@@ -33,6 +33,7 @@ import {
 } from "../routes/sauce-route.js";
 import { CliError, UsageError, type DefineValue, type SaltChoice } from "./args.js";
 import {
+  awaitPot,
   connect,
   kitchenFee,
   potState,
@@ -470,9 +471,12 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
       data: deploy.data,
       value: 0n,
     });
-    if (deployed.status !== "success" || !(await potState(client, cook.pot)).deployed) {
+    if (deployed.status !== "success") {
       throw new CliError(`${sentText("deploying the Pot", deployed)}; the Pot is not there`);
     }
+    // The cook is rehearsed next: on an endpoint behind the deployment it would "succeed" on an
+    // address with no code, so wait until the endpoint shows the Pot.
+    await awaitPot(client, cook.pot, deployed.blockNumber);
   } else if (state.owner !== signer) {
     throw new CliError(
       `Pot ${cook.pot} belongs to ${state.owner}, not the signer ${signer}: cook() is onlyOwner`,
@@ -569,16 +573,28 @@ export async function potDeployCommand(
     data: predicted.json.data as Hex,
     value: 0n,
   });
+  // Deployed means the endpoint shows its code, not only that a receipt said success.
+  if (sent.status === "success") await awaitPot(client, pot, sent.blockNumber);
+  const sender = input.account.address;
   const json = {
     ...predicted.json,
     deployed: sent.status === "success",
+    sender,
     deployPot: sentJson(sent),
   };
 
   return {
     text: JSON.stringify(json, null, 2),
     json,
-    notes: [sentText(`deployed Pot ${pot} in`, sent)],
+    notes: [
+      sentText(`deployed Pot ${pot} in`, sent),
+      ...(getAddress(input.owner) === sender
+        ? []
+        : [
+            `The Pot is ${input.owner}'s: ${sender} sent and paid for the deployment, and has no ` +
+              "control over it.",
+          ]),
+    ],
     ...(sent.status === "success" ? {} : { exitCode: 1 }),
   };
 }

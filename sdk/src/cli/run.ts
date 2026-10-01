@@ -31,6 +31,7 @@ import {
   requiredFlag,
   stringFlag,
   UsageError,
+  type FlagSpec,
   type FlagSpecs,
   type ParsedArgs,
 } from "./args.js";
@@ -330,12 +331,13 @@ const FUND: FlagSpecs = {
   sweep: { type: "boolean", help: "Return what is left of each funded token afterwards" },
 };
 
-/** Never parsed as a flag: everything after it is main's arguments (see `runCli`). */
+/** Never parsed as a flag: the words after it that are not flags are main's arguments
+ *  (`splitArgv`). */
 const ARGS: FlagSpecs = {
   args: {
     type: "boolean",
     value: "<value>…",
-    help: "Last: main's arguments in order (JSON for an array or tuple)",
+    help: "main's arguments in order (JSON for an array or tuple); -- before one like a flag",
   },
 };
 
@@ -593,21 +595,6 @@ const signerOf = (args: ParsedArgs, io: CliIo) => {
   );
 };
 
-/**
- * The owner where a signer is given: the signer. `--owner` then only restates it, and one that
- * names someone else is refused rather than silently ignored.
- */
-function signerIsOwner(signer: `0x${string}`, owner: string | undefined): `0x${string}` {
-  if (owner !== undefined && parseAddress("owner", owner) !== signer) {
-    throw new UsageError(
-      `--owner ${owner} is not the signer, ${signer}: with a signer, the owner is the signer. ` +
-        "Leave --owner out, or sign as its owner.",
-    );
-  }
-
-  return signer;
-}
-
 /** Whether `simulate` was given a key: it signs `--fund`'s pulls, and nothing else there. */
 const hasSigner = (args: ParsedArgs): boolean =>
   stringFlag(args, "keystore") !== undefined || stringFlag(args, "private-key") !== undefined;
@@ -703,13 +690,17 @@ async function keypairOf(args: ParsedArgs, io: CliIo): Promise<KeyPairSigner> {
 
 /** The Pot's owner on Solana: the signer when there is one (and `--owner` must agree), else
  *  `--owner`. */
-function svmOwner(args: ParsedArgs, signer?: SvmAddress): SvmAddress {
+function svmOwner(
+  args: ParsedArgs,
+  signer?: SvmAddress,
+  why = "with a signer, the owner is the signer",
+): SvmAddress {
   const owner = stringFlag(args, "owner");
   if (signer !== undefined) {
     if (owner !== undefined && parsePubkey("owner", owner) !== signer) {
       throw new UsageError(
-        `--owner ${owner} is not the signer, ${signer}: with a signer, the owner is the signer. ` +
-          "Leave --owner out, or sign as its owner.",
+        `--owner ${owner} is not the signer, ${signer}: ${why}. Leave --owner out, or sign as ` +
+          "its owner.",
       );
     }
 
@@ -1114,21 +1105,27 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       deploy: { type: "boolean", help: "Send the deployment (needs an endpoint and a signer)" },
       ...ENDPOINT,
       ...SIGNER,
+      yes: { type: "boolean", short: "y", help: "Accepted: --deploy sends without asking" },
       ...FORMAT,
       ...HELP,
     },
     details: [
       "A Pot's address is CREATE2 from the released Kitchen over (owner, salt), so it is known",
       "before it exists. Prints it and the unsigned Kitchen.deployPot transaction as JSON; with",
-      "--deploy, sends it (the owner defaults to the signer) unless the Pot is already there.",
-      "The default salt is zero: the one Pot an owner has by default.",
+      "--deploy, sends it unless the Pot is already there, and waits until the endpoint shows its",
+      "code. The owner defaults to the signer. Deploying is permissionless: with --owner, the",
+      "signer sends and pays for another owner's Pot, which is that owner's alone — how the Pot",
+      "intents share on a chain (owner: its Portal's Executor) is deployed. The default salt is",
+      "zero: the one Pot an owner has by default.",
       "",
       "On Solana a Pot is the Kitchen's PDA over (owner, salt): this prints it and the create_pot",
-      "instruction; --deploy (with --keypair) creates it.",
+      "instruction; --deploy (with --keypair) creates it. There the owner signs create_pot, so",
+      "the signer is the owner.",
       "",
       "Examples:",
       "  sauce pot --owner 0x… --chain base",
       "  sauce pot --deploy --chain base --rpc-url <url> --keystore ~/.keys/me.json --salt treasury",
+      "  sauce pot --deploy --chain base --owner 0x… --config sauce.config.json --keystore <keystore>",
       "  sauce pot --deploy --chain solana --rpc-url <url> --keypair ~/.config/solana/id.json",
     ].join("\n"),
     run: async (args, io) => {
@@ -1147,7 +1144,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         const signer = await keypairOf(args, io);
 
         return svmPotDeployCommand({
-          owner: svmOwner(args, signer.address),
+          owner: svmOwner(
+            args,
+            signer.address,
+            "on Solana the owner signs create_pot, so the signer creates its own Pot",
+          ),
           ...saltOf(args),
           rpcUrl: requiredEndpoint(args, io, chain),
           signer,
@@ -1165,7 +1166,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
 
       return potDeployCommand({
         chain,
-        owner: signerIsOwner(account.address, owner),
+        // Kitchen.deployPot is permissionless: the signer may send another owner's.
+        owner: owner === undefined ? account.address : parseAddress("owner", owner),
         ...saltOf(args),
         rpcUrl: requiredEndpoint(args, io, chain),
         account,
@@ -1604,8 +1606,83 @@ function mainHelp(): string {
 const commandNamed = (name: string | undefined): Command | undefined =>
   name !== undefined && Object.hasOwn(COMMANDS, name) ? COMMANDS[name] : undefined;
 
+/** Every flag any command takes: a flag given to the wrong command is named as that, never
+ *  "unknown", and never swallowed as one of `main`'s arguments. */
+const ANY_FLAG: FlagSpecs = Object.assign({}, ...Object.values(COMMANDS).map((c) => c.flags));
+
+/** The flag `word` spells (`--name`, `--name=value`, `-x`), if it is one any command takes. */
+function flagOf(word: string): FlagSpec | undefined {
+  const long = /^--([\w-]+)(?:=|$)/.exec(word)?.[1];
+  if (long !== undefined) return Object.hasOwn(ANY_FLAG, long) ? ANY_FLAG[long] : undefined;
+  const short = /^-(\w)$/.exec(word)?.[1];
+
+  return short === undefined ? undefined : Object.values(ANY_FLAG).find((f) => f.short === short);
+}
+
+/**
+ * The command's flag words and its trailing words (`--args …`). Flags may come in any order, and
+ * after the trailing ones too: past `--args`, a word that is a flag is read as one, with its value;
+ * every other word is an argument, in order. After a `--` there, every word is an argument, so one
+ * that looks like a flag can still be passed.
+ */
+function splitArgv(
+  rest: readonly string[],
+  command: Command,
+): { flags: string[]; trailing?: string[] } {
+  const at = command.trailing === undefined ? -1 : rest.indexOf(`--${command.trailing}`);
+  if (at < 0) return { flags: [...rest] };
+  const flags = rest.slice(0, at);
+  const trailing: string[] = [];
+  for (let i = at + 1; i < rest.length; i++) {
+    const word = rest[i]!;
+    if (word === "--") {
+      trailing.push(...rest.slice(i + 1));
+      break;
+    }
+    const flag = flagOf(word);
+    if (flag === undefined) {
+      trailing.push(word);
+      continue;
+    }
+    flags.push(word);
+    if (flag.type === "string" && !word.includes("=") && i + 1 < rest.length)
+      flags.push(rest[++i]!);
+  }
+
+  return { flags, trailing };
+}
+
+const SIGNING = new Set(["keystore", "password-file", "private-key", "keypair"]);
+const REACHING = new Set(["rpc-url", "config"]);
+
+/** Why `flag`, which another command takes, is not one of `name`'s. */
+function notTaken(name: string, flag: string): string {
+  const takers = Object.keys(COMMANDS).filter((other) => flag in COMMANDS[other]!.flags);
+  const own = COMMANDS[name]!.flags;
+  const why =
+    name === "simulate" && flag === "keypair"
+      ? "on Solana, simulate runs the cook from --owner and signs nothing"
+      : name === "tx" && SIGNING.has(flag)
+        ? "tx signs nothing: it prints the transaction unsigned, for a wallet (sauce run signs and sends it)"
+        : SIGNING.has(flag) && !Object.keys(own).some((key) => SIGNING.has(key))
+          ? `${name} signs nothing`
+          : REACHING.has(flag) && !("config" in own)
+            ? `${name} reads nothing from a chain`
+            : flag === "yes"
+              ? `${name} has nothing to ask`
+              : undefined;
+
+  return (
+    `--${flag} is not an option of sauce ${name}` +
+    (why === undefined ? "" : `: ${why}`) +
+    ` (${takers.map((taker) => `sauce ${taker}`).join(", ")} ${takers.length === 1 ? "takes" : "take"} it)`
+  );
+}
+
 /** Registers a `--private-key` value as a secret before anything can fail and print it. */
-function rememberSecrets(argv: readonly string[]): void {
+function rememberSecrets(given: readonly string[]): void {
+  // A word may hold several, from a shell that did not split a variable: split them here too.
+  const argv = given.flatMap((word) => (/^-\S*\s/.test(word) ? word.split(/\s+/) : [word]));
   argv.forEach((word, index) => {
     if (word === "--private-key" && argv[index + 1] !== undefined) secret(argv[index + 1]!);
     if (word.startsWith("--private-key=")) secret(word.slice("--private-key=".length));
@@ -1654,16 +1731,16 @@ export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<num
   }
 
   try {
-    // A trailing flag ends the options, so its words are never read as flags: a program's
-    // arguments may look like anything.
-    const at = command.trailing === undefined ? -1 : rest.indexOf(`--${command.trailing}`);
-    const args = parseFlags(at < 0 ? rest : rest.slice(0, at), command.flags);
+    const { flags, trailing } = splitArgv(rest, command);
+    const args = parseFlags(flags, ANY_FLAG);
     if (args.values.help === true) {
       io.stdout(commandHelp(command));
 
       return 0;
     }
-    const output = await command.run(args, io, at < 0 ? undefined : rest.slice(at + 1));
+    const foreign = Object.keys(args.values).find((flag) => !(flag in command.flags));
+    if (foreign !== undefined) throw new UsageError(notTaken(name, foreign));
+    const output = await command.run(args, io, trailing);
     if (output === undefined) return 0;
     for (const note of output.notes ?? []) io.stderr(`${note}\n`);
     io.stdout(`${render(command, output, args)}\n`);

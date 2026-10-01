@@ -16,6 +16,7 @@ import {
   keccak256,
   stringToBytes,
   type Hex,
+  type PublicClient,
 } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
@@ -27,6 +28,7 @@ import {
   parseSalt,
   UsageError,
 } from "../src/cli/args.js";
+import { awaitPot } from "../src/cli/chain.js";
 import { castSend } from "../src/cli/commands.js";
 import { failureReason } from "../src/cli/solana.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
@@ -1148,6 +1150,148 @@ describe("sauce pot", () => {
     expect(
       (await sauce("pot", "--chain", "solana", "--owner", owner, "--format", "cast")).stderr,
     ).toMatch(/--format cast prints an EVM transaction/);
+  });
+});
+
+describe("flags in any order", () => {
+  const SPLIT = "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n";
+
+  it("reads a flag after main's arguments as a flag, and -- makes the rest arguments", async () => {
+    const program = file("split.sauce.ts", SPLIT);
+    const stdout = (run: Run): Record<string, unknown> => {
+      expect(run.code).toBe(0);
+
+      return JSON.parse(run.stdout) as Record<string, unknown>;
+    };
+    const before = stdout(
+      await sauce(
+        "tx",
+        program,
+        "--chain",
+        "base",
+        "--owner",
+        OWNER,
+        "--value",
+        "7",
+        "--args",
+        RECIPIENT,
+        "5",
+      ),
+    );
+    // The same flags after --args, in another order, with --flag=value too.
+    const after = stdout(
+      await sauce(
+        "tx",
+        program,
+        "--args",
+        RECIPIENT,
+        "--value=7",
+        "5",
+        "--chain",
+        "base",
+        "--owner",
+        OWNER,
+      ),
+    );
+    expect(after).toEqual(before);
+    expect(before.value).toBe("7");
+    // After `--`, a word that looks like a flag is an argument.
+    const escaped = await sauce(
+      "tx",
+      program,
+      "--chain",
+      "base",
+      "--owner",
+      OWNER,
+      "--value",
+      "0",
+      "--args",
+      RECIPIENT,
+      "--",
+      "--value",
+    );
+    expect(escaped.code).toBe(2);
+    expect(escaped.stderr).toMatch(/--args: .*amount/);
+  });
+
+  it("names a flag the command does not take, and why, instead of an unknown option", async () => {
+    const program = file("split.sauce.ts", SPLIT);
+    const cases: Array<[string[], RegExp]> = [
+      [
+        ["tx", program, "--chain", "base", "--owner", OWNER, "--keystore", "k.json"],
+        /--keystore is not an option of sauce tx: tx signs nothing: it prints the transaction unsigned/,
+      ],
+      [
+        ["simulate", program, "--chain", "solana", "--owner", OWNER, "--keypair", "id.json"],
+        /--keypair is not an option of sauce simulate: on Solana, simulate runs the cook from --owner/,
+      ],
+      [
+        ["compile", program, "--chain", "base", "--yes"],
+        /--yes is not an option of sauce compile: compile has nothing to ask \(sauce run, sauce pot take it\)/,
+      ],
+      [
+        ["globals", "--chain", "base", "--rpc-url", "http://x"],
+        /globals reads nothing from a chain/,
+      ],
+      [["compile", program, "--chain", "base", "--nope"], /unknown option --nope/],
+    ];
+    for (const [argv, message] of cases) {
+      const run = await sauce(...argv);
+      expect(run.code).toBe(2);
+      expect(run.stderr).toMatch(message);
+    }
+    // `pot` takes --yes, which it has no use for: --deploy never asks.
+    const pot = await sauce("pot", "--owner", OWNER, "--chain", "base", "--yes");
+    expect(pot.code).toBe(0);
+  });
+
+  it("says so when one argument holds several flags, and prints none of their values", async () => {
+    const key = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+    // What zsh passes for `sauce pot --chain base --deploy $FLAGS`: one word.
+    const run = await sauce(
+      "pot",
+      "--chain",
+      "base",
+      "--deploy",
+      `--private-key ${key} --config sauce.config.json`,
+    );
+    expect(run.code).toBe(2);
+    expect(run.stderr).toMatch(
+      /one argument holds several words, --private-key, --config and their values, with spaces/,
+    );
+    expect(run.stderr).toMatch(/zsh does not split an unquoted \$VARIABLE/);
+    expect(run.stderr).not.toContain(key.slice(2, 12));
+  });
+});
+
+describe("waiting for a deployed Pot", () => {
+  const POT = "0x1111111111111111111111111111111111111111";
+  const answering = (answers: Array<string | Error>) => {
+    const asked: string[] = [];
+    const client = {
+      getCode: async ({ address }: { address: string }) => {
+        asked.push(address);
+        const next = answers.shift() ?? "0x";
+        if (next instanceof Error) throw next;
+
+        return next === "0x" ? undefined : next;
+      },
+    } as unknown as PublicClient;
+
+    return { client, asked };
+  };
+
+  it("asks past an endpoint that has not seen the deployment yet", async () => {
+    const { client, asked } = answering(["0x", new Error("header not found"), "0x", "0x6000"]);
+    await awaitPot(client, POT, 7n, { tries: 5, delayMs: 1 });
+    expect(asked).toHaveLength(4);
+  });
+
+  it("fails, naming the block, when the endpoint never shows the code", async () => {
+    const { client } = answering([]);
+    await expect(awaitPot(client, POT, 7n, { tries: 3, delayMs: 1 })).rejects.toThrow(
+      /deployed in block 7, but the endpoint still shows no code there/,
+    );
   });
 });
 

@@ -58,15 +58,27 @@ export function parseFlags(argv: readonly string[], flags: FlagSpecs): ParsedArg
 
     return { values, positionals };
   } catch (error) {
-    throw new UsageError(describeParseError(error, flags));
+    throw new UsageError(describeParseError(error, flags, argv));
   }
 }
 
 /** `parseArgs`'s messages advise on `--` escaping; say what was wrong with the flag instead. */
-function describeParseError(error: unknown, flags: FlagSpecs): string {
+function describeParseError(error: unknown, flags: FlagSpecs, argv: readonly string[]): string {
   const message = error instanceof Error ? error.message : String(error);
   const code = (error as { code?: string }).code;
   const flag = /'(-{1,2}[^' ]+)/.exec(message)?.[1];
+  // Several flags in one word: a shell handed over a quoted string, or a variable it did not split
+  // (zsh never splits an unquoted `$FLAGS`).
+  const joined = argv.find((word) => /^-{1,2}\S+\s/.test(word) && word.startsWith(flag ?? "\0"));
+  if (code === "ERR_PARSE_ARGS_UNKNOWN_OPTION" && joined !== undefined) {
+    // Only the flags' names: a value in there may be a key.
+    const names = joined.split(/\s+/).filter((word) => /^-{1,2}[\w-]+$/.test(word));
+    return (
+      `one argument holds several words, ${names.join(", ")} and their values, with spaces ` +
+      "between them: a shell passed a quoted string, or a variable it did not split (zsh does not " +
+      "split an unquoted $VARIABLE). Pass each flag and each value as a word of its own."
+    );
+  }
   if (code === "ERR_PARSE_ARGS_UNKNOWN_OPTION" && flag !== undefined) {
     return `unknown option ${flag}`;
   }

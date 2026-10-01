@@ -161,6 +161,54 @@ export async function potState(
   return { deployed: true, owner };
 }
 
+/**
+ * Waits, briefly, until the endpoint's latest block is `block` or later — so what the command
+ * reads next (an allowance it just approved, a Pot it just deployed) is read from state that has
+ * the transaction in it. It never fails: a node that stays behind is caught by the read that
+ * depends on it (`awaitPot`), or by the rehearsal of the transaction after it.
+ */
+async function caughtUp(
+  client: PublicClient,
+  block: bigint,
+  wait: { readonly tries: number; readonly delayMs: number } = POT_WAIT,
+): Promise<void> {
+  for (let attempt = 0; attempt < wait.tries; attempt++) {
+    const latest = await client.getBlockNumber({ cacheTime: 0 }).catch(() => undefined);
+    if (latest !== undefined && latest >= block) return;
+    await new Promise((resolve) => setTimeout(resolve, wait.delayMs));
+  }
+}
+
+/** How long {@link awaitPot} waits for a lagging endpoint, and how often it asks. */
+export const POT_WAIT = { tries: 30, delayMs: 500 };
+
+/**
+ * Waits until the endpoint's latest state has `pot`'s code, after a deployment that succeeded in
+ * `block`. A receipt is not proof the node answering the next request has that block: behind a
+ * load balancer, the node that served the receipt and the one asked for the code can differ, so
+ * an immediate `getCode` may read a Pot that is there as missing — and a cook simulated on that
+ * state "succeeds" on an address without code. This asks again until it sees the code, and fails,
+ * saying so, when it never does.
+ */
+export async function awaitPot(
+  client: PublicClient,
+  pot: Address,
+  block: bigint,
+  wait: { readonly tries: number; readonly delayMs: number } = POT_WAIT,
+): Promise<void> {
+  for (let attempt = 0; attempt < wait.tries; attempt++) {
+    // A node behind the deployment fails or answers empty: both mean "not yet".
+    const code = await client.getCode({ address: pot }).catch(() => undefined);
+    if (code !== undefined && code !== "0x") return;
+    await new Promise((resolve) => setTimeout(resolve, wait.delayMs));
+  }
+  throw new CliError(
+    `the Pot ${pot} was deployed in block ${block}, but the endpoint still shows no code there ` +
+      `after ${(wait.tries * wait.delayMs) / 1000}s: it is behind the chain. Run the command again ` +
+      "once it has caught up; the deployment is not repeated.",
+  );
+}
+
 /** The errors a cook can revert with by name: the Pot's, the Kitchen's, and Permit2's, which
  *  `--fund` pulls through. */
 const ERRORS = [...potArtifact.abi, ...kitchenArtifact.abi, ...Permit2ABI].filter(
@@ -276,7 +324,11 @@ export async function sendAndWait(
     gasUsed: receipt.gasUsed,
     blockNumber: receipt.blockNumber,
   };
-  if (receipt.status === "success") return sent;
+  if (receipt.status === "success") {
+    await caughtUp(client, receipt.blockNumber);
+
+    return sent;
+  }
   const replay = await client
     .call({ account: account.address, ...tx, blockNumber: receipt.blockNumber - 1n })
     .then(
