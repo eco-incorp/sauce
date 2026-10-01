@@ -155,8 +155,10 @@ for (const [id, environments] of Object.entries(ECO_ROUTES_ADDRESSES.v3.chains))
     }
     try {
       const call = intentVaultAddressCall(probeOn(chainId), { portal });
-      const answer = await rpc(chainId, "eth_call", [{ to: call.to, data: call.data }, "latest"]);
-      const code = await rpc(chainId, "eth_getCode", [portal, "latest"]);
+      const [answer, code] = await Promise.all([
+        rpc(chainId, "eth_call", [{ to: call.to, data: call.data }, "latest"]),
+        rpc(chainId, "eth_getCode", [portal, "latest"]),
+      ]);
       vaults.push({
         chainId,
         environment,

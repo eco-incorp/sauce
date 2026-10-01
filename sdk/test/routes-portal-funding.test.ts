@@ -5,10 +5,14 @@
  * Pure: hand-built `Intent`s, no compiler, no network. `routes-nest-dynamic.e2e.test.ts` and
  * `cli.e2e.test.ts` run both against the real Portal and check `isIntentFunded`.
  */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   bytesToHex,
   decodeFunctionData,
   erc20Abi,
+  toFunctionSignature,
   getAddress,
   toFunctionSelector,
   type AbiFunction,
@@ -67,6 +71,43 @@ const transferOf = (data: Hex) => {
 
   return decoded.args as readonly [Hex, bigint];
 };
+
+describe("the vault read a Pot makes is publish's payload under another selector", () => {
+  // `intent-sugar.ts#vaultFundingStatements` asks for the vault with `publish`'s rendered calldata
+  // behind `intentVaultAddress`'s selector, which is sound only while the two take the same
+  // arguments. That is held three ways: the lowering compares the two encodings of each intent; this
+  // compares the registry's declarations; and `registry-abi/targets.json` requires both overloads,
+  // so the registry test fails if a deployed Portal stops dispatching either signature.
+  const signature = (name: string) =>
+    toFunctionSignature(
+      PortalABI.find((item) => item.type === "function" && item.name === name) as AbiFunction,
+    );
+  const TARGETS = JSON.parse(
+    readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "fixtures/registry-abi/targets.json"),
+      "utf8",
+    ),
+  ) as {
+    protocols: Record<string, Record<string, { required?: Record<string, string> }>>;
+  };
+
+  it("declares the same parameters for both", () => {
+    const params = (name: string) => signature(name).slice(name.length);
+
+    expect(params("publish")).toBe(params("intentVaultAddress"));
+    expect(params("publish")).toBe(
+      "(uint64,bytes,(uint64,address,address,uint256,(address,uint256)[]))",
+    );
+  });
+
+  it("requires both overloads of every deployed Portal", () => {
+    const required = Object.keys(TARGETS.protocols["eco-routes"]!.PortalABI!.required ?? {});
+
+    expect(required).toEqual(
+      expect.arrayContaining([signature("publish"), signature("intentVaultAddress")]),
+    );
+  });
+});
 
 describe("what the vault must hold", () => {
   it("one leg per distinct token for its LARGEST amount, then native, zero legs left out", () => {

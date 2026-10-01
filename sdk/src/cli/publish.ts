@@ -273,8 +273,12 @@ async function planFor(
   }
   const { vault, vaultFrom } = await vaultOf(intent, portal, client);
   const steps: Step[] = [];
-  for (const leg of rewardVaultLegs(intent.intent)) {
-    const held = client === undefined ? 0n : await heldBy(client, vault, leg);
+  const legs = rewardVaultLegs(intent.intent);
+  const holdings = await Promise.all(
+    legs.map((leg) => (client === undefined ? 0n : heldBy(client, vault, leg))),
+  );
+  for (const [index, leg] of legs.entries()) {
+    const held = holdings[index]!;
     // Already there — a vault paid earlier, or a reward shared with another intent's — needs
     // nothing more: `isIntentFunded` compares balances, not who paid them.
     if (held >= leg.amount) continue;

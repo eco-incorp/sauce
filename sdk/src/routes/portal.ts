@@ -388,7 +388,16 @@ export function rewardVaultLegs(intent: Intent): readonly VaultLeg[] {
   return legs;
 }
 
-/** One leg paid into `vault`: `token.transfer(vault, amount)`, or `amount` wei sent with no data. */
+/**
+ * One leg paid into `vault`: `token.transfer(vault, amount)`, or `amount` wei sent with no data.
+ *
+ * A wallet's transaction, not a program's call, so there is no `SafeERC20` check to run on the
+ * return: a token that returns nothing (USDT) lands like any other, and one that returns `false`
+ * lands having moved nothing. What catches that is the vault's balance, not the receipt — ask
+ * `isIntentFundedCall` once the transfers have landed and before `publish` is sent, as
+ * `sauce publish` does. (A Pot's transfer into the vault is a program's, and is `SafeERC20`'s:
+ * `intent-sugar.ts#vaultFundingStatements`.)
+ */
 export function vaultTransferTx(vault: AddressInput, leg: VaultLeg): PortalTx {
   const to = getAddress(denormalizeToEvm(toUniversalAddress(vault))) as Hex;
   if (leg.token === undefined) return { to, data: "0x", value: leg.amount };
