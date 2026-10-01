@@ -483,10 +483,9 @@ function compileForChain(
   }
 
   // The registry-resolved token map (registry defaults + options.tokens overrides, per-key -- see
-  // token-registry.ts#resolveTokenMap). Computed unconditionally: for an evm chain the registry may
-  // already supply symbols even with no caller options.tokens at all; for an svm chain/id the
-  // registry itself has no rows (no TOKEN_REGISTRY key is ever an svm chain id), so this reduces to
-  // "only options.tokens, if any" -- preserving the existing svm-throws-on-any-rewrite behavior.
+  // token-registry.ts#resolveTokenMap). Computed unconditionally: the registry may supply symbols
+  // with no caller options.tokens at all -- an evm chain's token addresses, an svm chain's mint keys.
+  // On svm they are values only: the token syntax below still throws there, by name.
   const tokenMap = resolveTokenMap(chain, options.tokens);
 
   // The source is the program, as written: a module with a `main`, or a script whose top-level
@@ -566,8 +565,10 @@ function compileForChain(
     if (chain.kind === "svm") {
       throw new Error(
         `compileSauceRoute: destination '${chain.slug}' is svm — the ERC20 token rewrite ` +
-          "(`Token(addr)` / `<Sym>.transfer(...)`) is EVM-only; an SVM route needs the SPL " +
-          "account-plan `Token` emitter (see token/api.ts) instead.",
+          "(`Token(addr)` / `<Sym>.transfer(...)` / `self.<Sym>`) is EVM-only. On svm a token " +
+          "symbol is the mint, a value for the @sauce/token functions with the accounts as " +
+          "Account parameters: `transfer(USDC, tokenProgram, source, dest, authority, amount)`, " +
+          "`balanceOf(USDC, account)`; or the SPL account-plan `Token` emitter (see token/api.ts).",
       );
     }
     source = [...tokenImportLines({ writes, erc20 }), source].join("\n");

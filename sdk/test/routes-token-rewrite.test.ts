@@ -9,7 +9,7 @@ import { requireChain } from "../src/chains/canonical.js";
 // Through the public `routes` barrel: a caller of `rewriteTokenMembers` needs `tokenImportLines`
 // beside it to compile the result.
 import { rewriteTokenMembers, tokenImportLines } from "../src/routes/index.js";
-import { resolveTokenMap } from "../src/routes/token-registry.js";
+import { resolveTokenMap, SVM_TOKEN_REGISTRY } from "../src/routes/token-registry.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
 
@@ -405,10 +405,11 @@ describe("composition: token pass + protocol-accessor pass in ONE compile", () =
 
 // --- SVM: registry-default token/balance-sugar behavior must never SILENTLY rewrite -------------
 
-describe("svm: the token/balance-sugar pass never rewrites for an svm destination (registry has no svm rows)", () => {
-  it("with accessors:false, self.USDC is completely untouched by THIS feature -- the base compiler's own error on bare `self` fires instead (unrelated to tokens)", () => {
-    // Isolates the token/balance-sugar pass from the protocol-accessor pass's OWN (pre-existing,
-    // unrelated) self-sugar, which would otherwise also touch the bare `self` here.
+describe("svm: the token/balance-sugar pass is refused by name for an svm destination", () => {
+  it("with accessors:false, self.USDC on a registered Solana mint is the named svm error", () => {
+    // Isolates the token/balance-sugar pass from the protocol-accessor pass's OWN self-sugar. The
+    // registry has Solana mints now, so the balance sugar recognises `self.USDC` and the svm guard
+    // names it, rather than the compiler failing on a bare `self`.
     expect(() =>
       compileSauceRoute(
         "solana",
@@ -416,7 +417,20 @@ describe("svm: the token/balance-sugar pass never rewrites for an svm destinatio
         { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
         { accessors: false },
       ),
-    ).toThrow(/`self` is not a declared variable|property 'USDC' access not supported/);
+    ).toThrow(/is svm — the ERC20 token rewrite .* is EVM-only/);
+  });
+
+  it("a bare registered symbol is the mint's key, a value the program compiles with", () => {
+    const usdc = SVM_TOKEN_REGISTRY["mainnet-beta"].find((row) => row.symbol === "USDC")!;
+    const compiled = compileSauceRoute(
+      "solana",
+      `function main(account: Account): Uint256 { return balanceOf(USDC, account); }`,
+      { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
+      { ambient: ["@sauce/token"] },
+    );
+    expect(Buffer.from(compiled.compiled.bytecode[0]!).toString("hex")).toContain(
+      usdc.address.slice(2),
+    );
   });
 
   it("with accessors default ON, the pre-existing self-sugar rewrite fires and the existing svm guard throws -- a safe, named failure, never a silent drop", () => {

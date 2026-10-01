@@ -143,3 +143,15 @@ export const CASES: readonly MethodCase[] = [
     svm: 'import { approve } from "@sauce/token"; function main(token: Address, tokenProgram: Account, source: Account, delegate: Account, authority: Account, amount: Uint256): void { approve(token, tokenProgram, source, delegate, authority, amount); }',
   },
 ];
+
+/**
+ * The methods only one arm has, with the entry that calls them there. `ownerOf` reads a token
+ * account's owner@32, which only the SPL account model has: an ERC-20 balance has no account apart
+ * from its holder.
+ */
+export const SVM_ONLY_CASES: readonly Omit<MethodCase, "evm">[] = [
+  {
+    method: "ownerOf",
+    svm: 'import { ownerOf } from "@sauce/token"; function main(token: Address, account: Account): Address { return ownerOf(token, account); }',
+  },
+];
