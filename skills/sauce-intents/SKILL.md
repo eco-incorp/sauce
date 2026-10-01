@@ -294,7 +294,8 @@ developer's:
 - **`--intent-execution-fee <wei>`** for a program body: the destination Kitchen's fee. It is
   mutable on chain and lives on the destination, so read it there just before sending: an
   `eth_call` of `executionFee()` on the destination's Kitchen (its address is in the chain's file in
-  `sauce-chains`). An increase before the fill makes the cook, and the fulfilment, revert.
+  `sauce-chains`), or pass `--intent-execution-fee auto`, which reads it through `--config`. An
+  increase before the fill makes the cook, and the fulfilment, revert.
 
 **Units and defines.** Amounts are base units (`AMOUNT=1000000` is 1 USDC); only `--assume-balance`
 and `--fund` take whole tokens. In a `--defines` file, write an address or any value past 2^53 as a

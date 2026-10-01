@@ -45,6 +45,11 @@ interface Run {
 }
 
 async function sauce(...argv: string[]): Promise<Run> {
+  return sauceWith({}, ...argv);
+}
+
+/** `sauce` with some of its io replaced: stdin, for one. */
+async function sauceWith(overrides: Partial<CliIo>, ...argv: string[]): Promise<Run> {
   let stdout = "";
   let stderr = "";
   const io: CliIo = {
@@ -52,6 +57,7 @@ async function sauce(...argv: string[]): Promise<Run> {
     stdout: (text) => void (stdout += text),
     stderr: (text) => void (stderr += text),
     run: () => 0,
+    ...overrides,
   };
   const code = await runCli(argv, io);
 
@@ -105,6 +111,17 @@ describe("sauce actions", () => {
     assert.deepEqual(base!.parameters, ["amount"]);
     assert.deepEqual(base!.entryParams, [{ name: "a_amount", type: "Uint256" }]);
     assert.deepEqual(base!.document, SWAP, "the document as parsed, every name as written");
+  });
+
+  it("reads a document from stdin for -, as it reads the file", async () => {
+    const piped = { readStdin: () => JSON.stringify(SWAP) };
+    for (const command of ["actions", "compile"]) {
+      const fromFile = await sauce(command, file("swap.json", SWAP), "--chain", "base", "--json");
+      const fromStdin = await sauceWith(piped, command, "-", "--chain", "base", "--json");
+      assert.equal(fromStdin.code, 0, fromStdin.stderr);
+      const bytecode = (run: Run) => (JSON.parse(run.stdout) as { bytecode: string }).bytecode;
+      assert.equal(bytecode(fromStdin), bytecode(fromFile), command);
+    }
   });
 
   it("is the one function the MCP server calls: actionsCommand", async () => {

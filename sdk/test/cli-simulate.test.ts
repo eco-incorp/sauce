@@ -367,14 +367,16 @@ describe("sauce simulate --assume-balance, offline", () => {
     const section = (heading: string): string =>
       help.slice(help.indexOf(heading)).split("\n\n")[0]!;
     expect(help).toContain(
-      "Usage: sauce simulate <file> --chain <slug|id> (--owner <address> | --pot <address>)",
+      "Usage: sauce simulate <file | -> --chain <slug|id> (--owner <address> | --pot <address>)",
     );
-    expect(help).toContain("       sauce simulate <file> --chain solana --owner <pubkey>");
+    expect(help).toContain("       sauce simulate <file | -> --chain solana --owner <pubkey>");
     for (const flag of ["--pot", "--value", "--assume-balance", "--fund-mode", "--keystore"]) {
       expect(section("EVM chains only:")).toContain(`${flag} `);
       expect(section("Options:")).not.toContain(`${flag} `);
     }
     expect(section("Solana only:")).toContain("--account NAME=<address>");
+    expect(section("Solana only:")).toContain("--keypair <path>");
+    expect(section("Options:")).not.toContain("--keypair ");
     expect(section("Options:")).toContain("--owner <address>");
   });
 });
