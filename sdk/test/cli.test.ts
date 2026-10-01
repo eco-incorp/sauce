@@ -1110,6 +1110,98 @@ describe("sauce pot", () => {
   });
 });
 
+describe("sauce price", () => {
+  const WETH_BASE = "0x4200000000000000000000000000000000000006";
+
+  it("prints the pool's sqrtPriceX96 for the chain's token order, and each direction's floor", async () => {
+    const out = json(await sauce("price", "--chain", "base", "WETH", "USDC", "2700", "--json"));
+    // WETH is token0 on Base: the price is the SDK's conversion with WETH as the base.
+    const sqrt = root.sqrtPriceX96FromPrice("2700", {
+      baseDecimals: 18,
+      quoteDecimals: 6,
+      baseIsToken0: true,
+    });
+    expect(out).toEqual({
+      chain: "base",
+      price: "2700",
+      base: { symbol: "WETH", address: WETH_BASE, decimals: 18 },
+      quote: {
+        symbol: "USDC",
+        address: getAddress("0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"),
+        decimals: 6,
+      },
+      token0: "WETH",
+      token1: "USDC",
+      sqrtPriceX96: sqrt.toString(),
+      // Selling WETH: 2700e6 USDC units per 1e18 WETH units, times 1e18.
+      sell: {
+        tokenIn: "WETH",
+        tokenOut: "USDC",
+        zeroForOne: true,
+        sqrtPriceLimitX96: sqrt.toString(),
+        limit: "floor",
+        minAvgPrice: "2700000000",
+      },
+      // Buying WETH: 1e18 / 2700e6 WETH units per USDC unit, times 1e18, rounded up.
+      buy: {
+        tokenIn: "USDC",
+        tokenOut: "WETH",
+        zeroForOne: false,
+        sqrtPriceLimitX96: sqrt.toString(),
+        limit: "ceiling",
+        minAvgPrice: ((10n ** 36n + 2700n * 10n ** 6n - 1n) / (2700n * 10n ** 6n)).toString(),
+      },
+    });
+    const text = await sauce("price", "--chain", "base", "WETH", "USDC", "2700");
+    expect(text.stdout).toContain(`sqrtPriceX96  ${sqrt}`);
+    expect(text.stdout).toMatch(/minAvgPrice +2700000000 +USDC units per WETH unit/);
+  });
+
+  it("reads a pool's sqrtPriceX96 back as the price, and takes an address with its decimals", async () => {
+    const back = json(
+      await sauce(
+        "price",
+        "--chain",
+        "base",
+        WETH_BASE,
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913:6",
+        "--sqrt-price-x96",
+        "4124432773472966290820821",
+        "--json",
+      ),
+    );
+    expect(back).toMatchObject({ price: "2710", sell: { minAvgPrice: "2710000000" } });
+    // USDC as the base, on Arbitrum where it is token1: the quote's floor when selling it.
+    const usdc = json(
+      await sauce("price", "--chain", "arbitrum", "USDC", "WETH", "0.0004", "--json"),
+    );
+    expect(usdc).toMatchObject({
+      token0: "WETH",
+      sell: { tokenIn: "USDC", zeroForOne: false, limit: "ceiling" },
+      buy: { tokenIn: "WETH", zeroForOne: true, limit: "floor", minAvgPrice: "2500000000" },
+    });
+  });
+
+  it("names what it cannot price, exiting 2", async () => {
+    const cases: Array<[string[], RegExp]> = [
+      [["--chain", "solana", "WETH", "USDC", "1"], /on an EVM chain; solana has none/],
+      [["--chain", "base", "WETH", "DAI", "1"], /DAI is not a token base registers/],
+      [["--chain", "base", "WETH", `0x${"12".repeat(20)}`, "1"], /give them as 0x/],
+      [["--chain", "base", "WETH", "USDC"], /missing <price>/],
+      [["--chain", "base", "WETH", "USDC", "1", "--sqrt-price-x96", "1"], /not both/],
+      [["--chain", "base", "WETH", "USDC", "1e3"], /'1e3' is not a price/],
+      [["--chain", "base", "WETH", "USDC:18", "1"], /USDC has 6 decimals, not 18/],
+      [["--chain", "base", "WETH", "WETH", "1"], /WETH is both/],
+      [["--chain", "base", "WETH", "USDC", "--sqrt-price-x96", "5"], /outside the range/],
+    ];
+    for (const [argv, message] of cases) {
+      const run = await sauce("price", ...argv);
+      expect(run.code).toBe(2);
+      expect(run.stderr).toMatch(message);
+    }
+  });
+});
+
 describe("the CLI stays out of the browser-facing surface", () => {
   it("is exported by no barrel", async () => {
     const cli = [
@@ -1125,6 +1217,7 @@ describe("the CLI stays out of the browser-facing surface", () => {
       await import("../src/cli/inspect.js"),
       await import("../src/cli/verify.js"),
       await import("../src/cli/solana.js"),
+      await import("../src/cli/price.js"),
     ].flatMap((module) => Object.keys(module));
     expect(cli.length).toBeGreaterThan(0);
     const routes = root.routes as Record<string, unknown>;

@@ -58,6 +58,7 @@ import { FUND_MODES, parseFund, permit2On, planFunding, type FundMode } from "./
 import { globalsCommand } from "./globals.js";
 import { initProject } from "./init.js";
 import { inspectCommand, inspectFile } from "./inspect.js";
+import { parsePriceToken, priceCommand, pricedChain } from "./price.js";
 import { publishCommand } from "./publish.js";
 import { parsePin, verifyCommand } from "./verify.js";
 import {
@@ -1205,6 +1206,66 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         tokens: args.values.tokens === true,
         protocols: args.values.protocols === true,
         ...(protocol === undefined ? {} : { protocol }),
+      });
+    },
+  },
+  price: {
+    usage:
+      "sauce price --chain <slug|id> <base> <quote> (<price> | --sqrt-price-x96 <value>) [--json]",
+    summary: "Turn a price into a pool's sqrtPriceX96 and a swap's limit and average-price floor",
+    flags: {
+      chain: { type: "string", value: "<slug|id>", help: "The chain the pool is on" },
+      "sqrt-price-x96": {
+        type: "string",
+        value: "<value>",
+        help: "Read a pool's sqrtPriceX96 as a price instead",
+      },
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "<price> is how many <quote> tokens one <base> token is worth, in whole tokens: 2700 for",
+      "2,700 USDC per WETH. A token is a symbol the chain registers (sauce globals --tokens), or",
+      "an address with its decimals (0x…:18). Prints the pool's sqrtPriceX96 at that price, for",
+      "the pair's order on the chain (token0 is the lower address), and for each direction:",
+      "  sqrtPriceLimitX96  the same number as a swap's limit: a floor when selling token0, a",
+      "                     ceiling when selling token1",
+      "  minAvgPrice        output units per input unit times 1e18, rounded up, for a program's",
+      "                     check out * 1e18 >= minAvgPrice * spent",
+      "Uniswap V3 and V4 and their forks share this price. With --sqrt-price-x96, a pool's",
+      "price is read back the other way. Nothing reaches a network.",
+      "",
+      "Examples:",
+      "  sauce price --chain base WETH USDC 2700",
+      "  sauce price --chain base WETH USDC --sqrt-price-x96 4116816085950893928074568",
+    ].join("\n"),
+    run: (args) => {
+      const chain = pricedChain(parseChain(requiredFlag(args, "chain", "<slug|id>")));
+      const sqrt = stringFlag(args, "sqrt-price-x96");
+      const [base, quote, price, ...rest] = args.positionals;
+      if (base === undefined || quote === undefined) {
+        throw new UsageError("missing <base> <quote>: the pair, as WETH USDC");
+      }
+      if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}`);
+      if ((price === undefined) === (sqrt === undefined)) {
+        throw new UsageError(
+          price === undefined
+            ? "missing <price>: how many quote tokens one base token is worth (or --sqrt-price-x96)"
+            : "give <price> or --sqrt-price-x96, not both",
+        );
+      }
+      if (price !== undefined && !/^\d+(?:\.\d+)?$/.test(price)) {
+        throw new UsageError(`'${price}' is not a price: a decimal number, as 2700 or 0.00037`);
+      }
+      if (sqrt !== undefined && !/^\d+$/.test(sqrt)) {
+        throw new UsageError(`--sqrt-price-x96: '${sqrt}' is not a whole number`);
+      }
+
+      return priceCommand({
+        chain,
+        base: parsePriceToken(base, chain),
+        quote: parsePriceToken(quote, chain),
+        price: price !== undefined ? { decimal: price } : { sqrtPriceX96: BigInt(sqrt!) },
       });
     },
   },
