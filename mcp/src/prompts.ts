@@ -39,6 +39,10 @@ function embedded(skills: readonly Skill[], dir: string, root: string) {
   ];
 }
 
+/** Whether a prompt's `chain` argument names Solana. */
+const solana = (chain: string | undefined): boolean =>
+  chain !== undefined && /^(solana|sol|svm|mainnet-beta|1399811149)$/i.test(chain.trim());
+
 /** `dirs` as the skill resources to read, those the package ships. */
 const readList = (skills: readonly Skill[], dirs: readonly string[]): string =>
   [
@@ -72,7 +76,7 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
             text: [
               `Write a Sauce program that does this${chain === undefined ? "" : ` on ${chain}`}: ${task}`,
               "",
-              `Read the Sauce skills first (with sauce_skill, or as resources: ${readList(skills, ["sauce-overview", "sauce-script", "sauce-run"])}),`,
+              `Read the Sauce skills first (with sauce_skill, or as resources: ${readList(skills, solana(chain) ? ["sauce-overview", "sauce-solana", "sauce-run"] : ["sauce-overview", "sauce-script", "sauce-run"])}),`,
               "and follow them. Then, with this server's tools:",
               "1. sauce_globals for the chain: use the token symbols and protocol namespaces it lists",
               "   rather than writing addresses. (A fixed list of protocol calls can be an action",
@@ -87,7 +91,7 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
             ].join("\n"),
           },
         },
-        ...embedded(skills, "sauce-overview", root),
+        ...embedded(skills, solana(chain) ? "sauce-solana" : "sauce-overview", root),
       ],
     }),
   );
@@ -125,14 +129,21 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
               "",
               `Read the Sauce skills first (with sauce_skill, or as resources: ${readList(skills, ["sauce-overview", "sauce-intents"])}),`,
               "and follow them. Then, with this server's tools:",
-              "1. sauce_globals for each chain involved, for its tokens and protocols.",
-              "2. sauce_compile with the intent's deadline and creator (intentDeadline,",
-              "   intentCreator) until it compiles; its intents are listed by sauce_inspect with",
-              "   the source alone.",
-              "3. For an intent fixed when it is built: sauce_publish for the unsigned approvals and",
+              "1. sauce_globals for each chain involved, for its tokens and protocols. An intent",
+              "   body names the destination's tokens by address (the skill says why).",
+              "2. Price it: the reward must cover what the solver delivers on the destination, plus",
+              "   the destination Kitchen's fee when the body runs a program there (sauce_pot with",
+              "   that chain's rpcUrl reads it; pass it as intentExecutionFee). sauce_price reads a",
+              "   pool's price for a swap in the body.",
+              "3. sauce_compile with intentDeadline (Unix seconds, in the future) and intentCreator",
+              "   until it compiles; sauce_inspect with the source alone lists each intent's route",
+              "   and reward.",
+              "4. Rehearse the body where it runs: sauce_simulate on the destination chain, with",
+              "   its rpcUrl, and assumeBalance for what the solver would bring.",
+              "5. For an intent fixed when it is built: sauce_publish for the unsigned approvals and",
               "   Portal.publishAndFund, from the wallet that funds the reward (dryRun to rehearse",
-              "   them, with an endpoint). For one that measures a value on chain:",
-              "   run the program on a Pot with sauce_tx.",
+              "   them, with an endpoint). For one that measures a value on chain: run the program",
+              "   on a Pot with sauce_tx.",
               "Nothing here signs: hand the wallet's owner the unsigned transactions, in order, and",
               "never ask for a private key.",
             ].join("\n"),

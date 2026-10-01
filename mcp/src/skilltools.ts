@@ -1,10 +1,11 @@
 /**
  * The agent skills as TOOLS, for a client that calls tools but never reads resources: the list of
- * skills, one skill's file, the SDK's own documents for TypeScript work, and how to install the
- * skills where an agent reads them. Each serves only files the package ships — a skill's files as
- * `resources.ts` lists them, the manual under `docs/` — by name, never by a path the caller builds.
+ * skills, one skill's file (or the part of it a task needs), the SDK's own documents for TypeScript
+ * work, and how to install the skills where an agent reads them. Each serves only files the package
+ * ships — a skill's files as `resources.ts` lists them, the manual under `docs/` — by name, never by
+ * a path the caller builds.
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,8 +21,16 @@ import { configSnippet, launch, SETUP_AGENTS, type SetupAgent } from "./setup.js
 /** The package's manual, two levels above this module in `mcp/{src,dist}`. */
 const DOCS = fileURLToPath(new URL("../../docs/", import.meta.url));
 
+/** The skill tools, in the order `tools/list` gives them (after `tools.ts#TOOL_NAMES`). */
+export const SKILL_TOOL_NAMES = [
+  "sauce_skills",
+  "sauce_skill",
+  "sauce_dev",
+  "sauce_install_skills",
+] as const;
+
 /** The topics `sauce_dev` serves, each the shipped documents that cover it and the words that
- *  name it in a question. */
+ *  name it in a question. Every one is about application code or tooling, not SauceScript. */
 export const DEV_TOPICS: ReadonlyArray<{
   readonly topic: string;
   readonly about: string;
@@ -31,7 +40,7 @@ export const DEV_TOPICS: ReadonlyArray<{
   {
     topic: "start",
     about: "install the package and build a first intent from TypeScript",
-    keywords: ["start", "install", "quick", "first", "hello", "setup", "begin"],
+    keywords: ["start", "install", "quick", "first", "hello", "begin", "typescript"],
     files: ["guides/quick-start.md", "examples/first-intent.ts"],
   },
   {
@@ -44,9 +53,7 @@ export const DEV_TOPICS: ReadonlyArray<{
       "compilesauceprogram",
       "bytecode",
       "compact",
-      "argument",
       "arguments",
-      "define",
       "defines",
       "entry",
       "wasm",
@@ -55,7 +62,7 @@ export const DEV_TOPICS: ReadonlyArray<{
   },
   {
     topic: "intents",
-    about: "cross-chain intents from TypeScript: routes, rewards, publishing, nesting",
+    about: "cross-chain intents from TypeScript: openRoute, rewards, publishing, nesting",
     keywords: [
       "intent",
       "intents",
@@ -65,13 +72,9 @@ export const DEV_TOPICS: ReadonlyArray<{
       "reward",
       "portal",
       "crosschain",
-      "cross",
-      "chain",
-      "bridge",
       "nest",
       "nested",
       "cascade",
-      "publish",
     ],
     files: [
       "guides/intents.md",
@@ -83,20 +86,8 @@ export const DEV_TOPICS: ReadonlyArray<{
   },
   {
     topic: "protocols",
-    about: "tokens and protocols by name, the registries, and what is covered",
-    keywords: [
-      "protocol",
-      "protocols",
-      "token",
-      "tokens",
-      "namespace",
-      "registry",
-      "uniswap",
-      "aave",
-      "coverage",
-      "approval",
-      "approve",
-    ],
+    about: "tokens and protocols from TypeScript: the registries, the namespaces, coverage",
+    keywords: ["registry", "registries", "coverage", "descriptor", "descriptors", "viem"],
     files: ["guides/protocols-and-tokens.md", "api/coverage.md", "examples/protocol-approval.ts"],
   },
   {
@@ -108,54 +99,52 @@ export const DEV_TOPICS: ReadonlyArray<{
   {
     topic: "execution",
     about: "running a program on a Pot from TypeScript: the cook, the engine, the Kitchen",
-    keywords: ["execute", "execution", "cook", "pot", "kitchen", "engine", "evm", "run", "deploy"],
+    keywords: ["execute", "execution", "cook", "engine", "client", "deployments", "architecture"],
     files: ["examples/evm-execution.ts", "concepts/architecture.md"],
   },
   {
     topic: "solana",
-    about: "Solana from TypeScript: the SVM client, accounts, the Kitchen, staging",
-    keywords: ["solana", "svm", "spl", "account", "accounts", "manifest", "lamports", "staging"],
+    about: "Solana from TypeScript: the SVM client, account plans, the Kitchen, staging",
+    keywords: ["solana", "svm", "spl", "manifest", "lamports", "staging"],
     files: ["guides/solana.md"],
   },
   {
     topic: "verification",
-    about: "checking a settle program and a settlement",
+    about: "checking a settle program and a settlement from TypeScript",
     keywords: ["verify", "verification", "settle", "settlement", "audit", "validate"],
     files: ["guides/verification.md"],
   },
   {
     topic: "api",
     about: "every published import and what it holds, deployments included",
-    keywords: [
-      "api",
-      "export",
-      "exports",
-      "import",
-      "imports",
-      "subpath",
-      "deployments",
-      "address",
-    ],
+    keywords: ["api", "export", "exports", "import", "imports", "subpath", "package"],
     files: ["api/README.md"],
   },
   {
     topic: "language",
-    about: "SauceScript itself: what runs on chain and what the compiler accepts",
-    keywords: ["saucescript", "language", "syntax", "builtin", "builtins", "semantics"],
+    about: "how the compiler sees SauceScript, as the TypeScript SDK documents it",
+    keywords: ["semantics", "frontend", "concepts"],
     files: ["concepts/saucescript.md"],
+  },
+  {
+    topic: "cli",
+    about: "the sauce command: every command and flag, endpoints and signers",
+    keywords: ["cli", "command", "commands", "terminal", "flags", "keystore", "sauce"],
+    files: ["guides/cli.md"],
+  },
+  {
+    topic: "mcp",
+    about: "this MCP server: running it, endpoints, agent setup, self-hosting",
+    keywords: ["mcp", "server", "setup", "agent", "agents", "selfhost", "http", "stdio"],
+    files: ["guides/mcp.md"],
   },
 ];
 
-/** The skill tools, in the order `tools/list` gives them (after `tools.ts#TOOL_NAMES`). */
-export const SKILL_TOOL_NAMES = [
-  "sauce_skills",
-  "sauce_skill",
-  "sauce_dev",
-  "sauce_install_skills",
-] as const;
-
 /** The skill a TypeScript task starts from, by its directory. */
 const TYPESCRIPT_SKILL = "sauce-typescript";
+
+/** A skill's references past this many are summarized, not listed, by `sauce_skills`. */
+const LISTED_REFERENCES = 12;
 
 const PURE: ToolAnnotations = {
   readOnlyHint: true,
@@ -213,22 +202,73 @@ const docFiles = (): Set<string> =>
       .map((entry) => join(entry.parentPath, entry.name).slice(DOCS.length).split("\\").join("/")),
   );
 
+/** The part of a markdown `text` under the heading that names `section`, to the next heading of
+ *  its level or above; `undefined` when no heading names it. */
+export function sectionOf(text: string, section: string): string | undefined {
+  const lines = text.split("\n");
+  const wanted = section.toLowerCase().replace(/^#+\s*/, "");
+  const start = lines.findIndex(
+    (line) =>
+      /^#{1,6}\s/.test(line) &&
+      line
+        .replace(/^#+\s*/, "")
+        .toLowerCase()
+        .includes(wanted),
+  );
+  if (start < 0) return undefined;
+  const level = /^#+/.exec(lines[start]!)![0].length;
+  const end = lines.findIndex(
+    (line, at) => at > start && /^#{1,6}\s/.test(line) && /^#+/.exec(line)![0].length <= level,
+  );
+
+  return lines.slice(start, end < 0 ? undefined : end).join("\n");
+}
+
+/** The lines of `text` that hold `query` (any case), each with two lines around it, the ranges
+ *  merged and numbered; at most `limit` matches. */
+export function linesMatching(text: string, query: string, limit = 40): string {
+  const lines = text.split("\n");
+  const wanted = query.toLowerCase();
+  const hits = lines
+    .map((line, at) => (line.toLowerCase().includes(wanted) ? at : -1))
+    .filter((at) => at >= 0)
+    .slice(0, limit);
+  const keep = new Set<number>();
+  for (const at of hits) {
+    for (let near = Math.max(0, at - 2); near <= Math.min(lines.length - 1, at + 2); near++) {
+      keep.add(near);
+    }
+  }
+  const out: string[] = [];
+  let previous = -2;
+  for (const at of [...keep].sort((a, b) => a - b)) {
+    if (at !== previous + 1 && out.length > 0) out.push("…");
+    out.push(`${at + 1}: ${lines[at]}`);
+    previous = at;
+  }
+
+  return out.join("\n");
+}
+
 /** Where each agent reads skills from, per the `sauce skills` command (the one source). */
 const INSTALL_AGENTS = ["claude", "codex", "cursor", "copilot", "gemini", "agents-md"] as const;
 
 export function registerSkillTools(server: McpServer, root: string = PACKAGED_SKILLS): void {
   const skills = shippedSkills(root);
   const { name: packageName, version } = packageInfo();
+  const bytes = (path: string): number => statSync(join(root, path)).size;
 
   server.registerTool(
     "sauce_skills",
     {
       title: "List the Sauce agent skills",
       description:
-        "Lists every agent skill this server carries — each skill's name, a description of " +
-        "when to use it, and its files — with the package and version they belong to. Start " +
-        "here before writing a Sauce program: read sauce-overview first, then the skill the " +
-        "task needs, with sauce_skill. (The same files are resources under sauce://skills/.)",
+        "Lists every agent skill this server carries: each skill's name, when to use it, and " +
+        "its files with their sizes, with the package and version they belong to. Start here " +
+        "before writing a Sauce program: read sauce-overview first, then the skill the task " +
+        "needs, with sauce_skill (which can return one section, or the lines matching a term, " +
+        "of a large file). A skill with many references (one document per protocol) lists a " +
+        "few and how to name the rest. The same files are resources under sauce://skills/.",
       annotations: { title: "List the Sauce agent skills", ...PURE },
       outputSchema: z.looseObject({
         package: z.string(),
@@ -241,12 +281,32 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
         package: packageName,
         version,
         index: SKILLS_INDEX,
-        skills: skills.map((skill) => ({
-          name: skill.name,
-          description: skill.description,
-          uri: skill.uri,
-          files: skill.files.map((file) => file.path.slice(skill.dir.length + 1)),
-        })),
+        skills: skills.map((skill) => {
+          const files = skill.files.map((file) => ({
+            path: file.path.slice(skill.dir.length + 1),
+            bytes: bytes(file.path),
+          }));
+          const references = files.filter((file) => file.path.startsWith("references/"));
+          const many = references.length > LISTED_REFERENCES;
+
+          return {
+            name: skill.name,
+            description: skill.description,
+            uri: skill.uri,
+            files: many ? files.filter((file) => !file.path.startsWith("references/")) : files,
+            ...(many
+              ? {
+                  references: {
+                    count: references.length,
+                    some: references.slice(0, LISTED_REFERENCES).map((file) => file.path),
+                    rest:
+                      "every other file is references/<name>.md: sauce_skill with that path, " +
+                      "or this skill's SKILL.md, which says how they are named",
+                  },
+                }
+              : {}),
+          };
+        }),
       }),
   );
 
@@ -255,10 +315,12 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
     {
       title: "Read a Sauce agent skill",
       description:
-        "Returns one skill's SKILL.md — its instructions — or, with `path`, one of the files it " +
-        "names under its references/ or examples/ (paths as sauce_skills lists them, such as " +
-        "references/builtins.md). Follow a SKILL.md as written; it says which further files to " +
-        "read. Only the files the package ships are served.",
+        "Returns one skill's SKILL.md — its instructions — or, with `path`, one of its files " +
+        "under references/ or examples/ (paths as sauce_skills lists them, such as " +
+        "references/builtins.md). A large file need not come whole: `section` returns the part " +
+        "under one heading, `query` the lines that hold a term, with the lines around them. " +
+        "Follow a SKILL.md as written; it says which further files to read. Only the files the " +
+        "package ships are served.",
       annotations: { title: "Read a Sauce agent skill", ...PURE },
       inputSchema: z
         .object({
@@ -276,6 +338,23 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
               "A file of that skill, relative to its directory (references/x.md, " +
                 "examples/y.sauce.ts). Default: SKILL.md.",
             ),
+          section: z
+            .string()
+            .min(1)
+            .max(200)
+            .optional()
+            .describe(
+              "Only the part under the markdown heading that holds these words, to the next " +
+                "heading of its level.",
+            ),
+          query: z
+            .string()
+            .min(2)
+            .max(200)
+            .optional()
+            .describe(
+              "Only the lines that hold this text (any case), numbered, with two lines around each.",
+            ),
         })
         .strict(),
       outputSchema: z.looseObject({ skill: z.string(), path: z.string(), text: z.string() }),
@@ -292,13 +371,38 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
               skill.files.map((each) => each.path.slice(skill.dir.length + 1)).join(", "),
           );
         }
+        if (args.section !== undefined && args.query !== undefined) {
+          throw new UsageError("give section or query, not both");
+        }
+        const whole = readFileSync(join(root, file.path), "utf8");
+        let text = whole;
+        if (args.section !== undefined) {
+          const found = sectionOf(whole, args.section);
+          if (found === undefined) {
+            const headings = whole
+              .split("\n")
+              .filter((line) => /^#{1,3}\s/.test(line))
+              .map((line) => line.replace(/^#+\s*/, ""));
+            throw new UsageError(
+              `${path} has no heading holding '${args.section}': its headings are ` +
+                headings.join("; "),
+            );
+          }
+          text = found;
+        } else if (args.query !== undefined) {
+          text = linesMatching(whole, args.query);
+          if (text === "") throw new UsageError(`${path} holds no '${args.query}'`);
+        }
 
         return json({
           skill: skill.name,
           path,
           uri: file.uri,
           mimeType: file.mimeType,
-          text: readFileSync(join(root, file.path), "utf8"),
+          bytes: whole.length,
+          ...(args.section === undefined ? {} : { section: args.section }),
+          ...(args.query === undefined ? {} : { query: args.query }),
+          text,
         });
       } catch (error) {
         return failure(error);
@@ -309,15 +413,17 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
   server.registerTool(
     "sauce_dev",
     {
-      title: "Get the SDK documents for a TypeScript task",
+      title: "Get the SDK documents for a TypeScript or tooling task",
       description:
-        "For writing TypeScript against the @eco-incorp/sauce SDK, rather than a SauceScript " +
-        "program: returns the sauce-typescript skill and the package's own documents (guides, " +
-        "API pages, runnable examples, each with its path) for a topic, or for the topics a " +
-        "free-text question names. Topics: " +
+        "For application code that uses the @eco-incorp/sauce SDK from TypeScript, and for the " +
+        "sauce command and this server — not for writing a SauceScript program, whose rules are " +
+        "the skills (sauce_skill: sauce-script, sauce-globals, sauce-protocols). Returns the " +
+        "package's own documents (guides, API pages, runnable examples, each with its path) for " +
+        "a topic or for the topics a free-text question names, with the sauce-typescript skill " +
+        "for a TypeScript topic. Topics: " +
         DEV_TOPICS.map((entry) => `${entry.topic} (${entry.about})`).join("; ") +
         ". With no match it lists them.",
-      annotations: { title: "Get the SDK documents for a TypeScript task", ...PURE },
+      annotations: { title: "Get the SDK documents for a TypeScript or tooling task", ...PURE },
       inputSchema: z
         .object({
           topic: z
@@ -351,15 +457,20 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
             chosen.flatMap((topic) => DEV_TOPICS.find((entry) => entry.topic === topic)!.files),
           ),
         ].filter((path) => shipped.has(path));
-        const skill = skills.find((each) => each.dir === TYPESCRIPT_SKILL);
         const available = DEV_TOPICS.map((entry) => ({ topic: entry.topic, about: entry.about }));
+        // The TypeScript skill comes with a TypeScript topic, never with a miss or the tooling.
+        const typescript = chosen.some((topic) => topic !== "cli" && topic !== "mcp");
+        const skill = typescript ? skills.find((each) => each.dir === TYPESCRIPT_SKILL) : undefined;
 
         return json({
           topics: chosen,
           ...(chosen.length === 0
             ? {
                 available,
-                notes: ["No topic matched: give one of these as topic, or ask with their words."],
+                notes: [
+                  "No topic matched: give one of these as topic, or ask with their words. For a " +
+                    "SauceScript program, read the skills instead (sauce_skills).",
+                ],
               }
             : {}),
           ...(skill === undefined
@@ -385,15 +496,18 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
   server.registerTool(
     "sauce_install_skills",
     {
-      title: "How to install the Sauce skills for an agent",
+      title: "Set a project up for a coding agent: the skills and this server",
       description:
-        "Says how to put the latest Sauce agent skills, and this MCP server, in a project for " +
-        "one coding agent. Writes nothing (the server may be remote): it returns the commands " +
-        "to run in the project — install, update, status, and init for a new project — where " +
-        "that agent reads skills from, and that agent's MCP configuration for this server. " +
-        "install is a no-op on a project already installed; update is how installed skills are " +
-        "upgraded.",
-      annotations: { title: "How to install the Sauce skills for an agent", ...PURE },
+        "To set up a project for a coding agent, call this. It says how to put this server's " +
+        "version of the package, its agent skills and this MCP server in a project for one " +
+        "agent, and writes nothing (the server may be remote): the commands to run in the " +
+        "project — add the package, install the skills (a no-op where they are installed), " +
+        "update them (the upgrade), check them, or init a new project — where that agent reads " +
+        "skills from, and the exact MCP configuration `mcp setup` writes for that agent.",
+      annotations: {
+        title: "Set a project up for a coding agent: the skills and this server",
+        ...PURE,
+      },
       inputSchema: z
         .object({
           agent: z
@@ -408,6 +522,15 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
             .max(512)
             .optional()
             .describe("The project directory the commands are for (default: the current one)."),
+          config: z
+            .string()
+            .min(1)
+            .max(512)
+            .optional()
+            .describe(
+              "An RPC endpoints file for the server to start with (--config), as the agent " +
+                "will find it: it must exist then, holding real URLs, no <…> placeholders.",
+            ),
         })
         .strict(),
       outputSchema: z.looseObject({ agent: z.string(), commands: z.looseObject({}) }),
@@ -415,36 +538,56 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
     (args) => {
       try {
         const agent = args.agent;
-        const latest = `npx -y ${packageName}@latest`;
+        // This server's own version, everywhere: the skills it serves describe this package.
+        const pinned = `${packageName}@${version}`;
+        const run = `npx -y ${pinned}`;
         const dir = args.dir === undefined ? "" : ` --dir ${JSON.stringify(args.dir)}`;
+        const config = args.config === undefined ? "" : ` --config ${JSON.stringify(args.config)}`;
         const reads = skillTargets([agent]).map((target) => target.path.split("\\").join("/"));
         const mcp = (SETUP_AGENTS as readonly string[]).includes(agent)
-          ? configSnippet(agent as SetupAgent, launch({ packageName }))
+          ? configSnippet(
+              agent as SetupAgent,
+              launch({
+                packageName,
+                version,
+                ...(args.config === undefined ? {} : { config: args.config }),
+              }),
+            )
           : undefined;
 
         return json({
           agent,
+          version,
           skillsFrom: reads,
           commands: {
-            install: `${latest} skills install --agent ${agent}${dir}`,
-            update: `${latest} skills update --agent ${agent}${dir}`,
-            status: `${latest} skills status --agent ${agent}${dir}`,
-            init: `${latest} init${args.dir === undefined ? "" : ` ${JSON.stringify(args.dir)}`} --agent ${agent}`,
+            add: `npm install --save-exact ${pinned}`,
+            install: `${run} skills install --agent ${agent}${dir}`,
+            update: `${run} skills update --agent ${agent}${dir}`,
+            status: `${run} skills status --agent ${agent}${dir}`,
+            init: `${run} init${args.dir === undefined ? "" : ` ${JSON.stringify(args.dir)}`} --agent ${agent}`,
             ...(mcp === undefined
               ? {}
-              : { mcpSetup: `${latest} mcp setup --agent ${agent}${dir}` }),
+              : { mcpSetup: `${run} mcp setup --agent ${agent}${dir}${config}` }),
           },
           ...(mcp === undefined ? {} : { mcp: { path: mcp.path, config: mcp.text } }),
           notes: [
+            `Every command is pinned to ${pinned}, the version this server carries.`,
+            "add puts the package in an existing project; init scaffolds a new one pinned the " +
+              "same way, with its skills installed.",
             "install is the first install, and a no-op on a project already installed: update " +
               "brings installed skills to the version that runs it; status exits 1 while they " +
               "are outdated.",
-            "init scaffolds a new project pinned to one version, with its skills installed.",
             ...(mcp === undefined
               ? ["agents-md is an index of the skills in AGENTS.md; it names no MCP configuration."]
               : [
-                  `mcp is ${mcp.path} as the agent reads it from the project; \`mcp setup\` writes ` +
-                    "it, keeping what else the file holds.",
+                  `mcp is ${mcp.path} exactly as mcpSetup writes it, keeping what else the file ` +
+                    "holds.",
+                ]),
+            ...(args.config === undefined
+              ? []
+              : [
+                  `The server stops at start when ${args.config} is missing, malformed or holds a ` +
+                    "<…> placeholder.",
                 ]),
           ],
         });
