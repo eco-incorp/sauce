@@ -729,30 +729,34 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     const flagged = [...base, "--salt", "vault", "--rpc-url", RPC_URL, ...flags];
     const sentBefore = rpc.sent.length;
     const out = json(await sauce(...flagged, "--json", "--args", "400"));
-    expect(out.tokenChanges).toEqual([
-      {
-        account: source,
-        label: "source",
-        mint,
-        owner: pot,
-        before: "1000",
-        after: "600",
-        delta: "-400",
-        decimals: 6,
-        formatted: "-0.0004",
-      },
-      {
-        account: dest,
-        label: "dest",
-        mint,
-        owner: expect.any(String),
-        before: "0",
-        after: "400",
-        delta: "400",
-        decimals: 6,
-        formatted: "0.0004",
-      },
-    ]);
+    // In the transaction's account order, which follows the addresses: compared as a set.
+    expect(out.tokenChanges).toHaveLength(2);
+    expect(out.tokenChanges).toEqual(
+      expect.arrayContaining([
+        {
+          account: source,
+          label: "source",
+          mint,
+          owner: pot,
+          before: "1000",
+          after: "600",
+          delta: "-400",
+          decimals: 6,
+          formatted: "-0.0004",
+        },
+        {
+          account: dest,
+          label: "dest",
+          mint,
+          owner: expect.any(String),
+          before: "0",
+          after: "400",
+          delta: "400",
+          decimals: 6,
+          formatted: "0.0004",
+        },
+      ]),
+    );
     // The owner pays the Kitchen's fee and the transaction's: its lamports fall by at least both.
     const lamportChanges = out.lamportChanges as Array<{ account: string; delta: string }>;
     const paid = lamportChanges.find((change) => change.account === owner.signer.address);
@@ -767,9 +771,12 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(rpc.sent.length).toBe(sentBefore);
 
     const text = await sauce(...flagged, "--args", "400");
+    expect(text.stdout).toContain("Token balance changes:\n");
     expect(text.stdout).toContain(
-      `Token balance changes:\n  ${source} (source), owned by ${pot} (the Pot): -0.0004 of mint ${mint}\n` +
-        `  ${dest} (dest), owned by `,
+      `\n  ${source} (source), owned by ${pot} (the Pot): -0.0004 of mint ${mint}\n`,
+    );
+    expect(text.stdout).toMatch(
+      new RegExp(`\\n {2}${dest} \\(dest\\), owned by \\w+: \\+0\\.0004 of mint ${mint}\\n`),
     );
     expect(text.stdout).toMatch(
       new RegExp(
