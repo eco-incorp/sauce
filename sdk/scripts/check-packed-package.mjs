@@ -263,7 +263,7 @@ try {
     stdio: "inherit",
     env: smokeEnv,
   });
-  // Check emitted declarations from a real install, not src/. Bare source globals
+  // Check emitted declarations from a real install, not src/. Bare source globals and builtins
   // must survive declaration emit and the root package's side-effect import.
   // Base is a named export; USDC and Uniswap are SauceScript globals the compiler resolves
   // inside the route body — declared types with no runtime value, so importing them would be
@@ -282,6 +282,9 @@ try {
     };
     const built = Base(() => {
       USDC.approve(Uniswap.UniversalRouter, 1000000n);
+      // The language's builtins are declared for a typed closure too (builtins.generated.ts).
+      require(ctx.timestamp() > 0n, "stale");
+      log(crypto.keccak256(hex\`01\`).toBytesBe(32n));
     }, options).reward(0n);
     if (built.compiled.bytecode[0].length === 0) throw new Error('Empty route');
     // The actions declarations reference the SDK's by relative path; this checks they resolve.
