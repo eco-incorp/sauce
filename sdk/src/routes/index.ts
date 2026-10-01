@@ -126,9 +126,11 @@ export {
   knownTokenSymbols,
   registryTokenAddress,
   resolveTokenMap,
+  SVM_TOKEN_REGISTRY,
+  svmTokenRows,
   TOKEN_REGISTRY,
 } from "./token-registry.js";
-export type { TokenRegistryRow } from "./token-registry.js";
+export type { SvmTokenCluster, SvmTokenRow, TokenRegistryRow } from "./token-registry.js";
 export { openRoute } from "./intent-dsl.js";
 export { destinationPot } from "./intent-pot.js";
 export type {

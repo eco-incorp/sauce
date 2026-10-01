@@ -3,7 +3,8 @@
  * through the published `@eco-incorp/sauce-compiler`, for both targets.
  *
  * Five things are asserted here and nowhere else in this repo:
- *   1. every exported method compiles on both arms, at the signature each arm actually declares;
+ *   1. every exported method compiles on both arms, at the signature each arm actually declares, and
+ *      a method only one account model has (`ownerOf`) compiles on its arm and is refused on the other;
  *   2. the SPL Token program id the library pins its `require`s to, counted in the emitted bytecode;
  *   3. the ERC-20 selectors the EVM writes spell out by hand, counted the same way;
  *   4. what the library demands of its caller, which only a compile failure can show — the manifest
@@ -24,7 +25,7 @@ import { join } from "node:path";
 import { address, getAddressCodec } from "@solana/kit";
 import { toFunctionSelector } from "viem";
 import { Permit2ABI } from "../../../src/protocols/permit2/abis.js";
-import { CASES, compileStdToken, compileWith, TOKEN_DIR } from "./harness.js";
+import { CASES, compileStdToken, compileWith, SVM_ONLY_CASES, TOKEN_DIR } from "./harness.js";
 import type { AccountEntry } from "./harness.js";
 
 // `requires` is the role the slot demands of whatever account is attached there. Every account in
@@ -43,7 +44,8 @@ const caseNamed = (method: string) => {
   return testCase;
 };
 
-const svmEntry = (method: string): string => caseNamed(method).svm;
+const svmEntry = (method: string): string =>
+  (SVM_ONLY_CASES.find((entry) => entry.method === method) ?? caseNamed(method)).svm;
 
 const manifestOf = (method: string): AccountEntry[] => {
   const { manifest } = compileStdToken(svmEntry(method), "svm");
@@ -80,6 +82,19 @@ describe("@sauce/token: every exported method compiles on both targets", () => {
   });
 });
 
+describe("@sauce/token: the methods only the SPL arm has", () => {
+  it.each(SVM_ONLY_CASES)("$method compiles for Solana, reading the one account", ({ method }) => {
+    expect(manifestOf(method)).toEqual([slot(0, "account")]);
+  });
+
+  it.each(SVM_ONLY_CASES)("$method is not exported for the EVM", ({ method, svm }) => {
+    // Refused at the import, naming the method, rather than compiled into something that guesses.
+    expect(() => compileStdToken(svm.replace(/: Account\b/g, ": Address"), "evm")).toThrow(
+      `\`${method}\` is not exported by module`,
+    );
+  });
+});
+
 describe("@sauce/token: the SPL Token program id", () => {
   // Every `require(… == SPL_TOKEN_PROGRAM)` compiles the id inline, so counting occurrences counts the
   // guards. Nothing else in CI can: the guards only *fire* on an engine, and both e2e suites that own
@@ -92,6 +107,7 @@ describe("@sauce/token: the SPL Token program id", () => {
   // five, so this is also where a regression in that pruning would surface.
   it.each([
     ["balanceOf", 1],
+    ["ownerOf", 1],
     ["totalSupply", 1],
     ["decimals", 1],
     ["allowance", 1],

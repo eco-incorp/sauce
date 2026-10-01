@@ -8,8 +8,10 @@ description: Writing and running Sauce programs on Solana (the SVM target) — d
 A Solana program must declare every account it touches before it runs. In SauceScript those are
 `Account` parameters of `main`; the compile returns them, in order and with their roles, as the
 **account manifest**, and each is attached by name when the program runs. A program for Solana is
-compiled with `--chain solana`. Its signatures are annotated, and the EVM registry names (`USDC`,
-protocol namespaces) do not exist there; the `@sauce/token` functions do, with no import.
+compiled with `--chain solana`. Its signatures are annotated. Protocol namespaces and the token
+methods (`USDC.transfer(...)`) do not exist there; the `@sauce/token` functions do, with no import,
+and a registered token symbol (`USDC`, `USDT`, `WSOL`) is its mint's 32-byte key, a value they take:
+`balanceOf(USDC, account)`. `sauce globals --chain solana` lists the mints, and devnet's.
 
 ```sauce chain=solana define=MINT
 function main(
@@ -49,7 +51,9 @@ npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypai
 - `svm.sload(account, offset, length)` reads bytes; `.toLe()`/`.toBe()` make a number.
   `svm.call(program, [accounts...], data)` is a CPI to an attached program account.
 - Scalar parameters are runtime arguments (`--args`); `Account` parameters are not encoded. A
-  32-byte key the program needs as a value, such as a mint, is a define: `--define MINT=<hex>`.
+  32-byte key the program needs as a value, such as a mint, is a define: `--define MINT=<hex>`. A
+  define also overrides a registered symbol, which is how a devnet program names devnet's USDC; a
+  module `const USDC = …` does not, since the symbol is itself a define and a define wins.
 - On Solana `ctx.self()` is the executing Sauce program's id, `ctx.msgSender()` the transaction's
   first signer, and `ctx.balance(acct.address)` an attached account's lamports. `ctx.msgValue`,
   `ctx.gasLeft`, `ctx.codeSize` and the other EVM reads are rejected; move lamports with a
@@ -61,10 +65,16 @@ npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypai
 The SPL arm takes the mint first, then the accounts: `transfer(mint, tokenProgram, source, dest,
 authority, amount)`, `approve(mint, tokenProgram, source, delegate, authority, amount)`,
 `transferFrom` (the same instruction: SPL has one transfer for owners and delegates),
-`balanceOf(mint, account)`, `allowance(mint, account, spender)`, `totalSupply(mintAccount)`,
-`decimals(mintAccount)`. Every function requires the classic SPL Token program as the account owner
-and callee, checks the mint, and rejects amounts above `u64`; a Token-2022 account is refused. SPL
-tracks one delegate per account, so a second `approve` replaces the first.
+`balanceOf(mint, account)`, `allowance(mint, account, spender)`, `ownerOf(mint, account)`,
+`totalSupply(mintAccount)`, `decimals(mintAccount)`. Every function requires the classic SPL Token
+program as the account owner and callee, checks the mint, and rejects amounts above `u64`; a
+Token-2022 account is refused. SPL tracks one delegate per account, so a second `approve` replaces
+the first.
+
+A transfer's `authority` may be the source's owner or its delegate, so a transfer that succeeds does
+not show whose account `source` is. `ownerOf(mint, account)` reads the token account's owner (the
+wallet or PDA whose balance it is, not `account.owner`, the SPL Token program): before treating a
+balance as the Pot's, `require(ownerOf(USDC, source) == authority, "not the Pot's account")`.
 
 For Token-2022 and `TransferChecked`, generate the program from TypeScript with the token builder
 (`token.Token.transfer({ amount, svm: { ... } }).source("svm")`, top-level
