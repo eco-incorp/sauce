@@ -11,7 +11,12 @@ liquid-staking | Chains and addresses: [registry/rocket-pool.md](registry/rocket
 - **deposit**: Stake ETH and receive rETH
 - **burn**: Burn rETH to redeem ETH (subject to pool liquidity)
 
-## SauceScript Examples
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Deposit ETH for rETH

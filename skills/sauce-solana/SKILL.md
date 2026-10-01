@@ -114,6 +114,21 @@ succeeds from an account where the Pot is only a delegate, up to the delegated a
 `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`: pass it as `--define USDC=<key>`, which wins over
 the symbol. The Solana file in `sauce-chains` lists every registered mint, mainnet's and devnet's.
 
+`--account <name>=pot` attaches **the Pot's own account**, not its USDC. The Pot's USDC is a token
+account of its own, so a program reading it takes that account as a parameter and checks whose it
+is:
+
+```sauce chain=solana
+function main(pot: Account<Signer>, potUsdc: Account): Uint256 {
+  require(ownerOf(USDC, potUsdc) == pot.address, "not the Pot's USDC account");
+  return balanceOf(USDC, potUsdc);
+}
+```
+
+run with `--account pot=pot` and the Pot's USDC account in the second slot. Passing the Pot for
+that slot fails the checks with no message (the Pot is not an SPL token account), and so does an
+account that does not exist: **a Pot with no USDC account holds no USDC**.
+
 The Pot's USDC sits in its associated token account, the ATA of (Pot, mint). Derive it with
 `findAssociatedTokenPda` and create it with `getCreateAssociatedTokenIdempotentInstruction`, both
 from `@solana-program/token`, then fund it with an ordinary SPL transfer from any wallet: `--fund`

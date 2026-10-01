@@ -60,7 +60,26 @@ the pool asks for, in the input token, never more than the exact input
 the two addresses. Selling token0 moves the price down, so the limit is a floor; selling token1
 moves it up, so it is a ceiling. It must lie strictly between `4295128739` and
 `1461446703485210103287273052203988822378723970342` and on the far side of the pool's current
-price, or the pool reverts.
+price, or the pool reverts `SPL`.
+
+**Convert a price with `sauce price`**, which reads no network:
+`npx sauce price --chain base WETH USDC 2686.5`. The price is **quote per base**: the first token
+is the one priced, the second what it is priced in, so this is 2,686.5 USDC per WETH. Swapped,
+`USDC WETH 2686.5` would mean 2,686.5 WETH per USDC, a limit nowhere near any pool. It prints the
+pair's order on the chain (on Base WETH is token0, the lower address, and USDC token1) and two
+blocks:
+
+- **`sell`** (the base token in: WETH → USDC): its `sqrtPriceLimitX96` is a **floor**;
+- **`buy`** (the base token out: USDC → WETH): its `sqrtPriceLimitX96` is a **ceiling**.
+
+Each block also gives `minAvgPrice` for that direction. Take the limit from the block of the
+direction you trade.
+
+**Put the limit near the current price, on the far side of it.** A limit far beyond the price, such
+as the bound itself, is no limit at all: the pool fills down (or up) to it at any price. One on the
+wrong side fills nothing: a single swap reverts `SPL`, and a distributed swap skips every pool and
+refunds everything, which is not a success. In a real run never pass both `minOut` and
+`minAvgPrice` as `0`.
 
 **Build the limit from the best price a taker gets among pools with liquidity**: drop the pools
 with no in-range liquidity (`liquidity()`, or less than the order needs), take the best price after
@@ -83,6 +102,23 @@ must never end with any of its input left in the Pot.
 
 A V4 pool priced in native ETH has `currency0` = `0x0`: it is a different pair from the WETH pools,
 and it needs native ETH in the Pot.
+
+## When a swap reverts
+
+A V3-style pool reverts with a short string, and the Router with a custom error:
+
+| Revert                                   | From       | Means                                                                                           |
+| ---------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------- |
+| `SPL`                                    | the pool   | the price limit is on the wrong side of the pool's current price, or at or past a bound (above) |
+| `AS`                                     | the pool   | the amount is zero                                                                              |
+| `LOK`                                    | the pool   | the pool is not initialized (or is mid-swap)                                                    |
+| `IIA`                                    | the pool   | its callback paid less input than it asked for                                                  |
+| `TF`                                     | the pool   | its transfer of the output token failed                                                         |
+| `InvalidPool()`, `0x2083cd40`            | the Router | the pool's `token0`/`token1` are not the pair passed                                            |
+| `InputExceedsAuthorized()`, `0x510db218` | the Router | the pool asked for more input than the exact input offered                                      |
+
+A revert inside the program (`fill below minOut`, a `require` message) is the program's own; the
+cook reverts as a whole either way.
 
 ## The guard (required on every swap)
 

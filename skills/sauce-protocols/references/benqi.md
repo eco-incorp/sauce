@@ -6,7 +6,12 @@ Leading lending and borrowing protocol on Avalanche. Compound V2 fork with addit
 
 lending | Chains and addresses: [registry/benqi.md](registry/benqi.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### supply
 

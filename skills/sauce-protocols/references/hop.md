@@ -6,7 +6,12 @@ Token bridge for rollups using bonders for fast withdrawals. Supports ETH, USDC,
 
 bridge | Direction: L1-to-L2 (sendToL2), L2-to-L2/L1 (swapAndSend) | Chains and addresses: [registry/hop.md](registry/hop.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### bridgeFromL1
 

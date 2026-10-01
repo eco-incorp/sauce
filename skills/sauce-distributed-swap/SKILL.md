@@ -418,9 +418,11 @@ in base units. Take each token's decimals from
 [../sauce-globals/references/tokens.md](../sauce-globals/references/tokens.md).
 
 - **`sauce price --chain base WETH USDC 2686.5`** prints the pool's `sqrtPriceX96` at that price
-  (which is also the swap's limit, a floor selling token0 and a ceiling selling token1) and the
-  `minAvgPrice` for each direction, rounded up. `--sqrt-price-x96 <value>` reads a pool's price
-  back. It reads no network.
+  (which is also the swap's limit) and the `minAvgPrice` for each direction, rounded up. The price
+  is quote per base: 2,686.5 USDC per WETH, WETH being the token priced; `USDC WETH 2686.5` would be
+  2,686.5 WETH per USDC. Selling WETH (WETH → USDC) takes the `sell` block, a floor; buying it
+  (USDC → WETH) the `buy` block, a ceiling. `--sqrt-price-x96 <value>` reads a pool's price back.
+  It reads no network.
 - **By hand, from a human price to `sqrtPriceX96`**: with `P` the price of one whole token0 in whole
   token1 and `d0`, `d1` the decimals, `sqrtPriceX96 = floor(sqrt(P × 10^d1 / 10^d0) × 2^96)`,
   computed in integers as the integer square root of `P × 10^d1 × 2^192 / 10^d0`. A price quoted

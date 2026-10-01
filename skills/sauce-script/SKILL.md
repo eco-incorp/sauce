@@ -26,7 +26,9 @@ what every registry name means. A file takes one of two forms:
 | **`function main(…)`** | `main`'s parameters, passed at run time (`--args`); module constants for choices made per compile    | reusable programs: one bytecode serves every input, such as a swap's tokens, amount and limit |
 | **Top-level script**   | names the file leaves undeclared, each set by a define (`--define NAME=VALUE`); no runtime arguments | intent files (`sauce-intents`), which are only statements, and one-off programs               |
 
-A program with runtime inputs declares `main`, and may declare helper functions and import ABIs:
+A program with runtime inputs declares `main`, and may declare helper functions and import ABIs.
+(The `chain=…` after an example's opening fence here only says which chains it is checked on; it
+is not part of the file.)
 
 ```sauce chain=base,arbitrum
 // A compile-time choice: a module constant, which a define of the same name replaces.
@@ -46,6 +48,12 @@ function main(recipient: Address, floor: Uint256) {
   USDC.transfer(recipient, afterFee(held, FEE_BPS));
 }
 ```
+
+**`main` may return a value**, which the cook returns to whoever called it, so an `eth_call` of
+the cook reads it before anything is sent (`sauce simulate` prints it after `returns`). Declare
+the type: `main(): Address`, `: Uint256` or `: bool` comes back as one 32-byte word, a record as its
+fields one word each, and `: bytes` as the bytes themselves, unwrapped, so
+`return abi.encode(spent, bought)` gives two words. A `void` `main` returns nothing.
 
 A top-level script runs its statements in order. It declares no function and imports nothing, and
 every value it does not compute is a define: the name stays undeclared in the file, and

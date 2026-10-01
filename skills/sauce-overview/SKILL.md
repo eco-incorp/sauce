@@ -65,6 +65,10 @@ npx sauce run payout.sauce.ts --chain base --config sauce.config.json --keystore
   --args <recipient> 1000000
 ```
 
+**Units differ by flag.** `--args` and defines take base units: `1000000` is 1 USDC (6
+decimals). `--assume-balance` and `--fund` take whole tokens: `USDC:1` is 1 USDC, and
+`USDC:1000000n`, ending in `n`, the same in base units.
+
 Compiling for a chain produces the program's bytecode; running it is one transaction to the
 owner's Pot, `cook(engine, program)` with `main`'s arguments appended to the program, paying the
 Kitchen's fee. `sauce tx` prints that transaction unsigned, `{ chainId, to, data, value }`, for

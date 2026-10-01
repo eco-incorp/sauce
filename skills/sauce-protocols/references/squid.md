@@ -6,7 +6,12 @@ Cross-chain liquidity router built on Axelar. Enables one-click cross-chain swap
 
 bridge aggregator | Direction: any-to-any | Chains and addresses: [registry/squid.md](registry/squid.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### bridge
 

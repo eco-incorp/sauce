@@ -12,7 +12,12 @@ options | Chains and addresses: [registry/premia.md](registry/premia.md)
 - **settle**: Settle a short options position after expiry
 - **trade**: Buy or sell options via the Premia AMM
 
-## SauceScript Examples
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 Premia v3 has one pool contract per market (base, quote, strike, maturity, call/put), deployed by the PoolFactory; its `PoolDeployed` event names each pool. `exercise` and `settle` act on the caller's own position in that pool.
 

@@ -46,7 +46,12 @@ dex | Chains and addresses: [registry/uniswap-v2.md](registry/uniswap-v2.md)
 - **addLiquidity**: Deposit two tokens into a pair to mint LP tokens proportional to pool share
 - **removeLiquidity**: Burn LP tokens to withdraw both underlying tokens from a pair
 
-## SauceScript Examples
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### swap
 

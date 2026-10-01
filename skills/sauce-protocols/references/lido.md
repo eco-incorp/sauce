@@ -12,7 +12,12 @@ liquid-staking | Chains and addresses: [registry/lido.md](registry/lido.md)
 - **wrap**: Wrap stETH into wstETH (non-rebasing, DeFi-compatible)
 - **unwrap**: Unwrap wstETH back to stETH
 
-## SauceScript Examples
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Stake ETH for stETH

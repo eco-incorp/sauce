@@ -12,7 +12,12 @@ yield | Chains and addresses: [registry/yearn-v3.md](registry/yearn-v3.md)
 - **withdraw**: Withdraw assets by specifying asset amount
 - **redeem**: Withdraw by specifying share amount
 
-## SauceScript Examples
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Deposit into Yearn V3 vault
