@@ -152,14 +152,29 @@ export type {
 
 export {
   approvalTxs,
+  assertIntentVault,
   fundTx,
+  INTENT_FUND_VIA,
   intentHashCall,
+  intentSourceTxs,
+  IntentVaultMismatchError,
   intentVaultAddressCall,
   isIntentFundedCall,
+  predictIntentVault,
   publishAndFundTx,
   publishTx,
+  rewardVaultLegs,
+  vaultTransferTx,
+  vaultTransferTxs,
 } from "./portal.js";
-export type { PortalReadCall, PortalTarget, PortalTx } from "./portal.js";
+export type {
+  IntentFundVia,
+  IntentSourceTxsOptions,
+  PortalReadCall,
+  PortalTarget,
+  PortalTx,
+  VaultLeg,
+} from "./portal.js";
 
 export { assertNestingInvariants, assertStaticChild, nestedChildCalls } from "./nest.js";
 export type { AssertNestingInvariantsArgs, NestChild, NestedChildOptions } from "./nest.js";

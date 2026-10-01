@@ -28,12 +28,14 @@ import { v12DeployedAddresses, v12EngineAddress } from "../deployments/index.js"
 import { v12PredictPot } from "../deployments/pot.js";
 import { v12KitchenAbi, v12PotAbi } from "../evm/engine.js";
 import { PortalABI } from "../protocols/eco-routes/abis.js";
+import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { ERC20ABI } from "../protocols/erc20/abis.js";
 import { decodeRoute, denormalizeToEvm, hashIntent } from "../routes/encode.js";
 import { decodeEntryArguments, type EntryValue } from "../routes/entry.js";
 import { toUniversalAddress } from "../routes/normalize.js";
 import type { CompiledSauceProgram } from "../routes/sauce-route.js";
 import type { Reward, Route, UniversalAddress } from "../routes/types.js";
+import { ecoRoutesVaultConfig, predictVaultAddress } from "../routes/vault.js";
 import { validateSettleProgram } from "../verify/decode.js";
 import { CliError } from "./args.js";
 import { connect, receiptOf } from "./chain.js";
@@ -45,6 +47,20 @@ export interface InspectContext {
   readonly chain?: CanonicalChain;
   /** The program a cook was compiled from, to read its arguments back against. */
   readonly source?: { readonly file: string; readonly program: CompiledSauceProgram };
+  /** The Portal a publication was sent to, when known (a transaction's `to`); otherwise an intent's
+   *  vault is derived for `chain`'s registry Portal. */
+  readonly portal?: Address;
+  /** The intent carries values a program measures as it runs, so its vault is not known yet. */
+  readonly measured?: boolean;
+}
+
+/** The chain's eco-routes Portal, or `undefined` where the registry has none. */
+function registryPortal(chain: CanonicalChain): Address | undefined {
+  try {
+    return getAddress(ecoRoutesPortal(chain));
+  } catch {
+    return undefined;
+  }
 }
 
 /** One described thing: JSON for a program, lines for a person. */
@@ -53,9 +69,33 @@ interface Part {
   readonly lines: readonly string[];
 }
 
-const PUBLISH_AND_FUND = toFunctionSelector(
-  PortalABI.find((item) => item.type === "function" && item.name === "publishAndFund")!,
-).slice(2);
+const portalSelector = (name: "publish" | "publishAndFund"): string =>
+  toFunctionSelector(
+    PortalABI.find(
+      (item): item is Extract<(typeof PortalABI)[number], { type: "function" }> =>
+        item.type === "function" && item.name === name,
+    )!,
+  ).slice(2);
+
+/**
+ * The two Portal calls a program publishes an intent with: `publish`, after paying the vault itself
+ * (the SDK's default), or `publishAndFund`, after approving the Portal. Both take the destination,
+ * the route bytes and the reward first.
+ */
+const PUBLISHING: ReadonlyMap<string, "transfer" | "publishAndFund"> = new Map([
+  [portalSelector("publish"), "transfer"],
+  [portalSelector("publishAndFund"), "publishAndFund"],
+]);
+
+/** How an intent a program opens is funded, as a line and as JSON. */
+const funding = (fundVia: "transfer" | "publishAndFund"): Part => ({
+  json: { fundVia },
+  lines: [
+    fundVia === "transfer"
+      ? "funded: the program pays the reward into the intent's vault, then calls Portal.publish"
+      : "funded: the program approves the Portal, then calls Portal.publishAndFund",
+  ],
+});
 
 const indent = (lines: readonly string[], by = "  "): string[] => lines.map((line) => by + line);
 
@@ -214,6 +254,14 @@ function intentPart(
           route,
           reward: universal,
         });
+  // Where the reward is escrowed — the address a funder pays into before `publish` — derived as the
+  // SDK derives it, for the Portal the call went to or, failing that, the chain's registry Portal.
+  const portal =
+    context.portal ?? (context.chain === undefined ? undefined : registryPortal(context.chain));
+  const vault =
+    hashes === undefined || portal === undefined || context.measured === true
+      ? undefined
+      : predictVaultAddress(hashes.intentHash, ecoRoutesVaultConfig(portal));
   const calls = route.calls.map((call) => routeCall(call, depth));
   const tokens = (list: readonly { token: string; amount: bigint }[]): string =>
     list.length === 0 ? "none" : list.map((t) => `${t.amount} of ${t.token}`).join(", ");
@@ -225,6 +273,7 @@ function intentPart(
         ...(destinationChain === undefined ? {} : { chain: destinationChain.slug }),
       },
       ...(hashes === undefined ? {} : hashes),
+      ...(vault === undefined ? {} : { vault }),
       route: {
         salt: route.salt,
         deadline: route.deadline.toString(),
@@ -240,6 +289,9 @@ function intentPart(
       ...indent([
         `reward: ${tokens(reward.tokens)}${reward.nativeAmount === 0n ? "" : ` and ${reward.nativeAmount} wei`}, ` +
           `to whoever proves it through ${reward.prover} by ${reward.deadline}; creator ${reward.creator}`,
+        ...(vault === undefined
+          ? []
+          : [`vault: ${vault}, funded once it holds the reward (Portal ${portal})`]),
         `route: deadline ${route.deadline}, delivers ${tokens(
           route.tokens.map((t) => ({ token: evmOf(t.token), amount: t.amount })),
         )}, then calls:`,
@@ -249,47 +301,67 @@ function intentPart(
   };
 }
 
-/** Every `publishAndFund` a program embeds, decoded where its bytes are all known at compile time. */
+/** `part` with how it is funded beside it. */
+const fundedBy = (part: Part, fundVia: "transfer" | "publishAndFund"): Part => ({
+  json: { ...part.json, ...funding(fundVia).json },
+  lines: [part.lines[0]!, ...indent(funding(fundVia).lines), ...part.lines.slice(1)],
+});
+
+/** Every `publish` and `publishAndFund` a program embeds, in the order its bytes carry them,
+ *  decoded where its bytes are all known at compile time. */
 function embeddedIntents(program: Uint8Array, context: InspectContext, depth: number): Part[] {
   const hex = bytesToHex(program).slice(2);
+  const sites = [...PUBLISHING]
+    .flatMap(([selector, fundVia]) => {
+      const found: { at: number; fundVia: "transfer" | "publishAndFund" }[] = [];
+      for (let at = hex.indexOf(selector); at >= 0; at = hex.indexOf(selector, at + 2)) {
+        if (at % 2 === 0) found.push({ at, fundVia });
+      }
+
+      return found;
+    })
+    .sort((a, b) => a.at - b.at);
   const parts: Part[] = [];
-  for (
-    let at = hex.indexOf(PUBLISH_AND_FUND);
-    at >= 0;
-    at = hex.indexOf(PUBLISH_AND_FUND, at + 2)
-  ) {
-    if (at % 2 !== 0) continue;
+  for (const { at, fundVia } of sites) {
     const data = `0x${hex.slice(at)}` as Hex;
+    const expected = fundVia === "transfer" ? "publish" : "publishAndFund";
     try {
       const decoded = decodeFunctionData({ abi: PortalABI, data });
-      if (decoded.functionName !== "publishAndFund") continue;
+      if (decoded.functionName !== expected) continue;
       const [destination, routeBytes, reward] = decoded.args as unknown as [
         bigint,
         Hex,
         DecodedReward,
       ];
-      parts.push(publishedIntent(destination, routeBytes, reward, context, depth));
+      parts.push(
+        fundedBy(publishedIntent(destination, routeBytes, reward, context, depth), fundVia),
+      );
     } catch {
       // Split around values the program measures when it runs: only the destination, the first
       // argument, is whole. The rest is filled in on chain.
       if (data.length < 2 + 8 + 64) continue;
       const destination = hexToBigInt(slice(data, 4, 36));
       if (destination >> 64n !== 0n) continue;
-      parts.push({
-        json: {
-          destination: {
-            id: destination.toString(),
-            ...(resolveChain(destination) === undefined
-              ? {}
-              : { chain: resolveChain(destination)!.slug }),
+      parts.push(
+        fundedBy(
+          {
+            json: {
+              destination: {
+                id: destination.toString(),
+                ...(resolveChain(destination) === undefined
+                  ? {}
+                  : { chain: resolveChain(destination)!.slug }),
+              },
+              measured: true,
+            },
+            lines: [
+              `intent to ${chainNamed(destination)}, with values the program measures when it ` +
+                "runs (inspect its source file to see them)",
+            ],
           },
-          measured: true,
-        },
-        lines: [
-          `intent to ${chainNamed(destination)}, with values the program measures when it runs ` +
-            "(inspect its source file to see them)",
-        ],
-      });
+          fundVia,
+        ),
+      );
     }
   }
 
@@ -414,7 +486,10 @@ function cookCall(data: Hex, context: InspectContext, depth: number): Part | und
 }
 
 /** What `data` calls: a cook, a Kitchen or Portal call, a token call — or a program itself. */
-export function describeData(data: Hex, context: InspectContext): Part {
+export function describeData(data: Hex, given: InspectContext): Part {
+  // The call's target is the Portal only when the call is the Portal's: a cook's target is a Pot,
+  // and the intents its program publishes go to the chain's Portal.
+  const { portal: target, ...context } = given;
   const cook = cookCall(data, context, 0);
   if (cook !== undefined) return cook;
   try {
@@ -439,7 +514,13 @@ export function describeData(data: Hex, context: InspectContext): Part {
         Hex,
         DecodedReward,
       ];
-      const intent = publishedIntent(destination, routeBytes, reward, context, 0);
+      const intent = publishedIntent(
+        destination,
+        routeBytes,
+        reward,
+        target === undefined ? context : { ...context, portal: target },
+        0,
+      );
 
       return {
         json: { call: `Portal.${portal.functionName}`, intent: intent.json },
@@ -494,18 +575,21 @@ function named(
 
 /** The intents a compiled program opens, from the compile itself: each measured value named. */
 function sourceIntents(program: CompiledSauceProgram): Part[] {
-  const context: InspectContext = { chain: program.chain };
-
   return program.intents.map((lowered) =>
-    named(
-      intentPart(
-        BigInt(lowered.destination.id),
-        lowered.intent.route,
-        lowered.intent.reward,
-        context,
-        0,
+    fundedBy(
+      named(
+        intentPart(
+          BigInt(lowered.destination.id),
+          lowered.intent.route,
+          lowered.intent.reward,
+          // A measured value is a placeholder until the program runs, and the vault follows from
+          // the hash those values are part of — so there is no vault to show before then.
+          { chain: program.chain, ...(lowered.captures.length > 0 ? { measured: true } : {}) },
+          0,
+        ),
+        lowered.sentinels,
       ),
-      lowered.sentinels,
+      lowered.fundVia,
     ),
   );
 }
@@ -574,10 +658,10 @@ export async function inspectCommand(input: InspectInput): Promise<CommandOutput
     );
   }
   const receipt = await receiptOf(client, input.hex);
-  const part = describeData(transaction.input, input);
-  const status = receipt === undefined ? "pending" : receipt.status;
   const from = getAddress(transaction.from);
   const to = transaction.to === null ? null : getAddress(transaction.to);
+  const part = describeData(transaction.input, to === null ? input : { ...input, portal: to });
+  const status = receipt === undefined ? "pending" : receipt.status;
 
   return {
     text: [

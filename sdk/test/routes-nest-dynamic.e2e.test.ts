@@ -92,6 +92,8 @@ import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js"
 import { normalizeReward, normalizeRoute, toUniversalAddress } from "../src/routes/normalize.js";
 import { scaleAmount, WAD } from "../src/routes/template.js";
 import type { Intent } from "../src/routes/types.js";
+import { PortalABI } from "../src/protocols/eco-routes/abis.js";
+import { predictIntentVault } from "../src/routes/portal.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -423,6 +425,52 @@ const rewardOf = (published: PublishedIntent) => {
 
   return { reward, rewardHash: keccak256(encodeAbiParameters([EVM_REWARD_PARAM], [reward])) };
 };
+
+/**
+ * What the Portal itself says of an intent it published, over the bytes it logged: the vault it
+ * derives, whether that vault holds the reward (`isIntentFunded`, what the solver validates), and
+ * the status it recorded — `Funded` (1) only when `publishAndFund` pulled the reward itself.
+ */
+const portalView = async (published: PublishedIntent) => {
+  const { reward } = rewardOf(published);
+  const args = [published.destination, published.route, reward] as const;
+  const vault = (await publicClient.readContract({
+    abi: PortalABI,
+    address: portal,
+    functionName: "intentVaultAddress",
+    args,
+  })) as Address;
+  const funded = (await publicClient.readContract({
+    abi: PortalABI,
+    address: portal,
+    functionName: "isIntentFunded",
+    args,
+  })) as boolean;
+  const status = Number(
+    await publicClient.readContract({
+      abi: portalAbi,
+      address: portal,
+      functionName: "getRewardStatus",
+      args: [published.intentHash],
+    }),
+  );
+
+  return { vault, funded, status };
+};
+
+/** What the Portal logged in a fulfilment about the intents its route published, by event name in
+ *  emission order, with each one's index among all the logs — leaving out the fulfilment's own
+ *  `IntentFulfilled`. */
+const portalEventsIn = (logs: readonly Log[]): { name: string; at: number }[] =>
+  logs.flatMap((l, at) => {
+    if (l.address.toLowerCase() !== portal.toLowerCase()) return [];
+    try {
+      const name = decodeEventLog({ abi: PortalABI, data: l.data, topics: l.topics }).eventName;
+      return name === "IntentFulfilled" ? [] : [{ name, at }];
+    } catch {
+      return [];
+    }
+  });
 
 const startEvm = async (): Promise<ChildProcess> => {
   const anvil = spawn(
@@ -1187,14 +1235,10 @@ describeEvm("route nesting, executed", () => {
       expect(published).toHaveLength(1);
       expect(published[0]!.destination).toBe(42_161n); // Arbitrum, as the example names
       expect(published[0]!.rewardTokens[0]!.amount).toBe(SEEDED);
-      expect(
-        await publicClient.readContract({
-          abi: portalAbi,
-          address: portal,
-          functionName: "getRewardStatus",
-          args: [published[0]!.intentHash],
-        }),
-      ).toBe(1);
+      // Funded the way a solver checks it: the vault the Portal derives holds the reward.
+      const view = await portalView(published[0]!);
+      expect(view.funded).toBe(true);
+      expect(await balanceOf(token, view.vault)).toBe(SEEDED);
     }, 180_000);
 
     it("refuses to create the intent when the floor is not met, reverting everything", async () => {
@@ -1458,50 +1502,190 @@ describeEvm("route nesting, executed", () => {
       expect((delivered.args![0] as string).toLowerCase()).toBe(DELIVER_TO.toLowerCase());
       expect(delivered.args![1]).toBe(SEEDED);
 
-      // Funded, from the emitted approve, into the vault the Portal derives for that hash.
+      // Funded by default the way a solver checks it: the program read the vault from the Portal,
+      // paid the reward into it, then published. The vault holds exactly the reward and the Pot is
+      // empty -- and no allowance was ever set, so none stands on the shared Pot.
+      const view = await portalView(published[0]!);
+      expect(view.funded).toBe(true);
+      expect(await balanceOf(token, view.vault)).toBe(SEEDED);
+      expect(await balanceOf(token, executorPot)).toBe(0n);
       expect(
         await publicClient.readContract({
-          abi: portalAbi,
-          address: portal,
-          functionName: "getRewardStatus",
-          args: [published[0]!.intentHash],
+          address: token,
+          abi: erc20AllowanceAbi,
+          functionName: "allowance",
+          args: [executorPot, portal],
         }),
-      ).toBe(1);
-      expect(await balanceOf(token, executorPot)).toBe(0n);
+      ).toBe(0n);
+      // `publish` records nothing but the publication: `Initial`, not `Funded`, and no
+      // `IntentFunded` -- the vault's balance is the funding.
+      expect(view.status).toBe(0);
+      const events = portalEventsIn(logs);
+      expect(events.map((e) => e.name)).toEqual(["IntentPublished"]);
+      // The transfer into the vault landed before the publication announced it.
+      const transferAt = logs.findIndex(
+        (l) =>
+          l.address.toLowerCase() === token.toLowerCase() &&
+          l.topics[2]?.toLowerCase() === `0x${"00".repeat(12)}${view.vault.slice(2)}`.toLowerCase(),
+      );
+      expect(transferAt).toBeGreaterThanOrEqual(0);
+      expect(transferAt).toBeLessThan(events[0]!.at);
     }, 180_000);
 
-    it("a token whose approve returns nothing (USDT) publishes the same way", async () => {
-      await mintTo(usdt, executorPot, SEEDED);
-      const held = await balanceOf(usdt, executorPot);
+    /** Compiles `program` for this anvil's Portal, funding via `fundVia`, and fulfils one cook of it. */
+    const runIntentProgram = async (
+      program: string,
+      defines: Record<string, bigint>,
+      salt: string,
+      fundVia?: "transfer" | "publishAndFund",
+    ) => {
       const compiled = compileSauceRoute(
         "base",
-        PROGRAM,
+        program,
         { pot: executorPot, engine: sauce.engine },
         {
-          defines: { TOKEN: BigInt(usdt), RECIPIENT: BigInt(DELIVER_TO) },
+          defines,
           intents: {
             deadline: 4_000_000_000n,
             creator: CREATOR,
             prover: PROVER,
             sourcePortal: portal,
             destinationPortal: portal,
-            salt: `0x${"e1".repeat(32)}` as Hex,
+            salt: `0x${salt.repeat(32)}` as Hex,
+            ...(fundVia === undefined ? {} : { fundVia }),
           },
         },
       );
 
-      const { status, logs } = await fulfil([
+      return fulfil([
         {
           target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
           data: compiled.calls[0]!.data,
           value: 0n,
         },
       ]);
+    };
+
+    it("a token whose transfer returns nothing (USDT) funds the vault the same way", async () => {
+      await mintTo(usdt, executorPot, SEEDED);
+      const held = await balanceOf(usdt, executorPot);
+      const { status, logs } = await runIntentProgram(
+        PROGRAM,
+        { TOKEN: BigInt(usdt), RECIPIENT: BigInt(DELIVER_TO) },
+        "e1",
+      );
 
       expect(status).toBe("success");
-      expect(publishedIn(logs)[0]!.rewardTokens[0]!.amount).toBe(held);
+      const published = publishedIn(logs)[0]!;
+      expect(published.rewardTokens[0]!.amount).toBe(held);
+      const view = await portalView(published);
+      expect(view.funded).toBe(true);
+      expect(await balanceOf(usdt, view.vault)).toBe(held);
       expect(await balanceOf(usdt, executorPot)).toBe(0n);
     }, 180_000);
+
+    it("a token that returns false from its transfer reverts the whole fulfilment", async () => {
+      // SafeERC20 on the transfer into the vault: `false` is a failure, not a quiet no-op that would
+      // publish an intent whose vault is empty.
+      const { status } = await runIntentProgram(
+        `function main() {
+  Base(() => {
+    Token(TOKEN).transfer(RECIPIENT, 1n);
+  }).reward({ tokens: [{ token: TOKEN, amount: 5n }] });
+}`,
+        { TOKEN: BigInt(liar), RECIPIENT: BigInt(DELIVER_TO) },
+        "e2",
+      );
+
+      expect(status).toBe("reverted");
+    }, 180_000);
+
+    it("a native reward the program measured is sent to the vault", async () => {
+      const NATIVE = 777_000n;
+      await testClient.setBalance({ address: executorPot, value: NATIVE });
+      const token = await deploy(MOCK_ERC20.creationCode);
+      const { status, logs } = await runIntentProgram(
+        `function main() {
+  const native = ctx.selfBalance();
+  Base(() => {
+    Token(TOKEN).transfer(RECIPIENT, 1n);
+  }).reward({ nativeAmount: native });
+}`,
+        { TOKEN: BigInt(token), RECIPIENT: BigInt(DELIVER_TO) },
+        "e3",
+      );
+
+      expect(status).toBe("success");
+      const published = publishedIn(logs)[0]!;
+      expect(published.rewardNativeAmount).toBe(NATIVE);
+      const view = await portalView(published);
+      expect(view.funded).toBe(true);
+      expect(await publicClient.getBalance({ address: view.vault })).toBe(NATIVE);
+      expect(await publicClient.getBalance({ address: executorPot })).toBe(0n);
+    }, 180_000);
+
+    describe('opted into `fundVia: "publishAndFund"`', () => {
+      it("approves the Portal and publishAndFunds: recorded Funded, IntentFunded emitted", async () => {
+        const token = await deploy(MOCK_ERC20.creationCode);
+        await mintTo(token, executorPot, SEEDED);
+        const { status, logs } = await runIntentProgram(
+          PROGRAM,
+          { TOKEN: BigInt(token), RECIPIENT: BigInt(DELIVER_TO) },
+          "e4",
+          "publishAndFund",
+        );
+
+        expect(status).toBe("success");
+        const view = await portalView(publishedIn(logs)[0]!);
+        expect(view.funded).toBe(true);
+        expect(view.status).toBe(1);
+        expect(portalEventsIn(logs).map((e) => e.name)).toEqual([
+          "IntentPublished",
+          "IntentFunded",
+        ]);
+        expect(await balanceOf(token, view.vault)).toBe(SEEDED);
+        expect(await balanceOf(token, executorPot)).toBe(0n);
+      }, 180_000);
+
+      it("a token whose approve returns nothing (USDT) publishes the same way", async () => {
+        await mintTo(usdt, executorPot, SEEDED);
+        const held = await balanceOf(usdt, executorPot);
+        const { status, logs } = await runIntentProgram(
+          PROGRAM,
+          { TOKEN: BigInt(usdt), RECIPIENT: BigInt(DELIVER_TO) },
+          "e5",
+          "publishAndFund",
+        );
+
+        expect(status).toBe("success");
+        expect(publishedIn(logs)[0]!.rewardTokens[0]!.amount).toBe(held);
+        expect((await portalView(publishedIn(logs)[0]!)).status).toBe(1);
+        expect(await balanceOf(usdt, executorPot)).toBe(0n);
+      }, 180_000);
+
+      it("forwards a native reward as publishAndFund's value", async () => {
+        const NATIVE = 555_000n;
+        await testClient.setBalance({ address: executorPot, value: NATIVE });
+        const token = await deploy(MOCK_ERC20.creationCode);
+        const { status, logs } = await runIntentProgram(
+          `function main() {
+  const native = ctx.selfBalance();
+  Base(() => {
+    Token(TOKEN).transfer(RECIPIENT, 1n);
+  }).reward({ nativeAmount: native });
+}`,
+          { TOKEN: BigInt(token), RECIPIENT: BigInt(DELIVER_TO) },
+          "e6",
+          "publishAndFund",
+        );
+
+        expect(status).toBe("success");
+        const view = await portalView(publishedIn(logs)[0]!);
+        expect(view.status).toBe(1);
+        expect(await publicClient.getBalance({ address: view.vault })).toBe(NATIVE);
+        expect(await publicClient.getBalance({ address: executorPot })).toBe(0n);
+      }, 180_000);
+    });
   });
 
   describe("token-only intent bodies, run by the Portal's Executor", () => {
@@ -1932,6 +2116,35 @@ describeEvm("route nesting, executed", () => {
       });
 
       expect(derived.toLowerCase()).toBe(executor.toLowerCase());
+    }, 120_000);
+
+    it("an intent's vault, derived offline, is the one this Portal reports", async () => {
+      // The vault implementation is the Portal's FIRST create, and the clone's creation code is the
+      // one `vault.ts` records: a funder pays the vault before the Portal has ever seen the intent,
+      // so the address must be right without asking it. `eco-routes-vault.test.ts` holds the same
+      // derivation to every deployed registry Portal; this, to the build vendored here.
+      const intent = childIntent(5n, 7n);
+      const reported = await publicClient.readContract({
+        abi: portalAbi,
+        address: portal,
+        functionName: "intentVaultAddress",
+        args: [
+          intent.destination,
+          encodeRouteEvm(intent.route),
+          {
+            deadline: intent.reward.deadline,
+            creator: denormalizeToEvm(intent.reward.creator),
+            prover: denormalizeToEvm(intent.reward.prover),
+            nativeAmount: intent.reward.nativeAmount,
+            tokens: intent.reward.tokens.map((t) => ({
+              token: denormalizeToEvm(t.token),
+              amount: t.amount,
+            })),
+          },
+        ],
+      });
+
+      expect(predictIntentVault(intent, { portal })).toBe(getAddress(reported));
     }, 120_000);
 
     it("a Pot derived for that Executor is the one the Kitchen mints", async () => {

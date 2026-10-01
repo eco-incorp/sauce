@@ -22,6 +22,7 @@ import {
   parseDefines,
   parseDefinesFile,
   parseFlags,
+  parseFundVia,
   parseHeader,
   parseSalt,
   parseTarget,
@@ -255,6 +256,11 @@ const PROGRAM: FlagSpecs = {
     value: "<wei>",
     help: "…the destination Kitchen's fee, when one runs a program",
   },
+  "intent-fund-via": {
+    type: "string",
+    value: "<transfer|publishAndFund>",
+    help: "…how their reward is funded: paid into the vault (default), or publishAndFund",
+  },
   "compact-args": {
     type: "boolean",
     help: "Take main's arguments as compact-v1, not ABI-v1",
@@ -463,6 +469,7 @@ function programInput(
   const deadline = stringFlag(args, "intent-deadline");
   const creator = stringFlag(args, "intent-creator");
   const fee = stringFlag(args, "intent-execution-fee");
+  const fundVia = stringFlag(args, "intent-fund-via");
   const defines = {
     ...(definesFile === undefined
       ? {}
@@ -483,6 +490,7 @@ function programInput(
         : { deadline: parseUnixSeconds("intent-deadline", deadline) }),
       ...(creator === undefined ? {} : { creator: parseAddress("intent-creator", creator) }),
       ...(fee === undefined ? {} : { executionFee: parseWei("intent-execution-fee", fee) }),
+      ...(fundVia === undefined ? {} : { fundVia: parseFundVia(fundVia) }),
     },
   };
 }

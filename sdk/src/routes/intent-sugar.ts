@@ -31,6 +31,13 @@
  * compile-time value nor an enclosing local is refused. Nothing here guesses: the failure mode this
  * exists to avoid is a plausible-looking intent carrying a number nobody chose.
  *
+ * HOW THE REWARD IS FUNDED. By default the program pays it into the intent's vault itself and then
+ * publishes: it asks the source Portal for `intentVaultAddress` over the very bytes it is about to
+ * publish, transfers each reward token there with `SafeERC20` semantics, sends the native amount,
+ * and calls `publish` — all in the one cook, so the vault cannot be wrong and no allowance is left
+ * on the Pot every intent on the chain shares. `intents.fundVia: "publishAndFund"` emits the
+ * approvals and `publishAndFund` instead. See `vaultFundingStatements` and `portal.ts`'s module doc.
+ *
  * WHERE THE ADDRESSES COME FROM. The Portal on each side, and the prover for the pair, are looked up
  * in the SDK's eco-routes deployment registry (`protocols/eco-routes`). A caller supplies what has
  * no correct default — deadlines, and a creator when the refund must not go to the executing Pot.
@@ -40,11 +47,17 @@ import { encodeFunctionData, type Hex } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { ERC20ABI } from "../protocols/erc20/abis.js";
-import { safeApproveStatements } from "../token/safe.js";
+import { safeApproveStatements, safeTransferStatements } from "../token/safe.js";
 import { collectDeclaredNames, walk, type AstNode } from "./ast-walk.js";
 import { denormalizeToEvm } from "./encode.js";
 import { normalizeReward, normalizeRoute, toUniversalAddress } from "./normalize.js";
-import { publishAndFundTx } from "./portal.js";
+import {
+  INTENT_FUND_VIA,
+  intentVaultAddressCall,
+  publishAndFundTx,
+  publishTx,
+  type IntentFundVia,
+} from "./portal.js";
 import { emitTemplate, splitByPlaceholders, type PlaceholderSpec } from "./template.js";
 import type { AddressInput, Intent } from "./types.js";
 
@@ -91,7 +104,17 @@ export interface IntentSugarDefaults {
   /** Route salt, defaulting to 32 zero bytes. Two structurally identical children collapse into one
    *  intent without distinct salts. */
   readonly salt?: Hex;
-  /** Passed to `publishAndFund`. Default `false`. */
+  /**
+   * How the program funds the reward. `"transfer"` (default): it reads the intent's vault from the
+   * source Portal in the same cook, transfers each reward token to it with `SafeERC20` semantics
+   * and sends it the native amount, then calls `publish` — no approval, so no allowance is left on
+   * the shared Pot. `"publishAndFund"`: it approves the Portal (`forceApprove`) and calls
+   * `publishAndFund` with the native amount as value, which records the intent `Funded` and emits
+   * `IntentFunded`. See `portal.ts#IntentFundVia`.
+   */
+  readonly fundVia?: IntentFundVia;
+  /** Passed to `publishAndFund` (`fundVia: "publishAndFund"` only; `true` under `"transfer"` is
+   *  refused). Default `false`. */
   readonly allowPartial?: boolean;
   /** Overrides the destination Pot a cook-based child runs on. Derived by default: the solver's
    *  shared Pot for the recorded Portal's `executor()`, salt zero — see `routes/intent-pot.ts`. It
@@ -162,6 +185,9 @@ export interface LoweredIntent {
   /** Each sentinel the encoded child carries, and the local whose value replaces it on chain. */
   readonly sentinels: readonly { readonly sentinel: bigint; readonly capture: string }[];
   readonly destination: CanonicalChain;
+  /** How the emitted program funds it: by transfer to its vault then `publish`, or
+   *  `publishAndFund`. */
+  readonly fundVia: IntentFundVia;
 }
 
 class SugarError extends Error {}
@@ -741,7 +767,13 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
     };
 
     const sourcePortal = defaults.sourcePortal ?? context.portalOf(context.source);
-    const tx = publishAndFundTx(child, defaults.allowPartial ?? false, { portal: sourcePortal });
+    const fundVia = requireFundVia(defaults);
+    // `publish` when the program pays the vault itself, `publishAndFund` when the Portal pulls the
+    // reward under an approval. Either way the intent is these bytes, cut at the same slots.
+    const tx =
+      fundVia === "transfer"
+        ? publishTx(child, { portal: sourcePortal })
+        : publishAndFundTx(child, defaults.allowPartial ?? false, { portal: sourcePortal });
     // An intent every value of which is known now — defines and literals, no local of the program —
     // has no slot to fill: its calldata is simply these bytes.
     const template =
@@ -772,35 +804,53 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
         : emitTemplate(template, { prefix, locals });
 
     const statements: string[] = [...emitted.statements];
-    // One approve per distinct reward token, so the Portal can pull the escrow from this Pot.
-    // Through `token/safe.ts`: the ERC-20 ABI's `bool` return is decoded even when discarded and a
-    // token like USDT returns nothing, so the call goes out raw and the SafeERC20 check judges the
-    // result. That helper also resets a standing allowance first -- which matters here more than
-    // anywhere, because one Pot publishes every intent on this chain and the previous one's
-    // leftover allowance is exactly what USDT refuses to overwrite.
     const portalWord = {
       literal: BigInt(denormalizeToEvm(toUniversalAddress(sourcePortal))),
     } as const;
-    const approved = new Set<string>();
-    reward.tokens.forEach((t, i) => {
-      const token = addressHex(t.token);
-      if (approved.has(token)) return;
-      approved.add(token);
-      const amount =
-        "literal" in t.amount ? { literal: t.amount.literal } : { local: t.amount.capture };
+    const portalLiteral = `${portalWord.literal}n`;
+    if (fundVia === "transfer") {
       statements.push(
-        ...safeApproveStatements(`${prefix}${i}`, `${BigInt(t.token)}n`, portalWord, amount),
+        ...vaultFundingStatements({
+          prefix,
+          child,
+          publishData: tx.data,
+          dataVar: emitted.dataVar,
+          sourcePortal,
+          reward,
+        }),
+        `evm.call(${portalLiteral}, 0n, ${emitted.dataVar});`,
       );
-    });
-    statements.push(
-      `evm.call(${BigInt(denormalizeToEvm(toUniversalAddress(sourcePortal)))}n, 0n, ${emitted.dataVar});`,
-    );
+    } else {
+      // One approve per distinct reward token, so the Portal can pull the escrow from this Pot.
+      // Through `token/safe.ts`: the ERC-20 ABI's `bool` return is decoded even when discarded and a
+      // token like USDT returns nothing, so the call goes out raw and the SafeERC20 check judges the
+      // result. That helper also resets a standing allowance first -- which matters here more than
+      // anywhere, because one Pot publishes every intent on this chain and the previous one's
+      // leftover allowance is exactly what USDT refuses to overwrite.
+      const approved = new Set<string>();
+      reward.tokens.forEach((t, i) => {
+        const token = addressHex(t.token);
+        if (approved.has(token)) return;
+        approved.add(token);
+        const amount =
+          "literal" in t.amount ? { literal: t.amount.literal } : { local: t.amount.capture };
+        statements.push(
+          ...safeApproveStatements(`${prefix}${i}`, `${BigInt(t.token)}n`, portalWord, amount),
+        );
+      });
+      // The native reward travels as the call's value: `_fundNative` pays the vault from
+      // `msg.value`, and `Refund.excessNative` returns what it did not need.
+      statements.push(
+        `evm.call(${portalLiteral}, ${valueExpression(reward.nativeAmount)}, ${emitted.dataVar});`,
+      );
+    }
 
     intents.push({
       intent: child,
       captures,
       sentinels: placeholders.map(({ value, source }) => ({ sentinel: value, capture: source })),
       destination: site.chain,
+      fundVia,
     });
     replacements.push({
       start: site.start,
@@ -816,6 +866,135 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
     out = out.slice(0, replacement.start) + replacement.text + out.slice(replacement.end);
   }
   return { source: out, rewrote: true, intents };
+}
+
+/** A native amount as the expression a call's value takes: its literal, or the enclosing local. */
+function valueExpression(value: Value | undefined): string {
+  if (value === undefined) return "0n";
+
+  return "literal" in value ? `${value.literal}n` : value.capture;
+}
+
+/** `defaults.fundVia`, defaulted and checked, refusing an option that belongs to the other mode. */
+function requireFundVia(defaults: Partial<IntentSugarDefaults>): IntentFundVia {
+  const fundVia = defaults.fundVia ?? "transfer";
+  if (!INTENT_FUND_VIA.includes(fundVia)) {
+    return fail(
+      `\`intents.fundVia\` is '${String(fundVia)}', which is not ` +
+        `${INTENT_FUND_VIA.map((via) => `"${via}"`).join(" or ")}`,
+    );
+  }
+  if (fundVia === "transfer" && defaults.allowPartial === true) {
+    return fail(
+      '`intents.allowPartial` goes with `fundVia: "publishAndFund"`: funding by transfer pays the ' +
+        "whole reward into the vault, and `publish` takes no such flag",
+    );
+  }
+
+  return fundVia;
+}
+
+interface VaultFunding {
+  readonly prefix: string;
+  /** The intent as encoded, sentinels in place. */
+  readonly child: Intent;
+  /** Its `publish` calldata, sentinels in place — what `dataVar` holds once rendered. */
+  readonly publishData: Hex;
+  /** The local holding the rendered `publish` calldata. */
+  readonly dataVar: string;
+  readonly sourcePortal: AddressInput;
+  readonly reward: RewardSpec;
+}
+
+/**
+ * The statements that pay an intent's reward into its vault from the executing contract, before
+ * the `publish` that follows them:
+ *
+ *  1. the vault, read from the Portal in this same cook — `intentVaultAddress` over the very bytes
+ *     about to be published, so the address cannot disagree with the intent the Portal records.
+ *     Its arguments are `publish`'s exactly (`(uint64, bytes, Reward)` both), so the call is the
+ *     rendered payload with the other selector in front, not a second copy of the intent;
+ *  2. one `transfer(vault, amount)` per distinct reward token, for the largest of its amounts (the
+ *     balance `isIntentFunded` checks each entry against), with `SafeERC20` semantics
+ *     (`token/safe.ts`): a token returning nothing works, `false` or no code reverts the cook. A
+ *     captured amount of zero transfers nothing;
+ *  3. the native amount, sent to the vault.
+ */
+function vaultFundingStatements(funding: VaultFunding): string[] {
+  const { prefix, child, publishData, dataVar, sourcePortal, reward } = funding;
+  const query = intentVaultAddressCall(child, { portal: sourcePortal }).data;
+  // Held, not assumed: the selector swap below is only sound while both functions take the same
+  // arguments in the same encoding.
+  if (query.slice(10) !== publishData.slice(10)) {
+    throw new SugarError(
+      "intent sugar: intentVaultAddress and publish no longer encode the same arguments — " +
+        "the vault read would ask about a different intent than the one published. This is a bug " +
+        "in the lowering, not in the program.",
+    );
+  }
+  const portal = `${BigInt(denormalizeToEvm(toUniversalAddress(sourcePortal)))}n`;
+  const vault = `${prefix}vault`;
+  const statements: string[] = [
+    `const ${prefix}vsel = hex\`${query.slice(2, 10)}\`;`,
+    `const ${prefix}vq = ${prefix}vsel.concat(${dataVar}.slice(4n, ${dataVar}.length));`,
+    `const [${vault}] = abi.decode(evm.static(${portal}, ${prefix}vq), ["Address"]);`,
+  ];
+
+  // Distinct tokens in first-seen order, each with every amount it is listed for.
+  const byToken = new Map<bigint, Value[]>();
+  for (const t of reward.tokens) byToken.set(t.token, [...(byToken.get(t.token) ?? []), t.amount]);
+  [...byToken].forEach(([token, amounts], i) => {
+    const literals = amounts.filter((a): a is { literal: bigint } => "literal" in a);
+    const largestLiteral = literals.reduce<bigint | undefined>(
+      (max, a) => (max === undefined || a.literal > max ? a.literal : max),
+      undefined,
+    );
+    const captured = [...new Set(amounts.flatMap((a) => ("capture" in a ? [a.capture] : [])))];
+    // A token listed only for nothing needs nothing in the vault.
+    if (captured.length === 0 && largestLiteral === 0n) return;
+    let amount: string;
+    if (captured.length === 0) {
+      amount = `${largestLiteral}n`;
+    } else {
+      // The largest of the values only known at run time, and of the literal floor beside them.
+      const operands = [
+        ...captured,
+        ...(largestLiteral === undefined ? [] : [`${largestLiteral}n`]),
+      ];
+      amount = operands[0]!;
+      operands.slice(1).forEach((operand, k) => {
+        const next = `${prefix}f${i}m${k}`;
+        statements.push(`const ${next} = ${amount} > ${operand} ? ${amount} : ${operand};`);
+        amount = next;
+      });
+    }
+    const transfer = safeTransferStatements(
+      `${prefix}f${i}_`,
+      `${token}n`,
+      { local: vault },
+      captured.length === 0 ? { literal: largestLiteral! } : { local: amount },
+    );
+    if (captured.length === 0) {
+      statements.push(...transfer);
+      return;
+    }
+    // The calldata consts are hoisted out of the zero guard; the call AND its SafeERC20 check go
+    // inside it, since checking a call that never happened would read a stale result.
+    const firstCall = transfer.findIndex((line) => line.includes("evm.call("));
+    statements.push(...transfer.slice(0, firstCall));
+    statements.push(`if (${amount} > 0n) { ${transfer.slice(firstCall).join(" ")} }`);
+  });
+
+  const native = reward.nativeAmount;
+  if (native !== undefined && !("literal" in native && native.literal === 0n)) {
+    // Bound, not inline: a method call on a `hex` literal is outside the compiler's subset, and
+    // `evm.call` is the one way to send value.
+    statements.push(`const ${prefix}fnd = hex\`\`;`);
+    const send = `evm.call(${vault}, ${valueExpression(native)}, ${prefix}fnd);`;
+    statements.push("literal" in native ? send : `if (${native.capture} > 0n) { ${send} }`);
+  }
+
+  return statements;
 }
 
 /**

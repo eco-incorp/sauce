@@ -25,6 +25,7 @@ import { v12PredictPot } from "../deployments/pot.js";
 /** The released Kitchen, which deploys every Pot (`V12Deployments.json`). */
 export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
 import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
+import type { IntentFundVia } from "../routes/portal.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import {
   compileSauceProgram,
@@ -79,6 +80,9 @@ export interface ProgramInput {
     readonly deadline?: bigint;
     readonly creator?: Address;
     readonly executionFee?: bigint;
+    /** How their reward is funded, by the program a Pot runs or by `sauce publish`'s wallet:
+     *  `"transfer"` into the vault then `publish` (the default), or `"publishAndFund"`. */
+    readonly fundVia?: IntentFundVia;
   };
 }
 
@@ -116,11 +120,12 @@ export function castSend(to: Address, data: Hex, value?: bigint): string {
  */
 function compileOptions(input: ProgramInput, files: CliFiles): SauceCompileOptions {
   const dir = dirname(resolvePath(input.file));
-  const { deadline, creator, executionFee } = input.intents;
+  const { deadline, creator, executionFee, fundVia } = input.intents;
   const intents = {
     ...(deadline === undefined ? {} : { deadline }),
     ...(creator === undefined ? {} : { creator }),
     ...(executionFee === undefined ? {} : { executionFee }),
+    ...(fundVia === undefined ? {} : { fundVia }),
   };
 
   return {
