@@ -843,7 +843,7 @@ async function main() {
   const only = new Set(cli.positionals);
   const previous = existsSync(EVIDENCE_PATH)
     ? expand(JSON.parse(readFileSync(EVIDENCE_PATH, "utf-8")))
-    : { instances: [] };
+    : { instances: [], logs: [] };
   // A target can name a protocol another branch adds: without its build output there is nothing to
   // capture, and its evidence is carried over untouched until the protocol lands.
   const present = (slug) => existsSync(join(SDK, "dist", "protocols", slug, "abis.js"));
