@@ -147,6 +147,30 @@ describe("chain accessors: the names resolve through an import, and only through
     expect(diagnostics.some((d) => d.code === 2339)).toBe(true); // TS2339: Property does not exist
   });
 
+  // --- the chain's registry tokens ---
+
+  it("Base.USDC is typed { address, decimals, symbol, chain }", () => {
+    const diagnostics = typecheckProbe(`
+      import { Base, Arc } from ${ROOT};
+      const address: \`0x\${string}\` = Base.USDC.address;
+      const decimals: number = Base.WETH.decimals;
+      const symbol: string = Arc.EURC.symbol;
+      const id: number = Base.USDC.chain.id;
+      export {};
+    `);
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it("negative control: a token the chain has no registry row for is a type error (TS2339)", () => {
+    const diagnostics = typecheckProbe(`
+      import { Base, Celo } from ${ROOT};
+      const usdt: unknown = Base.USDT;
+      const usdc: unknown = Celo.USDC;
+      export {};
+    `);
+    expect(diagnostics.filter((d) => d.code === 2339)).toHaveLength(2);
+  });
+
   // --- the universal Token export ---
 
   it("`import { Token }` keeps the host object API, and .transfer(...).source(...) is real, not `any`", () => {

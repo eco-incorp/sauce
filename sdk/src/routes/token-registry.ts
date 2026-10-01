@@ -275,6 +275,41 @@ function toBigIntAddress(input: AddressInput): bigint {
   return BigInt(input);
 }
 
+/** One registry token on one chain, as a chain export carries it (`Base.USDC`): the same row a
+ *  compiled program's `USDC` resolves to on that chain. */
+export interface RegistryToken {
+  readonly address: `0x${string}`;
+  readonly decimals: number;
+  readonly symbol: string;
+  readonly chain: CanonicalChain;
+}
+
+const tokensByChain = new Map<number, Readonly<Record<string, RegistryToken>>>();
+
+/** Every registry token on `chain`, by symbol, each a frozen {@link RegistryToken}. The same objects
+ *  on every call. Empty for a chain the registry has no row for, and for an svm chain. */
+export function registryTokens(chain: CanonicalChain): Readonly<Record<string, RegistryToken>> {
+  let tokens = tokensByChain.get(chain.id);
+  if (tokens === undefined) {
+    const rows = chain.kind === "evm" ? (TOKEN_REGISTRY[chain.id] ?? []) : [];
+    tokens = Object.freeze(
+      Object.fromEntries(
+        rows.map((row) => [
+          row.symbol,
+          Object.freeze({
+            address: row.address,
+            decimals: row.decimals,
+            symbol: row.symbol,
+            chain,
+          }),
+        ]),
+      ),
+    );
+    tokensByChain.set(chain.id, tokens);
+  }
+  return tokens;
+}
+
 /** The registry's own address for `symbol` on `chain`, or `undefined` if unregistered. EVM-only --
  *  an svm chain always returns `undefined` (no `TOKEN_REGISTRY` key exists for an svm chain id). */
 export function registryTokenAddress(chain: CanonicalChain, symbol: string): bigint | undefined {

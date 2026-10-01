@@ -14,8 +14,9 @@
 // by `PascalOf<ChainSlug>`, so a name that no longer exists in the registry
 // fails `tsc` here before the drift test even runs.
 //
-// Composition is EAGER at module eval -- measured at ~1.4ms for all 40 chains,
-// against ~180ms just to load the modules involved -- because every contract
+// Composition is EAGER at module eval -- measured at ~6ms warm (~20ms cold) for all 41
+// chains and every registry namespace, against ~400ms just to load the modules involved --
+// because every contract
 // namespace underneath is a memoising getter, so composing only copies property
 // descriptors and builds nothing under `Base.Uniswap` until it is touched. A
 // lazily-evaluated named export is not expressible in ESM anyway.
@@ -33,24 +34,28 @@ import type { SvmVenueAccessors } from "../svm/accessors.js";
 import type { TokenApi, TokenFactory } from "../token/api.js";
 import { Token as tokenApi } from "../token/api.js";
 import { composedChainGlobal } from "./composed.js";
+import type { RegistryToken } from "./token-registry.js";
 
 /** What every chain accessor is: the eco-routes DSL for that chain (callable, plus
  *  `.chain`/`.route`) intersected with the chain-independent native contract tree.
  *  Naming the chain through `ChainGlobals` is the structural cross-check above. */
 type Composed<N extends keyof ChainGlobals> = ChainGlobals[N] & ChainContracts;
 
+/** The chain's registry tokens, by symbol: `Base.USDC` is `{ address, decimals, symbol, chain }`. */
+type Tokens<S extends string> = { readonly [K in S]: RegistryToken };
+
 /** eco-routes chain accessor for Ethereum (chain id 1). */
-export const Ethereum = composedChainGlobal("Ethereum") as Composed<"Ethereum">;
+export const Ethereum = composedChainGlobal("Ethereum") as Composed<"Ethereum"> & Tokens<"USDC" | "USDT" | "WETH">;
 /** eco-routes chain accessor for Optimism (chain id 10). */
-export const Optimism = composedChainGlobal("Optimism") as Composed<"Optimism">;
+export const Optimism = composedChainGlobal("Optimism") as Composed<"Optimism"> & Tokens<"USDC" | "USDT" | "WETH">;
 /** eco-routes chain accessor for BNB Chain (chain id 56). */
 export const Bsc = composedChainGlobal("Bsc") as Composed<"Bsc">;
 /** eco-routes chain accessor for Polygon (chain id 137). */
-export const Polygon = composedChainGlobal("Polygon") as Composed<"Polygon">;
+export const Polygon = composedChainGlobal("Polygon") as Composed<"Polygon"> & Tokens<"USDC" | "WETH" | "WPOL">;
 /** eco-routes chain accessor for Base (chain id 8453). */
-export const Base = composedChainGlobal("Base") as Composed<"Base">;
+export const Base = composedChainGlobal("Base") as Composed<"Base"> & Tokens<"USDC" | "WETH">;
 /** eco-routes chain accessor for Arbitrum One (chain id 42161). */
-export const Arbitrum = composedChainGlobal("Arbitrum") as Composed<"Arbitrum">;
+export const Arbitrum = composedChainGlobal("Arbitrum") as Composed<"Arbitrum"> & Tokens<"USDC" | "WETH">;
 /** eco-routes chain accessor for Celo (chain id 42220). */
 export const Celo = composedChainGlobal("Celo") as Composed<"Celo">;
 /** eco-routes chain accessor for Cronos (chain id 25). */
@@ -84,7 +89,7 @@ export const Kava = composedChainGlobal("Kava") as Composed<"Kava">;
 /** eco-routes chain accessor for Mantle (chain id 5000). */
 export const Mantle = composedChainGlobal("Mantle") as Composed<"Mantle">;
 /** eco-routes chain accessor for Arc (chain id 5042). */
-export const Arc = composedChainGlobal("Arc") as Composed<"Arc">;
+export const Arc = composedChainGlobal("Arc") as Composed<"Arc"> & Tokens<"USDC" | "EURC" | "USYC" | "WETH">;
 /** eco-routes chain accessor for ZetaChain (chain id 7000). */
 export const Zetachain = composedChainGlobal("Zetachain") as Composed<"Zetachain">;
 /** eco-routes chain accessor for Klaytn (chain id 8217). */
@@ -110,7 +115,7 @@ export const Aurora = composedChainGlobal("Aurora") as Composed<"Aurora">;
 /** eco-routes chain accessor for Unichain (chain id 130). */
 export const Unichain = composedChainGlobal("Unichain") as Composed<"Unichain">;
 /** eco-routes chain accessor for Monad (chain id 143). */
-export const Monad = composedChainGlobal("Monad") as Composed<"Monad">;
+export const Monad = composedChainGlobal("Monad") as Composed<"Monad"> & Tokens<"USDC" | "WMON">;
 /** eco-routes chain accessor for Sonic (chain id 146). */
 export const Sonic = composedChainGlobal("Sonic") as Composed<"Sonic">;
 /** eco-routes chain accessor for Ronin (chain id 2020). */
