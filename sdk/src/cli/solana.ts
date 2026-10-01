@@ -688,9 +688,8 @@ const stagedPin = (
 ): { expectedSha256?: Uint8Array } =>
   prepared.via === "engine" ? { expectedSha256: staged.sha256 } : {};
 
-/** How a cook names itself in what a command prints. */
-const cookName = (via: CookVia): string =>
-  via === "engine" ? "the engine's direct cook (cookAndPay)" : "the Kitchen cook";
+/** What a direct cook is called in what a command prints. */
+const DIRECT_COOK = "the engine's direct cook (cookAndPay)";
 
 /**
  * Whether the cook carrying `bytecode` fits in one transaction — measured as `run` sends it, with
@@ -929,7 +928,7 @@ export async function svmSimulateCommand(
             "transaction creates it first, the owner signing and paying its rent",
         ]),
     direct
-      ? `  ${cookName(prepared.via)}, from ${input.owner}, which signs for the program and pays ` +
+      ? `  ${DIRECT_COOK}, from ${input.owner}, which signs for the program and pays ` +
         `the execution fee of ${prepared.fee} lamports: no Kitchen and no Pot`
       : `  ${created ? "" : "2. "}the cook, from the owner ${input.owner}, which pays the ` +
         `Kitchen's execution fee of ${prepared.fee} lamports`,
@@ -986,7 +985,7 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
     json,
     notes: [
       direct
-        ? `${cookName(prepared.via)}: no Kitchen and no Pot. ${input.owner} is the authority ` +
+        ? `${DIRECT_COOK}: no Kitchen and no Pot. ${input.owner} is the authority ` +
           "the program acts with, so the accounts it spends from are the signer's own."
         : `Pot ${prepared.pot} belongs to ${input.owner} (salt ${input.salt}). ` +
           (deployed
