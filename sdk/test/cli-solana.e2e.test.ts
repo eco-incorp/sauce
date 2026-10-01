@@ -536,6 +536,19 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       instruction: { programAddress: KITCHEN },
     });
     expect(harness.svm.getAccount(pot).exists).toBe(false);
+    // With an endpoint, it reads the cluster: the released programs, the fee, the Pot.
+    const status = async () =>
+      json(
+        await sauce(
+          ...["pot", "--chain", "solana", "--owner", owner.signer.address, "--salt", "vault"],
+          ...["--rpc-url", RPC_URL],
+        ),
+      ).deployment;
+    expect(await status()).toEqual({
+      engine: { address: v12SvmEngineProgramId(), deployed: true },
+      kitchen: { address: KITCHEN, deployed: true, executionFee: `${FEE}` },
+      pot: { address: pot, deployed: false },
+    });
     const deploy = ["pot", "--deploy", "--chain", "solana", "--rpc-url", RPC_URL];
     const created = await sauce(...deploy, "--keypair", owner.path, "--salt", "vault");
     expect(json(created)).toMatchObject({ pot, deployed: true, createPot: { status: "success" } });
@@ -546,10 +559,11 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     });
     const again = await sauce(...deploy, "--keypair", owner.path, "--salt", "vault");
     expect(again.stderr).toMatch(/is already created on solana/);
-    // The signer is the owner: --owner naming someone else is refused.
+    expect(await status()).toMatchObject({ pot: { address: pot, deployed: true } });
+    // The signer is the owner, who signs create_pot: --owner naming someone else is refused.
     const other = await sauce(...deploy, "--keypair", owner.path, "--owner", harness.payer.address);
     expect(other.code).toBe(2);
-    expect(other.stderr).toMatch(/is not the signer/);
+    expect(other.stderr).toMatch(/is not the signer, .*: on Solana the owner signs create_pot/);
   }, 60_000);
 
   it("`sauce simulate` reads a revert's message from the engine's return data in the logs", async () => {

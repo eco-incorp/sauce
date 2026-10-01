@@ -45,11 +45,21 @@ import {
   connect,
   kitchenFee,
   potState,
+  releasedContracts,
   sendAndWait,
+  type Released,
   type Sent,
   type TxRequest,
 } from "./chain.js";
 import { describeCompileError } from "./diagnostics.js";
+import {
+  checkIntentPots,
+  intentCooks,
+  missingPotNote,
+  potCheckJson,
+  type PotCheck,
+  type Endpoints,
+} from "./intents.js";
 import { appliedDefines, contractCollector } from "./report.js";
 import { svmCookSize } from "./solana.js";
 import type { Funding } from "./funding.js";
@@ -199,6 +209,8 @@ export interface CompileInput extends ProgramInput {
   readonly args?: ArgsInput;
   /** Solana: accounts by slot name, as `--account` gives them, for sizing the cook. */
   readonly accounts?: Readonly<Record<string, string>>;
+  /** Endpoints for the intents' destinations: where given, each intent's Pot is checked. */
+  readonly endpoints?: Endpoints;
 }
 
 /**
@@ -221,7 +233,11 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
     input.chain.kind === "svm" && payload !== undefined
       ? await svmCookSize(payload, program.manifest ?? { accounts: [] }, input.accounts ?? {})
       : undefined;
+  const cooks = intentCooks(program.intents);
+  const pots: readonly PotCheck[] =
+    input.endpoints === undefined ? cooks : await checkIntentPots(cooks, input.endpoints);
   const notes = [
+    ...pots.filter((check) => check.deployed === false).map(missingPotNote),
     ...unread.map(
       (name) =>
         `--define ${name}: ${input.file} never reads ${name}, so the define changes nothing`,
@@ -252,6 +268,7 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       entrySchema: program.entrySchema === undefined ? null : bytesToHex(program.entrySchema),
       defines,
       contracts: collected.contracts(),
+      ...(pots.length === 0 ? {} : { intentPots: pots.map(potCheckJson) }),
       compiler: compilerPackage(),
       engine: pairedEngine(input.chain),
       ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
@@ -371,9 +388,9 @@ export function cookOf(input: CookInput, files: CliFiles): Cook {
 
 /** The `sauce pot` that deploys `target`'s Pot. */
 function deployHint(chain: CanonicalChain, target: PotInput): string {
-  // `--deploy` signs as the owner, so the hint names the owner and where its key goes.
+  // Any account may send the deployment; the hint names the owner, whose Pot it is.
   return "owner" in target
-    ? `sauce pot --deploy --owner ${target.owner} --chain ${chain.slug}${target.flag === undefined ? "" : ` ${target.flag}`} --keystore <its keystore>`
+    ? `sauce pot --deploy --owner ${target.owner} --chain ${chain.slug}${target.flag === undefined ? "" : ` ${target.flag}`} --keystore <keystore>`
     : `sauce pot --deploy --chain ${chain.slug} --keystore <its owner's keystore>`;
 }
 
@@ -591,6 +608,74 @@ export function potCommand(input: PotCommandInput): CommandOutput {
   };
 }
 
+/** What `sauce pot` reads off a chain: the released engine and Kitchen, and the Pot. */
+function deploymentLines(
+  chain: CanonicalChain,
+  released: Released,
+  pot: Address,
+  state: { readonly deployed: boolean; readonly owner?: Address },
+): { json: Record<string, unknown>; notes: string[] } {
+  const there = (deployed: boolean) => (deployed ? "deployed" : "NOT deployed");
+  const { engine, kitchen } = released;
+
+  return {
+    json: {
+      engine: { address: engine.address, deployed: engine.deployed },
+      kitchen: {
+        address: kitchen.address,
+        deployed: kitchen.deployed,
+        ...(kitchen.executionFee === undefined
+          ? {}
+          : { executionFee: kitchen.executionFee.toString() }),
+      },
+      pot: {
+        address: pot,
+        deployed: state.deployed,
+        ...(state.owner === undefined ? {} : { owner: state.owner }),
+      },
+    },
+    notes: [
+      `On ${chain.slug}: the engine ${engine.address} is ${there(engine.deployed)}; the Kitchen ` +
+        `${kitchen.address} is ${there(kitchen.deployed)}` +
+        (kitchen.executionFee === undefined
+          ? ""
+          : `, its execution fee ${kitchen.executionFee} wei`) +
+        `; the Pot ${pot} is ${there(state.deployed)}` +
+        (state.owner === undefined ? "." : `, owned by ${state.owner}.`),
+      ...(kitchen.deployed
+        ? []
+        : [
+            `The released Kitchen has no code on ${chain.slug}: no Pot can be deployed there, and no ` +
+              "cook runs.",
+          ]),
+      ...(engine.deployed || !kitchen.deployed
+        ? []
+        : [
+            `The released engine has no code on ${chain.slug}: a cook there has nothing to run on.`,
+          ]),
+    ],
+  };
+}
+
+/** `sauce pot` with an endpoint: the prediction, and what is deployed on the chain. */
+export async function potStatusCommand(
+  input: PotCommandInput & ChainAccess,
+): Promise<CommandOutput> {
+  const predicted = potCommand(input);
+  const pot = predicted.json.pot as Address;
+  const client = await connect(input.rpcUrl, input.chain);
+  const [released, state] = await Promise.all([releasedContracts(client), potState(client, pot)]);
+  const deployment = deploymentLines(input.chain, released, pot, state);
+  const json = { ...predicted.json, deployment: deployment.json };
+
+  return {
+    text: JSON.stringify(json, null, 2),
+    json,
+    cast: predicted.cast!,
+    notes: [...deployment.notes, ...(state.deployed ? [] : (predicted.notes ?? []))],
+  };
+}
+
 /** `sauce pot --deploy`: sends the Kitchen call, unless the Pot is already there. */
 export async function potDeployCommand(
   input: PotCommandInput & ChainAccess & { readonly account: PrivateKeyAccount },
@@ -598,6 +683,14 @@ export async function potDeployCommand(
   const predicted = potCommand(input);
   const pot = predicted.json.pot as Address;
   const client = await connect(input.rpcUrl, input.chain);
+  const released = await releasedContracts(client);
+  // A deployPot sent to an address with no code "succeeds" and deploys nothing.
+  if (!released.kitchen.deployed) {
+    throw new CliError(
+      `the released Kitchen ${released.kitchen.address} has no code on ${input.chain.slug}: no Pot ` +
+        "can be deployed there, so nothing was sent",
+    );
+  }
   const state = await potState(client, pot);
   if (state.deployed) {
     const json = { ...predicted.json, deployed: true, owner: state.owner };

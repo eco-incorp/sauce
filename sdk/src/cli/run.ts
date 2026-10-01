@@ -43,6 +43,7 @@ import {
   compileProgram,
   potCommand,
   potDeployCommand,
+  potStatusCommand,
   readInput,
   runCommand,
   txCommand,
@@ -66,6 +67,14 @@ import {
 import { globalsCommand } from "./globals.js";
 import { initProject } from "./init.js";
 import { inspectCommand, inspectFile } from "./inspect.js";
+import {
+  checkIntentPots,
+  destinationFee,
+  intentCooks,
+  missingPotNote,
+  uncheckedPotNote,
+  type Endpoints,
+} from "./intents.js";
 import { parsePriceToken, priceCommand, pricedChain } from "./price.js";
 import { publishCommand } from "./publish.js";
 import { simulateCommand } from "./simulate.js";
@@ -76,6 +85,7 @@ import {
   parsePubkey,
   svmPotCommand,
   svmPotDeployCommand,
+  svmPotStatusCommand,
   svmRunCommand,
   svmSimulateCommand,
   svmTxCommand,
@@ -252,8 +262,8 @@ const PROGRAM: FlagSpecs = {
   },
   "intent-execution-fee": {
     type: "string",
-    value: "<wei>",
-    help: "…the destination Kitchen's fee, when one runs a program",
+    value: "<wei|auto>",
+    help: "…the destination Kitchen's fee, when one runs a program; auto reads it",
   },
   "compact-args": {
     type: "boolean",
@@ -450,13 +460,65 @@ function definesReach(file: string, text: string, names: readonly string[]): voi
   }
 }
 
+/**
+ * The endpoints the command reaches the chains a program's intents go to with: every chain in
+ * `--config`'s `rpcUrls`, or with `--rpc-url` only the program's own `source` chain.
+ */
+function endpointsOf(args: ParsedArgs, io: CliIo, source: CanonicalChain): Endpoints {
+  const rpcUrl = stringFlag(args, "rpc-url");
+  const config = stringFlag(args, "config");
+  let urls: Record<string, unknown> | undefined;
+
+  return (chain) => {
+    if (rpcUrl !== undefined) return chain.id === source.id ? endpoint(args, io, chain) : undefined;
+    if (config === undefined) return undefined;
+    urls ??= (() => {
+      try {
+        const parsed = JSON.parse(readInput(io, config)) as { rpcUrls?: unknown } | null;
+
+        return typeof parsed?.rpcUrls === "object" && parsed.rpcUrls !== null
+          ? (parsed.rpcUrls as Record<string, unknown>)
+          : {};
+      } catch {
+        return {};
+      }
+    })();
+    // A chain the file has no entry for is one the command does not reach; a bad entry is named.
+    return Object.hasOwn(urls, String(chain.id)) ? endpoint(args, io, chain) : undefined;
+  };
+}
+
+/**
+ * `--intent-execution-fee auto`: the fee the program's intents' destination Kitchens charge, read
+ * from each through `endpoints`. The program is compiled once with a fee of zero to find which
+ * intents run a program there; one with none pays no fee.
+ */
+async function autoExecutionFee(
+  input: ProgramInput,
+  io: CliIo,
+  endpoints: Endpoints,
+): Promise<bigint | undefined> {
+  const probe = compileProgram({ ...input, intents: { ...input.intents, executionFee: 0n } }, io);
+  const cooks = intentCooks(probe.intents);
+  if (cooks.length === 0) {
+    io.stderr("--intent-execution-fee auto: no intent here runs a program, so none pays a fee\n");
+
+    return undefined;
+  }
+  const fee = await destinationFee(cooks, endpoints);
+  const chains = [...new Set(cooks.map((cook) => cook.destination.slug))].join(" and ");
+  io.stderr(`--intent-execution-fee auto: the Kitchen on ${chains} charges ${fee} wei\n`);
+
+  return fee;
+}
+
 /** A program operand's input; `fallback` is its chain when neither `--chain` nor its header says. */
-function programInput(
+async function programInput(
   args: ParsedArgs,
   io: CliIo,
   file = fileOperand(args),
   fallback?: CanonicalChain,
-): ProgramInput {
+): Promise<ProgramInput> {
   const text = readInput(io, file);
   const chain = chainOf(args, file, text, fallback);
   const definesFile = stringFlag(args, "defines");
@@ -470,8 +532,7 @@ function programInput(
     ...parseDefines(repeatedFlag(args, "define"), chain.kind),
   };
   definesReach(file, text, Object.keys(defines));
-
-  return {
+  const input: ProgramInput = {
     file,
     text,
     chain,
@@ -482,9 +543,17 @@ function programInput(
         ? {}
         : { deadline: parseUnixSeconds("intent-deadline", deadline) }),
       ...(creator === undefined ? {} : { creator: parseAddress("intent-creator", creator) }),
-      ...(fee === undefined ? {} : { executionFee: parseWei("intent-execution-fee", fee) }),
+      ...(fee === undefined || fee === "auto"
+        ? {}
+        : { executionFee: parseWei("intent-execution-fee", fee) }),
     },
   };
+  if (fee !== "auto") return input;
+  const executionFee = await autoExecutionFee(input, io, endpointsOf(args, io, chain));
+
+  return executionFee === undefined
+    ? input
+    : { ...input, intents: { ...input.intents, executionFee } };
 }
 
 /** `main`'s arguments: the words after `--args`, or `--args-json`'s array — never both. */
@@ -547,8 +616,8 @@ function cookInput(
   args: ParsedArgs,
   io: CliIo,
   trailing: readonly string[] | undefined,
-  signer?: `0x${string}`,
-  program: ProgramInput = programInput(args, io),
+  signer: `0x${string}` | undefined,
+  program: ProgramInput,
 ): CookInput {
   const value = stringFlag(args, "value");
   if (repeatedFlag(args, "account").length > 0) {
@@ -862,6 +931,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         value: "NAME=<address>",
         help: "Solana: an account main takes (an address, pot or owner), to size the cook",
       },
+      ...ENDPOINT,
       out: { type: "string", value: "<path>", help: "Write the output to a file, not stdout" },
       json: {
         type: "boolean",
@@ -886,6 +956,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "  size       the program's bytes; payload: the program with main's arguments (--args)",
       "  cook       on Solana, the cook's transaction against the 1232-byte limit, measured",
       "             with --account where given and a distinct account for each other slot",
+      "  intentPots each intent that runs a program on its destination: the Pot it cooks on (the",
+      "             one the destination Portal's Executor owns, salt 0) and, with an endpoint",
+      "             for that chain (--config), whether it is deployed; a missing one is warned",
+      "             about, since no solver can fill the intent until it is",
       "A define the file never reads is named on stderr: it changes nothing.",
       "",
       "Examples:",
@@ -894,7 +968,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     ].join("\n"),
     trailing: "args",
     run: async (args, io, trailing) => {
-      const program = programInput(args, io);
+      const program = await programInput(args, io);
       const accounts = repeatedFlag(args, "account");
       if (accounts.length > 0 && program.chain.kind !== "svm") {
         throw new UsageError(
@@ -906,6 +980,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           ...program,
           ...argsInput(args, io, trailing),
           ...(accounts.length === 0 ? {} : { accounts: parseAccounts(accounts) }),
+          endpoints: endpointsOf(args, io, program.chain),
         },
         io,
       );
@@ -987,7 +1062,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     ].join("\n"),
     trailing: "args",
     run: async (args, io, trailing) => {
-      const program = programInput(args, io);
+      const program = await programInput(args, io);
       const funds = repeatedFlag(args, "fund").length > 0;
       if (hasSigner(args) && !funds) {
         throw new UsageError(
@@ -1074,7 +1149,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     ].join("\n"),
     trailing: "args",
     run: async (args, io, trailing) => {
-      const program = programInput(args, io);
+      const program = await programInput(args, io);
       if (program.chain.kind === "svm") {
         fundingOf(args, io, program.chain, "", true, undefined);
         const signer = await keypairOf(args, io);
@@ -1158,7 +1233,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "    --intent-deadline 2000000000 --intent-creator 0x…",
     ].join("\n"),
     run: async (args, io) => {
-      const program = programInput(args, io);
+      const program = await programInput(args, io);
       if (program.chain.kind === "svm") {
         throw new UsageError(
           "sauce publish sends a source chain's Portal transactions from an EVM wallet. " +
@@ -1191,6 +1266,18 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           "--assume-balance goes with --dry-run: it gives the wallet a balance for a rehearsal, " +
             "and nothing to a transaction that is sent",
         );
+      }
+      // Before anything is sent: an intent whose Pot is not deployed is one no solver can fill.
+      const pots = await checkIntentPots(
+        intentCooks(compileProgram(program, io).intents),
+        endpointsOf(args, io, program.chain),
+      );
+      for (const check of pots) {
+        if (check.deployed !== true) {
+          io.stderr(
+            `${check.deployed === false ? missingPotNote(check) : uncheckedPotNote(check)}\n`,
+          );
+        }
       }
 
       return publishCommand(
@@ -1229,8 +1316,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "  sauce tx pay.sauce.ts --chain base --owner 0x… --value 0",
     ].join("\n"),
     trailing: "args",
-    run: (args, io, trailing) => {
-      const program = programInput(args, io);
+    run: async (args, io, trailing) => {
+      const program = await programInput(args, io);
       if (program.chain.kind === "svm") {
         return svmTxCommand(svmCookInput(args, io, trailing, program), io);
       }
@@ -1262,7 +1349,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "code. The owner defaults to the signer. Deploying is permissionless: with --owner, the",
       "signer sends and pays for another owner's Pot, which is that owner's alone — how the Pot",
       "intents share on a chain (owner: its Portal's Executor) is deployed. The default salt is",
-      "zero: the one Pot an owner has by default.",
+      "zero: the one Pot an owner has by default. With an endpoint and no --deploy, it also reads",
+      "the chain: whether the released engine and Kitchen are there, the Kitchen's fee, and",
+      "whether the Pot is deployed and whose it is (under `deployment`, and on stderr).",
       "",
       "On Solana a Pot is the Kitchen's PDA over (owner, salt): this prints it and the create_pot",
       "instruction; --deploy (with --keypair) creates it. There the owner signs create_pot, so",
@@ -1285,7 +1374,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           throw new UsageError("--format cast prints an EVM transaction; a Solana Pot has none");
         }
         if (args.values.deploy !== true) {
-          return svmPotCommand({ owner: svmOwner(args), ...saltOf(args) });
+          const rpcUrl = endpoint(args, io, chain);
+          const target = { owner: svmOwner(args), ...saltOf(args) };
+
+          return rpcUrl === undefined
+            ? svmPotCommand(target)
+            : svmPotStatusCommand({ ...target, rpcUrl });
         }
         const signer = await keypairOf(args, io);
 
@@ -1302,8 +1396,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       }
       if (args.values.deploy !== true) {
         if (owner === undefined) throw new UsageError("missing --owner <address>: whose Pot");
+        const rpcUrl = endpoint(args, io, chain);
+        const target = { chain, owner: parseAddress("owner", owner), ...saltOf(args) };
 
-        return potCommand({ chain, owner: parseAddress("owner", owner), ...saltOf(args) });
+        return rpcUrl === undefined ? potCommand(target) : potStatusCommand({ ...target, rpcUrl });
       }
       if (stringFlag(args, "format") === "cast") {
         throw new UsageError("--format cast prints the unsigned transaction; --deploy sends it");
@@ -1455,7 +1551,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         if (stringFlag(args, "source") !== undefined) {
           throw new UsageError("--source goes with hex: a file operand is its own source");
         }
-        const input = programInput(args, io);
+        const input = await programInput(args, io);
 
         return inspectFile(input.file, compileProgram(input, io));
       }
@@ -1469,7 +1565,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         );
       }
       const source =
-        sourceFile === undefined ? undefined : programInput(args, io, sourceFile, fetched?.chain);
+        sourceFile === undefined
+          ? undefined
+          : await programInput(args, io, sourceFile, fetched?.chain);
       const chainFlag = stringFlag(args, "chain");
       const chain =
         fetched?.chain ??

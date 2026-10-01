@@ -602,6 +602,22 @@ describe("sauce compile", () => {
     );
   });
 
+  it("needs no fee for --intent-execution-fee auto when no intent runs a program", async () => {
+    // A token-only body is calls the Portal's Executor makes itself: no cook, no Kitchen fee.
+    const program = file(
+      "bridge.sauce.ts",
+      "Base(() => {\n  USDC.transfer(RECIPIENT, 5n);\n}).reward({ tokens: [{ token: USDC, amount: 7n }] });\n",
+    );
+    const run = await sauce(
+      ...["compile", program, "--chain", "arbitrum", "--define", `RECIPIENT=${RECIPIENT}`],
+      ...["--intent-deadline", "2000000000", "--intent-creator", CREATOR],
+      ...["--intent-execution-fee", "auto", "--json"],
+    );
+    expect(run.code).toBe(0);
+    expect(run.stderr).toContain("no intent here runs a program, so none pays a fee");
+    expect(JSON.parse(run.stdout).intentPots).toBeUndefined();
+  });
+
   it("builds an intent the program opens, naming each setting it lacks", async () => {
     const body = [
       "const amount = USDC.balanceOf(ctx.self());",
@@ -707,7 +723,7 @@ describe("sauce tx", () => {
     });
     expect(run.stderr).toContain(`Pot ${pot} belongs to ${OWNER} (salt ${SAUCE_INTENT_POT_SALT}).`);
     expect(run.stderr).toContain(
-      `It must be deployed (sauce pot --deploy --owner ${OWNER} --chain ethereum --keystore <its keystore>)`,
+      `It must be deployed (sauce pot --deploy --owner ${OWNER} --chain ethereum --keystore <keystore>)`,
     );
     expect(run.stderr).toContain(`Send from ${OWNER}: cook() is onlyOwner.`);
   });
@@ -789,7 +805,7 @@ describe("sauce tx", () => {
       "treasury",
     );
     expect(hinted.stderr).toContain(
-      `sauce pot --deploy --owner ${OWNER} --chain ethereum --salt treasury --keystore <its keystore>`,
+      `sauce pot --deploy --owner ${OWNER} --chain ethereum --salt treasury --keystore <keystore>`,
     );
   });
 

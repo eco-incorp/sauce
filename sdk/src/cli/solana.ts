@@ -1319,6 +1319,61 @@ export async function svmPotCommand(target: SvmTarget): Promise<CommandOutput> {
   };
 }
 
+/** The released programs on the cluster, and the Pot: what a cook there needs. */
+async function deployment(
+  rpc: Rpc,
+  url: string,
+  pot: Address,
+): Promise<{ json: Record<string, unknown>; notes: string[] }> {
+  const program = async (at: Address, what: string): Promise<boolean> => {
+    const { value } = await ask(url, what, () =>
+      rpc.getAccountInfo(at, { encoding: "base64" }).send(),
+    );
+
+    return value !== null && value.executable;
+  };
+  const [engineThere, kitchenThere, potThere] = await Promise.all([
+    program(engine(), "the engine program"),
+    program(kitchen(), "the Kitchen program"),
+    exists(rpc, url, pot, "the Pot"),
+  ]);
+  const fee = kitchenThere ? await kitchenFee(rpc, url).catch(() => undefined) : undefined;
+  const there = (deployed: boolean) => (deployed ? "deployed" : "NOT deployed");
+
+  return {
+    json: {
+      engine: { address: engine(), deployed: engineThere },
+      kitchen: {
+        address: kitchen(),
+        deployed: kitchenThere,
+        ...(fee === undefined ? {} : { executionFee: fee.toString() }),
+      },
+      pot: { address: pot, deployed: potThere },
+    },
+    notes: [
+      `On the cluster: the engine ${engine()} is ${there(engineThere)}; the Kitchen ${kitchen()} ` +
+        `is ${there(kitchenThere)}` +
+        (fee === undefined ? "" : `, its execution fee ${fee} lamports`) +
+        `; the Pot ${pot} is ${there(potThere)}.`,
+      ...(kitchenThere && fee === undefined
+        ? ["The Kitchen has no execution-fee config on this cluster: a cook there is refused."]
+        : []),
+    ],
+  };
+}
+
+/** `sauce pot --chain solana` with an endpoint: the prediction, and what the cluster has. */
+export async function svmPotStatusCommand(
+  target: SvmTarget & { readonly rpcUrl: string },
+): Promise<CommandOutput> {
+  const predicted = await svmPotCommand(target);
+  const pot = predicted.json.pot as Address;
+  const found = await deployment(createSolanaRpc(target.rpcUrl), target.rpcUrl, pot);
+  const json = { ...predicted.json, deployment: found.json };
+
+  return { text: JSON.stringify(json, null, 2), json, notes: found.notes };
+}
+
 /** `sauce pot --deploy --chain solana`: creates the signer's Pot unless it is already there. */
 export async function svmPotDeployCommand(
   target: SvmTarget & { readonly rpcUrl: string; readonly signer: KeyPairSigner },
