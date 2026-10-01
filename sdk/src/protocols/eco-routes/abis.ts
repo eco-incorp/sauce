@@ -14,14 +14,14 @@
  * for a Solana destination the route is Borsh rather than ABI, so handing the Portal a pre-encoded
  * blob is the only way its `routeHash` matches the one the SDK computed. See `routes/portal.ts`.
  *
- * EVENTS AND ERRORS are the deployed Portal's, as its verified source declares them: the intent
- * lifecycle events, with each parameter's `indexed` exactly as emitted (a wrong flag decodes no log
- * at all — `IntentFunded` indexes nothing, `IntentFulfilled` indexes both of its parameters), and
- * every custom error the runtime code of every listed deployment can revert with, so a revert such
- * as `InsufficientFunds(intentHash)` decodes by name. Left out: the ERC-7683 `Open`/`OrderFilled`
- * events, the ECDSA errors of `openFor` (Arc's build has none), and errors only a constructor
- * throws. `registry-abi.test.ts` checks every one against the deployed code and the verified ABI,
- * and decodes a real log of each event it has one of.
+ * EVENTS AND ERRORS are the deployed Portal's (eco-routes 2.12.0), as its verified source declares
+ * them: the intent lifecycle events, with each parameter's `indexed` exactly as emitted (a wrong
+ * flag decodes no log at all — `IntentFunded` indexes nothing, `IntentFulfilled` indexes both of
+ * its parameters), and every custom error the runtime code of every listed deployment can revert
+ * with, so a revert such as `InsufficientFunds(intentHash)` or Arc's
+ * `RewardTokensNotUnique(token)` decodes by name. Left out: the ERC-7683 `Open`/`OrderFilled`
+ * events and errors only a constructor throws. `registry-abi.test.ts` checks every one against the
+ * deployed code and the verified ABI, and decodes a real log of each event it has one of.
  */
 
 export const PortalABI = [
@@ -679,6 +679,17 @@ export const PortalABI = [
     ],
   },
   {
+    type: "event",
+    name: "IntentCancelled",
+    inputs: [
+      {
+        name: "intentHash",
+        type: "bytes32",
+        indexed: true,
+      },
+    ],
+  },
+  {
     type: "error",
     name: "AddressEmptyCode",
     inputs: [
@@ -692,6 +703,16 @@ export const PortalABI = [
     type: "error",
     name: "ArrayLengthMismatch",
     inputs: [],
+  },
+  {
+    type: "error",
+    name: "CancelledIntent",
+    inputs: [
+      {
+        name: "intentHash",
+        type: "bytes32",
+      },
+    ],
   },
   {
     type: "error",
@@ -771,6 +792,20 @@ export const PortalABI = [
     type: "error",
     name: "InvalidClaimant",
     inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidCreatorBinding",
+    inputs: [
+      {
+        name: "user",
+        type: "address",
+      },
+      {
+        name: "creator",
+        type: "address",
+      },
+    ],
   },
   {
     type: "error",
@@ -892,6 +927,36 @@ export const PortalABI = [
     type: "error",
     name: "OpenDeadlinePassed",
     inputs: [],
+  },
+  {
+    type: "error",
+    name: "ReentrancyGuardReentrantCall",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "ReservedClaimant",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "RewardTokensNotUnique",
+    inputs: [
+      {
+        name: "token",
+        type: "address",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "RouteNotExpired",
+    inputs: [
+      {
+        name: "deadline",
+        type: "uint64",
+      },
+    ],
   },
   {
     type: "error",
