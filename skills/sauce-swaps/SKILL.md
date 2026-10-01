@@ -8,7 +8,8 @@ description: Swapping inside a Sauce program through the Sauce Router — the fl
 The Router is the Pot's swap surface. A program calls it **through its own Pot**,
 `ISauceRouter.at(ctx.self())`: the Pot's fallback delegatecalls the Router it is configured with
 (`router()` on the Pot), so the Router runs in the Pot's context, holds the Pot's balances, and its
-swap entry points accept only that self-call. Import the ABI the package serves:
+swap entry points accept only that self-call. Import the ABI the package serves (an intent file
+cannot import: there, call the Router by selector, from the table in `sauce-intents`):
 
 ```sauce chain=base,arbitrum
 import { ISauceRouter } from "./artifacts/ISauceRouter.json";
@@ -24,30 +25,17 @@ function main(amount: Uint256, sqrtPriceLimitX96: Uint256) {
 output stays in the Pot, where the program measures it. (A different `recipient` gets the output
 forwarded; a different `payer` is pulled from with `transferFrom`.)
 
-## Entry points
+## `swapV3` and `swapV4`
 
-| Entry point                                                                                              | Venues                                                                         | Price bound                            | Exact input is           |
-| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------- | ------------------------ |
-| `swapV3(pool, tokenIn, tokenOut, amountSpecified, sqrtPriceLimitX96, payer, recipient)`                  | any V3-style pool whose callback the Router services (below)                   | `sqrtPriceLimitX96`                    | positive                 |
-| `swapV4(poolManager, key, zeroForOne, amountSpecified, sqrtPriceLimitX96, payer, recipient)`             | Uniswap V4 pools; `key` is `{ currency0, currency1, fee, tickSpacing, hooks }` | `sqrtPriceLimitX96`                    | negative (`-amount`)     |
-| `swapInfinityCL(vault, key, zeroForOne, amountSpecified, sqrtPriceLimitX96, payer, recipient, callback)` | PancakeSwap Infinity CL                                                        | `sqrtPriceLimitX96`                    | negative (required)      |
-| `swapInfinityBin(vault, key, swapForY, amountSpecified, payer, recipient, callback)`                     | PancakeSwap Infinity Bin                                                       | none                                   | negative (required)      |
-| `swapMaverickV2Bounded(params, tickLimit)`                                                               | Maverick V2                                                                    | `tickLimit`                            | positive                 |
-| `swap(params)`, `params.poolType` below                                                                  | the unified entry point                                                        | `params.sqrtPriceLimitX96` (V3 and V4) | positive, UniV4 negative |
+| Entry point                                                                                  | Venues                                                                         | Price bound         | Exact input is       |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------- | -------------------- |
+| `swapV3(pool, tokenIn, tokenOut, amountSpecified, sqrtPriceLimitX96, payer, recipient)`      | any V3-style pool whose callback the Router services (below)                   | `sqrtPriceLimitX96` | positive             |
+| `swapV4(poolManager, key, zeroForOne, amountSpecified, sqrtPriceLimitX96, payer, recipient)` | Uniswap V4 pools; `key` is `{ currency0, currency1, fee, tickSpacing, hooks }` | `sqrtPriceLimitX96` | negative (`-amount`) |
 
 **Swap exact input only.** The Router caps what a callback may take at the exact-input amount; an
-exact-output swap (the other sign) has no such cap. A `sqrtPriceLimitX96` of `0` means no limit.
-
-Unified `swap` pool types (`poolType` values): `UniV2` 0, `UniV3` 1, `UniV4` 2, `Curve` 3,
-`BalancerV2` 4, `DODOV2` 5, `TraderJoeLB` 6, `MaverickV2` 7, `WOOFi` 8. Its `poolKey` is used by
-UniV4 (all five fields) and UniV2 (`fee`, the LP fee in ppm; `0` means 3000). Only V3 and V4 honour a
-price limit; the others fill in full or revert, bounded only by the guard below.
-
-**Every leg either takes all its input or returns the rest.** A venue that can stop part way, at a
-price or tick limit, is swapped only through the Router: its callback pays exactly what the pool
-took, and the unspent input stays in the Pot for the guard to return. Maverick V2 is such a venue,
-so it goes through `swapMaverickV2Bounded`, never a payment straight to the pool, which would leave
-the unfilled part with the pool.
+exact-output swap (the other sign) has no such cap. A `sqrtPriceLimitX96` of `0` means no limit,
+which leaves `minOut` as the only bound: set a real limit. PancakeSwap Infinity, Maverick V2 and the
+unified `swap` are under "Other entry points" below.
 
 ## Which pools `swapV3` drives
 
@@ -69,11 +57,17 @@ the pool asks for, in the input token, never more than the exact input
 ## Price limits and partial fills
 
 `sqrtPriceLimitX96` is `floor(sqrt(token1Units / token0Units) * 2^96)`, with token0 the lower of
-the two addresses, so one number means the same price on every V3-style pool of the pair and on V4
-pools of the same two currencies. Selling token0 moves the price down, so the limit is a floor;
-selling token1 moves it up, so it is a ceiling. It must lie strictly between `4295128739` and
+the two addresses. Selling token0 moves the price down, so the limit is a floor; selling token1
+moves it up, so it is a ceiling. It must lie strictly between `4295128739` and
 `1461446703485210103287273052203988822378723970342` and on the far side of the pool's current
 price, or the pool reverts.
+
+**It bounds the pool's price after the swap, not the price paid.** One number is the same pool price
+on every V3-style pool of the pair and on V4 pools of the same two currencies, but the fee comes on
+top, and it differs per pool: under one limit, the last unit a 1% pool fills costs about 1% more
+than the limit, a 0.05% pool's about 0.05%. To bound the price paid, give each pool its own limit:
+`limit ÷ √(1 − fee)` selling token0, `limit × √(1 − fee)` selling token1 (`sauce-distributed-swap`
+computes it and reads each pool's fee).
 
 A pool offered more than it can fill before its price reaches the limit **takes only what it
 can**: the callback pays exactly the pool's delta, and the rest of the input stays in the Pot. That
@@ -93,6 +87,10 @@ The Router returns the deltas but checks no minimum output and refunds nothing. 
 3. Pay the output out with a SafeERC20 `transfer`.
 4. Send whatever input is still in the Pot back to the user or a refund address.
 
+**Every leg either takes all its input or returns the rest.** A venue that can stop part way, at a
+price or tick limit, is swapped only through the Router: its callback pays exactly what the pool
+took, and the unspent input stays in the Pot for the guard to return.
+
 [examples/swap-leg.sauce.ts](examples/swap-leg.sauce.ts) is exactly this for one Uniswap V3 pool.
 Rehearse it, then run it, with the input in the Pot (or pulled in with `--fund`):
 
@@ -104,6 +102,23 @@ npx sauce run swap-leg.sauce.ts --chain base --config sauce.config.json --keysto
 ```
 
 For several venues under one price limit, use `sauce-distributed-swap`.
+
+## Other entry points
+
+| Entry point                                                                                              | Venues                   | Price bound                            | Exact input is           |
+| -------------------------------------------------------------------------------------------------------- | ------------------------ | -------------------------------------- | ------------------------ |
+| `swapInfinityCL(vault, key, zeroForOne, amountSpecified, sqrtPriceLimitX96, payer, recipient, callback)` | PancakeSwap Infinity CL  | `sqrtPriceLimitX96`                    | negative (required)      |
+| `swapInfinityBin(vault, key, swapForY, amountSpecified, payer, recipient, callback)`                     | PancakeSwap Infinity Bin | none                                   | negative (required)      |
+| `swapMaverickV2Bounded(params, tickLimit)`                                                               | Maverick V2              | `tickLimit`                            | positive                 |
+| `swap(params)`, `params.poolType` below                                                                  | the unified entry point  | `params.sqrtPriceLimitX96` (V3 and V4) | positive, UniV4 negative |
+
+Maverick V2 can stop part way, so it goes through `swapMaverickV2Bounded`, never a payment
+straight to the pool, which would leave the unfilled part with the pool.
+
+Unified `swap` pool types (`poolType` values): `UniV2` 0, `UniV3` 1, `UniV4` 2, `Curve` 3,
+`BalancerV2` 4, `DODOV2` 5, `TraderJoeLB` 6, `MaverickV2` 7, `WOOFi` 8. Its `poolKey` is used by
+UniV4 (all five fields) and UniV2 (`fee`, the LP fee in ppm; `0` means 3000). Only V3 and V4 honour a
+price limit; the others fill in full or revert, bounded only by the guard.
 
 ## Example
 
