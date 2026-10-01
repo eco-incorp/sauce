@@ -186,6 +186,45 @@ describe("a closure's own helper functions", () => {
     expect(source.slice(main)).not.toContain("function half(");
   });
 
+  it("are cut out wherever they stand, and keep calling each other", () => {
+    // Interleaved with the statements, one calling the other: each comes out whole, and the body
+    // keeps every statement, in order. A closure's text is the host's compiled JavaScript, so its
+    // helpers carry no annotations by the time the SDK reads them.
+    const interleaved = () => {
+      const start = 1000n;
+      function quarter(x: bigint): bigint {
+        return half(half(x));
+      }
+      USDC.transfer(RECIPIENT, quarter(start));
+      function half(x: bigint): bigint {
+        return x / 2n;
+      }
+      USDC.transfer(RECIPIENT, half(start));
+    };
+    const source = sauceBodyToSource(interleaved);
+    const main = source.slice(source.indexOf("function main()"));
+
+    expect(source.indexOf("function quarter(")).toBeLessThan(source.indexOf("function half("));
+    expect(source.indexOf("function half(")).toBeLessThan(source.indexOf("function main()"));
+    expect(main.slice("function main()".length)).not.toContain("function ");
+    expect(main.indexOf("const start = 1000n;")).toBeLessThan(main.indexOf("quarter(start)"));
+    expect(main.indexOf("quarter(start)")).toBeLessThan(main.indexOf("half(start)"));
+    // The same program a hand-written source makes.
+    const options = { defines: { RECIPIENT: 0x99n } };
+    const written = `function quarter(x) { return half(half(x)); }
+function half(x) { return x / 2n; }
+function main() {
+  const start = 1000n;
+  USDC.transfer(RECIPIENT, quarter(start));
+  USDC.transfer(RECIPIENT, half(start));
+}`;
+    expect(
+      Array.from(compileSauceRoute("base", source, execution, options).compiled.bytecode[0]!),
+    ).toEqual(
+      Array.from(compileSauceRoute("base", written, execution, options).compiled.bytecode[0]!),
+    );
+  });
+
   it("compile", () => {
     const out = compileSauceRoute("base", sauceBodyToSource(withHelper), execution, {
       defines: { RECIPIENT: 0x99n },

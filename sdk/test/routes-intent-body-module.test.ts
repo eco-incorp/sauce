@@ -157,6 +157,34 @@ import { approve, transfer as send, balanceOf } from "@sauce/token";
     expect(child.source).not.toContain("balanceOf }");
   });
 
+  it("a default import with its attributes, and a namespace import, as written", () => {
+    const child = childOf(
+      fileWithIntent(
+        `import cfg from "./config.json" with { type: "json" };
+import ERC20, { helper } from "./lib.js";
+import * as math from "./math.js";
+`,
+        "    USDC.transfer(RECIPIENT, cfg.fee + math.half(amount));",
+      ),
+    );
+
+    expect(child.source).toContain('import cfg from "./config.json" with { type: "json" };');
+    expect(child.source).toContain('import * as math from "./math.js";');
+    // Neither binding of the other import is read, so that line is not carried at all.
+    expect(child.source).not.toContain("./lib.js");
+  });
+
+  it("a default import beside a named one, each only when read", () => {
+    const child = childOf(
+      fileWithIntent(
+        'import ERC20, { helper, other } from "./lib.js";\n',
+        "    USDC.transfer(RECIPIENT, helper(ERC20.at(RECIPIENT).totalSupply()));",
+      ),
+    );
+
+    expect(child.source).toContain('import ERC20, { helper } from "./lib.js";');
+  });
+
   it("an interface a carried signature names", () => {
     const child = childOf(
       fileWithIntent(

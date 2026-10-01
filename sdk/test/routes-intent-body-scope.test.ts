@@ -113,3 +113,29 @@ describe("a destructured local of the body is the body's own", () => {
     expect(children[0]!.captures).toEqual(["amount"]);
   });
 });
+
+describe("an intent opened at a script's top level", () => {
+  // A script's top-level statements are its entry, so what they declare are the locals an intent
+  // there captures, as `main`'s would be.
+  const SCRIPT = `const amount = USDC.balanceOf(ctx.self());
+const [fee] = abi.decode(ctx.msgData(), ["Uint256"]);
+Arbitrum(() => {
+  if (amount > fee) { USDC.transfer(RECIPIENT, amount - fee); }
+}).reward({ tokens: [{ token: USDC, amount }] });`;
+
+  it("captures the script's locals the body reads", () => {
+    const { context, children } = recording();
+    rewriteIntentSugar(SCRIPT, context);
+
+    expect(children[0]!.captures).toEqual(["amount", "fee"]);
+  });
+
+  it("compiles on the real path", () => {
+    const out = compileSauceRoute("base", SCRIPT, EXECUTION, {
+      defines: { RECIPIENT },
+      intents: INTENTS,
+    });
+
+    expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+  });
+});
