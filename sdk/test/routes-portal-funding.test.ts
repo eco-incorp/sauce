@@ -11,6 +11,7 @@ import {
   erc20Abi,
   getAddress,
   toFunctionSelector,
+  type AbiFunction,
   type Hex,
 } from "viem";
 
@@ -237,7 +238,7 @@ describe("BuiltIntent.sourceTxs and predictVault", () => {
       );
     const selectorOf = (name: string) =>
       toFunctionSelector(
-        PortalABI.find((item) => item.type === "function" && item.name === name)!,
+        PortalABI.find((item) => item.type === "function" && item.name === name) as AbiFunction,
       ).slice(2);
 
     expect(programOf()).toContain(selectorOf("intentVaultAddress"));

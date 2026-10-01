@@ -9,7 +9,7 @@
  *
  * `routes-intent-sugar.e2e.test.ts` runs the result against a real Portal.
  */
-import { decodeFunctionData, erc20Abi, toFunctionSelector, type Hex } from "viem";
+import { decodeFunctionData, erc20Abi, toFunctionSelector, type AbiFunction, type Hex } from "viem";
 
 import { compileProgram as compile } from "./helpers";
 import { requireChain } from "../src/chains/canonical.js";
@@ -187,7 +187,7 @@ describe("what the lowering produces", () => {
     const portal = ecoRoutesPortal("base").slice(2).toLowerCase();
     const selector = (name: string) =>
       toFunctionSelector(
-        PortalABI.find((item) => item.type === "function" && item.name === name)!,
+        PortalABI.find((item) => item.type === "function" && item.name === name) as AbiFunction,
       ).slice(2);
     const linesOf = (source: string) => source.split("\n").map((line) => line.trim());
 
