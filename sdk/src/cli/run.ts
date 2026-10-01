@@ -11,7 +11,6 @@
  */
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
-import { createInterface } from "node:readline";
 
 import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
 import {
@@ -50,6 +49,7 @@ import {
   type ArgsInput,
   type CliFiles,
   type CommandOutput,
+  type Approver,
   type Confirm,
   type CookInput,
   type PotInput,
@@ -95,6 +95,7 @@ import {
 import type { Address as SvmAddress, KeyPairSigner } from "@solana/kit";
 import type { PrivateKeyAccount } from "viem/accounts";
 import { loadSigner, scrub, secret } from "./signer.js";
+import { chooseTerminal, confirmOn, controllingTerminal, passwordOn } from "./terminal.js";
 import {
   AGENTS,
   describeStatus,
@@ -120,68 +121,58 @@ export interface CliIo extends CliFiles {
   readonly promptPassword: (prompt: string) => Promise<string>;
   /** Asks a yes/no question; `undefined` where there is no terminal to ask on. */
   readonly confirm: Confirm;
-}
-
-/** A yes/no answer typed at the terminal, or `undefined` with no terminal to type it at. */
-function confirm(question: string): Promise<boolean | undefined> {
-  if (!process.stdin.isTTY) return Promise.resolve(undefined);
-  const prompt = createInterface({ input: process.stdin, output: process.stderr });
-
-  return new Promise((resolve) => {
-    prompt.question(question, (answer) => {
-      prompt.close();
-      resolve(/^\s*y(?:es)?\s*$/i.test(answer));
-    });
-  });
-}
-
-/** A password typed at the terminal, echoing nothing. */
-function promptPassword(prompt: string): Promise<string> {
-  const stdin = process.stdin;
-  if (!stdin.isTTY) {
-    return Promise.reject(
-      new UsageError(
-        "no terminal to ask for the keystore password on: pass --password-file <path>",
-      ),
-    );
-  }
-
-  return new Promise((resolve, reject) => {
-    let typed = "";
-    const finish = (): void => {
-      stdin.off("data", onData);
-      stdin.setRawMode(false);
-      stdin.pause();
-      process.stderr.write("\n");
-    };
-    const onData = (chunk: string): void => {
-      for (const ch of chunk) {
-        if (ch === "\r" || ch === "\n") {
-          finish();
-          resolve(typed);
-
-          return;
-        }
-        if (ch === "\u0003") {
-          finish();
-          reject(new CliError("cancelled"));
-
-          return;
-        }
-        typed = ch === "\u007f" || ch === "\b" ? typed.slice(0, -1) : typed + ch;
-      }
-    };
-    process.stderr.write(prompt);
-    stdin.setEncoding("utf8");
-    stdin.setRawMode(true);
-    stdin.resume();
-    stdin.on("data", onData);
-  });
+  /** Whether a question can reach a terminal (`terminal.ts`). */
+  readonly canAsk: () => boolean;
+  /** All of stdin, to its end: a program given as `-`. Questions go elsewhere after it. */
+  readonly readStdin: () => string;
 }
 
 /** The real process's streams, filesystem, children and terminal. */
 export function nodeIo(): CliIo {
+  let stdinRead = false;
+  const terminal = () =>
+    chooseTerminal({
+      stdinRead,
+      stdin: process.stdin,
+      stderr: process.stderr,
+      controlling: controllingTerminal,
+    });
+
   return {
+    readStdin: () => {
+      stdinRead = true;
+
+      return readFileSync(0, "utf8");
+    },
+    canAsk: () => {
+      const found = terminal();
+      found?.close();
+
+      return found !== undefined;
+    },
+    confirm: async (question) => {
+      const found = terminal();
+      if (found === undefined) return undefined;
+      try {
+        return await confirmOn(found, question);
+      } finally {
+        found.close();
+      }
+    },
+    promptPassword: async (prompt) => {
+      const found = terminal();
+      if (found === undefined) {
+        throw new UsageError(
+          `${stdinRead ? "stdin carried the program, and there is " : ""}no terminal to ask for ` +
+            "the keystore password on: pass --password-file <path>",
+        );
+      }
+      try {
+        return await passwordOn(found, prompt);
+      } finally {
+        found.close();
+      }
+    },
     stdout: (text) => void process.stdout.write(text),
     stderr: (text) => void process.stderr.write(text),
     readText: (path) => readFileSync(path, "utf8"),
@@ -204,8 +195,6 @@ export function nodeIo(): CliIo {
         // npm is `npm.cmd` on Windows, which only a shell resolves.
         shell: process.platform === "win32",
       }).status ?? 1,
-    promptPassword,
-    confirm,
   };
 }
 
@@ -268,6 +257,11 @@ const PROGRAM: FlagSpecs = {
   "compact-args": {
     type: "boolean",
     help: "Take main's arguments as compact-v1, not ABI-v1",
+  },
+  "source-dir": {
+    type: "string",
+    value: "<dir>",
+    help: "Resolve the program's relative imports here (default: beside it; from stdin, .)",
   },
 };
 
@@ -391,7 +385,9 @@ const FORMAT: FlagSpecs = {
 /** The one `<file>` operand a compiling command takes. */
 function fileOperand(args: ParsedArgs): string {
   const [file, ...rest] = args.positionals;
-  if (file === undefined) throw new UsageError("missing <file>: the SauceScript program");
+  if (file === undefined) {
+    throw new UsageError("missing <file>: the SauceScript program, or - to read it from stdin");
+  }
   if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}: give one <file>`);
 
   return file;
@@ -512,14 +508,37 @@ async function autoExecutionFee(
   return fee;
 }
 
-/** A program operand's input; `fallback` is its chain when neither `--chain` nor its header says. */
+/** What stdin carried, named in messages. */
+export const STDIN = "<stdin>";
+
+/** A program's text, and where it came from. */
+interface ProgramText {
+  readonly file: string;
+  readonly text: string;
+  readonly stdin: boolean;
+}
+
+/** The program's text: a file's, or stdin's for `-`, read once — or one already read. */
+function programText(io: CliIo, operand: string | ProgramText): ProgramText {
+  if (typeof operand !== "string") return operand;
+
+  return operand === "-"
+    ? { file: STDIN, text: io.readStdin(), stdin: true }
+    : { file: operand, text: readInput(io, operand), stdin: false };
+}
+
+/**
+ * A program operand's input — a file, or `-` for stdin — and `fallback` its chain when neither
+ * `--chain` nor its header says.
+ */
 async function programInput(
   args: ParsedArgs,
   io: CliIo,
-  file = fileOperand(args),
+  operand: string | ProgramText = fileOperand(args),
   fallback?: CanonicalChain,
 ): Promise<ProgramInput> {
-  const text = readInput(io, file);
+  const { file, text, stdin } = programText(io, operand);
+  const sourceDir = stringFlag(args, "source-dir");
   const chain = chainOf(args, file, text, fallback);
   const definesFile = stringFlag(args, "defines");
   const deadline = stringFlag(args, "intent-deadline");
@@ -535,6 +554,8 @@ async function programInput(
   const input: ProgramInput = {
     file,
     text,
+    ...(stdin ? { stdin } : {}),
+    ...(sourceDir === undefined ? {} : { sourceDir }),
     chain,
     compactArgs: args.values["compact-args"] === true,
     defines,
@@ -688,6 +709,25 @@ const signerOf = (args: ParsedArgs, io: CliIo) => {
   );
 };
 
+/**
+ * Who approves what a run sends before its cook: `--auto-approve`, which says so for each action it
+ * approves, or the person at the terminal (`io.confirm`).
+ */
+function approverOf(args: ParsedArgs, io: CliIo): Approver {
+  const auto = args.values["auto-approve"] === true;
+
+  return {
+    auto,
+    canAsk: auto || io.canAsk(),
+    approve: async (action, question) => {
+      if (!auto) return io.confirm(question);
+      io.stderr(`auto-approved: ${action}\n`);
+
+      return true;
+    },
+  };
+}
+
 /** Whether `simulate` was given a key: it signs `--fund`'s pulls, and nothing else there. */
 const hasSigner = (args: ParsedArgs): boolean =>
   stringFlag(args, "keystore") !== undefined || stringFlag(args, "private-key") !== undefined;
@@ -743,7 +783,7 @@ function fundingOf(
     permit2On(chain);
   }
 
-  return async (client, pot, owner) => {
+  return async (client, pot, owner, plan = false) => {
     if (account !== undefined && account.address !== owner) {
       throw new UsageError(
         `the signer ${account.address} is not the owner of Pot ${pot}, ${owner}: --fund pulls the ` +
@@ -761,9 +801,8 @@ function fundingOf(
       requests,
       sweep,
       ...(account === undefined ? {} : { account }),
-      send,
-      yes: args.values.yes === true,
-      confirm: io.confirm,
+      send: send && !plan,
+      approver: approverOf(args, io),
     });
   };
 }
@@ -920,7 +959,7 @@ const lines = (text: readonly string[]): CommandOutput => ({ text: text.join("\n
 
 const COMMANDS: Readonly<Record<string, Command>> = {
   compile: {
-    usage: "sauce compile <file> --chain <slug|id> [options]",
+    usage: "sauce compile <file | -> --chain <slug|id> [options]",
     summary: "Compile a SauceScript program; print its bytecode",
     flags: {
       ...PROGRAM,
@@ -997,8 +1036,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   simulate: {
     usage: [
-      "sauce simulate <file> --chain <slug|id> (--owner <address> | --pot <address>) --rpc-url <url> [options]",
-      "sauce simulate <file> --chain solana --owner <pubkey> --rpc-url <url> [--account NAME=<value>]… [options]",
+      "sauce simulate <file | -> --chain <slug|id> (--owner <address> | --pot <address>) --rpc-url <url> [options]",
+      "sauce simulate <file | -> --chain solana --owner <pubkey> --rpc-url <url> [--account NAME=<value>]… [options]",
     ],
     summary: "Rehearse the cook from the Pot's owner, with no key: what it did, or why it reverts",
     flags: {
@@ -1096,8 +1135,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   run: {
     usage: [
-      "sauce run <file> --chain <slug|id> --rpc-url <url> (--keystore <path> | --private-key <hex>) [options]",
-      "sauce run <file> --chain solana --rpc-url <url> --keypair <path> [--account NAME=<value>]… [options]",
+      "sauce run <file | -> --chain <slug|id> --rpc-url <url> (--keystore <path> | --private-key <hex>) [options]",
+      "sauce run <file | -> --chain solana --rpc-url <url> --keypair <path> [--account NAME=<value>]… [options]",
     ],
     summary: "Compile, sign, send and wait for the cook on your Pot",
     flags: {
@@ -1106,10 +1145,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       ...ENDPOINT,
       ...SIGNER,
       ...FUND,
-      yes: {
+      "auto-approve": {
         type: "boolean",
-        short: "y",
-        help: "Deploy a missing Pot, or approve for --fund, without asking",
+        help: "Approve, without asking, what the run sends first: see below",
       },
       ...JSON_FLAG,
       ...HELP,
@@ -1118,10 +1156,17 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     details: [
       "Compiles the file, builds the cook on the signer's Pot (or --pot), rehearses it, signs it,",
       "sends it and waits for the receipt: prints the hash, status and gas used, and the decoded",
-      "reason when it reverts (exit 1). The signer is the owner. A Pot that is not deployed",
-      "yet is deployed first, in a transaction of its own, once you agree at the prompt — or",
-      "with --yes, which is also how to allow it with no terminal to ask on. The value",
-      "defaults to the Kitchen's execution fee, read from the chain.",
+      "reason when it reverts (exit 1). The signer is the owner. The value defaults to the",
+      "Kitchen's execution fee, read from the chain.",
+      "",
+      "What the run sends before its cook, each in a transaction of its own, it asks you to",
+      "approve at the terminal first; --auto-approve approves every one without asking, and says",
+      "`auto-approved: <action>` for each. They are:",
+      "  deploying the Pot, when it is not deployed yet (on Solana, creating it)",
+      "  approving Permit2 for a token --fund pulls, the first time (--fund-mode permit2)",
+      "  approving the Pot for the amount --fund pulls (--fund-mode allowance)",
+      "With no terminal to ask on (CI, a pipe, a program read from stdin with no terminal),",
+      "nothing is sent until they are approved: the run names every one it needs and stops.",
       "",
       "--fund TOKEN:amount gets tokens into the Pot in the same cook: the program is wrapped so",
       "it first pulls each amount from you, then runs, then (--sweep) returns what is left. The",
@@ -1158,8 +1203,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           {
             ...svmCookInput(args, io, trailing, program, signer.address),
             signer,
-            yes: args.values.yes === true,
-            confirm: io.confirm,
+            approver: approverOf(args, io),
           },
           io,
         );
@@ -1175,8 +1219,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           ...(fund === undefined ? {} : { fund }),
           rpcUrl,
           account,
-          yes: args.values.yes === true,
-          confirm: io.confirm,
+          approver: approverOf(args, io),
         },
         io,
       );
@@ -1184,7 +1227,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   publish: {
     usage:
-      "sauce publish <file> --chain <source> --rpc-url <url> (--keystore <path> | --private-key <hex>) [options]",
+      "sauce publish <file | -> --chain <source> --rpc-url <url> (--keystore <path> | --private-key <hex>) [options]",
     summary: "Publish a file's fixed intents from a wallet, with no Pot",
     flags: {
       ...PROGRAM,
@@ -1296,8 +1339,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   tx: {
     usage: [
-      "sauce tx <file> --chain <slug|id> (--owner <address> | --pot <address>) [options]",
-      "sauce tx <file> --chain solana --owner <pubkey> --rpc-url <url> [--account NAME=<value>]… [options]",
+      "sauce tx <file | -> --chain <slug|id> (--owner <address> | --pot <address>) [options]",
+      "sauce tx <file | -> --chain solana --owner <pubkey> --rpc-url <url> [--account NAME=<value>]… [options]",
     ],
     summary: "Print the unsigned cook transaction, for a wallet to sign",
     flags: { ...PROGRAM, ...COOK, ...ENDPOINT, ...FORMAT, ...HELP, ...ARGS },
@@ -1338,7 +1381,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       deploy: { type: "boolean", help: "Send the deployment (needs an endpoint and a signer)" },
       ...ENDPOINT,
       ...SIGNER,
-      yes: { type: "boolean", short: "y", help: "Accepted: --deploy sends without asking" },
+      "auto-approve": {
+        type: "boolean",
+        help: "Accepted, approving nothing: --deploy itself is the approval",
+      },
       ...FORMAT,
       ...HELP,
     },
@@ -1517,7 +1563,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   inspect: {
-    usage: "sauce inspect <hex | tx-hash | file> [--chain <slug|id>] [--source <file>] [options]",
+    usage:
+      "sauce inspect <hex | tx-hash | file | -> [--chain <slug|id>] [--source <file | ->] [options]",
     summary: "Take a cook, a Portal or Kitchen call, a program or a file apart",
     flags: {
       ...PROGRAM,
@@ -1546,17 +1593,33 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "  sauce inspect bridge.sauce.ts --chain arbitrum --intent-deadline 2000000000 --intent-creator 0x…",
     ].join("\n"),
     run: async (args, io) => {
-      const [operand] = args.positionals;
-      if (operand === undefined || !operand.startsWith("0x")) {
+      const [operand, ...extra] = args.positionals;
+      // `-`: stdin carries the hex, the hash or the program — whichever it reads as.
+      const piped = operand === "-" ? io.readStdin().trim() : undefined;
+      if (piped !== undefined && extra.length > 0) {
+        throw new UsageError(`unexpected argument ${extra[0]}`);
+      }
+      const word = piped ?? operand;
+      if (word === undefined || !/^0x[0-9a-fA-F]*$/.test(word)) {
         if (stringFlag(args, "source") !== undefined) {
           throw new UsageError("--source goes with hex: a file operand is its own source");
         }
-        const input = await programInput(args, io);
+        const input = await programInput(
+          args,
+          io,
+          piped === undefined ? fileOperand(args) : { file: STDIN, text: piped, stdin: true },
+        );
 
         return inspectFile(input.file, compileProgram(input, io));
       }
-      const hex = hexOperand(args, "<hex | tx-hash | file>");
+      const hex =
+        piped === undefined
+          ? hexOperand(args, "<hex | tx-hash | file>")
+          : hexOperand({ ...args, positionals: [piped] }, "<hex | tx-hash | file>");
       const sourceFile = stringFlag(args, "source");
+      if (piped !== undefined && sourceFile === "-") {
+        throw new UsageError("stdin carries one thing: the hex, or --source's program, not both");
+      }
       const fetched = TX_HASH.test(hex) ? await transactionEndpoint(args, io) : undefined;
       if (TX_HASH.test(hex) && fetched === undefined) {
         throw new UsageError(
@@ -1859,6 +1922,12 @@ function mainHelp(): string {
     "or --config, and nothing is signed without --keystore or --private-key (on Solana,",
     "--keypair).",
     "",
+    "A program file may be `-`, read from stdin (`cat pay.sauce.ts | sauce compile - --chain",
+    "base`); it is never read without one. Its relative imports then resolve against the",
+    "current directory, or --source-dir. Questions go to the terminal (/dev/tty) instead of",
+    "stdin; with no terminal, a run names what it needs approved and sends nothing until",
+    "--auto-approve (and --password-file for a keystore) is given.",
+    "",
   ].join("\n");
 }
 
@@ -1927,7 +1996,7 @@ function notTaken(name: string, flag: string): string {
           ? `${name} signs nothing`
           : REACHING.has(flag) && !("config" in own)
             ? `${name} reads nothing from a chain`
-            : flag === "yes"
+            : flag === "auto-approve"
               ? `${name} has nothing to ask`
               : undefined;
 

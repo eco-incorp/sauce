@@ -46,7 +46,7 @@ import { wrapSauceBody } from "../routes/sauce-route.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { CliError, UsageError } from "./args.js";
 import { sendAndWait, type Sent } from "./chain.js";
-import type { Confirm } from "./commands.js";
+import type { Approver } from "./commands.js";
 
 export const FUND_MODES = ["permit2", "permit", "allowance", "transfer"] as const;
 export type FundMode = (typeof FUND_MODES)[number];
@@ -159,8 +159,8 @@ export interface FundingInput {
   readonly deadline?: bigint;
   /** May the run approve and transfer before the cook (`run`), or only report (`simulate`)? */
   readonly send: boolean;
-  readonly yes: boolean;
-  readonly confirm: Confirm;
+  /** Who approves the approvals a send makes first. */
+  readonly approver: Approver;
 }
 
 export interface Funding {
@@ -172,6 +172,8 @@ export interface Funding {
   readonly sent: ReadonlyArray<{ readonly what: string; readonly sent: Sent }>;
   /** What the run did or skipped, for the person. */
   readonly notes: readonly string[];
+  /** Planned without sending: each approval a run would ask for first (`approve Permit2 for USDC`). */
+  readonly needs?: readonly string[];
   /** Whether the owner's key signed the pulls (a Permit2 transfer, a permit). */
   readonly signed?: boolean;
   /**
@@ -236,12 +238,17 @@ export function permit2On(chain: CanonicalChain): Address {
 }
 
 /** Asks before a transaction the run needs and the person may not expect, as the Pot prompt does. */
-async function agreed(input: FundingInput, question: string, refused: string): Promise<void> {
-  const answer = input.yes ? true : await input.confirm(`${question} [y/N] `);
+async function agreed(
+  input: FundingInput,
+  action: string,
+  question: string,
+  refused: string,
+): Promise<void> {
+  const answer = await input.approver.approve(action, `${question} [y/N] `);
   if (answer === true) return;
   throw new CliError(
     answer === undefined
-      ? `${refused}, or pass --yes to let the run do it`
+      ? `${refused}, or pass --auto-approve to let the run do it`
       : `${refused}; nothing was sent`,
   );
 }
@@ -378,6 +385,7 @@ const word = (value: bigint): string => `0x${value.toString(16)}n`;
 export async function planFunding(input: FundingInput): Promise<Funding> {
   const { tokens, native } = await amounts(input);
   const notes: string[] = [];
+  const needs: string[] = [];
   const sent: Array<{ what: string; sent: Sent }> = [];
   const pulls: string[] = [];
   const imports = new Set<string>();
@@ -450,6 +458,7 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
       );
       if (allowed < funded.amount) {
         if (!input.send) {
+          needs.push(`approve Permit2 for ${funded.request.label}`);
           notes.push(
             `${funded.request.label}: Permit2 (${permit2}) may not move your tokens yet; sauce run ` +
               "would ask to approve it",
@@ -457,6 +466,7 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
         } else {
           await agreed(
             input,
+            `approve Permit2 for ${funded.request.label}`,
             `Permit2 (${permit2}) may move ${allowed} of your ${funded.request.label} (base units), ` +
               `and this run needs ${funded.amount}. Approve Permit2 for ${funded.request.label} now?`,
             `${funded.request.label} is not approved to Permit2: approve it`,
@@ -545,12 +555,14 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
       );
       if (allowed < funded.amount) {
         if (!input.send) {
+          needs.push(`approve the Pot for ${funded.amount} ${funded.request.label}`);
           notes.push(
             `${funded.request.label}: the Pot may not pull it yet; sauce run would ask to approve it`,
           );
         } else {
           await agreed(
             input,
+            `approve the Pot for ${funded.amount} ${funded.request.label}`,
             `The Pot ${input.pot} may pull ${allowed} of your ${funded.request.label} (base units), ` +
               `and this run needs ${funded.amount}. Approve the Pot for ${funded.amount}?`,
             `${funded.request.label} is not approved to the Pot: approve it`,
@@ -614,6 +626,7 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
     value: native,
     sent,
     notes,
+    needs,
     signed: tokens.length > 0 && (input.mode === "permit2" || input.mode === "permit"),
   };
 }

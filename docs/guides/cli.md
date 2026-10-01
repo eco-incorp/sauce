@@ -125,9 +125,38 @@ If the Pot is not deployed yet, `run` asks first:
 Pot 0x8a… (owner 0xYou, salt 0x00…00) is not deployed on base. Deploy it now? [y/N]
 ```
 
-`y` deploys it in a transaction of its own and then cooks; anything else sends nothing. With no
-terminal to ask on (CI, a pipe), the run fails and says so, unless you pass `--yes`, which agrees in
-advance.
+`y` deploys it in a transaction of its own and then cooks; anything else sends nothing.
+
+Every transaction a run sends before its cook is asked about like this: deploying a missing Pot (on
+Solana, creating it), approving Permit2 for a token `--fund` pulls, and approving the Pot for an
+amount under `--fund-mode allowance`. `--auto-approve` approves each of them without asking and
+says so for each, as `auto-approved: deploy Pot 0x…` or `auto-approved: approve Permit2 for USDC`.
+With no terminal to ask on (CI, a pipe), the run sends nothing: it names every action it would need
+approved and stops, until it is given `--auto-approve`.
+
+### A program from stdin
+
+Any command that takes a program file takes `-` for one read from stdin:
+
+```sh
+cat pay.sauce.ts | npx sauce compile - --chain base --define RECIPIENT=0x… --define AMOUNT=1
+npx sauce inspect - --chain base < cook.hex
+```
+
+Stdin is read only when the file is `-`, never because a file is missing: a command whose stdin is
+held open (an agent's shell, a CI step) would otherwise wait on it forever. `inspect -` reads hex, a
+transaction hash or a program, whichever stdin carries, and `inspect --source -` the program.
+
+A program from stdin has no directory of its own, so its relative imports
+(`import { fee } from "./lib/fee.js"`) resolve against the current directory, or the one
+`--source-dir <dir>` names; a compile error from one says so. The package's own modules — the
+`./artifacts/*.json` and `./protocols/*` ABIs, `@sauce/token` — resolve as they always do.
+
+Stdin carried the program, so it cannot answer questions too. They go to the terminal the command
+runs in (`/dev/tty`) when there is one, so a program piped in at a terminal is still asked about.
+With no terminal at all — or on Windows, which has no `/dev/tty` — a run sends nothing until
+`--auto-approve` approves what it needs, and a keystore needs `--password-file`. Neither ever waits
+on a stdin that is spent.
 
 ### Rehearsing: `sauce simulate`
 
@@ -252,8 +281,9 @@ Permit2 (0x000000000022D473030F116dDEE9F6B43aC78BA3) may move 0 of your USDC (ba
 ```
 
 `y` sends the approval (reset to zero first when a smaller one stands, as USDT requires) and then
-the cook; anything else sends nothing. With no terminal to ask on, the run fails unless you pass
-`--yes`. `--fund-mode allowance` asks the same about approving the Pot, and warns when it leaves an
+the cook; anything else sends nothing. With no terminal to ask on, the run names it and sends
+nothing, unless you pass `--auto-approve`. `--fund-mode allowance` asks the same about approving
+the Pot, and warns when it leaves an
 allowance standing. `permit` refuses a token whose `DOMAIN_SEPARATOR()` does not match its name,
 version and address, before sending anything.
 

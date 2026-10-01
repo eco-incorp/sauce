@@ -72,10 +72,11 @@ import { CliError, UsageError, type SaltChoice } from "./args.js";
 import {
   compileProgram,
   payloadOf,
+  unapproved,
+  type Approver,
   type ArgsInput,
   type CliFiles,
   type CommandOutput,
-  type Confirm,
   type ProgramInput,
 } from "./commands.js";
 import { secret } from "./signer.js";
@@ -1021,8 +1022,7 @@ async function stage(
 
 export interface SvmRunInput extends SvmCookInput {
   readonly signer: KeyPairSigner;
-  readonly yes: boolean;
-  readonly confirm: Confirm;
+  readonly approver: Approver;
 }
 
 const sentLine = (what: string, sent: SvmSent): string =>
@@ -1041,16 +1041,19 @@ const sentJson = (sent: SvmSent): Record<string, unknown> => ({
 async function ensurePot(input: SvmRunInput, rpc: Rpc, pot: Address): Promise<SvmSent | undefined> {
   if (await exists(rpc, input.rpcUrl, pot, "the Pot")) return undefined;
   const missing = `Pot ${pot} is not deployed on solana`;
-  const agreed = input.yes
-    ? true
-    : await input.confirm(
-        `Pot ${pot} (owner ${input.owner}, salt ${input.salt}) is not deployed on solana. ` +
-          "Deploy it now? [y/N] ",
-      );
+  const action = `create Pot ${pot}`;
+  // With no one to ask, creating it is the one approval a Solana run needs: named before it sends.
+  if (!input.approver.auto && !input.approver.canAsk) throw unapproved([action]);
+  const agreed = await input.approver.approve(
+    action,
+    `Pot ${pot} (owner ${input.owner}, salt ${input.salt}) is not deployed on solana. ` +
+      "Deploy it now? [y/N] ",
+  );
   if (agreed !== true) {
     throw new CliError(
       agreed === undefined
-        ? `${missing}. Create it first (${createHint(input)}), or pass --yes to create it before the cook`
+        ? `${missing}. Create it first (${createHint(input)}), or pass --auto-approve to create ` +
+            "it before the cook"
         : `${missing}, so nothing was sent. Create it with: ${createHint(input)}`,
     );
   }

@@ -37,6 +37,11 @@ Run the project's own copy, `npx sauce <command> --help`, for every option.
   owner's Pot instead, the signer paying; the Pot is that owner's alone.
 - Pass each flag and each value as a word of its own, in any order: a shell variable holding
   several flags reaches the command as one word unless the shell splits it.
+- A program can come from stdin: give `-` as the file (`cat pay.sauce.ts | npx sauce compile -
+--chain base`). Its relative imports then resolve against the current directory, or
+  `--source-dir <dir>`. Stdin is then spent, so questions go to the terminal; with none, pass
+  `--password-file` for a keystore, and `--auto-approve` once the user agrees to what the run
+  lists.
 
 ## Steps
 
@@ -78,8 +83,10 @@ Run the project's own copy, `npx sauce <command> --help`, for every option.
 6. **Run**:
    `npx sauce run pay.sauce.ts --chain ethereum --config sauce.config.json --keystore <keystore> --args <recipient> 1000000`
    compiles, rehearses, signs, sends and waits, then prints the hash, status and gas used. A Pot not
-   deployed yet is deployed first once the user agrees at the prompt; `--yes` agrees in advance, and
-   with no terminal it is required. Ask the user before passing `--yes`.
+   deployed yet is deployed first once the user agrees at the prompt. `--auto-approve` approves, in
+   advance, everything a run sends before its cook (deploying the Pot, approving Permit2 or the Pot
+   for `--fund`) and names each; with no terminal the run lists what it needs approved and sends
+   nothing until it is given. Ask the user before passing `--auto-approve`.
 7. **Check** what was sent:
    `npx sauce inspect <tx hash> --chain ethereum --config sauce.config.json --source pay.sauce.ts`
    reads the transaction back: the Pot, the engine, the arguments the program got, and the route and
@@ -165,5 +172,5 @@ The same commands take `--chain solana`, with three differences:
 
 - Never write an RPC URL or a key into a tracked file, a program or a command you commit.
 - Rehearse with `sauce simulate` (or `publish --dry-run`) before the first real send.
-- Do not pass `--yes` or deploy a Pot without the user's go-ahead: deploying costs gas, and with
+- Do not pass `--auto-approve` or deploy a Pot without the user's go-ahead: deploying costs gas, and with
   `--fund` it also approves Permit2 (or the Pot) to move the user's tokens.

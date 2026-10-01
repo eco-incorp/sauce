@@ -87,9 +87,14 @@ export interface CommandOutput {
 
 /** What every compiling command takes. */
 export interface ProgramInput {
+  /** The program's file, or `<stdin>` for a program read from stdin. */
   readonly file: string;
   /** The file's text, already read: its header chose `chain`. */
   readonly text: string;
+  /** The program came from stdin (`-`): it has no directory of its own. */
+  readonly stdin?: boolean;
+  /** Where its relative imports resolve: `--source-dir`, else beside the file (stdin: `.`). */
+  readonly sourceDir?: string;
   readonly chain: CanonicalChain;
   readonly defines: Record<string, DefineValue>;
   /** Compile `main`'s parameters for compact-v1 arguments instead of ABI-v1. */
@@ -139,7 +144,7 @@ function compileOptions(
   files: CliFiles,
   onContract?: (reference: string, target: AccessorTarget) => void,
 ): SauceCompileOptions {
-  const dir = dirname(resolvePath(input.file));
+  const dir = sourceDirOf(input);
   const { deadline, creator, executionFee } = input.intents;
   const intents = {
     ...(deadline === undefined ? {} : { deadline }),
@@ -157,6 +162,10 @@ function compileOptions(
   };
 }
 
+/** The directory a program's relative imports resolve against. */
+export const sourceDirOf = (input: ProgramInput): string =>
+  resolvePath(input.sourceDir ?? (input.stdin === true ? "." : dirname(resolvePath(input.file))));
+
 /**
  * Compiles the file as a standalone program, turning a failure into one message about the file.
  * `onContract` is told each protocol contract the compile resolves.
@@ -169,9 +178,15 @@ export function compileProgram(
   try {
     return compileSauceProgram(input.chain, input.text, compileOptions(input, files, onContract));
   } catch (error) {
+    const described = describeCompileError(error, input.file, input.text, input.chain);
+    // A relative import that did not resolve, from a program with no directory of its own.
+    const imports = input.stdin === true && /import|resolv|\.\//i.test(String(error));
     throw new CliError(
-      `${input.file} does not compile for ${input.chain.slug}\n` +
-        describeCompileError(error, input.file, input.text, input.chain),
+      `${input.file} does not compile for ${input.chain.slug}\n${described}` +
+        (imports
+          ? `\nhint: the program came from stdin, so its relative imports resolve against ` +
+            `${sourceDirOf(input)}: pass --source-dir <dir> to resolve them elsewhere`
+          : ""),
     );
   }
 }
@@ -360,7 +375,13 @@ export interface CookInput extends ProgramInput {
    * `--fund`: called once the Pot is known to be there, with its owner, it makes what funding the
    * cook needs and returns how to wrap the program (`funding.ts`).
    */
-  readonly fund?: (client: PublicClient, pot: Address, owner: Address) => Promise<Funding>;
+  readonly fund?: (
+    client: PublicClient,
+    pot: Address,
+    owner: Address,
+    /** Only plan: say what it would need approved (`Funding.needs`), and send nothing. */
+    plan?: boolean,
+  ) => Promise<Funding>;
 }
 
 export interface Cook {
@@ -475,11 +496,39 @@ const sentJson = (sent: Sent): Record<string, unknown> => ({
 /** Asks a yes/no question at the terminal; `undefined` when there is no terminal to ask on. */
 export type Confirm = (question: string) => Promise<boolean | undefined>;
 
+/**
+ * Who approves what a run does before its cook, each a transaction of its own: deploying a missing
+ * Pot, approving Permit2 for a token, approving the Pot for an amount. The person at the terminal,
+ * asked each in turn — or `--auto-approve`, which approves them all and says so for each.
+ */
+export interface Approver {
+  /** `--auto-approve`. */
+  readonly auto: boolean;
+  /** Whether a question can reach anyone: false with no terminal to ask on. */
+  readonly canAsk: boolean;
+  /**
+   * Approves `action` (`deploy Pot 0x…`): with `--auto-approve`, says `auto-approved: <action>` and
+   * goes ahead; else asks `question`. `undefined` when there is no one to ask.
+   */
+  readonly approve: (action: string, question: string) => Promise<boolean | undefined>;
+}
+
+/**
+ * Refuses a run that needs approvals with no terminal to ask on, before anything is sent: naming
+ * every action it would need approved, and how to approve them.
+ */
+export function unapproved(actions: readonly string[]): CliError {
+  return new CliError(
+    `nothing was sent: this run needs ${actions.length === 1 ? "an approval" : "approvals"}, and ` +
+      "there is no terminal to ask on:\n" +
+      actions.map((action) => `  ${action}\n`).join("") +
+      "Pass --auto-approve to approve them (and --password-file with a keystore).",
+  );
+}
+
 export interface RunInput extends CookInput, ChainAccess {
   readonly account: PrivateKeyAccount;
-  /** `--yes`: do what the run needs first (deploying the Pot) without asking. */
-  readonly yes: boolean;
-  readonly confirm: Confirm;
+  readonly approver: Approver;
 }
 
 /** `sauce run`: compile, sign, send and wait — deploying the Pot first once it is agreed to. */
@@ -495,23 +544,33 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   const cook = cookOf(input, files);
   const client = await connect(input.rpcUrl, input.chain);
   const state = await potState(client, cook.pot);
+  const deployAction = `deploy Pot ${cook.pot}`;
+  // With no one to ask, every approval the run would need is named before anything is sent.
+  if (!input.approver.auto && !input.approver.canAsk) {
+    const needs = [
+      ...(!state.deployed && "owner" in target ? [deployAction] : []),
+      ...(input.fund === undefined
+        ? []
+        : ((await input.fund(client, cook.pot, signer, true)).needs ?? [])),
+    ];
+    if (needs.length > 0) throw unapproved(needs);
+  }
   let deployed: Sent | undefined;
   if (!state.deployed) {
     const missing = `Pot ${cook.pot} is not deployed on ${input.chain.slug}`;
     if (!("owner" in target)) {
       throw new CliError(`${missing}. Deploy it first: ${deployHint(input.chain, target)}`);
     }
-    const agreed = input.yes
-      ? true
-      : await input.confirm(
-          `Pot ${cook.pot} (owner ${target.owner}, salt ${target.salt}) is not deployed on ` +
-            `${input.chain.slug}. Deploy it now? [y/N] `,
-        );
+    const agreed = await input.approver.approve(
+      deployAction,
+      `Pot ${cook.pot} (owner ${target.owner}, salt ${target.salt}) is not deployed on ` +
+        `${input.chain.slug}. Deploy it now? [y/N] `,
+    );
     if (agreed !== true) {
       throw new CliError(
         agreed === undefined
-          ? `${missing}. Deploy it first (${deployHint(input.chain, target)}), or pass --yes to ` +
-              "deploy it before the cook"
+          ? `${missing}. Deploy it first (${deployHint(input.chain, target)}), or pass ` +
+              "--auto-approve to deploy it before the cook"
           : `${missing}, so nothing was sent. Deploy it with: ${deployHint(input.chain, target)}`,
       );
     }

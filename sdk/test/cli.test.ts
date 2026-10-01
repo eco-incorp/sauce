@@ -3,6 +3,7 @@
  * file exactly as `openRoute` compiles a route body. Executing what it prints is `cli.e2e.test.ts`.
  */
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { PassThrough } from "node:stream";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,6 +30,12 @@ import {
   UsageError,
 } from "../src/cli/args.js";
 import { awaitPot, caughtUp } from "../src/cli/chain.js";
+import {
+  chooseTerminal,
+  confirmOn,
+  type Terminal,
+  type TerminalChoice,
+} from "../src/cli/terminal.js";
 import { castSend } from "../src/cli/commands.js";
 import { awaitAccount, failureReason } from "../src/cli/solana.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
@@ -68,11 +75,17 @@ interface Run {
 }
 
 async function sauce(...argv: string[]): Promise<Run> {
+  return sauceWith({}, ...argv);
+}
+
+/** `sauce` with `overrides` on the process io: stdin's text, a terminal to ask on. */
+async function sauceWith(overrides: Partial<CliIo>, ...argv: string[]): Promise<Run> {
   let stdout = "";
   let stderr = "";
   const ran: Array<{ command: string; args: readonly string[]; cwd: string }> = [];
   const io: CliIo = {
     ...nodeIo(),
+    ...overrides,
     stdout: (text) => void (stdout += text),
     stderr: (text) => void (stderr += text),
     run: (command, args, cwd) => {
@@ -1392,8 +1405,8 @@ describe("flags in any order", () => {
         /--keypair is not an option of sauce simulate: on Solana, simulate runs the cook from --owner/,
       ],
       [
-        ["compile", program, "--chain", "base", "--yes"],
-        /--yes is not an option of sauce compile: compile has nothing to ask \(sauce run, sauce pot take it\)/,
+        ["compile", program, "--chain", "base", "--auto-approve"],
+        /--auto-approve is not an option of sauce compile: compile has nothing to ask \(sauce run, sauce pot take it\)/,
       ],
       [
         ["globals", "--chain", "base", "--rpc-url", "http://x"],
@@ -1410,8 +1423,8 @@ describe("flags in any order", () => {
       expect(run.code).toBe(2);
       expect(run.stderr).toMatch(message);
     }
-    // `pot` takes --yes, which it has no use for: --deploy never asks.
-    const pot = await sauce("pot", "--owner", OWNER, "--chain", "base", "--yes");
+    // `pot` takes --auto-approve, which approves nothing there: --deploy itself is the approval.
+    const pot = await sauce("pot", "--owner", OWNER, "--chain", "base", "--auto-approve");
     expect(pot.code).toBe(0);
   });
 
@@ -1431,6 +1444,122 @@ describe("flags in any order", () => {
     );
     expect(run.stderr).toMatch(/zsh does not split an unquoted \$VARIABLE/);
     expect(run.stderr).not.toContain(key.slice(2, 12));
+  });
+});
+
+describe("a program from stdin", () => {
+  const PROGRAM = "function main(to: Address) {\n  USDC.transfer(to, 5n);\n}\n";
+  const piped = (text: string) => ({ readStdin: () => text });
+
+  it("compiles `-` as the program stdin carries, byte for byte as the file", async () => {
+    const fromFile = await sauce("compile", file("pay.sauce.ts", PROGRAM), "--chain", "base");
+    const fromStdin = await sauceWith(piped(PROGRAM), "compile", "-", "--chain", "base");
+    expect(fromStdin.code).toBe(0);
+    expect(fromStdin.stdout).toBe(fromFile.stdout);
+    // Read only when asked for: a missing file operand never falls back to stdin.
+    const none = await sauceWith(
+      {
+        readStdin: () => {
+          throw new Error("read stdin");
+        },
+      },
+      "compile",
+      "--chain",
+      "base",
+    );
+    expect(none.code).toBe(2);
+    expect(none.stderr).toMatch(
+      /missing <file>: the SauceScript program, or - to read it from stdin/,
+    );
+  });
+
+  it("resolves its relative imports against --source-dir, and says so when one is missing", async () => {
+    file("lib/fee.js", "export function fee(amount) { return amount / 100n; }\n");
+    const program =
+      'import { fee } from "./lib/fee.js";\nfunction main() {\n  require(fee(AMOUNT) > 0n);\n}\n';
+    const args = ["compile", "-", "--chain", "base", "--define", "AMOUNT=1000"];
+    const there = await sauceWith(piped(program), ...args, "--source-dir", work);
+    expect(there.stderr).toBe("");
+    expect(there.code).toBe(0);
+    // From the test's own directory, ./lib/fee.js is not there.
+    const missing = await sauceWith(piped(program), ...args);
+    expect(missing.code).toBe(1);
+    expect(missing.stderr).toContain("<stdin> does not compile for base");
+    expect(missing.stderr).toContain(
+      "hint: the program came from stdin, so its relative imports resolve against",
+    );
+    expect(missing.stderr).toContain("pass --source-dir <dir>");
+  });
+
+  it("takes apart what stdin carries for inspect: hex, or a program", async () => {
+    const compiled = (
+      await sauce("compile", file("pay.sauce.ts", PROGRAM), "--chain", "base")
+    ).stdout.trim();
+    const hex = await sauceWith(piped(`${compiled}\n`), "inspect", "-", "--chain", "base");
+    const direct = await sauce("inspect", compiled, "--chain", "base");
+    expect(hex.code).toBe(0);
+    expect(hex.stdout).toBe(direct.stdout);
+    const source = await sauceWith(piped(PROGRAM), "inspect", "-", "--chain", "base");
+    expect(source.code).toBe(0);
+    expect(source.stdout).toContain("<stdin> for base (evm)");
+    const both = await sauceWith(piped(compiled), "inspect", "-", "--source", "-");
+    expect(both.code).toBe(2);
+    expect(both.stderr).toMatch(/stdin carries one thing/);
+  });
+
+  it("asks nothing on a spent stdin: a keystore needs --password-file, approvals --auto-approve", async () => {
+    // jest's stdin is no terminal and the program used it: no password can be asked for.
+    const keystore = await sauceWith(
+      piped(PROGRAM),
+      ...["run", "-", "--chain", "base", "--rpc-url", "http://127.0.0.1:1"],
+      ...["--keystore", join(SDK, "test/fixtures/cli/anvil-2.keystore.json"), "--args", OWNER],
+    );
+    expect(keystore.code).toBe(2);
+    expect(keystore.stderr).toMatch(/to ask for the keystore password on: pass --password-file/);
+  });
+});
+
+describe("which terminal a question goes to", () => {
+  const stdin = (isTTY: boolean) =>
+    Object.assign(new PassThrough(), { isTTY }) as unknown as TerminalChoice["stdin"];
+  const controlling = { input: new PassThrough(), output: new PassThrough(), close: () => {} };
+  const choose = (stdinRead: boolean, isTTY: boolean, tty?: Terminal) =>
+    chooseTerminal({
+      stdinRead,
+      stdin: stdin(isTTY),
+      stderr: new PassThrough(),
+      controlling: () => tty,
+    });
+
+  it("asks on stdin while it is a terminal nothing has read", () => {
+    expect(choose(false, true, controlling)?.input).not.toBe(controlling.input);
+    expect(choose(false, true, controlling)).toBeDefined();
+  });
+
+  it("asks on the controlling terminal once stdin carried the program", () => {
+    expect(choose(true, false, controlling)).toBe(controlling);
+    expect(choose(true, true, controlling)).toBe(controlling);
+  });
+
+  it("asks nowhere with no terminal at all, and never falls back to an unread pipe", () => {
+    expect(choose(true, false, undefined)).toBeUndefined();
+    // A pipe nothing read is not a terminal, and is not swapped for /dev/tty either.
+    expect(choose(false, false, controlling)).toBeUndefined();
+  });
+
+  it("reads a yes, and anything else as no, at the terminal it is given", async () => {
+    for (const [typed, answer] of [
+      ["y\n", true],
+      ["yes\n", true],
+      ["\n", false],
+      ["nope\n", false],
+    ] as const) {
+      const input = new PassThrough();
+      const output = new PassThrough();
+      const asked = confirmOn({ input, output, close: () => {} }, "Deploy it now? [y/N] ");
+      input.write(typed);
+      expect(await asked).toBe(answer);
+    }
   });
 });
 

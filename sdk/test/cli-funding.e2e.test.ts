@@ -28,11 +28,12 @@ import {
   type Address,
   type Hex,
 } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
-import { runCommand, type CookInput } from "../src/cli/commands.js";
-import { parseFund, planFunding } from "../src/cli/funding.js";
-import { nodeIo } from "../src/cli/run.js";
+import { runCommand, type Approver, type CookInput } from "../src/cli/commands.js";
+import { parseFund, permit2On, planFunding } from "../src/cli/funding.js";
+import { nodeIo, type CliIo } from "../src/cli/run.js";
+import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
 import { addressOn, getDescriptor } from "../src/descriptors/query.js";
 import {
   CLI_FIXTURES,
@@ -116,7 +117,7 @@ describeEvm(
       confirm?: (question: string) => Promise<boolean | undefined>,
     ): Promise<Run> =>
       sauceWith(
-        confirm === undefined ? {} : { confirm },
+        confirm === undefined ? {} : { confirm, canAsk: () => true },
         "run",
         program,
         "--rpc-url",
@@ -132,6 +133,12 @@ describeEvm(
     const unasked = (question: string): Promise<boolean | undefined> => {
       throw new Error(`asked: ${question}`);
     };
+    /** The approver a run with a terminal has, answering with `confirm`. */
+    const asking = (confirm: (question: string) => Promise<boolean | undefined>): Approver => ({
+      auto: false,
+      canAsk: true,
+      approve: (_action, question) => confirm(question),
+    });
 
     const balance = (token: Address, holder: Address): Promise<bigint> =>
       local.balanceOf(token, holder);
@@ -191,7 +198,7 @@ describeEvm(
           expect(refused.code).toBe(1);
           expect(refused.stderr).toContain(
             answer === undefined
-              ? "USDC is not approved to Permit2: approve it, or pass --yes to let the run do it"
+              ? "USDC is not approved to Permit2: approve it, or pass --auto-approve to let the run do it"
               : "USDC is not approved to Permit2: approve it; nothing was sent",
           );
         }
@@ -240,7 +247,7 @@ describeEvm(
 
       it("funds USDT, whose writes return nothing, and --sweep returns what the program left", async () => {
         const done = await run(
-          ["--fund", "USDT:5", "--sweep", "--yes"],
+          ["--fund", "USDT:5", "--sweep", "--auto-approve"],
           [usdt, RECIPIENT, "2000000"],
         );
         expect(done.code).toBe(0);
@@ -268,8 +275,7 @@ describeEvm(
             args: { from: "--args", values: [usdc, RECIPIENT, amount.toString()] },
             rpcUrl: local.rpcUrl,
             account: OWNER,
-            yes: false,
-            confirm: unasked,
+            approver: asking(unasked),
             fund: ((client, at, owner) =>
               planFunding({
                 chain: local.chain,
@@ -284,8 +290,7 @@ describeEvm(
                 nonce,
                 ...(deadline === undefined ? {} : { deadline }),
                 send: true,
-                yes: false,
-                confirm: unasked,
+                approver: asking(unasked),
               })) satisfies CookInput["fund"],
           },
           nodeIo(),
@@ -334,7 +339,10 @@ describeEvm(
             args: [permit2, 1n],
           }),
         );
-        const done = await run(["--fund", `${tether}:2`, "--yes"], [tether, RECIPIENT, "2000000"]);
+        const done = await run(
+          ["--fund", `${tether}:2`, "--auto-approve"],
+          [tether, RECIPIENT, "2000000"],
+        );
         expect(done.code).toBe(0);
         const tx = "0x[0-9a-f]{64}: success, gas used \\d+, block \\d+";
         expect(done.stdout).toMatch(
@@ -510,7 +518,7 @@ describeEvm(
 
       it("reverts the whole run when the pull answers false", async () => {
         const refused = await run(
-          ["--fund", `${falsePull}:1`, "--fund-mode", "allowance", "--yes"],
+          ["--fund", `${falsePull}:1`, "--fund-mode", "allowance", "--auto-approve"],
           [falsePull, RECIPIENT, "1"],
         );
         expect(refused.code).toBe(1);
@@ -761,7 +769,69 @@ describeEvm(
     const KEYSTORE_KEY = "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a";
     const PASSWORD = readFileSync(join(CLI_FIXTURES, "anvil-2.password"), "utf8").trim();
 
-    it("signs with a keystore: deploys its Pot, approves Permit2 and funds the cook with --yes", async () => {
+    it("piped in with no terminal, names every approval it needs and sends nothing until approved", async () => {
+      // A signer of its own: no Pot, and USDC never approved to Permit2.
+      const key = generatePrivateKey();
+      const signer = privateKeyToAccount(key).address;
+      await local.testClient.setBalance({ address: signer, value: 10n ** 20n });
+      await local.mint(usdc, signer, 10_000_000n);
+      const pot = v12PredictPot(signer, potSalt("piped")) as Address;
+      const permit2 = permit2On(local.chain);
+      // The program comes from stdin, so no question can be asked there: with no terminal either.
+      const piped = (overrides: Partial<CliIo>, ...flags: string[]) =>
+        sauceWith(
+          { readStdin: () => readFileSync(program, "utf8"), ...overrides },
+          ...["run", "-", "--rpc-url", local.rpcUrl, "--private-key", key, "--salt"],
+          ...[flags[0] ?? "piped", "--fund", "USDC:2", ...flags.slice(1)],
+          ...["--args", usdc, RECIPIENT, "1000000"],
+        ).then(record);
+      const stopped = await piped({});
+      expect(stopped.code).toBe(1);
+      expect(stopped.stderr).toContain(
+        "nothing was sent: this run needs approvals, and there is no terminal to ask on:\n" +
+          `  deploy Pot ${pot}\n  approve Permit2 for USDC\nPass --auto-approve to approve them`,
+      );
+      expect(await local.publicClient.getCode({ address: pot })).toBeUndefined();
+      expect(await allowance(usdc, permit2)).toBe(0n);
+
+      const approved = await piped({}, "piped", "--auto-approve");
+      expect(approved.code).toBe(0);
+      expect(approved.stderr).toContain(`auto-approved: deploy Pot ${pot}`);
+      expect(approved.stderr).toContain("auto-approved: approve Permit2 for USDC");
+      expect(await balance(usdc, signer)).toBe(8_000_000n);
+
+      // Piped in from a terminal session: the questions go to the terminal, and only what is
+      // needed is asked — Permit2 is approved now, the Pot for this salt is not deployed.
+      const questions: string[] = [];
+      const asked = await piped(
+        {
+          canAsk: () => true,
+          confirm: async (question) => {
+            questions.push(question);
+
+            return true;
+          },
+        },
+        "piped-at-a-terminal",
+      );
+      expect(asked.code).toBe(0);
+      expect(questions).toEqual([
+        expect.stringMatching(
+          /^Pot 0x[0-9a-fA-F]{40} \(owner .*\) is not deployed on ethereum\. Deploy it now\? \[y\/N\] $/,
+        ),
+      ]);
+
+      async function allowance(token: Address, spender: Address): Promise<bigint> {
+        return local.publicClient.readContract({
+          address: token,
+          abi: erc20,
+          functionName: "allowance",
+          args: [signer, spender],
+        });
+      }
+    }, 120_000);
+
+    it("signs with a keystore: deploys its Pot, approves Permit2 and funds the cook with --auto-approve", async () => {
       const signer = privateKeyToAccount(KEYSTORE_KEY).address;
       await local.mint(usdc, signer, 10_000_000n);
       const before = await balance(usdc, RECIPIENT);
@@ -780,7 +850,7 @@ describeEvm(
           "--fund",
           "USDC:4",
           "--sweep",
-          "--yes",
+          "--auto-approve",
           "--args",
           usdc,
           RECIPIENT,

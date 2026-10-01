@@ -747,7 +747,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(run.stdout + run.stderr).not.toContain(secret);
   }, 60_000);
 
-  it("asks before creating a missing Pot; --yes creates it, then cooks", async () => {
+  it("asks before creating a missing Pot; --auto-approve creates it, then cooks", async () => {
     const salt = hexToBytes(potSalt("fresh"));
     const pot = await potOf(salt);
     const { dest, flags } = accountsFor(pot, 50n);
@@ -767,13 +767,15 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       "50",
     ];
     const noTerminal = await sauce(...argv);
+    // No terminal: the approval it needs is named before anything is sent.
     expect(noTerminal.code).toBe(1);
-    expect(noTerminal.stderr).toMatch(
-      /is not deployed on solana\. Create it first .*or pass --yes/,
+    expect(noTerminal.stderr).toContain(
+      "nothing was sent: this run needs an approval, and there is no terminal to ask on:\n" +
+        `  create Pot ${pot}\nPass --auto-approve`,
     );
     let asked = "";
     const declined = await sauceWith(
-      { confirm: async (question) => ((asked = question), false) },
+      { confirm: async (question) => ((asked = question), false), canAsk: () => true },
       ...argv,
     );
     expect(asked).toBe(
@@ -782,8 +784,9 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     );
     expect(declined.stderr).toMatch(/so nothing was sent/);
     expect(harness.svm.getAccount(pot).exists).toBe(false);
-    const yes = await sauce(...argv.slice(0, -2), "--yes", "--args", "50");
+    const yes = await sauce(...argv.slice(0, -2), "--auto-approve", "--args", "50");
     expect(yes.code).toBe(0);
+    expect(yes.stderr).toContain(`auto-approved: create Pot ${pot}`);
     expect(yes.stdout).toMatch(new RegExp(`^created Pot ${pot} in \\w+: success`, "m"));
     expect(yes.stdout).toMatch(/^cook \w+: success/m);
     expect(tokenAmount(harness, dest)).toBe(50n);

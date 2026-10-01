@@ -426,7 +426,7 @@ describeEvm("sauce, sent to a chain", () => {
       );
     }, 60_000);
 
-    it("`sauce run --yes` deploys the signer's missing Pot, then cooks", async () => {
+    it("`sauce run --auto-approve` deploys the signer's missing Pot, then cooks", async () => {
       const fresh = v12PredictPot(RAW_OWNER, SAUCE_INTENT_POT_SALT) as Address;
       // Tokens can be sent to the address before the Pot exists.
       for (const token of [usdc, usdt]) await ethereum.mint(token, fresh, FUNDED);
@@ -438,10 +438,11 @@ describeEvm("sauce, sent to a chain", () => {
         ethereum.rpcUrl,
         "--private-key",
         RAW_KEY,
-        "--yes",
+        "--auto-approve",
       );
       expect(run.code).toBe(0);
       expect(run.stderr).toMatch(/warning: --private-key puts the key in your shell history/);
+      expect(run.stderr).toContain(`auto-approved: deploy Pot ${fresh}`);
       expect(run.stdout).toMatch(
         new RegExp(`^deployed Pot ${fresh} in 0x[0-9a-f]{64}: success`, "m"),
       );
@@ -467,7 +468,7 @@ describeEvm("sauce, sent to a chain", () => {
           lagging.url,
           "--private-key",
           RAW_KEY,
-          "--yes",
+          "--auto-approve",
         );
         expect(run.stderr).not.toMatch(/the Pot is not there/);
         expect(run.code).toBe(0);
@@ -509,7 +510,7 @@ describeEvm("sauce, sent to a chain", () => {
       };
       const run = (label: string, answer: boolean | undefined) =>
         sauceWith(
-          { confirm: answering(answer) },
+          { confirm: answering(answer), canAsk: () => true },
           "run",
           PAY,
           "--salt",
@@ -550,7 +551,10 @@ describeEvm("sauce, sent to a chain", () => {
         RAW_KEY,
       );
       expect(unasked.code).toBe(1);
-      expect(unasked.stderr).toMatch(/or pass --yes to deploy it before the cook/);
+      expect(unasked.stderr).toContain(
+        "nothing was sent: this run needs an approval, and there is no terminal to ask on:\n" +
+          `  deploy Pot ${salted("unasked")}\nPass --auto-approve`,
+      );
       expect(await ethereum.publicClient.getCode({ address: salted("unasked") })).toBeUndefined();
     }, 60_000);
 
@@ -965,7 +969,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
       arbitrum.rpcUrl,
       "--private-key",
       OTHER_KEY,
-      "--yes",
+      "--auto-approve",
     );
     expect(run.stderr).not.toMatch(/sauce run:/);
     expect(run.code).toBe(0);
