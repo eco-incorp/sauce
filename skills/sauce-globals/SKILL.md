@@ -118,8 +118,10 @@ function main(recipient: Address, amount: Uint256) {
   `Uniswap.UniversalRouter` is `UniswapV4.UniversalRouter`; `Uniswap.Factory` is ambiguous.
 - `Ethereum.UniswapV4.UniversalRouter` takes Ethereum's address but still executes on the program's
   own chain; running on another chain is an intent (`sauce-intents`).
-- Every catalogued protocol has a namespace. An interface, such as `Erc4626.Vault`, has no one
-  address and is called at one: `Erc4626.Vault.at(vault).deposit(...)` (`sauce-protocols`).
+- Every catalogued protocol has a namespace. An interface, such as `Erc4626.Vault` or
+  `UniswapV3.Pool`, has no one address and is called at one, in the same expression:
+  `Erc4626.Vault.at(vault).deposit(...)`, or `UniswapV3.Pool.at(pool).liquidity()` for a pool its
+  factory returned. [references/protocols.md](references/protocols.md) lists every interface.
 
 **A venue a chain may not have** is asked with `available(<name>)`, decided when the program is
 compiled for a chain: `if (available(UniswapV3.Factory)) { ... }` keeps its branch where the chain
