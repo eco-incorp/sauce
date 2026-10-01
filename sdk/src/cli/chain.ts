@@ -355,6 +355,12 @@ export interface Sent {
   readonly status: "success" | "reverted";
   readonly gasUsed: bigint;
   readonly blockNumber: bigint;
+  /** The logs it emitted, as the receipt holds them. */
+  readonly logs: ReadonlyArray<{
+    readonly address: Address;
+    readonly topics: readonly Hex[];
+    readonly data: Hex;
+  }>;
   /** When it reverted: why, replayed at its block. */
   readonly reason?: string;
   /** The receipt it landed with: what it cost, and its logs. */
@@ -388,6 +394,11 @@ export async function sendAndWait(
     status: receipt.status,
     gasUsed: receipt.gasUsed,
     blockNumber: receipt.blockNumber,
+    logs: receipt.logs.map((log) => ({
+      address: getAddress(log.address),
+      topics: log.topics as readonly Hex[],
+      data: log.data,
+    })),
     receipt,
   };
   if (receipt.status === "success") {

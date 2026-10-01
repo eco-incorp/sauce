@@ -39,9 +39,14 @@ const built = Base(
   tokens: [{ token: sourceUsdc, amount }],
 });
 
-const sourceRequests = [...built.approvals(), built.publishAndFundCalldata(false)];
+// The reward paid into the intent's vault, then `publish`. Pass `{ vault }` as `built.vaultCall()`
+// reads it from the source chain to have it checked against this offline derivation.
+const sourceRequests = built.sourceTxs();
 if (built.intent.route.calls.length !== 2 || sourceRequests.length !== 2) {
-  throw new Error("Expected destination delivery + cook and source approval + funding");
+  throw new Error("Expected destination delivery + cook and source transfer + publish");
+}
+if (sourceRequests[0]?.to.toLowerCase() !== sourceUsdc.toLowerCase()) {
+  throw new Error("The reward is transferred in the source chain's USDC");
 }
 if (
   built.intent.route.calls[1]?.value !== executionFee ||

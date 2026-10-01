@@ -5,7 +5,7 @@
 // per pool, pays the USDC to RECIPIENT and returns the unsold WETH to REFUND_TO on Base. The
 // solver earns REWARD of WETH. The whole file is the intent: top-level statements, no main, and
 // every value a define. Nothing is measured on chain, so it can also be published from a wallet
-// (sauce publish).
+// (sauce intent publish).
 //
 // `--chain` is the source chain: `WETH` in `.reward(...)` is its WETH. Inside the braces, and in
 // the delivery argument after them, the body runs on Base: `WETH`, `USDC`, `UniswapV3.Factory`,
