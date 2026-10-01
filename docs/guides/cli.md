@@ -504,10 +504,30 @@ key on Solana, which the command does not encode: take it as an `Account`, or a 
 ## Agent skills
 
 The package ships agent skills: directories in the [Agent Skills](https://agentskills.io/specification)
-format, a `SKILL.md` and the examples it refers to, that teach a coding agent to use this package
-(the `sauce-run` skill covers everything on this page). They are written once and installed where
-coding agents read them. Each agent reads skills from these directories, per its vendor's
-documentation:
+format, a `SKILL.md` and the examples and references it links, that teach a coding agent to write
+Sauce programs and run them with this package. They live in [`skills/`](../../skills/sauce-overview/SKILL.md)
+at the package root:
+
+| Skill                    | What it teaches                                                                               |
+| ------------------------ | --------------------------------------------------------------------------------------------- |
+| `sauce-overview`         | What Sauce is, the path from a file to a transaction, the rules, and which skill to load next |
+| `sauce-script`           | The language: program forms, inputs and defines, compile errors, and the builtins reference   |
+| `sauce-globals`          | The names a program uses with no import, with generated indexes of every token and contract   |
+| `sauce-protocols`        | Calling protocols, the registries, and a document per catalogued protocol                     |
+| `sauce-swaps`            | Swapping through the Router: entry points, price limits, callbacks and the guard on every leg |
+| `sauce-distributed-swap` | One exact-input swap split across every price-limit venue on a chain                          |
+| `sauce-intents`          | Cross-chain intents written in Sauce: rewards, cascades, run or publish                       |
+| `sauce-solana`           | Programs for Solana: accounts, the SPL token functions, the Kitchen                           |
+| `sauce-run`              | Everything on this page: compiling, funding, simulating, running and publishing               |
+| `sauce-typescript`       | The same from application code: compiling, arguments, cooks, actions and verification         |
+| `sauce-examples`         | An index of every example program and runner, with the chains each is checked on              |
+
+Every program in them is compiled through this command on the chains it names, and every command
+line they show is held to its flags, before the package is published. The per-protocol documents in
+`sauce-protocols` are the files the [`/skills` export](../api/README.md#protocol-resources) returns.
+
+They are written once and installed where coding agents read them. Each agent reads skills from
+these directories, per its vendor's documentation:
 
 | Agent          | Reads project skills from                                         | Documentation                                                                                                                 |
 | -------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -560,4 +580,5 @@ and the sha256 of each file as written — and the `AGENTS.md` block records the
 marker. That record is how a package upgrade (a file still as installed) is told apart from an edit
 (a file that is not). Skills of your own in the same directories are never touched.
 
-These agent skills are separate from the per-protocol documents the `/skills` export loads.
+The per-protocol documents the `/skills` export returns are not a second set: they are the
+`sauce-protocols` skill's `references/`, installed with it.

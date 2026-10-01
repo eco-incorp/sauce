@@ -30,6 +30,7 @@ Complete programs live in the [examples](examples/README.md).
 | Chain intents — statically, or from an amount measured on chain | [Nested intents](guides/nested-intents.md)             |
 | Compile a standalone program and pass it runtime arguments      | [Compiling programs](guides/compiling.md)              |
 | Compile and run a program file from a terminal                  | [The sauce command](guides/cli.md)                     |
+| Have a coding agent write and run programs                      | [Agent skills](guides/cli.md#agent-skills)             |
 | Generate programs from structured data                          | [Builders](guides/builders-and-actions.md)             |
 | Write protocol actions as JSON, then run them or make an intent | [Actions](guides/actions.md)                           |
 | Plan accounts, stage code and execute on Solana                 | [Solana](guides/solana.md)                             |

@@ -21,11 +21,11 @@ A **pnpm monorepo** of three workspace packages (`pnpm-workspace.yaml`: `dev-too
 bundling is the key mental model: code lives in three packages for development, consumers import
 everything from one name.
 
-| Workspace    | Internal name                 | Published as                                                                                                                                          | Role                                                                                                |
-| ------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`); bin `sauce` | 135-protocol registry, chains, recipes, SVM/EVM engine clients, AI skill files, the `sauce` command |
-| `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`, `/actions/action-program.schema.json`                                                                                                     | JSON action programs → SauceScript, intents                                                         |
-| `dev-tools/` | `@eco-incorp/sauce-dev-tools` | not published                                                                                                                                         | Dev harness: compile helpers, local SVM Kitchen runner, legacy recipe runner                        |
+| Workspace    | Internal name                 | Published as                                                                                                                                          | Role                                                                                                      |
+| ------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`); bin `sauce` | 135-protocol registry, chains, recipes, SVM/EVM engine clients, the `/skills` loader, the `sauce` command |
+| `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`, `/actions/action-program.schema.json`                                                                                                     | JSON action programs → SauceScript, intents                                                               |
+| `dev-tools/` | `@eco-incorp/sauce-dev-tools` | not published                                                                                                                                         | Dev harness: compile helpers, local SVM Kitchen runner, legacy recipe runner                              |
 
 This repo was **extracted from the engine repo** (now `eco-incorp/v12`, checked out at `../v12`),
 which may still carry older copies of these packages. The packages here are **siblings, not
@@ -54,6 +54,7 @@ pnpm lint:fix       # ...with --fix
 pnpm format         # prettier --write, whole repo
 pnpm format:check   # prettier --check, what CI runs
 pnpm docs:check     # manual links, README snippet, and executable examples; build first
+pnpm skills:check   # the agent skills: programs, command lines, runners, wording; build first
 ```
 
 `lint` and `format:check` gate every PR (`.github/workflows/lint.yml`) and both run over the
@@ -289,8 +290,9 @@ those investigations; do not add them back to the public SDK manual.
 `addresses`, `abis` as-const, and `functions` SauceScript templates; `src/protocols/index.ts` is the
 query registry. `src/routes/` implements namespace rewrites, compiler integration, intents, and
 Portal encoding; token/swap/deposit builders and EVM/SVM clients construct executable programs,
-account plans, and transactions. `src/skills/*.md` are AI-ready per-protocol docs (loaded by
-`loader.ts`, shipped in the package). `src/chains/`, `src/recipes/`, `src/core/types.ts` hold shared
+account plans, and transactions. `src/skills/loader.ts` is the `/skills` export, which serves the
+per-protocol documents; those documents are the `sauce-protocols` agent skill's
+`skills/sauce-protocols/references/*.md` (see "Agent skills" below), embedded at build time. `src/chains/`, `src/recipes/`, `src/core/types.ts` hold shared
 chain and recipe definitions. **SDK tests compile every protocol's
 `sauceFunctions` through the real compiler**, which is the installed npm package — there is nothing
 to build first, but the suites that import `./artifacts/*.json` need `sync-engine-artifacts` to have
@@ -493,8 +495,56 @@ EVM commands against anvils with the released gated stack (and one `cast send` l
 `cli-solana.e2e.test.ts` runs the Solana ones against the released Kitchen and engine in LiteSVM
 through a JSON-RPC shim; the packed check runs the installed bin through `npx`. The agent skills
 `sauce skills` installs (to `.claude/skills/` and `.agents/skills/`) live in the top-level
-`skills/<name>/` and ship in the package; they are distinct from `sdk/src/skills/`, the
-per-protocol documents the `/skills` export loads.
+`skills/<name>/` and ship in the package (see "Agent skills" below).
+
+## Agent skills
+
+`skills/` holds the Agent Skills (agentskills.io) the package ships and `sauce skills install`
+copies into a project: `sauce-overview` (the entry point), `sauce-script`, `sauce-globals`,
+`sauce-protocols`, `sauce-swaps`, `sauce-distributed-swap`, `sauce-intents`, `sauce-solana`,
+`sauce-run`, `sauce-typescript` and the `sauce-examples` index. Each is a `SKILL.md` plus
+`examples/` (`.sauce.ts` programs and `.mts` runners) and, for three of them, `references/`.
+
+- **One set of protocol documents.** `skills/sauce-protocols/references/*.md` is the only copy of
+  the per-protocol documents. `gen-embedded-sources.mjs` embeds them for `src/skills/loader.ts`, so
+  the `/skills` export (`getProtocolSkill`, unchanged API) returns exactly what an agent reads.
+  Edit them there; `skills-loader.test.ts` pins the count.
+- **The index of globals is generated.** `sdk/scripts/gen-skills-globals.mjs` writes
+  `skills/sauce-globals/references/{tokens,protocols,chains}.md` from `routes.sourceGlobals` — the
+  function `sauce globals` prints, never a second derivation — at the end of every SDK `build`. The
+  files are committed and prettier-ignored; CI fails when the build changed `skills/`, so commit
+  the regenerated files with any registry change (`pnpm --filter './sdk' gen-skills-globals`).
+- **The checker.** `pnpm skills:check` (`sdk/scripts/check-skills.mjs`, build SDK and actions
+  first) runs in CI after `docs:check`, and the packed check reruns it (`--skills <dir>`) on the
+  copy `sauce skills install` writes into a project from the tarball — a project, because Node does
+  not strip TypeScript from a runner under `node_modules`. It holds: the frontmatter to the spec; the `sauce-examples` index
+  to the example files on disk, both ways; every program compiled through the `sauce` bin
+  (in-process `runCli`) on each chain its index row names, running the `//   sauce …` usage line in
+  its header offline (`compile`, then `tx` with `main`'s arguments sampled from its declared types);
+  every `sauce …` command line in a skill to the flags that command's `--help` lists; ` ```sauce
+chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refused;
+  ` ```ts ` blocks and runners typechecked, and runners executed with
+  `skills-check/offline-guard.mjs` preloaded; the globals index fresh, compilable and covering
+  every name a program uses; the SauceScript reference
+  (`sauce-script/references/builtins.{md,json}`, with `skills-check/builtins*.mjs`) to the
+  compiler; and the wording rules below.
+- **Wording rules, enforced.** No version numbers or release talk; no agent's name, install path or
+  instructions file (the skills reach every agent); no engine internals (opcodes, mnemonics, stack
+  effects, bytecode bytes); no placeholder or unrecorded address (every `0x` address must be one the
+  SDK records; developer inputs are `<placeholders>`); the Portal and provers only in
+  `sauce-intents`; no RPC endpoint; Sauce never described as a multicall. The protocol documents
+  are third-party facts and are exempt from the address, Portal and multicall rules only.
+- **Program conventions.** A program names no chain (`--chain <chain>` in its usage line, no
+  `// @chain` header): runtime inputs are typed `main(...)` parameters passed with `--args`, and an
+  intent file is top-level statements whose values are defines left undeclared. Prettier formats
+  `skills/**/*.sauce.ts` with no trailing commas (`.prettierrc.json`), because the SDK's rewrite of
+  `main`'s parameters breaks on one after the last parameter.
+- **They describe this tree, and their runners pin it.** Where the SDK's behaviour shapes how a
+  skill tells agents to write something, a runner asserts that behaviour, so the change that moves
+  it fails `skills:check` and the skill is rewritten with it. Today that covers, among others: an
+  intent body names destination tokens by address because a bare symbol there resolves on the
+  source chain (`sauce-intents/examples/intents.mts`), and a program for a chain carries
+  annotations on signatures only, with no `interface` (`sauce-script/examples/saucescript.mts`).
 
 **`dev-tools/`** — compiler/argument helpers and a local SVM Kitchen execution harness, for
 developing the SDK; nothing of it ships in the package. Its `start:local`/`start:fork` scripts and
