@@ -374,46 +374,58 @@ async function rehearseFill(
       value: 0n,
     });
   }
-  for (const approval of fulfillApprovalTxs(intent)) {
-    const token = getAddress(approval.to);
-    const amount = intent.route.tokens
-      .filter((entry) => getAddress(denormalizeToEvm(entry.token)) === token)
-      .reduce((sum, entry) => sum + entry.amount, 0n);
-    const info = await tokenInfo(client, chain, token);
-    const symbol = info.symbol ?? token;
-    const [held, standing] = await Promise.all([
-      read(`the solver's ${symbol} balance`, () =>
-        client.readContract({
-          address: token,
-          abi: ERC20,
-          functionName: "balanceOf",
-          args: [solver],
-        }),
-      ),
-      read(`the solver's ${symbol} allowance to the Portal`, () =>
-        client.readContract({
-          address: token,
-          abi: ERC20,
-          functionName: "allowance",
-          args: [solver, portal],
-        }),
-      ),
-    ]);
-    if (held < amount) {
-      const found = await assumeTokenBalance(client, token, solver, amount, symbol).catch(
-        (error: unknown) => {
-          if (!(error instanceof CliError)) throw error;
-          // `assume.ts` words its refusals for `--assume-balance`; here the balance is the solver's.
-          const why = error.message
-            .replace(/^--assume-balance [^:]+: /, "")
-            .replace(/ Fund the Pot instead\.$/, "")
-            .replace(/\.$/, "");
-          throw new CliError(
-            `the solver delivers ${symbol}, and the rehearsal cannot give it a balance: ${why}. ` +
-              "Pass --solver <an address that holds it>.",
-          );
-        },
-      );
+  // What each route token needs, read for every token at once: its name, what the solver holds
+  // and has approved, and — where it holds too little — the balance word to give it more.
+  const delivered = await Promise.all(
+    fulfillApprovalTxs(intent).map(async (approval) => {
+      const token = getAddress(approval.to);
+      const amount = intent.route.tokens
+        .filter((entry) => getAddress(denormalizeToEvm(entry.token)) === token)
+        .reduce((sum, entry) => sum + entry.amount, 0n);
+      const [info, held, standing] = await Promise.all([
+        tokenInfo(client, chain, token),
+        read(`the solver's ${token} balance`, () =>
+          client.readContract({
+            address: token,
+            abi: ERC20,
+            functionName: "balanceOf",
+            args: [solver],
+          }),
+        ),
+        read(`the solver's ${token} allowance to the Portal`, () =>
+          client.readContract({
+            address: token,
+            abi: ERC20,
+            functionName: "allowance",
+            args: [solver, portal],
+          }),
+        ),
+      ]);
+      const symbol = info.symbol ?? token;
+      const found =
+        held >= amount
+          ? undefined
+          : await assumeTokenBalance(client, token, solver, amount, symbol).catch(
+              (error: unknown) => {
+                if (!(error instanceof CliError)) throw error;
+                // `assume.ts` words its refusals for `--assume-balance`; here the balance is the
+                // solver's.
+                const why = error.message
+                  .replace(/^--assume-balance [^:]+: /, "")
+                  .replace(/ Fund the Pot instead\.$/, "")
+                  .replace(/\.$/, "");
+                throw new CliError(
+                  `the solver delivers ${symbol}, and the rehearsal cannot give it a balance: ` +
+                    `${why}. Pass --solver <an address that holds it>.`,
+                );
+              },
+            );
+
+      return { approval, token, amount, info, symbol, standing, found };
+    }),
+  );
+  for (const { approval, token, amount, info, symbol, standing, found } of delivered) {
+    if (found !== undefined) {
       overrides.push(found.override);
       assumed.push({
         token,
@@ -574,14 +586,18 @@ async function leftBehind(
   effects: Effects,
   holders: readonly Address[],
 ): Promise<Left[]> {
-  const left: Left[] = [];
-  for (const holder of holders) {
+  const pairs = holders.flatMap((holder) => {
     const tokens = new Set<Address | "native">();
     for (const move of [...effects.transfers, ...(effects.native ?? [])]) {
       if (move.from === holder || move.to === holder) tokens.add(move.token);
     }
-    const deltas = effects.changes.find((change) => change.address === holder)?.deltas ?? [];
-    for (const token of tokens) {
+
+    return [...tokens].map((token) => ({ holder, token }));
+  });
+
+  // Every balance at once: they are independent reads of the state before the fill.
+  return Promise.all(
+    pairs.map(async ({ holder, token }) => {
       const before =
         token === "native"
           ? await read("a balance", () => client.getBalance({ address: holder }))
@@ -593,12 +609,14 @@ async function leftBehind(
                 args: [holder],
               }),
             );
-      const delta = deltas.find((entry) => entry.token === token)?.amount ?? 0n;
-      left.push({ holder, token, before, after: before + delta });
-    }
-  }
+      const delta =
+        effects.changes
+          .find((change) => change.address === holder)
+          ?.deltas.find((entry) => entry.token === token)?.amount ?? 0n;
 
-  return left;
+      return { holder, token, before, after: before + delta };
+    }),
+  );
 }
 
 const assumedText = (balance: Assumed): string =>

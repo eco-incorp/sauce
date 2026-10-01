@@ -123,10 +123,13 @@ function tokenAccount(
   };
 }
 
-/** The registry's symbol for `mint` on `chain`, matched by base58 or by its 32 bytes in hex. */
-function symbolOf(chain: CanonicalChain, mint: Address): string | undefined {
+/** The registry's symbol for `mint` among `tokens`, matched by base58 or by its 32 bytes in hex. */
+function symbolOf(
+  tokens: ReturnType<typeof sourceGlobals>["tokens"],
+  mint: Address,
+): string | undefined {
   const hex = bytesToHex(new Uint8Array(getAddressEncoder().encode(mint))).toLowerCase();
-  const row = sourceGlobals(chain).tokens.find(
+  const row = tokens.find(
     (token) => token.address === mint || String(token.address).toLowerCase() === hex,
   );
 
@@ -184,10 +187,12 @@ export async function movedBy(
     });
   }
 
+  const registered = tokens.length === 0 ? [] : sourceGlobals(chain).tokens;
+
   return {
     tokens: tokens.map((change) => {
       const places = decimals.get(change.mint);
-      const symbol = symbolOf(chain, change.mint);
+      const symbol = symbolOf(registered, change.mint);
 
       return {
         ...change,
