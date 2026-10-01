@@ -31,6 +31,7 @@ import {
 } from "./token-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
+import { rewriteAvailability } from "./available.js";
 import { pascalOfSlug } from "./accessors.js";
 import { encodeCompactArguments } from "../compact-arguments.js";
 import { v12KitchenAddress } from "../deployments/index.js";
@@ -368,10 +369,16 @@ export function compileScopedRoute(
 
   let source = wrapSauceBody(sauce);
 
-  // The intent sugar runs FIRST, on the source as written. It reads `USDC` and `RECIPIENT` as
-  // compile-time values itself, so a token rewrite that had already turned `USDC.transfer(...)`
-  // into `__sauce_transfer(USDC, ...)` would leave it nothing it recognises. What it leaves behind
-  // is ordinary `evm.call` statements, which every later pass is free to walk over.
+  // `available(...)` FIRST: it removes the branches that name a contract or token this chain lacks,
+  // before any other pass resolves a name in them (see available.ts). A closure body is left for its
+  // own chain's compile.
+  source = rewriteAvailability(source, chain, tokenMap).source;
+
+  // The intent sugar runs next, on the source as written but for decided `available(...)`
+  // branches. It reads `USDC` and `RECIPIENT` as compile-time values itself, so a token rewrite
+  // that had already turned `USDC.transfer(...)` into `__sauce_transfer(USDC, ...)` would leave it
+  // nothing it recognises. What it leaves behind is ordinary `evm.call` statements, which every
+  // later pass is free to walk over.
   const sugar = rewriteIntentSugar(source, {
     source: chain,
     chains: chainAccessorNames(),

@@ -101,9 +101,10 @@ test("unsupported names and ABI argument shapes remain TypeScript errors", () =>
     MorphoBlue.Bundler3.at(0x1234n);
     PancakeswapV3.Factory.getPool(USDC, WETH);
     Erc4626.Vault.deposit(1n, 1n);
+    available("USDC");
     export {};
   `);
-  expect(errors).toHaveLength(12);
+  expect(errors).toHaveLength(13);
 });
 
 test("declarations cover current registry tokens and only recognized protocol namespaces", () => {
