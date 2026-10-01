@@ -48,6 +48,13 @@ export interface ProtocolRewriteOptions {
   /** Caller-supplied `compile.contracts` bundle this rewrite's own synthesized bindings must not
    *  silently collide with (a same-name entry with a DIFFERENT ABI throws). */
   existingContracts?: Readonly<ContractsConfig>;
+  /**
+   * Told each contract reference the rewrite resolved — a call (`UniswapV3.Factory.getPool(…)`) or a
+   * value (`Cctp.TokenMessenger`) — with the reference as written and what it resolved to: which
+   * chain's deployment, and its address. A compile passes `accessors` on to the intents a program
+   * opens, so it hears about each intent body's references too, resolved for its own chain.
+   */
+  onContract?: (reference: string, target: AccessorTarget) => void;
 }
 
 export interface ProtocolRewriteResult {
@@ -149,6 +156,7 @@ function collectValueAccessSites(
   enclosingChain: CanonicalChain,
   chainScope: ReadonlySet<number> | undefined,
   allowWidenedSelectors: boolean,
+  onContract?: ProtocolRewriteOptions["onContract"],
 ): Splice[] {
   // A node that is the `.object` of a member access, or a call's `.callee`, is part of a longer
   // chain the CALL pass (or an ordinary `.method` access) already owns -- never a terminal value.
@@ -178,7 +186,7 @@ function collectValueAccessSites(
     // Shape gate mirroring the call collector, minus the method: a protocol head is exactly
     // `<Protocol>.<Contract>` (path 1); a chain head is `<Chain>.<Protocol>[.<Contract>]` (path 1-2).
     if (chainKey ? path.length < 1 || path.length > 2 : path.length !== 1) return;
-    const { address } = resolveAccessorTarget(
+    const target = resolveAccessorTarget(
       head,
       path,
       false,
@@ -186,7 +194,8 @@ function collectValueAccessSites(
       chainScope,
       allowWidenedSelectors,
     );
-    sites.push({ start: n.start, end: n.end, replacement: formatBigint(BigInt(address)) });
+    onContract?.([head, ...path].join("."), target);
+    sites.push({ start: n.start, end: n.end, replacement: formatBigint(BigInt(target.address)) });
   });
   return sites;
 }
@@ -390,11 +399,12 @@ function resolveCandidate(
   enclosingChain: CanonicalChain,
   chainScope: ReadonlySet<number> | undefined,
   allowWidenedSelectors: boolean,
+  onContract?: ProtocolRewriteOptions["onContract"],
 ): ResolvedSite {
   const { head, path } = candidate;
   const method = path[path.length - 1]!;
 
-  const { protocol, contract, descriptor, address } = resolveAccessorTarget(
+  const target = resolveAccessorTarget(
     head,
     path,
     true,
@@ -402,6 +412,7 @@ function resolveCandidate(
     chainScope,
     allowWidenedSelectors,
   );
+  const { protocol, contract, descriptor, address } = target;
 
   const methodDescriptor = methodByName(descriptor, method);
   if (methodDescriptor === undefined) {
@@ -409,6 +420,7 @@ function resolveCandidate(
     fail(`'${method}' is not in ${protocol}.${contract}'s vendored ABI (known methods: ${known})`);
   }
 
+  onContract?.([head, ...path.slice(0, -1)].join("."), target);
   const bindingName = `I${pascalOfSlug(protocol)}_${contract}`;
   const bindingOp = bindingOpFor(methodDescriptor);
   const addressLiteral = formatBigint(BigInt(address));
@@ -511,7 +523,7 @@ export function rewriteProtocolAccessors(
   const candidates = collectAccessorCandidates(program, shadowed);
   const allowWidenedSelectors = opts.allowWidenedSelectors ?? false;
   const resolved = candidates.map((c) =>
-    resolveCandidate(c, chain, chainScope, allowWidenedSelectors),
+    resolveCandidate(c, chain, chainScope, allowWidenedSelectors, opts.onContract),
   );
 
   const contracts: ContractsConfig = { ...(opts.existingContracts ?? {}) };
@@ -557,6 +569,7 @@ export function rewriteProtocolAccessors(
     chain,
     chainScope,
     allowWidenedSelectors,
+    opts.onContract,
   );
 
   const allSites = [...resolved, ...selfSites, ...valueSites];
