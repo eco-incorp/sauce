@@ -4,8 +4,6 @@ import { v12Kitchen, v12Pot } from "@eco-incorp/sauce/evm/engine";
 import { getAddress, parseAbi, type Address, type Hex, type PublicClient } from "viem";
 
 const portalAbi = parseAbi(["function executor() view returns (address)"]);
-const feeAbi = parseAbi(["function executionFee() view returns (uint256)"]);
-const potKitchenAbi = parseAbi(["function kitchen() view returns (address)"]);
 
 // Call with a client for the destination chain. Importing this example performs no RPC.
 export async function prepareDestinationPot(client: PublicClient, portal: Address, salt: Hex) {
@@ -32,7 +30,7 @@ export async function prepareDestinationPot(client: PublicClient, portal: Addres
   });
   const executionFee = await client.readContract({
     address: kitchen,
-    abi: feeAbi,
+    abi: v12Kitchen.abi,
     functionName: "executionFee",
   });
   const context = { kitchen, engine, executor, pot, executionFee };
@@ -50,7 +48,7 @@ export async function prepareDestinationPot(client: PublicClient, portal: Addres
 
   const [owner, actualKitchen] = await Promise.all([
     client.readContract({ address: pot, abi: v12Pot.abi, functionName: "owner" }),
-    client.readContract({ address: pot, abi: potKitchenAbi, functionName: "kitchen" }),
+    client.readContract({ address: pot, abi: v12Pot.abi, functionName: "kitchen" }),
   ]);
   if (getAddress(owner) !== getAddress(executor) || getAddress(actualKitchen) !== kitchen) {
     throw new Error("Pot must belong to this Portal Executor and the current Kitchen");

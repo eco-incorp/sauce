@@ -1,7 +1,7 @@
 /**
  * `ContractCall` — the value a `Base.<Proto>.<Contract>.<method>(...)` leaf produces. Building one is
- * synchronous and reads nothing: the same posture as `swap/source.ts`/`deposit/source.ts`'s pure
- * param-templating call builders, which `toSauceScript` below deliberately mirrors.
+ * synchronous and reads nothing: the same posture as `deposit/source.ts`'s pure param-templating
+ * call builders, which `toSauceScript` below deliberately mirrors.
  *
  * Its viem helpers run the call against a client the CALLER passes — the SDK embeds no endpoint and
  * reads no environment:

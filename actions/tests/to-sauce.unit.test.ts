@@ -7,7 +7,9 @@
  * it attaches, and what its output is — for every action type. The mainnet suites execute them.
  *
  * Selectors are derived with viem's `toFunctionSelector` from the signature, so a signature edit has
- * to be made in both places to pass, and a typo in either is caught.
+ * to be made in both places to pass, and a typo in either is caught. A swap at one of
+ * `@sauce/router`'s venues is a call into that library: its targets are the call's arguments, and
+ * its selectors are compiled into the program from the library's own ABIs.
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -44,9 +46,7 @@ function literal(addr: string): string {
   return `0x${addr.slice(2).toLowerCase()}n`;
 }
 
-const EXACT_INPUT_SINGLE =
-  "exactInputSingle((address,address,uint24,address,uint256,uint256,uint160))";
-const V4 = ["transfer(address,uint256)", "execute(bytes,bytes[])"];
+const POOL_KEY = "(address,address,uint24,int24,address)";
 const SEND_PARAM = "(uint32,bytes32,uint256,uint256,bytes,bytes,bytes)";
 
 /** For every action that moves anything: the contracts it calls and the selectors it carries. */
@@ -54,26 +54,55 @@ const CALLS: Record<
   Exclude<ActionType, "balanceOf" | "nativeBalance" | "argument">,
   [A[], string[]]
 > = {
-  uniswapV3ExactInput: [[TARGET], [EXACT_INPUT_SINGLE]],
-  uniswapV3ExactInputMultiHop: [[TARGET], ["exactInput((bytes,address,uint256,uint256))"]],
-  // The input token is transferred to the router first, then the router is executed.
-  uniswapV4ExactInput: [[TOKEN, TARGET], V4],
-  uniswapV4ExactInputMultiHop: [[TOKEN, TARGET], V4],
-  // The 4-arg `exchange` returns nothing and pays the Pot, so the output is a `balanceOf` delta,
-  // forwarded to the recipient.
-  curveSwap: [
-    [TARGET, TOKEN_OUT],
-    ["exchange(int128,int128,uint256,uint256)", "balanceOf(address)", "transfer(address,uint256)"],
+  // The `@sauce/router` venues: what each library function calls.
+  uniswapV2Swap: [
+    [TARGET, TOKEN, TOKEN_OUT],
+    ["getReserves()", "transfer(address,uint256)", "swap(uint256,uint256,address,bytes)"],
   ],
+  uniswapV3Swap: [
+    [TARGET, TOKEN, TOKEN_OUT],
+    ["swapV3(address,address,address,int256,uint160,address,address)"],
+  ],
+  uniswapV4Swap: [
+    [TARGET, TOKEN, TOKEN_OUT],
+    [`swapV4(address,${POOL_KEY},bool,int256,uint160,address,address)`],
+  ],
+  curveSwap: [
+    [TARGET, TOKEN, TOKEN_OUT],
+    [
+      "approve(address,uint256)",
+      "exchange(int128,int128,uint256,uint256)",
+      "balanceOf(address)",
+      "transfer(address,uint256)",
+    ],
+  ],
+  balancerV2Swap: [
+    [TARGET, TOKEN, TOKEN_OUT],
+    [
+      "approve(address,uint256)",
+      "swap((bytes32,uint8,address,address,uint256,bytes),(address,bool,address,bool),uint256,uint256)",
+    ],
+  ],
+  dodoV2Swap: [
+    [TARGET, TOKEN, TOKEN_OUT],
+    ["transfer(address,uint256)", "sellBase(address)", "sellQuote(address)"],
+  ],
+  traderJoeLBSwap: [
+    [TARGET, TOKEN, TOKEN_OUT],
+    ["transfer(address,uint256)", "swap(bool,address)"],
+  ],
+  woofiSwap: [
+    [TARGET, TOKEN, TOKEN_OUT],
+    ["transfer(address,uint256)", "swap(address,address,uint256,uint256,address,address)"],
+  ],
+  maverickV2Swap: [
+    [TARGET, TOKEN, TOKEN_OUT],
+    [`swap((uint8,address,${POOL_KEY},address,address,int256,uint160,address,address,bytes))`],
+  ],
+  // The other venues: their own bindings.
   curveRouterNGSwap: [
     [TARGET],
     ["exchange(address[11],uint256[5][5],uint256,uint256,address[5],address)"],
-  ],
-  balancerV2Swap: [
-    [TARGET],
-    [
-      "swap((bytes32,uint8,address,address,uint256,bytes),(address,bool,address,bool),uint256,uint256)",
-    ],
   ],
   balancerV2BatchSwap: [
     [TARGET],
@@ -85,17 +114,11 @@ const CALLS: Record<
     [TARGET],
     ["swapSingleTokenExactIn(address,address,address,uint256,uint256,uint256,bool,bytes)"],
   ],
-  uniswapV2Swap: [
-    [TARGET],
-    ["swapExactTokensForTokens(uint256,uint256,address[],address,uint256)"],
-  ],
   ambientSwap: [[TARGET], ["userCmd(uint16,bytes)"]],
-  dodoSwap: [
+  dodoV1Swap: [
     [TARGET],
     ["dodoSwapV1(address,address,uint256,uint256,address[],uint256,bool,uint256)"],
   ],
-  maverickSwap: [[TARGET], ["exactInputSingle(address,address,bool,uint256,uint256)"]],
-  maverickMultiHopSwap: [[TARGET], ["exactInputMultiHop(address,bytes,uint256,uint256)"]],
   carbonSwap: [
     [TARGET],
     ["tradeBySourceAmount(address,address,(uint256,uint128)[],uint256,uint128)"],
@@ -137,20 +160,37 @@ const CALLS: Record<
   permit2Approve: [[TARGET], ["approve(address,address,uint160,uint48)"]],
 };
 
+/** The `@sauce/router` function each library-backed swap action calls. */
+const ROUTER: Partial<Record<ActionType, string>> = {
+  uniswapV2Swap: "uniswapV2",
+  uniswapV3Swap: "uniswapV3",
+  uniswapV4Swap: "uniswapV4",
+  curveSwap: "curve",
+  balancerV2Swap: "balancerV2",
+  dodoV2Swap: "dodoV2",
+  traderJoeLBSwap: "traderJoeLB",
+  woofiSwap: "woofi",
+  maverickV2Swap: "maverickV2",
+};
+
 describe("lowering — every action type", () => {
   for (const [type, [targets, signatures]] of Object.entries(CALLS)) {
     it(`${type}: calls the right contracts with the right selectors`, () => {
       const compiled = program([SAMPLES[type as ActionType]]);
+      const library = ROUTER[type as ActionType];
       for (const target of targets) {
-        assert.ok(
-          compiled.source.includes(`.at(${literal(target)})`) ||
-            compiled.source.includes(`evm.call(${literal(target)}, `),
-          `${type}: no call to ${target}\n${compiled.source}`,
-        );
+        // A binding call names its target; a library call takes it as an argument.
+        const named =
+          library === undefined
+            ? compiled.source.includes(`.at(${literal(target)})`) ||
+              compiled.source.includes(`evm.call(${literal(target)}, `)
+            : new RegExp(`${library}\\([^;]*${literal(target)}`).test(compiled.source);
+        assert.ok(named, `${type}: no call to ${target}\n${compiled.source}`);
       }
       // Every generated program is a value-less `main`; the compiler rejects one with no return
-      // type, so this is the annotation that keeps it compiling.
-      assert.ok(compiled.source.startsWith("function main(): void {"));
+      // type, so this is the annotation that keeps it compiling. A library call imports the function.
+      const head = library === undefined ? "" : `import { ${library} } from "@sauce/router";\n\n`;
+      assert.ok(compiled.source.startsWith(`${head}function main(): void {`), compiled.source);
       for (const sig of signatures) {
         assert.ok(
           hasSelector(compiled.bytecode, sig),
@@ -165,14 +205,12 @@ describe("lowering — every action type", () => {
     assert.deepEqual([...covered].sort(), [...ACTION_TYPES].sort());
   });
 
-  it("DODO's default version is the V2 entry point", () => {
-    const { version: _, ...v2 } = SAMPLES.dodoSwap;
-    assert.ok(
-      hasSelector(
-        program([v2]).bytecode,
-        "dodoSwapV2TokenToToken(address,address,uint256,uint256,address[],uint256,bool,uint256)",
-      ),
-    );
+  it("each swap at a @sauce/router venue is one call into that library, and nothing else", () => {
+    for (const [type, fn] of Object.entries(ROUTER)) {
+      const text = source([SAMPLES[type as ActionType]]);
+      assert.equal(text.match(new RegExp(`\\b${fn}\\(`, "g"))?.length, 1, `${type}\n${text}`);
+      assert.doesNotMatch(text, /\.at\(|evm\.call/, `${type} calls no contract itself`);
+    }
   });
 });
 
@@ -209,8 +247,12 @@ describe("lowering — native value", () => {
     for (const type of ACTION_TYPES) {
       if (type in attaches) continue;
       const text = source(sampleList(type));
-      assert.doesNotMatch(text, /evm\.call\(0x[0-9a-f]+n, (?!0n)[^,]+, /, `${type}\n${text}`);
-      for (const [, data] of text.matchAll(/evm\.call\(0x[0-9a-f]+n, 0n, (\w+)/g)) {
+      assert.doesNotMatch(
+        text,
+        /evm\.call\((0x[0-9a-f]+|[0-9]+)n, (?!0n)[^,]+, /,
+        `${type}\n${text}`,
+      );
+      for (const [, , data] of text.matchAll(/evm\.call\((0x[0-9a-f]+|[0-9]+)n, 0n, (\w+)/g)) {
         assert.match(text, new RegExp(`const ${data} = hex\`(a9059cbb|095ea7b3)`), text);
       }
     }
@@ -240,12 +282,12 @@ describe("lowering — outputs follow the spec", () => {
     it(`${type}: ${output === "realized" ? "a realized amount" : "its own amount"}`, () => {
       const value = stored(type);
       if (output === "passThrough") assert.equal(value, "1000n");
-      else assert.match(value, /^(amt|delta)\d+$/);
+      else assert.match(value, /^(amt|delta)\d+$|^swap\d+out$/);
     });
   }
 
   it("a balance-delta output brackets the call with two readings", () => {
-    for (const type of ["uniswapV2Swap", "lidoStake", "rocketPoolStake", "etherFiStake"] as const) {
+    for (const type of ["fraxswapSwap", "lidoStake", "rocketPoolStake", "etherFiStake"] as const) {
       const text = source([{ ...SAMPLES[type], saveOutputAs: "out" }]);
       assert.equal(text.match(/\.balanceOf\(ctx\.self\(\)\)/g)?.length, 2, text);
       assert.match(text, /const delta\d+ = bal\d+ - bal\d+;/);
@@ -255,7 +297,7 @@ describe("lowering — outputs follow the spec", () => {
   });
 
   it("an unread output is not measured", () => {
-    assert.doesNotMatch(source([SAMPLES.uniswapV2Swap]), /balanceOf/);
+    assert.doesNotMatch(source([SAMPLES.fraxswapSwap]), /balanceOf/);
     assert.doesNotMatch(source([SAMPLES.lidoStake]), /balanceOf/);
   });
 });
@@ -320,23 +362,24 @@ describe("lowering — sources", () => {
 
 describe("lowering — chaining", () => {
   const v3 = (extra: Partial<Action> = {}): Action =>
-    ({ ...SAMPLES.uniswapV3ExactInput, ...extra }) as Action;
+    ({ ...SAMPLES.uniswapV3Swap, ...extra }) as Action;
 
   it("independent swaps keep their recipients and capture nothing", () => {
     const other = "0x3000000000000000000000000000000000000002";
     const text = source([v3(), v3({ recipient: other } as Partial<Action>)]);
-    assert.ok(text.includes(`recipient: ${literal(RECIPIENT)}`));
-    assert.ok(text.includes(`recipient: ${literal(other)}`));
-    assert.doesNotMatch(text, /recipient: ctx\.self\(\)/);
+    assert.ok(text.includes(`, ${literal(RECIPIENT)});`));
+    assert.ok(text.includes(`, ${literal(other)});`));
+    assert.doesNotMatch(text, /ctx\.self\(\)\);/);
     assert.doesNotMatch(text, /let t_out/);
   });
 
   it("an implicit chain captures only the action it follows, and delivers it to the Pot", () => {
     const text = source([v3(), v3(), v3({ amount: undefined })]);
-    assert.equal(text.match(/recipient: ctx\.self\(\)/g)?.length, 1);
+    assert.equal(text.match(/ctx\.self\(\)\);/g)?.length, 1);
     assert.doesNotMatch(text, /let t_out0/);
+    assert.match(text, /const amt\d+ = uniswapV3\(.*, ctx\.self\(\)\);/);
     assert.match(text, /let t_out1 = amt\d+;/);
-    assert.match(text, /amountIn: t_out1,/);
+    assert.match(text, /uniswapV3\(0x[0-9a-f]+n, 0x[0-9a-f]+n, 0x[0-9a-f]+n, t_out1, /);
   });
 
   it("saveOutputAs binds a local, and amountRef reads it", () => {

@@ -9,9 +9,7 @@
  *
  * These are the deterministic addresses — CREATE3 on EVM, a fixed/derived keypair on SVM — so they are
  * `chainIndependent` / `clusterIndependent`: one address set, the same everywhere it is deployed. They
- * are ADDRESSES, not liveness. The legacy chain roster does not attest that these release versions
- * are deployed; check code/programs on the target chain before use. These supersede the legacy
- * ADDRESSES — `v12.generated.ts` records the pre-`cook` stack, and its Kitchen/Router are not these.
+ * are ADDRESSES, not liveness: check code/programs on the target chain before use.
  */
 import deployments from "../artifacts/V12Deployments.json" with { type: "json" };
 
@@ -24,6 +22,7 @@ export interface V12EvmContractRef {
   derivation?: string;
   /** Present on the Kitchen — it is a UUPS proxy. */
   proxyKind?: string;
+  /** The Kitchen proxy's and the Router's fixed-address generation. */
   generation?: number;
   note?: string;
 }
@@ -46,6 +45,9 @@ export interface V12SvmProgramRef {
 
 /** The assembled `V12Deployments.json`: release addresses and per-component provenance. */
 export interface V12DeployedAddresses {
+  /** The compiler version these releases were synced for: the row of `releases.json` they come
+   *  from. Every program this SDK compiles is that compiler's output. */
+  compiler: string;
   /** Legacy EVM Kitchen version; use `releases` for per-component versions. */
   version: string;
   /** Legacy EVM Kitchen commit; use `releases` for per-component commits. */
@@ -95,6 +97,25 @@ export const v12EngineAddress = (): string => v12DeployedAddresses().evm.contrac
 
 /** The current EVM Router address. */
 export const v12RouterAddress = (): string => v12DeployedAddresses().evm.contracts.router.address;
+
+/**
+ * The pinned Kitchen's Router generation — the Router every Pot minted from it starts on.
+ *
+ * A Pot minted earlier keeps its own Router until its owner moves it, so this is a Pot's generation
+ * only once `potRouterUpdate(client, pot)` returns nothing. The generation decides which pools'
+ * callbacks a Pot's Router answers: a `@sauce/router` swap on a Synthra V3 or UnitFlow V3 pool needs
+ * generation 3, and reverts on an earlier one.
+ */
+export function v12RouterGeneration(): number {
+  const { generation } = v12DeployedAddresses().evm.contracts.router;
+  if (generation === undefined) {
+    throw new Error(
+      "V12Deployments.json records no Router generation — re-run `sync-engine-artifacts`",
+    );
+  }
+
+  return generation;
+}
 
 /** The current EVM Kitchen (UUPS proxy) address — mints Pots and gates every cook. */
 export const v12KitchenAddress = (): string => v12DeployedAddresses().evm.contracts.kitchen.address;

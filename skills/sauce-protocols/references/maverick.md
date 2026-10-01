@@ -73,3 +73,4 @@ function main(
 - Maverick's key innovation is directional LP strategies: bins can be configured to move with price in one direction
 - LP modes: Static (like Uniswap V3), Right (follow price up), Left (follow price down), Both (follow both)
 - Input token must be ERC20-approved to the V2 Router
+- From a Pot program, `@sauce/router`'s `maverickV2(pool, tokenIn, tokenOut, amountIn, minOut, recipient)` swaps a Maverick V2 pool through the Pot's Sauce Router, which pays in the pool's callback exactly what the pool asks for, so a partial fill strands nothing: what the pool did not take stays in the Pot. It does not use the pool's pre-pay mode, where the unfilled part of a pushed input would stay in the pool. The `maverickV2Swap` action is the same call

@@ -18,7 +18,12 @@ application calls them.
 | [first-intent.ts](first-intent.ts)                             | Both sides of a transfer intent: Ethereum reward, Base delivery, Executor-to-Pot funding, source transaction requests         |
 | [compile-program.ts](compile-program.ts)                       | Direct compilation, a compact entry schema, and argument encoding and decoding                                                |
 | [action-program.ts](action-program.ts)                         | A JSON action program: strict parsing, compilation with a runtime amount, and an intent on the program's chain                |
+| [router-swap.sauce.ts](router-swap.sauce.ts)                   | Two swaps through `@sauce/router`, the second spending what the first returned — written in SauceScript                       |
+| [router-swap.ts](router-swap.ts)                               | Compiling that program into a cook and an intent, with its floor as a define                                                  |
+| [router-route.sauce.ts](router-route.sauce.ts)                 | One program for any route over four venues, picking each `@sauce/router` function while it runs                               |
+| [router-route.ts](router-route.ts)                             | Compiling it once with the raw compiler and appending a route as its arguments                                                |
 | [evm-execution.ts](evm-execution.ts)                           | Reading a destination chain: Kitchen, Executor ownership, Pot prediction and deployment, execution fee                        |
+| [pot-router.ts](pot-router.ts)                                 | Whether a Pot runs its Kitchen's current Router, and the owner's `setRouter` call when it does not                            |
 
 ## Run an example in your project
 
@@ -36,7 +41,7 @@ pnpm exec tsc example.ts --target ES2022 --module NodeNext --moduleResolution No
 node dist/example.js
 ```
 
-For `first-intent.ts`, `evm-execution.ts` and `registry-names.ts`, also run `pnpm add viem`: they use Viem's address formatter and RPC interfaces.
+For `first-intent.ts`, `evm-execution.ts`, `pot-router.ts`, `router-route.ts` and `registry-names.ts`, also run `pnpm add viem`: they use Viem's address formatter and RPC interfaces.
 
 CI typechecks and runs each of them, and asserts the encoded output including a nonzero cook-fee
 budget. The RPC helpers are not live-chain integration tests — they are the shape of the reads you make.

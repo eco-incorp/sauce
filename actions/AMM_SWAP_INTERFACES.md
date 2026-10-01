@@ -137,9 +137,10 @@ function swapExactTokensForETHSupportingFeeOnTransferTokens(
 
 ### Uniswap V3 SwapRouter
 
-**Verified (SwapRouter02).** The `uniswapV3ExactInput*` actions call **SwapRouter02**
-(`0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45` on Ethereum, `0x2626664c2603336E57B271c5C0b26F421741e481`
-on Base), whose structs have **no `deadline` field**:
+**Verified (SwapRouter02)**, by execution while an action called it; no action does now
+(`uniswapV3Swap` swaps through `@sauce/router`'s `uniswapV3`, against the pool), so nothing re-checks
+it. **SwapRouter02** (`0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45` on Ethereum,
+`0x2626664c2603336E57B271c5C0b26F421741e481` on Base) has structs with **no `deadline` field**:
 
 ```solidity
 struct ExactInputSingleParams {   // SwapRouter02
@@ -316,8 +317,9 @@ struct ExactOutputParams {
 }
 ```
 
-**Verified against the deployed mainnet Universal Router** (`tests/actions.mainnet.test.ts`): the two
-exact-input structs above are what it decodes. Each sub-action's params are ONE `abi.encode` of the
+**Verified against the deployed mainnet Universal Router**, by execution while an action called it
+(no action does now: `uniswapV4Swap` swaps through `@sauce/router`'s `uniswapV4`, against the
+PoolManager, so nothing re-checks it): the two exact-input structs above are what it decodes. Each sub-action's params are ONE `abi.encode` of the
 struct — the head offset word included, which the router's calldata decoder reads. A flat
 `abi.encode(poolKey, zeroForOne, …)` without it reverts, and so does an `ExactInputParams` with an
 extra per-hop array (a `maxHopSlippage`/`minHopPriceX36` field from later periphery versions).
@@ -327,9 +329,9 @@ extra per-hop array (a `maxHopSlippage`/`minHopPriceX36` field from later periph
 `ADDRESS_THIS = address(2)`. A TAKE of `type(uint256).max` overflows the router's `uint128` cast
 and reverts with `SafeCastOverflow()`.
 
-The actions use `SWAP_EXACT_IN_SINGLE`/`SWAP_EXACT_IN`, then `SETTLE(currencyIn, CONTRACT_BALANCE,
-payerIsUser = false)` after transferring the input to the router, then `TAKE(currencyOut, recipient,
-OPEN_DELTA)` — no Permit2 approval is needed.
+The sequence that executed was `SWAP_EXACT_IN_SINGLE`/`SWAP_EXACT_IN`, then `SETTLE(currencyIn,
+CONTRACT_BALANCE, payerIsUser = false)` after transferring the input to the router, then
+`TAKE(currencyOut, recipient, OPEN_DELTA)` — no Permit2 approval is needed.
 
 #### Typical V4 Swap Flow
 

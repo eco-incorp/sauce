@@ -5,9 +5,14 @@
 import { chains, getAllChainIds, nativeErc20 } from "../chains/index.js";
 import { toExactBigInt } from "../numeric.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
-import type { AddressInput, AmountInput } from "../swap/types.js";
 import { depositTemplateFor } from "./templates.js";
-import type { ApprovalPolicy, DepositSpec, NormalizedDeposit } from "./types.js";
+import type {
+  AddressInput,
+  AmountInput,
+  ApprovalPolicy,
+  DepositSpec,
+  NormalizedDeposit,
+} from "./types.js";
 
 function toAddressBigint(value: AddressInput, _label: string): bigint {
   if (typeof value === "bigint") return value;
@@ -49,6 +54,11 @@ function rejectNonWrapperTarget(action: string, target: bigint): void {
 function toBigIntStrict(value: AmountInput, label: string): bigint {
   if (typeof value === "bigint") return value;
   if (typeof value === "number") return toExactBigInt(value, label);
+  if (!/^(0x[0-9a-fA-F]+|[0-9]+)$/.test(value)) {
+    throw new Error(
+      `toDeposit: ${label} ${JSON.stringify(value)} is not an integer, "balance" or "max"`,
+    );
+  }
   return BigInt(value);
 }
 
@@ -57,9 +67,9 @@ function toBigIntStrict(value: AmountInput, label: string): bigint {
  * into a fully normalized {@link NormalizedDeposit} — plain bigints (+ the `"self"` sentinel for a
  * defaulted `beneficiary`), with its resolved {@link DepositTemplate} attached.
  *
- * `spec.amount` may be `"balance" | "delta" | "max"` — see {@link DepositSourceSpec} — in which case
- * it passes through unresolved (the caller, `depositCallStatement`/`swapThenDepositSource`, decides
- * the actual amount EXPRESSION; this function only validates every OTHER field and, for `"max"`,
+ * `spec.amount` may be `"balance" | "max"` — see {@link DepositSourceSpec} — in which case it
+ * passes through unresolved (the caller, `depositCallStatement`, decides the actual amount
+ * EXPRESSION; this function only validates every OTHER field and, for `"max"`,
  * checks `allowsMaxAmount`).
  *
  * Throws (never emits a program that would misbehave on-chain) for: an unknown `protocol:action`;
@@ -72,7 +82,7 @@ function toBigIntStrict(value: AmountInput, label: string): bigint {
  * own `ExtraFieldSpec.normalize` throws for an out-of-range extra value.
  */
 export function toDeposit(
-  spec: DepositSpec | (Omit<DepositSpec, "amount"> & { amount: "balance" | "delta" | "max" }),
+  spec: DepositSpec | (Omit<DepositSpec, "amount"> & { amount: "balance" | "max" }),
 ): NormalizedDeposit {
   const template = depositTemplateFor(spec.protocol, spec.action);
 
@@ -99,8 +109,8 @@ export function toDeposit(
     );
   }
 
-  const amount: bigint | "balance" | "delta" | "max" =
-    spec.amount === "balance" || spec.amount === "delta" || spec.amount === "max"
+  const amount: bigint | "balance" | "max" =
+    spec.amount === "balance" || spec.amount === "max"
       ? spec.amount
       : toBigIntStrict(spec.amount, "amount");
 

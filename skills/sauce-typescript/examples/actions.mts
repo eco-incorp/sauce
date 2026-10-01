@@ -6,10 +6,11 @@ import {
   parseProgram,
   quoteAction,
   type ActionProgram,
-  type UniswapV3ExactInputAction,
+  type UniswapV4SwapAction,
 } from "@eco-incorp/sauce/actions";
 import { contracts, routes } from "@eco-incorp/sauce";
-import { toHex, type Hex } from "viem";
+import { v12RouterAddress } from "@eco-incorp/sauce/deployments";
+import { toHex, zeroAddress, type Hex } from "viem";
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`check failed: ${message}`);
@@ -27,9 +28,15 @@ function contract(address: Hex | undefined, what: string): Hex {
 }
 const USDT = token("ethereum", "USDT");
 const USDC = token("ethereum", "USDC");
-const uniswapV3 = contracts.on("ethereum").UniswapV3;
-// The spender a swap needs: the Uniswap V3 router the quote below prices through.
-const SWAP_ROUTER = contract(uniswapV3.SwapRouter02.address, "SwapRouter02");
+// The spender of the approval below: Aave V3's Pool.
+const AAVE_POOL = contract(contracts.on("ethereum").AaveV3.Pool.address, "the Aave V3 Pool");
+const POOL_MANAGER = contract(
+  contracts.on("ethereum").UniswapV4.PoolManager.address,
+  "the Uniswap V4 PoolManager",
+);
+// The Sauce Router of the release, which quotes Uniswap V3 and V4 swap actions with the code that
+// swaps them. A Pot swaps through its own Router, the Kitchen's when it was minted.
+const ROUTER = contract(toHex(BigInt(v12RouterAddress()), { size: 20 }), "the Sauce Router");
 
 // 1. Strict validation: every problem at once, each with a path. Amounts are base-10 STRINGS.
 try {
@@ -47,7 +54,7 @@ const reusable: ActionProgram = parseProgram({
   chainId: 1,
   actions: [
     { type: "argument", name: "amount" },
-    { type: "approve", token: USDT, spender: SWAP_ROUTER },
+    { type: "approve", token: USDT, spender: AAVE_POOL },
   ],
 });
 const compiled = compileProgram(reusable);
@@ -63,20 +70,23 @@ check(
   "the approve is not a typed IERC20 call",
 );
 
-// 3. A quote is an eth_call you send yourself; nothing here touches the network.
-const swapAction: UniswapV3ExactInputAction = {
-  type: "uniswapV3ExactInput",
-  router: SWAP_ROUTER,
+// 3. A quote is an eth_call you send yourself; nothing here touches the network. A swap action is
+//    a call into @sauce/router, here its `uniswapV4`: a hookless USDC/USDT pool, named by its key.
+const swapAction: UniswapV4SwapAction = {
+  type: "uniswapV4Swap",
+  poolManager: POOL_MANAGER,
   tokenIn: USDC,
   tokenOut: USDT,
   fee: 100,
+  tickSpacing: 1,
+  hooks: zeroAddress, // hookless
   amount: "1000000",
   amountOutMin: "990000",
   recipient: "self",
 };
-const quote = quoteAction(swapAction, {
-  uniswapV3Quoter: contract(uniswapV3.QuoterV2.address, "QuoterV2"),
-});
+const swapping = compileProgram(parseProgram({ version: 1, chainId: 1, actions: [swapAction] }));
+check(/from "@sauce\/router"/.test(swapping.source), "a swap action calls @sauce/router");
+const quote = quoteAction(swapAction, { router: ROUTER });
 check(
   quote.data.startsWith("0x") && typeof quote.decode === "function",
   "quote = { to, data, decode }",

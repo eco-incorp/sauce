@@ -1,0 +1,55 @@
+{
+  "$comment": "Trader Joe Liquidity Book swap(swapForY, to) and getSwapOut(amountIn, swapForY), copied from the verified LBPair implementation on Avalanche, 0x7a5b4e301fc2B148ceFe57257A236EB845082797 (solc 0.8.20), which every LB v2.2 pair clones. swap returns both lanes in one word: X in the low 128 bits, Y in the high 128.",
+  "abi": [
+    {
+      "name": "swap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "swapForY",
+          "type": "bool"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amountsOut",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "getSwapOut",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "amountIn",
+          "type": "uint128"
+        },
+        {
+          "name": "swapForY",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amountInLeft",
+          "type": "uint128"
+        },
+        {
+          "name": "amountOut",
+          "type": "uint128"
+        },
+        {
+          "name": "fee",
+          "type": "uint128"
+        }
+      ]
+    }
+  ]
+}

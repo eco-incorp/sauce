@@ -1,11 +1,11 @@
 // One guarded swap leg: sell `amountIn` of `tokenIn` on the chain's Uniswap V3 pool at `fee`, never
-// past `sqrtPriceLimitX96`. The pool takes only what it can fill before the limit, and the Router's
-// callback pays exactly that. The output is measured as a balance delta and checked against
-// `minOut`, and the unspent input goes back, so the Pot ends holding neither token.
+// past `sqrtPriceLimitX96`. `uniswapV3` swaps through the Pot's Router, pays `recipient` and reverts
+// below `minOut`. The pool takes only what it can fill before the limit, so the unspent input goes
+// back too, and the Pot ends holding neither token.
 //
 //   sauce run swap-leg.sauce.ts --chain <chain> --config sauce.config.json --keystore <keystore> \
 //     --args <tokenIn> <tokenOut> <fee> <amountIn> <sqrtPriceLimitX96> <minOut> <recipient>
-import { ISauceRouter } from "./artifacts/ISauceRouter.json";
+import { uniswapV3 } from "@sauce/router";
 
 function main(
   tokenIn: Address,
@@ -16,18 +16,12 @@ function main(
   minOut: Uint256,
   recipient: Address,
 ) {
-  const self = ctx.self();
   const pool = UniswapV3.Factory.getPool(tokenIn, tokenOut, fee);
   require(pool != 0n, "no pool at that fee tier");
 
-  const outBefore = Token(tokenOut).balanceOf(self);
-  // A positive amountSpecified is exact input on this entry point.
-  ISauceRouter.at(self).swapV3(pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, self, self);
-  const out = Token(tokenOut).balanceOf(self) - outBefore;
-  require(out >= minOut, "fill below minOut");
+  uniswapV3(pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient);
 
-  Token(tokenOut).transfer(recipient, out);
-  const unspent = Token(tokenIn).balanceOf(self);
+  const unspent = Token(tokenIn).balanceOf(ctx.self());
   if (unspent > 0n) {
     Token(tokenIn).transfer(recipient, unspent);
   }
