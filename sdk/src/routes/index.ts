@@ -104,7 +104,12 @@ export { decodeEntryArguments, encodeEntryArguments } from "./entry.js";
 export type { EntryParam, EntryValue } from "./entry.js";
 export type { LoweredIntent } from "./intent-sugar.js";
 
-export { predictVaultAddress, vaultInitCodeHash } from "./vault.js";
+export {
+  ECO_ROUTES_VAULT_PROXY_CREATION_CODE,
+  ecoRoutesVaultConfig,
+  predictVaultAddress,
+  vaultInitCodeHash,
+} from "./vault.js";
 export type { VaultConfig } from "./vault.js";
 
 export { isSauceClosure, sauceBodyToSource } from "./closure.js";
