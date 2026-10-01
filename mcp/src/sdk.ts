@@ -34,6 +34,7 @@ export {
   compileProgram,
   pastDeadline,
   potCommand,
+  programChains,
   txCommand,
   type CliFiles,
   type CommandOutput,
@@ -78,6 +79,17 @@ export {
 } from "../../sdk/dist/cli/lifecycle.js";
 export { publishCommand } from "../../sdk/dist/cli/publish.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";
+export {
+  CHAIN_SUPPORT_ISSUES_URL,
+  CHAIN_SUPPORT_NEW_ISSUE_URL,
+  chainSupport,
+  chainSupportRequest,
+  previewRefusal,
+  PreviewChainError,
+  requireSupported,
+  supportedChainNames,
+  type PreviewChainRefusal,
+} from "../../sdk/dist/cli/support.js";
 export { simulateCommand } from "../../sdk/dist/cli/simulate.js";
 export { PACKAGED_SKILLS, targetsFor as skillTargets } from "../../sdk/dist/cli/skills.js";
 export {
