@@ -50,7 +50,12 @@ export {
   programChain,
 } from "../../sdk/dist/cli/inputs.js";
 export { inspectCommand, inspectFile } from "../../sdk/dist/cli/inspect.js";
-export type { McpEntry, McpServeOptions, McpSetupOptions } from "../../sdk/dist/cli/mcp.js";
+export type {
+  McpEntry,
+  McpServeOptions,
+  McpSetupOptions,
+  McpWallets,
+} from "../../sdk/dist/cli/mcp.js";
 export {
   parsePriceToken,
   priceCommand,
@@ -78,6 +83,15 @@ export {
 } from "../../sdk/dist/cli/lifecycle.js";
 export { publishCommand } from "../../sdk/dist/cli/publish.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";
+export { HOT_WALLET, openWallet } from "../../sdk/dist/cli/wallet-commands.js";
+export {
+  checkPlan,
+  planChain,
+  plannedTransactions,
+  sendPlan,
+} from "../../sdk/dist/cli/wallet-send.js";
+export { noPolicyNote, PolicyRefusal, readPolicy } from "../../sdk/dist/cli/policy.js";
+export { walletName, WalletStore, type WalletKind } from "../../sdk/dist/cli/wallets.js";
 export { simulateCommand } from "../../sdk/dist/cli/simulate.js";
 export { PACKAGED_SKILLS, targetsFor as skillTargets } from "../../sdk/dist/cli/skills.js";
 export {

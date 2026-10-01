@@ -205,11 +205,12 @@ export interface PlanInput {
   readonly rpcUrl: string;
 }
 
-/** Sends a plan from a wallet: rehearsed and held to its policy first, then each in order. */
-export async function sendPlan(
-  input: PlanInput,
-): Promise<{ readonly json: Record<string, unknown>; readonly notes: string[] }> {
-  const { wallet, guard, chain, transactions } = input;
+/** Refuses a plan `wallet` cannot send on `chain`: mixed kinds, or a kind the chain or wallet is not. */
+export function checkPlan(
+  wallet: Pick<Unlocked, "kind" | "info">,
+  chain: CanonicalChain,
+  transactions: readonly PlannedTx[],
+): void {
   const kinds = new Set(transactions.map((tx) => tx.kind));
   if (kinds.size > 1) throw new UsageError("the plan mixes EVM and Solana transactions");
   const svm = kinds.has("svm");
@@ -225,7 +226,15 @@ export async function sendPlan(
         `these are ${svm ? "Solana" : "EVM"} transactions`,
     );
   }
-  const sent = svm ? await sendSvm(input) : await sendEvm(input);
+}
+
+/** Sends a plan from a wallet: rehearsed and held to its policy first, then each in order. */
+export async function sendPlan(
+  input: PlanInput,
+): Promise<{ readonly json: Record<string, unknown>; readonly notes: string[] }> {
+  const { wallet, guard, chain, transactions } = input;
+  checkPlan(wallet, chain, transactions);
+  const sent = chain.kind === "svm" ? await sendSvm(input) : await sendEvm(input);
   const failed = sent.find((entry) => entry.status !== "success");
   const landed = sent.filter((entry) => entry.hash !== "").length;
   const notes = [

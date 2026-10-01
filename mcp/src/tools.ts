@@ -43,6 +43,7 @@ import {
   parsePriceToken,
   parsePubkey,
   parseSalt,
+  plannedTransactions,
   parseUnixSeconds,
   parseVia,
   parseWei,
@@ -73,6 +74,7 @@ import {
   type IntentRecord,
   type ProgramInput,
   type SvmCookInput,
+  type WalletStore,
 } from "./sdk.js";
 
 /** Input bounds, so one call cannot hand the server unbounded work. */
@@ -720,6 +722,11 @@ const notesSchema = z.array(z.string()).optional();
 export const UNSIGNED =
   "Nothing is signed or sent: the caller signs and sends with its own wallet or signer.";
 
+/** That sentence on a server with wallets (`sauce mcp --wallets`). */
+export const WALLET_UNSIGNED =
+  "Nothing is signed or sent here: pass the result to sauce_wallet_send to send it from one of " +
+  "this server's wallets, or sign it with any other wallet.";
+
 // ---------------------------------------------------------------------------------------------
 // The tools
 // ---------------------------------------------------------------------------------------------
@@ -728,6 +735,17 @@ export const UNSIGNED =
 export interface ToolContext {
   readonly endpoints: Endpoints;
   readonly guard?: RpcGuard;
+  /** Over stdio with `--wallets`: the wallets the server signs with. Never over HTTP. */
+  readonly wallets?: WalletContext;
+}
+
+/** The wallet directory a stdio server was started with, and the password its wallets open with. */
+export interface WalletContext {
+  readonly store: WalletStore;
+  /** Read once at start from the source the server was given; never an input, never returned. */
+  readonly password: string;
+  /** That source, as the instructions name it. */
+  readonly source: string;
 }
 
 /** The names of the tools, in the order `tools/list` gives them. */
@@ -767,11 +785,15 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
   const { endpoints, guard } = context;
 
   return (name, config, run) => {
+    // A tool that builds a transaction, on a server that can send it: the result says how.
+    const sendable = context.wallets !== undefined && config.description.includes(UNSIGNED);
     server.registerTool(
       name,
       {
         title: config.title,
-        description: config.description,
+        description: sendable
+          ? config.description.replace(UNSIGNED, WALLET_UNSIGNED)
+          : config.description,
         // A tool that takes nothing declares no schema, so a call that sends no arguments is
         // still a call; every other refuses a field it does not know.
         inputSchema:
@@ -782,7 +804,14 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
       async (args: unknown) => {
         const reach = callReach(endpoints, guard);
         try {
-          return result(await run(args as never, reach), reach.scrub);
+          const output = await run(args as never, reach);
+
+          return result(
+            sendable && (args as { dryRun?: unknown }).dryRun !== true
+              ? withSendNote(output)
+              : output,
+            reach.scrub,
+          );
         } catch (error) {
           return {
             isError: true,
@@ -794,6 +823,27 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
       },
     );
   };
+}
+
+/** `output` with a note on sending it from a wallet, when it carries transactions to send. */
+function withSendNote(output: ToolOutput): ToolOutput {
+  // A Pot that is there already: its deployment is not to be sent.
+  if (output.json.deployed === true) return output;
+  try {
+    const count = plannedTransactions(output.json).length;
+
+    return {
+      ...output,
+      notes: [
+        ...(output.notes ?? []),
+        `To send ${count === 1 ? "it" : `these ${count}`} from one of this server's wallets: ` +
+          "sauce_wallet_send { wallet, transaction: <this result> }. It rehearses them first, " +
+          "and holds them to the wallet's policy.",
+      ],
+    };
+  } catch {
+    return output;
+  }
 }
 
 export function registerTools(server: McpServer, context: ToolContext): void {
