@@ -550,8 +550,8 @@ npx sauce actions swap.json --chain ethereum --json
 
 `--chain` defaults to the document's `chainId`; a document without one needs it, and one with a
 `chainId` compiles for that chain only. `--json` prints what `sauce compile --json` does, with the
-parsed `document`, the `source`, the ABI bindings it calls through (`contracts`) and the argument
-names (`parameters`). `--compact-args` compiles the arguments compact-v1. A name the chain lacks is
+parsed `document`, the `source`, the ABI bindings it calls through (`bindings`) and the argument
+names (`parameters`); `contracts` is still the protocol contracts it calls, as `compile` reports them. `--compact-args` compiles the arguments compact-v1. A name the chain lacks is
 refused with its path, the chain and the name:
 
 ```text
