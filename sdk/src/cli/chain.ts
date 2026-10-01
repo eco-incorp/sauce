@@ -25,6 +25,7 @@ import type { PrivateKeyAccount } from "viem/accounts";
 
 import kitchenArtifact from "../artifacts/V12Kitchen.json" with { type: "json" };
 import potArtifact from "../artifacts/V12Pot.json" with { type: "json" };
+import routerArtifact from "../artifacts/Router.json" with { type: "json" };
 import { resolveChain, type CanonicalChain } from "../chains/canonical.js";
 import { v12EngineAddress, v12KitchenAddress } from "../deployments/index.js";
 import { v12Pot } from "../evm/engine.js";
@@ -265,17 +266,66 @@ const ERC20_ERRORS = parseAbi([
   "error ERC20InvalidSpender(address spender)",
 ]);
 
-/** The errors a cook or a publish can revert with by name: the Pot's, the Kitchen's, Permit2's
- *  (which `--fund` pulls through), whatever the registry's Portal and prover ABIs declare, and
- *  ERC-20's standard ones. */
+/** The errors a cook or a publish can revert with by name: the Pot's, the Kitchen's, the Pot's
+ *  Router's (which `@sauce/router` swaps through), Permit2's (which `--fund` pulls through),
+ *  whatever the registry's Portal and prover ABIs declare, and ERC-20's standard ones. */
 const ERRORS = [
   ...potArtifact.abi,
   ...kitchenArtifact.abi,
+  ...routerArtifact.abi,
   ...Permit2ABI,
   ...PortalABI,
   ...ProverABI,
   ...ERC20_ERRORS,
 ].filter((item) => item.type === "error") as Abi;
+
+/**
+ * What a pool's short revert string means. A Uniswap V3 pool reverts with a code of a few letters,
+ * and so do its forks (PancakeSwap V3, Aerodrome Slipstream and the rest keep the strings), the
+ * `TransferHelper` they pay through, and Uniswap's periphery.
+ */
+const POOL_REVERTS: Readonly<Record<string, string>> = {
+  SPL:
+    "a V3-style pool's price-limit check: the limit is on the wrong side of the pool's current " +
+    "price, or at or past a bound (it must lie strictly between MIN_SQRT_RATIO and " +
+    "MAX_SQRT_RATIO); `sauce price` gives the limit for a price",
+  AS: "a V3-style pool's check that the amount is not zero",
+  LOK: "a V3-style pool's lock: the pool is not initialized, or was re-entered mid-swap",
+  IIA: "a V3-style pool's check that its swap callback paid all the input it asked for",
+  TF: "a V3-style pool could not transfer the output token out",
+  STF: "a token's transferFrom failed: the payer's allowance or balance is short",
+  ST: "a token's transfer failed: the sender's balance is short",
+  SA: "a token's approve failed",
+  STE: "a native transfer failed",
+  "Too little received": "the swap's output is below its minimum",
+  "Too much requested": "the swap needs more input than its maximum",
+  "Transaction too old": "the swap's deadline has passed",
+};
+
+/** What a V2-style pair's `<Name>: REASON` means (UniswapV2, Pancake and the other forks). */
+const PAIR_REVERTS: Readonly<Record<string, string>> = {
+  K: "the pair's constant-product check: it was paid too little input for the output taken (or a fee stated too low)",
+  INSUFFICIENT_OUTPUT_AMOUNT: "the pair was asked for no output",
+  INSUFFICIENT_INPUT_AMOUNT: "the pair received no input before the swap",
+  INSUFFICIENT_LIQUIDITY: "the pair's reserves cannot pay the output asked for",
+  LOCKED: "the pair was re-entered mid-swap",
+  TRANSFER_FAILED: "the pair could not transfer the output token out",
+};
+
+/** What the Pot's Router's own errors mean. */
+const ROUTER_REVERTS: Readonly<Record<string, string>> = {
+  InvalidPool: "the Router's check that the pool's token0 and token1 are the pair passed",
+  InputExceedsAuthorized: "the pool asked the Router for more input than the exact input offered",
+};
+
+/** A short revert string's meaning, when it is a pool's, a pair's or a token helper's. */
+export function poolRevertMeaning(message: string): string | undefined {
+  // A pair's own `UniswapV2: K`; a router's `UniswapV2Router: …` is the router's, and means other things.
+  const pair = /^(\w+): ([A-Z_]+)$/.exec(message);
+  const fromPair = pair !== null && !/Router/.test(pair[1]!);
+
+  return POOL_REVERTS[message] ?? (fromPair ? PAIR_REVERTS[pair[2]!] : undefined);
+}
 
 /** The revert data somewhere in viem's error chain, if the node returned any. */
 function revertData(error: unknown): Hex | undefined {
@@ -317,9 +367,15 @@ export function revertReason(error: unknown): string {
   try {
     const decoded = decodeErrorResult({ abi: ERRORS, data });
     const args = (decoded.args ?? []).map((arg) => String(arg));
-    if (decoded.errorName === "Error") return JSON.stringify(args[0] ?? "");
+    if (decoded.errorName === "Error") {
+      const message = args[0] ?? "";
+      const meaning = poolRevertMeaning(message);
 
-    return `${decoded.errorName}(${args.join(", ")})`;
+      return `${JSON.stringify(message)}${meaning === undefined ? "" : ` (${meaning})`}`;
+    }
+    const meaning = ROUTER_REVERTS[decoded.errorName];
+
+    return `${decoded.errorName}(${args.join(", ")})${meaning === undefined ? "" : ` (${meaning})`}`;
   } catch {
     // A program's `throw "message"` reverts with the message's bytes as they are.
     const thrown = thrownText(data);

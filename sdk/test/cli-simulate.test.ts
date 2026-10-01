@@ -187,6 +187,41 @@ describe("a revert, by name", () => {
     });
     expect(revertReason({ data })).toBe(`ERC20InsufficientBalance(${HOLDER}, 0, 2000000)`);
   });
+
+  const message = (text: string) =>
+    revertReason({
+      data: encodeErrorResult({
+        abi: parseAbi(["error Error(string)"]),
+        errorName: "Error",
+        args: [text],
+      }),
+    });
+
+  it("says what a pool's short revert string means", () => {
+    expect(message("SPL")).toMatch(
+      /^"SPL" \(a V3-style pool's price-limit check: the limit is on the wrong side of the pool's current price, or at or past a bound/,
+    );
+    expect(message("LOK")).toMatch(/^"LOK" \(a V3-style pool's lock: the pool is not initialized/);
+    expect(message("STF")).toMatch(/^"STF" \(a token's transferFrom failed/);
+    // A pair's own check, under any fork's name — and not a router's string of the same reason.
+    expect(message("UniswapV2: K")).toMatch(/^"UniswapV2: K" \(the pair's constant-product check/);
+    expect(message("Pancake: K")).toMatch(/^"Pancake: K" \(the pair's constant-product check/);
+    expect(message("UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT")).toBe(
+      '"UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT"',
+    );
+    // A program's own message stays as it is.
+    expect(message("fill below minOut")).toBe('"fill below minOut"');
+  });
+
+  it("names the Router's errors, and says what the pair check means", () => {
+    const data = encodeErrorResult({
+      abi: parseAbi(["error InvalidPool()"]),
+      errorName: "InvalidPool",
+    });
+    expect(revertReason({ data })).toBe(
+      "InvalidPool() (the Router's check that the pool's token0 and token1 are the pair passed)",
+    );
+  });
 });
 
 describe("what the cook did, from its logs", () => {
