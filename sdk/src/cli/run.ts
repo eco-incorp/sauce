@@ -44,7 +44,6 @@ import {
   potDeployCommand,
   readInput,
   runCommand,
-  simulateCommand,
   txCommand,
   type ArgsInput,
   type CliFiles,
@@ -54,11 +53,19 @@ import {
   type PotInput,
   type ProgramInput,
 } from "./commands.js";
-import { FUND_MODES, parseFund, permit2On, planFunding, type FundMode } from "./funding.js";
+import {
+  FUND_MODES,
+  parseFund,
+  parseTokenAmount,
+  permit2On,
+  planFunding,
+  type FundMode,
+} from "./funding.js";
 import { globalsCommand } from "./globals.js";
 import { initProject } from "./init.js";
 import { inspectCommand, inspectFile } from "./inspect.js";
 import { publishCommand } from "./publish.js";
+import { simulateCommand } from "./simulate.js";
 import { parsePin, verifyCommand } from "./verify.js";
 import {
   loadKeypair,
@@ -849,11 +856,17 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   simulate: {
     usage:
       "sauce simulate <file> --chain <slug|id> (--pot <address> | --owner <address>) --rpc-url <url> [options]",
-    summary: "Dry-run the cook from the Pot's owner: result, gas, or why it reverts",
+    summary: "Rehearse the cook from the Pot's owner, with no key: what it did, or why it reverts",
     flags: {
       ...PROGRAM,
       ...COOK,
       ...ENDPOINT,
+      "assume-balance": {
+        type: "string",
+        multiple: true,
+        value: "<TOKEN:amount>",
+        help: "Give the Pot this balance, for the rehearsal only: USDC:2, ETH:0.1",
+      },
       ...FUND,
       keystore: SIGNER.keystore!,
       "password-file": SIGNER["password-file"]!,
@@ -863,21 +876,37 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       ...ARGS,
     },
     details: [
-      "Compiles the file, builds the cook, and runs it through eth_call from the Pot's owner:",
-      "no key, no transaction, no local node. Prints the gas it needs and what it returns, or",
-      "the decoded reason it reverts (exit 1). The Pot must be deployed.",
+      "Compiles the file, builds the cook and rehearses it from the Pot's owner: no key, no",
+      "transaction, no local node. Prints the gas, what the program returns and what the cook",
+      "did, or the decoded reason it reverts (exit 1).",
       "",
-      "With --fund, the rehearsal includes the pulls `sauce run --fund` would make. They carry the",
-      "owner's signature, so give the owner's key (--keystore or --private-key) to sign them;",
-      "nothing is sent. Without a key the funding is skipped, and a note says so. An approval",
-      "the run would ask for is reported, not made.",
+      "It rehearses through eth_simulateV1, which returns the cook's logs: the output lists the",
+      "ERC-20 transfers and approvals (registry symbols, whole units), the native transfers the",
+      "node traces, and each address's net change. An endpoint without eth_simulateV1 falls back",
+      "to eth_call with state overrides, which gives the result and the gas but no logs. The",
+      "output names the route it took.",
+      "",
+      "A Pot that is not deployed yet is deployed in the rehearsal first, from --owner (and",
+      "--salt): any account may send Kitchen.deployPot, and the Pot is the owner's either way.",
+      "An owner holding less than the cook's value is given it for the rehearsal.",
+      "",
+      "--assume-balance TOKEN:amount gives the Pot that balance for this rehearsal only, by state",
+      "override: repeatable, the amount as --fund takes it, ETH:<amount> for the native currency.",
+      "Where a token keeps the balance is found by asking it, with eth_call; a token that stores",
+      "no balance it reports (rebasing, shares) is refused.",
+      "",
+      "With --fund and the owner's key (--keystore or --private-key), the rehearsal includes the",
+      "pulls `sauce run --fund` would make, signed and not sent; an approval the run would ask for",
+      "is reported, not made. With no key the pulls cannot be signed, so the Pot is credited what",
+      "they would bring, by state override, and --sweep still runs.",
       "",
       "On Solana: the Kitchen cook, simulated from --owner (no signature needed), with each",
       "account main takes given as --account NAME=<address | pot | owner>. Prints the compute",
       "units, or the reason and the program logs.",
       "",
       "Examples:",
-      "  sauce simulate pay.sauce.ts --chain base --owner 0x… --rpc-url <url>",
+      "  sauce simulate pay.sauce.ts --chain base --owner 0x… --rpc-url <url> \\",
+      "    --assume-balance USDC:2 --args 0x… 1000000",
       "  sauce simulate sweep.sauce.ts --chain solana --owner <pubkey> --rpc-url <url> \\",
       "    --account source=<token account> --account authority=pot",
     ].join("\n"),
@@ -891,17 +920,35 @@ const COMMANDS: Readonly<Record<string, Command>> = {
             "runs from the Pot's owner without one)",
         );
       }
+      const assume = repeatedFlag(args, "assume-balance");
       if (program.chain.kind === "svm") {
         fundingOf(args, io, program.chain, "", false, undefined);
+        if (assume.length > 0) {
+          throw new UsageError(
+            "--assume-balance is for EVM chains: a Solana endpoint's simulateTransaction takes no " +
+              "account overrides, so on solana the rehearsal runs on the accounts as they are",
+          );
+        }
 
         return svmSimulateCommand(svmCookInput(args, io, trailing, program), io);
       }
       const input = cookInput(args, io, trailing, undefined, program);
+      const assumed = assume.map((raw) => parseTokenAmount(raw, input.chain, "--assume-balance"));
+      const seen = new Set<string>();
+      for (const request of assumed) {
+        if (seen.has(request.token ?? "native")) {
+          throw new UsageError(`--assume-balance names ${request.label} twice: give it once`);
+        }
+        seen.add(request.token ?? "native");
+      }
       const rpcUrl = requiredEndpoint(args, io, input.chain);
       const account = funds && hasSigner(args) ? await signerOf(args, io) : undefined;
       const fund = fundingOf(args, io, input.chain, rpcUrl, false, account);
 
-      return simulateCommand({ ...input, rpcUrl, ...(fund === undefined ? {} : { fund }) }, io);
+      return simulateCommand(
+        { ...input, rpcUrl, assume: assumed, ...(fund === undefined ? {} : { fund }) },
+        io,
+      );
     },
   },
   run: {

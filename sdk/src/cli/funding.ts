@@ -51,7 +51,8 @@ import type { Confirm } from "./commands.js";
 export const FUND_MODES = ["permit2", "permit", "allowance", "transfer"] as const;
 export type FundMode = (typeof FUND_MODES)[number];
 
-/** One `--fund`, as given: the chain's native currency or a token, and an amount. */
+/** One `--fund` or `--assume-balance`, as given: the chain's native currency or a token, and an
+ *  amount. */
 export interface FundRequest {
   readonly raw: string;
   /** `undefined` for the native currency. */
@@ -67,18 +68,19 @@ export interface FundRequest {
 const NATIVE = /^(eth|native)$/i;
 
 /**
- * `--fund <TOKEN|address>:<amount>`. The amount is in whole units — `USDC:1.5` is 1.5 USDC, by the
- * registry's decimals (or the token's own, for an address) — or, ending in `n`, in base units, as a
- * SauceScript integer is written: `USDC:1500000n`. `ETH:<amount>` (or `native:`) is the chain's
- * native currency, 18 decimals.
+ * `<TOKEN|address>:<amount>`, as `--fund` and `--assume-balance` take it (`flag` names which, for
+ * the error). The amount is in whole units — `USDC:1.5` is 1.5 USDC, by the registry's decimals (or
+ * the token's own, for an address) — or, ending in `n`, in base units, as a SauceScript integer is
+ * written: `USDC:1500000n`. `ETH:<amount>` (or `native:`) is the chain's native currency, 18
+ * decimals.
  */
-export function parseFund(raw: string, chain: CanonicalChain): FundRequest {
+export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: string): FundRequest {
   const at = raw.lastIndexOf(":");
   const what = raw.slice(0, at).trim();
   const amount = raw.slice(at + 1).trim();
   if (at <= 0 || amount === "") {
     throw new UsageError(
-      `--fund: expected <TOKEN|address>:<amount>, as USDC:1.5 or USDC:1500000n; got '${raw}'`,
+      `${flag}: expected <TOKEN|address>:<amount>, as USDC:1.5 or USDC:1500000n; got '${raw}'`,
     );
   }
   const parsed = /^\d+n$/.test(amount)
@@ -88,7 +90,7 @@ export function parseFund(raw: string, chain: CanonicalChain): FundRequest {
       : undefined;
   if (parsed === undefined) {
     throw new UsageError(
-      `--fund ${raw}: '${amount}' is not an amount — whole units (1.5) or base units ending in n ` +
+      `${flag} ${raw}: '${amount}' is not an amount — whole units (1.5) or base units ending in n ` +
         "(1500000n)",
     );
   }
@@ -101,7 +103,7 @@ export function parseFund(raw: string, chain: CanonicalChain): FundRequest {
   );
   if (row === undefined) {
     throw new UsageError(
-      `--fund ${raw}: ${what} is not a token ${chain.slug} registers` +
+      `${flag} ${raw}: ${what} is not a token ${chain.slug} registers` +
         ` (sauce globals --chain ${chain.slug} --tokens lists them); give its address instead`,
     );
   }
@@ -114,6 +116,10 @@ export function parseFund(raw: string, chain: CanonicalChain): FundRequest {
     amount: parsed,
   };
 }
+
+/** `--fund <TOKEN|address>:<amount>`: {@link parseTokenAmount}. */
+export const parseFund = (raw: string, chain: CanonicalChain): FundRequest =>
+  parseTokenAmount(raw, chain, "--fund");
 
 const ERC20 = parseAbi([
   "function balanceOf(address) view returns (uint256)",
@@ -144,7 +150,8 @@ export interface FundingInput {
   readonly mode: FundMode;
   readonly requests: readonly FundRequest[];
   readonly sweep: boolean;
-  /** Who signs and sends; absent for a simulation with no key, which then skips the funding. */
+  /** Who signs and sends; absent for a simulation with no key, which credits the Pot instead of
+   *  pulling (`Funding.credit`). */
   readonly account?: PrivateKeyAccount;
   /** Permit2's nonce and the signatures' deadline (unix seconds): fresh and ten minutes out when
    *  not given. */
@@ -165,6 +172,15 @@ export interface Funding {
   readonly sent: ReadonlyArray<{ readonly what: string; readonly sent: Sent }>;
   /** What the run did or skipped, for the person. */
   readonly notes: readonly string[];
+  /**
+   * A simulation with no key: the tokens its pulls would have brought, which the rehearsal credits
+   * the Pot with through state overrides instead of pulling them.
+   */
+  readonly credit?: ReadonlyArray<{
+    readonly token: Address;
+    readonly label: string;
+    readonly amount: bigint;
+  }>;
 }
 
 const read = async <T>(what: string, call: () => Promise<T>): Promise<T> => {
@@ -177,25 +193,26 @@ const read = async <T>(what: string, call: () => Promise<T>): Promise<T> => {
   }
 };
 
-/** Every request's amount in base units, a token's decimals read from it when not registered. */
+/** A request's amount in base units, a token's decimals read from it when not registered. */
+export async function baseUnits(client: PublicClient, request: FundRequest): Promise<bigint> {
+  if ("base" in request.amount) return request.amount.base;
+  const decimals =
+    request.decimals ??
+    Number(
+      await read(`${request.label}'s decimals()`, () =>
+        client.readContract({ address: request.token!, abi: ERC20, functionName: "decimals" }),
+      ),
+    );
+
+  return parseUnits(request.amount.units, decimals);
+}
+
+/** Every request's amount in base units. */
 async function amounts(input: FundingInput): Promise<{ tokens: Funded[]; native: bigint }> {
   const tokens: Funded[] = [];
   let native = 0n;
   for (const request of input.requests) {
-    let decimals = request.decimals;
-    if (decimals === undefined && "units" in request.amount) {
-      decimals = Number(
-        await read(`${request.label}'s decimals()`, () =>
-          input.client.readContract({
-            address: request.token!,
-            abi: ERC20,
-            functionName: "decimals",
-          }),
-        ),
-      );
-    }
-    const amount =
-      "base" in request.amount ? request.amount.base : parseUnits(request.amount.units, decimals!);
+    const amount = await baseUnits(input.client, request);
     if (request.token === undefined) native += amount;
     else tokens.push({ request, token: request.token, amount });
   }
@@ -364,6 +381,13 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
   const imports = new Set<string>();
   const owner = input.owner;
 
+  // With no key (a simulation), a shortfall is what `run` would refuse, said rather than refused:
+  // the rehearsal does not spend the owner's balance.
+  const keyless = input.account === undefined;
+  const short = (message: string): void => {
+    if (!keyless) throw new CliError(message);
+    notes.push(`${message}: sauce run would refuse it`);
+  };
   for (const funded of tokens) {
     const balance = await read(`${funded.request.label}'s balanceOf`, () =>
       input.client.readContract({
@@ -374,7 +398,7 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
       }),
     );
     if (balance < funded.amount) {
-      throw new CliError(
+      short(
         `${owner} holds ${balance} of ${funded.request.label} (base units), below the ` +
           `${funded.amount} --fund ${funded.request.raw} needs`,
       );
@@ -383,20 +407,30 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
   if (native > 0n) {
     const balance = await input.client.getBalance({ address: owner });
     if (balance < native) {
-      throw new CliError(
-        `${owner} holds ${balance} wei, below the ${native} --fund sends with the cook`,
-      );
+      short(`${owner} holds ${balance} wei, below the ${native} --fund sends with the cook`);
     }
   }
-  if (input.account === undefined && tokens.length > 0) {
-    // A simulation with no key: it cannot sign the pull, so it rehearses the program on the Pot as
-    // it stands.
+  if (keyless && tokens.length > 0) {
+    // A simulation with no key cannot sign the pulls. It credits the Pot with what they would
+    // bring instead (state overrides, `simulateCommand`), and keeps the sweep.
     notes.push(
-      `funding skipped: pulling ${tokens.map((t) => t.request.label).join(", ")} needs the owner's ` +
-        "signature (--keystore or --private-key); the rehearsal runs on the Pot as it is",
+      `--fund without a key: pulling ${tokens.map((t) => t.request.label).join(", ")} needs the ` +
+        "owner's signature (--keystore or --private-key), so the pulls are not rehearsed; the Pot " +
+        "is credited what they would bring, for this rehearsal only",
     );
+    const sweeps = input.sweep ? sweepLines(tokens, native, owner, imports) : [];
 
-    return { wrap: (text) => text, value: native, sent, notes };
+    return {
+      wrap: (text) => (sweeps.length === 0 ? text : wrapProgram(text, imports, [], sweeps)),
+      value: native,
+      sent,
+      notes,
+      credit: tokens.map((funded) => ({
+        token: funded.token,
+        label: funded.request.label,
+        amount: funded.amount,
+      })),
+    };
   }
   const latest = await read("the latest block", () => input.client.getBlock());
   const deadline = input.deadline ?? latest.timestamp + 600n;
@@ -570,26 +604,7 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
     }
   }
 
-  const sweeps: string[] = [];
-  if (input.sweep) {
-    imports.add("balanceOf as __sauce_fund_balance");
-    imports.add("transfer as __sauce_fund_push");
-    tokens.forEach((funded, index) => {
-      sweeps.push(
-        `const __sauce_left${index} = __sauce_fund_balance(${word(BigInt(funded.token))}, ctx.self());`,
-        `if (__sauce_left${index} > 0n) {`,
-        `  __sauce_fund_push(${word(BigInt(funded.token))}, ${word(BigInt(owner))}, __sauce_left${index});`,
-        "}",
-      );
-    });
-    if (native > 0n) {
-      sweeps.push(
-        "if (ctx.selfBalance() > 0n) {",
-        `  evm.call(${word(BigInt(owner))}, ctx.selfBalance(), hex\`\`);`,
-        "}",
-      );
-    }
-  }
+  const sweeps = input.sweep ? sweepLines(tokens, native, owner, imports) : [];
 
   return {
     wrap: (text) =>
@@ -598,6 +613,36 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
     sent,
     notes,
   };
+}
+
+/** `--sweep`: the lines that send the Pot's whole balance of each funded token (and of the native
+ *  currency, when it is funded) back to the owner, with the imports they need. */
+function sweepLines(
+  tokens: readonly Funded[],
+  native: bigint,
+  owner: Address,
+  imports: Set<string>,
+): string[] {
+  const sweeps: string[] = [];
+  imports.add("balanceOf as __sauce_fund_balance");
+  imports.add("transfer as __sauce_fund_push");
+  tokens.forEach((funded, index) => {
+    sweeps.push(
+      `const __sauce_left${index} = __sauce_fund_balance(${word(BigInt(funded.token))}, ctx.self());`,
+      `if (__sauce_left${index} > 0n) {`,
+      `  __sauce_fund_push(${word(BigInt(funded.token))}, ${word(BigInt(owner))}, __sauce_left${index});`,
+      "}",
+    );
+  });
+  if (native > 0n) {
+    sweeps.push(
+      "if (ctx.selfBalance() > 0n) {",
+      `  evm.call(${word(BigInt(owner))}, ctx.selfBalance(), hex\`\`);`,
+      "}",
+    );
+  }
+
+  return sweeps;
 }
 
 /**
