@@ -293,11 +293,16 @@ npx sauce pot --chain base --owner 0xYou --salt treasury
 
 prints the Pot's address — CREATE2 from the Kitchen over the owner and salt — and the unsigned
 `Kitchen.deployPot(owner, salt)` transaction as JSON. With `--deploy` and a signer it sends it,
-unless the Pot is already there. Any account may deploy a Pot; it is its owner's either way.
+unless the Pot is already there, and waits until the endpoint shows the Pot's code before saying it
+is deployed: a load-balanced endpoint can answer from a node that has not seen the block yet. Any
+account may deploy a Pot; it is its owner's either way. So `pot --deploy` takes `--owner` for
+another owner's Pot, which the signer sends and pays for — how the Pot every intent to a chain
+cooks on, owned by that chain's Portal Executor, is deployed — and defaults the owner to the
+signer. On Solana the owner signs `create_pot`, so there the signer creates its own.
 
-`run`, `publish` and `pot --deploy` act for the signer, so the owner is the signer: `--owner` may
-only restate it, and one that names someone else is refused. `simulate`, `tx` and plain `pot` have
-no signer and take `--owner` (or, for `simulate` and `tx`, `--pot <address>`, of a deployed Pot).
+`run` and `publish` act for the signer, so the owner is the signer: `--owner` may only restate it,
+and one that names someone else is refused. `simulate`, `tx` and plain `pot` have no signer and
+take `--owner` (or, for `simulate` and `tx`, `--pot <address>`, of a deployed Pot).
 
 ### For a wallet: `sauce tx`
 
@@ -390,8 +395,9 @@ function main(token: Address, recipients: Address[], amount: Uint256, alsoUsdc: 
 ```
 
 `sauce compile --json` reports them (`entryParams`, `entryEncoding`, and `entrySchema` under
-`--compact-args`). `simulate`, `run` and `tx` take them after `--args`, last on the line and in
-order, or as one JSON array with `--args-json '[…]'` (or a file):
+`--compact-args`). `simulate`, `run` and `tx` take them after `--args`, in order — a flag after
+them is still a flag, and `--` before an argument that starts with `--` keeps it one — or as one
+JSON array with `--args-json '[…]'` (or a file):
 
 ```sh
 npx sauce run split.sauce.ts --chain base --config sauce.config.json --keystore ~/.keys/me.json \

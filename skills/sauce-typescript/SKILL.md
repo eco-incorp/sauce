@@ -50,6 +50,8 @@ export function cookTransactions(
 
 - `destinationExecutionFee()` builds the fee read (`{ to, data, decode }`); send it as an `eth_call`
   on the chain with your client, just before sending the cook.
+- `routes.sauceEvmDeployPotCall` and `routes.buildSauceEvmCall` return `{ to, data, value }` to send
+  as a transaction, plus `target`, the same contract as a route's `calls` entry names it.
 - `v12EngineAddress()`, `v12KitchenAddress()` and `v12GateKitchen()` are recorded release
   addresses: check the chain has code at them. Deploy the Pot only where it has no code yet.
 - A program that opens an intent also needs `options.intents`, `{ deadline, creator,

@@ -16,6 +16,7 @@ import {
   keccak256,
   stringToBytes,
   type Hex,
+  type PublicClient,
 } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
@@ -27,6 +28,7 @@ import {
   parseSalt,
   UsageError,
 } from "../src/cli/args.js";
+import { awaitPot } from "../src/cli/chain.js";
 import { castSend } from "../src/cli/commands.js";
 import { failureReason } from "../src/cli/solana.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
@@ -121,6 +123,20 @@ describe("flags", () => {
       expect(() => parseDefines([bad])).toThrow(UsageError);
     }
     expect(() => parseDefines(["A=1", "A=2"])).toThrow(/A is given twice/);
+  });
+
+  it("takes a base58 public key for a Solana program, as the 32-byte word its address compares to", () => {
+    // Mainnet USDC: the word `svm.sload(account, 0, 32).toBe()` reads from a USDC token account.
+    const usdc = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+    const word = 0xc6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61n;
+    expect(parseDefines([`MINT=${usdc}`], "svm")).toEqual({ MINT: word });
+    expect(parseDefinesFile(JSON.stringify({ MINT: usdc }), "d.json", "svm")).toEqual({
+      MINT: word,
+    });
+    // Integer syntax wins: digits are the integer, even where they would also be base58.
+    expect(parseDefines(["N=12345"], "svm")).toEqual({ N: 12345n });
+    expect(() => parseDefines([`MINT=${usdc}`])).toThrow(/is a Solana public key \(base58\)/);
+    expect(() => parseDefines(["MINT=NotAKey0OIl"], "svm")).toThrow(/a base58 public key/);
   });
 
   it("reads a defines file of names to addresses, integers and booleans", () => {
@@ -291,6 +307,33 @@ describe("sauce compile", () => {
       expect(out.manifest).toEqual({ accounts: [{ kind: "remaining", from: 0 }] });
       expect(out.engine).toMatchObject({ release: "v12-svm", programId: expect.any(String) });
     }
+  });
+
+  it("takes a Solana program's key defines in base58, as --account takes them", async () => {
+    const program = file(
+      "mint.sauce.ts",
+      "const MINT = 0n;\nfunction main(mint: Account) {\n  require(mint.address == MINT);\n}\n",
+    );
+    const usdc = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+    const base58 = json(
+      await sauce("compile", program, "--chain", "solana", "--define", `MINT=${usdc}`, "--json"),
+    );
+    const hex = json(
+      await sauce(
+        "compile",
+        program,
+        "--chain",
+        "solana",
+        "--define",
+        "MINT=0xc6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61",
+        "--json",
+      ),
+    );
+    expect(base58.bytecode).toBe(hex.bytecode);
+    expect(base58.bytecode).toContain("c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca6");
+    const evm = await sauce("compile", program, "--chain", "base", "--define", `MINT=${usdc}`);
+    expect(evm.code).toBe(2);
+    expect(evm.stderr).toMatch(/is a Solana public key \(base58\)/);
   });
 
   it("takes the chain and target from the file's header, and a flag over it", async () => {
@@ -1110,6 +1153,240 @@ describe("sauce pot", () => {
   });
 });
 
+describe("flags in any order", () => {
+  const SPLIT = "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n";
+
+  it("reads a flag after main's arguments as a flag, and -- makes the rest arguments", async () => {
+    const program = file("split.sauce.ts", SPLIT);
+    const stdout = (run: Run): Record<string, unknown> => {
+      expect(run.code).toBe(0);
+
+      return JSON.parse(run.stdout) as Record<string, unknown>;
+    };
+    const before = stdout(
+      await sauce(
+        "tx",
+        program,
+        "--chain",
+        "base",
+        "--owner",
+        OWNER,
+        "--value",
+        "7",
+        "--args",
+        RECIPIENT,
+        "5",
+      ),
+    );
+    // The same flags after --args, in another order, with --flag=value too.
+    const after = stdout(
+      await sauce(
+        "tx",
+        program,
+        "--args",
+        RECIPIENT,
+        "--value=7",
+        "5",
+        "--chain",
+        "base",
+        "--owner",
+        OWNER,
+      ),
+    );
+    expect(after).toEqual(before);
+    expect(before.value).toBe("7");
+    // After `--`, a word that looks like a flag is an argument.
+    const escaped = await sauce(
+      "tx",
+      program,
+      "--chain",
+      "base",
+      "--owner",
+      OWNER,
+      "--value",
+      "0",
+      "--args",
+      RECIPIENT,
+      "--",
+      "--value",
+    );
+    expect(escaped.code).toBe(2);
+    expect(escaped.stderr).toMatch(/--args: .*amount/);
+  });
+
+  it("names a flag the command does not take, and why, instead of an unknown option", async () => {
+    const program = file("split.sauce.ts", SPLIT);
+    const cases: Array<[string[], RegExp]> = [
+      [
+        ["tx", program, "--chain", "base", "--owner", OWNER, "--keystore", "k.json"],
+        /--keystore is not an option of sauce tx: tx signs nothing: it prints the transaction unsigned/,
+      ],
+      [
+        ["simulate", program, "--chain", "solana", "--owner", OWNER, "--keypair", "id.json"],
+        /--keypair is not an option of sauce simulate: on Solana, simulate runs the cook from --owner/,
+      ],
+      [
+        ["compile", program, "--chain", "base", "--yes"],
+        /--yes is not an option of sauce compile: compile has nothing to ask \(sauce run, sauce pot take it\)/,
+      ],
+      [
+        ["globals", "--chain", "base", "--rpc-url", "http://x"],
+        /globals reads nothing from a chain/,
+      ],
+      [["compile", program, "--chain", "base", "--nope"], /unknown option --nope/],
+    ];
+    for (const [argv, message] of cases) {
+      const run = await sauce(...argv);
+      expect(run.code).toBe(2);
+      expect(run.stderr).toMatch(message);
+    }
+    // `pot` takes --yes, which it has no use for: --deploy never asks.
+    const pot = await sauce("pot", "--owner", OWNER, "--chain", "base", "--yes");
+    expect(pot.code).toBe(0);
+  });
+
+  it("says so when one argument holds several flags, and prints none of their values", async () => {
+    const key = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+    // What zsh passes for `sauce pot --chain base --deploy $FLAGS`: one word.
+    const run = await sauce(
+      "pot",
+      "--chain",
+      "base",
+      "--deploy",
+      `--private-key ${key} --config sauce.config.json`,
+    );
+    expect(run.code).toBe(2);
+    expect(run.stderr).toMatch(
+      /one argument holds several words, --private-key, --config and their values, with spaces/,
+    );
+    expect(run.stderr).toMatch(/zsh does not split an unquoted \$VARIABLE/);
+    expect(run.stderr).not.toContain(key.slice(2, 12));
+  });
+});
+
+describe("waiting for a deployed Pot", () => {
+  const POT = "0x1111111111111111111111111111111111111111";
+  const answering = (answers: Array<string | Error>) => {
+    const asked: string[] = [];
+    const client = {
+      getCode: async ({ address }: { address: string }) => {
+        asked.push(address);
+        const next = answers.shift() ?? "0x";
+        if (next instanceof Error) throw next;
+
+        return next === "0x" ? undefined : next;
+      },
+    } as unknown as PublicClient;
+
+    return { client, asked };
+  };
+
+  it("asks past an endpoint that has not seen the deployment yet", async () => {
+    const { client, asked } = answering(["0x", new Error("header not found"), "0x", "0x6000"]);
+    await awaitPot(client, POT, 7n, { tries: 5, delayMs: 1 });
+    expect(asked).toHaveLength(4);
+  });
+
+  it("fails, naming the block, when the endpoint never shows the code", async () => {
+    const { client } = answering([]);
+    await expect(awaitPot(client, POT, 7n, { tries: 3, delayMs: 1 })).rejects.toThrow(
+      /deployed in block 7, but the endpoint still shows no code there/,
+    );
+  });
+});
+
+describe("sauce price", () => {
+  const WETH_BASE = "0x4200000000000000000000000000000000000006";
+
+  it("prints the pool's sqrtPriceX96 for the chain's token order, and each direction's floor", async () => {
+    const out = json(await sauce("price", "--chain", "base", "WETH", "USDC", "2700", "--json"));
+    // WETH is token0 on Base: the price is the SDK's conversion with WETH as the base.
+    const sqrt = root.sqrtPriceX96FromPrice("2700", {
+      baseDecimals: 18,
+      quoteDecimals: 6,
+      baseIsToken0: true,
+    });
+    expect(out).toEqual({
+      chain: "base",
+      price: "2700",
+      base: { symbol: "WETH", address: WETH_BASE, decimals: 18 },
+      quote: {
+        symbol: "USDC",
+        address: getAddress("0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"),
+        decimals: 6,
+      },
+      token0: "WETH",
+      token1: "USDC",
+      sqrtPriceX96: sqrt.toString(),
+      // Selling WETH: 2700e6 USDC units per 1e18 WETH units, times 1e18.
+      sell: {
+        tokenIn: "WETH",
+        tokenOut: "USDC",
+        zeroForOne: true,
+        sqrtPriceLimitX96: sqrt.toString(),
+        limit: "floor",
+        minAvgPrice: "2700000000",
+      },
+      // Buying WETH: 1e18 / 2700e6 WETH units per USDC unit, times 1e18, rounded up.
+      buy: {
+        tokenIn: "USDC",
+        tokenOut: "WETH",
+        zeroForOne: false,
+        sqrtPriceLimitX96: sqrt.toString(),
+        limit: "ceiling",
+        minAvgPrice: ((10n ** 36n + 2700n * 10n ** 6n - 1n) / (2700n * 10n ** 6n)).toString(),
+      },
+    });
+    const text = await sauce("price", "--chain", "base", "WETH", "USDC", "2700");
+    expect(text.stdout).toContain(`sqrtPriceX96  ${sqrt}`);
+    expect(text.stdout).toMatch(/minAvgPrice +2700000000 +USDC units per WETH unit/);
+  });
+
+  it("reads a pool's sqrtPriceX96 back as the price, and takes an address with its decimals", async () => {
+    const back = json(
+      await sauce(
+        "price",
+        "--chain",
+        "base",
+        WETH_BASE,
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913:6",
+        "--sqrt-price-x96",
+        "4124432773472966290820821",
+        "--json",
+      ),
+    );
+    expect(back).toMatchObject({ price: "2710", sell: { minAvgPrice: "2710000000" } });
+    // USDC as the base, on Arbitrum where it is token1: the quote's floor when selling it.
+    const usdc = json(
+      await sauce("price", "--chain", "arbitrum", "USDC", "WETH", "0.0004", "--json"),
+    );
+    expect(usdc).toMatchObject({
+      token0: "WETH",
+      sell: { tokenIn: "USDC", zeroForOne: false, limit: "ceiling" },
+      buy: { tokenIn: "WETH", zeroForOne: true, limit: "floor", minAvgPrice: "2500000000" },
+    });
+  });
+
+  it("names what it cannot price, exiting 2", async () => {
+    const cases: Array<[string[], RegExp]> = [
+      [["--chain", "solana", "WETH", "USDC", "1"], /on an EVM chain; solana has none/],
+      [["--chain", "base", "WETH", "DAI", "1"], /DAI is not a token base registers/],
+      [["--chain", "base", "WETH", `0x${"12".repeat(20)}`, "1"], /give them as 0x/],
+      [["--chain", "base", "WETH", "USDC"], /missing <price>/],
+      [["--chain", "base", "WETH", "USDC", "1", "--sqrt-price-x96", "1"], /not both/],
+      [["--chain", "base", "WETH", "USDC", "1e3"], /'1e3' is not a price/],
+      [["--chain", "base", "WETH", "USDC:18", "1"], /USDC has 6 decimals, not 18/],
+      [["--chain", "base", "WETH", "WETH", "1"], /WETH is both/],
+      [["--chain", "base", "WETH", "USDC", "--sqrt-price-x96", "5"], /outside the range/],
+    ];
+    for (const [argv, message] of cases) {
+      const run = await sauce("price", ...argv);
+      expect(run.code).toBe(2);
+      expect(run.stderr).toMatch(message);
+    }
+  });
+});
+
 describe("the CLI stays out of the browser-facing surface", () => {
   it("is exported by no barrel", async () => {
     const cli = [
@@ -1125,6 +1402,7 @@ describe("the CLI stays out of the browser-facing surface", () => {
       await import("../src/cli/inspect.js"),
       await import("../src/cli/verify.js"),
       await import("../src/cli/solana.js"),
+      await import("../src/cli/price.js"),
     ].flatMap((module) => Object.keys(module));
     expect(cli.length).toBeGreaterThan(0);
     const routes = root.routes as Record<string, unknown>;

@@ -33,7 +33,10 @@ Run the project's own copy, `npx sauce <command> --help`, for every option.
 - **Signer**: `--keystore <keystore>`, a JSON keystore; its password is asked for at the terminal,
   or read from `--password-file <file>`. `--private-key <hex>` also works but lands in shell
   history. On Solana, `--keypair <keypair>`. The signer is the Pot's owner: `run`, `publish` and
-  `pot --deploy` act for it.
+  `pot --deploy` act for it. On an EVM chain `pot --deploy --owner <address>` deploys another
+  owner's Pot instead, the signer paying; the Pot is that owner's alone.
+- Pass each flag and each value as a word of its own, in any order: a shell variable holding
+  several flags reaches the command as one word unless the shell splits it.
 
 ## Steps
 

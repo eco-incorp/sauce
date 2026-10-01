@@ -50,6 +50,7 @@ import {
   FEE,
   fixture,
   jsonOf,
+  laggingEndpoint,
   OTHER_KEY,
   OWNER,
   OWNER_KEY,
@@ -445,6 +446,54 @@ describeEvm("sauce, sent to a chain", () => {
       expect(await ethereum.balanceOf(usdc, fresh)).toBe(FUNDED - AMOUNT);
     }, 60_000);
 
+    it("waits for an endpoint that lags behind the deployment before calling the Pot there", async () => {
+      // After each transaction the endpoint answers eth_getCode with nothing, three times over, as
+      // a load-balanced node that has not seen the block yet does.
+      const lagging = await laggingEndpoint(ethereum.rpcUrl, 3);
+      try {
+        const salted = v12PredictPot(RAW_OWNER, potSalt("lagging")) as Address;
+        for (const token of [usdc, usdt]) await ethereum.mint(token, salted, FUNDED);
+        const run = await sauce(
+          "run",
+          PAY,
+          ...defines(SECOND_RECIPIENT),
+          "--salt",
+          "lagging",
+          "--rpc-url",
+          lagging.url,
+          "--private-key",
+          RAW_KEY,
+          "--yes",
+        );
+        expect(run.stderr).not.toMatch(/the Pot is not there/);
+        expect(run.code).toBe(0);
+        expect(run.stdout).toMatch(/^cook 0x[0-9a-f]{64}: success/m);
+        expect(lagging.served()).toBeGreaterThanOrEqual(3);
+        expect(await ethereum.balanceOf(usdc, salted)).toBe(FUNDED - AMOUNT);
+
+        const before = lagging.served();
+        const deployed = jsonOf(
+          await sauce(
+            "pot",
+            "--deploy",
+            "--chain",
+            "ethereum",
+            "--salt",
+            "lagging-pot",
+            "--rpc-url",
+            lagging.url,
+            "--private-key",
+            RAW_KEY,
+          ),
+        );
+        expect(deployed).toMatchObject({ deployed: true });
+        // It asked past the stale answers, and only then said deployed.
+        expect(lagging.served() - before).toBeGreaterThanOrEqual(3);
+      } finally {
+        await lagging.stop();
+      }
+    }, 90_000);
+
     it("asks before deploying a missing Pot, and does only what the answer says", async () => {
       const salted = (label: string) => v12PredictPot(RAW_OWNER, potSalt(label)) as Address;
       for (const token of [usdc, usdt]) await ethereum.mint(token, salted("yes"), FUNDED);
@@ -501,36 +550,51 @@ describeEvm("sauce, sent to a chain", () => {
       expect(await ethereum.publicClient.getCode({ address: salted("unasked") })).toBeUndefined();
     }, 60_000);
 
-    it("takes the owner from the signer, and refuses an --owner that is someone else", async () => {
-      for (const argv of [
-        [
-          "run",
-          PAY,
-          "--owner",
-          OWNER.address,
-          ...defines(RECIPIENT),
-          "--rpc-url",
-          ethereum.rpcUrl,
-          ...KEYSTORE,
-        ],
-        [
-          "pot",
-          "--deploy",
-          "--owner",
-          OWNER.address,
-          "--chain",
-          "ethereum",
-          "--rpc-url",
-          ethereum.rpcUrl,
-          ...KEYSTORE,
-        ],
-      ]) {
-        const run = await sauce(...argv);
-        expect(run.code).toBe(2);
-        expect(run.stderr).toMatch(
-          new RegExp(`--owner ${OWNER.address} is not the signer, ${KEYSTORE_OWNER}`),
-        );
-      }
+    it("takes the owner from the signer, and refuses to cook on an --owner that is someone else", async () => {
+      const run = await sauce(
+        "run",
+        PAY,
+        "--owner",
+        OWNER.address,
+        ...defines(RECIPIENT),
+        "--rpc-url",
+        ethereum.rpcUrl,
+        ...KEYSTORE,
+      );
+      expect(run.code).toBe(2);
+      expect(run.stderr).toMatch(
+        new RegExp(`--owner ${OWNER.address} is not the signer, ${KEYSTORE_OWNER}`),
+      );
+    }, 60_000);
+
+    it("`sauce pot --deploy --owner` deploys another owner's Pot, which the signer pays for", async () => {
+      // How the Pot intents share is deployed: its owner is a Portal's Executor, which signs nothing.
+      const pot = v12PredictPot(OWNER.address, potSalt("deployed-for")) as Address;
+      // The flags in any order: the signer's before --deploy, the endpoint after it.
+      const run = await sauce(
+        "pot",
+        "--chain",
+        "ethereum",
+        "--owner",
+        OWNER.address,
+        ...KEYSTORE,
+        "--salt",
+        "deployed-for",
+        "--deploy",
+        "--rpc-url",
+        ethereum.rpcUrl,
+      );
+      const out = jsonOf(run);
+      expect(out).toMatchObject({
+        pot,
+        owner: OWNER.address,
+        sender: KEYSTORE_OWNER,
+        deployed: true,
+      });
+      expect(run.stderr).toContain(
+        `The Pot is ${OWNER.address}'s: ${KEYSTORE_OWNER} sent and paid for the deployment`,
+      );
+      expect(await potOwner(ethereum, pot)).toBe(OWNER.address);
     }, 60_000);
   });
 });
