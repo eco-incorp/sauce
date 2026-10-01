@@ -55,6 +55,8 @@ type Method =
 
 interface Body {
   readonly globals: Record<string, Entry>;
+  /** Compile-time parameters a program on this chain compiles with; a caller's `defines` win. */
+  readonly defines?: Record<string, string>;
 }
 
 export interface ExtensionsOptions {
@@ -63,6 +65,14 @@ export interface ExtensionsOptions {
   readonly tokens?: Readonly<Record<string, AddressInput>>;
   /** Compile a `typeFidelity: "widened"` descriptor's calls anyway (`accessors.allowWidenedSelectors`). */
   readonly allowWidenedSelectors?: boolean;
+  /**
+   * Hand each chain's scalar spellings — `chainId`, `CHAIN_ID` and the `<Protocol>_<Contract>`
+   * addresses — to its programs as defines as well, so a program's own `const` of the name gives
+   * way to the chain's value, as it did to `openRoute`'s chain-scoped values
+   * (`ambient.ts#chainDefines`). A program literal compiles with its own chain's. Off, they are only
+   * names, which lose to any declaration. Default `false`.
+   */
+  readonly chainDefines?: boolean;
 }
 
 /** `"uniswap-v3"` -> `"UniswapV3"`: how a slug is spelled as a name — `builder.ts#pascalOfSlug`'s
@@ -204,8 +214,11 @@ function body(
   const globals: Record<string, Entry> = {};
   const evm = chain.kind === "evm";
 
-  globals.chainId = { kind: "const", value: word(BigInt(chain.id)) };
-  globals.CHAIN_ID = { kind: "const", value: word(BigInt(chain.id)) };
+  // The scalar spellings `ambient.ts#chainDefines` gives a chain beside its token symbols.
+  const scalars: Record<string, string> = {
+    chainId: word(BigInt(chain.id)),
+    CHAIN_ID: word(BigInt(chain.id)),
+  };
   globals.available = { kind: "intrinsic", name: "available" };
   globals.self = { kind: "context", read: "self" };
   globals.Token = evm
@@ -254,10 +267,7 @@ function body(
           };
       const address = descriptor.perChainAddress[chain.id];
       if (evm && address !== undefined) {
-        globals[`${pascalOfSlug(slug)}_${descriptor.contract}`] = {
-          kind: "const",
-          value: word(address),
-        };
+        scalars[`${pascalOfSlug(slug)}_${descriptor.contract}`] = word(address);
       }
     }
     const callable = descriptors.filter((d) => d.kind === "singleton");
@@ -300,8 +310,9 @@ function body(
     }
     globals[key] = { kind: "namespace", members };
   }
+  for (const [name, value] of Object.entries(scalars)) globals[name] = { kind: "const", value };
 
-  return { globals };
+  return options.chainDefines ? { globals, defines: scalars } : { globals };
 }
 
 /** The serialized body of every chain, by chain id, for one set of caller token overrides. */
@@ -309,7 +320,12 @@ const bodies = new Map<string, string>();
 function bodyText(chain: CanonicalChain, options: ExtensionsOptions, current: boolean): string {
   // Overrides apply to the chain being compiled for only: a caller's `USDC` is that chain's USDC.
   const overrides = current ? options.tokens : undefined;
-  const key = JSON.stringify([chain.id, overrides ?? null, options.allowWidenedSelectors ?? false]);
+  const key = JSON.stringify([
+    chain.id,
+    overrides ?? null,
+    options.allowWidenedSelectors ?? false,
+    options.chainDefines ?? false,
+  ]);
   let text = bodies.get(key);
   if (text === undefined) {
     text = JSON.stringify(body(chain, resolveTokenMap(chain, overrides), options));
@@ -319,10 +335,15 @@ function bodyText(chain: CanonicalChain, options: ExtensionsOptions, current: bo
 }
 
 /** The path a chain's body is served at, for the given options. */
-const bodyPath = (chain: CanonicalChain, current: boolean, options: ExtensionsOptions): string =>
-  current && (options.tokens !== undefined || options.allowWidenedSelectors)
-    ? `${ROOT}/chains/${chain.slug}.current.json`
-    : `${ROOT}/chains/${chain.slug}${options.allowWidenedSelectors ? ".widened" : ""}.json`;
+const bodyPath = (chain: CanonicalChain, current: boolean, options: ExtensionsOptions): string => {
+  const variant =
+    current && (options.tokens !== undefined || options.allowWidenedSelectors)
+      ? ".current"
+      : options.allowWidenedSelectors
+        ? ".widened"
+        : "";
+  return `${ROOT}/chains/${chain.slug}${variant}${options.chainDefines ? ".defines" : ""}.json`;
+};
 
 /**
  * A `resolve` for the manifest of a compile for `current`: the document at {@link EXTENSIONS_PATH},

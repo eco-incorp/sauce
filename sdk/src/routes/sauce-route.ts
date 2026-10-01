@@ -551,18 +551,17 @@ function compileForChain(
   });
   source = sugar.source;
   if (scope.native ?? nativePipeline) {
-    // The chain's scalar spellings stay defines: a program may declare `const UniswapV3_Factory =
-    // 0n;` as the default a chain overrides, which a manifest name — losing to every declaration —
-    // could not do. Token symbols are not among them: a define has no type, and a symbol's methods
-    // are its type's.
-    const symbols = resolveTokenMap(chain, options.tokens);
-    const chainScalars = Object.fromEntries(
-      Object.entries(scope.chainDefines?.(chain) ?? {}).filter(([name]) => !symbols.has(name)),
+    // A scope's chain-scoped values are the manifest's chain defines: a program may declare `const
+    // UniswapV3_Factory = 0n;` as the default a chain overrides, which a manifest name — losing to
+    // every declaration — could not do. Token symbols are not among them: a define has no type, and
+    // a symbol's methods are its type's.
+    const native = compileNatively(
+      chain,
+      source,
+      target,
+      options,
+      scope.chainDefines !== undefined,
     );
-    const native = compileNatively(chain, source, target, {
-      ...options,
-      defines: { ...chainScalars, ...options.defines },
-    });
     return { ...native, chain, source, intents: sugar.intents };
   }
   let contracts: ContractsConfig | undefined = options.contracts;
@@ -681,13 +680,15 @@ function compileForChain(
  * The native half of {@link compileForChain}: the program as written — after the intent sugar,
  * which still lowers as text — compiled with the extensions manifest for `chain`. The compiler gives
  * it the chain's tokens, protocols, `chainId`, `Token`, `self` and `available` itself, so no define
- * carries a chain-scoped name and no rewrite runs; `defines` is exactly the caller's.
+ * carries a chain-scoped name and no rewrite runs; `defines` is exactly the caller's. With
+ * `chainDefines`, the chain's scalar spellings are its manifest defines as well (`extensions.ts`).
  */
 function compileNatively(
   chain: CanonicalChain,
   source: string,
   target: CompileTarget,
   options: SauceCompileOptions,
+  chainDefines: boolean,
 ): {
   readonly compiled: CompileResult;
   readonly entryEncoding: "abi-v1" | "compact-v1";
@@ -707,6 +708,7 @@ function compileNatively(
       chain,
       tokens: options.tokens,
       allowWidenedSelectors: accessors.allowWidenedSelectors,
+      chainDefines,
     },
   });
   if (compiled.bytecode.length === 0) {

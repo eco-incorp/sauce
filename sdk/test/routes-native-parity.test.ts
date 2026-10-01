@@ -196,6 +196,10 @@ const SHAPES: readonly (readonly [string, string])[] = [
     "function main(v: Address, a: Address): Uint256 { return Erc4626.Vault.at(v).balanceOf(a); }",
   ],
   ["an underscore spelling", "function main(): Uint256 { return UniswapV3_Factory; }"],
+  [
+    "a default the chain overrides",
+    "const UniswapV3_Factory = 0n;\nfunction main(): Uint256 { return UniswapV3_Factory + chainId; }",
+  ],
   ["chainId", "function main(): Uint256 { return chainId + CHAIN_ID; }"],
   [
     "available, decided true",
