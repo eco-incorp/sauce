@@ -35,8 +35,8 @@ import {
   type FlagSpecs,
   type ParsedArgs,
 } from "./args.js";
+import { mainSignature } from "../routes/entry.js";
 import { blankLiterals } from "../routes/rs-compile.js";
-import { wrapSauceBody } from "../routes/sauce-route.js";
 import { chainServedBy, endpointFor } from "./chain.js";
 import {
   compileCommand,
@@ -436,7 +436,7 @@ function chainOf(
  * define of the same name — which replaces a MODULE-level const — would be silently ignored.
  */
 function definesReach(file: string, text: string, names: readonly string[]): void {
-  if (wrapSauceBody(text) === text) return;
+  if (mainSignature(text) !== undefined) return;
   const code = blankLiterals(text);
   for (const name of names) {
     if (new RegExp(`(^|[^.\\w$])(?:const|let)\\s+${name.replace(/\$/g, "\\$")}\\b`).test(code)) {

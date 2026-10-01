@@ -1142,6 +1142,9 @@
       },
       "UniswapV4UniversalRouterABI": {
         "roles": ["universalRouter"]
+      },
+      "UniswapV4StateViewABI": {
+        "roles": ["stateView"]
       }
     },
     "unitflow-v3": {

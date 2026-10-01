@@ -99,10 +99,10 @@ describe("chain accessors: the names resolve through an import, and only through
         creator: "0x3333333333333333333333333333333333333333" as const,
         prover: "0x4444444444444444444444444444444444444444" as const,
       };
-      const viaCall = Base("return 1n;", opts);
+      const viaCall = Base("function main() { return 1n; }", opts);
       const built = viaCall.reward(0n);
       const intent: unknown = built.intent;
-      const viaRoute = Base.route("return 1n;", opts);
+      const viaRoute = Base.route("function main() { return 1n; }", opts);
       const built2 = viaRoute.reward(0n);
       // type-level pin: .route carries EXACTLY the call signature's own interface.
       const _pin: (typeof Base)["route"] = Base;
@@ -145,6 +145,79 @@ describe("chain accessors: the names resolve through an import, and only through
       export {};
     `);
     expect(diagnostics.some((d) => d.code === 2339)).toBe(true); // TS2339: Property does not exist
+  });
+
+  // --- every registry protocol, typed from its ABI ---
+
+  it("a formerly unlinked namespace is typed from its ABI: arguments, and what read() resolves to", () => {
+    const diagnostics = typecheckProbe(`
+      import { Base, Unichain } from ${ROOT};
+      // Any viem client; the probe has no viem of its own to import the type from.
+      const client = undefined as never;
+      export async function probe() {
+        const pool: \`0x\${string}\` = await Base.PancakeswapV3.Factory
+          .getPool(Base.USDC.address, Base.WETH.address, 500)
+          .read(client);
+        const [sqrtPriceX96, tick, protocolFee, lpFee] = await Unichain.UniswapV4.StateView
+          .getSlot0("0x0000000000000000000000000000000000000000000000000000000000001234")
+          .read(client);
+        const total: bigint = sqrtPriceX96;
+        const fees: number = tick + protocolFee + lpFee;
+        const slot: \`0x\${string}\` = await Base.UniswapV4.PoolManager.extsload("0x00").read(client);
+        const hash: \`0x\${string}\` = await Base.UniswapV3.SwapRouter02.exactInputSingle({
+          tokenIn: Base.USDC.address,
+          tokenOut: Base.WETH.address,
+          fee: 500,
+          recipient: Base.USDC.address,
+          amountIn: 1n,
+          amountOutMinimum: 0n,
+          sqrtPriceLimitX96: 0n,
+        }).write(client);
+        const shares = Base.Erc4626.Vault.at(Base.USDC.address).deposit(1n, Base.USDC.address);
+        return [pool, total, fees, slot, hash, shares.data] as const;
+      }
+    `);
+    expect(diagnostics.map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"))).toEqual(
+      [],
+    );
+  });
+
+  it("negative control: wrong argument types, a view's write, and an unbound interface are type errors", () => {
+    const diagnostics = typecheckProbe(`
+      import { Base } from ${ROOT};
+      const client = undefined as never;
+      export function probe() {
+        Base.PancakeswapV3.Factory.getPool(Base.USDC.address, Base.WETH.address, "500");
+        Base.PancakeswapV3.Factory.getPool(Base.USDC.address, Base.WETH.address, 500).write(client);
+        Base.Erc4626.Vault.deposit(1n, Base.USDC.address);
+        Base.AaveV3.PoolAddressesProvider.getPool();
+      }
+    `);
+    expect(diagnostics).toHaveLength(4);
+  });
+
+  // --- the chain's registry tokens ---
+
+  it("Base.USDC is typed { address, decimals, symbol, chain }", () => {
+    const diagnostics = typecheckProbe(`
+      import { Base, Arc } from ${ROOT};
+      const address: \`0x\${string}\` = Base.USDC.address;
+      const decimals: number = Base.WETH.decimals;
+      const symbol: string = Arc.EURC.symbol;
+      const id: number = Base.USDC.chain.id;
+      export {};
+    `);
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it("negative control: a token the chain has no registry row for is a type error (TS2339)", () => {
+    const diagnostics = typecheckProbe(`
+      import { Base, Celo } from ${ROOT};
+      const usdt: unknown = Base.USDT;
+      const usdc: unknown = Celo.USDC;
+      export {};
+    `);
+    expect(diagnostics.filter((d) => d.code === 2339)).toHaveLength(2);
   });
 
   // --- the universal Token export ---
@@ -240,11 +313,8 @@ describe("chain accessors: the names resolve through an import, and only through
       const x: unknown = Base.UniswapV4.UniversalRouter.exactIn;
       export {};
     `);
-    expect(diagnostics).toHaveLength(0);
-    // UniversalRouter's method surface is typed loosely (unknown), so
-    // .exactIn is not a TS2339 -- calling it is a RUNTIME undefined, per
-    // accessors.ts's own doc comment. Confirm the property access itself at
-    // least resolves against the real, narrowed contract-name union first.
+    // The method surface is typed from the ABI, so a name it lacks is TS2339, not `unknown`.
+    expect(diagnostics.some((d) => d.code === 2339)).toBe(true);
     const namespaceDiagnostics = typecheckProbe(`
       import { Base } from ${ROOT};
       const x: unknown = Base.UniswapV4.NotARealContract;

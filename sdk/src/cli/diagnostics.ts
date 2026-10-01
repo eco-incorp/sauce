@@ -1,14 +1,12 @@
 /**
  * A compile failure, reported against the file the developer wrote.
  *
- * The compiler never sees that file. It sees the program after the SDK's passes — a bare body
- * wrapped in `main`, token and protocol syntax lowered, `@sauce/token` imports prepended — under
- * the entry name `main.js`. So its `--> main.js:5:15` names a line of a text nobody has open. This
+ * The compiler never sees that file. It sees the program after the SDK's passes — token, protocol
+ * and intent syntax lowered, `@sauce/token` imports prepended — under the entry name `main.js`. So its `--> main.js:5:15` names a line of a text nobody has open. This
  * maps each location back to the file where the line it quotes is still that file's own line, and
  * says so plainly where the SDK rewrote the line itself.
  */
 import type { CanonicalChain } from "../chains/canonical.js";
-import { wrapSauceBody } from "../routes/sauce-route.js";
 import { knownTokenSymbols } from "../routes/token-registry.js";
 
 /** The entry name `rs-compile.ts` compiles every route program under. */
@@ -33,19 +31,16 @@ export function describeCompileError(
 }
 
 /**
- * The SDK's rewrites parse the program as JavaScript first, and that parse reports
- * `Unexpected token (3:10)` against the wrapped program. Only the wrapper moves lines before that
- * parse, so the file's own position is one line up exactly when the file is a bare body.
+ * The SDK's rewrites parse the program before the compiler does, and that parse reports
+ * `Unexpected token (3:10)` against the file as written: its own line and column.
  */
 function syntaxError(
   message: string,
-  wrappedLine: number,
+  line: number,
   column: number,
   file: string,
   text: string,
 ): string {
-  const wrapped = wrapSauceBody(text) !== text;
-  const line = wrapped ? wrappedLine - 1 : wrappedLine;
   const quoted = text.split(/\r?\n/)[line - 1];
   const reason = message.replace(/\s*\(\d+:\d+\)$/, "");
   const gutter = " ".repeat(String(line).length);
@@ -59,12 +54,6 @@ function syntaxError(
           `${line} | ${quoted}`,
           `${gutter} | ${" ".repeat(column)}^`,
         ];
-  // The one syntax error the wrapper itself causes: an import in a bare body ends up inside `main`.
-  if (wrapped && /'import' and 'export' may only appear at the top level/.test(reason)) {
-    report.push(
-      "hint: a file that imports must declare function main() rather than be a bare body",
-    );
-  }
 
   return report.join("\n");
 }
@@ -120,9 +109,9 @@ function relocate(message: string, file: string, text: string): string {
   }
   if (unmapped) {
     lines.push(
-      `note: ${ENTRY} is ${file} as the SDK rewrote it (a bare body wrapped in main, token, ` +
-        "protocol and intent syntax lowered, imports added), and the line above is one of those " +
-        "rewrites rather than a line of the file.",
+      `note: ${ENTRY} is ${file} as the SDK rewrote it (token, protocol and intent syntax ` +
+        "lowered, imports added), and the line above is one of those rewrites rather than a line " +
+        "of the file.",
     );
   }
 

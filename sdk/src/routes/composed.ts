@@ -1,8 +1,8 @@
 /**
  * The composed chain accessor -- `Base` as the SDK hands it out: a callable
  * forwarding to `origin.route`, plus `.chain`/`.route`, the lazy contract
- * namespace tree (`Uniswap`, `UniswapV4`, ...) and, for an `svm`-kind chain,
- * the svm venue accessor tree.
+ * namespace tree (`Uniswap`, `UniswapV4`, ...), the chain's registry tokens
+ * (`Base.USDC`) and, for an `svm`-kind chain, the svm venue accessor tree.
  *
  * One shape, two delivery paths: the generated NAMED EXPORTS
  * (`./chain-exports.generated.ts`, what `import { Base }` resolves) and the
@@ -21,6 +21,9 @@ import { chainContracts } from "../descriptors/accessors.js";
 // (`Solana.RaydiumCpSwap.swap(...)`) onto an `svm`-kind chain only --
 // see composeChainGlobal's `origin.chain.kind === "svm"` branch below.
 import { venues as svmVenueAccessors } from "../svm/accessors.js";
+// The chain's registry tokens (`Base.USDC` -> `{ address, decimals, symbol, chain }`), the rows a
+// compiled program's `USDC` resolves to on the same chain.
+import { registryTokens } from "./token-registry.js";
 
 /** What `chainAccessors[name]` is, in the shape this module consumes it. */
 type ChainOrigin = Record<string, unknown> & { chain: CanonicalChain; route: unknown };
@@ -44,15 +47,17 @@ const FUNCTION_INTRINSIC_DENYLIST: ReadonlySet<string> = new Set([
 /**
  * Composes one chain accessor: a FRESH callable forwarding to `origin.route`
  * (so it stays CALLABLE — a plain object would silently drop that), plus
- * `chain`/`route` and the lazy contract-namespace tree (`Uniswap`,
- * `UniswapV4`, ...) and, for an `svm`-kind chain only, the svm venue
- * accessor tree (`RaydiumCpSwap`, `MeteoraDammV2`, ...) — copied via
+ * `chain`/`route`, the lazy contract-namespace tree (`Uniswap`,
+ * `UniswapV4`, ...), the chain's registry tokens (`USDC`, ...) and, for an
+ * `svm`-kind chain only, the svm venue accessor tree (`RaydiumCpSwap`,
+ * `MeteoraDammV2`, ...) — copied via
  * `Object.getOwnPropertyDescriptors` (NOT spread) so every namespace's
  * memoising GETTERS stay lazy — spread would invoke every one of them
  * eagerly at composition time. `origin` itself is never mutated: this returns
- * a fresh function object. Throws on a name collision (e.g. a future protocol
- * or venue slug literally named "route", "chain", or a function intrinsic
- * like "call"/"bind"), mirroring `createChainGlobals`'s own duplicate-key
+ * a fresh function object. Throws on a name collision — a protocol, family,
+ * token or venue name literally "route", "chain" or a function intrinsic like
+ * "call"/"bind", or two of them sharing a name (a token symbol that is also a
+ * protocol namespace) — mirroring `createChainGlobals`'s own duplicate-key
  * throw. The `kind === "svm"` gate is registry-derived (from
  * `../chains/canonical.js`'s own `CanonicalChain.kind`), not a hardcoded
  * chain name -- a second SVM chain added to `CANONICAL_CHAINS` gets the
@@ -60,7 +65,15 @@ const FUNCTION_INTRINSIC_DENYLIST: ReadonlySet<string> = new Set([
  */
 function composeChainGlobal(name: string, origin: ChainOrigin): object {
   const contracts = chainContracts(origin.chain) as unknown as Record<string, unknown>;
-  const sources: PropertyDescriptorMap[] = [Object.getOwnPropertyDescriptors(contracts)];
+  const sources: PropertyDescriptorMap[] = [
+    Object.getOwnPropertyDescriptors(contracts),
+    Object.fromEntries(
+      Object.entries(registryTokens(origin.chain)).map(([symbol, token]) => [
+        symbol,
+        { value: token, enumerable: true, configurable: false, writable: false },
+      ]),
+    ),
+  ];
   if (origin.chain.kind === "svm") {
     const svmVenues = svmVenueAccessors() as unknown as Record<string, unknown>;
     sources.push(Object.getOwnPropertyDescriptors(svmVenues));
@@ -76,7 +89,8 @@ function composeChainGlobal(name: string, origin: ChainOrigin): object {
     for (const key of Object.keys(source)) {
       if (key in merged || FUNCTION_INTRINSIC_DENYLIST.has(key)) {
         throw new Error(
-          `routes/composed: contract namespace '${key}' collides with the eco-routes accessor on '${name}'`,
+          `routes/composed: '${key}' collides with another name on the '${name}' accessor ` +
+            "(its route, chain, a function intrinsic, or a protocol, token or venue of the same name)",
         );
       }
     }

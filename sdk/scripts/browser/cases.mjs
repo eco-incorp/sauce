@@ -24,7 +24,7 @@ export function beforeReady() {
   const attempts = {
     compile: () =>
       compile({ target: "evm", resolve: () => utf8("function main(): Uint256 { return 1n; }") }),
-    route: () => routes.compileSauceRoute("base", "return 1n;", EXECUTION),
+    route: () => routes.compileSauceRoute("base", "function main() { return 1n; }", EXECUTION),
   };
 
   return Object.fromEntries(

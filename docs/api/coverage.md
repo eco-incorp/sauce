@@ -4,62 +4,53 @@ The SDK carries several registries, and they answer different questions. "Is thi
 catalog?" is not "can I call it by name in a program?", and neither is "is it deployed on my chain?".
 Each of the three can be true without the others.
 
-| Registry                         | Current scope                                                                     | Inspect it                                                             |
-| -------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Protocol catalog                 | 135 protocols with metadata, deployments, ABI fragments, and program templates    | `listProtocols()`, `getProtocol(slug)`, `getProtocolsByChain(id)`      |
-| Contract descriptors             | 30 descriptors across 16 protocol/interface namespaces                            | `contracts.listDescriptors()`, `contracts.listContracts(slug)`         |
-| Compiled-source protocol globals | 26 singleton contract leaves across 14 protocol namespaces, plus 5 family aliases | TypeScript completion after importing `@eco-incorp/sauce`; names below |
-| Token symbols                    | 7 symbols distributed across 7 EVM chains                                         | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
-| Canonical chain identities       | 41 chains: 40 EVM and Solana                                                      | `CANONICAL_CHAINS`, `requireChain(ref)`                                |
-| EVM chain metadata               | 34 records with native-currency and explorer information                          | `chains`, `getChain(id)`, `getAllChainIds()`                           |
+| Registry                         | Current scope                                                                  | Inspect it                                                             |
+| -------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| Protocol catalog                 | 135 protocols with metadata, deployments, ABI fragments, and program templates | `listProtocols()`, `getProtocol(slug)`, `getProtocolsByChain(id)`      |
+| Contract descriptors             | 300 descriptors across 135 protocol namespaces                                 | `contracts.listDescriptors()`, `contracts.listContracts(slug)`         |
+| Compiled-source protocol globals | The same 135 protocol namespaces, plus 13 family aliases                       | TypeScript completion after importing `@eco-incorp/sauce`; names below |
+| Token symbols                    | 7 symbols distributed across 7 EVM chains                                      | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
+| Canonical chain identities       | 41 chains: 40 EVM and Solana                                                   | `CANONICAL_CHAINS`, `requireChain(ref)`                                |
+| EVM chain metadata               | 34 records with native-currency and explorer information                       | `chains`, `getChain(id)`, `getAllChainIds()`                           |
 
-The descriptor registry is the one that makes a name callable: it ties a contract name to an ABI and
-an address role. `contracts.listDescriptors()` lists them. These associations are curated rather than
-derived, which is why the catalog is much larger.
+Every catalog protocol is a namespace, in a program and in TypeScript: the descriptor registry is
+generated from the same binding of addresses to ABIs that the registry's ABI evidence is checked
+against, so a contract is exposed exactly as it is evidenced. `contracts.listDescriptors()` lists
+them and `contracts.listContracts(slug)` one protocol's.
 
-## Protocol globals
+## Protocol namespaces
 
-These names are available inside compiled EVM route bodies. Availability on the destination chain
-is checked during compilation. The declarations describe the vendored ABI surface, which is a
-subset of each protocol's complete API.
+A namespace is its protocol's slug in PascalCase, and every one has a contract per registered
+deployment role, plus its interfaces. The [contracts reference](contracts.md) has the naming rules
+and both surfaces.
 
-| Namespace       | Contract leaves                                                                   |
-| --------------- | --------------------------------------------------------------------------------- |
-| `UniswapV2`     | `Factory`, `Router`                                                               |
-| `UniswapV3`     | `Factory`, `SwapRouter`, `SwapRouter02`, `QuoterV2`, `NonfungiblePositionManager` |
-| `UniswapV4`     | `PoolManager`, `UniversalRouter`, `PositionManager`                               |
-| `SushiswapV2`   | `Factory`, `Router`                                                               |
-| `PancakeswapV2` | `Factory`, `Router`                                                               |
-| `Aerodrome`     | `Router`, `PoolFactory`                                                           |
-| `Cctp`          | `TokenMessenger`                                                                  |
-| `AaveV3`        | `Pool`                                                                            |
-| `AaveV2`        | `LendingPool`                                                                     |
-| `Permit2`       | `Permit2`                                                                         |
-| `Oneinch`       | `AggregationRouterV6`                                                             |
-| `Pendle`        | `Router`                                                                          |
-| `MorphoBlue`    | `Morpho`                                                                          |
-| `CompoundV3`    | `CometUSDC`, `CometWETH`, `CometUSDT`                                             |
+| Contract kind     | Count | What it is                                                                    |
+| ----------------- | ----- | ----------------------------------------------------------------------------- |
+| Deployed contract | 222   | An address per chain and a verified ABI: callable, and its address as a value |
+| Address only      | 55    | An address per chain with no verified ABI: usable as an address, no methods   |
+| Interface         | 23    | An ABI with no fixed address: called through `.at(address)`                   |
 
-Every descriptor declares its contract's deployed ABI types, so its selectors are the deployed
-ones. `compile.accessors.allowWidenedSelectors` is still accepted, and no shipped descriptor needs
-it.
+A name existing does not mean the contract is deployed on your chain: `available(...)` in a program
+and `.available` in TypeScript answer that, and naming an absent contract fails at compile or call
+construction, listing the chains that have it.
 
-Family aliases are `Uniswap`, `Sushiswap`, `Pancakeswap`, `Aave`, and `Compound`. A family exposes
-a contract only when exactly one member owns its name. Consequently:
+Family aliases are `Aave`, `Balancer`, `Compound`, `Euler`, `Gmx`, `Liquity`, `Pancakeswap`,
+`Sushiswap`, `Synthetix`, `Synthra`, `Uniswap`, `Unitflow` and `Yearn`. A family exposes a contract
+only when exactly one member owns its name. Consequently:
 
 - `Uniswap.UniversalRouter` resolves to `UniswapV4.UniversalRouter`.
-- `Uniswap.Factory` is ambiguous; use a versioned namespace.
+- `Uniswap.Factory` and `Pancakeswap.Factory` are ambiguous; use a versioned namespace.
 - `UniswapV3.UniversalRouter` is absent from this registry.
 - A family always requires a contract name, even when it has one protocol member.
 
-A protocol with exactly one callable contract also supports a shortcut such as
-`Cctp.depositForBurn(...)` or `AaveV3.supply(...)`. See
-[protocols and tokens](../guides/protocols-and-tokens.md) for argument conventions and examples.
+A protocol with exactly one deployed contract also supports a shortcut in programs, such as
+`Cctp.depositForBurn(...)` or `AaveV3.supply(...)`.
 
-The four remaining descriptors are available for host-side discovery: `AaveV3.PoolAddressesProvider`
-and `MorphoBlue.Bundler3` have addresses but no vendored ABI; `Erc20.ERC20` and
-`Erc4626.ERC4626Vault` are unbound interfaces. They are excluded from source globals. Use
-`Token(address)` for route-body ERC-20 calls or supply a contract ABI directly to the compiler.
+Every registry ABI declares its contract's deployed types, so its selectors are the deployed ones,
+and is a subset of the contract's complete API. A `coverage.caveats` entry records a deployment the
+evidence shows differs from its ABI — a bridged token without the L1 token's functions, a function
+whose selector is checked but whose source is not verified. `compile.accessors.allowWidenedSelectors`
+is still accepted, and no shipped descriptor needs it.
 
 ## Tokens
 
@@ -149,10 +140,9 @@ const resolved = contracts.describeContract("base", "uniswap-v4", "UniversalRout
 const onBase = contracts.contractsOnChain("base");
 ```
 
-Host accessors such as `Base.Uniswap.UniversalRouter` and `contracts.on(...)` build inert
-`ContractCall` objects when their methods are invoked. Those methods are typed `unknown` — their
-signatures come from an ABI the type system never sees — so narrow one before calling it. The bare
-protocol names _inside_ a compiled program are different: those do have generated ABI method types.
+Host accessors such as `Base.Uniswap.UniversalRouter` and `contracts.on(...)` build `ContractCall`
+objects when their methods are invoked, typed from the contract's ABI, and run them against a viem
+client you pass; see the [contracts reference](contracts.md).
 
 Use `requireChain` for route identities. `getChain` is a separate metadata lookup with
 native-currency and explorer details, and it covers fewer chains: Unichain, Monad, Sonic, Ronin,

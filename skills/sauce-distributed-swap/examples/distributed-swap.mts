@@ -1,18 +1,15 @@
-// Compiles distributed-swap.sauce.ts for Base and Arbitrum the way `sauce compile` does, with the
-// registry's PancakeSwap V3 and Slipstream factories as the `--define`s a run passes, and builds the
-// cook `sauce tx` would print for selling 1 WETH down to 1,500 USDC per WETH. Asserts what can be
-// checked offline; sends nothing.
+// Compiles distributed-swap.sauce.ts for Base, Arbitrum and Optimism the way `sauce compile` does
+// (each venue where the chain has it), and builds the cook `sauce tx` would print for selling 1 WETH
+// down to 1,500 USDC per WETH. Asserts what can be checked offline; sends nothing.
 //
 //   node distributed-swap.mts --owner <Pot owner> --recipient <address>
 import { readFileSync } from "node:fs";
 
-import { routes, v12PredictPot } from "@eco-incorp/sauce";
+import { contracts, routes, v12PredictPot } from "@eco-incorp/sauce";
 import { resolveSdkModule } from "@eco-incorp/sauce/compiler";
 import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
 import { v12Pot } from "@eco-incorp/sauce/evm/engine";
-import * as slipstream from "@eco-incorp/sauce/protocols/aerodrome-slipstream";
-import * as pancakeV3 from "@eco-incorp/sauce/protocols/pancakeswap-v3";
-import { bytesToHex, concatHex, getAddress, toFunctionSelector, toHex } from "viem";
+import { bytesToHex, concatHex, getAddress, toFunctionSelector } from "viem";
 
 type Address = `0x${string}`;
 function address(name: string): Address {
@@ -52,15 +49,10 @@ for (const callback of ["uniswapV3SwapCallback", "pancakeV3SwapCallback", "unloc
   );
 }
 
-// The two price reads the program makes by selector: a V3-style pool's slot0(), and the
-// PoolManager's extsload(bytes32) of a V4 pool's state (not in the served PoolManager ABI).
-for (const [signature, selector] of [
-  ["slot0()", "3850c7bd"],
-  ["extsload(bytes32)", "1e2eaeaf"],
-] as const) {
-  check(toFunctionSelector(signature) === `0x${selector}`, `${signature} is 0x${selector}`);
-  check(source.includes(`hex\`${selector}\``), `the program reads ${signature}`);
-}
+// The one read the program makes by selector: a V3-style pool's slot0(). A V4 pool's price comes
+// from the chain's StateView, by name.
+check(toFunctionSelector("slot0()") === "0x3850c7bd", "slot0() is 0x3850c7bd");
+check(source.includes("hex`3850c7bd`"), "the program reads slot0()");
 
 // floor(sqrt(token1 units / token0 units) * 2^96) for a price in whole tokens, token0 the lower
 // address.
@@ -78,31 +70,44 @@ function sqrtPriceX96(
   return x;
 }
 
-for (const slug of ["base", "arbitrum"]) {
+// Each chain's venues, as `available(...)` decides them: Base has all six, Arbitrum no Slipstream,
+// Optimism no PancakeSwap V3 either.
+const VENUES = {
+  base: ["UniswapV3.Factory", "PancakeswapV3.Factory", "AerodromeSlipstream.CLFactory"],
+  arbitrum: ["UniswapV3.Factory", "PancakeswapV3.Factory"],
+  optimism: ["UniswapV3.Factory"],
+} as const;
+const ALL = [
+  "UniswapV3.Factory",
+  "PancakeswapV3.Factory",
+  "AerodromeSlipstream.CLFactory",
+  "AerodromeSlipstream.CLFactoryGaugeCaps",
+  "AerodromeSlipstream.CLFactoryGaugesV3",
+  "UniswapV4.StateView",
+  "UniswapV4.PoolManager",
+];
+for (const [slug, expected] of Object.entries(VENUES)) {
   const chain = routes.chain(slug).chain;
-  // The venue factories the chain does not set, from the registry: what `--define` passes.
-  const pancake = pancakeV3.deployments.find((d) => d.chainId === chain.id)?.addresses ?? {};
-  const slip: Record<string, string | undefined> =
-    slipstream.deployments.find((d) => d.chainId === chain.id)?.addresses ?? {};
-  const venues: Record<string, bigint> = {};
-  if (pancake.factory) venues.PANCAKE_V3_FACTORY = BigInt(pancake.factory);
-  if (slip.clFactory) venues.SLIPSTREAM_INITIAL = BigInt(slip.clFactory);
-  if (slip.clFactoryGaugeCaps) venues.SLIPSTREAM_GAUGE_CAPS = BigInt(slip.clFactoryGaugeCaps);
-  if (slip.clFactoryGaugesV3) venues.SLIPSTREAM_GAUGES_V3 = BigInt(slip.clFactoryGaugesV3);
-
-  const program = routes.compileSauceProgram(slug, source, { defines: venues });
-  check((program.source.match(/\.swapV3\(/g) ?? []).length === 1, "one swapV3 call site");
-  check((program.source.match(/\.swapV4\(/g) ?? []).length === 1, "one swapV4 call site");
+  const program = routes.compileSauceProgram(slug, source);
   check(/__sauce_transfer\(tokenOut,/.test(program.source), "the payout is a SafeERC20 transfer");
   check(/__sauce_transfer\(tokenIn,/.test(program.source), "the refund is a SafeERC20 transfer");
-  // The chain sets the Uniswap venues itself, so the program carries their addresses.
+  // The program carries the address of exactly the venues the chain has.
   const bytecode = bytesToHex(program.bytecode).toLowerCase();
-  const defines = routes.chainDefines(chain);
-  for (const venue of ["UniswapV3_Factory", "UniswapV4_PoolManager"]) {
-    const at = defines[venue];
-    check(typeof at === "bigint", `${slug} has ${venue}`);
-    check(bytecode.includes(toHex(at, { size: 20 }).slice(2)), `the program uses ${venue}`);
+  const on = contracts.on(slug) as unknown as Record<
+    string,
+    Record<string, { available: boolean; address?: string }>
+  >;
+  const used: string[] = [];
+  for (const name of ALL) {
+    const [ns, member] = name.split(".") as [string, string];
+    const contract = on[ns]?.[member];
+    const carried =
+      contract?.available === true && bytecode.includes(contract.address!.toLowerCase().slice(2));
+    check(carried === (contract?.available === true), `${slug}: ${name} is used where it exists`);
+    if (carried) used.push(name);
   }
+  for (const name of expected) check(used.includes(name), `${slug} has ${name}`);
+  check(used.includes("UniswapV4.StateView"), `${slug} reads Uniswap V4 through its StateView`);
 
   // Sell 1 WETH for USDC down to 1,500 USDC per WETH.
   const wethInfo = routes.TOKEN_REGISTRY[chain.id]!.find((t) => t.symbol === "WETH")!;
@@ -111,7 +116,10 @@ for (const slug of ["base", "arbitrum"]) {
   const limit = sqrtPriceX96(1500n, usdcInfo, wethInfo, wethIsToken0);
   const minAvgPrice =
     (1500n * 10n ** BigInt(usdcInfo.decimals) * 10n ** 18n) / 10n ** BigInt(wethInfo.decimals);
-  check(wethIsToken0 && limit === 3068493539683605256287027n, "WETH is token0; the limit quoted");
+  // The skill quotes Base's and Arbitrum's limit, where WETH is token0 (on Optimism it is token1,
+  // and the limit is the ceiling above the price instead).
+  check(wethIsToken0 === (slug !== "optimism"), `WETH is token${wethIsToken0 ? 0 : 1} on ${slug}`);
+  if (wethIsToken0) check(limit === 3068493539683605256287027n, "the limit the skill quotes");
   check(minAvgPrice === 1_500_000_000n, "the average-price floor the skill quotes");
 
   // main's arguments, encoded as `--args` encodes them, appended to the program; then the cook the
@@ -135,7 +143,7 @@ for (const slug of ["base", "arbitrum"]) {
     "the arguments decode back to what was encoded",
   );
   console.log(
-    `${slug}: ${program.bytecode.length} bytes, venues UniswapV3_Factory, UniswapV4_PoolManager, ` +
-      `${Object.keys(venues).join(", ")}; cook to ${pot}, ${(data.length - 2) / 2} bytes of calldata`,
+    `${slug}: ${program.bytecode.length} bytes, venues ${used.join(", ")}; cook to ${pot}, ` +
+      `${(data.length - 2) / 2} bytes of calldata`,
   );
 }

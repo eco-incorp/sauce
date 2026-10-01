@@ -33,7 +33,7 @@ function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
 }
 
 function childWithReward(destination: string, source = "base", deadline = 2000n) {
-  return openRoute(destination, "return 1n;", {
+  return openRoute(destination, "function main() { return 1n; }", {
     pot: POT,
     engine: ENGINE,
     deadline,
@@ -69,7 +69,7 @@ function decodeCallKinds(calls: readonly { data: Hex }[]): readonly string[] {
 describe(".nest(): via default is 'transfer'", () => {
   it("emits NO publishAndFund call, and exactly one extra cook targeting the pot", () => {
     const child = childWithReward("arbitrum");
-    const built = openRoute("base", "return 1n;", evmOptions())
+    const built = openRoute("base", "function main() { return 1n; }", evmOptions())
       .nest(child, { vault: VAULT_A })
       .reward(0n);
 
@@ -85,7 +85,7 @@ describe(".nest(): via default is 'transfer'", () => {
 
   it("the transfer program's own compiled bytecode contains a balanceOf read + transfer call (compileProof)", () => {
     const child = childWithReward("arbitrum");
-    const built = openRoute("base", "return 1n;", evmOptions())
+    const built = openRoute("base", "function main() { return 1n; }", evmOptions())
       .nest(child, { vault: VAULT_A })
       .reward(0n);
 
@@ -107,13 +107,13 @@ describe(".nest(): via:'publishAndFund' reproduces the byte-identical landed out
     const childForTransfer = childWithReward("arbitrum");
     const childForPublish = childWithReward("arbitrum");
 
-    const transferBuilt = openRoute("base", "return 1n;", evmOptions())
+    const transferBuilt = openRoute("base", "function main() { return 1n; }", evmOptions())
       .nest(childForTransfer, { via: "transfer", vault: VAULT_A })
       .reward(0n);
 
     const publishBuilt = openRoute(
       "base",
-      "return 1n;",
+      "function main() { return 1n; }",
       evmOptions({ tokens: [{ token: TOKEN, amount: 500n }] }),
     )
       .nest(childForPublish, { via: "publishAndFund" })
@@ -150,7 +150,7 @@ describe(".nest(): merging", () => {
     const childA = childWithReward("arbitrum");
     const childB = childWithReward("optimism");
 
-    const built = openRoute("base", "return 1n;", evmOptions())
+    const built = openRoute("base", "function main() { return 1n; }", evmOptions())
       .nest(childA, { vault: VAULT_A })
       .nest(childB, { vault: VAULT_B })
       .reward(0n);
@@ -164,7 +164,7 @@ describe(".nest(): merging", () => {
     const childA = childWithReward("arbitrum");
     const childB = childWithReward("optimism");
 
-    const built = openRoute("base", "return 1n;", evmOptions())
+    const built = openRoute("base", "function main() { return 1n; }", evmOptions())
       .nest(childA, { vault: VAULT_A })
       .nest(childB, { vault: VAULT_B })
       .reward(0n);
@@ -179,7 +179,7 @@ describe(".nest(): merging", () => {
 describe(".nest(): child stays static", () => {
   it("hash/vault/encodeEVM/intents all keep working on a transfer-mode child", () => {
     const child = childWithReward("arbitrum");
-    const built = openRoute("base", "return 1n;", evmOptions())
+    const built = openRoute("base", "function main() { return 1n; }", evmOptions())
       .nest(child, { vault: VAULT_A })
       .reward(0n);
 
@@ -196,12 +196,12 @@ describe(".nest(): child stays static", () => {
     const grandchild = childWithReward("optimism", "arbitrum");
     const child = openRoute(
       "arbitrum",
-      "return 2n;",
+      "function main() { return 2n; }",
       evmOptions({ deadline: 2000n, rewardDeadline: 2000n }),
     )
       .nest(grandchild, { vault: VAULT_B })
       .reward({ tokens: [{ token: TOKEN, amount: 500n }] });
-    const head = openRoute("base", "return 1n;", evmOptions())
+    const head = openRoute("base", "function main() { return 1n; }", evmOptions())
       .nest(child, { vault: VAULT_A })
       .reward(0n);
 
@@ -214,7 +214,7 @@ describe(".nest(): T3 — via:'transfer' requires an EVM Pot execution", () => {
     // the SVM-destination route's child must source from "solana" (its parent's destination).
     const svmChild = childWithReward("arbitrum", "solana");
     expect(() =>
-      openRoute("solana", "return 1n;", {
+      openRoute("solana", "function main() { return 1n; }", {
         execution: { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
         deadline: 2000n,
         portal: PORTAL,
@@ -236,7 +236,7 @@ describe(".nest(): merged transfer entries must agree on the Pot AND the engine"
     const b = childWithReward("optimism");
 
     expect(() =>
-      openRoute("base", "return 1n;", evmOptions())
+      openRoute("base", "function main() { return 1n; }", evmOptions())
         .nest(a, { vault: VAULT_A })
         .nest(b, { vault: VAULT_B, engine: "0xabababababababababababababababababababab" })
         .reward(0n),
@@ -248,7 +248,7 @@ describe(".nest(): merged transfer entries must agree on the Pot AND the engine"
     const b = childWithReward("optimism");
 
     expect(() =>
-      openRoute("base", "return 1n;", evmOptions())
+      openRoute("base", "function main() { return 1n; }", evmOptions())
         .nest(a, { vault: VAULT_A })
         .nest(b, { vault: VAULT_B, engine: ENGINE })
         .reward(0n),
@@ -260,7 +260,7 @@ describe(".nest(): mode-mismatched options throw", () => {
   it("a transfer-only option under via:'publishAndFund' throws a named error", () => {
     const child = childWithReward("arbitrum");
     expect(() =>
-      openRoute("base", "return 1n;", evmOptions()).nest(child, {
+      openRoute("base", "function main() { return 1n; }", evmOptions()).nest(child, {
         via: "publishAndFund",
         vault: VAULT_A,
       }),
@@ -270,7 +270,7 @@ describe(".nest(): mode-mismatched options throw", () => {
   it("a publishAndFund-only option under via:'transfer' (default) throws a named error", () => {
     const child = childWithReward("arbitrum");
     expect(() =>
-      openRoute("base", "return 1n;", evmOptions()).nest(child, {
+      openRoute("base", "function main() { return 1n; }", evmOptions()).nest(child, {
         allowPartial: true,
         vault: VAULT_A,
       }),
@@ -280,13 +280,21 @@ describe(".nest(): mode-mismatched options throw", () => {
 
 describe(".nest(): fundNativeFromRoute", () => {
   it("sets the transfer cook's value and enforces T5 (native coverage)", () => {
-    const nativeChild = openRoute("arbitrum", "return 1n;", evmOptions()).reward({
+    const nativeChild = openRoute(
+      "arbitrum",
+      "function main() { return 1n; }",
+      evmOptions(),
+    ).reward({
       nativeAmount: 50n,
       deadline: 2000n,
     });
 
     // T5 passes: parent route.nativeAmount (50) covers the opted-in child's nativeAmount (50).
-    const built = openRoute("base", "return 1n;", evmOptions({ nativeAmount: 50n }))
+    const built = openRoute(
+      "base",
+      "function main() { return 1n; }",
+      evmOptions({ nativeAmount: 50n }),
+    )
       .nest(nativeChild, { vault: VAULT_A, fundNativeFromRoute: true })
       .reward(0n);
 
@@ -294,12 +302,16 @@ describe(".nest(): fundNativeFromRoute", () => {
     expect(transferCall.value).toBe(50n);
 
     // T5 fails: parent only declares 10, child wants 50.
-    const underfundedChild = openRoute("arbitrum", "return 1n;", evmOptions()).reward({
+    const underfundedChild = openRoute(
+      "arbitrum",
+      "function main() { return 1n; }",
+      evmOptions(),
+    ).reward({
       nativeAmount: 50n,
       deadline: 2000n,
     });
     expect(() =>
-      openRoute("base", "return 1n;", evmOptions({ nativeAmount: 10n }))
+      openRoute("base", "function main() { return 1n; }", evmOptions({ nativeAmount: 10n }))
         .nest(underfundedChild, { vault: VAULT_A, fundNativeFromRoute: true })
         .reward(0n),
     ).toThrow(/nativeAmount/i);
@@ -308,7 +320,9 @@ describe(".nest(): fundNativeFromRoute", () => {
 
 describe(".nest(): no-regression control", () => {
   it("a depth-1 build with no .nest() is unaffected by any of this", () => {
-    const withoutNest = openRoute("base", "return 1n;", evmOptions()).reward(0n);
+    const withoutNest = openRoute("base", "function main() { return 1n; }", evmOptions()).reward(
+      0n,
+    );
     expect(withoutNest.children).toEqual([]);
     expect(withoutNest.intents()).toEqual([withoutNest.intent]);
   });
@@ -316,13 +330,17 @@ describe(".nest(): no-regression control", () => {
 
 describe(".nest(): execution fees", () => {
   it("pays one fee for merged children in addition to their native rewards", () => {
-    const nativeChild = openRoute("arbitrum", "return 1n;", evmOptions()).reward({
+    const nativeChild = openRoute(
+      "arbitrum",
+      "function main() { return 1n; }",
+      evmOptions(),
+    ).reward({
       nativeAmount: 50n,
       deadline: 2000n,
     });
     const built = openRoute(
       "base",
-      "return 1n;",
+      "function main() { return 1n; }",
       evmOptions({ execution: { pot: POT, engine: ENGINE, value: 10n }, nativeAmount: 70n }),
     )
       .nest(nativeChild, { vault: VAULT_A, fundNativeFromRoute: true, executionFee: 10n })
@@ -334,7 +352,11 @@ describe(".nest(): execution fees", () => {
   });
 
   it("budgets separate fees for before and after transfer cooks", () => {
-    const built = openRoute("base", "return 1n;", evmOptions({ nativeAmount: 20n }))
+    const built = openRoute(
+      "base",
+      "function main() { return 1n; }",
+      evmOptions({ nativeAmount: 20n }),
+    )
       .nest(childWithReward("arbitrum"), {
         vault: VAULT_A,
         position: "before",
@@ -350,7 +372,7 @@ describe(".nest(): execution fees", () => {
     expect(() =>
       openRoute(
         "base",
-        "return 1n;",
+        "function main() { return 1n; }",
         evmOptions({ execution: { pot: POT, engine: ENGINE, value: 10n }, nativeAmount: 10n }),
       )
         .nest(childWithReward("arbitrum"), { vault: VAULT_A, executionFee: 10n })
@@ -360,7 +382,7 @@ describe(".nest(): execution fees", () => {
 
   it("rejects conflicting fees in a merged cook", () => {
     expect(() =>
-      openRoute("base", "return 1n;", evmOptions({ nativeAmount: 100n }))
+      openRoute("base", "function main() { return 1n; }", evmOptions({ nativeAmount: 100n }))
         .nest(childWithReward("arbitrum"), { vault: VAULT_A, executionFee: 10n })
         .nest(childWithReward("optimism"), { vault: VAULT_B, executionFee: 20n })
         .reward(0n),
@@ -368,14 +390,18 @@ describe(".nest(): execution fees", () => {
   });
 
   it("includes publication value unless explicitly funded by the body", () => {
-    const publicationChild = openRoute("arbitrum", "return 1n;", evmOptions()).reward({
+    const publicationChild = openRoute(
+      "arbitrum",
+      "function main() { return 1n; }",
+      evmOptions(),
+    ).reward({
       nativeAmount: 50n,
       deadline: 2000n,
     });
     const build = (fundedByBody: boolean) =>
       openRoute(
         "base",
-        "return 1n;",
+        "function main() { return 1n; }",
         evmOptions({ execution: { pot: POT, engine: ENGINE, value: 10n }, nativeAmount: 60n }),
       )
         .nest(publicationChild, { via: "publishAndFund", fundedByBody })
@@ -388,15 +414,21 @@ describe(".nest(): execution fees", () => {
 
   it("rejects negative fees and fees in publication mode", () => {
     expect(() =>
-      openRoute("base", "return 1n;", evmOptions()).nest(childWithReward("arbitrum"), {
-        executionFee: -1n,
-      }),
+      openRoute("base", "function main() { return 1n; }", evmOptions()).nest(
+        childWithReward("arbitrum"),
+        {
+          executionFee: -1n,
+        },
+      ),
     ).toThrow(/non-negative/);
     expect(() =>
-      openRoute("base", "return 1n;", evmOptions()).nest(childWithReward("arbitrum"), {
-        via: "publishAndFund",
-        executionFee: 10n,
-      }),
+      openRoute("base", "function main() { return 1n; }", evmOptions()).nest(
+        childWithReward("arbitrum"),
+        {
+          via: "publishAndFund",
+          executionFee: 10n,
+        },
+      ),
     ).toThrow(/only valid with via: "transfer"/);
   });
 });

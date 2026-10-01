@@ -11,14 +11,15 @@
 // `installRouteGlobals()` still exists for a host that deliberately wants the bare
 // spelling at run time, but it installs no types and nothing calls it by default.
 //
-// WHY canonical.ts IS EXECUTED, NOT REGEXED. `src/chains/canonical.ts` has
-// zero imports (checked below) -- this script transpiles it with the
-// `typescript` package (already a devDependency) and evaluates the output
-// directly, so the generator reads the SAME `CANONICAL_CHAINS` array the SDK
-// itself ships, not a hand-parsed approximation that could drift from a
-// syntax change. If canonical.ts ever gains an import, this script starts
-// throwing (loud, not a silent wrong-answer) -- fix by widening the loader,
-// not by regexing instead.
+// Each export is typed with the chain's registry tokens too (`Base.USDC`, from
+// src/routes/token-registry.ts's TOKEN_REGISTRY), so a symbol the chain has no
+// row for is a type error rather than an `undefined` at run time.
+//
+// WHY THE REGISTRY IS EXECUTED, NOT REGEXED. `scripts/lib/load-ts.mjs` transpiles
+// canonical.ts and token-registry.ts with the `typescript` package and evaluates
+// them, so the generator reads the SAME `CANONICAL_CHAINS` and `TOKEN_REGISTRY`
+// the SDK itself ships, not a hand-parsed approximation that could drift from a
+// syntax change.
 //
 // Regenerate: `node scripts/gen-route-globals.mjs` (writes the file) or
 // `node scripts/gen-route-globals.mjs --stdout` (prints, used by the jest
@@ -26,11 +27,11 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+
+import { createTsLoader } from "./lib/load-ts.mjs";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const SDK_DIR = resolve(SCRIPT_DIR, "..");
-const CANONICAL_PATH = resolve(SDK_DIR, "src", "chains", "canonical.ts");
 const OUT_PATH = resolve(SDK_DIR, "src", "routes", "chain-exports.generated.ts");
 
 /** Runtime mirror of `PascalOf`/`pascalOfSlug` (builder.ts) -- duplicated
@@ -44,24 +45,22 @@ function pascalOfSlug(slug) {
     .join("");
 }
 
+const load = createTsLoader(SDK_DIR);
+
 function loadCanonicalChains() {
-  const source = readFileSync(CANONICAL_PATH, "utf8");
-  if (/^\s*import\b/m.test(source) || /\brequire\(/.test(source)) {
-    throw new Error(
-      `${CANONICAL_PATH} now has an import -- gen-route-globals.mjs's execute-it-directly ` +
-        `loader assumes zero imports (see this script's header comment). Widen the loader.`,
-    );
-  }
-  const { outputText } = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  });
-  const mod = { exports: {} };
-  new Function("exports", "module", outputText)(mod.exports, mod);
-  const chains = mod.exports.CANONICAL_CHAINS;
+  const chains = load("src/chains/canonical.ts").CANONICAL_CHAINS;
   if (!Array.isArray(chains) || chains.length === 0) {
-    throw new Error(`CANONICAL_CHAINS in ${CANONICAL_PATH} is missing or empty.`);
+    throw new Error("CANONICAL_CHAINS in src/chains/canonical.ts is missing or empty.");
   }
   return chains;
+}
+
+/** chain id -> the registry's token symbols there, in registry order. */
+function loadTokenSymbols() {
+  const registry = load("src/routes/token-registry.ts").TOKEN_REGISTRY;
+  return new Map(
+    Object.entries(registry).map(([id, rows]) => [Number(id), rows.map((row) => row.symbol)]),
+  );
 }
 
 /** The one fixed, non-chain global this generator also emits -- see gen-route-globals.mjs's
@@ -69,7 +68,7 @@ function loadCanonicalChains() {
  * CANONICAL_CHAINS, but still collision-checked against it below. */
 const TOKEN_GLOBAL_NAME = "Token";
 
-function render(chains) {
+function render(chains, tokensByChain) {
   const seen = new Map();
   const lines = [];
   for (const c of chains) {
@@ -89,9 +88,14 @@ function render(chains) {
     // runtime `origin.chain.kind === "svm"` branch. Derived from `c.kind`,
     // not a hardcoded slug, so a second svm chain gets this for free.
     const svm = c.kind === "svm" ? " & SvmVenueAccessors" : "";
+    const symbols = tokensByChain.get(c.id) ?? [];
+    const tokens =
+      symbols.length > 0
+        ? ` & Tokens<${symbols.map((symbol) => JSON.stringify(symbol)).join(" | ")}>`
+        : "";
     lines.push(`/** eco-routes chain accessor for ${c.name} (chain id ${c.id}). */`);
     lines.push(
-      `export const ${name} = composedChainGlobal("${name}") as Composed<"${name}">${svm};`,
+      `export const ${name} = composedChainGlobal("${name}") as Composed<"${name}">${svm}${tokens};`,
     );
   }
 
@@ -111,8 +115,9 @@ function render(chains) {
 // by \`PascalOf<ChainSlug>\`, so a name that no longer exists in the registry
 // fails \`tsc\` here before the drift test even runs.
 //
-// Composition is EAGER at module eval -- measured at ~1.4ms for all 40 chains,
-// against ~180ms just to load the modules involved -- because every contract
+// Composition is EAGER at module eval -- measured at ~6ms warm (~20ms cold) for all 41
+// chains and every registry namespace, against ~400ms just to load the modules involved --
+// because every contract
 // namespace underneath is a memoising getter, so composing only copies property
 // descriptors and builds nothing under \`Base.Uniswap\` until it is touched. A
 // lazily-evaluated named export is not expressible in ESM anyway.
@@ -130,11 +135,15 @@ import type { SvmVenueAccessors } from "../svm/accessors.js";
 import type { TokenApi, TokenFactory } from "../token/api.js";
 import { Token as tokenApi } from "../token/api.js";
 import { composedChainGlobal } from "./composed.js";
+import type { RegistryToken } from "./token-registry.js";
 
 /** What every chain accessor is: the eco-routes DSL for that chain (callable, plus
  *  \`.chain\`/\`.route\`) intersected with the chain-independent native contract tree.
  *  Naming the chain through \`ChainGlobals\` is the structural cross-check above. */
 type Composed<N extends keyof ChainGlobals> = ChainGlobals[N] & ChainContracts;
+
+/** The chain's registry tokens, by symbol: \`Base.USDC\` is \`{ address, decimals, symbol, chain }\`. */
+type Tokens<S extends string> = { readonly [K in S]: RegistryToken };
 
 ${lines.join("\n")}
 
@@ -151,7 +160,7 @@ export const Token: TokenApi & TokenFactory = tokenApi as TokenApi & TokenFactor
 function main() {
   const args = new Set(process.argv.slice(2));
   const chains = loadCanonicalChains();
-  const text = render(chains);
+  const text = render(chains, loadTokenSymbols());
 
   if (args.has("--stdout")) {
     process.stdout.write(text);

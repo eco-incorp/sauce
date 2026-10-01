@@ -12,7 +12,7 @@ function main(
   otherToken: Address,
   usdtAmount: Uint256,
   otherAmount: Uint256,
-  usdcAmount: Uint256
+  usdcAmount: Uint256,
 ) {
   const me = ctx.self();
 

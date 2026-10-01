@@ -48,7 +48,7 @@ function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
  *  the solver must post and the `transfer` it must make — is `amountOut`. Nothing here is a number
  *  the caller knows; all three are sentinels until the parent runs. */
 function templatedChild(destination = "arbitrum", source = "base"): BuiltIntent {
-  return openRoute(destination, "return 1n;", {
+  return openRoute(destination, "function main() { return 1n; }", {
     ...evmOptions({ source }),
     tokens: [{ token: TOKEN, amount: AMOUNT_OUT_PLACEHOLDER }],
     precalls: [
@@ -93,7 +93,7 @@ function callKinds(calls: readonly { data: Hex }[]): readonly string[] {
 
 describe(".nest(): via 'dynamic' produces one extra cook, not a pre-encoded publishAndFund", () => {
   it("adds exactly one cook after the body's own, and no Portal call in route.calls", () => {
-    const built = openRoute("base", "return 1n;", evmOptions())
+    const built = openRoute("base", "function main() { return 1n; }", evmOptions())
       .nest(templatedChild(), {
         via: "dynamic",
         measure: { kind: "erc20Balance", token: TOKEN },
@@ -110,7 +110,7 @@ describe(".nest(): via 'dynamic' produces one extra cook, not a pre-encoded publ
 
   it("the cook's bytecode carries the child's calldata as literal runs", () => {
     const child = templatedChild();
-    const built = openRoute("base", "return 1n;", evmOptions())
+    const built = openRoute("base", "function main() { return 1n; }", evmOptions())
       .nest(child, {
         via: "dynamic",
         measure: { kind: "erc20Balance", token: TOKEN },
@@ -133,7 +133,7 @@ describe(".nest(): via 'dynamic' produces one extra cook, not a pre-encoded publ
 
   it("the child is reachable on the built intent, and intents() walks it", () => {
     const child = templatedChild();
-    const built = openRoute("base", "return 1n;", evmOptions())
+    const built = openRoute("base", "function main() { return 1n; }", evmOptions())
       .nest(child, {
         via: "dynamic",
         measure: { kind: "erc20Balance", token: TOKEN },
@@ -150,7 +150,7 @@ describe(".nest(): via 'dynamic' produces one extra cook, not a pre-encoded publ
     // Invariant 5 would reject this child under `publishAndFund`: its reward names a ~1.5e77 amount
     // the parent's (empty) route.tokens cannot cover.
     expect(() =>
-      openRoute("base", "return 1n;", evmOptions({ tokens: [] }))
+      openRoute("base", "function main() { return 1n; }", evmOptions({ tokens: [] }))
         .nest(templatedChild(), {
           via: "dynamic",
           measure: { kind: "erc20Balance", token: TOKEN },
@@ -164,13 +164,15 @@ describe(".nest(): via 'dynamic' produces one extra cook, not a pre-encoded publ
 describe(".nest(): via 'dynamic' option gating", () => {
   it("requires `measure` — it has no safe default", () => {
     expect(() =>
-      openRoute("base", "return 1n;", evmOptions()).nest(templatedChild(), { via: "dynamic" }),
+      openRoute("base", "function main() { return 1n; }", evmOptions()).nest(templatedChild(), {
+        via: "dynamic",
+      }),
     ).toThrow(/requires `measure`/);
   });
 
   it("rejects a transfer-only option, naming the modes it IS valid under", () => {
     expect(() =>
-      openRoute("base", "return 1n;", evmOptions()).nest(templatedChild(), {
+      openRoute("base", "function main() { return 1n; }", evmOptions()).nest(templatedChild(), {
         via: "dynamic",
         measure: { kind: "nativeBalance" },
         clamp: true,
@@ -180,20 +182,22 @@ describe(".nest(): via 'dynamic' option gating", () => {
 
   it("rejects a dynamic-only option under another mode", () => {
     expect(() =>
-      openRoute("base", "return 1n;", evmOptions()).nest(templatedChild(), {
+      openRoute("base", "function main() { return 1n; }", evmOptions()).nest(templatedChild(), {
         via: "publishAndFund",
         measure: { kind: "nativeBalance" },
       }),
     ).toThrow(/option 'measure' is only valid with via: "dynamic"/);
     expect(() =>
-      openRoute("base", "return 1n;", evmOptions()).nest(templatedChild(), { scale: 1n }),
+      openRoute("base", "function main() { return 1n; }", evmOptions()).nest(templatedChild(), {
+        scale: 1n,
+      }),
     ).toThrow(/option 'scale' is only valid with via: "dynamic"/);
   });
 
   it("shares `allowPartial` with publishAndFund and the cook plumbing with transfer", () => {
     const measure = { kind: "erc20Balance", token: TOKEN } as const;
     expect(() =>
-      openRoute("base", "return 1n;", evmOptions())
+      openRoute("base", "function main() { return 1n; }", evmOptions())
         .nest(templatedChild(), {
           via: "dynamic",
           measure,
@@ -210,7 +214,7 @@ describe(".nest(): via 'dynamic' option gating", () => {
   it("T3: a Solana destination has no Pot to run the renderer on", () => {
     // A child of an SVM-destination route sources from "solana" -- its parent's destination.
     expect(() =>
-      openRoute("solana", "return 1n;", {
+      openRoute("solana", "function main() { return 1n; }", {
         execution: { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
         deadline: 2000n,
         portal: PORTAL,
@@ -231,12 +235,12 @@ describe(".nest(): mixing modes in one position group", () => {
     const staticChild = (salt: string) =>
       openRoute(
         "arbitrum",
-        "return 1n;",
+        "function main() { return 1n; }",
         evmOptions({ salt: `0x${salt.repeat(32)}` as Hex }),
       ).reward({ tokens: [{ token: TOKEN, amount: 5n }] });
     const built = openRoute(
       "base",
-      "return 1n;",
+      "function main() { return 1n; }",
       evmOptions({ tokens: [{ token: TOKEN, amount: 5n }] }),
     )
       // Deliberately nested in the OPPOSITE order to the one they must come out in.
@@ -261,7 +265,7 @@ describe(".nest(): mixing modes in one position group", () => {
 
   it("merges several dynamic children in one group into ONE cook", () => {
     const measure = { kind: "erc20Balance", token: TOKEN } as const;
-    const built = openRoute("base", "return 1n;", evmOptions())
+    const built = openRoute("base", "function main() { return 1n; }", evmOptions())
       .nest(templatedChild("arbitrum"), { via: "dynamic", measure, placeholders: PLACEHOLDERS })
       .nest(templatedChild("optimism"), { via: "dynamic", measure, placeholders: PLACEHOLDERS })
       .reward(0n);
@@ -271,7 +275,7 @@ describe(".nest(): mixing modes in one position group", () => {
   });
 
   it("a `position: 'before'` dynamic child runs ahead of the body's own cook", () => {
-    const built = openRoute("base", "return 1n;", evmOptions())
+    const built = openRoute("base", "function main() { return 1n; }", evmOptions())
       .nest(templatedChild(), {
         via: "dynamic",
         position: "before",
@@ -294,13 +298,13 @@ describe(".nest(): a dynamic child that itself nests a dynamic child", () => {
   const cascade = () => {
     const measureOnArbitrum = { kind: "erc20Balance", token: TOKEN } as const;
 
-    const grandchild = openRoute("optimism", "return 1n;", {
+    const grandchild = openRoute("optimism", "function main() { return 1n; }", {
       ...evmOptions({ source: "arbitrum" }),
       salt: `0x${"9c".repeat(32)}` as Hex,
       tokens: [{ token: TOKEN, amount: AMOUNT_OUT_PLACEHOLDER }],
     }).reward({ tokens: [{ token: TOKEN, amount: AMOUNT_IN_PLACEHOLDER }] });
 
-    const child = openRoute("arbitrum", "return 1n;", {
+    const child = openRoute("arbitrum", "function main() { return 1n; }", {
       ...evmOptions({ source: "base" }),
       salt: `0x${"9b".repeat(32)}` as Hex,
       tokens: [{ token: TOKEN, amount: AMOUNT_OUT_PLACEHOLDER }],
@@ -312,7 +316,7 @@ describe(".nest(): a dynamic child that itself nests a dynamic child", () => {
       })
       .reward({ tokens: [{ token: TOKEN, amount: AMOUNT_IN_PLACEHOLDER }] });
 
-    return openRoute("base", "return 1n;", evmOptions())
+    return openRoute("base", "function main() { return 1n; }", evmOptions())
       .nest(child, {
         via: "dynamic",
         measure: { kind: "erc20Balance", token: TOKEN },

@@ -8,20 +8,22 @@ build transaction data without sending anything. Repeated-digit addresses and ro
 fixtures, not configuration. The RPC helpers are typechecked here and read chain state only when your
 application calls them.
 
-| Example                                                    | Shows                                                                                                                 |
-| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| [cross-chain-intent.sauce.ts](cross-chain-intent.sauce.ts) | A program that measures a balance and publishes a new intent carrying it — written in SauceScript                     |
-| [cross-chain-intent.ts](cross-chain-intent.ts)             | Compiling that program with `defines` and attaching it to a route                                                     |
-| [protocol-approval.ts](protocol-approval.ts)               | A typed `Base(() => ...)` body calling `USDC.approve(Uniswap.UniversalRouter, ...)`                                   |
-| [first-intent.ts](first-intent.ts)                         | Both sides of a transfer intent: Ethereum reward, Base delivery, Executor-to-Pot funding, source transaction requests |
-| [compile-program.ts](compile-program.ts)                   | Direct compilation, a compact entry schema, and argument encoding and decoding                                        |
-| [action-program.ts](action-program.ts)                     | A JSON action program: strict parsing, compilation with a runtime amount, and an intent on the program's chain        |
-| [router-swap.sauce.ts](router-swap.sauce.ts)               | Two swaps through `@sauce/router`, the second spending what the first returned — written in SauceScript               |
-| [router-swap.ts](router-swap.ts)                           | Compiling that program into a cook and an intent, with its floor as a define                                          |
-| [router-route.sauce.ts](router-route.sauce.ts)             | One program for any route over four venues, picking each `@sauce/router` function while it runs                       |
-| [router-route.ts](router-route.ts)                         | Compiling it once with the raw compiler and appending a route as its arguments                                        |
-| [evm-execution.ts](evm-execution.ts)                       | Reading a destination chain: Kitchen, Executor ownership, Pot prediction and deployment, execution fee                |
-| [pot-router.ts](pot-router.ts)                             | Whether a Pot runs its Kitchen's current Router, and the owner's `setRouter` call when it does not                    |
+| Example                                                        | Shows                                                                                                                         |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| [cross-chain-intent.sauce.ts](cross-chain-intent.sauce.ts)     | A program that measures a balance and publishes a new intent carrying it — written in SauceScript                             |
+| [cross-chain-intent.ts](cross-chain-intent.ts)                 | Compiling that program with `defines` and attaching it to a route                                                             |
+| [protocol-approval.ts](protocol-approval.ts)                   | A typed `Base(() => ...)` body calling `USDC.approve(Uniswap.UniversalRouter, ...)`                                           |
+| [venue-where-deployed.sauce.ts](venue-where-deployed.sauce.ts) | One program for every chain, using PancakeSwap V3 only where `available(...)` finds it — written in SauceScript               |
+| [registry-names.ts](registry-names.ts)                         | That program compiled for two chains, and the same registry names from TypeScript: `Base.USDC`, a typed call, `.read(client)` |
+| [first-intent.ts](first-intent.ts)                             | Both sides of a transfer intent: Ethereum reward, Base delivery, Executor-to-Pot funding, source transaction requests         |
+| [compile-program.ts](compile-program.ts)                       | Direct compilation, a compact entry schema, and argument encoding and decoding                                                |
+| [action-program.ts](action-program.ts)                         | A JSON action program: strict parsing, compilation with a runtime amount, and an intent on the program's chain                |
+| [router-swap.sauce.ts](router-swap.sauce.ts)                   | Two swaps through `@sauce/router`, the second spending what the first returned — written in SauceScript                       |
+| [router-swap.ts](router-swap.ts)                               | Compiling that program into a cook and an intent, with its floor as a define                                                  |
+| [router-route.sauce.ts](router-route.sauce.ts)                 | One program for any route over four venues, picking each `@sauce/router` function while it runs                               |
+| [router-route.ts](router-route.ts)                             | Compiling it once with the raw compiler and appending a route as its arguments                                                |
+| [evm-execution.ts](evm-execution.ts)                           | Reading a destination chain: Kitchen, Executor ownership, Pot prediction and deployment, execution fee                        |
+| [pot-router.ts](pot-router.ts)                                 | Whether a Pot runs its Kitchen's current Router, and the owner's `setRouter` call when it does not                            |
 
 ## Run an example in your project
 
@@ -39,7 +41,7 @@ pnpm exec tsc example.ts --target ES2022 --module NodeNext --moduleResolution No
 node dist/example.js
 ```
 
-For `first-intent.ts`, `evm-execution.ts`, `pot-router.ts` and `router-route.ts`, also run `pnpm add viem`: they use Viem's address formatter and RPC interfaces.
+For `first-intent.ts`, `evm-execution.ts`, `pot-router.ts`, `router-route.ts` and `registry-names.ts`, also run `pnpm add viem`: they use Viem's address formatter and RPC interfaces.
 
 CI typechecks and runs each of them, and asserts the encoded output including a nonzero cook-fee
 budget. The RPC helpers are not live-chain integration tests — they are the shape of the reads you make.
