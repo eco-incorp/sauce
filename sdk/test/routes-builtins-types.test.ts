@@ -6,7 +6,8 @@
  * always did (`source-globals.generated.ts`); the language's own builtins did not, and a closure
  * that compiled as SauceScript failed `tsc` on `ctx`, `crypto.keccak256`, `hex`, `Math.mulDiv`,
  * `log`, `require(cond, message)`, `.toBytesBe` and `evm`. They are declared in
- * `routes/builtins.generated.ts`, generated from `docs/api/builtins.json`.
+ * `routes/builtins.generated.ts`, generated from the SauceScript reference's
+ * `skills/sauce-script/references/builtins.json`.
  */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -15,9 +16,9 @@ import { join, resolve } from "node:path";
 import ts from "typescript";
 
 const SDK = resolve(process.cwd());
-const BUILTINS = JSON.parse(readFileSync(resolve(SDK, "../docs/api/builtins.json"), "utf8")) as {
-  builtins: readonly { name: string; group: string }[];
-};
+const BUILTINS = JSON.parse(
+  readFileSync(resolve(SDK, "../skills/sauce-script/references/builtins.json"), "utf8"),
+) as { intrinsics: readonly { name: string; group: string }[] };
 
 /** The closure the report came with: nine `tsc` errors, and it compiles as SauceScript. */
 const REPORTED = `
@@ -240,7 +241,7 @@ describe("a typed closure using SauceScript's builtins", () => {
   });
 
   it("uses every builtin the typings declare", () => {
-    for (const { name, group } of BUILTINS.builtins) {
+    for (const { name, group } of BUILTINS.intrinsics) {
       if (TYPED_ELSEWHERE.has(group)) continue;
       const spelling = SPELLING[name] ?? `${name}(`;
       expect([name, EVERY_BUILTIN.includes(spelling)]).toEqual([name, true]);
