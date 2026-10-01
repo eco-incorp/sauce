@@ -57,15 +57,19 @@ With the program above saved as `payout.sauce.ts`:
 
 ```sh
 npx sauce globals --chain base                     # the names a program on Base can use
-npx sauce compile payout.sauce.ts --chain base     # check it compiles
-npx sauce pot --deploy --chain base --config sauce.config.json --keystore <keystore>
+npx sauce compile payout.sauce.ts --chain base     # check it compiles: the bytecode
 npx sauce simulate payout.sauce.ts --chain base --owner <address> --config sauce.config.json \
-  --args <recipient> 1000000
+  --assume-balance USDC:1 --args <recipient> 1000000
+npx sauce tx payout.sauce.ts --chain base --owner <address> --args <recipient> 1000000
 npx sauce run payout.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
   --args <recipient> 1000000
 ```
 
-`sauce-run` covers each command. Endpoints come from a config file the developer passes, never
+Compiling for a chain produces the program's bytecode; running it is one transaction to the
+owner's Pot, `cook(engine, program)` with `main`'s arguments appended to the program, paying the
+Kitchen's fee. `sauce tx` prints that transaction unsigned, `{ chainId, to, data, value }`, for
+any wallet or signer to send; `sauce run` signs and sends it itself, deploying the Pot first if it
+is not there. `sauce-run` covers each command. Endpoints come from a config file the developer passes, never
 from the program or the environment.
 
 ## Pick the next skill

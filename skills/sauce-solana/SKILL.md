@@ -53,8 +53,9 @@ npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypai
   `svm.call(program, [accounts...], data)` is a CPI to an attached program account.
 - Scalar parameters are runtime arguments (`--args`); `Account` parameters are not encoded. A
   32-byte key chosen per compile, such as a mint, is a module constant (`const MINT = 0n;`) that
-  `--define MINT=<32-byte hex>` replaces. A key that changes per call is an `Account` parameter: the
-  command does not encode an `Address` argument of `main` on Solana.
+  `--define MINT=<32-byte hex>` replaces. A key that changes per call is an `Address` argument of
+  `main`, passed as a base58 public key and encoded as one ABI word (not with `--compact-args`), or
+  an `Account` parameter when the program reads or writes that account.
 - On Solana `ctx.self()` is the executing Sauce program's id, **not the Pot**, `ctx.msgSender()`
   the transaction's first signer, and `ctx.balance(acct.address)` an attached account's lamports. `ctx.msgValue`,
   `ctx.gasLeft`, `ctx.codeSize` and the other EVM reads are rejected; move lamports with a

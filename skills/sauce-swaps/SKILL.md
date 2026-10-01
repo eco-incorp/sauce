@@ -92,10 +92,12 @@ price or tick limit, is swapped only through the Router: its callback pays exact
 took, and the unspent input stays in the Pot for the guard to return.
 
 [examples/swap-leg.sauce.ts](examples/swap-leg.sauce.ts) is exactly this for one Uniswap V3 pool.
-Rehearse it, then run it, with the input in the Pot (or pulled in with `--fund`):
+Rehearse it (`--assume-balance` gives the Pot the input for the rehearsal only), then run it with
+the input in the Pot or pulled in with `--fund`:
 
 ```sh
 npx sauce simulate swap-leg.sauce.ts --chain base --owner <address> --config sauce.config.json \
+  --assume-balance WETH:0.5 \
   --args <tokenIn> <tokenOut> 500 <amountIn> <sqrtPriceLimitX96> <minOut> <recipient>
 npx sauce run swap-leg.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
   --fund WETH:0.5 --args <tokenIn> <tokenOut> 500 <amountIn> <sqrtPriceLimitX96> <minOut> <recipient>
