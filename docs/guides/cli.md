@@ -594,8 +594,9 @@ at the package root:
 | ------------------------ | --------------------------------------------------------------------------------------------- |
 | `sauce-overview`         | What Sauce is, the path from a file to a transaction, the rules, and which skill to load next |
 | `sauce-script`           | The language: program forms, inputs and defines, compile errors, and the builtins reference   |
-| `sauce-globals`          | The names a program uses with no import, with generated indexes of every token and contract   |
-| `sauce-protocols`        | Calling protocols, the registries, and a document per catalogued protocol                     |
+| `sauce-globals`          | The names a program uses with no import, with generated indexes of them                       |
+| `sauce-chains`           | Each chain, generated from the registries: tokens, every protocol with its addresses, intents |
+| `sauce-protocols`        | Every protocol by category: how to choose, its deployments, its pitfalls and how to call it   |
 | `sauce-swaps`            | Swapping through the Router: entry points, price limits, callbacks and the guard on every leg |
 | `sauce-distributed-swap` | One exact-input swap split across every price-limit venue on a chain                          |
 | `sauce-intents`          | Cross-chain intents written in Sauce: rewards, cascades, run or publish                       |
