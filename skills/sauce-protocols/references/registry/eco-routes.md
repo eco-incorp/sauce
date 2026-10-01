@@ -14,26 +14,20 @@ Eco's cross-chain intent protocol. A Portal publishes an intent, escrows its rew
 
 ## In a program
 
-The registry records no deployment: `MessageBridgeProverABI` is an interface, bound to an address the
+The registry records no deployment: `PortalABI` is an interface, bound to an address the
 program is given.
 
 ```sauce chain=ethereum
-import MessageBridgeProverABI from "./protocols/eco-routes/MessageBridgeProverABI.json";
+import PortalABI from "./protocols/eco-routes/PortalABI.json";
 
 const TARGET = 0n; // the contract's address, as a define
 
 function main() {
-  const target = MessageBridgeProverABI.at(TARGET);
+  const target = PortalABI.at(TARGET);
 }
 ```
 
 ## ABI
-
-### `MessageBridgeProverABI`
-
-`import MessageBridgeProverABI from "./protocols/eco-routes/MessageBridgeProverABI.json";` Speaks for: HyperProver, MetaProver, LayerZeroProver.
-
-- `fetchFee(uint64 domainID, bytes encodedProofs, bytes data) view returns (uint256)`
 
 ### `PortalABI`
 
@@ -68,3 +62,4 @@ function main() {
 - `version() pure returns (string)`
 - `PORTAL() view returns (address)`
 - `isWhitelisted(bytes32 addr) view returns (bool)`
+- `fetchFee(uint64 domainID, bytes encodedProofs, bytes data) view returns (uint256)`
