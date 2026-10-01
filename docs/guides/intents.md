@@ -252,6 +252,39 @@ A variable can arrive two ways, and the same variable can do both:
 
 Used both ways, a variable gets a slot in each: they are different offsets carrying the same value.
 
+### The file's functions, imports and constants
+
+A program body was written in the file, so it can use what the file declares: its functions, its
+imports, its interfaces and its module-level constants. Its program carries the ones the body
+reaches, and the ones those reach, as written, and nothing else:
+
+```ts
+import { balanceOf } from "@sauce/token";
+
+function fee(amount: Uint256): Uint256 {
+  return amount / 100n;
+}
+
+function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum(
+    () => {
+      const [held] = abi.decode(abi.encode(balanceOf(USDC, ctx.self())), ["Uint256"]);
+      USDC.transfer(RECIPIENT, held - fee(held));
+    },
+    { tokens: [{ token: USDC, amount }] },
+  ).reward({ tokens: [{ token: USDC, amount }] });
+}
+```
+
+A carried declaration is compiled for the chain its program runs on, so `USDC` in `fee` would mean
+Arbitrum's USDC there. A function only intent bodies call moves out of the enclosing program, which
+never runs it. A local of the enclosing function shadows a file declaration of the same name, as it
+does in the compiler: the body captures the local. A module-level `let` is carried as a declaration,
+not captured: it is scratch space that every run starts afresh, and the body's program is a run of
+its own. A body cannot call the function that opens it, since that function's program would contain
+the intent it is the body of.
+
 ### Nesting
 
 An intent inside an intent is lowered recursively — the child is compiled by re-entering the same
@@ -373,6 +406,7 @@ Each of these is a compile error naming the construct, never a silently differen
 - A `.reward(...)` that is not an object, or a token entry missing `token` or `amount`.
 - A missing `deadline`, a missing `creator`, or a missing `executionFee` for a program body.
 - A chain with no eco-routes deployment, or a pair with no prover deployed on both sides.
+- A program body that calls the function opening it.
 
 Inside a program body an unknown name is the _compiler's_ error rather than this lowering's, and
 reads the same way: it names the variable that is not declared.
@@ -384,6 +418,8 @@ A callback is read with `Function.prototype.toString()`, parsed, and compiled as
 Use literals for self-contained callbacks, or source strings plus `defines` for application inputs, as above. Defines accept scalar `bigint`, `number`, or `boolean` values; use `bigint` for addresses and token quantities. `compile.defines` overrides `options.defines`, which overrides chain defaults. Local declarations in the program take precedence over ambient names.
 
 Callbacks must be synchronous and take no parameters. Bound/native functions, generators, and async functions are rejected. If a bundler transforms function source, ship an explicit SauceScript string or source asset. A TypeScript type declaration does not create a captured value.
+
+A function the callback declares in its own body is a helper of the program: SauceScript has no nested functions, so it is declared beside `main`, and an intent opened inside the callback can call it like any other function of the file. Its annotations are whatever the host's TypeScript compilation left in the callback's text, which is usually none, so a helper that takes or returns an array or a record belongs in a source string.
 
 `Base(...)` adds the SDK's default ambient token module, enabling function forms such as `approve(tokenAddress, spender, amount)`. Direct `compileSauceRoute(...)` does not automatically add that ambient module. The token and protocol member syntax described in [protocols and tokens](protocols-and-tokens.md) is a separate rewrite that works on both paths; its writes import the same module's functions themselves, so they have the same `SafeERC20` semantics either way.
 

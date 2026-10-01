@@ -569,6 +569,52 @@ describeEvm("an intent created inside a program, across chains with different to
     }, 300_000);
   });
 
+  it("a body that calls the file's typed helpers and an import runs on Arbitrum", async () => {
+    // The body compiles as a program of its own: it carries `fee`, the typed array helper `sum`
+    // and the `balanceOf` import it reaches, and binds `held` by destructuring. Each of those
+    // failed to compile before: a helper or an import was "called but never declared", an
+    // annotation was "Unexpected token", and `[held]` was mistaken for a capture.
+    const program = `import { balanceOf } from "@sauce/token";
+
+function fee(amount: Uint256): Uint256 {
+  return amount / 100n;
+}
+
+function sum(parts: Uint256[]): Uint256 {
+  let total = 0n;
+  for (const part of parts) {
+    total += part;
+  }
+  return total;
+}
+
+function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  require(amount >= MIN_AMOUNT);
+  Arbitrum(() => {
+    const [held] = abi.decode(abi.encode(balanceOf(USDC, ctx.self())), ["Uint256"]);
+    const parts: Uint256[] = [held - fee(held), fee(held)];
+    USDC.transfer(RECIPIENT, sum(parts) - fee(held));
+  }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount }] });
+}`;
+    const { route, rewardHash } = direct(program, {});
+    await base.mint(base.usdc, base.pot, SEEDED);
+    const held = await base.balanceOf(base.usdc, base.pot);
+
+    const onBase = await base.fulfil(route, rewardHash);
+    expect(onBase.status).toBe("success");
+    const [published] = onBase.published;
+    expect(published!.destination).toBe(42_161n);
+
+    const child = fulfilmentOf(published!);
+    const paid = await arbitrum.balanceOf(arbitrum.usdc, RECIPIENT);
+    await arbitrum.provide(child.route);
+    const onArbitrum = await arbitrum.fulfil(child.route, child.rewardHash);
+    expect(onArbitrum.status).toBe("success");
+    // `sum([held - fee, fee]) - fee`: everything the solver delivered, less the one percent.
+    expect(await arbitrum.balanceOf(arbitrum.usdc, RECIPIENT)).toBe(paid + held - held / 100n);
+  }, 300_000);
+
   it("CONTROL: a reward naming the DESTINATION's token reverts the fulfilment where it is funded", async () => {
     // What the lowering used to build for `{ token: USDC }`, written out by hand: the approval and
     // allowance read hit an address with no code on Base, and the whole fulfilment reverts. This is

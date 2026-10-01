@@ -13,7 +13,7 @@ export interface AstNode {
 }
 
 /** The properties of a node (`parse.ts`'s TypeScript AST) that hold a TYPE rather than a value. */
-const TYPE_KEYS: ReadonlySet<string> = new Set([
+export const TYPE_KEYS: ReadonlySet<string> = new Set([
   "typeAnnotation",
   "returnType",
   "typeParameters",
@@ -58,7 +58,7 @@ export function walk(node: unknown, visit: (n: AstNode) => void): void {
 /** Every name a binding PATTERN introduces -- an identifier, or any nesting of object/array
  *  destructuring, defaults and rest. Collecting only the `Identifier` case would miss
  *  `const { Token } = x` and `function f({ Token })`, which bind the name just as plainly. */
-function collectPatternNames(pattern: unknown, names: { add(name: string): void }): void {
+export function collectPatternNames(pattern: unknown, names: { add(name: string): void }): void {
   if (pattern === null || typeof pattern !== "object") return;
   const node = pattern as AstNode;
   switch (node.type) {

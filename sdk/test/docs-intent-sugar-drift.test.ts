@@ -106,6 +106,22 @@ const REFUSALS: readonly {
       rewriteIntentSugar(wrap("USDC.transfer(RECIPIENT, amount);", undefined, "Zora"), context()),
     message: /eco-routes v3 is not deployed on zora/,
   },
+  {
+    documented: "A program body that calls the function opening it",
+    trigger: () =>
+      rewriteIntentSugar(
+        `function payout(amount) {
+  Arbitrum(() => {
+    if (amount > 0n) { payout(amount); }
+  }).reward({ tokens: [{ token: USDC, amount }] });
+}
+function main() {
+  payout(5n);
+}`,
+        context(),
+      ),
+    message: /calls `payout`, the function that opens it/,
+  },
 ];
 
 describe("the guide's refusal list is the lowering's", () => {

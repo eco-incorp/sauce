@@ -5,6 +5,7 @@ import { compileProgram as compile } from "./helpers";
 import * as acorn from "acorn";
 import { isSauceClosure, sauceBodyToSource } from "../src/routes/closure.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
+import { compileSauceRoute } from "../src/routes/sauce-route.js";
 import type { IntentOptions } from "../src/routes/intent-dsl.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
@@ -165,6 +166,60 @@ describe("openRoute: closure bodies end to end", () => {
   });
 });
 
-// Ambient declared only for the type-checker inside the closure fixture above -- the compiler
-// resolves it via `options.defines`, never via JS scope (closures capture nothing).
+describe("a closure's own helper functions", () => {
+  // A closure is the only place a closure-based program can declare a helper. SauceScript has no
+  // nested functions, so the extracted program declares each at the top level, beside `main`.
+  const withHelper = () => {
+    function half(x: bigint): bigint {
+      return x / 2n;
+    }
+    USDC.transfer(RECIPIENT, half(1000n));
+  };
+  const execution = { pot: POT, engine: ENGINE };
+
+  it("are declared beside `main`, not inside it", () => {
+    const source = sauceBodyToSource(withHelper);
+    const main = source.indexOf("function main()");
+
+    expect(source.indexOf("function half(")).toBeGreaterThanOrEqual(0);
+    expect(source.indexOf("function half(")).toBeLessThan(main);
+    expect(source.slice(main)).not.toContain("function half(");
+  });
+
+  it("compile", () => {
+    const out = compileSauceRoute("base", sauceBodyToSource(withHelper), execution, {
+      defines: { RECIPIENT: 0x99n },
+    });
+
+    expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+  });
+
+  it("reach an intent opened inside the closure", () => {
+    const body = () => {
+      function half(x: bigint): bigint {
+        return x / 2n;
+      }
+      const amount = USDC.balanceOf(0x1234n);
+      Arbitrum(() => {
+        USDC.transfer(RECIPIENT, half(amount));
+      }).reward({ tokens: [{ token: USDC, amount }] });
+    };
+    const out = compileSauceRoute("base", sauceBodyToSource(body), execution, {
+      defines: { RECIPIENT: 0x99n },
+      intents: {
+        deadline: 4_000_000_000n,
+        creator: "0x3333333333333333333333333333333333333333",
+        executionFee: 0n,
+      },
+    });
+
+    expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+  });
+});
+
+// Ambient declared only for the type-checker inside the closure fixtures above -- the compiler
+// resolves them via `options.defines` or the route rewrites, never via JS scope (closures capture
+// nothing).
 declare const chainId: bigint;
+declare const RECIPIENT: bigint;
+declare const Arbitrum: (body: () => void) => { reward(spec: unknown): void };
