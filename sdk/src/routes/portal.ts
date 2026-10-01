@@ -47,6 +47,24 @@
  * `eco/eco-routes-svm`, with its own instructions and accounts, which these helpers do not build.
  * The DESTINATION may be `svm` and is fully supported: an EVM-sourced reward with Borsh route bytes
  * is exactly the `DepositAddress_USDCTransfer_Solana.sol` shape.
+ *
+ * FUNDING BY TRANSFER — the default `intentSourceTxs` builds (`fundVia: "transfer"`). An intent is
+ * funded when its vault HOLDS the reward, however it got there: `IntentSource.isIntentFunded` is
+ * `rewardStatuses[hash] == Funded || _isRewardFunded(reward, vault)`, the latter a balance check per
+ * leg, and the solver validates funding with exactly that call after picking the intent up from
+ * `IntentPublished`. `withdraw` accepts an `Initial` intent and `refund` returns whatever the vault
+ * holds, so a vault paid directly pays out like one the Portal pulled into. So the funder transfers
+ * each reward token to the vault (and sends the native amount) and then calls `publish`: no approval
+ * at all, so nothing to reset for USDT and no allowance left standing. Transfer FIRST: the solver
+ * sees `IntentPublished` with the vault already funded, and a `publish` that fails leaves the funds
+ * in the vault, to be published later or refunded after the reward deadline.
+ *
+ * The vault is not read from anything the funder controls: {@link predictIntentVault} derives it
+ * offline (`vault.ts#ecoRoutesVaultConfig`, held to every deployed registry Portal), and a vault a
+ * caller read on chain (`intentVaultAddressCall`) is cross-checked against it —
+ * {@link assertIntentVault} — so a lying endpoint cannot redirect the reward. `fundVia:
+ * "publishAndFund"` keeps the approvals and `publishAndFund`: the Portal emits `IntentFunded` and
+ * records the intent `Funded`, which the solver's quote flow reads to promote quotes.
  */
 import {
   concatHex,
@@ -79,6 +97,7 @@ import type { IntentHashes } from "./encode.js";
 import { assertRewardAssetsDistinct } from "./intent.js";
 import { toUniversalAddress } from "./normalize.js";
 import type { AddressInput, Intent } from "./types.js";
+import { ecoRoutesVaultConfig, predictVaultAddress } from "./vault.js";
 
 /** A submittable transaction request. `value` is always explicit, never omitted. */
 export interface PortalTx {
@@ -790,4 +809,184 @@ export function intentFromPublished(
   }
 
   return { intent, intentHash };
+}
+
+// ---------------------------------------------------------------------------
+// Funding: by transfer to the vault (the default), or approve + publishAndFund
+// ---------------------------------------------------------------------------
+
+/**
+ * How an intent's reward reaches its vault, everywhere the SDK funds one — this builder, the
+ * program a Pot runs for an intent it opens, `sauce intent publish` (`--intent-fund-via`) and the MCP
+ * `sauce_publish` tool (`intentFundVia`). The same two words, with the same meanings, as `.nest()`'s
+ * `via`:
+ *
+ *  - `"transfer"` (the default): each reward token transferred to the vault, and the native amount
+ *    sent to it, then `Portal.publish`. No approval. See the module doc.
+ *  - `"publishAndFund"`: each reward token approved to the Portal, then `Portal.publishAndFund`,
+ *    which pulls the reward into the vault, records the intent `Funded` and emits `IntentFunded`.
+ */
+export type IntentFundVia = "transfer" | "publishAndFund";
+
+/** Every {@link IntentFundVia}, in the order a message lists them. */
+export const INTENT_FUND_VIA: readonly IntentFundVia[] = ["transfer", "publishAndFund"];
+
+/** One thing the vault must hold for the intent to count as funded: a token's amount, or (with no
+ *  `token`) the native amount. */
+export interface VaultLeg {
+  /** The reward token, checksummed; absent for the native amount. */
+  readonly token?: Hex;
+  readonly amount: bigint;
+}
+
+/**
+ * What the vault must hold: one leg per DISTINCT reward token, in first-seen order, for the largest
+ * of its amounts, then the native amount. Largest and not the sum, because
+ * `IntentSource._isRewardFunded` compares each entry against the vault's whole balance of that
+ * token — the same reason {@link approvalTxs} approves the largest. A zero leg needs nothing and is
+ * left out.
+ */
+export function rewardVaultLegs(intent: Intent): readonly VaultLeg[] {
+  const largest = new Map<Hex, bigint>();
+  for (const { token, amount } of intent.reward.tokens) {
+    const address = getAddress(denormalizeToEvm(token)) as Hex;
+    const previous = largest.get(address);
+    if (previous === undefined || amount > previous) largest.set(address, amount);
+  }
+  const legs: VaultLeg[] = [...largest]
+    .filter(([, amount]) => amount > 0n)
+    .map(([token, amount]) => ({ token, amount }));
+  if (intent.reward.nativeAmount > 0n) legs.push({ amount: intent.reward.nativeAmount });
+
+  return legs;
+}
+
+/**
+ * One leg paid into `vault`: `token.transfer(vault, amount)`, or `amount` wei sent with no data.
+ *
+ * A wallet's transaction, not a program's call, so there is no `SafeERC20` check to run on the
+ * return: a token that returns nothing (USDT) lands like any other, and one that returns `false`
+ * lands having moved nothing. What catches that is the vault's balance, not the receipt — ask
+ * `isIntentFundedCall` once the transfers have landed and before `publish` is sent, as
+ * `sauce intent publish` does. (A Pot's transfer into the vault is a program's, and is `SafeERC20`'s:
+ * `intent-sugar.ts#vaultFundingStatements`.)
+ */
+export function vaultTransferTx(vault: AddressInput, leg: VaultLeg): PortalTx {
+  const to = getAddress(denormalizeToEvm(toUniversalAddress(vault))) as Hex;
+  if (leg.token === undefined) return { to, data: "0x", value: leg.amount };
+
+  return {
+    to: leg.token,
+    data: encodeFunctionData({ abi: ERC20ABI, functionName: "transfer", args: [to, leg.amount] }),
+    value: 0n,
+  };
+}
+
+/** Every leg of {@link rewardVaultLegs} paid into `vault`, in order. */
+export function vaultTransferTxs(intent: Intent, vault: AddressInput): readonly PortalTx[] {
+  assertEvmSource(intent, "vaultTransferTxs");
+
+  return rewardVaultLegs(intent).map((leg) => vaultTransferTx(vault, leg));
+}
+
+/**
+ * The intent's vault on `target.portal`, derived offline (`vault.ts#ecoRoutesVaultConfig`): what
+ * `Portal.intentVaultAddress` returns for an eco-routes Portal, with nothing read from a chain.
+ */
+export function predictIntentVault(intent: Intent, target: PortalTarget): Hex {
+  assertEvmSource(intent, "predictIntentVault");
+
+  return predictVaultAddress(hashIntent(intent).intentHash, ecoRoutesVaultConfig(target.portal));
+}
+
+/** A vault read from a chain that is not the one the SDK derives for the intent. */
+export class IntentVaultMismatchError extends Error {
+  constructor(
+    readonly reported: Hex,
+    readonly predicted: Hex,
+  ) {
+    super(
+      `the Portal reports the intent's vault as ${reported}, but the SDK derives ${predicted} — ` +
+        "refusing to send the reward to either. The endpoint may be answering for another chain " +
+        "or Portal, or this Portal derives its vaults some other way; fund it with fundVia " +
+        "publishAndFund instead, where the Portal moves the reward itself.",
+    );
+    this.name = "IntentVaultMismatchError";
+  }
+}
+
+/**
+ * `vault` — read with `intentVaultAddressCall` — checked against {@link predictIntentVault}, and
+ * returned checksummed. Throws {@link IntentVaultMismatchError} when they differ: a transfer is
+ * final, so an address two sources disagree on is not paid.
+ */
+export function assertIntentVault(intent: Intent, target: PortalTarget, vault: AddressInput): Hex {
+  const predicted = predictIntentVault(intent, target);
+  const reported = getAddress(denormalizeToEvm(toUniversalAddress(vault))) as Hex;
+  if (reported !== predicted) throw new IntentVaultMismatchError(reported, predicted);
+
+  return reported;
+}
+
+/** What {@link intentSourceTxs} builds. */
+export interface IntentSourceTxsOptions {
+  /** Default `"transfer"`. */
+  readonly fundVia?: IntentFundVia;
+  /** `"transfer"` only: the vault as the Portal reports it (`intentVaultAddressCall`), checked
+   *  against the SDK's derivation before anything is paid to it. Omitted, the derivation is used. */
+  readonly vault?: AddressInput;
+  /** `"publishAndFund"`: passed to `publishAndFund`. Default `false`, the only value `"transfer"`
+   *  takes — it pays the whole reward. */
+  readonly allowPartial?: boolean;
+}
+
+/**
+ * The source-chain transactions that fund and publish `intent` from one wallet, in the order to
+ * send them:
+ *
+ *  - `fundVia: "transfer"` (default): {@link vaultTransferTxs} into the vault, then
+ *    {@link publishTx};
+ *  - `fundVia: "publishAndFund"`: {@link approvalTxs}, then {@link publishAndFundTx}.
+ *
+ * Pure: the caller performs any read and sends the transactions. An option the mode cannot honour
+ * (`vault` under `"publishAndFund"`, `allowPartial: true` under `"transfer"`) throws rather than
+ * being ignored.
+ */
+export function intentSourceTxs(
+  intent: Intent,
+  target: PortalTarget,
+  options: IntentSourceTxsOptions = {},
+): readonly PortalTx[] {
+  const fundVia = options.fundVia ?? "transfer";
+  if (!INTENT_FUND_VIA.includes(fundVia)) {
+    throw new Error(
+      `portal.ts#intentSourceTxs: fundVia '${String(fundVia)}' is not ` +
+        `${INTENT_FUND_VIA.map((via) => `"${via}"`).join(" or ")}`,
+    );
+  }
+  if (fundVia === "publishAndFund") {
+    if (options.vault !== undefined) {
+      throw new Error(
+        'portal.ts#intentSourceTxs: `vault` goes with fundVia "transfer" — under ' +
+          '"publishAndFund" the Portal finds the vault itself',
+      );
+    }
+
+    return [
+      ...approvalTxs(intent, target),
+      publishAndFundTx(intent, options.allowPartial ?? false, target),
+    ];
+  }
+  if (options.allowPartial === true) {
+    throw new Error(
+      'portal.ts#intentSourceTxs: `allowPartial` goes with fundVia "publishAndFund" — a transfer ' +
+        "pays the whole reward, and `publish` takes no such flag",
+    );
+  }
+  const vault =
+    options.vault === undefined
+      ? predictIntentVault(intent, target)
+      : assertIntentVault(intent, target, options.vault);
+
+  return [...vaultTransferTxs(intent, vault), publishTx(intent, target)];
 }

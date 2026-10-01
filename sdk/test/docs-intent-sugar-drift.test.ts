@@ -239,8 +239,8 @@ describe("the guide's account of which chain a name resolves on is the lowering'
       holds: () => lowered().reward.tokens[0]!.token === onChain(BASE.slug),
     },
     {
-      // Through the real compile: a caller's `USDC` is Base's, so the reward's approval reads it,
-      // while the Arbitrum body keeps Arbitrum's registry USDC.
+      // Through the real compile: a caller's `USDC` is Base's, so the reward's transfer into the
+      // vault is a call on it, while the Arbitrum body keeps Arbitrum's registry USDC.
       documented: "is a name on the chain the program is compiled for",
       holds: () => {
         const chosen = 0x7777777777777777777777777777777777777777n;
@@ -259,7 +259,7 @@ describe("the guide's account of which chain a name resolves on is the lowering'
             intents: { deadline: 4_000_000_000n, creator: CREATOR },
           },
         ).source.toLowerCase();
-        return source.includes(`evm.static(${chosen}n`) && source.includes(arbitrumUsdc);
+        return source.includes(`evm.call(${chosen}n`) && source.includes(arbitrumUsdc);
       },
     },
   ];

@@ -6,14 +6,13 @@
  * (`evm/fixtures/MockMailbox.sol`, whose `process` delivers a message with no ISM).
  *
  * THE PORTAL IS PUT IN PLACE, NOT DEPLOYED THERE. A Portal's address is its deployer's, and three
- * contracts hold each other's addresses as immutables: the Portal's `executor` (its second CREATE),
- * the Executor's `portal`, and the vault implementation's `portal` (its first CREATE), which every
+ * contracts hold each other's addresses as immutables: the Portal's `executor` and vault
+ * implementation (its CREATEs), and the Executor's and the implementation's `portal`, which every
  * intent's vault — a proxy delegating to it — checks its caller against. So the fixture is
- * deployed wherever it lands, and the three runtimes copied to the registry's Portal, the Executor
- * derived from it and (in place) the vault implementation, with exactly those immutables
- * rewritten. The Portal's other immutables are untouched: its chain id (anvil's), the vault
- * implementation's address, and its EIP-712 cache, which recomputes for an address not the cached
- * one. The HyperProver has no immutable naming its own address, so it is constructed for the
+ * deployed wherever it lands, and the three runtimes copied to the registry's Portal and the two
+ * addresses the SDK derives from it, every copy of the three addresses rewritten (`plantPortal`).
+ * The Portal's other immutables are untouched: its chain id (anvil's) and its EIP-712 cache, which
+ * recomputes for an address not the cached one. The HyperProver has no immutable naming its own address, so it is constructed for the
  * registry's Portal and Mailbox, and its runtime copied to the registry's prover address.
  */
 import { readFileSync } from "node:fs";
@@ -24,7 +23,6 @@ import {
   encodeAbiParameters,
   encodeFunctionData,
   getAddress,
-  getContractAddress,
   pad,
   parseAbi,
   zeroAddress,
@@ -36,6 +34,7 @@ import {
   ecoRoutesContract,
   ecoRoutesExecutorOf,
   ecoRoutesPortal,
+  ecoRoutesVaultImplementationOf,
 } from "../src/protocols/eco-routes/lookup.js";
 import type { LocalChain } from "./cli-anvil.js";
 
@@ -66,13 +65,21 @@ export function rewrite(code: Hex, from: Address, to: Address): Hex {
   return parts.join(to.slice(2).toLowerCase()) as Hex;
 }
 
-/** The registry's Portal on `local`'s chain, made the fixture `name`'s real code. */
+/**
+ * The registry's Portal on `local`'s chain, made the fixture `name`'s real code: deployed wherever
+ * it lands, then the Portal, its vault implementation and its Executor copied to the registry's
+ * Portal and the two addresses the SDK derives from it (`ecoRoutesVaultImplementationOf`,
+ * `ecoRoutesExecutorOf`), every copy of those three addresses rewritten in all three — as
+ * `cli-anvil.ts#placePortal` does for the current fixture, so the vault the SDK predicts offline is
+ * the one the Portal reports.
+ */
 export async function plantPortal(
   local: LocalChain,
   name: (typeof PORTAL_FIXTURES)[keyof typeof PORTAL_FIXTURES] = PORTAL_FIXTURES.v2_12,
 ): Promise<{ portal: Address; executor: Address; vaultImplementation: Address }> {
   const portal = getAddress(ecoRoutesPortal(local.chain));
   const executor = getAddress(ecoRoutesExecutorOf(portal));
+  const vaultImplementation = getAddress(ecoRoutesVaultImplementationOf(portal));
   const deployed = await local.plant(
     `${creation(name)}${encodeAbiParameters([{ type: "address" }], [zeroAddress]).slice(2)}` as Hex,
   );
@@ -81,25 +88,21 @@ export async function plantPortal(
     abi: PORTAL,
     functionName: "executor",
   });
-  // The Portal's first CREATE is its vault implementation (`IntentSource(address(new Vault()), …)`).
-  const vaultImplementation = getContractAddress({ from: deployed, nonce: 1n, opcode: "CREATE" });
-  const [portalCode, executorCode, vaultCode] = await Promise.all(
-    [deployed, itsExecutor, vaultImplementation].map((address) =>
-      local.publicClient.getCode({ address }),
-    ),
-  );
-  await local.testClient.setCode({
-    address: portal,
-    bytecode: rewrite(portalCode!, itsExecutor, executor),
-  });
-  await local.testClient.setCode({
-    address: executor,
-    bytecode: rewrite(executorCode!, deployed, portal),
-  });
-  await local.testClient.setCode({
-    address: vaultImplementation,
-    bytecode: rewrite(vaultCode!, deployed, portal),
-  });
+  const moves = [
+    [deployed, portal],
+    [getAddress(ecoRoutesVaultImplementationOf(deployed)), vaultImplementation],
+    [getAddress(itsExecutor), executor],
+  ] as const;
+  const relocated = (code: Hex): Hex =>
+    moves.reduce(
+      (text, [from, to]) => text.split(from.slice(2).toLowerCase()).join(to.slice(2).toLowerCase()),
+      code.toLowerCase(),
+    ) as Hex;
+  for (const [from, to] of moves) {
+    const code = await local.publicClient.getCode({ address: from });
+    if (code === undefined) throw new Error(`the Portal's deployment left no contract at ${from}`);
+    await local.testClient.setCode({ address: to, bytecode: relocated(code) });
+  }
 
   return { portal, executor, vaultImplementation };
 }

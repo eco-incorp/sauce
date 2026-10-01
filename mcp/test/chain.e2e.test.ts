@@ -10,21 +10,10 @@
  * without it in CI (the harness throws on import there).
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { createServer } from "node:net";
-import { dirname, join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import { fileURLToPath } from "node:url";
 
-import {
-  encodeAbiParameters,
-  formatUnits,
-  getAddress,
-  zeroAddress,
-  toFunctionSelector,
-  type Address,
-  type Hex,
-} from "viem";
+import { formatUnits, getAddress, toFunctionSelector, type Address, type Hex } from "viem";
 
 import {
   FEE,
@@ -38,15 +27,7 @@ import {
 } from "../../sdk/test/cli-anvil.js";
 import { v12KitchenAddress } from "../../sdk/dist/deployments/index.js";
 import { v12PredictPot } from "../../sdk/dist/deployments/pot.js";
-import { ecoRoutesPortal } from "../../sdk/dist/protocols/eco-routes/lookup.js";
 import { connect, endpointsFor, failed, ok, type Connected } from "./harness.js";
-
-const SDK_TEST = join(dirname(fileURLToPath(import.meta.url)), "../../sdk/test");
-const PORTAL_CREATION = (
-  JSON.parse(readFileSync(join(SDK_TEST, "evm/fixtures/Portal.json"), "utf8")) as {
-    creationCode: Hex;
-  }
-).creationCode;
 
 /** An owner nobody holds the key of, with nothing: no Pot, no native currency, no tokens. */
 const NOBODY: Address = "0x5a0Ce0000000000000000000000000000000Beef";
@@ -133,11 +114,9 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
   before(async () => {
     local = await startChain("arbitrum", await freePort());
     usdc = await local.plant(fixture("MockERC20"), registered(local.chain, "USDC"));
-    // The real eco-routes Portal, where the SDK records it, for the publish rehearsal.
-    await local.plant(
-      `${PORTAL_CREATION}${encodeAbiParameters([{ type: "address" }], [zeroAddress]).slice(2)}` as Hex,
-      ecoRoutesPortal("arbitrum") as Address,
-    );
+    // The real eco-routes Portal, where the SDK records it and deployed there in effect (so its
+    // vaults are the ones the SDK derives), for the publish rehearsal.
+    await placePortal(local);
     base = await startChain("base", await freePort());
     baseUsdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
     basePortal = (await placePortal(base)).portal;
@@ -370,12 +349,26 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       dryRun: true,
     };
     const short = ok(await mcp.call("sauce_intent_publish", args));
-    assert.equal(short.ok, false, "with nothing to fund the reward, publishAndFund reverts");
+    assert.equal(short.ok, false, "with nothing to pay into the vault, the transfer reverts");
     const out = ok(await mcp.call("sauce_intent_publish", { ...args, assumeBalance: ["USDC:1"] }));
     assert.equal(out.ok, true);
     assert.deepEqual(
-      (out.transactions as Array<{ status: string }>).map((tx) => tx.status),
-      ["success", "success"],
+      (out.transactions as Array<{ what: string; status: string }>).map((tx) => [
+        tx.what.split(" ")[0],
+        tx.status,
+      ]),
+      [
+        ["transfer", "success"],
+        ["publish", "success"],
+      ],
+    );
+    // After the transfer and the publish, the Portal counts the intent funded.
+    assert.deepEqual(
+      (out.intents as Array<{ fundVia: string; funded: boolean }>).map((intent) => [
+        intent.fundVia,
+        intent.funded,
+      ]),
+      [["transfer", true]],
     );
     assert.equal(await local.balanceOf(usdc, NOBODY), 0n);
     // The other side is the destination's, and its tool is named.

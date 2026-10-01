@@ -21,6 +21,7 @@ import {
   parseDefines,
   parseDefinesFile,
   parseFlags,
+  parseFundVia,
   parseSalt,
   parseTarget,
   parseUnixSeconds,
@@ -305,6 +306,11 @@ const PROGRAM: FlagSpecs = {
     value: "<wei|auto>",
     help: "…the destination Kitchen's fee, when one runs a program; auto reads it",
   },
+  "intent-fund-via": {
+    type: "string",
+    value: "<transfer|publishAndFund>",
+    help: "…how their reward is funded: paid into the vault (default), or publishAndFund",
+  },
   "compact-args": {
     type: "boolean",
     help: "Take main's arguments as compact-v1, not ABI-v1",
@@ -555,6 +561,7 @@ async function programInput(
   const creator = stringFlag(args, "intent-creator");
   const prover = stringFlag(args, "intent-prover");
   const fee = stringFlag(args, "intent-execution-fee");
+  const fundVia = stringFlag(args, "intent-fund-via");
   const defines = {
     ...(definesFile === undefined
       ? {}
@@ -582,6 +589,7 @@ async function programInput(
       ...(fee === undefined || fee === "auto"
         ? {}
         : { executionFee: parseWei("intent-execution-fee", fee) }),
+      ...(fundVia === undefined ? {} : { fundVia: parseFundVia(fundVia) }),
     },
   };
   if (fee !== "auto") return input;
@@ -957,6 +965,7 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
     ...(flag("prover") === undefined ? {} : { prover: flag("prover")! }),
     ...(flag("fill-deadline") === undefined ? {} : { fillDeadline: flag("fill-deadline")! }),
     ...(flag("reward-deadline") === undefined ? {} : { rewardDeadline: flag("reward-deadline")! }),
+    ...(flag("intent-fund-via") === undefined ? {} : { fundVia: flag("intent-fund-via")! }),
     ...(flag("out") === undefined ? {} : { out: flag("out")! }),
   };
   const created = await createIntent({
@@ -987,6 +996,7 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
       rewardDeadline: created.rewardDeadline,
       creator,
       prover: created.prover,
+      fundVia: created.fundVia,
     },
   };
   const rpcUrl = lookup(created.source);
@@ -1279,25 +1289,33 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     details: [
       "For a file whose intents are fixed when it is built — every amount a literal, a define or a",
       "top-level `const` of a literal — builds each intent off-chain (the SDK's own lowering) and",
-      "sends the source chain's Portal transactions from the signer's wallet: each reward token",
+      "sends the source chain's transactions from the signer's wallet: each reward token",
+      "transferred to the intent's vault (and the native amount sent to it), then Portal.publish.",
+      "No approval is asked for. The vault is the SDK's offline derivation, which the Portal's own",
+      "intentVaultAddress must agree with or nothing is sent; only what the vault does not hold",
+      "yet is transferred, and publish is sent only once the Portal counts the intent funded.",
+      "Prints the intent hashes and the transactions. A file whose intent uses a value the program",
+      "measures or computes while it runs, or that does anything besides open its intents, is",
+      "refused: use `sauce run` on a Pot.",
+      "",
+      "--intent-fund-via publishAndFund funds it through the Portal instead: each reward token",
       "approved to the Portal (reset to zero first when a smaller allowance stands, as SafeERC20",
-      "does), then publishAndFund. Prints the intent hashes and the transactions. A file whose",
-      "intent uses a value the program measures or computes while it runs, or that does anything",
-      "besides open its intents, is refused: use `sauce run` on a Pot.",
+      "does), then publishAndFund, which records the intent Funded and emits IntentFunded.",
       "",
       "--dry-run rehearses the transactions together through eth_simulateV1 from the signer's",
-      "wallet, or --from's with no key, and sends nothing. --assume-balance TOKEN:amount gives",
-      "that wallet a balance for the rehearsal only, by state override (repeatable; the amount as",
-      "`sauce run --fund` takes it; ETH:<amount> for the native currency), so a wallet that does",
-      "not hold the reward yet can rehearse publishing it.",
-      "",
+      "wallet, or --from's with no key, then asks the Portal whether each intent is funded, and",
+      "sends nothing. --assume-balance TOKEN:amount gives that wallet a balance for the rehearsal",
+      "only, by state override (repeatable; the amount as `sauce run --fund` takes it;",
+      "ETH:<amount> for the native currency), so a wallet that does not hold the reward yet can",
+      "rehearse publishing it.",
       "",
       "With no <file>, it makes one: which chains, what is delivered and to whom, the reward",
       "(suggested: what is delivered plus a margin over the solver's destination costs — gas, the",
       "proof's fee, a Kitchen fee where one runs — priced through a Uniswap V3 pool there, and",
-      "doubled so a fill is worth a solver's while), the fill and reward deadlines, and the",
-      "prover, each asked at a terminal unless its flag gives it (with no terminal, every flag",
-      "still needed is named). It writes the intent as a .sauce.ts file (--out, default",
+      "doubled so a fill is worth a solver's while), the fill and reward deadlines, the prover",
+      "and how the reward is funded (--intent-fund-via, a transfer to the vault by default), each",
+      "asked at a terminal unless its flag gives it (with no terminal, every flag still needed is",
+      "named). It writes the intent as a .sauce.ts file (--out, default",
       "intent-<source>-to-<destination>-<time>.sauce.ts) to keep and publish again, rehearses",
       "publishing it (--dry-run) and filling it on the destination (`sauce intent fill`), and",
       "with a signer publishes it once you approve (or with --auto-approve), storing it. --config names",
