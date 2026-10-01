@@ -4,9 +4,9 @@
 // main, and BENEFICIARY a define.
 //
 // `--chain` is the source chain, which funds the reward: `USDC` in `.reward(...)` is its USDC.
-// Inside the braces the body runs on Arbitrum: `AaveV3.Pool` is Arbitrum's pool, and Arbitrum's
-// USDC is named by its address there (the tokens index lists it), which the body, the delivery and
-// the approve all use. The gap between what is delivered and the reward is the solver's margin.
+// Inside the braces, and in the delivery argument after them, the code runs on Arbitrum: `USDC` and
+// `AaveV3.Pool` there are Arbitrum's. The gap between what is delivered and the reward is the
+// solver's margin.
 //
 //   sauce run cross-chain.sauce.ts --chain <chain> --config sauce.config.json \
 //     --keystore <keystore> --define BENEFICIARY=<address> --intent-deadline <unix seconds> \
@@ -18,8 +18,8 @@ const delivered = amount - (amount * 10n) / 10000n; // the solver keeps 0.1%
 
 Arbitrum(
   () => {
-    Token(0xaf88d065e77c8cc2239327c5edb3a432268e5831n).approve(AaveV3.Pool, delivered);
-    AaveV3.Pool.supply(0xaf88d065e77c8cc2239327c5edb3a432268e5831n, delivered, BENEFICIARY, 0n);
+    USDC.approve(AaveV3.Pool, delivered);
+    AaveV3.Pool.supply(USDC, delivered, BENEFICIARY, 0n);
   },
-  { tokens: [{ token: 0xaf88d065e77c8cc2239327c5edb3a432268e5831n, amount: delivered }] }
+  { tokens: [{ token: USDC, amount: delivered }] },
 ).reward({ tokens: [{ token: USDC, amount }] });

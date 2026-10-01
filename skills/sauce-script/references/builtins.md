@@ -132,7 +132,11 @@ Accounts compare only with `==` and `!=`: "accounts compare for identity only �
 - A `: void` function's result is not a value: "a call to a `: void` function produces no value, so its result
   can't be used as one — call it as a statement instead".
 - `main` is the entry point and cannot be called from your code.
-- A function other than `main` takes **at most 16 parameters**. More fails with "`f` does not fit …".
+- A function other than `main` has a fixed budget for its parameters and the values its body keeps live at
+  once: about sixteen. Seventeen parameters still compile when the body reads each one once. Past the
+  budget — sixteen parameters with a local held beside them, or seventeen with the first one read again — the
+  compile fails with "`f` does not fit …". Pass a record or an array instead of a long list of numbers. `main`'s
+  parameters are the program's arguments and are not limited this way.
 
 **`main`'s arguments**
 
@@ -144,7 +148,9 @@ Accounts compare only with `==` and `!=`: "accounts compare for identity only �
 - On **SVM**, `Account` parameters are not encoded arguments: they are the accounts attached to the transaction,
   in declaration order.
 
-**Scripts:** a file with top-level statements and no `main` runs as `main(): void`.
+**Scripts:** a file with top-level statements and no `main` runs as `main(): void`. Its top-level `const` and
+`let` are locals of that entry, so a function cannot read them, and it cannot `return`. Declare `main` to share
+a module-level constant with functions, or to return a value.
 
 **Module constants and defines**
 
@@ -170,13 +176,13 @@ Available on **Both** targets. These are statements, except `eval`, which return
 reserved: you cannot declare a function named `require`, `revert`, `log` or `eval` ("`log` is a reserved
 builtin and cannot be a function name").
 
-| Form                                      | Types                                                                           | Behaviour and errors                                                                                                                                                                                                                                                                                                                                                                                  | Example                                              |
-| ----------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `require(cond)`, `require(cond, message)` | `cond`: scalar. `message`: bytes.                                               | Reverts unless `cond` is nonzero. "`require` takes 1 or 2 arguments (a condition and an optional bytes payload), got N"; "a `require` condition requires a scalar value". Used as a value: "`require` aborts execution and produces no value — use it as a statement".                                                                                                                                | `require(out >= minOut, "slippage");`                |
-| `revert()`, `revert(data)`                | `data`: bytes                                                                   | Reverts with `data` as the revert data. "`revert` takes at most 1 argument (an optional bytes payload), got 2"; "a revert payload requires a bytes value"                                                                                                                                                                                                                                             | `revert(abi.encode(code));`                          |
-| `throw data`                              | `data`: bytes                                                                   | The same as `revert(data)`. "a `throw` payload requires a bytes value".                                                                                                                                                                                                                                                                                                                               | `throw "below floor";`                               |
-| `log(data)`, `log(data, topic1, …)`       | `data`: bytes. Up to 4 scalar topics, **EVM only**.                             | Emits a log record. On SVM pass `data` alone: "`log with topics` is not available on the svm target; … call log(data) alone and fold any event discriminator into data (concat or abi.encode it in front of the fields)". Other errors: "`log` requires a bytes data payload — `log()` records nothing"; "`log` carries at most 4 indexed topics after its data payload, got 5".                      | `log(abi.encode(from, to, amount), TRANSFER_TOPIC);` |
-| `eval(program, ...args)`                  | `program`: compiled Sauce program bytes. Up to 16 scalar `args`. Returns bytes. | Runs another program and returns what it returns; `args` become its `main` arguments. If the inner program reverts, so does the outer one. On SVM the inner program can read accounts but cannot write them. Errors: "`eval` requires bytecode to run — `eval()` has nothing to execute"; "`eval` takes at most 16 arguments after its bytecode, got 17"; "an eval argument requires a scalar value". | `const result = eval(program, amount);`              |
+| Form                                      | Types                                                                           | Behaviour and errors                                                                                                                                                                                                                                                                                                                                                                                  | Example                                 |
+| ----------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| `require(cond)`, `require(cond, message)` | `cond`: scalar. `message`: bytes.                                               | Reverts unless `cond` is nonzero. "`require` takes 1 or 2 arguments (a condition and an optional bytes payload), got N"; "a `require` condition requires a scalar value". Used as a value: "`require` aborts execution and produces no value — use it as a statement".                                                                                                                                | `require(out >= minOut, "slippage");`   |
+| `revert()`, `revert(data)`                | `data`: bytes                                                                   | Reverts with `data` as the revert data. "`revert` takes at most 1 argument (an optional bytes payload), got 2"; "a revert payload requires a bytes value"                                                                                                                                                                                                                                             | `revert(code.toBytesBe(32n));`          |
+| `throw data`                              | `data`: bytes                                                                   | The same as `revert(data)`. "a `throw` payload requires a bytes value".                                                                                                                                                                                                                                                                                                                               | `throw "below floor";`                  |
+| `log(data)`, `log(data, topic1, …)`       | `data`: bytes. Up to 4 scalar topics, **EVM only**.                             | Emits a log record. On SVM pass `data` alone: "`log with topics` is not available on the svm target; … call log(data) alone and fold any event discriminator into data (concat or abi.encode it in front of the fields)". Other errors: "`log` requires a bytes data payload — `log()` records nothing"; "`log` carries at most 4 indexed topics after its data payload, got 5".                      | `log(amount.toBytesLe(8n));`            |
+| `eval(program, ...args)`                  | `program`: compiled Sauce program bytes. Up to 16 scalar `args`. Returns bytes. | Runs another program and returns what it returns; `args` become its `main` arguments. If the inner program reverts, so does the outer one. On SVM the inner program can read accounts but cannot write them. Errors: "`eval` requires bytecode to run — `eval()` has nothing to execute"; "`eval` takes at most 16 arguments after its bytecode, got 17"; "an eval argument requires a scalar value". | `const result = eval(program, amount);` |
 
 **Failure is atomic.** `require`, `revert`, `throw`, a failing call and every checked operation revert the whole
 transaction; nothing that ran before them survives. The only failure a program can survive is a failed
@@ -189,7 +195,7 @@ Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a 
 | Read                      | Returns | Targets  | On EVM                                                                             | On SVM                                                                                                                                                                                                       | Example                                         |
 | ------------------------- | ------- | -------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
 | `ctx.msgSender()`         | number  | **Both** | the immediate caller (`msg.sender`)                                                | the transaction's first signer                                                                                                                                                                               | `require(ctx.msgSender() == OWNER);`            |
-| `ctx.self()`              | number  | **Both** | the executing contract: the Pot, which holds the program's balances and allowances | the executing Sauce program's id                                                                                                                                                                             | `const held = USDC.balanceOf(ctx.self());`      |
+| `ctx.self()`              | number  | **Both** | the executing contract: the Pot, which holds the program's balances and allowances | the executing Sauce program's id                                                                                                                                                                             | `log(ctx.self().toBytesBe(32n));`               |
 | `ctx.chainId()`           | number  | **Both** | the chain id                                                                       | 1399811149 on mainnet, 1399811150 on devnet                                                                                                                                                                  | `if (ctx.chainId() == 8453n) { … }`             |
 | `ctx.blockNumber()`       | number  | **Both** | the block number                                                                   | the **slot**                                                                                                                                                                                                 | `const at = ctx.blockNumber();`                 |
 | `ctx.timestamp()`         | number  | **Both** | the block time, in seconds                                                         | the cluster time, in seconds                                                                                                                                                                                 | `require(ctx.timestamp() <= deadline);`         |
@@ -206,7 +212,8 @@ Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a 
 - A wrong argument count gives "`ctx.timestamp` takes 0 argument(s), but this call passes 1".
 - An unknown name gives "`ctx.origin` is not a context builtin".
 - A bare `gasLeft()` gives "… is called but never declared; write `ctx.gasLeft()` instead".
-- There is no read for the transaction origin, the block hash, the base fee or the gas price.
+- There is no read for the transaction origin, the block hash, the base fee or the gas price. Pass such a value
+  in as a `main` argument.
 
 ## 7. `crypto`
 
@@ -292,31 +299,32 @@ An unknown name gives "`svm.rent` is not an svm builtin; `svm` is a reserved nam
 
 ### Methods (Both targets)
 
-| Method               | On                | Types                      | Behaviour and errors                                                                                                                                                                                                                                 | Example                                                 |
-| -------------------- | ----------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `.slice(start, end)` | bytes             | `(scalar, scalar) → bytes` | Covers bytes `start` up to, but not including, `end`. `end < start` reverts. Arrays have no `.slice`: "a bytes method's receiver requires a bytes value". "`.slice` takes exactly 2 arguments (start, end), got N"                                   | `const args = input.slice(4n, 68n);`                    |
-| `.concat(b1, b2, …)` | bytes             | `(...bytes) → bytes`       | Joins bytes values. "a `.concat` argument requires a bytes value"                                                                                                                                                                                    | `const call = selector.concat(abi.encode(to, amount));` |
-| `.toBe()`            | bytes, at most 32 | `() → number`              | Reads the bytes as a big-endian number. Longer input fails when run.                                                                                                                                                                                 | `const word = svm.sload(acct, 0n, 32n).toBe();`         |
-| `.toLe()`            | bytes, at most 32 | `() → number`              | Reads the bytes as a little-endian number (Solana's layout)                                                                                                                                                                                          | `const lamports = svm.sload(acct, 64n, 8n).toLe();`     |
-| `.toBytesBe(width)`  | a scalar          | `(scalar) → bytes`         | The low `width` bytes, big-endian, with `width` from 1 to 32. A constant outside that range gives "a `.toBytesBe`/`.toBytesLe` width must be between 1 and 32 bytes, got 33". A computed width above 32 reverts, and a computed 0 gives empty bytes. | `log(total.toBytesBe(32n));`                            |
-| `.toBytesLe(width)`  | a scalar          | `(scalar) → bytes`         | The same, little-endian                                                                                                                                                                                                                              | `const field = amount.toBytesLe(8n);`                   |
-| `.length`            | bytes or an array | number                     | The byte count or the element count. On a record, `.length` looks for a field named `length` ("`length` is not a field of this tuple — …"). It cannot be assigned.                                                                                   | `for (let i = 0n; i < amounts.length; i++) { … }`       |
+| Method               | On                | Types                      | Behaviour and errors                                                                                                                                                                                                                                 | Example                                                                   |
+| -------------------- | ----------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `.slice(start, end)` | bytes             | `(scalar, scalar) → bytes` | Covers bytes `start` up to, but not including, `end`. `end < start` reverts. Arrays have no `.slice`: "a bytes method's receiver requires a bytes value". "`.slice` takes exactly 2 arguments (start, end), got N"                                   | `const args = input.slice(4n, 68n);`                                      |
+| `.concat(b1, b2, …)` | bytes             | `(...bytes) → bytes`       | Joins bytes values. "a `.concat` argument requires a bytes value"                                                                                                                                                                                    | `const call = selector.concat(to.toBytesBe(32n), amount.toBytesBe(32n));` |
+| `.toBe()`            | bytes, at most 32 | `() → number`              | Reads the bytes as a big-endian number. Longer input fails when run.                                                                                                                                                                                 | `const word = input.slice(4n, 36n).toBe();`                               |
+| `.toLe()`            | bytes, at most 32 | `() → number`              | Reads the bytes as a little-endian number (Solana's layout)                                                                                                                                                                                          | `const amount = input.slice(64n, 72n).toLe();`                            |
+| `.toBytesBe(width)`  | a scalar          | `(scalar) → bytes`         | The low `width` bytes, big-endian, with `width` from 1 to 32. A constant outside that range gives "a `.toBytesBe`/`.toBytesLe` width must be between 1 and 32 bytes, got 33". A computed width above 32 reverts, and a computed 0 gives empty bytes. | `log(total.toBytesBe(32n));`                                              |
+| `.toBytesLe(width)`  | a scalar          | `(scalar) → bytes`         | The same, little-endian                                                                                                                                                                                                                              | `const field = amount.toBytesLe(8n);`                                     |
+| `.length`            | bytes or an array | number                     | The byte count or the element count. On a record, `.length` looks for a field named `length` ("`length` is not a field of this tuple — …"). It cannot be assigned.                                                                                   | `for (let i = 0n; i < amounts.length; i++) { … }`                         |
 
 **Call methods on a variable, not on a literal.** ``hex`a9`.concat(d)`` and `"ab".concat(d)` are rejected
 ("calling anything other than a plain function name …"). Write ``const selector = hex`a9059cbb`; selector.concat(d)``.
 
 ### Account properties
 
-| Property       | Returns | SVM                               | EVM                                                                                                                                   | Example                                   |
-| -------------- | ------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `acct.address` | number  | the account's public key          | the address itself                                                                                                                    | `require(acct.address == EXPECTED_MINT);` |
-| `acct.owner`   | number  | the program that owns the account | not available: "`account.owner` is not available on the evm target; an address on the EVM is the code — check it with ctx.isContract" | `require(acct.owner == TOKEN_PROGRAM);`   |
-| `acct.dataLen` | number  | the account's data size, in bytes | not available                                                                                                                         | `require(acct.dataLen == 165n);`          |
+| Property       | Returns | Targets  | On SVM                            | On EVM                                                                                                                                | Example                                   |
+| -------------- | ------- | -------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `acct.address` | number  | **Both** | the account's public key          | the address itself                                                                                                                    | `require(acct.address == EXPECTED_MINT);` |
+| `acct.owner`   | number  | **SVM**  | the program that owns the account | not available: "`account.owner` is not available on the evm target; an address on the EVM is the code — check it with ctx.isContract" | `require(acct.owner == TOKEN_PROGRAM);`   |
+| `acct.dataLen` | number  | **SVM**  | the account's data size, in bytes | not available                                                                                                                         | `require(acct.dataLen == 165n);`          |
 
 - These properties are read-only: "`.owner` is read-only — …".
 - On SVM, compare accounts with `a == b` or `a != b`; ordering comparisons are rejected.
-- On SVM an account is not an ordinary value: it cannot be used in arithmetic, returned, or passed to
-  `abi.encode`. Each of those gives "… can't be an account — …". Use `acct.address` when you need its key.
+- On SVM an account is not an ordinary value. Returning one gives "a return value can't be an account — …", and
+  using one where a number is expected, as in arithmetic, gives "…: expected a number, found an account". Use
+  `acct.address` when you need its key.
 
 ## 13. Contract bindings and `.catch()` (EVM)
 
@@ -407,16 +415,16 @@ The compiler rejects each of these. Most messages read "… is not supported", n
 
 ## 15. Limits
 
-| Limit                                                           | Value                            |
-| --------------------------------------------------------------- | -------------------------------- |
-| Parameters of a function other than `main`                      | 16                               |
-| `log` topics                                                    | 4 on EVM; none on SVM            |
-| `eval` arguments                                                | 16                               |
-| `abi.encode` values, record fields encoded, `abi.decode` fields | 255                              |
-| Elements in an array literal                                    | 65,535                           |
-| Bytes in a string or `hex` literal                              | 65,535                           |
-| `.catch()` block                                                | about 255 bytes of compiled code |
-| `crypto.findPDA` seeds                                          | 15 (checked when run)            |
-| Nested arrays in a `main` parameter                             | 4 levels                         |
-| One caller-supplied collection in `main`'s arguments            | 16 KiB                           |
-| Working memory on SVM                                           | 64 KiB per run                   |
+| Limit                                                                                   | Value                            |
+| --------------------------------------------------------------------------------------- | -------------------------------- |
+| Parameters of a function other than `main`, plus the values its body keeps live at once | about 16 (§4)                    |
+| `log` topics                                                                            | 4 on EVM; none on SVM            |
+| `eval` arguments                                                                        | 16                               |
+| `abi.encode` values, record fields encoded, `abi.decode` fields                         | 255                              |
+| Elements in an array literal                                                            | 65,535                           |
+| Bytes in a string or `hex` literal                                                      | 65,535                           |
+| `.catch()` block                                                                        | about 255 bytes of compiled code |
+| `crypto.findPDA` seeds                                                                  | 15 (checked when run)            |
+| Nested arrays in a `main` parameter                                                     | 4 levels                         |
+| One caller-supplied collection in `main`'s arguments                                    | 16 KiB                           |
+| Working memory on SVM                                                                   | 64 KiB per run                   |

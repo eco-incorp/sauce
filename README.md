@@ -40,7 +40,8 @@ an intent carrying it onward.
 // the encoded intent, and fills in the Portal, the prover, the approval and the encoding.
 //
 // RECIPIENT is a compile-time `define` the caller supplies. `USDC` is a registered symbol, and
-// inside the braces it means Arbitrum's USDC, because that is the chain those calls run on.
+// inside the braces it means Arbitrum's USDC, because that is the chain those calls run on. In
+// `.reward(...)` it means the USDC of the chain this program runs on, which escrows the reward.
 function main() {
   const amount = USDC.balanceOf(ctx.self());
   if (amount < MIN_AMOUNT) {
@@ -70,8 +71,10 @@ Portal, encode the intent around the amount, call `publishAndFund`) or a second 
 yourself after the first lands and you have read what it produced.
 
 `USDC` is a registered token symbol, and inside the braces it means **Arbitrum's** USDC, because
-that is where those calls run. `RECIPIENT` and `MIN_AMOUNT` are compile-time `defines`: a program
-captures nothing from the JavaScript around it, so defines are how application values reach one.
+that is where those calls run. In `.reward(...)` it means the USDC of the chain the program runs
+on — Base, in [the caller](docs/examples/cross-chain-intent.ts) — because the program escrows the
+reward there. `RECIPIENT` and `MIN_AMOUNT` are compile-time `defines`: a program captures nothing
+from the JavaScript around it, so defines are how application values reach one.
 
 You supply what the SDK cannot know once, on the enclosing intent, and every intent the program
 creates inherits it: a deadline, and the creator who may reclaim the reward if nobody earns it. The

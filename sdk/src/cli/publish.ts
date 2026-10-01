@@ -12,7 +12,6 @@
  * So does a file that does anything besides open its intents: `publish` sends only the intents,
  * and silently dropping the rest of a program would be worse than refusing it.
  */
-import { parse } from "acorn";
 import {
   encodeFunctionData,
   formatUnits,
@@ -27,10 +26,10 @@ import type { PrivateKeyAccount } from "viem/accounts";
 
 import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm, hashIntent } from "../routes/encode.js";
-import { liftSignatures } from "../routes/entry.js";
+import { isTypeDeclaration } from "../routes/ast-walk.js";
 import type { LoweredIntent } from "../routes/intent-sugar.js";
 import { approvalTxs, publishAndFundTx } from "../routes/portal.js";
-import { wrapSauceBody } from "../routes/sauce-route.js";
+import { parseSauce } from "../routes/parse.js";
 import { CliError, UsageError } from "./args.js";
 import { assumeTokenBalance, mergeOverrides } from "./assume.js";
 import { connect, revertReason, sendAndWait, type Sent, type TxRequest } from "./chain.js";
@@ -49,7 +48,7 @@ const ERC20 = parseAbi([
   "function approve(address spender, uint256 amount) returns (bool)",
 ]);
 
-/** A node of acorn's tree, as far as this reads it. */
+/** A node of the SauceScript parser's tree, as far as this reads it. */
 interface Node {
   readonly type: string;
   readonly loc?: { readonly start: { readonly line: number } };
@@ -80,27 +79,32 @@ const callFree = (node: unknown): boolean => {
   return Object.values(node).every(callFree);
 };
 
+/** A top-level statement that declares rather than runs: an import, a function, a type. */
+const isDeclaration = (node: Node): boolean =>
+  node.type === "ImportDeclaration" ||
+  node.type === "FunctionDeclaration" ||
+  node.type === "ExportNamedDeclaration" ||
+  isTypeDeclaration(node.type);
+
 /**
  * The first statement of `text`'s program that is neither one of its intents nor a declaration of
- * a fixed value, as `file:line`; `undefined` when the program only opens intents.
+ * a fixed value, as `file:line`; `undefined` when the program only opens intents. The program's
+ * statements are `main`'s body in a module, and the top-level statements of a script.
  */
 function otherStatement(file: string, text: string): string | undefined {
-  const wrapped = wrapSauceBody(text);
-  const shift = wrapped === text ? 0 : 1;
-  const program = parse(liftSignatures(wrapped).source, {
-    ecmaVersion: "latest",
-    sourceType: "module",
-    locations: true,
-  }) as unknown as { body: Node[] };
+  const program = parseSauce(text) as unknown as { body: Node[] };
   const main = program.body.find(
     (node) => node.type === "FunctionDeclaration" && (node.id as Node).name === "main",
   );
-  const statements = ((main?.body as Node | undefined)?.body as Node[] | undefined) ?? [];
+  const statements =
+    main === undefined
+      ? program.body.filter((node) => !isDeclaration(node))
+      : (((main.body as Node | undefined)?.body as Node[] | undefined) ?? []);
   const other = statements.find(
     (node) => !isIntentSite(node) && !(node.type === "VariableDeclaration" && callFree(node)),
   );
 
-  return other === undefined ? undefined : `${file}:${other.loc!.start.line - shift}`;
+  return other === undefined ? undefined : `${file}:${other.loc!.start.line}`;
 }
 
 /** The intents `input`'s file opens, refusing a file that is not only fixed intents. */

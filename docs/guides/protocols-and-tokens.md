@@ -47,6 +47,10 @@ Contract accessors expose `address`, `available`, `chains`, `abi`, `methods` and
 existing does not mean the contract is deployed on your chain — calling one that is not fails when
 you build or compile, which is the point at which you can still do something about it.
 
+A name used as a token or a protocol that the destination does not have at all fails the same way,
+naming it and the chain's closest names: `USDCC.balanceOf(...)` on Base reports
+"`USDCC` is not a token or protocol on base. Did you mean `USDC`?".
+
 Versioned names are explicit: `UniswapV2.Factory` and `UniswapV3.Factory` select different descriptors. A family alias only resolves a contract name when it identifies one descriptor; `Uniswap.Factory` is ambiguous and fails. A protocol with a single default contract also permits the shorter `Protocol.method(...)` form.
 
 ## Token methods and balances

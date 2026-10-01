@@ -5,7 +5,8 @@
  * The CLI composes a WRAPPER around the file: the file's own `main` is renamed and called from a new
  * `main` with the same signature, which first PULLS each funded token from the owner into the Pot,
  * then runs the program, then — with `--sweep` — sends the Pot's whole balance of each funded token
- * back to the owner. One cook. The pulls are `@sauce/token`'s, the functions a hand-written program
+ * back to the owner. A script gets the pulls after its imports and the sweep after its last
+ * statement. One cook. The pulls are `@sauce/token`'s, the functions a hand-written program
  * uses, and every one is a `safeTransferFrom`:
  *
  *   - `permit2` (the default): the owner signs a Permit2 SignatureTransfer for exactly this amount,
@@ -41,8 +42,9 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { Permit2ABI } from "../protocols/permit2/abis.js";
 import { mainSignature } from "../routes/entry.js";
+import type { AstNode } from "../routes/ast-walk.js";
+import { parseSauce } from "../routes/parse.js";
 import { blankLiterals } from "../routes/rs-compile.js";
-import { wrapSauceBody } from "../routes/sauce-route.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { CliError, UsageError } from "./args.js";
 import { sendAndWait, type Sent } from "./chain.js";
@@ -653,11 +655,12 @@ function sweepLines(
 }
 
 /**
- * The file's program inside the funding wrapper: its `main` renamed `__sauce_program` and called,
- * with `main`'s own parameters, from a new `main` that pulls before it and sweeps after it. The
- * wrapper is the file's own source with a few lines around it, not an import of the file: the
- * chain's names and the token syntax are rewritten in the source compiled, and an imported module
- * would get none of that.
+ * The file's program inside the funding wrapper. A module's `main` is renamed `__sauce_program`
+ * and called, with `main`'s own parameters, from a new `main` that pulls before it and sweeps
+ * after it. A script's entry is its top-level statements, so the pulls go after its imports and
+ * before its first statement, and the sweeps after its last. The wrapper is the file's own source
+ * with a few lines around it, not an import of the file: the chain's names and the token syntax
+ * are rewritten in the source compiled, and an imported module would get none of that.
  */
 export function wrapProgram(
   text: string,
@@ -665,21 +668,41 @@ export function wrapProgram(
   pulls: readonly string[],
   sweeps: readonly string[],
 ): string {
-  const program = wrapSauceBody(text);
-  const signature = mainSignature(program);
-  if (signature === undefined) throw new Error("internal: a wrapped program has a main");
+  const head =
+    imports.size === 0 ? [] : [`import { ${[...imports].join(", ")} } from "@sauce/token";`];
+  const signature = mainSignature(text);
+  if (signature === undefined) {
+    // A script's imports lead it (the compiler takes no import after other code).
+    let end = 0;
+    for (const node of (parseSauce(text) as unknown as { body: AstNode[] }).body) {
+      if (node.type !== "ImportDeclaration") break;
+      end = node.end;
+    }
+
+    return [
+      ...head,
+      ...(end === 0 ? [] : [text.slice(0, end)]),
+      ...pulls,
+      text
+        .slice(end)
+        .replace(/^\r?\n/, "")
+        .trimEnd(),
+      ...sweeps,
+      "",
+    ].join("\n");
+  }
   const { open, close, params, returns, names, returnsValue } = signature;
-  const nameAt = blankLiterals(program).lastIndexOf("main", open);
+  const nameAt = blankLiterals(text).lastIndexOf("main", open);
   // A helper with no return annotation must return a value, where `main` need not: one that
   // returns nothing is declared `: void` once it is not `main`.
   const renamed =
-    `${program.slice(0, nameAt)}__sauce_program${program.slice(nameAt + "main".length, close + 1)}` +
-    `${returns.trim() === "" && !returnsValue ? ": void" : ""}${program.slice(close + 1)}`;
+    `${text.slice(0, nameAt)}__sauce_program${text.slice(nameAt + "main".length, close + 1)}` +
+    `${returns.trim() === "" && !returnsValue ? ": void" : ""}${text.slice(close + 1)}`;
   // The wrapper's `main` takes exactly what the program's did, and returns what it returned.
   const call = `__sauce_program(${names.join(", ")})`;
 
   return [
-    ...(imports.size === 0 ? [] : [`import { ${[...imports].join(", ")} } from "@sauce/token";`]),
+    ...head,
     renamed,
     "",
     `function main(${params})${returns} {`,

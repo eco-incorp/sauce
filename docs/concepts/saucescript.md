@@ -32,8 +32,10 @@ target feature has nothing to point at.
 
 A function declared `: void` can finish without returning a value. Other
 functions must return on every path. Annotate helper functions returning arrays,
-bytes, or records so their callers know the return shape. The raw compiler also
-accepts an entry script without an explicit `main` and synthesizes its entry.
+bytes, or records so their callers know the return shape. A file without a `main`
+is a script: its top-level statements are the entry, which runs as `main(): void`,
+so a script cannot `return`. The raw compiler and the route compiler both take one
+as written.
 Entry argument encoding does not determine return encoding. For ABI-decodable
 EVM output, [return `abi.encode(...)`](../guides/compiling.md#return-values-an-abi-decoder-can-read).
 
@@ -71,58 +73,29 @@ one program — one hash — covers every value. The SVM settle recipe folds its
 and token-program split in as defines instead, and is verified by recompiling with
 the same values. Neither is a drop-in for the other.
 
-## Values and types
+## The language
 
-SauceScript uses 256-bit scalar words and heap-backed bytes, arrays, and tuples.
-There is no JavaScript floating-point arithmetic. Prefer `bigint` literals in
-host-authored route callbacks so the host preserves exact integer values.
+The [SauceScript reference](../../skills/sauce-script/references/builtins.md) is the complete account of the language, and
+every example and quoted error in it is checked against the compiler this package ships: types,
+literals, operators, statements, functions and modules, every builtin on each target, and the
+limits. What most often surprises a TypeScript author:
 
-| Type or syntax                            | Meaning                                                      |
-| ----------------------------------------- | ------------------------------------------------------------ |
-| `Uint256`, `number`, `bigint`             | A scalar integer word                                        |
-| `Address`                                 | An address-valued scalar                                     |
-| `bool`, `boolean`                         | A boolean type checked separately from integer values        |
-| `bytes`, `string`                         | Byte strings                                                 |
-| `T[]`                                     | An array whose element type is `T`                           |
-| `{ amount: Uint256, recipient: Address }` | A tuple/record shape                                         |
-| A top-level `interface`                   | A named record type                                          |
-| `Account`, `Account<Writable, Signer>`    | An SVM account slot and required role; address-valued on EVM |
-| `void`                                    | A function with no return value                              |
-
-Annotations are checked. Arbitrary TypeScript types are not accepted, and `as`
-casts cannot be used to bypass a type error. Ordinary arithmetic is checked by
-the compiler/runtime rather than following JavaScript number semantics.
-
-A module-level scalar `const` is a compile-time value. A module-level `let` is
-re-initialised on every invocation — it is scratch space, not chain state. Reach
-for the target's storage builtins when something has to persist.
-
-## Language support
-
-The current compiler supports function declarations, recursion, `if`/`else`,
-`while`, C-style `for`, array `for...of`, short-circuit logical operators,
-conditional expressions, array/record values, indexing, mutation, and supported
-byte operations. Modules can import other SauceScript modules, JSON ABIs, and
-JSON data. Constant expressions and compile-time branches can be folded.
-
-Useful boundaries when adapting application code:
-
-- `async`/`await`, promises, classes, arbitrary JavaScript libraries, and host APIs
-  such as `fetch` or `console` are not on-chain operations.
-- Functions are declarations, not first-class values. The outer route callback
-  is an SDK wrapper; it does not add general arrow-function support to the
-  language. The special EVM external-call `.catch(() => { ... })` handler is a
-  supported exception.
-- `switch`, `for...in`, rest/spread, default parameters, and general object
-  destructuring are unsupported. Tuple destructuring in function bodies is
-  supported.
-- Type aliases, enums, generic application types, unions, `as`, and `satisfies`
-  are outside the subset. Use the supported annotations and named interfaces.
-- A template literal with interpolation is unsupported. The `hex` tagged literal
-  produces literal bytes.
-
-Every example and boundary on this page is checked against the compiler this
-package ships.
+- Numbers are unsigned 256-bit integers, and arithmetic is checked: overflow, underflow and division
+  by zero revert. Write a negative amount as `-x`; `~x + 1n` reverts when `x` is zero. Prefer
+  `bigint` literals in host-authored route callbacks so the host keeps exact values.
+- `bool` is kept apart from numbers, and `bytes`/`string` are byte strings: `"text"` is its UTF-8
+  bytes and `` hex`a9059cbb` `` raw bytes. Every untagged template literal is rejected, with or
+  without `${}`.
+- Annotations are checked, and an unannotated parameter is a number, so a helper that takes or
+  returns an array, a record or bytes says so. `Account` roles (`Account<Writable, Signer>`) exist
+  on SVM only; on EVM an `Account` is an address and a role is a compile error.
+- Destructuring binds the fields of something that produces a record — a multi-output contract
+  call, `abi.decode`, `crypto.findPDA` — and not of an array.
+- Functions are top-level declarations; `switch`, `try`/`catch`, classes, closures other than the
+  EVM `.catch(() => { ... })` handler, spread and optional chaining are rejected.
+- A module-level `const` is a compile-time value. A module-level `let` is re-initialised on every
+  invocation — scratch space, not chain state. Reach for the target's storage builtins when
+  something has to persist.
 
 ## EVM and SVM operations
 

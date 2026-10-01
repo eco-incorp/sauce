@@ -10,7 +10,8 @@
 // the encoded intent, and fills in the Portal, the prover, the approval and the encoding.
 //
 // RECIPIENT is a compile-time `define` the caller supplies. `USDC` is a registered symbol, and
-// inside the braces it means Arbitrum's USDC, because that is the chain those calls run on.
+// inside the braces it means Arbitrum's USDC, because that is the chain those calls run on. In
+// `.reward(...)` it means the USDC of the chain this program runs on, which escrows the reward.
 function main() {
   const amount = USDC.balanceOf(ctx.self());
   if (amount < MIN_AMOUNT) {

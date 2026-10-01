@@ -222,7 +222,8 @@ currency: it rides as the cook's value, on top of the Kitchen's fee.
 The command wraps the program: a new `main`, with the same parameters, first pulls each amount from
 you into the Pot, then calls the program's own `main` with the arguments as given, then, with
 `--sweep`, sends the Pot's whole balance of each funded token (and of the native currency, when
-`ETH` is funded) back to you. It is one cook, so the pulls, the program and the sweep succeed or
+`ETH` is funded) back to you. A script gets the pulls after its imports and the sweep after its
+last statement. It is one cook, so the pulls, the program and the sweep succeed or
 revert together. The pulls are `@sauce/token`'s, the same functions a program can call itself
 ([Pulling tokens in](protocols-and-tokens.md#pulling-tokens-in)). Your balance of each token is
 checked before anything is sent.
@@ -337,8 +338,10 @@ against it. One file therefore compiles for every chain whose names it uses. `sa
 are read from beside the file.
 
 A file is either a script — top-level statements, which are the program — or declares
-`function main(...)`. A bare body is wrapped in `main()` for you; a file that imports another
-declares `main()` itself. Only `main`'s parameters carry type annotations.
+`function main(...)`, and it reaches the compiler as written: imports, helper functions,
+`interface` declarations and annotations included. A script's imports come first, and its
+top-level `const`s are the script's own locals, which a function cannot read; declare `main` to
+share a module constant with functions or to return a value.
 
 ### Choosing the chain
 
