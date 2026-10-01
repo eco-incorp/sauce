@@ -50,7 +50,10 @@ commands apply with differences in accounts, signing and fees: read `sauce-solan
 2. **Compile**, to check the program: `npx sauce compile pay.sauce.ts --chain ethereum`. It prints the
    bytecode; `--json` adds the size, `main`'s parameters, the compiler and the engine it pairs with.
    A failing compile points at the file's line and column, and its `hint:` lines name the flag or
-   define to add.
+   define to add. Every command takes the chain as `--chain <slug or id>`. A file may name its own
+   chain instead, in a `// @chain base` line among the `//` comment lines it starts with (and
+   `// @target svm` alone picks Solana); `--chain` overrides it. Leave the line out of a file meant
+   for more than one chain.
 3. **Pot**: `npx sauce pot --chain base --owner <address>` prints the Pot's address, known before it
    exists, and its deploy transaction.
    `npx sauce pot --deploy --chain base --config sauce.config.json --keystore <keystore>` deploys the
