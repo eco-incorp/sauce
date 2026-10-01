@@ -62,6 +62,7 @@ import {
 } from "./intents.js";
 import { costJson, costLine, costOf, receiptEffects, receiptReport } from "./receipt.js";
 import { appliedDefines, contractCollector } from "./report.js";
+import type { CookVia } from "../svm/client.js";
 import { svmCookSize } from "./solana.js";
 import type { Funding } from "./funding.js";
 
@@ -225,6 +226,8 @@ export interface CompileInput extends ProgramInput {
   readonly args?: ArgsInput;
   /** Solana: accounts by slot name, as `--account` gives them, for sizing the cook. */
   readonly accounts?: Readonly<Record<string, string>>;
+  /** Solana: size the Kitchen's cook (the default) or the engine's direct one. */
+  readonly via?: CookVia;
   /** Endpoints for the intents' destinations: where given, each intent's Pot is checked. */
   readonly endpoints?: Endpoints;
 }
@@ -247,7 +250,12 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       : hexToBytes(payloadOf(program, input.args));
   const cook =
     input.chain.kind === "svm" && payload !== undefined
-      ? await svmCookSize(payload, program.manifest ?? { accounts: [] }, input.accounts ?? {})
+      ? await svmCookSize(
+          payload,
+          program.manifest ?? { accounts: [] },
+          input.accounts ?? {},
+          input.via,
+        )
       : undefined;
   const cooks = intentCooks(program.intents);
   const pots: readonly PotCheck[] =
