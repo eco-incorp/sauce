@@ -643,7 +643,8 @@ units and what the cook moved, or the reason — a program's `throw` or `require
 from the engine's return data — and the program logs. What moved is read from the accounts
 themselves: every account the transaction may write, as it is now and as the simulation leaves it
 (`simulateTransaction`'s `accounts`). Each token account's balance change (SPL Token and
-Token-2022, in whole units by its mint's decimals) and each account's lamports are listed, named
+Token-2022, in whole units by its mint's decimals, a mint the registry records by its symbol) and
+each account's lamports are listed, named
 by their `--account` names, as the owner, the Pot and the Kitchen's fee config; the owner's
 lamports include the transaction's fee. `--json` lists them as `tokenChanges` and
 `lamportChanges`. Solana's `simulateTransaction` takes no account overrides, so there

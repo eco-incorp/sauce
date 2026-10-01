@@ -123,23 +123,23 @@ function tokenAccount(
   };
 }
 
-/** The registry's symbol for `mint` among `tokens`, matched by base58 or by its 32 bytes in hex. */
-function symbolOf(
+/** The registry's row for `mint` among `tokens`, matched by base58 or by its 32 bytes in hex. */
+function registryRow(
   tokens: ReturnType<typeof sourceGlobals>["tokens"],
   mint: Address,
-): string | undefined {
+): { readonly symbol: string; readonly decimals?: number } | undefined {
   const hex = bytesToHex(new Uint8Array(getAddressEncoder().encode(mint))).toLowerCase();
-  const row = tokens.find(
+
+  return tokens.find(
     (token) => token.address === mint || String(token.address).toLowerCase() === hex,
   );
-
-  return row?.symbol;
 }
 
 /**
  * What changed between `before` and `after` for each of `tracked`: the token accounts' balances
  * (a token account the cook created starts at 0, one it closed ends at 0), and every account's
- * lamports. Each mint's decimals are read from the cluster.
+ * lamports. Each mint's decimals are read from the cluster, else taken from the registry, which
+ * also names a mint it records.
  */
 export async function movedBy(
   rpc: Rpc,
@@ -191,8 +191,9 @@ export async function movedBy(
 
   return {
     tokens: tokens.map((change) => {
-      const places = decimals.get(change.mint);
-      const symbol = symbolOf(registered, change.mint);
+      const row = registryRow(registered, change.mint);
+      const places = decimals.get(change.mint) ?? row?.decimals;
+      const symbol = row?.symbol;
 
       return {
         ...change,
