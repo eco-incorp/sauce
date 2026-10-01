@@ -45,6 +45,7 @@ Complete programs live in the [examples](examples/README.md).
 
 - [API entry points](api/README.md) — every published import and what it contains.
 - [Routes](api/routes.md) — chain entry points, intent options, built intents, nesting.
+- [Contracts and tokens](api/contracts.md) — every protocol namespace and token, in a program and in TypeScript.
 - [Compiler](api/compiler.md) — `compile()` options and result, and the compact argument codec.
 - [Coverage](api/coverage.md) — which protocols, tokens and chains are actually registered.
 - [Examples](examples/README.md) — complete programs, and how they are kept working.

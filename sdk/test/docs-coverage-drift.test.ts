@@ -38,6 +38,26 @@ describe("docs/api/coverage.md still states the registry sizes it has", () => {
   it.each([
     ["protocols", /(\d+) protocols with metadata/, () => listProtocols().length],
     ["contract descriptors", /(\d+) descriptors across/, () => listDescriptors().length],
+    [
+      "protocol namespaces",
+      /\d+ descriptors across (\d+) protocol namespaces/,
+      () => new Set(listDescriptors().map((d) => d.protocol)).size,
+    ],
+    [
+      "deployed contracts",
+      /\| Deployed contract \| (\d+)/,
+      () => listDescriptors().filter((d) => d.kind === "singleton").length,
+    ],
+    [
+      "address-only contracts",
+      /\| Address only \s*\| (\d+)/,
+      () => listDescriptors().filter((d) => d.kind === "address-only").length,
+    ],
+    [
+      "interfaces",
+      /\| Interface \s*\| (\d+)/,
+      () => listDescriptors().filter((d) => d.kind === "interface").length,
+    ],
     ["canonical chains", /(\d+) chains: \d+ EVM and Solana/, () => CANONICAL_CHAINS.length],
     [
       "canonical EVM chains",
