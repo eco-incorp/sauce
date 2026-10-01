@@ -70,9 +70,10 @@ reach it, and the `sauce` command refuses such a define rather than ignore it.
 | A value of a script, or of an intent file                                | an **undeclared name**, set by a define                                      | folded into the bytecode                                           |
 | A value the chain supplies                                               | a global (`sauce-globals`)                                                   | resolved when compiling for that chain                             |
 
-`main`'s parameters are taken in declaration order and encoded after the program: `--args` and
-`--args-json` of `sauce run`, `simulate` and `tx` (`sauce-run`), or `routes.encodeEntryArguments`
-from TypeScript (`sauce-typescript`).
+`main`'s parameters are taken in declaration order, ABI-encoded by default, and appended to the
+program's bytecode: that is the payload a cook runs. `--args` and `--args-json` of `sauce run`,
+`simulate` and `tx` encode them (`sauce-run`); `sauce-typescript` covers encoding them from
+TypeScript.
 
 ## Compiling for a chain
 

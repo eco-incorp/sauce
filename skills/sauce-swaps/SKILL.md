@@ -103,6 +103,10 @@ npx sauce run swap-leg.sauce.ts --chain base --config sauce.config.json --keysto
   --fund WETH:0.5 --args <tokenIn> <tokenOut> 500 <amountIn> <sqrtPriceLimitX96> <minOut> <recipient>
 ```
 
+The cook is one transaction to the Pot (`cook(engine, program)` with `main`'s arguments appended,
+paying the Kitchen's fee): `sauce tx` prints it unsigned, `{ chainId, to, data, value }`, for any
+signer to send instead of `sauce run`.
+
 For several venues under one price limit, use `sauce-distributed-swap`.
 
 ## Other entry points

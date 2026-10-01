@@ -340,6 +340,8 @@ const UNDECLARED_NAMES = {
       "Solana's JSON-RPC method that reads an account, a node's API, not the package's",
   },
   "sauce-solana": {
+    getAccountInfo:
+      "Solana's JSON-RPC method that reads an account, a node's API, not the package's",
     getCreateAssociatedTokenIdempotentInstruction:
       "@solana-program/token's ATA creation, a dependency the package re-exports none of",
   },

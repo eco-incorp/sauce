@@ -101,7 +101,23 @@ live code on the chain.
   `decodeSettleCall`, `extractEvmSettleFromIntent`, historical pins. It identifies the program and
   its parameters; the Pot, engine and every other call stay yours to check (`sauce verify` runs
   it). See [examples/verify.mts](examples/verify.mts).
-- **Solana execution**: the Kitchen client, `sauce-solana`.
+- **Solana execution** (`/svm`): the Kitchen client,
+  `createSauceSvmClient({ rpcUrl, payer, programId, kitchen, maxExecutionFee })`, with no default
+  endpoint; the SVM route helpers (`Solana(...)` routes, `buildSauceSvmCall`) do not produce an
+  instruction the engine accepts, so build execution with the Kitchen client. `USDC_MINT` is the
+  mainnet USDC mint. The token builder generates Token-2022 and `TransferChecked` programs:
+  `token.Token.transfer({ amount, svm: { ... } }).source("svm")`, with top-level
+  `tokenProgram: "token-2022"`. Venue adapters (`venue("raydium-cp-swap")`, also `Solana.RaydiumCpSwap`) build
+  pool configs, quote source and swap CPIs over an account loader you supply. For a local validator
+  or LiteSVM, `svmEnginePath()`, `svmKitchenPath()` and `svmKitchenIdlPath()` from
+  `@eco-incorp/sauce/svm/engine-artifacts` (Node only) locate the packaged programs; the program
+  ids are `v12SvmEngineProgramId()` and `v12SvmKitchenProgramId()` from `/deployments`. Writing the
+  programs is `sauce-solana`.
+- **Intents** (`sauce-intents`): `routes.hashIntent(intent)` gives the three hashes,
+  `routes.encodeRouteEvm(intent.route)` the route bytes (decode with `routes.EVM_ROUTE_PARAM` for
+  `fulfill`), `destinationPot(chain)` the shared Pot and
+  `routes.sauceEvmDeployPotCall({ kitchen: v12GateKitchen(), owner: ecoRoutesExecutor(chain), salt: SAUCE_INTENT_POT_SALT })`
+  its deploy; the intents runner builds a rehearsal with them.
 
 ## Example
 

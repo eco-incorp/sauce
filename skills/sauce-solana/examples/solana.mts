@@ -87,6 +87,10 @@ const [byHand] = await getProgramDerivedAddress({
   seeds: ["pot", getAddressEncoder().encode(owner.address), salt],
 });
 check(POT_SEED === "pot" && pot.address === byHand, "the Pot's seeds are pot, owner, salt");
+// The skill gives the Kitchen and engine program ids, and the Kitchen's 32-byte hex for the define.
+const kitchenHex = `0x${Buffer.from(getAddressEncoder().encode(kitchen)).toString("hex")}`;
+for (const value of [v12SvmKitchenProgramId(), v12SvmEngineProgramId(), kitchenHex])
+  check(skill.includes(value), `the skill quotes ${value}`);
 
 // A cook as `sauce run` builds it: the heap frame, a compute-unit limit, the Kitchen's cook.
 async function cookSize(accounts: number): Promise<number> {

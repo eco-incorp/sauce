@@ -84,7 +84,9 @@ npx sauce run distributed-swap.sauce.ts --chain base --config sauce.config.json 
   <recipient> <refundTo>
 ```
 
-`--define NAME=VALUE` gives one value and wins over the file. On another chain, take the same roles
+Either is one cook on the owner's Pot: `sauce tx` with the same flags and `--owner <address>`
+prints it unsigned, `{ chainId, to, data, value }`, for any signer to send instead. `--define
+NAME=VALUE` gives one value and wins over the file. On another chain, take the same roles
 from that chain's rows of
 [../sauce-protocols/references/pancakeswap-v3.md](../sauce-protocols/references/pancakeswap-v3.md)
 and
@@ -275,8 +277,6 @@ in base units. Take each token's decimals from
   - buying WETH with USDC at no more than 2,707 USDC per WETH: `1e18 × 1e18 / 2707e6`, that is
     `1e36 / 2707e6`, **369412633912079793128925009** (rounded down, so it allows a hair more than
     2,707).
-
-The runner's `sqrtPriceX96` and `minAvgPrice` helpers compute both, and it checks the numbers here.
 
 ## Adapting it
 

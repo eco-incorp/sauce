@@ -170,18 +170,18 @@ Arbitrum's USDC. Each level's deadline must be no earlier than its parent's.
 
 ## What the compile supplies, and what you pass
 
-The Portal, the prover, the destination Pot and the encoding are looked up: the eco-routes registry
-(`ecoRoutesPortal(chain)`, `ecoRoutesProver(source, destination)` from
-`@eco-incorp/sauce/protocols/eco-routes`) records where each chain's Portal is and a prover deployed
-on both sides. [../sauce-globals/references/chains.md](../sauce-globals/references/chains.md) lists
-which chains take intents. Three values are the developer's:
+The Portal, the prover, the destination Pot and the encoding are looked up from the eco-routes
+registry, which records each chain's Portal and a prover deployed on both sides. Each chain's file in
+`sauce-chains` says whether it takes intents and gives its Portal, Executor and shared intent Pot
+([../sauce-chains/references/index.md](../sauce-chains/references/index.md)). Three values are the
+developer's:
 
 - **`--intent-deadline <unix seconds>`**: when the intent must be filled by.
 - **`--intent-creator <address>`**: who may reclaim an unearned reward. Never a Pot.
 - **`--intent-execution-fee <wei>`** for a program body: the destination Kitchen's fee. It is
-  mutable on chain and lives on the destination, so read it there just before sending
-  (`destinationExecutionFee()` builds the read, an `eth_call` of the Kitchen's `executionFee()`); an
-  increase before the fill makes the cook, and the fulfilment, revert.
+  mutable on chain and lives on the destination, so read it there just before sending: an
+  `eth_call` of `executionFee()` on the destination's Kitchen (its address is in the chain's file in
+  `sauce-chains`). An increase before the fill makes the cook, and the fulfilment, revert.
 
 **What the solver pays.** The fee becomes the route's `nativeAmount`: the solver sends it, in the
 destination's native coin, as the value of `fulfill`, and pays the destination gas too. Nothing in
@@ -197,12 +197,13 @@ prover deployed on both sides.
 ## The destination Pot
 
 A program body cooks on the destination Portal Executor's **shared Pot** (one per Executor, salt
-zero), `destinationPot(chain)`. The package derives its address and deploys nothing: **the Pot must
-exist before fulfilment, and no solver can fill a program body until it does**. Deploying it is
-permissionless, and returns the existing Pot when there is one: send
-`routes.sauceEvmDeployPotCall({ kitchen: v12GateKitchen(), owner: ecoRoutesExecutor(chain), salt: SAUCE_INTENT_POT_SALT })`
-on the destination. Anything left in the Pot after the program, token or allowance, belongs to the
-next intent through that Portal: approve exactly what is spent and move every remainder out.
+zero); the destination's file in `sauce-chains` gives its address. The package derives it and
+deploys nothing: **the Pot must exist before fulfilment, and no solver can fill a program body
+until it does**. Deploying it is permissionless, and returns the existing Pot when there is one:
+call the destination Kitchen's `deployPot(address owner, bytes32 salt)` with the Executor as
+`owner` and a zero salt, from any account. Anything left in the Pot after the program, token or
+allowance, belongs to the next intent through that Portal: approve exactly what is spent and move
+every remainder out.
 
 ## Rehearse the body before a solver does
 
@@ -210,22 +211,26 @@ next intent through that Portal: approve exactly what is spent and move every re
 first runs when a solver fulfils it. Run it yourself on a fork of the destination first, as a solver
 would:
 
-1. Fork the destination (`anvil --fork-url <destination endpoint>`), and compile the file with the
-   same defines and intent flags (`routes.compileSauceProgram(source, file, { defines, intents })`);
-   its `intents[0].intent` is the intent.
-2. Check that `destinationPot(chain)` has code; if not, send the deploy call above.
-3. Deliver the route's tokens the way a solver does: hold `intent.route.tokens` in an account and
-   approve the destination Portal (`ecoRoutesPortal(chain)`) for each; `fulfill` pulls them.
-4. Hash the intent: `routes.hashIntent(intent)` gives `intentHash`, `routeHash` and `rewardHash`,
-   the same three as the Portal's `getIntentHash(destination, route, reward)`.
-5. From that account, call the Portal's
-   `fulfill(intentHash, route, rewardHash, claimant)` (`PortalABI` from
-   `@eco-incorp/sauce/protocols/eco-routes`; the route as the tuple
-   `decodeAbiParameters([routes.EVM_ROUTE_PARAM], routes.encodeRouteEvm(intent.route))`, the
-   claimant the solver's address as 32 bytes), with **value = `intent.route.nativeAmount`**. Less
-   value reverts; so does a missing Pot.
+1. Fork the destination (`anvil --fork-url <destination endpoint>`).
+2. Get the intent: `sauce inspect <file> --chain <source> --json`, with the same defines and intent
+   flags, prints each intent's `intentHash`, `routeHash`, `rewardHash`, route and reward. The raw
+   route bytes are the `route` argument of `publishAndFund` in
+   `sauce publish <file> … --from <address> --format json` (their keccak-256 is `routeHash`).
+3. Check that the shared Pot has code; if not, send the Kitchen's `deployPot(<Executor>, 0x0)`.
+4. Deliver the route's tokens the way a solver does: hold the route's `tokens` in an account and
+   approve the destination Portal for each; `fulfill` pulls them.
+5. From that account, call the destination Portal's
+   `fulfill(bytes32 intentHash, Route route, bytes32 rewardHash, bytes32 claimant)` with **value =
+   the route's `nativeAmount`**, where `Route` is
+   `(bytes32 salt, uint64 deadline, address portal, uint256 nativeAmount, (address token, uint256 amount)[] tokens, (address target, bytes data, uint256 value)[] calls)`,
+   the route bytes decoded, and the claimant is the solver's address as 32 bytes. Less value
+   reverts; so does a missing Pot. The Portal's `getIntentHash(uint64 destination, bytes route,
+Reward reward)` returns the same three hashes, as a cross-check.
 6. Read the outcome on the fork: what the recipient got, what was refunded, the gas, and that the
    Pot holds nothing.
+
+The hashes are `routeHash = keccak256(route bytes)`, `rewardHash = keccak256(abi.encode(reward))`
+and `intentHash = keccak256(abi.encodePacked(uint64 destination chain id, routeHash, rewardHash))`.
 
 Solana destinations are not built this way (see `sauce-solana`). An application can also build an
 intent from TypeScript around a program it compiles itself (`sauce-typescript`).
