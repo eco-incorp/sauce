@@ -147,6 +147,55 @@ describe("chain accessors: the names resolve through an import, and only through
     expect(diagnostics.some((d) => d.code === 2339)).toBe(true); // TS2339: Property does not exist
   });
 
+  // --- every registry protocol, typed from its ABI ---
+
+  it("a formerly unlinked namespace is typed from its ABI: arguments, and what read() resolves to", () => {
+    const diagnostics = typecheckProbe(`
+      import { Base, Unichain } from ${ROOT};
+      // Any viem client; the probe has no viem of its own to import the type from.
+      const client = undefined as never;
+      export async function probe() {
+        const pool: \`0x\${string}\` = await Base.PancakeswapV3.Factory
+          .getPool(Base.USDC.address, Base.WETH.address, 500)
+          .read(client);
+        const [sqrtPriceX96, tick, protocolFee, lpFee] = await Unichain.UniswapV4.StateView
+          .getSlot0("0x0000000000000000000000000000000000000000000000000000000000001234")
+          .read(client);
+        const total: bigint = sqrtPriceX96;
+        const fees: number = tick + protocolFee + lpFee;
+        const slot: \`0x\${string}\` = await Base.UniswapV4.PoolManager.extsload("0x00").read(client);
+        const hash: \`0x\${string}\` = await Base.UniswapV3.SwapRouter02.exactInputSingle({
+          tokenIn: Base.USDC.address,
+          tokenOut: Base.WETH.address,
+          fee: 500,
+          recipient: Base.USDC.address,
+          amountIn: 1n,
+          amountOutMinimum: 0n,
+          sqrtPriceLimitX96: 0n,
+        }).write(client);
+        const shares = Base.Erc4626.Vault.at(Base.USDC.address).deposit(1n, Base.USDC.address);
+        return [pool, total, fees, slot, hash, shares.data] as const;
+      }
+    `);
+    expect(diagnostics.map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"))).toEqual(
+      [],
+    );
+  });
+
+  it("negative control: wrong argument types, a view's write, and an unbound interface are type errors", () => {
+    const diagnostics = typecheckProbe(`
+      import { Base } from ${ROOT};
+      const client = undefined as never;
+      export function probe() {
+        Base.PancakeswapV3.Factory.getPool(Base.USDC.address, Base.WETH.address, "500");
+        Base.PancakeswapV3.Factory.getPool(Base.USDC.address, Base.WETH.address, 500).write(client);
+        Base.Erc4626.Vault.deposit(1n, Base.USDC.address);
+        Base.AaveV3.PoolAddressesProvider.getPool();
+      }
+    `);
+    expect(diagnostics).toHaveLength(4);
+  });
+
   // --- the chain's registry tokens ---
 
   it("Base.USDC is typed { address, decimals, symbol, chain }", () => {

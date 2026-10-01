@@ -107,7 +107,7 @@ test("unsupported names and ABI argument shapes remain TypeScript errors", () =>
   expect(errors).toHaveLength(13);
 });
 
-test("declarations cover current registry tokens and only recognized protocol namespaces", () => {
+test("declarations cover every registry token and every protocol namespace, in both languages", () => {
   const generated = readFileSync(resolve("src/routes/source-globals.generated.ts"), "utf8");
   for (const symbol of new Set(
     Object.values(TOKEN_REGISTRY)
@@ -115,15 +115,75 @@ test("declarations cover current registry tokens and only recognized protocol na
       .map((row) => row.symbol),
   ))
     expect(generated).toContain(`const ${symbol}: bigint & SauceTokenSource;`);
+  // Compiled source: one global per namespace the rewrite resolves, no more and no fewer.
   const names = [...generated.matchAll(/^ {2}const (\w+): \w+Source;/gm)].map((match) => match[1]);
-  for (const name of names) expect(NAMESPACE_KEYS.has(name)).toBe(true);
+  expect(new Set(names)).toEqual(new Set(NAMESPACE_KEYS));
   for (const link of CONTRACT_LINKS) {
-    if (link.kind === "interface") continue;
     const namespace = link.protocol
       .split("-")
       .map((part) => part[0]!.toUpperCase() + part.slice(1))
       .join("");
     expect(names).toContain(namespace);
+  }
+  // TypeScript host: the same namespaces on `ChainContracts`, as the runtime tree has them.
+  const host = readFileSync(resolve("src/descriptors/contracts.generated.ts"), "utf8");
+  const tree = /export interface ChainContracts \{\n([\s\S]*?)\n\}/.exec(host)![1]!;
+  const hostNames = [...tree.matchAll(/^ {2}readonly (\w+): \w+;/gm)].map((match) => match[1]);
+  expect(new Set(hostNames)).toEqual(new Set(NAMESPACE_KEYS));
+  expect(new Set(Object.keys(Base).filter((key) => NAMESPACE_KEYS.has(key)))).toEqual(
+    new Set(NAMESPACE_KEYS),
+  );
+});
+
+test("a typed closure over a formerly unlinked namespace typechecks and compiles", () => {
+  const body = `
+      let pool = 0n;
+      if (available(PancakeswapV3.Factory)) {
+        pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
+      }
+      const [sqrtPriceX96, tick] = UniswapV4.StateView.getSlot0(0x1234n);
+      return pool + sqrtPriceX96 + AerodromeSlipstream.CLFactory.getPool(USDC, WETH, 100n);
+  `;
+  expect(diagnostics(`const routeBody = () => {${body}};\nexport {};`)).toEqual([]);
+  // The same body as a closure, compiled for a chain with every name in it.
+  const closure = Base(() => {
+    let pool = 0n;
+    if (available(PancakeswapV3.Factory)) {
+      pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
+    }
+    const [sqrtPriceX96] = UniswapV4.StateView.getSlot0(0x1234n);
+    return pool + sqrtPriceX96 + AerodromeSlipstream.CLFactory.getPool(USDC, WETH, 100n);
+  }, options).reward(0n);
+  // Each contract is called at Base's address for it, which the bytecode carries.
+  const bytecode = Buffer.from(closure.compiled.bytecode[0]!).toString("hex");
+  for (const contract of [Base.PancakeswapV3.Factory, Base.AerodromeSlipstream.CLFactory]) {
+    expect(bytecode).toContain(contract.address!.slice(2).toLowerCase());
+  }
+});
+
+test("the global declarations do not collide with the DOM and ES libraries a consumer loads", () => {
+  const dir = mkdtempSync(join(tmpdir(), "sauce-source-libs-"));
+  try {
+    const file = join(dir, "consumer.ts");
+    writeFileSync(file, `import ${JSON.stringify(resolve("src/index.ts"))};\nexport {};\n`);
+    const program = ts.createProgram([file], {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      lib: ["lib.es2022.d.ts", "lib.dom.d.ts", "lib.dom.iterable.d.ts"],
+      noEmit: true,
+      strict: true,
+      allowImportingTsExtensions: true,
+    });
+    const generatedFile = program.getSourceFile(resolve("src/routes/source-globals.generated.ts"));
+    expect(generatedFile).toBeDefined();
+    expect(
+      program
+        .getSemanticDiagnostics(generatedFile)
+        .map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n")),
+    ).toEqual([]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 
