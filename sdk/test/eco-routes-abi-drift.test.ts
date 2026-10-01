@@ -76,7 +76,7 @@ describe("the registered Portal ABI is the one the SDK encodes against", () => {
 
 describe("a Portal revert reads by name", () => {
   // `publishAndFund(..., allowPartial = false)` with the reward not fully funded: what an agent's
-  // `sauce publish --dry-run` met as bare revert data while the ABI declared no errors.
+  // `sauce intent publish --dry-run` met as bare revert data while the ABI declared no errors.
   const intentHash = keccak256("0x01");
   const data = encodeErrorResult({
     abi: PortalABI,

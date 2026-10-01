@@ -876,7 +876,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     }) as Promise<number>;
 
   it("prints the unsigned transfer to the vault and publish, with no key and no endpoint", async () => {
-    const run = await sauce("publish", intentFile, ...DEFINES, "--format", "json");
+    const run = await sauce("intent", "publish", intentFile, ...DEFINES, "--format", "json");
     expect(run.code).toBe(0);
     const out = JSON.parse(run.stdout) as {
       portal: string;
@@ -917,7 +917,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
 
   it("prints the approval and publishAndFund instead with --intent-fund-via publishAndFund", async () => {
     const run = await sauce(
-      ...["publish", intentFile, ...DEFINES, "--intent-fund-via", "publishAndFund"],
+      ...["intent", "publish", intentFile, ...DEFINES, "--intent-fund-via", "publishAndFund"],
       ...["--format", "json"],
     );
     expect(run.code).toBe(0);
@@ -930,7 +930,14 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
       ["publishAndFund", portal],
     ]);
 
-    const wrong = await sauce("publish", intentFile, ...DEFINES, "--intent-fund-via", "permit");
+    const wrong = await sauce(
+      "intent",
+      "publish",
+      intentFile,
+      ...DEFINES,
+      "--intent-fund-via",
+      "permit",
+    );
     expect(wrong.code).toBe(2);
     expect(wrong.stderr).toContain("--intent-fund-via: 'permit' is not transfer or publishAndFund");
   }, 60_000);
@@ -938,6 +945,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
   it("rehearses the transactions together, and sends nothing", async () => {
     await arbitrum.mint(usdc, OWNER.address, REWARD);
     const run = await sauce(
+      "intent",
       "publish",
       intentFile,
       ...DEFINES,
@@ -948,10 +956,10 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
       "--dry-run",
       "--json",
     );
-    // The one note: the destination side is `sauce fill`'s.
+    // The one note: the destination side is `sauce intent fill`'s.
     expect(run.stderr).toBe(
       "This rehearses publishing on arbitrum only. What the intent does runs on base, when a " +
-        "solver fills it: `sauce fill` with the same file and flags, and the destination's " +
+        "solver fills it: `sauce intent fill` with the same file and flags, and the destination's " +
         "endpoint, rehearses that.\n",
     );
     expect(run.code).toBe(0);
@@ -969,7 +977,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     const empty = getAddress("0x5a0ce0000000000000000000000000000000beef");
     const dryRun = (...flags: string[]) =>
       sauce(
-        ...["publish", intentFile, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
+        ...["intent", "publish", intentFile, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
         ...["--from", empty, "--dry-run", ...flags],
       );
     // Without it the transfer into the vault reverts: the wallet holds nothing to send.
@@ -988,7 +996,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     expect(await arbitrum.balanceOf(usdc, empty)).toBe(0n);
     // A balance is assumed only for a rehearsal.
     const sent = await sauce(
-      ...["publish", intentFile, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
+      ...["intent", "publish", intentFile, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
       ...["--private-key", OWNER_KEY, "--assume-balance", "USDC:2"],
     );
     expect(sent.code).toBe(2);
@@ -1014,7 +1022,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
         ["--from", OWNER.address, "--format", "json"],
       ]) {
         const run = await sauce(
-          ...["publish", intentFile, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
+          ...["intent", "publish", intentFile, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
           ...flags,
         );
         expect(run.code).toBe(1);
@@ -1030,6 +1038,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
 
   it("publishes from the wallet: the reward paid into the vault, which the Portal counts funded", async () => {
     const run = await sauce(
+      "intent",
       "publish",
       intentFile,
       ...DEFINES,
@@ -1095,7 +1104,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
 
     // Run again, it pays nothing more: the vault holds the reward, so only `publish` is sent.
     const again = await sauce(
-      ...["publish", intentFile, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
+      ...["intent", "publish", intentFile, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
       ...["--private-key", OWNER_KEY, "--json"],
     );
     expect(jsonOf(again)).toMatchObject({ transactions: [{ what: "publish", status: "success" }] });
@@ -1108,7 +1117,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     const defines = definesFor(other);
     await arbitrum.mint(usdc, OWNER.address, other);
     const run = await sauce(
-      ...["publish", intentFile, ...defines, "--intent-fund-via", "publishAndFund"],
+      ...["intent", "publish", intentFile, ...defines, "--intent-fund-via", "publishAndFund"],
       ...["--rpc-url", arbitrum.rpcUrl, "--private-key", OWNER_KEY],
     );
     expect(run.code).toBe(0);
@@ -1143,7 +1152,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     };
     const publishFile = (file: string, ...flags: string[]) =>
       sauce(
-        ...["publish", file, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
+        ...["intent", "publish", file, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
         ...["--private-key", OWNER_KEY, ...flags],
       );
     const intentOf = (file: string, defines: Record<string, bigint>) =>
@@ -1247,7 +1256,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
         "",
       ].join("\n"),
     );
-    const refused = await sauce("publish", measured, ...DEFINES, "--format", "json");
+    const refused = await sauce("intent", "publish", measured, ...DEFINES, "--format", "json");
     expect(refused.code).toBe(1);
     expect(refused.stderr).toMatch(
       /the intent to base uses `amount`, which the program measures or computes while it runs, so it cannot be built from a wallet: use `sauce run` on a Pot/,
@@ -1255,7 +1264,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
 
     const more = join(work, "more.sauce.ts");
     writeFileSync(more, `${INTENT}USDC.transfer(RECIPIENT, 1n);\n`);
-    const extra = await sauce("publish", more, ...DEFINES, "--format", "json");
+    const extra = await sauce("intent", "publish", more, ...DEFINES, "--format", "json");
     expect(extra.code).toBe(1);
     expect(extra.stderr).toContain(`${more}:5 does something besides open an intent`);
   }, 60_000);
@@ -1422,7 +1431,16 @@ describeEvm("what is deployed: the released contracts, a Pot, and an intent's de
     expect(missing.stderr).toContain(`sauce pot --deploy --chain base --owner ${executor}`);
     // Publishing says so before it sends anything; with no endpoint for Base, that it cannot check.
     const unsigned = await sauce(
-      ...["publish", file, ...DEFINES, "--intent-execution-fee", `${FEE}`, "--format", "json"],
+      ...[
+        "intent",
+        "publish",
+        file,
+        ...DEFINES,
+        "--intent-execution-fee",
+        `${FEE}`,
+        "--format",
+        "json",
+      ],
     );
     expect(unsigned.stderr).toContain(`the intent to base cooks on Pot ${pot}`);
     expect(unsigned.stderr).toContain("pass --config with an rpcUrls entry for chain id 8453");

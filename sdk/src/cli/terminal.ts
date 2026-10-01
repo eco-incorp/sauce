@@ -1,6 +1,6 @@
 /**
- * Where the `sauce` command asks its questions: a yes/no before a transaction it sends first, and a
- * keystore's password.
+ * Where the `sauce` command asks its questions: a yes/no before a transaction it sends first, a
+ * keystore's password, and a line of text (`sauce intent`'s picker and guided creation).
  *
  * Stdin, while it is a terminal and nothing else has read it. Once a program came through stdin
  * (`sauce run -`), stdin is spent — at its end, or a pipe — so the questions go to the controlling
@@ -86,6 +86,18 @@ export function confirmOn(terminal: Terminal, question: string): Promise<boolean
     prompt.question(question, (answer) => {
       prompt.close();
       resolve(/^\s*y(?:es)?\s*$/i.test(answer));
+    });
+  });
+}
+
+/** A line typed at `terminal`, as typed. */
+export function askOn(terminal: Terminal, question: string): Promise<string> {
+  const prompt = createInterface({ input: terminal.input, output: terminal.output });
+
+  return new Promise((resolve) => {
+    prompt.question(question, (answer) => {
+      prompt.close();
+      resolve(answer);
     });
   });
 }

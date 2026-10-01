@@ -28,7 +28,10 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
   ],
   // fill's: --rpc-url is one destination's endpoint; the call's rpcUrls names each.
   [/so give --config, which names each destination's/g, "so give rpcUrls, which names each one"],
-  [/`sauce fill` with the same file and flags/g, "sauce_intent_fill with the same inputs"],
+  [
+    /`sauce (?:intent )?fill` with the same file and flags/g,
+    "sauce_intent_fill with the same inputs",
+  ],
   // An intent's commands are its tools under sauce_intent_, spelt either way the command line has.
   [command("sauce (?:intent )?(publish|fill)"), "sauce_intent_$1"],
   [command("sauce intent (status|import|prove|claim|refund|cancel)"), "sauce_intent_$1"],

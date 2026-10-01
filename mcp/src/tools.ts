@@ -26,7 +26,9 @@ import {
   compileProgram,
   connect,
   definesReach,
+  defineLabels,
   fillCommand,
+  fillTargets,
   fundingFor,
   globalsCommand,
   inspectCommand,
@@ -1532,21 +1534,20 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           : await reach.endpoint(program.input.chain, args.rpcUrl);
 
       return fromCommand(
-        await fillCommand(
-          {
-            ...program.input,
-            endpointOf: (chain) => {
-              const url = byChain.get(chain.id) ?? one ?? endpoints.endpoint(chain);
-              if (url === undefined) throw noEndpoint(chain, endpoints, "Rehearsing a fill");
+        await fillCommand({
+          intents: fillTargets(program.input, program.files),
+          from: program.input.file,
+          labels: defineLabels(program.input),
+          endpointOf: (chain) => {
+            const url = byChain.get(chain.id) ?? one ?? endpoints.endpoint(chain);
+            if (url === undefined) throw noEndpoint(chain, endpoints, "Rehearsing a fill");
 
-              return url;
-            },
-            endpointFlag: one === undefined ? "--config" : "--rpc-url",
-            ...(solver === undefined ? {} : { solver }),
-            ...(args.claimant === undefined ? {} : { claimant: args.claimant as Hex }),
+            return url;
           },
-          program.files,
-        ),
+          endpointFlag: one === undefined ? "--config" : "--rpc-url",
+          ...(solver === undefined ? {} : { solver }),
+          ...(args.claimant === undefined ? {} : { claimant: args.claimant as Hex }),
+        }),
       );
     },
   );

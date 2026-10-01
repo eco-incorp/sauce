@@ -394,7 +394,7 @@ describe("sauce inspect", () => {
     const fixed = file("fixed.sauce.ts", FIXED);
     const publishing = (...flags: string[]) =>
       sauce(
-        ...["publish", fixed, "--define", `RECIPIENT=${RECIPIENT}`, ...INTENT_FLAGS],
+        ...["intent", "publish", fixed, "--define", `RECIPIENT=${RECIPIENT}`, ...INTENT_FLAGS],
         ...["--format", "json", ...flags],
       );
     type Printed = {

@@ -611,8 +611,22 @@ quotes and, for the split swap, the same quoter calls as SauceScript over fixed 
 been checked.
 
 **The `sauce` bin** (`sdk/src/cli/`, built to `sdk/dist/cli/main.js`) is the package's one
-executable: `compile`, `actions`, `simulate`, `run`, `publish`, `tx`, `pot`, `globals`, `inspect`,
-`verify`, `init` and `skills install|update|status`, on EVM chains and (`solana.ts`) Solana.
+executable: `compile`, `actions`, `simulate`, `run`, `intent <verb>`, `tx`, `pot`, `globals`,
+`inspect`, `verify`, `init` and `skills install|update|status`, on EVM chains and (`solana.ts`) Solana.
+`run.ts` dispatches `intent <verb>` (`INTENT_VERBS`: publish, fill, prove, claim, refund, cancel,
+status, list, show, import; no verb at a terminal is the picker, `interactive.ts`) as commands of
+their own, each with its own flags and `--help`; the skills checker reads the verbs from
+`sauce intent --help`. An intent's life after publishing is `lifecycle.ts`: plain-value functions
+(`intentStatus`, `buildFill`/`planFill`, `buildProve`, `buildClaim`, `buildRefund`, `buildCancel`,
+`importIntents`) taking an `IntentRecord` and an endpoint per chain and returning unsigned
+transactions as JSON, with no key, store, prompt or environment, which the MCP server calls as they
+are; the calldata is `routes/portal.ts`'s. `intent-commands.ts` adds the signer, the approvals
+(`--auto-approve`) and the store; `store.ts` is the store under `~/.sauce/intents` (an
+`intent.json` linked into place once, an append-only `events.jsonl`, nothing read and written back;
+it imports only Node's modules, so `cli-store.test.ts` runs it in child processes).
+`cli-lifecycle.e2e.test.ts` runs a whole intent on two anvils with eco-routes' own Portal and
+HyperProver (`eco-routes-anvil.ts`, immutables rewritten where the Portal, its Executor and vault
+implementation name each other); only Hyperlane's relay is mocked (`evm/fixtures/MockMailbox.sol`).
 `actions.ts` takes an actions document as a program operand: `sauce actions` prints what it lowers
 to, and `compile`/`tx`/`simulate`/`run` accept one wherever they take a file, as an ordinary
 `ProgramInput` (the generated source, plus its ABI bindings in `contracts`). It loads
