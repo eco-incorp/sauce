@@ -2,9 +2,10 @@
 // whose body is the distributed swap. A solver delivers AMOUNT_IN of WETH on Base; the body sells
 // it on every Uniswap V3 and hookless Uniswap V4 pool with liquidity, each up to its own limit (the
 // price paid, fee included, never below SQRT_PRICE_LIMIT_X96), best taker price first, one swap
-// per pool, pays the USDC to RECIPIENT and returns the unsold WETH to REFUND_TO on Base. The solver earns REWARD of WETH. The whole file is the intent: top-level statements,
-// no main, and every value a define. Nothing is measured on chain, so it can also be published
-// from a wallet (sauce publish).
+// per pool, pays the USDC to RECIPIENT and returns the unsold WETH to REFUND_TO on Base. The
+// solver earns REWARD of WETH. The whole file is the intent: top-level statements, no main, and
+// every value a define. Nothing is measured on chain, so it can also be published from a wallet
+// (sauce publish).
 //
 // `--chain` is the source chain: `WETH` in `.reward(...)` is its WETH. Inside the braces the body
 // runs on Base: `UniswapV3.Factory` and `UniswapV4.PoolManager` are Base's, and Base's WETH and
@@ -32,12 +33,14 @@ Base(
     const feeOf = hex`ddca3f43`;
     const extsload = hex`1e2eaeaf`;
 
-    // 1. Discover the pools that can trade. Candidates 0-3 are Uniswap V3's fee tiers (slot0,
-    //    liquidity and fee of the factory's pool), 4-7 the standard hookless V4 keys (the pool's
-    //    state in the PoolManager through extsload: price and fees, and 3 words on, liquidity).
-    //    Each pool's own limit is the caller's moved by sqrt(1 - fee), so the price paid, fee
-    //    included, never passes it; a pool with no liquidity, or priced past its own limit, is
-    //    left out. Each kept pool gets its taker price, fee included, for the ranking.
+    // 1. Discover the pools that can trade. Candidates 0-3 are Uniswap V3's fee tiers (the
+    //    factory's pool: liquidity, then slot0 and fee), 4-7 the four standard hookless V4 keys,
+    //    written in because an intent has no main to pass them (the pool's state in the
+    //    PoolManager through extsload: 3 words on, liquidity; the first word, price and fees).
+    //    Liquidity before price: a pool with none keeps a stale price, which would rank first, so
+    //    it is dropped before its price is read. Each pool's own limit is the caller's moved by
+    //    sqrt(1 - fee), so the price paid, fee included, never passes it, and a pool priced past
+    //    its own limit is left out. Each kept pool gets its taker price, fee included, to rank by.
     const v3Tiers = [100n, 500n, 3000n, 10000n];
     const v4Fees = [100n, 500n, 3000n, 10000n];
     const v4TickSpacings = [1n, 10n, 60n, 200n];
@@ -55,33 +58,36 @@ Base(
       if (k < 4n) {
         pool = UniswapV3.Factory.getPool(weth, usdc, v3Tiers[k]);
         if (pool != 0n) {
+          inRange = abi.decode(evm.static(pool, liquidity), ["Uint256"])[0n];
+        }
+        if (inRange != 0n) {
           spot = abi.decode(evm.static(pool, slot0), ["Uint256"])[0n];
           fee = abi.decode(evm.static(pool, feeOf), ["Uint256"])[0n];
-          inRange = abi.decode(evm.static(pool, liquidity), ["Uint256"])[0n];
         }
       } else {
         const id = crypto.keccak256(
           abi.encode(currency0, currency1, v4Fees[k - 4n], v4TickSpacings[k - 4n], 0n)
         );
         const state = crypto.keccak256(abi.encode(id, 6n));
-        const read = extsload.concat(abi.encode(state));
-        const word = abi.decode(evm.static(UniswapV4.PoolManager, read), ["Uint256"])[0n];
-        spot = word & ((1n << 160n) - 1n);
-        let protocolFee = (word >> 184n) & 0xfffn; // selling token0; token1's is the next 12 bits
-        if (!sellsToken0) {
-          protocolFee = (word >> 196n) & 0xfffn;
-        }
-        const lpFee = (word >> 208n) & 0xffffffn;
-        fee = protocolFee + lpFee - (protocolFee * lpFee) / 1000000n;
         const readLiquidity = extsload.concat(abi.encode(state + 3n));
         inRange = abi.decode(evm.static(UniswapV4.PoolManager, readLiquidity), ["Uint256"])[0n];
+        if (inRange != 0n) {
+          const read = extsload.concat(abi.encode(state));
+          const word = abi.decode(evm.static(UniswapV4.PoolManager, read), ["Uint256"])[0n];
+          spot = word & ((1n << 160n) - 1n);
+          let protocolFee = (word >> 184n) & 0xfffn; // selling token0; token1's is the next 12 bits
+          if (!sellsToken0) {
+            protocolFee = (word >> 196n) & 0xfffn;
+          }
+          const lpFee = (word >> 208n) & 0xffffffn;
+          fee = protocolFee + lpFee - (protocolFee * lpFee) / 1000000n;
+        }
       }
       const root = Math.sqrt((1000000n - fee) * 10n ** 30n); // sqrt(1 - fee), times 1e18
       let limit = Math.mulDiv(SQRT_PRICE_LIMIT_X96, root, 10n ** 18n);
       if (sellsToken0) {
         limit = Math.mulDiv(SQRT_PRICE_LIMIT_X96, 10n ** 18n, root);
       }
-      // Liquidity before price: a pool with none keeps a stale price, which would rank first.
       if (inRange != 0n && spot != 0n && (sellsToken0 ? spot > limit : spot < limit)) {
         const mid = Math.mulDiv(spot, spot, 1n << 96n);
         let price = Math.mulDiv(mid, 1000000n, 1000000n - fee);
@@ -137,7 +143,10 @@ Base(
       remaining -= before - Token(weth).balanceOf(self);
     }
 
-    // 4. Settle: the checks, the USDC out, every unsold WETH back, on Base.
+    // 4. Settle: the checks, the USDC out, and the WETH back, on Base. This body runs on the
+    //    shared intent Pot, which holds nothing of anyone's between intents, so it returns all
+    //    the WETH there. A program on an owner's Pot returns only what is left of its amount
+    //    (distributed-swap.sauce.ts), leaving the owner's other tokens in place.
     const spent = AMOUNT_IN - remaining;
     const out = Token(usdc).balanceOf(self) - outBefore;
     require(out >= MIN_OUT, "output below MIN_OUT");

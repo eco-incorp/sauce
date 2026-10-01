@@ -1,7 +1,7 @@
 // Distributed swap: sell `amountIn` of `tokenIn` for `tokenOut` on every price-limited pool of the
 // chain.
 //   1. Discover the pair's pools: Uniswap V3, PancakeSwap V3 and Aerodrome Slipstream through their
-//      factories, hookless Uniswap V4 pools by key.
+//      factories, hookless Uniswap V4 pools by the keys passed in `v4Keys`.
 //   2. Liquidity before price: drop every pool with no liquidity at its price, whose price is
 //      stale and would rank first. Give each one left its own limit (`sqrtPriceLimitX96` is the
 //      worst price a taker accepts, fee included, so each pool stops where its price, less its fee,
@@ -9,8 +9,8 @@
 //   3. Rank them by the price a taker gets, fee included, best first.
 //   4. Swap once per pool with all remaining input: each fills up to its limit and leaves the rest
 //      in the Pot for the next.
-//   5. Check the fill, pay `recipient`, refund the unspent input to `refundTo`, and return what
-//      happened.
+//   5. Check the fill, pay `recipient`, refund what is left of `amountIn` to `refundTo`, and
+//      return what happened. Anything else the Pot holds stays there.
 //
 // It names no chain: `--chain` picks one, and the chain sets the Uniswap venues it has. The
 // PancakeSwap V3 and Slipstream factories are optional defines (the sauce-distributed-swap skill
@@ -18,7 +18,7 @@
 //
 //   sauce run distributed-swap.sauce.ts --chain <chain> --config sauce.config.json \
 //     --keystore <keystore> --args <tokenIn> <tokenOut> <amountIn> <sqrtPriceLimitX96> <minOut> \
-//     <minAvgPrice> <recipient> <refundTo>
+//     <minAvgPrice> <recipient> <refundTo> <v4Keys>
 import { ISauceRouter } from "./artifacts/ISauceRouter.json";
 import IUniswapV3Factory from "./protocols/uniswap-v3/UniswapV3FactoryABI.json";
 import IPancakeV3Factory from "./protocols/pancakeswap-v3/PancakeSwapV3FactoryABI.json";
@@ -159,8 +159,9 @@ function swapIntoV4(
 
 // Runtime inputs, passed with the transaction. sqrtPriceLimitX96 is the worst price, fee included,
 // as a sqrt price. minOut and minAvgPrice are 0 to turn them off; minAvgPrice is tokenOut units per
-// tokenIn unit, times 1e18. Returns abi.encode(spent, bought,
-// unspent): the input the pools took, the output paid to `recipient`, the input refunded.
+// tokenIn unit, times 1e18. v4Keys are the hookless Uniswap V4 pools to try, by fee and tick
+// spacing ([] for none). Returns abi.encode(spent, bought, unspent): the input the pools took, the
+// output paid to `recipient`, and the rest of `amountIn`, refunded to `refundTo`.
 function main(
   tokenIn: Address,
   tokenOut: Address,
@@ -169,7 +170,8 @@ function main(
   minOut: Uint256,
   minAvgPrice: Uint256,
   recipient: Address,
-  refundTo: Address
+  refundTo: Address,
+  v4Keys: { fee: Uint256; tickSpacing: Uint256 }[]
 ): bytes {
   const self = ctx.self();
   const sellsToken0 = tokenIn < tokenOut;
@@ -204,13 +206,13 @@ function main(
   // 2. Liquidity before price: a pool with no liquidity at its price is dropped before its price is
   //    looked at, since an abandoned pool can sit far from the market, rank first and fill nothing.
   //    Each pool left gets its own limit and the price a taker gets there. A V3-style pool is its
-  //    address; a Uniswap V4 pool has pool 0 and is named by its key's fee and tick spacing (the
-  //    standard keys, 100/1, 500/10, 3000/60 and 10000/200).
-  let pools = new Array(27); // the 23 above + 4 V4 keys
-  let fees = new Array(27);
-  let tickSpacings = new Array(27);
-  let limits = new Array(27);
-  let prices = new Array(27);
+  //    address; a Uniswap V4 pool has pool 0 and is named by its key's fee and tick spacing.
+  const most = m + v4Keys.length;
+  let pools = new Array(most);
+  let fees = new Array(most);
+  let tickSpacings = new Array(most);
+  let limits = new Array(most);
+  let prices = new Array(most);
   let n = 0n;
   for (let i = 0n; i < m; i++) {
     if (found[i] != 0n && inRangeLiquidity(found[i]) != 0n) {
@@ -228,19 +230,17 @@ function main(
     }
   }
   if (UniswapV4_PoolManager != 0n) {
-    const v4Fees = [100n, 500n, 3000n, 10000n];
-    const v4TickSpacings = [1n, 10n, 60n, 200n];
-    for (let k = 0n; k < 4n; k++) {
-      const liquidity = v4State(v4Fees[k], v4TickSpacings[k], tokenIn, tokenOut, 3n);
-      const state = v4State(v4Fees[k], v4TickSpacings[k], tokenIn, tokenOut, 0n);
+    for (const key of v4Keys) {
+      const liquidity = v4State(key.fee, key.tickSpacing, tokenIn, tokenOut, 3n);
+      const state = v4State(key.fee, key.tickSpacing, tokenIn, tokenOut, 0n);
       const spot = state & ((1n << 160n) - 1n);
       if (liquidity != 0n && spot != 0n) {
         const fee = v4SwapFee(state, sellsToken0);
         const limit = poolLimit(sqrtPriceLimitX96, fee, sellsToken0);
         if (isBetter(spot, limit, sellsToken0)) {
           pools[n] = 0n;
-          fees[n] = v4Fees[k];
-          tickSpacings[n] = v4TickSpacings[k];
+          fees[n] = key.fee;
+          tickSpacings[n] = key.tickSpacing;
           limits[n] = limit;
           prices[n] = takerPrice(spot, fee, sellsToken0);
           n++;
@@ -271,7 +271,9 @@ function main(
     }
   }
 
-  // 5. Settle: the checks, the output out, every unspent input token back, and what happened.
+  // 5. Settle: the checks, the output out, the rest of amountIn back, and what happened. Only this
+  //    trade's tokens move: the refund is what is left of amountIn, not the Pot's whole balance,
+  //    so tokens the owner keeps in the Pot stay there.
   const spent = amountIn - remaining;
   const bought = Token(tokenOut).balanceOf(self) - outBefore;
   require(bought >= minOut, "output below minOut");
@@ -279,9 +281,8 @@ function main(
   if (bought > 0n) {
     Token(tokenOut).transfer(recipient, bought);
   }
-  const unspent = Token(tokenIn).balanceOf(self);
-  if (unspent > 0n) {
-    Token(tokenIn).transfer(refundTo, unspent);
+  if (remaining > 0n) {
+    Token(tokenIn).transfer(refundTo, remaining);
   }
-  return abi.encode(spent, bought, unspent);
+  return abi.encode(spent, bought, remaining);
 }

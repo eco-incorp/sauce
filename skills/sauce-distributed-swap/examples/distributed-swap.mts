@@ -1,14 +1,15 @@
 // Compiles distributed-swap.sauce.ts for Base, Arbitrum and Ethereum the way `sauce compile` does,
 // with the registry's PancakeSwap V3 and Slipstream factories as the defines a run passes, and
-// builds the cooks `sauce tx` would print for selling WETH down to 1,500 USDC per WETH and buying
-// WETH up to 2,707. Checks that the SKILL.md's Base defines file, its selectors and its worked
-// prices are what the registry and the arithmetic give. Asserts what can be checked offline; sends
-// nothing.
+// builds the cooks `sauce tx` would print for selling 1 WETH and buying WETH with 3,000 USDC, each
+// with the limit 0.5% from a reference of 2,700 USDC per WETH and the four standard V4 keys. Checks
+// that the SKILL.md's Base defines file, its V4 keys, its selectors, its worked prices and minimum
+// outputs, and the arguments of its commands are what the registry and the arithmetic give.
+// Asserts what can be checked offline; sends nothing.
 //
 //   node distributed-swap.mts --owner <Pot owner> --recipient <address>
 import { readFileSync } from "node:fs";
 
-import { routes, v12PredictPot } from "@eco-incorp/sauce";
+import { routes, sqrtPriceX96FromPrice, v12PredictPot } from "@eco-incorp/sauce";
 import { resolveSdkModule } from "@eco-incorp/sauce/compiler";
 import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
 import { v12Pot } from "@eco-incorp/sauce/evm/engine";
@@ -68,30 +69,44 @@ for (const [signature, selector] of [
   check(skill.includes(`0x${selector}`), `the skill gives ${signature}'s selector`);
 }
 
-// floor(sqrt(token1 units / token0 units) * 2^96) for a price in whole tokens, token0 the lower
-// address.
 function isqrt(n: bigint) {
   let x = n;
   let y = (x + 1n) / 2n;
   while (y < x) [x, y] = [y, (y + n / y) / 2n];
   return x;
 }
-function sqrtPriceX96(price: bigint, token0: { decimals: number }, token1: { decimals: number }) {
-  return isqrt(
-    (price * 10n ** BigInt(token1.decimals) * 2n ** 192n) / 10n ** BigInt(token0.decimals),
-  );
-}
-// Output units per input unit, times 1e18, for a price of `priceInOut` whole output per whole input.
+const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b;
+// Output units per input unit, times 1e18, rounded up, for `priceNum / priceDen` whole output per
+// whole input: the program's check is out * 1e18 >= minAvgPrice * spent.
 function minAvgPrice(
   out: { decimals: number },
   inp: { decimals: number },
   priceNum: bigint,
   priceDen: bigint,
 ) {
-  return (
-    (priceNum * 10n ** BigInt(out.decimals) * 10n ** 18n) / (priceDen * 10n ** BigInt(inp.decimals))
+  return ceilDiv(
+    priceNum * 10n ** BigInt(out.decimals) * 10n ** 18n,
+    priceDen * 10n ** BigInt(inp.decimals),
   );
 }
+
+// The four standard hookless V4 keys the skill gives as v4Keys' default, as `--args` takes them.
+const STANDARD_KEYS = [
+  { fee: 100, tickSpacing: 1 },
+  { fee: 500, tickSpacing: 10 },
+  { fee: 3000, tickSpacing: 60 },
+  { fee: 10000, tickSpacing: 200 },
+];
+const keysBlock = /```json\n(\[[\s\S]*?)```/.exec(skill);
+check(keysBlock !== null, "the skill gives the V4 keys as JSON");
+check(
+  JSON.stringify(JSON.parse(keysBlock[1]!)) === JSON.stringify(STANDARD_KEYS),
+  "the skill's V4 keys are the four standard hookless keys",
+);
+check(
+  skill.includes(`'${JSON.stringify(STANDARD_KEYS)}'`),
+  "the skill's commands pass the standard keys",
+);
 
 // The Base defines file the SKILL.md gives is the registry's addresses for those roles.
 const fenced = /```json\n([\s\S]*?)```/.exec(skill);
@@ -124,7 +139,10 @@ for (const slug of ["base", "arbitrum", "ethereum"]) {
   check((program.source.match(/\.swapV3\(/g) ?? []).length === 1, "one swapV3 call site");
   check((program.source.match(/\.swapV4\(/g) ?? []).length === 1, "one swapV4 call site");
   check(/__sauce_transfer\(tokenOut,/.test(program.source), "the payout is a SafeERC20 transfer");
-  check(/__sauce_transfer\(tokenIn,/.test(program.source), "the refund is a SafeERC20 transfer");
+  check(
+    /__sauce_transfer\(tokenIn, refundTo, remaining\)/.test(program.source),
+    "the refund is a SafeERC20 transfer of what is left of amountIn, not the Pot's balance",
+  );
   // The chain sets the Uniswap venues itself, so the program carries their addresses.
   const bytecode = bytesToHex(program.bytecode).toLowerCase();
   const defines = routes.chainDefines(chain);
@@ -145,34 +163,83 @@ for (const slug of ["base", "arbitrum", "ethereum"]) {
     continue;
   }
 
-  // Sell 1 WETH for USDC down to 1,500 USDC per WETH; buy WETH with 3,000 USDC up to 2,707.
-  const sell = { limit: sqrtPriceX96(1500n, weth, usdc), avg: minAvgPrice(usdc, weth, 1500n, 1n) };
-  const buy = { limit: sqrtPriceX96(2707n, weth, usdc), avg: minAvgPrice(weth, usdc, 1n, 2707n) };
-  check(sell.limit === 3068493539683605256287027n, "1,500 USDC per WETH as sqrtPriceX96");
-  check(buy.limit === 4122149244956051421750688n, "2,707 USDC per WETH as sqrtPriceX96");
-  check(sell.avg === 1_500_000_000n, "the average-price floor selling WETH");
-  check(buy.avg === 369412633912079793128925009n, "the average-price floor buying WETH");
-  for (const value of [sell.limit, buy.limit, sell.avg, buy.avg])
+  // A reference of 2,700 USDC per WETH, and the limit 0.5% from it: selling 1 WETH down to 2,686.5,
+  // buying with 3,000 USDC up to 2,713.5. The SDK's conversion is what `sauce price` prints.
+  const tokens = { baseDecimals: weth.decimals, quoteDecimals: usdc.decimals, baseIsToken0: true };
+  const reference = sqrtPriceX96FromPrice("2700", tokens);
+  const sell = {
+    limit: sqrtPriceX96FromPrice("2686.5", tokens),
+    avg: minAvgPrice(usdc, weth, 26865n, 10n),
+    minOut: ceilDiv(10n ** 18n * 26865n * 10n ** 6n, 10n * 10n ** 18n),
+  };
+  const buy = {
+    limit: sqrtPriceX96FromPrice("2713.5", tokens),
+    avg: minAvgPrice(weth, usdc, 10n, 27135n),
+    minOut: ceilDiv(3000n * 10n ** 6n * 10n * 10n ** 18n, 27135n * 10n ** 6n),
+  };
+  check(reference === 4116816085950893928074568n, "2,700 USDC per WETH as sqrtPriceX96");
+  check(sell.limit === 4106511148422261116904015n, "2,686.5 USDC per WETH as sqrtPriceX96");
+  check(buy.limit === 4127095293177970497328754n, "2,713.5 USDC per WETH as sqrtPriceX96");
+  check(sell.avg === 2_686_500_000n, "the average-price floor selling WETH");
+  check(
+    buy.avg === 368527731711811313801363553n,
+    "the average-price floor buying WETH, rounded up",
+  );
+  check(sell.minOut === 2_686_500_000n, "minOut selling all of 1 WETH at the floor");
+  check(buy.minOut === 1105583195135433942n, "minOut buying with all of 3,000 USDC at the ceiling");
+  for (const value of [reference, sell.limit, buy.limit, sell.avg, buy.avg, buy.minOut])
     check(skill.includes(String(value)), `the skill quotes ${value}`);
+  // X% on the price is √(1 ± X) on sqrtPriceX96: 0.5% is × 0.99750 down and × 1.00250 up.
+  const down = isqrt(995n * 10n ** 33n); // √0.995, times 1e18
+  const up = isqrt(1005n * 10n ** 33n);
+  const fiveDigits = (x: bigint) => (x + 5n * 10n ** 12n) / 10n ** 13n; // rounded to 5 decimals
+  check(
+    fiveDigits(down) === 99750n && fiveDigits(up) === 100250n,
+    "√0.995 ≈ 0.99750, √1.005 ≈ 1.00250",
+  );
+  check(skill.includes("0.99750") && skill.includes("1.00250"), "the skill gives both factors");
+  for (const [moved, exact] of [
+    [(reference * down) / 10n ** 18n, sell.limit],
+    [(reference * up) / 10n ** 18n, buy.limit],
+  ] as const) {
+    const gap = moved > exact ? moved - exact : exact - moved;
+    check(
+      gap * 10n ** 15n < exact,
+      "the reference times the factor is the moved price, to 15 digits",
+    );
+  }
   // And back: sqrtPriceX96² × 10^d0 / (2^192 × 10^d1) is the price again.
-  const back = (buy.limit * buy.limit * 10n ** 18n) / (2n ** 192n * 10n ** 6n);
-  check(back === 2706n, "4122149244956051421750688 converts back to just under 2,707");
+  const back = (reference * reference * 10n ** 18n) / (2n ** 192n * 10n ** 6n);
+  check(back === 2699n, "4116816085950893928074568 converts back to just under 2,700");
+  // The skill's commands pass these values, in main's order.
+  check(
+    skill.includes(`1000000000000000000 ${sell.limit} ${sell.minOut} ${sell.avg} <recipient>`),
+    "the selling commands pass amountIn, the floor, minOut and minAvgPrice",
+  );
+  check(
+    skill.includes(`3000000000 ${buy.limit} 0 ${buy.avg} <recipient>`),
+    "the buying command passes amountIn, the ceiling, minOut 0 and minAvgPrice",
+  );
 
   // main's arguments, encoded as `--args` encodes them, appended to the program; then the cook the
   // owner sends, with the Kitchen's fee as its value.
-  for (const [tokenIn, tokenOut, amountIn, { limit, avg }] of [
-    [weth.address, usdc.address, 10n ** 18n, sell],
-    [usdc.address, weth.address, 3000n * 10n ** 6n, buy],
+  for (const [tokenIn, tokenOut, amountIn, minOut, { limit, avg }] of [
+    [weth.address, usdc.address, 10n ** 18n, sell.minOut, sell],
+    [usdc.address, weth.address, 3000n * 10n ** 6n, 0n, buy],
   ] as const) {
     const args = routes.encodeEntryArguments(program, [
       tokenIn,
       tokenOut,
       amountIn,
       limit,
-      0n,
+      minOut,
       avg,
       recipient,
       recipient,
+      STANDARD_KEYS.map(({ fee, tickSpacing }) => ({
+        fee: BigInt(fee),
+        tickSpacing: BigInt(tickSpacing),
+      })),
     ]);
     const data = v12Pot.encodeCook(
       engine,

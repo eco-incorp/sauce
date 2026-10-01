@@ -112,7 +112,10 @@ the source chain. The body is written inside the braces, uses the file's defines
 `evm.call(address, value, data)` for a write, `data` being the selector bytes
 `.concat(abi.encode(...))`. The swap Router is reached through the Pot itself,
 `evm.call(ctx.self(), 0n, ...)`. Every unsold input and every output leaves the destination Pot
-before the body ends, and a refund the body makes lands on the destination chain.
+before the body ends, and a refund the body makes lands on the destination chain. The body runs on
+the shared intent Pot, which holds nothing of anyone's between intents, so it may return a token's
+whole balance there, as the refunds below do; a program on an owner's Pot returns only what is left
+of its own amount instead (`sauce-distributed-swap`).
 
 Inside a body, read a decoded result by position, `abi.decode(data, ["Address"])[0n]`: destructuring
 it, `const [pool] = …`, is refused there ("Identifier 'pool' has already been declared"), though it

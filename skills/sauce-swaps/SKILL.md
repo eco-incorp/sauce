@@ -62,9 +62,12 @@ moves it up, so it is a ceiling. It must lie strictly between `4295128739` and
 `1461446703485210103287273052203988822378723970342` and on the far side of the pool's current
 price, or the pool reverts.
 
-**Build the limit from a liquid reference**: derive it from the price of a pool deep enough for
-the order, read with its liquidity, never from a pool's price alone. A pool with no liquidity at
-its price keeps a stale price that can be far from the market.
+**Build the limit from the best price a taker gets among pools with liquidity**: drop the pools
+with no in-range liquidity (`liquidity()`, or less than the order needs), take the best price after
+each pool's fee, and move it by the slippage you accept. Never a pool's price alone: a pool with no
+liquidity at its price keeps a stale price that can be far from the market. Nor the deepest pool's
+mid price: a pool's mid sits up to its fee away from the cheap pools, so a 0.3% pool's price is a
+loose reference. `sauce-distributed-swap` works this through on Base.
 
 **It bounds the pool's price after the swap, not the price paid.** One number is the same pool price
 on every V3-style pool of the pair and on V4 pools of the same two currencies, but the fee comes on
@@ -76,7 +79,7 @@ computes it and reads each pool's fee).
 A pool offered more than it can fill before its price reaches the limit **takes only what it
 can**: the callback pays exactly the pool's delta, and the rest of the input stays in the Pot. That
 is what a limit is for (the remainder can go to another venue or back to the user), and why a leg
-must never end with input left in the Pot.
+must never end with any of its input left in the Pot.
 
 A V4 pool priced in native ETH has `currency0` = `0x0`: it is a different pair from the WETH pools,
 and it needs native ETH in the Pot.
@@ -89,7 +92,10 @@ The Router returns the deltas but checks no minimum output and refunds nothing. 
 2. `require(out >= minOut, ...)`, `minOut` being a `main` input: a short fill reverts the whole
    transaction.
 3. Pay the output out with a SafeERC20 `transfer`.
-4. Send whatever input is still in the Pot back to the user or a refund address.
+4. Send the rest of the input back to the user or a refund address: `amountIn` less what the
+   swap took (the input balance before minus after), not the Pot's whole balance of the token,
+   which on an owner's Pot may hold more of it for other uses. A full sweep is only for an intent
+   body on the shared intent Pot, which holds nothing of anyone's (`sauce-intents`).
 
 **Every leg either takes all its input or returns the rest.** A venue that can stop part way, at a
 price or tick limit, is swapped only through the Router: its callback pays exactly what the pool
