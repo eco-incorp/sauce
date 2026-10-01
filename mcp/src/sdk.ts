@@ -18,7 +18,6 @@ export {
   parseUnixSeconds,
   parseWei,
   UsageError,
-  type DefineValue,
 } from "../../sdk/dist/cli/args.js";
 export {
   connect,
@@ -34,6 +33,7 @@ export {
   txCommand,
   type CliFiles,
   type CommandOutput,
+  type CompileInput,
   type CookInput,
   type ProgramInput,
 } from "../../sdk/dist/cli/commands.js";

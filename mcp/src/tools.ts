@@ -9,7 +9,7 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
-import { formatUnits, getAddress, numberToHex, parseAbi, type Address, type Hex } from "viem";
+import { formatUnits, parseAbi, type Address, type Hex } from "viem";
 import * as z from "zod";
 
 import { noEndpoint, type Endpoints } from "./config.js";
@@ -64,8 +64,8 @@ import {
   type CanonicalChain,
   type CliFiles,
   type CommandOutput,
+  type CompileInput,
   type CookInput,
-  type DefineValue,
   type ProgramInput,
   type SvmCookInput,
 } from "./sdk.js";
@@ -235,6 +235,9 @@ const COOK = {
   rpcUrl: RPC_URL,
 };
 
+/** Endpoints by chain, for a call that reads more than one: each intent's destination. */
+const RPC_URLS = z.record(z.string().max(64), z.string().min(1).max(2048)).optional();
+
 const TOKEN_AMOUNTS = z
   .array(z.string().min(3).max(200))
   .max(LIMITS.entries)
@@ -337,6 +340,23 @@ function programOf(args: ProgramArgs, fallback?: CanonicalChain): Program {
 const argsOf = (args: { readonly args?: readonly unknown[] | undefined }) =>
   args.args === undefined ? {} : { args: { from: "--args-json" as const, values: args.args } };
 
+/** A call's `rpcUrls`, each reached as `reach` reaches a call's URL: by chain id. */
+async function endpointsByChain(
+  urls: Readonly<Record<string, string>> | undefined,
+  reach: Reach,
+): Promise<ReadonlyMap<number, string>> {
+  if (Object.keys(urls ?? {}).length > LIMITS.entries) {
+    throw new UsageError(`rpcUrls: at most ${LIMITS.entries}`);
+  }
+  const byChain = new Map<number, string>();
+  for (const [key, url] of Object.entries(urls ?? {})) {
+    const chain = parseChain(key, "rpcUrls");
+    byChain.set(chain.id, (await reach.endpoint(chain, url))!);
+  }
+
+  return byChain;
+}
+
 /** An EVM cook: the program on the Pot `owner`/`salt` or `pot` names. */
 function evmCook(args: CookArgs, program: Program): CookInput {
   if (args.accounts !== undefined) {
@@ -424,29 +444,12 @@ async function cookTransaction(
   return txCommand({ ...cook, ...(rpcUrl === undefined ? {} : { rpcUrl }) }, program.files);
 }
 
-/** A define's value as JSON: an address-sized integer as its address, a wider one (a Solana key,
- *  a hash) as 32 bytes of hex, any other in decimal. */
-function defineJson(value: DefineValue): string | boolean {
-  if (typeof value === "boolean") return value;
-  if (value >= 1n << 160n) return numberToHex(value, { size: 32 });
-
-  return value >= 1n << 64n ? getAddress(numberToHex(value, { size: 20 })) : value.toString();
-}
-
-/** `sauce compile --json`, with the defines the compile was given as JSON beneath the command's
- *  own report of them, which wins where it gives one. */
-async function compiled(program: Program): Promise<ToolOutput> {
-  const output = await compileCommand(program.input, program.files);
-
-  return {
-    json: {
-      defines: Object.fromEntries(
-        Object.entries(program.input.defines).map(([name, value]) => [name, defineJson(value)]),
-      ),
-      ...output.json,
-    },
-    notes: output.notes,
-  };
+/** `sauce compile --json`: the command's own report, its defines among it. */
+async function compiled(program: {
+  readonly input: CompileInput;
+  readonly files: CliFiles;
+}): Promise<ToolOutput> {
+  return fromCommand(await compileCommand(program.input, program.files));
 }
 
 const POOL = parseAbi([
@@ -502,6 +505,8 @@ function scaled(price: string, numerator: bigint, denominator: bigint): string {
 }
 
 const HEX = /^0x(?:[0-9a-fA-F]{2})*$/;
+/** A rehearsal's approver: it sends nothing, so there is nothing to approve and no one to ask. */
+const NO_APPROVER = { auto: false, canAsk: false, approve: async () => undefined } as const;
 /** The name an actions document goes by in messages: it comes from the call, not a file. */
 const ACTIONS_FILE = "actions.json";
 /** An intent's claimant, as fulfill records it: an address, or 32 bytes. */
@@ -916,10 +921,24 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "encoded (`entryEncoding`; with compactArgs, the compact-v1 `entrySchema`), the defines " +
         "it was given, the compiler and the released engine it pairs with, and on Solana the " +
         "account `manifest` (the accounts a cook attaches, in order). A program that does not " +
-        "compile is an error naming its line. For a program that opens intents, the result is " +
-        "the program the source chain runs; sauce_inspect with the source alone lists each " +
-        "intent's destination, route and reward. Reads nothing.",
-      input: PROGRAM,
+        "compile is an error naming its line. Also `contracts`, each protocol contract it calls " +
+        "with its address, and with args the `payload` (the program with main's arguments " +
+        "appended, what a cook carries) and its size; on Solana, with args and accounts, the " +
+        "cook's transaction size against the one-transaction limit. For a program that opens " +
+        "intents, the result is the program the source chain runs; sauce_inspect with the " +
+        "source alone lists each intent's destination, route and reward. Reads no chain unless " +
+        "rpcUrls is given: then each intent's destination is checked for the Pot its cook " +
+        "needs (`intentPots`).",
+      input: {
+        ...PROGRAM,
+        args: COOK.args,
+        accounts: COOK.accounts,
+        rpcUrls: RPC_URLS.describe(
+          "For a program that opens intents: each destination's endpoint by chain (slug or " +
+            'id), { "base": "<url>" }, to check the Pot its cook runs on is deployed there. ' +
+            "Used for this call only, never returned or logged.",
+        ),
+      },
       output: {
         chain: z.string(),
         chainId: z.number(),
@@ -932,9 +951,35 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         defines: z.unknown(),
         manifest: z.unknown().optional(),
       },
-      annotations: PURE,
+      annotations: READS_CHAIN,
     },
-    (args) => compiled(programOf(args)),
+    async (args, reach) => {
+      const program = programOf(args);
+      if (args.accounts !== undefined && program.input.chain.kind !== "svm") {
+        throw new UsageError(
+          `accounts names a Solana program's accounts; a program on ${program.input.chain.slug} takes none`,
+        );
+      }
+      const byChain = await endpointsByChain(args.rpcUrls, reach);
+
+      return compiled({
+        input: {
+          ...program.input,
+          ...argsOf(args),
+          ...(args.accounts === undefined
+            ? {}
+            : {
+                accounts: parseAccounts(
+                  Object.entries(args.accounts).map(([name, value]) => `${name}=${value}`),
+                ),
+              }),
+          ...(byChain.size === 0
+            ? {}
+            : { endpoints: (chain: CanonicalChain) => byChain.get(chain.id) }),
+        },
+        files: program.files,
+      });
+    },
   );
 
   tool(
@@ -1229,8 +1274,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         sweep: args.sweep === true,
         // A rehearsal: nothing sent, no key, so the pulls are credited rather than signed.
         send: false,
-        yes: false,
-        confirm: async () => undefined,
+        approver: NO_APPROVER,
       };
       if (chain.kind === "svm") {
         if ((args.assumeBalance ?? []).length > 0) {
@@ -1385,13 +1429,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
             "The DESTINATION chain's endpoint, when every intent goes to one chain: used for " +
               "this call only, never returned or logged.",
           ),
-        rpcUrls: z
-          .record(z.string().max(64), z.string().min(1).max(2048))
-          .optional()
-          .describe(
-            'Each destination\'s endpoint by chain (slug or id): { "base": "<url>" }. ' +
-              "Used for this call only, never returned or logged.",
-          ),
+        rpcUrls: RPC_URLS.describe(
+          'Each destination\'s endpoint by chain (slug or id): { "base": "<url>" }. ' +
+            "Used for this call only, never returned or logged.",
+        ),
       },
       output: {
         ok: z.boolean(),
@@ -1407,20 +1448,13 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       if (args.rpcUrl !== undefined && args.rpcUrls !== undefined) {
         throw new UsageError("give rpcUrl (one destination) or rpcUrls (by chain), not both");
       }
-      if (Object.keys(args.rpcUrls ?? {}).length > LIMITS.entries) {
-        throw new UsageError(`rpcUrls: at most ${LIMITS.entries}`);
-      }
       const solver = args.solver === undefined ? undefined : parseAddress("solver", args.solver);
       if (args.claimant !== undefined && !CLAIMANT.test(args.claimant)) {
         throw new UsageError(
           `claimant: '${args.claimant}' is neither an address (20 bytes) nor 32 bytes of hex`,
         );
       }
-      const byChain = new Map<number, string>();
-      for (const [key, url] of Object.entries(args.rpcUrls ?? {})) {
-        const chain = parseChain(key, "rpcUrls");
-        byChain.set(chain.id, (await reach.endpoint(chain, url))!);
-      }
+      const byChain = await endpointsByChain(args.rpcUrls, reach);
       const one =
         args.rpcUrl === undefined
           ? undefined
