@@ -117,8 +117,9 @@ function signatureAt(code: string, open: number): MainSignature | undefined {
   return { open, close, returnEnd };
 }
 
-/** `text` split at its top-level commas — not those inside `<>`, `{}`, `[]` or `()`. */
-function splitTopLevel(text: string): string[] {
+/** `text` split at its top-level commas (or other `separators`) — not those inside `<>`, `{}`, `[]`
+ *  or `()`. */
+function splitTopLevel(text: string, separators = ","): string[] {
   const parts: string[] = [];
   let depth = 0;
   let start = 0;
@@ -126,7 +127,7 @@ function splitTopLevel(text: string): string[] {
     const ch = text[i]!;
     if (ch === "<" || ch === "{" || ch === "[" || ch === "(") depth++;
     else if (ch === ">" || ch === "}" || ch === "]" || ch === ")") depth--;
-    else if (ch === "," && depth === 0) {
+    else if (separators.includes(ch) && depth === 0) {
       parts.push(text.slice(start, i));
       start = i + 1;
     }
@@ -321,7 +322,8 @@ export function parseEntryType(text: string): EntryType {
   if (type.startsWith("{") && type.endsWith("}")) {
     return {
       kind: "tuple",
-      fields: splitTopLevel(type.slice(1, -1)).map((field) => {
+      // A record type's fields, separated by `,` or, as a TypeScript formatter writes them, `;`.
+      fields: splitTopLevel(type.slice(1, -1), ",;").map((field) => {
         const { name, type: fieldType } = splitParam(field);
         if (fieldType === undefined)
           throw new TypeError(`the field '${name}' of ${type} has no type`);

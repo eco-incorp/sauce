@@ -245,6 +245,22 @@ describe("encodeEntryArguments", () => {
     );
   });
 
+  it("reads a record type's fields separated by ;, as a formatter writes them", () => {
+    const comma = compileSauceProgram(
+      "base",
+      "function main(legs: { amount: Uint256, to: Address }[]) {}",
+    );
+    const semicolon = compileSauceProgram(
+      "base",
+      "function main(legs: { amount: Uint256; to: Address }[]) {}",
+    );
+    expect(semicolon.entryParams).toEqual([
+      { name: "legs", type: "{ amount: Uint256; to: Address }[]" },
+    ]);
+    const legs = [[{ amount: 5n, to: PROVER }]];
+    expect(encodeEntryArguments(semicolon, legs)).toEqual(encodeEntryArguments(comma, legs));
+  });
+
   it("names the parameter and what it takes when a value is wrong", () => {
     const program = { entryEncoding: "abi-v1" as const, entryParams: params };
     const at = (index: number, value: unknown) => {

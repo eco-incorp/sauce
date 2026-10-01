@@ -671,7 +671,7 @@ function sample(type) {
       const ch = body[i];
       if (ch === "{" || ch === "[" || ch === "<") depth++;
       else if (ch === "}" || ch === "]" || ch === ">") depth--;
-      if ((ch === "," && depth === 0) || i === body.length) {
+      if (((ch === "," || ch === ";") && depth === 0) || i === body.length) {
         const field = body.slice(start, i).trim();
         if (field) {
           const at = field.indexOf(":");
