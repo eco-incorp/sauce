@@ -159,6 +159,15 @@ describe("a server with wallets", () => {
       ),
       /name no chain: give chain/,
     );
+    // A preview chain is refused before any endpoint is reached, saying how to ask for it.
+    const preview = await mcp.call("sauce_wallet_send", {
+      wallet: "agent",
+      transaction: { ...tx, chainId: 42161 },
+    });
+    assert.equal(preview.isError, true);
+    const refused = (preview.structuredContent as { refused?: Record<string, unknown> }).refused;
+    assert.equal(refused?.code, "preview-chain");
+    assert.equal(refused?.action, "sending from a wallet");
     // No endpoint: the call can give one.
     assert.match(
       failed(await mcp.call("sauce_wallet_send", { wallet: "agent", transaction: tx })),

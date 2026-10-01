@@ -83,6 +83,7 @@ import { derivePotPda } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import type { TxRequest } from "./chain.js";
 import { nativeSymbol, tokenInfo } from "./effects.js";
+import { requireSupported } from "./support.js";
 import { accountsNow, movedBy, writableAccounts } from "./svm-effects.js";
 import type { WalletInfo } from "./wallets.js";
 
@@ -838,13 +839,12 @@ export interface Reservation {
 const NOTHING: Reservation = { sent: () => undefined, released: () => undefined };
 
 /**
- * The release's chain gate, for every send a wallet makes. Wallets send only where the release
- * sends at all: the shared gate (`support.ts#requireSupported`, which the commands themselves call)
- * belongs here too, so a raw transaction a wallet is handed is held to it as a built one is.
+ * The release's chain gate (`support.ts#requireSupported`), for every send a wallet makes: wallets
+ * send only where the release sends at all, so a raw transaction a wallet is handed is held to it
+ * as a built one is — refused on a preview chain before anything is measured, signed or sent.
  */
-function releaseGate(_chain: CanonicalChain): void {
-  // The shared gate lands with the release's chain support; until then every chain is open.
-}
+const releaseGate = (chain: CanonicalChain): void =>
+  requireSupported("sending from a wallet", [chain]);
 
 /** A wallet's guard: its policy (if any), and the ledger and lock beside it. */
 export class SendGuard {

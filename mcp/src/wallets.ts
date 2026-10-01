@@ -26,6 +26,7 @@ import {
   plannedTransactions,
   readPolicy,
   sendPlan,
+  supportedChainNames,
   UsageError,
   walletName,
 } from "./sdk.js";
@@ -176,7 +177,9 @@ export function registerWalletTools(
         "again, and stops at the first that does not succeed. Returns each one's hash (a Solana " +
         "signature) and status. Build the transactions for the wallet's address: as `owner` or " +
         "`from` in the tool that builds them. Needs the chain's endpoint (rpcUrl, or the " +
-        "server's). What it sends is spent: rehearse with sauce_simulate first.",
+        "server's). What it sends is spent: rehearse with sauce_simulate first. It sends only on " +
+        `${supportedChainNames()}, the chains this release supports; on any other it is refused ` +
+        "before any endpoint is reached, with `refused` saying how to request the chain.",
       input: {
         wallet: WALLET,
         transaction: z
@@ -207,13 +210,15 @@ export function registerWalletTools(
               "logged.",
           ),
       },
+      // Each field optional: a refusal on a preview chain comes back as `refused` alone.
       output: {
-        wallet: z.string(),
-        from: z.string(),
-        chain: z.string(),
-        ok: z.boolean(),
-        sent: z.array(z.looseObject({ hash: z.string(), status: z.string() })),
-        policy: z.string().nullable(),
+        wallet: z.string().optional(),
+        from: z.string().optional(),
+        chain: z.string().optional(),
+        ok: z.boolean().optional(),
+        sent: z.array(z.looseObject({ hash: z.string(), status: z.string() })).optional(),
+        policy: z.string().nullable().optional(),
+        refused: z.looseObject({}).optional(),
       },
       annotations: SENDS,
     },

@@ -38,6 +38,7 @@ import {
   readPolicy,
   SendGuard,
 } from "../src/cli/policy.js";
+import { PreviewChainError } from "../src/cli/support.js";
 import { WalletStore, type WalletInfo } from "../src/cli/wallets.js";
 
 const BASE = requireChain("base");
@@ -309,6 +310,22 @@ describe("the guard", () => {
     );
     // A preflight reserves nothing.
     expect(() => readFileSync(join(dir, "agent.ledger.jsonl"))).toThrow();
+  });
+
+  it("sends from a wallet only on a chain the release supports, policy or not", async () => {
+    const onArbitrum = {
+      ...client([]),
+      getChainId: async () => requireChain("arbitrum").id,
+      simulateBlocks: async () => {
+        throw new Error("a preview chain is refused before anything is rehearsed");
+      },
+    } as unknown as PublicClient;
+    for (const guard of [guardWallet(wallet, undefined), guarded({})]) {
+      await expect(guard.evm(onArbitrum, pay)).rejects.toThrow(PreviewChainError);
+      await expect(guard.evm(onArbitrum, pay)).rejects.toThrow(
+        /sending from a wallet is refused: it involves arbitrum/,
+      );
+    }
   });
 
   it("guards a real wallet the store unlocked by the same address", async () => {
