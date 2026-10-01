@@ -240,11 +240,8 @@ describe("chain accessors: the names resolve through an import, and only through
       const x: unknown = Base.UniswapV4.UniversalRouter.exactIn;
       export {};
     `);
-    expect(diagnostics).toHaveLength(0);
-    // UniversalRouter's method surface is typed loosely (unknown), so
-    // .exactIn is not a TS2339 -- calling it is a RUNTIME undefined, per
-    // accessors.ts's own doc comment. Confirm the property access itself at
-    // least resolves against the real, narrowed contract-name union first.
+    // The method surface is typed from the ABI, so a name it lacks is TS2339, not `unknown`.
+    expect(diagnostics.some((d) => d.code === 2339)).toBe(true);
     const namespaceDiagnostics = typecheckProbe(`
       import { Base } from ${ROOT};
       const x: unknown = Base.UniswapV4.NotARealContract;

@@ -1,16 +1,24 @@
 /**
- * The E2.3 native accessor tree: `chainContracts(chainRef)` builds the lazy
- * `Chain -> Protocol -> Contract -> method` object a chain global (`Base`)
- * or `contracts.on(ref)` exposes. A walk over `describeContract`/
- * `requireContract` (query.ts) and `DESCRIPTORS` (registry.ts) — not a
+ * The native accessor tree: `chainContracts(chainRef)` builds the lazy `Chain -> Protocol -> Contract
+ * -> method` object a chain export (`Base`) or `contracts.on(ref)` carries. A walk over
+ * `describeContract`/`requireContract` (query.ts) and `DESCRIPTORS` (registry.ts) — not a
  * reimplementation of either.
  *
- * Every namespace and leaf is a memoising GETTER (`Object.defineProperty`,
- * never eager construction/spread) so nothing is built until touched — see
- * the design doc's laziness note for why that matters (39 chains x ~29
- * contracts eagerly built on the SDK's import path would be real cost).
+ * Every namespace and leaf is a memoising GETTER (`Object.defineProperty`, never eager
+ * construction/spread) so nothing is built until touched: 41 chains times every registry contract,
+ * built eagerly on the SDK's import path, would be real cost.
+ *
+ * The TYPE of the tree, `ChainContracts`, is generated with the table (`contracts.generated.ts`):
+ * every contract typed from its ABI, so `Base.UniswapV3.QuoterV2.quoteExactInputSingle(...)` takes
+ * the ABI's arguments and its `read(client)` resolves to the ABI's outputs.
  */
-import type { Address, Abi } from "viem";
+import type {
+  Abi,
+  AbiStateMutability,
+  Address,
+  ContractFunctionArgs,
+  ContractFunctionName,
+} from "viem";
 import {
   requireChain,
   type CanonicalChain,
@@ -19,27 +27,19 @@ import {
 } from "../chains/canonical.js";
 import { pascalOfSlug } from "../routes/builder.js";
 import { makeContractCall, type ContractCall } from "./call.js";
+import type { ChainContracts } from "./contracts.generated.js";
 import { addressOn, methodOf, requireContract } from "./query.js";
 import { DESCRIPTORS } from "./registry.js";
 import type { ContractCoverage, ContractDescriptor, DescriptorMethod } from "./types.js";
-import type {
-  FamilyContracts,
-  FamilyKey,
-  ContractNameOf,
-  PascalOf,
-  ProtocolSlug,
-} from "./names.js";
+
+export type { ChainContracts };
 
 /**
- * One leaf: a bound (protocol, contract) on a specific chain, plus every
- * real ABI method as a callable producing a `ContractCall`. Method names are
- * NOT part of the static type (kept loose as `unknown` via the index
- * signature below) — they are derived from the descriptor's real ABI at
- * BUILD time, so `Base.UniswapV4.UniversalRouter.execute(...)` resolves a
- * real method and `.exactIn` is `undefined`, matching E2.2's "surface what
- * exists, invent nothing" stance.
+ * One leaf's own properties: a (protocol, contract) on a specific chain. Its methods are separate
+ * (`ContractMethods`): {@link Contract} is the two together. A type rather than an interface, so a
+ * contract typed from its ABI is assignable to the untyped {@link Contract}.
  */
-export interface ContractAccessor {
+export type ContractAccessor<TAbi extends Abi = Abi> = {
   readonly descriptor: ContractDescriptor;
   readonly chain: CanonicalChain;
   /** `undefined` when this contract has no address on `chain` (a hole), or for an unbound `kind:"interface"`. */
@@ -47,32 +47,58 @@ export interface ContractAccessor {
   readonly available: boolean;
   readonly chains: readonly ChainSlug[];
   readonly coverage: ContractCoverage;
-  readonly abi: Abi;
+  readonly abi: TAbi;
   readonly methods: readonly DescriptorMethod[];
   /** Rebinds this accessor to a specific instance address — REQUIRED for `kind:"interface"`, an optional override otherwise. */
-  at(address: Address): ContractAccessor;
-  readonly [method: string]: unknown;
-}
-
-/**
- * The whole typed tree `chainContracts(...)` returns — chain-INDEPENDENT by
- * design (per-chain address presence is runtime data, not literally typed;
- * see the design doc's `ChainContracts` note), so it instantiates once
- * regardless of how many chain globals intersect it.
- */
-export type ChainContracts = {
-  readonly [P in ProtocolSlug as PascalOf<P>]: {
-    readonly [C in ContractNameOf<P>]: ContractAccessor;
-  };
-} & {
-  readonly [F in FamilyKey]: { readonly [C in FamilyContracts<F>]: ContractAccessor };
+  at(address: Address): Contract<TAbi>;
 };
+
+/** The names of `TAbi`'s functions with one of the mutabilities `M`. */
+export type FunctionNameOf<
+  TAbi extends Abi,
+  M extends AbiStateMutability = AbiStateMutability,
+> = Extract<TAbi[number], { readonly type: "function"; readonly stateMutability: M }>["name"];
+
+/** One ABI method: takes the ABI's arguments, typed from the ABI, and returns the call. */
+export type ContractMethod<TAbi extends Abi, TName extends ContractFunctionName<TAbi>> = <
+  const TArgs extends ContractFunctionArgs<TAbi, AbiStateMutability, TName> & readonly unknown[],
+>(
+  ...args: TArgs
+) => ContractCall;
+
+/** Every function of `TAbi`, by its ABI name. An untyped ABI has an index of `unknown` instead. */
+export type ContractMethods<TAbi extends Abi> = Abi extends TAbi
+  ? { readonly [method: string]: unknown }
+  : { readonly [N in FunctionNameOf<TAbi> & ContractFunctionName<TAbi>]: ContractMethod<TAbi, N> };
+
+/** A contract with an ABI: its accessor properties and its methods. */
+export type Contract<TAbi extends Abi = Abi> = ContractAccessor<TAbi> & ContractMethods<TAbi>;
+
+/** A contract the registry has an address for and no ABI: `.address` and `.available`, no methods. */
+export type AddressOnlyContract = ContractAccessor<readonly []>;
+
+/** An ABI with no fixed address: bind a deployment with `.at(address)` to call it. */
+export type InterfaceContract<TAbi extends Abi> = ContractAccessor<TAbi>;
+
+/** The accessor's own properties: a method of the same name would shadow one, which the generator
+ *  refuses and `buildAccessor` re-checks. */
+const ACCESSOR_PROPERTIES: ReadonlySet<string> = new Set([
+  "descriptor",
+  "chain",
+  "address",
+  "available",
+  "chains",
+  "coverage",
+  "abi",
+  "methods",
+  "at",
+]);
 
 function buildAccessor(
   descriptor: ContractDescriptor,
   chain: CanonicalChain,
   addressOverride?: Address,
-): ContractAccessor {
+): Contract {
   const isInterface = descriptor.kind === "interface";
   const resolvedAddress: Address | undefined =
     addressOverride ?? (isInterface ? undefined : addressOn(descriptor, chain));
@@ -87,7 +113,7 @@ function buildAccessor(
     coverage: descriptor.coverage,
     abi: descriptor.abi,
     methods: descriptor.methods,
-    at(newAddress: Address): ContractAccessor {
+    at(newAddress: Address): Contract {
       return buildAccessor(descriptor, chain, newAddress);
     },
   };
@@ -99,6 +125,11 @@ function buildAccessor(
     byName.set(method.name, [...(byName.get(method.name) ?? []), method]);
   }
   for (const [name, overloads] of byName) {
+    if (ACCESSOR_PROPERTIES.has(name)) {
+      throw new Error(
+        `${descriptor.protocol}.${descriptor.contract}.${name} would shadow the accessor's own '${name}'`,
+      );
+    }
     base[name] = (...args: unknown[]): ContractCall => {
       const method =
         overloads.length === 1 ? overloads[0]! : methodOf(descriptor, name, args.length);
@@ -129,7 +160,7 @@ function buildAccessor(
     };
   }
 
-  return base as ContractAccessor;
+  return base as Contract;
 }
 
 /** protocol slug (exact, as declared in CONTRACT_LINKS) -> its descriptors, insertion order. */
@@ -175,18 +206,18 @@ const familyMembers: ReadonlyMap<string, readonly string[]> = (() => {
  */
 export function chainContracts(chainRef: ChainRef): ChainContracts {
   const chain = requireChain(chainRef);
-  const protocolNamespaceCache = new Map<string, Record<string, ContractAccessor>>();
+  const protocolNamespaceCache = new Map<string, Record<string, Contract>>();
 
-  function protocolNamespace(slug: string): Record<string, ContractAccessor> {
+  function protocolNamespace(slug: string): Record<string, Contract> {
     const cached = protocolNamespaceCache.get(slug);
     if (cached !== undefined) return cached;
-    const ns: Record<string, ContractAccessor> = {};
+    const ns: Record<string, Contract> = {};
     for (const d of protocolGroups.get(slug) ?? []) {
-      let memo: ContractAccessor | undefined;
+      let memo: Contract | undefined;
       Object.defineProperty(ns, d.contract, {
         enumerable: true,
         configurable: true,
-        get(): ContractAccessor {
+        get(): Contract {
           if (memo === undefined) memo = buildAccessor(d, chain);
           return memo;
         },

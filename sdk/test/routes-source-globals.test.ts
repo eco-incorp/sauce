@@ -95,13 +95,15 @@ test("unsupported names and ABI argument shapes remain TypeScript errors", () =>
     Uniswap.Factory;
     Uniswap.UniversalRouter.exactIn(1n);
     Uniswap.UniversalRouter.execute("0x", ["0x"], "tomorrow");
-    Uniswap.UniversalRouter.at(0x1234n);
+    Uniswap.UniversalRouter.at("0x1234");
     AaveV3.Pool.supply(USDC, 1n, 0x1234n, false);
-    AaveV3.PoolAddressesProvider;
-    MorphoBlue.Bundler3;
+    AaveV3.PoolAddressesProvider.getPool();
+    MorphoBlue.Bundler3.at(0x1234n);
+    PancakeswapV3.Factory.getPool(USDC, WETH);
+    Erc4626.Vault.deposit(1n, 1n);
     export {};
   `);
-  expect(errors).toHaveLength(10);
+  expect(errors).toHaveLength(12);
 });
 
 test("declarations cover current registry tokens and only recognized protocol namespaces", () => {

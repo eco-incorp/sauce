@@ -56,12 +56,20 @@ describe("source globals match the Sauce contract model", () => {
         USDC.transfer("0x1111111111111111111111111111111111111111", 1n);
         // @ts-expect-error ERC-20 balance owners are Sauce scalars too.
         USDC.balanceOf("0x1111111111111111111111111111111111111111");
-        // @ts-expect-error Address-only descriptors cannot be referenced in compiled source.
+        // An address-only contract is its address: no ABI, so no methods.
         const provider: bigint = AaveV3.PoolAddressesProvider;
-        // @ts-expect-error Address-only descriptors cannot be referenced through their protocol.
         const bundler: bigint = MorphoBlue.Bundler3;
-        // @ts-expect-error An unbound interface has no concrete destination address.
-        const token: unknown = Erc20;
+        // @ts-expect-error An address-only contract has no methods to call.
+        AaveV3.PoolAddressesProvider.getPool();
+        // An interface has no address of its own: it is called at one the program supplies.
+        const shares: bigint = Erc4626.Vault.at(1n).deposit(1n, 1n);
+        // @ts-expect-error An unbound interface is not an address.
+        const vault: bigint = Erc4626.Vault;
+        // A deployed contract's ABI reaches another deployment the same way.
+        const other: bigint = UniswapV3.Factory.at(1n).getPool(USDC, WETH, 500n);
+        // A namespace for every registry protocol, not only the formerly linked ones.
+        const pancake: bigint = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
+        const clPool: bigint = AerodromeSlipstream.CLFactory.getPool(USDC, WETH, 100n);
         // @ts-expect-error Factory is ambiguous across Uniswap versions.
         const factory: unknown = Uniswap.Factory;
         // @ts-expect-error Even a single-member family alias requires the contract name.

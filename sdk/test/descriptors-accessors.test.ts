@@ -11,11 +11,13 @@ import { getDescriptor, methodOf, selectorOf } from "../src/descriptors/query.js
 import { UniswapV4UniversalRouterABI } from "../src/protocols/uniswap-v4/abis.js";
 import { compileWithRs } from "../src/routes/rs-compile.js";
 
-/** Method names are typed `unknown` on `ContractAccessor` (see accessors.ts's own doc comment) —
- *  this test file's job is RUNTIME behavior, so every call site casts through this one helper
- *  rather than sprinkling `as any` inline. */
+/** This test file's job is RUNTIME behavior (the method TYPES are pinned by the type probes in
+ *  routes-chain-exports-types.test.ts), so every call site goes through this one untyped helper —
+ *  including the calls a typed accessor would refuse to compile. */
 function invoke(accessor: ContractAccessor, method: string, ...args: unknown[]): ContractCall {
-  return (accessor[method] as (...a: unknown[]) => ContractCall)(...args);
+  return (
+    (accessor as unknown as Record<string, unknown>)[method] as (...a: unknown[]) => ContractCall
+  )(...args);
 }
 
 describe("descriptors accessors: the motivating path", () => {

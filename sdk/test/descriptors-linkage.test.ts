@@ -1,50 +1,62 @@
 /**
- * Fail-closed invariants over the vendored data behind the descriptor
- * linkage table (../src/descriptors/links.ts). Every assertion here is a
- * drift alarm: a future edit to addresses.ts/abis.ts, or to links.ts itself,
- * that breaks one of these should fail the suite, not ship a silent hole.
+ * Fail-closed invariants over the generated contract table (../src/descriptors/contracts.generated.ts)
+ * and the registry data behind it. Every assertion here is a drift alarm: an edit to addresses.ts,
+ * abis.ts or targets.json that the table no longer agrees with fails the suite, rather than shipping
+ * a silent hole. `routes-source-globals.test.ts` holds the table to its generator.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isAddress, getAddress } from "viem";
 import { CONTRACT_LINKS, type ContractLink } from "../src/descriptors/links.js";
-
-const LINKS: readonly ContractLink[] = CONTRACT_LINKS;
+import { PROTOCOL_SOURCES } from "../src/descriptors/contracts.generated.js";
 import { ABI_EXPORTS } from "../src/descriptors/registry.js";
 import { DESCRIPTORS } from "../src/descriptors/index.js";
 import { deriveContractName } from "../src/descriptors/derive.js";
-import { getProtocol } from "../src/protocols/index.js";
-import { requireChain, chainByAlias } from "../src/chains/canonical.js";
+import { getProtocol, listProtocolSlugs } from "../src/protocols/index.js";
+import { requireChain, chainByAlias, chainById } from "../src/chains/canonical.js";
 import { protocols } from "../src/protocols/index.js";
+import type { ChainDeployment } from "../src/core/types.js";
 
-/** Links whose `contract` is a deliberate OVERRIDE of what deriveContractName would compute from
- *  `abiExport` alone (see links.ts's module comment) -- these are EXPECTED to diverge, since
- *  deriveContractName has no notion of roleKey and would otherwise collapse e.g. all three
- *  compound-v3 Comet markets to the same name "Comet". */
-const DELIBERATE_OVERRIDES = new Set([
-  "uniswap-v3::swapRouter02",
-  "compound-v3::cUSDCv3",
-  "compound-v3::cWETHv3",
-  "compound-v3::cUSDTv3",
-  "erc4626::",
-]);
+const LINKS: readonly ContractLink[] = CONTRACT_LINKS;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const targets = JSON.parse(
+  readFileSync(join(__dirname, "fixtures", "registry-abi", "targets.json"), "utf8"),
+).protocols as Record<
+  string,
+  Record<string, { roles?: string[]; chains?: number[]; unverifiable?: string }>
+>;
+
+const deploymentsOf = (slug: string): readonly ChainDeployment[] =>
+  (PROTOCOL_SOURCES as Record<string, { deployments: readonly ChainDeployment[] }>)[slug]!
+    .deployments;
+
+/** Roles with an EVM address on a canonical EVM chain. */
+function evmRoles(slug: string): Set<string> {
+  const roles = new Set<string>();
+  for (const d of deploymentsOf(slug)) {
+    if (chainById(d.chainId)?.kind !== "evm") continue;
+    for (const [role, address] of Object.entries(d.addresses)) {
+      if (/^0x[0-9a-fA-F]{40}$/.test(address)) roles.add(role);
+    }
+  }
+  return roles;
+}
 
 describe("descriptor linkage: every link resolves against the live vendored data", () => {
-  it("every link's protocol exists in the registry", () => {
-    for (const link of LINKS) {
-      expect(getProtocol(link.protocol)).toBeDefined();
-    }
+  it("every registry protocol has a namespace, and every link's protocol exists", () => {
+    expect(new Set(LINKS.map((l) => l.protocol))).toEqual(new Set(listProtocolSlugs()));
+    for (const link of LINKS) expect(getProtocol(link.protocol)).toBeDefined();
   });
 
-  it("every roleKey appears in >=1 ChainDeployment.addresses of that protocol", () => {
+  it("every roleKey has an EVM address in its protocol's deployments", () => {
     for (const link of LINKS) {
       if (link.roleKey === undefined) continue;
-      const info = getProtocol(link.protocol)!;
-      const present = info.chains.some((d) => link.roleKey! in d.addresses);
-      expect(present).toBe(true);
+      expect([link.protocol, evmRoles(link.protocol).has(link.roleKey)]).toEqual([
+        link.protocol,
+        true,
+      ]);
     }
   });
 
@@ -74,76 +86,96 @@ describe("descriptor linkage: kind consistency", () => {
     }
   });
 
-  it("interface implies abiExport only (no roleKey), and the protocol has zero deployments", () => {
+  it("interface implies abiExport only (no roleKey), and its binding names no role", () => {
     for (const link of LINKS) {
       if (link.kind !== "interface") continue;
       expect(link.roleKey).toBeUndefined();
       expect(link.abiExport).toBeDefined();
-      const info = getProtocol(link.protocol)!;
-      expect(info.chains.length).toBe(0);
+      expect(targets[link.protocol]![link.abiExport!]!.roles ?? []).toEqual([]);
     }
   });
 });
 
-describe("descriptor linkage: starter-set coverage lint", () => {
-  it("every role key in a starter protocol's addresses.ts is claimed by exactly the expected residue (currently: zero unlinked)", () => {
-    const starterProtocols = new Set(LINKS.map((l) => l.protocol));
-    const unlinkedRoles: string[] = [];
-    for (const protocolSlug of starterProtocols) {
-      const info = getProtocol(protocolSlug)!;
-      const allRoleKeys = new Set<string>();
-      for (const deployment of info.chains) {
-        for (const role of Object.keys(deployment.addresses)) allRoleKeys.add(role);
-      }
-      const linkedRoles = new Set(
-        LINKS.filter((l) => l.protocol === protocolSlug)
-          .map((l) => l.roleKey)
-          .filter((r): r is string => r !== undefined),
-      );
-      for (const role of allRoleKeys) {
-        if (!linkedRoles.has(role)) unlinkedRoles.push(`${protocolSlug}.${role}`);
-      }
+describe("descriptor linkage: the table is the evidence binding, all of it", () => {
+  it("every EVM role is a contract: bound by its target, or address-only", () => {
+    const unlinked: string[] = [];
+    for (const slug of listProtocolSlugs()) {
+      const linked = new Set(LINKS.filter((l) => l.protocol === slug).map((l) => l.roleKey));
+      for (const role of evmRoles(slug)) if (!linked.has(role)) unlinked.push(`${slug}.${role}`);
     }
-    expect(unlinkedRoles).toEqual([]);
+    expect(unlinked).toEqual([]);
   });
 
-  it("every abiExport claimed exists, and no starter protocol's abis.ts export is left unclaimed", () => {
-    const starterProtocols = new Set(LINKS.map((l) => l.protocol));
-    const unclaimed: string[] = [];
-    for (const protocolSlug of starterProtocols) {
-      const allExports = new Set(Object.keys(ABI_EXPORTS[protocolSlug] ?? {}));
-      const claimed = new Set(
-        LINKS.filter((l) => l.protocol === protocolSlug)
-          .map((l) => l.abiExport)
-          .filter((x): x is string => x !== undefined),
+  it("a role is bound exactly as targets.json binds it", () => {
+    const wrong: string[] = [];
+    for (const link of LINKS) {
+      if (link.roleKey === undefined) continue;
+      const bound = Object.entries(targets[link.protocol] ?? {}).filter(([, t]) =>
+        t.roles?.includes(link.roleKey!),
       );
-      for (const exportName of allExports) {
-        if (!claimed.has(exportName)) unclaimed.push(`${protocolSlug}.${exportName}`);
+      const verified = bound.filter(([, t]) => t.unverifiable === undefined);
+      if (link.kind === "singleton") {
+        const match = verified.find(([name]) => name === link.abiExport);
+        if (
+          match === undefined ||
+          JSON.stringify(match[1].chains) !== JSON.stringify(link.chains)
+        ) {
+          wrong.push(`${link.protocol}.${link.contract}`);
+        }
+      } else if (verified.length > 0) {
+        wrong.push(`${link.protocol}.${link.contract} is address-only but bound`);
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it("every abis.ts export is a contract's ABI, unless its evidence is unverifiable", () => {
+    const unclaimed: string[] = [];
+    for (const [slug, exports] of Object.entries(ABI_EXPORTS)) {
+      const claimed = new Set(LINKS.filter((l) => l.protocol === slug).map((l) => l.abiExport));
+      for (const name of Object.keys(exports)) {
+        if (claimed.has(name) || targets[slug]?.[name]?.unverifiable !== undefined) continue;
+        unclaimed.push(`${slug}.${name}`);
       }
     }
     expect(unclaimed).toEqual([]);
   });
 });
 
-describe("descriptor linkage: (protocol, contract) uniqueness (E2.3's key space)", () => {
+describe("descriptor linkage: (protocol, contract) uniqueness and names", () => {
   it("no two descriptors share a (protocol, contract) pair", () => {
     const keys = DESCRIPTORS.map((d) => `${d.protocol}::${d.contract}`);
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it("every link has an explicit `contract` (required for E2.3's literal accessor-tree types)", () => {
+  it("a role's contract is its role key, capitalized, in the ABI export's spelling where it has one", () => {
+    const split = new Set(
+      LINKS.filter((l) => l.chains !== undefined).map((l) => `${l.protocol}::${l.roleKey}`),
+    );
     for (const link of LINKS) {
-      expect(typeof link.contract).toBe("string");
+      if (link.roleKey === undefined || split.has(`${link.protocol}::${link.roleKey}`)) continue;
+      expect(link.contract.toLowerCase()).toBe(link.roleKey.toLowerCase());
+      expect(link.contract[0]).toBe(link.contract[0]!.toUpperCase());
     }
   });
 
-  it("every non-override explicit `contract` equals what deriveContractName computes — the literal type can never drift from the derivation", () => {
+  it("an interface, or a role split across ABIs by chain, is named by deriveContractName", () => {
     for (const link of LINKS) {
-      if (link.abiExport === undefined) continue;
-      if (DELIBERATE_OVERRIDES.has(`${link.protocol}::${link.roleKey ?? ""}`)) continue;
+      if (link.kind !== "interface" && link.chains === undefined) continue;
       const info = getProtocol(link.protocol)!;
-      expect(link.contract).toBe(deriveContractName(info.name, link.abiExport));
+      expect(link.contract).toBe(deriveContractName(info.name, link.abiExport!, link.protocol));
     }
+  });
+
+  it("names the motivating contracts as the namespace convention reads", () => {
+    const name = (protocol: string, role: string) =>
+      LINKS.find((l) => l.protocol === protocol && l.roleKey === role)?.contract;
+    expect(name("pancakeswap-v3", "factory")).toBe("Factory");
+    expect(name("aerodrome-slipstream", "clFactory")).toBe("CLFactory");
+    expect(name("aerodrome-slipstream", "clFactoryGaugeCaps")).toBe("CLFactoryGaugeCaps");
+    expect(name("compound-v3", "cUSDCv3")).toBe("CUSDCv3");
+    expect(name("trader-joe", "lbRouter")).toBe("LBRouter");
+    expect(name("uniswap-v3", "quoterV2")).toBe("QuoterV2");
   });
 
   it("every linked abiExport has a sibling protocols/<slug>/<Export>.json on disk (needed by toSauceScript's import line)", () => {
@@ -157,7 +189,7 @@ describe("descriptor linkage: (protocol, contract) uniqueness (E2.3's key space)
         link.protocol,
         `${link.abiExport}.json`,
       );
-      expect(existsSync(jsonPath)).toBe(true);
+      expect([jsonPath, existsSync(jsonPath)]).toEqual([jsonPath, true]);
     }
   });
 });
@@ -166,7 +198,7 @@ describe("descriptor linkage: an overloaded name is unambiguous by argument coun
   // The accessor and `methodOf` pick an overload by how many arguments it takes, and the route
   // rewrite binds a name with `.view` or `.at` before the compiler picks an overload. So overloads
   // of one name must differ in argument count, and be all view or all non-view.
-  it("every starter-set ABI's overloads differ in argument count and agree on view vs non-view", () => {
+  it("every registry ABI's overloads differ in argument count and agree on view vs non-view", () => {
     const ambiguous: string[] = [];
     for (const d of DESCRIPTORS) {
       const byName = new Map<string, typeof d.methods>();
@@ -231,5 +263,14 @@ describe("descriptor linkage: address checksum invariants", () => {
     )!;
     const addr = d.perChainAddress[8453];
     expect(addr).toBe("0x6fF5693b99212Da76ad316178A184AB56D299b43");
+  });
+
+  it("a role split across ABIs by chain keeps each binding to its own chains (gamma's uniProxy)", () => {
+    const proxy = DESCRIPTORS.find((d) => d.protocol === "gamma" && d.contract === "UniProxy")!;
+    const legacy = DESCRIPTORS.find(
+      (d) => d.protocol === "gamma" && d.contract === "UniProxyLegacy",
+    )!;
+    expect(proxy.chains).toEqual(["polygon"]);
+    expect(legacy.chains).toEqual(["ethereum"]);
   });
 });

@@ -1,0 +1,31 @@
+{
+  "abi": [
+    {
+      "type": "function",
+      "name": "provenIntents",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "intentHash",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "claimant",
+              "type": "address"
+            },
+            {
+              "name": "destination",
+              "type": "uint64"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
