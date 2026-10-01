@@ -26,6 +26,7 @@ import { swapSource } from "../src/swap/source.js";
 import { SwapPoolType } from "../src/swap/types.js";
 import { Token } from "../src/token/api.js";
 import { compileProgram, SDK_SOURCE_DIRS } from "./helpers";
+import { compileStdRouter, programCalling } from "./std/router/harness.js";
 import { CASES, compileStdToken } from "./std/token/harness.js";
 
 /** jest's cwd is `sdk/`. */
@@ -127,8 +128,9 @@ describe("resolveSdkModule serves what is on disk", () => {
     expect(resolveSdkModule(`.${SDK_STD_ROOT}/token/../../artifacts/IERC20.json`)).toBeUndefined();
   });
 
-  it("resolveSdkPackage maps @sauce/token to its neutral entry, and declines the rest", () => {
+  it("resolveSdkPackage maps each standard library to its neutral entry, and declines the rest", () => {
     expect(resolveSdkPackage("@sauce/token")).toBe(`${SDK_STD_ROOT}/token/token.js`);
+    expect(resolveSdkPackage("@sauce/router")).toBe(`${SDK_STD_ROOT}/router/router.js`);
     expect(resolveSdkPackage("@sauce/other")).toBeUndefined();
     expect(resolveSdkPackage("viem")).toBeUndefined();
   });
@@ -160,6 +162,13 @@ describe("compiling from memory gives the same bytes as compiling from disk", ()
     expect(source).toContain("./artifacts/ISauceRouter.json");
     expect(source).toContain("./artifacts/IERC20.json");
     expect(evm(source)).toBe(fromDisk(source));
+  });
+
+  it("a program calling @sauce/router, which imports its pool ABIs and @sauce/token", () => {
+    const source = programCalling("tryCurve");
+    expect(hex(compileWithRs({ source, target: "v12" }).bytecode[0]!)).toBe(
+      hex(compileStdRouter(source).bytecode),
+    );
   });
 
   it.each<DepositKey>(["aave-v3:supply", "compound-v3:supply", "erc4626:deposit", "lido:wrap"])(

@@ -18,7 +18,7 @@
 // not here — this script only copies the `.sauce.ts` program templates `tsc` leaves behind.
 //
 // Run as the last step of `sdk`'s `build` script.
-import { existsSync, copyFileSync, mkdirSync } from "node:fs";
+import { existsSync, copyFileSync, mkdirSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -33,13 +33,21 @@ const ASSETS = [
   // Layer-C plugin manifest, beside its compiled module for tools that read it directly.
   // `loadPlugin()` imports it as JSON.
   { subdir: "plugin", file: "manifest.json" },
-  // `@sauce/token`, the SauceScript stdlib, shipped as files for a consumer resolving it off disk.
-  // The route path serves the embedded copy (`src/embedded/resolve.ts`) and reads none of these.
-  { subdir: join("std", "token"), file: "token.evm.js" },
-  { subdir: join("std", "token"), file: "token.svm.js" },
-  { subdir: join("std", "token"), file: "erc20.abi.json" },
-  { subdir: join("std", "token"), file: "package.json" },
+  // `@sauce/token` and `@sauce/router`, the SauceScript stdlib, shipped as files for a consumer
+  // resolving them off disk. The route path serves the embedded copies (`src/embedded/resolve.ts`)
+  // and reads none of these.
+  ...stdPackage("token"),
+  ...stdPackage("router"),
 ];
+
+/** Every file of the standard-library package in `src/std/<name>/`. */
+function stdPackage(name) {
+  const subdir = join("std", name);
+
+  return readdirSync(join(SDK_DIR, "src", subdir))
+    .sort()
+    .map((file) => ({ subdir, file }));
+}
 
 for (const { subdir, file } of ASSETS) {
   const src = join(SDK_DIR, "src", subdir, file);

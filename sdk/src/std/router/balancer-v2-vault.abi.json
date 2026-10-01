@@ -1,0 +1,78 @@
+{
+  "$comment": "The Balancer V2 Vault's swap(singleSwap, funds, limit, deadline): the registry's BalancerV2VaultABI fragment (protocols/balancer-v2), which test/registry-abi.test.ts pins to the deployed Vault, 0xBA12222222228d8Ba445958a75a0704d566BF2C8. Its uint256 output is the amount the swap paid out.",
+  "abi": [
+    {
+      "name": "swap",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "singleSwap",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "poolId",
+              "type": "bytes32"
+            },
+            {
+              "name": "kind",
+              "type": "uint8"
+            },
+            {
+              "name": "assetIn",
+              "type": "address"
+            },
+            {
+              "name": "assetOut",
+              "type": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "name": "userData",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "funds",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "sender",
+              "type": "address"
+            },
+            {
+              "name": "fromInternalBalance",
+              "type": "bool"
+            },
+            {
+              "name": "recipient",
+              "type": "address"
+            },
+            {
+              "name": "toInternalBalance",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "limit",
+          "type": "uint256"
+        },
+        {
+          "name": "deadline",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amountCalculated",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}
