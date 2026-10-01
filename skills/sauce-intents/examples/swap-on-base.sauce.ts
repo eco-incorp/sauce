@@ -5,11 +5,11 @@
 // SQRT_PRICE_LIMIT_X96), then pays the USDC to RECIPIENT and returns the unsold WETH to REFUND_TO
 // on Base. The solver earns REWARD of WETH. The whole file is the intent: top-level statements, no
 // main, and every value a define. Nothing is measured on chain, so it can also be published from a
-// wallet (sauce intent publish). A pool is read through the file's own ABI beside it, IPool.json.
+// wallet (sauce intent publish).
 //
 // `--chain` is the source chain: `WETH` in `.reward(...)` is its WETH. Inside the braces, and in
 // the delivery argument after them, the body runs on Base: `WETH`, `USDC`, `UniswapV3.Factory`,
-// `UniswapV4.StateView` and `UniswapV4.PoolManager` there are Base's.
+// `UniswapV3.Pool`, `UniswapV4.StateView` and `UniswapV4.PoolManager` there are Base's.
 //
 //   sauce run swap-on-base.sauce.ts --chain <chain> --config sauce.config.json \
 //     --keystore <keystore> --define AMOUNT_IN=<amount> --define REWARD=<amount> \
@@ -42,7 +42,6 @@
 //     --define RECIPIENT=<address> --define REFUND_TO=<address> \
 //     --intent-deadline <unix seconds> --intent-creator <address> --intent-execution-fee auto
 import { uniswapV3, uniswapV4 } from "@sauce/router";
-import IPool from "./IPool.json";
 
 // A pool's own limit: the caller's sqrt price limit moved by sqrt(1 - fee), so that what the pool
 // pays, fee included, never passes the caller's. Selling token0 pushes the price down: then the
@@ -66,13 +65,13 @@ Base(
     // One pass over the pools: each is offered all the WETH still unsold, up to its own limit, and
     // skipped when it is missing, has no liquidity, or is already past that limit. A pool fills
     // what it can and leaves the rest for the next.
-    // Uniswap V3, by fee tier: the pool through its own ABI (./IPool.json).
+    // Uniswap V3, by fee tier, each pool read through the `UniswapV3.Pool` namespace.
     for (const tier of [100n, 500n, 3000n, 10000n]) {
       const pool = UniswapV3.Factory.getPool(WETH, USDC, tier);
       if (pool != 0n) {
-        if (IPool.at(pool).liquidity() > 0n) {
-          const limit = ownLimit(SQRT_PRICE_LIMIT_X96, IPool.at(pool).fee(), sellsToken0);
-          const price = IPool.at(pool).slot0().sqrtPriceX96;
+        if (UniswapV3.Pool.at(pool).liquidity() > 0n) {
+          const limit = ownLimit(SQRT_PRICE_LIMIT_X96, UniswapV3.Pool.at(pool).fee(), sellsToken0);
+          const price = UniswapV3.Pool.at(pool).slot0().sqrtPriceX96;
           const unsold = WETH.balanceOf(self);
           if (unsold > 0n && (sellsToken0 ? price > limit : price < limit)) {
             uniswapV3(pool, WETH, USDC, unsold, limit, 0n, self);

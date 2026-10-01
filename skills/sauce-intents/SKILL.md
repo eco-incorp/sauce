@@ -349,10 +349,9 @@ a ceiling, the `buy` block of `sauce price`.
 [examples/swap-on-base.sauce.ts](examples/swap-on-base.sauce.ts) is the same with a distributed
 swap as the body (`sauce-distributed-swap`): one pass over every Uniswap V3 and hookless V4 pool of
 the pair, each offered the WETH still unsold up to its own fee-adjusted limit, and skipped when it
-has no liquidity or is past that limit. It swaps through `@sauce/router`, reads the V4 pools from
-`UniswapV4.StateView`, and reads a V3 pool through the file's own ABI beside it,
-[examples/IPool.json](examples/IPool.json): `import IPool from "./IPool.json"` at the top of the
-file, which the body then calls as `IPool.at(pool).liquidity()`.
+has no liquidity or is past that limit. It swaps through `@sauce/router`, finds each V3 pool with
+`UniswapV3.Factory.getPool` and reads it as `UniswapV3.Pool.at(pool)`, and reads the V4 pools from
+`UniswapV4.StateView`.
 
 ## Cascades
 
