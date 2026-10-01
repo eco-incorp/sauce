@@ -9,8 +9,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import type { Endpoints } from "./config.js";
 import type { RpcGuard } from "./guard.js";
+import { CHAIN_SUPPORT_NEW_ISSUE_URL, supportedChainNames } from "./sdk.js";
 import { registerPrompts } from "./prompts.js";
-import { registerResources, SKILLS_INDEX } from "./resources.js";
+import { registerResources, SKILLS_INDEX, WRITE_IT_YOURSELF } from "./resources.js";
 import { registerSkillTools } from "./skilltools.js";
 import { registerIntentTools } from "./intents.js";
 import { registerTools } from "./tools.js";
@@ -40,6 +41,8 @@ export function instructions(endpoints: Endpoints): string {
     "For TypeScript against the SDK, or the sauce command, sauce_dev returns the package's own",
     "documents. To set a project up for a coding agent, call sauce_install_skills.",
     "",
+    ...WRITE_IT_YOURSELF,
+    "",
     "To write and run a program:",
     "1. sauce_globals for the chain (tokens, protocols): call names, never invent addresses.",
     "   A fixed sequence of protocol operations can be an actions document in JSON instead:",
@@ -62,6 +65,19 @@ export function instructions(endpoints: Endpoints): string {
     "",
     "NOTHING HERE SIGNS OR SENDS. Every transaction comes back unsigned, for the user to sign",
     "with their own wallet; never ask anyone for a private key or a seed phrase.",
+    "",
+    `CHAINS. This release builds transactions only on ${supportedChainNames()}. Every other`,
+    "chain is a preview chain (sauce_chains gives each chain's `support`): sauce_compile,",
+    "sauce_actions, sauce_simulate, sauce_inspect, sauce_globals, sauce_price, the dry runs",
+    "(sauce_intent_publish and sauce_intent_fill with dryRun) and the reads (sauce_pot's",
+    "prediction, sauce_intent_status, sauce_intent_import) work on it, so you can prototype any",
+    "protocol on any chain. A tool that would return a transaction there — sauce_tx, sauce_pot's",
+    "deployment, sauce_actions' cook, sauce_intent_publish, and the intent steps on the chain",
+    "they are sent on — returns `refused` instead: the supported chains and, for that chain, a",
+    "search for an existing chain-support request on GitHub, a prefilled new one, and the title,",
+    "body and comment to post. Tell the user, and offer to find or open that request (or to add",
+    "their use case to it) with the text given; do not build the transaction another way.",
+    `Requests: ${CHAIN_SUPPORT_NEW_ISSUE_URL}`,
     "",
     "A tool that reads a chain takes rpcUrl, an endpoint for that call; it is never echoed.",
     endpoints.chainIds.length === 0

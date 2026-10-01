@@ -101,6 +101,7 @@ import {
 } from "./commands.js";
 import { decodeReturned, returnedLine } from "./returned.js";
 import { secret } from "./signer.js";
+import { requireSupported } from "./support.js";
 import {
   accountsNow,
   movedBy,
@@ -1347,6 +1348,7 @@ export async function svmSimulateCommand(
 
 /** `sauce tx` on Solana: the cook as an unsigned, serialized transaction for a wallet. */
 export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promise<CommandOutput> {
+  requireSupported("building the cook transaction", [input.chain]);
   const prepared = await prepare(input, files, unsignedSigner(input.owner));
   const direct = prepared.via === "engine";
   const size = await fits(prepared);
@@ -1554,6 +1556,7 @@ async function ensurePot(input: SvmRunInput, rpc: Rpc, pot: Address): Promise<Sv
 
 /** `sauce run` on Solana: compile, create the Pot if agreed, stage if needed, cook, confirm. */
 export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promise<CommandOutput> {
+  requireSupported("sending the cook", [input.chain]);
   const prepared = await prepare(input, files, input.signer);
   const direct = prepared.via === "engine";
   // Directly to the engine the program runs as no Pot: there is none to create.
@@ -1881,6 +1884,7 @@ export async function svmPotStatusCommand(
 export async function svmPotDeployCommand(
   target: SvmTarget & { readonly rpcUrl: string; readonly signer: KeyPairSigner },
 ): Promise<CommandOutput> {
+  requireSupported("creating a Pot", [requireChain("solana")]);
   const predicted = await svmPotCommand(target);
   const pot = predicted.json.pot as Address;
   const rpc = createSolanaRpc(target.rpcUrl);

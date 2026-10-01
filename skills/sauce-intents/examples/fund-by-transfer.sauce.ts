@@ -9,6 +9,21 @@
 //
 //   sauce run fund-by-transfer.sauce.ts --chain <chain> --config sauce.config.json \
 //     --keystore <keystore> --args <portal> <destination> <route> <reward>
+//
+//   portal: Address       the source chain's Portal
+//   destination: Uint256  the destination's chain id: 1 is Ethereum
+//   route: bytes          the encoded route, 0x hex, as the publish transaction carries it
+//   reward: { deadline: Uint256; creator: Address; prover: Address; nativeAmount: Uint256;
+//             tokens: { token: Address; amount: Uint256 }[] }
+//                         the reward, a JSON object: each token's amount in its smallest units,
+//                         {"deadline": <unix seconds>, "creator": "<address>", "prover": "<address>",
+//                         "nativeAmount": 0, "tokens": [{"token": "<token>", "amount": 1010000}]}
+//                         is 1.01 of a 6-decimal token such as USDC
+//
+// On Base, for an intent to Ethereum:
+//
+//   sauce run fund-by-transfer.sauce.ts --chain base --config sauce.config.json \
+//     --keystore <keystore> --args 0xEC000769A73b70e16f361a442292500b3BCf4A85 1 <route> <reward>
 function main(
   portal: Address,
   destination: Uint256,

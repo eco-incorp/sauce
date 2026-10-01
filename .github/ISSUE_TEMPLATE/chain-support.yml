@@ -1,0 +1,64 @@
+# A request for a chain the release does not support yet. Sauce's initial release builds and sends
+# transactions on Ethereum, Base and Solana; every other chain is a preview chain (compile and
+# simulate only). The `sauce` command and its MCP server link here, prefilled, when they refuse a
+# preview chain (`sdk/src/cli/support.ts#chainSupportRequest`), so the field ids below are query
+# parameters of that link: `sdk/test/cli-chain-support.test.ts` holds the two to each other.
+name: Chain support request
+description: Ask for a chain Sauce does not support yet, or add your use case to a request.
+title: "Chain support: "
+labels: ["chain-support"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Sauce's initial release supports transactions on **Ethereum, Base and Solana**. Every
+        other chain in the registry is a preview chain: programs compile and simulate there, but
+        the `sauce` command and its MCP server build and send no transaction.
+
+        Before opening a request, search the
+        [existing ones](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support):
+        if your chain has one, add your use case there as a comment instead.
+  - type: input
+    id: chain
+    attributes:
+      label: Chain
+      description: The chain's name.
+      placeholder: Arbitrum One
+    validations:
+      required: true
+  - type: input
+    id: chain-id
+    attributes:
+      label: Chain id
+      description: Its numeric chain id.
+      placeholder: "42161"
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: What you want to run there
+      description: What your programs or intents would do on this chain.
+    validations:
+      required: true
+  - type: textarea
+    id: protocols
+    attributes:
+      label: Protocols and tokens
+      description: The protocols your programs call and the tokens they move on this chain.
+    validations:
+      required: true
+  - type: textarea
+    id: volume
+    attributes:
+      label: Expected volume and timing
+      description: Roughly how much would run, and from when you need it.
+    validations:
+      required: true
+  - type: input
+    id: contact
+    attributes:
+      label: Contact
+      description: How to reach you, if not through this issue (optional).
+    validations:
+      required: false

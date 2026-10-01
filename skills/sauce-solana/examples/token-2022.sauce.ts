@@ -9,6 +9,20 @@
 //   sauce run token-2022.sauce.ts --chain <chain> --config sauce.config.json --keypair <keypair> \
 //     --account tokenProgram=program:PYUSD --account source=pot:PYUSD --account mint=mint:PYUSD \
 //     --account destination=<token account> --account pot=pot --args <amount>
+//
+//   tokenProgram: Account            the token program that owns PYUSD, Token-2022: program:PYUSD
+//   source: Account<Writable>        the token account paying, the Pot's: pot:PYUSD
+//   mint: Account                    the PYUSD mint: mint:PYUSD
+//   destination: Account<Writable>   the PYUSD token account paid
+//   pot: Account<Signer>             the Pot, which owns `source` and signs for it: pot
+//   amount: Uint256                  how much, in PYUSD's smallest units: it has 6 decimals, so
+//                                    1000000 is 1 PYUSD
+//
+// On Solana, 1 PYUSD from the Pot's PYUSD account:
+//
+//   sauce run token-2022.sauce.ts --chain solana --config sauce.config.json --keypair <keypair> \
+//     --account tokenProgram=program:PYUSD --account source=pot:PYUSD --account mint=mint:PYUSD \
+//     --account destination=<token account> --account pot=pot --args 1000000
 function main(
   tokenProgram: Account,
   source: Account<Writable>,

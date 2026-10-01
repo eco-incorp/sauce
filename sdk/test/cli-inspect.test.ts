@@ -283,14 +283,14 @@ const SPLIT = [
   "",
 ].join("\n");
 const FIXED = [
-  "// @chain arbitrum",
+  "// @chain ethereum",
   "Base(() => {",
   "  USDC.transfer(RECIPIENT, 1000n);",
   "}).reward({ tokens: [{ token: USDC, amount: 2000n }] });",
   "",
 ].join("\n");
 const MEASURED = [
-  "// @chain arbitrum",
+  "// @chain ethereum",
   "function main(recipient: Address) {",
   "  const amount = USDC.balanceOf(ctx.self());",
   "  Base(() => {",
@@ -359,7 +359,7 @@ describe("sauce inspect", () => {
 
   it("reads a fixed intent out of the program that opens it, hash and all", async () => {
     const fixed = file("fixed.sauce.ts", FIXED);
-    const [lowered] = compileSauceProgram("arbitrum", FIXED, {
+    const [lowered] = compileSauceProgram("ethereum", FIXED, {
       defines: { RECIPIENT: BigInt(RECIPIENT) },
       intents: { deadline: 2_000_000_000n, creator: CREATOR },
     }).intents;
@@ -370,13 +370,13 @@ describe("sauce inspect", () => {
     expect(fromFile.intents).toEqual([expect.objectContaining({ intentHash })]);
     // From the cook's bytes alone, on the chain that publishes it: the same intent.
     const data = await cookOf(fixed, ...defines);
-    const fromBytes = json(await sauce("inspect", data, "--chain", "arbitrum", "--json"));
+    const fromBytes = json(await sauce("inspect", data, "--chain", "ethereum", "--json"));
     const [intent] = (fromBytes.program as { intents: Array<Record<string, unknown>> }).intents;
     expect(intent).toMatchObject({
       destination: { id: "8453", chain: "base" },
       intentHash,
       // The program pays the vault the Portal derives, so that is the one shown: the registry's.
-      vault: predictIntentVault(lowered!.intent, { portal: ecoRoutesPortal("arbitrum") }),
+      vault: predictIntentVault(lowered!.intent, { portal: ecoRoutesPortal("ethereum") }),
       fundVia: "transfer",
       reward: { creator: CREATOR, tokens: [{ amount: "2000" }] },
       route: {
@@ -387,7 +387,7 @@ describe("sauce inspect", () => {
     // Opted out, the program approves and calls publishAndFund, and says so.
     const optedOut = await cookOf(fixed, ...defines, "--intent-fund-via", "publishAndFund");
     const [approved] = (
-      json(await sauce("inspect", optedOut, "--chain", "arbitrum", "--json")).program as {
+      json(await sauce("inspect", optedOut, "--chain", "ethereum", "--json")).program as {
         intents: Array<Record<string, unknown>>;
       }
     ).intents;
@@ -404,11 +404,11 @@ describe("sauce inspect", () => {
     expect(fromFile.stdout).toMatch(/reward: <amount> of 0x/);
     expect(fromFile.stdout).toMatch(/\.transfer\(<recipient>, <amount>\)/);
     const data = await cookOf(measured, ...INTENT_FLAGS, "--args", RECIPIENT);
-    const fromBytes = json(await sauce("inspect", data, "--chain", "arbitrum", "--json"));
+    const fromBytes = json(await sauce("inspect", data, "--chain", "ethereum", "--json"));
     expect((fromBytes.program as { intents: unknown[] }).intents).toEqual([
       { destination: { id: "8453", chain: "base" }, measured: true, fundVia: "transfer" },
     ]);
-    expect((await sauce("inspect", data, "--chain", "arbitrum")).stdout).toContain(
+    expect((await sauce("inspect", data, "--chain", "ethereum")).stdout).toContain(
       "funded: the program pays the reward into the intent's vault, then calls Portal.publish",
     );
     // Given the source, the cook's intents are the compile's, named.
@@ -444,9 +444,9 @@ describe("sauce inspect", () => {
       call: "ERC20.transfer",
       args: { to: vault, amount: "2000" },
     });
-    const text = await sauce("inspect", publish!, "--chain", "arbitrum");
+    const text = await sauce("inspect", publish!, "--chain", "ethereum");
     expect(text.stdout).toContain(`vault: ${vault}, funded once it holds the reward`);
-    expect(json(await sauce("inspect", publish!, "--chain", "arbitrum", "--json"))).toMatchObject({
+    expect(json(await sauce("inspect", publish!, "--chain", "ethereum", "--json"))).toMatchObject({
       call: "Portal.publish",
       intent: { intentHash, vault, destination: { chain: "base" } },
     });
@@ -459,7 +459,7 @@ describe("sauce inspect", () => {
       args: { amount: "2000" },
     });
     expect(
-      json(await sauce("inspect", publishAndFund!, "--chain", "arbitrum", "--json")),
+      json(await sauce("inspect", publishAndFund!, "--chain", "ethereum", "--json")),
     ).toMatchObject({
       call: "Portal.publishAndFund",
       intent: { intentHash, vault, destination: { chain: "base" } },

@@ -80,7 +80,9 @@ that lacks it.
 2. Read its document's pitfalls before writing the call.
 3. Write the program, compile it for the chain (`sauce compile <file> --chain <slug>`), and hand the
    cook to any signer as `sauce tx`'s unsigned JSON, `{ chainId, to, data, value }`, or send it with
-   `sauce run` (`sauce-run`).
+   `sauce run` (`sauce-run`). For the initial release that is on Ethereum, Base or Solana: every
+   protocol on every chain compiles and simulates, but on a preview chain `sauce tx` and `sauce run`
+   are refused with the chain-support request for that chain (`sauce-chains`).
 
 ## Common gotchas
 
@@ -103,9 +105,12 @@ that lacks it.
 - [ ] Each contract is named as its registry file says for that chain, or behind `available(...)`.
 - [ ] The document's pitfalls are handled: approvals, balance deltas, minimums.
 - [ ] The program compiles with `--chain`.
+- [ ] Its transaction goes to a supported chain (Ethereum, Base or Solana); a protocol on a preview
+      chain is compiled and simulated, and the chain requested.
 
 ## Example
 
 [examples/protocols.sauce.ts](examples/protocols.sauce.ts) calls Aave and, where the chain has it,
 PancakeSwap V3 through their namespaces; [examples/protocols.mts](examples/protocols.mts) compiles it
-for Base, Arbitrum and Optimism, loads a protocol document, and compiles a protocol template.
+for Base, Arbitrum and Optimism (the last two preview chains, compiled only), loads a protocol
+document, and compiles a protocol template.

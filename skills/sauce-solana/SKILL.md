@@ -266,6 +266,9 @@ npx sauce run token-2022.sauce.ts --chain solana --config sauce.config.json --ke
 
 ## Running
 
+Solana is one of the three chains the initial release supports, with Ethereum and Base: its cooks,
+Pots and intent steps are built and sent there.
+
 - **The Pot** is the Kitchen's address for the owner and salt.
   `npx sauce pot --chain solana --owner <pubkey>` prints it;
   `npx sauce pot --deploy --chain solana --config sauce.config.json --keypair <keypair>` creates it.
@@ -299,7 +302,7 @@ npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypai
 - The engine program is `2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT` and the Kitchen
   `SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot` ([../sauce-chains/references/solana.md](../sauce-chains/references/solana.md));
   confirm both are deployed on the cluster (`getAccountInfo` returns an executable account).
-- `sauce intent publish` does not work from Solana; open an intent from an EVM chain. Its
+- `sauce intent publish` does not work from Solana; open an intent from Ethereum or Base. Its
   destination may be Solana: `sauce intent fill`, `prove` and `cancel` act on it there with
   `--keypair` (`sauce-intents`), and take no `--via`: an intent's program on Solana runs
   through the Kitchen. A failed `sauce run` prints the program logs.

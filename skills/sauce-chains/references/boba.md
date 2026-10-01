@@ -2,8 +2,18 @@
 
 # Boba
 
+**Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
+On Boba a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
+runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,
+`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are
+refused, naming the supported chains and how to request this one.
+
+To request Boba, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Boba%22) and add your
+use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Boba+%28288%29&chain=Boba&chain-id=288) with the chain-support issue form.
+
 | Fact | Value |
 | --- | --- |
+| Support | preview: compile and simulate; no transaction is built or sent |
 | Slug (`--chain`) | `boba`; also `boba-network` |
 | Chain id | 288 |
 | Kind | EVM |
