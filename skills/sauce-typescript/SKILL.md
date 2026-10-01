@@ -111,10 +111,14 @@ a recorded address, not proof of live code on the chain.
 
 ## Other host tools
 
-- **JSON action programs** (`/actions`): `parseProgram`, `compileProgram` (with `argument` actions
-  as runtime amounts), `quoteAction`, `compileSplitSwap`. Reference:
+- **JSON action programs** (`/actions`): a document names tokens by registry symbol (`"USDC"`) and
+  contracts by namespace (`"UniswapV3.Factory"`), and a swap may give its pool by its factory's
+  key (`factory` and `fee`). `compileProgram(program, { chain })` compiles it for any chain that
+  has those names; a name the chain lacks throws `ProgramError`, whose `issues` and `chain` say
+  which. `argument` actions become runtime amounts. `programIntent(...)`, `quoteAction(...)` and
+  `compileSplitSwap(...)` resolve names on `chain` the same way. Reference:
   `node_modules/@eco-incorp/sauce/docs/guides/actions.md`; see
-  [examples/actions.mts](examples/actions.mts).
+  [examples/actions.mts](examples/actions.mts), and `sauce-actions` for writing the documents.
 - **Settlement verification** (`/verify`, `/svm/verify`): `validateSettleProgram`,
   `decodeSettleCall`, `extractEvmSettleFromIntent`, historical pins. It identifies the program and
   its parameters; the Pot, engine and every other call stay yours to check (`sauce verify` runs
