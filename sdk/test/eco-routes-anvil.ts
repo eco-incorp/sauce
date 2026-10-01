@@ -104,13 +104,19 @@ export async function plantPortal(
   return { portal, executor, vaultImplementation };
 }
 
-/** A Mailbox for `local`'s chain (its domain is the chain id), charging `fee` per message. */
-export async function deployMailbox(local: LocalChain, fee: bigint): Promise<Address> {
+/** A Mailbox for `local`'s chain (its domain is the chain id), charging `fee` per message; at
+ *  `at`, its code replacing what is there (its storage kept), when given — a fee that changes. */
+export async function deployMailbox(
+  local: LocalChain,
+  fee: bigint,
+  at?: Address,
+): Promise<Address> {
   return local.plant(
     `${creation("MockMailbox")}${encodeAbiParameters(
       [{ type: "uint32" }, { type: "uint256" }],
       [local.chain.id, fee],
     ).slice(2)}` as Hex,
+    at,
   );
 }
 

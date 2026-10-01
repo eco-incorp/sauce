@@ -741,6 +741,35 @@ interface SentFill {
   readonly time: bigint;
 }
 
+/**
+ * The fills again, planned and rehearsed on the chain as it is once a person has approved them:
+ * a question can stand for minutes, in which the prover's fee or the solver's allowance can move.
+ * Refuses, sending nothing, when a fill no longer rehearses or would now spend more native value
+ * than was approved; a fill that spends less (a lower fee) goes ahead with the new plan.
+ */
+async function replanned(input: FillInput, fills: readonly Fill[]): Promise<Fill[]> {
+  const fresh = await Promise.all(fills.map((fill) => rehearseFill(input, fill.target)));
+  for (const [index, fill] of fresh.entries()) {
+    const approved = fills[index]!.plan;
+    if (!fill.outcome.ok) {
+      throw new CliError(
+        `not sent: ${fill.plan.hashes.intentHash} no longer rehearses on ` +
+          `${fill.target.destination.slug} (${fill.outcome.reason}): run it again`,
+      );
+    }
+    if (fill.plan.value > approved.value) {
+      const native = nativeSymbol(fill.target.destination);
+      throw new CliError(
+        `not sent: filling ${fill.plan.hashes.intentHash} now takes ` +
+          `${formatUnits(fill.plan.value, 18)} ${native} of value, more than the ` +
+          `${formatUnits(approved.value, 18)} ${native} you approved (the prover's fee rose): run it again`,
+      );
+    }
+  }
+
+  return fresh;
+}
+
 /** Sends `fill`'s transactions, in order, from the signer: each simulated first by `sendAndWait`. */
 async function sendFill(input: FillInput, fill: Fill): Promise<SentFill> {
   const send = input.send!;
@@ -884,7 +913,7 @@ export async function fillCommand(input: FillInput): Promise<CommandOutput> {
   if (answer === undefined) throw unapproved([action]);
   if (!answer) throw new CliError("not sent: you declined");
   const done: SentFill[] = [];
-  for (const fill of fills) {
+  for (const fill of send.approver.auto ? fills : await replanned(input, fills)) {
     const result = await sendFill(input, fill);
     done.push(result);
     record(send.store, result);

@@ -38,20 +38,27 @@ function print(io: InteractiveIo, output: CommandOutput): void {
   io.stdout(`${output.text}\n`);
 }
 
-/** The live status of `target`, or `undefined` where no endpoint reads it (or the read fails). */
-async function statusOf(
-  target: Target,
-  context: LifecycleContext,
-): Promise<IntentStatus | undefined> {
+/** The live status of `target`: `undefined` where no endpoint reads it, and why not where a
+ *  read failed. */
+type Read = { readonly status?: IntentStatus; readonly failed?: string };
+
+async function statusOf(target: Target, context: LifecycleContext): Promise<Read> {
   const endpoints: Record<string, string> = {};
   for (const id of [target.record.source.chainId, target.record.destination.chainId]) {
     const url = context.endpoint(requireChain(id));
     if (url !== undefined) endpoints[String(id)] = url;
   }
-  if (Object.keys(endpoints).length === 0) return undefined;
-
-  return intentStatus(target.record, endpoints).catch(() => undefined);
+  if (Object.keys(endpoints).length === 0) return {};
+  try {
+    return { status: await intentStatus(target.record, endpoints) };
+  } catch (error) {
+    return { failed: error instanceof Error ? error.message : String(error) };
+  }
 }
+
+/** The actions after which the menu keeps the status it read: a rehearsed fill sends nothing.
+ *  `status` is asked for to see the chain as it is now, so the menu reads it again after one. */
+const READ_ONLY: ReadonlySet<Action> = new Set(["fill"]);
 
 /** The picker, then the menu for the intent picked, until the person quits. */
 export async function interactiveIntents(
@@ -59,7 +66,8 @@ export async function interactiveIntents(
   context: LifecycleContext,
 ): Promise<number> {
   for (;;) {
-    const stored = context.store.list();
+    const { intents: stored, warnings } = context.store.list();
+    for (const warning of warnings) io.stderr(`${warning}\n`);
     if (stored.length === 0) {
       io.stdout(
         `No intents in ${context.store.dir}. Publish one (\`sauce intent publish\`) or import one.\n`,
@@ -70,33 +78,37 @@ export async function interactiveIntents(
     const rows = await Promise.all(
       stored.map(async (entry) => ({
         target: { record: entry.record, stored: entry } as Target,
-        status: await statusOf({ record: entry.record, stored: entry }, context),
+        read: await statusOf({ record: entry.record, stored: entry }, context),
       })),
     );
     const picked = await askChoice(io.ask, "Intents:", [
-      ...rows.map(({ target, status }) => ({
+      ...rows.map(({ target, read }) => ({
         label:
           `${target.record.intentHash.slice(0, 18)}…  ${target.record.source.chain} -> ` +
-          `${target.record.destination.chain}  ${status?.state ?? target.stored?.events.at(-1)?.event ?? "stored"}` +
+          `${target.record.destination.chain}  ` +
+          `${read.status?.state ?? (read.failed === undefined ? (target.stored?.events.at(-1)?.event ?? "stored") : "not read")}` +
           `  fill by ${iso(target.record.route.deadline)}`,
-        value: { target, status } as const,
+        value: { target, read } as const,
       })),
       { label: "quit", value: undefined },
     ]);
     if (picked === undefined) return 0;
-    const leave = await menu(io, context, picked.target);
+    const leave = await menu(io, context, picked.target, picked.read);
     if (leave) return 0;
   }
 }
 
-/** The menu for one intent; `true` when the person quits. */
+/** The menu for one intent, starting from the status the picker read; `true` when the person
+ *  quits. The status is read again after an action that sends something, and only then. */
 async function menu(
   io: InteractiveIo,
   context: LifecycleContext,
   target: Target,
+  read: Read,
 ): Promise<boolean> {
   for (;;) {
-    const status = await statusOf(target, context);
+    if (read.failed !== undefined) io.stderr(`its status could not be read: ${read.failed}\n`);
+    const status = read.status;
     const can = status?.can;
     const mark = (ok: boolean | undefined, why: string | undefined): string =>
       ok === undefined ? "" : ok ? "" : ` (not now: ${why})`;
@@ -130,10 +142,12 @@ async function menu(
     } catch (error) {
       io.stderr(`${error instanceof Error ? error.message : String(error)}\n`);
     }
-    // The store may hold new events for it now.
+    if (READ_ONLY.has(action)) continue;
+    // The store may hold new events for it now, and the chain a new state.
     if (context.store.has(target.record.intentHash)) {
       target = { record: target.record, stored: context.store.load(target.record.intentHash) };
     }
+    read = await statusOf(target, context);
   }
 }
 

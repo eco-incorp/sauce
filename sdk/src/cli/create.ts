@@ -208,35 +208,40 @@ async function nativePrice(
     rows.find((row) => STABLES.has(row.symbol.toUpperCase()));
   const factory = uniswapV3.find((entry) => entry.chainId === chain.id)?.addresses.factory;
   if (wrapped === undefined || stable === undefined || factory === undefined) return undefined;
-  for (const fee of [500, 3000, 100]) {
-    try {
-      const pool = await client.readContract({
-        address: getAddress(factory),
-        abi: POOL,
-        functionName: "getPool",
-        args: [getAddress(wrapped.address), getAddress(stable.address), fee],
-      });
-      if (BigInt(pool) === 0n) continue;
-      const [sqrtPriceX96] = await client.readContract({
-        address: pool,
-        abi: POOL,
-        functionName: "slot0",
-      });
-      if (sqrtPriceX96 === 0n) continue;
+  // Every fee tier at once, the first in this order with a priced pool winning. A tier whose
+  // read fails counts as having no pool: the price only suggests a margin, and none found
+  // means the person gives the reward.
+  const prices = await Promise.all(
+    [500, 3000, 100].map(async (fee) => {
+      try {
+        const pool = await client.readContract({
+          address: getAddress(factory),
+          abi: POOL,
+          functionName: "getPool",
+          args: [getAddress(wrapped.address), getAddress(stable.address), fee],
+        });
+        if (BigInt(pool) === 0n) return undefined;
+        const [sqrtPriceX96] = await client.readContract({
+          address: pool,
+          abi: POOL,
+          functionName: "slot0",
+        });
+        if (sqrtPriceX96 === 0n) return undefined;
 
-      return Number(
-        priceFromSqrtPriceX96(sqrtPriceX96, {
-          baseDecimals: wrapped.decimals,
-          quoteDecimals: stable.decimals,
-          baseIsToken0: BigInt(wrapped.address) < BigInt(stable.address),
-        }),
-      );
-    } catch {
-      continue;
-    }
-  }
+        return Number(
+          priceFromSqrtPriceX96(sqrtPriceX96, {
+            baseDecimals: wrapped.decimals,
+            quoteDecimals: stable.decimals,
+            baseIsToken0: BigInt(wrapped.address) < BigInt(stable.address),
+          }),
+        );
+      } catch {
+        return undefined;
+      }
+    }),
+  );
 
-  return undefined;
+  return prices.find((price) => price !== undefined);
 }
 
 /** What a solver spends on the destination to fill a plain transfer, as an estimate. */

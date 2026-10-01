@@ -206,6 +206,38 @@ async function approveSpend(
   return context.approver.auto ? lines : [];
 }
 
+/**
+ * The transactions to send once `approved` was approved: the same ones with `--auto-approve`, or
+ * where nothing beyond gas was asked about; otherwise built again from the chain as it is now,
+ * because a question can stand for minutes and the prover's fee can move. Refuses, sending
+ * nothing, when the new plan is not ready or spends more native value than was approved.
+ */
+async function rebuilt(
+  context: LifecycleContext,
+  approved: readonly TxJson[],
+  build: () => Promise<{
+    readonly ready: boolean;
+    readonly why?: string;
+    readonly transactions: readonly TxJson[];
+  }>,
+): Promise<readonly TxJson[]> {
+  const total = (transactions: readonly TxJson[]): bigint =>
+    transactions.reduce((sum, tx) => sum + BigInt(tx.value), 0n);
+  if (context.approver.auto || total(approved) === 0n) return approved;
+  const fresh = await build();
+  if (!fresh.ready) throw new CliError(`not sent: ${fresh.why ?? "it is no longer ready"}`);
+  if (total(fresh.transactions) > total(approved)) {
+    const native = nativeSymbol(requireChain(approved[0]!.chainId));
+    throw new CliError(
+      `not sent: it now takes ${formatUnits(total(fresh.transactions), 18)} ${native} of value, ` +
+        `more than the ${formatUnits(total(approved), 18)} ${native} you approved (the prover's ` +
+        "fee rose): run it again",
+    );
+  }
+
+  return fresh.transactions;
+}
+
 /** The transactions printed for a wallet to sign, when the command has no signer. */
 function unsigned(transactions: readonly TxJson[], what: string): CommandOutput {
   return {
@@ -321,7 +353,8 @@ export async function proveCommand(
       return cancelled === undefined ? [] : [[target.record.intentHash, cancelled.block!] as const];
     }),
   );
-  const plan = await buildProve(records, endpointsOf(targets, context), { cancelledIn });
+  const endpoints = endpointsOf(targets, context);
+  const plan = await buildProve(records, endpoints, { cancelledIn });
   if (!plan.ready) {
     return {
       text: `Not proven: ${plan.why}`,
@@ -336,7 +369,12 @@ export async function proveCommand(
   }
   if (context.account === undefined) return unsigned(plan.transactions, "prove");
   const shown = await approveSpend(context, "Proving", plan.transactions);
-  const [sent] = await sendAll(plan.transactions, context);
+  const [sent] = await sendAll(
+    await rebuilt(context, plan.transactions, () =>
+      buildProve(records, endpoints, { cancelledIn }),
+    ),
+    context,
+  );
   const messages = dispatchedMessages(sent!.result.logs);
   for (const message of messages)
     remember(context, records, "proving", sent!, { message: message.id });
@@ -517,7 +555,12 @@ export async function cancelCommand(
       continue;
     }
     texts.push(...(await approveSpend(context, "Cancelling", plan.transactions)));
-    const [sent] = await sendAll(plan.transactions, context);
+    const [sent] = await sendAll(
+      await rebuilt(context, plan.transactions, () =>
+        buildCancel(target.record, endpoints, { prove: options.prove }),
+      ),
+      context,
+    );
     remember(context, [target.record], "cancelled", sent!);
     const messages = dispatchedMessages(sent!.result.logs);
     for (const message of messages) {
@@ -690,20 +733,25 @@ const lastEvent = (stored: StoredIntent): string => stored.events.at(-1)?.event 
 
 /** `sauce intent list`: every intent the store keeps, with where it stands when endpoints say. */
 export async function listCommand(context: LifecycleContext): Promise<CommandOutput> {
-  const all = context.store
-    .list()
-    .sort((a, b) => (a.events[0]?.time ?? "").localeCompare(b.events[0]?.time ?? ""));
-  const rows = await Promise.all(
-    all.map(async (stored) => {
-      const endpoints = endpointsOf([{ record: stored.record, stored }], context);
-      const status =
-        Object.keys(endpoints).length === 0
-          ? undefined
-          : await intentStatus(stored.record, endpoints).catch(() => undefined);
-
-      return { stored, status };
-    }),
+  const listing = context.store.list();
+  const all = [...listing.intents].sort((a, b) =>
+    (a.events[0]?.time ?? "").localeCompare(b.events[0]?.time ?? ""),
   );
+  const unread: string[] = [];
+  const rows = await inBatches(all, LIST_READS, async (stored) => {
+    const endpoints = endpointsOf([{ record: stored.record, stored }], context);
+    if (Object.keys(endpoints).length === 0) return { stored, status: undefined };
+    try {
+      return { stored, status: await intentStatus(stored.record, endpoints) };
+    } catch (error) {
+      unread.push(
+        `${stored.intentHash}: its status could not be read: ` +
+          (error instanceof Error ? error.message : String(error)),
+      );
+
+      return { stored, status: undefined };
+    }
+  });
 
   return {
     text:
@@ -727,8 +775,25 @@ export async function listCommand(context: LifecycleContext): Promise<CommandOut
         ...(status === undefined ? {} : { state: status.state, can: status.can }),
       })),
     },
-    notes: rows.flatMap(({ stored }) => stored.warnings),
+    notes: [...listing.warnings, ...rows.flatMap(({ stored }) => stored.warnings), ...unread],
   };
+}
+
+/** How many intents `sauce intent list` reads at once: each read is several calls on two chains. */
+const LIST_READS = 4;
+
+/** `run` over `items`, `size` at a time, the results in `items`' order. */
+async function inBatches<T, R>(
+  items: readonly T[],
+  size: number,
+  run: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  for (let start = 0; start < items.length; start += size) {
+    results.push(...(await Promise.all(items.slice(start, start + size).map(run))));
+  }
+
+  return results;
 }
 
 /** `sauce intent import`: the intents a transaction published, rebuilt and stored. */

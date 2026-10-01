@@ -25,6 +25,7 @@ import {
   createWalletClient,
   encodeAbiParameters,
   encodeFunctionData,
+  formatEther,
   getAddress,
   http,
   pad,
@@ -287,6 +288,146 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(refunded.code).toBe(0);
     expect(await arbitrum.balanceOf(arbitrumUsdc, OWNER.address)).toBe(before + REWARD);
     expect(getAddress(CANCELLED_CLAIMANT)).toBe("0xe685056aEc77686A83E2a6bDf37c6f71dD2fdB5f");
+  }, 240_000);
+
+  it("proves two fills in one message, leaves out one proven, claims both in one batchWithdraw", async () => {
+    const store = mkdtempSync(join(work, "store-"));
+    const start = await now(base);
+    // Three intents, told apart by their route's deadline.
+    const one = await publish(store, start + 3601n, start + 7200n);
+    const two = await publish(store, start + 3602n, start + 7200n);
+    const three = await publish(store, start + 3603n, start + 7200n);
+    const send = ["--send", "--private-key", SOLVER_KEY, "--auto-approve", "--json"];
+    for (const hash of [one, two]) {
+      expect((await lifecycle("fill", hash, store, "--no-prove", ...send)).code).toBe(0);
+    }
+    // The third proves itself as it fills, and its proof is carried.
+    const third = jsonOf(await lifecycle("fill", three, store, ...send));
+    const fulfill = (
+      third.intents as Array<{ transactions: Array<{ kind: string; hash: Hex }> }>
+    )[0]!.transactions.find((tx) => tx.kind === "fulfill")!.hash;
+    expect(await relay(base, baseMailbox, fulfill, arbitrum, arbitrumMailbox)).toBe(1);
+
+    // One proof for the two left unproven, the third left out with a note.
+    const proved = await sauce(
+      ...["intent", "prove", one, two, three, "--config", config, "--store", store],
+      ...["--private-key", SOLVER_KEY, "--auto-approve", "--json"],
+    );
+    expect(proved.code).toBe(0);
+    expect(proved.stderr).toContain(`${three} is proven on arbitrum already`);
+    const proof = JSON.parse(proved.stdout) as {
+      transactions: Array<{ hash: Hex; value: string }>;
+      messages: unknown[];
+    };
+    expect(proof.transactions).toHaveLength(1);
+    expect(proof.transactions[0]!.value).toBe(String(HYPERLANE_FEE));
+    expect(proof.messages).toHaveLength(1);
+    expect(
+      await relay(base, baseMailbox, proof.transactions[0]!.hash, arbitrum, arbitrumMailbox),
+    ).toBe(1);
+
+    // Both claimed in one transaction.
+    const before = await arbitrum.balanceOf(arbitrumUsdc, SOLVER.address);
+    const claimed = await sauce(
+      ...["intent", "claim", one, two, "--config", config, "--store", store],
+      ...["--private-key", SOLVER_KEY, "--json"],
+    );
+    expect(claimed.code).toBe(0);
+    const claim = JSON.parse(claimed.stdout) as {
+      transactions: Array<{ what: string }>;
+      claims: unknown[];
+    };
+    expect(claim.transactions).toHaveLength(1);
+    expect(claim.transactions[0]!.what).toContain("Portal.batchWithdraw(2 intents)");
+    expect(claim.claims).toHaveLength(2);
+    expect(await arbitrum.balanceOf(arbitrumUsdc, SOLVER.address)).toBe(before + 2n * REWARD);
+  }, 240_000);
+
+  it("cancels and proves in one transaction with --and-prove, paying the fee", async () => {
+    const store = mkdtempSync(join(work, "store-"));
+    const start = await now(base);
+    const hash = await publish(store, start + 60n, start + 100_000n);
+    await warp(base, 120);
+    const cancelled = await lifecycle(
+      "cancel",
+      hash,
+      store,
+      ...["--and-prove", "--private-key", OWNER_KEY, "--auto-approve", "--json"],
+    );
+    expect(cancelled.code).toBe(0);
+    // It proves at once, without waiting for the cancel to be final: said.
+    expect(cancelled.stderr).toMatch(/final/);
+    const [entry] = (
+      JSON.parse(cancelled.stdout) as {
+        intents: Array<{
+          transactions: Array<{ hash: Hex; value: string; data: Hex }>;
+          messages: unknown[];
+        }>;
+      }
+    ).intents;
+    expect(entry!.transactions[0]!.value).toBe(String(HYPERLANE_FEE));
+    expect(entry!.messages).toHaveLength(1);
+    expect(
+      await relay(base, baseMailbox, entry!.transactions[0]!.hash, arbitrum, arbitrumMailbox),
+    ).toBe(1);
+    const before = await arbitrum.balanceOf(arbitrumUsdc, OWNER.address);
+    const refunded = await lifecycle("refund", hash, store, "--private-key", OWNER_KEY);
+    expect(refunded.code).toBe(0);
+    expect(await arbitrum.balanceOf(arbitrumUsdc, OWNER.address)).toBe(before + REWARD);
+  }, 240_000);
+
+  it("sends nothing when the prover's fee rises while the person is deciding", async () => {
+    const store = mkdtempSync(join(work, "store-"));
+    const start = await now(base);
+    const hash = await publish(store, start + 3604n, start + 7200n);
+    // The question stands while the Hyperlane fee doubles: the plan is made again once it is
+    // answered, and spends more than was approved, so nothing goes out.
+    const raising = {
+      canAsk: () => true,
+      confirm: async () => {
+        await deployMailbox(base, 2n * HYPERLANE_FEE, baseMailbox);
+
+        return true;
+      },
+    };
+    const delivered = await base.balanceOf(baseUsdc, RECIPIENT);
+    try {
+      const fill = await sauceWith(
+        raising,
+        ...["intent", "fill", hash, "--config", config, "--store", store],
+        ...["--send", "--private-key", SOLVER_KEY],
+      );
+      expect(fill.code).toBe(1);
+      expect(fill.stderr).toContain(`more than the ${formatEther(HYPERLANE_FEE)} ETH you approved`);
+      expect(await base.balanceOf(baseUsdc, RECIPIENT)).toBe(delivered);
+      // Filled without its proof, then proven: the same for the proof's fee.
+      await deployMailbox(base, HYPERLANE_FEE, baseMailbox);
+      expect(
+        (
+          await lifecycle(
+            "fill",
+            hash,
+            store,
+            "--send",
+            "--no-prove",
+            "--private-key",
+            SOLVER_KEY,
+            "--auto-approve",
+          )
+        ).code,
+      ).toBe(0);
+      const prove = await sauceWith(
+        raising,
+        ...["intent", "prove", hash, "--config", config, "--store", store],
+        ...["--private-key", SOLVER_KEY],
+      );
+      expect(prove.code).toBe(1);
+      expect(prove.stderr).toContain(
+        `more than the ${formatEther(HYPERLANE_FEE)} ETH you approved`,
+      );
+    } finally {
+      await deployMailbox(base, HYPERLANE_FEE, baseMailbox);
+    }
   }, 240_000);
 
   it("refuses to cancel where either Portal predates proven cancellation", async () => {

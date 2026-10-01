@@ -17,6 +17,7 @@ import {
   type Hex,
 } from "viem";
 
+import { fundedIntents } from "../src/cli/lifecycle.js";
 import { PortalABI, ProverABI } from "../src/protocols/eco-routes/abis.js";
 import { encodeRoute, evmRouteTuple, hashIntent } from "../src/routes/encode.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
@@ -305,5 +306,36 @@ describe("intentFromPublished", () => {
     expect(() =>
       intentFromPublished(logOf(intent(), hashIntent(intent("12")).intentHash), 42161n),
     ).toThrow(/hashes to 0x[0-9a-f]{64}, not the/);
+  });
+});
+
+describe("fundedIntents (sauce intent import's funding check)", () => {
+  const portal = getAddress(SOURCE_PORTAL);
+  const topics = encodeEventTopics({ abi: PortalABI, eventName: "IntentFunded" }) as Hex[];
+  const fundedLog = (hash: Hex, complete: boolean, address = portal) => ({
+    address,
+    topics,
+    data: encodeAbiParameters(
+      [{ type: "bytes32" }, { type: "address" }, { type: "bool" }],
+      [hash, "0x658d45d9DEB56768ca379C50daEcde116Db44521", complete],
+    ),
+  });
+
+  it("keys each complete IntentFunded by the Portal that emitted it, decoded by the registry ABI", () => {
+    const [a, b, c, d] = ["01", "02", "03", "04"].map(
+      (salt) => hashIntent(intent(salt)).intentHash,
+    );
+    const other = getAddress("0x1111111111111111111111111111111111111111");
+    const funded = fundedIntents([
+      fundedLog(a!, true),
+      // Funded in part: not complete.
+      fundedLog(b!, false),
+      // The same shape from another contract is that contract's, and funds nothing at the Portal.
+      fundedLog(c!, true, other),
+      // Cut short: does not decode, so it is no funding.
+      { ...fundedLog(d!, true), data: fundedLog(d!, true).data.slice(0, 130) as Hex },
+    ]);
+    expect([...funded]).toEqual([`${portal}:${a!.toLowerCase()}`, `${other}:${c!.toLowerCase()}`]);
+    expect(funded.has(`${portal}:${c!.toLowerCase()}`)).toBe(false);
   });
 });

@@ -102,7 +102,22 @@ describe("the intent store", () => {
     const loaded = store.load(record.intentHash);
     expect(loaded.record).toEqual(record);
     expect(intentOf(loaded.record)).toEqual(INTENT);
-    expect(store.list().map((entry) => entry.intentHash)).toEqual([record.intentHash]);
+    expect(store.list().intents.map((entry) => entry.intentHash)).toEqual([record.intentHash]);
+  });
+
+  it("lists every record it can read, and warns of one it cannot instead of dropping it unsaid", () => {
+    const store = new IntentStore(dir);
+    store.save(record);
+    const broken = `0x${"ef".repeat(32)}`;
+    mkdirSync(join(dir, broken));
+    writeFileSync(join(dir, broken, "intent.json"), '{"schema":"sauce.intent/1","intentHa');
+    const listing = store.list();
+    expect(listing.intents.map((entry) => entry.intentHash)).toEqual([record.intentHash]);
+    expect(listing.warnings).toEqual([
+      expect.stringMatching(
+        new RegExp(`${broken}/intent\\.json is not JSON; that intent is left out`),
+      ),
+    ]);
   });
 
   it("refuses a different intent under the same hash, and leaves the file as it was", () => {
@@ -139,7 +154,7 @@ describe("the intent store", () => {
     const store = new IntentStore(dir);
     expect(() => store.load(`0x${"cd".repeat(32)}`)).toThrow(/no intent 0x(cd){32} in /);
     expect(() => store.load("0x1234")).toThrow(/is not an intent hash/);
-    expect(store.list()).toEqual([]);
+    expect(store.list()).toEqual({ intents: [], warnings: [] });
   });
 
   it("loses no event when two processes append at once", async () => {

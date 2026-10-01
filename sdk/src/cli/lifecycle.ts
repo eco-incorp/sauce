@@ -21,6 +21,7 @@
  * proven cancellation would pay the reward to an address nobody controls).
  */
 import {
+  decodeEventLog,
   decodeFunctionResult,
   encodeFunctionData,
   getAbiItem,
@@ -366,11 +367,20 @@ function carriesError(code: Hex, selector: Hex): boolean {
   return four.has(bare) || left.has(bare);
 }
 
+/** The scans of the last `PUSH_CACHE_SIZE` codes read, least recently used first (a `Map` keeps
+ *  insertion order, and a hit is moved to the end), so a long-running caller such as the MCP
+ *  server neither grows it without bound nor loses every entry at once. */
 const pushCache = new Map<string, { four: Set<string>; left: Set<string> }>();
+const PUSH_CACHE_SIZE = 64;
 
 function pushes(code: Hex): { four: Set<string>; left: Set<string> } {
   const cached = pushCache.get(code);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    pushCache.delete(code);
+    pushCache.set(code, cached);
+
+    return cached;
+  }
   const four = new Set<string>();
   const left = new Set<string>();
   const hex = code.slice(2).toLowerCase();
@@ -382,8 +392,8 @@ function pushes(code: Hex): { four: Set<string>; left: Set<string> } {
     if (op >= 0x60 && op <= 0x7f) i += (op - 0x5f) * 2;
   }
   const found = { four, left };
-  if (pushCache.size > 64) pushCache.clear();
   pushCache.set(code, found);
+  if (pushCache.size > PUSH_CACHE_SIZE) pushCache.delete(pushCache.keys().next().value!);
 
   return found;
 }
@@ -796,6 +806,10 @@ export async function planFill(
       return { approval, token, amount, held, standing, info };
     }),
   );
+  // The approvals are planned from the allowance read now. Another transaction of the solver's
+  // that moves it before these land (a concurrent fill of a USDT-like token) can make the approve
+  // revert: the CLI re-plans after a person approves, and rehearses each transaction just before
+  // sending it, so such a race is refused unsent rather than reverting on chain.
   for (const { approval, token, amount, standing, info } of tokens) {
     if (standing >= amount) continue;
     const symbol = info.symbol ?? token;
@@ -1101,6 +1115,10 @@ async function readSource(
     funded,
     holds,
     proof: proof === null || proof.claimant === zeroAddress ? null : proof,
+    // Necessary, not sufficient: code that can revert `CancelledIntent` is eco-routes 2.12's
+    // `withdraw`, which refuses a cancellation's sentinel claimant, and a Portal predating 2.12
+    // cannot revert it at all. A different contract carrying the selector would pass; the Portal
+    // here is the one the intent itself names, whose source this does not re-verify.
     refusesCancelledClaimant: carriesError(code, CANCELLED_INTENT),
     time,
   };
@@ -1559,9 +1577,10 @@ export async function buildClaim(
     vault: Address;
     moves: VaultMove[];
   }> = [];
-  for (const intent of intents) {
+  const sources = await Promise.all(intents.map((intent) => readSource(client, intent, portal)));
+  for (const [index, intent] of intents.entries()) {
     const { intentHash } = hashIntent(intent);
-    const source = await readSource(client, intent, portal);
+    const source = sources[index]!;
     const proof = source.proof;
     const reason =
       source.status === "Withdrawn"
@@ -1889,6 +1908,41 @@ const INTENT_FUNDED_TOPIC = toEventSelector(
 );
 
 /**
+ * The intents `logs` record funded completely, as `portal:intentHash` keys: each
+ * `IntentFunded(intentHash, funder, complete)` decoded strictly with the registry's declaration,
+ * and keyed by the contract that emitted it, so another contract's log of the same shape funds
+ * nothing. A log that does not decode is not a funding.
+ */
+export function fundedIntents(
+  logs: ReadonlyArray<{
+    readonly address: Address;
+    readonly topics: readonly Hex[];
+    readonly data: Hex;
+  }>,
+): Set<string> {
+  const funded = new Set<string>();
+  for (const log of logs) {
+    if (log.topics[0]?.toLowerCase() !== INTENT_FUNDED_TOPIC) continue;
+    let decoded;
+    try {
+      decoded = decodeEventLog({
+        abi: PortalABI,
+        eventName: "IntentFunded",
+        topics: log.topics as [Hex, ...Hex[]],
+        data: log.data,
+        strict: true,
+      });
+    } catch {
+      continue;
+    }
+    if (decoded.eventName !== "IntentFunded" || !decoded.args.complete) continue;
+    funded.add(`${getAddress(log.address)}:${decoded.args.intentHash.toLowerCase()}`);
+  }
+
+  return funded;
+}
+
+/**
  * The intents `logs` — a transaction's, mined in `at.blockNumber` on `chain` — announce with
  * `IntentPublished`, rebuilt and recorded with the vault each one's Portal derives, and whether the
  * same transaction funded each completely. None is an empty list, not an error.
@@ -1911,12 +1965,7 @@ export async function publishedIntents(
   });
   if (published.length === 0) return [];
   const block = await read("its block", () => client.getBlock({ blockNumber: at.blockNumber }));
-  const funded = new Set(
-    logs
-      .filter((log) => log.topics[0]?.toLowerCase() === INTENT_FUNDED_TOPIC)
-      .filter((log) => BigInt(`0x${log.data.slice(130, 194)}`) === 1n)
-      .map((log) => `0x${log.data.slice(2, 66)}`.toLowerCase()),
-  );
+  const funded = fundedIntents(logs);
 
   return Promise.all(
     published.map(async ({ intent, intentHash, portal, index }) => {
@@ -1931,7 +1980,7 @@ export async function publishedIntents(
         block: at.blockNumber.toString(),
         time: block.timestamp.toString(),
         logIndex: index,
-        funded: funded.has(intentHash),
+        funded: funded.has(`${portal}:${intentHash.toLowerCase()}`),
       };
     }),
   );

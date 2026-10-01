@@ -231,24 +231,29 @@ export class IntentStore {
     return { events, warnings };
   }
 
-  /** Every intent the store holds, newest event last within each. */
-  list(): StoredIntent[] {
+  /** Every intent the store holds, newest event last within each, and a warning for each record
+   *  it holds but cannot read (not JSON, another schema), which is left out. */
+  list(): { readonly intents: StoredIntent[]; readonly warnings: string[] } {
     let names: string[];
     try {
       names = readdirSync(this.dir);
     } catch (error) {
-      if ((error as { code?: string }).code === "ENOENT") return [];
+      if ((error as { code?: string }).code === "ENOENT") return { intents: [], warnings: [] };
       throw error;
     }
+    const intents: StoredIntent[] = [];
+    const warnings: string[] = [];
+    for (const name of names) {
+      if (!HASH.test(name) || !existsSync(join(this.dir, name, "intent.json"))) continue;
+      try {
+        intents.push(this.load(name as Hex));
+      } catch (error) {
+        warnings.push(
+          `warning: ${error instanceof Error ? error.message : String(error)}; that intent is left out`,
+        );
+      }
+    }
 
-    return names
-      .filter((name) => HASH.test(name) && existsSync(join(this.dir, name, "intent.json")))
-      .flatMap((name) => {
-        try {
-          return [this.load(name as Hex)];
-        } catch {
-          return [];
-        }
-      });
+    return { intents, warnings };
   }
 }
