@@ -506,20 +506,28 @@ export function knownTokenSymbols(chain: CanonicalChain): readonly string[] {
   return [...rowsOf(chain).map((r) => r.symbol)].sort();
 }
 
+/** Each chain's registry rows as the map `resolveTokenMap` returns, built once per chain: with the
+ *  stock tokens, Ethereum's is over 1,700 entries, read on every compile. */
+const registryMaps = new Map<number, ReadonlyMap<string, bigint>>();
+
 /**
  * THE one precedence resolver every token-address consumer goes through: registry rows for `chain`
  * first (an EVM chain's tokens, an svm chain's cluster mints as 32-byte keys), then `callerTokens`
  * merged PER KEY on top -- overriding one symbol (e.g. `USDC`) never drops an unrelated registry
- * symbol (e.g. `WETH`) for the same chain.
+ * symbol (e.g. `WETH`) for the same chain. With no `callerTokens`, the chain's registry map: the
+ * same map on every call.
  */
 export function resolveTokenMap(
   chain: CanonicalChain,
   callerTokens?: Readonly<Record<string, AddressInput>>,
 ): ReadonlyMap<string, bigint> {
-  const map = new Map<string, bigint>();
-  for (const row of rowsOf(chain)) {
-    map.set(row.symbol, BigInt(row.address));
+  let registry = registryMaps.get(chain.id);
+  if (registry === undefined) {
+    registry = new Map(rowsOf(chain).map((row) => [row.symbol, BigInt(row.address)]));
+    registryMaps.set(chain.id, registry);
   }
+  if (callerTokens === undefined) return registry;
+  const map = new Map(registry);
   if (callerTokens) {
     for (const [symbol, address] of Object.entries(callerTokens)) {
       map.set(symbol, toBigIntAddress(address));
