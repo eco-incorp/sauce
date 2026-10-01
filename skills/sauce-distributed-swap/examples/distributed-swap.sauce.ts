@@ -2,9 +2,10 @@
 // chain.
 //   1. Discover the pair's pools: Uniswap V3, PancakeSwap V3 and Aerodrome Slipstream through their
 //      factories, hookless Uniswap V4 pools by key.
-//   2. Give each pool its own limit: `sqrtPriceLimitX96` is the worst price a taker accepts, fee
-//      included, so each pool stops where its price, less its fee, reaches it. Keep the pools that
-//      can trade: liquidity at their price, and a price better than their own limit.
+//   2. Liquidity before price: drop every pool with no liquidity at its price, whose price is
+//      stale and would rank first. Give each one left its own limit (`sqrtPriceLimitX96` is the
+//      worst price a taker accepts, fee included, so each pool stops where its price, less its fee,
+//      reaches it) and keep those priced better than it.
 //   3. Rank them by the price a taker gets, fee included, best first.
 //   4. Swap once per pool with all remaining input: each fills up to its limit and leaves the rest
 //      in the Pot for the next.
@@ -200,11 +201,11 @@ function main(
     }
   }
 
-  // 2. Keep each pool that can trade, with its own limit and the price a taker gets there. A pool
-  //    with no liquidity at its price is skipped: abandoned, it can sit far from the market, rank
-  //    first and fill nothing. A V3-style pool is its address; a Uniswap V4 pool has pool 0 and is
-  //    named by its key's fee and tick spacing (the standard keys, 100/1, 500/10, 3000/60 and
-  //    10000/200).
+  // 2. Liquidity before price: a pool with no liquidity at its price is dropped before its price is
+  //    looked at, since an abandoned pool can sit far from the market, rank first and fill nothing.
+  //    Each pool left gets its own limit and the price a taker gets there. A V3-style pool is its
+  //    address; a Uniswap V4 pool has pool 0 and is named by its key's fee and tick spacing (the
+  //    standard keys, 100/1, 500/10, 3000/60 and 10000/200).
   let pools = new Array(27); // the 23 above + 4 V4 keys
   let fees = new Array(27);
   let tickSpacings = new Array(27);
@@ -212,12 +213,12 @@ function main(
   let prices = new Array(27);
   let n = 0n;
   for (let i = 0n; i < m; i++) {
-    if (found[i] != 0n) {
+    if (found[i] != 0n && inRangeLiquidity(found[i]) != 0n) {
       const spot = spotPrice(found[i]);
       if (spot != 0n) {
         const fee = poolFee(found[i]);
         const limit = poolLimit(sqrtPriceLimitX96, fee, sellsToken0);
-        if (isBetter(spot, limit, sellsToken0) && inRangeLiquidity(found[i]) != 0n) {
+        if (isBetter(spot, limit, sellsToken0)) {
           pools[n] = found[i];
           limits[n] = limit;
           prices[n] = takerPrice(spot, fee, sellsToken0);
@@ -230,13 +231,13 @@ function main(
     const v4Fees = [100n, 500n, 3000n, 10000n];
     const v4TickSpacings = [1n, 10n, 60n, 200n];
     for (let k = 0n; k < 4n; k++) {
+      const liquidity = v4State(v4Fees[k], v4TickSpacings[k], tokenIn, tokenOut, 3n);
       const state = v4State(v4Fees[k], v4TickSpacings[k], tokenIn, tokenOut, 0n);
       const spot = state & ((1n << 160n) - 1n);
-      if (spot != 0n) {
+      if (liquidity != 0n && spot != 0n) {
         const fee = v4SwapFee(state, sellsToken0);
         const limit = poolLimit(sqrtPriceLimitX96, fee, sellsToken0);
-        const liquidity = v4State(v4Fees[k], v4TickSpacings[k], tokenIn, tokenOut, 3n);
-        if (isBetter(spot, limit, sellsToken0) && liquidity != 0n) {
+        if (isBetter(spot, limit, sellsToken0)) {
           pools[n] = 0n;
           fees[n] = v4Fees[k];
           tickSpacings[n] = v4TickSpacings[k];

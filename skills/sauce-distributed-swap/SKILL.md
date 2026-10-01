@@ -21,10 +21,11 @@ try to split the amount perfectly; the limit does the splitting.
 
 1. **Discover** the pair's pools on every price-limit venue the chain has: V3-style pools through
    their factories, Uniswap V4 pools by key.
-2. **Give each pool its own limit.** The caller's `sqrtPriceLimitX96` is the worst price a taker
-   accepts, **fee included**; each pool gets the price limit at which its price, less its fee,
-   reaches it. **Keep** the pools that can trade: liquidity at their current price, and a price
-   better than their own limit.
+2. **Liquidity before price.** Drop every pool with no liquidity at its current price before
+   looking at its price: such a pool's price is stale and would rank first. **Give each pool left
+   its own limit**: the caller's `sqrtPriceLimitX96` is the worst price a taker accepts, **fee
+   included**, and each pool gets the price limit at which its price, less its fee, reaches it.
+   Keep the pools priced better than their own limit.
 3. **Rank** them by the price a taker gets there, fee included, best first.
 4. **Swap once per pool**, in that order, offering all the input still unsold, up to the pool's own
    limit. Each pool takes what it can fill before its price reaches that limit; the Router's
@@ -143,12 +144,14 @@ Every read is an `evm.static` call with the selector, decoded as one word:
   which needs a hook to set the fee.
 - **On Algebra pools** the price is the first word of `globalState()`.
 
-**Skip a pool with no liquidity at its price.** A pool can exist with none: created or abandoned,
-its price stays wherever the last trade left it, often far from the market. That price ranks it
-first, and its swap fills nothing (it only moves the empty pool's price to the limit), at the cost of
-a call. Standard V4 keys are the usual case, since anyone can initialize one: on Base, two WETH/USDC
+**Liquidity before price: skip a pool with no liquidity at its price.** A pool can exist with
+none: created or abandoned, its price stays wherever the last trade left it, often far from the
+market. That price ranks it first, and its swap fills nothing (it only moves the empty pool's price
+to the limit), at the cost of a call. Standard V4 keys are the usual case, since anyone can initialize one: on Base, two WETH/USDC
 keys hold such pools, far below the market, and a WETH purchase ranked by price alone swapped them
-first for nothing.
+first for nothing. To skip thin pools as well, compare the in-range liquidity with a minimum
+instead of zero: it is in the same units on every V3-style and V4 pool of the pair, whatever its
+fee or tick spacing.
 
 ## Ranking by the price a taker gets
 
@@ -266,6 +269,10 @@ in base units. Take each token's decimals from
   the integer square root of 1500 × 10^6 × 2^192 / 10^18, **3068493539683605256287027**, and 2,707
   is **4122149244956051421750688**. Back, 4122149244956051421750688² × 10^18 / (2^192 × 10^6) ≈
   2,707. On Ethereum USDC is token0, so the same price is a different number there.
+- **Build the limit from a liquid reference.** Take the price you derive the limit from from a
+  pool deep enough for the order (or the deepest), never from the best-ranked pool or the best
+  price on offer: a stale pool with no liquidity has the best price and the worst information, and
+  a limit set from it can skip every real pool or trade far past the market.
 - **The limit** is the worst price paid, fee included (the program gives each pool its own, above):
   selling token0 it is a floor below the current price; selling token1, a ceiling above it. Selling
   WETH for USDC on Base sells token0 (floor); buying WETH sells USDC, token1 (ceiling). The program

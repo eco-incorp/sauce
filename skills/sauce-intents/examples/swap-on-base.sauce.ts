@@ -81,7 +81,8 @@ Base(
       if (sellsToken0) {
         limit = Math.mulDiv(SQRT_PRICE_LIMIT_X96, 10n ** 18n, root);
       }
-      if (spot != 0n && inRange != 0n && (sellsToken0 ? spot > limit : spot < limit)) {
+      // Liquidity before price: a pool with none keeps a stale price, which would rank first.
+      if (inRange != 0n && spot != 0n && (sellsToken0 ? spot > limit : spot < limit)) {
         const mid = Math.mulDiv(spot, spot, 1n << 96n);
         let price = Math.mulDiv(mid, 1000000n, 1000000n - fee);
         if (sellsToken0) {

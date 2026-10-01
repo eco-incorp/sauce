@@ -62,6 +62,10 @@ moves it up, so it is a ceiling. It must lie strictly between `4295128739` and
 `1461446703485210103287273052203988822378723970342` and on the far side of the pool's current
 price, or the pool reverts.
 
+**Build the limit from a liquid reference**: derive it from the price of a pool deep enough for
+the order, read with its liquidity, never from a pool's price alone. A pool with no liquidity at
+its price keeps a stale price that can be far from the market.
+
 **It bounds the pool's price after the swap, not the price paid.** One number is the same pool price
 on every V3-style pool of the pair and on V4 pools of the same two currencies, but the fee comes on
 top, and it differs per pool: under one limit, the last unit a 1% pool fills costs about 1% more
