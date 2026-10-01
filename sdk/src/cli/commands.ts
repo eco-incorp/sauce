@@ -80,6 +80,9 @@ export interface ProgramInput {
     readonly creator?: Address;
     readonly executionFee?: bigint;
   };
+  /** ABI bindings the program calls through by name: what an action program's lowering declares
+   *  (`actions/src/source.ts`); a file names its own with `import`. */
+  readonly contracts?: SauceCompileOptions["contracts"];
 }
 
 /** An input file's text — the program, a defines file — or a precise reason it has none. */
@@ -127,6 +130,7 @@ function compileOptions(input: ProgramInput, files: CliFiles): SauceCompileOptio
     defines: input.defines,
     ...(Object.keys(intents).length === 0 ? {} : { intents }),
     ...(input.compactArgs ? { compactArgs: true } : {}),
+    ...(input.contracts === undefined ? {} : { contracts: input.contracts }),
     resolve: (path) => files.readModule(resolvePath(dir, path)),
   };
 }
