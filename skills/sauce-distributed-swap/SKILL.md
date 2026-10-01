@@ -9,7 +9,8 @@ The reference program is
 [examples/distributed-swap.sauce.ts](examples/distributed-swap.sauce.ts). It names no chain, so one
 file compiles for every chain, with the venues that chain has;
 [examples/distributed-swap.mts](examples/distributed-swap.mts) compiles it for Base, Arbitrum and
-Optimism, each with the venues it has, and builds the cook with its inputs. Start from it; this
+Optimism, each with the venues it has, and builds the cook on Base, a chain the initial release
+supports (Arbitrum and Optimism are preview chains: compiled, never sent). Start from it; this
 skill explains its design and gives every value a run on Base needs. The same swap as the body of a
 cross-chain intent, paid for on another chain, is
 [../sauce-intents/examples/swap-on-base.sauce.ts](../sauce-intents/examples/swap-on-base.sauce.ts).
@@ -439,7 +440,10 @@ in base units. Take each token's decimals from
 
 ## Adapting it
 
-- **Another chain**: pass its `--chain`; the venues it has are used, and the others left out.
+- **Another chain**: pass its `--chain`; the venues it has are used, and the others left out. For
+  the initial release the swap is sent only on Ethereum or Base (and Solana, for a Solana
+  program): on a preview chain such as Arbitrum or Optimism it compiles and simulates, and
+  `sauce tx` and `sauce run` refuse it with the chain-support request to post (`sauce-chains`).
 - **Another venue**: add its lookups behind `if (available(<Namespace.Contract>))` and grow the
   discovery array; `swapIntoV3` (`uniswapV3`) already drives every V3-style pool the Router
   services. For Algebra
