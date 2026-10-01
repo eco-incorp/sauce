@@ -9,7 +9,7 @@ Each of the three can be true without the others.
 | Protocol catalog                 | 135 protocols with metadata, deployments, ABI fragments, and program templates | `listProtocols()`, `getProtocol(slug)`, `getProtocolsByChain(id)`      |
 | Contract descriptors             | 300 descriptors across 135 protocol namespaces                                 | `contracts.listDescriptors()`, `contracts.listContracts(slug)`         |
 | Compiled-source protocol globals | The same 135 protocol namespaces, plus 13 family aliases                       | TypeScript completion after importing `@eco-incorp/sauce`; names below |
-| Token symbols                    | 7 symbols distributed across 7 EVM chains                                      | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
+| Token symbols                    | 1796 symbols distributed across 7 EVM chains, 1789 of them tokenized stocks    | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
 | Canonical chain identities       | 41 chains: 40 EVM and Solana                                                   | `CANONICAL_CHAINS`, `requireChain(ref)`                                |
 | EVM chain metadata               | 34 records with native-currency and explorer information                       | `chains`, `getChain(id)`, `getAllChainIds()`                           |
 
@@ -68,6 +68,26 @@ The exported `routes.TOKEN_REGISTRY` contains:
 
 On Arc, `USDC` is the ERC-20 face of the chain's native coin, and `WETH` is bridged ETH rather than
 a wrapped native. See [Arc: USDC is the native coin](#arc-usdc-is-the-native-coin).
+
+### Tokenized stocks
+
+Ethereum and Base also register tokenized stocks, which a program names by symbol like any other
+token (`SPCXc.balanceOf(ctx.self())` on Base). Each list is copied from its issuer's own published
+list and every row is checked on chain; a stock row carries `stock`, its issuer, name and ticker:
+
+| Chain    | ID   | Issuer                            | Tokens | For example                 |
+| -------- | ---- | --------------------------------- | ------ | --------------------------- |
+| Ethereum | 1    | Backed (xStocks, and its bTokens) | 1280   | `TSLAx`, `SPCXx`, `bTSLA`   |
+| Ethereum | 1    | Ondo Global Markets               | 451    | `TSLAon`, `SPCXon`, `SPYon` |
+| Base     | 8453 | Coinbase                          | 58     | `TSLAc`, `SPCXc`, `NVDAc`   |
+| Base     | 8453 | Backed (its bTokens)              | 9      | `bTSLA`, `bNVDA`, `bCOIN`   |
+
+A stock's symbol is its issuer's ticker for the token, which is not always uppercase, with a `.`
+written `_` (`BRK.Bx` is `BRK_Bx`). Any contract, a Pot included, can hold and swap them; an
+issuer can pause its token or refuse a sanctioned address. Backed's tokens rebase: a balance changes
+between transactions, never within one. Coinbase's are B20 tokens built into the Base node, so they
+run on Base but not in a local EVM such as anvil. Solana's tokenized stocks are Token-2022 mints,
+which the SVM token functions do not take, so none is registered.
 
 A missing symbol means the registry has no verified row under that name. Token variants can have
 different symbols and addresses. `IntentOptions.tokenDefines` or `SauceCompileOptions.tokens`
