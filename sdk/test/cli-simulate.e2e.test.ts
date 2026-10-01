@@ -47,32 +47,48 @@ const USDT_CREATION = `${fixture("NoReturnERC20")}${encodeAbiParameters(
   ["Tether USD", "USDT", 6],
 ).slice(2)}` as Hex;
 
+/** What a rehearsal never asks a node for: anything that sends, signs or changes the chain. */
+const WRITES = /^(eth_send|eth_sign|personal_|anvil_|evm_|hardhat_|debug_)/;
+
 /**
- * A JSON-RPC proxy to `upstream` that answers `eth_simulateV1` as a node without it does, and
- * passes everything else through.
+ * A JSON-RPC proxy to `upstream` on loopback, for this suite only. It answers `eth_simulateV1` as a
+ * node without it does, refuses (and records) any method that writes, and passes the rest through
+ * — so a rehearsal through it is shown to have asked for nothing but reads.
  */
-async function withoutSimulateV1(upstream: string): Promise<{ url: string; server: Server }> {
+async function withoutSimulateV1(
+  upstream: string,
+): Promise<{ url: string; server: Server; refused: string[] }> {
+  const refused: string[] = [];
+  const error = (id: unknown, code: number, message: string) => ({
+    jsonrpc: "2.0",
+    id,
+    error: { code, message },
+  });
   const server = createServer((request, response) => {
     let body = "";
     request.on("data", (chunk: Buffer) => (body += chunk.toString()));
     request.on("end", () => {
-      const forward = async (call: { id: unknown; method: string }) =>
-        call.method === "eth_simulateV1"
-          ? {
-              jsonrpc: "2.0",
-              id: call.id,
-              error: {
-                code: -32601,
-                message: "the method eth_simulateV1 does not exist/is not available",
-              },
-            }
-          : (
-              await fetch(upstream, {
-                method: "POST",
-                headers: { "content-type": "application/json", connection: "close" },
-                body: JSON.stringify(call),
-              })
-            ).json();
+      const forward = async (call: { id: unknown; method: string }) => {
+        if (call.method === "eth_simulateV1") {
+          return error(
+            call.id,
+            -32601,
+            "the method eth_simulateV1 does not exist/is not available",
+          );
+        }
+        if (WRITES.test(call.method)) {
+          refused.push(call.method);
+
+          return error(call.id, -32601, `the test proxy refuses ${call.method}`);
+        }
+        const answer = await fetch(upstream, {
+          method: "POST",
+          headers: { "content-type": "application/json", connection: "close" },
+          body: JSON.stringify(call),
+        });
+
+        return answer.json();
+      };
       const parsed = JSON.parse(body) as
         { id: unknown; method: string } | { id: unknown; method: string }[];
       void (Array.isArray(parsed) ? Promise.all(parsed.map(forward)) : forward(parsed)).then(
@@ -87,12 +103,12 @@ async function withoutSimulateV1(upstream: string): Promise<{ url: string; serve
   await once(server, "listening");
   const { port } = server.address() as { port: number };
 
-  return { url: `http://127.0.0.1:${port}`, server };
+  return { url: `http://127.0.0.1:${port}`, server, refused };
 }
 
 describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
   let local: LocalChain;
-  let proxy: { url: string; server: Server };
+  let proxy: { url: string; server: Server; refused: string[] };
   let work: string;
   let usdc: Address;
   let usdt: Address;
@@ -111,6 +127,9 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
     proxy?.server.close();
     await local?.stop();
   });
+
+  // Every rehearsal through the fallback asked for reads only.
+  afterEach(() => expect(proxy.refused).toEqual([]));
 
   /** Nothing a rehearsal does reaches the chain. */
   const untouched = async (): Promise<void> => {
