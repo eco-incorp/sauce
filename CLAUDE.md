@@ -665,14 +665,20 @@ owns its flags and imports `mcp/dist/entry.js` LAZILY, by a specifier TypeScript
 (so the SDK builds before `mcp/`), and only when the command runs (so no other command loads the
 MCP SDK); `entry.ts` exports `mcpEntry` typed by the CLI's `McpEntry`, so the two cannot drift.
 Its tools are the `sauce` command's read-only half — `sauce_compile`, `sauce_actions`, `sauce_tx`,
-`sauce_pot`, `sauce_simulate`, `sauce_intent_publish`, `sauce_intent_fill`, `sauce_inspect`, `sauce_verify`, `sauce_globals`,
+`sauce_pot`, `sauce_simulate`, `sauce_intent_publish`, `sauce_inspect`, `sauce_verify`, `sauce_globals`,
 `sauce_price`, `sauce_chains` — plus the skills as tools (`sauce_skills`, `sauce_skill`,
 `sauce_dev`, `sauce_install_skills`), because many clients never read resources. Each command tool
 calls the function the matching command calls (`compileCommand`, `txCommand`, `simulateCommand`, …)
 and returns its JSON as structured content, so a change to a command reaches its tool with no edit
 in `mcp/`; do not reimplement command logic there. `sauce_actions` calls `actions.ts`'s
 `actionsCommand` (and `actionsProgram` for its cook), what `sauce actions` and the program commands
-use.
+use. The intent tools (`mcp/src/intents.ts`: `sauce_intent_import`, `sauce_intent_status`,
+`sauce_intent_fill`, `sauce_intent_prove`, `sauce_intent_claim`, `sauce_intent_refund`,
+`sauce_intent_cancel`) call `lifecycle.ts` as it is and keep no store: a call names its intent by
+its `record` (which `sauce_intent_publish` returns per intent) or by `txHash` and its source
+`chain`, and gives each chain's endpoint in `rpcUrls`. `intents.e2e.test.ts` runs a whole intent
+through them on two anvils with eco-routes' Portal and HyperProver (`sdk/test/eco-routes-anvil.ts`),
+signing each unsigned transaction itself.
 
 It never signs and takes no key under any name (`tools.test.ts` fails a tool input that looks like
 one), and reads no environment. A tool reads a chain through the call's own `rpcUrl`, else the
