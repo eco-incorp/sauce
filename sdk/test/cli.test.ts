@@ -7,6 +7,8 @@ import { PassThrough } from "node:stream";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { once } from "node:events";
+import { createServer } from "node:http";
 import { address as svmAddress } from "@solana/kit";
 import {
   bytesToHex,
@@ -349,6 +351,31 @@ describe("sauce compile", () => {
       { name: "RECIPIENT", value: RECIPIENT, source: "user", chain: "base" },
       { name: "SMALL", value: "4660", source: "user", chain: "base" },
     ]);
+  });
+
+  it("names a price limit at or past the bounds a pool takes, where it fills nothing", async () => {
+    const program = file(
+      "limits.sauce.ts",
+      "const SQRT_PRICE_LIMIT_X96 = 0n;\nfunction main(sqrtPriceLimitX96: Uint256) {\n" +
+        "  require(SQRT_PRICE_LIMIT_X96 != sqrtPriceLimitX96);\n}\n",
+    );
+    const max = "1461446703485210103287273052203988822378723970342";
+    const run = await sauce(
+      ...["compile", program, "--chain", "base", "--define", `SQRT_PRICE_LIMIT_X96=${max}`],
+      ...["--args", "4295128739"],
+    );
+    expect(run.code).toBe(0);
+    expect(run.stderr).toContain(
+      `SQRT_PRICE_LIMIT_X96 = ${max} is MAX_SQRT_RATIO: a V3-style pool takes a price limit ` +
+        "strictly between 4295128739 and",
+    );
+    expect(run.stderr).toContain("sqrtPriceLimitX96 = 4295128739 is MIN_SQRT_RATIO");
+    // 0 (no limit) and a limit inside the bounds pass quietly.
+    const fine = await sauce(
+      ...["compile", program, "--chain", "base", "--define", "SQRT_PRICE_LIMIT_X96=0"],
+      ...["--args", "4295128740"],
+    );
+    expect(fine.stderr).toBe("");
   });
 
   it("refuses an intent deadline that has passed, which no solver could ever fill", async () => {
@@ -1926,6 +1953,9 @@ describe("sauce price", () => {
     expect(out).toEqual({
       chain: "base",
       price: "2700",
+      // What it means, in words, and the same price the other way round.
+      means: "2700 USDC per WETH",
+      inverse: { price: "0.00037037037037037", means: "0.00037037037037037 WETH per USDC" },
       base: { symbol: "WETH", address: WETH_BASE, decimals: 18 },
       quote: {
         symbol: "USDC",
@@ -1955,8 +1985,73 @@ describe("sauce price", () => {
       },
     });
     const text = await sauce("price", "--chain", "base", "WETH", "USDC", "2700");
+    expect(text.stdout.split("\n")[0]).toBe(
+      "2700 USDC per WETH on base: 1 WETH = 2700 USDC, 1 USDC = 0.00037037037037037 WETH",
+    );
     expect(text.stdout).toContain(`sqrtPriceX96  ${sqrt}`);
     expect(text.stdout).toMatch(/minAvgPrice +2700000000 +USDC units per WETH unit/);
+    // Said in words, the same price: `2700 USDC per WETH`.
+    const worded = await sauce("price", "--chain", "base", "2700", "USDC", "per", "WETH");
+    expect(worded.stdout).toBe(text.stdout);
+  });
+
+  it("reads the pair's price now with an endpoint, and says when the one given is the wrong way round", async () => {
+    // A Base endpoint whose Uniswap V3 factory has one WETH/USDC pool, at the 0.05% tier.
+    const factory = BigInt(routes.chainDefines(requireChain("base")).UniswapV3_Factory as bigint);
+    const pool = "0x00000000000000000000000000000000000b0015";
+    const live = root.sqrtPriceX96FromPrice("4100", {
+      baseDecimals: 18,
+      quoteDecimals: 6,
+      baseIsToken0: true,
+    });
+    const word = (value: bigint) => numberToHex(value, { size: 32 });
+    const server = createServer((request, response) => {
+      let body = "";
+      request.on("data", (chunk: Buffer) => (body += chunk.toString()));
+      request.on("end", () => {
+        const call = JSON.parse(body) as { id: number; method: string; params: unknown[] };
+        const { to, data } = (call.params?.[0] ?? {}) as { to?: string; data?: string };
+        let result: unknown = null;
+        if (call.method === "eth_chainId") result = "0x2105";
+        else if (call.method === "eth_call" && BigInt(to!) === factory) {
+          // getPool(tokenA, tokenB, fee): the pool at 500, none at the other tiers.
+          result = word(BigInt(`0x${data!.slice(-64)}`) === 500n ? BigInt(pool) : 0n);
+        } else if (call.method === "eth_call" && data!.startsWith("0x1a686502")) {
+          result = word(10n ** 18n); // liquidity()
+        } else if (call.method === "eth_call" && data!.startsWith("0x3850c7bd")) {
+          result = `${word(live)}${"0".repeat(64 * 6)}`; // slot0()
+        }
+        response.setHeader("content-type", "application/json");
+        response.end(JSON.stringify({ jsonrpc: "2.0", id: call.id, result }));
+      });
+    });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    try {
+      const right = await sauce(
+        ...["price", "--chain", "base", "4000", "USDC", "per", "WETH", "--rpc-url", url, "--json"],
+      );
+      expect(right.code).toBe(0);
+      expect(right.stderr).toBe("");
+      expect(JSON.parse(right.stdout)).toMatchObject({
+        live: { pool: getAddress(pool), fee: 500, price: "4100", means: "4100 USDC per WETH" },
+      });
+      // Haiku's reading: 2500 WETH per USDC, a millionfold off — and the right way round named.
+      const wrong = await sauce(
+        ...["price", "--chain", "base", "USDC", "WETH", "2500", "--rpc-url", url],
+      );
+      expect(wrong.code).toBe(0);
+      expect(wrong.stderr).toContain(
+        "the price given, 2500 WETH per USDC, is about 10^7 times off the Uniswap V3 pool",
+      );
+      expect(wrong.stderr).toContain(
+        "it looks the wrong way round. For 2500 USDC per WETH, run " +
+          "`sauce price --chain base 2500 USDC per WETH`",
+      );
+    } finally {
+      server.close();
+    }
   });
 
   it("reads a pool's sqrtPriceX96 back as the price, and takes an address with its decimals", async () => {
@@ -1990,6 +2085,7 @@ describe("sauce price", () => {
       [["--chain", "base", "WETH", "DAI", "1"], /DAI is not a token base registers/],
       [["--chain", "base", "WETH", `0x${"12".repeat(20)}`, "1"], /give them as 0x/],
       [["--chain", "base", "WETH", "USDC"], /missing <price>/],
+      [["--chain", "base", "WETH"], /missing the pair: <price> <quote> per <base>/],
       [["--chain", "base", "WETH", "USDC", "1", "--sqrt-price-x96", "1"], /not both/],
       [["--chain", "base", "WETH", "USDC", "1e3"], /'1e3' is not a price/],
       [["--chain", "base", "WETH", "USDC:18", "1"], /USDC has 6 decimals, not 18/],

@@ -25,6 +25,7 @@ import { connectAt, kitchenFee, potState } from "./chain.js";
 import {
   cookOf,
   kitchenAddress,
+  priceLimitNotes,
   valueOf,
   type ChainAccess,
   type CliFiles,
@@ -301,7 +302,11 @@ export async function simulateCommand(
         }
       : { stage: rehearsal.stage, reason: rehearsal.reason }),
   };
-  const notes = [...(funding?.notes ?? []), ...rehearsal.notes];
+  const notes = [
+    ...priceLimitNotes(input, cook.program.entryParams, input.args),
+    ...(funding?.notes ?? []),
+    ...rehearsal.notes,
+  ];
 
   if (!rehearsal.ok) {
     return {

@@ -32,6 +32,7 @@ import { v12PredictPot } from "../deployments/pot.js";
 /** The released Kitchen, which deploys every Pot (`V12Deployments.json`). */
 export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
 import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
+import { MAX_SQRT_PRICE_X96, MIN_SQRT_PRICE_X96 } from "../price.js";
 import type { AccessorTarget } from "../routes/protocol-rewrite.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import {
@@ -268,6 +269,7 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
   const pots: readonly PotCheck[] =
     input.endpoints === undefined ? cooks : await checkIntentPots(cooks, input.endpoints);
   const notes = [
+    ...priceLimitNotes(input, program.entryParams, input.args),
     ...pots.filter((check) => check.deployed === false).map(missingPotNote),
     ...unread.map(({ name, readOn }) =>
       readOn.length === 0
@@ -341,6 +343,55 @@ function argumentValues(params: readonly EntryParam[], args: ArgsInput): EntryVa
           `${param.type.trim().startsWith("{") ? '{"field": 1}' : "[1, 2]"}; got '${raw}'`,
       );
     }
+  });
+}
+
+/** A define or parameter whose name says it is a pool's price limit. */
+const LIMIT_NAME = /sqrt.*price|price.*limit|sqrt.*limit/i;
+
+/**
+ * A note for each price limit — a define or one of `main`'s arguments named like one
+ * (`SQRT_PRICE_LIMIT_X96`, `sqrtPriceLimitX96`) — at or past the bounds a V3-style pool takes. A
+ * pool takes a limit strictly between MIN_SQRT_RATIO and MAX_SQRT_RATIO and reverts "SPL" at
+ * either, so such a limit cannot fill; `0` is the library's "no limit", and is left alone.
+ */
+export function priceLimitNotes(
+  input: Pick<ProgramInput, "defines">,
+  params: readonly EntryParam[],
+  args: ArgsInput | undefined,
+): string[] {
+  const values: Array<[string, bigint]> = Object.entries(input.defines).flatMap(
+    ([name, value]): Array<[string, bigint]> =>
+      LIMIT_NAME.test(name) && typeof value === "bigint" ? [[name, value]] : [],
+  );
+  if (args !== undefined) {
+    params.forEach((param, index) => {
+      const raw = args.values[index];
+      if (!LIMIT_NAME.test(param.name) || param.type.trim() !== "Uint256") return;
+      if (typeof raw === "string" && /^(\d+|0x[0-9a-fA-F]+)n?$/.test(raw)) {
+        values.push([param.name, BigInt(raw.replace(/n$/, ""))]);
+      } else if (typeof raw === "number" && Number.isSafeInteger(raw)) {
+        values.push([param.name, BigInt(raw)]);
+      }
+    });
+  }
+
+  return values.flatMap(([name, value]) => {
+    if (value === 0n || (value > MIN_SQRT_PRICE_X96 && value < MAX_SQRT_PRICE_X96)) return [];
+    const where =
+      value === MIN_SQRT_PRICE_X96
+        ? "is MIN_SQRT_RATIO"
+        : value === MAX_SQRT_PRICE_X96
+          ? "is MAX_SQRT_RATIO"
+          : value < MIN_SQRT_PRICE_X96
+            ? "is below MIN_SQRT_RATIO"
+            : "is past MAX_SQRT_RATIO";
+
+    return [
+      `${name} = ${value} ${where}: a V3-style pool takes a price limit strictly between ` +
+        `${MIN_SQRT_PRICE_X96} and ${MAX_SQRT_PRICE_X96}, and reverts "SPL" at or past either. ` +
+        "0 is no limit; `sauce price` gives the limit for a price",
+    ];
   });
 }
 

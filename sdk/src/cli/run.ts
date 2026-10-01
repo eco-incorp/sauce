@@ -38,9 +38,10 @@ import {
 import { mainSignature } from "../routes/entry.js";
 import { blankLiterals } from "../routes/rs-compile.js";
 import { actionsCommand, actionsProgram, isActionsDocument, type ActionsInput } from "./actions.js";
-import { chainServedBy, endpointFor } from "./chain.js";
+import { chainServedBy, connect, endpointFor } from "./chain.js";
 import {
   compileCommand,
+  priceLimitNotes,
   compileProgram,
   potCommand,
   potDeployCommand,
@@ -78,7 +79,7 @@ import {
   uncheckedPotNote,
   type Endpoints,
 } from "./intents.js";
-import { parsePriceToken, priceCommand, pricedChain } from "./price.js";
+import { livePrice, parsePriceToken, priceCommand, pricedChain } from "./price.js";
 import { publishCommand } from "./publish.js";
 import { simulateCommand } from "./simulate.js";
 import { parsePin, verifyCommand } from "./verify.js";
@@ -1479,6 +1480,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     ].join("\n"),
     run: async (args, io) => {
       const program = liveDeadline(await programInput(args, io));
+      // An intent's price limit at a bound fills nothing on its destination: say so before sending.
+      for (const note of priceLimitNotes(program, [], undefined))
+        io.stderr(`${note}
+`);
       if (program.chain.kind === "svm") {
         throw new UsageError(
           "sauce publish sends a source chain's Portal transactions from an EVM wallet. " +
@@ -1813,8 +1818,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   price: {
-    usage:
+    usage: [
+      "sauce price --chain <slug|id> <price> <quote> per <base> [--rpc-url <url>] [--json]",
       "sauce price --chain <slug|id> <base> <quote> (<price> | --sqrt-price-x96 <value>) [--json]",
+    ],
     summary: "Turn a price into a pool's sqrtPriceX96 and a swap's limit and average-price floor",
     flags: {
       chain: { type: "string", value: "<slug|id>", help: "The chain the pool is on" },
@@ -1823,31 +1830,45 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         value: "<value>",
         help: "Read a pool's sqrtPriceX96 as a price instead",
       },
+      ...ENDPOINT,
       ...JSON_FLAG,
       ...HELP,
     },
     details: [
-      "<price> is how many <quote> tokens one <base> token is worth, in whole tokens: 2700 for",
-      "2,700 USDC per WETH. A token is a symbol the chain registers (sauce globals --tokens), or",
-      "an address with its decimals (0x…:18). Prints the pool's sqrtPriceX96 at that price, for",
-      "the pair's order on the chain (token0 is the lower address), and for each direction:",
+      "`2700 USDC per WETH` says it in words: 2,700 USDC for one WETH. The same price is",
+      "`WETH USDC 2700`: <base> <quote> <price>, the price how many <quote> tokens one <base> is",
+      "worth. A token is a symbol the chain registers (sauce globals --tokens), or an address with",
+      "its decimals (0x…:18). The first line says what the price means, both ways round",
+      "(1 WETH = 2700 USDC, 1 USDC = 0.00037… WETH). Then the pool's sqrtPriceX96 at that price,",
+      "for the pair's order on the chain (token0 is the lower address), and for each direction:",
       "  sqrtPriceLimitX96  the same number as a swap's limit: a floor when selling token0, a",
       "                     ceiling when selling token1",
       "  minAvgPrice        output units per input unit times 1e18, rounded up, for a program's",
       "                     check out * 1e18 >= minAvgPrice * spent",
       "Uniswap V3 and V4 and their forks share this price. With --sqrt-price-x96, a pool's",
-      "price is read back the other way. Nothing reaches a network.",
+      "price is read back the other way.",
+      "",
+      "With --rpc-url (or --config), it also reads the pair's price now, from its deepest Uniswap",
+      "V3 pool on the chain, and warns when the price given is 10x or more away from it, saying so",
+      "when the price looks written the wrong way round. Without, nothing reaches a network.",
       "",
       "Examples:",
-      "  sauce price --chain base WETH USDC 2700",
+      "  sauce price --chain base 2700 USDC per WETH",
+      "  sauce price --chain base 2700 USDC per WETH --rpc-url <url>",
       "  sauce price --chain base WETH USDC --sqrt-price-x96 4116816085950893928074568",
     ].join("\n"),
-    run: (args) => {
+    run: async (args, io) => {
       const chain = pricedChain(parseChain(requiredFlag(args, "chain", "<slug|id>")));
       const sqrt = stringFlag(args, "sqrt-price-x96");
-      const [base, quote, price, ...rest] = args.positionals;
+      // `<price> <quote> per <base>`, or `<base> <quote> <price>`.
+      const worded = args.positionals.length === 4 && args.positionals[2]?.toLowerCase() === "per";
+      const [base, quote, price, ...rest] = worded
+        ? [args.positionals[3], args.positionals[1], args.positionals[0]]
+        : args.positionals;
       if (base === undefined || quote === undefined) {
-        throw new UsageError("missing <base> <quote>: the pair, as WETH USDC");
+        throw new UsageError(
+          "missing the pair: <price> <quote> per <base>, as 2700 USDC per WETH (or WETH USDC 2700)",
+        );
       }
       if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}`);
       if ((price === undefined) === (sqrt === undefined)) {
@@ -1864,12 +1885,34 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         throw new UsageError(`--sqrt-price-x96: '${sqrt}' is not a whole number`);
       }
 
-      return priceCommand({
+      const pair = { base: parsePriceToken(base, chain), quote: parsePriceToken(quote, chain) };
+      const reach =
+        stringFlag(args, "rpc-url") !== undefined || stringFlag(args, "config") !== undefined;
+      const live = reach
+        ? await livePrice(
+            await connect(requiredEndpoint(args, io, chain), chain),
+            chain,
+            pair.base,
+            pair.quote,
+          )
+        : undefined;
+      const output = priceCommand({
         chain,
-        base: parsePriceToken(base, chain),
-        quote: parsePriceToken(quote, chain),
+        ...pair,
         price: price !== undefined ? { decimal: price } : { sqrtPriceX96: BigInt(sqrt!) },
+        ...(live === undefined ? {} : { live }),
       });
+
+      return reach && live === undefined
+        ? {
+            ...output,
+            notes: [
+              ...(output.notes ?? []),
+              `no Uniswap V3 pool for ${pair.base.symbol}/${pair.quote.symbol} on ${chain.slug} ` +
+                "to read the price now from",
+            ],
+          }
+        : output;
     },
   },
   inspect: {
