@@ -37,7 +37,16 @@ import * as gated from "./evm/gated-engine.js";
 
 export const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
-export const describeEvm = RUNTIME_HEX_PATH ? describe : describe.skip;
+/** jest's `describe`, as far as `describeEvm` uses it — typed here, and read when called rather
+ *  than when this module loads, so a suite on another runner (`mcp/test`) can import the harness. */
+interface Describe {
+  (name: string, fn: () => void): void;
+  readonly skip: (name: string, fn: () => void) => void;
+}
+const jestDescribe = (): Describe => (globalThis as unknown as { describe: Describe }).describe;
+/** `describe`, or `describe.skip` without the engine. */
+export const describeEvm = (name: string, fn: () => void): void =>
+  (RUNTIME_HEX_PATH ? jestDescribe() : jestDescribe().skip)(name, fn);
 if (!RUNTIME_HEX_PATH && process.env.CI) {
   throw new Error(
     "SAUCE_V12_RUNTIME_CREATION_HEX is unset in CI. This suite must never skip there — see the " +
