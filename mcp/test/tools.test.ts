@@ -130,6 +130,64 @@ describe("sauce_globals", () => {
     assert.ok(one.protocol.contracts.some((contract) => Array.isArray(contract.methods)));
   });
 
+  it("counts tokenized stocks out of the default, and says how to list and find them", async () => {
+    const { tools } = await mcp.client.listTools();
+    const description = tools.find((tool) => tool.name === "sauce_globals")!.description ?? "";
+    assert.match(description, /tokenized stocks/);
+    assert.match(description, /`search` finds one by symbol, company name or ticker/);
+    const base = ok(await mcp.call("sauce_globals", { chain: "base", tokens: true })) as {
+      tokens: Array<{ symbol: string }>;
+      page?: unknown;
+    };
+    assert.deepEqual(
+      base.tokens.map((token) => token.symbol),
+      ["USDC", "WETH"],
+    );
+    assert.equal(base.page, undefined);
+  });
+
+  it("finds a stock by the company's name, with its issuer, ticker and source", async () => {
+    const found = ok(await mcp.call("sauce_globals", { chain: "base", search: "spacex" })) as {
+      tokens: Array<{ symbol: string; decimals: number; stock?: Record<string, string> }>;
+    };
+    assert.deepEqual(found.tokens, [
+      {
+        symbol: "SPCXc",
+        address: "0xb2000000000000000000007b9fcbd005511aCBd5",
+        decimals: 8,
+        stock: {
+          issuer: "coinbase",
+          name: "Space Exploration Technologies Corp.",
+          ticker: "SPCX",
+          issuerName: "Coinbase",
+          source: "https://api.coinbase.com/v1/tokenized-stocks",
+        },
+      },
+    ]);
+  });
+
+  it("pages a chain's stock tokens", async () => {
+    type Page = {
+      tokens: Array<{ symbol: string }>;
+      page: { offset: number; total: number; next?: number };
+    };
+    const first = ok(await mcp.call("sauce_globals", { chain: "ethereum", stocks: true })) as Page;
+    assert.equal(first.tokens.length, 200);
+    assert.ok(first.page.total > 1000);
+    assert.equal(first.page.next, 200);
+    const last = ok(
+      await mcp.call("sauce_globals", {
+        chain: "ethereum",
+        stocks: true,
+        offset: first.page.total - 5,
+      }),
+    ) as Page;
+    assert.equal(last.tokens.length, 5);
+    assert.equal(last.page.next, undefined);
+    const symbols = new Set(first.tokens.map((token) => token.symbol));
+    assert.ok(!symbols.has("USDC"), "the stocks alone");
+  });
+
   it("names an unknown chain or namespace as the error", async () => {
     assert.match(failed(await mcp.call("sauce_globals", { chain: "nowhere" })), /nowhere/);
     assert.match(
