@@ -32,7 +32,7 @@ import { v12PredictPot } from "../deployments/pot.js";
 /** The released Kitchen, which deploys every Pot (`V12Deployments.json`). */
 export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
 import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
-import type { AccessorTarget } from "../routes/protocol-rewrite.js";
+import type { AccessorTarget } from "../routes/protocol-resolve.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import {
   compileSauceProgram,

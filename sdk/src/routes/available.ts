@@ -32,7 +32,7 @@ import { addressOn } from "../descriptors/query.js";
 import { collectDeclaredNames, type AstNode } from "./ast-walk.js";
 import { parseSauce } from "./parse.js";
 import { isChainKey, resolveNamespace } from "./accessor-index.js";
-import { resolveContractReference } from "./protocol-rewrite.js";
+import { resolveContractReference } from "./protocol-resolve.js";
 import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "./token-registry.js";
 
 export interface AvailabilityResult {

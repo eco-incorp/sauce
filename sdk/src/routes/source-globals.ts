@@ -33,7 +33,7 @@ import { STD_SOURCES } from "../embedded/sources.generated.js";
 import { NAMESPACE_KEYS, resolveNamespace } from "./accessor-index.js";
 import { chainAmbient, chainDefines } from "./ambient.js";
 import { pascalOfSlug } from "./builder.js";
-import { resolveProtocolContract } from "./protocol-rewrite.js";
+import { resolveProtocolContract } from "./protocol-resolve.js";
 import { svmTokenRows, TOKEN_REGISTRY } from "./token-registry.js";
 
 export interface SourceToken {
