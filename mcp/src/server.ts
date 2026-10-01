@@ -12,6 +12,7 @@ import type { RpcGuard } from "./guard.js";
 import { registerPrompts } from "./prompts.js";
 import { registerResources, SKILLS_INDEX } from "./resources.js";
 import { registerSkillTools } from "./skilltools.js";
+import { registerIntentTools } from "./intents.js";
 import { registerTools } from "./tools.js";
 
 let manifest: { readonly name: string; readonly version: string } | undefined;
@@ -49,8 +50,15 @@ export function instructions(endpoints: Endpoints): string {
     "   whether it exists, the Kitchen's fee and what the Pot holds.",
     "5. sauce_simulate with rpcUrl: the cook rehearsed (any owner will do; nothing is signed).",
     "6. sauce_tx for the unsigned cook, for the owner to sign. An intent fixed when it is built",
-    "   publishes from a wallet instead: sauce_intent_publish, and sauce_intent_fill rehearses",
-    "   a solver filling it on its destination.",
+    "   publishes from a wallet instead: sauce_intent_publish, and sauce_intent_fill with dryRun",
+    "   rehearses a solver filling it on its destination.",
+    "",
+    "An intent's life after it is published: sauce_intent_status says where it stands and what",
+    "can happen next (`can`); sauce_intent_fill (with the solver as from), sauce_intent_prove,",
+    "sauce_intent_claim, sauce_intent_refund and sauce_intent_cancel build each step unsigned;",
+    "sauce_intent_import reads one back from its transaction. This server keeps no intents: pass",
+    "the intent's `record` (sauce_intent_publish and sauce_intent_import return it), or txHash",
+    "and its source chain, and rpcUrls with both chains' endpoints.",
     "",
     "NOTHING HERE SIGNS OR SENDS. Every transaction comes back unsigned, for the user to sign",
     "with their own wallet; never ask anyone for a private key or a seed phrase.",
@@ -80,10 +88,12 @@ export function createSauceServer(options: SauceServerOptions): McpServer {
       instructions: instructions(options.endpoints),
     },
   );
-  registerTools(server, {
+  const tools = {
     endpoints: options.endpoints,
     ...(options.guard === undefined ? {} : { guard: options.guard }),
-  });
+  };
+  registerTools(server, tools);
+  registerIntentTools(server, tools);
   registerSkillTools(server, options.skillsDir);
   registerResources(server, options.skillsDir);
   registerPrompts(server, options.skillsDir);

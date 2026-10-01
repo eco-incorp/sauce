@@ -215,8 +215,10 @@ The same steps are tools of the Sauce MCP server, for an agent with no local ins
 `npx -y @eco-incorp/sauce mcp` starts it over stdio. A tool takes the program as text (`source`)
 and the command's flags as inputs of the same name in camelCase; `args` is `main`'s arguments as a
 JSON array. A tool that reads a chain takes `rpcUrl`, an endpoint for that one call, which is never
-returned. Nothing signs: the user signs and sends what `sauce_tx`, `sauce_pot` and
-`sauce_intent_publish` return, with their own wallet.
+returned. Nothing signs: the user signs and sends what `sauce_tx`, `sauce_pot` and the
+`sauce_intent_*` tools return, with their own wallet. The server keeps no intents: an intent tool
+takes the intent's `record` (which `sauce_intent_publish` and `sauce_intent_import` return), or the
+transaction that published it with its source chain.
 
 | Command                | Tool                                                                   |
 | ---------------------- | ---------------------------------------------------------------------- |
@@ -227,7 +229,13 @@ returned. Nothing signs: the user signs and sends what `sauce_tx`, `sauce_pot` a
 | `sauce simulate`       | `sauce_simulate`                                                       |
 | `sauce tx`             | `sauce_tx`                                                             |
 | `sauce intent publish` | `sauce_intent_publish`, unsigned or as a dry run                       |
-| `sauce intent fill`    | `sauce_intent_fill`: the destination's side, rehearsed                 |
+| `sauce intent fill`    | `sauce_intent_fill`: the solver's fill, unsigned, or rehearsed         |
+| `sauce intent import`  | `sauce_intent_import`                                                  |
+| `sauce intent status`  | `sauce_intent_status`: where it stands, and what can happen next       |
+| `sauce intent prove`   | `sauce_intent_prove`                                                   |
+| `sauce intent claim`   | `sauce_intent_claim`                                                   |
+| `sauce intent refund`  | `sauce_intent_refund`                                                  |
+| `sauce intent cancel`  | `sauce_intent_cancel`                                                  |
 | `sauce inspect`        | `sauce_inspect`                                                        |
 | `sauce verify`         | `sauce_verify`                                                         |
 | `sauce price`          | `sauce_price`, also from a pool read now                               |

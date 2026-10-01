@@ -22,6 +22,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { NO_ENDPOINTS } from "../src/config.js";
 import { endpointUrl, serveHttp } from "../src/http.js";
 import { createSauceServer } from "../src/server.js";
+import { INTENT_TOOL_NAMES } from "../src/intents.js";
 import { SKILL_TOOL_NAMES } from "../src/skilltools.js";
 import { TOOL_NAMES } from "../src/tools.js";
 
@@ -37,7 +38,7 @@ async function exercise(client: Client): Promise<void> {
   const { tools } = await client.listTools();
   assert.deepEqual(
     tools.map((tool) => tool.name),
-    [...TOOL_NAMES, ...SKILL_TOOL_NAMES],
+    [...TOOL_NAMES, ...INTENT_TOOL_NAMES, ...SKILL_TOOL_NAMES],
   );
   const compiled = structured(
     await client.callTool({ name: "sauce_compile", arguments: { source: PROGRAM, chain: "base" } }),
