@@ -279,11 +279,12 @@ function main() {
 
 A carried declaration is compiled for the chain its program runs on, so `USDC` in `fee` would mean
 Arbitrum's USDC there. A function only intent bodies call moves out of the enclosing program, which
-never runs it. A local of the enclosing function shadows a file declaration of the same name, as it
-does in the compiler: the body captures the local. A module-level `let` is carried as a declaration,
-not captured: it is scratch space that every run starts afresh, and the body's program is a run of
-its own. A body cannot call the function that opens it, since that function's program would contain
-the intent it is the body of.
+never runs it; one that another remaining function calls stays. A local of the enclosing function
+shadows a file declaration of the same name, as it does in the compiler: the body captures the
+local. A module-level `let` the body's program uses starts with the value it has where the intent
+opens — the program carries the declaration and is handed its value, the same value a reward naming
+it escrows — so the body and every function it calls see one number. A body cannot call the
+function that opens it, since that function's program would contain the intent it is the body of.
 
 ### Nesting
 
@@ -407,6 +408,7 @@ Each of these is a compile error naming the construct, never a silently differen
 - A missing `deadline`, a missing `creator`, or a missing `executionFee` for a program body.
 - A chain with no eco-routes deployment, or a pair with no prover deployed on both sides.
 - A program body that calls the function opening it.
+- A program body using a module variable that a local of the opening function shadows.
 
 Inside a program body an unknown name is the _compiler's_ error rather than this lowering's, and
 reads the same way: it names the variable that is not declared.

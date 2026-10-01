@@ -231,6 +231,90 @@ function main() {
     expect(child.source).not.toContain("function amount");
   });
 
+  it("a module `let` starts the program with the value it has where the intent opens", () => {
+    // The reward reads `total` at run time; the body must read the same value, not the `0n` the
+    // declaration starts with — and so must a function the body calls.
+    const child = childOf(`let total = 0n;
+function half(): Uint256 {
+  return total / 2n;
+}
+function main() {
+  total = USDC.balanceOf(ctx.self());
+  Arbitrum(() => {
+    const out = half() + total;
+    if (out > 0n) { USDC.transfer(RECIPIENT, out); }
+  }).reward({ tokens: [{ token: USDC, amount: total }] });
+}`);
+
+    expect(child.captures).toEqual(["total"]);
+    expect(child.source).toContain("let total = 0n;");
+    expect(child.source).toMatch(/function main\((\w+)\) \{\ntotal = \1;\n/);
+  });
+
+  it("a module `let` only a carried function reads is passed in too", () => {
+    const child = childOf(`let scratch = 0n;
+function bump(): Uint256 {
+  scratch = scratch + 1n;
+  return scratch;
+}
+function main() {
+  scratch = 5n;
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum(() => {
+    if (bump() > 1n) { USDC.transfer(RECIPIENT, amount); }
+  }).reward({ tokens: [{ token: USDC, amount }] });
+}`);
+
+    expect(child.captures).toEqual(["amount", "scratch"]);
+    expect(child.source).toMatch(/\nscratch = \w+;\n/);
+  });
+
+  it("refuses a module `let` the opening function shadows, whose value the body cannot be given", () => {
+    const { context } = recording();
+    expect(() =>
+      rewriteIntentSugar(
+        `let total = 0n;
+function half(): Uint256 {
+  return total / 2n;
+}
+function main() {
+  const total = USDC.balanceOf(ctx.self());
+  Arbitrum(() => {
+    if (half() > 0n) { USDC.transfer(RECIPIENT, total); }
+  }).reward({ tokens: [{ token: USDC, amount: total }] });
+}`,
+        context,
+      ),
+    ).toThrow(/module variable `total`/);
+  });
+
+  it("a helper's own parameters and locals are not references to the file's declarations", () => {
+    // `payout` and `fees` below are bindings inside the helpers, not the functions of those names.
+    const child = childOf(`function compute(x: Uint256): Uint256 {
+  const payout = x * 2n;
+  return payout;
+}
+function fees(): Uint256 {
+  return USDT.balanceOf(ctx.self());
+}
+function net(x: Uint256, fees: Uint256): Uint256 {
+  return x - fees;
+}
+function payout(amount: Uint256): void {
+  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, net(compute(amount), 1n));
+  }).reward({ tokens: [{ token: USDC, amount }] });
+}
+function main() {
+  payout(USDC.balanceOf(ctx.self()) + fees());
+}`);
+
+    expect(child.source).toContain("function compute(");
+    expect(child.source).toContain("function net(");
+    expect(child.source).not.toContain("function fees(");
+    expect(child.source).not.toContain("function payout(");
+  });
+
   it("refuses a body that calls the function opening it", () => {
     const source = `function payout(amount: Uint256): void {
   Arbitrum(() => {
@@ -280,6 +364,43 @@ function main() {
 }`);
 
     expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+  });
+
+  it("a module `let` handed to the body's program", () => {
+    const out = compile(`let total = 0n;
+function half(): Uint256 {
+  return total / 2n;
+}
+function main() {
+  total = USDC.balanceOf(ctx.self());
+  Arbitrum(() => {
+    const out = half() + total;
+    if (out > 0n) { USDC.transfer(RECIPIENT, out); }
+  }).reward({ tokens: [{ token: USDC, amount: total }] });
+}`);
+
+    expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+  });
+
+  it("keeps a moved function's callers whole: a function that stays keeps what it calls", () => {
+    // `net` is never called by `main`, but it stays in the enclosing program, and the compiler
+    // checks every function there, so `fee` — which the body also calls — must stay too.
+    const out = compile(`function fee(x: Uint256): Uint256 {
+  return x / 100n;
+}
+function net(x: Uint256): Uint256 {
+  return x - fee(x);
+}
+function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum(() => {
+    const f = fee(amount);
+    if (f > 0n) { USDC.transfer(RECIPIENT, f); }
+  }).reward({ tokens: [{ token: USDC, amount }] });
+}`);
+
+    expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+    expect(out.source).toContain("function fee(");
   });
 
   it("moves a function only the body calls out of the enclosing program", () => {

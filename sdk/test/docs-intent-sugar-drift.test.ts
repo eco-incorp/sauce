@@ -122,6 +122,25 @@ function main() {
       ),
     message: /calls `payout`, the function that opens it/,
   },
+  {
+    documented:
+      "A program body using a module variable that a local of the opening function shadows",
+    trigger: () =>
+      rewriteIntentSugar(
+        `let total = 0n;
+function half() {
+  return total / 2n;
+}
+function main() {
+  const total = 5n;
+  Arbitrum(() => {
+    if (half() > 0n) { USDC.transfer(RECIPIENT, total); }
+  }).reward({ tokens: [{ token: USDC, amount: total }] });
+}`,
+        context(),
+      ),
+    message: /module variable `total`, which a local of the function opening the intent shadows/,
+  },
 ];
 
 describe("the guide's refusal list is the lowering's", () => {

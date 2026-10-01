@@ -615,6 +615,37 @@ function main() {
     expect(await arbitrum.balanceOf(arbitrum.usdc, RECIPIENT)).toBe(paid + held - held / 100n);
   }, 300_000);
 
+  it("a module `let` reaches the body's program with the value it has where the intent opens", async () => {
+    // `total` starts at 0n and is set before the intent. The reward escrows it at run time; the
+    // body's program, through `half()`, must pay out from the same value, not from the 0n its
+    // declaration starts with.
+    const program = `let total = 0n;
+
+function half(): Uint256 {
+  return total / 2n;
+}
+
+function main() {
+  total = USDC.balanceOf(ctx.self());
+  require(total >= MIN_AMOUNT);
+  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, half());
+  }, { tokens: [{ token: USDC, amount: total }] }).reward({ tokens: [{ token: USDC, amount: total }] });
+}`;
+    const { route, rewardHash } = direct(program, {});
+    await base.mint(base.usdc, base.pot, SEEDED);
+    const held = await base.balanceOf(base.usdc, base.pot);
+
+    const onBase = await base.fulfil(route, rewardHash);
+    expect(onBase.status).toBe("success");
+    const child = fulfilmentOf(onBase.published[0]!);
+    const paid = await arbitrum.balanceOf(arbitrum.usdc, RECIPIENT);
+    await arbitrum.provide(child.route);
+    const onArbitrum = await arbitrum.fulfil(child.route, child.rewardHash);
+    expect(onArbitrum.status).toBe("success");
+    expect(await arbitrum.balanceOf(arbitrum.usdc, RECIPIENT)).toBe(paid + held / 2n);
+  }, 300_000);
+
   it("CONTROL: a reward naming the DESTINATION's token reverts the fulfilment where it is funded", async () => {
     // What the lowering used to build for `{ token: USDC }`, written out by hand: the approval and
     // allowance read hit an address with no code on Base, and the whole fulfilment reverts. This is

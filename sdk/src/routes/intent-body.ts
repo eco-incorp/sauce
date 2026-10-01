@@ -11,13 +11,18 @@
  *    of the child's `main` and the enclosing program splices it in;
  *  - a DECLARATION OF THE FILE — a function, an import, an interface or a module-level variable.
  *    It is the same text wherever it compiles, so the child program carries it: the declarations
- *    the body reaches, and the ones those reach, and nothing else;
+ *    the body reaches, and the ones those reach, and nothing else. A declaration reaches what it
+ *    names freely; its own parameters and locals are not references to the file's names;
  *  - anything else — a builtin (`ctx`, `abi`), a token symbol or define, a protocol namespace, a
  *    chain to open an intent on — is the child compile's to resolve for its own chain.
  *
  * Lexical, the way the compiler reads the file: a local of the opening function shadows a file
- * declaration of the same name. A module-level variable is carried rather than captured: it is
- * scratch space that every run starts afresh, and the child is a run of its own.
+ * declaration of the same name.
+ *
+ * A module-level `let` the program carries is ALSO captured: the program declares it as written and
+ * its `main` first assigns it the value it has where the intent opens. That is the value the reward
+ * and the delivery splice in, so the body and every function it calls see the same number the
+ * intent was funded with, rather than the declaration's initial one.
  */
 import { collectPatternNames, isTypeDeclaration, TYPE_KEYS, type AstNode } from "./ast-walk.js";
 
@@ -26,7 +31,9 @@ interface Declaration {
   /** The declaration itself — an `export` around it unwrapped. */
   readonly node: AstNode;
   readonly kind: "function" | "type" | "variable";
-  /** Every name it mentions, types included: what carrying it carries along. */
+  /** A module-level `let` (or `var`): scratch state whose value the program is handed. */
+  readonly mutable: boolean;
+  /** The names it reads freely, types included: what carrying it carries along. */
   readonly mentions: ReadonlySet<string>;
 }
 
@@ -50,7 +57,8 @@ export interface ModuleScope {
 export interface ChildProgram {
   /** A complete module: the carried declarations, then `main` with the captures as parameters. */
   readonly source: string;
-  /** The captured locals, in the order `main` takes them. */
+  /** What the enclosing program splices in, in the order `main` takes them: the opening function's
+   *  locals the body reads, then the module-level `let`s the program carries. */
   readonly captures: readonly string[];
   /** The file's functions the program carries, by name. */
   readonly carriedFunctions: ReadonlySet<string>;
@@ -160,6 +168,12 @@ function declaredOutsideArrows(nodes: readonly unknown[]): Set<string> {
   return names;
 }
 
+/** The names `nodes` read that they do not bind themselves, types included. */
+function freeNames(nodes: readonly AstNode[]): string[] {
+  const bound = bodyLocals(nodes);
+  return namesRead(nodes, true).filter((name) => !bound.has(name));
+}
+
 /** Every name the body binds, in every binding form and at any depth — its own, not a capture. */
 function bodyLocals(body: readonly AstNode[]): Set<string> {
   const names = new Set<string>();
@@ -221,7 +235,8 @@ export function moduleScope(program: AstNode): ModuleScope {
         declarations.set(nameOf(id), {
           node,
           kind: "function",
-          mentions: new Set(namesRead([node], true)),
+          mutable: false,
+          mentions: new Set(freeNames([node])),
         });
       }
       continue;
@@ -232,7 +247,8 @@ export function moduleScope(program: AstNode): ModuleScope {
         declarations.set(nameOf(id), {
           node,
           kind: "type",
-          mentions: new Set(namesRead([node], true)),
+          mutable: false,
+          mentions: new Set(freeNames([node])),
         });
       }
       continue;
@@ -244,8 +260,11 @@ export function moduleScope(program: AstNode): ModuleScope {
       for (const declarator of (node as { declarations?: AstNode[] }).declarations ?? []) {
         collectPatternNames((declarator as { id?: unknown }).id, names);
       }
-      const mentions = new Set(namesRead([node], true));
-      for (const name of names) declarations.set(name, { node, kind: "variable", mentions });
+      const mentions = new Set(freeNames([node]));
+      const mutable = (node as { kind?: string }).kind !== "const";
+      for (const name of names) {
+        declarations.set(name, { node, kind: "variable", mutable, mentions });
+      }
       continue;
     }
     if (script) entry.push(node);
@@ -322,17 +341,14 @@ export function childProgram(
 ): ChildProgram {
   const own = bodyLocals(body);
   const locals = enclosingLocals(program, scope, site.start);
-
-  const captures = namesRead(body, false).filter(
-    (name) => !own.has(name) && !compileTimeNames.has(name) && locals.has(name),
+  const reads = namesRead(body, false).filter(
+    (name) => !own.has(name) && !compileTimeNames.has(name),
   );
 
   // The file's declarations the body reaches, then the ones those reach, until nothing new does.
   const carriedDeclarations = new Set<Declaration>();
   const carriedImports = new Set<ImportBinding>();
-  const pending = namesRead(body, true).filter(
-    (name) => !own.has(name) && !captures.includes(name) && !locals.has(name),
-  );
+  const pending = namesRead(body, true).filter((name) => !own.has(name) && !locals.has(name));
   const visited = new Set<string>();
   while (pending.length > 0) {
     const name = pending.pop()!;
@@ -355,6 +371,30 @@ export function childProgram(
     carriedDeclarations.add(declaration);
     pending.push(...declaration.mentions);
   }
+
+  // The module-level `let`s the program carries, each handed the value it has at the site. One
+  // the opening function shadows cannot be read there, so it cannot be handed over.
+  const lets = new Set<string>();
+  for (const [name, declaration] of scope.declarations) {
+    if (!declaration.mutable || !carriedDeclarations.has(declaration)) continue;
+    if (locals.has(name)) {
+      throw new IntentBodyError(
+        `intent sugar: the intent body uses the module variable \`${name}\`, which a local of the ` +
+          `function opening the intent shadows, so its value there cannot be handed to the body's ` +
+          `program. Rename the local or the module variable.`,
+      );
+    }
+    lets.add(name);
+  }
+  const captures = [
+    ...reads.filter((name) => locals.has(name) || lets.has(name)),
+    ...[...lets].filter((name) => !reads.includes(name)),
+  ];
+  const parameters = captures.map((name) => (lets.has(name) ? `__sauce_let_${name}` : name));
+  const prologue = captures
+    .filter((name) => lets.has(name))
+    .map((name) => `${name} = __sauce_let_${name};\n`)
+    .join("");
 
   const imports: string[] = [];
   const byDeclaration = new Map<AstNode, AstNode[]>();
@@ -388,7 +428,7 @@ export function childProgram(
   );
 
   return {
-    source: `${prelude}${prelude === "" ? "" : "\n"}function main(${captures.join(", ")}) {\n${bodyText}\n}`,
+    source: `${prelude}${prelude === "" ? "" : "\n"}function main(${parameters.join(", ")}) {\n${prologue}${bodyText}\n}`,
     captures,
     carriedFunctions,
   };
@@ -403,8 +443,13 @@ export function unreachedFunctions(
   scope: ModuleScope,
   candidates: ReadonlySet<string>,
 ): ReadonlySet<string> {
+  // What the entry reads, and what every declaration that stays reads: the compiler checks every
+  // function in the file, called or not, so a function that stays keeps whatever it calls.
   const reached = new Set<string>();
-  const pending = namesRead(scope.entry, true);
+  const pending = freeNames(scope.entry);
+  for (const [name, declaration] of scope.declarations) {
+    if (!candidates.has(name)) pending.push(...declaration.mentions);
+  }
   while (pending.length > 0) {
     const name = pending.pop()!;
     if (reached.has(name)) continue;
