@@ -47,8 +47,9 @@ spends none. For Portal fulfillment the Pot must be owned by the destination Por
 `route.nativeAmount` must cover every call value. [Create an intent](intents.md) covers reading the
 fee, deriving that Pot, and adding the reward and Portal calldata.
 
-`compileSauceRoute` takes a bare body or a complete `function main(...)`. Its rewrite passes parse
-the body as JavaScript, so a body carrying SauceScript type annotations belongs in raw `compile`,
+`compileSauceRoute` takes a SauceScript file as written: a module declaring `function main(...)`,
+or a script whose top-level statements are the entry. Its rewrite passes parse
+the source as JavaScript, so a body carrying SauceScript type annotations belongs in raw `compile`,
 which accepts typed source directly.
 
 ## Compile a reusable program

@@ -6,16 +6,16 @@ import ts from "typescript";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
 import { sauceBodyToSource } from "../src/routes/closure.js";
 
-const cctpSource = `
+const cctpSource = `function main() {
   Cctp.TokenMessenger.depositForBurn(1n, 3n, 1n, USDC, 0n, 0n, 1000n);
   return 1n;
-`;
+}`;
 
-const tokenWritesSource = `
+const tokenWritesSource = `function main() {
   USDC.approve(Uniswap.UniversalRouter, 1n);
   USDC.transfer(1n, 1n);
   return USDC.balanceOf(1n);
-`;
+}`;
 
 describe("source globals match the Sauce contract model", () => {
   it("accepts scalar bytes32 CCTP arguments and excludes source-unavailable accessors", () => {
@@ -30,7 +30,7 @@ describe("source globals match the Sauce contract model", () => {
     writeFileSync(
       probePath,
       `
-        function body() { ${cctpSource} }
+        ${cctpSource}
         // TokenMessengerV2.depositForBurn returns nothing.
         const burned: void = Cctp.depositForBurn(1n, 3n, 1n, USDC, 0n, 0n, 1000n);
         // ERC-20 writes have SafeERC20 semantics: each reverts unless the token accepted it, so

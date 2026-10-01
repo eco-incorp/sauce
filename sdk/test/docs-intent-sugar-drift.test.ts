@@ -255,7 +255,8 @@ describe("the guide's account of the destination Pot is the builder's", () => {
     ...extra,
   });
   const calls = (extra: Partial<IntentOptions> = {}) =>
-    openRoute("ethereum", "return 1n;", options(extra)).reward(0n).intent.route.calls;
+    openRoute("ethereum", "function main() { return 1n; }", options(extra)).reward(0n).intent.route
+      .calls;
   const sharedPot = v12PredictPot(ecoRoutesExecutorOf(PORTAL));
   const deploySelector = v12Kitchen
     .encodeDeployPot(ecoRoutesExecutorOf(PORTAL), SAUCE_INTENT_POT_SALT)

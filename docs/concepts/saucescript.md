@@ -32,8 +32,10 @@ target feature has nothing to point at.
 
 A function declared `: void` can finish without returning a value. Other
 functions must return on every path. Annotate helper functions returning arrays,
-bytes, or records so their callers know the return shape. The raw compiler also
-accepts an entry script without an explicit `main` and synthesizes its entry.
+bytes, or records so their callers know the return shape. A file without a `main`
+is a script: its top-level statements are the entry, which runs as `main(): void`,
+so a script cannot `return`. The raw compiler and the route compiler both take one
+as written.
 Entry argument encoding does not determine return encoding. For ABI-decodable
 EVM output, [return `abi.encode(...)`](../guides/compiling.md#return-values-an-abi-decoder-can-read).
 

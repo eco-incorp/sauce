@@ -52,7 +52,7 @@ describe("@sauce/token as the default ambient module", () => {
   it("approve(USDC, spender, amount) compiles with zero import AND zero opts (default ambient)", () => {
     const built = openRoute(
       "base",
-      `approve(USDC, ${BigInt(SPENDER)}n, 5n); return 0n;`,
+      `function main() { approve(USDC, ${BigInt(SPENDER)}n, 5n); return 0n; }`,
       evmOptions(),
     ).reward(0n);
     expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
@@ -61,14 +61,14 @@ describe("@sauce/token as the default ambient module", () => {
   it("the whole function surface is broadcast by default: transfer + balanceOf resolve too", () => {
     const built = openRoute(
       "base",
-      `transfer(USDC, ${BigInt(SPENDER)}n, 5n); return balanceOf(USDC, ctx.self());`,
+      `function main() { transfer(USDC, ${BigInt(SPENDER)}n, 5n); return balanceOf(USDC, ctx.self()); }`,
       evmOptions(),
     ).reward(0n);
     expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 
   it("explicitly opting @sauce/token in via compile.ambient is idempotent with the default", () => {
-    const body = `approve(USDC, ${BigInt(SPENDER)}n, 5n); return 0n;`;
+    const body = `function main() { approve(USDC, ${BigInt(SPENDER)}n, 5n); return 0n; }`;
     const viaDefault = openRoute("base", body, evmOptions()).reward(0n);
     const viaExplicit = openRoute(
       "base",
@@ -117,7 +117,7 @@ describe("@sauce/token as the default ambient module", () => {
     // The other side of the assertion above — proves `failed to import module` is reachable on this
     // path at all, so the `not.toMatch` is a real check rather than a string that never appears.
     expect(() =>
-      openRoute("solana", "return chainId;", {
+      openRoute("solana", "function main() { return chainId; }", {
         ...svmOptions(),
         compile: { ambient: ["@sauce/definitely-not-a-real-module"] },
       }).reward(0n),
@@ -126,7 +126,9 @@ describe("@sauce/token as the default ambient module", () => {
 
   it("negative control: a genuinely undeclared name is still a compile error (ambient is not a catch-all)", () => {
     expect(() =>
-      openRoute("base", `return notARealAmbientName(1n);`, evmOptions()).reward(0n),
+      openRoute("base", `function main() { return notARealAmbientName(1n); }`, evmOptions()).reward(
+        0n,
+      ),
     ).toThrow();
   });
 });

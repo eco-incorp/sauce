@@ -82,8 +82,8 @@ export type { NestVia };
 export type { AmountMeasurement, PlaceholderSpec };
 
 /**
- * A route body: a complete `function main(){...}` program, a bare body (see
- * `sauce-route.ts#wrapSauceBody`), or a closure (see `closure.ts#sauceBodyToSource`) whose
+ * A route body: a SauceScript file — a module declaring `function main`, or a script whose top-level
+ * statements are the entry — or a closure (see `closure.ts#sauceBodyToSource`) whose
  * `Function.prototype.toString()` is extracted as SauceScript source. Closures capture nothing by
  * construction — a free identifier must come from `IntentOptions.defines` (or chain-scoped ambient
  * defines) or the compile fails closed with "`X` is not a declared variable".

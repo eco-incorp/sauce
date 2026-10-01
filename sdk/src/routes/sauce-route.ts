@@ -125,21 +125,8 @@ export type SauceSvmExecutionInput = SauceSvmCallParams;
 export interface CompiledSauceRoute {
   readonly calls: readonly CallInput[];
   readonly compiled: CompileResult;
-  /** Source after SDK wrapping and rewrites, before the compiler adapter adds entry annotations. */
+  /** Source after the SDK's rewrites, before the compiler adapter adds entry annotations. */
   readonly source: string;
-}
-
-/**
- * A source is treated as already containing an entry program whenever it
- * contains a top-level-looking `function main(` anywhere not immediately preceded by a word
- * character or `.` (so `foo.main(` or `xmain(` don't false-positive); anything else is wrapped as a
- * `function main() { ... }` body.
- */
-const MAIN_FN_RE = /(^|[^.\w])function\s+main\s*\(/;
-
-export function wrapSauceBody(sauce: string): string {
-  if (MAIN_FN_RE.test(sauce)) return sauce;
-  return `function main() {\n${sauce}\n}`;
 }
 
 /** Accessor name -> chain, for every canonical chain. `Base(() => ...)` in a program opens an
@@ -321,9 +308,13 @@ function defaultTargetFor(kind: "evm" | "svm"): CompileTarget {
 }
 
 /**
- * Compiles `sauce` (a complete `function main(){...}` program, or a bare body auto-wrapped by
- * {@link wrapSauceBody}) for `destination`'s `ChainKind`, and slots the result into exactly one
+ * Compiles `sauce` for `destination`'s `ChainKind`, and slots the result into exactly one
  * `CallInput` via the existing `buildSauceEvmCall`/`buildSauceSvmCall` fork — never a new encoder.
+ *
+ * `sauce` is a SauceScript file: a module declaring `function main`, or a script whose top-level
+ * statements run as the entry. It reaches the compiler as written, apart from the SDK's rewrites.
+ * A value-returning or early-exiting program declares `main`, since a top-level `return` is not
+ * SauceScript.
  */
 export function compileSauceRoute(
   destination: ChainRef,
@@ -366,7 +357,9 @@ export function compileScopedRoute(
   // "only options.tokens, if any" -- preserving the existing svm-throws-on-any-rewrite behavior.
   const tokenMap = resolveTokenMap(chain, options.tokens);
 
-  let source = wrapSauceBody(sauce);
+  // The source is the program, as written: a module with a `main`, or a script whose top-level
+  // statements are the entry. The compiler tells the two apart; nothing here has to.
+  let source = sauce;
 
   // The intent sugar runs FIRST, on the source as written. It reads `USDC` and `RECIPIENT` as
   // compile-time values itself, so a token rewrite that had already turned `USDC.transfer(...)`
