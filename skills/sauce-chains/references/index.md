@@ -7,7 +7,7 @@ tokens and every protocol recorded there with its addresses.
 
 | Chain | Slug | Id | Kind | Intents | CCTP | Tokens | Protocols |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| [Ethereum](ethereum.md) | `ethereum` | 1 | EVM | yes | 0 | 3 | 96 |
+| [Ethereum](ethereum.md) | `ethereum` | 1 | EVM | yes | 0 | 1734 | 96 |
 | [Optimism](optimism.md) | `optimism` | 10 | EVM | yes | 2 | 3 | 40 |
 | [Cronos](cronos.md) | `cronos` | 25 | EVM | no | — | 0 | 0 |
 | [BNB Chain](bsc.md) | `bsc` | 56 | EVM | no | — | 0 | 29 |
@@ -33,7 +33,7 @@ tokens and every protocol recorded there with its addresses.
 | [Arc](arc.md) | `arc` | 5042 | EVM | yes | 26 | 4 | 23 |
 | [ZetaChain](zetachain.md) | `zetachain` | 7000 | EVM | no | — | 0 | 0 |
 | [Klaytn](klaytn.md) | `klaytn` | 8217 | EVM | no | — | 0 | 0 |
-| [Base](base.md) | `base` | 8453 | EVM | yes | 6 | 2 | 47 |
+| [Base](base.md) | `base` | 8453 | EVM | yes | 6 | 69 | 47 |
 | [Evmos](evmos.md) | `evmos` | 9001 | EVM | no | — | 0 | 0 |
 | [Plasma](plasma.md) | `plasma` | 9745 | EVM | yes | — | 0 | 0 |
 | [Mode](mode.md) | `mode` | 34443 | EVM | no | — | 0 | 2 |
