@@ -544,6 +544,12 @@ export async function publishCommand(input: PublishInput, files: CliFiles): Prom
           status: results[index]?.status ?? "not run",
         })),
       },
+      notes: [
+        `This rehearses publishing on ${input.chain.slug} only. What the intent does runs on ` +
+          `${[...new Set(plans.map((plan) => plan.intent.destination.slug))].join(" and ")}, when ` +
+          "a solver fills it: `sauce fill` with the same file and flags, and the destination's " +
+          "endpoint, rehearses that.",
+      ],
       ...(ok ? {} : { exitCode: 1 }),
     };
   }

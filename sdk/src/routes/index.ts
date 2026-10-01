@@ -44,6 +44,7 @@ export {
   routeHash,
   EVM_ROUTE_PARAM,
   EVM_REWARD_PARAM,
+  evmRouteTuple,
   svmCallCodec,
   svmRewardCodec,
   svmRouteCodec,
@@ -158,6 +159,8 @@ export type {
 export {
   approvalTxs,
   assertIntentVault,
+  fulfillApprovalTxs,
+  fulfillTx,
   fundTx,
   INTENT_FUND_VIA,
   intentHashCall,
@@ -173,6 +176,7 @@ export {
   vaultTransferTxs,
 } from "./portal.js";
 export type {
+  FulfillOptions,
   IntentFundVia,
   IntentSourceTxsOptions,
   PortalReadCall,
