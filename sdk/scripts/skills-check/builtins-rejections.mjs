@@ -847,6 +847,11 @@ export const rejections = [
     src: "function main(t: Uint256, o: Uint256, k: Uint256): Uint256 { return ERC20.at(t).balanceOf(o).catch(() => { return k; }); }",
   },
   {
+    quotes: ["a `.catch()` fallback: expected a bytes value, found a number"],
+    targets: ["evm"],
+    src: "function main(t: Address, d: bytes): bytes { const r = evm.static(t, d).catch(() => { return 0n; }); return r; }",
+  },
+  {
     quotes: ["a `.catch()` handler is N bytes, beyond the 255 …"],
     targets: ["evm"],
     contracts,

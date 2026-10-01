@@ -229,6 +229,62 @@ function main(pool: Address, amount: Uint256, sqrtPriceLimitX96: Uint256) {
 }
 ```
 
+The value form, `const v = <call>.catch(() => { return <constant>; });`, gives the constant when
+the call fails. It takes a call that returns one value: a bound method with one output, such as
+a namespace contract's or an imported ABI's. A raw `evm.call`, `evm.static` or `evm.delegate`
+returns bytes, which no constant can stand in for ("a `.catch()` fallback: expected a bytes value,
+found a number"). For a raw read that may fail, test it with the statement form, then read again
+only when it worked. A read changes nothing, so the second call is safe; never repeat a write
+that way.
+
+`.catch()` catches a call that reverts, not a call to an address with no code. That call succeeds
+and returns nothing, and decoding nothing reverts the cook, `.catch()` or not. When an address may
+have no code, check `ctx.codeSize(address) > 0n` first:
+
+```sauce chain=base,arbitrum
+// One word from a read that may fail, or 0: an address with no code, or a read that reverts.
+function readWord(target: Address, query: bytes): Uint256 {
+  if (ctx.codeSize(target) == 0n) {
+    return 0n;
+  }
+  let readable = true;
+  evm.static(target, query).catch(() => {
+    readable = false;
+  });
+  if (!readable) {
+    return 0n;
+  }
+  return abi.decode(evm.static(target, query), ["Uint256"])[0];
+}
+
+function main(target: Address, query: bytes): Uint256 {
+  return readWord(target, query);
+}
+```
+
+## What a program costs
+
+On an EVM chain, a cook's gas is the transaction's own, the Kitchen's and the Pot's, plus the
+program's, which the engine interprets step by step. Measured on a local chain through the engine
+and a Kitchen-made Pot:
+
+| What                                                | Gas, about                                   |
+| --------------------------------------------------- | -------------------------------------------- |
+| A cook whose program does almost nothing            | 43,000, the transaction's 21,000 included    |
+| One loop iteration that adds two numbers            | 1,000                                        |
+| Writing an array element, or reading one            | 500, or 300, on top                          |
+| A call to a contract the transaction already called | 2,000 on top, plus what that contract spends |
+| `.catch()` on that call                             | 100 more                                     |
+| `crypto.keccak256(abi.encode(a, b))`                | 2,000                                        |
+
+The first call to a contract in a transaction costs 2,600 more than later ones, as on any EVM
+chain. A loop is what adds up in the program itself: a hundred iterations of a little arithmetic
+cost about 100,000 gas. Read a value once and keep it in a local rather than calling for it twice,
+and bound each loop by its input. The real figure is the rehearsal's:
+`sauce simulate` prints it, and `sauce run` and most signers set the gas limit from an estimate.
+Leave headroom when the chain can move between the rehearsal and the send; a swap that crosses more
+ticks spends more.
+
 ## Reading a compile error
 
 Compile errors fail the command; there is no warning channel. `sauce compile` points at the file's

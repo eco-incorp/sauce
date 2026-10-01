@@ -598,8 +598,14 @@ from "@sauce/token"`), which handles tokens that return nothing, such as USDT. A
     `evm.static` and `evm.delegate`.
   - Example: `ERC20.at(t).approve(spender, amount).catch(() => { approved = false; });`
 - `const v = <call>.catch(() => { return <constant>; });`
-  - If the call fails, `v` is the constant. The call must return one value.
+  - If the call fails, `v` is the constant. The call must return one value: a bound method with
+    one output. A raw `evm.call`, `evm.static` or `evm.delegate` returns bytes, which no constant
+    stands in for ("a `.catch()` fallback: expected a bytes value, found a number"); test a raw
+    read with the statement form, then read again only when it worked.
   - Example: `const balance = ERC20.at(t).balanceOf(who).catch(() => { return 0n; });`
+- A call to an address with no code does not revert: it succeeds with no return data, so
+  `.catch()` never runs, and decoding that nothing reverts the cook. Check
+  `ctx.codeSize(address) > 0n` first when the address may have no code.
 
 Rules and errors:
 
