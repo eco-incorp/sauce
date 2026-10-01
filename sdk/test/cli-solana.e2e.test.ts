@@ -33,6 +33,7 @@ import {
   verifySignature,
   type Address,
   type KeyPairSigner,
+  type ReadonlyUint8Array,
   type Transaction,
 } from "@solana/kit";
 import { FailedTransactionMetadata } from "litesvm";
@@ -98,11 +99,11 @@ const json = (run: Run): Record<string, unknown> => {
 // The cluster: a JSON-RPC shim over the bank
 // ---------------------------------------------------------------------------------------------
 
-const b64 = (bytes: Uint8Array): string => getBase64Decoder().decode(bytes);
+const b64 = (bytes: ReadonlyUint8Array): string => getBase64Decoder().decode(bytes);
 
 /** An account as the JSON-RPC API encodes it (`encoding: "base64"`). */
 const rpcAccount = (account: {
-  readonly data: Uint8Array;
+  readonly data: ReadonlyUint8Array;
   readonly executable: boolean;
   readonly lamports: bigint;
   readonly programAddress: Address;
