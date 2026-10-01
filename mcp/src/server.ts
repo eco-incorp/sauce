@@ -27,6 +27,7 @@ export function instructions(endpoints: Endpoints): string {
     "programs that run atomically in one transaction: on an EVM chain through the owner's Pot",
     "(Pot.cook), on Solana through the Kitchen. These tools are the read-only half of the `sauce`",
     "command: compile a program (sauce_compile), list the names a chain gives it (sauce_globals),",
+    "turn a price into a swap's sqrtPriceX96 and floors (sauce_price),",
     "build the unsigned cook (sauce_tx), predict and deploy a Pot (sauce_pot), rehearse a cook",
     "(sauce_simulate), build an intent's publish transactions (sauce_publish), and take calls",
     "apart or check a settle (sauce_inspect, sauce_verify).",

@@ -134,6 +134,7 @@ land.
 | ---------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `sauce_chains`   | —                | Every chain: slug, id, name, kind, aliases, and whether this server has an endpoint for it                                                                                 |
 | `sauce_globals`  | `sauce globals`  | The chain's token symbols, protocol namespaces and contracts (with `protocol`, its methods), chain names, defines and `@sauce/token` functions                             |
+| `sauce_price`    | `sauce price`    | A pair's price as the pool's `sqrtPriceX96` (also the swap's limit) and each direction's `minAvgPrice`; or a `sqrtPriceX96` read back as a price                           |
 | `sauce_compile`  | `sauce compile`  | `bytecode`, `size`, `entryParams`, `entryEncoding`, `entrySchema` (with `compactArgs`), the `defines` given, `compiler`, `engine`, and on Solana the account `manifest`    |
 | `sauce_tx`       | `sauce tx`       | EVM `{ chainId, to, data, value }`, the cook on the Pot; Solana `{ chain, feePayer, pot, fee, transaction }`, base64 and signed by no one                                  |
 | `sauce_pot`      | `sauce pot`      | The Pot's address and its unsigned deployment (EVM `Kitchen.deployPot` `{ to, data, value }`; Solana the `create_pot` instruction), and `deployed` (null with no endpoint) |

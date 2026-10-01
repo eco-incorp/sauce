@@ -506,8 +506,8 @@ tool arguments into it.
 
 **The `sauce-mcp` bin** (`mcp/`, built to `mcp/dist/main.js`) is the MCP server: the `sauce`
 command's read-only half as tools (`sauce_compile`, `sauce_tx`, `sauce_pot`, `sauce_simulate`,
-`sauce_publish`, `sauce_inspect`, `sauce_verify`, `sauce_globals`, `sauce_chains`), over stdio by
-default or stateless Streamable HTTP with `--http`. Each tool calls the function the matching
+`sauce_publish`, `sauce_inspect`, `sauce_verify`, `sauce_globals`, `sauce_price`,
+`sauce_chains`), over stdio by default or stateless Streamable HTTP with `--http`. Each tool calls the function the matching
 command calls (`compileCommand`, `txCommand`, `simulateCommand`, …) and returns its JSON as
 structured content, so a change to a command reaches its tool with no edit in `mcp/`; do not
 reimplement command logic there. It never signs and takes no key under any name (`tools.test.ts`
