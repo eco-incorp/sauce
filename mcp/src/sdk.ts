@@ -43,6 +43,12 @@ export {
   programChain,
 } from "../../sdk/dist/cli/inputs.js";
 export { inspectCommand, inspectFile } from "../../sdk/dist/cli/inspect.js";
+export {
+  parsePriceToken,
+  priceCommand,
+  pricedChain,
+  priceGiven,
+} from "../../sdk/dist/cli/price.js";
 export { publishCommand } from "../../sdk/dist/cli/publish.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";
 export { simulateCommand } from "../../sdk/dist/cli/simulate.js";

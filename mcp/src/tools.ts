@@ -37,6 +37,10 @@ import {
   potCommand,
   potState,
   potTarget,
+  parsePriceToken,
+  priceCommand,
+  pricedChain,
+  priceGiven,
   programChain,
   publishCommand,
   scrub,
@@ -440,6 +444,7 @@ export interface ToolContext {
 export const TOOL_NAMES = [
   "sauce_chains",
   "sauce_globals",
+  "sauce_price",
   "sauce_compile",
   "sauce_tx",
   "sauce_pot",
@@ -554,6 +559,65 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           ...(args.protocol === undefined ? {} : { protocol: args.protocol }),
         }),
       ),
+  );
+
+  tool(
+    "sauce_price",
+    {
+      title: "Turn a price into a pool's sqrtPriceX96",
+      description:
+        "A human price for a pair as the numbers a swap program takes, as `sauce price` gives " +
+        "them: the pool's sqrtPriceX96 for the pair's order on the chain (token0 is the lower " +
+        "address) — which is also the swap's sqrtPriceLimitX96 — and, for selling and for buying " +
+        "the base token, the minAvgPrice a program checks a fill against (out * 1e18 >= " +
+        "minAvgPrice * spent). Uniswap V3 and V4 and their forks share it. With sqrtPriceX96, a " +
+        "pool's price is read back the other way. Reads no chain.",
+      input: {
+        chain: chainRef,
+        base: z
+          .string()
+          .min(1)
+          .max(64)
+          .describe(
+            "The token the price is per one of: a registered symbol (WETH), or 0x…:<decimals>.",
+          ),
+        quote: z
+          .string()
+          .min(1)
+          .max(64)
+          .describe("The token the price is in: a registered symbol (USDC), or 0x…:<decimals>."),
+        price: z
+          .string()
+          .max(80)
+          .optional()
+          .describe("How many quote tokens one base token is worth, in whole tokens: 2700."),
+        sqrtPriceX96: z
+          .string()
+          .max(80)
+          .optional()
+          .describe("Or a pool's sqrtPriceX96, to read as a price."),
+      },
+      output: {
+        price: z.string(),
+        sqrtPriceX96: z.string(),
+        token0: z.string(),
+        token1: z.string(),
+      },
+      annotations: PURE,
+    },
+    (args) => {
+      const chain = pricedChain(parseChain(String(args.chain), "chain"));
+      const given = priceGiven(args.price, args.sqrtPriceX96);
+
+      return fromCommand(
+        priceCommand({
+          chain,
+          base: parsePriceToken(args.base, chain),
+          quote: parsePriceToken(args.quote, chain),
+          price: given,
+        }),
+      );
+    },
   );
 
   tool(

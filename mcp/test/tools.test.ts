@@ -121,6 +121,38 @@ describe("sauce_globals", () => {
   });
 });
 
+describe("sauce_price", () => {
+  it("turns a price into the pool's sqrtPriceX96 and both directions' floors, and back", async () => {
+    const out = ok(
+      await mcp.call("sauce_price", { chain: "base", base: "WETH", quote: "USDC", price: "2700" }),
+    ) as { sqrtPriceX96: string; sell: { minAvgPrice: string }; buy: { minAvgPrice: string } };
+    assert.match(out.sqrtPriceX96, /^\d+$/);
+    assert.ok(BigInt(out.sell.minAvgPrice) > 0n && BigInt(out.buy.minAvgPrice) > 0n);
+    const back = ok(
+      await mcp.call("sauce_price", {
+        chain: "base",
+        base: "WETH",
+        quote: "USDC",
+        sqrtPriceX96: out.sqrtPriceX96,
+      }),
+    );
+    assert.equal(Math.round(Number(back.price)), 2700);
+  });
+
+  it("takes one of price and sqrtPriceX96, on an EVM chain", async () => {
+    assert.match(
+      failed(await mcp.call("sauce_price", { chain: "base", base: "WETH", quote: "USDC" })),
+      /missing <price>/,
+    );
+    assert.match(
+      failed(
+        await mcp.call("sauce_price", { chain: "solana", base: "SOL", quote: "USDC", price: "1" }),
+      ),
+      /solana has none/,
+    );
+  });
+});
+
 describe("sauce_compile", () => {
   it("compiles for the chain: bytecode, size, main's parameters, defines, compiler, engine", async () => {
     const out = ok(
