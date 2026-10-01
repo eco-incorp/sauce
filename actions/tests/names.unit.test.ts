@@ -396,6 +396,18 @@ describe("names — refused on the chain that lacks them", () => {
     );
   });
 
+  it('refuses wrapping "WETH" where it is not the wrapped native, and takes it where it is', () => {
+    const wrap = doc({ type: "wrapETH", amount: "1", weth: "WETH" });
+    const found = problems(() => compileProgram(wrap, { chain: "polygon" }));
+    assert.match(
+      found[0]!,
+      /^actions\[0\]\.weth: on Polygon \(chain 137\) the native coin is \w+, and the registry's "WETH" is bridged ETH/,
+    );
+    for (const chain of ["ethereum", "base", "arbitrum", "optimism"]) {
+      assert.ok(compileProgram(wrap, { chain }).bytecode.length > 0, chain);
+    }
+  });
+
   it("checks the rules a name decides once it is resolved: a token swapped for itself", () => {
     const found = problems(() =>
       compileProgram(doc({ ...V3_BY_KEY, tokenOut: addressOf("base", "USDC") }), { chain: "base" }),

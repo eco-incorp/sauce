@@ -14,6 +14,7 @@
  * token for itself) and for the quote calls, which are built here rather than compiled.
  */
 import { CANONICAL_CHAINS, type CanonicalChain } from "../../sdk/dist/chains/canonical.js";
+import { getChain, nativeErc20 } from "../../sdk/dist/chains/index.js";
 import { sourceGlobals } from "../../sdk/dist/routes/index.js";
 
 import { ACTION_SPECS, type FieldKind } from "./spec.js";
@@ -318,6 +319,36 @@ export function resolveNames(
   });
 
   return { resolved, issues };
+}
+
+/**
+ * A name whose MEANING depends on the chain, refused where it means something else: `"WETH"` is
+ * the wrapped native coin only where the native coin is ETH. On Polygon the registry's WETH is
+ * bridged ETH beside the native POL, so a `wrapETH` or `unwrapETH` of `"WETH"` there would call a
+ * token that wraps nothing. (Arc, whose native coin is itself an ERC-20, refuses wrapping outright:
+ * `semantics.ts`.) An address is taken as given: it says which contract is meant.
+ */
+export function wrappedNativeIssues(
+  actions: readonly Action[],
+  chain: CanonicalChain,
+  path = "actions",
+): ProgramIssue[] {
+  const native = getChain(chain.id)?.nativeCurrency.symbol;
+  if (native === undefined || native === "ETH" || nativeErc20(chain.id) !== undefined) return [];
+
+  return actions.flatMap((action, i) =>
+    (action.type === "wrapETH" || action.type === "unwrapETH") && action.weth === "WETH"
+      ? [
+          {
+            path: `${path}[${i}].weth`,
+            message:
+              `on ${onChain(chain)} the native coin is ${native}, and the registry's "WETH" is ` +
+              `bridged ETH, not its wrapped native: ${action.type} would call a token that wraps ` +
+              "nothing. Give the wrapped native's symbol or address",
+          },
+        ]
+      : [],
+  );
 }
 
 /** True when any action names a token or a contract rather than giving its address. */

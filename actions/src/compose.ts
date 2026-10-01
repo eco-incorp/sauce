@@ -37,7 +37,7 @@ import {
 
 import type { ActionContracts } from "./abis.js";
 import { compileEvm } from "./compile.js";
-import { chainLabel, resolveNames } from "./names.js";
+import { chainLabel, resolveNames, wrappedNativeIssues } from "./names.js";
 import { parseProgram } from "./program.js";
 import { ProgramError, programIssues } from "./semantics.js";
 import { lowerActions, renderProgram, renderRouteBody, type Lowered } from "./to-sauce.js";
@@ -148,6 +148,7 @@ export function lowerProgram(program: ActionProgram, chain?: ChainRef): LoweredP
   const parsed = parseProgram(program);
   const target = targetChain(parsed.chainId, chain);
   const { resolved, issues } = resolveNames(parsed.actions, target);
+  issues.push(...wrappedNativeIssues(parsed.actions, target));
   if (issues.length === 0) issues.push(...programIssues(resolved, target.id));
   if (issues.length > 0) throw new ProgramError(issues, target);
 
