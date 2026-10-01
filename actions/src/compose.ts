@@ -7,16 +7,28 @@
  * declared `scalarWidth` each sits at a fixed offset (`argumentOffset`), which is what lets a caller
  * splice a number measured at runtime into an otherwise precompiled payload.
  *
- * INTENT (`programIntent`). The program is the route body on its own chain: the SDK compiles it
- * there, puts its cook in the route, and `.reward(...)` / `.nest(...)` work on it like on any other.
- * A route body takes no runtime arguments, so an amount only known at execution comes from a
+ * INTENT (`programIntent`). The program is the route body on its chain: the SDK compiles it there,
+ * puts its cook in the route, and `.reward(...)` / `.nest(...)` work on it like on any other. A
+ * route body takes no runtime arguments, so an amount only known at execution comes from a
  * `balanceOf` action instead — which is also how a child of a dynamic `.nest()` spends exactly what
  * its parent delivered.
+ *
+ * THE CHAIN. Both compile for one chain: `options.chain`, else the document's `chainId`. The
+ * program's token symbols and namespace references are its globals, and that compile resolves them
+ * there — the SDK's own program compile, `routes.compileSauceProgram`, with the chain's names — so
+ * a document with no `chainId` compiles for any chain where its names exist. A name the chain lacks
+ * is refused first, with its path (`names.ts`).
  */
 import { concatBytes, encodeAbiParameters, hexToBytes } from "viem";
 
+import {
+  resolveChain,
+  type CanonicalChain,
+  type ChainRef,
+} from "../../sdk/dist/chains/canonical.js";
 import { encodeCompactArguments } from "../../sdk/dist/compact-arguments.js";
 import {
+  compileSauceProgram,
   openRoute,
   type IntentOptions,
   type PendingSauceRoute,
@@ -25,11 +37,20 @@ import {
 
 import type { ActionContracts } from "./abis.js";
 import { compileEvm } from "./compile.js";
+import { chainLabel, resolveNames } from "./names.js";
 import { parseProgram } from "./program.js";
-import { lowerActions, renderProgram, renderRouteBody } from "./to-sauce.js";
+import { ProgramError, programIssues } from "./semantics.js";
+import { lowerActions, renderProgram, renderRouteBody, type Lowered } from "./to-sauce.js";
 import type { ActionProgram } from "./types.js";
 
 export interface CompileOptions {
+  /**
+   * The chain to compile for — a slug (`"base"`), a chain id (`8453`) or a canonical chain — whose
+   * names the program's token symbols and namespace references resolve to. Defaults to the
+   * document's `chainId`; a document without one needs it, and one with a `chainId` compiles for
+   * that chain only.
+   */
+  readonly chain?: ChainRef;
   /** Encode the runtime arguments compact-v1 instead of ABI-v1. Default `false`. */
   readonly compactArgs?: boolean;
 }
@@ -47,8 +68,13 @@ export interface ArgumentEncoding {
 
 export interface CompiledProgram {
   readonly bytecode: Uint8Array;
-  /** The SauceScript that was compiled. */
+  /**
+   * The SauceScript the actions lowered to, with every name as written — `USDC`,
+   * `UniswapV3.Factory.getPool(...)` — which the compile resolved on its chain.
+   */
   readonly source: string;
+  /** The ABI bindings `source` calls through (`IErc20`, `IAaveV3Pool`), handed to its compile. */
+  readonly contracts: ActionContracts;
   /** The `argument` names, in the order `main` takes them. Empty when there are none. */
   readonly parameters: readonly string[];
   readonly entryEncoding: "abi-v1" | "compact-v1";
@@ -64,24 +90,101 @@ export interface CompiledProgram {
   argumentOffset(name: string, encoding?: ArgumentEncoding): number;
 }
 
-/** Compiles an action program standalone. Its `argument` actions become runtime arguments. */
+/** An action program checked for one chain and lowered: what both compiles start from. */
+export interface LoweredProgram {
+  readonly chain: CanonicalChain;
+  /** The program as parsed: canonical, every name as written. */
+  readonly program: ActionProgram;
+  readonly lowered: Lowered;
+}
+
+/**
+ * The chain a document compiles for: `given`, else its own `chainId`. A document with a `chainId`
+ * compiles for that chain alone — its addresses are that chain's.
+ */
+function targetChain(
+  documentChain: number | undefined,
+  given: ChainRef | undefined,
+): CanonicalChain {
+  const ref = given ?? documentChain;
+  if (ref === undefined) {
+    throw new Error(
+      "the action program has no `chainId`, so say which chain to compile it for: pass `chain` " +
+        '(a slug such as "base", or a chain id). A document that names its tokens and ' +
+        "contracts compiles for any chain where they exist.",
+    );
+  }
+  const chain = resolveChain(ref);
+  if (chain === undefined) {
+    throw new Error(
+      `unknown chain ${JSON.stringify(String(ref))}: the program's names resolve against one of ` +
+        'the SDK\'s canonical chains (a slug such as "base", or its chain id)',
+    );
+  }
+  if (chain.kind !== "evm") {
+    throw new Error(`action programs run on EVM chains; ${chain.slug} is ${chain.kind}`);
+  }
+  if (documentChain !== undefined && chain.id !== documentChain) {
+    throw new ProgramError([
+      {
+        path: "chainId",
+        message:
+          `the program is written for chain ${documentChain}, not ${chainLabel(chain)}: its ` +
+          "addresses are that chain's. Leave `chainId` out to compile it for other chains — " +
+          "with every token and contract named, it compiles for any chain that has them",
+      },
+    ]);
+  }
+
+  return chain;
+}
+
+/**
+ * Parses `program`, checks every name it uses — and the rules its resolved addresses must keep
+ * (no swap of a token for itself, a chain's native-coin rules) — on the chain it compiles for, and
+ * lowers it. Throws a `ProgramError` listing every problem with its path.
+ */
+export function lowerProgram(program: ActionProgram, chain?: ChainRef): LoweredProgram {
+  const parsed = parseProgram(program);
+  const target = targetChain(parsed.chainId, chain);
+  const { resolved, issues } = resolveNames(parsed.actions, target);
+  if (issues.length === 0) issues.push(...programIssues(resolved, target.id));
+  if (issues.length > 0) throw new ProgramError(issues, target);
+
+  return { chain: target, program: parsed, lowered: lowerActions(parsed.actions) };
+}
+
+/**
+ * Compiles an action program standalone, for `options.chain` or its own `chainId`. Its `argument`
+ * actions become runtime arguments.
+ */
 export function compileProgram(
   program: ActionProgram,
   options: CompileOptions = {},
 ): CompiledProgram {
-  const lowered = lowerActions(parseProgram(program).actions);
+  const { chain, lowered } = lowerProgram(program, options.chain);
 
-  return compiled(renderProgram(lowered), lowered.contracts, lowered.parameters, options);
+  return compiled(renderProgram(lowered), lowered.contracts, lowered.parameters, options, chain);
 }
 
-/** Compiles generated source into a `CompiledProgram`. */
+/**
+ * Compiles generated source into a `CompiledProgram`: for `chain` with its names, through the SDK's
+ * program compile, or — a split swap with no chain, whose source holds only addresses — directly.
+ */
 export function compiled(
   source: string,
   contracts: ActionContracts,
   parameters: readonly string[],
   options: CompileOptions = {},
+  chain?: CanonicalChain,
 ): CompiledProgram {
-  const result = compileEvm(source, contracts, { compactArgs: options.compactArgs });
+  const result =
+    chain === undefined
+      ? compileEvm(source, contracts, { compactArgs: options.compactArgs })
+      : compileSauceProgram(chain, source, {
+          contracts: contracts as unknown as NonNullable<SauceCompileOptions["contracts"]>,
+          ...(options.compactArgs === true ? { compactArgs: true } : {}),
+        });
   const { bytecode } = result;
 
   const positional = (values: ArgumentValues = {}): bigint[] => {
@@ -131,6 +234,7 @@ export function compiled(
   return {
     bytecode,
     source,
+    contracts,
     parameters,
     entryEncoding: result.entryEncoding,
     entrySchema: result.entrySchema,
@@ -177,18 +281,27 @@ function withContracts(
   };
 }
 
+/** `programIntent`'s options: an intent's, and the chain its route runs on. */
+export type ProgramIntentOptions = IntentOptions & {
+  /** The route's chain, whose names the program resolves; defaults to the document's `chainId`. */
+  readonly chain?: ChainRef;
+};
+
 /**
- * An action program as an Eco intent route on the program's own chain:
+ * An action program as an Eco intent route on its chain (`options.chain`, else its `chainId`):
  * `programIntent(program, options).reward(reward)` is `Base(body, options).reward(reward)` with the
  * program as the body. Moving value to another chain is a bridge action inside the program, or a
  * nested intent (`.nest(...)`) on the returned route.
  */
-export function programIntent(program: ActionProgram, options: IntentOptions): PendingSauceRoute {
-  const { chainId, actions } = parseProgram(program);
-  const lowered = lowerActions(actions);
+export function programIntent(
+  program: ActionProgram,
+  options: ProgramIntentOptions,
+): PendingSauceRoute {
+  const { chain: given, ...intent } = options;
+  const { chain, lowered } = lowerProgram(program, given);
 
-  return openRoute(chainId, renderRouteBody(lowered), {
-    ...options,
-    compile: withContracts(options.compile, lowered.contracts),
+  return openRoute(chain, renderRouteBody(lowered), {
+    ...intent,
+    compile: withContracts(intent.compile, lowered.contracts),
   });
 }

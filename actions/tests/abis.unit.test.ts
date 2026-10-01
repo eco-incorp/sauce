@@ -79,7 +79,7 @@ describe("action ABI bindings", () => {
         }
       }
     }
-    assert.equal(fromSdk, 21, "a registry-sourced method was added or dropped — update this count");
+    assert.equal(fromSdk, 25, "a registry-sourced method was added or dropped — update this count");
   });
 
   it("the methods the registry declares with their deployed types come from it, selector unchanged", () => {
