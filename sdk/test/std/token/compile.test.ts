@@ -2,14 +2,15 @@
  * `@sauce/token` compile conformance, from the CONSUMER side: the library at sdk/src/std/token built
  * through the published `@eco-incorp/sauce-compiler`, for both targets.
  *
- * Five things are asserted here and nowhere else in this repo:
+ * Six things are asserted here and nowhere else in this repo:
  *   1. every exported method compiles on both arms, at the signature each arm actually declares, and
  *      a method only one account model has (`ownerOf`) compiles on its arm and is refused on the other;
  *   2. the SPL Token program id the library pins its `require`s to, counted in the emitted bytecode;
- *   3. the ERC-20 selectors the EVM writes spell out by hand, counted the same way;
- *   4. what the library demands of its caller, which only a compile failure can show — the manifest
+ *   3. the reason each of those SPL checks reverts with, counted the same way;
+ *   4. the ERC-20 selectors the EVM writes spell out by hand, counted the same way;
+ *   5. what the library demands of its caller, which only a compile failure can show — the manifest
  *      cannot, being exactly `main`'s own `Account` params;
- *   5. the packaging invariant that there is deliberately NO neutral `token.js`, so a package with no
+ *   6. the packaging invariant that there is deliberately NO neutral `token.js`, so a package with no
  *      arm for the target fails on the IMPORT rather than on a missing export.
  *
  * Execution — the compiled bytecode actually running on a real engine and returning the right value —
@@ -116,6 +117,55 @@ describe("@sauce/token: the SPL Token program id", () => {
     ["approve", 2],
   ])("%s pins it %i time(s)", (method, expected) => {
     expect(pinnedProgramIds(method)).toBe(expected);
+  });
+});
+
+describe("@sauce/token: the reason each SPL check reverts with", () => {
+  // Every `require` in the SPL arm names what it refused, and the engine returns that text as the
+  // failed cook's return data. Only an engine can make a check FIRE, and `svm.e2e.test.ts` asserts
+  // each reason there; this pins, with no engine, which reasons each method's program carries — the
+  // UTF-8 bytes, counted — so a dropped or reworded reason fails here too. They are the whole cost
+  // of naming the failure (a reason compiles byte for byte), which on Solana comes out of a
+  // 1,232-byte transaction: a write's four add 65 bytes.
+  const REASONS = [
+    "not a token account",
+    "wrong mint",
+    "not a mint",
+    "uninitialized mint",
+    "not the token program",
+    "amount over u64",
+  ];
+  const occurrences = (haystack: Buffer, needle: Buffer): number => {
+    let count = 0;
+    for (let at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) count++;
+
+    return count;
+  };
+  const reasonsIn = (method: string): Record<string, number> => {
+    const bytecode = Buffer.from(compileStdToken(svmEntry(method), "svm").bytecode);
+
+    return Object.fromEntries(
+      REASONS.map((reason) => [reason, occurrences(bytecode, Buffer.from(reason))]).filter(
+        ([, count]) => count !== 0,
+      ),
+    );
+  };
+  const TOKEN_ACCOUNT = { "not a token account": 1, "wrong mint": 1 };
+  // The owner and the size check both say "not a mint": either way the account is no legacy mint.
+  const MINT = { "not a mint": 2, "uninitialized mint": 1 };
+  const WRITE = { "not the token program": 1, ...TOKEN_ACCOUNT, "amount over u64": 1 };
+
+  it.each([
+    ["balanceOf", TOKEN_ACCOUNT],
+    ["ownerOf", TOKEN_ACCOUNT],
+    ["allowance", TOKEN_ACCOUNT],
+    ["totalSupply", MINT],
+    ["decimals", MINT],
+    ["transfer", WRITE],
+    ["transferFrom", WRITE],
+    ["approve", WRITE],
+  ])("%s", (method, expected) => {
+    expect(reasonsIn(method)).toEqual(expected);
   });
 });
 

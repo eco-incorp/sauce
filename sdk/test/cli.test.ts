@@ -1338,6 +1338,72 @@ describe("sauce publish, offline", () => {
     );
   });
 
+  describe("a top-level `const` of a literal is fixed, as a define is", () => {
+    // `const AMOUNT = 1000000n;` is known when the file is compiled, so the intent is too. It was
+    // taken for a value the program measures, and `publish` refused the file.
+    const AMOUNT = 1_000_000n;
+    const body = (amount: string) =>
+      [
+        "Base(() => {",
+        `  USDC.transfer(RECIPIENT, ${amount});`,
+        `}).reward({ tokens: [{ token: USDC, amount: ${amount} }] });`,
+      ].join("\n");
+    const hashes = async (name: string, text: string, ...flags: string[]) => {
+      const run = await sauce("publish", file(name, text), ...FLAGS, ...flags, "--format", "json");
+      expect(run.code).toBe(0);
+      return (JSON.parse(run.stdout) as { intents: Array<{ intentHash: string }> }).intents.map(
+        (intent) => intent.intentHash,
+      );
+    };
+
+    it("in a script and in a module, publishing the intent the define would", async () => {
+      const defined = await hashes(
+        "defined.sauce.ts",
+        `// @chain arbitrum\n${body("AMOUNT")}\n`,
+        "--define",
+        `AMOUNT=${AMOUNT}`,
+      );
+      expect(defined).toHaveLength(1);
+      expect(
+        await hashes(
+          "script.sauce.ts",
+          `// @chain arbitrum\nconst AMOUNT = 1_000_000n;\n${body("AMOUNT")}\n`,
+        ),
+      ).toEqual(defined);
+      expect(
+        await hashes(
+          "module.sauce.ts",
+          `// @chain arbitrum\nconst AMOUNT = 1_000_000n;\nfunction main() {\n${body("AMOUNT")}\n}\n`,
+        ),
+      ).toEqual(defined);
+    });
+
+    it("still refuses a value the program measures or computes, naming it", async () => {
+      const refused = (text: string) =>
+        sauce("publish", file("refused.sauce.ts", text), ...FLAGS, "--format", "json");
+      const measured = await refused(
+        `// @chain arbitrum\nconst amount = USDC.balanceOf(ctx.self());\n${body("amount")}\n`,
+      );
+      expect(measured.code).toBe(1);
+      expect(measured.stderr).toBe(
+        "sauce publish: the intent to base uses `amount`, which the program measures or computes " +
+          "while it runs, so it cannot be built from a wallet: use `sauce run` on a Pot, or make " +
+          "it a literal, a define or a top-level `const` of a literal\n",
+      );
+      const computed = await refused(
+        `// @chain arbitrum\nconst AMOUNT = 1000n * 1000n;\n${body("AMOUNT")}\n`,
+      );
+      expect(computed.code).toBe(1);
+      expect(computed.stderr).toMatch(/uses `AMOUNT`, which the program measures or computes/);
+      // A local of `main` shadows the file's constant, and it is the local the intent reads.
+      const shadowed = await refused(
+        `// @chain arbitrum\nconst AMOUNT = 5n;\nfunction main() {\n  const AMOUNT = USDC.balanceOf(ctx.self());\n${body("AMOUNT")}\n}\n`,
+      );
+      expect(shadowed.code).toBe(1);
+      expect(shadowed.stderr).toMatch(/uses `AMOUNT`, which the program measures or computes/);
+    });
+  });
+
   it("needs an endpoint to send, and a wallet to send from", async () => {
     const run = await sauce("publish", file("bridge.sauce.ts", INTENT), ...FLAGS);
     expect(run.code).toBe(2);
