@@ -2094,15 +2094,19 @@ describe("sauce price", () => {
     expect(worded.stdout).toBe(text.stdout);
   });
 
-  it("reads the pair's price now with an endpoint, and says when the one given is the wrong way round", async () => {
-    // A Base endpoint whose Uniswap V3 factory has one WETH/USDC pool, at the 0.05% tier.
+  /**
+   * A Base endpoint whose Uniswap V3 factory has a WETH/USDC pool at each tier `pools` names, each
+   * with its liquidity and price (USDC per WETH); `getPool` answers zero at every other tier.
+   */
+  async function v3Endpoint(
+    pools: Readonly<Record<number, { liquidity: bigint; price: string }>>,
+  ): Promise<{ url: string; close: () => void; poolAt: (fee: number) => string }> {
     const factory = BigInt(routes.chainDefines(requireChain("base")).UniswapV3_Factory as bigint);
-    const pool = "0x00000000000000000000000000000000000b0015";
-    const live = root.sqrtPriceX96FromPrice("4100", {
-      baseDecimals: 18,
-      quoteDecimals: 6,
-      baseIsToken0: true,
-    });
+    const poolAt = (fee: number) =>
+      getAddress(`0x${(0xb00000 + fee).toString(16).padStart(40, "0")}`);
+    const byPool = new Map(
+      Object.entries(pools).map(([fee, pool]) => [BigInt(poolAt(Number(fee))), pool]),
+    );
     const word = (value: bigint) => numberToHex(value, { size: 32 });
     const server = createServer((request, response) => {
       let body = "";
@@ -2113,12 +2117,18 @@ describe("sauce price", () => {
         let result: unknown = null;
         if (call.method === "eth_chainId") result = "0x2105";
         else if (call.method === "eth_call" && BigInt(to!) === factory) {
-          // getPool(tokenA, tokenB, fee): the pool at 500, none at the other tiers.
-          result = word(BigInt(`0x${data!.slice(-64)}`) === 500n ? BigInt(pool) : 0n);
-        } else if (call.method === "eth_call" && data!.startsWith("0x1a686502")) {
-          result = word(10n ** 18n); // liquidity()
-        } else if (call.method === "eth_call" && data!.startsWith("0x3850c7bd")) {
-          result = `${word(live)}${"0".repeat(64 * 6)}`; // slot0()
+          const fee = Number(BigInt(`0x${data!.slice(-64)}`));
+          result = word(pools[fee] === undefined ? 0n : BigInt(poolAt(fee)));
+        } else if (call.method === "eth_call" && byPool.has(BigInt(to!))) {
+          const pool = byPool.get(BigInt(to!))!;
+          const sqrt = root.sqrtPriceX96FromPrice(pool.price, {
+            baseDecimals: 18,
+            quoteDecimals: 6,
+            baseIsToken0: true,
+          });
+          result = data!.startsWith("0x1a686502")
+            ? word(pool.liquidity) // liquidity()
+            : `${word(sqrt)}${"0".repeat(64 * 6)}`; // slot0()
         }
         response.setHeader("content-type", "application/json");
         response.end(JSON.stringify({ jsonrpc: "2.0", id: call.id, result }));
@@ -2126,19 +2136,29 @@ describe("sauce price", () => {
     });
     server.listen(0, "127.0.0.1");
     await once(server, "listening");
-    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+
+    return {
+      url: `http://127.0.0.1:${(server.address() as { port: number }).port}`,
+      close: () => server.close(),
+      poolAt,
+    };
+  }
+
+  it("reads the pair's price now with an endpoint, and says when the one given is the wrong way round", async () => {
+    const endpoint = await v3Endpoint({ 500: { liquidity: 10n ** 18n, price: "4100" } });
     try {
       const right = await sauce(
-        ...["price", "--chain", "base", "4000", "USDC", "per", "WETH", "--rpc-url", url, "--json"],
+        ...["price", "--chain", "base", "4000", "USDC", "per", "WETH"],
+        ...["--rpc-url", endpoint.url, "--json"],
       );
       expect(right.code).toBe(0);
       expect(right.stderr).toBe("");
       expect(JSON.parse(right.stdout)).toMatchObject({
-        live: { pool: getAddress(pool), fee: 500, price: "4100", means: "4100 USDC per WETH" },
+        live: { pool: endpoint.poolAt(500), fee: 500, price: "4100", means: "4100 USDC per WETH" },
       });
-      // Haiku's reading: 2500 WETH per USDC, a millionfold off — and the right way round named.
+      // Haiku's reading: 2500 WETH per USDC, ten-millionfold off — and the right way round named.
       const wrong = await sauce(
-        ...["price", "--chain", "base", "USDC", "WETH", "2500", "--rpc-url", url],
+        ...["price", "--chain", "base", "USDC", "WETH", "2500", "--rpc-url", endpoint.url],
       );
       expect(wrong.code).toBe(0);
       expect(wrong.stderr).toContain(
@@ -2148,8 +2168,51 @@ describe("sauce price", () => {
         "it looks the wrong way round. For 2500 USDC per WETH, run " +
           "`sauce price --chain base 2500 USDC per WETH`",
       );
+      // 10x is where it warns: 11x warns, 9x does not, and neither says "the wrong way round".
+      const far = await sauce(
+        ...["price", "--chain", "base", "45100", "USDC", "per", "WETH", "--rpc-url", endpoint.url],
+      );
+      expect(far.stderr).toContain("is 11x off the Uniswap V3 pool");
+      expect(far.stderr).not.toContain("wrong way round");
+      const near = await sauce(
+        ...["price", "--chain", "base", "36900", "USDC", "per", "WETH", "--rpc-url", endpoint.url],
+      );
+      expect(near.stderr).toBe("");
     } finally {
-      server.close();
+      endpoint.close();
+    }
+  });
+
+  it("reads the deepest of the pair's pools, and says when there is none to read", async () => {
+    // Three tiers: the deepest is the 0.3% pool, whatever the others' prices.
+    const several = await v3Endpoint({
+      100: { liquidity: 5n, price: "1000" },
+      500: { liquidity: 10n ** 18n, price: "4100" },
+      3000: { liquidity: 10n ** 20n, price: "4200" },
+    });
+    try {
+      const out = json(
+        await sauce(
+          ...["price", "--chain", "base", "4150", "USDC", "per", "WETH"],
+          ...["--rpc-url", several.url, "--json"],
+        ),
+      );
+      expect(out.live).toMatchObject({ pool: several.poolAt(3000), fee: 3000, price: "4200" });
+    } finally {
+      several.close();
+    }
+    // Pools with no liquidity are no price at all.
+    const empty = await v3Endpoint({ 500: { liquidity: 0n, price: "4100" } });
+    try {
+      const run = await sauce(
+        ...["price", "--chain", "base", "4150", "USDC", "per", "WETH", "--rpc-url", empty.url],
+      );
+      expect(run.code).toBe(0);
+      expect(run.stderr).toContain(
+        "no Uniswap V3 pool for WETH/USDC on base to read the price now from",
+      );
+    } finally {
+      empty.close();
     }
   });
 

@@ -213,6 +213,35 @@ describe("a revert, by name", () => {
     expect(message("fill below minOut")).toBe('"fill below minOut"');
   });
 
+  it("has a meaning for every string it knows, and none for one it does not", async () => {
+    const { poolRevertMeaning } = await import("../src/cli/chain.js");
+    const known: Array<[string, RegExp]> = [
+      ["SPL", /price-limit check/],
+      ["AS", /amount is not zero/],
+      ["LOK", /lock/],
+      ["IIA", /callback paid all the input/],
+      ["TF", /could not transfer the output token/],
+      ["STF", /transferFrom failed/],
+      ["ST", /transfer failed/],
+      ["SA", /approve failed/],
+      ["STE", /native transfer failed/],
+      ["Too little received", /below its minimum/],
+      ["Too much requested", /more input than its maximum/],
+      ["Transaction too old", /deadline has passed/],
+      ["UniswapV2: K", /constant-product check/],
+      ["UniswapV2: INSUFFICIENT_OUTPUT_AMOUNT", /asked for no output/],
+      ["UniswapV2: INSUFFICIENT_INPUT_AMOUNT", /received no input/],
+      ["UniswapV2: INSUFFICIENT_LIQUIDITY", /reserves cannot pay/],
+      ["UniswapV2: LOCKED", /re-entered/],
+      ["UniswapV2: TRANSFER_FAILED", /could not transfer the output token/],
+    ];
+    for (const [text, meaning] of known)
+      expect([text, poolRevertMeaning(text)]).toEqual([text, expect.stringMatching(meaning)]);
+    for (const text of ["XYZ", "UniswapV2: SOMETHING", "UniswapV2Router: EXPIRED", ""]) {
+      expect(poolRevertMeaning(text)).toBeUndefined();
+    }
+  });
+
   it("names the Router's errors, and says what the pair check means", () => {
     const data = encodeErrorResult({
       abi: parseAbi(["error InvalidPool()"]),
@@ -221,6 +250,38 @@ describe("a revert, by name", () => {
     expect(revertReason({ data })).toBe(
       "InvalidPool() (the Router's check that the pool's token0 and token1 are the pair passed)",
     );
+  });
+});
+
+describe("a rehearsal pinned to one block", () => {
+  it("puts the block in every state read that names a moving one, or none", async () => {
+    const { pinnedParams } = await import("../src/cli/chain.js");
+    const block = "0x10";
+    const tx = { to: HOLDER, data: "0x" };
+    // eth_call's block is its second parameter: given, moving, or left out.
+    expect(pinnedParams("eth_call", [tx, "latest", { [HOLDER]: {} }], block)).toEqual([
+      tx,
+      block,
+      { [HOLDER]: {} },
+    ]);
+    expect(pinnedParams("eth_call", [tx, "pending"], block)).toEqual([tx, block]);
+    expect(pinnedParams("eth_estimateGas", [tx], block)).toEqual([tx, block]);
+    // A block the request names already is kept.
+    expect(pinnedParams("eth_call", [tx, "0x5"], block)).toEqual([tx, "0x5"]);
+    // eth_getStorageAt's is its third: a request short of it is padded to it.
+    expect(pinnedParams("eth_getStorageAt", [HOLDER, "0x0"], block)).toEqual([
+      HOLDER,
+      "0x0",
+      block,
+    ]);
+    expect(pinnedParams("eth_getStorageAt", [HOLDER], block)).toEqual([HOLDER, null, block]);
+    expect(pinnedParams("eth_simulateV1", [{ blockStateCalls: [] }, "latest"], block)).toEqual([
+      { blockStateCalls: [] },
+      block,
+    ]);
+    // Anything that is not a state read is left alone.
+    expect(pinnedParams("eth_blockNumber", [], block)).toEqual([]);
+    expect(pinnedParams("eth_chainId", undefined, block)).toBeUndefined();
   });
 });
 

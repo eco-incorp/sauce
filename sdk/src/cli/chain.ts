@@ -124,7 +124,7 @@ const BLOCK_PARAM: Readonly<Record<string, number>> = {
 const MOVING = new Set(["latest", "pending", "safe", "finalized"]);
 
 /** `params` of `method` with its block, where the request names a moving one (or none), pinned. */
-function pinnedParams(method: string, params: unknown, block: Hex): unknown {
+export function pinnedParams(method: string, params: unknown, block: Hex): unknown {
   const at = BLOCK_PARAM[method];
   if (at === undefined || !Array.isArray(params)) return params;
   const pinned = [...(params as unknown[])];

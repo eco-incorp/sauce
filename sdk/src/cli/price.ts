@@ -167,7 +167,8 @@ export async function livePrice(
 /** How far apart two prices of the pair are, as the larger over the smaller: from sqrt prices. */
 const apart = (a: bigint, b: bigint): number => {
   const [hi, lo] = a > b ? [a, b] : [b, a];
-  const ratio = Number(hi) / Number(lo);
+  // The ratio in integers, to six decimals, before it is a Number: exact where it is compared.
+  const ratio = Number((hi * 1_000_000n) / (lo === 0n ? 1n : lo)) / 1_000_000;
 
   return ratio * ratio;
 };
