@@ -383,9 +383,15 @@ export async function createIntent(input: CreateInput): Promise<Created> {
     source === undefined || sourceUrl === undefined ? undefined : await connect(sourceUrl, source);
 
   // What is delivered.
+  // A question about a chain not chosen yet cannot be asked; its flag is still named as missing.
+  const unasked = (flag: string, given: string | undefined) => {
+    if (given === undefined) missing.push(flag);
+
+    return given;
+  };
   const tokenRaw =
     destination === undefined
-      ? undefined
+      ? unasked("--token", input.given.token)
       : await value(input, missing, "--token", input.given.token, (ask) =>
           askToken(ask, destination, `Token to deliver on ${destination.slug}:`, "USDC"),
         );
@@ -442,7 +448,7 @@ export async function createIntent(input: CreateInput): Promise<Created> {
   // The reward, pre-filled: what is delivered, plus a margin over the solver's costs.
   const rewardTokenRaw =
     source === undefined
-      ? undefined
+      ? unasked("--reward-token", input.given.rewardToken)
       : await value(input, missing, "--reward-token", input.given.rewardToken, (ask) =>
           askToken(ask, source, `Reward token on ${source.slug}:`, delivered?.symbol),
         );

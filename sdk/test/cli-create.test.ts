@@ -1,0 +1,271 @@
+/**
+ * `sauce intent publish` with no file (`cli/create.ts`) and the `sauce intent` picker
+ * (`cli/interactive.ts`), offline: every question answered by its flag, or at a scripted terminal;
+ * with no terminal, the flags still missing named; and the file it writes, which compiles as an
+ * ordinary intent file. Nothing here reaches a network: with no endpoint, the margin is not
+ * estimated and says so.
+ */
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { getAddress, type Hex } from "viem";
+
+import { UsageError } from "../src/cli/args.js";
+import { compileProgram } from "../src/cli/commands.js";
+import { createIntent, parseWhen, portalChains, type CreateInput } from "../src/cli/create.js";
+import { interactiveIntents } from "../src/cli/interactive.js";
+import { intentRecord } from "../src/cli/lifecycle.js";
+import { IntentStore } from "../src/cli/store.js";
+import { ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
+import { nodeIo } from "../src/cli/run.js";
+
+const NOW = 1_900_000_000n;
+const ME = getAddress("0x5a0Ce0000000000000000000000000000000Beef");
+const RECIPIENT = getAddress("0x6666666666666666666666666666666666666666");
+
+describe("making an intent: sauce intent publish with no file", () => {
+  let work: string;
+  beforeEach(() => (work = mkdtempSync(join(tmpdir(), "sauce-create-"))));
+  afterEach(() => rmSync(work, { recursive: true, force: true }));
+
+  const input = (overrides: Partial<CreateInput> = {}): CreateInput => ({
+    given: {},
+    endpoint: () => undefined,
+    signer: ME,
+    now: NOW,
+    writeText: (path, text) => writeFileSync(path, text),
+    exists: (path) => existsSync(path),
+    ...overrides,
+  });
+
+  it("writes an intent file from flags alone, which compiles as any intent file does", async () => {
+    const out = join(work, "bridge.sauce.ts");
+    const created = await createIntent(
+      input({
+        given: {
+          source: "arbitrum",
+          destination: "base",
+          token: "USDC",
+          amount: "1.5",
+          recipient: RECIPIENT,
+          rewardToken: "USDC",
+          reward: "1.6",
+          prover: "HyperProver",
+          fillDeadline: "+1h",
+          rewardDeadline: "+1d",
+          out,
+        },
+      }),
+    );
+    expect(created.source.slug).toBe("arbitrum");
+    expect(created.destination.slug).toBe("base");
+    expect(created.deadline).toBe(NOW + 3600n);
+    expect(created.rewardDeadline).toBe(NOW + 86_400n);
+    const text = readFileSync(out, "utf8");
+    expect(text).toContain(`USDC.transfer(${RECIPIENT.toLowerCase()}n, 1500000n);`);
+    expect(text).toContain("reward({ tokens: [{ token: USDC, amount: 1600000n }] })");
+    expect(text).toContain(`sauce intent publish ${out} --chain arbitrum`);
+    // With no endpoint the solver's costs are not estimated, and it says so.
+    expect(created.summary.join("\n")).toContain("no base endpoint");
+    const program = compileProgram(
+      {
+        file: out,
+        text,
+        chain: created.source,
+        defines: {},
+        compactArgs: false,
+        intents: {
+          deadline: created.deadline,
+          rewardDeadline: created.rewardDeadline,
+          creator: ME,
+          prover: created.prover,
+        },
+      },
+      nodeIo(),
+    );
+    const [intent] = program.intents;
+    expect(intent!.destination.slug).toBe("base");
+    expect(intent!.intent.reward.deadline).toBe(NOW + 86_400n);
+    expect(intent!.intent.route.deadline).toBe(NOW + 3600n);
+    expect(intent!.intent.route.tokens[0]!.amount).toBe(1_500_000n);
+  });
+
+  it("asks what no flag gave, at a terminal, with the defaults it says", async () => {
+    const asked: string[] = [];
+    const answers = [
+      String(portalChains().findIndex((chain) => chain.slug === "arbitrum") + 1), // source
+      "", // destination: prompt shown, then answered below
+    ];
+    const destinations = portalChains().filter((chain) => chain.slug !== "arbitrum");
+    answers[1] = String(destinations.findIndex((chain) => chain.slug === "base") + 1);
+    const script = [
+      ...answers,
+      "", // token: USDC, the default
+      "2", // amount
+      "", // recipient: the signer
+      "", // prover: the registry's
+      "", // reward token: what is delivered
+      "2.1", // reward: no suggestion without an endpoint, so one is typed
+      "", // fill deadline: +1h
+      "", // reward deadline: +25h
+    ];
+    const out = join(work, "asked.sauce.ts");
+    const created = await createIntent(
+      input({
+        given: { out },
+        ask: async (question) => {
+          asked.push(question);
+
+          return script.shift();
+        },
+      }),
+    );
+    expect(script).toEqual([]);
+    expect(asked[0]).toMatch(/^Source chain/);
+    expect(asked.some((question) => /Token to deliver on base/.test(question))).toBe(true);
+    expect(asked.some((question) => /Recipient on base \[0x5a0Ce/.test(question))).toBe(true);
+    expect(created.deadline).toBe(NOW + 3600n);
+    expect(created.rewardDeadline).toBe(NOW + 25n * 3600n);
+    expect(readFileSync(out, "utf8")).toContain(`USDC.transfer(${ME.toLowerCase()}n, 2000000n);`);
+  });
+
+  it("with no terminal, names every flag still missing", async () => {
+    await expect(createIntent(input({ given: { source: "arbitrum" } }))).rejects.toThrow(
+      new UsageError(
+        "sauce intent publish has no terminal to ask on, and needs --destination, --token, " +
+          "--amount, --recipient, --prover, --reward-token, --reward, --fill-deadline, " +
+          "--reward-deadline: pass them as flags",
+      ),
+    );
+  });
+
+  it("refuses a chain with no Portal, one chain twice, and a reward deadline before the fill's", async () => {
+    const given = {
+      destination: "base",
+      token: "USDC",
+      amount: "1",
+      recipient: RECIPIENT,
+      rewardToken: "USDC",
+      reward: "1",
+      prover: "HyperProver",
+      out: join(work, "x.sauce.ts"),
+    };
+    await expect(
+      createIntent(
+        input({ given: { ...given, source: "base", fillDeadline: "+1h", rewardDeadline: "+2h" } }),
+      ),
+    ).rejects.toThrow(/the source and the destination are the same chain/);
+    await expect(
+      createIntent(
+        input({
+          given: { ...given, source: "arbitrum", fillDeadline: "+2h", rewardDeadline: "+1h" },
+        }),
+      ),
+    ).rejects.toThrow(/the reward deadline is before the fill deadline/);
+    await expect(
+      createIntent(
+        input({
+          given: { ...given, source: "solana", fillDeadline: "+2h", rewardDeadline: "+3h" },
+        }),
+      ),
+    ).rejects.toThrow(/solana has no eco-routes Portal recorded/);
+  });
+
+  it("reads a deadline as a unix second or a span from now", () => {
+    expect(parseWhen("fill-deadline", "+90", NOW)).toBe(NOW + 90n);
+    expect(parseWhen("fill-deadline", "+30m", NOW)).toBe(NOW + 1800n);
+    expect(parseWhen("fill-deadline", "+2h", NOW)).toBe(NOW + 7200n);
+    expect(parseWhen("fill-deadline", "+1d", NOW)).toBe(NOW + 86_400n);
+    expect(parseWhen("fill-deadline", "2000000000", NOW)).toBe(2_000_000_000n);
+    expect(() => parseWhen("fill-deadline", "tomorrow", NOW)).toThrow(/neither a unix second/);
+  });
+});
+
+describe("the picker: sauce intent at a terminal", () => {
+  it("lists the stored intents, and runs what is picked on the one picked", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "sauce-picker-"));
+    try {
+      const store = new IntentStore(dir);
+      const portal = ecoRoutesPortal("arbitrum");
+      const record = intentRecord(
+        {
+          sourceChainId: 42161n,
+          destination: 8453n,
+          route: {
+            salt: `0x${"00".repeat(32)}` as Hex,
+            deadline: 2_000_000_000n,
+            portal: `0x${"00".repeat(12)}${ecoRoutesPortal("base").slice(2).toLowerCase()}` as Hex,
+            nativeAmount: 0n,
+            tokens: [],
+            calls: [],
+          },
+          reward: {
+            deadline: 2_000_086_400n,
+            creator: `0x${"00".repeat(12)}${ME.slice(2).toLowerCase()}` as Hex,
+            prover: `0x${"00".repeat(12)}${"77".repeat(20)}` as Hex,
+            nativeAmount: 0n,
+            tokens: [],
+          },
+        },
+        { sourcePortal: portal },
+      );
+      store.save(record);
+      store.append(record.intentHash, {
+        event: "published",
+        chain: "arbitrum",
+        chainId: 42161,
+        time: "2026-10-01T00:00:00.000Z",
+      });
+      const script = ["1", "1", "8"]; // the intent, its status, quit
+      const asked: string[] = [];
+      let stdout = "";
+      const code = await interactiveIntents(
+        {
+          ask: async (question) => {
+            asked.push(question);
+
+            return script.shift();
+          },
+          stdout: (text) => void (stdout += text),
+          stderr: () => undefined,
+        },
+        {
+          store,
+          endpoint: () => undefined,
+          yes: false,
+          confirm: async () => undefined,
+        },
+      );
+      expect(code).toBe(0);
+      expect(asked[0]).toContain(`${record.intentHash.slice(0, 18)}…  arbitrum -> base  published`);
+      expect(asked[1]).toMatch(/status\n.*fill, rehearsed/s);
+      expect(stdout).toContain(`Intent ${record.intentHash}: arbitrum -> base`);
+      expect(stdout).toContain("published arbitrum");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("says when the store is empty", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "sauce-picker-"));
+    try {
+      let stdout = "";
+      await interactiveIntents(
+        {
+          ask: async () => undefined,
+          stdout: (text) => void (stdout += text),
+          stderr: () => undefined,
+        },
+        {
+          store: new IntentStore(dir),
+          endpoint: () => undefined,
+          yes: false,
+          confirm: async () => undefined,
+        },
+      );
+      expect(stdout).toMatch(/^No intents in /);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

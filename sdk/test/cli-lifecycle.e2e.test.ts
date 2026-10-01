@@ -21,9 +21,20 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getAddress, pad, type Address, type Hex } from "viem";
+import {
+  createWalletClient,
+  encodeAbiParameters,
+  encodeFunctionData,
+  getAddress,
+  http,
+  pad,
+  parseAbi,
+  type Address,
+  type Hex,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
+import { ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
 import { CANCELLED_CLAIMANT } from "../src/routes/portal.js";
 import {
   describeEvm,
@@ -54,6 +65,8 @@ const AMOUNT = 1_000_000n;
 const REWARD = 1_050_000n;
 /** What the Mailbox charges per message: the prover's quoted fee. */
 const HYPERLANE_FEE = 7_777n;
+
+const APPROVE = parseAbi(["function approve(address, uint256)"]);
 
 /** Base USDC to RECIPIENT, for Arbitrum USDC: a body of plain transfers, run by the Executor. */
 const INTENT = [
@@ -278,6 +291,95 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     } finally {
       await plantPortal(base, PORTAL_FIXTURES.v2_12);
     }
+    // The source without `CancelledIntent`: a proven cancellation there would pay an address no
+    // key controls, so it is not cancelled even though the destination can.
+    await plantPortal(arbitrum, PORTAL_FIXTURES.pre);
+    try {
+      const run = await lifecycle("cancel", hash, store, "--private-key", OWNER_KEY);
+      expect(run.code).toBe(1);
+      expect(run.stdout).toContain("would pay a proven cancellation to");
+      expect(run.stdout).toContain("an address nobody controls");
+    } finally {
+      await plantPortal(arbitrum, PORTAL_FIXTURES.v2_12);
+    }
+  }, 240_000);
+
+  it("fills a USDT-like token from a solver with an allowance standing: zero first", async () => {
+    // A token that returns nothing and refuses a nonzero allowance moved to another, as USDT does.
+    const usdt = await base.plant(
+      `${fixture("NoReturnERC20")}${encodeAbiParameters(
+        [{ type: "string" }, { type: "string" }, { type: "uint8" }],
+        ["Tether USD", "USDT", 6],
+      ).slice(2)}` as Hex,
+    );
+    await base.mint(usdt, SOLVER.address, 10n * AMOUNT);
+    const portal = getAddress(ecoRoutesPortal("base"));
+    await base.send(
+      createWalletClient({ account: SOLVER, transport: http(base.rpcUrl) }),
+      usdt,
+      encodeFunctionData({ abi: APPROVE, functionName: "approve", args: [portal, 1n] }),
+    );
+    const store = mkdtempSync(join(work, "store-"));
+    const usdtFile = join(work, "usdt.sauce.ts");
+    writeFileSync(
+      usdtFile,
+      INTENT.replace("USDC.transfer(", `Token(${usdt.toLowerCase()}n).transfer(`),
+    );
+    const start = await now(base);
+    const out = jsonOf(
+      await sauce(
+        ...["intent", "publish", usdtFile, ...intentFlags(start + 3600n, start + 7200n)],
+        ...["--rpc-url", arbitrum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
+      ),
+    );
+    const hash = (out.intents as Array<{ intentHash: Hex }>)[0]!.intentHash;
+    const filled = await lifecycle(
+      "fill",
+      hash,
+      store,
+      ...["--send", "--private-key", SOLVER_KEY, "--yes", "--json"],
+    );
+    expect(filled.code).toBe(0);
+    const [sent] = (JSON.parse(filled.stdout) as { intents: Array<Record<string, unknown>> })
+      .intents;
+    expect((sent!.transactions as Array<{ what: string }>).map((tx) => tx.what)).toEqual([
+      "reset the solver's USDT allowance to the Portal",
+      "approve the Portal for 1 USDT",
+      expect.stringMatching(/^Portal\.fulfillAndProve\(/),
+    ]);
+    expect(await base.balanceOf(usdt, RECIPIENT)).toBe(AMOUNT);
+  }, 240_000);
+
+  it("makes an intent from flags, writes its file, rehearses both sides, publishes and stores it", async () => {
+    const store = mkdtempSync(join(work, "store-"));
+    const out = join(work, "made.sauce.ts");
+    const run = await sauce(
+      ...["intent", "publish", "--source", "arbitrum", "--destination", "base"],
+      ...["--token", "USDC", "--amount", "1", "--recipient", RECIPIENT],
+      ...["--reward-token", "USDC", "--reward", "1.05", "--prover", "HyperProver"],
+      ...["--fill-deadline", "+1h", "--reward-deadline", "+2h", "--out", out],
+      ...["--config", config, "--private-key", OWNER_KEY, "--yes", "--store", store, "--json"],
+    );
+    expect(run.code).toBe(0);
+    // What it made and rehearsed, before anything was sent.
+    expect(run.stderr).toContain(`Wrote ${out}:`);
+    expect(run.stderr).toContain("Publishing, rehearsed on arbitrum:");
+    expect(run.stderr).toContain("Filling, rehearsed on base (as a solver will):");
+    expect(run.stderr).toMatch(/the solver's costs on base: ~250000 gas/);
+    expect(readFileSync(out, "utf8")).toContain(
+      `USDC.transfer(${RECIPIENT.toLowerCase()}n, 1000000n);`,
+    );
+    const published = JSON.parse(run.stdout) as { intents: Array<{ intentHash: Hex }> };
+    const hash = published.intents[0]!.intentHash;
+    expect(existsSync(join(store, hash, "intent.json"))).toBe(true);
+    const status = jsonOf(
+      await sauce("intent", "status", hash, "--config", config, "--store", store, "--json"),
+    );
+    const [one] = status.intents as Array<{
+      status: { state: string; can: { fill: { ok: boolean } } };
+    }>;
+    expect(one!.status.state).toBe("funded");
+    expect(one!.status.can.fill.ok).toBe(true);
   }, 240_000);
 
   it("prints the transactions unsigned with no signer, and imports a published intent", async () => {
