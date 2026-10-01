@@ -1,0 +1,166 @@
+/**
+ * The Solana cook tools' `via` and `maxExecutionFee`, against a JSON-RPC endpoint that answers only
+ * what building a cook asks: the Kitchen's fee config, a Pot that does not exist, and a blockhash.
+ * The fee the endpoint holds is the test's, so each refusal and each fee returned is one it chose.
+ * Building and signing nothing else, these need no engine: what runs the cook is the SDK's own
+ * suites' business (`sdk/test/cli-solana.e2e.test.ts`, `sdk/test/svm/direct-engine.e2e.test.ts`).
+ */
+import assert from "node:assert/strict";
+import { createServer, type Server } from "node:http";
+import { after, before, describe, it } from "node:test";
+
+import { connect, failed, ok, type Connected } from "./harness.js";
+
+const OWNER = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
+const KITCHEN = "SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot";
+const FEE = 5_000n;
+/** `ExecutionFeeConfig`: its Anchor discriminator, then the fee as a u64 LE. */
+const CONFIG = Buffer.from([60, 73, 184, 44, 4, 104, 241, 138, 0x88, 0x13, 0, 0, 0, 0, 0, 0]);
+const BLOCKHASH = "4sGjMW1sUnHzSxGspuhpqLDx6wiyjNtZAMdL4VZHirAn";
+
+const PROGRAM = [
+  "function main(",
+  "  tokenProgram: Account,",
+  "  source: Account<Writable>,",
+  "  destination: Account<Writable>,",
+  "  authority: Account<Signer>,",
+  "  amount: Uint256",
+  ") {",
+  "  transfer(MINT, tokenProgram, source, destination, authority, amount);",
+  "}",
+  "",
+].join("\n");
+
+const ACCOUNTS = {
+  tokenProgram: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+  source: "So11111111111111111111111111111111111111112",
+  destination: "SysvarRent111111111111111111111111111111111",
+};
+
+describe("the Solana cook tools, through the Kitchen or direct", () => {
+  let server: Server;
+  let url: string;
+  let mcp: Connected;
+  const asked: string[] = [];
+
+  before(async () => {
+    assert.equal(CONFIG.readBigUInt64LE(8), FEE);
+    server = createServer((request, response) => {
+      let body = "";
+      request.on("data", (chunk: Buffer) => (body += chunk.toString()));
+      request.on("end", () => {
+        const call = JSON.parse(body) as { id: number; method: string; params: unknown[] };
+        asked.push(call.method);
+        const context = { slot: 1 };
+        // Every account asked for is the fee config, but for a Pot, which does not exist yet: a
+        // direct cook asks for no Pot, so a Pot read is the one the Kitchen cook makes.
+        const result =
+          call.method === "getLatestBlockhash"
+            ? { context, value: { blockhash: BLOCKHASH, lastValidBlockHeight: 1_000 } }
+            : call.method === "getAccountInfo"
+              ? {
+                  context,
+                  value:
+                    asked.filter((method) => method === "getAccountInfo").length === 1
+                      ? {
+                          data: [CONFIG.toString("base64"), "base64"],
+                          executable: false,
+                          lamports: 1_000_000,
+                          owner: KITCHEN,
+                          rentEpoch: 0,
+                          space: 16,
+                        }
+                      : null,
+                }
+              : null;
+        response.setHeader("content-type", "application/json");
+        response.end(JSON.stringify({ jsonrpc: "2.0", id: call.id, result }));
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as { port: number };
+    url = `http://127.0.0.1:${port}/`;
+    mcp = await connect();
+  });
+
+  after(async () => {
+    await mcp?.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  const tx = (extra: Record<string, unknown>) =>
+    mcp.call("sauce_tx", {
+      source: PROGRAM,
+      chain: "solana",
+      defines: { MINT: OWNER },
+      owner: OWNER,
+      accounts: { ...ACCOUNTS, authority: "owner" },
+      args: ["400"],
+      rpcUrl: url,
+      ...extra,
+    });
+
+  it("via engine builds the engine's own cook: the fee it read, and no Pot", async () => {
+    asked.length = 0;
+    const out = ok(await tx({ via: "engine", maxExecutionFee: FEE.toString() }));
+
+    assert.equal(out.via, "engine");
+    assert.equal(out.fee, FEE.toString());
+    assert.equal(out.maxExecutionFee, FEE.toString());
+    assert.equal(out.pot, undefined);
+    assert.match(out.transaction as string, /^[A-Za-z0-9+/=]+$/);
+    // The fee config, read once; no Pot is looked up.
+    assert.equal(asked.filter((method) => method === "getAccountInfo").length, 1);
+  });
+
+  it("refuses a fee above maxExecutionFee, either way, building nothing", async () => {
+    for (const via of ["kitchen", "engine"]) {
+      asked.length = 0;
+      const refused = failed(await tx({ via, maxExecutionFee: (FEE - 1n).toString() }));
+
+      assert.match(refused, new RegExp(`the execution fee is ${FEE} lamports, above`));
+      assert.ok(!asked.includes("getLatestBlockhash"), "nothing was built");
+    }
+  });
+
+  it("refuses the Pot as a signer on the direct path", async () => {
+    const refused = failed(
+      await tx({ via: "engine", accounts: { ...ACCOUNTS, authority: "pot" } }),
+    );
+
+    assert.match(refused, /nothing signs for the Pot/);
+  });
+
+  it("sizes either cook in sauce_compile, the direct one smaller", async () => {
+    const compile = (via?: string) =>
+      mcp.call("sauce_compile", {
+        source: PROGRAM,
+        chain: "solana",
+        defines: { MINT: OWNER },
+        args: ["400"],
+        accounts: { ...ACCOUNTS, authority: "owner" },
+        ...(via === undefined ? {} : { via }),
+      });
+    const kitchen = ok(await compile()).cook as { size: number; via: string };
+    const direct = ok(await compile("engine")).cook as { size: number; via: string };
+
+    assert.equal(kitchen.via, "kitchen");
+    assert.equal(direct.via, "engine");
+    assert.ok(direct.size < kitchen.size, `${direct.size} < ${kitchen.size}`);
+  });
+
+  it("refuses via and maxExecutionFee on an EVM chain", async () => {
+    for (const extra of [{ via: "engine" }, { maxExecutionFee: "5000" }]) {
+      const refused = failed(
+        await mcp.call("sauce_tx", {
+          source: "function main() {}\n",
+          chain: "base",
+          owner: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+          ...extra,
+        }),
+      );
+
+      assert.match(refused, /is for a Solana cook/);
+    }
+  });
+});

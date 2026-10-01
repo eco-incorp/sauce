@@ -196,8 +196,12 @@ USDC:<amount>` rehearses it from a wallet that does not hold the reward yet.
   vault), rehearsing them, and every later step (`sauce intent fill --send`, `prove`, `claim`,
   `refund`, `cancel`, `status`, `import`).
 - **On Solana** (`--chain solana`) a program declares every account it touches, a cook signs with
-  `--keypair`, and the Kitchen's fee is read from the cluster with no `--value`; `--fund` and
-  `sauce intent publish` are EVM only. A `simulate` that succeeds lists what the cook moved: each token
+  `--keypair`, and the execution fee is read from the cluster and printed as `fee`, with no
+  `--value`; `--max-execution-fee <lamports>` refuses a cook whose fee is above it. `--via kitchen`,
+  the default, cooks through the Kitchen on the owner's Pot; `--via engine` calls the engine
+  directly, with no Pot: the signer pays the fee and is the authority the program acts with
+  (`--account NAME=owner`), and the program's own calls get one more level of CPI depth. `--fund`
+  and `sauce intent publish` are EVM only. A `simulate` that succeeds lists what the cook moved: each token
   account's balance change and each account's lamports, read from the accounts as the simulation
   leaves them. `sauce-solana` covers writing and running one.
 
