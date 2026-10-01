@@ -123,6 +123,20 @@ describe("flags", () => {
     expect(() => parseDefines(["A=1", "A=2"])).toThrow(/A is given twice/);
   });
 
+  it("takes a base58 public key for a Solana program, as the 32-byte word its address compares to", () => {
+    // Mainnet USDC: the word `svm.sload(account, 0, 32).toBe()` reads from a USDC token account.
+    const usdc = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+    const word = 0xc6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61n;
+    expect(parseDefines([`MINT=${usdc}`], "svm")).toEqual({ MINT: word });
+    expect(parseDefinesFile(JSON.stringify({ MINT: usdc }), "d.json", "svm")).toEqual({
+      MINT: word,
+    });
+    // Integer syntax wins: digits are the integer, even where they would also be base58.
+    expect(parseDefines(["N=12345"], "svm")).toEqual({ N: 12345n });
+    expect(() => parseDefines([`MINT=${usdc}`])).toThrow(/is a Solana public key \(base58\)/);
+    expect(() => parseDefines(["MINT=NotAKey0OIl"], "svm")).toThrow(/a base58 public key/);
+  });
+
   it("reads a defines file of names to addresses, integers and booleans", () => {
     expect(
       parseDefinesFile(
@@ -291,6 +305,33 @@ describe("sauce compile", () => {
       expect(out.manifest).toEqual({ accounts: [{ kind: "remaining", from: 0 }] });
       expect(out.engine).toMatchObject({ release: "v12-svm", programId: expect.any(String) });
     }
+  });
+
+  it("takes a Solana program's key defines in base58, as --account takes them", async () => {
+    const program = file(
+      "mint.sauce.ts",
+      "const MINT = 0n;\nfunction main(mint: Account) {\n  require(mint.address == MINT);\n}\n",
+    );
+    const usdc = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+    const base58 = json(
+      await sauce("compile", program, "--chain", "solana", "--define", `MINT=${usdc}`, "--json"),
+    );
+    const hex = json(
+      await sauce(
+        "compile",
+        program,
+        "--chain",
+        "solana",
+        "--define",
+        "MINT=0xc6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61",
+        "--json",
+      ),
+    );
+    expect(base58.bytecode).toBe(hex.bytecode);
+    expect(base58.bytecode).toContain("c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca6");
+    const evm = await sauce("compile", program, "--chain", "base", "--define", `MINT=${usdc}`);
+    expect(evm.code).toBe(2);
+    expect(evm.stderr).toMatch(/is a Solana public key \(base58\)/);
   });
 
   it("takes the chain and target from the file's header, and a flag over it", async () => {

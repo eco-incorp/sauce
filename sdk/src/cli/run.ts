@@ -224,7 +224,7 @@ const PROGRAM: FlagSpecs = {
     type: "string",
     multiple: true,
     value: "NAME=VALUE",
-    help: "A value the program reads by name: integer, 0x hex, true, false",
+    help: "A value the program reads by name: integer, 0x hex, true, false; base58 on Solana",
   },
   defines: {
     type: "string",
@@ -432,20 +432,23 @@ function programInput(
   fallback?: CanonicalChain,
 ): ProgramInput {
   const text = readInput(io, file);
+  const chain = chainOf(args, file, text, fallback);
   const definesFile = stringFlag(args, "defines");
   const deadline = stringFlag(args, "intent-deadline");
   const creator = stringFlag(args, "intent-creator");
   const fee = stringFlag(args, "intent-execution-fee");
   const defines = {
-    ...(definesFile === undefined ? {} : parseDefinesFile(readInput(io, definesFile), definesFile)),
-    ...parseDefines(repeatedFlag(args, "define")),
+    ...(definesFile === undefined
+      ? {}
+      : parseDefinesFile(readInput(io, definesFile), definesFile, chain.kind)),
+    ...parseDefines(repeatedFlag(args, "define"), chain.kind),
   };
   definesReach(file, text, Object.keys(defines));
 
   return {
     file,
     text,
-    chain: chainOf(args, file, text, fallback),
+    chain,
     compactArgs: args.values["compact-args"] === true,
     defines,
     intents: {
