@@ -168,8 +168,8 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_tx`             | `sauce tx`       | EVM `{ chainId, to, data, value }`, the cook on the Pot, with `from` (who signs) and the `kitchenFee` read; Solana `{ chain, feePayer, pot, fee, transaction }`, base64 and signed by no one |
 | `sauce_pot`            | `sauce pot`      | The Pot's address, its unsigned deployment (EVM `Kitchen.deployPot`; Solana `create_pot`), `deployed` (null with no endpoint), and with an endpoint what it holds and the Kitchen's fee      |
 | `sauce_simulate`       | `sauce simulate` | `ok`, the `path` taken, gas, what `main` returns, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts                                                       |
-| `sauce_publish`        | `sauce publish`  | Each fixed intent's `intentHash` and its unsigned `transactions` (reward approvals, `Portal.publishAndFund`); with `dryRun`, their status                                                    |
-| `sauce_fill`           | `sauce fill`     | Per intent, a solver's fill rehearsed on its destination: `ok`, the calls and gas, what moved and what it left in the shared Pot and the Executor; or the decoded `reason`                   |
+| `sauce_intent_publish` | `sauce publish`  | Each fixed intent's `intentHash` and its unsigned `transactions` (reward approvals, `Portal.publishAndFund`); with `dryRun`, their status                                                    |
+| `sauce_intent_fill`    | `sauce fill`     | Per intent, a solver's fill rehearsed on its destination: `ok`, the calls and gas, what moved and what it left in the shared Pot and the Executor; or the decoded `reason`                   |
 | `sauce_inspect`        | `sauce inspect`  | A cook, Kitchen, Portal or ERC-20 call, or a program, taken apart; with `source`, the arguments decoded against `main`                                                                       |
 | `sauce_verify`         | `sauce verify`   | `valid` with the settle's tokens, `minOut` and recipient, or `valid: false` with the rejection `code`                                                                                        |
 
@@ -218,8 +218,8 @@ Uniswap V3-style pool of the pair read through an endpoint (its `slot0` price, l
 With `slippageBps`, `limits` gives each direction's `sqrtPriceLimitX96` that far from the price,
 and a `minAvgPrice` that also pays the pool's fee (`feePpm`, or the pool's own).
 
-`sauce_publish` takes `from` (the wallet that funds the reward), `dryRun`, `assumeBalance` and
-`rpcUrl`. `sauce_fill` takes the same program inputs, with `chain` the source; its endpoint is the
+`sauce_intent_publish` takes `from` (the wallet that funds the reward), `dryRun`, `assumeBalance` and
+`rpcUrl`. `sauce_intent_fill` takes the same program inputs, with `chain` the source; its endpoint is the
 DESTINATION's: `rpcUrl` when every intent goes to one chain, else `rpcUrls`, each destination's by
 chain (`{ "base": "<url>" }`). `solver` and `claimant` default to an account nobody holds the key
 of. Together they rehearse both sides of an intent before anything is signed. `sauce_actions` takes the document as `program`, an object or its JSON text, validated
@@ -243,7 +243,7 @@ cast send <to> <data> --value <value> --rpc-url <url> --keystore <keystore>
 The other transactions:
 
 - `sauce_pot`'s deployment can be sent from any account.
-- `sauce_publish`'s transactions go in order, from the wallet that funds the reward.
+- `sauce_intent_publish`'s transactions go in order, from the wallet that funds the reward.
 - On Solana, `sauce_tx`'s `transaction` is base64, for the owner to sign and send. Its blockhash
   expires in about a minute.
 

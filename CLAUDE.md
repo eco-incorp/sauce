@@ -623,7 +623,7 @@ owns its flags and imports `mcp/dist/entry.js` LAZILY, by a specifier TypeScript
 (so the SDK builds before `mcp/`), and only when the command runs (so no other command loads the
 MCP SDK); `entry.ts` exports `mcpEntry` typed by the CLI's `McpEntry`, so the two cannot drift.
 Its tools are the `sauce` command's read-only half — `sauce_compile`, `sauce_actions`, `sauce_tx`,
-`sauce_pot`, `sauce_simulate`, `sauce_publish`, `sauce_fill`, `sauce_inspect`, `sauce_verify`, `sauce_globals`,
+`sauce_pot`, `sauce_simulate`, `sauce_intent_publish`, `sauce_intent_fill`, `sauce_inspect`, `sauce_verify`, `sauce_globals`,
 `sauce_price`, `sauce_chains` — plus the skills as tools (`sauce_skills`, `sauce_skill`,
 `sauce_dev`, `sauce_install_skills`), because many clients never read resources. Each command tool
 calls the function the matching command calls (`compileCommand`, `txCommand`, `simulateCommand`, …)

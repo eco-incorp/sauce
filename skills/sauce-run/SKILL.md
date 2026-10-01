@@ -159,7 +159,7 @@ The same steps are tools of the Sauce MCP server, for an agent with no local ins
 `npx -y @eco-incorp/sauce mcp` starts it over stdio. A tool takes the program as text (`source`)
 and the command's flags as inputs of the same name in camelCase; `args` is `main`'s arguments as a
 JSON array. A tool that reads a chain takes `rpcUrl`, an endpoint for that one call, which is never
-returned. Nothing signs: the user signs and sends what `sauce_tx`, `sauce_pot` and `sauce_publish`
+returned. Nothing signs: the user signs and sends what `sauce_tx`, `sauce_pot` and `sauce_intent_publish`
 return, with their own wallet.
 
 | Command          | Tool                                                                   |
@@ -169,8 +169,8 @@ return, with their own wallet.
 | `sauce pot`      | `sauce_pot`: the address, the deploy, whether it exists, what it holds |
 | `sauce simulate` | `sauce_simulate`                                                       |
 | `sauce tx`       | `sauce_tx`                                                             |
-| `sauce publish`  | `sauce_publish`, unsigned or as a dry run                              |
-| `sauce fill`     | `sauce_fill`: the destination's side, rehearsed                        |
+| `sauce publish`  | `sauce_intent_publish`, unsigned or as a dry run                       |
+| `sauce fill`     | `sauce_intent_fill`: the destination's side, rehearsed                 |
 | `sauce inspect`  | `sauce_inspect`                                                        |
 | `sauce verify`   | `sauce_verify`                                                         |
 | `sauce price`    | `sauce_price`, also from a pool read now                               |
