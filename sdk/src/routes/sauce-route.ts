@@ -70,11 +70,11 @@ export interface SauceCompileOptions {
    */
   defines?: Record<string, bigint | boolean | number>;
   /** Caller token symbol -> address OVERRIDES, merged per-key on top of `token-registry.ts`'s
-   *  default per-chain registry (see `resolveTokenMap`) -- the merged map drives both `<Sym>.
-   *  transfer/.approve/.balanceOf(...)` and `<holder>.<Sym>` balance-sugar rewrites (see
-   *  `token-rewrite.ts`). A bare `USDC.transfer(...)` on a chain the registry covers now compiles
-   *  with NO entry here at all. EVM destinations only -- an svm destination throws if any site
-   *  actually rewrites, pointing at the SPL account-plan `Token` emitter instead. */
+   *  default per-chain registry (see `resolveTokenMap`), for the chain compiled for. The merged map
+   *  is the chain's token symbols in the extensions manifest, which give `<Sym>.transfer/.approve/
+   *  .transferFrom(...)` (`@sauce/token`'s SafeERC20 writes), `<Sym>.balanceOf(...)` and the
+   *  `<holder>.<Sym>` balance. A bare `USDC.transfer(...)` on a chain the registry covers compiles
+   *  with NO entry here at all. On an svm destination the token syntax is refused by name. */
   tokens?: Readonly<Record<string, AddressInput>>;
   /** Parsed ABI bindings, adapted to the compiler's inlineContracts option. */
   contracts?: ContractsConfig;

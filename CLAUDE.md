@@ -359,8 +359,9 @@ run (see the Foundry gotcha above).
 source is SauceScript, annotations included, so the rewrites must take what the compiler takes; a
 JavaScript-only parse rejected every typed helper. `ast-walk.ts#walk` steps over annotations and
 type-only declarations, so no rewrite reads a type name as a value. Do not add a second parser, and
-do not reintroduce a "rewrites cannot parse annotations" workaround: the compile seam's one remaining
-insertion is `ensureVoidMain`.
+do not reintroduce a "rewrites cannot parse annotations" workaround. The token, protocol and
+`available(…)` syntax is not rewritten at all any more: the compiler resolves it from the extensions
+manifest (`extensions.ts`), and it infers a void `main` itself.
 
 **Every registry ABI is pinned against the deployed contract, offline.** `test/registry-abi.test.ts`
 checks each function, event and custom error of each `abis.ts` export against
@@ -500,28 +501,18 @@ every level's compile on three paths and decodes each level's `publishAndFund`;
 symbol one address everywhere (a `tokens` override, a define) cannot see either defect.
 
 The **`Token(addr)` global wrapper** (`Token(addr).approve(spender, amt)` / `const t = Token(addr);
-t.approve(...)`, zero import) and the **`<Sym>.transfer(...)` symbol syntax** are TEXTUAL rewrites in
-`token-rewrite.ts`, run in `compileSauceRoute` before the compiler, and both lower a WRITE
-(`transfer`/`approve`/`transferFrom`) to the `@sauce/token` function of the same name with the
-token first: `USDC.transfer(to, amt)` → `__sauce_transfer(USDC, to, amt)`, with
-`import { transfer as __sauce_transfer } from "@sauce/token"` prepended (`tokenImportLines`). So a
-write has ONE implementation however it is spelled, and it is the library's SafeERC20 one. The import
-is ALIASED (the pinned compiler, 2.3.0 and 2.4.0 alike, accepts `import { a as b }` and emits
-byte-identical code), which is what keeps a program's own `transfer`/`approve` from colliding; the `__sauce_<method>` names are reserved
-and a program declaring one is refused by name. It is an explicit import, not the ambient module,
-because `compileSauceRoute` never merges `chainAmbient()` in. A READ (`balanceOf`, and any other
-method on `Token(...)`) stays on the typed `IERC20.at(...)` binding — a `uint256` is always there.
-A write returns nothing, so one whose result is read (`const ok = USDC.transfer(...)`) is refused,
-and the source-global and `TokenBinding` types declare the writes `void`. A bound `Token(...)` is
-lowered only when the name is declared once in the whole program, never reassigned and only ever
-called as `t.<method>(...)`: the binding then holds the ADDRESS and each call is lowered by name.
-Any other `Token(...)` — an argument, a value, a reassigned or passed binding — is REFUSED with an
-error naming the safe spellings, never passed through as the typed call (which would be the
-unchecked write again). Both rewrites are shadow-safe (a program that binds `Token` or a symbol owns
-the name) and svm-rejected: the SVM arm's writes need SPL account slots the sugar has nowhere to put.
-The compiler therefore never sees a method call on a `Token(...)` result, and no compiler feature is
-needed — the earlier "`Token(addr)` needs a compiler feature" framing only applied to making
-`@sauce/token` _export_ a real `Token` value (blocked by the M1 subset). A token-only INTENT body
+t.approve(...)`, zero import) and the **`<Sym>.transfer(...)` symbol syntax** are the compiler's,
+resolved from the extensions manifest the SDK generates (`src/routes/extensions.ts`), with no source
+rewrite: a token symbol is a `const` of the extension type `Token`, and `Token` a constructor of it.
+The type's WRITES (`transfer`/`approve`/`transferFrom`) are `@sauce/token`'s functions of the same
+name, called with the token first, so a write has ONE implementation however it is spelled, and it
+is the library's SafeERC20 one; its READ `balanceOf` is the `IERC20` call, and `holder.USDC` is that
+read on the holder. A write returns nothing, so one whose result is read is refused, and the
+source-global and `TokenBinding` types declare the writes `void`. On an SVM chain the type is
+`SplToken`, whose every method is refused by name: the SVM arm's writes need SPL account slots.
+A program that declares `Token` or a symbol owns the name — a manifest name loses to every
+declaration. `test/routes-native-golden.test.ts` holds each spelling to the bytes the old rewrite
+produced, proven equal before the rewrite was deleted (eco-incorp/sauce#43–#45). A token-only INTENT body
 (`Base(() => { USDC.transfer(...) })` inside a program, every statement a `transfer`/`approve` on a
 symbol or literal `Token(...)` — `intent-sugar.ts#isDirectCallBody`) is different again: it lowers
 to plain `route.calls` the Portal's Executor runs raw, not to a Sauce program, so it gets the

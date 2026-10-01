@@ -151,9 +151,9 @@ function hexAddress(value: TokenTransferSpec["token"], label: string): `0x${stri
  *
  * Route-body calls are positional (`Token(a).approve(spender, amt)`) where the runtime
  * [`TokenApi`] takes a spec object, because the body is compiled to Sauce bytecode rather than
- * executed: `token-rewrite.ts#rewriteTokenFactory` lowers each write to `@sauce/token`'s function
- * of the same name, which has OpenZeppelin `SafeERC20` semantics, and each read to `IERC20.at`,
- * before the compiler sees it. These signatures are what let a **typed closure** body typecheck on
+ * executed: the compiler gives `Token(a)` the extensions manifest's token type (`extensions.ts`),
+ * whose writes are `@sauce/token`'s functions of the same name, with OpenZeppelin `SafeERC20`
+ * semantics, and whose reads are `IERC20` calls. These signatures are what let a **typed closure** body typecheck on
  * the way there. The writes return nothing: they revert the program unless the token accepted
  * them. Nothing calls these at run time, which is why they live here rather than on `TokenApi`.
  */

@@ -13,9 +13,8 @@
  *   - a name this chain lacks but another has is `unavailable`, with the message the SDK's rewrites
  *     gave, so it is a compile error where it is read and `false` to `available(…)`.
  *
- * Nothing here parses or rewrites a program. It replaces, one at a time, the source passes
- * (`token-rewrite.ts`, `protocol-rewrite.ts`, `available.ts`, `closure.ts`) that did the same work
- * as text. The document is large, so it is split the way the compiler caches it: the document names
+ * Nothing here parses or rewrites a program. It replaced the source passes that did the same work as
+ * text: the token, protocol and `available(…)` rewrites. The document is large, so it is split the way the compiler caches it: the document names
  * each chain's body and the ABI table by path, and each is served — and cached by the compiler — on
  * its own bytes. Only the small document changes with the chain being compiled for.
  */

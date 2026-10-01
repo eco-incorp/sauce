@@ -1,9 +1,7 @@
 /**
- * Shared AST plumbing for the routes/ source-rewrite passes (`token-rewrite.ts`,
- * `protocol-rewrite.ts`), over the tree `parse.ts` produces. Extracted verbatim from `token-rewrite.ts` (U4) so the two passes' whole-
- * program shadow semantics can never drift apart — see `token-rewrite.ts`'s own module doc for the
- * shadowing rationale (SauceScript shares scope across `if`/`while`/bare-block bodies, so this is
- * deliberately a coarser, whole-program-conservative check, not real lexical scoping).
+ * Shared AST plumbing for the routes/ source-rewrite passes still left (`intent-sugar.ts`,
+ * `intent-body.ts`, `available.ts`), over the tree `parse.ts` produces. Its shadow check is
+ * deliberately coarse — whole-program and conservative, not real lexical scoping.
  */
 export interface AstNode {
   type: string;
