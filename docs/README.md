@@ -29,6 +29,8 @@ Complete programs live in the [examples](examples/README.md).
 | Construct, fund, submit and inspect an intent                   | [Create an intent](guides/intents.md)                  |
 | Chain intents — statically, or from an amount measured on chain | [Nested intents](guides/nested-intents.md)             |
 | Compile a standalone program and pass it runtime arguments      | [Compiling programs](guides/compiling.md)              |
+| Compile and run a program file from a terminal                  | [The sauce command](guides/cli.md)                     |
+| Have a coding agent write and run programs                      | [Agent skills](guides/cli.md#agent-skills)             |
 | Generate programs from structured data                          | [Builders](guides/builders-and-actions.md)             |
 | Write protocol actions as JSON, then run them or make an intent | [Actions](guides/actions.md)                           |
 | Plan accounts, stage code and execute on Solana                 | [Solana](guides/solana.md)                             |
@@ -45,6 +47,8 @@ Complete programs live in the [examples](examples/README.md).
 
 - [API entry points](api/README.md) — every published import and what it contains.
 - [Routes](api/routes.md) — chain entry points, intent options, built intents, nesting.
+- [Contracts and tokens](api/contracts.md) — every protocol namespace and token, in a program and in TypeScript.
+- [SauceScript reference](../skills/sauce-script/references/builtins.md) — every type, builtin, statement and limit, per target.
 - [Compiler](api/compiler.md) — `compile()` options and result, and the compact argument codec.
 - [`@sauce/router`](api/router.md) — the SauceScript swap library: one function per venue.
 - [Coverage](api/coverage.md) — which protocols, tokens and chains are actually registered.

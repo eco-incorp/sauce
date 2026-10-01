@@ -6,16 +6,16 @@ import ts from "typescript";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
 import { sauceBodyToSource } from "../src/routes/closure.js";
 
-const cctpSource = `
+const cctpSource = `function main() {
   Cctp.TokenMessenger.depositForBurn(1n, 3n, 1n, USDC, 0n, 0n, 1000n);
   return 1n;
-`;
+}`;
 
-const tokenWritesSource = `
+const tokenWritesSource = `function main() {
   USDC.approve(Uniswap.UniversalRouter, 1n);
   USDC.transfer(1n, 1n);
   return USDC.balanceOf(1n);
-`;
+}`;
 
 describe("source globals match the Sauce contract model", () => {
   it("accepts scalar bytes32 CCTP arguments and excludes source-unavailable accessors", () => {
@@ -30,7 +30,7 @@ describe("source globals match the Sauce contract model", () => {
     writeFileSync(
       probePath,
       `
-        function body() { ${cctpSource} }
+        ${cctpSource}
         // TokenMessengerV2.depositForBurn returns nothing.
         const burned: void = Cctp.depositForBurn(1n, 3n, 1n, USDC, 0n, 0n, 1000n);
         // ERC-20 writes have SafeERC20 semantics: each reverts unless the token accepted it, so
@@ -56,12 +56,24 @@ describe("source globals match the Sauce contract model", () => {
         USDC.transfer("0x1111111111111111111111111111111111111111", 1n);
         // @ts-expect-error ERC-20 balance owners are Sauce scalars too.
         USDC.balanceOf("0x1111111111111111111111111111111111111111");
-        // @ts-expect-error Address-only descriptors cannot be referenced in compiled source.
+        // An address-only contract is its address: no ABI, so no methods.
         const provider: bigint = AaveV3.PoolAddressesProvider;
-        // @ts-expect-error Address-only descriptors cannot be referenced through their protocol.
         const bundler: bigint = MorphoBlue.Bundler3;
-        // @ts-expect-error An unbound interface has no concrete destination address.
-        const token: unknown = Erc20;
+        // @ts-expect-error An address-only contract has no methods to call.
+        AaveV3.PoolAddressesProvider.getPool();
+        // An interface has no address of its own: it is called at one the program supplies.
+        const shares: bigint = Erc4626.Vault.at(1n).deposit(1n, 1n);
+        // @ts-expect-error An unbound interface is not an address.
+        const vault: bigint = Erc4626.Vault;
+        // A deployed contract's ABI reaches another deployment the same way.
+        const other: bigint = UniswapV3.Factory.at(1n).getPool(USDC, WETH, 500n);
+        // A namespace for every registry protocol, not only the formerly linked ones.
+        const pancake: bigint = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
+        const clPool: bigint = AerodromeSlipstream.CLFactory.getPool(USDC, WETH, 100n);
+        // The presence check takes a contract or a token, and is a compile-time boolean.
+        const has: boolean = available(PancakeswapV3.Factory) && available(USDT);
+        // @ts-expect-error The presence check takes a registry name, not an interface.
+        available(Erc4626.Vault);
         // @ts-expect-error Factory is ambiguous across Uniswap versions.
         const factory: unknown = Uniswap.Factory;
         // @ts-expect-error Even a single-member family alias requires the contract name.

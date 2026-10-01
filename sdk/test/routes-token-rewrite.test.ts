@@ -9,7 +9,7 @@ import { requireChain } from "../src/chains/canonical.js";
 // Through the public `routes` barrel: a caller of `rewriteTokenMembers` needs `tokenImportLines`
 // beside it to compile the result.
 import { rewriteTokenMembers, tokenImportLines } from "../src/routes/index.js";
-import { resolveTokenMap } from "../src/routes/token-registry.js";
+import { resolveTokenMap, SVM_TOKEN_REGISTRY } from "../src/routes/token-registry.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
 
@@ -201,13 +201,13 @@ describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with N
     expect(bytecode).not.toEqual(libraryProgram(`${USDC}n`, "transfer", `${TO}, 5n`));
   });
 
-  it("an unregistered chain (no registry rows, no tokenDefines) leaves a bare USDC untouched -- the base compiler's own error", () => {
+  it("an unregistered chain (no registry rows, no tokenDefines) leaves a bare USDC untouched, and the compile names it", () => {
     // The point is that the rewrite declines and the compile FAILS CLOSED rather than emitting a
-    // program with an unbound symbol. The compiler reports a member call on an undeclared name as an
-    // un-lowerable call expression rather than naming the identifier, so match either shape.
+    // program with an unbound symbol -- and says which name the chain does not have, rather than
+    // leaving the compiler to report an un-lowerable call expression.
     expect(() =>
       compileSauceRoute("ronin", `USDC.transfer(${TO}, 5n);`, { pot: POT, engine: ENGINE }),
-    ).toThrow(/`USDC` is not a declared variable|cannot be lowered to IR yet/);
+    ).toThrow("`USDC` is not a token or protocol on ronin");
   });
 });
 
@@ -277,7 +277,10 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
   });
 
   it("THE DECISIVE STEP (a): self.USDC for a real chain rewrites to IERC20.at(<real Base USDC>n).balanceOf(ctx.self()) and compiles", () => {
-    const compiled = compileSauceRoute("base", `return self.USDC;`, { pot: POT, engine: ENGINE });
+    const compiled = compileSauceRoute("base", `function main() { return self.USDC; }`, {
+      pot: POT,
+      engine: ENGINE,
+    });
     expect(compiled.source).toContain(
       `IERC20.at(${BigInt(USDC).toString()}n).balanceOf(ctx.self())`,
     );
@@ -285,11 +288,11 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
   });
 
   it("chain-scoped: Base USDC != Ethereum USDC in the emitted literal", () => {
-    const baseCompiled = compileSauceRoute("base", `return self.USDC;`, {
+    const baseCompiled = compileSauceRoute("base", `function main() { return self.USDC; }`, {
       pot: POT,
       engine: ENGINE,
     });
-    const ethCompiled = compileSauceRoute("ethereum", `return self.USDC;`, {
+    const ethCompiled = compileSauceRoute("ethereum", `function main() { return self.USDC; }`, {
       pot: POT,
       engine: ENGINE,
     });
@@ -385,7 +388,7 @@ describe("composition: token pass + protocol-accessor pass in ONE compile", () =
   it("a body using BOTH Uniswap.UniversalRouter.execute(...) and self.USDC compiles, both rewritten, ERC20 import exactly once", () => {
     const compiled = compileSauceRoute(
       "base",
-      `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n); return self.USDC;`,
+      `function main() { Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n); return self.USDC; }`,
       { pot: POT, engine: ENGINE },
     );
     expect(compiled.source).toContain("IUniswapV4_UniversalRouter.at(");
@@ -402,23 +405,37 @@ describe("composition: token pass + protocol-accessor pass in ONE compile", () =
 
 // --- SVM: registry-default token/balance-sugar behavior must never SILENTLY rewrite -------------
 
-describe("svm: the token/balance-sugar pass never rewrites for an svm destination (registry has no svm rows)", () => {
-  it("with accessors:false, self.USDC is completely untouched by THIS feature -- the base compiler's own error on bare `self` fires instead (unrelated to tokens)", () => {
-    // Isolates the token/balance-sugar pass from the protocol-accessor pass's OWN (pre-existing,
-    // unrelated) self-sugar, which would otherwise also touch the bare `self` here.
+describe("svm: the token/balance-sugar pass is refused by name for an svm destination", () => {
+  it("with accessors:false, self.USDC on a registered Solana mint is the named svm error", () => {
+    // Isolates the token/balance-sugar pass from the protocol-accessor pass's OWN self-sugar. The
+    // registry has Solana mints now, so the balance sugar recognises `self.USDC` and the svm guard
+    // names it, rather than the compiler failing on a bare `self`.
     expect(() =>
       compileSauceRoute(
         "solana",
-        `return self.USDC;`,
+        `function main() { return self.USDC; }`,
         { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
         { accessors: false },
       ),
-    ).toThrow(/`self` is not a declared variable|property 'USDC' access not supported/);
+    ).toThrow(/is svm — the ERC20 token rewrite .* is EVM-only/);
+  });
+
+  it("a bare registered symbol is the mint's key, a value the program compiles with", () => {
+    const usdc = SVM_TOKEN_REGISTRY["mainnet-beta"].find((row) => row.symbol === "USDC")!;
+    const compiled = compileSauceRoute(
+      "solana",
+      `function main(account: Account): Uint256 { return balanceOf(USDC, account); }`,
+      { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
+      { ambient: ["@sauce/token"] },
+    );
+    expect(Buffer.from(compiled.compiled.bytecode[0]!).toString("hex")).toContain(
+      usdc.address.slice(2),
+    );
   });
 
   it("with accessors default ON, the pre-existing self-sugar rewrite fires and the existing svm guard throws -- a safe, named failure, never a silent drop", () => {
     expect(() =>
-      compileSauceRoute("solana", `return self.USDC;`, {
+      compileSauceRoute("solana", `function main() { return self.USDC; }`, {
         code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
         accounts: [],
       }),

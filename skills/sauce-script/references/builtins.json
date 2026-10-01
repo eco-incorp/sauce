@@ -1,0 +1,823 @@
+{
+  "description": "Every builtin documented in builtins.md, with one example program per target. Each program is a complete SauceScript module (entry main.js). Compile it with @eco-incorp/sauce/compiler for that target; it must compile. For each `unavailable` entry, compiling `program` for that target must fail with a message containing `error`. Items listing `contracts` need those ABIs passed as inlineContracts: [[name, abis[name]]].",
+  "abis": {
+    "ERC20": "[{\"type\":\"function\",\"name\":\"balanceOf\",\"stateMutability\":\"view\",\"inputs\":[{\"name\":\"owner\",\"type\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}]},{\"type\":\"function\",\"name\":\"totalSupply\",\"stateMutability\":\"view\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}]},{\"type\":\"function\",\"name\":\"transfer\",\"stateMutability\":\"nonpayable\",\"inputs\":[{\"name\":\"to\",\"type\":\"address\"},{\"name\":\"amount\",\"type\":\"uint256\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}]},{\"type\":\"function\",\"name\":\"approve\",\"stateMutability\":\"nonpayable\",\"inputs\":[{\"name\":\"spender\",\"type\":\"address\"},{\"name\":\"amount\",\"type\":\"uint256\"}],\"outputs\":[]}]"
+  },
+  "count": 68,
+  "intrinsics": [
+    {
+      "name": "ctx.msgSender",
+      "group": "ctx",
+      "signature": "ctx.msgSender(): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(): Uint256 { return ctx.msgSender(); }",
+        "svm": "function main(): Uint256 { return ctx.msgSender(); }"
+      }
+    },
+    {
+      "name": "ctx.self",
+      "group": "ctx",
+      "signature": "ctx.self(): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(): Uint256 { return ctx.self(); }",
+        "svm": "function main(): Uint256 { return ctx.self(); }"
+      }
+    },
+    {
+      "name": "ctx.chainId",
+      "group": "ctx",
+      "signature": "ctx.chainId(): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(): Uint256 { return ctx.chainId(); }",
+        "svm": "function main(): Uint256 { return ctx.chainId(); }"
+      }
+    },
+    {
+      "name": "ctx.blockNumber",
+      "group": "ctx",
+      "signature": "ctx.blockNumber(): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(): Uint256 { return ctx.blockNumber(); }",
+        "svm": "function main(): Uint256 { return ctx.blockNumber(); }"
+      }
+    },
+    {
+      "name": "ctx.timestamp",
+      "group": "ctx",
+      "signature": "ctx.timestamp(): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(deadline: Uint256): void { require(ctx.timestamp() <= deadline); }",
+        "svm": "function main(deadline: Uint256): void { require(ctx.timestamp() <= deadline); }"
+      }
+    },
+    {
+      "name": "ctx.selfBalance",
+      "group": "ctx",
+      "signature": "ctx.selfBalance(): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(): Uint256 { return ctx.selfBalance(); }",
+        "svm": "function main(): Uint256 { return ctx.selfBalance(); }"
+      }
+    },
+    {
+      "name": "ctx.msgData",
+      "group": "ctx",
+      "signature": "ctx.msgData(): bytes",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(): bytes { return ctx.msgData(); }",
+        "svm": "function main(): bytes { return ctx.msgData(); }"
+      }
+    },
+    {
+      "name": "ctx.balance",
+      "group": "ctx",
+      "signature": "ctx.balance(address: Uint256): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(who: Address): Uint256 { return ctx.balance(who); }",
+        "svm": "function main(vault: Account): Uint256 { return ctx.balance(vault.address); }"
+      }
+    },
+    {
+      "name": "ctx.msgValue",
+      "group": "ctx",
+      "signature": "ctx.msgValue(): Uint256",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(fee: Uint256): void { require(ctx.msgValue() >= fee); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(): Uint256 { return ctx.msgValue(); }",
+          "error": "`ctx.msgValue` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "ctx.gasLeft",
+      "group": "ctx",
+      "signature": "ctx.gasLeft(): Uint256",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(): Uint256 { return ctx.gasLeft(); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(): Uint256 { return ctx.gasLeft(); }",
+          "error": "`ctx.gasLeft` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "ctx.codeSize",
+      "group": "ctx",
+      "signature": "ctx.codeSize(address: Uint256): Uint256",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(token: Address): void { require(ctx.codeSize(token) > 0n); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(a: Uint256): Uint256 { return ctx.codeSize(a); }",
+          "error": "`ctx.codeSize` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "ctx.codeHash",
+      "group": "ctx",
+      "signature": "ctx.codeHash(address: Uint256): Uint256",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(pool: Address): Uint256 { return ctx.codeHash(pool); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(a: Uint256): Uint256 { return ctx.codeHash(a); }",
+          "error": "`ctx.codeHash` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "ctx.isContract",
+      "group": "ctx",
+      "signature": "ctx.isContract(address: Uint256): bool",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(token: Address): void { require(ctx.isContract(token)); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(a: Uint256): bool { return ctx.isContract(a); }",
+          "error": "`ctx.isContract` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "ctx.isEOA",
+      "group": "ctx",
+      "signature": "ctx.isEOA(address: Uint256): bool",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(): void { require(ctx.isEOA(ctx.msgSender())); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(a: Uint256): bool { return ctx.isEOA(a); }",
+          "error": "`ctx.isEOA` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "crypto.keccak256",
+      "group": "crypto",
+      "signature": "crypto.keccak256(data: bytes): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(): Uint256 { return crypto.keccak256(\"Transfer(address,address,uint256)\"); }",
+        "svm": "function main(): Uint256 { return crypto.keccak256(\"Transfer(address,address,uint256)\"); }"
+      }
+    },
+    {
+      "name": "crypto.ecdsaVerify",
+      "group": "crypto",
+      "signature": "crypto.ecdsaVerify(hash: Uint256, signature: bytes, signer: Uint256): bool",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(digest: Uint256, sig: bytes, owner: Address): void { require(crypto.ecdsaVerify(digest, sig, owner)); }",
+        "svm": "function main(digest: Uint256, sig: bytes, owner: Address): void { require(crypto.ecdsaVerify(digest, sig, owner)); }"
+      }
+    },
+    {
+      "name": "crypto.findPDA",
+      "group": "crypto",
+      "signature": "crypto.findPDA(programId: Uint256, seeds: bytes[]): [Uint256, Uint256]",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(program: Uint256): Uint256 { const [vault, bump] = crypto.findPDA(program, [hex`01`, \"vault\"]); return vault; }",
+        "svm": "function main(program: Uint256): Uint256 { const [vault, bump] = crypto.findPDA(program, [hex`01`, \"vault\"]); return vault; }"
+      }
+    },
+    {
+      "name": "Math.sqrt",
+      "group": "Math",
+      "signature": "Math.sqrt(x: Uint256): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(k: Uint256): Uint256 { return Math.sqrt(k); }",
+        "svm": "function main(k: Uint256): Uint256 { return Math.sqrt(k); }"
+      }
+    },
+    {
+      "name": "Math.mulDiv",
+      "group": "Math",
+      "signature": "Math.mulDiv(x: Uint256, y: Uint256, d: Uint256): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(amount: Uint256, bps: Uint256): Uint256 { return Math.mulDiv(amount, bps, 10000n); }",
+        "svm": "function main(amount: Uint256, bps: Uint256): Uint256 { return Math.mulDiv(amount, bps, 10000n); }"
+      }
+    },
+    {
+      "name": "Math.addMod",
+      "group": "Math",
+      "signature": "Math.addMod(a: Uint256, b: Uint256, n: Uint256): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(a: Uint256, b: Uint256, n: Uint256): Uint256 { return Math.addMod(a, b, n); }",
+        "svm": "function main(a: Uint256, b: Uint256, n: Uint256): Uint256 { return Math.addMod(a, b, n); }"
+      }
+    },
+    {
+      "name": "Math.mulMod",
+      "group": "Math",
+      "signature": "Math.mulMod(a: Uint256, b: Uint256, n: Uint256): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(a: Uint256, b: Uint256, n: Uint256): Uint256 { return Math.mulMod(a, b, n); }",
+        "svm": "function main(a: Uint256, b: Uint256, n: Uint256): Uint256 { return Math.mulMod(a, b, n); }"
+      }
+    },
+    {
+      "name": "Math.sDiv",
+      "group": "Math",
+      "signature": "Math.sDiv(a: Uint256, b: Uint256): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(delta: Uint256): Uint256 { return Math.sDiv(delta, 2n); }",
+        "svm": "function main(delta: Uint256): Uint256 { return Math.sDiv(delta, 2n); }"
+      }
+    },
+    {
+      "name": "Math.sMod",
+      "group": "Math",
+      "signature": "Math.sMod(a: Uint256, b: Uint256): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(delta: Uint256): Uint256 { return Math.sMod(delta, 3n); }",
+        "svm": "function main(delta: Uint256): Uint256 { return Math.sMod(delta, 3n); }"
+      }
+    },
+    {
+      "name": "Math.sShr",
+      "group": "Math",
+      "signature": "Math.sShr(value: Uint256, bits: Uint256): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(tick: Uint256): Uint256 { return Math.sShr(tick, 1n); }",
+        "svm": "function main(tick: Uint256): Uint256 { return Math.sShr(tick, 1n); }"
+      }
+    },
+    {
+      "name": "Math.signExtend",
+      "group": "Math",
+      "signature": "Math.signExtend(value: Uint256, byte: Uint256): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(raw: Uint256): Uint256 { return Math.signExtend(raw, 2n); }",
+        "svm": "function main(raw: Uint256): Uint256 { return Math.signExtend(raw, 2n); }"
+      }
+    },
+    {
+      "name": "Math.sLt",
+      "group": "Math",
+      "signature": "Math.sLt(a: Uint256, b: Uint256): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(tick: Uint256): Uint256 { if (Math.sLt(tick, 0n)) { return 1n; } return 0n; }",
+        "svm": "function main(tick: Uint256): Uint256 { if (Math.sLt(tick, 0n)) { return 1n; } return 0n; }"
+      }
+    },
+    {
+      "name": "Math.sGt",
+      "group": "Math",
+      "signature": "Math.sGt(a: Uint256, b: Uint256): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(a: Uint256, b: Uint256): Uint256 { return Math.sGt(a, b); }",
+        "svm": "function main(a: Uint256, b: Uint256): Uint256 { return Math.sGt(a, b); }"
+      }
+    },
+    {
+      "name": "Math.sLte",
+      "group": "Math",
+      "signature": "Math.sLte(a: Uint256, b: Uint256): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(a: Uint256, b: Uint256): Uint256 { return Math.sLte(a, b); }",
+        "svm": "function main(a: Uint256, b: Uint256): Uint256 { return Math.sLte(a, b); }"
+      }
+    },
+    {
+      "name": "Math.sGte",
+      "group": "Math",
+      "signature": "Math.sGte(a: Uint256, b: Uint256): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(a: Uint256, b: Uint256): Uint256 { return Math.sGte(a, b); }",
+        "svm": "function main(a: Uint256, b: Uint256): Uint256 { return Math.sGte(a, b); }"
+      }
+    },
+    {
+      "name": "abi.encode",
+      "group": "abi",
+      "signature": "abi.encode(...values: value[]): bytes",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(total: Uint256, to: Address): bytes { return abi.encode(total, to); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(a: Uint256): bytes { return abi.encode(a); }",
+          "error": "`abi.encode` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "abi.decode",
+      "group": "abi",
+      "signature": "abi.decode(data: bytes, shape: string[]): record",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(data: bytes): Uint256 { const [amount, to] = abi.decode(data, [\"Uint256\", \"Address\"]); return amount; }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(d: bytes): Uint256 { const t = abi.decode(d, [\"Uint256\"]); return t[0]; }",
+          "error": "`abi.decode` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "evm.call",
+      "group": "evm",
+      "signature": "evm.call(address: Uint256, value: Uint256, data: bytes): bytes",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(weth: Address, amount: Uint256): bytes { return evm.call(weth, amount, hex`d0e30db0`); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(a: Uint256, d: bytes): bytes { return evm.call(a, 0n, d); }",
+          "error": "`evm.call` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "evm.static",
+      "group": "evm",
+      "signature": "evm.static(address: Uint256, data: bytes): bytes",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(pool: Address, query: bytes): bytes { return evm.static(pool, query); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(a: Uint256, d: bytes): bytes { return evm.static(a, d); }",
+          "error": "`evm.static` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "evm.delegate",
+      "group": "evm",
+      "signature": "evm.delegate(address: Uint256, data: bytes): bytes",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(library: Address, data: bytes): bytes { return evm.delegate(library, data); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(a: Uint256, d: bytes): bytes { return evm.delegate(a, d); }",
+          "error": "`evm.delegate` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "evm.sload",
+      "group": "evm",
+      "signature": "evm.sload(slot: Uint256): Uint256",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(): Uint256 { return evm.sload(0n); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(s: Uint256): Uint256 { return evm.sload(s); }",
+          "error": "`evm.sload` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "evm.sstore",
+      "group": "evm",
+      "signature": "evm.sstore(slot: Uint256, value: Uint256): void",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(): void { const count = evm.sload(0n); evm.sstore(0n, count + 1n); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(s: Uint256): void { evm.sstore(s, 1n); }",
+          "error": "`evm.sstore` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "evm.tload",
+      "group": "evm",
+      "signature": "evm.tload(key: Uint256): Uint256",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(key: Uint256): Uint256 { return evm.tload(key); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(k: Uint256): Uint256 { return evm.tload(k); }",
+          "error": "`evm.tload` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "evm.tstore",
+      "group": "evm",
+      "signature": "evm.tstore(key: Uint256, value: Uint256): void",
+      "targets": ["evm"],
+      "example": {
+        "evm": "function main(key: Uint256): void { evm.tstore(key, 1n); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(k: Uint256): void { evm.tstore(k, 1n); }",
+          "error": "`evm.tstore` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "svm.sload",
+      "group": "svm",
+      "signature": "svm.sload(account: Account, offset: Uint256, length: Uint256): bytes",
+      "targets": ["svm"],
+      "example": {
+        "svm": "function main(tokenAccount: Account): Uint256 { return svm.sload(tokenAccount, 64n, 8n).toLe(); }"
+      },
+      "unavailable": {
+        "evm": {
+          "program": "function main(a: Account): bytes { return svm.sload(a, 0n, 8n); }",
+          "error": "`svm.sload` is not available on the evm target"
+        }
+      }
+    },
+    {
+      "name": "svm.sstore",
+      "group": "svm",
+      "signature": "svm.sstore(account: Account<Writable, Signer>, offset: Uint256, data: bytes): void",
+      "targets": ["svm"],
+      "example": {
+        "svm": "function main(state: Account<Writable, Signer>, counter: Uint256): void { svm.sstore(state, 0n, counter.toBytesLe(8n)); }"
+      },
+      "unavailable": {
+        "evm": {
+          "program": "function main(a: Account, d: bytes): void { svm.sstore(a, 0n, d); }",
+          "error": "`svm.sstore` is not available on the evm target"
+        }
+      }
+    },
+    {
+      "name": "svm.call",
+      "group": "svm",
+      "signature": "svm.call(program: Account, accounts: Account[], data: bytes): bytes",
+      "targets": ["svm"],
+      "example": {
+        "svm": "function main(tokenProgram: Account, source: Account<Writable>, destination: Account<Writable>, owner: Account<Signer>, instruction: bytes): bytes { return svm.call(tokenProgram, [source, destination, owner], instruction); }"
+      },
+      "unavailable": {
+        "evm": {
+          "program": "function main(p: Account, d: bytes): bytes { return svm.call(p, [], d); }",
+          "error": "`svm.call` is not available on the evm target"
+        }
+      }
+    },
+    {
+      "name": "svm.remainingAccount",
+      "group": "svm",
+      "signature": "svm.remainingAccount(index: Uint256): Account",
+      "targets": ["svm"],
+      "example": {
+        "svm": "function main(program: Account): Uint256 { return svm.sload(svm.remainingAccount(0n), 0n, 32n).toBe(); }"
+      },
+      "unavailable": {
+        "evm": {
+          "program": "function main(i: Uint256): Uint256 { return svm.remainingAccount(i); }",
+          "error": "`svm.remainingAccount` is not available on the evm target"
+        }
+      }
+    },
+    {
+      "name": "svm.remainingAccounts",
+      "group": "svm",
+      "signature": "svm.remainingAccounts(): Account[]",
+      "targets": ["svm"],
+      "example": {
+        "svm": "function main(router: Account, data: bytes): bytes { const rest = svm.remainingAccounts(); return svm.call(router, rest, data); }"
+      },
+      "unavailable": {
+        "evm": {
+          "program": "function main(): Uint256 { const rest = svm.remainingAccounts(); return 0n; }",
+          "error": "`svm.remainingAccounts` is not available on the evm target"
+        }
+      }
+    },
+    {
+      "name": "require",
+      "group": "statement",
+      "signature": "require(condition: scalar, message?: bytes): void",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(out: Uint256, minOut: Uint256): void { require(out >= minOut, \"slippage\"); }",
+        "svm": "function main(out: Uint256, minOut: Uint256): void { require(out >= minOut, \"slippage\"); }"
+      }
+    },
+    {
+      "name": "revert",
+      "group": "statement",
+      "signature": "revert(data?: bytes): void",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(code: Uint256): void { if (code != 0n) { revert(code.toBytesBe(32n)); } }",
+        "svm": "function main(code: Uint256): void { if (code != 0n) { revert(code.toBytesBe(32n)); } }"
+      }
+    },
+    {
+      "name": "throw",
+      "group": "statement",
+      "signature": "throw data",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(held: Uint256, floor: Uint256): void { if (held < floor) { throw \"below floor\"; } }",
+        "svm": "function main(held: Uint256, floor: Uint256): void { if (held < floor) { throw \"below floor\"; } }"
+      }
+    },
+    {
+      "name": "log",
+      "group": "statement",
+      "signature": "log(data: bytes, ...topics: scalar[]): void",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(from: Address, to: Address, amount: Uint256): void { log(amount.toBytesBe(32n), crypto.keccak256(\"Transfer(address,address,uint256)\"), from, to); }",
+        "svm": "function main(amount: Uint256): void { log(amount.toBytesLe(8n)); }"
+      }
+    },
+    {
+      "name": "eval",
+      "group": "statement",
+      "signature": "eval(program: bytes, ...args: scalar[]): bytes",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(program: bytes, amount: Uint256): bytes { return eval(program, amount); }",
+        "svm": "function main(program: bytes, amount: Uint256): bytes { return eval(program, amount); }"
+      }
+    },
+    {
+      "name": ".slice",
+      "group": "method",
+      "signature": "bytes.slice(start: Uint256, end: Uint256): bytes",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(input: bytes): bytes { return input.slice(4n, 36n); }",
+        "svm": "function main(input: bytes): bytes { return input.slice(4n, 36n); }"
+      }
+    },
+    {
+      "name": ".concat",
+      "group": "method",
+      "signature": "bytes.concat(...parts: bytes[]): bytes",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(to: Uint256, amount: Uint256): bytes { const selector = hex`a9059cbb`; return selector.concat(to.toBytesBe(32n), amount.toBytesBe(32n)); }",
+        "svm": "function main(to: Uint256, amount: Uint256): bytes { const selector = hex`a9059cbb`; return selector.concat(to.toBytesBe(32n), amount.toBytesBe(32n)); }"
+      }
+    },
+    {
+      "name": ".toBe",
+      "group": "method",
+      "signature": "bytes.toBe(): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(word: bytes): Uint256 { return word.toBe(); }",
+        "svm": "function main(word: bytes): Uint256 { return word.toBe(); }"
+      }
+    },
+    {
+      "name": ".toLe",
+      "group": "method",
+      "signature": "bytes.toLe(): Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(field: bytes): Uint256 { return field.toLe(); }",
+        "svm": "function main(field: bytes): Uint256 { return field.toLe(); }"
+      }
+    },
+    {
+      "name": ".toBytesBe",
+      "group": "method",
+      "signature": "value.toBytesBe(width: Uint256): bytes",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(total: Uint256): bytes { return total.toBytesBe(32n); }",
+        "svm": "function main(total: Uint256): bytes { return total.toBytesBe(32n); }"
+      }
+    },
+    {
+      "name": ".toBytesLe",
+      "group": "method",
+      "signature": "value.toBytesLe(width: Uint256): bytes",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(amount: Uint256): bytes { return amount.toBytesLe(8n); }",
+        "svm": "function main(amount: Uint256): bytes { return amount.toBytesLe(8n); }"
+      }
+    },
+    {
+      "name": ".length",
+      "group": "method",
+      "signature": "(bytes | T[]).length: Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(amounts: Uint256[]): Uint256 { let total = 0n; for (let i = 0n; i < amounts.length; i++) { total += amounts[i]; } return total; }",
+        "svm": "function main(amounts: Uint256[]): Uint256 { let total = 0n; for (let i = 0n; i < amounts.length; i++) { total += amounts[i]; } return total; }"
+      }
+    },
+    {
+      "name": "account.address",
+      "group": "account",
+      "signature": "account.address: Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(acct: Account): Uint256 { return acct.address; }",
+        "svm": "function main(acct: Account, expected: Uint256): void { require(acct.address == expected); }"
+      }
+    },
+    {
+      "name": "account.owner",
+      "group": "account",
+      "signature": "account.owner: Uint256",
+      "targets": ["svm"],
+      "example": {
+        "svm": "function main(acct: Account, tokenProgram: Uint256): void { require(acct.owner == tokenProgram); }"
+      },
+      "unavailable": {
+        "evm": {
+          "program": "function main(acct: Account): Uint256 { return acct.owner; }",
+          "error": "`account.owner` is not available on the evm target"
+        }
+      }
+    },
+    {
+      "name": "account.dataLen",
+      "group": "account",
+      "signature": "account.dataLen: Uint256",
+      "targets": ["svm"],
+      "example": {
+        "svm": "function main(acct: Account): void { require(acct.dataLen == 165n); }"
+      },
+      "unavailable": {
+        "evm": {
+          "program": "function main(acct: Account): Uint256 { return acct.dataLen; }",
+          "error": "`account.dataLen` is not available on the evm target"
+        }
+      }
+    },
+    {
+      "name": "account ==",
+      "group": "account",
+      "signature": "account == account: bool",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(a: Account, b: Account): void { require(a != b); }",
+        "svm": "function main(a: Account, b: Account): void { require(a != b); }"
+      }
+    },
+    {
+      "name": "Contract.at",
+      "group": "binding",
+      "signature": "Contract.at(address).method(...args)",
+      "targets": ["evm"],
+      "contracts": ["ERC20"],
+      "example": {
+        "evm": "function main(token: Address): Uint256 { return ERC20.at(token).balanceOf(ctx.self()); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(t: Uint256): Uint256 { return ERC20.at(t).totalSupply(); }",
+          "error": "`Contract.at` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "Contract.view",
+      "group": "binding",
+      "signature": "Contract.view(address).method(...args)",
+      "targets": ["evm"],
+      "contracts": ["ERC20"],
+      "example": {
+        "evm": "function main(token: Address): Uint256 { return ERC20.view(token).totalSupply(); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(t: Uint256): Uint256 { return ERC20.view(t).totalSupply(); }",
+          "error": "`Contract.view` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "Contract.lib",
+      "group": "binding",
+      "signature": "Contract.lib(address).method(...args)",
+      "targets": ["evm"],
+      "contracts": ["ERC20"],
+      "example": {
+        "evm": "function main(lib: Address): Uint256 { return ERC20.lib(lib).totalSupply(); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(t: Uint256): Uint256 { return ERC20.lib(t).totalSupply(); }",
+          "error": "`Contract.lib` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "bound contract variable",
+      "group": "binding",
+      "signature": "const t = Contract.at(address); t.method(...args)",
+      "targets": ["evm"],
+      "contracts": ["ERC20"],
+      "example": {
+        "evm": "function main(token: Address, router: Address, amount: Uint256): void { const t = ERC20.at(token); t.approve(router, amount); }"
+      }
+    },
+    {
+      "name": ".catch (statement)",
+      "group": "binding",
+      "signature": "<external call>.catch(() => { ... })",
+      "targets": ["evm"],
+      "contracts": ["ERC20"],
+      "example": {
+        "evm": "function main(token: Address, spender: Address, amount: Uint256): Uint256 { let approved = 1n; ERC20.at(token).approve(spender, amount).catch(() => { approved = 0n; }); return approved; }"
+      }
+    },
+    {
+      "name": ".catch (value)",
+      "group": "binding",
+      "signature": "const v = <call returning one value>.catch(() => { return <constant>; })",
+      "targets": ["evm"],
+      "contracts": ["ERC20"],
+      "example": {
+        "evm": "function main(token: Address, who: Address): Uint256 { return ERC20.at(token).balanceOf(who).catch(() => { return 0n; }); }"
+      },
+      "unavailable": {
+        "svm": {
+          "program": "function main(p: Account, d: bytes): Uint256 { return svm.call(p, [], d).toLe().catch(() => { return 0n; }); }",
+          "error": "`.catch()` is not available on the svm target"
+        }
+      }
+    },
+    {
+      "name": "new Array",
+      "group": "construct",
+      "signature": "new Array(length: Uint256): Uint256[]",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(n: Uint256): Uint256[] { const xs = new Array(n); xs[0] = 1n; return xs; }",
+        "svm": "function main(n: Uint256): Uint256[] { const xs = new Array(n); xs[0] = 1n; return xs; }"
+      }
+    },
+    {
+      "name": "hex literal",
+      "group": "construct",
+      "signature": "hex`digits`: bytes",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(): bytes { return hex`0xdeadbeef`; }",
+        "svm": "function main(): bytes { return hex`0xdeadbeef`; }"
+      }
+    },
+    {
+      "name": "unary minus",
+      "group": "construct",
+      "signature": "-x: Uint256",
+      "targets": ["evm", "svm"],
+      "example": {
+        "evm": "function main(x: Uint256): Uint256 { return -x; }",
+        "svm": "function main(x: Uint256): Uint256 { return -x; }"
+      }
+    }
+  ]
+}

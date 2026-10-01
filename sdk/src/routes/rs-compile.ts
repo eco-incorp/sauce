@@ -10,7 +10,12 @@
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
 // The RS compiler's own option/result types, from the package `wasm-compiler.ts` loads -- a
 // hand-written mirror of them would drift with nothing to catch it.
-import type { ResolveModule, ResolvePackage, SauceTarget as RsTarget } from "sauce-compiler";
+import type {
+  AccountManifest,
+  ResolveModule,
+  ResolvePackage,
+  SauceTarget as RsTarget,
+} from "sauce-compiler";
 import { resolveSdkModule, resolveSdkPackage, sdkStdPath } from "../embedded/resolve.js";
 import { compile } from "../wasm-compiler.js";
 
@@ -120,7 +125,7 @@ function endOfComment(source: string, open: number): number {
  * LENGTH-PRESERVING, so an index into the original still names the same character — which is what
  * lets the brace search in `mainBody` run on the blanked copy.
  */
-function blankLiterals(source: string): string {
+export function blankLiterals(source: string): string {
   const blank = (text: string): string => text.replace(/[^\n]/g, " ");
   const blanked: string[] = [];
 
@@ -162,10 +167,10 @@ function mainBody(code: string, from: number): string {
 /**
  * Declare `main` void when it falls off the end.
  *
- * The compiler requires a function's return type to be declared rather than inferred, but the SDK's
- * source generators must emit PLAIN JS: the token-member and protocol-accessor rewrites are
- * acorn-based and cannot parse a type annotation. So the annotation is added here, at the single
- * compile seam, after every rewrite pass has run.
+ * The compiler requires a function's return type to be declared rather than inferred. A route body
+ * and the SDK's own generated sources are allowed to leave a `main` that returns nothing
+ * unannotated, so the annotation is added here, at the single compile seam, after every rewrite
+ * pass has run.
  */
 export function ensureVoidMain(source: string): string {
   // EVERY search below runs on the blanked copy, never the raw source: an earlier string or comment
@@ -193,43 +198,6 @@ export function ensureVoidMain(source: string): string {
   return `${source.slice(0, i + 1)}: void${source.slice(i + 1)}`;
 }
 
-/**
- * Give every unannotated parameter of `main` a `Uint256` type.
- *
- * Same reason `ensureVoidMain` exists, one step further: the compiler wants annotations, and the
- * SDK's rewrite passes are acorn-based, so a source carrying them cannot get through them. A child
- * program built from an intent closure takes its captured values as parameters, so it needs both —
- * the annotations added here, after every rewrite has run.
- *
- * Only parameters that have none are touched, so a hand-written typed program passes through
- * unchanged, and a `main` with no parameters is a no-op.
- */
-export function ensureTypedMainParams(source: string): string {
-  const code = blankLiterals(source);
-  const signature = /function(\s+)main(\s*)\(/.exec(code);
-  if (signature === null) return source;
-
-  const open = signature.index + signature[0].length - 1;
-  let depth = 0;
-  let close = open;
-  for (let i = open; i < code.length; i++) {
-    if (code[i] === "(") depth++;
-    else if (code[i] === ")" && --depth === 0) {
-      close = i;
-      break;
-    }
-  }
-  const params = source.slice(open + 1, close);
-  if (params.trim() === "") return source;
-
-  const annotated = params
-    .split(",")
-    .map((param) => (param.includes(":") ? param : `${param.trim()}: Uint256`))
-    .join(", ");
-
-  return `${source.slice(0, open + 1)}${annotated}${source.slice(close)}`;
-}
-
 export interface RsCompileInput {
   source: string;
   target: CompileTarget;
@@ -246,20 +214,27 @@ export interface RsCompileInput {
   compactArgs?: boolean;
 }
 
+/** The seam's `CompileResult`, plus what `compileSauceProgram` reports beyond it: how entry
+ *  arguments are encoded, and the SVM account manifest when the compiler returned one. */
+export interface RsCompileResult extends CompileResult {
+  entryEncoding: "abi-v1" | "compact-v1";
+  manifest?: AccountManifest;
+}
+
 /**
  * Compiles `input.source` and adapts the result to the seam's own `CompileResult`, so
  * `compileSauceRoute` can slot it into `CompiledSauceRoute`.
  *
  * `bytecode` is a one-element list because a cook runs exactly one program; `warnings` is always
- * empty, since a real problem throws rather than being reported. The SVM account `manifest` is not
- * carried through -- nothing `compileSauceRoute` returns reads it, and an SVM caller that needs the
- * attach contract compiles through `svm/` directly.
+ * empty, since a real problem throws rather than being reported. The SVM account `manifest` rides
+ * alongside for `compileSauceProgram`, which hands it to the `sauce` command; `compileSauceRoute`
+ * returns none, and an SVM caller that needs the attach contract compiles through `svm/` directly.
  */
-export function compileWithRs(input: RsCompileInput): CompileResult {
+export function compileWithRs(input: RsCompileInput): RsCompileResult {
   const result = compile({
     target: mapTarget(input.target),
     entry: ENTRY,
-    resolve: makeResolve(ensureVoidMain(ensureTypedMainParams(input.source)), input.resolve),
+    resolve: makeResolve(ensureVoidMain(input.source), input.resolve),
     resolvePackage: makeResolvePackage(input.resolvePackage),
     inlineContracts: toInlineContracts(input.contracts),
     ambient: input.ambient,
@@ -267,5 +242,13 @@ export function compileWithRs(input: RsCompileInput): CompileResult {
     compactArgs: input.compactArgs,
   });
 
-  return { bytecode: [result.bytecode], warnings: [], entrySchema: result.entrySchema };
+  const compiled: RsCompileResult = {
+    bytecode: [result.bytecode],
+    warnings: [],
+    entrySchema: result.entrySchema,
+    entryEncoding: result.entryEncoding,
+  };
+  if (result.manifest !== undefined) compiled.manifest = result.manifest;
+
+  return compiled;
 }

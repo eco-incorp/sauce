@@ -20,7 +20,7 @@ are suffixes of that package name; `.` means `@eco-incorp/sauce` itself.
 | `/svm/recipes/settle.sauce.ts` | SVM settlement source asset                                                                                                        |
 | `/evm/engine`                  | EVM Pot and Kitchen ABIs and call encoders (`v12PotAbi`, `v12KitchenAbi`, `v12Pot`, `v12Kitchen`), and `potRouterUpdate`           |
 | `/verify`                      | EVM settlement encoding, structural decoding, and validation against the pinned program                                            |
-| `/skills`                      | Protocol Markdown index and skill-file loaders                                                                                     |
+| `/skills`                      | The per-protocol documents (the `sauce-protocols` agent skill's references) and their index, as text                               |
 
 The [`exports` map](../../package.json) defines this list. There is no `/routes`, `/token`,
 `/deposit`, or `/contracts` subpath; import these namespaces from the root:
@@ -35,15 +35,21 @@ Importing the package puts nothing on `globalThis`. `chain(ref)` and the host `T
 named exports too.
 
 Bare names such as `USDC` and `Uniswap` are different: they are _program syntax_, resolved by the
-compiler inside a route body, with no host JavaScript object behind them. See
+compiler inside a route body, with no host JavaScript object behind them. The same registry entries
+are on the chain export in TypeScript (`Base.USDC`, `Base.Uniswap`). See
 [protocols and tokens](../guides/protocols-and-tokens.md).
 
 ## Detailed references
 
+- [SauceScript reference](../../skills/sauce-script/references/builtins.md): every type, operator,
+  statement, builtin and limit, per target, checked against the compiler;
+  [`builtins.json`](../../skills/sauce-script/references/builtins.json) lists the builtins with an
+  example program each. It is the `sauce-script` agent skill's reference, shipped in the package.
 - [Compiler](compiler.md): direct compilation, result metadata, compact argument encoding.
 - [`@sauce/router`](router.md): the SauceScript swap library a program imports — one function per
   venue.
 - [Routes](routes.md): compile options, intent construction, nested execution, and submission helpers.
+- [Contracts and tokens](contracts.md): every protocol namespace and token, in a program and in TypeScript, and running a call through viem.
 - [Coverage](coverage.md): distinguish catalog entries, callable descriptors, and available deployments.
 
 For programs assembled from data rather than written, see [builders](../guides/builders-and-actions.md).
@@ -65,14 +71,19 @@ const aaveMarkdown = getProtocolSkill("aave-v3");
 const availableSkills = listSkillSlugs();
 ```
 
-Skill files are Markdown written for AI coding assistants; loading one reads a document and
-performs no protocol operation. `getProtocolSkill` throws for a slug absent from `listSkillSlugs()`.
+Each document is Markdown written for coding agents; loading one reads a document and performs no
+protocol operation. `getProtocolSkill` throws for a slug absent from `listSkillSlugs()`. The
+documents are the `sauce-protocols` agent skill's references
+([`skills/sauce-protocols/references/`](../../skills/sauce-protocols/references/index.md)), the same
+files `sauce skills install` puts in a project ([Agent skills](../guides/cli.md#agent-skills)), so the
+text this export returns is the text an agent reads.
 
 ## Where each import runs
 
 Every import runs in Node **24 or newer** and in a browser, with one exception:
 `/svm/engine-artifacts` returns filesystem paths to the packaged engine binaries for a local
-LiteSVM harness, and is Node-only.
+LiteSVM harness, and is Node-only. The [`sauce` command](../guides/cli.md) is not an import at
+all: it is the package's executable, and Node-only too.
 
 Anything that compiles — `/compiler`, route compilation, the builders, the recipes, `/actions`,
 `/svm/verify` — needs one `await ready()` first in a browser, while the compiler's WebAssembly

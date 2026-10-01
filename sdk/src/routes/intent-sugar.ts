@@ -31,20 +31,29 @@
  * compile-time value nor an enclosing local is refused. Nothing here guesses: the failure mode this
  * exists to avoid is a plausible-looking intent carrying a number nobody chose.
  *
+ * WHICH CHAIN A NAME MEANS. Two chains are in play, and each part of the expression belongs to one.
+ * The body and the delivery argument run on the destination, so `USDC` there is the destination's.
+ * The reward is escrowed by the enclosing program, on the chain it runs on, and approved to that
+ * chain's Portal, so `USDC` in `.reward(...)` is that chain's. An intent opened inside a body is
+ * funded on the body's chain: its reward resolves there and its own body on its own destination —
+ * the same rule one level down, because the child compile re-enters this pass with `source` set to
+ * the chain it compiles for.
+ *
  * WHERE THE ADDRESSES COME FROM. The Portal on each side, and the prover for the pair, are looked up
  * in the SDK's eco-routes deployment registry (`protocols/eco-routes`). A caller supplies what has
  * no correct default — deadlines, and a creator when the refund must not go to the executing Pot.
  */
-import { parse } from "acorn";
 import { encodeFunctionData, type Hex } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { ERC20ABI } from "../protocols/erc20/abis.js";
 import { safeApproveStatements } from "../token/safe.js";
-import { collectDeclaredNames, walk, type AstNode } from "./ast-walk.js";
+import { walk, type AstNode } from "./ast-walk.js";
+import { childProgram, enclosingLocals, moduleScope, unreachedFunctions } from "./intent-body.js";
 import { denormalizeToEvm } from "./encode.js";
 import { normalizeReward, normalizeRoute, toUniversalAddress } from "./normalize.js";
 import { publishAndFundTx } from "./portal.js";
+import { parseSauce } from "./parse.js";
 import { emitTemplate, splitByPlaceholders, type PlaceholderSpec } from "./template.js";
 import type { AddressInput, Intent } from "./types.js";
 
@@ -106,7 +115,8 @@ export interface IntentSugarDefaults {
 
 /** Everything the rewrite needs that is not in the source text. */
 export interface IntentSugarContext {
-  /** The chain the ENCLOSING program runs on — the child's source chain. */
+  /** The chain the ENCLOSING program runs on — the child's source chain, where its reward is
+   *  escrowed. */
   readonly source: CanonicalChain;
   /** Chain accessor name (`Base`) -> canonical chain. Only these names open an intent. */
   readonly chains: ReadonlyMap<string, CanonicalChain>;
@@ -117,7 +127,8 @@ export interface IntentSugarContext {
    * Per chain because a symbol is not an address. `USDC` inside `Arbitrum(() => ...)` is Arbitrum's
    * USDC, and resolving it against the enclosing program's chain would put a Base address in a
    * route that executes on Arbitrum — most likely not a token at all, and a transfer to it is
-   * funds gone. The enclosing program's own names resolve against `source`.
+   * funds gone. The `.reward(...)` argument is the other way round: this program escrows it, on
+   * `source`, so its names resolve against `source`.
    */
   readonly definesFor: (chain: CanonicalChain) => ReadonlyMap<string, bigint>;
   /** Resolves the Portal for a chain, and the prover for a pair. Throws with its own diagnostic. */
@@ -159,6 +170,8 @@ export interface LoweredIntent {
   readonly intent: Intent;
   /** Enclosing locals spliced into it, in slot order. */
   readonly captures: readonly string[];
+  /** Each sentinel the encoded child carries, and the local whose value replaces it on chain. */
+  readonly sentinels: readonly { readonly sentinel: bigint; readonly capture: string }[];
   readonly destination: CanonicalChain;
 }
 
@@ -230,13 +243,20 @@ interface LoweredCall {
 
 /** Whether every statement is a plain token write, which lowers to direct `route.calls` entries and
  *  needs no program, no Pot and no Kitchen fee. Anything else — a swap, control flow, a nested
- *  intent — takes the general path. */
+ *  intent, an argument that has to be computed (`half(amount)`, `amount - fee`) — takes the
+ *  general path. */
 function isDirectCallBody(body: readonly AstNode[], defines: ReadonlyMap<string, bigint>): boolean {
+  // The SHAPE of each argument, not its value: a literal or a name is resolved by the lowering
+  // itself, which reports a name it cannot resolve by name. Anything computed needs a program.
+  const shapeOnly: Resolver = (node, what) =>
+    literalOf(node) !== undefined || node.type === "Identifier"
+      ? { literal: 0n }
+      : fail(`${what} is computed`);
   return (
     body.length > 0 &&
     body.every((statement) => {
       try {
-        lowerStatement(statement, () => ({ literal: 0n }), defines);
+        lowerStatement(statement, shapeOnly, defines);
 
         return true;
       } catch {
@@ -322,57 +342,6 @@ function lowerStatement(
     return fail(`\`.${method}(...)\` takes two arguments, got ${args.length}`);
   }
   return { target, method, args };
-}
-
-/**
- * The enclosing program's variables a closure body reads.
- *
- * Whole-program `outerLocals` minus everything the closure declares itself, minus names the
- * destination resolves (tokens, protocols, `ctx`, `abi`…). Conservative in the safe direction: a
- * name wrongly treated as a capture becomes an unused program parameter, while one wrongly left out
- * becomes an undeclared variable the compiler rejects by name.
- */
-function collectCaptures(
-  body: readonly AstNode[],
-  outerLocals: ReadonlySet<string>,
-  defines: ReadonlyMap<string, bigint>,
-): string[] {
-  const declared = new Set<string>();
-  const read: string[] = [];
-  for (const statement of body) {
-    walk(statement, (node) => {
-      if (node.type === "VariableDeclarator") {
-        const id = (node as { id?: AstNode }).id;
-        if (id?.type === "Identifier") declared.add((id as unknown as { name: string }).name);
-      }
-    });
-  }
-  for (const statement of body) {
-    walk(statement, (node) => {
-      if (node.type !== "Identifier") return;
-      const name = (node as unknown as { name: string }).name;
-      if (declared.has(name) || defines.has(name)) return;
-      if (!outerLocals.has(name)) return;
-      if (!read.includes(name)) read.push(name);
-    });
-  }
-  return read;
-}
-
-/** Is this identifier a PROPERTY (`a.b`) rather than a value read? Those are never captures. */
-function stripMemberProperties(body: readonly AstNode[]): Set<string> {
-  const properties = new Set<string>();
-  for (const statement of body) {
-    walk(statement, (node) => {
-      if (node.type !== "MemberExpression") return;
-      if ((node as { computed?: boolean }).computed === true) return;
-      const property = (node as { property?: AstNode }).property;
-      if (property?.type === "Identifier") {
-        properties.add((property as unknown as { name: string }).name);
-      }
-    });
-  }
-  return properties;
 }
 
 // ---------------------------------------------------------------------------
@@ -535,7 +504,7 @@ function collectSites(program: AstNode, context: IntentSugarContext): SugarSite[
 const addressHex = (value: bigint): Hex => `0x${value.toString(16).padStart(40, "0")}`;
 
 /** Lowers every `Chain(() => { ... }).reward({ ... })` in `source`. Purely textual surgery driven by
- *  acorn ranges, so everything else survives byte for byte. */
+ *  parser ranges, so everything else survives byte for byte. */
 export function rewriteIntentSugar(source: string, context: IntentSugarContext): IntentSugarResult {
   // Every route compile comes through here, and most programs have no sugar, so skip the parse
   // when a site is impossible. A site is a call whose callee's property is the identifier
@@ -546,17 +515,16 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
   if (!source.includes("reward") && !source.includes("\\u")) {
     return { source, rewrote: false, intents: [] };
   }
-  const program = parse(source, {
-    ecmaVersion: "latest",
-    sourceType: "module",
-  }) as unknown as AstNode;
+  const program = parseSauce(source);
   const sites = collectSites(program, context);
   if (sites.length === 0) return { source, rewrote: false, intents: [] };
 
-  // Every name the program binds anywhere. A capture must be one of them, and the enclosing
-  // program's locals are what this set is -- deliberately whole-program rather than scope-accurate,
-  // matching `token-rewrite.ts`'s posture, because SauceScript shares scope across blocks anyway.
-  const outerLocals = collectDeclaredNames(program);
+  // The file's top level: the declarations a child program may carry, and the entry. See
+  // `intent-body.ts` for what each name an intent body reads means.
+  const scope = moduleScope(program);
+  // The file's functions some child program carries; those the enclosing program no longer reaches
+  // once its bodies are lowered move out of it below.
+  const carriedFunctions = new Set<string>();
 
   const intents: LoweredIntent[] = [];
   const replacements: { start: number; end: number; text: string }[] = [];
@@ -587,10 +555,23 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       return captureSentinel(at);
     };
 
-    // Resolved against the DESTINATION's registry: `USDC` in this closure is the destination's
-    // USDC, because that is the chain the calls run on.
+    // TWO chains, so two resolvers. The body and the delivery argument run on the DESTINATION:
+    // `USDC` in the closure is the destination's USDC. The reward is escrowed by THIS program, on
+    // the chain it runs on, and approved to that chain's Portal a few statements below, so its
+    // `USDC` is the enclosing chain's. Crossing them names an address with no code where the call
+    // runs: a reward token from the destination fails SafeERC20's code check on the approval and
+    // reverts the whole fulfilment, and a body token from here is not a token over there.
     const defines = context.definesFor(site.chain);
-    const resolve = makeResolver(defines, outerLocals);
+    // What the enclosing program can read where the intent opens: its locals there, and the
+    // file's module-level values. A reward, a delivery or a token-write argument naming one is
+    // spliced in at run time.
+    const readable = new Set([
+      ...enclosingLocals(program, scope, site.start),
+      ...scope.imports.keys(),
+      ...[...scope.declarations].filter(([, d]) => d.kind === "variable").map(([name]) => name),
+    ]);
+    const resolve = makeResolver(defines, readable);
+    const resolveFunding = makeResolver(context.definesFor(context.source), readable);
 
     /**
      * What the solver delivers to the destination Executor so this intent can run.
@@ -609,8 +590,10 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
     // call, which is cheaper than a cook and needs neither a Pot nor a Kitchen fee. Anything else --
     // a swap, a condition, a loop, an intent of its own -- is a program, compiled for the
     // destination and run through its Pot. The second shape is strictly more general; the first is
-    // kept because it is free.
-    const simple = isDirectCallBody(site.body, defines);
+    // kept because it is free. It is ERC-20 calldata, so only for an EVM destination: on Solana a
+    // symbol is a mint's key, and a token write there goes the program way, where the SVM compile
+    // refuses the token syntax by name.
+    const simple = site.chain.kind === "evm" && isDirectCallBody(site.body, defines);
     // The Portal the child's route records. Resolved once, here, because it is also what the Pot's
     // owner is derived from: a route recording one Portal is run by that Portal's Executor.
     const destinationPortal = context.defaults.destinationPortal ?? context.portalOf(site.chain);
@@ -619,22 +602,32 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
     const captureWords: { name: string; sentinel: bigint }[] = [];
 
     if (!simple) {
-      const properties = stripMemberProperties(site.body);
-      const captured = collectCaptures(site.body, outerLocals, defines).filter(
-        (name) => !properties.has(name),
-      );
+      // The body as a program of its own: the file's declarations it reaches, carried as written,
+      // and `main` taking what it captures (`intent-body.ts`).
+      //
       // Captured values reach the program as ENTRY ARGUMENTS. They cannot be folded in: their
       // values do not exist when it is compiled. Declared as `main`'s parameters, encoded
       // compact-v1 at a declared width so the payload's length does not move with them, and spliced
-      // by the parent at a fixed offset -- which is the property `scalarWidth` exists for.
-      // UNTYPED parameters on purpose: the rewrite passes downstream are acorn-based and cannot
-      // parse an annotation. `rs-compile.ts#ensureTypedMainParams` adds them at the compile seam,
-      // after every rewrite has run -- the same staging `ensureVoidMain` already uses.
-      const childSource = `function main(${captured.join(", ")}) {\n${source.slice(
-        site.bodyStart + 1,
-        site.bodyEnd - 1,
-      )}\n}`;
-      const child = context.compileChild(site.chain, childSource, captured, destinationPortal);
+      // by the parent at a fixed offset -- which is the property `scalarWidth` exists for. Left
+      // unannotated: the compiler reads an unannotated parameter as a number, which a spliced
+      // 32-byte word is.
+      const childModule = childProgram(
+        source,
+        program,
+        scope,
+        site,
+        site.body,
+        source.slice(site.bodyStart + 1, site.bodyEnd - 1),
+        new Set(defines.keys()),
+      );
+      const captured = childModule.captures;
+      for (const name of childModule.carriedFunctions) carriedFunctions.add(name);
+      const child = context.compileChild(
+        site.chain,
+        childModule.source,
+        captured,
+        destinationPortal,
+      );
       captured.forEach((name, i) => {
         captureWords.push({ name, sentinel: child.captureSentinels[i]! });
       });
@@ -702,7 +695,8 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       if (!captures.includes(name)) captures.push(name);
     }
 
-    const reward = lowerReward(site.reward, resolve);
+    // On the enclosing chain: see `resolveFunding` above.
+    const reward = lowerReward(site.reward, resolveFunding);
     const { defaults } = context;
     const rewardDeadline = defaults.rewardDeadline ?? requireDeadline(defaults);
     const child: Intent = {
@@ -738,13 +732,16 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
 
     const sourcePortal = defaults.sourcePortal ?? context.portalOf(context.source);
     const tx = publishAndFundTx(child, defaults.allowPartial ?? false, { portal: sourcePortal });
-    const template = splitByPlaceholders(tx.data, placeholders);
+    // An intent every value of which is known now — defines and literals, no local of the program —
+    // has no slot to fill: its calldata is simply these bytes.
+    const template =
+      placeholders.length === 0 ? undefined : splitByPlaceholders(tx.data, placeholders);
     // Every sentinel must have become a slot. `splitByPlaceholders` guarantees that for the ones it
     // was TOLD about; this catches the other direction — a sentinel written into the payload whose
     // placeholder was never declared, which leaves it in the literal segments and ships an intent
     // carrying `0x5acecab7…` where an amount belongs. That happened once, silently, which is why it
     // is checked rather than reasoned about.
-    for (const segment of template.segments) {
+    for (const segment of template?.segments ?? [tx.data]) {
       for (const tag of [CAPTURE_TAG, CHILD_CAPTURE_TAG]) {
         if (segment.includes(tag)) {
           throw new SugarError(
@@ -756,7 +753,13 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       }
     }
     const locals = Object.fromEntries(captures.map((name) => [name, name]));
-    const emitted = emitTemplate(template, { prefix, locals });
+    const emitted =
+      template === undefined
+        ? {
+            statements: [`const ${prefix}data = hex\`${tx.data.slice(2)}\`;`],
+            dataVar: `${prefix}data`,
+          }
+        : emitTemplate(template, { prefix, locals });
 
     const statements: string[] = [...emitted.statements];
     // One approve per distinct reward token, so the Portal can pull the escrow from this Pot.
@@ -783,7 +786,12 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       `evm.call(${BigInt(denormalizeToEvm(toUniversalAddress(sourcePortal)))}n, 0n, ${emitted.dataVar});`,
     );
 
-    intents.push({ intent: child, captures, destination: site.chain });
+    intents.push({
+      intent: child,
+      captures,
+      sentinels: placeholders.map(({ value, source }) => ({ sentinel: value, capture: source })),
+      destination: site.chain,
+    });
     replacements.push({
       start: site.start,
       end: site.end,
@@ -797,7 +805,33 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
   for (const replacement of [...replacements].sort((a, b) => b.start - a.start)) {
     out = out.slice(0, replacement.start) + replacement.text + out.slice(replacement.end);
   }
-  return { source: out, rewrote: true, intents };
+  return { source: withoutMovedFunctions(out, carriedFunctions), rewrote: true, intents };
+}
+
+/**
+ * `source` without the functions only an intent body used. Each moved into that body's program,
+ * which compiles it for the chain it runs on; left here it would be compiled for this chain too,
+ * where the program never calls it, and could fail a rewrite there for a token or protocol that
+ * chain does not have.
+ */
+function withoutMovedFunctions(source: string, carried: ReadonlySet<string>): string {
+  if (carried.size === 0) return source;
+  const program = parseSauce(source);
+  const moved = unreachedFunctions(moduleScope(program), carried);
+  if (moved.size === 0) return source;
+  let out = source;
+  const statements = [...((program as { body?: AstNode[] }).body ?? [])].reverse();
+  for (const statement of statements) {
+    const node =
+      statement.type === "ExportNamedDeclaration"
+        ? ((statement as { declaration?: AstNode }).declaration ?? statement)
+        : statement;
+    const id = node.type === "FunctionDeclaration" ? (node as { id?: AstNode }).id : undefined;
+    if (id === undefined || !moved.has((id as unknown as { name: string }).name)) continue;
+    const end = out[statement.end] === "\n" ? statement.end + 1 : statement.end;
+    out = out.slice(0, statement.start) + out.slice(end);
+  }
+  return out;
 }
 
 /**

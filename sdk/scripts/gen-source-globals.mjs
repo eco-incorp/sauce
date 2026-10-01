@@ -1,64 +1,330 @@
 #!/usr/bin/env node
-// Route bodies are compiled source, not JavaScript callbacks. These declarations
-// describe their token/protocol names without installing host runtime objects.
-// Read literal registry initializers through the TypeScript AST: no build, ABI
-// inference, or execution of application modules is needed to regenerate types.
+// Generates every protocol namespace the SDK exposes, in both languages, from the registry:
+//
+//   src/descriptors/contracts.generated.ts — the contract table the runtime builds its descriptors
+//     from (`CONTRACT_LINKS`, every protocol's ABIs and deployments), and the TypeScript type of the
+//     host tree `Base.UniswapV3.QuoterV2`;
+//   src/routes/source-globals.generated.ts — the declarations a compiled route body sees: the same
+//     namespaces as Sauce scalars (`UniswapV3.QuoterV2`), the token symbols, and `available`.
+//
+// WHERE A CONTRACT COMES FROM. A protocol's `addresses.ts` names each deployed contract by a role
+// key, and its `abis.ts` exports ABIs; `test/fixtures/registry-abi/targets.json` binds the two — it
+// is the table `registry-abi.test.ts` checks every ABI against the deployed code with. A namespace
+// therefore exposes a contract exactly as the registry evidences it:
+//   - a role bound to an ABI is a contract with that ABI (`singleton`);
+//   - a role bound to an ABI the evidence marks `unverifiable`, or bound to none, keeps its address
+//     and has no methods (`address-only`);
+//   - an ABI bound to no role (evidenced by representative `instances`) has no fixed address — the
+//     caller binds one with `.at(address)` (`interface`).
+//
+// NAMES. A contract is named by its role key with the first letter upper-cased; where the role's
+// leading words also appear, as words, in its ABI export's name, they take the ABI's spelling, so
+// `clFactory` bound to `SlipstreamCLFactoryABI` is `CLFactory`. A contract with no role (an
+// interface), or a role bound to different ABIs on different chains (Gamma's `uniProxy`), is named
+// after its ABI export instead, without the trailing `ABI` and the protocol's own prefix. A protocol
+// namespace is `PascalOf(slug)`; a slug ending in `-v<N>` also joins the family `PascalOf(stem)`,
+// which exposes a contract only where exactly one member owns its name.
+//
+// Every value is read from the SDK's own modules (`scripts/lib/load-ts.mjs`): no build is needed,
+// and nothing here is a hand-kept table. Regenerate after changing a registry ABI, role, binding or
+// token symbol: `pnpm --filter './sdk' gen-source-globals` (`--check` exits 1 on drift).
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
+import { createTsLoader } from "./lib/load-ts.mjs";
+
 const sdk = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const output = resolve(sdk, "src/routes/source-globals.generated.ts");
+const OUT_SOURCE = resolve(sdk, "src/routes/source-globals.generated.ts");
+const OUT_CONTRACTS = resolve(sdk, "src/descriptors/contracts.generated.ts");
+const load = createTsLoader(sdk);
+
 const pascal = (slug) =>
   slug
     .split("-")
     .map((part) => part[0].toUpperCase() + part.slice(1))
     .join("");
+const camel = (slug) => {
+  const p = pascal(slug).replace(/[^A-Za-z0-9]/g, "");
+  return /^[0-9]/.test(p) ? `p${p}` : p[0].toLowerCase() + p.slice(1);
+};
+const cap = (s) => s[0].toUpperCase() + s.slice(1);
+const isEvmAddress = (value) => /^0x[0-9a-fA-F]{40}$/.test(value);
 
-function literal(node) {
-  if (
-    ts.isAsExpression(node) ||
-    ts.isSatisfiesExpression(node) ||
-    ts.isParenthesizedExpression(node)
-  )
-    return literal(node.expression);
-  if (ts.isStringLiteral(node)) return node.text;
-  if (ts.isNumericLiteral(node)) return Number(node.text);
-  if (node.kind === ts.SyntaxKind.TrueKeyword) return true;
-  if (node.kind === ts.SyntaxKind.FalseKeyword) return false;
-  if (ts.isArrayLiteralExpression(node)) return node.elements.map(literal);
-  if (ts.isObjectLiteralExpression(node))
-    return Object.fromEntries(
-      node.properties.map((property) => {
-        if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name))
-          throw new Error("Source-global registries must contain literal properties");
-        return [property.name.text, literal(property.initializer)];
-      }),
-    );
-  throw new Error(`Non-literal registry expression: ${node.getText()}`);
+function fail(message) {
+  throw new Error(`gen-source-globals: ${message}`);
 }
 
-function readConstant(file, name) {
-  const path = resolve(sdk, "src", file);
-  const source = ts.createSourceFile(
-    path,
-    readFileSync(path, "utf8"),
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  for (const statement of source.statements) {
-    if (!ts.isVariableStatement(statement)) continue;
-    for (const declaration of statement.declarationList.declarations)
-      if (
-        ts.isIdentifier(declaration.name) &&
-        declaration.name.text === name &&
-        declaration.initializer
-      )
-        return literal(declaration.initializer);
+// --- registry --------------------------------------------------------------------------------
+
+const { CANONICAL_CHAINS } = load("src/chains/canonical.ts");
+const { listProtocols } = load("src/protocols/index.ts");
+const { TOKEN_REGISTRY, SVM_TOKEN_REGISTRY } = load("src/routes/token-registry.ts");
+const targets = JSON.parse(
+  readFileSync(resolve(sdk, "test/fixtures/registry-abi/targets.json"), "utf8"),
+).protocols;
+
+const evmChainIds = new Set(CANONICAL_CHAINS.filter((c) => c.kind === "evm").map((c) => c.id));
+const chainSlugById = new Map(CANONICAL_CHAINS.map((c) => [c.id, c.slug]));
+
+/** Camel-case words of an identifier: `clFactoryGaugeCaps` -> cl|Factory|Gauge|Caps, `stETHStrategy` -> st|ETH|Strategy. */
+const words = (id) => id.split(/(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])/);
+const isUpper = (ch) => ch !== undefined && ch >= "A" && ch <= "Z";
+const isLower = (ch) => ch !== undefined && ch >= "a" && ch <= "z";
+const isDigit = (ch) => ch !== undefined && ch >= "0" && ch <= "9";
+
+/** The role's contract name: see the header. */
+function roleName(role, abiExport) {
+  const parts = words(role);
+  if (abiExport !== undefined) {
+    const abi = abiExport.replace(/ABI$/, "");
+    const lower = abi.toLowerCase();
+    for (let k = parts.length; k > 0; k--) {
+      const prefix = parts.slice(0, k).join("").toLowerCase();
+      for (let at = lower.indexOf(prefix); at !== -1; at = lower.indexOf(prefix, at + 1)) {
+        const end = at + prefix.length;
+        const startsWord =
+          at === 0 ||
+          (isUpper(abi[at]) &&
+            (isLower(abi[at - 1]) || isDigit(abi[at - 1]) || isLower(abi[at + 1])));
+        const endsWord = end === abi.length || isUpper(abi[end]) || isDigit(abi[end]);
+        if (startsWord && endsWord) return cap(abi.slice(at, end) + parts.slice(k).join(""));
+      }
+    }
   }
-  throw new Error(`Missing ${name} in ${path}`);
+  return cap(role);
 }
+
+/** An ABI export's contract name: the export without `ABI` and the protocol's own prefix. Mirrors
+ *  `deriveContractName` in `src/descriptors/derive.ts`, which `descriptors-linkage.test.ts` pins. */
+function abiName(protocolName, slug, abiExport) {
+  const base = abiExport.endsWith("ABI") ? abiExport.slice(0, -3) : abiExport;
+  const prefixes = [
+    protocolName.replace(/[^a-zA-Z0-9]/g, ""),
+    pascal(slug).replace(/[^a-zA-Z0-9]/g, ""),
+  ]
+    .filter((p) => p.length > 0)
+    .sort((a, b) => b.length - a.length);
+  for (const prefix of prefixes) {
+    const rest = base.slice(prefix.length);
+    if (base.toLowerCase().startsWith(prefix.toLowerCase()) && /^[A-Z0-9]/.test(rest)) return rest;
+  }
+  return base;
+}
+
+/** Accessor properties a method or contract name must never shadow (see descriptors/accessors.ts). */
+const ACCESSOR_PROPERTIES = new Set([
+  "descriptor",
+  "chain",
+  "address",
+  "available",
+  "chains",
+  "coverage",
+  "abi",
+  "methods",
+  "at",
+]);
+
+const protocols = [...listProtocols()].sort((a, b) => a.slug.localeCompare(b.slug));
+/** slug -> { info, abis, deployments, contracts: link[] } */
+const registry = new Map();
+
+for (const info of protocols) {
+  const slug = info.slug;
+  const abis = load(`src/protocols/${slug}/abis.ts`);
+  const { deployments } = load(`src/protocols/${slug}/addresses.ts`);
+  const spec = targets[slug] ?? {};
+  for (const name of Object.keys(abis)) {
+    if (Array.isArray(abis[name]) && spec[name] === undefined) {
+      fail(`${slug}.${name} has no binding in targets.json (registry-abi.test.ts requires one)`);
+    }
+  }
+
+  // Roles with an EVM address on a canonical EVM chain, in first-seen order.
+  const evmRoles = [];
+  for (const d of deployments) {
+    if (!evmChainIds.has(d.chainId)) continue;
+    for (const [role, address] of Object.entries(d.addresses)) {
+      if (isEvmAddress(address) && !evmRoles.includes(role)) evmRoles.push(role);
+    }
+  }
+  const exportsOfRole = new Map();
+  for (const [exportName, binding] of Object.entries(spec)) {
+    for (const role of binding.roles ?? []) {
+      exportsOfRole.set(role, [...(exportsOfRole.get(role) ?? []), exportName]);
+    }
+  }
+  /** chain id -> address, lowercase, for a role. */
+  const addressesOf = (role) =>
+    new Map(
+      deployments
+        .filter((d) => evmChainIds.has(d.chainId) && isEvmAddress(d.addresses[role] ?? ""))
+        .map((d) => [d.chainId, d.addresses[role].toLowerCase()]),
+    );
+
+  const contracts = [];
+  for (const [exportName, binding] of Object.entries(spec)) {
+    const abi = abis[exportName];
+    if (!Array.isArray(abi))
+      fail(`${slug}: targets.json binds '${exportName}', which abis.ts does not export`);
+    const roles = binding.roles ?? [];
+    if (roles.length === 0) {
+      contracts.push({
+        protocol: slug,
+        contract: abiName(info.name, slug, exportName),
+        kind: "interface",
+        abiExport: exportName,
+      });
+      continue;
+    }
+    for (const role of roles) {
+      const addresses = addressesOf(role);
+      if (addresses.size === 0) continue;
+      if (binding.unverifiable !== undefined) {
+        contracts.push({
+          protocol: slug,
+          contract: roleName(role, exportName),
+          kind: "address-only",
+          roleKey: role,
+          caveats: [`${exportName} does not describe this deployment: ${binding.unverifiable}`],
+        });
+        continue;
+      }
+      const split = (exportsOfRole.get(role) ?? []).length > 1;
+      const chains = binding.chains;
+      if (split && chains === undefined)
+        fail(`${slug}.${role} is bound to several ABIs without \`chains\``);
+      const caveats = [];
+      for (const [sig, byInstance] of Object.entries(binding.exempt ?? {})) {
+        for (const [where, reason] of Object.entries(byInstance)) {
+          const [chainId, address] = where.split(":");
+          if (addresses.get(Number(chainId)) !== address) continue;
+          caveats.push(
+            `${sig} is not available on ${chainSlugById.get(Number(chainId)) ?? chainId}: ${reason}`,
+          );
+        }
+      }
+      for (const [sig, reason] of Object.entries(binding.unverified ?? {})) {
+        caveats.push(`${sig} is checked against the deployed bytecode only: ${reason}`);
+      }
+      contracts.push({
+        protocol: slug,
+        contract: split ? abiName(info.name, slug, exportName) : roleName(role, exportName),
+        kind: "singleton",
+        roleKey: role,
+        abiExport: exportName,
+        ...(chains !== undefined ? { chains } : {}),
+        ...(caveats.length > 0 ? { caveats } : {}),
+      });
+    }
+  }
+  for (const role of evmRoles) {
+    if (exportsOfRole.has(role)) continue;
+    contracts.push({
+      protocol: slug,
+      contract: roleName(role, undefined),
+      kind: "address-only",
+      roleKey: role,
+      caveats: ["the registry has no ABI for this contract: its address only"],
+    });
+  }
+
+  const names = new Set();
+  for (const c of contracts) {
+    if (!ts.isIdentifierText(c.contract, ts.ScriptTarget.Latest))
+      fail(`${slug}: '${c.contract}' is not an identifier`);
+    if (names.has(c.contract)) fail(`${slug}: two contracts are named '${c.contract}'`);
+    if (ACCESSOR_PROPERTIES.has(c.contract))
+      fail(`${slug}.${c.contract} shadows an accessor property`);
+    names.add(c.contract);
+    for (const item of c.abiExport ? abis[c.abiExport] : []) {
+      if (item.type === "function" && ACCESSOR_PROPERTIES.has(item.name)) {
+        fail(`${slug}.${c.contract}.${item.name} shadows an accessor property`);
+      }
+    }
+  }
+  registry.set(slug, { info, abis, contracts });
+}
+
+const LINKS = [...registry.values()].flatMap((p) => p.contracts);
+
+// --- namespaces, families, collisions ----------------------------------------------------------
+
+/** A protocol's default contract — `<Protocol>.<method>(...)` — when it has exactly one singleton. */
+function defaultContract(slug) {
+  const singletons = registry.get(slug).contracts.filter((c) => c.kind === "singleton");
+  return singletons.length === 1 ? singletons[0] : undefined;
+}
+
+const namespaceOf = new Map(); // namespace key -> slug
+for (const slug of registry.keys()) {
+  if (registry.get(slug).contracts.length === 0) continue;
+  const key = pascal(slug);
+  if (namespaceOf.has(key)) fail(`duplicate protocol namespace '${key}'`);
+  namespaceOf.set(key, slug);
+}
+const families = new Map(); // family key -> member slugs
+for (const slug of namespaceOf.values()) {
+  const stem = /^(.+)-v\d+$/.exec(slug)?.[1];
+  if (stem === undefined) continue;
+  const key = pascal(stem);
+  families.set(key, [...(families.get(key) ?? []), slug]);
+}
+for (const key of families.keys()) {
+  if (namespaceOf.has(key)) fail(`family alias '${key}' collides with a protocol namespace`);
+}
+/** family key -> contract name -> owning slug, for the names exactly one member owns. */
+function familyContracts(members) {
+  const owners = new Map();
+  for (const slug of members) {
+    for (const c of registry.get(slug).contracts)
+      owners.set(c.contract, [...(owners.get(c.contract) ?? []), slug]);
+  }
+  return [...owners]
+    .filter(([, slugs]) => slugs.length === 1)
+    .map(([name, [slug]]) => [name, slug]);
+}
+
+const tokens = [
+  ...new Set(
+    Object.values(TOKEN_REGISTRY)
+      .flat()
+      .map((row) => row.symbol),
+  ),
+].sort();
+// Solana's mints: a symbol only a Solana program has is its mint's key, a value and no more (the
+// token methods are EVM-only); one an EVM chain also has keeps the EVM declaration.
+const mints = [
+  ...new Set(
+    Object.values(SVM_TOKEN_REGISTRY)
+      .flat()
+      .map((row) => row.symbol),
+  ),
+]
+  .filter((symbol) => !tokens.includes(symbol))
+  .sort();
+const reserved = new Map([
+  ...CANONICAL_CHAINS.map((c) => [pascal(c.slug), `the chain '${c.slug}'`]),
+  ["Token", "the Token global"],
+  ["chain", "the chain front door"],
+  ["chainId", "the chain id define"],
+  ["CHAIN_ID", "the chain id define"],
+  ["available", "the presence check"],
+]);
+function claim(name, what) {
+  if (!ts.isIdentifierText(name, ts.ScriptTarget.Latest))
+    fail(`'${name}' (${what}) is not an identifier`);
+  const prior = reserved.get(name);
+  if (prior !== undefined) fail(`'${name}' (${what}) collides with ${prior}`);
+  reserved.set(name, what);
+}
+for (const [key, slug] of namespaceOf) claim(key, `the protocol namespace of ${slug}`);
+for (const key of families.keys()) claim(key, "a family alias");
+for (const token of tokens) claim(token, "a token symbol");
+for (const mint of mints) claim(mint, "a Solana mint symbol");
+
+// --- Sauce source declarations ---------------------------------------------------------------------
 
 function valueType(parameter, input) {
   const array = /^(.*)\[\d*\]$/.exec(parameter.type);
@@ -77,102 +343,98 @@ function valueType(parameter, input) {
       fields.some((field) => !field.name) ||
       new Set(fields.map((field) => field.name)).size !== fields.length
     )
-      throw new Error("A Sauce tuple needs distinct, named ABI components");
-    return `{ ${fields.map((field) => `${JSON.stringify(field.name)}: ${valueType(field, input)}`).join("; ")} }`;
+      return undefined; // a Sauce tuple binds object-literal keys, so it needs named components
+    const typed = fields.map((field) => [field.name, valueType(field, input)]);
+    if (typed.some(([, type]) => type === undefined)) return undefined;
+    return `{ ${typed.map(([name, type]) => `${JSON.stringify(name)}: ${type}`).join("; ")} }`;
   }
-  throw new Error(`Unsupported Sauce ABI type: ${parameter.type}`);
+  return undefined;
 }
 
 function resultType(outputs) {
   if (!outputs.length) return "void";
   if (outputs.length === 1) return valueType(outputs[0], false);
-  const tuple = `[${outputs.map((field) => valueType(field, false)).join(", ")}]`;
+  const types = outputs.map((field) => valueType(field, false));
+  if (types.some((type) => type === undefined)) return undefined;
+  const tuple = `[${types.join(", ")}]`;
   const named = outputs.filter((field) => field.name);
-  if (new Set(named.map((field) => field.name)).size !== named.length)
-    throw new Error("Duplicate ABI output name");
+  if (new Set(named.map((field) => field.name)).size !== named.length) return tuple;
   return named.length
     ? `${tuple} & { ${named.map((field) => `${JSON.stringify(field.name)}: ${valueType(field, false)}`).join("; ")} }`
     : tuple;
 }
 
-function methods(link) {
-  if (!link.abiExport) return [];
-  const abi = readConstant(`protocols/${link.protocol}/abis.ts`, link.abiExport);
+/** Method declarations of one ABI. A function whose types Sauce has no source spelling for is
+ *  declared over `unknown`, so it stays callable from a typed closure and the compiler decides. */
+function sourceMethods(abi) {
   return abi
     .filter((entry) => entry.type === "function")
     .map((method) => {
+      const inputs = method.inputs.map((field) => valueType(field, true));
+      const output = resultType(method.outputs ?? []);
       const args = method.inputs
-        .map((field, index) => `arg${index}: ${valueType(field, true)}`)
+        .map((_, index) => `arg${index}: ${inputs[index] ?? "unknown"}`)
         .join(", ");
-      return `    ${JSON.stringify(method.name)}(${args}): ${resultType(method.outputs ?? [])};`;
+      return `  ${JSON.stringify(method.name)}(${args}): ${output ?? "unknown"};`;
     });
 }
 
-const links = readConstant("descriptors/links.ts", "CONTRACT_LINKS");
-const tokens = [
-  ...new Set(
-    Object.values(readConstant("routes/token-registry.ts", "TOKEN_REGISTRY"))
-      .flat()
-      .map((row) => row.symbol),
-  ),
-].sort();
-const chains = readConstant("chains/canonical.ts", "CANONICAL_CHAINS");
-const declarations = [];
-const reserved = new Set([
-  ...chains.map((chain) => pascal(chain.slug)),
-  "Token",
-  "chain",
-  "chainId",
-  "CHAIN_ID",
-]);
-function declare(name, type) {
-  if (!ts.isIdentifierText(name, ts.ScriptTarget.Latest) || reserved.has(name))
-    throw new Error(`Source global '${name}' is invalid or collides with another global`);
-  reserved.add(name);
-  declarations.push(`  const ${name}: ${type};`);
-}
-
-const protocols = [...new Set(links.map((link) => link.protocol))];
-const definitions = [];
-const families = new Map();
-for (const protocol of protocols) {
-  // The source rewrite refuses both unbound interfaces and address-only entries.
-  const entries = links.filter((link) => link.protocol === protocol && link.kind === "singleton");
-  if (!entries.length) continue;
-  const name = pascal(protocol);
-  const fields = entries.map(
-    (link) =>
-      `  readonly ${JSON.stringify(link.contract)}: bigint & {\n${methods(link).join("\n")}\n  };`,
-  );
-  if (entries.length === 1) fields.push(...methods(entries[0]));
-  definitions.push(`export interface ${name}Source {\n${fields.join("\n")}\n}`);
-  declare(name, `${name}Source`);
-  const stem = /^(.*)-v\d+$/.exec(protocol)?.[1];
-  if (stem) {
-    const key = pascal(stem);
-    const members = families.get(key) ?? [];
-    members.push(...entries.map((link) => ({ ...link, namespace: name })));
-    families.set(key, members);
-  }
-}
-for (const [family, entries] of families) {
-  const fields = [];
-  for (const entry of entries) {
-    if (entries.filter((other) => other.contract === entry.contract).length !== 1) continue;
-    fields.push(
-      `  readonly ${JSON.stringify(entry.contract)}: ${entry.namespace}Source[${JSON.stringify(entry.contract)}];`,
+const methodsInterface = new Map(); // `${slug}:${abiExport}` -> interface name
+const sourceDefinitions = [];
+const usedInterfaceNames = new Set();
+for (const [slug, { info, abis, contracts }] of registry) {
+  for (const c of contracts) {
+    if (c.abiExport === undefined || methodsInterface.has(`${slug}:${c.abiExport}`)) continue;
+    const name = `${pascal(slug)}${abiName(info.name, slug, c.abiExport)}Methods`;
+    if (usedInterfaceNames.has(name)) fail(`two ABIs declare methods interface '${name}'`);
+    usedInterfaceNames.add(name);
+    methodsInterface.set(`${slug}:${c.abiExport}`, name);
+    sourceDefinitions.push(
+      `export interface ${name} {\n${sourceMethods(abis[c.abiExport]).join("\n")}\n}`,
     );
   }
-  definitions.push(`export interface ${family}Source {\n${fields.join("\n")}\n}`);
-  declare(family, `${family}Source`);
 }
-for (const token of tokens) declare(token, "bigint & SauceTokenSource");
 
-const generated = `// GENERATED by sdk/scripts/gen-source-globals.mjs — do not edit.
-// Source-only names for compiled EVM route bodies. No runtime objects are installed.
-// Addresses and availability are resolved for the destination chain at compile time.
-// TypeScript checks names and call shapes; the Sauce compiler checks its own language
-// subset, target capabilities, ABI fidelity, and per-chain deployment availability.
+function sourceContractType(c) {
+  if (c.kind === "address-only") return "bigint";
+  const methods = methodsInterface.get(`${c.protocol}:${c.abiExport}`);
+  return c.kind === "interface" ? `SauceInterface<${methods}>` : `SauceContract<${methods}>`;
+}
+
+const globalDeclarations = [];
+for (const [key, slug] of namespaceOf) {
+  const { contracts } = registry.get(slug);
+  const fallback = defaultContract(slug);
+  const heritage = fallback
+    ? ` extends ${methodsInterface.get(`${slug}:${fallback.abiExport}`)}`
+    : "";
+  if (fallback) {
+    const shadowed = registry
+      .get(slug)
+      .abis[fallback.abiExport].filter(
+        (m) => m.type === "function" && contracts.some((c) => c.contract === m.name),
+      );
+    if (shadowed.length > 0)
+      fail(`${slug}: default-contract method '${shadowed[0].name}' collides with a contract name`);
+  }
+  const fields = contracts.map((c) => `  readonly ${c.contract}: ${sourceContractType(c)};`);
+  sourceDefinitions.push(`export interface ${key}Source${heritage} {\n${fields.join("\n")}\n}`);
+  globalDeclarations.push(`  const ${key}: ${key}Source;`);
+}
+for (const [family, members] of families) {
+  const fields = familyContracts(members).map(
+    ([name, slug]) => `  readonly ${name}: ${pascal(slug)}Source[${JSON.stringify(name)}];`,
+  );
+  sourceDefinitions.push(`export interface ${family}FamilySource {\n${fields.join("\n")}\n}`);
+  globalDeclarations.push(`  const ${family}: ${family}FamilySource;`);
+}
+for (const token of tokens) globalDeclarations.push(`  const ${token}: bigint & SauceTokenSource;`);
+for (const mint of mints) globalDeclarations.push(`  const ${mint}: bigint;`);
+
+const sourceGenerated = `// GENERATED by sdk/scripts/gen-source-globals.mjs — do not edit.
+// Source-only names for compiled route bodies. No runtime objects are installed: every name resolves
+// for the destination chain at compile time. TypeScript checks names and call shapes; the SDK checks
+// per-chain deployment, and the Sauce compiler its own language subset and target capabilities.
 
 /**
  * ERC-20 calls in compiled source. Addresses are Sauce scalars. The writes have SafeERC20 semantics
@@ -198,24 +460,121 @@ export interface SauceBytes extends SauceArray<bigint> {
   toLe(): bigint;
 }
 
-${definitions.join("\n\n")}
+/** A registry ABI with no fixed address: \`.at(address)\` names the deployment to call. */
+export interface SauceInterface<Methods> {
+  at(address: bigint): Methods;
+}
+
+/** A deployed registry contract: its address on the destination chain, its methods, and
+ *  \`.at(address)\` to call another deployment of the same ABI. */
+export type SauceContract<Methods> = bigint & Methods & SauceInterface<Methods>;
+
+${sourceDefinitions.join("\n\n")}
 
 declare global {
-${declarations.join("\n")}
+${globalDeclarations.join("\n")}
   /** Destination chain identity supplied by openRoute. */
   const chainId: bigint;
   const CHAIN_ID: bigint;
+  /**
+   * Whether the destination chain has a registry contract or token, decided at compile time:
+   * \`available(UniswapV3.Factory)\`, \`available(Arbitrum.UniswapV3.Factory)\`, \`available(USDT)\`.
+   * A branch it rules out (\`if\`, \`?:\`, \`&&\`, \`||\`) is removed before anything in it resolves.
+   */
+  function available(name: bigint): boolean;
 }
 `;
-if (process.argv.includes("--stdout")) process.stdout.write(generated);
-else if (process.argv.includes("--check")) {
-  if (readFileSync(output, "utf8") !== generated) {
+
+// --- TypeScript host types and the runtime contract table ------------------------------------------
+
+const abiImports = [];
+const sources = [];
+for (const slug of registry.keys()) {
+  const local = camel(slug);
+  abiImports.push(`import * as ${local}Abis from "../protocols/${slug}/abis.js";`);
+  abiImports.push(
+    `import { deployments as ${local}Deployments } from "../protocols/${slug}/addresses.js";`,
+  );
+  sources.push(
+    `  ${JSON.stringify(slug)}: { abis: ${local}Abis, deployments: ${local}Deployments },`,
+  );
+}
+
+function hostContractType(c) {
+  if (c.kind === "address-only") return "AddressOnlyContract";
+  const abi = `typeof ${camel(c.protocol)}Abis.${c.abiExport}`;
+  return c.kind === "interface" ? `InterfaceContract<${abi}>` : `Contract<${abi}>`;
+}
+
+const hostDefinitions = [];
+const hostTree = [];
+for (const [key, slug] of namespaceOf) {
+  const fields = registry
+    .get(slug)
+    .contracts.map((c) => `  readonly ${c.contract}: ${hostContractType(c)};`);
+  hostDefinitions.push(`export interface ${key}Contracts {\n${fields.join("\n")}\n}`);
+  hostTree.push(`  readonly ${key}: ${key}Contracts;`);
+}
+for (const [family, members] of families) {
+  const fields = familyContracts(members).map(
+    ([name, slug]) => `  readonly ${name}: ${pascal(slug)}Contracts[${JSON.stringify(name)}];`,
+  );
+  hostDefinitions.push(`export interface ${family}FamilyContracts {\n${fields.join("\n")}\n}`);
+  hostTree.push(`  readonly ${family}: ${family}FamilyContracts;`);
+}
+
+const renderLink = (c) =>
+  `  { ${Object.entries(c)
+    .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+    .join(", ")} },`;
+
+const contractsGenerated = `// GENERATED by sdk/scripts/gen-source-globals.mjs — do not edit.
+// Every registry contract, as \`descriptors/registry.ts\` builds its descriptors and the host tree
+// (\`Base.UniswapV3.QuoterV2\`) types it. See the generator's header for where each entry comes from
+// and how it is named.
+import type { ContractLink } from "./links.js";
+import type { AddressOnlyContract, Contract, InterfaceContract } from "./accessors.js";
+${abiImports.join("\n")}
+
+/** Every registry protocol's ABI exports and deployments, by slug. */
+export const PROTOCOL_SOURCES = {
+${sources.join("\n")}
+} as const;
+
+/** One entry per contract: ${LINKS.length} contracts across ${namespaceOf.size} protocols. */
+export const CONTRACT_LINKS = [
+${LINKS.map(renderLink).join("\n")}
+] as const satisfies readonly ContractLink[];
+
+${hostDefinitions.join("\n\n")}
+
+/** The contract tree every chain accessor carries: one namespace per registry protocol and one
+ *  per family alias. Chain-independent: whether a contract is deployed on a chain is its
+ *  \`.available\`. */
+export interface ChainContracts {
+${hostTree.join("\n")}
+}
+`;
+
+// --- write ---------------------------------------------------------------------------------------
+
+const outputs = [
+  [OUT_CONTRACTS, contractsGenerated],
+  [OUT_SOURCE, sourceGenerated],
+];
+if (process.argv.includes("--stdout")) {
+  for (const [, text] of outputs) process.stdout.write(text);
+} else if (process.argv.includes("--check")) {
+  const stale = outputs.filter(([path, text]) => readFileSync(path, "utf8") !== text);
+  if (stale.length > 0) {
     process.stderr.write(
-      "Source globals are stale; run pnpm --filter './sdk' gen-source-globals\n",
+      `${stale.map(([path]) => path).join(", ")} stale; run pnpm --filter './sdk' gen-source-globals\n`,
     );
     process.exitCode = 1;
   }
 } else {
-  writeFileSync(output, generated);
-  process.stdout.write(`wrote ${output}\n`);
+  for (const [path, text] of outputs) {
+    writeFileSync(path, text);
+    process.stdout.write(`wrote ${path}\n`);
+  }
 }

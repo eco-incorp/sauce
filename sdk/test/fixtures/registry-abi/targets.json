@@ -802,7 +802,11 @@
     },
     "permit2": {
       "Permit2ABI": {
-        "roles": ["permit2"]
+        "roles": ["permit2"],
+        "required": {
+          "permitTransferFrom(((address,uint256),uint256,uint256),(address,uint256),address,bytes)": "@sauce/token permitTransferFrom, which sauce run --fund pulls a Permit2 signature transfer into the Pot with",
+          "nonceBitmap(address,uint256)": "the sauce CLI, choosing an unspent Permit2 nonce to sign"
+        }
       }
     },
     "perpetual-protocol": {
@@ -1138,6 +1142,9 @@
       },
       "UniswapV4UniversalRouterABI": {
         "roles": ["universalRouter"]
+      },
+      "UniswapV4StateViewABI": {
+        "roles": ["stateView"]
       }
     },
     "unitflow-v3": {

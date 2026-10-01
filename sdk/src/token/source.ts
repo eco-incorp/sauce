@@ -151,8 +151,8 @@ export function tokenSource(
 
   // Every SVM account is a main() param, in attach order — that declaration IS the manifest.
   const params = isEvmTarget(target) ? "" : svmAccountParamList(specs);
-  // SVM consumers compile directly to retain the account manifest. EVM source stays plain JS for
-  // the route wrapper's accessor parser, whose compiler adapter supplies its void annotation.
+  // SVM consumers compile directly to retain the account manifest. EVM source leaves `main`
+  // unannotated: it is compiled through the route compiler, whose adapter supplies the `void`.
   const returnType =
     !isEvmTarget(target) && specs[specs.length - 1]!.op !== "balanceOf" ? ": void" : "";
   const parts = [...importLines, "", `function ${fnName}(${params})${returnType} {`, body, "}", ""];

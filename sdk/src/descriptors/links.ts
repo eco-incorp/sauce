@@ -1,296 +1,40 @@
 import type { ContractKind } from "./types.js";
 
 /**
- * THE CRUX: role-key <-> ABI-export <-> human-contract-name linkage.
+ * One registry contract: a protocol's addresses.ts role key, its abis.ts export, and the name it has
+ * in a namespace (`Base.UniswapV3.QuoterV2`, `UniswapV3.QuoterV2` in a program).
  *
- * `addresses.ts` keys per-chain addresses by a free-form role string
- * ("factory", "swapRouter02", …) and `abis.ts` exports `<Name>ABI` arrays —
- * nothing in the existing registry data connects the two, or names the
- * resulting contract for a human/accessor tree. That link genuinely isn't
- * derivable end to end from the data (see the name-normalization measurement
- * below), so it is hand-authored here, one entry per descriptor, and
- * cross-checked against the live vendored data by
- * `test/descriptors-linkage.test.ts` — a role key or ABI export that stops
- * existing fails that suite immediately rather than silently producing a
- * stale/hole descriptor.
+ * The table is GENERATED (`contracts.generated.ts`, by `scripts/gen-source-globals.mjs`) from the
+ * binding the registry's ABI evidence is captured for, `test/fixtures/registry-abi/targets.json`: a
+ * role is exposed with the ABI `registry-abi.test.ts` checks against its deployed code, and nothing
+ * else. Every role with an EVM address is a contract:
+ *  - `singleton` — a role bound to an ABI;
+ *  - `address-only` — a role bound to no ABI, or to one the evidence marks `unverifiable` (its
+ *    address only, no methods);
+ *  - `interface` — an ABI bound to no role: no fixed address, so a caller binds one with `.at(...)`.
  *
- * SCOPE (v1): a STARTER SET of 15 protocols with clean, unambiguous linkage —
- * NOT an attempt to auto-link all ~128 registry protocols. Excluded, with
- * reasons that are data, not taste:
- *  - curve, lido, compound-v2, benqi, moonwell, venus, silo, layerbank:
- *    role key <-> ABI export name mismatches that need a human judgment call
- *    (`lido.stETH` vs `LidoABI`; `curve.threePool` is a StableSwap INSTANCE,
- *    not a role naming a single ABI-typed contract).
- *  - every bridge (l1-side / l2-side role pairs are a per-chain-SIDE axis this model
- *    has no slot for yet).
- *  - maker / alchemix / olympus / tokemak / stargate and similar: role keys
- *    are majority plain ERC20 token addresses, not protocol contracts.
- *
- * `contract` is the human display name. When omitted it is DERIVED (never
- * invented) by `deriveContractName` in derive.ts: `abiExport` minus its
- * trailing "ABI" minus the protocol-name prefix. Only entries that would
- * otherwise collide, or that have no `abiExport` to derive from, carry an
- * explicit override — see the comments below.
+ * A contract is named by its role key, first letter upper-cased, with the ABI export's spelling for
+ * the role's leading words wherever the export spells the same words (`clFactory` under
+ * `SlipstreamCLFactoryABI` is `CLFactory`). An interface, or a role bound to different ABIs on
+ * different chains, is named after its ABI export (`deriveContractName`). The generator refuses a
+ * name two contracts of one protocol would share.
  */
 export interface ContractLink {
   readonly protocol: string;
   readonly roleKey?: string;
   readonly abiExport?: string;
-  /** Override only; see module doc comment. */
-  readonly contract?: string;
+  readonly contract: string;
   readonly kind: ContractKind;
-  /** Default "exact". "widened" flags a vendored ABI using a wider-than-real type
-   *  (e.g. uint32 in place of the deployed contract's uint24) — the computed
-   *  selector will NOT match the real, deployed contract. No entry below sets
-   *  it: every registry ABI declares the deployed types. */
+  /** The chains this binding covers, where one role runs different ABIs on different chains. */
+  readonly chains?: readonly number[];
+  /** Default "exact". "widened" flags a vendored ABI using a wider-than-real type — the computed
+   *  selector would NOT match the deployed contract. No registry ABI is widened. */
   readonly typeFidelity?: "widened";
+  /** Where a deployment differs from the ABI, from the evidence's `exempt`/`unverified` records. */
   readonly caveats?: readonly string[];
 }
 
-export const CONTRACT_LINKS = [
-  // --- uniswap-v2 ---
-  // `contract` below is explicit (not left to deriveContractName) purely so
-  // `typeof CONTRACT_LINKS[number]["contract"]` is a literal for every entry —
-  // see the E2.3 accessor-tree design doc. Values are byte-identical to what
-  // deriveContractName(protocolInfo.name, abiExport) already computes;
-  // test/descriptors-linkage.test.ts asserts that equality so the two can
-  // never drift.
-  {
-    protocol: "uniswap-v2",
-    roleKey: "factory",
-    abiExport: "UniswapV2FactoryABI",
-    contract: "Factory",
-    kind: "singleton",
-  },
-  {
-    protocol: "uniswap-v2",
-    roleKey: "router",
-    abiExport: "UniswapV2RouterABI",
-    contract: "Router",
-    kind: "singleton",
-  },
-
-  // --- uniswap-v3 ---
-  {
-    protocol: "uniswap-v3",
-    roleKey: "factory",
-    abiExport: "UniswapV3FactoryABI",
-    contract: "Factory",
-    kind: "singleton",
-  },
-  {
-    protocol: "uniswap-v3",
-    roleKey: "swapRouter",
-    abiExport: "UniswapV3SwapRouterABI",
-    contract: "SwapRouter",
-    kind: "singleton",
-  },
-  // SwapRouter02 has its own ABI: its params structs drop SwapRouter's `deadline` field.
-  {
-    protocol: "uniswap-v3",
-    roleKey: "swapRouter02",
-    abiExport: "UniswapV3SwapRouter02ABI",
-    contract: "SwapRouter02",
-    kind: "singleton",
-  },
-  {
-    protocol: "uniswap-v3",
-    roleKey: "quoterV2",
-    abiExport: "UniswapV3QuoterV2ABI",
-    contract: "QuoterV2",
-    kind: "singleton",
-  },
-  {
-    protocol: "uniswap-v3",
-    roleKey: "nonfungiblePositionManager",
-    abiExport: "UniswapV3NonfungiblePositionManagerABI",
-    contract: "NonfungiblePositionManager",
-    kind: "singleton",
-  },
-
-  // --- uniswap-v4 ---
-  {
-    protocol: "uniswap-v4",
-    roleKey: "poolManager",
-    abiExport: "UniswapV4PoolManagerABI",
-    contract: "PoolManager",
-    kind: "singleton",
-  },
-  // Only `execute` is vendored; the Universal Router's real swap surface is
-  // expressed through the `commands`/`inputs` byte encoding, not modelled
-  // here. No `exactIn`-shaped method is invented.
-  {
-    protocol: "uniswap-v4",
-    roleKey: "universalRouter",
-    abiExport: "UniswapV4UniversalRouterABI",
-    contract: "UniversalRouter",
-    kind: "singleton",
-    caveats: [
-      "vendored ABI covers execute(bytes,bytes[],uint256) only; the Universal Router's swap surface is expressed through the commands/inputs byte encoding, not modelled as separate methods here",
-    ],
-  },
-  {
-    protocol: "uniswap-v4",
-    roleKey: "positionManager",
-    abiExport: "UniswapV4PositionManagerABI",
-    contract: "PositionManager",
-    kind: "singleton",
-  },
-
-  // --- sushiswap-v2 ---
-  {
-    protocol: "sushiswap-v2",
-    roleKey: "factory",
-    abiExport: "SushiSwapV2FactoryABI",
-    contract: "Factory",
-    kind: "singleton",
-  },
-  {
-    protocol: "sushiswap-v2",
-    roleKey: "router",
-    abiExport: "SushiSwapV2RouterABI",
-    contract: "Router",
-    kind: "singleton",
-  },
-
-  // --- pancakeswap-v2 ---
-  {
-    protocol: "pancakeswap-v2",
-    roleKey: "factory",
-    abiExport: "PancakeSwapV2FactoryABI",
-    contract: "Factory",
-    kind: "singleton",
-  },
-  {
-    protocol: "pancakeswap-v2",
-    roleKey: "router",
-    abiExport: "PancakeSwapV2RouterABI",
-    contract: "Router",
-    kind: "singleton",
-  },
-
-  // --- aerodrome ---
-  {
-    protocol: "aerodrome",
-    roleKey: "router",
-    abiExport: "AerodromeRouterABI",
-    contract: "Router",
-    kind: "singleton",
-  },
-  {
-    protocol: "aerodrome",
-    roleKey: "poolFactory",
-    abiExport: "AerodromePoolFactoryABI",
-    contract: "PoolFactory",
-    kind: "singleton",
-  },
-
-  // --- cctp (Circle CCTP v2) ---
-  {
-    protocol: "cctp",
-    roleKey: "tokenMessenger",
-    abiExport: "TokenMessengerABI",
-    contract: "TokenMessenger",
-    kind: "singleton",
-  },
-  // --- aave-v3 ---
-  {
-    protocol: "aave-v3",
-    roleKey: "pool",
-    abiExport: "PoolABI",
-    contract: "Pool",
-    kind: "singleton",
-  },
-  // No ABI vendored for this role at all — a real, known address with no
-  // methods, recorded rather than dropped.
-  {
-    protocol: "aave-v3",
-    roleKey: "poolAddressesProvider",
-    contract: "PoolAddressesProvider",
-    kind: "address-only",
-    caveats: ["no ABI vendored for this role; address recorded with zero methods"],
-  },
-
-  // --- aave-v2 ---
-  {
-    protocol: "aave-v2",
-    roleKey: "lendingPool",
-    abiExport: "LendingPoolABI",
-    contract: "LendingPool",
-    kind: "singleton",
-  },
-
-  // --- permit2 ---
-  {
-    protocol: "permit2",
-    roleKey: "permit2",
-    abiExport: "Permit2ABI",
-    contract: "Permit2",
-    kind: "singleton",
-  },
-
-  // --- oneinch ---
-  {
-    protocol: "oneinch",
-    roleKey: "aggregationRouterV6",
-    abiExport: "AggregationRouterV6ABI",
-    contract: "AggregationRouterV6",
-    kind: "singleton",
-  },
-
-  // --- pendle ---
-  {
-    protocol: "pendle",
-    roleKey: "router",
-    abiExport: "PendleRouterABI",
-    contract: "Router",
-    kind: "singleton",
-  },
-
-  // --- morpho-blue ---
-  {
-    protocol: "morpho-blue",
-    roleKey: "morpho",
-    abiExport: "MorphoABI",
-    contract: "Morpho",
-    kind: "singleton",
-  },
-  {
-    protocol: "morpho-blue",
-    roleKey: "bundler3",
-    contract: "Bundler3",
-    kind: "address-only",
-    caveats: ["no ABI vendored for this role; address recorded with zero methods"],
-  },
-
-  // --- compound-v3 --- one ABI (CometABI) shared by three per-market
-  // singleton contracts; each needs an explicit override or all three would
-  // derive to the same name ("Comet").
-  {
-    protocol: "compound-v3",
-    roleKey: "cUSDCv3",
-    abiExport: "CometABI",
-    contract: "CometUSDC",
-    kind: "singleton",
-  },
-  {
-    protocol: "compound-v3",
-    roleKey: "cWETHv3",
-    abiExport: "CometABI",
-    contract: "CometWETH",
-    kind: "singleton",
-  },
-  {
-    protocol: "compound-v3",
-    roleKey: "cUSDTv3",
-    abiExport: "CometABI",
-    contract: "CometUSDT",
-    kind: "singleton",
-  },
-
-  // --- erc20 / erc4626 --- kind:"interface": ABI + methods, no fixed address; the caller supplies the instance.
-  { protocol: "erc20", abiExport: "ERC20ABI", contract: "ERC20", kind: "interface" },
-  { protocol: "erc4626", abiExport: "VaultABI", contract: "ERC4626Vault", kind: "interface" },
-] as const satisfies readonly ContractLink[];
+export { CONTRACT_LINKS } from "./contracts.generated.js";
+import type { CONTRACT_LINKS } from "./contracts.generated.js";
 
 export type ContractLinkEntry = (typeof CONTRACT_LINKS)[number];

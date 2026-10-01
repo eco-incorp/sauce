@@ -6,8 +6,8 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { documentedExports } from "../../actions/scripts/documented-exports.mjs";
 
@@ -52,7 +52,6 @@ if (!shipsAddresses) {
 }
 const work = mkdtempSync(join(tmpdir(), "sauce-package-check-"));
 try {
-  execFileSync("npm", ["run", "prepack"], { cwd: root, stdio: "inherit" });
   const output = execFileSync(
     "npm",
     ["pack", "--ignore-scripts", "--json", "--pack-destination", work],
@@ -263,7 +262,7 @@ try {
     stdio: "inherit",
     env: smokeEnv,
   });
-  // Check emitted declarations from a real install, not src/. Bare source globals
+  // Check emitted declarations from a real install, not src/. Bare source globals and builtins
   // must survive declaration emit and the root package's side-effect import.
   // Base is a named export; USDC and Uniswap are SauceScript globals the compiler resolves
   // inside the route body — declared types with no runtime value, so importing them would be
@@ -282,6 +281,9 @@ try {
     };
     const built = Base(() => {
       USDC.approve(Uniswap.UniversalRouter, 1000000n);
+      // The language's builtins are declared for a typed closure too (builtins.generated.ts).
+      require(ctx.timestamp() > 0n, "stale");
+      log(crypto.keccak256(hex\`01\`).toBytesBe(32n));
     }, options).reward(0n);
     if (built.compiled.bytecode[0].length === 0) throw new Error('Empty route');
     // The actions declarations reference the SDK's by relative path; this checks they resolve.
@@ -331,6 +333,172 @@ try {
   console.log(
     `Clean package install: all ${documented.length} exports the actions pages name typecheck ` +
       `from ./actions, the type-only ones being ${actionTypes.join(", ")}`,
+  );
+
+  // The `sauce` bin, run the way a consumer runs it — through npx, from the install, with nothing
+  // but the tarball's files. It compiles the example its own agent skill ships, builds the Pot and
+  // the transaction, and scaffolds a project whose skills then report up to date.
+  const sauce = (...args) =>
+    execFileSync("npx", ["--no", "--", "sauce", ...args], {
+      cwd: work,
+      encoding: "utf8",
+      env: smokeEnv,
+    });
+  assert.equal(
+    execFileSync("npx", ["--no", "--", name, "--version"], {
+      cwd: work,
+      encoding: "utf8",
+      env: smokeEnv,
+    }),
+    `${name} ${installedManifest.version}\n`,
+    `npx ${name} runs the package's one bin`,
+  );
+  // The skill's `pay.sauce.ts` names no chain and takes `main(recipient, amount)` at run time.
+  const example = join(installedRoot, "skills/sauce-run/examples/pay.sauce.ts");
+  const recipient = "0x6666666666666666666666666666666666666666";
+  const owner = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+  const chain = ["--chain", "ethereum"];
+  const args = ["--args", recipient, "1000000"];
+  const bytecode = sauce("compile", example, ...chain).trim();
+  assert.match(bytecode, /^0x[0-9a-f]+$/, "sauce compile prints the program as hex");
+  const compiled = JSON.parse(sauce("compile", example, ...chain, "--json"));
+  const installedCompiler = JSON.parse(
+    readFileSync(join(work, "node_modules/sauce-compiler/package.json"), "utf8"),
+  );
+  assert.equal(compiled.bytecode, bytecode);
+  assert.equal(compiled.chain, "ethereum", "--chain chose the chain");
+  assert.deepEqual(
+    compiled.entryParams,
+    [
+      { name: "recipient", type: "Address" },
+      { name: "amount", type: "Uint256" },
+    ],
+    "main's parameters, as --args takes them",
+  );
+  assert.equal(compiled.compiler.version, installedCompiler.version);
+  assert.equal(compiled.engine.release, "v12-evm");
+  const pot = JSON.parse(sauce("pot", "--owner", owner, "--chain", "ethereum"));
+  assert.equal(pot.to, pot.kitchen, "sauce pot prints the Kitchen.deployPot transaction");
+  const tx = JSON.parse(sauce("tx", example, ...chain, "--owner", owner, "--value", "0", ...args));
+  assert.deepEqual(Object.keys(tx), ["chainId", "to", "data", "value"], "sauce tx prints the tx");
+  assert.equal(tx.to, pot.pot, "sauce tx cooks on the Pot sauce pot predicts");
+  assert.ok(tx.data.includes(bytecode.slice(2)), "the cook carries the compiled program");
+  assert.ok(tx.data.includes(recipient.slice(2)), "and main's arguments after it");
+  assert.equal(
+    sauce("tx", example, ...chain, "--owner", owner, "--value", "0", "--format", "cast", ...args),
+    `cast send ${tx.to} ${tx.data} --value 0 --rpc-url <RPC_URL> --private-key <PRIVATE_KEY>\n`,
+  );
+  console.log(
+    `Clean package install: the sauce bin compiles the shipped example (${compiled.size} bytes) ` +
+      `and builds its Pot and cook transactions`,
+  );
+
+  const project = join(work, "scaffolded");
+  sauce("init", project);
+  const scaffoldedManifest = JSON.parse(readFileSync(join(project, "package.json"), "utf8"));
+  assert.deepEqual(
+    scaffoldedManifest.dependencies,
+    { [name]: installedManifest.version },
+    "sauce init pins the package to exactly the version that ran it",
+  );
+  for (const file of [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+    ".gitignore",
+    "sauce.config.example.json",
+  ]) {
+    assert.ok(existsSync(join(project, file)), `sauce init writes ${file}`);
+  }
+  // Every agent skill in the repository ships, byte for byte, and nothing else does.
+  const skillFiles = (dir) =>
+    readdirSync(dir, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => relative(dir, join(entry.parentPath, entry.name)).split(sep).join("/"))
+      .sort();
+  const shippedSkills = skillFiles(join(installedRoot, "skills"));
+  assert.deepEqual(shippedSkills, skillFiles(join(root, "skills")), "the package ships skills/");
+  for (const file of shippedSkills) {
+    assert.ok(
+      readFileSync(join(installedRoot, "skills", file)).equals(
+        readFileSync(join(root, "skills", file)),
+      ),
+      `skills/${file} ships verbatim`,
+    );
+  }
+  for (const skill of ["sauce-overview", "sauce-run", "sauce-protocols", "sauce-examples"]) {
+    assert.ok(shippedSkills.includes(`${skill}/SKILL.md`), `the package ships the ${skill} skill`);
+  }
+  // The per-protocol documents the /skills export serves are the sauce-protocols skill's files.
+  const protocolSkills = await import(
+    pathToFileURL(join(installedRoot, installedManifest.exports["./skills"].default)).href
+  );
+  for (const slug of protocolSkills.listSkillSlugs()) {
+    assert.equal(
+      protocolSkills.getProtocolSkill(slug),
+      readFileSync(join(installedRoot, "skills/sauce-protocols/references", `${slug}.md`), "utf8"),
+      `getProtocolSkill("${slug}") is the shipped sauce-protocols reference`,
+    );
+  }
+  // Claude Code reads .claude/skills; Codex, Cursor, Copilot and Gemini CLI read .agents/skills.
+  for (const dir of [".claude/skills", ".agents/skills"]) {
+    for (const file of shippedSkills) {
+      assert.equal(
+        readFileSync(join(project, dir, file), "utf8"),
+        readFileSync(join(installedRoot, "skills", file), "utf8"),
+        `sauce init installs ${file} verbatim into ${dir}`,
+      );
+    }
+  }
+  // status exits non-zero on anything outdated, so execFileSync throwing is the failure.
+  const status = sauce("skills", "status", "--dir", project);
+  assert.equal(status.match(/: up to date \(/g)?.length, 2, `every target is current:\n${status}`);
+  assert.match(sauce("skills", "install", "--dir", project), /^skills are up to date \(/);
+  console.log(
+    `Clean package install: sauce init scaffolds a project pinned to ${installedManifest.version}, ` +
+      `whose ${shippedSkills.length} skill files then check clean for every agent`,
+  );
+
+  // `sauce skills install` on its own, for one agent: only the directory that agent reads, every
+  // shipped file verbatim, and the record `update` and `status` read.
+  const codexProject = join(work, "codex-project");
+  sauce("skills", "install", "--agent", "codex", "--dir", codexProject);
+  assert.ok(!existsSync(join(codexProject, ".claude")), "--agent codex writes no .claude/skills");
+  for (const file of shippedSkills) {
+    assert.ok(
+      readFileSync(join(codexProject, ".agents/skills", file)).equals(
+        readFileSync(join(installedRoot, "skills", file)),
+      ),
+      `sauce skills install --agent codex writes ${file} verbatim`,
+    );
+  }
+  const record = JSON.parse(
+    readFileSync(join(codexProject, ".agents/skills/.sauce-skills.json"), "utf8"),
+  );
+  assert.equal(record.version, installedManifest.version, "the install records the version");
+  assert.deepEqual(Object.keys(record.files).sort(), shippedSkills, "and every file it wrote");
+  assert.match(
+    sauce("skills", "status", "--dir", codexProject),
+    /: up to date \(/,
+    "status: the codex install is current",
+  );
+  console.log(
+    `Clean package install: sauce skills install --agent codex writes the ${shippedSkills.length} ` +
+      "skill files to .agents/skills and nothing else",
+  );
+
+  // The skills as that install left them, checked against the INSTALLED package as the repository
+  // checks its own: every program compiled through the installed bin, every command line, every
+  // runner executed offline from the project, the way an agent runs one.
+  execFileSync(
+    process.execPath,
+    [join(root, "sdk/scripts/check-skills.mjs"), "--skills", join(codexProject, ".agents/skills")],
+    { cwd: work, stdio: "inherit", env: smokeEnv },
+  );
+  assert.match(
+    sauce("skills", "status", "--dir", codexProject),
+    /: up to date \(/,
+    "the check leaves the installed skills as they were",
   );
 
   // The same browser gates the repository runs, against the INSTALLED package and resolved from

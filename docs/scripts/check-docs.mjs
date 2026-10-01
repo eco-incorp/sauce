@@ -26,10 +26,13 @@ function markdownFiles(path) {
 }
 const manual = [
   "README.md",
-  ...(packageArgument < 0 ? ["CLAUDE.md", "sdk/README.md", "actions/README.md"] : []),
-  "dev-tools/README.md",
+  ...(packageArgument < 0
+    ? ["CLAUDE.md", "sdk/README.md", "actions/README.md", "dev-tools/README.md"]
+    : []),
   "docs/README.md",
 ].map((path) => join(root, path));
+// The agent skills ship in the package, and link to their own supporting files.
+manual.push(...markdownFiles(join(root, "skills")));
 for (const directory of ["concepts", "guides", "api", "examples"]) {
   manual.push(...markdownFiles(join(root, "docs", directory)));
 }

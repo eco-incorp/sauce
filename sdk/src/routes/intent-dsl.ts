@@ -59,7 +59,9 @@ import {
 } from "./portal.js";
 import {
   compileSauceRoute,
+  compileScopedRoute,
   type CompiledSauceRoute,
+  type RouteScope,
   type SauceCompileOptions,
   type SauceEvmExecutionInput,
   type SauceSvmExecutionInput,
@@ -80,8 +82,8 @@ export type { NestVia };
 export type { AmountMeasurement, PlaceholderSpec };
 
 /**
- * A route body: a complete `function main(){...}` program, a bare body (see
- * `sauce-route.ts#wrapSauceBody`), or a closure (see `closure.ts#sauceBodyToSource`) whose
+ * A route body: a SauceScript file — a module declaring `function main`, or a script whose top-level
+ * statements are the entry — or a closure (see `closure.ts#sauceBodyToSource`) whose
  * `Function.prototype.toString()` is extracted as SauceScript source. Closures capture nothing by
  * construction — a free identifier must come from `IntentOptions.defines` (or chain-scoped ambient
  * defines) or the compile fails closed with "`X` is not a declared variable".
@@ -525,14 +527,21 @@ export function openRoute(
   // UNDERNEATH the caller's own IntentOptions.defines, which sits underneath the most-specific
   // IntentOptions.compile.defines -- caller always wins on a key collision; a user-declared local
   // inside the body wins over all of this via the compiler's own getConstant/getVar precedence.
-  const ambientDefines = chainDefines(destination, { tokens: options.tokenDefines });
-  const mergedDefines = { ...ambientDefines, ...options.defines, ...options.compile?.defines };
+  //
+  // The two travel SEPARATELY, so `defines` stays exactly what the caller wrote. The chain-scoped
+  // ones belong to one chain: they reach the compile as a scope for this program's chain, and a
+  // level on another chain — an intent's body written in the program — gets that chain's own
+  // (`sauce-route.ts#levelOn`, which also drops the caller's defines of chain-scoped names there).
+  const callerDefines = { ...options.defines, ...options.compile?.defines };
+  const scope: RouteScope = {
+    chainDefines: (chain) => chainDefines(chain, { tokens: options.tokenDefines }),
+  };
 
-  // P7 — the ambient-MODULE half of the chain bundle (`ambientDefines` above is the scalar half).
-  // `chainAmbient(destination)` is the plugin's chain-scoped ambient module list (`["@sauce/token"]`
-  // by default, see `ambient.ts#chainAmbient`/`plugin/index.ts`'s own notes); merged with any
-  // caller-supplied `options.compile.ambient` (deduped -- either side may legitimately name the
-  // same module).
+  // P7 — the ambient-MODULE half of the chain bundle (`scope.chainDefines` above is the scalar
+  // half). `chainAmbient(destination)` is the plugin's chain-scoped ambient module list
+  // (`["@sauce/token"]` by default, see `ambient.ts#chainAmbient`/`plugin/index.ts`'s own notes);
+  // merged with any caller-supplied `options.compile.ambient` (deduped -- either side may
+  // legitimately name the same module).
   const mergedAmbient = Array.from(
     new Set([...chainAmbient(destination), ...(options.compile?.ambient ?? [])]),
   );
@@ -549,14 +558,14 @@ export function openRoute(
       ...options.ecoRoutes,
       ...options.compile?.intents,
     },
-    defines: mergedDefines,
+    defines: callerDefines,
     tokens: options.compile?.tokens ?? options.tokenDefines,
     ambient: mergedAmbient.length > 0 ? mergedAmbient : options.compile?.ambient,
   };
 
   let compiledRoute: CompiledSauceRoute;
   try {
-    compiledRoute = compileSauceRoute(destination, sauceSource, execution, compileOptions);
+    compiledRoute = compileScopedRoute(destination, sauceSource, execution, compileOptions, scope);
   } catch (err) {
     // The compiler reports a free identifier as "`X` is not a declared variable", inside a larger
     // rustc-style diagnostic — so match the sentence rather than a message prefix.

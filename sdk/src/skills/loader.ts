@@ -1,6 +1,7 @@
-// The skill documents are embedded at build time (`embedded/skills.generated.ts`), so this module
-// reads no filesystem and works in a browser. The `.md` files under `src/skills/` remain the source
-// of truth, and still ship in the package for readers who want the files themselves.
+// The per-protocol documents are embedded at build time (`embedded/skills.generated.ts`), so this
+// module reads no filesystem and works in a browser. Their source of truth is the `sauce-protocols`
+// agent skill, `skills/sauce-protocols/references/*.md` at the package root: the files ship there,
+// `sauce skills install` copies them into a project, and this module returns the same text.
 import { SKILL_DOCUMENTS } from "../embedded/skills.generated.js";
 
 const INDEX = "index";

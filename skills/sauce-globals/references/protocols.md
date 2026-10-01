@@ -1,0 +1,355 @@
+<!-- Generated from the SDK's registries: the names `sauce globals --chain <chain>` lists. Do not edit. -->
+
+# Protocol globals
+
+A program names a contract as `Namespace.Contract`: its address where a value is expected, a
+bound contract where a method is called. Naming one that is not deployed on the program's chain
+is a compile error. Each contract is also the compile-time define `Namespace_Contract` on the
+chains listed. A namespace's default contract (marked) is also called as `Namespace.method(...)`.
+
+## Contracts
+
+- `AaveV2.LendingPool` (`aave-v2`, default): ethereum, polygon, avalanche
+- `AaveV3.Pool` (`aave-v3`, default): ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll
+- `AaveV3.PoolAddressesProvider` (`aave-v3`): ethereum, optimism, polygon, monad, base, arbitrum, avalanche
+- `AaveV4.AvaxCorrelatedSpoke` (`aave-v4`): avalanche
+- `AaveV4.BluechipSpoke` (`aave-v4`): ethereum
+- `AaveV4.CoreHub` (`aave-v4`): ethereum, arc, avalanche
+- `AaveV4.EquitiesHub` (`aave-v4`): base
+- `AaveV4.EthenaCorrelatedSpoke` (`aave-v4`): ethereum
+- `AaveV4.EthenaEcosystemSpoke` (`aave-v4`): ethereum
+- `AaveV4.EtherfiESpoke` (`aave-v4`): ethereum
+- `AaveV4.ForexSpoke` (`aave-v4`): ethereum, arc, avalanche
+- `AaveV4.GlobalDollarHub` (`aave-v4`): ethereum
+- `AaveV4.GoldSpoke` (`aave-v4`): ethereum
+- `AaveV4.KelpESpoke` (`aave-v4`): ethereum
+- `AaveV4.LidoESpoke` (`aave-v4`): ethereum
+- `AaveV4.LombardBtcSpoke` (`aave-v4`): ethereum
+- `AaveV4.Mag7Spoke` (`aave-v4`): base
+- `AaveV4.MainSpoke` (`aave-v4`): ethereum, arc, avalanche
+- `AaveV4.PaxgGoldSpoke` (`aave-v4`): ethereum
+- `AaveV4.PlusHub` (`aave-v4`): ethereum
+- `AaveV4.PrimeHub` (`aave-v4`): ethereum
+- `AaveV4.UsdgMapleESpoke` (`aave-v4`): ethereum
+- `AaveV4.UsdgPendleSpoke` (`aave-v4`): ethereum
+- `Abracadabra.DegenBox` (`abracadabra`, default): ethereum, arbitrum
+- `Abracadabra.Mim` (`abracadabra`): ethereum, arbitrum
+- `Across.HubPool` (`across`): ethereum
+- `Across.SpokePool` (`across`): ethereum, optimism, polygon, zksync, arc, base, mode, arbitrum, linea, blast, scroll
+- `Aerodrome.PoolFactory` (`aerodrome`): base
+- `Aerodrome.Router` (`aerodrome`): base
+- `AerodromeSlipstream.CLFactory` (`aerodrome-slipstream`): arc, base
+- `AerodromeSlipstream.CLFactoryGaugeCaps` (`aerodrome-slipstream`): base
+- `AerodromeSlipstream.CLFactoryGaugesV3` (`aerodrome-slipstream`): base
+- `AerodromeSlipstream.Metarouter` (`aerodrome-slipstream`): arc
+- `AerodromeSlipstream.NonfungiblePositionManager` (`aerodrome-slipstream`): arc, base
+- `AerodromeSlipstream.NonfungiblePositionManagerGaugeCaps` (`aerodrome-slipstream`): base
+- `AerodromeSlipstream.NonfungiblePositionManagerGaugesV3` (`aerodrome-slipstream`): base
+- `Aevo.DepositContract` (`aevo`, default): ethereum
+- `Alchemix.AlETH` (`alchemix`): ethereum
+- `Alchemix.AlUSD` (`alchemix`): ethereum
+- `Alchemix.AlchemistAlETH` (`alchemix`): ethereum
+- `Alchemix.AlchemistAlUSD` (`alchemix`): ethereum
+- `Ambient.CrocSwapDex` (`ambient`, default): ethereum, scroll
+- `ArbitrumBridge.L1GatewayRouter` (`arbitrum-bridge`, default): ethereum
+- `ArbitrumBridge.L2GatewayRouter` (`arbitrum-bridge`): arbitrum
+- `Arrakis.Factory` (`arrakis`): ethereum
+- `Arrakis.Router` (`arrakis`, default): ethereum
+- `Axelar.GasService` (`axelar`): ethereum
+- `Axelar.Gateway` (`axelar`): ethereum, optimism, polygon, base, arbitrum, avalanche
+- `Axelar.ITS` (`axelar`): ethereum, optimism, polygon, base, arbitrum, avalanche
+- `BalancerV2.Vault` (`balancer-v2`, default): ethereum, optimism, bsc, gnosis, polygon, base, arbitrum, avalanche
+- `BaseBridge.L1StandardBridge` (`base-bridge`, default): ethereum
+- `BaseBridge.L2StandardBridge` (`base-bridge`): base
+- `Baseswap.V2Router` (`baseswap`, default): base
+- `Beefy.BIFI` (`beefy`): ethereum, optimism, bsc, polygon, base, arbitrum, avalanche
+- `Benqi.Comptroller` (`benqi`, default): avalanche
+- `Camelot.V2Factory` (`camelot`): arbitrum
+- `Camelot.V2Router` (`camelot`): arbitrum
+- `Camelot.V3Factory` (`camelot`): arbitrum
+- `Camelot.V3SwapRouter` (`camelot`): arbitrum
+- `Cbeth.CbETH` (`cbeth`, default): ethereum, base
+- `Cctp.TokenMessenger` (`cctp`, default): ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea
+- `Celer.Bridge` (`celer`, default): ethereum, optimism, bsc, polygon, arbitrum, avalanche
+- `Chainlink.EthUsdFeed` (`chainlink`): ethereum, arc
+- `Chainlink.FeedRegistry` (`chainlink`): ethereum
+- `Chainlink.VrfV2Coordinator` (`chainlink`): ethereum
+- `ChainlinkCcip.Router` (`chainlink-ccip`, default): ethereum, optimism, polygon, arc, base, arbitrum
+- `CircleGateway.GatewayMinter` (`circle-gateway`): ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche
+- `CircleGateway.GatewayWallet` (`circle-gateway`): ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche
+- `CompoundV2.CETH` (`compound-v2`): ethereum
+- `CompoundV2.CUSDC` (`compound-v2`): ethereum
+- `CompoundV2.Comptroller` (`compound-v2`): ethereum
+- `CompoundV3.CUSDCv3` (`compound-v3`): ethereum, optimism, polygon, base, arbitrum, scroll
+- `CompoundV3.CUSDTv3` (`compound-v3`): ethereum, arbitrum
+- `CompoundV3.CWETHv3` (`compound-v3`): ethereum, base
+- `Connext.EverclearSpoke` (`connext`, default): ethereum, optimism, base, arbitrum
+- `Convex.Booster` (`convex`, default): ethereum
+- `Convex.CvxRewardPool` (`convex`): ethereum
+- `Cowswap.GPv2Settlement` (`cowswap`, default): ethereum, arbitrum
+- `Crvusd.CrvUSD` (`crvusd`, default): ethereum
+- `Curve.AddressProvider` (`curve`): ethereum, gnosis, polygon, fantom, arbitrum, avalanche
+- `Curve.CrvToken` (`curve`): ethereum
+- `Curve.RouterNG` (`curve`): ethereum, optimism, base, arbitrum
+- `Curve.ThreePool` (`curve`): ethereum
+- `Debridge.DlnDestination` (`debridge`): ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche
+- `Debridge.DlnSource` (`debridge`): ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche
+- `Dodo.DODOV2Proxy` (`dodo`, default): ethereum, bsc
+- `Eigenlayer.CbETHStrategy` (`eigenlayer`): ethereum
+- `Eigenlayer.DelegationManager` (`eigenlayer`): ethereum
+- `Eigenlayer.RETHStrategy` (`eigenlayer`): ethereum
+- `Eigenlayer.StETHStrategy` (`eigenlayer`): ethereum
+- `Eigenlayer.StrategyManager` (`eigenlayer`): ethereum
+- `Ens.BaseRegistrar` (`ens`): ethereum
+- `Ens.Registry` (`ens`): ethereum
+- `Ethena.Susde` (`ethena`): ethereum
+- `Ethena.USDe` (`ethena`): ethereum
+- `Etherfi.EETH` (`etherfi`): ethereum
+- `Etherfi.LiquidityPool` (`etherfi`): ethereum
+- `Etherfi.WeETH` (`etherfi`): ethereum
+- `EulerV2.EthereumVaultConnector` (`euler-v2`, default): ethereum
+- `Fenix.Router` (`fenix`, default): blast
+- `Fluid.Liquidity` (`fluid`): ethereum, arbitrum
+- `Frax.Frax` (`frax`, default): ethereum
+- `FraxEther.FrxETHMinter` (`frax-ether`): ethereum
+- `FraxEther.SfrxETH` (`frax-ether`): ethereum
+- `GainsNetwork.Diamond` (`gains-network`, default): polygon, arbitrum
+- `GainsNetwork.Gns` (`gains-network`): arbitrum
+- `Gamma.UniProxy` (`gamma`): polygon
+- `Gamma.UniProxyLegacy` (`gamma`): ethereum
+- `Gelato.Automate` (`gelato`, default): ethereum, optimism, bsc, polygon, base, arbitrum, avalanche
+- `Gho.Gho` (`gho`, default): ethereum
+- `GmxV1.Glp` (`gmx-v1`): arbitrum
+- `GmxV1.PositionRouter` (`gmx-v1`): arbitrum
+- `GmxV1.Router` (`gmx-v1`): arbitrum, avalanche
+- `GmxV1.Vault` (`gmx-v1`): arbitrum, avalanche
+- `GmxV2.DataStore` (`gmx-v2`): arbitrum
+- `GmxV2.ExchangeRouter` (`gmx-v2`, default): arbitrum
+- `Harvest.Controller` (`harvest`): ethereum
+- `Harvest.DepositHelper` (`harvest`): ethereum
+- `Harvest.Farm` (`harvest`): ethereum
+- `Hegic.Hegic` (`hegic`): arbitrum
+- `Hegic.OperationalTreasury` (`hegic`, default): arbitrum
+- `Hop.L1EthBridge` (`hop`): ethereum
+- `Hop.L1UsdcBridge` (`hop`): ethereum
+- `Hop.L2AmmWrapper` (`hop`): optimism, polygon, base, arbitrum
+- `Hyperlane.Mailbox` (`hyperlane`, default): ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche
+- `Instadapp.FlashloanAggregator` (`instadapp`, default): ethereum
+- `Kelp.LRTDepositPool` (`kelp`): ethereum
+- `Kelp.RsETH` (`kelp`): ethereum
+- `Kim.V2Router` (`kim`, default): mode
+- `Kyberswap.ElasticFactory` (`kyberswap`): ethereum, optimism, bsc, polygon, arbitrum, avalanche
+- `Kyberswap.ElasticRouter` (`kyberswap`): ethereum, optimism, bsc, polygon, arbitrum, avalanche
+- `Kyberswap.MetaAggregationRouterV2` (`kyberswap`): ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche
+- `KyberswapAggregator.MetaAggregationRouter` (`kyberswap-aggregator`, default): ethereum, optimism, bsc, polygon, fantom, zksync, arc, base, arbitrum, avalanche, linea, scroll
+- `Layerbank.Core` (`layerbank`, default): scroll
+- `Layerzero.EndpointV2` (`layerzero`, default): ethereum, optimism, bsc, polygon, zksync, arc, base, arbitrum, avalanche, linea, scroll
+- `LevelFinance.LiquidityPool` (`level-finance`, default): bsc, arbitrum
+- `Lido.StETH` (`lido`): ethereum
+- `Lido.WstETH` (`lido`): ethereum, arbitrum
+- `Lifi.LiFiDiamond` (`lifi`, default): ethereum, optimism, bsc, gnosis, polygon, fantom, arc, base, arbitrum, avalanche
+- `LineaBridge.L1MessageService` (`linea-bridge`, default): ethereum
+- `LineaBridge.L2MessageService` (`linea-bridge`): linea
+- `LiquityV1.BorrowerOperations` (`liquity-v1`, default): ethereum
+- `LiquityV1.Lusd` (`liquity-v1`): ethereum
+- `LiquityV2.Bold` (`liquity-v2`, default): ethereum
+- `Lynex.Router` (`lynex`, default): linea
+- `Maker.Dai` (`maker`): ethereum
+- `Maker.Pot` (`maker`): ethereum
+- `Maker.SDAI` (`maker`): ethereum
+- `Maker.Usds` (`maker`): ethereum
+- `Maker.Vat` (`maker`): ethereum
+- `MantleMeth.METH` (`mantle-meth`): ethereum
+- `MantleMeth.Staking` (`mantle-meth`): ethereum
+- `Maverick.V2Factory` (`maverick`): ethereum
+- `Maverick.V2Router` (`maverick`): ethereum, base, arbitrum
+- `Moonwell.Comptroller` (`moonwell`, default): base
+- `MorphoBlue.Bundler3` (`morpho-blue`): ethereum
+- `MorphoBlue.Morpho` (`morpho-blue`, default): ethereum, monad, arc, base
+- `MuxProtocol.LiquidityPool` (`mux-protocol`): arbitrum
+- `MuxProtocol.OrderBook` (`mux-protocol`): arbitrum
+- `Olympus.Ohm` (`olympus`): ethereum
+- `Olympus.Staking` (`olympus`, default): ethereum
+- `Olympus.StakingHelper` (`olympus`): ethereum
+- `Oneinch.AggregationRouterV6` (`oneinch`, default): ethereum, optimism, bsc, polygon, base, arbitrum, avalanche
+- `Openocean.ExchangeV2` (`openocean`, default): ethereum, optimism, bsc, polygon, fantom, arbitrum, avalanche
+- `OptimismBridge.L1StandardBridge` (`optimism-bridge`, default): ethereum
+- `OptimismBridge.L2StandardBridge` (`optimism-bridge`): optimism
+- `Opyn.Controller` (`opyn`, default): ethereum
+- `Opyn.OSQTH` (`opyn`): ethereum
+- `PancakeswapV2.Factory` (`pancakeswap-v2`): ethereum, bsc, monad, opbnb, base, arbitrum, linea
+- `PancakeswapV2.Router` (`pancakeswap-v2`): ethereum, bsc, monad, opbnb, base, arbitrum, linea
+- `PancakeswapV3.Factory` (`pancakeswap-v3`): ethereum, bsc, base, arbitrum, linea
+- `PancakeswapV3.NonfungiblePositionManager` (`pancakeswap-v3`): ethereum, bsc, base, arbitrum, linea
+- `PancakeswapV3.SmartRouter` (`pancakeswap-v3`): ethereum, bsc, base, arbitrum, linea
+- `Paraswap.AugustusV5` (`paraswap`, default): ethereum, optimism, bsc, polygon, base, arbitrum, avalanche
+- `Paraswap.AugustusV6` (`paraswap`): ethereum, optimism, bsc, polygon, base, arbitrum, avalanche
+- `Pendle.Router` (`pendle`, default): ethereum, monad, arbitrum
+- `Permit2.Permit2` (`permit2`, default): ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche
+- `PerpetualProtocol.ClearingHouse` (`perpetual-protocol`): optimism
+- `PerpetualProtocol.Vault` (`perpetual-protocol`): optimism
+- `PolygonBridge.ChildChainManager` (`polygon-bridge`): polygon
+- `PolygonBridge.Erc20Predicate` (`polygon-bridge`): ethereum
+- `PolygonBridge.EtherPredicate` (`polygon-bridge`): ethereum
+- `PolygonBridge.RootChainManager` (`polygon-bridge`, default): ethereum
+- `Premia.PoolFactory` (`premia`): arbitrum
+- `Puffer.PufETH` (`puffer`): ethereum
+- `Puffer.PufferVault` (`puffer`, default): ethereum
+- `Pyth.Oracle` (`pyth`, default): ethereum
+- `Quickswap.V2Factory` (`quickswap`): polygon
+- `Quickswap.V2Router` (`quickswap`): polygon
+- `Quickswap.V3Factory` (`quickswap`): polygon
+- `Quickswap.V3SwapRouter` (`quickswap`): polygon
+- `Radiant.LendingPool` (`radiant`): arbitrum
+- `Ramses.Router` (`ramses`, default): arbitrum
+- `Reflexer.CoinJoin` (`reflexer`): ethereum
+- `Reflexer.ETHJoin` (`reflexer`): ethereum
+- `Reflexer.Rai` (`reflexer`): ethereum
+- `Reflexer.SAFEEngine` (`reflexer`): ethereum
+- `Renzo.EzETH` (`renzo`): ethereum
+- `Renzo.RestakeManager` (`renzo`): ethereum
+- `RocketPool.RETH` (`rocket-pool`): ethereum
+- `RocketPool.RocketDepositPool` (`rocket-pool`): ethereum
+- `Sablier.LockupLinear` (`sablier`, default): ethereum
+- `Safe.SafeL2V130` (`safe`): ethereum, optimism, polygon, arc, base, arbitrum
+- `Safe.SafeV141` (`safe`): ethereum, arc
+- `ScrollBridge.L1GatewayRouter` (`scroll-bridge`): ethereum
+- `ScrollBridge.L1ScrollMessenger` (`scroll-bridge`): ethereum
+- `ScrollBridge.L2GatewayRouter` (`scroll-bridge`): scroll
+- `ScrollBridge.L2ScrollMessenger` (`scroll-bridge`): scroll
+- `Seamless.Pool` (`seamless`, default): base
+- `Seamless.PoolAddressesProvider` (`seamless`): base
+- `Seaport.SeaportV16` (`seaport`, default): ethereum, optimism, polygon, arc, base, arbitrum
+- `Silo.SiloRepository` (`silo`, default): ethereum, arbitrum
+- `Socket.SocketGateway` (`socket`, default): ethereum, optimism, bsc, polygon, base, arbitrum, avalanche
+- `Sommelier.CellarRouter` (`sommelier`): ethereum
+- `Spark.Pool` (`spark`, default): ethereum
+- `Spark.PoolAddressesProvider` (`spark`): ethereum
+- `Spookyswap.V2Router` (`spookyswap`, default): fantom
+- `Squid.SquidRouter` (`squid`, default): ethereum, optimism, bsc, polygon, base, arbitrum, avalanche
+- `Stader.ETHx` (`stader`): ethereum
+- `Stader.StakePoolManager` (`stader`): ethereum
+- `Stargate.PoolNative` (`stargate`): ethereum, base, arbitrum
+- `Stargate.PoolUSDC` (`stargate`): ethereum, base, arbitrum
+- `Stargate.PoolUSDT` (`stargate`): ethereum
+- `Superfluid.CFAForwarder` (`superfluid`, default): ethereum, optimism, polygon, base, arbitrum
+- `Superfluid.Host` (`superfluid`): ethereum, optimism, polygon, base, arbitrum
+- `SushiswapV2.Factory` (`sushiswap-v2`): ethereum, optimism, bsc, polygon, fantom, arbitrum, avalanche
+- `SushiswapV2.Router` (`sushiswap-v2`): ethereum, optimism, bsc, polygon, fantom, arbitrum, avalanche
+- `Swell.RswETH` (`swell`): ethereum
+- `Swell.SwETH` (`swell`): ethereum
+- `Synapse.CctpRouter` (`synapse`): ethereum
+- `Synapse.SynapseBridge` (`synapse`, default): ethereum, optimism, polygon, base, arbitrum, avalanche
+- `Syncswap.Router` (`syncswap`, default): zksync
+- `SynthetixV3.CoreProxy` (`synthetix-v3`): base
+- `SynthetixV3.PerpsMarketProxy` (`synthetix-v3`): base
+- `SynthraV3.Factory` (`synthra-v3`): arc
+- `SynthraV3.NonfungiblePositionManager` (`synthra-v3`): arc
+- `SynthraV3.QuoterV2` (`synthra-v3`): arc
+- `SynthraV3.SwapRouter02` (`synthra-v3`): arc
+- `Thales.SpeedMarketsAMM` (`thales`): optimism
+- `Thales.ThalesAMM` (`thales`): optimism
+- `Thena.RouterV2` (`thena`, default): bsc
+- `Thruster.V3SwapRouter` (`thruster`, default): blast
+- `Tokemak.AutopoolRegistry` (`tokemak`): ethereum
+- `Tokemak.SystemRegistry` (`tokemak`): ethereum
+- `Tokemak.Toke` (`tokemak`): ethereum
+- `TraderJoe.LBFactory` (`trader-joe`): avalanche
+- `TraderJoe.LBRouter` (`trader-joe`): bsc, arbitrum, avalanche
+- `UniswapV2.Factory` (`uniswap-v2`): ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora
+- `UniswapV2.Router` (`uniswap-v2`): ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora
+- `UniswapV3.Factory` (`uniswap-v3`): ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche
+- `UniswapV3.NonfungiblePositionManager` (`uniswap-v3`): ethereum, optimism, polygon, monad, arc, base, arbitrum
+- `UniswapV3.QuoterV2` (`uniswap-v3`): ethereum, monad, arc
+- `UniswapV3.SwapRouter` (`uniswap-v3`): ethereum, optimism, polygon, arbitrum
+- `UniswapV3.SwapRouter02` (`uniswap-v3`): ethereum, bsc, monad, arc, base, celo, avalanche
+- `UniswapV4.PoolManager` (`uniswap-v4`): ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora
+- `UniswapV4.PositionManager` (`uniswap-v4`): ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche
+- `UniswapV4.StateView` (`uniswap-v4`): ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora
+- `UniswapV4.UniversalRouter` (`uniswap-v4`): ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche
+- `UnitflowV3.Factory` (`unitflow-v3`): arc
+- `UnitflowV3.Quoter` (`unitflow-v3`): arc
+- `UnitflowV3.Router` (`unitflow-v3`): arc
+- `Velodrome.PoolFactory` (`velodrome`): optimism
+- `Velodrome.RouterV2` (`velodrome`): optimism
+- `Venus.Comptroller` (`venus`): bsc
+- `Venus.VBNB` (`venus`): bsc
+- `Vertex.Clearinghouse` (`vertex`): arbitrum
+- `Vertex.Endpoint` (`vertex`): arbitrum
+- `Wormhole.CoreBridge` (`wormhole`): ethereum, optimism, polygon, arc, base, arbitrum, avalanche
+- `Wormhole.TokenBridge` (`wormhole`): ethereum, optimism, polygon, base, arbitrum, avalanche
+- `YearnV3.VaultFactory` (`yearn-v3`): ethereum
+- `Zerolend.Pool` (`zerolend`, default): zksync
+- `Zerox.ExchangeProxy` (`zerox`, default): ethereum, optimism, bsc, polygon, base, arbitrum, avalanche
+- `ZksyncBridge.DiamondProxy` (`zksync-bridge`, default): ethereum
+- `ZksyncBridge.L2Bridge` (`zksync-bridge`): zksync
+
+## Family aliases
+
+A family names a contract when exactly one of its members has it on the program's chain. Any
+other name, such as one that two members share, is ambiguous: name the versioned namespace.
+
+- `Aave.AvaxCorrelatedSpoke` → `AaveV4.AvaxCorrelatedSpoke`: avalanche
+- `Aave.BluechipSpoke` → `AaveV4.BluechipSpoke`: ethereum
+- `Aave.CoreHub` → `AaveV4.CoreHub`: ethereum, arc, avalanche
+- `Aave.EquitiesHub` → `AaveV4.EquitiesHub`: base
+- `Aave.EthenaCorrelatedSpoke` → `AaveV4.EthenaCorrelatedSpoke`: ethereum
+- `Aave.EthenaEcosystemSpoke` → `AaveV4.EthenaEcosystemSpoke`: ethereum
+- `Aave.EtherfiESpoke` → `AaveV4.EtherfiESpoke`: ethereum
+- `Aave.ForexSpoke` → `AaveV4.ForexSpoke`: ethereum, arc, avalanche
+- `Aave.GlobalDollarHub` → `AaveV4.GlobalDollarHub`: ethereum
+- `Aave.GoldSpoke` → `AaveV4.GoldSpoke`: ethereum
+- `Aave.KelpESpoke` → `AaveV4.KelpESpoke`: ethereum
+- `Aave.LendingPool` → `AaveV2.LendingPool`: ethereum, polygon, avalanche
+- `Aave.LidoESpoke` → `AaveV4.LidoESpoke`: ethereum
+- `Aave.LombardBtcSpoke` → `AaveV4.LombardBtcSpoke`: ethereum
+- `Aave.Mag7Spoke` → `AaveV4.Mag7Spoke`: base
+- `Aave.MainSpoke` → `AaveV4.MainSpoke`: ethereum, arc, avalanche
+- `Aave.PaxgGoldSpoke` → `AaveV4.PaxgGoldSpoke`: ethereum
+- `Aave.PlusHub` → `AaveV4.PlusHub`: ethereum
+- `Aave.Pool` → `AaveV3.Pool`: ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll
+- `Aave.PoolAddressesProvider` → `AaveV3.PoolAddressesProvider`: ethereum, optimism, polygon, monad, base, arbitrum, avalanche
+- `Aave.PrimeHub` → `AaveV4.PrimeHub`: ethereum
+- `Aave.UsdgMapleESpoke` → `AaveV4.UsdgMapleESpoke`: ethereum
+- `Aave.UsdgPendleSpoke` → `AaveV4.UsdgPendleSpoke`: ethereum
+- `Balancer.Vault` → `BalancerV2.Vault`: ethereum, optimism, bsc, gnosis, polygon, base, arbitrum, avalanche
+- `Compound.CETH` → `CompoundV2.CETH`: ethereum
+- `Compound.CUSDC` → `CompoundV2.CUSDC`: ethereum
+- `Compound.CUSDCv3` → `CompoundV3.CUSDCv3`: ethereum, optimism, polygon, base, arbitrum, scroll
+- `Compound.CUSDTv3` → `CompoundV3.CUSDTv3`: ethereum, arbitrum
+- `Compound.CWETHv3` → `CompoundV3.CWETHv3`: ethereum, base
+- `Compound.Comptroller` → `CompoundV2.Comptroller`: ethereum
+- `Euler.EthereumVaultConnector` → `EulerV2.EthereumVaultConnector`: ethereum
+- `Gmx.DataStore` → `GmxV2.DataStore`: arbitrum
+- `Gmx.ExchangeRouter` → `GmxV2.ExchangeRouter`: arbitrum
+- `Gmx.Glp` → `GmxV1.Glp`: arbitrum
+- `Gmx.PositionRouter` → `GmxV1.PositionRouter`: arbitrum
+- `Gmx.Router` → `GmxV1.Router`: arbitrum, avalanche
+- `Gmx.Vault` → `GmxV1.Vault`: arbitrum, avalanche
+- `Liquity.Bold` → `LiquityV2.Bold`: ethereum
+- `Liquity.BorrowerOperations` → `LiquityV1.BorrowerOperations`: ethereum
+- `Liquity.Lusd` → `LiquityV1.Lusd`: ethereum
+- `Pancakeswap.NonfungiblePositionManager` → `PancakeswapV3.NonfungiblePositionManager`: ethereum, bsc, base, arbitrum, linea
+- `Pancakeswap.Router` → `PancakeswapV2.Router`: ethereum, bsc, monad, opbnb, base, arbitrum, linea
+- `Pancakeswap.SmartRouter` → `PancakeswapV3.SmartRouter`: ethereum, bsc, base, arbitrum, linea
+- `Sushiswap.Factory` → `SushiswapV2.Factory`: ethereum, optimism, bsc, polygon, fantom, arbitrum, avalanche
+- `Sushiswap.Router` → `SushiswapV2.Router`: ethereum, optimism, bsc, polygon, fantom, arbitrum, avalanche
+- `Synthetix.CoreProxy` → `SynthetixV3.CoreProxy`: base
+- `Synthetix.PerpsMarketProxy` → `SynthetixV3.PerpsMarketProxy`: base
+- `Synthra.Factory` → `SynthraV3.Factory`: arc
+- `Synthra.NonfungiblePositionManager` → `SynthraV3.NonfungiblePositionManager`: arc
+- `Synthra.QuoterV2` → `SynthraV3.QuoterV2`: arc
+- `Synthra.SwapRouter02` → `SynthraV3.SwapRouter02`: arc
+- `Uniswap.NonfungiblePositionManager` → `UniswapV3.NonfungiblePositionManager`: ethereum, optimism, polygon, monad, arc, base, arbitrum
+- `Uniswap.PoolManager` → `UniswapV4.PoolManager`: ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora
+- `Uniswap.PositionManager` → `UniswapV4.PositionManager`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche
+- `Uniswap.QuoterV2` → `UniswapV3.QuoterV2`: ethereum, monad, arc
+- `Uniswap.Router` → `UniswapV2.Router`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora
+- `Uniswap.StateView` → `UniswapV4.StateView`: ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora
+- `Uniswap.SwapRouter` → `UniswapV3.SwapRouter`: ethereum, optimism, polygon, arbitrum
+- `Uniswap.SwapRouter02` → `UniswapV3.SwapRouter02`: ethereum, bsc, monad, arc, base, celo, avalanche
+- `Uniswap.UniversalRouter` → `UniswapV4.UniversalRouter`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche
+- `Unitflow.Factory` → `UnitflowV3.Factory`: arc
+- `Unitflow.Quoter` → `UnitflowV3.Quoter`: arc
+- `Unitflow.Router` → `UnitflowV3.Router`: arc
+- `Yearn.VaultFactory` → `YearnV3.VaultFactory`: ethereum
