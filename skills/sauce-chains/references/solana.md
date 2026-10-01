@@ -13,9 +13,34 @@
 | Sauce Kitchen program | `SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot` |
 | Intents (eco-routes) | takes intents; Portal `0xca542f42f1d9649f69c3e971b2301e76a3f63663154e37bd351ffef8ed0ba2ca` |
 
+## In a program
+
+Compiled with `--chain solana`, a program names Solana's mints with no import: a
+symbol is the mint's 32-byte key, a value the `@sauce/token` functions take. A token account
+is an `Account` parameter (`sauce-solana`).
+
+```sauce chain=solana
+function main(account: Account): Uint256 {
+  // `USDC` is the mint `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`, as the key `0xc6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61`.
+  return balanceOf(USDC, account);
+}
+```
+
 ## Tokens
 
-The registry names no token on this chain: a mint is a define, and a token account an `Account` parameter (`sauce-solana`).
+| Symbol | Mint | Key, the value a program holds | Decimals |
+| --- | --- | --- | --- |
+| `USDC` | `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` | `0xc6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61` | 6 |
+| `USDT` | `Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB` | `0xce010e60afedb22717bd63192f54145a3f965a33bb82d2c7029eb2ce1e208264` | 6 |
+| `WSOL` | `So11111111111111111111111111111111111111112` | `0x069b8857feab8184fb687f634618c035dac439dc1aeb3b5598a0f00000000001` | 9 |
+
+On devnet, pass a mint that differs as a define, which wins over the symbol
+(`--define USDC=<key>`):
+
+| Symbol | Mint | Key, the value a program holds | Decimals |
+| --- | --- | --- | --- |
+| `USDC` | `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` | `0x3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7` | 6 |
+| `WSOL` | `So11111111111111111111111111111111111111112` | `0x069b8857feab8184fb687f634618c035dac439dc1aeb3b5598a0f00000000001` | 9 |
 
 ## Protocols
 

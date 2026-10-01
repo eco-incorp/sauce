@@ -3,15 +3,15 @@
 // A Solana program declares every account it touches as an `Account` parameter; the compiler
 // returns them as the manifest, in this order, with these roles, and each is passed by name with
 // `--account`. `amount` is the one runtime argument; MINT, a 32-byte key chosen per compile, is a
-// module constant that `--define MINT=<hex>` replaces. The @sauce/token SVM arm checks each
-// account's owner and mint before it reads or writes, and requires `tokenProgram` to be the SPL
-// Token program.
+// module constant that `--define MINT=<mint>` replaces (base58, or 32-byte hex). The @sauce/token
+// SVM arm checks each account's owner and mint before it reads or writes, and requires
+// `tokenProgram` to be the SPL Token program.
 //
 //   sauce run solana.sauce.ts --chain <chain> --config sauce.config.json --keypair <keypair> \
-//     --define MINT=<mint, as 32-byte hex> --account tokenProgram=<SPL Token program> \
+//     --define MINT=<mint> --account tokenProgram=<SPL Token program> \
 //     --account source=<the Pot's token account> --account destination=<token account> \
 //     --account authority=pot --args <amount>
-const MINT = 0n; // the SPL mint, as 32-byte hex: a define replaces it
+const MINT = 0n; // the SPL mint's 32-byte key: a define replaces it
 
 function main(
   tokenProgram: Account,

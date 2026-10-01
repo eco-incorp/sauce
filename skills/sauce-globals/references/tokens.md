@@ -13,6 +13,12 @@ and amounts are in its smallest units (its decimals). Their addresses are in the
 - **Arc** (`arc`, [addresses](../../sauce-chains/references/arc.md)): `EURC` (6), `USDC` (6), `USYC` (6), `WETH` (18)
 - **Base** (`base`, [addresses](../../sauce-chains/references/base.md)): `USDC` (6), `WETH` (18)
 - **Arbitrum** (`arbitrum`, [addresses](../../sauce-chains/references/arbitrum.md)): `USDC` (6), `WETH` (18)
+- **Solana** (`solana`, [addresses](../../sauce-chains/references/solana.md)): `USDC` (6), `USDT` (6), `WSOL` (9)
+
+On Solana a symbol is the mint's 32-byte key, a value for the `@sauce/token` functions
+(`balanceOf(USDC, account)`); the token accounts are `Account` parameters, and the token
+methods (`USDC.transfer(...)`) are EVM-only. Devnet's mints, which differ, are in the Solana
+file in `sauce-chains`, passed as a define that wins over the symbol.
 
 ## Token functions
 
@@ -34,6 +40,7 @@ On EVM chains:
 On Solana:
 
 - `balanceOf(token: Address, account: Account): Uint256`
+- `ownerOf(token: Address, account: Account): Address`
 - `totalSupply(token: Account): Uint256`
 - `decimals(token: Account): Uint256`
 - `allowance(token: Address, account: Account, spender: Address): Uint256`

@@ -65,13 +65,18 @@ export function globalsIndex(sdk, ecoRoutes) {
               (token) => token.address.toLowerCase() === native.address.toLowerCase(),
             );
 
+      // Solana's are mints: the base58 address beside the 32-byte key a program holds.
+      const row = ({ symbol, address, decimals, mint }) => ({
+        symbol,
+        address,
+        decimals,
+        ...(mint === undefined ? {} : { mint }),
+      });
+
       return {
-        chain: { key: globals.chain.key, slug: chain.slug, id: chain.id },
-        tokens: globals.tokens.map(({ symbol, address, decimals }) => ({
-          symbol,
-          address,
-          decimals,
-        })),
+        chain: { key: globals.chain.key, slug: chain.slug, id: chain.id, kind: chain.kind },
+        tokens: globals.tokens.map(row),
+        ...(chain.kind === "svm" ? { devnet: routes.SVM_TOKEN_REGISTRY.devnet.map(row) } : {}),
         ...(native === undefined
           ? {}
           : {
@@ -314,6 +319,7 @@ export async function skillsReferences(api, documented) {
       coin,
       native: tokens?.native,
       tokens: tokens?.tokens ?? [],
+      devnet: tokens?.devnet ?? [],
       intents,
       cctp: cctp.CCTP_DOMAIN?.[chain.slug],
       sauce:
@@ -512,6 +518,15 @@ function renderGlobals(data) {
         entry.tokens.map((t) => `\`${t.symbol}\` (${t.decimals})`).join(", "),
     );
   }
+  if (globals.tokens.some((entry) => entry.chain.kind === "svm")) {
+    tokens.push(
+      "",
+      "On Solana a symbol is the mint's 32-byte key, a value for the `@sauce/token` functions",
+      "(`balanceOf(USDC, account)`); the token accounts are `Account` parameters, and the token",
+      "methods (`USDC.transfer(...)`) are EVM-only. Devnet's mints, which differ, are in the Solana",
+      "file in `sauce-chains`, passed as a define that wins over the symbol.",
+    );
+  }
   tokens.push(
     "",
     "## Token functions",
@@ -592,6 +607,27 @@ function renderGlobals(data) {
 function chainExample(chain) {
   const namespaced = chain.protocols.flatMap((p) => p.deployed.filter((d) => d.namespace));
   if (chain.tokens.length === 0 && namespaced.length === 0) return [];
+  if (chain.kind === "svm") {
+    // A Solana program reads a token account by the mint's key: the symbol is that key.
+    const token = chain.tokens[0];
+    if (token === undefined) return [];
+
+    return [
+      "## In a program",
+      "",
+      `Compiled with \`--chain ${chain.slug}\`, a program names ${chain.name}'s mints with no import: a`,
+      "symbol is the mint's 32-byte key, a value the `@sauce/token` functions take. A token account",
+      "is an `Account` parameter (`sauce-solana`).",
+      "",
+      `\`\`\`sauce chain=${chain.slug}`,
+      "function main(account: Account): Uint256 {",
+      `  // \`${token.symbol}\` is the mint \`${token.mint ?? token.address}\`, as the key \`${token.address}\`.`,
+      `  return balanceOf(${token.symbol}, account);`,
+      "}",
+      "```",
+      "",
+    ];
+  }
   const token = chain.tokens[0];
   const contract = namespaced[0];
   const body = [];
@@ -676,6 +712,25 @@ function renderChain(chain) {
         : "The registry names no token on this chain: a program uses `Token(<address>)`.",
       "",
     );
+  } else if (chain.kind === "svm") {
+    const mints = (list) => [
+      "| Symbol | Mint | Key, the value a program holds | Decimals |",
+      "| --- | --- | --- | --- |",
+      ...list.map(
+        (t) =>
+          `| \`${t.symbol}\` | \`${t.mint ?? t.address}\` | \`${t.address}\` | ${t.decimals} |`,
+      ),
+      "",
+    ];
+    lines.push(...mints(chain.tokens));
+    if (chain.devnet.length > 0) {
+      lines.push(
+        "On devnet, pass a mint that differs as a define, which wins over the symbol",
+        "(`--define USDC=<key>`):",
+        "",
+        ...mints(chain.devnet),
+      );
+    }
   } else {
     lines.push("| Symbol | Address | Decimals |", "| --- | --- | --- |");
     for (const t of chain.tokens)

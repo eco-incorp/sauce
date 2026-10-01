@@ -303,6 +303,7 @@ declare global {
   const WETH: bigint & SauceTokenSource;
   const WMON: bigint & SauceTokenSource;
   const WPOL: bigint & SauceTokenSource;
+  const WSOL: bigint;
   /** Destination chain identity supplied by openRoute. */
   const chainId: bigint;
   const CHAIN_ID: bigint;

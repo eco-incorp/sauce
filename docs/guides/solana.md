@@ -4,7 +4,7 @@
 
 Solana execution differs from EVM in one structural way, and everything on this page follows from it: **a Solana program must declare every account it touches, up front.** Those declarations are `Account` parameters on `main`, and the compiler returns them as an account manifest you resolve to real addresses before sending anything.
 
-Two consequences. The EVM name rewrites (`USDC.transfer(...)`, protocol members) do not apply here — there is no address to fold in without an account slot to put it in. And you want `@eco-incorp/sauce/compiler` directly: `routes.compileSauceRoute()` returns calls and bytecode but drops the manifest, which is the part you need.
+Two consequences. The EVM name rewrites (`USDC.transfer(...)`, protocol members) do not apply here — there is no address to fold in without an account slot to put it in. A registered token symbol is still a value: compiled for `solana` (`sauce compile --chain solana`, `routes.compileSauceProgram("solana", source)`), `USDC` is the mint's 32-byte key, which the `@sauce/token` functions take first (`balanceOf(USDC, account)`); `routes.SVM_TOKEN_REGISTRY` lists the mints, mainnet's and devnet's. And you want `@eco-incorp/sauce/compiler` directly: `routes.compileSauceRoute()` returns calls and bytecode but drops the manifest, which is the part you need.
 
 ## Compile an SPL transfer
 

@@ -8,11 +8,13 @@ description: Writing and running Sauce programs on Solana (the SVM target) — d
 A Solana program must declare every account it touches before it runs. In SauceScript those are
 `Account` parameters of `main`; the compile returns them, in order and with their roles, as the
 **account manifest**, and each is attached by name when the program runs. A program for Solana is
-compiled with `--chain solana`. Its signatures are annotated, and the EVM registry names (`USDC`,
-protocol namespaces) do not exist there; the `@sauce/token` functions do, with no import.
+compiled with `--chain solana`. Its signatures are annotated. Protocol namespaces and the token
+methods (`USDC.transfer(...)`) do not exist there; the `@sauce/token` functions do, with no import,
+and a registered token symbol (`USDC`, `USDT`, `WSOL`) is its mint's 32-byte key, a value they take:
+`balanceOf(USDC, account)`. `sauce globals --chain solana` lists the mints, and devnet's.
 
 ```sauce chain=solana define=MINT
-const MINT = 0n; // the SPL mint, as 32-byte hex: a define replaces it
+const MINT = 0n; // the SPL mint's 32-byte key: a define replaces it
 
 function main(
   tokenProgram: Account,
@@ -31,9 +33,9 @@ function main(
 ```
 
 ```sh
-npx sauce compile solana.sauce.ts --chain solana --define MINT=<mint, as 32-byte hex> --json
+npx sauce compile solana.sauce.ts --chain solana --define MINT=<mint> --json
 npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypair <keypair> \
-  --define MINT=<mint, as 32-byte hex> --account tokenProgram=<SPL Token program> \
+  --define MINT=<mint> --account tokenProgram=<SPL Token program> \
   --account source=<the Pot's token account> --account destination=<token account> \
   --account authority=pot --args 400
 ```
@@ -53,12 +55,14 @@ npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypai
   `svm.call(program, [accounts...], data)` is a CPI to an attached program account.
 - Scalar parameters are runtime arguments (`--args`); `Account` parameters are not encoded. A
   32-byte key chosen per compile, such as a mint, is a module constant (`const MINT = 0n;`) that
-  `--define MINT=<32-byte hex>` replaces. A key that changes per call is an `Address` argument of
-  `main`, passed as a base58 public key and encoded as one ABI word (not with `--compact-args`), or
-  an `Account` parameter when the program reads or writes that account.
+  `--define MINT=<key>` replaces, the key in base58 or as 32-byte hex. A define also overrides a
+  registered symbol, which is how a devnet program names devnet's USDC; a module `const USDC = …`
+  does not, since the symbol is itself a define and a define wins. A key that changes per call is
+  an `Address` argument of `main`, passed as a base58 public key and encoded as one ABI word (not
+  with `--compact-args`), or an `Account` parameter when the program reads or writes that account.
 - On Solana `ctx.self()` is the executing Sauce program's id, **not the Pot**, `ctx.msgSender()`
-  the transaction's first signer, and `ctx.balance(acct.address)` an attached account's lamports. `ctx.msgValue`,
-  `ctx.gasLeft`, `ctx.codeSize` and the other EVM reads are rejected; move lamports with a
+  the transaction's first signer, and `ctx.balance(acct.address)` an attached account's lamports.
+  `ctx.msgValue`, `ctx.gasLeft`, `ctx.codeSize` and the other EVM reads are rejected; move lamports with a
   system-program CPI through `svm.call`. Every read, per target, is in
   [../sauce-script/references/builtins.md](../sauce-script/references/builtins.md).
 
@@ -70,7 +74,8 @@ The Pot is an account the program is given: declare it as `pot: Account<Signer>`
 for the seeds `"pot"`, the owner and the 32-byte salt (zero unless `--salt` names another), and the
 owner is `ctx.msgSender()` when the owner signs the cook, as `sauce run` does. `KITCHEN` is the
 Kitchen program, `SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot`, as a define:
-`--define KITCHEN=0x068ddbf2073c779081c9b11a48aea267e5545cb7f387144de6b7ff8c7138818b`.
+`--define KITCHEN=SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot` (or its 32-byte hex,
+`0x068ddbf2073c779081c9b11a48aea267e5545cb7f387144de6b7ff8c7138818b`).
 
 ```sauce chain=solana define=KITCHEN
 const SALT = 0n; // the Pot's salt, zero by default
@@ -86,28 +91,28 @@ function main(pot: Account<Signer>, amount: Uint256) {
 ## Token accounts
 
 An SPL token account is 165 bytes, and `acct.owner` is the program that owns it (the SPL Token
-program), not who may spend it:
+program), not whose balance it is:
 
-| Bytes   | Field                                  | Read                               |
-| ------- | -------------------------------------- | ---------------------------------- |
-| 0–32    | mint                                   | `svm.sload(acct, 0n, 32n).toBe()`  |
-| 32–64   | owner: the authority that may spend it | `svm.sload(acct, 32n, 32n).toBe()` |
-| 64–72   | amount (u64, little-endian)            | `svm.sload(acct, 64n, 8n).toLe()`  |
-| 72–76   | delegate tag (u32: 0 none, 1 some)     | `svm.sload(acct, 72n, 4n).toLe()`  |
-| 76–108  | delegate                               | `svm.sload(acct, 76n, 32n).toBe()` |
-| 121–129 | delegated amount (u64)                 | `svm.sload(acct, 121n, 8n).toLe()` |
+| Bytes   | Field                              | Read                               |
+| ------- | ---------------------------------- | ---------------------------------- |
+| 0–32    | mint                               | `svm.sload(acct, 0n, 32n).toBe()`  |
+| 32–64   | owner: whose balance it is         | `ownerOf(mint, acct)`              |
+| 64–72   | amount (u64, little-endian)        | `svm.sload(acct, 64n, 8n).toLe()`  |
+| 72–76   | delegate tag (u32: 0 none, 1 some) | `svm.sload(acct, 72n, 4n).toLe()`  |
+| 76–108  | delegate                           | `svm.sload(acct, 76n, 32n).toBe()` |
+| 121–129 | delegated amount (u64)             | `svm.sload(acct, 121n, 8n).toLe()` |
 
-**Check the authority before calling a balance the Pot's.** `transfer(..., authority, ...)` with
-the Pot as `authority` also succeeds from an account where the Pot is only a delegate, up to the
-delegated amount, so `require(svm.sload(source, 32n, 32n).toBe() == pot.address)` before treating
-`source` as the Pot's own.
+**Check the owner before calling a balance the Pot's**: a transfer with the Pot as `authority` also
+succeeds from an account where the Pot is only a delegate, up to the delegated amount.
+`ownerOf(mint, acct)` (below) checks the account's program and mint, then reads its owner.
 
 ## USDC, and the Pot's token account
 
-The SDK records Solana mainnet's USDC mint, `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`, which
-as a define is
-`0xc6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61`. It records no devnet mint, and
-`sauce globals --chain solana` lists no token symbols.
+`USDC` on Solana is mainnet's USDC mint, `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`, whose
+32-byte key is `0xc6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61`;
+`balanceOf(USDC, account)` takes it with no define. On devnet USDC is another mint,
+`4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`: pass it as `--define USDC=<key>`, which wins over
+the symbol. The Solana file in `sauce-chains` lists every registered mint, mainnet's and devnet's.
 
 The Pot's USDC sits in its associated token account, the ATA of (Pot, mint). Derive it with
 `findAssociatedTokenPda` and create it with `getCreateAssociatedTokenIdempotentInstruction`, both
@@ -133,10 +138,16 @@ program and its arguments have about 694 bytes. What costs bytes:
 The SPL arm takes the mint first, then the accounts: `transfer(mint, tokenProgram, source, dest,
 authority, amount)`, `approve(mint, tokenProgram, source, delegate, authority, amount)`,
 `transferFrom` (the same instruction: SPL has one transfer for owners and delegates),
-`balanceOf(mint, account)`, `allowance(mint, account, spender)`, `totalSupply(mintAccount)`,
-`decimals(mintAccount)`. Every function requires the classic SPL Token program as the account owner
-and callee, checks the mint, and rejects amounts above `u64`; a Token-2022 account is refused. SPL
-tracks one delegate per account, so a second `approve` replaces the first.
+`balanceOf(mint, account)`, `allowance(mint, account, spender)`, `ownerOf(mint, account)`,
+`totalSupply(mintAccount)`, `decimals(mintAccount)`. Every function requires the classic SPL Token
+program as the account owner and callee, checks the mint, and rejects amounts above `u64`; a
+Token-2022 account is refused. SPL tracks one delegate per account, so a second `approve` replaces
+the first.
+
+A transfer's `authority` may be the source's owner or its delegate, so a transfer that succeeds does
+not show whose account `source` is. `ownerOf(mint, account)` reads the token account's owner (the
+wallet or PDA whose balance it is, not `account.owner`, the SPL Token program): before treating a
+balance as the Pot's, `require(ownerOf(USDC, source) == authority, "not the Pot's account")`.
 
 Token-2022 and `TransferChecked` are not in the `@sauce/token` arm: a program for them calls the
 token program itself with `svm.call`, or is generated by the SDK's token builder from TypeScript

@@ -227,8 +227,11 @@ would:
    the route's `nativeAmount`**, where `Route` is
    `(bytes32 salt, uint64 deadline, address portal, uint256 nativeAmount, (address token, uint256 amount)[] tokens, (address target, bytes data, uint256 value)[] calls)`,
    the route bytes decoded, and the claimant is the solver's address as 32 bytes. Less value
-   reverts; so does a missing Pot. The Portal's `getIntentHash(uint64 destination, bytes route,
-Reward reward)` returns the same three hashes, as a cross-check.
+   reverts with `InsufficientNativeAmount(sent, required)` (`0x172f1184`), and a missing Pot with
+   `CallToEOA(<Pot>)` (`0x2db59289`), the Executor's refusal to call an address with no code. The
+   Portal's `getIntentHash(uint64 destination, bytes route, Reward reward)` returns the same three
+   hashes, as a cross-check. The Portal's ABI, with its events and errors, is the registry's
+   `eco-routes` `PortalABI` (`sauce-protocols`).
 6. Read the outcome on the fork: what the recipient got, what was refunded, the gas, and that the
    Pot holds nothing.
 

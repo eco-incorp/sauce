@@ -47,4 +47,4 @@ tokens and every protocol recorded there with its addresses.
 | [Scroll](scroll.md) | `scroll` | 534352 | EVM | no | — | 0 | 8 |
 | [Zora](zora.md) | `zora` | 7777777 | EVM | no | — | 0 | 1 |
 | [Aurora](aurora.md) | `aurora` | 1313161554 | EVM | no | — | 0 | 0 |
-| [Solana](solana.md) | `solana` | 1399811149 | Solana (SVM) | yes | — | 0 | 0 |
+| [Solana](solana.md) | `solana` | 1399811149 | Solana (SVM) | yes | — | 3 | 0 |

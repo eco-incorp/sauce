@@ -15,9 +15,9 @@
 // right bytes at the right offsets reads exactly like a genuine one.
 //
 // SPL token-account layout (`spl_token::state::Account`, `LEN` = 165): mint@0 (pubkey), owner@32
-// (pubkey: the authority that may spend it, not `account.owner`, the owning program), amount@64
-// (u64 LE), delegate COption tag@72 (u32 LE: 0 = None, 1 = Some), delegate@76 (pubkey),
-// delegated_amount@121 (u64 LE).
+// (pubkey: whose balance it is, a wallet or a PDA such as a Pot), amount@64 (u64 LE), delegate
+// COption tag@72 (u32 LE: 0 = None, 1 = Some), delegate@76 (pubkey), state@108 (u8), is_native
+// COption@109, delegated_amount@121 (u64 LE), close_authority COption@129.
 // SPL mint layout (`spl_token::state::Mint`, `LEN` = 82): supply@36 (u64 LE), decimals@44 (u8), initialized@45 (bool).
 // Instruction tags: Transfer=3, Approve=4.
 // The SPL Token program (TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA) is an `Account` the caller
@@ -39,6 +39,19 @@ export function balanceOf(token: Address, account: Account): Uint256 {
   require(account.owner == SPL_TOKEN_PROGRAM);
   require(svm.sload(account, 0, 32).toBe() == token);
   return svm.sload(account, 64, 8).toLe();
+}
+
+// Whose token account this is: its owner@32, a wallet or a PDA such as a Pot. Not `account.owner`,
+// which is the program that owns the account's data (SPL Token, checked first as everywhere here),
+// and not the `authority` a write is signed by: SPL accepts the account's delegate there too, so a
+// `transfer(…, authority)` that succeeds proves `authority` may spend from `source`, not that
+// `source` is `authority`'s. A program measuring its own balance requires
+// `ownerOf(token, account) == authority` first. There is no EVM counterpart: an ERC-20 balance has no
+// account apart from its holder, so the holder is already the address a program passes.
+export function ownerOf(token: Address, account: Account): Address {
+  require(account.owner == SPL_TOKEN_PROGRAM);
+  require(svm.sload(account, 0, 32).toBe() == token);
+  return svm.sload(account, 32, 32).toBe();
 }
 
 // Legacy SPL Token owns both 82-byte mints and 165-byte token accounts. Owner must be checked
