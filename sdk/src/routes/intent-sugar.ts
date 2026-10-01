@@ -318,7 +318,7 @@ function lowerStatement(
     if (address === undefined) {
       return fail(
         `'${name}' is not a token this chain registers. Use a registered symbol, or ` +
-          `\`Token(address)\` with a literal or define.`,
+          "`Token(address)` with a literal, a define or a top-level `const` of a literal.",
       );
     }
     target = address;
@@ -377,7 +377,8 @@ const fieldOf = (list: TokenList, path: string): string =>
   list.part === "reward" ? `\`reward.${path}\`` : `the delivery's \`${path}\``;
 
 /** A token address of `list`. It is encoded into the intent, so it must be known when the intent is
- *  built: a symbol, a literal or a define, never a value the program has only while it runs. */
+ *  built: a symbol, a literal, a define or a top-level `const` of a literal, never a value the
+ *  program has only while it runs. */
 function tokenOf(node: AstNode, resolve: Resolver, list: TokenList): bigint {
   const chain = list.chain.slug;
   const subject = `the ${list.part} token`;
@@ -387,7 +388,9 @@ function tokenOf(node: AstNode, resolve: Resolver, list: TokenList): bigint {
         `brings to ${chain}, so its symbols are ${chain}'s: fix it there, not in \`.reward(...)\`.`
       : `The reward — \`.reward({ tokens: [...] })\` — is escrowed on ${chain}, where the program ` +
         `opening the intent runs, so its symbols are ${chain}'s.`;
-  const fix = `Use a symbol ${chain} registers, or the token's ${chain} address as a literal or a define.`;
+  const fix =
+    `Use a symbol ${chain} registers, or the token's ${chain} address as a literal, a define or a ` +
+    "top-level `const` of a literal.";
   if (node.type !== "Identifier" && literalOf(node) === undefined) {
     return fail(
       `${subject} is a ${node.type}, which is not known when the intent is built. ${where} ${fix}`,

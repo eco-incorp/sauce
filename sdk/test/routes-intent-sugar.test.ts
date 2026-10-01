@@ -489,7 +489,8 @@ describe("what it refuses, and how clearly", () => {
     const DELIVERY =
       "The delivery — the intent's second argument, `{ tokens: [...] }` — is what the solver " +
       "brings to arbitrum, so its symbols are arbitrum's: fix it there, not in `.reward(...)`. " +
-      "Use a symbol arbitrum registers, or the token's arbitrum address as a literal or a define.";
+      "Use a symbol arbitrum registers, or the token's arbitrum address as a literal, a define or " +
+      "a top-level `const` of a literal.";
 
     it("a delivery token the destination does not register", () => {
       expect(messageOf(intent("USDT0"))).toBe(
@@ -517,7 +518,7 @@ describe("what it refuses, and how clearly", () => {
         "intent sugar: the reward token 'USDT0' is not a token base registers, nor a define. The " +
           "reward — `.reward({ tokens: [...] })` — is escrowed on base, where the program opening " +
           "the intent runs, so its symbols are base's. Use a symbol base registers, or the token's " +
-          "base address as a literal or a define.",
+          "base address as a literal, a define or a top-level `const` of a literal.",
       );
     });
   });
