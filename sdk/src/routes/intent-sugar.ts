@@ -641,10 +641,9 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       // Captured values reach the program as ENTRY ARGUMENTS. They cannot be folded in: their
       // values do not exist when it is compiled. Declared as `main`'s parameters, encoded
       // compact-v1 at a declared width so the payload's length does not move with them, and spliced
-      // by the parent at a fixed offset -- which is the property `scalarWidth` exists for.
-      // UNTYPED parameters on purpose: the rewrite passes downstream are acorn-based and cannot
-      // parse an annotation. `rs-compile.ts#ensureTypedMainParams` adds them at the compile seam,
-      // after every rewrite has run -- the same staging `ensureVoidMain` already uses.
+      // by the parent at a fixed offset -- which is the property `scalarWidth` exists for. Left
+      // unannotated: the compiler reads an unannotated parameter as a number, which a spliced
+      // 32-byte word is.
       const childSource = `function main(${captured.join(", ")}) {\n${source.slice(
         site.bodyStart + 1,
         site.bodyEnd - 1,
