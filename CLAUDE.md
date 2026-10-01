@@ -831,6 +831,12 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   the cook, an intent funded by a transfer into its vault) was verified on anvil against real
   Uniswap V3/V4 contracts and eco-routes' Portal through the gated engine
   (`sdk/test/evm/gated-engine.ts`) before it was written. Re-verify the same way when changing it.
+  The swap-on-base intent is held permanently: `sdk/test/evm/swap-on-base.e2e.test.ts` fulfils
+  the file's intent through a local Portal into the shared Pot, on Uniswap V3 pools from
+  `@uniswap/v3-core` and V4 pools on `@uniswap/v4-core`'s own PoolManager, run at Base's address
+  with its one immutable (the address `NoDelegateCall` checks) relinked there, and read through
+  `fixtures/StateView.sol` (v4-periphery's two reads the body makes). Change the file and that
+  suite together.
 
 **`dev-tools/`** — compiler/argument helpers and a local SVM Kitchen execution harness, for
 developing the SDK; nothing of it ships in the package. Its `start:local`/`start:fork` scripts and
