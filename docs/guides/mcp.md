@@ -154,23 +154,23 @@ Each tool is the `sauce` command named beside it, called with the same inputs: t
 very functions the command does. Each returns its JSON as the tool's structured content, with the
 same JSON as text. Where there are `notes`, they say what must be true for a transaction to land.
 
-| Tool                   | Like             | Returns                                                                                                                                          |
-| ---------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `sauce_skills`         | —                | Every agent skill with when to use it, and the package version                                                                                   |
-| `sauce_skill`          | —                | One skill's `SKILL.md`, or a file under its `references/` or `examples/`                                                                         |
-| `sauce_dev`            | —                | For TypeScript against the SDK: the TypeScript skill and the package's guides, API pages and examples for a topic or a question                  |
-| `sauce_install_skills` | `sauce skills`   | For one agent: the commands that install, update and check the latest skills, where it reads them, and its MCP configuration                     |
-| `sauce_chains`         | —                | Every chain: slug, id, name, kind, aliases, and whether the server has its own endpoint for it                                                   |
-| `sauce_globals`        | `sauce globals`  | The chain's token symbols, protocol namespaces and contracts (with `protocol`, its methods), chain names, defines and `@sauce/token` functions   |
-| `sauce_price`          | `sauce price`    | A pair's price as the pool's `sqrtPriceX96` (also the swap's limit) and each direction's `minAvgPrice`, or a `sqrtPriceX96` read back as a price |
-| `sauce_compile`        | `sauce compile`  | `bytecode`, `size`, `entryParams`, `entryEncoding`, `entrySchema`, the `defines` given, `compiler`, `engine`, and on Solana the `manifest`       |
-| `sauce_actions`        | —                | An action program (JSON) as its generated `source`, `compile` (as `sauce_compile`), and, given a Pot, the unsigned cook `transaction`            |
-| `sauce_tx`             | `sauce tx`       | EVM `{ chainId, to, data, value }`, the cook on the Pot; Solana `{ chain, feePayer, pot, fee, transaction }`, base64 and signed by no one        |
-| `sauce_pot`            | `sauce pot`      | The Pot's address, its unsigned deployment (EVM `Kitchen.deployPot`; Solana `create_pot`), and `deployed` (null with no endpoint)                |
-| `sauce_simulate`       | `sauce simulate` | `ok`, the `path` taken, gas, what `main` returns, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts           |
-| `sauce_publish`        | `sauce publish`  | Each fixed intent's `intentHash` and its unsigned `transactions` (reward approvals, `Portal.publishAndFund`); with `dryRun`, their status        |
-| `sauce_inspect`        | `sauce inspect`  | A cook, Kitchen, Portal or ERC-20 call, or a program, taken apart; with `source`, the arguments decoded against `main`                           |
-| `sauce_verify`         | `sauce verify`   | `valid` with the settle's tokens, `minOut` and recipient, or `valid: false` with the rejection `code`                                            |
+| Tool                   | Like             | Returns                                                                                                                                                                                      |
+| ---------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sauce_skills`         | —                | Every agent skill with when to use it and its files' sizes, and the package version                                                                                                          |
+| `sauce_skill`          | —                | One skill's `SKILL.md`, or a file under its `references/` or `examples/`; with `section` or `query`, only that part                                                                          |
+| `sauce_dev`            | —                | For TypeScript against the SDK: the TypeScript skill and the package's guides, API pages and examples for a topic or a question                                                              |
+| `sauce_install_skills` | `sauce skills`   | For one agent, pinned to the server's version: the commands that add the package and install, update and check the skills, where it reads them, and its MCP configuration                    |
+| `sauce_chains`         | —                | Every chain: slug, id, name, kind, aliases, and whether the server has its own endpoint for it                                                                                               |
+| `sauce_globals`        | `sauce globals`  | The chain's token symbols, protocol namespaces and contracts (with `protocol`, its methods), chain names, defines and `@sauce/token` functions                                               |
+| `sauce_price`          | `sauce price`    | A pair's price as the pool's `sqrtPriceX96` (also the swap's limit) and each direction's `minAvgPrice`; from `price`, `sqrtPriceX96` or a `pool` read now; with `slippageBps`, the `limits`  |
+| `sauce_compile`        | `sauce compile`  | `bytecode`, `size`, `entryParams`, `entryEncoding`, `entrySchema`, the `defines` given, `compiler`, `engine`, and on Solana the `manifest`                                                   |
+| `sauce_actions`        | —                | An action program (JSON) as its generated `source`, `compile` (as `sauce_compile`), and, given a Pot, the unsigned cook `transaction`                                                        |
+| `sauce_tx`             | `sauce tx`       | EVM `{ chainId, to, data, value }`, the cook on the Pot, with `from` (who signs) and the `kitchenFee` read; Solana `{ chain, feePayer, pot, fee, transaction }`, base64 and signed by no one |
+| `sauce_pot`            | `sauce pot`      | The Pot's address, its unsigned deployment (EVM `Kitchen.deployPot`; Solana `create_pot`), `deployed` (null with no endpoint), and with an endpoint what it holds and the Kitchen's fee      |
+| `sauce_simulate`       | `sauce simulate` | `ok`, the `path` taken, gas, what `main` returns, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts                                                       |
+| `sauce_publish`        | `sauce publish`  | Each fixed intent's `intentHash` and its unsigned `transactions` (reward approvals, `Portal.publishAndFund`); with `dryRun`, their status                                                    |
+| `sauce_inspect`        | `sauce inspect`  | A cook, Kitchen, Portal or ERC-20 call, or a program, taken apart; with `source`, the arguments decoded against `main`                                                                       |
+| `sauce_verify`         | `sauce verify`   | `valid` with the settle's tokens, `minOut` and recipient, or `valid: false` with the rejection `code`                                                                                        |
 
 A revert and a rejected settle are results (`ok: false`, `valid: false`), not errors. An error is a
 call that could not be answered: a program that does not compile, an input that is wrong, a chain
@@ -206,15 +206,25 @@ A cook (`sauce_tx`, `sauce_simulate`, `sauce_actions`) adds these inputs:
   The Pot is credited what the pulls would bring.
 
 A token amount is whole units (`USDC:1.5`) or base units ending in `n` (`USDC:1500000n`).
+
+`sauce_pot` with an endpoint reads what a cook needs: on an EVM chain the Kitchen's fee (the least
+a cook's `value` can be) and the Pot's balance of the native currency and of each token the chain
+registers (`null` where a token cannot be read there); on Solana the Pot's associated token account
+for each registered mint, whether it exists, and its balance. `balances: false` skips those reads.
+
+`sauce_price` takes the price one of three ways: `price` (a decimal), `sqrtPriceX96`, or `pool`, a
+Uniswap V3-style pool of the pair read through an endpoint (its `slot0` price, liquidity and fee).
+With `slippageBps`, `limits` gives each direction's `sqrtPriceLimitX96` that far from the price,
+and a `minAvgPrice` that also pays the pool's fee (`feePpm`, or the pool's own).
 `sauce_publish` takes `from` (the wallet that funds the reward), `dryRun`, `assumeBalance` and
 `rpcUrl`. `sauce_actions` takes the document as `program`, an object or its JSON text, validated
 against the [action-program schema](../../actions/action-program.schema.json), also served as
 `sauce://actions/schema.json`. It lowers the document with the same function the `sauce` command
 does, then compiles it.
 
-Error messages are the `sauce` command's, so they name its flags. Each flag is the tool input of
-the same name in camelCase (`--salt-hex` is `saltHex`), and `--args` and `--args-json` are `args`.
-A message that names a flag says so.
+Error messages and notes are the `sauce` command's, in the tools' words: a flag is named as the
+tool input (`--salt-hex` as `saltHex`, `--args` as `args`), and a command line as the tool
+(`sauce pot --deploy …` as `sauce_pot`).
 
 ### Signing what it builds
 
@@ -241,13 +251,14 @@ resources:
 - as tools. `sauce_skills` lists them. `sauce_skill` returns a `SKILL.md`, or a file it links, by
   skill and path; only shipped files are served. `sauce_dev` returns the TypeScript skill and the
   package's own guides, API pages and examples for a topic or a free-text question.
-  `sauce_install_skills` says how to install the latest skills locally for an agent.
+  `sauce_install_skills` says how to install the skills locally for an agent, at the server's
+  own version.
 - as resources. `sauce://skills/index` lists every skill and its files.
   `sauce://skills/<skill>/SKILL.md` is a skill, and its `references/…` and `examples/…` sit beside
   it.
 
-When a client connects, the server's instructions tell it three things: the server never signs,
-start from `sauce_skills`, and how `rpcUrl` works. Two prompts walk the main tasks through the
+When a client connects, the server's instructions tell it four things: the server never signs,
+start from `sauce_skills`, the steps from `sauce_globals` to `sauce_tx`, and how `rpcUrl` works. Two prompts walk the main tasks through the
 tools, with the skill they start from embedded:
 
 - `sauce_write_program` (`task`, `chain`) writes, compiles, rehearses and builds a program.

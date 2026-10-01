@@ -162,18 +162,18 @@ JSON array. A tool that reads a chain takes `rpcUrl`, an endpoint for that one c
 returned. Nothing signs: the user signs and sends what `sauce_tx`, `sauce_pot` and `sauce_publish`
 return, with their own wallet.
 
-| Command          | Tool                                                  |
-| ---------------- | ----------------------------------------------------- |
-| `sauce globals`  | `sauce_globals`                                       |
-| `sauce compile`  | `sauce_compile`                                       |
-| `sauce pot`      | `sauce_pot`: the address, the deploy, deployed or not |
-| `sauce simulate` | `sauce_simulate`                                      |
-| `sauce tx`       | `sauce_tx`                                            |
-| `sauce publish`  | `sauce_publish`, unsigned or as a dry run             |
-| `sauce inspect`  | `sauce_inspect`                                       |
-| `sauce verify`   | `sauce_verify`                                        |
-| `sauce price`    | `sauce_price`                                         |
-| `sauce run`      | none: it signs                                        |
+| Command          | Tool                                                                   |
+| ---------------- | ---------------------------------------------------------------------- |
+| `sauce globals`  | `sauce_globals`                                                        |
+| `sauce compile`  | `sauce_compile`                                                        |
+| `sauce pot`      | `sauce_pot`: the address, the deploy, whether it exists, what it holds |
+| `sauce simulate` | `sauce_simulate`                                                       |
+| `sauce tx`       | `sauce_tx`                                                             |
+| `sauce publish`  | `sauce_publish`, unsigned or as a dry run                              |
+| `sauce inspect`  | `sauce_inspect`                                                        |
+| `sauce verify`   | `sauce_verify`                                                         |
+| `sauce price`    | `sauce_price`, also from a pool read now                               |
+| `sauce run`      | none: it signs                                                         |
 
 `sauce_actions` compiles an action program written as JSON and builds its cook. `sauce_skills` and
 `sauce_skill` read these skills, and `sauce_install_skills` says how to install them locally.
