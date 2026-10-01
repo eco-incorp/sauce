@@ -784,7 +784,12 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
       "--dry-run",
       "--json",
     );
-    expect(run.stderr).toBe("");
+    // The one note: the destination side is `sauce fill`'s.
+    expect(run.stderr).toBe(
+      "This rehearses publishing on arbitrum only. What the intent does runs on base, when a " +
+        "solver fills it: `sauce fill` with the same file and flags, and the destination's " +
+        "endpoint, rehearses that.\n",
+    );
     expect(run.code).toBe(0);
     expect(JSON.parse(run.stdout)).toMatchObject({
       ok: true,
