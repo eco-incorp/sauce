@@ -14,6 +14,7 @@ through an endpoint you name on the command line.
 | `sauce simulate` | Rehearse the cook with no key, no deployed Pot and assumed balances: what it did  |
 | `sauce run`      | Compile, sign, send and wait for the cook on your Pot                             |
 | `sauce publish`  | Publish a file's fixed intents from your wallet, with no Pot                      |
+| `sauce fill`     | Rehearse a solver filling a file's intents on their destination, with no key      |
 | `sauce tx`       | Print the unsigned cook transaction, for a wallet to sign                         |
 | `sauce pot`      | Predict a Pot's address, and deploy it or print the transaction that does         |
 | `sauce globals`  | List the tokens, protocols and other names a program on a chain can use           |
@@ -458,6 +459,80 @@ There are two ways to get such a file's intents onto the chain:
 
 Publishing from Solana is not supported: see [Solana](#solana).
 
+### Rehearsing the fill: `sauce fill`
+
+`publish --dry-run` rehearses the source side: the approval and `publishAndFund`. What the intent
+does — the swap, the minimum it checks, the refund — runs on the destination, when a solver fills
+it, and that is where it fails. `sauce fill` rehearses that fill with no key and sends nothing. It
+takes the file and the flags `publish` does, and the destination's endpoint:
+
+```sh
+npx sauce fill swap.sauce.ts --chain arbitrum --config sauce.config.json \
+  --defines swap.defines.json --intent-deadline 2000000000 --intent-creator 0xYou \
+  --intent-execution-fee 3744785386350
+```
+
+For each intent the file opens it runs one `eth_simulateV1` block on the intent's destination,
+every call from a solver:
+
+1. `Kitchen.deployPot(executor, 0)`, when the route cooks on the destination's shared intent Pot
+   and it is not deployed yet. Any account may send it, and the Pot is the Executor's either way.
+   The command also warns, with the `sauce pot` line that prints the deployment.
+2. The solver's approval of the Portal for each token the route delivers. The Portal pulls them
+   from the solver.
+3. `Portal.fulfill(intentHash, route, rewardHash, claimant)`, with the route's native amount — the
+   Kitchen's fee for its cook — as the value.
+
+The solver is an address nobody holds the key of, or `--solver <address>`, and the claimant is the
+solver, or `--claimant <address | bytes32>`. The solver is given the route's tokens and the value
+by state override, the token's balance word found as `simulate --assume-balance` finds it. On
+success it prints the gas, the transfers, each address's net change (an address a define holds is
+named by the define), the Portal's `IntentFulfilled` record, and what the fill left in the shared
+Pot and the Portal's Executor:
+
+```text
+Intent 0xf261…5d2c from arbitrum to base: the fill succeeds, gas used 1874288
+Rehearsed with eth_simulateV1 on base, one block from the solver 0x5A0c…F111; nothing was signed or sent:
+  1. approve the Portal for 998 USDC (gas 55425)
+  2. Portal.fulfill(0xf261…5d2c, route, 0xe94c…0a6c, 0x5A0c…F111) with 3744785386350 wei: the route's nativeAmount, the Kitchen's fee for its cook (gas 1874288)
+Assumed for this rehearsal only, by state override:
+  the solver holds 998 USDC: the route's tokens, which the solver delivers (its balance word 0xc2e6…e5a4: Solidity mapping at slot 9)
+  the solver holds 0.00000374478538635 ETH: fulfill's value
+Token transfers:
+  998 USDC: 0x5A0c…F111 (the solver) -> 0x645d…91Ca (the Portal's Executor)
+  998 USDC: 0x645d…91Ca (the Portal's Executor) -> 0x48e8…744a (the shared intent Pot)
+  0.368481796891017787 WETH: 0x72AB…2D38 -> 0x48e8…744a (the shared intent Pot)
+  998 USDC: 0x48e8…744a (the shared intent Pot) -> 0x72AB…2D38
+  0.368481796891017787 WETH: 0x48e8…744a (the shared intent Pot) -> 0x5a0C…Beef (RECIPIENT, REFUND_TO)
+Native transfers:
+  …
+Net balance changes:
+  0x5A0c…F111 (the solver): -998 USDC, -0.00000374478538635 ETH
+  0x72AB…2D38: -0.368481796891017787 WETH, +998 USDC
+  0x5a0C…Beef (RECIPIENT, REFUND_TO): +0.368481796891017787 WETH
+  0x1984…506b (Kitchen): +0.00000374478538635 ETH
+The Portal records the fill: IntentFulfilled(0xf261…5d2c, claimant 0x0000…F111)
+Left behind: nothing. The shared intent Pot and the Portal's Executor end holding none of what the fill moved.
+```
+
+A fill that leaves tokens in the shared Pot or the Executor is warned about: every intent through
+that Portal shares them, so a later intent's program or solver can take what is left. A revert
+prints `the fill reverts: <reason>` and exits 1, a failed route call unwrapped from the Executor's
+`CallFailed` down to its own reason — `route call 2 of 2 (the cook on the shared Pot 0x48e8…)
+reverted: the program threw "output below MIN_OUT"`, or `FeeNotPaid(<fee>, <paid>)` for a cook
+that underpays the Kitchen, which the command also warns about, naming the fee to build with. The
+Portal's own refusals are named: `IntentExpired()` with the deadline, `IntentAlreadyFulfilled`,
+`InvalidHash`. `--json` carries one object per intent under `intents`: the hashes, `portal`,
+`executor`, `pot` and `potDeployed`, `solver`, `claimant`, `value`, `calls` (each with its
+`status` and `gasUsed`), `assumed`, then `gas`, `fulfilled`, `transfers`, `approvals`,
+`nativeTransfers`, `balanceChanges`, `otherLogs` and `leftBehind` — or `stage` and `reason`.
+
+The endpoint is the destination's: `--config` names one for each destination, and `--rpc-url`
+serves a file whose intents all go to one chain. It needs `eth_simulateV1`, since the deployment,
+the approvals and the fulfill carry state from one to the next. The intent must be fixed when it is
+built, as for `publish`: an intent that uses a value the program measures on chain has no route
+until the program runs. A Solana destination is not rehearsed.
+
 ## Look up and take apart
 
 ### `sauce globals`
@@ -558,8 +633,14 @@ missing one, as on an EVM chain.
 **The cook.** The Kitchen's fee is read from the cluster, so there is no `--value`. `simulate`
 simulates the cook from `--owner` with signatures unchecked; a Pot the Kitchen has not created yet
 is created by its `create_pot` ahead of the cook, in the same transaction. It prints the compute
-units, or the reason — a program's `throw` or `require` message, decoded from the engine's return
-data — and the program logs. Solana's `simulateTransaction` takes no account overrides, so there
+units and what the cook moved, or the reason — a program's `throw` or `require` message, decoded
+from the engine's return data — and the program logs. What moved is read from the accounts
+themselves: every account the transaction may write, as it is now and as the simulation leaves it
+(`simulateTransaction`'s `accounts`). Each token account's balance change (SPL Token and
+Token-2022, in whole units by its mint's decimals) and each account's lamports are listed, named
+by their `--account` names, as the owner, the Pot and the Kitchen's fee config; the owner's
+lamports include the transaction's fee. `--json` lists them as `tokenChanges` and
+`lamportChanges`. Solana's `simulateTransaction` takes no account overrides, so there
 is no `--assume-balance`: the rehearsal runs on the accounts as they are, and the owner must hold
 the Pot's rent and the fees (a shortfall is named). A cook too large for one transaction is refused
 with the bytes to shrink the payload (the program and its arguments) by, since staging it writes a

@@ -109,6 +109,8 @@ Every address helper here returns a **recorded** address, never a verified one. 
 
 Submission and read helpers take an optional `{ portal }` override; without one they use `sourcePortal`, which itself defaults to the eco-routes Portal for the reward's source chain. They build EVM requests, require an EVM source, and perform no RPC — you send them. The codec represents an SVM destination fine; building that execution is the separate matter above. `encodeEVM()`/`encodeSVM()` force a codec for inspection; they do not change an intent's chain kinds.
 
+The destination side is a solver's, and two helpers build it from `built.intent`: `fulfillTx(intent, { claimant })` is `Portal.fulfill(intentHash, route, rewardHash, claimant)`, sent to the Portal the route records with `route.nativeAmount` as its value, and `fulfillApprovalTxs(intent)` the solver's approvals of that Portal for the route's tokens, which it pulls from the solver first (one per token, the entries summed). Both require an EVM destination. The route they carry is `evmRouteTuple(route)`, the value `routeHash` is taken over, so the Portal's hash check agrees with `hashIntent`. [`sauce fill`](../guides/cli.md#rehearsing-the-fill-sauce-fill) rehearses them on the destination with no key.
+
 ## Composition and lower-level encoding
 
 Call `.nest(childOrThunk, options?)` before `.reward(...)`. The fluent default is transfer funding after the parent program. [Nested intents](../guides/nested-intents.md) explains funding modes, deadlines, account custody, and execution ordering.
