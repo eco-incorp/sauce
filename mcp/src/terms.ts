@@ -26,7 +26,13 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
     command("sauce run"),
     "a signed run (outside this server: sign and send sauce_tx's transaction)",
   ],
-  [command("sauce (globals|compile|simulate|tx|pot|publish|inspect|verify|price)"), "sauce_$1"],
+  // fill's: --rpc-url is one destination's endpoint; the call's rpcUrls names each.
+  [/so give --config, which names each destination's/g, "so give rpcUrls, which names each one"],
+  [/`sauce fill` with the same file and flags/g, "sauce_fill with the same inputs"],
+  [
+    command("sauce (globals|compile|simulate|tx|pot|publish|fill|inspect|verify|price)"),
+    "sauce_$1",
+  ],
   // A flag, as the input of the same meaning. `--config` is the operator's, and stays.
   [/pass them after --args, in order, or as --args-json/g, "pass them as args, in order"],
   [/--args-json\b|--args\b/g, "args"],
@@ -49,6 +55,8 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
   [/--target\b/g, "target"],
   [/--rpc-url\b/g, "rpcUrl"],
   [/--from\b/g, "from"],
+  [/--solver\b/g, "solver"],
+  [/--claimant\b/g, "claimant"],
   [/--dry-run\b/g, "dryRun"],
   [/--pin\b/g, "pins"],
   [/--engine\b/g, "engines"],

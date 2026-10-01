@@ -12,7 +12,7 @@ import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/
 import { formatUnits, getAddress, numberToHex, parseAbi, type Address, type Hex } from "viem";
 import * as z from "zod";
 
-import type { Endpoints } from "./config.js";
+import { noEndpoint, type Endpoints } from "./config.js";
 import { callFiles, DEFAULT_FILE } from "./files.js";
 import type { RpcGuard } from "./guard.js";
 import { callReach, type Reach } from "./reach.js";
@@ -26,6 +26,7 @@ import {
   compileProgram,
   connect,
   definesReach,
+  fillCommand,
   fundingFor,
   globalsCommand,
   inspectCommand,
@@ -501,6 +502,8 @@ function scaled(price: string, numerator: bigint, denominator: bigint): string {
 }
 
 const HEX = /^0x(?:[0-9a-fA-F]{2})*$/;
+/** An intent's claimant, as fulfill records it: an address, or 32 bytes. */
+const CLAIMANT = /^0x(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/;
 const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 
 function hexArg(raw: string, what: string): Hex {
@@ -605,6 +608,7 @@ export const TOOL_NAMES = [
   "sauce_pot",
   "sauce_simulate",
   "sauce_publish",
+  "sauce_fill",
   "sauce_inspect",
   "sauce_verify",
 ] as const;
@@ -1337,6 +1341,110 @@ export function registerTools(server: McpServer, context: ToolContext): void {
             dryRun: false,
             ...(from === undefined ? {} : { from }),
             ...(rpcUrl === undefined ? {} : { rpcUrl }),
+          },
+          program.files,
+        ),
+      );
+    },
+  );
+
+  tool(
+    "sauce_fill",
+    {
+      title: "Rehearse a solver filling an intent on its destination",
+      description:
+        "For a program that opens cross-chain intents fixed when it is built (as sauce_publish " +
+        "takes): what happens on each intent's DESTINATION chain when a solver fills it, " +
+        "rehearsed there with no key and nothing sent — the other half of sauce_publish's " +
+        "dryRun, which rehearses the source. Give the same inputs as sauce_publish (chain is " +
+        "the SOURCE) and the destination's endpoint: rpcUrl when every intent goes to one chain, " +
+        "rpcUrls by chain otherwise. One eth_simulateV1 block from the solver: the destination's " +
+        "shared intent Pot deployed when the route cooks on it and it is not there yet, the " +
+        "solver's approval of the Portal for each token the route delivers, then " +
+        "Portal.fulfill with the route's native amount (the Kitchen's fee for its cook) as " +
+        "value. The solver is given the route's tokens and that value for the rehearsal. " +
+        "Returns, per intent, ok with the gas and what the fill moved (transfers, net changes, " +
+        "what it left in the shared Pot and the Portal's Executor), or the decoded reason it " +
+        "reverts — a revert is a result (ok: false), not an error. Needs an endpoint that " +
+        "serves eth_simulateV1; a Solana destination is not rehearsed. Nothing is signed or sent.",
+      input: {
+        ...PROGRAM,
+        solver: z
+          .string()
+          .max(64)
+          .optional()
+          .describe("The 0x account the fill comes from (default: one nobody holds the key of)."),
+        claimant: z
+          .string()
+          .max(80)
+          .optional()
+          .describe(
+            "Who claims the reward, as fulfill records it: a 0x address or 32 bytes of hex " +
+              "(default: the solver).",
+          ),
+        rpcUrl: z
+          .string()
+          .min(1)
+          .max(2048)
+          .optional()
+          .describe(
+            "The DESTINATION chain's endpoint, when every intent goes to one chain: used for " +
+              "this call only, never returned or logged.",
+          ),
+        rpcUrls: z
+          .record(z.string().max(64), z.string().min(1).max(2048))
+          .optional()
+          .describe(
+            'Each destination\'s endpoint by chain (slug or id): { "base": "<url>" }. ' +
+              "Used for this call only, never returned or logged.",
+          ),
+      },
+      output: {
+        ok: z.boolean(),
+        chain: z.string(),
+        intents: z.array(
+          z.looseObject({ ok: z.boolean(), intentHash: z.string(), destination: z.string() }),
+        ),
+      },
+      annotations: READS_CHAIN,
+    },
+    async (args, reach) => {
+      const program = programOf(args);
+      if (args.rpcUrl !== undefined && args.rpcUrls !== undefined) {
+        throw new UsageError("give rpcUrl (one destination) or rpcUrls (by chain), not both");
+      }
+      if (Object.keys(args.rpcUrls ?? {}).length > LIMITS.entries) {
+        throw new UsageError(`rpcUrls: at most ${LIMITS.entries}`);
+      }
+      const solver = args.solver === undefined ? undefined : parseAddress("solver", args.solver);
+      if (args.claimant !== undefined && !CLAIMANT.test(args.claimant)) {
+        throw new UsageError(
+          `claimant: '${args.claimant}' is neither an address (20 bytes) nor 32 bytes of hex`,
+        );
+      }
+      const byChain = new Map<number, string>();
+      for (const [key, url] of Object.entries(args.rpcUrls ?? {})) {
+        const chain = parseChain(key, "rpcUrls");
+        byChain.set(chain.id, (await reach.endpoint(chain, url))!);
+      }
+      const one =
+        args.rpcUrl === undefined
+          ? undefined
+          : await reach.endpoint(program.input.chain, args.rpcUrl);
+
+      return fromCommand(
+        await fillCommand(
+          {
+            ...program.input,
+            endpointOf: (chain) => {
+              const url = byChain.get(chain.id) ?? one ?? endpoints.endpoint(chain);
+              if (url === undefined) throw noEndpoint(chain, endpoints, "Rehearsing a fill");
+
+              return url;
+            },
+            endpointFlag: one === undefined ? "--config" : "--rpc-url",
+            ...(solver === undefined ? {} : { solver }),
+            ...(args.claimant === undefined ? {} : { claimant: args.claimant as Hex }),
           },
           program.files,
         ),
