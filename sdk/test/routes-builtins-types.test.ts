@@ -150,38 +150,93 @@ const PRELUDE = `import { Base } from ${JSON.stringify(resolve(SDK, "src/index.t
 declare const OPTIONS: Parameters<typeof Base>[1];
 `;
 
-function diagnostics(source: string, options: ts.CompilerOptions = {}): string[] {
-  const dir = mkdtempSync(join(tmpdir(), "sauce-builtin-types-"));
-  try {
-    const file = join(dir, "consumer.ts");
+const WRONG_SHAPES = `
+Base(() => {
+  ctx.msgSender(1n);
+  Math.mulDiv(1n, 2n);
+  evm.call(1n, 2n);
+  const sum: bigint = crypto.keccak256(1n);
+  require();
+  log();
+  ctx.origin();
+}, OPTIONS);
+`;
+
+const PROBES = { REPORTED, EVERY_BUILTIN, WRONG_SHAPES } as const;
+type Probe = keyof typeof PROBES;
+
+/**
+ * The host environments a consumer compiles in: browser code, Node code, both, or neither.
+ * `crypto`, `Math`, `require` and `eval` are host names in each, so the typings must merge into
+ * whatever the lib and `@types` declare under them.
+ */
+const ENVIRONMENTS = {
+  "DOM and Node": { lib: ["lib.es2022.d.ts", "lib.dom.d.ts"], types: ["node"] },
+  "Node only": { lib: ["lib.es2022.d.ts"], types: ["node"] },
+  "DOM only": { lib: ["lib.es2022.d.ts", "lib.dom.d.ts"], types: [] },
+  neither: { lib: ["lib.es2022.d.ts"], types: [] },
+} as const;
+type Environment = keyof typeof ENVIRONMENTS;
+
+const dir = mkdtempSync(join(tmpdir(), "sauce-builtin-types-"));
+const files = Object.fromEntries(
+  Object.entries(PROBES).map(([name, source]) => {
+    const file = join(dir, `${name}.ts`);
     writeFileSync(file, `${PRELUDE}${source}\nexport {};\n`);
-    const program = ts.createProgram([file], {
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.ESNext,
-      moduleResolution: ts.ModuleResolutionKind.Bundler,
-      noEmit: true,
-      strict: true,
-      skipLibCheck: true,
-      allowImportingTsExtensions: true,
-      ...options,
-    });
-    // The probe's own diagnostics, and the declarations' — which must merge cleanly into whatever
-    // the host's lib and `@types` declare under the same names (`crypto`, `require`, `Math`).
-    return [file, GENERATED]
-      .flatMap((path) => program.getSemanticDiagnostics(program.getSourceFile(path)))
-      .map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"));
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+    return [name, file];
+  }),
+) as Record<Probe, string>;
+afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+/** Parsed once for every environment: each program is the whole SDK, and they share its files. */
+const parsed = new Map<string, ts.SourceFile | undefined>();
+const checked = new Map<Environment, ts.Program>();
+
+/** One program per environment, holding every probe. */
+function programFor(environment: Environment): ts.Program {
+  const existing = checked.get(environment);
+  if (existing !== undefined) return existing;
+  const env = ENVIRONMENTS[environment];
+  const options: ts.CompilerOptions = {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    noEmit: true,
+    strict: true,
+    skipLibCheck: true,
+    allowImportingTsExtensions: true,
+    lib: [...env.lib],
+    types: [...env.types],
+  };
+  const host = ts.createCompilerHost(options);
+  const read = host.getSourceFile.bind(host);
+  host.getSourceFile = (name, language, ...rest) => {
+    if (!parsed.has(name)) parsed.set(name, read(name, language, ...rest));
+    return parsed.get(name);
+  };
+  const program = ts.createProgram(Object.values(files), options, host);
+  checked.set(environment, program);
+  return program;
+}
+
+/** A probe's diagnostics, and the declarations' own, in `environment`. */
+function diagnostics(probe: Probe, environment: Environment = "DOM and Node"): string[] {
+  const program = programFor(environment);
+  return [files[probe], GENERATED]
+    .flatMap((path) => program.getSemanticDiagnostics(program.getSourceFile(path)))
+    .map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"));
 }
 
 describe("a typed closure using SauceScript's builtins", () => {
+  // One checker per environment is what this suite holds; free each before the next.
+  afterAll(() => checked.clear());
+
   it("typechecks the closure the report came with", () => {
-    expect(diagnostics(REPORTED)).toEqual([]);
+    expect(diagnostics("REPORTED")).toEqual([]);
   });
 
   it("typechecks every builtin", () => {
-    expect(diagnostics(EVERY_BUILTIN)).toEqual([]);
+    expect(diagnostics("EVERY_BUILTIN")).toEqual([]);
   });
 
   it("uses every builtin the typings declare", () => {
@@ -193,29 +248,12 @@ describe("a typed closure using SauceScript's builtins", () => {
   });
 
   it("still rejects a wrong call shape", () => {
-    const errors = diagnostics(`
-Base(() => {
-  ctx.msgSender(1n);
-  Math.mulDiv(1n, 2n);
-  evm.call(1n, 2n);
-  const sum: bigint = crypto.keccak256(1n);
-  require();
-  log();
-  ctx.origin();
-}, OPTIONS);
-`);
-    expect(errors).toHaveLength(7);
+    expect(diagnostics("WRONG_SHAPES")).toHaveLength(7);
   });
 
-  // A host is browser code, Node code, or both: the typings must hold whichever lib and `@types`
-  // it compiles with, since `crypto`, `Math`, `require` and `eval` are host names there too.
-  it.each([
-    ["DOM and Node", { lib: ["lib.es2022.d.ts", "lib.dom.d.ts"], types: ["node"] }],
-    ["Node only", { lib: ["lib.es2022.d.ts"], types: ["node"] }],
-    ["DOM only", { lib: ["lib.es2022.d.ts", "lib.dom.d.ts"], types: [] }],
-    ["neither", { lib: ["lib.es2022.d.ts"], types: [] }],
-  ] as const)("typechecks with %s", (_name, env) => {
-    expect(diagnostics(EVERY_BUILTIN, { lib: [...env.lib], types: [...env.types] })).toEqual([]);
+  it.each(Object.keys(ENVIRONMENTS) as Environment[])("typechecks with %s", (environment) => {
+    expect(diagnostics("EVERY_BUILTIN", environment)).toEqual([]);
+    checked.delete(environment);
   });
 });
 
