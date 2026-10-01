@@ -20,6 +20,7 @@ import { toolTerms } from "./terms.js";
 import {
   actionsCommand,
   actionsProgram,
+  addressDefinesOf,
   assumedBalances,
   CANONICAL_CHAINS,
   compileCommand,
@@ -387,6 +388,9 @@ export function programOf(args: ProgramArgs, fallback?: CanonicalChain): Program
   );
   const defines = parseDefineMap(args.defines ?? {}, "defines", chain.kind);
   definesReach(file, args.source, Object.keys(defines));
+  // The defines written as addresses, which the compile report shows as one; any other value is the
+  // integer it is.
+  const addresses = addressDefinesOf(args.defines ?? {}, chain.kind);
 
   return {
     input: {
@@ -394,6 +398,7 @@ export function programOf(args: ProgramArgs, fallback?: CanonicalChain): Program
       text: args.source,
       chain,
       defines,
+      ...(addresses.length === 0 ? {} : { addressDefines: addresses }),
       compactArgs: args.compactArgs === true,
       intents: intentsOf(args),
     },

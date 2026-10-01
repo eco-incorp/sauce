@@ -13,7 +13,12 @@ import * as sauce from "../src/index.js";
 import { Base, Ethereum, Solana, Token, chain, canonicalChains } from "../src/index.js";
 import { chainAccessors, pascalOfSlug } from "../src/routes/index.js";
 import { requireChain } from "../src/chains/canonical.js";
-import { TOKEN_REGISTRY, resolveTokenMap } from "../src/routes/token-registry.js";
+import {
+  TOKEN_REGISTRY,
+  registryTokens,
+  resolveTokenMap,
+  svmTokenRows,
+} from "../src/routes/token-registry.js";
 import { venueAdapter } from "../src/svm/venues/registry.js";
 import type { IntentOptions } from "../src/routes/index.js";
 
@@ -101,16 +106,36 @@ describe("chain accessors: the chain's registry tokens", () => {
     expect(BigInt(Base.USDC.address)).toBe(resolveTokenMap(requireChain("base")).get("USDC"));
   });
 
+  it("Solana.USDC is the registered mint: its key a program holds, and its base58 address", () => {
+    const solana = requireChain("solana");
+    const usdc = svmTokenRows(solana).find((row) => row.symbol === "USDC")!;
+    expect(Solana.USDC).toEqual({
+      address: usdc.address,
+      decimals: 6,
+      symbol: "USDC",
+      chain: solana,
+      mint: usdc.mint,
+    });
+    expect(BigInt(Solana.USDC.address)).toBe(resolveTokenMap(solana).get("USDC"));
+    expect(registryTokens(solana).USDC).toBe(Solana.USDC);
+  });
+
   it("every registered token on every chain, and nothing else", () => {
     for (const c of canonicalChains) {
       const exported = sdk[pascalOfSlug(c.slug)] as Record<string, unknown>;
-      const rows = TOKEN_REGISTRY[c.id] ?? [];
+      const rows: ReadonlyArray<{
+        address: string;
+        decimals: number;
+        symbol: string;
+        mint?: string;
+      }> = c.kind === "svm" ? svmTokenRows(c) : (TOKEN_REGISTRY[c.id] ?? []);
       for (const row of rows) {
         expect(exported[row.symbol]).toEqual({
           address: row.address,
           decimals: row.decimals,
           symbol: row.symbol,
           chain: c,
+          ...(row.mint === undefined ? {} : { mint: row.mint }),
         });
       }
       const symbols = new Set(Object.values(TOKEN_REGISTRY).flatMap((r) => r.map((t) => t.symbol)));

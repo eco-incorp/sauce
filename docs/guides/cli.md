@@ -204,12 +204,18 @@ The owner is `--owner`, or the owner's key: `--keystore` (or `--private-key`; on
   reported rather than refused.
 
 It rehearses through `eth_simulateV1` where the endpoint serves it: one simulated block holding
-the deployment and the cook, state carried from one to the next, with the cook's logs. On success
-it prints the gas used and what the program returned, then what the cook did:
+the deployment and the cook, state carried from one to the next, with the cook's logs. Everything
+it reads first (the Pot, the Kitchen's fee, the balances it assumes) and the rehearsal itself run on
+one block: the latest when the command starts, or the one `--block <number | latest | safe |
+finalized>` names, so a limit computed from a quote can be rehearsed on the state the quote saw. The
+`Rehearsed with …` line, and `block` in `--json`, say which. On success it prints the gas used and
+what the program returned — read as the type `main` declares, where it declares one (`main returns
+Address: 0xd0b5…`, an array as its elements, a record as its fields; `returnType` and `returned`
+in `--json`) — then what the cook did:
 
 ```text
 The cook succeeds from 0xYou: gas used 128999, returns 0x
-Rehearsed with eth_simulateV1; nothing was signed or sent:
+Rehearsed with eth_simulateV1 on the state of block 36120411; nothing was signed or sent:
   1. Kitchen.deployPot(0xYou, 0x00…00): Pot 0x8a… is not deployed on base yet. Any account may send this; the Pot is the owner's either way.
   2. the cook, from the owner 0xYou
 Assumed for this rehearsal only, by state override:
@@ -242,12 +248,17 @@ contract's nonce. That route reports the result and an estimated gas but no logs
 moved. The `Rehearsed with …` line names the route taken, and why it fell back.
 
 A revert prints `The cook reverts: <reason>` (or `Deploying the Pot reverts: …`) and exits 1: a
-Pot, Kitchen, Permit2 or Portal error by name, ERC-20's standard errors, `Error(string)`, or
-`the program threw "…"` for a SauceScript `throw` or `require` message. `--json` carries the same
-as fields: `path`, `fallback`, `deployPot`, `assumed`, `gas` and `gasKind` (`used` or
-`estimated`), `returns`, `transfers`, `approvals`, `nativeTransfers`, `balanceChanges` and
-`otherLogs`, amounts as decimal strings in base units with `formatted` whole units beside them —
-or `stage` and `reason` for a revert.
+Pot, Kitchen, Router, Permit2 or Portal error by name, ERC-20's standard errors, `Error(string)`, or
+`the program threw "…"` for a SauceScript `throw` or `require` message. A pool's short revert string
+says what the check is: `"SPL" (a V3-style pool's price-limit check: the limit is on the wrong side
+of the pool's current price, or at or past a bound …)`, and likewise `AS`, `LOK`, `IIA`, `TF`, the
+token helpers' `STF`, `ST`, `SA`, `STE`, and a V2-style pair's `UniswapV2: K` (or any fork's). A
+define or argument named like a price limit (`SQRT_PRICE_LIMIT_X96`) at or past `MIN_SQRT_RATIO` or
+`MAX_SQRT_RATIO` is named on stderr before the rehearsal, by `compile` and `publish` too. `--json`
+carries the same as fields: `block`, `path`, `fallback`, `deployPot`, `assumed`, `gas` and
+`gasKind` (`used` or `estimated`), `returns`, `returnType` and `returned`, `transfers`,
+`approvals`, `nativeTransfers`, `balanceChanges` and `otherLogs`, amounts as decimal strings in
+base units with `formatted` whole units beside them — or `stage` and `reason` for a revert.
 
 ### Funding a run: `--fund`
 
@@ -456,6 +467,11 @@ the 32-byte word an account's `address` compares to.
   intent body's resolves on the intent's own chain.
 - `size`, the program's bytes, and `payload`, the program with `main`'s arguments appended, given
   with `--args` or `--args-json` (`null` until they are).
+- `returnType`: the type `main` declares it returns, an `interface` spelled out (`null` when it
+  returns nothing), which `simulate` reads the cook's return data as.
+- A define's `value` is an address only where it was written as one (`0x` and 40 hex digits, or a
+  base58 key on Solana) or where it replaces a chain's token or contract; any other value is the
+  integer it is, whatever its size.
 - On Solana, `cook`: the size of the cook's transaction against the 1232-byte limit, measured as
   `sauce run` builds it, with each `--account` given and a distinct account for every other slot —
   the Kitchen's cook, or with `--via engine` the engine's direct one, which is smaller (no Kitchen,
@@ -551,8 +567,8 @@ npx sauce actions swap.json --chain ethereum --json
 
 `--chain` defaults to the document's `chainId`; a document without one needs it, and one with a
 `chainId` compiles for that chain only. `--json` prints what `sauce compile --json` does, with the
-parsed `document`, the `source`, the ABI bindings it calls through (`contracts`) and the argument
-names (`parameters`). `--compact-args` compiles the arguments compact-v1. A name the chain lacks is
+parsed `document`, the `source`, the ABI bindings it calls through (`bindings`) and the argument
+names (`parameters`); `contracts` is still the protocol contracts it calls, as `compile` reports them. `--compact-args` compiles the arguments compact-v1. A name the chain lacks is
 refused with its path, the chain and the name:
 
 ```text
@@ -578,10 +594,11 @@ npx sauce run swap.json --chain base --config sauce.config.json --keystore ~/.ke
 A program can open an intent on another chain — `Base(() => { … }).reward({ … })`. The command
 needs what the SDK cannot look up: `--intent-deadline <unix seconds>` and `--intent-creator
 <address>`, and, when the intent's body compiles to a program of its own,
-`--intent-execution-fee <wei>`, the destination Kitchen's fee. It names whichever is missing.
-`--intent-reward-deadline <unix seconds>` sets when an unproven reward becomes refundable (the
-fill deadline by default), and `--intent-prover <address>` overrides the prover the registry
-records for the pair.
+`--intent-execution-fee <wei>`, the destination Kitchen's fee. It names whichever is missing, and
+refuses a deadline at or before now, which no solver could ever fill (`sauce intent fill` still
+rehearses one, with a note, to show the Portal's refusal). `--intent-reward-deadline <unix seconds>`
+sets when an unproven reward becomes refundable (the fill deadline by default), and
+`--intent-prover <address>` overrides the prover the registry records for the pair.
 `--intent-execution-fee auto` reads that fee from each destination's Kitchen, through `--config`
 (an `rpcUrls` entry for the destination's chain id), and says what it read.
 
@@ -613,7 +630,8 @@ There are two ways to get such a file's intents onto the chain:
   measured or computed on chain is refused, naming the value and pointing at `sauce run`, and so is
   one that does anything else.
   `--dry-run` rehearses the transactions together (`eth_simulateV1`) and sends nothing, from the
-  signer's wallet or `--from <address>`'s; `--assume-balance USDC:2` (repeatable, `ETH:` for the
+  signer's wallet or `--from <address>`'s, printing each one's gas or revert (`gasUsed` and
+  `reason` in `--json`); `--assume-balance USDC:2` (repeatable, `ETH:` for the
   native currency) gives that wallet the reward for the rehearsal only, by state override, as
   `simulate` gives a Pot one. `--format json` (or `cast`) prints the transactions unsigned, with
   `--from <address>` when there is no signer.
@@ -895,18 +913,29 @@ npx sauce globals --chain base --protocol UniswapV3  # one namespace, with its m
 lists every name a program compiled for the chain may use without declaring it: the token symbols
 with their addresses and decimals, each protocol namespace with its contracts' addresses (and, with
 `--protocol`, each method with every parameter and struct field named), the chain names that open
-intents, the defines, and the `@sauce/token` functions. `--json` prints the same for a program to
-read. It is `routes.sourceGlobals(chain)`, which reads the registries the compile reads and lists
-contracts through the protocol rewrite's own resolver, so a name it lists is one the compile
+intents, the defines, and the `@sauce/token` functions. On an EVM chain it also lists the
+interfaces: ABIs the registry knows with no fixed address (`Erc4626.Vault`, `Erc20.ERC20`), which a
+program binds to an address of its own, `Erc4626.Vault.at(vault).totalAssets()`; `--protocol
+Erc4626` lists their methods. `--json` prints the same for a program to read (`interfaces` beside
+`protocols`). It is `routes.sourceGlobals(chain)`, which reads the registries the compile reads and
+lists contracts through the protocol rewrite's own resolver, so a name it lists is one the compile
 accepts, at the address the program gets.
 
 ### `sauce price`
 
 ```sh
-npx sauce price --chain base WETH USDC 2700                       # 2,700 USDC per WETH
+npx sauce price --chain base 2700 USDC per WETH                   # the price, in words
+npx sauce price --chain base WETH USDC 2700                       # the same: <base> <quote> <price>
+npx sauce price --chain base 2700 USDC per WETH --config sauce.config.json   # and the pool's now
 npx sauce price --chain base WETH USDC --sqrt-price-x96 4116816085950893928074568
 ```
 
+Its first line says what the price means both ways round — `2700 USDC per WETH on base: 1 WETH =
+2700 USDC, 1 USDC = 0.00037037037037037 WETH` (`means` and `inverse` in `--json`) — since a price
+written the wrong way round is off by its own square, a millionfold for WETH and USDC. With
+`--rpc-url` or `--config` it also reads the pair's price now from its deepest Uniswap V3 pool on
+the chain (`live` in `--json`) and warns on stderr when the price given is 10x or more away from it,
+saying so, with the command that reads it the right way, when it looks written backwards. It
 turns a price, in quote tokens per base token, into the numbers a swap program takes, for the pair's
 order on the chain (token0 is the lower address): the `sqrtPriceX96` a Uniswap V3 or V4 pool (or a
 fork) trades at, which is also the swap's `sqrtPriceLimitX96` — a floor when selling token0, a
@@ -915,7 +944,7 @@ program compares a fill against, `out * 1e18 >= minAvgPrice * spent`, rounded up
 passes a worse average. A token is a symbol the chain registers, or `0x…:<decimals>`.
 `--sqrt-price-x96` reads a pool's price back. The conversion is the package's
 `sqrtPriceX96FromPrice` and `priceFromSqrtPriceX96`, which a TypeScript program imports from the
-root; nothing reaches a network.
+root; without an endpoint, nothing reaches a network.
 
 ### `sauce inspect`
 
@@ -971,8 +1000,12 @@ Three things differ, and a fourth is Solana's alone: how the cook reaches the en
 **Accounts.** A Solana program declares every account it touches as an `Account` parameter of
 `main` — `Account<Writable>`, `Account<Signer>` — and `sauce compile --json` reports them in its
 `manifest`. Pass each to `simulate`, `run` and `tx` as `--account NAME=<value>`, where the value is
-an address, `pot` (the Pot, which the Kitchen signs for) or `owner` (the signer). A missing one is
-named with the role it needs.
+an address, `pot` (the Pot, which the Kitchen signs for), `owner` (the signer), or a token account
+by whose it is: `pot:USDC` is the Pot's own USDC account — its associated token account for the
+mint, under the classic SPL Token program — `pot:<mint>` the same for any mint, and `owner:USDC` the
+owner's (a direct cook, `--via engine`, has no Pot, so no `pot:` account). A slot with no `--account` is named with the role it needs, and `simulate` notes each
+account it was given that the cluster does not have (a guard on it fails with no message of its
+own).
 
 ```js
 // @chain solana
@@ -997,7 +1030,8 @@ npx sauce run sweep.sauce.ts --config sauce.config.json --keypair ~/.config/sola
 
 **The Pot.** A Pot is the Kitchen's PDA over the owner and the salt. `sauce pot --chain solana
 --owner <pubkey>` prints it and the `create_pot` instruction; `--deploy` with `--keypair` creates
-it. A cook names its Pot by `--owner` and `--salt`, never `--pot`, and `run` asks before creating a
+it. With an endpoint it also lists the Pot's token account for each registered mint: its address,
+whether it exists and what it holds (`tokenAccounts` in its JSON). A cook names its Pot by `--owner` and `--salt`, never `--pot`, and `run` asks before creating a
 missing one, as on an EVM chain.
 
 **The cook.** The execution fee is read from the cluster, so there is no `--value`: every output
@@ -1006,7 +1040,8 @@ or, if the fee rises before it lands, fails. `--max-execution-fee <lamports>` re
 fee is above it, before anything is signed or sent. `simulate`
 simulates the cook from `--owner` with signatures unchecked; a Pot the Kitchen has not created yet
 is created by its `create_pot` ahead of the cook, in the same transaction. It prints the compute
-units and what the cook moved, or the reason — a program's `throw` or `require` message, decoded
+units, what `main` returned (read as its declared type, as on an EVM chain) and what the cook
+moved, or the reason — a program's `throw` or `require` message, decoded
 from the engine's return data — and the program logs. What moved is read from the accounts
 themselves: every account the transaction may write, as it is now and as the simulation leaves it
 (`simulateTransaction`'s `accounts`). Each token account's balance change (SPL Token and

@@ -61,6 +61,8 @@ import { connect, revertReason, sendAndWait, type Sent, type TxRequest } from ".
 import {
   castSend,
   compileProgram,
+  priceLimitNotes,
+  refusePastDeadline,
   type CliFiles,
   type CommandOutput,
   type ProgramInput,
@@ -429,6 +431,17 @@ async function fundedNow(client: PublicClient, plan: Plan, portal: Hex): Promise
 
 /** `sauce intent publish`: send, rehearse or print the Portal transactions of a file's fixed intents. */
 export async function publishCommand(input: PublishInput, files: CliFiles): Promise<CommandOutput> {
+  // What no funding path can fix, refused or named first, for every front end: a deadline that has
+  // passed, and a price limit at a bound, which fills nothing on the destination.
+  refusePastDeadline(input);
+  const limits = priceLimitNotes(input, [], undefined);
+  const output = await publishIntents(input, files);
+
+  return limits.length === 0 ? output : { ...output, notes: [...limits, ...(output.notes ?? [])] };
+}
+
+/** `publishCommand` past its checks: the plans, and what it prints, rehearses or sends. */
+async function publishIntents(input: PublishInput, files: CliFiles): Promise<CommandOutput> {
   const intents = fixedIntents(input, files);
   const portal = ecoRoutesPortal(input.chain);
   const from = input.account?.address ?? input.from;
@@ -546,10 +559,21 @@ export async function publishCommand(input: PublishInput, files: CliFiles): Prom
           ...intentJson(plan),
           ...(funded[index] === undefined ? {} : { funded: funded[index] }),
         })),
-        transactions: calls.map((step, index) => ({
-          ...stepJson(step),
-          status: results[index]?.status ?? "not run",
-        })),
+        // What the text says of each, as fields: its gas, or why it reverts.
+        transactions: calls.map((step, index) => {
+          const result = results[index];
+
+          return {
+            ...stepJson(step),
+            status: result?.status ?? "not run",
+            ...(result?.status === "success" && result.gasUsed !== undefined
+              ? { gasUsed: result.gasUsed.toString() }
+              : {}),
+            ...(result !== undefined && result.status !== "success"
+              ? { reason: revertReason(result.error) }
+              : {}),
+          };
+        }),
       },
       notes: [
         `This rehearses publishing on ${input.chain.slug} only. What the intent does runs on ` +

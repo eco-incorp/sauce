@@ -50,10 +50,10 @@ export interface UsedContract {
 }
 
 /**
- * A define's value as the report shows it: an address as an address (a base58 key on Solana), any
- * other number in decimal. `address` says it is one (a chain's token or contract); otherwise a
- * value is taken for an address only where a number seldom is — 20 bytes with the top ones set, or
- * on Solana 32 — so a price or an amount reads as the number it is.
+ * A define's value as the report shows it: an address as an address (a base58 key on Solana) when
+ * `address` says it is one — a chain's token or contract, or a value written as one — and any
+ * other number as the integer it is. Nothing is guessed from the size: a price limit near 2^160
+ * reads as the number it is.
  */
 export function shownValue(
   value: DefineValue | number,
@@ -62,15 +62,11 @@ export function shownValue(
 ): string | boolean {
   if (typeof value === "boolean") return value;
   const word = BigInt(value);
-  if (chain.kind === "svm") {
-    return word < 1n << 256n && (address || word >= 1n << 200n)
-      ? getAddressDecoder().decode(hexToBytes(numberToHex(word, { size: 32 })))
-      : word.toString();
-  }
+  if (!address) return word.toString();
 
-  return word < 1n << 160n && (address || word >= 1n << 140n)
-    ? getAddress(numberToHex(word, { size: 20 }))
-    : word.toString();
+  return chain.kind === "svm"
+    ? getAddressDecoder().decode(hexToBytes(numberToHex(word, { size: 32 })))
+    : getAddress(numberToHex(word, { size: 20 }));
 }
 
 /** A source range that runs on another chain: an intent's body or its delivery argument. */
@@ -206,6 +202,7 @@ export function appliedDefines(
   text: string,
   chain: CanonicalChain,
   user: Readonly<Record<string, DefineValue>>,
+  addresses: ReadonlySet<string> = new Set(),
 ): { readonly defines: readonly AppliedDefine[]; readonly unread: readonly UnreadDefine[] } {
   const applied = new Map<string, AppliedDefine>();
   const used = new Set<string>();
@@ -224,7 +221,11 @@ export function appliedDefines(
       const replaced = fromChain[name];
       applied.set(key, {
         name,
-        value: shownValue(users[name]!, on, replaced !== undefined && address),
+        value: shownValue(
+          users[name]!,
+          on,
+          (replaced !== undefined && address) || addresses.has(name),
+        ),
         source: "user",
         ...(replaced === undefined ? {} : { replaces: shownValue(replaced, on, address) }),
         chain: on.slug,

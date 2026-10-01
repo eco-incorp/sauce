@@ -5,11 +5,21 @@
  * selling the base token and for buying it.
  *
  * The conversion is the SDK's own (`price.ts`); this adds only the chain's token order and decimals,
- * from the registry `sauce globals` lists. Nothing here reads a network.
+ * from the registry `sauce globals` lists. With an endpoint it also reads the pair's live price from
+ * its deepest Uniswap V3 pool, and warns when the price given is far from it — a price written the
+ * wrong way round is off by its own square, a millionfold for WETH/USDC.
  */
-import { getAddress, isAddress, type Address } from "viem";
+import {
+  getAddress,
+  isAddress,
+  parseAbi,
+  zeroAddress,
+  type Address,
+  type PublicClient,
+} from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
+import { chainDefines } from "../routes/ambient.js";
 import {
   priceFromSqrtPriceX96,
   sqrtPriceX96FromPrice,
@@ -94,7 +104,74 @@ export interface PriceInput {
   readonly quote: PriceToken;
   /** A price in quote tokens per base token, or the pool's `sqrtPriceX96` to read as one. */
   readonly price: { readonly decimal: string } | { readonly sqrtPriceX96: bigint };
+  /** The pair's live price, when an endpoint read it (`livePrice`). */
+  readonly live?: LivePrice;
 }
+
+/** A pair's price as its deepest Uniswap V3 pool on the chain has it now. */
+export interface LivePrice {
+  readonly pool: Address;
+  /** The pool's fee tier, in millionths: 500 is 0.05%. */
+  readonly fee: number;
+  readonly sqrtPriceX96: bigint;
+}
+
+const V3 = parseAbi([
+  "function getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)",
+  "function liquidity() view returns (uint128)",
+  "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)",
+]);
+
+/** Uniswap V3's fee tiers every deployment enables. */
+const FEES = [100, 500, 3000, 10_000] as const;
+
+/**
+ * The pair's live price from its Uniswap V3 pool with the most liquidity on the chain, through the
+ * registry's factory — `undefined` where the chain has no Uniswap V3 factory or the pair no pool.
+ */
+export async function livePrice(
+  client: PublicClient,
+  chain: CanonicalChain,
+  base: PriceToken,
+  quote: PriceToken,
+): Promise<LivePrice | undefined> {
+  const factory = chainDefines(chain).UniswapV3_Factory;
+  if (typeof factory !== "bigint") return undefined;
+  const at = getAddress(`0x${factory.toString(16).padStart(40, "0")}`);
+  const pools = await Promise.all(
+    FEES.map(async (fee) => {
+      const pool = await client.readContract({
+        address: at,
+        abi: V3,
+        functionName: "getPool",
+        args: [base.address, quote.address, fee],
+      });
+      if (pool === zeroAddress) return undefined;
+      const [liquidity, slot0] = await Promise.all([
+        client.readContract({ address: pool, abi: V3, functionName: "liquidity" }),
+        client.readContract({ address: pool, abi: V3, functionName: "slot0" }),
+      ]);
+
+      return { pool, fee, liquidity, sqrtPriceX96: slot0[0] };
+    }),
+  );
+  const deepest = pools
+    .filter((pool) => pool !== undefined && pool.liquidity > 0n)
+    .sort((a, b) => (a!.liquidity > b!.liquidity ? -1 : 1))[0];
+
+  return deepest === undefined
+    ? undefined
+    : { pool: deepest.pool, fee: deepest.fee, sqrtPriceX96: deepest.sqrtPriceX96 };
+}
+
+/** How far apart two prices of the pair are, as the larger over the smaller: from sqrt prices. */
+const apart = (a: bigint, b: bigint): number => {
+  const [hi, lo] = a > b ? [a, b] : [b, a];
+  // The ratio in integers, to six decimals, before it is a Number: exact where it is compared.
+  const ratio = Number((hi * 1_000_000n) / (lo === 0n ? 1n : lo)) / 1_000_000;
+
+  return ratio * ratio;
+};
 
 /**
  * The price as given: a decimal number of quote tokens per base token, or a pool's `sqrtPriceX96`
@@ -181,13 +258,65 @@ export function priceCommand(input: PriceInput): CommandOutput {
   const width = Math.max(token0.symbol.length, token1.symbol.length);
   const row = (token: PriceToken, which: string): string =>
     `  ${which}  ${token.symbol.padEnd(width)}  ${token.address}  ${token.decimals} decimals`;
+  // The same price read the other way round: base tokens per quote token.
+  const inverse = priceFromSqrtPriceX96(sqrtPriceX96, {
+    baseDecimals: quote.decimals,
+    quoteDecimals: base.decimals,
+    baseIsToken0: !baseIsToken0,
+  });
+  const means = `${price} ${quote.symbol} per ${base.symbol}`;
+  const inverseMeans = `${inverse} ${base.symbol} per ${quote.symbol}`;
+  const liveReport = (found: LivePrice) => {
+    const now = priceFromSqrtPriceX96(found.sqrtPriceX96, tokens);
+    const off = apart(found.sqrtPriceX96, sqrtPriceX96);
+    const pool = `the Uniswap V3 pool ${found.pool} (fee ${found.fee / 10_000}%)`;
+    // The number given read the other way round, as base tokens per quote token: near the pool's,
+    // it was written the wrong way round.
+    const inverted = (() => {
+      try {
+        const flipped = sqrtPriceX96FromPrice(price, {
+          baseDecimals: quote.decimals,
+          quoteDecimals: base.decimals,
+          baseIsToken0: !baseIsToken0,
+        });
+
+        return apart(found.sqrtPriceX96, flipped) < 10;
+      } catch {
+        // Read that way it is no price a pool can hold.
+        return false;
+      }
+    })();
+    const warning =
+      off < 10
+        ? undefined
+        : `the price given, ${means}, is ${off < 1e6 ? `${Math.round(off)}x` : `about 10^${Math.round(Math.log10(off))} times`} ` +
+          `off ${pool}, which is at ${now} ${quote.symbol} per ${base.symbol}` +
+          (inverted
+            ? `: it looks the wrong way round. For ${price} ${base.symbol} per ${quote.symbol}, ` +
+              `run \`sauce price --chain ${chain.slug} ${price} ${base.symbol} per ${quote.symbol}\``
+            : "");
+
+    return {
+      json: {
+        pool: found.pool,
+        fee: found.fee,
+        sqrtPriceX96: found.sqrtPriceX96.toString(),
+        price: now,
+        means: `${now} ${quote.symbol} per ${base.symbol}`,
+      },
+      line: `Live: ${pool} is at ${now} ${quote.symbol} per ${base.symbol} (sqrtPriceX96 ${found.sqrtPriceX96})`,
+      warning,
+    };
+  };
+  const live = input.live === undefined ? undefined : liveReport(input.live);
 
   return {
     text: [
-      `${price} ${quote.symbol} per ${base.symbol} on ${chain.slug}`,
+      `${means} on ${chain.slug}: 1 ${base.symbol} = ${price} ${quote.symbol}, 1 ${quote.symbol} = ${inverse} ${base.symbol}`,
       row(token0, "token0"),
       row(token1, "token1"),
       `sqrtPriceX96  ${sqrtPriceX96}`,
+      ...(live === undefined ? [] : [live.line]),
       "",
       ...directions.flatMap((side) => [
         `${side.name === "sell" ? "Selling" : "Buying"} ${base.symbol} ` +
@@ -198,14 +327,20 @@ export function priceCommand(input: PriceInput): CommandOutput {
           `${side.tokenIn.symbol} unit, times 1e18: out * 1e18 >= minAvgPrice * spent`,
       ]),
     ].join("\n"),
+    ...(live?.warning === undefined ? {} : { notes: [live.warning] }),
     json: {
       chain: chain.slug,
       price,
+      means,
+      inverse: { price: inverse, means: inverseMeans },
       base,
       quote,
       token0: token0.symbol,
       token1: token1.symbol,
       sqrtPriceX96: sqrtPriceX96.toString(),
+      ...(live === undefined
+        ? {}
+        : { live: live.json, ...(live.warning === undefined ? {} : { warning: live.warning }) }),
       ...Object.fromEntries(
         directions.map((side) => [
           side.name,

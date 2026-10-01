@@ -14,6 +14,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import {
+  addressDefines,
   CliError,
   describeFlags,
   parseAddress,
@@ -37,9 +38,10 @@ import {
   type ParsedArgs,
 } from "./args.js";
 import { actionsCommand, actionsProgram, isActionsDocument, type ActionsInput } from "./actions.js";
-import { chainServedBy, endpointFor, type Sent } from "./chain.js";
+import { chainServedBy, connect, endpointFor, type Sent } from "./chain.js";
 import {
   compileCommand,
+  pastDeadline,
   compileProgram,
   potCommand,
   potDeployCommand,
@@ -93,7 +95,7 @@ import {
   type Endpoints,
 } from "./intents.js";
 import { MCP_FLAGS, mcpCommand } from "./mcp.js";
-import { parsePriceToken, priceCommand, pricedChain, priceGiven } from "./price.js";
+import { livePrice, parsePriceToken, priceCommand, pricedChain, priceGiven } from "./price.js";
 import { publishCommand } from "./publish.js";
 import { simulateCommand } from "./simulate.js";
 import { parsePin, verifyCommand } from "./verify.js";
@@ -357,7 +359,7 @@ const COOK: FlagSpecs = {
     type: "string",
     multiple: true,
     value: "NAME=<address>",
-    help: "An account main takes, by name: an address, pot or owner",
+    help: "An account main takes, by name: an address, pot, owner, or pot:USDC (the Pot's USDC account)",
     only: "svm",
   },
   via: {
@@ -584,9 +586,15 @@ async function programInput(
     ...parseDefines(repeatedFlag(args, "define"), chain.kind),
   };
   definesReach(file, text, Object.keys(defines));
+  const addresses = addressDefines(
+    repeatedFlag(args, "define"),
+    definesFile === undefined ? undefined : readInput(io, definesFile),
+    chain.kind,
+  );
   const input: ProgramInput = {
     file,
     text,
+    ...(addresses.length === 0 ? {} : { addressDefines: addresses }),
     ...(stdin ? { stdin } : {}),
     ...(sourceDir === undefined ? {} : { sourceDir }),
     chain,
@@ -1577,6 +1585,9 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         from = operands.length === 1 ? operands[0]! : "the intents named";
       } else {
         const program = await programInput(args, io);
+        // A deadline that has passed is rehearsed anyway, so the Portal's own refusal shows.
+        const past = pastDeadline(program);
+        if (past !== undefined) io.stderr(`${past}: the rehearsal shows the Portal refusing it\n`);
         targets = fillTargets(program, io);
         labels = defineLabels(program);
         from = program.file;
@@ -1877,7 +1888,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         type: "string",
         multiple: true,
         value: "NAME=<address>",
-        help: "Solana: an account main takes (an address, pot or owner), to size the cook",
+        help: "Solana: an account main takes (an address, pot, owner, pot:USDC), to size the cook",
       },
       via: {
         type: "string",
@@ -2020,6 +2031,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         help: "Give the Pot this balance, for the rehearsal only: USDC:2, ETH:0.1",
         only: "evm",
       },
+      block: {
+        type: "string",
+        value: "<number|tag>",
+        help: "Rehearse on this block: a number, or latest, safe, finalized (default: latest)",
+        only: "evm",
+      },
       ...FUND,
       keystore: {
         type: "string",
@@ -2066,17 +2083,20 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "",
       "On Solana: the Kitchen cook, simulated from --owner with signatures unchecked, with each",
       "account main takes given as --account NAME=<address | pot | owner> and an Address",
-      "argument as a base58 public key. A Pot the Kitchen has not created is created first, in the",
+      "argument as a base58 public key. `pot:USDC` (or pot:<mint>) is the Pot's own token account",
+      "for that mint, its associated token account; owner:USDC the owner's. An account the",
+      "cluster does not have is named in a note. Where main declares a return type, what it",
+      "returned is read as that type. A Pot the Kitchen has not created is created first, in the",
       "same transaction. --via engine rehearses the engine's own paid cook instead: no Kitchen and",
-      "no Pot, --owner signing as the program's authority and paying the fee. Either way the cook",
-      "pays the Kitchen's execution fee, read from the cluster and printed; --max-execution-fee",
-      "refuses one above it. Prints the compute units and what the cook moved — each token",
-      "account's balance change and each account's lamports, read from the accounts the",
-      "transaction writes before it and as the simulation leaves them — or the reason (a program's",
-      "revert message decoded) and the program logs. Solana's simulateTransaction takes no account",
-      "overrides, so the owner must hold the Pot's rent and the fees, and --assume-balance is",
-      "refused there. A cook too large for one transaction is refused with the bytes to shrink:",
-      "staging it writes a code buffer on chain, which only `sauce run` does.",
+      "no Pot (so no pot or pot:<token> account), --owner signing as the program's authority and",
+      "paying the fee. Either way the cook pays the Kitchen's execution fee, read from the cluster",
+      "and printed; --max-execution-fee refuses one above it. Prints the compute units and what the",
+      "cook moved — each token account's balance change and each account's lamports, read from the",
+      "accounts the transaction writes before it and as the simulation leaves them — or the reason",
+      "(a program's revert message decoded) and the program logs. Solana's simulateTransaction",
+      "takes no account overrides, so the owner must hold the Pot's rent and the fees, and",
+      "--assume-balance is refused there. A cook too large for one transaction is refused with the",
+      "bytes to shrink: staging it writes a code buffer on chain, which only `sauce run` does.",
       "",
       "Examples:",
       "  sauce simulate pay.sauce.ts --chain base --owner 0x… --rpc-url <url> \\",
@@ -2097,6 +2117,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           throw new UsageError(
             "--assume-balance is for EVM chains: a Solana endpoint's simulateTransaction takes no " +
               "account overrides, so on solana the rehearsal runs on the accounts as they are",
+          );
+        }
+        if (stringFlag(args, "block") !== undefined) {
+          throw new UsageError(
+            "--block is for EVM chains: Solana's simulateTransaction runs on the cluster's " +
+              "current state, at no slot it can be given",
           );
         }
 
@@ -2131,8 +2157,16 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       const rpcUrl = requiredEndpoint(args, io, input.chain);
       const fund = fundingOf(args, io, input.chain, rpcUrl, false, account);
 
+      const block = stringFlag(args, "block");
+
       return simulateCommand(
-        { ...input, rpcUrl, assume: assumed, ...(fund === undefined ? {} : { fund }) },
+        {
+          ...input,
+          rpcUrl,
+          assume: assumed,
+          ...(fund === undefined ? {} : { fund }),
+          ...(block === undefined ? {} : { block }),
+        },
         io,
       );
     },
@@ -2482,8 +2516,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   price: {
-    usage:
+    usage: [
+      "sauce price --chain <slug|id> <price> <quote> per <base> [--rpc-url <url>] [--json]",
       "sauce price --chain <slug|id> <base> <quote> (<price> | --sqrt-price-x96 <value>) [--json]",
+    ],
     summary: "Turn a price into a pool's sqrtPriceX96 and a swap's limit and average-price floor",
     flags: {
       chain: { type: "string", value: "<slug|id>", help: "The chain the pool is on" },
@@ -2492,41 +2528,77 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         value: "<value>",
         help: "Read a pool's sqrtPriceX96 as a price instead",
       },
+      ...ENDPOINT,
       ...JSON_FLAG,
       ...HELP,
     },
     details: [
-      "<price> is how many <quote> tokens one <base> token is worth, in whole tokens: 2700 for",
-      "2,700 USDC per WETH. A token is a symbol the chain registers (sauce globals --tokens), or",
-      "an address with its decimals (0x…:18). Prints the pool's sqrtPriceX96 at that price, for",
-      "the pair's order on the chain (token0 is the lower address), and for each direction:",
+      "`2700 USDC per WETH` says it in words: 2,700 USDC for one WETH. The same price is",
+      "`WETH USDC 2700`: <base> <quote> <price>, the price how many <quote> tokens one <base> is",
+      "worth. A token is a symbol the chain registers (sauce globals --tokens), or an address with",
+      "its decimals (0x…:18). The first line says what the price means, both ways round",
+      "(1 WETH = 2700 USDC, 1 USDC = 0.00037… WETH). Then the pool's sqrtPriceX96 at that price,",
+      "for the pair's order on the chain (token0 is the lower address), and for each direction:",
       "  sqrtPriceLimitX96  the same number as a swap's limit: a floor when selling token0, a",
       "                     ceiling when selling token1",
       "  minAvgPrice        output units per input unit times 1e18, rounded up, for a program's",
       "                     check out * 1e18 >= minAvgPrice * spent",
       "Uniswap V3 and V4 and their forks share this price. With --sqrt-price-x96, a pool's",
-      "price is read back the other way. Nothing reaches a network.",
+      "price is read back the other way.",
+      "",
+      "With --rpc-url (or --config), it also reads the pair's price now, from its deepest Uniswap",
+      "V3 pool on the chain, and warns when the price given is 10x or more away from it, saying so",
+      "when the price looks written the wrong way round. Without, nothing reaches a network.",
       "",
       "Examples:",
-      "  sauce price --chain base WETH USDC 2700",
+      "  sauce price --chain base 2700 USDC per WETH",
+      "  sauce price --chain base 2700 USDC per WETH --rpc-url <url>",
       "  sauce price --chain base WETH USDC --sqrt-price-x96 4116816085950893928074568",
     ].join("\n"),
-    run: (args) => {
+    run: async (args, io) => {
       const chain = pricedChain(parseChain(requiredFlag(args, "chain", "<slug|id>")));
       const sqrt = stringFlag(args, "sqrt-price-x96");
-      const [base, quote, price, ...rest] = args.positionals;
+      // `<price> <quote> per <base>`, or `<base> <quote> <price>`.
+      const worded = args.positionals.length === 4 && args.positionals[2]?.toLowerCase() === "per";
+      const [base, quote, price, ...rest] = worded
+        ? [args.positionals[3], args.positionals[1], args.positionals[0]]
+        : args.positionals;
       if (base === undefined || quote === undefined) {
-        throw new UsageError("missing <base> <quote>: the pair, as WETH USDC");
+        throw new UsageError(
+          "missing the pair: <price> <quote> per <base>, as 2700 USDC per WETH (or WETH USDC 2700)",
+        );
       }
       if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}`);
       const given = priceGiven(price, sqrt);
 
-      return priceCommand({
+      const pair = { base: parsePriceToken(base, chain), quote: parsePriceToken(quote, chain) };
+      const reach =
+        stringFlag(args, "rpc-url") !== undefined || stringFlag(args, "config") !== undefined;
+      const live = reach
+        ? await livePrice(
+            await connect(requiredEndpoint(args, io, chain), chain),
+            chain,
+            pair.base,
+            pair.quote,
+          )
+        : undefined;
+      const output = priceCommand({
         chain,
-        base: parsePriceToken(base, chain),
-        quote: parsePriceToken(quote, chain),
+        ...pair,
         price: given,
+        ...(live === undefined ? {} : { live }),
       });
+
+      return reach && live === undefined
+        ? {
+            ...output,
+            notes: [
+              ...(output.notes ?? []),
+              `no Uniswap V3 pool for ${pair.base.symbol}/${pair.quote.symbol} on ${chain.slug} ` +
+                "to read the price now from",
+            ],
+          }
+        : output;
     },
   },
   inspect: {

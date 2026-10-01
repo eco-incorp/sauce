@@ -244,6 +244,45 @@ describe("sauce_compile", () => {
     assert.equal((out.compiler as { name: string }).name, "@eco-incorp/sauce-compiler");
   });
 
+  it("refuses an intent deadline that has passed, as the command does", async () => {
+    const refused = failed(
+      await mcp.call("sauce_compile", {
+        source: INTENT,
+        defines: { RECIPIENT },
+        intentDeadline: 1728432000,
+        intentCreator: CREATOR,
+      }),
+    );
+    assert.match(
+      refused,
+      /1728432000 \(2024-10-09T00:00:00\.000Z\) has passed: an intent can be filled only until its deadline/,
+    );
+  });
+
+  it("shows a define as an address only where it was written as one", async () => {
+    // A price limit just under MAX_SQRT_RATIO is 160 bits wide, and a number all the same.
+    const limit = "1461446703485210103287273052203988822378723970341";
+    const out = ok(
+      await mcp.call("sauce_compile", {
+        source:
+          "const LIMIT = 0n;\nfunction main() {\n  require(LIMIT > 0n);\n  USDC.transfer(RECIPIENT, 1n);\n}\n",
+        chain: "base",
+        defines: { LIMIT: limit, RECIPIENT },
+      }),
+    );
+    assert.deepEqual(
+      (out.defines as Array<{ name: string; value: string }>).map(({ name, value }) => [
+        name,
+        value,
+      ]),
+      [
+        ["LIMIT", limit],
+        ["RECIPIENT", RECIPIENT],
+        ["USDC", "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"],
+      ],
+    );
+  });
+
   it("sizes the payload main's args make, and refuses accounts off Solana", async () => {
     const out = ok(
       await mcp.call("sauce_compile", { source: PAY, chain: "base", args: [RECIPIENT, "1"] }),

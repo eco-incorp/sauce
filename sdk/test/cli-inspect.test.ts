@@ -225,6 +225,34 @@ describe("sauce globals", () => {
     expect((out.defines as Record<string, unknown>).USDC).toBe(usdc.address);
   });
 
+  it("lists the interfaces a program binds to its own address, and their methods", async () => {
+    const all = await sauce("globals", "--chain", "base");
+    expect(all.stdout).toMatch(/^Interfaces \(\d+\): an ABI with no fixed address/m);
+    expect(all.stdout).toMatch(/^ {2}Erc4626\.Vault {2}\(.+\)$/m);
+    // Asked for by name, the methods, as every namespace's are; JSON gives the same.
+    const one = await sauce("globals", "--chain", "base", "--protocol", "Erc4626");
+    expect(one.code).toBe(0);
+    expect(one.stdout).toMatch(
+      /^Erc4626\.Vault\.at\(<address>\) {2}interface \(.+\): no fixed address$/m,
+    );
+    expect(one.stdout).toMatch(/^ {2}totalAssets\(\): \(.+\) {2}view$/m);
+    const out = json(await sauce("globals", "--chain", "base", "--protocol", "erc4626", "--json"));
+    expect(Object.keys(out)).toEqual(["chain", "interfaces"]);
+    expect(out.interfaces).toEqual([
+      expect.objectContaining({ namespace: "Erc4626", name: "Vault", protocol: "erc4626" }),
+    ]);
+    // Every one listed binds and compiles as listed.
+    const vault = sourceGlobals("base").interfaces.find((bound) => bound.namespace === "Erc4626")!;
+    expect(vault.methods.map((m) => m.name)).toContain("totalAssets");
+    const program = file(
+      "vault.sauce.ts",
+      "function main(vault: Address): Uint256 {\n  return Erc4626.Vault.at(vault).totalAssets();\n}\n",
+    );
+    expect((await sauce("compile", program, "--chain", "base")).code).toBe(0);
+    // None on Solana: interfaces are EVM ABIs.
+    expect(sourceGlobals("solana").interfaces).toEqual([]);
+  });
+
   it("names a namespace the chain does not have, and what it does have", async () => {
     const run = await sauce("globals", "--chain", "base", "--protocol", "Nope");
     expect(run.code).toBe(2);

@@ -441,6 +441,19 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     // A rehearsal: nothing landed on the destination.
     assert.equal(await base.publicClient.getBlockNumber(), block);
     assert.equal(await base.balanceOf(baseUsdc, RECIPIENT), 0n);
+    // A deadline that has passed is rehearsed anyway, so the Portal's refusal shows, and said.
+    const late = ok(
+      await mcp.call("sauce_intent_fill", {
+        ...args,
+        intentDeadline: 1_728_432_000,
+        dryRun: true,
+        rpcUrl: base.rpcUrl,
+      }),
+    ) as { ok: boolean; notes: string[] };
+    assert.equal(late.ok, false);
+    assert.match(late.notes[0]!, /has passed: .* the rehearsal shows the Portal refusing it/);
+    assert.doesNotMatch(late.notes[0]!, /--intent-deadline/);
+
     // The server has no endpoint of its own for the destination.
     assert.match(
       failed(await mcp.call("sauce_intent_fill", { ...args, dryRun: true })),

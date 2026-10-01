@@ -172,7 +172,9 @@ export async function actionsCommand(
       ...compiled.json,
       document: lowering.program,
       source: lowering.source,
-      contracts: Object.keys(lowering.contracts),
+      // The ABI bindings the source calls through, by name: not `contracts`, which is the compile
+      // report's — the protocol contracts the program calls, resolved on their chain.
+      bindings: Object.keys(lowering.contracts),
       parameters: lowering.parameters,
     },
   };

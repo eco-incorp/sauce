@@ -32,6 +32,7 @@ import { v12PredictPot } from "../deployments/pot.js";
 /** The released Kitchen, which deploys every Pot (`V12Deployments.json`). */
 export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
 import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
+import { MAX_SQRT_PRICE_X96, MIN_SQRT_PRICE_X96 } from "../price.js";
 import type { IntentFundVia } from "../routes/portal.js";
 import type { AccessorTarget } from "../routes/protocol-rewrite.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
@@ -63,6 +64,7 @@ import {
 } from "./intents.js";
 import { costJson, costLine, costOf, receiptEffects, receiptReport } from "./receipt.js";
 import { appliedDefines, contractCollector } from "./report.js";
+import { mainReturnType } from "../routes/entry.js";
 import type { CookVia } from "../svm/client.js";
 import { svmCookSize } from "./solana.js";
 import type { Funding } from "./funding.js";
@@ -100,6 +102,9 @@ export interface ProgramInput {
   readonly sourceDir?: string;
   readonly chain: CanonicalChain;
   readonly defines: Record<string, DefineValue>;
+  /** The defines whose value was written as an address (`args.ts#addressDefines`), which a
+   *  report shows as one. */
+  readonly addressDefines?: readonly string[];
   /** Compile `main`'s parameters for compact-v1 arguments instead of ABI-v1. */
   readonly compactArgs: boolean;
   /** `Chain(() => …).reward(…)` inside the program: what the SDK cannot look up. */
@@ -120,6 +125,40 @@ export interface ProgramInput {
    * (`actions.ts`), whose generated source names `IErc20` and the like. Absent for a file.
    */
   readonly contracts?: SauceCompileOptions["contracts"];
+}
+
+/** Why `--intent-deadline` has passed, or `undefined` while it is still ahead. */
+export function pastDeadline(
+  program: Pick<ProgramInput, "intents">,
+  now: number = Date.now(),
+): string | undefined {
+  const deadline = program.intents.deadline;
+  if (deadline === undefined || deadline > BigInt(Math.floor(now / 1000))) return undefined;
+
+  return (
+    `--intent-deadline ${deadline} (${new Date(Number(deadline) * 1000).toISOString()}) has ` +
+    "passed: an intent can be filled only until its deadline"
+  );
+}
+
+/**
+ * Refuses a program whose intents' deadline has passed: the commands that build an intent to
+ * publish — `compileCommand`, `cookOf` (simulate, tx, run), the Solana cook, `publishCommand` —
+ * would build one no solver could ever fill. Here, in the commands both front ends call, so the
+ * CLI and the MCP tools refuse it alike. `fill` rehearses one anyway, with a note, and `inspect`
+ * reads what was.
+ */
+export function refusePastDeadline(
+  program: Pick<ProgramInput, "intents">,
+  now: number = Date.now(),
+): void {
+  const past = pastDeadline(program, now);
+  if (past === undefined) return;
+  const later = BigInt(Math.floor(now / 1000)) + 86_400n;
+  throw new UsageError(
+    `${past}, so this one never could be. Give a later Unix time in seconds, such as ${later} ` +
+      "(a day from now).",
+  );
 }
 
 /** An input file's text — the program, a defines file — or a precise reason it has none. */
@@ -256,10 +295,16 @@ export interface CompileInput extends ProgramInput {
  * the cook's transaction against the one-transaction limit.
  */
 export async function compileCommand(input: CompileInput, files: CliFiles): Promise<CommandOutput> {
+  refusePastDeadline(input);
   const collected = contractCollector();
   const program = compileProgram(input, files, collected.onContract);
   const bytecode = bytesToHex(program.bytecode);
-  const { defines, unread } = appliedDefines(input.text, input.chain, input.defines);
+  const { defines, unread } = appliedDefines(
+    input.text,
+    input.chain,
+    input.defines,
+    new Set(input.addressDefines ?? []),
+  );
   // The payload is the program with its arguments appended: known once the arguments are.
   const payload =
     input.args === undefined && program.entryParams.length > 0
@@ -278,6 +323,7 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
   const pots: readonly PotCheck[] =
     input.endpoints === undefined ? cooks : await checkIntentPots(cooks, input.endpoints);
   const notes = [
+    ...priceLimitNotes(input, program.entryParams, input.args),
     ...pots.filter((check) => check.deployed === false).map(missingPotNote),
     ...unread.map(({ name, readOn }) =>
       readOn.length === 0
@@ -310,6 +356,8 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       entryEncoding: program.entryEncoding,
       entryParams: program.entryParams,
       entrySchema: program.entrySchema === undefined ? null : bytesToHex(program.entrySchema),
+      // What main returns, as it declares it: `simulate` reads the cook's return data as this.
+      returnType: mainReturnType(input.text) ?? null,
       defines,
       contracts: collected.contracts(),
       ...(pots.length === 0 ? {} : { intentPots: pots.map(potCheckJson) }),
@@ -349,6 +397,55 @@ function argumentValues(params: readonly EntryParam[], args: ArgsInput): EntryVa
           `${param.type.trim().startsWith("{") ? '{"field": 1}' : "[1, 2]"}; got '${raw}'`,
       );
     }
+  });
+}
+
+/** A define or parameter whose name says it is a pool's price limit. */
+const LIMIT_NAME = /sqrt.*price|price.*limit|sqrt.*limit/i;
+
+/**
+ * A note for each price limit — a define or one of `main`'s arguments named like one
+ * (`SQRT_PRICE_LIMIT_X96`, `sqrtPriceLimitX96`) — at or past the bounds a V3-style pool takes. A
+ * pool takes a limit strictly between MIN_SQRT_RATIO and MAX_SQRT_RATIO and reverts "SPL" at
+ * either, so such a limit cannot fill; `0` is the library's "no limit", and is left alone.
+ */
+export function priceLimitNotes(
+  input: Pick<ProgramInput, "defines">,
+  params: readonly EntryParam[],
+  args: ArgsInput | undefined,
+): string[] {
+  const values: Array<[string, bigint]> = Object.entries(input.defines).flatMap(
+    ([name, value]): Array<[string, bigint]> =>
+      LIMIT_NAME.test(name) && typeof value === "bigint" ? [[name, value]] : [],
+  );
+  if (args !== undefined) {
+    params.forEach((param, index) => {
+      const raw = args.values[index];
+      if (!LIMIT_NAME.test(param.name) || param.type.trim() !== "Uint256") return;
+      if (typeof raw === "string" && /^(\d+|0x[0-9a-fA-F]+)n?$/.test(raw)) {
+        values.push([param.name, BigInt(raw.replace(/n$/, ""))]);
+      } else if (typeof raw === "number" && Number.isSafeInteger(raw)) {
+        values.push([param.name, BigInt(raw)]);
+      }
+    });
+  }
+
+  return values.flatMap(([name, value]) => {
+    if (value === 0n || (value > MIN_SQRT_PRICE_X96 && value < MAX_SQRT_PRICE_X96)) return [];
+    const where =
+      value === MIN_SQRT_PRICE_X96
+        ? "is MIN_SQRT_RATIO"
+        : value === MAX_SQRT_PRICE_X96
+          ? "is MAX_SQRT_RATIO"
+          : value < MIN_SQRT_PRICE_X96
+            ? "is below MIN_SQRT_RATIO"
+            : "is past MAX_SQRT_RATIO";
+
+    return [
+      `${name} = ${value} ${where}: a V3-style pool takes a price limit strictly between ` +
+        `${MIN_SQRT_PRICE_X96} and ${MAX_SQRT_PRICE_X96}, and reverts "SPL" at or past either. ` +
+        "0 is no limit; `sauce price` gives the limit for a price",
+    ];
   });
 }
 
@@ -425,6 +522,7 @@ export function cookOf(input: CookInput, files: CliFiles): Cook {
   if (input.chain.kind !== "evm") {
     throw new Error(`internal: ${input.chain.slug}'s cook is built by solana.ts`);
   }
+  refusePastDeadline(input);
   const target = input.target;
   const pot = "pot" in target ? target.pot : (v12PredictPot(target.owner, target.salt) as Address);
   const engine = getAddress(v12EngineAddress());
@@ -713,7 +811,7 @@ export function potCommand(input: PotCommandInput): CommandOutput {
     json,
     cast: castSend(kitchen, call.data),
     notes: [
-      `Kitchen.deployPot on the released Kitchen. Any account may send it, the Pot is ` +
+      `This is Kitchen.deployPot on the released Kitchen. Any account may send it: the Pot is ` +
         `${input.owner}'s either way, and it deploys once.`,
     ],
   };

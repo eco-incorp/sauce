@@ -32,6 +32,7 @@ import {
   parseAddress,
   parseChain,
   parsePubkey,
+  pastDeadline,
   requireChain,
   UsageError,
   type CanonicalChain,
@@ -520,8 +521,11 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
       let endpoints: Record<string, string>;
       let labels: ReturnType<typeof defineLabels> = [];
       let from = "the call's intent";
+      // A program whose deadline has passed is filled anyway, so the Portal's own refusal shows.
+      let past: string | undefined;
       if (args.source !== undefined) {
         const program = programOf(args as ProgramArgs);
+        past = pastDeadline(program.input);
         const targets = fillTargets(program.input, program.files);
         records = targets.map((target) =>
           intentRecord(target.intent, { sourcePortal: target.sourcePortal }),
@@ -576,7 +580,17 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
           ...(args.prove === undefined ? {} : { prove: args.prove }),
         });
 
-        return fromCommand(output);
+        const rehearsed = fromCommand(output);
+
+        return past === undefined
+          ? rehearsed
+          : {
+              ...rehearsed,
+              notes: [
+                `${past}: the rehearsal shows the Portal refusing it`,
+                ...(rehearsed.notes ?? []),
+              ],
+            };
       }
       if (args.from === undefined) {
         throw new UsageError(
@@ -606,6 +620,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         fills.push({ intentHash: record.intentHash, destination: destination.slug, ...fill });
         notes.push(...said);
       }
+      if (past !== undefined) notes.unshift(`${past}: the Portal refuses a fill now`);
       notes.push(
         `Only ${args.from} may send these, in order, on each intent's destination: the Portal ` +
           "pulls what the route delivers from the account that calls fulfill.",

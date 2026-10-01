@@ -7,6 +7,8 @@ import { PassThrough } from "node:stream";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { once } from "node:events";
+import { createServer } from "node:http";
 import { address as svmAddress } from "@solana/kit";
 import {
   bytesToHex,
@@ -15,6 +17,7 @@ import {
   getAddress,
   hexToBytes,
   keccak256,
+  numberToHex,
   stringToBytes,
   type Hex,
   type PublicClient,
@@ -300,6 +303,7 @@ describe("sauce compile", () => {
       entryEncoding: "abi-v1",
       entryParams: [],
       entrySchema: null,
+      returnType: null,
       defines: [
         { name: "AMOUNT", value: "1000", source: "user", chain: "ethereum" },
         { name: "RECIPIENT", value: RECIPIENT, source: "user", chain: "ethereum" },
@@ -327,6 +331,116 @@ describe("sauce compile", () => {
         address: getAddress(v12EngineAddress()),
       },
     });
+  });
+
+  it("shows a define as an address only where it was written as one, whatever its size", async () => {
+    // A price limit just under MAX_SQRT_RATIO is 160 bits wide, and still a number.
+    const limit = "1461446703485210103287273052203988822378723970341";
+    const program = file(
+      "limit.sauce.ts",
+      "const LIMIT = 0n;\nconst RECIPIENT = 0n;\nconst SMALL = 0n;\nfunction main() {\n" +
+        "  require(LIMIT > SMALL && RECIPIENT != 0n);\n}\n",
+    );
+    const defines = file("values.json", JSON.stringify({ RECIPIENT, SMALL: "0x1234" }));
+    const run = await sauce(
+      ...["compile", program, "--chain", "base", "--json"],
+      ...["--define", `LIMIT=${limit}`, "--defines", defines],
+    );
+    expect(run.code).toBe(0);
+    expect((JSON.parse(run.stdout) as { defines: unknown[] }).defines).toEqual([
+      { name: "LIMIT", value: limit, source: "user", chain: "base" },
+      { name: "RECIPIENT", value: RECIPIENT, source: "user", chain: "base" },
+      { name: "SMALL", value: "4660", source: "user", chain: "base" },
+    ]);
+  });
+
+  it("refuses a past deadline in the commands themselves, which every front end calls", async () => {
+    const { compileCommand, cookOf, refusePastDeadline } = await import("../src/cli/commands.js");
+    const { publishCommand } = await import("../src/cli/publish.js");
+    // As the MCP tools build it: a ProgramInput by hand, no CLI argument handling.
+    const input = {
+      file: "pay.sauce.ts",
+      text: PAY,
+      chain: requireChain("base"),
+      defines: { RECIPIENT: BigInt(RECIPIENT), AMOUNT: 1000n },
+      compactArgs: false,
+      intents: { deadline: 1728432000n },
+    };
+    const past = /--intent-deadline 1728432000 \(2024-10-09T00:00:00\.000Z\) has passed/;
+    await expect(compileCommand(input, nodeIo())).rejects.toThrow(past);
+    expect(() =>
+      cookOf(
+        {
+          ...input,
+          target: { owner: getAddress(RECIPIENT), salt: `0x${"00".repeat(32)}` },
+        } as never,
+        nodeIo(),
+      ),
+    ).toThrow(past);
+    await expect(publishCommand({ ...input, dryRun: false } as never, nodeIo())).rejects.toThrow(
+      past,
+    );
+    // A deadline still ahead passes; one at the exact second does not.
+    expect(() => refusePastDeadline({ intents: { deadline: 2000000000n } })).not.toThrow();
+    expect(() => refusePastDeadline({ intents: { deadline: 1000n } }, 1_000_000)).toThrow(
+      /has passed/,
+    );
+  });
+
+  it("names a price limit at or past the bounds a pool takes, where it fills nothing", async () => {
+    const program = file(
+      "limits.sauce.ts",
+      "const SQRT_PRICE_LIMIT_X96 = 0n;\nfunction main(sqrtPriceLimitX96: Uint256) {\n" +
+        "  require(SQRT_PRICE_LIMIT_X96 != sqrtPriceLimitX96);\n}\n",
+    );
+    const max = "1461446703485210103287273052203988822378723970342";
+    const run = await sauce(
+      ...["compile", program, "--chain", "base", "--define", `SQRT_PRICE_LIMIT_X96=${max}`],
+      ...["--args", "4295128739"],
+    );
+    expect(run.code).toBe(0);
+    expect(run.stderr).toContain(
+      `SQRT_PRICE_LIMIT_X96 = ${max} is MAX_SQRT_RATIO: a V3-style pool takes a price limit ` +
+        "strictly between 4295128739 and",
+    );
+    expect(run.stderr).toContain("sqrtPriceLimitX96 = 4295128739 is MIN_SQRT_RATIO");
+    // An intent's limit, named before it is published, whichever way its reward is paid.
+    const intent = file(
+      "limit-intent.sauce.ts",
+      "// @chain arbitrum\nBase(() => {\n  require(SQRT_PRICE_LIMIT_X96 > 0n);\n" +
+        "  USDC.transfer(RECIPIENT, 5n);\n}).reward({ tokens: [{ token: USDC, amount: 7n }] });\n",
+    );
+    const published = await sauce(
+      ...["intent", "publish", intent, "--define", `SQRT_PRICE_LIMIT_X96=${max}`],
+      ...["--define", `RECIPIENT=${RECIPIENT}`, "--intent-deadline", "2000000000"],
+      ...["--intent-creator", CREATOR, "--intent-execution-fee", "0"],
+      ...["--from", CREATOR, "--format", "json"],
+    );
+    expect(published.code).toBe(0);
+    expect(published.stderr).toContain(`SQRT_PRICE_LIMIT_X96 = ${max} is MAX_SQRT_RATIO`);
+    // 0 (no limit) and a limit inside the bounds pass quietly.
+    const fine = await sauce(
+      ...["compile", program, "--chain", "base", "--define", "SQRT_PRICE_LIMIT_X96=0"],
+      ...["--args", "4295128740"],
+    );
+    expect(fine.stderr).toBe("");
+  });
+
+  it("refuses an intent deadline that has passed, which no solver could ever fill", async () => {
+    const run = await sauce(
+      "compile",
+      file("pay.sauce.ts", PAY),
+      "--chain",
+      "base",
+      ...PAY_DEFINES,
+      "--intent-deadline",
+      "1728432000",
+    );
+    expect(run.code).toBe(2);
+    expect(run.stderr).toContain(
+      "--intent-deadline 1728432000 (2024-10-09T00:00:00.000Z) has passed: an intent can be " +
+        "filled only until its deadline, so this one never could be. Give a later Unix time",
+    );
   });
 
   it("compiles for Solana, reporting the account manifest", async () => {
@@ -364,11 +478,12 @@ describe("sauce compile", () => {
     const arbitrum = routes.chainDefines(requireChain("arbitrum"));
     const address = (value: unknown) =>
       getAddress(`0x${(value as bigint).toString(16).padStart(40, "0")}`);
-    const report = appliedDefines(text, requireChain("base"), {
-      RECIPIENT: BigInt(recipient),
-      USDC: BigInt(mine),
-      WETH: BigInt(mine),
-    });
+    const report = appliedDefines(
+      text,
+      requireChain("base"),
+      { RECIPIENT: BigInt(recipient), USDC: BigInt(mine), WETH: BigInt(mine) },
+      new Set(["RECIPIENT", "USDC", "WETH"]),
+    );
     expect(report.defines).toEqual([
       { name: "RECIPIENT", value: getAddress(recipient), source: "user", chain: "arbitrum" },
       {
@@ -1770,6 +1885,57 @@ describe("flags in any order", () => {
   });
 });
 
+describe("what main returned", () => {
+  const word = (value: bigint) => numberToHex(value, { size: 32 }).slice(2);
+  const data = (...values: bigint[]) => `0x${values.map(word).join("")}` as Hex;
+  const base = requireChain("base");
+
+  it("reads the cook's return data as the type main declares", async () => {
+    const { decodeReturned, returnedLine } = await import("../src/cli/returned.js");
+    const usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+    expect(decodeReturned("Address", data(BigInt(usdc)), base)).toBe(usdc);
+    expect(decodeReturned("Uint256", data(42n), base)).toBe("42");
+    expect(decodeReturned("bool", data(1n), base)).toBe(true);
+    // An array: its elements one word each, no length in front.
+    expect(decodeReturned("Uint256[]", data(1n, 2n, 3n), base)).toEqual(["1", "2", "3"]);
+    expect(decodeReturned("Uint256[]", "0x", base)).toEqual([]);
+    // A record: its fields one word each, in order; an array of records, one after another.
+    const record = "{ token: Address, out: Uint256 }";
+    expect(decodeReturned(record, data(BigInt(usdc), 5n), base)).toEqual({ token: usdc, out: "5" });
+    expect(decodeReturned(`${record}[]`, data(BigInt(usdc), 5n, BigInt(usdc), 6n), base)).toEqual([
+      { token: usdc, out: "5" },
+      { token: usdc, out: "6" },
+    ]);
+    // bytes as they are.
+    expect(decodeReturned("bytes", "0x1234", base)).toBe("0x1234");
+    // A shape that does not fit is not guessed at.
+    expect(decodeReturned("Uint256", data(1n, 2n), base)).toBeUndefined();
+    expect(decodeReturned(`${record}[]`, data(1n, 2n, 3n), base)).toBeUndefined();
+    expect(returnedLine("Uint256", data(1n, 2n), base)).toBe(
+      "main returns Uint256: the data above does not read as one",
+    );
+    expect(returnedLine(record, data(BigInt(usdc), 5n), base)).toBe(
+      `main returns ${record}: { token: ${usdc}, out: 5 }`,
+    );
+    // On Solana an address is a 32-byte key, shown in base58.
+    const solana = requireChain("solana");
+    const mint = routes.registryTokens(solana).USDC!;
+    expect(decodeReturned("Address", mint.address, solana)).toBe(mint.mint);
+  });
+
+  it("finds main's declared return type, an interface spelled out", async () => {
+    const { mainReturnType } = await import("../src/routes/entry.js");
+    expect(mainReturnType("function main(): Address {\n  return 0n;\n}\n")).toBe("Address");
+    expect(mainReturnType("function main() {\n}\n")).toBeUndefined();
+    expect(mainReturnType("function main(): void {\n}\n")).toBeUndefined();
+    expect(
+      mainReturnType(
+        "interface Out { token: Address; out: Uint256 }\nfunction main(): Out[] {\n  return [];\n}\n",
+      ),
+    ).toBe("{ token: Address, out: Uint256 }[]");
+  });
+});
+
 describe("a program from stdin", () => {
   const PROGRAM = "function main(to: Address) {\n  USDC.transfer(to, 5n);\n}\n";
   const piped = (text: string) => ({ readStdin: () => text });
@@ -1973,6 +2139,9 @@ describe("sauce price", () => {
     expect(out).toEqual({
       chain: "base",
       price: "2700",
+      // What it means, in words, and the same price the other way round.
+      means: "2700 USDC per WETH",
+      inverse: { price: "0.00037037037037037", means: "0.00037037037037037 WETH per USDC" },
       base: { symbol: "WETH", address: WETH_BASE, decimals: 18 },
       quote: {
         symbol: "USDC",
@@ -2002,8 +2171,136 @@ describe("sauce price", () => {
       },
     });
     const text = await sauce("price", "--chain", "base", "WETH", "USDC", "2700");
+    expect(text.stdout.split("\n")[0]).toBe(
+      "2700 USDC per WETH on base: 1 WETH = 2700 USDC, 1 USDC = 0.00037037037037037 WETH",
+    );
     expect(text.stdout).toContain(`sqrtPriceX96  ${sqrt}`);
     expect(text.stdout).toMatch(/minAvgPrice +2700000000 +USDC units per WETH unit/);
+    // Said in words, the same price: `2700 USDC per WETH`.
+    const worded = await sauce("price", "--chain", "base", "2700", "USDC", "per", "WETH");
+    expect(worded.stdout).toBe(text.stdout);
+  });
+
+  /**
+   * A Base endpoint whose Uniswap V3 factory has a WETH/USDC pool at each tier `pools` names, each
+   * with its liquidity and price (USDC per WETH); `getPool` answers zero at every other tier.
+   */
+  async function v3Endpoint(
+    pools: Readonly<Record<number, { liquidity: bigint; price: string }>>,
+  ): Promise<{ url: string; close: () => void; poolAt: (fee: number) => string }> {
+    const factory = BigInt(routes.chainDefines(requireChain("base")).UniswapV3_Factory as bigint);
+    const poolAt = (fee: number) =>
+      getAddress(`0x${(0xb00000 + fee).toString(16).padStart(40, "0")}`);
+    const byPool = new Map(
+      Object.entries(pools).map(([fee, pool]) => [BigInt(poolAt(Number(fee))), pool]),
+    );
+    const word = (value: bigint) => numberToHex(value, { size: 32 });
+    const server = createServer((request, response) => {
+      let body = "";
+      request.on("data", (chunk: Buffer) => (body += chunk.toString()));
+      request.on("end", () => {
+        const call = JSON.parse(body) as { id: number; method: string; params: unknown[] };
+        const { to, data } = (call.params?.[0] ?? {}) as { to?: string; data?: string };
+        let result: unknown = null;
+        if (call.method === "eth_chainId") result = "0x2105";
+        else if (call.method === "eth_call" && BigInt(to!) === factory) {
+          const fee = Number(BigInt(`0x${data!.slice(-64)}`));
+          result = word(pools[fee] === undefined ? 0n : BigInt(poolAt(fee)));
+        } else if (call.method === "eth_call" && byPool.has(BigInt(to!))) {
+          const pool = byPool.get(BigInt(to!))!;
+          const sqrt = root.sqrtPriceX96FromPrice(pool.price, {
+            baseDecimals: 18,
+            quoteDecimals: 6,
+            baseIsToken0: true,
+          });
+          result = data!.startsWith("0x1a686502")
+            ? word(pool.liquidity) // liquidity()
+            : `${word(sqrt)}${"0".repeat(64 * 6)}`; // slot0()
+        }
+        response.setHeader("content-type", "application/json");
+        response.end(JSON.stringify({ jsonrpc: "2.0", id: call.id, result }));
+      });
+    });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+
+    return {
+      url: `http://127.0.0.1:${(server.address() as { port: number }).port}`,
+      close: () => server.close(),
+      poolAt,
+    };
+  }
+
+  it("reads the pair's price now with an endpoint, and says when the one given is the wrong way round", async () => {
+    const endpoint = await v3Endpoint({ 500: { liquidity: 10n ** 18n, price: "4100" } });
+    try {
+      const right = await sauce(
+        ...["price", "--chain", "base", "4000", "USDC", "per", "WETH"],
+        ...["--rpc-url", endpoint.url, "--json"],
+      );
+      expect(right.code).toBe(0);
+      expect(right.stderr).toBe("");
+      expect(JSON.parse(right.stdout)).toMatchObject({
+        live: { pool: endpoint.poolAt(500), fee: 500, price: "4100", means: "4100 USDC per WETH" },
+      });
+      // Haiku's reading: 2500 WETH per USDC, ten-millionfold off — and the right way round named.
+      const wrong = await sauce(
+        ...["price", "--chain", "base", "USDC", "WETH", "2500", "--rpc-url", endpoint.url],
+      );
+      expect(wrong.code).toBe(0);
+      expect(wrong.stderr).toContain(
+        "the price given, 2500 WETH per USDC, is about 10^7 times off the Uniswap V3 pool",
+      );
+      expect(wrong.stderr).toContain(
+        "it looks the wrong way round. For 2500 USDC per WETH, run " +
+          "`sauce price --chain base 2500 USDC per WETH`",
+      );
+      // 10x is where it warns: 11x warns, 9x does not, and neither says "the wrong way round".
+      const far = await sauce(
+        ...["price", "--chain", "base", "45100", "USDC", "per", "WETH", "--rpc-url", endpoint.url],
+      );
+      expect(far.stderr).toContain("is 11x off the Uniswap V3 pool");
+      expect(far.stderr).not.toContain("wrong way round");
+      const near = await sauce(
+        ...["price", "--chain", "base", "36900", "USDC", "per", "WETH", "--rpc-url", endpoint.url],
+      );
+      expect(near.stderr).toBe("");
+    } finally {
+      endpoint.close();
+    }
+  });
+
+  it("reads the deepest of the pair's pools, and says when there is none to read", async () => {
+    // Three tiers: the deepest is the 0.3% pool, whatever the others' prices.
+    const several = await v3Endpoint({
+      100: { liquidity: 5n, price: "1000" },
+      500: { liquidity: 10n ** 18n, price: "4100" },
+      3000: { liquidity: 10n ** 20n, price: "4200" },
+    });
+    try {
+      const out = json(
+        await sauce(
+          ...["price", "--chain", "base", "4150", "USDC", "per", "WETH"],
+          ...["--rpc-url", several.url, "--json"],
+        ),
+      );
+      expect(out.live).toMatchObject({ pool: several.poolAt(3000), fee: 3000, price: "4200" });
+    } finally {
+      several.close();
+    }
+    // Pools with no liquidity are no price at all.
+    const empty = await v3Endpoint({ 500: { liquidity: 0n, price: "4100" } });
+    try {
+      const run = await sauce(
+        ...["price", "--chain", "base", "4150", "USDC", "per", "WETH", "--rpc-url", empty.url],
+      );
+      expect(run.code).toBe(0);
+      expect(run.stderr).toContain(
+        "no Uniswap V3 pool for WETH/USDC on base to read the price now from",
+      );
+    } finally {
+      empty.close();
+    }
   });
 
   it("reads a pool's sqrtPriceX96 back as the price, and takes an address with its decimals", async () => {
@@ -2037,6 +2334,7 @@ describe("sauce price", () => {
       [["--chain", "base", "WETH", "DAI", "1"], /DAI is not a token base registers/],
       [["--chain", "base", "WETH", `0x${"12".repeat(20)}`, "1"], /give them as 0x/],
       [["--chain", "base", "WETH", "USDC"], /missing <price>/],
+      [["--chain", "base", "WETH"], /missing the pair: <price> <quote> per <base>/],
       [["--chain", "base", "WETH", "USDC", "1", "--sqrt-price-x96", "1"], /not both/],
       [["--chain", "base", "WETH", "USDC", "1e3"], /'1e3' is not a price/],
       [["--chain", "base", "WETH", "USDC:18", "1"], /USDC has 6 decimals, not 18/],
@@ -2071,6 +2369,7 @@ describe("the CLI stays out of the browser-facing surface", () => {
       await import("../src/cli/intents.js"),
       await import("../src/cli/receipt.js"),
       await import("../src/cli/terminal.js"),
+      await import("../src/cli/returned.js"),
     ].flatMap((module) => Object.keys(module));
     expect(cli.length).toBeGreaterThan(0);
     const routes = root.routes as Record<string, unknown>;

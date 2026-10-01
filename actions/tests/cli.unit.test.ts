@@ -111,6 +111,17 @@ describe("sauce actions", () => {
     assert.deepEqual(base!.parameters, ["amount"]);
     assert.deepEqual(base!.entryParams, [{ name: "a_amount", type: "Uint256" }]);
     assert.deepEqual(base!.document, SWAP, "the document as parsed, every name as written");
+    // Two lists, two names: the ABI bindings the source calls through, and — as `compile --json`
+    // reports them — the protocol contracts the program calls, resolved on the chain.
+    const bindings = base!.bindings as string[];
+    // (none here: the lowering calls the factory by namespace).
+    assert.ok(Array.isArray(bindings) && bindings.every((name) => typeof name === "string"));
+    assert.deepEqual(
+      (base!.contracts as Array<{ contract: string; chain: string }>).map(
+        ({ contract, chain }) => `${chain} ${contract}`,
+      ),
+      ["base UniswapV3.Factory"],
+    );
   });
 
   it("reads a document from stdin for -, as it reads the file", async () => {
