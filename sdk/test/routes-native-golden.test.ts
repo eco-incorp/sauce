@@ -7,22 +7,21 @@
  * fixture (`fixtures/native-golden.json`) records each case's bytecode digest — or that it is
  * refused — and the parameters given a filler value so the program could compile at all.
  *
- * The digests are a compiler's output, so a compiler bump that changes code generation changes them.
- * Re-prove and re-record with the parity suite, where the rewrites still exist:
- * `UPDATE_NATIVE_GOLDEN=1 pnpm --filter ./sdk test -- routes-native-parity`. After they are gone, a
+ * The digests were recorded by the parity suite that compared the two pipelines, while the rewrites
+ * existed (eco-incorp/sauce#43–#45). They are a compiler's output, so a compiler bump that changes
+ * code generation moves them: `UPDATE_NATIVE_GOLDEN=1` re-records them from what compiles now, and a
  * digest that moves needs the reason it moved.
  */
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
-const GOLDEN = JSON.parse(
-  readFileSync(join(ROOT, "sdk/test/fixtures/native-golden.json"), "utf8"),
-) as Record<
+const FIXTURE = join(ROOT, "sdk/test/fixtures/native-golden.json");
+const GOLDEN = JSON.parse(readFileSync(FIXTURE, "utf8")) as Record<
   string,
   {
     readonly source?: string;
@@ -38,6 +37,8 @@ const INTENTS = {
   executionFee: 1n,
 } as const;
 const FILLER = 0x3333333333333333333333333333333333333333n;
+/** What `UPDATE_NATIVE_GOLDEN=1` re-records. */
+const recorded: Record<string, unknown> = {};
 
 describe("the corpus and the shapes compile to their recorded bytecode", () => {
   for (const [key, expected] of Object.entries(GOLDEN)) {
@@ -53,7 +54,17 @@ describe("the corpus and the shapes compile to their recorded bytecode", () => {
         expect(compile).toThrow();
         return;
       }
-      expect(createHash("sha256").update(compile()).digest("hex")).toBe(expected.sha256);
+      const sha256 = createHash("sha256").update(compile()).digest("hex");
+      if (process.env.UPDATE_NATIVE_GOLDEN === "1") {
+        recorded[key] = { ...expected, sha256 };
+        return;
+      }
+      expect(sha256).toBe(expected.sha256);
     });
   }
+  afterAll(() => {
+    if (process.env.UPDATE_NATIVE_GOLDEN === "1") {
+      writeFileSync(FIXTURE, `${JSON.stringify({ ...GOLDEN, ...recorded }, null, 2)}\n`);
+    }
+  });
 });

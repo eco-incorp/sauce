@@ -12,7 +12,6 @@
  */
 import { compileWithRs } from "../src/routes/rs-compile.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
-import { rewriteProtocolAccessors } from "../src/routes/protocol-rewrite.js";
 import { rewriteTokenFactory, rewriteTokenMembers } from "../src/routes/token-rewrite.js";
 import { requireChain } from "../src/chains/canonical.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
@@ -141,27 +140,5 @@ function main(to: Address): Uint256 {
     );
     expect(out.source).toContain("const t = token;");
     expect(out.source).toContain("__sauce_transfer(t, to, amount)");
-  });
-
-  it("the protocol-accessor pass", () => {
-    const out = rewriteProtocolAccessors(annotated, BASE);
-    expect(out.accessorSites).toBe(1);
-    expect(out.source).toContain("function main(to: Address): Uint256 {");
-  });
-
-  it("reads an annotated parameter as the binding it is", () => {
-    // `self` as an annotated parameter is a declaration, so the whole-program shadow rule leaves
-    // every `self` alone, exactly as it does for an unannotated one.
-    const out = rewriteProtocolAccessors(
-      "function f(self: Address): Address { return self; }\nfunction main(): Address { return f(self); }",
-      BASE,
-    );
-    expect(out.source).toBe(
-      "function f(self: Address): Address { return self; }\nfunction main(): Address { return f(self); }",
-    );
-  });
-
-  it("still reports a syntax error as one", () => {
-    expect(() => rewriteProtocolAccessors("function main( { }", BASE)).toThrow(SyntaxError);
   });
 });
