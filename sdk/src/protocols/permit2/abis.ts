@@ -24,6 +24,53 @@ export const Permit2ABI = [
     outputs: [],
   },
   {
+    // SignatureTransfer: moves `requestedAmount` of `permitted.token` from `owner` to `to` on a
+    // one-time EIP-712 signature by `owner`, which names the caller (`msg.sender`) as its spender.
+    name: "permitTransferFrom",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "permit",
+        type: "tuple",
+        components: [
+          {
+            name: "permitted",
+            type: "tuple",
+            components: [
+              { name: "token", type: "address" },
+              { name: "amount", type: "uint256" },
+            ],
+          },
+          { name: "nonce", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+        ],
+      },
+      {
+        name: "transferDetails",
+        type: "tuple",
+        components: [
+          { name: "to", type: "address" },
+          { name: "requestedAmount", type: "uint256" },
+        ],
+      },
+      { name: "owner", type: "address" },
+      { name: "signature", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    // The unordered nonces SignatureTransfer spends: bit `nonce & 255` of word `nonce >> 8`.
+    name: "nonceBitmap",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "wordPosition", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
     name: "lockdown",
     type: "function",
     stateMutability: "nonpayable",
