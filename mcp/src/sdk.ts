@@ -20,7 +20,13 @@ export {
   UsageError,
   type DefineValue,
 } from "../../sdk/dist/cli/args.js";
-export { connect, endpointFor, potState } from "../../sdk/dist/cli/chain.js";
+export {
+  connect,
+  endpointFor,
+  kitchenFee,
+  potState,
+  registeredBalances,
+} from "../../sdk/dist/cli/chain.js";
 export {
   compileCommand,
   compileProgram,
@@ -56,6 +62,7 @@ export {
   parsePubkey,
   svmPotCommand,
   svmPotExists,
+  svmPotTokenAccounts,
   svmSimulateCommand,
   svmTxCommand,
   svmVerifyCommand,

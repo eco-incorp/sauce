@@ -9,13 +9,14 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
-import { getAddress, numberToHex, type Address, type Hex } from "viem";
+import { formatUnits, getAddress, numberToHex, parseAbi, type Address, type Hex } from "viem";
 import * as z from "zod";
 
 import type { Endpoints } from "./config.js";
 import { callFiles, DEFAULT_FILE } from "./files.js";
 import type { RpcGuard } from "./guard.js";
 import { callReach, type Reach } from "./reach.js";
+import { toolTerms } from "./terms.js";
 import {
   actionSource,
   assumedBalances,
@@ -29,6 +30,7 @@ import {
   globalsCommand,
   inspectCommand,
   inspectFile,
+  kitchenFee,
   parseAccounts,
   parseAddress,
   parseChain,
@@ -47,9 +49,11 @@ import {
   priceGiven,
   programChain,
   publishCommand,
+  registeredBalances,
   simulateCommand,
   svmPotCommand,
   svmPotExists,
+  svmPotTokenAccounts,
   svmSimulateCommand,
   svmTxCommand,
   svmVerifyCommand,
@@ -125,7 +129,9 @@ const PROGRAM = {
     .optional()
     .describe(
       "Other files the program imports by relative path, as path → text, each path from the " +
-        "directory of `file` (lib/math.sauce.ts). The server reads nothing from its own disk.",
+        "directory of `file` (lib/math.sauce.ts). The server reads nothing from its own disk, " +
+        "but serves what the SDK ships without being passed: @sauce/token, @sauce/router, " +
+        "./artifacts/IERC20.json, ./artifacts/ISauceRouter.json and ./protocols/<slug>/<Export>.json.",
     ),
   chain: chainRef
     .optional()
@@ -178,7 +184,8 @@ const POT = {
     .optional()
     .describe(
       "The Pot's owner: a 0x address on an EVM chain, a base58 public key on Solana. With the " +
-        "salt it derives the Pot; only the owner may cook on it.",
+        "salt it derives the Pot; only the owner may cook on it. To rehearse (sauce_simulate) any " +
+        "address will do: nothing is signed, and a missing Pot or balance is supplied.",
     ),
   salt: z
     .string()
@@ -337,6 +344,13 @@ function evmCook(args: CookArgs, program: Program): CookInput {
     );
   }
 
+  if (args.owner === undefined && args.pot === undefined) {
+    throw new UsageError(
+      "give owner (the Pot's owner, whose Pot the cook runs on; to rehearse, any address will do) " +
+        "or pot (the Pot's address)",
+    );
+  }
+
   return {
     ...program.input,
     target: potTarget({ pot: args.pot, owner: args.owner, salt: args.salt, saltHex: args.saltHex }),
@@ -434,6 +448,58 @@ async function compiled(program: Program): Promise<ToolOutput> {
   };
 }
 
+const POOL = parseAbi([
+  "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)",
+  "function liquidity() view returns (uint128)",
+  "function fee() view returns (uint24)",
+  "function token0() view returns (address)",
+  "function token1() view returns (address)",
+]);
+
+/** A Uniswap V3-style pool's price, liquidity, fee and tokens, read now. */
+async function readPool(client: Awaited<ReturnType<typeof connect>>, pool: Address) {
+  const read = async <T>(what: string, call: () => Promise<T>): Promise<T> => {
+    try {
+      return await call();
+    } catch (error) {
+      const why = ((error as { shortMessage?: string }).shortMessage ?? String(error)).split(
+        "\n",
+      )[0];
+      throw new UsageError(
+        `reading the pool's ${what} failed (${why}): is ${pool} a V3-style pool on this chain?`,
+      );
+    }
+  };
+  const [slot0, liquidity, fee, token0, token1] = await Promise.all([
+    read("slot0()", () => client.readContract({ address: pool, abi: POOL, functionName: "slot0" })),
+    read("liquidity()", () =>
+      client.readContract({ address: pool, abi: POOL, functionName: "liquidity" }),
+    ),
+    read("fee()", () => client.readContract({ address: pool, abi: POOL, functionName: "fee" })),
+    read("token0()", () =>
+      client.readContract({ address: pool, abi: POOL, functionName: "token0" }),
+    ),
+    read("token1()", () =>
+      client.readContract({ address: pool, abi: POOL, functionName: "token1" }),
+    ),
+  ]);
+
+  return { sqrtPriceX96: slot0[0], tick: slot0[1], liquidity, fee, token0, token1 };
+}
+
+/** The decimal `price` times `numerator / denominator`, to 24 decimal places. */
+function scaled(price: string, numerator: bigint, denominator: bigint): string {
+  const [whole = "0", fraction = ""] = price.split(".");
+  const PLACES = 24;
+  const units = BigInt(`${whole}${fraction.padEnd(PLACES, "0").slice(0, PLACES)}`);
+  const result = (units * numerator) / denominator;
+  const text = result.toString().padStart(PLACES + 1, "0");
+  const integer = text.slice(0, -PLACES);
+  const decimals = text.slice(-PLACES).replace(/0+$/, "");
+
+  return decimals === "" ? integer : `${integer}.${decimals}`;
+}
+
 const HEX = /^0x(?:[0-9a-fA-F]{2})*$/;
 const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 
@@ -458,23 +524,23 @@ const fromCommand = (output: CommandOutput): ToolOutput => ({
   notes: output.notes,
 });
 
-/** `value` with every string passed through `scrub`. */
-function scrubbed(value: unknown, scrub: (text: string) => string): unknown {
-  if (typeof value === "string") return scrub(value);
+/** Fields that hold a program's or a file's own text, never reworded. */
+const VERBATIM = new Set(["source", "text"]);
+
+/** `value` with every string passed through `scrub`, and put in the tools' words (`terms.ts`)
+ *  unless it is a program's own text. */
+function scrubbed(value: unknown, scrub: (text: string) => string, verbatim = false): unknown {
+  if (typeof value === "string") return verbatim ? scrub(value) : toolTerms(scrub(value));
   if (typeof value === "bigint") return value.toString();
-  if (Array.isArray(value)) return value.map((each) => scrubbed(each, scrub));
+  if (Array.isArray(value)) return value.map((each) => scrubbed(each, scrub, verbatim));
   if (value !== null && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value).map(([k, v]) => [scrub(k), scrubbed(v, scrub)]),
+      Object.entries(value).map(([k, v]) => [scrub(k), scrubbed(v, scrub, VERBATIM.has(k))]),
     );
   }
 
   return value;
 }
-
-const FLAGS_NOTE =
-  "(This message names the sauce command's flags. Each is this tool's input of the same name in " +
-  "camelCase — --salt-hex is saltHex — and --args and --args-json are args.)";
 
 /** A failure as the one message the caller reads, scrubbed by `scrub` (the call's, by default
  *  the server's alone). */
@@ -485,10 +551,8 @@ export function errorText(
     undefined,
   ).scrub,
 ): string {
-  const message = scrub(error instanceof Error ? error.message : String(error));
-
-  // `--config` is the operator's flag, not an input: only the others are the tools' inputs.
-  return /(^|[\s(`'"])--(?!config\b)[a-z]/.test(message) ? `${message}\n${FLAGS_NOTE}` : message;
+  // The command's message, in the tools' words: an input where it names a flag.
+  return toolTerms(scrub(error instanceof Error ? error.message : String(error)));
 }
 
 const result = (output: ToolOutput, scrub: (text: string) => string): CallToolResult => {
@@ -652,29 +716,50 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       output: { chain: z.looseObject({ slug: z.string(), id: z.number() }) },
       annotations: PURE,
     },
-    (args) =>
-      fromCommand(
+    (args) => {
+      const output = fromCommand(
         globalsCommand({
           chain: parseChain(String(args.chain), "chain"),
           tokens: args.tokens === true,
           protocols: args.protocols === true,
           ...(args.protocol === undefined ? {} : { protocol: args.protocol }),
         }),
-      ),
+      );
+      const protocols = output.json.protocols as
+        Array<{ contracts?: Array<Record<string, unknown>> }> | undefined;
+      // Every namespace's methods are tens of kilobytes: they come with `protocol`, for one.
+      return protocols === undefined
+        ? output
+        : {
+            ...output,
+            json: {
+              ...output.json,
+              protocols: protocols.map((namespace) => ({
+                ...namespace,
+                contracts: (namespace.contracts ?? []).map(
+                  ({ methods: _methods, ...contract }) => contract,
+                ),
+              })),
+            },
+          };
+    },
   );
 
   tool(
     "sauce_price",
     {
-      title: "Turn a price into a swap's sqrtPriceX96 and floors",
+      title: "Turn a price into a swap's limits, or read a pool's price",
       description:
-        "Converts a human price for a pair into the numbers a swap program takes: the pool's " +
-        "sqrtPriceX96 for the pair's order on the chain (token0 is the lower address), which is " +
-        "also the swap's sqrtPriceLimitX96, and, for selling and for buying the base token, the " +
-        "minAvgPrice a program checks a fill against (out * 1e18 >= minAvgPrice * spent). Shared " +
-        "by Uniswap V3 and V4 and their forks; EVM chains only. Given sqrtPriceX96 instead, " +
-        "reads a pool's price back. Use it to set a swap's limits, then pass them as defines or " +
-        "arguments. Reads nothing.",
+        "The numbers a swap program takes, for a pair on an EVM chain: the pool's sqrtPriceX96 " +
+        "for the pair's order (token0 is the lower address) — which is also a swap's " +
+        "sqrtPriceLimitX96 — and, for selling and for buying the base token, the minAvgPrice a " +
+        "program checks a fill against (out * 1e18 >= minAvgPrice * spent). Give the price one " +
+        "of three ways: `price` (a decimal), `sqrtPriceX96` (to read it back), or `pool` with an " +
+        "endpoint, which reads a Uniswap V3-style pool's slot0, liquidity and fee now. With " +
+        "slippageBps, `limits` gives each direction's sqrtPriceLimitX96 that far from the price, " +
+        "and a minAvgPrice that also pays the pool's fee (feePpm, or the pool's own). Uniswap V3 " +
+        "and V4 and their forks share the arithmetic. Use it to set a swap's limits, then pass " +
+        "them as defines or arguments.",
       input: {
         chain: chainRef,
         base: z
@@ -694,15 +779,41 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           .string()
           .max(80)
           .optional()
-          .describe(
-            "How many whole quote tokens one whole base token is worth, as a decimal: 2700. " +
-              "Give this or sqrtPriceX96.",
-          ),
+          .describe("How many whole quote tokens one whole base token is worth, a decimal: 2700."),
         sqrtPriceX96: z
           .string()
           .max(80)
           .optional()
           .describe("A pool's sqrtPriceX96, a decimal integer, to read back as a price."),
+        pool: z
+          .string()
+          .max(64)
+          .optional()
+          .describe(
+            "A Uniswap V3-style pool of the pair (0x address), read now through an endpoint: its " +
+              "slot0 price, liquidity and fee. (A V4 pool has no address; read it with its " +
+              "StateView in sauce_simulate.)",
+          ),
+        slippageBps: z
+          .number()
+          .int()
+          .min(0)
+          .max(5000)
+          .optional()
+          .describe(
+            "How far from the price each direction's limit sits, in basis points: 50 = 0.5%.",
+          ),
+        feePpm: z
+          .number()
+          .int()
+          .min(0)
+          .max(999_999)
+          .optional()
+          .describe(
+            "The pool's fee in millionths (3000 = 0.3%), paid into each minAvgPrice. Default: the " +
+              "pool's own when `pool` is given, else none.",
+          ),
+        rpcUrl: RPC_URL,
       },
       output: {
         price: z.string(),
@@ -710,20 +821,79 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         token0: z.string(),
         token1: z.string(),
       },
-      annotations: PURE,
+      annotations: READS_CHAIN,
     },
-    (args) => {
+    async (args, reach) => {
       const chain = pricedChain(parseChain(String(args.chain), "chain"));
-      const given = priceGiven(args.price, args.sqrtPriceX96);
+      const base = parsePriceToken(args.base, chain);
+      const quote = parsePriceToken(args.quote, chain);
+      const given = [args.price, args.sqrtPriceX96, args.pool].filter((each) => each !== undefined);
+      if (given.length !== 1) {
+        throw new UsageError("give one of price, sqrtPriceX96, or pool (with an endpoint)");
+      }
+      let pool: Record<string, unknown> | undefined;
+      let sqrtPriceX96 = args.sqrtPriceX96;
+      let feePpm = args.feePpm;
+      if (args.pool !== undefined) {
+        const address = parseAddress("pool", args.pool);
+        const rpcUrl = await reach.require(chain, args.rpcUrl, "Reading a pool");
+        const read = await readPool(await connect(rpcUrl, chain), address);
+        const pair = [base.address, quote.address].map((token) => token.toLowerCase()).sort();
+        if (read.token0.toLowerCase() !== pair[0] || read.token1.toLowerCase() !== pair[1]) {
+          throw new UsageError(
+            `the pool trades ${read.token0} and ${read.token1}, not ${base.symbol} and ${quote.symbol}`,
+          );
+        }
+        sqrtPriceX96 = read.sqrtPriceX96.toString();
+        feePpm ??= read.fee;
+        pool = {
+          address,
+          sqrtPriceX96: read.sqrtPriceX96.toString(),
+          tick: read.tick,
+          liquidity: read.liquidity.toString(),
+          feePpm: read.fee,
+          readFrom: chain.slug,
+        };
+      }
+      const at = (price: { decimal: string } | { sqrtPriceX96: bigint }) =>
+        priceCommand({ chain, base, quote, price });
+      const now = at(priceGiven(args.price, sqrtPriceX96));
+      const json: Record<string, unknown> = {
+        ...now.json,
+        ...(pool === undefined ? {} : { pool }),
+      };
+      if (args.slippageBps !== undefined) {
+        const price = now.json.price as string;
+        const bps = BigInt(args.slippageBps);
+        const fee = BigInt(feePpm ?? 0);
+        const side = (output: CommandOutput, name: "sell" | "buy") =>
+          output.json[name] as Record<string, unknown>;
+        // The limit is the pool's price that far out; the floor also pays the pool's fee.
+        const sellLimit = at({ decimal: scaled(price, 10_000n - bps, 10_000n) });
+        const buyLimit = at({ decimal: scaled(price, 10_000n + bps, 10_000n) });
+        const sellFloor = at({
+          decimal: scaled(price, (10_000n - bps) * (1_000_000n - fee), 10_000n * 1_000_000n),
+        });
+        const buyFloor = at({
+          decimal: scaled(price, (10_000n + bps) * 1_000_000n, 10_000n * (1_000_000n - fee)),
+        });
+        json.limits = {
+          slippageBps: args.slippageBps,
+          feePpm: feePpm ?? 0,
+          sell: {
+            price: sellLimit.json.price,
+            sqrtPriceLimitX96: side(sellLimit, "sell").sqrtPriceLimitX96,
+            minAvgPrice: side(sellFloor, "sell").minAvgPrice,
+          },
+          buy: {
+            price: buyLimit.json.price,
+            sqrtPriceLimitX96: side(buyLimit, "buy").sqrtPriceLimitX96,
+            minAvgPrice: side(buyFloor, "buy").minAvgPrice,
+          },
+        };
+      }
 
-      return fromCommand(
-        priceCommand({
-          chain,
-          base: parsePriceToken(args.base, chain),
-          quote: parsePriceToken(args.quote, chain),
-          price: given,
-        }),
-      );
+      return { json, notes: now.notes };
     },
   );
 
@@ -740,7 +910,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "encoded (`entryEncoding`; with compactArgs, the compact-v1 `entrySchema`), the defines " +
         "it was given, the compiler and the released engine it pairs with, and on Solana the " +
         "account `manifest` (the accounts a cook attaches, in order). A program that does not " +
-        "compile is an error naming its line. Reads nothing.",
+        "compile is an error naming its line. For a program that opens intents, the result is " +
+        "the program the source chain runs; sauce_inspect with the source alone lists each " +
+        "intent's destination, route and reward. Reads nothing.",
       input: PROGRAM,
       output: {
         chain: z.string(),
@@ -871,22 +1043,68 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       },
       annotations: READS_CHAIN,
     },
-    async (args, reach) => fromCommand(await cookTransaction(args, programOf(args), reach)),
+    async (args, reach) => {
+      const program = programOf(args);
+      const output = await cookTransaction(args, program, reach);
+      if (program.input.chain.kind === "svm") return fromCommand(output);
+      const chain = program.input.chain;
+      const rpcUrl = await reach.endpoint(chain, args.rpcUrl);
+      const client = rpcUrl === undefined ? undefined : await connect(rpcUrl, chain);
+      const fee = client === undefined ? undefined : await kitchenFee(client, chain);
+      const owner =
+        args.owner !== undefined
+          ? parseAddress("owner", args.owner)
+          : client === undefined
+            ? undefined
+            : (await potState(client, output.json.to as Address)).owner;
+
+      return {
+        json: {
+          ...output.json,
+          from: owner ?? null,
+          kitchenFee:
+            fee === undefined
+              ? null
+              : { wei: fee.toString(), native: formatUnits(fee, 18), readFrom: chain.slug },
+        },
+        notes: [
+          ...(output.notes ?? []),
+          ...(fee === undefined
+            ? ["The Kitchen's fee was not read (no endpoint): value is as given."]
+            : []),
+          "sauce_tx does not rehearse the cook: run sauce_simulate to see whether it reverts now.",
+        ],
+      };
+    },
   );
 
   tool(
     "sauce_pot",
     {
-      title: "Predict a Pot, and build the transaction that deploys it",
+      title: "Predict a Pot, build its deployment, and read what it holds",
       description:
-        "A Pot is the owner's on-chain account that runs their programs. Its address is known " +
-        "before it exists: the released Kitchen derives it from (owner, salt). Returns `pot`, " +
-        "the unsigned deployment — on an EVM chain Kitchen.deployPot as { to, data, value }, " +
-        "which any account may send (the Pot is the owner's either way); on Solana the Kitchen's " +
-        "create_pot `instruction` (accounts and base58 data), which the owner signs — and " +
-        "`deployed`: whether it exists (null with no endpoint). Use it before the first cook. " +
+        "A Pot is the owner's on-chain account that runs their programs and holds their " +
+        "tokens. Its address is known before it exists: the released Kitchen derives it from " +
+        "(owner, salt). Returns `pot` and the unsigned deployment — on an EVM chain " +
+        "Kitchen.deployPot as { to, data, value }, which any account may send (the Pot is the " +
+        "owner's either way); on Solana the Kitchen's create_pot `instruction`, which the owner " +
+        "signs. With an endpoint it also says `deployed` (null without one) — when true, do not " +
+        "send the deployment — and reads what the cook will need: on an EVM chain the Kitchen's " +
+        "fee (the least a cook's value can be) and the Pot's balance of the native currency and " +
+        "of every token the chain registers; on Solana the Pot's associated token account for " +
+        "each registered mint, whether it exists, and its balance. " +
         UNSIGNED,
-      input: { chain: chainRef, ...POT, rpcUrl: RPC_URL },
+      input: {
+        chain: chainRef,
+        ...POT,
+        balances: z
+          .boolean()
+          .optional()
+          .describe(
+            "With an endpoint, read the Pot's balances (default true); false skips those reads.",
+          ),
+        rpcUrl: RPC_URL,
+      },
       output: {
         pot: z.string(),
         owner: z.string(),
@@ -900,26 +1118,63 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       if (args.owner === undefined) throw new UsageError("missing owner: whose Pot");
       const salt = parseSalt(args.salt, args.saltHex);
       const rpcUrl = await reach.endpoint(chain, args.rpcUrl);
+      const reading = rpcUrl !== undefined && args.balances !== false;
       const unchecked = `There is no endpoint for ${chain.slug}, so whether the Pot exists was not checked: pass rpcUrl to check.`;
+      const deployedNote = "The Pot is deployed already: do not send the deployment.";
       if (chain.kind === "svm") {
         const target = { owner: parsePubkey("owner", args.owner), ...salt };
         const output = await svmPotCommand(target);
         const deployed = rpcUrl === undefined ? null : await svmPotExists(target, rpcUrl);
+        const tokenAccounts = reading
+          ? await svmPotTokenAccounts(target, rpcUrl!, chain)
+          : undefined;
 
         return {
-          json: { ...output.json, deployed },
-          notes: [...(output.notes ?? []), ...(deployed === null ? [unchecked] : [])],
+          json: {
+            ...output.json,
+            deployed,
+            ...(tokenAccounts === undefined ? {} : { tokenAccounts }),
+          },
+          notes: [
+            ...(output.notes ?? []),
+            ...(deployed === null ? [unchecked] : deployed ? [deployedNote] : []),
+          ],
         };
       }
       const output = potCommand({ chain, owner: parseAddress("owner", args.owner), ...salt });
-      const deployed =
-        rpcUrl === undefined
-          ? null
-          : (await potState(await connect(rpcUrl, chain), output.json.pot as Address)).deployed;
+      const pot = output.json.pot as Address;
+      const client = rpcUrl === undefined ? undefined : await connect(rpcUrl, chain);
+      const deployed = client === undefined ? null : (await potState(client, pot)).deployed;
+      const fee = client === undefined ? undefined : await kitchenFee(client, chain);
+      const held =
+        reading && client !== undefined ? await registeredBalances(client, chain, pot) : undefined;
 
       return {
-        json: { ...output.json, deployed },
-        notes: [...(output.notes ?? []), ...(deployed === null ? [unchecked] : [])],
+        json: {
+          ...output.json,
+          deployed,
+          ...(fee === undefined
+            ? {}
+            : { kitchenFee: { wei: fee.toString(), native: formatUnits(fee, 18) } }),
+          ...(held === undefined
+            ? {}
+            : {
+                balances: {
+                  native: { wei: held.native.toString(), formatted: formatUnits(held.native, 18) },
+                  tokens: held.tokens.map((token) => ({
+                    symbol: token.symbol,
+                    address: token.address,
+                    balance: token.balance === null ? null : token.balance.toString(),
+                    formatted:
+                      token.balance === null ? null : formatUnits(token.balance, token.decimals),
+                  })),
+                },
+              }),
+        },
+        notes: [
+          ...(output.notes ?? []),
+          ...(deployed === null ? [unchecked] : deployed ? [deployedNote] : []),
+        ],
       };
     },
   );
