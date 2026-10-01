@@ -191,6 +191,7 @@ const SHAPES: readonly (readonly [string, string])[] = [
     "function main(a: Address): void { USDC.transferFrom(a, 0x1111111111111111111111111111111111111111, 5n); }",
   ],
   ["a token read", "function main(): Uint256 { return USDC.balanceOf(ctx.self()); }"],
+  ["a bare self", "function main(): Uint256 { return USDC.balanceOf(self); }"],
   ["a holder's balance", "function main(pool: Address): Uint256 { return pool.WETH; }"],
   [
     "Token(address)",
@@ -212,6 +213,10 @@ const SHAPES: readonly (readonly [string, string])[] = [
     "function main(v: Address, a: Address): Uint256 { return Erc4626.Vault.at(v).balanceOf(a); }",
   ],
   ["an underscore spelling", "function main(): Uint256 { return UniswapV3_Factory; }"],
+  [
+    "a default the chain overrides",
+    "const UniswapV3_Factory = 0n;\nfunction main(): Uint256 { return UniswapV3_Factory + chainId; }",
+  ],
   ["chainId", "function main(): Uint256 { return chainId + CHAIN_ID; }"],
   [
     "available, decided true",

@@ -41,7 +41,7 @@ const SPL_TOKEN_TYPE = "SplToken";
 type Entry =
   | { kind: "const"; value: string; type?: string }
   | { kind: "constructor"; type: string }
-  | { kind: "lazy"; fn: string; type?: string }
+  | { kind: "context"; read: "self" }
   | { kind: "namespace"; members: Record<string, Entry>; default?: string }
   | { kind: "contract"; address?: string; abi?: string; refuse?: string }
   | { kind: "intrinsic"; name: "available" }
@@ -55,6 +55,8 @@ type Method =
 
 interface Body {
   readonly globals: Record<string, Entry>;
+  /** Compile-time parameters a program on this chain compiles with; a caller's `defines` win. */
+  readonly defines?: Record<string, string>;
 }
 
 export interface ExtensionsOptions {
@@ -68,6 +70,14 @@ export interface ExtensionsOptions {
   readonly tokens?: Readonly<Record<string, AddressInput>>;
   /** Compile a `typeFidelity: "widened"` descriptor's calls anyway (`accessors.allowWidenedSelectors`). */
   readonly allowWidenedSelectors?: boolean;
+  /**
+   * Hand each chain's scalar spellings — `chainId`, `CHAIN_ID` and the `<Protocol>_<Contract>`
+   * addresses — to its programs as defines as well, so a program's own `const` of the name gives
+   * way to the chain's value, as it did to `openRoute`'s chain-scoped values
+   * (`ambient.ts#chainDefines`). A program literal compiles with its own chain's. Off, they are only
+   * names, which lose to any declaration. Default `false`.
+   */
+  readonly chainDefines?: boolean;
 }
 
 /** `"uniswap-v3"` -> `"UniswapV3"`: how a slug is spelled as a name — `builder.ts#pascalOfSlug`'s
@@ -216,10 +226,13 @@ function body(
   const globals: Record<string, Entry> = {};
   const evm = chain.kind === "evm";
 
-  globals.chainId = { kind: "const", value: word(BigInt(chain.id)) };
-  globals.CHAIN_ID = { kind: "const", value: word(BigInt(chain.id)) };
+  // The scalar spellings `ambient.ts#chainDefines` gives a chain beside its token symbols.
+  const scalars: Record<string, string> = {
+    chainId: word(BigInt(chain.id)),
+    CHAIN_ID: word(BigInt(chain.id)),
+  };
   globals.available = { kind: "intrinsic", name: "available" };
-  if (options.self !== false) globals.self = { kind: "lazy", fn: "@sauce/context#self" };
+  if (options.self !== false) globals.self = { kind: "context", read: "self" };
   // On an SVM chain `Token(x)` still constructs — a token whose every method is refused by name.
   globals.Token = { kind: "constructor", type: evm ? TOKEN_TYPE : SPL_TOKEN_TYPE };
 
@@ -257,10 +270,7 @@ function body(
       members[descriptor.contract] = contractEntry(descriptor, chain, options);
       const address = descriptor.perChainAddress[chain.id];
       if (evm && address !== undefined) {
-        globals[`${pascalOfSlug(slug)}_${descriptor.contract}`] = {
-          kind: "const",
-          value: word(address),
-        };
+        scalars[`${pascalOfSlug(slug)}_${descriptor.contract}`] = word(address);
       }
     }
     if (options.protocols === false) continue;
@@ -304,8 +314,9 @@ function body(
     }
     globals[key] = { kind: "namespace", members };
   }
+  for (const [name, value] of Object.entries(scalars)) globals[name] = { kind: "const", value };
 
-  return { globals };
+  return options.chainDefines ? { globals, defines: scalars } : { globals };
 }
 
 /** The serialized body of every chain, by chain id, for one set of caller token overrides. */
@@ -319,6 +330,7 @@ function bodyText(chain: CanonicalChain, options: ExtensionsOptions, current: bo
     options.allowWidenedSelectors ?? false,
     options.protocols ?? true,
     options.self ?? true,
+    options.chainDefines ?? false,
   ]);
   let text = bodies.get(key);
   if (text === undefined) {
@@ -335,6 +347,7 @@ const bodyPath = (chain: CanonicalChain, current: boolean, options: ExtensionsOp
     options.allowWidenedSelectors ? "widened" : "",
     options.protocols === false ? "noprotocols" : "",
     options.self === false ? "noself" : "",
+    options.chainDefines ? "defines" : "",
   ]
     .filter((part) => part !== "")
     .join(".");
