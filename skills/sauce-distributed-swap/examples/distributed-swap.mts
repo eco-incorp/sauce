@@ -1,5 +1,5 @@
 // Compiles distributed-swap.sauce.ts for Base the way `sauce compile` does, and builds the cooks
-// `sauce tx` would print for buying WETH with 3,000 USDC at most 2,713.5 each and selling WETH for
+// `sauce tx` would print for buying SPCXc with 1,000 USDC at most 150 each and selling WETH for
 // USDC at least 2,686.5 each. Checks that the SKILL.md shows the program's own code, and that its
 // venues, `maxPrice` values, the limits the program derives from them, each pool's own limit,
 // `minTokens`, the compile error on a chain without a venue, and the arguments of its commands (and
@@ -64,24 +64,26 @@ check(
   "the Router implements uniswapV3SwapCallback",
 );
 
-// Every pool read is a typed binding, never a selector: Uniswap V3's, and Slipstream's own, whose
-// fee is read from the pool.
+// Every pool read is a typed binding, never a selector: Uniswap V3's, and Slipstream's own, with
+// the fee read from the pool. One helper, `trade`, serves every pool; the loops only find pools.
 check(!/evm\.static|hex`/.test(code), "the program reads no pool by selector");
-for (const read of [
-  "UniswapV3.Pool.at(pool).liquidity()",
-  "UniswapV3.Pool.at(pool).slot0().sqrtPriceX96",
-  "AerodromeSlipstream.Pool.at(pool).liquidity()",
-  "AerodromeSlipstream.Pool.at(pool).slot0().sqrtPriceX96",
-  "AerodromeSlipstream.Pool.at(pool).fee()",
-])
-  check(code.includes(read), `the program reads ${read}`);
+for (const venue of ["UniswapV3", "AerodromeSlipstream"])
+  for (const read of ["liquidity()", "slot0().sqrtPriceX96", "fee()"])
+    check(code.includes(`${venue}.Pool.at(pool).${read}`), `the program reads ${venue} ${read}`);
+check(code.match(/^function /gm)?.length === 2, "the program has trade and main, nothing else");
+check(code.match(/trade\(pool, (true|false), /g)?.length === 2, "each venue's loop calls trade");
 
-// The venues it walks: Uniswap V3's four tiers and Slipstream's nine spacings, 13 lookups.
-const TIERS = [100n, 500n, 3000n, 10000n];
+// The venues it walks: Slipstream's nine spacings, then the seven tiers Base's Uniswap V3 factory
+// enables, 16 lookups.
+const TIERS = [100n, 200n, 300n, 400n, 500n, 3000n, 10000n];
 const SPACINGS = [1n, 10n, 50n, 80n, 100n, 150n, 200n, 500n, 2000n];
 const list = (xs: bigint[]) => `[${xs.map((x) => `${x}n`).join(", ")}]`;
-check(code.includes(`for (const fee of ${list(TIERS)})`), "the program walks the four tiers");
-check(code.includes(`for (const spacing of ${list(SPACINGS)})`), "and the nine tick spacings");
+check(code.includes(`for (const spacing of ${list(SPACINGS)})`), "the program walks nine spacings");
+check(code.includes(`for (const fee of ${list(TIERS)})`), "and Base's seven tiers");
+check(
+  code.indexOf("CLFactoryGaugesV3.getPool") < code.indexOf("UniswapV3.Factory.getPool"),
+  "Slipstream, the pair's deep venue, comes first",
+);
 check(
   skill.includes(`Discovery is ${TIERS.length + SPACINGS.length} lookups`),
   "the skill counts the lookups",
@@ -146,16 +148,23 @@ const usdc = registered("USDC");
 check(BigInt(weth.address) < BigInt(usdc.address), "on Base, WETH is token0");
 const tokens = { baseDecimals: weth.decimals, quoteDecimals: usdc.decimals, baseIsToken0: true };
 
+// SPCXc, Coinbase's tokenized SpaceX on Base: a token global, with 8 decimals.
+const spcxc = registered("SPCXc");
+check(spcxc.decimals === 8, "SPCXc has 8 decimals");
+check(skill.includes(spcxc.address) && source.includes(spcxc.address), "both name SPCXc's address");
+
 // maxPrice: the price in whole tokens times 10^(18 + payDecimals - buyDecimals).
 const buyWeth = (27135n * 10n ** BigInt(18 + usdc.decimals - weth.decimals)) / 10n; // 2,713.5
-const eightDecimals = 150n * 10n ** BigInt(18 + usdc.decimals - 8); // 150 USDC
+const buySpcxc = 150n * 10n ** BigInt(18 + usdc.decimals - spcxc.decimals); // 150 USDC
+const avgSpcxc = (1495n * 10n ** BigInt(18 + usdc.decimals - spcxc.decimals)) / 10n; // 149.5
+const capSpcxc = 140n * 10n ** BigInt(18 + usdc.decimals - spcxc.decimals); // 140, below the market
 const sellWeth = (E18 * E18 * 10n) / (26865n * 10n ** BigInt(usdc.decimals)); // 1 ÷ 2,686.5
+check(10n ** BigInt(18 + usdc.decimals - spcxc.decimals) === 10n ** 16n, "SPCXc's scale is 1e16");
 check(buyWeth === 2_713_500_000n, "maxPrice buying WETH at most 2,713.5 USDC");
-check(eightDecimals === 1_500_000_000_000_000_000n, "maxPrice for an 8-decimal token at 150 USDC");
+check(buySpcxc === 1_500_000_000_000_000_000n, "maxPrice buying SPCXc at most 150 USDC");
 check(sellWeth === 372231528010422482784291829n, "maxPrice selling WETH at least 2,686.5 USDC");
-for (const value of [buyWeth, eightDecimals, sellWeth])
+for (const value of [buyWeth, buySpcxc, sellWeth])
   check(skill.includes(String(value)), `the skill quotes ${value}`);
-check(source.includes(String(eightDecimals)), "the program header's example passes it");
 
 // The limits the program derives from those are the pool prices at 2,713.5 and 2,686.5.
 const ceiling = limitOf(buyWeth, false); // paying USDC, token1
@@ -166,9 +175,9 @@ check(floor - exactFloor <= 1n, "2,686.5 as the program's limit, maxPrice rounde
 for (const value of [ceiling, exactFloor])
   check(skill.includes(String(value)), `the skill quotes ${value}`);
 
-// Each pool's own limit, back as a price, is the skill's table; the pool's last unit there, after
-// its fee, costs maxPrice: at it or inside it, to 0.001%.
-for (const fee of TIERS) {
+// Each pool's own limit, back as a price, is the skill's table, the four standard tiers; the pool's
+// last unit there, after its fee, costs maxPrice: at it or inside it, to 0.001%.
+for (const fee of [100n, 500n, 3000n, 10000n]) {
   const buying = poolLimit(ceiling, fee, false);
   const selling = poolLimit(floor, fee, true);
   const cells = [
@@ -192,16 +201,30 @@ const budget = 3000n * 10n ** BigInt(usdc.decimals);
 const allOrNothing = (budget * E18 + buyWeth - 1n) / buyWeth;
 check(allOrNothing === 1105583195135433942n, "minTokens for all of 3,000 USDC at 2,713.5");
 check(skill.includes(String(allOrNothing)), "the skill quotes it");
-// The commands pass these values, in main's order: the skill's and the program header's.
-const commands = `--args ${usdc.address} ${weth.address} \\\n  ${budget} ${buyWeth} 0 0 <recipient> <refundTo>`;
-check(skill.includes(commands), "the skill's commands pass the budget, maxPrice and the checks");
-const header = `--args ${usdc.address} <buyToken> 1000000000 \\\n//     ${eightDecimals} 0 0 <recipient> <refundTo>`;
-check(source.includes(header), "the program header's Base command passes the same shape");
+// The commands pass these values, in main's order: 1,000 USDC of SPCXc at most 150, at least 6.6
+// SPCXc and an average of at most 149.5; then 10 SPCXc, more than the budget buys at 150 (the
+// minTokens revert), and an average capped at 140 (the maxAvgPrice revert).
+const spend = 1000n * 10n ** BigInt(usdc.decimals);
+const atLeast = (66n * 10n ** BigInt(spcxc.decimals)) / 10n; // 6.6 SPCXc
+const tooMany = 10n * 10n ** BigInt(spcxc.decimals); // 10 SPCXc
+check(atLeast <= (spend * E18) / buySpcxc && tooMany > (spend * E18) / buySpcxc, "the minTokens");
+const args = (minTokens: bigint, maxAvgPrice: bigint) =>
+  `--args ${usdc.address} ${spcxc.address} \\\n  ${spend} ${buySpcxc} ${minTokens} ${maxAvgPrice} <recipient> <refundTo>`;
+for (const [minTokens, maxAvgPrice, what] of [
+  [atLeast, avgSpcxc, "the trade"],
+  [tooMany, avgSpcxc, "the minTokens revert"],
+  [atLeast, capSpcxc, "the maxAvgPrice revert"],
+] as const)
+  check(skill.includes(args(minTokens, maxAvgPrice)), `the skill rehearses ${what}`);
+check(
+  source.includes(args(atLeast, avgSpcxc).replace("\n  ", "\n//     ")),
+  "the program header's Base command passes the same",
+);
 
 // main's arguments, encoded as `--args` encodes them, appended to the program; then the cook the
 // owner sends, with the Kitchen's fee as its value.
 for (const [payToken, buyToken, amount, maxPrice] of [
-  [usdc.address, weth.address, budget, buyWeth],
+  [usdc.address, spcxc.address, spend, buySpcxc],
   [weth.address, usdc.address, E18, sellWeth],
 ] as const) {
   const args = routes.encodeEntryArguments(program, [

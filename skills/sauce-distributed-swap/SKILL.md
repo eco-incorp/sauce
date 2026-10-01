@@ -1,6 +1,6 @@
 ---
 name: sauce-distributed-swap
-description: Writing a Sauce program that spreads one exact-input swap over several price-limited pools as a limit order — a limit buy that never pays more than a maximum price for any unit, fees included, and never strands input. Covers the rules a correct one follows (discover the pools, skip missing or empty ones and ones already past their limit, a fee-adjusted limit per pool, the price limit stopping each pool, a minimum and an average-price check on the total, refunding only the unspent budget), why no sorting is needed, one complete program over Uniswap V3 and Aerodrome Slipstream explained step by step, its inputs and their units, maxPrice from a human price, running it, reading a rehearsal, gas, and more venues. Use when asked for a distributed, split, multi-venue or aggregated swap, "swap across all pools", "buy up to a price", "fill up to a price limit", a limit order, or one trade routed through several pools.
+description: Writing a Sauce program that spreads one exact-input swap over several price-limited pools as a limit order, a limit buy that never pays more than a maximum price for any unit, fees included, and never strands input. Covers the rules (cover the venues that hold the pair, skip missing, empty and past-limit pools, a fee-adjusted limit per pool, minimum and average-price checks, refund only the unspent budget), one helper per pool with loops that only find pools, why no sorting is needed, a complete program over Aerodrome Slipstream and Uniswap V3 on Base, maxPrice for tokens of any decimals (an 8-decimal tokenized stock such as SPCXc), finding a token and its pools, the three rehearsals before sending, and more venues. Use when asked for a distributed, split or multi-venue swap, "swap across protocols", "buy up to a price", a limit order, a minimum-amount-out or max-average-price check, or one trade routed through several pools.
 ---
 
 # A distributed swap: one limit order over several pools
@@ -14,67 +14,97 @@ sorts.
 
 A correct distributed swap, whatever its tokens, chain or venues:
 
-1. **Discovers the pools** of the pair through each venue's factory, by its namespace:
-   `UniswapV3.Factory.getPool(payToken, buyToken, fee)` for each fee tier,
-   `AerodromeSlipstream.CLFactoryGaugesV3.getPool(payToken, buyToken, tickSpacing)` for each tick
-   spacing. `0` means no pool.
-2. **Skips, in the same loop, a missing pool, an empty one and one already past its limit.** A
-   pool with no liquidity at its current price has nothing to sell there: its price is wherever its
-   last trade left it, and a swap would spend a call to move it. A pool whose price is already at
-   or past its own limit has nothing to sell within it, and handed such a limit it reverts `SPL`,
+1. **Covers the venues that hold the pair on the chain**, not every venue that exists. A venue's
+   pools are found through its factory, by namespace: `UniswapV3.Factory.getPool(a, b, fee)` per
+   fee tier, `AerodromeSlipstream.CLFactoryGaugesV3.getPool(a, b, tickSpacing)` per tick spacing.
+   `0` means no pool.
+2. **Skips a missing pool, an empty one and one already past its own limit.** A pool with no
+   liquidity at its current price has nothing to sell there. A pool whose price is already at or
+   past its own limit has nothing to sell within it, and handed such a limit it reverts `SPL`,
    which would revert the whole program.
 3. **Gives each pool its own limit, adjusted for its fee.** A pool's price limit bounds its price,
    and its fee comes on top: under the caller's price as it is, a 0.3% pool's last unit would cost
    0.3% more. So each pool's limit is the caller's sqrt price moved toward the trade by
    `√(1 − fee)`: **`limit ÷ √(1 − fee)` paying token0, `limit × √(1 − fee)` paying token1**. The
-   pool's last unit, fee paid, then costs exactly `maxPrice`, and every earlier unit less. A Uniswap
-   V3 pool's fee is its tier; a Slipstream pool's is set per pool and changes, so it is read from
-   the pool.
+   pool's last unit, fee paid, then costs exactly `maxPrice`, and every earlier unit less. The fee
+   is read from the pool: a Slipstream pool's is set per pool and changes over time.
 4. **Offers each pool everything still unspent** and lets the limit stop it. These pools are paid
    in their swap callback, and the Router pays exactly what the pool asks for: a pool that stops at
    its limit takes less, and the rest is still in the Pot.
 5. **Checks the total**: at least `minTokens` bought, and an average no dearer than `maxAvgPrice`.
 6. **Refunds only what is left of the budget**, to `refundTo`: never the Pot's whole balance of
    the token, which on an owner's Pot may hold more of it for other uses.
-7. **Reads and calls through bindings and library functions, directly.** A pool's reads are its
-   typed binding, `UniswapV3.Pool.at(pool).liquidity()` and `.slot0().sqrtPriceX96`
-   (`AerodromeSlipstream.Pool.at(pool)` for a Slipstream pool, whose `slot0` differs); the swap is
-   `uniswapV3` from `@sauce/router`; token reads and writes are the token's own. Each is written
-   where it is used. A function earns its place only with logic of its own used per pool, as
-   `poolLimit` and `canTrade` here; one that only wraps a call costs a call frame of gas and adds
-   nothing to read.
+
+**One helper per pool; the loops only find pools.** Everything a pool needs, whatever its venue,
+is the same: read it, skip it or work out its limit, swap. Write that once, as one function that
+takes the pool, and let each venue's loop do nothing but look pools up and hand them over. A
+function earns its place only with logic of its own used more than once; one that only wraps a
+call adds nothing to read and costs a call frame of gas. Call bindings and library functions
+directly where they are used.
+
+- **Read a pool through its typed binding**: `UniswapV3.Pool.at(pool).liquidity()`, or
+  `AerodromeSlipstream.Pool.at(pool)` for a Slipstream pool, whose `slot0` has no `feeProtocol`.
+  `.at(...)` and the call are one expression; a binding is not a value to keep in a variable.
+  Take only the output you need, by name, `.slot0().sqrtPriceX96`, or by position,
+  `const [sqrtPriceX96] = UniswapV3.Pool.at(pool).slot0();`, never all of them.
+- **A function that returns a value returns it on every path**, or the program does not compile:
+  `` `trade` does not return on every path ``. End every early exit with `return 0n;`.
 
 **Why no sorting.** A pool trades only while its price, after its fee, beats `maxPrice`, so every
 unit any pool sells is within it, in any order. The order decides only which pool gets the budget
-when it runs out before every pool reaches its limit. With enough budget for every pool to reach
-its limit, every pool's last unit costs the same, exactly `maxPrice`: the best split there is,
-whatever the order.
+when it runs out before every pool reaches its limit: put the venue with the deepest, cheapest
+pools first. With enough budget for every pool to reach its limit, every pool's last unit costs
+the same, exactly `maxPrice`: the best split there is, whatever the order.
 
 ## The program
 
 [examples/distributed-swap.sauce.ts](examples/distributed-swap.sauce.ts) is one complete
-implementation of those rules, over Base's Uniswap V3 and Aerodrome Slipstream pools; its header
-gives every input with its units and a command for Base. Its code:
+implementation of those rules, over Base's Aerodrome Slipstream and Uniswap V3 pools; its header
+gives every input with its units and a command that buys SPCXc with USDC. Its code:
 
 ```sauce chain=base
 import { uniswapV3 } from "@sauce/router";
 
-// A pool's own limit: the caller's sqrt price moved by √(1 − fee), so that the pool's last unit,
-// fee paid, costs exactly maxPrice. Paying token0 pushes the price down, token1 pushes it up.
-function poolLimit(limit: Uint256, fee: Uint256, paysToken0: bool): Uint256 {
+// One pool, from either venue: skipped when missing, empty or already past its own limit, else
+// offered all of the budget still unspent, up to its own limit. Returns what it bought.
+// `slipstream` picks the pool's ABI: a Slipstream pool's slot0 has no feeProtocol.
+function trade(
+  pool: Address,
+  slipstream: bool,
+  payToken: Address,
+  buyToken: Address,
+  kept: Uint256,
+  limit: Uint256,
+  recipient: Address,
+): Uint256 {
+  const unspent = Token(payToken).balanceOf(ctx.self()) - kept;
+  if (pool == 0n || unspent == 0n) {
+    return 0n;
+  }
+  let liquidity = 0n;
+  let price = 0n;
+  let fee = 0n;
+  if (slipstream) {
+    liquidity = AerodromeSlipstream.Pool.at(pool).liquidity();
+    price = AerodromeSlipstream.Pool.at(pool).slot0().sqrtPriceX96;
+    fee = AerodromeSlipstream.Pool.at(pool).fee();
+  } else {
+    liquidity = UniswapV3.Pool.at(pool).liquidity();
+    price = UniswapV3.Pool.at(pool).slot0().sqrtPriceX96;
+    fee = UniswapV3.Pool.at(pool).fee();
+  }
+  // The pool's own limit: the caller's moved by √(1 − fee), so that its last unit, fee paid,
+  // costs exactly maxPrice. Paying token0 pushes the price down, token1 pushes it up.
+  const paysToken0 = payToken < buyToken;
   const root = Math.sqrt((1000000n - fee) * 10n ** 30n); // √(1 − fee), times 1e18
-  if (paysToken0) {
-    return Math.mulDiv(limit, 10n ** 18n, root);
+  const own = paysToken0
+    ? Math.mulDiv(limit, 10n ** 18n, root)
+    : Math.mulDiv(limit, root, 10n ** 18n);
+  const better = paysToken0 ? price > own : price < own;
+  if (liquidity == 0n || !better) {
+    return 0n;
   }
-  return Math.mulDiv(limit, root, 10n ** 18n);
-}
-
-// Whether a pool's price is still better than its own limit.
-function canTrade(price: Uint256, own: Uint256, paysToken0: bool): bool {
-  if (paysToken0) {
-    return price > own;
-  }
-  return price < own;
+  return uniswapV3(pool, payToken, buyToken, unspent, own, 0n, recipient);
 }
 
 function main(
@@ -92,38 +122,23 @@ function main(
   require(maxPrice > 0n, "maxPrice is 0");
   require(pay.balanceOf(self) >= budget, "budget is not in the Pot");
   const kept = pay.balanceOf(self) - budget; // the Pot's other payToken, never spent
-  const paysToken0 = payToken < buyToken;
   let bought = 0n;
 
   // maxPrice as a pool's sqrt price (token1 per token0, times 2^96): where a unit costs maxPrice.
   let limit = Math.sqrt(Math.mulDiv(maxPrice, 1n << 192n, 10n ** 18n));
-  if (paysToken0) {
+  if (payToken < buyToken) {
     limit = Math.sqrt(Math.mulDiv(1n << 192n, 10n ** 18n, maxPrice));
   }
 
-  // Uniswap V3: one pool per fee tier. Skip it if missing, empty or already past its own limit;
-  // otherwise offer it everything unspent, and its limit stops it.
-  for (const fee of [100n, 500n, 3000n, 10000n]) {
-    const pool = UniswapV3.Factory.getPool(payToken, buyToken, fee);
-    const unspent = pay.balanceOf(self) - kept;
-    if (pool != 0n && unspent > 0n && UniswapV3.Pool.at(pool).liquidity() > 0n) {
-      const own = poolLimit(limit, fee, paysToken0);
-      if (canTrade(UniswapV3.Pool.at(pool).slot0().sqrtPriceX96, own, paysToken0)) {
-        bought += uniswapV3(pool, payToken, buyToken, unspent, own, 0n, recipient);
-      }
-    }
-  }
-
-  // Aerodrome Slipstream: one pool per tick spacing, the same way. A pool's fee is its own.
+  // The loops only find pools; trade() decides and swaps. Slipstream, keyed by tick spacing.
   for (const spacing of [1n, 10n, 50n, 80n, 100n, 150n, 200n, 500n, 2000n]) {
     const pool = AerodromeSlipstream.CLFactoryGaugesV3.getPool(payToken, buyToken, spacing);
-    const unspent = pay.balanceOf(self) - kept;
-    if (pool != 0n && unspent > 0n && AerodromeSlipstream.Pool.at(pool).liquidity() > 0n) {
-      const own = poolLimit(limit, AerodromeSlipstream.Pool.at(pool).fee(), paysToken0);
-      if (canTrade(AerodromeSlipstream.Pool.at(pool).slot0().sqrtPriceX96, own, paysToken0)) {
-        bought += uniswapV3(pool, payToken, buyToken, unspent, own, 0n, recipient);
-      }
-    }
+    bought += trade(pool, true, payToken, buyToken, kept, limit, recipient);
+  }
+  // Uniswap V3, keyed by fee tier: the seven Base's factory enables.
+  for (const fee of [100n, 200n, 300n, 400n, 500n, 3000n, 10000n]) {
+    const pool = UniswapV3.Factory.getPool(payToken, buyToken, fee);
+    bought += trade(pool, false, payToken, buyToken, kept, limit, recipient);
   }
 
   // Settle: what was bought is already with the recipient; what is left of the budget goes back.
@@ -144,21 +159,21 @@ Step by step:
   two tokens, the budget, `maxPrice`, the two checks and the two addresses. The program names no
   token, so one file buys any token with any other.
 - **The budget.** It must already be in the Pot (`sauce run --fund` pulls it in with the cook).
-  `kept` is whatever else of `payToken` the Pot holds, and `unspent` is the Pot's balance less
-  `kept`, so only the budget is ever offered or refunded.
-- **Direction.** Token0 is the lower address of the pair, and a pool's price is token1 per token0.
-  Paying token0 pushes the price down; paying token1 pushes it up. `paysToken0` picks the side at
-  run time: the same program buys either way.
+  `kept` is whatever else of `payToken` the Pot holds, so only the budget is ever offered or
+  refunded.
 - **`maxPrice` as a sqrt price.** `maxPrice` is payToken per buyToken; a pool's `sqrtPriceX96` is
-  the square root of token1 per token0, times 2^96. Paying token1, `limit` is
-  `√(maxPrice × 2^192 ÷ 1e18)`; paying token0, the price is upside down,
+  the square root of token1 per token0 (token0 is the lower address), times 2^96. Paying token1,
+  `limit` is `√(maxPrice × 2^192 ÷ 1e18)`; paying token0, the price is upside down,
   `√(2^192 × 1e18 ÷ maxPrice)`. `Math.mulDiv` keeps the full product before dividing.
-- **Discover and skip.** One lookup per fee tier and per tick spacing. `pool != 0n` comes first,
-  so a missing pool is never read; `unspent > 0n` stops reading once the budget is gone; a pool
-  with no liquidity at its price is skipped; `canTrade` skips a pool whose price is not better than
-  its own limit.
-- **Each pool's limit.** `poolLimit` moves `limit` by `√(1 − fee)`, the root rounded down, so each
-  limit sits a hair inside the exact one: the pool stops a little sooner, never later.
+- **The loops** look the pair up on Slipstream's `CLFactoryGaugesV3`, one pool per tick spacing,
+  then on Uniswap V3's factory, one per fee tier, and hand each pool to `trade`. Slipstream comes
+  first: for the pair this program is written for, its pool is the deep one.
+- **`trade`** reads what is left of the budget and returns `0n` for a missing pool or an empty
+  budget, so a missing pool is never read. It reads the pool's liquidity, price and fee through the
+  venue's binding (`slipstream` says which), works out the pool's own limit, returns `0n` for an
+  empty pool or one whose price is not better than that limit, and otherwise swaps. Paying token0
+  pushes the price down; paying token1 pushes it up. The root is rounded down, so each limit sits a
+  hair inside the exact one: the pool stops a little sooner, never later.
 - **Swap.** `uniswapV3` swaps through the Pot's Router, exact input, with the pool's own limit and
   no floor of its own (`0n`): the totals are checked once, after both loops. A Slipstream pool
   speaks Uniswap V3's swap and callback, so the same function drives it. The output goes straight
@@ -170,30 +185,57 @@ Step by step:
 **The chains it compiles on.** Each venue is a namespace contract, and naming one a chain lacks is a
 compile error (`Contract 'CLFactoryGaugesV3' (aerodrome-slipstream) is not deployed on
 'ethereum'`). `AerodromeSlipstream.CLFactoryGaugesV3` is on Base alone, so this program compiles for
-Base. For a chain without it, write the program with the venues that chain has: Ethereum has
+Base. For another chain, write the loops for the venues that chain has: Ethereum has
 `UniswapV3.Factory` and no Slipstream, so the Uniswap V3 loop alone.
+
+## The token and its pools
+
+**The token by its name.** `npx sauce globals --chain base` lists every token a program on Base can
+name, tokenized stocks included, each with its address and decimals: SPCXc is Coinbase's
+tokenized SpaceX, `0xb2000000000000000000007b9fcbd005511aCBd5`, 8 decimals. The same lists are in
+[../sauce-globals/references/tokens.md](../sauce-globals/references/tokens.md) and
+[../sauce-globals/references/stocks.md](../sauce-globals/references/stocks.md). A token the
+registry does not name comes from the user or its issuer, never from a search summary, and is
+checked on chain before use: its `name()`, `symbol()` and `decimals()`. Decimals decide
+`maxPrice`.
+
+**The venues that hold the pair.** On Base, the price-limited venues are Aerodrome Slipstream's
+three CL factories (`AerodromeSlipstream.CLFactory`, `.CLFactoryGaugeCaps`, `.CLFactoryGaugesV3`),
+Uniswap V3, PancakeSwap V3 and Uniswap V4. Look the pair up before writing the loops: a one-line
+program rehearsed with `sauce simulate` prints what `main` returns, a pool's address (`0` for none)
+or its liquidity.
+
+```sauce chain=base
+// The pair's Slipstream pool at one tick spacing on one factory; 0 when there is none.
+function main(a: Address, b: Address, spacing: Uint256): Address {
+  return AerodromeSlipstream.CLFactoryGaugesV3.getPool(a, b, spacing);
+}
+```
+
+Read on chain on 2026-10-01: SPCXc against USDC had its deep pool on `CLFactoryGaugesV3` at tick
+spacing 10 (fee 0.05%) and a Uniswap V3 pool at 1%, which is why the program covers those two
+venues.
 
 ## Inputs and units
 
 `main(payToken, buyToken, budget, maxPrice, minTokens, maxAvgPrice, recipient, refundTo)`, every
-amount in a token's base units (its decimals are in
-[../sauce-globals/references/tokens.md](../sauce-globals/references/tokens.md)): on Base, USDC has
-6 decimals and WETH 18, so `1000000000` is 1,000 USDC and `1000000000000000000` is 1 WETH.
+amount in a token's base units: on Base USDC has 6 decimals, WETH 18 and SPCXc 8, so `1000000000` is
+1,000 USDC and `660000000` is 6.6 SPCXc.
 
 **`maxPrice`** is payToken base units per buyToken base unit, times 1e18:
 
 `maxPrice = price × 10^(18 + payDecimals − buyDecimals)`, with `price` in whole payToken per whole
-buyToken.
+buyToken. Paying USDC (6), that is the price × 10^16 for SPCXc (8) and × 10^6 for WETH (18).
 
 | Trade                                     | Price                 | `maxPrice`                      |
 | ----------------------------------------- | --------------------- | ------------------------------- |
+| Buy SPCXc with USDC                       | at most 150 USDC      | **1500000000000000000**         |
 | Buy WETH with USDC                        | at most 2,713.5 USDC  | **2713500000**                  |
-| Buy an 8-decimal token with USDC          | at most 150 USDC      | **1500000000000000000**         |
 | Buy USDC with WETH (sell WETH at a floor) | at least 2,686.5 USDC | **372231528010422482784291829** |
 
 The last is the same order seen from the other side: 1 WETH for at least 2,686.5 USDC is at most
-`1 ÷ 2,686.5` WETH per USDC, so `10^18 × 1e18 ÷ (2,686.5 × 10^6)`, rounded down.
-`maxAvgPrice` is in the same units; `0` turns it off.
+`1 ÷ 2,686.5` WETH per USDC, so `10^18 × 1e18 ÷ (2,686.5 × 10^6)`, rounded down. `maxAvgPrice` is
+in the same units; `0` turns it off.
 
 **Each pool's own limit.** On Base WETH is token0 (the lower address) and USDC token1. The
 program's arithmetic, back in USDC per WETH: the price at which that pool's last unit, after its
@@ -222,9 +264,9 @@ price's `sqrtPriceX96`, and `--sqrt-price-x96 <value>` reads a pool's back as a 
   deepest pool's mid price: a pool's mid sits up to its fee away from the cheap pools.
 - **`maxPrice` is that reference plus the slippage you accept**, on the price itself: 0.5% above
   2,700 USDC per WETH is 2,713.5, and a WETH sold for at least 0.5% below it is 2,686.5.
-- **The headroom decides which pools trade.** A `maxPrice` at or below the best price any pool
-  offers trades nothing and refunds the whole budget, without reverting.
-- **Too loose costs real money.** The pools fill up to whatever price they are given.
+- **Keep it tight.** A loose `maxPrice` reaches the thin, dear pools too, and they fill in loop
+  order. A `maxPrice` at or below the best price any pool offers trades nothing and refunds the
+  whole budget, without reverting.
 
 **`minTokens`, consistent with `maxPrice`.** Every unit costs `maxPrice` or less, so spending the
 whole budget buys at least `budget × 1e18 ÷ maxPrice`:
@@ -234,59 +276,68 @@ whole budget buys at least `budget × 1e18 ÷ maxPrice`:
   all of it within `maxPrice`, the cook reverts.
 - **To buy as much as fills within `maxPrice`**: `minTokens` is the least worth the gas, or `0`, and
   the rest of the budget comes back.
-- **`maxAvgPrice`** caps the average whatever the fill size. At `maxPrice` itself it adds nothing
-  the per-pool limits do not already guarantee; it is the check for a stricter average.
+- **`maxAvgPrice`** caps the average whatever the fill size: set it between the reference and
+  `maxPrice`. At `maxPrice` itself it adds nothing the per-pool limits do not already guarantee.
 
 ## Running it
 
 The budget must be in the Pot before the program runs: send it there from any wallet, or let
-`sauce run --fund` pull it from the signer in the same cook (`sauce-run`). Rehearse first, with no
-key and nothing sent, then run. Buying WETH with up to 3,000 USDC at most 2,713.5 each, USDC pulled
-in by its own permit:
+`sauce run --fund` pull it from the signer in the same cook (`sauce-run`). **Rehearse three times
+before sending**, with no key and nothing sent: the trade as meant, one with `minTokens` above what
+fills, which reverts `bought below minTokens`, and one with `maxAvgPrice` below the average, which
+reverts `average too high`. That shows both checks work. Buying SPCXc with 1,000 USDC at most 150
+each, with the price near 148.8 on 2026-10-01:
 
 ```sh
 npx sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
-  --config sauce.config.json --assume-balance USDC:3000 \
-  --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0x4200000000000000000000000000000000000006 \
-  3000000000 2713500000 0 0 <recipient> <refundTo>
+  --config sauce.config.json --assume-balance USDC:1000 \
+  --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0xb2000000000000000000007b9fcbd005511aCBd5 \
+  1000000000 1500000000000000000 660000000 1495000000000000000 <recipient> <refundTo>
+npx sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
+  --config sauce.config.json --assume-balance USDC:1000 \
+  --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0xb2000000000000000000007b9fcbd005511aCBd5 \
+  1000000000 1500000000000000000 1000000000 1495000000000000000 <recipient> <refundTo>
+npx sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
+  --config sauce.config.json --assume-balance USDC:1000 \
+  --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0xb2000000000000000000007b9fcbd005511aCBd5 \
+  1000000000 1500000000000000000 660000000 1400000000000000000 <recipient> <refundTo>
 npx sauce run distributed-swap.sauce.ts --chain base --config sauce.config.json \
-  --keystore <keystore> --fund USDC:3000 --fund-mode permit \
-  --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0x4200000000000000000000000000000000000006 \
-  3000000000 2713500000 0 0 <recipient> <refundTo>
+  --keystore <keystore> --fund USDC:1000 --fund-mode permit \
+  --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0xb2000000000000000000007b9fcbd005511aCBd5 \
+  1000000000 1500000000000000000 660000000 1495000000000000000 <recipient> <refundTo>
 ```
 
-Each is one cook on the owner's Pot: `sauce tx` with the same `--args` and `--owner <address>`
-prints it unsigned, `{ chainId, to, data, value }`, for any signer to send instead.
+The second asks for 10 SPCXc, more than 1,000 USDC buys at 150; the third caps the average at 140,
+below the market. Each is one cook on the owner's Pot: `sauce tx` with the same `--args` and
+`--owner <address>` prints it unsigned, `{ chainId, to, data, value }`, for any signer to send
+instead. SPCXc is built into the Base node, so rehearse against Base itself, not a local copy of
+the chain.
 
 For the initial release the swap is sent only on Ethereum or Base: on a preview chain such as
 Arbitrum or Optimism a program compiles and simulates, and `sauce tx` and `sauce run` refuse it
 with the chain-support request to post (`sauce-chains`).
 
 **Reading a rehearsal.** `sauce simulate` prints what `main` returned and what the cook moved.
-Buying with 2,000 USDC over three pools, pool addresses as `<pool A>` to `<pool C>`:
+Buying WETH with 2,000 USDC over two pools, pool addresses as `<pool A>` and `<pool B>`:
 
 ```text
-The cook succeeds from <owner>: gas used 693101, returns <96 bytes>
+The cook succeeds from <owner>: gas used 642327, returns <96 bytes>
 Token transfers:
-  0.64697669175288916 WETH: <pool A> -> <Pot> (the Pot)
-  1751.63668 USDC: <Pot> (the Pot) -> <pool A>
-  0.64697669175288916 WETH: <Pot> (the Pot) -> <recipient>
-  0.025550811867031959 WETH: <pool B> -> <Pot> (the Pot)
-  69.327522 USDC: <Pot> (the Pot) -> <pool B>
-  0.025550811867031959 WETH: <Pot> (the Pot) -> <recipient>
-  0.066025916856648132 WETH: <pool C> -> <Pot> (the Pot)
-  179.035798 USDC: <Pot> (the Pot) -> <pool C>
-  0.066025916856648132 WETH: <Pot> (the Pot) -> <recipient>
+  0.167790241413064662 WETH: <pool A> -> <Pot> (the Pot)
+  455.100231 USDC: <Pot> (the Pot) -> <pool A>
+  0.167790241413064662 WETH: <Pot> (the Pot) -> <recipient>
+  0.570768248770730456 WETH: <pool B> -> <Pot> (the Pot)
+  1544.899769 USDC: <Pot> (the Pot) -> <pool B>
+  0.570768248770730456 WETH: <Pot> (the Pot) -> <recipient>
 Net balance changes:
-  <pool A>: -0.64697669175288916 WETH, +1751.63668 USDC
+  <pool A>: -0.167790241413064662 WETH, +455.100231 USDC
   <Pot> (the Pot): -2000 USDC
-  <recipient>: +0.738553420476569251 WETH
-  <pool B>: -0.025550811867031959 WETH, +69.327522 USDC
-  <pool C>: -0.066025916856648132 WETH, +179.035798 USDC
+  <recipient>: +0.738558490183795118 WETH
+  <pool B>: -0.570768248770730456 WETH, +1544.899769 USDC
 ```
 
 - **The 96 bytes after `returns`** are three words: `spent` (here 2,000 USDC), `bought`
-  (0.738553420476569251 WETH) and `unspent` (0).
+  (0.738558490183795118 WETH) and `unspent` (0).
 - **Each pool that traded** took payToken and gave buyToken. A pool you expected and do not see
   sat out: missing, empty, already past its limit, or the budget ran out first.
 - **A partial fill** ends with one more transfer: what is left of the budget, from the Pot to
@@ -294,23 +345,22 @@ Net balance changes:
 - **The average** is `spent ÷ bought` in whole tokens (2,708.0 USDC per WETH here), to compare with
   `maxPrice` before sending.
 
-**Gas.** Measured on a local chain against real Uniswap V3 pools: about 690,000 gas for the cook
-with three pools swapped and no initialized tick crossed, and 790,000 with `--fund`'s pull.
-Discovery is 13 lookups, four fee tiers and nine tick spacings; each pool found adds its reads;
-every initialized tick a swap crosses adds to its swap. The gas is the same on any chain; what it
-costs is the chain's gas price.
+**Gas.** Measured on a local chain against real Uniswap V3 pools: about 640,000 gas for the cook with
+two pools swapped and no initialized tick crossed. Discovery is 16 lookups, nine tick spacings and
+seven fee tiers; each pool found adds its reads; every initialized tick a swap crosses adds to its
+swap. The gas is the same on any chain; what it costs is the chain's gas price.
 
 ## More venues
 
-Each venue is one more loop of the same shape: look the pool up, skip it when it is missing, empty
-or past its own limit, give it its fee-adjusted limit, and offer it everything still unspent.
+Each venue is one more loop that finds pools and hands them to `trade`; a venue whose pools read
+differently gets its branch in `trade`.
 
-- **More Uniswap V3 tiers.** A factory enables tiers over time; Base's also has 200, 300 and 400.
-  Add them to the list.
 - **Base's other Slipstream factories**, `AerodromeSlipstream.CLFactory` and
-  `AerodromeSlipstream.CLFactoryGaugeCaps`, each with pools of their own (a pair can have one at
-  the same tick spacing under each, with its own fee): one more loop each, the same as the
-  `CLFactoryGaugesV3` loop.
+  `AerodromeSlipstream.CLFactoryGaugeCaps`, each with pools of their own (Base's WETH/USDC
+  Slipstream pools are on `CLFactory`). A pair can have a pool at the same tick spacing under each,
+  with its own fee. A singleton binding takes another address too, so one loop can walk all three:
+  `for (const factory of [AerodromeSlipstream.CLFactory, AerodromeSlipstream.CLFactoryGaugeCaps, AerodromeSlipstream.CLFactoryGaugesV3])`
+  and `AerodromeSlipstream.CLFactory.at(factory).getPool(a, b, spacing)`.
 - **PancakeSwap V3**: `PancakeswapV3.Factory.getPool(a, b, fee)`, tiers 100, 500, 2500 and 10000,
   swapped with the same `uniswapV3`.
 - **Uniswap V4, hookless**: a pool is a key, `{ currency0, currency1, fee, tickSpacing, hooks }`,
@@ -327,10 +377,11 @@ or past its own limit, give it its fee-adjusted limit, and offer it everything s
 ## Before sending
 
 - `maxPrice` is the best fee-inclusive price among pools with liquidity plus the slippage you
-  accept, in payToken base units per buyToken base unit, times 1e18.
+  accept, in payToken base units per buyToken base unit, times 1e18: `10^(18 + payDecimals −
+buyDecimals)` times the price.
 - `minTokens` follows the recipe: `budget × 1e18 ÷ maxPrice` to spend everything, less to accept a
   partial fill.
-- A rehearsal shows the pools you expected, an average near the reference, and what came back.
+- Three rehearsals: the trade, a `minTokens` revert and a `maxAvgPrice` revert.
 
 [examples/distributed-swap.mts](examples/distributed-swap.mts) compiles the program for Base and
 pins this page to it: the code above, the venues, `maxPrice` and the limits it gives, each pool's
