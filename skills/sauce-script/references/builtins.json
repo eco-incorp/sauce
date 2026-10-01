@@ -198,7 +198,7 @@
     {
       "name": "crypto.findPDA",
       "group": "crypto",
-      "signature": "const [address, bump] = crypto.findPDA(programId: Uint256, seeds: bytes[])",
+      "signature": "crypto.findPDA(programId: Uint256, seeds: bytes[]): [Uint256, Uint256]",
       "targets": ["evm", "svm"],
       "example": {
         "evm": "function main(program: Uint256): Uint256 { const [vault, bump] = crypto.findPDA(program, [hex`01`, \"vault\"]); return vault; }",
@@ -328,7 +328,7 @@
     {
       "name": "abi.encode",
       "group": "abi",
-      "signature": "abi.encode(...values): bytes",
+      "signature": "abi.encode(...values: value[]): bytes",
       "targets": ["evm"],
       "example": {
         "evm": "function main(total: Uint256, to: Address): bytes { return abi.encode(total, to); }"
@@ -343,7 +343,7 @@
     {
       "name": "abi.decode",
       "group": "abi",
-      "signature": "abi.decode(data: bytes, [\"Shape\", ...]): record",
+      "signature": "abi.decode(data: bytes, shape: string[]): record",
       "targets": ["evm"],
       "example": {
         "evm": "function main(data: bytes): Uint256 { const [amount, to] = abi.decode(data, [\"Uint256\", \"Address\"]); return amount; }"
@@ -523,7 +523,7 @@
     {
       "name": "svm.remainingAccounts",
       "group": "svm",
-      "signature": "const rest = svm.remainingAccounts(): Account[]",
+      "signature": "svm.remainingAccounts(): Account[]",
       "targets": ["svm"],
       "example": {
         "svm": "function main(router: Account, data: bytes): bytes { const rest = svm.remainingAccounts(); return svm.call(router, rest, data); }"
@@ -558,7 +558,7 @@
     {
       "name": "throw",
       "group": "statement",
-      "signature": "throw data (bytes)",
+      "signature": "throw data",
       "targets": ["evm", "svm"],
       "example": {
         "evm": "function main(held: Uint256, floor: Uint256): void { if (held < floor) { throw \"below floor\"; } }",
@@ -568,7 +568,7 @@
     {
       "name": "log",
       "group": "statement",
-      "signature": "log(data: bytes, ...topics: scalar[]): void  (topics: EVM only)",
+      "signature": "log(data: bytes, ...topics: scalar[]): void",
       "targets": ["evm", "svm"],
       "example": {
         "evm": "function main(from: Address, to: Address, amount: Uint256): void { log(amount.toBytesBe(32n), crypto.keccak256(\"Transfer(address,address,uint256)\"), from, to); }",
@@ -792,7 +792,7 @@
     {
       "name": "new Array",
       "group": "construct",
-      "signature": "new Array(n: Uint256): Uint256[]",
+      "signature": "new Array(length: Uint256): Uint256[]",
       "targets": ["evm", "svm"],
       "example": {
         "evm": "function main(n: Uint256): Uint256[] { const xs = new Array(n); xs[0] = 1n; return xs; }",
@@ -802,7 +802,7 @@
     {
       "name": "hex literal",
       "group": "construct",
-      "signature": "hex`<hex digits>`: bytes",
+      "signature": "hex`digits`: bytes",
       "targets": ["evm", "svm"],
       "example": {
         "evm": "function main(): bytes { return hex`0xdeadbeef`; }",
@@ -812,7 +812,7 @@
     {
       "name": "unary minus",
       "group": "construct",
-      "signature": "-x: Uint256 (two's-complement negation)",
+      "signature": "-x: Uint256",
       "targets": ["evm", "svm"],
       "example": {
         "evm": "function main(x: Uint256): Uint256 { return -x; }",

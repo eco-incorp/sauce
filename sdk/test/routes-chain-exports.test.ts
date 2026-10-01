@@ -54,9 +54,9 @@ describe("chain accessors: one named export per canonical chain", () => {
 
   it("the export is CALLABLE and `Base(...)` === `Base.route(...)` in behavior", () => {
     const opts = evmOptions();
-    const viaCall = Base("return 1n;", opts).reward(0n);
-    const viaRoute = Base.route("return 1n;", opts).reward(0n);
-    const viaAccessor = chainAccessors.Base("return 1n;", opts).reward(0n);
+    const viaCall = Base("function main() { return 1n; }", opts).reward(0n);
+    const viaRoute = Base.route("function main() { return 1n; }", opts).reward(0n);
+    const viaAccessor = chainAccessors.Base("function main() { return 1n; }", opts).reward(0n);
     expect(viaCall.intent).toEqual(viaAccessor.intent);
     expect(viaRoute.intent).toEqual(viaAccessor.intent);
   });

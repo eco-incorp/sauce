@@ -20,7 +20,6 @@
 import type { CanonicalChain } from "../chains/canonical.js";
 import { loadPlugin, loadPluginData } from "../plugin/index.js";
 import { pascalOfSlug } from "./builder.js";
-import type { SauceCompileOptions } from "./sauce-route.js";
 import type { AddressInput } from "./types.js";
 
 export interface AmbientDefinesOptions {
@@ -86,27 +85,4 @@ export function chainDefines(
  */
 export function chainAmbient(_chain: CanonicalChain): string[] {
   return loadPlugin().ambient;
-}
-
-/**
- * `options` with `chain`'s whole ambient bundle underneath: `chainDefines` below the caller's own
- * `defines` (the caller wins a collision), and `chainAmbient` merged with the caller's `ambient`,
- * deduped — either side may name the same module.
- *
- * The bundle `openRoute` compiles a route body with, for `compileSauceProgram` — so a program
- * means the same thing on a Pot as in an intent. `compileSauceRoute` itself deliberately adds none
- * of this.
- */
-export function withChainAmbient(
-  chain: CanonicalChain,
-  options: SauceCompileOptions,
-  defines: AmbientDefinesOptions = {},
-): SauceCompileOptions {
-  const ambient = Array.from(new Set([...chainAmbient(chain), ...(options.ambient ?? [])]));
-
-  return {
-    ...options,
-    defines: { ...chainDefines(chain, defines), ...options.defines },
-    ambient: ambient.length > 0 ? ambient : options.ambient,
-  };
 }

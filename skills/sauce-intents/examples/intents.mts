@@ -111,29 +111,18 @@ for (const [what, value] of [
 check(swapped.rewarded.join() === word(token("arbitrum", "WETH")), "the reward is Arbitrum's WETH");
 
 // ---- A token-only child is plain route calls for the destination's Executor: no Pot, no fee.
+// Inside the body, and in the delivery, a token symbol is the destination's: `USDC` here is
+// Arbitrum's, while the one in `.reward(...)` is Base's, which the program escrows.
 const direct = intentOf(
-  compileFor(
-    "base",
-    "Arbitrum(() => { Token(0xaf88d065e77c8cc2239327c5edb3a432268e5831n).transfer(RECIPIENT, AMOUNT); }).reward({ tokens: [{ token: USDC, amount: AMOUNT }] });",
-    { RECIPIENT: recipient, AMOUNT: 1_000_000n },
-  ),
-);
-check(direct.calls.startsWith(word(token("arbitrum", "USDC"))), "one transfer, called directly");
-check(!direct.calls.includes(" "), "and nothing else: no cook");
-
-// ---- Inside a body, a bare token symbol names the token of the chain the file is compiled for,
-// which is why the examples name the destination's tokens by address.
-const bare = intentOf(
   compileFor(
     "base",
     "Arbitrum(() => { USDC.transfer(RECIPIENT, AMOUNT); }).reward({ tokens: [{ token: USDC, amount: AMOUNT }] });",
     { RECIPIENT: recipient, AMOUNT: 1_000_000n },
   ),
 );
-check(
-  bare.calls.startsWith(word(token("base", "USDC"))),
-  "a bare symbol in a body is the source's",
-);
+check(direct.calls.startsWith(word(token("arbitrum", "USDC"))), "Arbitrum's USDC, called directly");
+check(!direct.calls.includes(" "), "and nothing else: no cook");
+check(direct.rewarded.join() === word(token("base", "USDC")), "the reward is Base's USDC");
 check(contracts.on("arbitrum").AaveV3.Pool.available, "Arbitrum has AaveV3.Pool");
 
 console.log(

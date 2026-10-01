@@ -8,8 +8,8 @@
  *
  * ```ts
  * import { Base, Solana } from "@eco-incorp/sauce";
- * const built = Base("return 1n;", { pot, engine, deadline, portal }).reward({ source: Solana.chain, creator, prover, deadline });
- * // identically: Base.route("return 1n;", {...}).reward({...})
+ * const built = Base("function main() { return 1n; }", { pot, engine, deadline, portal }).reward({ source: Solana.chain, creator, prover, deadline });
+ * // identically: Base.route("function main() { return 1n; }", {...}).reward({...})
  * ```
  */
 export { chain, chainAccessors, pascalOfSlug } from "./accessors.js";
@@ -92,7 +92,7 @@ export type {
 
 // --- cross-chain intent DSL (S1) ---
 
-export { compileSauceProgram, compileSauceRoute, wrapSauceBody } from "./sauce-route.js";
+export { compileSauceProgram, compileSauceRoute } from "./sauce-route.js";
 export type {
   CompiledSauceProgram,
   CompiledSauceRoute,

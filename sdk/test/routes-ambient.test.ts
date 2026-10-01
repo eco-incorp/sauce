@@ -77,10 +77,14 @@ describe("chainDefines", () => {
 
 describe("openRoute: ambient defines threading", () => {
   it("Base(() => { return chainId; }, opts) compiles and its bytecode equals the explicit defines map form", () => {
-    const viaAmbient = openRoute("ethereum", "return chainId;", evmOptions()).reward(0n);
+    const viaAmbient = openRoute(
+      "ethereum",
+      "function main() { return chainId; }",
+      evmOptions(),
+    ).reward(0n);
     const viaExplicit = openRoute(
       "ethereum",
-      "return chainId;",
+      "function main() { return chainId; }",
       evmOptions({ defines: { chainId: 1n } }),
     ).reward(0n);
     expect(viaAmbient.compiled.bytecode).toEqual(viaExplicit.compiled.bytecode);
@@ -89,30 +93,42 @@ describe("openRoute: ambient defines threading", () => {
   it("caller options.defines OVERRIDE a chain-derived key of the same name", () => {
     const built = openRoute(
       "ethereum",
-      "return chainId;",
+      "function main() { return chainId; }",
       evmOptions({ defines: { chainId: 999n } }),
     ).reward(0n);
-    const explicit999 = openRoute("ethereum", "return 999n;", evmOptions()).reward(0n);
+    const explicit999 = openRoute(
+      "ethereum",
+      "function main() { return 999n; }",
+      evmOptions(),
+    ).reward(0n);
     expect(built.compiled.bytecode).toEqual(explicit999.compiled.bytecode);
   });
 
   it("a user `let chainId = 7n;` inside the body shadows the ambient define (proven by a differing program)", () => {
     const shadowed = openRoute(
       "ethereum",
-      "let chainId = 7n; return chainId;",
+      "function main() { let chainId = 7n; return chainId; }",
       evmOptions(),
     ).reward(0n);
-    const unshadowed = openRoute("ethereum", "return chainId;", evmOptions()).reward(0n);
+    const unshadowed = openRoute(
+      "ethereum",
+      "function main() { return chainId; }",
+      evmOptions(),
+    ).reward(0n);
     expect(shadowed.compiled.bytecode).not.toEqual(unshadowed.compiled.bytecode);
     // the shadowed program compiles a local write+read, not the folded ambient literal --
     // distinct in shape from a program returning the ambient value directly.
-    const ambientLiteral = openRoute("ethereum", "return 1n;", evmOptions()).reward(0n);
+    const ambientLiteral = openRoute(
+      "ethereum",
+      "function main() { return 1n; }",
+      evmOptions(),
+    ).reward(0n);
     expect(shadowed.compiled.bytecode).not.toEqual(ambientLiteral.compiled.bytecode);
   });
 
   it("an svm destination gets chainId and the caller token map, and compiles on target 'svm'", () => {
     const USDC = "0x5555555555555555555555555555555555555555" as const;
-    const built = openRoute("solana", "return chainId;", {
+    const built = openRoute("solana", "function main() { return chainId; }", {
       execution: { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
       deadline: 2000n,
       portal: PORTAL,

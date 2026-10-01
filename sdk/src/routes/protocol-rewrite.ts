@@ -22,7 +22,6 @@
  * unsupported contracts, missing deployments/methods, widened ABIs, ambiguous family aliases,
  * binding collisions, and out-of-scope chains produce explicit errors.
  */
-import * as acorn from "acorn";
 import type { Address } from "viem";
 import type { ContractsConfig } from "./compile-types.js";
 
@@ -33,6 +32,7 @@ import { formatBigint } from "../deposit/format.js";
 import { walk, collectDeclaredNames, type AstNode } from "./ast-walk.js";
 import { pascalOfSlug } from "./builder.js";
 import { chainSlugForKey, isChainKey, resolveNamespace, type Namespace } from "./accessor-index.js";
+import { parseSauce } from "./parse.js";
 
 export interface ProtocolRewriteOptions {
   /** Allows a `typeFidelity: "widened"` descriptor (vendored ABI, real selector mismatch) to be
@@ -498,7 +498,7 @@ function collectSelfSites(
 /**
  * Rewrites every recognized protocol-accessor call site (shapes A-D) and, unless
  * `opts.selfSugar === false`, every bare `self` read, over `source` for the enclosing/destination
- * `chain`. Edits use ranges from acorn over the original source, preserving unrelated formatting,
+ * `chain`. Edits use parser ranges over the original source, preserving unrelated formatting,
  * comments, and code byte-for-byte.
  */
 export function rewriteProtocolAccessors(
@@ -506,14 +506,11 @@ export function rewriteProtocolAccessors(
   chain: CanonicalChain,
   opts: ProtocolRewriteOptions = {},
 ): ProtocolRewriteResult {
-  // sourceType: "module" -- this pass runs unconditionally (default ON), so it must tolerate a
-  // source that ALREADY carries a leading `import { X } from "./X.json";` line, e.g. the
-  // ERC20-import-prefixed transfer program `nest.ts#nestedTransferProgram` can hand
-  // `compileSauceRoute` before this pass ever sees it.
-  const program = acorn.parse(source, {
-    ecmaVersion: "latest",
-    sourceType: "module",
-  }) as unknown as AstNode;
+  // A module parse, annotations included -- this pass runs unconditionally (default ON), so it
+  // must take whatever the compiler does, including a source that ALREADY carries a leading
+  // `import { X } from "./X.json";` line, e.g. the ERC20-import-prefixed transfer program
+  // `nest.ts#nestedTransferProgram` can hand `compileSauceRoute` before this pass ever sees it.
+  const program = parseSauce(source);
   const shadowed = collectDeclaredNames(program);
 
   const chainScope = opts.chainScope

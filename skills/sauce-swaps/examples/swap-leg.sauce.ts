@@ -14,7 +14,7 @@ function main(
   amountIn: Uint256,
   sqrtPriceLimitX96: Uint256,
   minOut: Uint256,
-  recipient: Address
+  recipient: Address,
 ) {
   const self = ctx.self();
   const pool = UniswapV3.Factory.getPool(tokenIn, tokenOut, fee);

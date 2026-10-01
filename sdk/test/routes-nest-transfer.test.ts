@@ -74,7 +74,7 @@ const explicitOpts: TransferChildOptions = { vaultResolution: { mode: "explicit"
 
 describe("nest.ts: default fluent transfer mode compiles with runtime vault lookup", () => {
   it.each(["ERC20", "native"] as const)("funds a %s child without an explicit vault", (asset) => {
-    const child = openRoute("arbitrum", "return 1n;", {
+    const child = openRoute("arbitrum", "function main() { return 1n; }", {
       pot: VAULT,
       engine: PROVER,
       portal: CHILD_ROUTE_PORTAL,
@@ -89,7 +89,7 @@ describe("nest.ts: default fluent transfer mode compiles with runtime vault look
 
     // No nest options: this must compile the default transfer program and query the Portal for
     // its vault, rather than using the explicit-vault shortcut the earlier compile tests covered.
-    const built = openRoute("base", "return 1n;", {
+    const built = openRoute("base", "function main() { return 1n; }", {
       pot: VAULT,
       engine: PROVER,
       portal: PARENT_PORTAL,

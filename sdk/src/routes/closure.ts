@@ -2,24 +2,27 @@
  * Closure route bodies — `() => {...}` accepted as a `SauceBody` alongside a string.
  *
  * Mechanism: `Function.prototype.toString.call(fn)` returns the verbatim declared text
- * (ES2018-spec-guaranteed). We parse `(${text})` with acorn (parsing the parenthesized form is
+ * (ES2018-spec-guaranteed). We parse `(${text})` with `parse.ts` (parsing the parenthesized form is
  * what makes both a `function (){}` expression and an arrow valid inputs to one parse), take the
  * single `ExpressionStatement`'s function node, and either:
  *  - a BLOCK body: slice the ORIGINAL text between the block's own braces using the node's
  *    `start`/`end` ranges (minus the one-character paren offset) and emit `function main() {\n<slice>\n}`
  *    — the slice is verbatim source, so comments/formatting/nested arrows/string literals survive
- *    untouched;
+ *    untouched. A function the block declares at its own top level is a HELPER: SauceScript has no
+ *    nested functions, and the closure is the only place a closure-based program can declare one,
+ *    so each is emitted as written beside `main`, ahead of it, and cut out of the body;
  *  - a CONCISE body (`() => expr`): slice the expression's range and synthesize
  *    `function main() {\n  return <slice>;\n}`.
  *
  * Never hand-slice on `=>` or brace-counting: a `=>` inside a string literal, a template literal,
- * a comment, or a default parameter breaks naive slicing, which is exactly why acorn is used.
+ * a comment, or a default parameter breaks naive slicing, which is exactly why a parser is used.
  *
  * CAPTURE: there is none, by construction, and that is CORRECT — a free identifier that is neither
  * a chain-scoped ambient name nor a caller-supplied `defines` entry is a hard "`X` is not a declared variable"
  * compile error, which can never silently bake a stale JS value into bytecode.
  */
-import * as acorn from "acorn";
+import type { AstNode } from "./ast-walk.js";
+import { parseSauceExpression } from "./parse.js";
 
 export type SauceBody = string | (() => unknown);
 
@@ -46,13 +49,13 @@ export function sauceBodyToSource(body: () => unknown): string {
     );
   }
 
-  let parsed: acorn.Node;
+  let parsed: AstNode;
   const PAREN_OFFSET = 1; // the leading "(" we prepend below
   try {
-    parsed = acorn.parseExpressionAt(`(${text})`, 0, { ecmaVersion: "latest" });
+    parsed = parseSauceExpression(`(${text})`);
   } catch (err) {
     fail(
-      `could not parse the closure's own declared source with acorn (${(err as Error).message}) -- ` +
+      `could not parse the closure's own declared source (${(err as Error).message}) -- ` +
         "this can happen under a bundler/minifier that rewrites function text; pass a string instead.",
     );
   }
@@ -62,7 +65,7 @@ export function sauceBodyToSource(body: () => unknown): string {
     async?: boolean;
     generator?: boolean;
     params?: unknown[];
-    body: { type: string; start: number; end: number };
+    body: { type: string; start: number; end: number; body?: AstNode[] };
   };
 
   if (fnNode.type !== "ArrowFunctionExpression" && fnNode.type !== "FunctionExpression") {
@@ -86,8 +89,18 @@ export function sauceBodyToSource(body: () => unknown): string {
 
   if (fnNode.body.type === "BlockStatement") {
     // start/end include the surrounding braces themselves; slice the interior.
-    const interior = text.slice(start + 1, end - 1);
-    return `function main() {\n${interior}\n}`;
+    const helpers = (fnNode.body.body ?? []).filter((node) => node.type === "FunctionDeclaration");
+    let interior = "";
+    let at = start + 1;
+    for (const helper of helpers) {
+      interior += text.slice(at, helper.start - PAREN_OFFSET);
+      at = helper.end - PAREN_OFFSET;
+    }
+    interior += text.slice(at, end - 1);
+    const declared = helpers.map(
+      (helper) => `${text.slice(helper.start - PAREN_OFFSET, helper.end - PAREN_OFFSET)}\n\n`,
+    );
+    return `${declared.join("")}function main() {\n${interior}\n}`;
   }
 
   const exprText = text.slice(start, end);

@@ -12,8 +12,8 @@ undeclared in the file and set with `--define NAME=VALUE` (`sauce-script`).
 
 ```sauce chain=base define=RECIPIENT,AMOUNT
 Arbitrum(() => {
-  Token(0xaf88d065e77c8cc2239327c5edb3a432268e5831n).transfer(RECIPIENT, AMOUNT); // Arbitrum USDC
-}).reward({ tokens: [{ token: USDC, amount: AMOUNT }] });
+  USDC.transfer(RECIPIENT, AMOUNT); // Arbitrum's USDC: the body runs there
+}).reward({ tokens: [{ token: USDC, amount: AMOUNT }] }); // the source chain's USDC
 ```
 
 Nothing about the fill is guaranteed: a solver decides whether the reward is worth it, and the
@@ -27,12 +27,17 @@ The file is compiled for the **source** chain, the one that pays the reward (`--
   there is the source chain's USDC. A reward token must be known when the file is compiled: a
   symbol, or a token's address on the source chain as a literal or a define. Its amount may be a
   measured value.
-- **Inside the braces, and in the delivery argument**, the code runs on the destination. Protocol
-  namespaces resolve there: `AaveV3.Pool` in an `Arbitrum(...)` body is Arbitrum's pool. A bare
-  token symbol, `chainId` and a `Namespace_Contract` define resolve on the chain the file is
-  compiled for, so name each destination token by **its address on the destination**, from
-  [../sauce-globals/references/tokens.md](../sauce-globals/references/tokens.md):
-  `Token(0xaf88d065e77c8cc2239327c5edb3a432268e5831n)` is Arbitrum's USDC.
+- **Inside the braces, and in the delivery argument**, the code runs on the destination, and every
+  name a chain supplies resolves there: in an `Arbitrum(...)` body, `USDC` is Arbitrum's USDC,
+  `AaveV3.Pool` is Arbitrum's pool, and `chainId` and a `Namespace_Contract` define are Arbitrum's.
+  The tokens a destination has are listed in
+  [../sauce-globals/references/tokens.md](../sauce-globals/references/tokens.md).
+- **The rule repeats at every depth.** An intent opened inside a body is funded on that body's
+  chain, so its reward resolves there and its own body on its own destination.
+- A literal address means that address everywhere, and so does a define whose name no chain uses
+  (`RECIPIENT`). A define under a chain-scoped name (`USDC`, `chainId`, a protocol address) is a
+  name on the source chain: it applies to the file's own statements and the reward, and a body on
+  another chain keeps that chain's value.
 
 ## Two ways to run the file
 
@@ -78,10 +83,10 @@ const amount = USDC.balanceOf(ctx.self());
 const delivered = amount - (amount * 10n) / 10000n;
 Arbitrum(
   () => {
-    Token(0xaf88d065e77c8cc2239327c5edb3a432268e5831n).approve(AaveV3.Pool, delivered);
-    AaveV3.Pool.supply(0xaf88d065e77c8cc2239327c5edb3a432268e5831n, delivered, BENEFICIARY, 0n);
+    USDC.approve(AaveV3.Pool, delivered);
+    AaveV3.Pool.supply(USDC, delivered, BENEFICIARY, 0n);
   },
-  { tokens: [{ token: 0xaf88d065e77c8cc2239327c5edb3a432268e5831n, amount: delivered }] }
+  { tokens: [{ token: USDC, amount: delivered }] },
 ).reward({ tokens: [{ token: USDC, amount }] });
 ```
 
@@ -93,12 +98,13 @@ margin. Make it worth filling.
 The body can be any program for the destination, such as a complete swap:
 [examples/swap-on-base.sauce.ts](examples/swap-on-base.sauce.ts) runs the distributed swap
 (`sauce-distributed-swap`) on Base for WETH a solver delivers there, and pays the solver in WETH on
-the source chain. The body is written inside the braces, uses the file's defines as values, and
-imports nothing: it calls contracts by namespace (`UniswapV3.Factory.getPool(...)`) or by selector,
-with `evm.static(address, data)` for a read and `evm.call(address, value, data)` for a write, `data`
-being the selector bytes `.concat(abi.encode(...))`. The swap Router is reached through the Pot
-itself, `evm.call(ctx.self(), 0n, ...)`. Every unsold input and every output leaves the destination
-Pot before the body ends.
+the source chain. The body is written inside the braces and uses the file's defines as values. It
+may also use what the file declares: its imports (an ABI, a library) and its helper functions, each
+compiled into the body's program for the destination. It calls contracts by namespace
+(`UniswapV3.Factory.getPool(...)`), through an imported binding, or by selector, with
+`evm.static(address, data)` for a read and `evm.call(address, value, data)` for a write, `data` being
+the selector bytes `.concat(abi.encode(...))`. The swap Router is reached through the Pot itself,
+`ctx.self()`. Every unsold input and every output leaves the destination Pot before the body ends.
 
 ## Cascades
 
@@ -109,12 +115,12 @@ execution and carried into the level below; no amount past the first exists when
 const amount = USDC.balanceOf(ctx.self());
 Arbitrum(
   () => {
-    const arrived = Token(0xaf88d065e77c8cc2239327c5edb3a432268e5831n).balanceOf(ctx.self());
+    const arrived = USDC.balanceOf(ctx.self()); // Arbitrum's USDC
     Optimism(() => {
-      Token(0x0b2c639c533813f4aa9d7837caf62653d097ff85n).transfer(RECIPIENT, arrived);
-    }).reward({ tokens: [{ token: 0xaf88d065e77c8cc2239327c5edb3a432268e5831n, amount: arrived }] });
+      USDC.transfer(RECIPIENT, arrived); // Optimism's USDC
+    }).reward({ tokens: [{ token: USDC, amount: arrived }] }); // Arbitrum's: it funds this level
   },
-  { tokens: [{ token: 0xaf88d065e77c8cc2239327c5edb3a432268e5831n, amount }] }
+  { tokens: [{ token: USDC, amount }] },
 ).reward({ tokens: [{ token: USDC, amount }] });
 ```
 

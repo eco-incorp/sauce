@@ -78,7 +78,7 @@ function swapIntoV4(fee, tickSpacing, tokenIn, tokenOut, amount, limit) {
     currency1: zeroForOne ? tokenOut : tokenIn,
     fee: fee,
     tickSpacing: tickSpacing,
-    hooks: 0n
+    hooks: 0n,
   };
   const router = ISauceRouter.at(self);
   router.swapV4(UniswapV4_PoolManager, key, zeroForOne, -amount, limit, self, self);
@@ -95,7 +95,7 @@ function main(
   minOut: Uint256,
   minAvgPrice: Uint256,
   recipient: Address,
-  refundTo: Address
+  refundTo: Address,
 ) {
   const self = ctx.self();
   const outBefore = Token(tokenOut).balanceOf(self);
@@ -180,7 +180,7 @@ function main(
         tokenIn,
         tokenOut,
         remaining,
-        sqrtPriceLimitX96
+        sqrtPriceLimitX96,
       );
     }
   }

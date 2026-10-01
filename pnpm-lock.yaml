@@ -29,8 +29,11 @@ importers:
       '@solana/kit':
         specifier: ^6.10.0
         version: 6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@sveltejs/acorn-typescript':
+        specifier: 1.0.13
+        version: 1.0.13(acorn@8.16.0)
       acorn:
-        specifier: ^8.15.0
+        specifier: 8.16.0
         version: 8.16.0
       dotenv:
         specifier: ^17.3.1
@@ -1325,6 +1328,11 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  '@sveltejs/acorn-typescript@1.0.13':
+    resolution: {integrity: sha512-wgKggnhZVL9Bfx1OaKKTrYY9BFRk6C8UAkQNUcIv1+llzYrIqy+RZm5HPKzn0NpEBvTVhTqB4kQyllZywsRBRQ==}
+    peerDependencies:
+      acorn: ^8.9.0
 
   '@types/babel__core@7.20.5':
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
@@ -4488,6 +4496,10 @@ snapshots:
       typescript: 5.9.3
     transitivePeerDependencies:
       - fastestsmallesttextencoderdecoder
+
+  '@sveltejs/acorn-typescript@1.0.13(acorn@8.16.0)':
+    dependencies:
+      acorn: 8.16.0
 
   '@types/babel__core@7.20.5':
     dependencies:
