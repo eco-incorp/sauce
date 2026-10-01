@@ -15,7 +15,7 @@
  */
 import { CANONICAL_CHAINS, type CanonicalChain } from "../../sdk/dist/chains/canonical.js";
 import { getChain, nativeErc20 } from "../../sdk/dist/chains/index.js";
-import { sourceGlobals } from "../../sdk/dist/routes/index.js";
+import { sourceGlobals, TOKEN_REGISTRY } from "../../sdk/dist/routes/index.js";
 import { NAMESPACE_KEYS } from "../../sdk/dist/routes/accessor-index.js";
 
 import { ACTION_SPECS, type FieldKind } from "./spec.js";
@@ -24,6 +24,37 @@ import type { Action } from "./types.js";
 
 /** A registry token symbol: the registry's own ticker rule (`token-registry.ts`). */
 export const TOKEN_SYMBOL_RE = /^[A-Z][A-Z0-9]{1,10}$/;
+
+/**
+ * The shape of a symbol, stocks' included: an identifier with a capital letter in it, as an
+ * issuer's ticker is ("SPCXc", "TSLAon", "bTSLA", "BRK_Bx") and `"native"` and `"usdc"` are not.
+ * What the JSON Schema accepts, since it lists no names; the parser takes only the uppercase
+ * ticker shape and the stock symbols the registry has (`isTokenSymbol`).
+ */
+export const STOCK_SYMBOL_RE = /^(?=[^A-Z]*[A-Z])[A-Za-z][A-Za-z0-9_]{1,15}$/;
+
+/** Every tokenized stock's symbol the registry has, on any chain: which chain is the compile's. */
+const STOCK_SYMBOLS: ReadonlySet<string> = new Set(
+  Object.values(TOKEN_REGISTRY).flatMap((rows) =>
+    rows.filter((row) => row.stock !== undefined).map((row) => row.symbol),
+  ),
+);
+
+/** True for a token symbol: the uppercase ticker shape, or a tokenized stock's own symbol. */
+export function isTokenSymbol(value: string): boolean {
+  return TOKEN_SYMBOL_RE.test(value) || STOCK_SYMBOLS.has(value);
+}
+
+/** The registry's spelling of `value` written in another case (`spcxc` is `SPCXc`), if any. */
+export function registrySpelling(value: string): string | undefined {
+  const wanted = value.toUpperCase();
+  for (const rows of Object.values(TOKEN_REGISTRY)) {
+    const row = rows.find((candidate) => candidate.symbol.toUpperCase() === wanted);
+    if (row !== undefined) return row.symbol;
+  }
+
+  return undefined;
+}
 
 /** A protocol contract by namespace: `Namespace.Contract`, as a program writes it. */
 export const CONTRACT_NAME_RE = /^[A-Z][A-Za-z0-9]*\.[A-Za-z][A-Za-z0-9]*$/;
@@ -37,7 +68,7 @@ type Address = `0x${string}`;
 
 /** True for a token symbol or a namespace reference — anything but an address or `"native"`. */
 export function isName(value: string): boolean {
-  return TOKEN_SYMBOL_RE.test(value) || CONTRACT_NAME_RE.test(value);
+  return isTokenSymbol(value) || CONTRACT_NAME_RE.test(value);
 }
 
 /** A contract a program can name on one chain. */
@@ -158,10 +189,17 @@ function missingToken(symbol: string, names: ChainNames): string {
     names.tokens.size === 0
       ? "which registers no token symbols"
       : `whose tokens are ${list(known)}${stocks}`;
+  // A stock token is on one chain or two: say which, for a document compiled for another.
+  const on = (CANONICAL_CHAINS as readonly CanonicalChain[]).filter(
+    (chain) =>
+      chain.kind === "evm" && STOCK_SYMBOLS.has(symbol) && chainNames(chain).tokens.has(symbol),
+  );
   const hint =
     symbol === "ETH"
       ? '; the native currency is "native" where an action trades it, and wrapped ETH is "WETH"'
-      : "";
+      : on.length > 0
+        ? `; ${symbol} is a token on ${on.map((chain) => chain.name).join(" and ")}`
+        : "";
 
   return (
     `no token "${symbol}" on ${onChain(names.chain)}, ${listed}${hint} — give its address there ` +
