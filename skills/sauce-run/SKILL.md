@@ -12,7 +12,8 @@ compiles the file, deploys the Pot, rehearses the cook, signs it and sends it. I
 tool, reads no environment variables, and reaches a network only through `--rpc-url` or
 `--config`.
 
-Run the project's own copy, `npx sauce <command> --help`, for every option.
+Run the project's own copy, `npx sauce <command> --help`, for every option. On Solana the same
+commands apply with differences in accounts, signing and fees: read `sauce-solana` alongside.
 
 | Command          | Does                                                                              |
 | ---------------- | --------------------------------------------------------------------------------- |
@@ -104,43 +105,28 @@ Every value is checked against its declared type before anything is sent: `Addre
 - Runtime values are `main`'s parameters. A compile-time choice is a module-level `const` that
   `--define NAME=VALUE` replaces (`--defines values.json` gives several). A file of top-level
   statements with no `main`, such as an intent file, leaves the name undeclared and takes it from
-  the define. An address in a program is a hex integer with an `n`, as Base's USDC is
-  `0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n`; on the command line it is plain hex.
+  the define. In a `--defines` file, give an address or any value past 2^53 as a JSON string, hex
+  or decimal: a JSON number loses precision. An address in a program is a hex integer with an `n`,
+  as Base's USDC is `0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n`; on the command line it is plain
+  hex.
 - `sauce-script` covers the language and what compiling for a chain adds to it.
 
 [examples/pay.sauce.ts](examples/pay.sauce.ts) pays a recipient in USDC and USDT, on any chain that registers both.
 [examples/split.sauce.ts](examples/split.sauce.ts) takes its token, recipients and amount as
 arguments.
 
-## Intents to other chains
+## Intents and Solana
 
-A program can open an intent to another chain: `Arbitrum(() => { … }).reward({ … })`. Pass
-`--intent-deadline <unix seconds>` and `--intent-creator <address>`, and
-`--intent-execution-fee <wei>` when the intent's body runs a program; the command names whichever
-is missing. `sauce-intents` covers writing them.
-
-- `sauce run` cooks the file on the Pot, which funds the intents: use it when an amount is measured
-  on chain while the program runs (a balance, a swap's output).
-- `sauce publish <file> --chain <chain> --config sauce.config.json --keystore <keystore>` publishes
-  and funds the intents from the signer's wallet, with no Pot: it approves each reward token, then
-  publishes. Only a file whose intents are fixed when it is built qualifies; it refuses one with a
-  measured amount and says to use `sauce run`. `--dry-run` rehearses without sending.
-
-## Solana
-
-The same commands take `--chain solana`, with three differences:
-
-- A program declares every account it touches as an `Account` parameter of `main`
-  (`Account<Writable>`, `Account<Signer>`). Pass each as `--account NAME=<address>`, or
-  `NAME=pot` for the Pot, which the Kitchen signs for, or `NAME=owner` for the signer.
-  `sauce compile --json` lists them in its `manifest`.
-- Sign with `--keypair <keypair>`. The Pot is the Kitchen's address for the owner and salt, so a cook
-  names `--owner` (and `--salt`), never `--pot`.
-- The Kitchen's fee is read from the cluster; there is no `--value`. A failed `simulate` or `run`
-  prints the program logs. `sauce run` stages a program too large for one transaction. `sauce tx`
-  prints a base64 transaction for a wallet. `sauce publish` does not work from Solana.
-
-`sauce-solana` covers writing them.
+- **A file that opens intents** (`Arbitrum(() => { … }).reward({ … })`) also takes
+  `--intent-deadline <unix seconds>`, `--intent-creator <address>` and, when an intent's body runs a
+  program, `--intent-execution-fee <wei>`. `sauce run` opens them from the Pot, which is the way when
+  an amount is measured on chain; `sauce publish` opens fixed ones from a wallet with no Pot, and
+  `sauce publish <file> --chain <chain> --from <address> --format json` prints its unsigned approve
+  and `publishAndFund` for any wallet to send. `sauce-intents` covers writing, publishing and
+  rehearsing them.
+- **On Solana** (`--chain solana`) a program declares every account it touches, a cook signs with
+  `--keypair`, and the Kitchen's fee is read from the cluster with no `--value`; `--fund` and
+  `sauce publish` are EVM only. `sauce-solana` covers writing and running one.
 
 ## Rules
 
