@@ -50,9 +50,10 @@ spends none. For Portal fulfillment the Pot must be owned by the destination Por
 `route.nativeAmount` must cover every call value. [Create an intent](intents.md) covers reading the
 fee, deriving that Pot, and adding the reward and Portal calldata.
 
-`compileSauceRoute` takes a bare body or a complete `function main(...)`. Its rewrite passes parse
-the body as JavaScript, so a body carrying SauceScript type annotations belongs in raw `compile`,
-which accepts typed source directly.
+`compileSauceRoute` takes a SauceScript file as written: a module declaring `function main(...)`,
+or a script whose top-level statements are the entry. Its rewrite passes parse SauceScript as the
+compiler does, type annotations included, so a typed helper that takes or returns an array or a
+record compiles the same way through either.
 
 ## Compile a reusable program
 
@@ -199,10 +200,10 @@ For an ABI you already hold, raw compilation takes
 `contracts: { ERC20: { abi } }`, and adapts it. The two shapes are not interchangeable.
 
 Raw compilation serves nothing you do not. The route path serves the SDK's own files itself: the
-`@sauce/token` library, the ERC-20 and Sauce Router ABIs and every protocol ABI twin. For a raw
-compile that needs them, fall back to `resolveSdkModule` and `resolveSdkPackage` from
-`@eco-incorp/sauce/compiler` — the [compiler reference](../api/compiler.md#the-sdks-own-modules)
-shows how.
+`@sauce/token` and [`@sauce/router`](../api/router.md) libraries, the ERC-20 and Sauce Router ABIs
+and every protocol ABI twin. For a raw compile that needs them, fall back to `resolveSdkModule` and
+`resolveSdkPackage` from `@eco-incorp/sauce/compiler` — the
+[compiler reference](../api/compiler.md#the-sdks-own-modules) shows how.
 
 The filesystem resolver above is the one Node-only part of this page. In a browser, serve modules
 from memory.

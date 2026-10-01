@@ -22,7 +22,9 @@ import {
   v12KitchenAddress,
   v12KitchenImplementationAddress,
   v12PotDerivation,
+  v12ReleaseSet,
   v12RouterAddress,
+  v12RouterGeneration,
   v12SvmEngineProgramId,
   v12SvmKitchenProgramId,
 } from "../src/deployments/index.js";
@@ -63,17 +65,13 @@ describeAddresses("v12 deployed addresses", () => {
     expect(new Set(evm).size).toBe(evm.length);
   });
 
-  it("agrees with the engine gate anchors — Kitchen, Router, Pot initCodeHash", () => {
-    // V12EngineGate.json is assembled from the engine manifest + kitchen addresses and re-verified by
-    // the harness against the live potInitCodeHash(); if these disagree, the addresses name a
-    // different stack than the engine actually gates to.
-    const gate = JSON.parse(readFileSync(GATE, "utf8")) as {
-      kitchen: string;
-      potInitCodeHash: string;
-      router: string;
-    };
+  it("agrees with the engine gate anchors — Kitchen and Pot initCodeHash", () => {
+    // V12EngineGate.json is the engine manifest's gate, re-verified by the harness against the live
+    // potInitCodeHash(); if these disagree, the addresses name a different stack than the engine
+    // actually gates to. The Router is not an anchor: no Pot hash derives from it.
+    const gate = JSON.parse(readFileSync(GATE, "utf8")) as Record<string, string>;
+    expect(Object.keys(gate).sort()).toEqual(["kitchen", "potInitCodeHash"]);
     expect(v12KitchenAddress()).toBe(gate.kitchen);
-    expect(v12RouterAddress()).toBe(gate.router);
     expect(v12PotDerivation().initCodeHash).toBe(gate.potInitCodeHash);
     // A Pot is deployed BY the Kitchen it is gated to.
     expect(v12PotDerivation().deployer).toBe(gate.kitchen);
@@ -85,20 +83,26 @@ describeAddresses("v12 deployed addresses", () => {
     expect(v12SvmKitchenProgramId()).toBe(idl.address);
   });
 
-  it("preserves independent engine and Kitchen provenance", () => {
+  it("preserves independent engine and Kitchen provenance, from the pinned release set", () => {
     const releases = v12DeployedAddresses().releases;
-    const evmEngine = { version: "1.1.0", commit: "42a492ac7ce3ae3c8444c97182306560b1f1e012" };
-    const kitchen = { version: "1.1.0", commit: evmEngine.commit };
-    expect(releases).toEqual({
-      "v12-evm": evmEngine,
-      "v12-svm": { version: "1.3.0", commit: evmEngine.commit },
-      "kitchen-evm": kitchen,
-      "kitchen-svm": { version: "1.0.0", commit: "f2f6dfbe38809304d83ca755eb7975c19d35ceab" },
-    });
-    expect(v12DeployedVersion()).toBe(kitchen.version);
-    expect(v12DeployedAddresses().commit).toBe(kitchen.commit);
-    expect(v12EngineAddress()).toBe("0x6785455AA479AA99D59357d7c9Fe14cba626F175");
-    expect(v12SvmEngineProgramId()).toBe("2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT");
+    const set = v12ReleaseSet();
+    for (const component of ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"] as const) {
+      expect(releases[component]).toEqual({
+        version: set[component].version,
+        commit: expect.stringMatching(/^[0-9a-f]{40}$/),
+      });
+    }
+    expect(v12DeployedVersion()).toBe(releases["kitchen-evm"].version);
+    expect(v12DeployedAddresses().commit).toBe(releases["kitchen-evm"].commit);
+    expect(v12EngineAddress()).toBe(set["v12-evm"].engine);
+    expect(v12SvmEngineProgramId()).toBe(set["v12-svm"].engine);
+  });
+
+  it("records the Router's generation, read off its fixed-address salt", () => {
+    const router = v12DeployedAddresses().evm.contracts.router;
+    expect(router.saltName).toBe("Router");
+    expect(v12RouterGeneration()).toBe(Number.parseInt(router.rawSalt!.slice(-2), 16));
+    expect(v12RouterGeneration()).toBeGreaterThanOrEqual(1);
   });
 
   it("carries the release provenance (version + commit)", () => {

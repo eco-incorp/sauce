@@ -2,14 +2,27 @@
 
 [Documentation](../README.md) · [Quick start](quick-start.md) · [Coverage](../api/coverage.md)
 
-Inside an EVM route body, token symbols and protocol contracts are names the compiler resolves
-against the destination chain — so a program reads like the operation it performs:
+Every protocol in the registry is a namespace, and every registered token a name, in both languages
+the SDK speaks. Inside a program they are names the compiler resolves against the chain the program
+runs on:
 
 ```js
 USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
 ```
 
-`USDC` resolves to the chain's registered token address. `Uniswap.UniversalRouter` resolves to the registered contract address when used as an argument, and exposes its ABI methods when used as a call target. Amounts are integers in the token's smallest units; the SDK does not infer decimal conversions.
+In host TypeScript the same names hang off a chain export:
+
+```ts
+import { Base } from "@eco-incorp/sauce";
+
+Base.USDC.address; // the address `USDC` resolves to in a program compiled for Base
+Base.UniswapV4.UniversalRouter.address; // the address `UniswapV4.UniversalRouter` resolves to there
+```
+
+`USDC` resolves to the chain's registered token address. `Uniswap.UniversalRouter` resolves to the
+registered contract address when used as a value, and exposes its ABI methods when used as a call
+target. Amounts are integers in the token's smallest units; the SDK does not infer decimal
+conversions.
 
 ## Compile a global call
 
@@ -28,26 +41,94 @@ The returned `calls` encode an EVM Pot `cook`; this function does not submit a t
 
 The supported Universal Router spelling is `UniswapV4.UniversalRouter`, or the unambiguous family alias `Uniswap.UniversalRouter`. `UniswapV3.UniversalRouter` is not registered. The router's `execute` method takes the arguments declared by its ABI; the namespace does not construct swap commands or select a route for you.
 
-## Which names exist?
+## Namespaces
 
-The protocol catalog, contract descriptors, token registry, and SVM venue registry provide different coverage. A catalog entry does not automatically provide a callable contract namespace. [Coverage](../api/coverage.md) lists what is registered.
+A protocol's namespace is its registry slug in PascalCase: `uniswap-v3` is `UniswapV3`,
+`aerodrome-slipstream` is `AerodromeSlipstream`, `pancakeswap-v3` is `PancakeswapV3`. Its members
+are the contracts the registry evidences against the deployed code, one per contract:
 
-```ts
-import { contracts, getProtocol, routes } from "@eco-incorp/sauce";
+| Member              | Example                                        | In a program                         | In TypeScript                                         |
+| ------------------- | ---------------------------------------------- | ------------------------------------ | ----------------------------------------------------- |
+| A deployed contract | `PancakeswapV3.Factory`, `UniswapV4.StateView` | its address; `.method(...)` calls it | `.address`, `.available`, `.method(...)` builds calls |
+| An address only     | `AaveV3.PoolAddressesProvider`, `Maker.Dai`    | its address                          | `.address`, `.available`; no methods                  |
+| An interface        | `Erc4626.Vault`, `Curve.StableSwap`            | `.at(address).method(...)`           | `.at(address).method(...)`                            |
 
-const protocol = getProtocol("uniswap-v4");
-const descriptors = contracts.listDescriptors();
-const router = contracts.on("base").UniswapV4.UniversalRouter;
-const baseTokens = routes.knownTokenSymbols(routes.chain("base").chain);
+A deployed contract's ABI also reaches another deployment of it with `.at(address)`:
+`UniswapV3.Factory.at(factory).getPool(...)`. An address-only contract is one the registry has an
+address for and no verified ABI. An interface is an ABI the registry has no fixed address for —
+a vault, a pool, a token — so the program or host names the deployment.
 
-console.log(protocol, descriptors.length, router.available, baseTokens);
+### Names
+
+- **A contract is named by its role** in the protocol's `addresses.ts`, first letter upper-cased:
+  `quoterV2` is `QuoterV2`, `cUSDCv3` is `CUSDCv3`. Where the role's leading words also appear in
+  its ABI's name, they keep the ABI's spelling: `clFactory`, whose ABI is `SlipstreamCLFactoryABI`,
+  is `AerodromeSlipstream.CLFactory`.
+- **An interface is named by its ABI**, without `ABI` and the protocol's own prefix:
+  `ERC20ABI` is `Erc20.ERC20`, ERC-4626's `VaultABI` is `Erc4626.Vault`. So is a role that runs
+  different ABIs on different chains (Gamma's `UniProxy` and `UniProxyLegacy`).
+- **A family alias** groups a protocol's versions: a slug ending in `-v<N>` also joins the family
+  named by the rest, so `Uniswap` covers `UniswapV2`, `UniswapV3` and `UniswapV4`, and `Aave`,
+  `Compound`, `Pancakeswap`, `Gmx` and the others theirs. A family exposes a contract only when
+  exactly one member has one by that name: `Uniswap.UniversalRouter` is `UniswapV4.UniversalRouter`,
+  while `Uniswap.Factory` names both V2's and V3's and is refused, never guessed — in a program at
+  compile time, in TypeScript as a type error and a thrown error. A family alias always takes a
+  contract name.
+- **A protocol with one deployed contract** also takes its methods directly:
+  `Cctp.depositForBurn(...)` is `Cctp.TokenMessenger.depositForBurn(...)`. This shortcut exists in
+  programs only.
+
+A name existing does not mean the contract is deployed on your chain. Naming one that is not fails
+when the program compiles, or when TypeScript builds the call — the point at which you can still do
+something about it. [Coverage](../api/coverage.md) has the totals, and
+`contracts.listContracts(slug)` lists a protocol's contracts.
+
+## Use a venue only where the chain has it
+
+`available(<name>)` asks, when the program is compiled, whether the chain it is compiled for has a
+contract or a token. A branch it rules out is removed before any name in it is resolved, so one
+program can name a venue some of its chains lack:
+
+```js
+// One program for every chain: the USDC/WETH 0.05% pool from PancakeSwap V3 where the chain has it,
+// from Uniswap V3 where it does not, and nothing where it has neither.
+//
+// `available(...)` is decided when the program is compiled, for the chain it is compiled for, and
+// the branches it rules out are removed before anything in them is resolved.
+function main() {
+  let pool = 0n;
+  if (available(PancakeswapV3.Factory)) {
+    pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
+  } else if (available(UniswapV3.Factory)) {
+    pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);
+  }
+  return pool;
+}
 ```
 
-Contract accessors expose `address`, `available`, `chains`, `abi`, `methods` and `coverage`. A name
-existing does not mean the contract is deployed on your chain — calling one that is not fails when
-you build or compile, which is the point at which you can still do something about it.
+Compiled for Base this calls PancakeSwap V3's factory; compiled for Optimism, which has no
+PancakeSwap V3, it compiles to the Uniswap V3 lookup alone. [registry-names.ts](../examples/registry-names.ts)
+compiles it for both.
 
-Versioned names are explicit: `UniswapV2.Factory` and `UniswapV3.Factory` select different descriptors. A family alias only resolves a contract name when it identifies one descriptor; `Uniswap.Factory` is ambiguous and fails. A protocol with a single default contract also permits the shorter `Protocol.method(...)` form.
+- It takes a contract — `UniswapV3.Factory`, `Uniswap.UniversalRouter`, or one on a named chain,
+  `Arbitrum.UniswapV3.Factory` — or a token symbol, `USDT`. A token is available where the chain's
+  token map has it, which includes the `tokens` you pass.
+- It folds `if`/`else`, `?:`, `&&`, `||` and `!`. A guard that returns,
+  `if (!available(X)) return 0n;`, removes the rest of its block where `X` is absent.
+- Anywhere else it is the literal `true` or `false`. A branch that depends on it only through a
+  runtime value (`const has = available(X); if (has) ...`) is live code, and every name in it must
+  still resolve.
+- A name the registry does not know on any chain is an error, not `false`, as are an ambiguous
+  family name and an interface, so a typo cannot quietly drop a branch. A program that declares its
+  own `available` keeps it.
+- Inside an intent to another chain, `Arbitrum(() => { ... })`, it is decided for that chain.
+
+In TypeScript, the same question is a contract's `.available`, and whether the chain export has the
+token: `Optimism.PancakeswapV3.Factory.available` is `false`, and `Celo.USDC` is a type error.
+
+A name used as a token or a protocol that the chain does not have at all fails when the program
+compiles, naming it and the chain's closest names: `USDCC.balanceOf(...)` on Base reports
+"`USDCC` is not a token or protocol on base. Did you mean `USDC`?".
 
 ## Token methods and balances
 
@@ -55,7 +136,7 @@ These are SauceScript route-body fragments:
 
 ```js
 USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
-let available = USDC.balanceOf(self);
+let balance = USDC.balanceOf(self);
 ```
 
 For a token absent from the registry, use `Token(address)`:
@@ -81,10 +162,10 @@ A write returns nothing: it succeeds or reverts the program, so there is no `boo
 a reserved `__sauce_<method>` name, so a program's own `transfer` or `approve` function keeps its
 name.
 
-An explicit `IERC20.at(address).transfer(...)`, with the ABI imported yourself, is **not** SafeERC20.
-It is the raw ABI call: it decodes the declared `bool`, so it reverts on a token that returns nothing
-and accepts one that returns `false`. Use it only when that is the behavior you want; otherwise use
-one of the spellings above.
+The raw ABI call is **not** SafeERC20: `Erc20.ERC20.at(address).transfer(...)`, or
+`IERC20.at(address).transfer(...)` with the ABI imported yourself, decodes the declared `bool`, so it
+reverts on a token that returns nothing and accepts one that returns `false`. Use it only when that
+is the behavior you want; otherwise use one of the spellings above.
 
 Use `tokenDefines` on an intent to add or override symbols, or `tokens` on `compileSauceRoute`'s compile options. Overrides merge per symbol with the registry. These maps contain **addresses**; `IntentOptions.tokens` instead declares the **token amounts** a solver must deliver for the route.
 
@@ -154,32 +235,76 @@ Two different mechanisms share the look of a bare name, and the difference is wh
 
 Chain accessors such as `Base` and `Solana`, the `chain(ref)` front door, and the host `Token` builder are **named exports**: `import { Base, Solana, Token } from "@eco-incorp/sauce"`. They are ordinary JavaScript values, and importing the package installs nothing on `globalThis`.
 
-Bare route names such as `USDC` and `Uniswap` are **route syntax**, resolved by the compiler against the destination chain. The package supplies TypeScript declarations for them so a typed callback checks, but there is no host JavaScript `USDC` or `Uniswap` object to import or execute.
+Bare route names such as `USDC`, `Uniswap` and `available` are **route syntax**, resolved by the compiler against the destination chain. The package supplies TypeScript declarations for them so a typed callback checks, but there is no host JavaScript `USDC` or `Uniswap` object to import or execute. The host spelling of the same registry entry is on the chain export: `Base.USDC`, `Base.Uniswap`.
 
 A host that wants the chain names as runtime globals anyway can opt in with `installRouteGlobals()`, which defines them on `globalThis` (or any target you pass) and never overwrites a name already there. It installs values only; declare the names yourself.
 
-Outside a route, `Base.UniswapV4.UniversalRouter` or `contracts.on("base").UniswapV4.UniversalRouter` is a real host accessor. Its methods return inert `ContractCall` objects. A call can provide encoded `data`, `.toCall()` for `{ target, data, value }`, or `.toSauceScript()` for source and import paths. A host accessor's methods are typed `unknown`, because their signatures come from an ABI the type
-system has not seen. Narrow one before calling it:
+## Contracts and tokens from TypeScript
+
+A chain export carries the registry for its chain. A token is its registry row:
 
 ```ts
-import { contracts } from "@eco-incorp/sauce";
+import { Base } from "@eco-incorp/sauce";
 
-const router = contracts.on("base").UniswapV4.UniversalRouter;
-const execute = router.execute as (
-  commands: `0x${string}`,
-  inputs: readonly `0x${string}`[],
-  deadline: bigint,
-) => contracts.ContractCall;
+const { address, decimals, symbol, chain } = Base.USDC;
 ```
 
-That declaration does not build or send a swap. Supply valid Universal Router commands before calling it. For ordinary ERC-20 operations from host code, the typed `token.Token.transfer({ ... })` and `.approve({ ... })` builders are usually more convenient; see [builders](builders-and-actions.md).
+A contract's methods build calls, typed from its ABI: the arguments are the ABI's, and a call
+carries its encoded `data`, `.toCall()` for `{ target, data, value }` and `.toSauceScript()` for the
+same call as a program. Run one against a client you pass — the SDK embeds no RPC endpoint and reads
+no environment:
+
+```ts
+import { Base } from "@eco-incorp/sauce";
+import type { PublicClient, WalletClient } from "viem";
+
+export async function quoteAndSwap(publicClient: PublicClient, walletClient: WalletClient) {
+  const [amountOut] = await Base.UniswapV3.QuoterV2.quoteExactInputSingle({
+    tokenIn: Base.USDC.address,
+    tokenOut: Base.WETH.address,
+    amountIn: 1_000_000n,
+    fee: 500,
+    sqrtPriceLimitX96: 0n,
+  }).read(publicClient);
+
+  const swap = Base.UniswapV3.SwapRouter02.exactInputSingle({
+    tokenIn: Base.USDC.address,
+    tokenOut: Base.WETH.address,
+    fee: 500,
+    recipient: walletClient.account!.address,
+    amountIn: 1_000_000n,
+    amountOutMinimum: (amountOut * 99n) / 100n,
+    sqrtPriceLimitX96: 0n,
+  });
+  await swap.simulate(publicClient, { account: walletClient.account! });
+  return swap.write(walletClient);
+}
+```
+
+- `read(client)` runs the method as an `eth_call` and resolves to its decoded outputs: a view's
+  value, or what a state-changing method would return with nothing sent. Uniswap's QuoterV2 quotes
+  are state-changing methods meant to be read this way.
+- `simulate(client, { account, value? })` runs a state-changing method as `account` and resolves
+  to viem's `{ result, request }`.
+- `write(client, { account?, value? })` sends a state-changing method from the wallet client's
+  account and resolves to the transaction hash. A view or pure method's call has no `simulate` or
+  `write`.
+
+Each first checks that the client is on the call's chain, because the address is that chain's
+deployment. viem's actions load on the first such call, not when the call is built. The swap above
+also needs the router's allowance for `USDC` first: an interface bound to the token,
+`Base.Erc20.ERC20.at(Base.USDC.address).approve(router, amount)`, builds it, as do the
+[token builders](builders-and-actions.md).
+
+`contracts.on("base")` returns the same tree for a chain chosen at run time. The [contracts
+reference](../api/contracts.md) lists every property and option.
 
 ## Chain selection and ABI bindings
 
 A bare protocol reference uses the enclosing destination. A qualified reference such as `Ethereum.UniswapV4.UniversalRouter` selects an address from Ethereum's registry. It does **not** move execution to Ethereum: the resulting call still executes on the enclosing route's chain. Use separate intents and [nesting](nested-intents.md) for cross-chain execution. Set `compile.accessors.chainScope` to restrict explicitly qualified chain names when needed.
 
-Route rewriting rejects missing methods, ambiguous aliases and missing deployments. Every descriptor declares its contract's deployed ABI types, so the selectors it computes are the ones the deployed contract dispatches.
+Route rewriting rejects missing methods, ambiguous aliases and missing deployments. Every registry ABI declares its contract's deployed types, so the selectors it computes are the ones the deployed contract dispatches.
 
-To call a contract outside the descriptor registry, supply an ABI binding through `compile.contracts` or a resolved ABI import, then call `Binding.at(address).method(...)` in source. See [compiler integration](../api/compiler.md). Host `.at(address)` rebinding and SauceScript ABI `.at(address)` are separate APIs; the global protocol rewrite does not provide arbitrary `.at(...)` chains.
+To call a contract outside the registry, supply an ABI binding through `compile.contracts` or a resolved ABI import, then call `Binding.at(address).method(...)` in source. See [compiler integration](../api/compiler.md).
 
 The token and EVM protocol rewrites apply to EVM routes. Solana uses account parameters and venue adapters, covered in the [Solana guide](solana.md).

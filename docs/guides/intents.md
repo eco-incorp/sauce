@@ -64,13 +64,18 @@ the one Pot the solver deploys per Portal and every intent through that Portal s
 overrides. `destinationPot(Base.chain, { portal })` returns that address, for a `precalls`
 transfer into it.
 
+The address also follows the pinned Kitchen release's Pot bytecode, whose hash is part of every Pot
+address. A Kitchen release that changes that bytecode starts a new family: the shared Pot for the
+same Executor moves to a new address, and a Pot of the earlier family keeps running on the engine
+built for it. `destinationPot` always answers for the family this SDK pins.
+
 **The destination Pot must exist before the intent is fulfilled.** The SDK derives its address and
 deploys nothing: the route contains no deployment call. The solver deploys the shared Pot for each
 Portal. A fulfilment that cooks on a Pot that is not there reverts entirely, because the Executor
 refuses a call with calldata to an address without code (`CallToEOA`).
 
 To deploy it yourself first, send this on the destination chain:
-`routes.sauceEvmDeployPotCall({ kitchen: v12GateKitchen(), owner: executor, salt: SAUCE_INTENT_POT_SALT })`.
+`routes.sauceEvmDeployPotCall({ owner: executor, salt: SAUCE_INTENT_POT_SALT })`.
 The call is permissionless, and it returns the existing Pot when one is already there. A **Pot you
 name** instead must also exist, and be owned by that Executor, or the cook reverts with `NotOwner()`.
 Use
@@ -83,8 +88,9 @@ the shared Pot — to predict the Pot and check that it is deployed, with the ri
 Arc's eco-routes Portal (`0xEC002CA16cE20c2a9F3C6200EF04E7d92a3dfBD8`) is not the Portal most other
 chains share, so its Executor (`0x95b2d45F49c68a54BDBa0356fc3034751A43b3D4`) and the Pot derived from
 it (`destinationPot("arc")`, `0x4edfB4576F91A9c2fE9aA50f669B7C81E4B82955`) are Arc's own. This prediction
-uses Kitchen **1.1.0** initcode. Upgrade the Kitchen and deploy the matching engine and Pot before
-sending intents; the release address alone does not confirm readiness.
+uses the pinned Kitchen release's Pot bytecode. The Kitchen, the matching engine and that Pot must be
+deployed on Arc before an intent to it can run; the release address alone does not confirm
+readiness.
 
 The deployment helpers return the released addresses. They do not check that code is live at those
 addresses on your chain. The same helper confirms the Kitchen and engine have code, and reads the
@@ -252,6 +258,40 @@ A variable can arrive two ways, and the same variable can do both:
 
 Used both ways, a variable gets a slot in each: they are different offsets carrying the same value.
 
+### The file's functions, imports and constants
+
+A program body was written in the file, so it can use what the file declares: its functions, its
+imports, its interfaces and its module-level constants. Its program carries the ones the body
+reaches, and the ones those reach, as written, and nothing else:
+
+```ts
+import { balanceOf } from "@sauce/token";
+
+function fee(amount: Uint256): Uint256 {
+  return amount / 100n;
+}
+
+function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum(
+    () => {
+      const [held] = abi.decode(abi.encode(balanceOf(USDC, ctx.self())), ["Uint256"]);
+      USDC.transfer(RECIPIENT, held - fee(held));
+    },
+    { tokens: [{ token: USDC, amount }] },
+  ).reward({ tokens: [{ token: USDC, amount }] });
+}
+```
+
+A carried declaration is compiled for the chain its program runs on, so `USDC` in `fee` would mean
+Arbitrum's USDC there. A function only intent bodies call moves out of the enclosing program, which
+never runs it; one that another remaining function calls stays. A local of the enclosing function
+shadows a file declaration of the same name, as it does in the compiler: the body captures the
+local. A module-level `let` the body's program uses starts with the value it has where the intent
+opens — the program carries the declaration and is handed its value, the same value a reward naming
+it escrows — so the body and every function it calls see one number. A body cannot call the
+function that opens it, since that function's program would contain the intent it is the body of.
+
 ### Nesting
 
 An intent inside an intent is lowered recursively — the child is compiled by re-entering the same
@@ -261,8 +301,31 @@ of hops whose amounts are each measured on arrival is written; see
 
 ### Names resolve per chain
 
-`USDC` inside the braces is _Arbitrum's_ USDC, because those calls run on Arbitrum. Resolving it
-against the enclosing chain would put one chain's address in another chain's route.
+Two chains meet in `Arbitrum(() => { ... }).reward({ ... })`, and each part belongs to one of them.
+A token symbol resolves on the chain where its part runs:
+
+| Part                                   | Runs on                       | `USDC` is    |
+| -------------------------------------- | ----------------------------- | ------------ |
+| The braces                             | Arbitrum, the destination     | Arbitrum's   |
+| The second argument, what is delivered | Arbitrum, the destination     | Arbitrum's   |
+| `.reward(...)`                         | The chain the program runs on | That chain's |
+
+The reward belongs to the enclosing chain because the program escrows it there: it approves that
+chain's Portal for the reward token and funds the intent in the same fulfillment. Resolving a name
+on the other chain names an address that is not that token where it is used. A reward token taken
+from the destination fails the approval's code check and reverts the fulfillment. A body token taken
+from the enclosing chain makes the intent unfulfillable.
+
+The rule repeats at every depth. An intent opened inside a body is funded on that body's chain, so
+its reward resolves there and its own body on its own destination. The same holds for the other
+values that belong to a chain, `chainId` and protocol addresses such as `UniswapV4_UniversalRouter`:
+a body on another chain sees that chain's own.
+
+A literal address means that address wherever it appears, and so does a compile-time define whose
+name no chain uses, such as `RECIPIENT`. A define or a `tokens` override under a chain-scoped name —
+a token symbol, `chainId`, a protocol address — is a name on the chain the program is compiled for.
+It applies to that program and to the reward it funds. A body on another chain keeps that chain's
+value, whether the define came from `chainDefines(base)` or was chosen by hand.
 
 ### A throw reverts everything
 
@@ -350,6 +413,8 @@ Each of these is a compile error naming the construct, never a silently differen
 - A `.reward(...)` that is not an object, or a token entry missing `token` or `amount`.
 - A missing `deadline`, a missing `creator`, or a missing `executionFee` for a program body.
 - A chain with no eco-routes deployment, or a pair with no prover deployed on both sides.
+- A program body that calls the function opening it.
+- A program body using a module variable that a local of the opening function shadows.
 
 Inside a program body an unknown name is the _compiler's_ error rather than this lowering's, and
 reads the same way: it names the variable that is not declared.
@@ -360,7 +425,11 @@ A callback is read with `Function.prototype.toString()`, parsed, and compiled as
 
 Use literals for self-contained callbacks, or source strings plus `defines` for application inputs, as above. Defines accept scalar `bigint`, `number`, or `boolean` values; use `bigint` for addresses and token quantities. `compile.defines` overrides `options.defines`, which overrides chain defaults. Local declarations in the program take precedence over ambient names.
 
+The package declares SauceScript's builtins for TypeScript — `ctx`, `crypto.keccak256`, `hex`, `Math.mulDiv`, `require(condition, message)`, `abi`, `evm`, `svm`, `.toBytesBe(...)` and the rest of the [reference](../../skills/sauce-script/references/builtins.md) — as it declares token symbols and protocols, so a typed callback that uses them typechecks. The declarations install nothing at run time, and a builtin's comment says which targets have it: TypeScript does not know which chain the callback compiles for.
+
 Callbacks must be synchronous and take no parameters. Bound/native functions, generators, and async functions are rejected. If a bundler transforms function source, ship an explicit SauceScript string or source asset. A TypeScript type declaration does not create a captured value.
+
+A function the callback declares in its own body is a helper of the program: SauceScript has no nested functions, so it is declared beside `main`, and an intent opened inside the callback can call it like any other function of the file. Its annotations are whatever the host's TypeScript compilation left in the callback's text, which is usually none, so a helper that takes or returns an array or a record belongs in a source string.
 
 `Base(...)` adds the SDK's default ambient token module, enabling function forms such as `approve(tokenAddress, spender, amount)`. Direct `compileSauceRoute(...)` does not automatically add that ambient module. The token and protocol member syntax described in [protocols and tokens](protocols-and-tokens.md) is a separate rewrite that works on both paths; its writes import the same module's functions themselves, so they have the same `SafeERC20` semantics either way.
 

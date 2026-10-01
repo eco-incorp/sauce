@@ -6,8 +6,8 @@
 //   node cook.mts --owner <Pot owner> --recipient <address>
 import { existsSync, statSync } from "node:fs";
 
-import { destinationExecutionFee, routes, v12GateKitchen, v12PredictPot } from "@eco-incorp/sauce";
-import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
+import { destinationExecutionFee, routes, v12PredictPot } from "@eco-incorp/sauce";
+import { v12EngineAddress, v12KitchenAddress } from "@eco-incorp/sauce/deployments";
 import { v12Pot, v12PotAbi } from "@eco-incorp/sauce/evm/engine";
 import { svmEngineArtifacts } from "@eco-incorp/sauce/svm/engine-artifacts";
 import { bytesToHex, concatHex, decodeFunctionData, getAddress, keccak256 } from "viem";
@@ -28,7 +28,7 @@ function check(condition: unknown, message: string): asserts condition {
 const owner = address("owner");
 const salt = `0x${"00".repeat(32)}` as const; // one Pot per owner and salt
 const pot = v12PredictPot(owner, salt);
-const deploy = routes.sauceEvmDeployPotCall({ kitchen: v12GateKitchen(), owner, salt });
+const deploy = routes.sauceEvmDeployPotCall({ owner, salt }); // through the released Kitchen
 // Send deploy ({ to, data, value }) where the chain has no code at `pot`.
 
 // 2. The program, compiled for its chain with that chain's names, as `sauce compile` does.
@@ -52,7 +52,7 @@ check(
   decoded.functionName === "cook" && decoded.args?.[1] === payload,
   "the cook carries program and arguments",
 );
-check(deploy.to === getAddress(v12GateKitchen()), "the Pot is deployed through the Kitchen");
+check(deploy.to === getAddress(v12KitchenAddress()), "the Pot is deployed through the Kitchen");
 
 // 5. Solana: the packaged engine and Kitchen binaries a local harness loads (Node-only paths).
 const artifacts = svmEngineArtifacts("devnet");

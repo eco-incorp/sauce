@@ -26,9 +26,9 @@ There is no `/routes` subpath. The public types are members of the namespace: `r
 
 Chain references accept canonical slugs, names/aliases supported by the registry, numeric chain IDs, and canonical chain records. `.chain` exposes the canonical record.
 
-`Base` and every other chain are **named exports of the package root**; importing the package installs nothing on `globalThis`. A root-imported accessor is the composed one, which also exposes host contract and venue accessors (`Base.Uniswap.UniversalRouter`, `Solana.RaydiumCpSwap`); `routes.chainAccessors.Base` is the bare route entry point without that tree. A host that wants the bare names at run time can call `installRouteGlobals()`; `uninstallRouteGlobals()` reverses it, and neither installs TypeScript declarations.
+`Base` and every other chain are **named exports of the package root**; importing the package installs nothing on `globalThis`. A root-imported accessor is the composed one, which also exposes host contract and venue accessors (`Base.Uniswap.UniversalRouter`, `Solana.RaydiumCpSwap`) and the chain's registry tokens (`Base.USDC`), described in the [contracts reference](contracts.md); `routes.chainAccessors.Base` is the bare route entry point without them. A host that wants the bare names at run time can call `installRouteGlobals()`; `uninstallRouteGlobals()` reverses it, and neither installs TypeScript declarations.
 
-`body` accepts a source string or a synchronous zero-argument callback. A string can contain a full `function main(...)` or a bare body. A callback supplies source text, with no JavaScript capture. See [callback semantics](../guides/intents.md#callbacks-are-compiled-source).
+`body` accepts a source string or a synchronous zero-argument callback. A string is a SauceScript file, compiled as written: a module declaring `function main(...)`, or a script whose top-level statements are the entry. A script cannot `return`, so a program that returns a value declares `main`. A callback supplies source text, with no JavaScript capture. See [callback semantics](../guides/intents.md#callbacks-are-compiled-source).
 
 ## Intent options
 
@@ -59,7 +59,7 @@ The compiler needs no source reward to compile a destination program. Use `compi
 import { routes } from "@eco-incorp/sauce";
 
 export function compileProgram(execution: routes.SauceEvmExecutionInput) {
-  return routes.compileSauceRoute("base", "return 7n;", execution);
+  return routes.compileSauceRoute("base", "function main() { return 7n; }", execution);
 }
 ```
 
@@ -69,11 +69,11 @@ export function compileProgram(execution: routes.SauceEvmExecutionInput) {
 | ---------- | --------------------------------------------------------------------- |
 | `calls`    | Destination call inputs, normally one call for one program            |
 | `compiled` | Route compatibility result with `bytecode: Uint8Array[]` and warnings |
-| `source`   | Source after wrapping and SDK token/protocol rewrites                 |
+| `source`   | Source after the SDK token/protocol rewrites                          |
 
 The route wrapper differs from the direct `/compiler` API, which returns one byte array plus compiler metadata and an optional SVM account manifest. Use the direct API when you need that metadata. The route target defaults to `"v12"` for EVM and `"svm"` for SVM; direct compiler targets are `"evm"` and `"svm"`.
 
-`SauceCompileOptions` supports `resolve` and `resolvePackage` for the program's own imports, scalar `defines`, token-address `tokens`, ABI `contracts`, `ambient` module names, and `accessors`. `resolve` has the [compiler's resolver contract](compiler.md#resolver-contract) and is asked for any path the program imports; the SDK itself serves `@sauce/token`, `./artifacts/IERC20.json`, `./artifacts/ISauceRouter.json` and every `./protocols/<slug>/<Export>.json`, so source from the SDK's builders needs neither option. Accessor rewriting defaults on; an options object can configure qualified-chain scope or other rewrite behavior. `openRoute` merges chain defaults and the default ambient token module. Direct `compileSauceRoute` performs token/protocol rewrites but does not automatically merge that ambient module.
+`SauceCompileOptions` supports `resolve` and `resolvePackage` for the program's own imports, scalar `defines`, token-address `tokens`, ABI `contracts`, `ambient` module names, and `accessors`. `resolve` has the [compiler's resolver contract](compiler.md#resolver-contract) and is asked for any path the program imports; the SDK itself serves `@sauce/token`, `./artifacts/IERC20.json`, `./artifacts/ISauceRouter.json` and every `./protocols/<slug>/<Export>.json`, so source from the SDK's builders needs neither option. Accessor rewriting defaults on; an options object can configure qualified-chain scope or other rewrite behavior. `openRoute` adds each chain's defaults — its token symbols, `chainId` and protocol addresses, taken separately for every chain an intent written in the program names — and the default ambient token module. A `defines` or `tokens` entry under one of those chain-scoped names belongs to the chain the program compiles for: an intent's body on another chain uses that chain's value instead ([names resolve per chain](../guides/intents.md#names-resolve-per-chain)). Direct `compileSauceRoute` performs token/protocol rewrites but does not automatically merge that ambient module.
 
 The route wrapper has no runtime argument-payload parameter. Use compile-time defines here, or direct compilation and a suitable execution API for parameterized entry points; see [compiler integration](compiler.md).
 
@@ -85,9 +85,9 @@ Both builders, and `sauceEvmDeployPotCall` below, return `{ to, target, data, va
 
 ## Deployment addresses
 
-`sauceEvmDeployPotCall({ owner, salt, kitchen })` encodes Pot deployment through the Kitchen you name; for a direct intent route the owner is the destination `Portal.executor()`. No route the SDK builds includes this call. To deploy an intent's shared Pot yourself before the solver does, pass `kitchen: v12GateKitchen()`, that Executor, and `SAUCE_INTENT_POT_SALT`.
+`sauceEvmDeployPotCall({ owner, salt, kitchen? })` encodes Pot deployment through a Kitchen, by default the released one (`v12KitchenAddress()`); for a direct intent route the owner is the destination `Portal.executor()`. No route the SDK builds includes this call. To deploy an intent's shared Pot yourself before the solver does, pass that Executor and `SAUCE_INTENT_POT_SALT`.
 
-Every address helper here returns a **recorded** address, never a verified one. `v12EngineAddress()` and `v12KitchenAddress()` give the released addresses directly and are the ones to prefer. `sauceEvmDeployPotCall`'s `chainId` form, `v12Deployment` and `requireV12Deployment` filter by a roster of chains where deployment previously succeeded, which is a different question from whether code is there now. `V12_EVM_CONTRACTS` and `v12SvmProgramId` name an earlier deployment generation. Check the chain before trusting any of them; [evm-execution.ts](../examples/evm-execution.ts) shows prediction, deployment and the owner/Kitchen checks.
+Every address helper here returns a **recorded** address, never a verified one. `v12EngineAddress()` and `v12KitchenAddress()` give the released addresses, the same on every chain; the SDK reads no chain, so it cannot say whether code is there. Check the chain before trusting any of them; [evm-execution.ts](../examples/evm-execution.ts) shows prediction, deployment and the owner/Kitchen checks.
 
 `buildSauceSvmCall` and the SVM route path emit an 8-byte engine instruction that the Solana engine does not accept, whatever code account or engine id you give them: they do not build the Kitchen call the engine requires. Build Solana execution with the Kitchen client instead — see [SVM destinations in Eco intents](../guides/solana.md#svm-destinations-in-eco-intents).
 

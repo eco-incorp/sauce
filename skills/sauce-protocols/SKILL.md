@@ -1,55 +1,50 @@
 ---
 name: sauce-protocols
-description: Calling any DeFi protocol from a Sauce program and finding its contracts — registry namespaces versus ABI imports from ./protocols/<slug>/<Export>.json bound to a registry address, reading a protocol's per-chain deployments (factories, routers, pools), looking pools up on chain through factories, and the per-protocol documents (operations, addresses, ABI notes, pitfalls, SauceScript templates) this skill carries for every catalogued protocol. Use when a program must call a protocol that has no namespace (PancakeSwap V3, Aerodrome Slipstream, Curve, Balancer, Camelot, Lido, …), when the user asks which protocols or pools exist on a chain, needs a factory or router address, or wants protocol-specific instructions.
+description: Calling any DeFi protocol from a Sauce program and finding its contracts — every catalogued protocol as a registry namespace (deployed contracts with their methods, address-only contracts, interfaces called with .at(address)), using a protocol only on chains that have it with available(...), ABI imports from ./protocols/<slug>/<Export>.json for a contract the registry does not record, reading a protocol's per-chain deployments (factories, routers, pools), looking pools up on chain through factories, and the per-protocol documents (operations, addresses, ABI notes, pitfalls, SauceScript templates) this skill carries for every catalogued protocol. Use when a program must call a protocol (PancakeSwap V3, Aerodrome Slipstream, Curve, Balancer, Camelot, Lido, …), when the user asks which protocols or pools exist on a chain, needs a factory or router address, or wants protocol-specific instructions.
 ---
 
 # Protocols from Sauce
 
-There are two ways a program reaches a protocol:
+A program reaches a catalogued protocol through its **registry namespace**, with no import: the
+address and the ABI come from the registry for the chain the program is compiled for.
+[../sauce-globals/references/protocols.md](../sauce-globals/references/protocols.md) lists every
+deployed contract and its chains. A namespace member is one of three kinds:
 
-1. **A registry namespace** (`AaveV3.Pool`, `UniswapV3.Factory`, …): address and ABI both come from
-   the registry for the program's chain, with no import.
-   [../sauce-globals/references/protocols.md](../sauce-globals/references/protocols.md) lists every
-   one and its chains.
-2. **Everything else** in the catalog: import the ABI the package serves at
-   `./protocols/<slug>/<Export>.json`, and bind it to the address the protocol's `deployments`
-   record for the program's chain. That address is a compile-time value: a module constant
-   defaulting to `0n`, which `--define` replaces, so the program still compiles (with the venue left
-   out) on a chain where the protocol is absent.
+| Member              | Example                                                  | In a program                         |
+| ------------------- | -------------------------------------------------------- | ------------------------------------ |
+| A deployed contract | `PancakeswapV3.Factory`, `AerodromeSlipstream.CLFactory` | its address; `.method(...)` calls it |
+| An address only     | `Camelot.V3Factory` (no ABI the registry has verified)   | its address                          |
+| An interface        | `Erc4626.Vault` (a vault has no one fixed address)       | `.at(address).method(...)`           |
 
-```sauce chain=base,arbitrum
-import IPancakeV3Factory from "./protocols/pancakeswap-v3/PancakeSwapV3FactoryABI.json";
+`.at(address)` also reaches another deployment of a deployed contract's ABI. A contract the
+registry does not record at all is called through its ABI, imported from
+`./protocols/<slug>/<Export>.json` and bound with `.at(address)` to an address passed in as a
+`main` input or a define.
 
-const PANCAKE_V3_FACTORY = 0n; // pancakeswap-v3 `deployments`, role `factory`, as a define
+A program that should also compile for a chain without the protocol asks `available(...)`, which is
+decided when it is compiled; the branch it rules out is left out, names and all:
 
+```sauce chain=base,arbitrum,optimism
 function main(fee: Uint256) {
   const uni = UniswapV3.Factory.getPool(WETH, USDC, fee);
   let pancake = 0n;
-  if (PANCAKE_V3_FACTORY != 0n) {
-    pancake = IPancakeV3Factory.at(PANCAKE_V3_FACTORY).getPool(WETH, USDC, fee);
+  if (available(PancakeswapV3.Factory)) {
+    pancake = PancakeswapV3.Factory.getPool(WETH, USDC, fee);
   }
   require(uni != 0n || pancake != 0n, "no WETH/USDC pool at that fee");
 }
 ```
 
-With that program in `pools.sauce.ts`, a run on Base passes the factory:
+With that program in `pools.sauce.ts`, a run on Base passes nothing but the fee:
 
 ```sh
 npx sauce run pools.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
-  --define PANCAKE_V3_FACTORY=<factory> --args 500
+  --args 500
 ```
 
-The factory's address is in the protocol's document,
-[references/pancakeswap-v3.md](references/pancakeswap-v3.md), and in its registry module
-(below). A namespace contract can be made optional the same way: it is the define
-`Namespace_Contract` on chains where it is deployed, so `const UniswapV3_Factory = 0n;` plus an ABI
-import makes `UniswapV3.Factory` a venue that is simply absent where Uniswap V3 is
-(`sauce-globals`).
-
 A factory lookup returns the zero address when no pool exists, so a program discovers pools at run
-time instead of trusting a list. Some protocols ship without a factory ABI (Algebra forks such as
-Camelot V3 and QuickSwap V3 record only a `v3Factory` address): discover the pool off chain and pass
-its address in as a `main` input.
+time instead of trusting a list. Some protocols' factories are addresses only (Algebra forks such as
+Camelot V3 and QuickSwap V3): discover the pool off chain and pass its address in as a `main` input.
 
 ## Reading the registry (from TypeScript)
 
@@ -62,14 +57,14 @@ export const info = getProtocol("pancakeswap-v3"); // name, category, chains, we
 export const slugs = listProtocolSlugs();
 // Per-chain addresses by role, e.g. { factory, smartRouter, nonfungiblePositionManager }.
 export const pancakeOnBase = pancakeV3.deployments.find((d) => d.chainId === 8453)?.addresses;
-// Whether a namespace contract is callable by name on a chain, and where.
+// Whether a namespace contract is deployed on a chain, and where.
 export const aave = contracts.on("base").AaveV3.Pool; // { available, address, abi, methods, … }
+export const pancake = contracts.on("optimism").PancakeswapV3.Factory.available; // false
 ```
 
 Each protocol module (`@eco-incorp/sauce/protocols/<slug>`) exports `protocolInfo`, `deployments`,
-its ABIs (`…ABI`), and its SauceScript templates by name (`supply`, `swap`, `getPool`, …). A
-catalogued protocol is not necessarily callable by name, and an address in `deployments` is a
-recorded address, not proof of live code on the chain.
+its ABIs (`…ABI`), and its SauceScript templates by name (`supply`, `swap`, `getPool`, …). An
+address in `deployments` is a recorded address, not proof of live code on the chain.
 
 ## Per-protocol documents
 
@@ -85,8 +80,8 @@ Read their code with these in mind:
 
 - Their templates are typed programs (`function main(pool: Address, …)`) for the compiler taken
   directly: a template's `import { PoolABI as IPool } from "./abis"` is a contract import, so the
-  resolver serves the path `./abis` with that ABI's JSON. In a program for a chain, use the namespace
-  or the `./protocols/<slug>/<Export>.json` import instead.
+  resolver serves the path `./abis` with that ABI's JSON. In a program for a chain, use the
+  namespace instead.
 - Some snippets use Solidity idioms with a SauceScript spelling: `msg.sender` is `ctx.msgSender()`,
   `address(this)` is `ctx.self()`, and `type(uint256).max` is `~0n`
   ([../sauce-script/references/builtins.md](../sauce-script/references/builtins.md)).
@@ -95,7 +90,6 @@ Read their code with these in mind:
 
 ## Example
 
-[examples/protocols.sauce.ts](examples/protocols.sauce.ts) calls Aave through its namespace and
-PancakeSwap V3 through an ABI import; [examples/protocols.mts](examples/protocols.mts) compiles it
-for Base and Arbitrum with the registry's factory as the define, loads a protocol document, and
-compiles a protocol template.
+[examples/protocols.sauce.ts](examples/protocols.sauce.ts) calls Aave and, where the chain has it,
+PancakeSwap V3 through their namespaces; [examples/protocols.mts](examples/protocols.mts) compiles it
+for Base, Arbitrum and Optimism, loads a protocol document, and compiles a protocol template.

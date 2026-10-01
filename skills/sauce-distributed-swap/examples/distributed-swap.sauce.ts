@@ -7,51 +7,42 @@
 //      in the Pot for the next.
 //   4. Check the fill, pay `recipient`, refund the unspent input to `refundTo`.
 //
-// It names no chain: `--chain` picks one, and the chain sets the Uniswap venues it has. The
-// PancakeSwap V3 and Slipstream factories are optional `--define`s (the sauce-distributed-swap
-// skill shows them for Base).
+// It names no chain: `--chain` picks one, and each venue is used where that chain has it
+// (`available(...)`), so one file compiles for every chain.
 //
 //   sauce run distributed-swap.sauce.ts --chain <chain> --config sauce.config.json \
 //     --keystore <keystore> --args <tokenIn> <tokenOut> <amountIn> <sqrtPriceLimitX96> <minOut> \
 //     <minAvgPrice> <recipient> <refundTo>
-import { ISauceRouter } from "./artifacts/ISauceRouter.json";
-import IUniswapV3Factory from "./protocols/uniswap-v3/UniswapV3FactoryABI.json";
-import IPancakeV3Factory from "./protocols/pancakeswap-v3/PancakeSwapV3FactoryABI.json";
-import ISlipstreamFactory from "./protocols/aerodrome-slipstream/SlipstreamCLFactoryABI.json";
-
-// Venues, as compile-time addresses: 0 leaves a venue out. The chain sets the Uniswap ones where
-// they are deployed; the others are `--define`s, from each protocol's registry deployments.
-const UniswapV3_Factory = 0n;
-const UniswapV4_PoolManager = 0n;
-const PANCAKE_V3_FACTORY = 0n;
-const SLIPSTREAM_INITIAL = 0n; // Aerodrome Slipstream has up to three CLFactory generations
-const SLIPSTREAM_GAUGE_CAPS = 0n;
-const SLIPSTREAM_GAUGES_V3 = 0n;
+import { uniswapV3, uniswapV4 } from "@sauce/router";
 
 // A V3-style pool's current sqrtPriceX96: the first word of slot0().
-function spotPrice(pool) {
+function spotPrice(pool: Address): Uint256 {
   const slot0 = hex`3850c7bd`;
   const [sqrtPriceX96] = abi.decode(evm.static(pool, slot0), ["Uint256"]);
   return sqrtPriceX96;
 }
 
-// A hookless Uniswap V4 pool's current sqrtPriceX96, or 0 if the pool does not exist. Its id is the
-// hash of its key; its price is the low 160 bits of the first word of its state, which lives in the
-// PoolManager's `pools` mapping (storage slot 6) and is read with extsload(bytes32).
-function v4SpotPrice(fee, tickSpacing, tokenIn, tokenOut) {
+// A hookless Uniswap V4 pool's current sqrtPriceX96, from the chain's StateView, or 0 if the pool
+// does not exist (or the chain has no Uniswap V4). Its id is the hash of its key.
+function v4SpotPrice(
+  fee: Uint256,
+  tickSpacing: Uint256,
+  tokenIn: Address,
+  tokenOut: Address,
+): Uint256 {
+  if (!available(UniswapV4.StateView)) {
+    return 0n;
+  }
   const zeroForOne = tokenIn < tokenOut;
   const currency0 = zeroForOne ? tokenIn : tokenOut;
   const currency1 = zeroForOne ? tokenOut : tokenIn;
   const poolId = crypto.keccak256(abi.encode(currency0, currency1, fee, tickSpacing, 0n));
-  const stateSlot = crypto.keccak256(abi.encode(poolId, 6n));
-  const extsload = hex`1e2eaeaf`;
-  const call = extsload.concat(abi.encode(stateSlot));
-  const [slot0] = abi.decode(evm.static(UniswapV4_PoolManager, call), ["Uint256"]);
-  return slot0 & ((1n << 160n) - 1n);
+  const [sqrtPriceX96] = UniswapV4.StateView.getSlot0(poolId);
+  return sqrtPriceX96;
 }
 
 // Selling token0 (the lower address) pushes the price down, so a higher price is better.
-function isBetter(price, than, tokenIn, tokenOut) {
+function isBetter(price: Uint256, than: Uint256, tokenIn: Address, tokenOut: Address): bool {
   if (tokenIn < tokenOut) {
     return price > than;
   }
@@ -59,29 +50,47 @@ function isBetter(price, than, tokenIn, tokenOut) {
 }
 
 // One exact-input swap offering `amount`; returns the input the pool took. The pool takes what it
-// can fill before the limit, the Router pays exactly that, and the rest stays in the Pot.
-function swapIntoV3(pool, tokenIn, tokenOut, amount, limit) {
+// can fill before the limit, the Pot's Router pays exactly that, and the rest stays in the Pot. The
+// output stays in the Pot too, and the settlement checks it.
+function swapIntoV3(
+  pool: Address,
+  tokenIn: Address,
+  tokenOut: Address,
+  amount: Uint256,
+  limit: Uint256,
+): Uint256 {
   const self = ctx.self();
   const before = Token(tokenIn).balanceOf(self);
-  const router = ISauceRouter.at(self); // the Router, reached through this Pot
-  router.swapV3(pool, tokenIn, tokenOut, amount, limit, self, self);
+  uniswapV3(pool, tokenIn, tokenOut, amount, limit, 0n, self);
   return before - Token(tokenIn).balanceOf(self);
 }
 
-// The same for a hookless Uniswap V4 pool, named by its key. V4 exact input is a negative amount.
-function swapIntoV4(fee, tickSpacing, tokenIn, tokenOut, amount, limit) {
+// The same for a hookless Uniswap V4 pool, named by its fee and tick spacing.
+function swapIntoV4(
+  fee: Uint256,
+  tickSpacing: Uint256,
+  tokenIn: Address,
+  tokenOut: Address,
+  amount: Uint256,
+  limit: Uint256,
+): Uint256 {
+  if (!available(UniswapV4.PoolManager)) {
+    return 0n;
+  }
   const self = ctx.self();
   const before = Token(tokenIn).balanceOf(self);
-  const zeroForOne = tokenIn < tokenOut;
-  const key = {
-    currency0: zeroForOne ? tokenIn : tokenOut,
-    currency1: zeroForOne ? tokenOut : tokenIn,
-    fee: fee,
-    tickSpacing: tickSpacing,
-    hooks: 0n
-  };
-  const router = ISauceRouter.at(self);
-  router.swapV4(UniswapV4_PoolManager, key, zeroForOne, -amount, limit, self, self);
+  uniswapV4(
+    UniswapV4.PoolManager,
+    tokenIn,
+    tokenOut,
+    amount,
+    fee,
+    tickSpacing,
+    0n,
+    limit,
+    0n,
+    self,
+  );
   return before - Token(tokenIn).balanceOf(self);
 }
 
@@ -95,33 +104,46 @@ function main(
   minOut: Uint256,
   minAvgPrice: Uint256,
   recipient: Address,
-  refundTo: Address
+  refundTo: Address,
 ) {
   const self = ctx.self();
   const outBefore = Token(tokenOut).balanceOf(self);
   require(Token(tokenIn).balanceOf(self) >= amountIn, "amountIn is not in the Pot");
 
-  // 1. Discover. The factories give each fee tier's or tick spacing's pool (0 where there is none).
+  // 1. Discover. Each venue the chain has gives a pool per fee tier or tick spacing (0 where there
+  //    is none); a venue the chain lacks is left out when the program is compiled.
   let found = new Array(23); // 4 + 4 + 3 * 5
   let m = 0n;
-  if (UniswapV3_Factory != 0n) {
+  if (available(UniswapV3.Factory)) {
     for (const fee of [100n, 500n, 3000n, 10000n]) {
-      found[m] = IUniswapV3Factory.at(UniswapV3_Factory).getPool(tokenIn, tokenOut, fee);
+      found[m] = UniswapV3.Factory.getPool(tokenIn, tokenOut, fee);
       m++;
     }
   }
-  if (PANCAKE_V3_FACTORY != 0n) {
+  if (available(PancakeswapV3.Factory)) {
     for (const fee of [100n, 500n, 2500n, 10000n]) {
-      found[m] = IPancakeV3Factory.at(PANCAKE_V3_FACTORY).getPool(tokenIn, tokenOut, fee);
+      found[m] = PancakeswapV3.Factory.getPool(tokenIn, tokenOut, fee);
       m++;
     }
   }
-  for (const factory of [SLIPSTREAM_INITIAL, SLIPSTREAM_GAUGE_CAPS, SLIPSTREAM_GAUGES_V3]) {
-    if (factory != 0n) {
-      for (const tickSpacing of [1n, 50n, 100n, 200n, 2000n]) {
-        found[m] = ISlipstreamFactory.at(factory).getPool(tokenIn, tokenOut, tickSpacing);
-        m++;
-      }
+  // Aerodrome Slipstream has up to three CLFactory generations.
+  const tickSpacings = [1n, 50n, 100n, 200n, 2000n];
+  if (available(AerodromeSlipstream.CLFactory)) {
+    for (const tickSpacing of tickSpacings) {
+      found[m] = AerodromeSlipstream.CLFactory.getPool(tokenIn, tokenOut, tickSpacing);
+      m++;
+    }
+  }
+  if (available(AerodromeSlipstream.CLFactoryGaugeCaps)) {
+    for (const tickSpacing of tickSpacings) {
+      found[m] = AerodromeSlipstream.CLFactoryGaugeCaps.getPool(tokenIn, tokenOut, tickSpacing);
+      m++;
+    }
+  }
+  if (available(AerodromeSlipstream.CLFactoryGaugesV3)) {
+    for (const tickSpacing of tickSpacings) {
+      found[m] = AerodromeSlipstream.CLFactoryGaugesV3.getPool(tokenIn, tokenOut, tickSpacing);
+      m++;
     }
   }
 
@@ -129,7 +151,7 @@ function main(
   // and is named by its key's fee and tick spacing.
   let pools = new Array(27); // the 23 above + 4 V4 keys
   let fees = new Array(27);
-  let tickSpacings = new Array(27);
+  let spacings = new Array(27);
   let prices = new Array(27);
   let n = 0n;
   for (let i = 0n; i < m; i++) {
@@ -139,13 +161,13 @@ function main(
       n++;
     }
   }
-  if (UniswapV4_PoolManager != 0n) {
+  if (available(UniswapV4.StateView)) {
     const v4Fees = [100n, 500n, 3000n, 10000n];
     const v4TickSpacings = [1n, 10n, 60n, 200n];
     for (let k = 0n; k < 4n; k++) {
       pools[n] = 0n;
       fees[n] = v4Fees[k];
-      tickSpacings[n] = v4TickSpacings[k];
+      spacings[n] = v4TickSpacings[k];
       prices[n] = v4SpotPrice(v4Fees[k], v4TickSpacings[k], tokenIn, tokenOut);
       n++;
     }
@@ -176,11 +198,11 @@ function main(
     } else {
       remaining -= swapIntoV4(
         fees[i],
-        tickSpacings[i],
+        spacings[i],
         tokenIn,
         tokenOut,
         remaining,
-        sqrtPriceLimitX96
+        sqrtPriceLimitX96,
       );
     }
   }

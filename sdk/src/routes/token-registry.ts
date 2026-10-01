@@ -399,6 +399,41 @@ function toBigIntAddress(input: AddressInput): bigint {
   return BigInt(input);
 }
 
+/** One registry token on one chain, as a chain export carries it (`Base.USDC`): the same row a
+ *  compiled program's `USDC` resolves to on that chain. */
+export interface RegistryToken {
+  readonly address: `0x${string}`;
+  readonly decimals: number;
+  readonly symbol: string;
+  readonly chain: CanonicalChain;
+}
+
+const tokensByChain = new Map<number, Readonly<Record<string, RegistryToken>>>();
+
+/** Every registry token on `chain`, by symbol, each a frozen {@link RegistryToken}. The same objects
+ *  on every call. Empty for a chain the registry has no row for, and for an svm chain. */
+export function registryTokens(chain: CanonicalChain): Readonly<Record<string, RegistryToken>> {
+  let tokens = tokensByChain.get(chain.id);
+  if (tokens === undefined) {
+    const rows = chain.kind === "evm" ? (TOKEN_REGISTRY[chain.id] ?? []) : [];
+    tokens = Object.freeze(
+      Object.fromEntries(
+        rows.map((row) => [
+          row.symbol,
+          Object.freeze({
+            address: row.address,
+            decimals: row.decimals,
+            symbol: row.symbol,
+            chain,
+          }),
+        ]),
+      ),
+    );
+    tokensByChain.set(chain.id, tokens);
+  }
+  return tokens;
+}
+
 /** The rows a program compiled for `chain` resolves its symbols from: the chain's EVM tokens, or
  *  on an svm chain its cluster's mints, each as the value the program gets. */
 function rowsOf(chain: CanonicalChain): readonly { symbol: string; address: `0x${string}` }[] {

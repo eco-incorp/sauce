@@ -42,8 +42,7 @@ The account references are names, not addresses. `manifest.accounts` records the
 
 Use `v12SvmEngineProgramId()` and `v12SvmKitchenProgramId()` from
 `@eco-incorp/sauce/deployments` for the released program identities, and confirm
-they are deployed on your cluster. `v12SvmProgramId` names an earlier engine
-generation, not these. The client derives a Pot owned by its `payer` signer;
+they are deployed on your cluster. The client derives a Pot owned by its `payer` signer;
 choose it with `potSalt` when you configure the client.
 
 ```ts

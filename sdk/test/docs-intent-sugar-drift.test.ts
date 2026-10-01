@@ -17,7 +17,8 @@ import { fileURLToPath } from "node:url";
 import { getAddress } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { SAUCE_INTENT_POT_SALT, v12GateKitchen, v12PredictPot } from "../src/deployments/pot.js";
+import { v12KitchenAddress } from "../src/deployments/index.js";
+import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { v12Kitchen } from "../src/evm/engine.js";
 import {
   ecoRoutesExecutorOf,
@@ -29,6 +30,7 @@ import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
 import { rewriteIntentSugar } from "../src/routes/intent-sugar.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
+import { registryTokenAddress } from "../src/routes/token-registry.js";
 
 const GUIDE = readFileSync(
   resolve(dirname(fileURLToPath(import.meta.url)), "../../docs/guides/intents.md"),
@@ -105,6 +107,41 @@ const REFUSALS: readonly {
       rewriteIntentSugar(wrap("USDC.transfer(RECIPIENT, amount);", undefined, "Zora"), context()),
     message: /eco-routes v3 is not deployed on zora/,
   },
+  {
+    documented: "A program body that calls the function opening it",
+    trigger: () =>
+      rewriteIntentSugar(
+        `function payout(amount) {
+  Arbitrum(() => {
+    if (amount > 0n) { payout(amount); }
+  }).reward({ tokens: [{ token: USDC, amount }] });
+}
+function main() {
+  payout(5n);
+}`,
+        context(),
+      ),
+    message: /calls `payout`, the function that opens it/,
+  },
+  {
+    documented:
+      "A program body using a module variable that a local of the opening function shadows",
+    trigger: () =>
+      rewriteIntentSugar(
+        `let total = 0n;
+function half() {
+  return total / 2n;
+}
+function main() {
+  const total = 5n;
+  Arbitrum(() => {
+    if (half() > 0n) { USDC.transfer(RECIPIENT, total); }
+  }).reward({ tokens: [{ token: USDC, amount: total }] });
+}`,
+        context(),
+      ),
+    message: /module variable `total`, which a local of the function opening the intent shadows/,
+  },
 ];
 
 describe("the guide's refusal list is the lowering's", () => {
@@ -161,6 +198,85 @@ describe("the guide's refusal list is the lowering's", () => {
   });
 });
 
+describe("the guide's account of which chain a name resolves on is the lowering's", () => {
+  // A different USDC per chain, so each part's chain shows in the address it names. Executed with
+  // the real registry, across three chains, in `routes-intent-chains.e2e.test.ts`.
+  const USDC_ON = new Map([
+    [BASE.slug, 0x1111111111111111111111111111111111111111n],
+    [ARBITRUM.slug, 0x2222222222222222222222222222222222222222n],
+  ]);
+  const lowered = () =>
+    rewriteIntentSugar(
+      `function main() {
+  const amount = 5n;
+  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, amount);
+  }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount }] });
+}`,
+      context({
+        definesFor: (chain: typeof BASE) =>
+          new Map([
+            ["USDC", USDC_ON.get(chain.slug)!],
+            ["RECIPIENT", 0x9999999999999999999999999999999999999999n],
+          ]),
+      }),
+    ).intents[0]!.intent;
+  const onChain = (slug: string) => `0x${"00".repeat(12)}${USDC_ON.get(slug)!.toString(16)}`;
+  const guide = GUIDE.replace(/\s+/g, " ");
+
+  const CLAIMS: readonly { readonly documented: string; readonly holds: () => boolean }[] = [
+    {
+      documented: "| The braces | Arbitrum, the destination | Arbitrum's |",
+      holds: () => lowered().route.calls[0]!.target === onChain(ARBITRUM.slug),
+    },
+    {
+      documented:
+        "| The second argument, what is delivered | Arbitrum, the destination | Arbitrum's |",
+      holds: () => lowered().route.tokens[0]!.token === onChain(ARBITRUM.slug),
+    },
+    {
+      documented: "| `.reward(...)` | The chain the program runs on | That chain's |",
+      holds: () => lowered().reward.tokens[0]!.token === onChain(BASE.slug),
+    },
+    {
+      // Through the real compile: a caller's `USDC` is Base's, so the reward's approval reads it,
+      // while the Arbitrum body keeps Arbitrum's registry USDC.
+      documented: "is a name on the chain the program is compiled for",
+      holds: () => {
+        const chosen = 0x7777777777777777777777777777777777777777n;
+        const arbitrumUsdc = registryTokenAddress(ARBITRUM, "USDC")!.toString(16);
+        const source = compileSauceRoute(
+          "base",
+          `function main() {
+  const amount = 5n;
+  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, amount);
+  }).reward({ tokens: [{ token: USDC, amount }] });
+}`,
+          { pot: CREATOR, engine: CREATOR },
+          {
+            defines: { USDC: chosen, RECIPIENT: 1n },
+            intents: { deadline: 4_000_000_000n, creator: CREATOR },
+          },
+        ).source.toLowerCase();
+        return source.includes(`evm.static(${chosen}n`) && source.includes(arbitrumUsdc);
+      },
+    },
+  ];
+
+  it.each(CLAIMS.map((c) => [c.documented, c] as const))("the guide says %s", (_name, claim) => {
+    expect(guide).toContain(claim.documented);
+  });
+
+  it.each(CLAIMS.map((c) => [c.documented, c] as const))("and it holds: %s", (_name, claim) => {
+    expect(claim.holds()).toBe(true);
+  });
+
+  it("no longer says every name inside the intent is the destination's", () => {
+    expect(guide).not.toContain("Resolving it against the enclosing chain would put");
+  });
+});
+
 describe("the guide's account of the destination Pot is the builder's", () => {
   // Each claim is a sentence the guide must contain and a check on what the SDK builds. What the
   // chain does with it -- a missing Pot reverts, a present one cooks -- is executed in
@@ -175,7 +291,8 @@ describe("the guide's account of the destination Pot is the builder's", () => {
     ...extra,
   });
   const calls = (extra: Partial<IntentOptions> = {}) =>
-    openRoute("ethereum", "return 1n;", options(extra)).reward(0n).intent.route.calls;
+    openRoute("ethereum", "function main() { return 1n; }", options(extra)).reward(0n).intent.route
+      .calls;
   const sharedPot = v12PredictPot(ecoRoutesExecutorOf(PORTAL));
   const deploySelector = v12Kitchen
     .encodeDeployPot(ecoRoutesExecutorOf(PORTAL), SAUCE_INTENT_POT_SALT)
@@ -204,7 +321,7 @@ describe("the guide's account of the destination Pot is the builder's", () => {
         calls().length === 1 &&
         calls().every(
           (c) =>
-            denormalizeToEvm(c.target) !== v12GateKitchen().toLowerCase() &&
+            denormalizeToEvm(c.target) !== v12KitchenAddress().toLowerCase() &&
             !c.data.startsWith(`0x${deploySelector}`),
         ),
     },

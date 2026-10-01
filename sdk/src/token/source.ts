@@ -1,6 +1,6 @@
 /**
  * SauceScript SOURCE emission for the universal token interface — pure string templating, no
- * compiler import (matches `swap/source.ts`/`deposit/source.ts`'s posture: every compile option
+ * compiler import (matches `deposit/source.ts`'s posture: every compile option
  * stays explicit at the call site). The `IERC20` ABI an EVM program imports is served by the route
  * compiler itself (`embedded/resolve.ts`), so compiling one needs no resolver option.
  */
@@ -151,8 +151,8 @@ export function tokenSource(
 
   // Every SVM account is a main() param, in attach order — that declaration IS the manifest.
   const params = isEvmTarget(target) ? "" : svmAccountParamList(specs);
-  // SVM consumers compile directly to retain the account manifest. EVM source stays plain JS for
-  // the route wrapper's accessor parser, whose compiler adapter supplies its void annotation.
+  // SVM consumers compile directly to retain the account manifest. EVM source leaves `main`
+  // unannotated: it is compiled through the route compiler, whose adapter supplies the `void`.
   const returnType =
     !isEvmTarget(target) && specs[specs.length - 1]!.op !== "balanceOf" ? ": void" : "";
   const parts = [...importLines, "", `function ${fnName}(${params})${returnType} {`, body, "}", ""];

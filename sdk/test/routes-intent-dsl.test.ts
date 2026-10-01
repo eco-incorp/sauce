@@ -19,7 +19,6 @@ import {
 } from "../src/routes/encode.js";
 import { normalizeReward, normalizeRoute } from "../src/routes/normalize.js";
 import { buildSauceSvmCall } from "../src/routes/sauce-calls.js";
-import { compileSauceRoute, wrapSauceBody } from "../src/routes/sauce-route.js";
 import { predictVaultAddress } from "../src/routes/vault.js";
 import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
 import {
@@ -75,32 +74,6 @@ describe("openRoute: EVM happy path", () => {
   });
 });
 
-describe("openRoute: bare-body wrapping", () => {
-  it("wraps a bare body into byte-identical bytecode as the explicit main() form", () => {
-    const explicit = compileSauceRoute("ethereum", "function main() { let x = 1n; return x; }", {
-      pot: POT,
-      engine: ENGINE,
-    });
-    const bare = compileSauceRoute("ethereum", "let x = 1n; return x;", {
-      pot: POT,
-      engine: ENGINE,
-    });
-
-    expect(bare.compiled.bytecode.length).toBe(explicit.compiled.bytecode.length);
-    for (let i = 0; i < explicit.compiled.bytecode.length; i++) {
-      expect(Array.from(bare.compiled.bytecode[i]!)).toEqual(
-        Array.from(explicit.compiled.bytecode[i]!),
-      );
-    }
-  });
-
-  it("wrapSauceBody leaves an already-complete program untouched", () => {
-    const program = "function main() { return 1n; }";
-    expect(wrapSauceBody(program)).toBe(program);
-    expect(wrapSauceBody("return 1n;")).toBe("function main() {\nreturn 1n;\n}");
-  });
-});
-
 describe("openRoute: precalls precede the compiled call", () => {
   it("keeps precalls first, in order, followed by the sauce call", () => {
     const precalls = [
@@ -115,7 +88,11 @@ describe("openRoute: precalls precede the compiled call", () => {
         value: 0n,
       },
     ];
-    const built = openRoute("ethereum", "return 1n;", evmOptions({ precalls })).reward(0n);
+    const built = openRoute(
+      "ethereum",
+      "function main() { return 1n; }",
+      evmOptions({ precalls }),
+    ).reward(0n);
 
     expect(built.intent.route.calls).toHaveLength(3);
     expect(built.intent.route.calls[0]!.data).toBe("0xaa");
@@ -129,7 +106,9 @@ describe("openRoute: assembled intent shape", () => {
       tokens: [{ token: "0x7777777777777777777777777777777777777777", amount: 9n }],
       nativeAmount: 3n,
     });
-    const built = openRoute("ethereum", "return 1n;", options).reward({ nativeAmount: 4n });
+    const built = openRoute("ethereum", "function main() { return 1n; }", options).reward({
+      nativeAmount: 4n,
+    });
 
     expect(built.intent.destination).toBe(BigInt(requireChain("ethereum").id));
     expect(built.intent.sourceChainId).toBe(BigInt(requireChain("base").id));
@@ -158,8 +137,8 @@ describe("openRoute: hash()", () => {
   it("agrees with hashIntent, and routeHash changes when the sauce source changes", () => {
     const buildWith = (sauce: string) => openRoute("ethereum", sauce, evmOptions()).reward(0n);
 
-    const a = buildWith("return 1n;");
-    const b = buildWith("return 2n;");
+    const a = buildWith("function main() { return 1n; }");
+    const b = buildWith("function main() { return 2n; }");
 
     expect(a.hash()).toEqual(hashIntent(a.intent));
     expect(b.hash()).toEqual(hashIntent(b.intent));
@@ -170,7 +149,7 @@ describe("openRoute: hash()", () => {
 
 describe("openRoute: encodeEVM()/encodeSVM()", () => {
   it("equal the direct encodeRouteEvm/Svm + encodeRewardEvm/Svm calls", () => {
-    const built = openRoute("ethereum", "return 1n;", evmOptions()).reward(0n);
+    const built = openRoute("ethereum", "function main() { return 1n; }", evmOptions()).reward(0n);
 
     expect(built.encodeEVM()).toEqual({
       route: encodeRouteEvm(built.intent.route),
@@ -236,7 +215,7 @@ describe("openRoute: SVM destination", () => {
 
   it("rejects a nonzero value (SVM Call has no value field)", () => {
     expect(() =>
-      openRoute("solana", "return 1n;", {
+      openRoute("solana", "function main() { return 1n; }", {
         execution: {
           code: BUFFER,
           accounts: [{ pubkey: ACCOUNT, isSigner: false, isWritable: false }],
@@ -269,7 +248,9 @@ describe("openRoute: the destination Pot is derived, not deployed", () => {
   const deploySelector = v12Kitchen.encodeDeployPot(executor, SAUCE_INTENT_POT_SALT).slice(0, 10);
 
   it("cooks on the Executor's shared Pot with the released engine, and adds no other call", () => {
-    const built = openRoute("ethereum", "return 1n;", derivedOptions()).reward(0n);
+    const built = openRoute("ethereum", "function main() { return 1n; }", derivedOptions()).reward(
+      0n,
+    );
     const [cook] = built.intent.route.calls;
 
     expect(built.intent.route.calls).toHaveLength(1);
@@ -281,7 +262,7 @@ describe("openRoute: the destination Pot is derived, not deployed", () => {
 
   it("emits no deployPot, before or after the precalls", () => {
     const precall = { target: POT, data: "0x1234" as Hex };
-    const built = openRoute("ethereum", "return 1n;", {
+    const built = openRoute("ethereum", "function main() { return 1n; }", {
       ...derivedOptions(),
       precalls: [precall],
     }).reward(0n);
@@ -292,7 +273,7 @@ describe("openRoute: the destination Pot is derived, not deployed", () => {
 
   it("derives from the registry Portal's Executor when no Portal is named", () => {
     const { portal: _unused, ...options } = derivedOptions();
-    const built = openRoute("ethereum", "return 1n;", options).reward(0n);
+    const built = openRoute("ethereum", "function main() { return 1n; }", options).reward(0n);
 
     expect(getAddress(denormalizeToEvm(built.intent.route.calls[0]!.target))).toBe(
       v12PredictPot(ecoRoutesExecutorOf(ecoRoutesPortal("ethereum"))),
@@ -300,7 +281,9 @@ describe("openRoute: the destination Pot is derived, not deployed", () => {
   });
 
   it("follows an overriding Portal: its OWN Executor owns the Pot, not the registry Portal's", () => {
-    const built = openRoute("ethereum", "return 1n;", derivedOptions()).reward(0n);
+    const built = openRoute("ethereum", "function main() { return 1n; }", derivedOptions()).reward(
+      0n,
+    );
     const registryPot = v12PredictPot(ecoRoutesExecutorOf(ecoRoutesPortal("ethereum")));
 
     // The registry Portal's Pot would reject this route's cook with `NotOwner()`: the route records
@@ -320,7 +303,7 @@ describe("openRoute: the destination Pot is derived, not deployed", () => {
     ["execution.pot", { execution: { pot: POT } }],
     ["the pot shorthand", { pot: POT }],
   ])("a Pot named through %s is used as given", (_name, override) => {
-    const built = openRoute("ethereum", "return 1n;", {
+    const built = openRoute("ethereum", "function main() { return 1n; }", {
       ...derivedOptions(),
       ...override,
     }).reward(0n);
@@ -334,7 +317,7 @@ describe("openRoute: the destination Pot is derived, not deployed", () => {
   });
 
   it("an overriding engine keeps the derived Pot", () => {
-    const built = openRoute("ethereum", "return 1n;", {
+    const built = openRoute("ethereum", "function main() { return 1n; }", {
       ...derivedOptions(),
       execution: { engine: ENGINE, value: 7n },
     }).reward(0n);
@@ -350,7 +333,7 @@ describe("vault(): predictVaultAddress", () => {
   const VAULT_INIT_CODE_HASH = keccak256("0xdeadbeef") as Hex;
 
   it("matches viem's getCreate2Address with an explicit bytecodeHash", () => {
-    const built = openRoute("ethereum", "return 1n;", evmOptions()).reward(0n);
+    const built = openRoute("ethereum", "function main() { return 1n; }", evmOptions()).reward(0n);
 
     const intentHash = built.hash().intentHash;
     const vault = built.vault({ portal: PORTAL, vaultInitCodeHash: VAULT_INIT_CODE_HASH });
@@ -364,8 +347,8 @@ describe("vault(): predictVaultAddress", () => {
   });
 
   it("gives a different vault for a different intentHash", () => {
-    const a = openRoute("ethereum", "return 1n;", evmOptions()).reward(0n);
-    const b = openRoute("ethereum", "return 2n;", evmOptions()).reward(0n);
+    const a = openRoute("ethereum", "function main() { return 1n; }", evmOptions()).reward(0n);
+    const b = openRoute("ethereum", "function main() { return 2n; }", evmOptions()).reward(0n);
 
     const vaultA = a.vault({ portal: PORTAL, vaultInitCodeHash: VAULT_INIT_CODE_HASH });
     const vaultB = b.vault({ portal: PORTAL, vaultInitCodeHash: VAULT_INIT_CODE_HASH });
@@ -395,14 +378,18 @@ describe("openRoute: additive-ness — chainAccessors survives", () => {
 
 describe("openRoute: reward argument shorthands", () => {
   it("a bare bigint means NATIVE amount only", () => {
-    const built = openRoute("ethereum", "return 1n;", evmOptions()).reward(123n);
+    const built = openRoute("ethereum", "function main() { return 1n; }", evmOptions()).reward(
+      123n,
+    );
     expect(built.intent.reward.nativeAmount).toBe(123n);
     expect(built.intent.reward.tokens).toHaveLength(0);
   });
 
   it("a bare TokenAmountInput[] means reward.tokens", () => {
     const tokens = [{ token: "0x7777777777777777777777777777777777777777" as const, amount: 5n }];
-    const built = openRoute("ethereum", "return 1n;", evmOptions()).reward(tokens);
+    const built = openRoute("ethereum", "function main() { return 1n; }", evmOptions()).reward(
+      tokens,
+    );
     expect(built.intent.reward.tokens).toHaveLength(1);
     expect(built.intent.reward.tokens[0]!.amount).toBe(5n);
   });
@@ -410,12 +397,14 @@ describe("openRoute: reward argument shorthands", () => {
 
 describe("openRoute: fail-closed", () => {
   it("throws via requireChain for an unknown destination", () => {
-    expect(() => openRoute("not-a-real-chain", "return 1n;", evmOptions())).toThrow();
+    expect(() =>
+      openRoute("not-a-real-chain", "function main() { return 1n; }", evmOptions()),
+    ).toThrow();
   });
 
   it("throws for an svm destination missing a staged code account, pointing at the kitchen", () => {
     expect(() =>
-      openRoute("solana", "return 1n;", {
+      openRoute("solana", "function main() { return 1n; }", {
         // deliberately missing `code` to exercise the fail-closed path
         execution: { accounts: [] } as never,
         deadline: 2000n,
@@ -426,14 +415,17 @@ describe("openRoute: fail-closed", () => {
 
   it("throws naming 'deadline' when IntentOptions.deadline is missing", () => {
     expect(() =>
-      openRoute("ethereum", "return 1n;", { portal: PORTAL, pot: POT } as never),
+      openRoute("ethereum", "function main() { return 1n; }", {
+        portal: PORTAL,
+        pot: POT,
+      } as never),
     ).toThrow(/deadline/i);
   });
 
   // `portal` STOPPED being required: the SDK carries the eco-routes deployments, so a caller only
   // names a Portal to reach one the registry does not have.
   it("defaults the Portal to the eco-routes deployment for the destination", () => {
-    const built = openRoute("ethereum", "return 1n;", {
+    const built = openRoute("ethereum", "function main() { return 1n; }", {
       deadline: 2000n,
       pot: POT,
       engine: ENGINE,
@@ -447,19 +439,23 @@ describe("openRoute: fail-closed", () => {
   it("says which chain has no deployment rather than failing later", () => {
     // Zora is canonical but carries no eco-routes deployment in the pinned tables.
     expect(() =>
-      openRoute("zora", "return 1n;", { deadline: 2000n, pot: POT, engine: ENGINE }),
+      openRoute("zora", "function main() { return 1n; }", {
+        deadline: 2000n,
+        pot: POT,
+        engine: ENGINE,
+      }),
     ).toThrow(/eco-routes v3 is not deployed on zora/i);
   });
 
   it("throws naming 'execution' for an SVM destination that names no CODE account", () => {
-    expect(() => openRoute("solana", "return 1n;", { deadline: 2000n, portal: PORTAL })).toThrow(
-      /execution/i,
-    );
+    expect(() =>
+      openRoute("solana", "function main() { return 1n; }", { deadline: 2000n, portal: PORTAL }),
+    ).toThrow(/execution/i);
   });
 
   it("refuses an SVM-shaped execution for an EVM destination rather than deriving past it", () => {
     expect(() =>
-      openRoute("ethereum", "return 1n;", {
+      openRoute("ethereum", "function main() { return 1n; }", {
         deadline: 2000n,
         portal: PORTAL,
         execution: { code: "11111111111111111111111111111111", accounts: [] },
@@ -469,7 +465,7 @@ describe("openRoute: fail-closed", () => {
 
   it("throws naming 'source' when the reward has no source and options has none either", () => {
     expect(() =>
-      openRoute("ethereum", "return 1n;", {
+      openRoute("ethereum", "function main() { return 1n; }", {
         pot: POT,
         engine: ENGINE,
         deadline: 2000n,
@@ -480,7 +476,7 @@ describe("openRoute: fail-closed", () => {
 
   it("throws naming 'creator' when the reward has no creator and options has none either", () => {
     expect(() =>
-      openRoute("ethereum", "return 1n;", {
+      openRoute("ethereum", "function main() { return 1n; }", {
         pot: POT,
         engine: ENGINE,
         deadline: 2000n,
@@ -492,7 +488,7 @@ describe("openRoute: fail-closed", () => {
 
   it("throws naming 'prover' when the reward has no prover and options has none either", () => {
     expect(() =>
-      openRoute("ethereum", "return 1n;", {
+      openRoute("ethereum", "function main() { return 1n; }", {
         pot: POT,
         engine: ENGINE,
         deadline: 2000n,
@@ -515,7 +511,7 @@ describe("BuiltIntent: sourcePortal defaulting", () => {
   // `sourcePortal` stopped being required along with `portal`: the SDK carries the eco-routes
   // deployments for the source chain too.
   it("defaults to the eco-routes Portal for the reward's source chain", () => {
-    const built = openRoute("ethereum", "return 1n;", evmOptions()).reward(0n);
+    const built = openRoute("ethereum", "function main() { return 1n; }", evmOptions()).reward(0n);
 
     expect(built.publishCalldata().to.toLowerCase()).toBe(ecoRoutesPortal("base").toLowerCase());
     expect(built.vaultCall().to.toLowerCase()).toBe(ecoRoutesPortal("base").toLowerCase());
@@ -523,14 +519,18 @@ describe("BuiltIntent: sourcePortal defaulting", () => {
 
   it("still says which chain has none, rather than failing later", () => {
     expect(() =>
-      openRoute("ethereum", "return 1n;", evmOptions({ source: "zora" })).reward(0n),
+      openRoute(
+        "ethereum",
+        "function main() { return 1n; }",
+        evmOptions({ source: "zora" }),
+      ).reward(0n),
     ).toThrow(/eco-routes v3 is not deployed on zora/i);
   });
 
   it("uses IntentOptions.sourcePortal when no per-call target is given", () => {
     const built = openRoute(
       "ethereum",
-      "return 1n;",
+      "function main() { return 1n; }",
       evmOptions({ sourcePortal: SOURCE_PORTAL }),
     ).reward(0n);
     expect(built.publishCalldata()).toEqual(publishTx(built.intent, { portal: SOURCE_PORTAL }));
@@ -540,7 +540,7 @@ describe("BuiltIntent: sourcePortal defaulting", () => {
   it("a per-call target.portal overrides IntentOptions.sourcePortal", () => {
     const built = openRoute(
       "ethereum",
-      "return 1n;",
+      "function main() { return 1n; }",
       evmOptions({ sourcePortal: SOURCE_PORTAL }),
     ).reward(0n);
     const tx = built.publishCalldata({ portal: OTHER_PORTAL });
@@ -551,7 +551,11 @@ describe("BuiltIntent: sourcePortal defaulting", () => {
 
 describe("BuiltIntent: submission/read methods delegate to portal.ts", () => {
   const built = () =>
-    openRoute("ethereum", "return 1n;", evmOptions({ sourcePortal: SOURCE_PORTAL })).reward(0n);
+    openRoute(
+      "ethereum",
+      "function main() { return 1n; }",
+      evmOptions({ sourcePortal: SOURCE_PORTAL }),
+    ).reward(0n);
 
   it("publishCalldata === publishTx(intent, target)", () => {
     const b = built();
@@ -594,7 +598,7 @@ describe("BuiltIntent: approvals() is head-only", () => {
     const tokens = [{ token: "0x7777777777777777777777777777777777777777" as const, amount: 5n }];
     const built = openRoute(
       "ethereum",
-      "return 1n;",
+      "function main() { return 1n; }",
       evmOptions({ sourcePortal: SOURCE_PORTAL }),
     ).reward(tokens);
     expect(built.approvals()).toEqual(approvalTxs(built.intent, { portal: SOURCE_PORTAL }));
@@ -604,7 +608,7 @@ describe("BuiltIntent: approvals() is head-only", () => {
 
 describe("BuiltIntent: vault(cfg) is a byte-identical alias of predictVault(cfg)", () => {
   it("returns the same address both ways", () => {
-    const built = openRoute("ethereum", "return 1n;", evmOptions()).reward(0n);
+    const built = openRoute("ethereum", "function main() { return 1n; }", evmOptions()).reward(0n);
     const cfg = { portal: PORTAL, vaultInitCodeHash: keccak256("0xdeadbeef") as Hex };
     expect(built.vault(cfg)).toBe(built.predictVault(cfg));
   });

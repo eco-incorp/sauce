@@ -406,14 +406,14 @@ describe("sauce compile", () => {
       'import { fee } from "./lib/nope.js";\nfunction main() {}\n',
     );
     expect((await sauce("compile", missing, "--chain", "base")).code).toBe(1);
-    // A bare body cannot carry an import, since it is wrapped in `main`: say what to write instead.
-    const bare = file(
-      "bare.sauce.ts",
-      'import { fee } from "./lib/fee.js";\nrequire(fee(1n) > 0n);\n',
+    // A script imports too: its imports lead it, and its statements are the entry.
+    const script = file(
+      "script.sauce.ts",
+      'import { fee } from "./lib/fee.js";\nrequire(fee(1000n) > 0n);\n',
     );
-    expect((await sauce("compile", bare, "--chain", "base")).stderr).toMatch(
-      /hint: a file that imports must declare function main\(\)/,
-    );
+    const scripted = await sauce("compile", script, "--chain", "base");
+    expect(scripted.stderr).toBe("");
+    expect(scripted.code).toBe(0);
   });
 
   it("reports a compile error at the file's own line, even on a line the SDK rewrote", async () => {

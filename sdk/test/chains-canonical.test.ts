@@ -1,10 +1,9 @@
 /**
  * CONTRACT for the canonical chain registry (../src/chains/canonical.ts).
  *
- * Pins that the registry is additive to `chains` (never shadowing it),
- * decoupled from v12 liveness (identity != deployability), and that it
- * actually reconciles every `chainName` spelling used across the protocol
- * registry — the concrete motivating use case.
+ * Pins that the registry is additive to `chains` (never shadowing it), and
+ * that it actually reconciles every `chainName` spelling used across the
+ * protocol registry — the concrete motivating use case.
  */
 import {
   chains,
@@ -26,7 +25,6 @@ import {
   svmChains,
   normalizeChainKey,
 } from "../src/chains/canonical.js";
-import { V12_EVM_CHAINS, v12LiveChainIds, v12ChainSlug } from "../src/deployments/index.js";
 import { listProtocols } from "../src/protocols/index.js";
 
 describe("canonical chain registry: structural invariants", () => {
@@ -84,31 +82,6 @@ describe("canonical chain registry: superset of `chains` (additivity)", () => {
   });
 });
 
-describe("canonical chain registry: v12 deploy-record consistency", () => {
-  it("matches V12_EVM_CHAINS slugs for all 13 chains, ronin included", () => {
-    const raw = V12_EVM_CHAINS as Record<number, { name: string }>;
-    const ids = Object.keys(raw).map(Number);
-    expect(ids.length).toBe(13);
-    for (const id of ids) {
-      expect(chainById(id)!.slug).toBe(raw[id].name);
-    }
-  });
-
-  it("agrees with v12ChainSlug for every live chain", () => {
-    const live = v12LiveChainIds();
-    expect(live.length).toBeGreaterThan(0);
-    for (const id of live) {
-      expect(v12ChainSlug(id)).toBe(chainById(id)!.slug);
-    }
-  });
-
-  it("registers ronin (identity) even though its v12 deploy failed (liveness)", () => {
-    expect(chainById(2020)).toBeDefined();
-    expect(chainById(2020)!.slug).toBe("ronin");
-    expect(v12ChainSlug(2020)).toBeUndefined();
-  });
-});
-
 describe("canonical chain registry: protocol chainName reconciliation", () => {
   it("resolves every distinct (chainId, chainName) pair used across the protocol registry", () => {
     const pairs = new Map<string, number>();
@@ -123,7 +96,7 @@ describe("canonical chain registry: protocol chainName reconciliation", () => {
       }
     }
     expect(visited).toBeGreaterThan(0); // guards a vacuously-true loop
-    expect(pairs.size).toBe(23); // + (1329, "Sei"), from circle-gateway
+    expect(pairs.size).toBe(24); // + (1329, "Sei"), from circle-gateway; + (57073, "Ink"), from uniswap-v4
   });
 });
 

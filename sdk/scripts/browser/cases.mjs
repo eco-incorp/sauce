@@ -2,7 +2,7 @@
 // Chromium — and compares byte for byte. It imports the package BY NAME, exactly as an application
 // does, so what runs is the package's public `exports`. Kept free of anything environment-specific:
 // the same text is the Node run and the browser run.
-import { ready, routes, swap, deposit } from "@eco-incorp/sauce";
+import { ready, routes, deposit } from "@eco-incorp/sauce";
 import {
   compile,
   decodeCompactArguments,
@@ -24,7 +24,7 @@ export function beforeReady() {
   const attempts = {
     compile: () =>
       compile({ target: "evm", resolve: () => utf8("function main(): Uint256 { return 1n; }") }),
-    route: () => routes.compileSauceRoute("base", "return 1n;", EXECUTION),
+    route: () => routes.compileSauceRoute("base", "function main() { return 1n; }", EXECUTION),
   };
 
   return Object.fromEntries(
@@ -72,16 +72,21 @@ export async function run(source) {
     resolve: (path) => (path === "settle.sauce.ts" ? settleText : resolveSdkModule(path)),
   });
 
-  // Builders: a swap (the embedded ISauceRouter and IERC20 ABIs) and a deposit (a protocol twin).
+  // A swap through `@sauce/router` (the embedded library, its pool ABIs and `@sauce/token`, which it
+  // imports), and a deposit builder (a protocol twin).
   const swapRoute = routes.compileSauceRoute(
     "base",
-    swap.swapSource({
-      poolType: swap.SwapPoolType.UniV3,
-      pool: "0x1111111111111111111111111111111111111111",
-      tokenIn: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-      tokenOut: "0x4200000000000000000000000000000000000006",
-      amountIn: "balance",
-    }),
+    [
+      'import { uniswapV2, uniswapV3 } from "@sauce/router";',
+      'import { balanceOf } from "@sauce/token";',
+      "function main() {",
+      "  const usdc = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913n;",
+      "  const weth = 0x4200000000000000000000000000000000000006n;",
+      "  const out = uniswapV2(0x1111111111111111111111111111111111111111n, usdc, weth,",
+      "    balanceOf(usdc, ctx.self()), 0n, 0n, ctx.self());",
+      "  uniswapV3(0x4444444444444444444444444444444444444444n, weth, usdc, out, 0n, 0n, ctx.self());",
+      "}",
+    ].join("\n"),
     EXECUTION,
   );
   const depositRoute = routes.compileSauceRoute(

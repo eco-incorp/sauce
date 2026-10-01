@@ -1,31 +1,22 @@
 /**
  * CANONICAL CHAIN REGISTRY — identity only, additive, zero runtime coupling.
  *
- * `chains` (./index.ts) is EVM-only and has no `slug`; `../deployments/` knows
- * chain SLUGS but only for the 12 chains in the v12 deploy record, and only
- * gated on whether the stack is LIVE there. Neither answers the plain question
- * "what is this chain called, and what kind of VM does it run" for the full
- * union — including the 5 v12-only EVM chains and Solana, which have no
- * `chains` entry at all.
+ * `chains` (./index.ts) is EVM-only and has no `slug`. It does not answer the plain question "what
+ * is this chain called, and what kind of VM does it run" for the full union — including the EVM
+ * chains and Solana, which have no `chains` entry at all.
  *
- * This module is a flat, hand-maintained data table answering exactly that
- * question, for both EVM and SVM chains in ONE numeric id space. It carries no
- * nativeCurrency / blockExplorerUrls / testnet — those already live on
- * `chains` for the ids that have them; a consumer needing that data still goes
- * through `getChain(id)`, which returns `undefined` for the 5 v12-only EVM
- * chains and for Solana.
+ * This module is a flat, hand-maintained data table answering exactly that question, for both EVM
+ * and SVM chains in ONE numeric id space. It carries no nativeCurrency / blockExplorerUrls /
+ * testnet — those already live on `chains` for the ids that have them; a consumer needing that
+ * data still goes through `getChain(id)`, which returns `undefined` for a chain `chains` lacks.
  *
- * Deliberately NOT wired to `../deployments/` or `../protocols/` — no import
- * cycle, no runtime coupling. `v12ChainSlug`/`v12LiveChainSlugs` answer
- * "can I cook here", a LIVENESS question; this module answers "what is this
- * chain called", an IDENTITY question. Ronin (2020) is registered here even
- * though its v12 deploy failed — see `test/chains-canonical.test.ts` for the
- * pinned proof that the two layers are intentionally decoupled.
+ * Deliberately NOT wired to `../deployments/` or `../protocols/` — no import cycle, no runtime
+ * coupling. It answers "what is this chain called", an IDENTITY question, and says nothing about
+ * whether Sauce is deployed there: the release addresses are chain-independent, so that is a
+ * question for the chain itself.
  *
- * MAINTENANCE NOTE: this table is hand-maintained, not derived. A chain added
- * to `chains` (./index.ts) or to `V12_EVM_CHAINS` (../deployments/v12.generated.ts,
- * rewritten by `sync-engine-artifacts` on every engine repin) will fail
- * `test/chains-canonical.test.ts` until a matching entry is added here — that is
+ * MAINTENANCE NOTE: this table is hand-maintained, not derived. A chain added to `chains`
+ * (./index.ts) fails `test/chains-canonical.test.ts` until a matching entry is added here — that is
  * the intended fail-closed behavior, not a test to relax.
  */
 
@@ -39,7 +30,7 @@ export type ChainKind = "evm" | "svm";
 export interface CanonicalChain {
   /** Numeric chain id. EVM chain id, or the eco-routes SVM id for Solana. */
   readonly id: number;
-  /** Stable lowercase kebab-case key. For the 12 chains in the v12 deploy record this IS that record's `name`. */
+  /** Stable lowercase kebab-case key. */
   readonly slug: string;
   /** Canonical display name. For every id present in `chains`, this is byte-identical to `chains[id].name`. */
   readonly name: string;
@@ -49,7 +40,7 @@ export interface CanonicalChain {
 }
 
 export const CANONICAL_CHAINS = [
-  // --- EVM, present in `chains` AND in the v12 deploy record (7) — slug === V12_EVM_CHAINS[id].name ---
+  // --- EVM, present in `chains` ---
   { id: 1, slug: "ethereum", name: "Ethereum", kind: "evm", aliases: ["mainnet", "eth"] },
   { id: 10, slug: "optimism", name: "Optimism", kind: "evm", aliases: ["op", "op-mainnet"] },
   {
@@ -64,7 +55,6 @@ export const CANONICAL_CHAINS = [
   { id: 42161, slug: "arbitrum", name: "Arbitrum One", kind: "evm", aliases: ["arb"] },
   { id: 42220, slug: "celo", name: "Celo", kind: "evm", aliases: [] },
 
-  // --- EVM, present only in `chains` (27) ---
   { id: 25, slug: "cronos", name: "Cronos", kind: "evm", aliases: ["cro"] },
   { id: 100, slug: "gnosis", name: "Gnosis", kind: "evm", aliases: ["xdai", "gnosis-chain"] },
   { id: 122, slug: "fuse", name: "Fuse", kind: "evm", aliases: [] },
@@ -92,9 +82,8 @@ export const CANONICAL_CHAINS = [
   { id: 1329, slug: "sei", name: "Sei", kind: "evm", aliases: ["sei-evm"] },
   { id: 2222, slug: "kava", name: "Kava", kind: "evm", aliases: ["kava-evm"] },
   { id: 5000, slug: "mantle", name: "Mantle", kind: "evm", aliases: [] },
-  // Circle's Arc. Not in the legacy v12 deploy record, which predates it; the released engine,
-  // router and Kitchen from V12Deployments.json do have code on Arc (measured 2026-09-28), but no
-  // intent Pot is deployed there yet.
+  // Circle's Arc. The released engine, router and Kitchen from V12Deployments.json have code on Arc
+  // (measured 2026-09-28), but no intent Pot is deployed there yet.
   { id: 5042, slug: "arc", name: "Arc", kind: "evm", aliases: ["arc-mainnet", "arc-network"] },
   { id: 7000, slug: "zetachain", name: "ZetaChain", kind: "evm", aliases: ["zeta"] },
   { id: 8217, slug: "klaytn", name: "Klaytn", kind: "evm", aliases: ["kaia"] },
@@ -108,7 +97,7 @@ export const CANONICAL_CHAINS = [
   { id: 7777777, slug: "zora", name: "Zora", kind: "evm", aliases: [] },
   { id: 1313161554, slug: "aurora", name: "Aurora", kind: "evm", aliases: [] },
 
-  // --- EVM, present only in V12_EVM_CHAINS (6) — NOT in `chains`; slug copied from the deploy record ---
+  // --- EVM, NOT in `chains` ---
   { id: 130, slug: "unichain", name: "Unichain", kind: "evm", aliases: [] },
   { id: 143, slug: "monad", name: "Monad", kind: "evm", aliases: [] },
   { id: 146, slug: "sonic", name: "Sonic", kind: "evm", aliases: [] },
@@ -185,7 +174,7 @@ export function resolveChain(ref: ChainRef): CanonicalChain | undefined {
   return typeof ref === "object" && ref !== null ? ref : undefined;
 }
 
-/** `resolveChain` or throw, mirroring `requireV12Deployment`'s existing throw-with-the-known-set style. */
+/** `resolveChain` or throw, naming the known set. */
 export function requireChain(ref: ChainRef): CanonicalChain {
   const found = resolveChain(ref);
   if (found === undefined) {

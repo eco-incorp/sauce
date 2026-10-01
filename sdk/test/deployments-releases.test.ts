@@ -1,0 +1,229 @@
+/**
+ * The compiler/engine pairing: ONE table (`deployments/releases.json`), keyed by exact versions, and
+ * the refusal every engine-naming builder applies from it.
+ *
+ * The pairing runs in both directions. Compiler 2.4.0's EVM output carries `ABI_ENCODE` type lists
+ * a v12-evm 1.0.x engine reads as instructions and its SVM output needs v12-svm 1.3.0's untyped
+ * stack; 2.3.x output must not reach the new engines either. The SVM ISA revision does not move
+ * between them, so nothing but the versions can tell them apart.
+ */
+import { createRequire } from "node:module";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { address } from "@solana/kit";
+import type { Address, Hex } from "viem";
+
+import {
+  assertEngineRunsCompiler,
+  sdkCompilerVersion,
+  v12DeployedAddresses,
+  v12EngineAddress,
+  v12ReleaseSet,
+  v12SvmEngineProgramId,
+  V12_RELEASE_SETS,
+} from "../src/deployments/index.js";
+import { v12Pot } from "../src/evm/engine.js";
+import { buildSauceEvmCall } from "../src/routes/sauce-calls.js";
+import { buildExecuteFromAccountInstruction } from "../src/svm/instructions.js";
+import { buildCookInstruction } from "../src/svm/kitchen.js";
+
+const SEMVER = /^\d+\.\d+\.\d+$/;
+
+/** The resolved compiler's own manifest (see verify.compile.test.ts for why this walks up). */
+function resolvedCompilerVersion(): string {
+  let dir = dirname(createRequire(import.meta.url).resolve("sauce-compiler"));
+  for (let up = 0; up < 10; up++) {
+    const manifest = join(dir, "package.json");
+    if (existsSync(manifest)) {
+      const parsed = JSON.parse(readFileSync(manifest, "utf8")) as {
+        name?: string;
+        version?: string;
+      };
+      if (parsed.name === "@eco-incorp/sauce-compiler" && parsed.version) return parsed.version;
+    }
+    dir = dirname(dir);
+  }
+  throw new Error("could not locate the @eco-incorp/sauce-compiler manifest");
+}
+
+const PROGRAM = "0x00" as Hex;
+const POT = "0x2222222222222222222222222222222222222222" as Address;
+
+describe("the release table", () => {
+  it("keys every row by an exact compiler version, once", () => {
+    const compilers = V12_RELEASE_SETS.map((row) => row.compiler);
+    for (const version of compilers) expect(version).toMatch(SEMVER);
+    expect(new Set(compilers).size).toBe(compilers.length);
+  });
+
+  it("names exact versions for all four components in every row", () => {
+    for (const row of V12_RELEASE_SETS) {
+      for (const component of ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"] as const) {
+        expect([row.compiler, component, row[component].version]).toEqual([
+          row.compiler,
+          component,
+          expect.stringMatching(SEMVER),
+        ]);
+      }
+    }
+  });
+
+  it("gives every engine to one compiler — no engine is claimed by two rows", () => {
+    for (const component of ["v12-evm", "v12-svm"] as const) {
+      const engines = V12_RELEASE_SETS.map((row) => row[component].engine).filter(
+        (engine): engine is string => engine !== null,
+      );
+      const keys = engines.map((e) => (component === "v12-evm" ? e.toLowerCase() : e));
+      expect(new Set(keys).size).toBe(keys.length);
+    }
+  });
+
+  it("the synced artifacts are the row of the compiler that is installed", () => {
+    expect(sdkCompilerVersion()).toBe(resolvedCompilerVersion());
+    const set = v12ReleaseSet();
+    const { releases } = v12DeployedAddresses();
+    for (const component of ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"] as const) {
+      expect([component, releases[component].version]).toEqual([component, set[component].version]);
+    }
+    expect(set["v12-evm"].engine?.toLowerCase()).toBe(v12EngineAddress().toLowerCase());
+    expect(set["v12-svm"].engine).toBe(v12SvmEngineProgramId());
+  });
+
+  it("refuses a compiler no row pairs with", () => {
+    expect(() => v12ReleaseSet("0.0.1")).toThrow(/no v12 release set pairs with compiler 0\.0\.1/);
+  });
+});
+
+/** Every (row, other row) pair: the engine a row names, and a compiler that is not that row's. */
+const crossings = V12_RELEASE_SETS.flatMap((own) =>
+  V12_RELEASE_SETS.filter((other) => other.compiler !== own.compiler).map((other) => ({
+    own,
+    other,
+  })),
+);
+
+describe("assertEngineRunsCompiler — one table, both directions", () => {
+  it("runs each row's compiler on that row's own engines", () => {
+    for (const row of V12_RELEASE_SETS) {
+      const evm = row["v12-evm"].engine;
+      const svm = row["v12-svm"].engine;
+      if (evm !== null)
+        expect(() => assertEngineRunsCompiler("evm", evm, row.compiler)).not.toThrow();
+      if (svm !== null)
+        expect(() => assertEngineRunsCompiler("svm", svm, row.compiler)).not.toThrow();
+    }
+  });
+
+  it("refuses every other row's compiler on a row's engines", () => {
+    expect(crossings.length).toBeGreaterThan(0);
+    for (const { own, other } of crossings) {
+      const evm = own["v12-evm"].engine;
+      const svm = own["v12-svm"].engine;
+      if (evm !== null) {
+        expect(() => assertEngineRunsCompiler("evm", evm, other.compiler)).toThrow(
+          `is v12-evm ${own["v12-evm"].version}, which runs compiler ${own.compiler} output`,
+        );
+      }
+      if (svm !== null) {
+        expect(() => assertEngineRunsCompiler("svm", svm, other.compiler)).toThrow(
+          `is v12-svm ${own["v12-svm"].version}, which runs compiler ${own.compiler} output`,
+        );
+      }
+    }
+  });
+
+  // The two refusals the rollout exists for, named. Each reads its engine from the table, so a row
+  // edit that dropped either would fail here rather than let the pairing through.
+  it("refuses compiler 2.4.0 output on v12-evm 1.0.1 and on v12-svm 1.2.0", () => {
+    const old = v12ReleaseSet("2.3.0");
+    expect(old["v12-evm"].version).toBe("1.0.1");
+    expect(old["v12-svm"].version).toBe("1.2.0");
+    expect(() => assertEngineRunsCompiler("evm", old["v12-evm"].engine!, "2.4.0")).toThrow(
+      /Compiler 2\.4\.0 output runs on v12-evm 1\.1\.0/,
+    );
+    expect(() => assertEngineRunsCompiler("svm", old["v12-svm"].engine!, "2.4.0")).toThrow(
+      /Compiler 2\.4\.0 output runs on v12-svm 1\.3\.0/,
+    );
+  });
+
+  it("refuses compiler 2.3.0 output on v12-evm 1.1.0 and on v12-svm 1.3.0", () => {
+    const next = v12ReleaseSet("2.4.0");
+    expect(next["v12-evm"].version).toBe("1.1.0");
+    expect(next["v12-svm"].version).toBe("1.3.0");
+    expect(() => assertEngineRunsCompiler("evm", next["v12-evm"].engine!, "2.3.0")).toThrow(
+      /Compiler 2\.3\.0 output runs on v12-evm 1\.0\.1/,
+    );
+    expect(() => assertEngineRunsCompiler("svm", next["v12-svm"].engine!, "2.3.0")).toThrow(
+      /Compiler 2\.3\.0 output runs on v12-svm 1\.2\.0/,
+    );
+  });
+
+  it("compares EVM engines case-insensitively", () => {
+    const evm = v12ReleaseSet("2.3.0")["v12-evm"].engine!;
+    expect(() => assertEngineRunsCompiler("evm", evm.toLowerCase(), "2.4.0")).toThrow();
+    expect(() =>
+      assertEngineRunsCompiler("evm", evm.toUpperCase().replace("0X", "0x"), "2.4.0"),
+    ).toThrow();
+  });
+
+  it("does not refuse an engine no row names — a local deployment", () => {
+    expect(() =>
+      assertEngineRunsCompiler("evm", "0x1111111111111111111111111111111111111111", "2.4.0"),
+    ).not.toThrow();
+    expect(() =>
+      assertEngineRunsCompiler("svm", "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "2.3.0"),
+    ).not.toThrow();
+  });
+});
+
+/** An engine the table names for a compiler that is NOT this SDK's — what every builder refuses. */
+const foreign = (component: "v12-evm" | "v12-svm"): string[] =>
+  V12_RELEASE_SETS.filter((row) => row.compiler !== sdkCompilerVersion())
+    .map((row) => row[component].engine)
+    .filter((engine): engine is string => engine !== null);
+
+describe("every builder that names an engine refuses another compiler's", () => {
+  it("has an EVM engine of another compiler to refuse", () => {
+    expect(foreign("v12-evm").length).toBeGreaterThan(0);
+  });
+
+  it("v12Pot.encodeCook and buildSauceEvmCall refuse it, and take this SDK's own", () => {
+    for (const engine of foreign("v12-evm")) {
+      expect(() => v12Pot.encodeCook(engine as Address, PROGRAM)).toThrow(/runs compiler/);
+      expect(() =>
+        buildSauceEvmCall({ pot: POT, engine: engine as Address, program: PROGRAM }),
+      ).toThrow(/runs compiler/);
+    }
+    expect(() =>
+      buildSauceEvmCall({ pot: POT, engine: v12EngineAddress() as Address, program: PROGRAM }),
+    ).not.toThrow();
+  });
+
+  it("the SVM engine and Kitchen cook instructions refuse it, and take this SDK's own", () => {
+    const kitchen = address("SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot");
+    const owner = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+    const cook = (engineProgram: string) =>
+      buildCookInstruction({
+        kitchen,
+        owner,
+        engineProgram: address(engineProgram),
+        potSalt: new Uint8Array(32),
+        pot: owner,
+        feeConfig: owner,
+        bytecode: new Uint8Array([0]),
+        maxExecutionFee: 0n,
+      });
+    const execute = (programId: string) =>
+      buildExecuteFromAccountInstruction({
+        programId: address(programId),
+        code: owner,
+        accounts: [],
+      });
+    for (const engine of foreign("v12-svm")) {
+      expect(() => cook(engine)).toThrow(/runs compiler/);
+      expect(() => execute(engine)).toThrow(/runs compiler/);
+    }
+    expect(() => cook(v12SvmEngineProgramId())).not.toThrow();
+    expect(() => execute(v12SvmEngineProgramId())).not.toThrow();
+  });
+});

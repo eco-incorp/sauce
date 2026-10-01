@@ -1,0 +1,49 @@
+{
+  "$comment": "UniswapV2Pair getReserves and swap, copied from the verified Uniswap V2 WETH/USDC pair on Ethereum, 0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc (solc 0.5.16). Every Uniswap V2 fork's pair keeps both signatures.",
+  "abi": [
+    {
+      "name": "getReserves",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "_reserve0",
+          "type": "uint112"
+        },
+        {
+          "name": "_reserve1",
+          "type": "uint112"
+        },
+        {
+          "name": "_blockTimestampLast",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "swap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "amount0Out",
+          "type": "uint256"
+        },
+        {
+          "name": "amount1Out",
+          "type": "uint256"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    }
+  ]
+}

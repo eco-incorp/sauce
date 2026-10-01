@@ -1,6 +1,6 @@
 ---
 name: sauce-typescript
-description: The TypeScript side of Sauce (@eco-incorp/sauce) — compiling a .sauce.ts program for a chain from application code exactly as the sauce command does, encoding its main(...) arguments and the Pot.cook transaction, deriving and deploying the owner's Pot, the raw compiler with typed programs and compact arguments, JSON action programs, settlement verification, browser compilation with ready(), and the rule that the package embeds no RPC. Use when writing application or script code that compiles, encodes, verifies or submits Sauce programs, or when the user asks which import or subpath to use.
+description: The TypeScript side of Sauce (@eco-incorp/sauce) — compiling a .sauce.ts program for a chain from application code exactly as the sauce command does, encoding its main(...) arguments and the Pot.cook transaction, deriving and deploying the owner's Pot, the raw compiler and compact arguments, JSON action programs, settlement verification, browser compilation with ready(), and the rule that the package embeds no RPC. Use when writing application or script code that compiles, encodes, verifies or submits Sauce programs, or when the user asks which import or subpath to use.
 ---
 
 # Sauce from TypeScript
@@ -23,7 +23,7 @@ and program plus arguments is the `program` of the owner's `Pot.cook(engine, pro
 
 ```ts
 import { readFileSync } from "node:fs";
-import { routes, v12GateKitchen, v12PredictPot } from "@eco-incorp/sauce";
+import { routes, v12PredictPot } from "@eco-incorp/sauce";
 import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
 import { v12Pot } from "@eco-incorp/sauce/evm/engine";
 import { bytesToHex, concatHex, getAddress } from "viem";
@@ -38,7 +38,7 @@ export function cookTransactions(
 ) {
   const salt = `0x${"00".repeat(32)}` as const;
   const pot = v12PredictPot(owner, salt); // the owner's Pot, derived through the released Kitchen
-  const deploy = routes.sauceEvmDeployPotCall({ kitchen: v12GateKitchen(), owner, salt }); // once
+  const deploy = routes.sauceEvmDeployPotCall({ owner, salt }); // once, through the Kitchen
   const program = routes.compileSauceProgram(chain, readFileSync(file, "utf8"));
   const encoded = routes.encodeEntryArguments(program, args); // checked against main's types
   const engine = getAddress(v12EngineAddress());
@@ -52,16 +52,20 @@ export function cookTransactions(
   on the chain with your client, just before sending the cook.
 - `routes.sauceEvmDeployPotCall` and `routes.buildSauceEvmCall` return `{ to, data, value }` to send
   as a transaction, plus `target`, the same contract as a route's `calls` entry names it.
-- `v12EngineAddress()`, `v12KitchenAddress()` and `v12GateKitchen()` are recorded release
-  addresses: check the chain has code at them. Deploy the Pot only where it has no code yet.
+- `v12EngineAddress()` and `v12KitchenAddress()` are recorded release addresses, and the deploy
+  call goes to the Kitchen unless you pass `kitchen`: check the chain has code at them. Deploy the
+  Pot only where it has no code yet.
+- A Pot swaps through the Router its Kitchen handed it when it was minted. `potRouterUpdate(client,
+pot)` from `/evm/engine` reads both, and returns the `setRouter` call for the Pot's owner to send
+  when the Kitchen has a newer one.
 - A program that opens an intent also needs `options.intents`, `{ deadline, creator,
 executionFee }` (`sauce-intents`).
 
 ## The raw compiler
 
-`compile({ target, entry, resolve, ... })` from `/compiler` compiles a **typed** program and resolves
-nothing for you: no registry names, no chain defines. Reach for it for full control of the source
-and resolver, typed programs the way the reference writes them, and compact arguments.
+`compile({ target, entry, resolve, ... })` from `/compiler` compiles a program and resolves nothing
+for you: no registry names, no chain defines, no token syntax. Reach for it for full control of the
+source and resolver, and for compact arguments.
 
 - ABI-v1 arguments by default; `compactArgs: true` returns an `entrySchema` for
   `encodeCompactArguments`/`decodeCompactArguments` (`scalarWidth` keeps offsets fixed).

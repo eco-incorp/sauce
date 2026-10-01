@@ -1,7 +1,17 @@
+const { availableParallelism } = process.getBuiltinModule("node:os");
+
 /** @type {import('ts-jest').JestConfigWithTsJest} */
 module.exports = {
   preset: "ts-jest/presets/default-esm",
   testEnvironment: "node",
+  // A process that runs many suites keeps a part of each one's module graph: measured in band, the
+  // heap grows about 5 MB per suite and passes 2 GB before the last of them, which is the default
+  // heap limit on CI's 2-vCPU runner, and the suites that typecheck probes against the whole SDK
+  // (`routes-*-types`, `routes-source-globals*`) each build TypeScript programs of over a gigabyte.
+  // A worker past 1 GB after a suite is replaced instead. That needs workers, and jest runs in band
+  // — with nothing to replace — when it has only one, so there are always at least two.
+  workerIdleMemoryLimit: "1GB",
+  maxWorkers: Math.max(2, availableParallelism() - 1),
   roots: ["<rootDir>/test"],
   extensionsToTreatAsEsm: [".ts"],
   moduleNameMapper: {
@@ -30,9 +40,4 @@ module.exports = {
     ],
   },
   testMatch: ["**/*.test.ts"],
-  // Every test file re-imports the SDK under ESM, and the modules stay reachable in the process that
-  // ran them, so one process running the whole suite grows to the CI runner's ~2 GB heap — which is
-  // what a two-core runner does, running in band. A limit makes jest use workers even then and
-  // replace one once it has grown past it.
-  workerIdleMemoryLimit: "1GB",
 };
