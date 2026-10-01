@@ -1274,6 +1274,27 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
     for (const token of entry.tokens) add(entry.chain.slug, token.symbol);
   const program = (list) =>
     `function main() {\n${list.map((e) => `  require(${e} != 0n);`).join("\n")}\n}`;
+  // An interface is bound to an address and called in the same expression, on any EVM chain.
+  const evmChain = GLOBALS.chains.find((chain) => chain.kind === "evm")?.slug;
+  for (const one of GLOBALS.interfaces) {
+    if (one.call === undefined || evmChain === undefined) continue;
+    const args = one.call.inputs
+      .split(",")
+      .filter((type) => type !== "")
+      .map((type) => (type === "bool" ? "false" : "0n"));
+    try {
+      sdk.routes.compileSauceProgram(
+        evmChain,
+        `function main(target: Address) {\n  ${one.name}.at(target).${one.call.name}(${args.join(", ")});\n}`,
+      );
+      counts.indexed++;
+    } catch (error) {
+      fail(
+        rel(REFERENCE),
+        `lists ${one.name}, whose call does not compile: ${diagnostic(error.message)}`,
+      );
+    }
+  }
   for (const [slug, expressions] of perChain) {
     try {
       sdk.routes.compileSauceProgram(slug, program(expressions));
@@ -1295,7 +1316,8 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
   // Every global a program, a SauceScript block or inline code uses is listed.
   const contracts = new Set(GLOBALS.contracts.map((c) => c.name));
   const aliases = new Set(GLOBALS.aliases.map((a) => a.name));
-  const namespaces = new Set([...contracts, ...aliases].map((n) => n.split(".")[0]));
+  const interfaces = new Set(GLOBALS.interfaces.map((one) => one.name));
+  const namespaces = new Set([...contracts, ...aliases, ...interfaces].map((n) => n.split(".")[0]));
   const symbols = new Set(GLOBALS.tokens.flatMap((entry) => entry.tokens.map((t) => t.symbol)));
   const chainNames = new Set(GLOBALS.chains.map((c) => c.key));
   // A family's member namespaces, from the contracts its aliases name: `Uniswap` -> UniswapV2, …
@@ -1337,7 +1359,7 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
       )
         continue;
       if (!strict && (!namespaces.has(name.split(".")[0]) || ambiguous(name))) continue; // prose may name what fails
-      if (!contracts.has(name) && !aliases.has(name))
+      if (!contracts.has(name) && !aliases.has(name) && !interfaces.has(name))
         fail(where, `uses the global ${name}, which the index does not list`);
     }
     const declared = new Set([
