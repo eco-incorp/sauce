@@ -45,6 +45,18 @@ describe("toolTerms", () => {
       "USDC is not a token base registers (sauce_globals lists them)",
     );
     assert.equal(toolTerms("sauce run would refuse it"), "a signed run would refuse it");
+    assert.equal(
+      toolTerms(
+        "swap.sauce.ts's intents go to base and optimism: --rpc-url names one endpoint, so give --config, which names each destination's",
+      ),
+      "swap.sauce.ts's intents go to base and optimism: rpcUrl names one endpoint, so give rpcUrls, which names each one",
+    );
+    assert.equal(
+      toolTerms(
+        "This rehearses publishing on arbitrum only. `sauce fill` with the same file and flags, and the destination's endpoint, rehearses that.",
+      ),
+      "This rehearses publishing on arbitrum only. sauce_fill with the same inputs, and the destination's endpoint, rehearses that.",
+    );
     assert.equal(toolTerms("no flags, no commands"), "no flags, no commands");
   });
 });
