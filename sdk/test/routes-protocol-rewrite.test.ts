@@ -399,3 +399,83 @@ describe("rewriteProtocolAccessors: VALUE position -- an accessor used as an add
     expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 });
+
+describe("rewriteProtocolAccessors: every registry protocol, every contract kind", () => {
+  it("a formerly unlinked protocol resolves like any other: PancakeswapV3.Factory on Base", () => {
+    const source = `function main() { return PancakeswapV3.Factory.getPool(1n, 2n, 500n); }`;
+    const { source: rewritten, contracts } = rewriteProtocolAccessors(source, BASE);
+    const factory = getDescriptor("pancakeswap-v3", "Factory")!.perChainAddress[8453]!;
+    expect(rewritten).toContain(`IPancakeswapV3_Factory.view(${BigInt(factory)}n).getPool`);
+    expect(Object.keys(contracts)).toEqual(["IPancakeswapV3_Factory"]);
+    expect(compile(rewritten, { contracts }).bytecode[0]!.length).toBeGreaterThan(0);
+  });
+
+  it("Uniswap V4's StateView and PoolManager.extsload read pool state, on every V4 chain", () => {
+    const source = `function main() {
+      const poolId = 0x1234n;
+      const [sqrtPriceX96, tick, protocolFee, lpFee] = UniswapV4.StateView.getSlot0(poolId);
+      const raw = UniswapV4.PoolManager.extsload(poolId);
+      return sqrtPriceX96 + UniswapV4.StateView.getLiquidity(poolId) + raw;
+    }`;
+    for (const slug of getDescriptor("uniswap-v4", "StateView")!.chains) {
+      const { source: rewritten, contracts } = rewriteProtocolAccessors(source, requireChain(slug));
+      expect(Object.keys(contracts).sort()).toEqual([
+        "IUniswapV4_PoolManager",
+        "IUniswapV4_StateView",
+      ]);
+      expect(compile(rewritten, { contracts }).bytecode[0]!.length).toBeGreaterThan(0);
+    }
+    expect(getDescriptor("uniswap-v4", "StateView")!.chains).toEqual(
+      getDescriptor("uniswap-v4", "PoolManager")!.chains,
+    );
+  });
+
+  it("shape E: an interface is called at the address the program supplies", () => {
+    const source = `function main() { return Erc4626.Vault.at(0x1234n).deposit(1n, ctx.self()); }`;
+    const { source: rewritten, contracts } = rewriteProtocolAccessors(source, BASE);
+    expect(rewritten).toBe(
+      `function main() { return IErc4626_Vault.at(0x1234n).deposit(1n, ctx.self()); }`,
+    );
+    expect(Object.keys(contracts)).toEqual(["IErc4626_Vault"]);
+    expect(compile(rewritten, { contracts }).bytecode[0]!.length).toBeGreaterThan(0);
+  });
+
+  it("shape E: a deployed contract's ABI reaches another deployment, still bound .view for a view", () => {
+    const source = `function main() { return UniswapV3.Factory.at(0x1234n).getPool(1n, 2n, 500n); }`;
+    expect(rewriteProtocolAccessors(source, BASE).source).toBe(
+      `function main() { return IUniswapV3_Factory.view(0x1234n).getPool(1n, 2n, 500n); }`,
+    );
+  });
+
+  it("shape E needs a method in the same expression, and one address", () => {
+    expect(() =>
+      rewriteProtocolAccessors(`function main() { const v = Erc4626.Vault.at(1n); }`, BASE),
+    ).toThrow(/is not a value — call a method on it/);
+    expect(() =>
+      rewriteProtocolAccessors(
+        `function main() { Erc4626.Vault.at(1n, 2n).deposit(1n, 1n); }`,
+        BASE,
+      ),
+    ).toThrow(/takes exactly one argument/);
+    expect(() =>
+      rewriteProtocolAccessors(
+        `function main() { AaveV3.PoolAddressesProvider.at(1n).getPool(); }`,
+        BASE,
+      ),
+    ).toThrow(/there is nothing to bind/);
+  });
+
+  it("an interface without .at is refused with the spelling that works", () => {
+    expect(() =>
+      rewriteProtocolAccessors(`function main() { Erc4626.Vault.deposit(1n, 1n); }`, BASE),
+    ).toThrow(/Erc4626\.Vault\.at\(<address>\)\.<method>\(\.\.\.\)/);
+  });
+
+  it("an address-only contract is its address in value position", () => {
+    const source = `function main() { return AaveV3.PoolAddressesProvider; }`;
+    const provider = getDescriptor("aave-v3", "PoolAddressesProvider")!.perChainAddress[8453]!;
+    expect(rewriteProtocolAccessors(source, BASE).source).toBe(
+      `function main() { return ${BigInt(provider)}n; }`,
+    );
+  });
+});

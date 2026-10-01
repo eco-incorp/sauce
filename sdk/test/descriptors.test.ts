@@ -20,6 +20,7 @@ import {
   descriptorChains,
 } from "../src/descriptors/index.js";
 import { chainById } from "../src/chains/canonical.js";
+import { listProtocolSlugs } from "../src/protocols/index.js";
 
 describe("descriptors: golden selectors", () => {
   it("correct: erc20.transfer", () => {
@@ -161,9 +162,10 @@ describe("descriptors: kind:'address-only'", () => {
 
 describe("descriptors: many-to-one ABI sharing (compound-v3)", () => {
   it("cUSDCv3/cWETHv3/cUSDTv3 share CometABI, have distinct addresses, identical method sets", () => {
-    const usdc = getDescriptor("compound-v3", "CometUSDC")!;
-    const weth = getDescriptor("compound-v3", "CometWETH")!;
-    const usdt = getDescriptor("compound-v3", "CometUSDT")!;
+    // Named by role key: each Comet market is its own deployment of one ABI.
+    const usdc = getDescriptor("compound-v3", "CUSDCv3")!;
+    const weth = getDescriptor("compound-v3", "CWETHv3")!;
+    const usdt = getDescriptor("compound-v3", "CUSDTv3")!;
     expect(usdc.abiExport).toBe("CometABI");
     expect(weth.abiExport).toBe("CometABI");
     expect(usdt.abiExport).toBe("CometABI");
@@ -187,7 +189,7 @@ describe("descriptors: reverse index", () => {
     }
   });
 
-  it("contractsOnChain('solana') is [] -- deliberate, no starter protocol deploys there", () => {
+  it("contractsOnChain('solana') is [] -- a Solana program id under a role is no EVM contract", () => {
     expect(contractsOnChain("solana")).toEqual([]);
   });
 
@@ -200,14 +202,14 @@ describe("descriptors: reverse index", () => {
 });
 
 describe("descriptors: registry totals + purity", () => {
-  it("pins the current starter-set shape as a tripwire against silent link-table drift", () => {
+  it("covers every registry protocol: a tripwire against silent table drift", () => {
     const protocolSlugs = new Set(DESCRIPTORS.map((d) => d.protocol));
-    const abiExports = new Set(
-      DESCRIPTORS.map((d) => d.abiExport).filter((x): x is string => x !== undefined),
-    );
-    expect(protocolSlugs.size).toBe(16);
-    expect(abiExports.size).toBe(26);
-    expect(DESCRIPTORS.length).toBe(30);
+    const kinds = (kind: string) => DESCRIPTORS.filter((d) => d.kind === kind).length;
+    expect(protocolSlugs).toEqual(new Set(listProtocolSlugs()));
+    expect(DESCRIPTORS.length).toBe(300);
+    expect(kinds("singleton")).toBe(222);
+    expect(kinds("address-only")).toBe(55);
+    expect(kinds("interface")).toBe(23);
   });
 
   it("listDescriptors() is stable/reference-equal across calls, and mutating a returned perChainAddress does not corrupt the registry", () => {

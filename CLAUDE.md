@@ -80,7 +80,7 @@ pnpm --filter './sdk' test               # SDK tests, including protocol SauceSc
 pnpm --filter './actions' test:unit      # no mainnet state
 pnpm --filter './actions' test:mainnet   # real mainnet contracts, replayed locally
 pnpm --filter './sdk' gen-route-globals  # regenerate the per-chain named exports
-pnpm --filter './sdk' gen-source-globals # regenerate source-only token/protocol declarations
+pnpm --filter './sdk' gen-source-globals # regenerate the contract table and both languages' types
 ```
 
 Single test file: jest (sdk) → `pnpm --filter './sdk' test -- routes-void-main.test.ts`.
@@ -485,9 +485,13 @@ Those are **type-only declarations**: no host `USDC` or `Uniswap` runtime object
 SDK extracts with `Function.prototype.toString`; the closure is never invoked and captures no
 outer JavaScript values. Use `compile.defines` for external scalar values.
 
-`pnpm --filter './sdk' gen-source-globals` derives these declarations from descriptor/token
-registries. Regenerate after changing descriptor ABI shapes, namespace aliases, or token symbols;
-do not hand-edit the generated file. Type declarations describe known names and call shapes across
+`pnpm --filter './sdk' gen-source-globals` generates every protocol namespace from the registry:
+`descriptors/contracts.generated.ts` (the contract table the descriptors are built from, and the
+host `ChainContracts` type) and these declarations. A contract is a role from `addresses.ts`, bound
+to an ABI exactly as `test/fixtures/registry-abi/targets.json` binds it for the evidence — there is
+no hand-kept link table. It evaluates the registry modules from `src` (`scripts/lib/load-ts.mjs`),
+so it needs no build. Regenerate after changing a registry ABI, role, binding or token symbol; do
+not hand-edit the generated files. Type declarations describe known names and call shapes across
 the registry, not availability on every chain. Compilation still enforces the selected chain's
 deployments, the SauceScript subset, and ABI fidelity. The public root type graph must keep the
 generated ambient declaration import so downstream typed closures see the same declarations.
@@ -601,7 +605,9 @@ copies into a project: `sauce-overview` (the entry point), `sauce-script`, `sauc
   Edit them there; `skills-loader.test.ts` pins the count.
 - **The index of globals is generated.** `sdk/scripts/gen-skills-globals.mjs` writes
   `skills/sauce-globals/references/{tokens,protocols,chains}.md` from `routes.sourceGlobals` — the
-  function `sauce globals` prints, never a second derivation — at the end of every SDK `build`. The
+  function `sauce globals` prints, never a second derivation — at the end of every SDK `build`. It
+  leaves out the `EcoRoutes` namespace (the Portal and its provers): a program opens an intent with
+  the chain syntax, never by calling them, and the skills keep the Portal to `sauce-intents`. The
   files are committed and prettier-ignored; CI fails when the build changed `skills/`, so commit
   the regenerated files with any registry change (`pnpm --filter './sdk' gen-skills-globals`).
 - **The checker.** `pnpm skills:check` (`sdk/scripts/check-skills.mjs`, build SDK and actions
