@@ -23,14 +23,15 @@ and program plus arguments is the `program` of the owner's `Pot.cook(engine, pro
 
 ```ts
 import { readFileSync } from "node:fs";
-import { routes, v12PredictPot } from "@eco-incorp/sauce";
+import { destinationExecutionFee, routes, v12PredictPot } from "@eco-incorp/sauce";
 import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
 import { v12Pot } from "@eco-incorp/sauce/evm/engine";
-import { bytesToHex, concatHex, getAddress } from "viem";
+import { bytesToHex, concatHex, getAddress, type PublicClient } from "viem";
 
 type Address = `0x${string}`;
 
-export function cookTransactions(
+export async function cookTransactions(
+  client: PublicClient, // the chain's: the program is compiled for it and the fee read from it
   file: string,
   chain: string,
   owner: Address,
@@ -43,13 +44,24 @@ export function cookTransactions(
   const encoded = routes.encodeEntryArguments(program, args); // checked against main's types
   const engine = getAddress(v12EngineAddress());
   const payload = concatHex([bytesToHex(program.bytecode), bytesToHex(encoded)]);
-  // The owner sends the cook with value = the Kitchen's executionFee(), read at run time.
-  return { deploy, cook: { to: pot, data: v12Pot.encodeCook(engine, payload) } };
+  // The cook's value is the Kitchen's executionFee(), read just before sending: a cook paying
+  // less reverts.
+  const fee = destinationExecutionFee();
+  const { data: answer } = await client.call({ to: fee.to, data: fee.data });
+  if (answer === undefined) throw new Error("the Kitchen did not answer executionFee()");
+  const cook = {
+    chainId: await client.getChainId(),
+    to: pot,
+    data: v12Pot.encodeCook(engine, payload),
+    value: fee.decode(answer),
+  };
+
+  return { deploy, cook }; // cook is what `sauce tx` prints: { chainId, to, data, value }
 }
 ```
 
-- `destinationExecutionFee()` builds the fee read (`{ to, data, decode }`); send it as an `eth_call`
-  on the chain with your client, just before sending the cook.
+- `destinationExecutionFee()` builds the fee read (`{ to, data, decode }`) for the chain's
+  Kitchen; the example sends it as an `eth_call` with the chain's client just before the cook.
 - `routes.sauceEvmDeployPotCall` and `routes.buildSauceEvmCall` return `{ to, data, value }` to send
   as a transaction, plus `target`, the same contract as a route's `calls` entry names it.
 - `v12EngineAddress()` and `v12KitchenAddress()` are recorded release addresses, and the deploy
@@ -75,17 +87,66 @@ source and resolver, and for compact arguments.
   Node-only subpath. See [examples/compiler.mts](examples/compiler.mts) and
   `node_modules/@eco-incorp/sauce/docs/api/compiler.md`.
 
+## The protocol registry
+
+```ts
+import { contracts, getProtocol, getProtocolsByChain, listProtocolSlugs } from "@eco-incorp/sauce";
+import * as pancakeV3 from "@eco-incorp/sauce/protocols/pancakeswap-v3";
+
+export const onBase = getProtocolsByChain(8453).map((p) => p.slug); // catalogued on Base
+export const info = getProtocol("pancakeswap-v3"); // name, category, chains, website
+export const slugs = listProtocolSlugs();
+// Per-chain addresses by role, e.g. { factory, smartRouter, nonfungiblePositionManager }.
+export const pancakeOnBase = pancakeV3.deployments.find((d) => d.chainId === 8453)?.addresses;
+// Whether a namespace contract is deployed on a chain, and where.
+export const aave = contracts.on("base").AaveV3.Pool; // { available, address, abi, methods, … }
+export const pancake = contracts.on("optimism").PancakeswapV3.Factory.available; // false
+```
+
+Each protocol module (`@eco-incorp/sauce/protocols/<slug>`) exports `protocolInfo`, `deployments`,
+its ABIs (`…ABI`), and its SauceScript templates by name (`supply`, `swap`, `getPool`, …).
+`getProtocolSkill(slug)`, `getProtocolIndex()` and `listSkillSlugs()` from
+`@eco-incorp/sauce/skills` return the `sauce-protocols` documents. An address in `deployments` is
+a recorded address, not proof of live code on the chain.
+
 ## Other host tools
 
-- **JSON action programs** (`/actions`): `parseProgram`, `compileProgram` (with `argument` actions
-  as runtime amounts), `quoteAction`, `compileSplitSwap`. Reference:
+- **JSON action programs** (`/actions`): a document names tokens by registry symbol (`"USDC"`) and
+  contracts by namespace (`"UniswapV3.Factory"`), and a swap may give its pool by its factory's
+  key (`factory` and `fee`). `compileProgram(program, { chain })` compiles it for any chain that
+  has those names; a name the chain lacks throws `ProgramError`, whose `issues` and `chain` say
+  which. `argument` actions become runtime amounts. `programIntent(...)`, `quoteAction(...)` and
+  `compileSplitSwap(...)` resolve names on `chain` the same way. Reference:
   `node_modules/@eco-incorp/sauce/docs/guides/actions.md`; see
-  [examples/actions.mts](examples/actions.mts).
+  [examples/actions.mts](examples/actions.mts), and `sauce-actions` for writing the documents.
 - **Settlement verification** (`/verify`, `/svm/verify`): `validateSettleProgram`,
   `decodeSettleCall`, `extractEvmSettleFromIntent`, historical pins. It identifies the program and
   its parameters; the Pot, engine and every other call stay yours to check (`sauce verify` runs
   it). See [examples/verify.mts](examples/verify.mts).
-- **Solana execution**: the Kitchen client, `sauce-solana`.
+- **Solana execution** (`/svm`): the Kitchen client,
+  `createSauceSvmClient({ rpcUrl, payer, programId, kitchen, maxExecutionFee })`, with no default
+  endpoint; the SVM route helpers (`Solana(...)` routes, `buildSauceSvmCall`) do not produce an
+  instruction the engine accepts, so build execution with the Kitchen client. `USDC_MINT` is the
+  mainnet USDC mint. The token builder generates Token-2022 and `TransferChecked` programs:
+  `token.Token.transfer({ amount, svm: { ... } }).source("svm")`, with top-level
+  `tokenProgram: "token-2022"`. Venue adapters (`venue("raydium-cp-swap")`, also `Solana.RaydiumCpSwap`) build
+  pool configs, quote source and swap CPIs over an account loader you supply. For a local validator
+  or LiteSVM, `svmEnginePath()`, `svmKitchenPath()` and `svmKitchenIdlPath()` from
+  `@eco-incorp/sauce/svm/engine-artifacts` (Node only) locate the packaged programs; the program
+  ids are `v12SvmEngineProgramId()` and `v12SvmKitchenProgramId()` from `/deployments`. Writing the
+  programs is `sauce-solana`.
+- **Intents** (`sauce-intents`): `routes.hashIntent(intent)` gives the three hashes,
+  `routes.encodeRouteEvm(intent.route)` the route bytes (decode with `routes.EVM_ROUTE_PARAM` for
+  `fulfill`), `destinationPot(chain)` the shared Pot and
+  `routes.sauceEvmDeployPotCall({ owner: ecoRoutesExecutor(chain), salt: SAUCE_INTENT_POT_SALT })`
+  its deploy; the intents runner builds a rehearsal with them. For the source side,
+  `routes.publishTx`, `routes.publishAndFundTx`, `routes.approvalTxs`,
+  `routes.intentVaultAddressCall` and `routes.isIntentFundedCall` build the publication, funding
+  and vault calls (`{ to, data }`, with `decode` for a read) from an intent, for the source chain.
+- **Cascades from TypeScript**: `routes.openRoute(chain, body, options).nest(child, { via })`
+  attaches a child intent to a route. By default (`via: "transfer"`) the parent's route funds the
+  child by a transfer into the child's vault, with no publication of its own;
+  `via: "publishAndFund"` publishes and funds it for public discovery instead.
 
 ## Example
 

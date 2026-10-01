@@ -4,25 +4,19 @@ Liquid staking and restaking protocol for Ethereum. Offers swETH for liquid stak
 
 ## Category
 
-liquid-staking | Chains: Ethereum
+liquid-staking | Chains and addresses: [registry/swell.md](registry/swell.md)
 
 ## Key Operations
 
 - **stakeSwETH**: Deposit ETH for swETH (liquid staking)
 - **stakeRswETH**: Deposit ETH for rswETH (liquid restaking)
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  stakeSwETH,
-  stakeRswETH,
-} from "@eco-incorp/sauce/protocols/swell";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Stake ETH for swETH
@@ -42,26 +36,11 @@ function main(rswethAddress: Address): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | swETH    | `0xf951E335afb289353dc249e82926178EaC7DEd78` |
-| Ethereum | rswETH   | `0xFAe103DC9cf190eD75350761e95403b7b8aFa6c0` |
-
-## ABI Methods
-
-### SwETHABI
-
-- `deposit()` - Stake ETH (payable), receive swETH. Returns nothing: read the minted amount as a balance change
-- `swETHToETHRate()` - Current swETH/ETH exchange rate
-- `balanceOf(address)` - Query swETH balance
-
-### RswETHABI
-
-- `deposit()` - Stake ETH (payable), receive rswETH. Returns nothing: read the minted amount as a balance change
-- `rswETHToETHRate()` - Current rswETH/ETH exchange rate
-- `balanceOf(address)` - Query rswETH balance
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/swell.md](registry/swell.md).
 
 ## Notes
 

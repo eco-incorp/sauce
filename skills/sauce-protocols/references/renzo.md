@@ -4,20 +4,19 @@ Liquid restaking protocol built on EigenLayer. Deposit ETH or LSTs and receive e
 
 ## Category
 
-restaking | Chains: Ethereum
+restaking | Chains and addresses: [registry/renzo.md](registry/renzo.md)
 
 ## Key Operations
 
 - **depositETH**: Deposit ETH directly to receive ezETH
 - **deposit**: Deposit LST collateral (stETH, etc.) to receive ezETH
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import { protocolInfo, deployments, depositETH, deposit } from "@eco-incorp/sauce/protocols/renzo";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Deposit ETH for ezETH
@@ -37,24 +36,11 @@ function main(restakeManagerAddress: Address, collateralToken: Address, amount: 
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract       | Address                                      |
-| -------- | -------------- | -------------------------------------------- |
-| Ethereum | ezETH          | `0xbf5495Efe5DB9ce00f80364C8B423567e58d2110` |
-| Ethereum | restakeManager | `0x74a09653A083691711cF8215a6ab074BB4e99ef5` |
-
-## ABI Methods
-
-### RestakeManagerABI
-
-- `deposit(address,uint256)` - Deposit LST collateral for ezETH (not payable). Approve token first
-- `depositETH()` - Deposit ETH (payable) for ezETH. Send ETH as msg.value
-
-### EzETHABI
-
-- `balanceOf(address)` - Query ezETH balance
-- `approve(address,uint256)` - Approve ezETH spending
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/renzo.md](registry/renzo.md).
 
 ## Notes
 

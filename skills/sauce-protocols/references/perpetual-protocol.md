@@ -4,7 +4,7 @@ Decentralized perpetual futures exchange (Curie v2) on Optimism. Concentrated-li
 
 ## Category
 
-perpetuals | Chains: Optimism
+perpetuals | Chains and addresses: [registry/perpetual-protocol.md](registry/perpetual-protocol.md)
 
 ## Key Operations
 
@@ -13,18 +13,12 @@ perpetuals | Chains: Optimism
 - **openPosition**: Open a leveraged perpetual position
 - **closePosition**: Close an existing perpetual position
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  deposit,
-  withdraw,
-} from "@eco-incorp/sauce/protocols/perpetual-protocol";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Deposit collateral
@@ -44,26 +38,11 @@ function main(vaultAddress: Address, token: Address, amount: Uint256): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract      | Address                                      |
-| -------- | ------------- | -------------------------------------------- |
-| Optimism | clearingHouse | `0x82ac2CE43e33683c58BE4cDc40975E73aA50f459` |
-| Optimism | vault         | `0xAD7b4C162707E0B2b5f6fdDbD3f8538A5fbA0d60` |
-
-## ABI Methods
-
-### ClearingHouseABI
-
-- `openPosition((address,bool,bool,uint256,uint256,uint256,uint160,bytes32))` - Open leveraged position. One params struct: baseToken (market), isBaseToQuote (true=short, false=long), isExactInput (true=exact input amount), amount (trade amount), oppositeAmountBound (slippage limit), deadline (tx deadline), sqrtPriceLimitX96 (price limit, 0 for none), referralCode. Returns (base, quote)
-- `closePosition((address,uint160,uint256,uint256,bytes32))` - Close position. One params struct: baseToken, sqrtPriceLimitX96 (0 for market), oppositeAmountBound (slippage), deadline, referralCode. Returns (base, quote)
-- `getAccountValue(address)` - Get account value. Params: trader. Returns int256 value
-
-### VaultABI
-
-- `deposit(address,uint256)` - Deposit collateral. Params: token (USDC etc.), amount
-- `withdraw(address,uint256)` - Withdraw collateral. Params: token, amount
-- `getFreeCollateral(address)` - Query available collateral. Params: trader. Returns free collateral amount
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/perpetual-protocol.md](registry/perpetual-protocol.md).
 
 ## Notes
 

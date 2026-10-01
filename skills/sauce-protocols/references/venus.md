@@ -4,9 +4,14 @@ Leading lending and borrowing protocol on BNB Chain. Fork of Compound V2 with ad
 
 ## Category
 
-lending | Chains: BSC (56)
+lending | Chains and addresses: [registry/venus.md](registry/venus.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### supply
 
@@ -68,36 +73,11 @@ function main(vTokenAddress: Address, amount: Uint256): Uint256 {
 
 - Requires ERC-20 approval of underlying to the vToken
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain | Contract    | Address                                      |
-| ----- | ----------- | -------------------------------------------- |
-| BSC   | comptroller | `0xfD36E2c2a6789Db23113685031d7F16329158384` |
-| BSC   | vBNB        | `0xA07c5b74C9B40447a954e1466938b865b6BBea36` |
-
-## ABI Reference
-
-### VTokenABI
-
-- `mint(uint256 mintAmount) returns (uint256)` - Supply underlying, receive vTokens
-- `redeem(uint256 redeemTokens) returns (uint256)` - Redeem vTokens for underlying
-- `redeemUnderlying(uint256 redeemAmount) returns (uint256)` - Redeem exact underlying amount
-- `borrow(uint256 borrowAmount) returns (uint256)` - Borrow underlying
-- `repayBorrow(uint256 repayAmount) returns (uint256)` - Repay borrow debt
-- `balanceOfUnderlying(address owner) returns (uint256)` - Get underlying balance including accrued interest. Not a view: it accrues interest first, so it cannot be STATICCALLed
-
-### VBNBABI
-
-vBNB (`vBNB`) takes native BNB, so its `mint` and `repayBorrow` take no amount: the BNB sent with the call is the amount.
-
-- `mint()` - Supply BNB (payable), receive vBNB. Returns nothing; reverts on failure
-- `repayBorrow()` - Repay BNB borrow debt (payable). Returns nothing; reverts on failure
-- `redeem`, `redeemUnderlying`, `borrow`, `balanceOfUnderlying` - As on `VTokenABI`
-
-### VenusComptrollerABI
-
-- `enterMarkets(address[] vTokens) returns (uint256[])` - Enable vTokens as collateral
-- `exitMarket(address vToken) returns (uint256)` - Remove vToken from collateral
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/venus.md](registry/venus.md).
 
 ## Notes
 
@@ -106,3 +86,4 @@ vBNB (`vBNB`) takes native BNB, so its `mint` and `repayBorrow` take no amount: 
 - Also supports VAI stablecoin minting (separate contract)
 - Return values: 0 = success, non-zero = error code
 - BSC-only deployment. TVL: $3B+. Audited
+- vBNB (`vBNB`) takes native BNB, so its `mint` and `repayBorrow` take no amount: the BNB sent with the call is the amount.

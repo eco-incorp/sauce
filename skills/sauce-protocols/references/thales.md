@@ -4,7 +4,7 @@ Positional markets protocol built on Synthetix offering binary options, speed ma
 
 ## Category
 
-options | Chains: Optimism
+options | Chains and addresses: [registry/thales.md](registry/thales.md)
 
 ## Key Operations
 
@@ -12,18 +12,12 @@ options | Chains: Optimism
 - **buyFromAMM**: Buy positional tokens (UP/DOWN) from the Thales AMM
 - **createSpeedMarket**: Create a speed market position
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  exerciseMarket,
-  buyFromAMM,
-} from "@eco-incorp/sauce/protocols/thales";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Buy from AMM
@@ -49,26 +43,11 @@ function main(market: Address): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract        | Address                                      |
-| -------- | --------------- | -------------------------------------------- |
-| Optimism | thalesAMM       | `0x278B5A44397c9D8E52743fEdec263c4760dc1A1A` |
-| Optimism | speedMarketsAMM | `0xE16B8a01490835EC1e76bAbbB3Cadd8921b32001` |
-
-## ABI Methods
-
-### ThalesAMMABI
-
-- `buyFromAMM(address,uint8,uint256,uint256,uint256) returns (uint256)` - Buy positional tokens. Params: market (market address), position (0=UP, 1=DOWN), amount (tokens to buy), expectedPayout (expected return), additionalSlippage (slippage tolerance). Returns the amount paid
-
-### PositionalMarketABI
-
-- `exerciseOptions() returns (uint256)` - Exercise the caller's positions in a matured market (called on the market, not the AMM)
-
-### SpeedMarketsAMMABI
-
-- `createNewMarket(CreateMarketParams) returns (address)` - Create a speed market. One struct: `(address user, bytes32 asset, uint64 strikeTime, uint64 delta, int64 strikePrice, uint64 strikePricePublishTime, uint8 oracleSource, uint8 direction, address collateral, uint256 collateralAmount, address referrer, uint256 skewImpact)`. Returns the market address
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/thales.md](registry/thales.md).
 
 ## Notes
 

@@ -10,12 +10,17 @@ are program syntax, not JavaScript values. **Look names up before writing a prog
 `npx sauce globals --chain <chain>` lists one chain's, and these indexes list every chain's, from
 the same registries the compile reads:
 
-- [references/tokens.md](references/tokens.md): every token symbol per chain, with its address and
-  decimals, and the `@sauce/token` functions.
-- [references/protocols.md](references/protocols.md): every `Namespace.Contract`, the chains it is
-  deployed on, and the family aliases.
+- [references/tokens.md](references/tokens.md): every token symbol per chain, with its decimals,
+  and the `@sauce/token` functions.
+- [references/protocols.md](references/protocols.md): every `Namespace.Contract`, and the family
+  aliases.
 - [references/chains.md](references/chains.md): every chain name, its id, and whether it takes
   intents.
+
+These are the names. Where each is deployed and its address there are the full map: per chain in
+`sauce-chains` ([../sauce-chains/references/index.md](../sauce-chains/references/index.md)), and per
+protocol in `sauce-protocols`
+([../sauce-protocols/references/index.md](../sauce-protocols/references/index.md)).
 
 A name that is absent on the target chain (a token the chain does not register, a contract not
 deployed there) is a **compile error**, never a wrong address at run time.
@@ -35,7 +40,7 @@ once, never reassigned, used only as `t.<method>(...)`).
 | `.transfer(to, amount)`           | SafeERC20 transfer                                        |
 | `.transferFrom(from, to, amount)` | SafeERC20 transferFrom                                    |
 | `.approve(spender, amount)`       | forceApprove: a non-zero allowance is reset to zero first |
-| `.balanceOf(owner)`               | balance read; `self.USDC` is the Pot's own balance        |
+| `.balanceOf(owner)`               | balance read; `self.USDC` is `USDC.balanceOf(ctx.self())` |
 
 Writes are **SafeERC20**: a token that returns nothing (USDT) works when it has code; a `false`
 return, a malformed return or an address with no code reverts the program. A write returns
@@ -66,7 +71,8 @@ name of its own, as here, in a file that also uses the token syntax, which binds
 ## Protocols
 
 - `Namespace.Contract` is the contract's address on the program's chain where a value is expected,
-  and a bound contract where a method is called: `UniswapV3.Factory.getPool(a, b, 500n)`.
+  and a bound contract where a method is called: `UniswapV3.Factory.getPool(a, b, 500n)`. A
+  Uniswap fee is in millionths: `500n` is the 0.05% tier, `3000n` 0.3%.
 - A namespace's default contract is also called by the namespace alone:
   `Cctp.depositForBurn(...)` calls `Cctp.TokenMessenger`.
 - A family alias (`Uniswap`, `Aave`, …) names a contract only when one member has it on the chain:

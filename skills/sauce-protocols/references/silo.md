@@ -4,9 +4,14 @@ Permissionless lending protocol with isolated risk markets (Silos). Each Silo is
 
 ## Category
 
-lending | Chains: Ethereum (1), Arbitrum (42161)
+lending | Chains and addresses: [registry/silo.md](registry/silo.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### deposit
 
@@ -76,25 +81,11 @@ function main(siloAddress: Address, asset: Address, amount: Uint256): Uint256 {
 
 - Requires ERC-20 approval to the Silo
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract       | Address                                      |
-| -------- | -------------- | -------------------------------------------- |
-| Ethereum | siloRepository | `0xbACBBefda6fD1FbF5a2d6A79916F4B6124eD2D49` |
-| Arbitrum | siloRepository | `0x8658047e48CC09161f4152c79155Dac1d710Ff0a` |
-
-## ABI Reference
-
-### SiloABI
-
-- `deposit(address asset, uint256 amount, bool collateralOnly) returns (uint256 collateralAmount, uint256 collateralShare)` - Deposit asset into Silo
-- `withdraw(address asset, uint256 amount, bool collateralOnly) returns (uint256 withdrawnAmount, uint256 withdrawnShare)` - Withdraw deposited asset
-- `borrow(address asset, uint256 amount) returns (uint256 debtAmount, uint256 debtShare)` - Borrow asset against collateral
-- `repay(address asset, uint256 amount) returns (uint256 repaidAmount, uint256 repaidShare)` - Repay borrowed debt
-
-### SiloRepositoryABI
-
-- `getSilo(address asset) returns (address silo)` - Look up Silo address for a given asset (view)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/silo.md](registry/silo.md).
 
 ## Notes
 

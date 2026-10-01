@@ -4,9 +4,14 @@ Permissionless interchain messaging protocol. Supports modular security with ISM
 
 ## Category
 
-cross-chain messaging | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), Avalanche (43114), BSC (56), Arc (5042)
+cross-chain messaging | Direction: any-to-any | Chains and addresses: [registry/hyperlane.md](registry/hyperlane.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### dispatch
 
@@ -32,26 +37,11 @@ function main(
 - Requires native token (ETH) as msg.value for interchain gas payment
 - Use `quoteDispatch()` to estimate fees before sending
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain     | Contract | Address                                      |
-| --------- | -------- | -------------------------------------------- |
-| Ethereum  | mailbox  | `0xc005dc82818d67AF737725bD4bf75435d065D239` |
-| Arbitrum  | mailbox  | `0x979Ca5202784112f4738403dBec5D0F3B9daabB9` |
-| Optimism  | mailbox  | `0xd4C1905BB1D26BC93DAC913e13CaCC278CdCC80D` |
-| Base      | mailbox  | `0xeA87ae93Fa0019a82A727bfd3eBd1cFCa8f64f1D` |
-| Polygon   | mailbox  | `0x5d934f4e2f797775e53561bB72aca21ba36B96BB` |
-| Avalanche | mailbox  | `0xFf06aFcaABaDDd1fb08371f9ccA15D73D51FeBD6` |
-| BSC       | mailbox  | `0x2971b9Aec44bE4eb673DF1B88cDB57b96eefe8a4` |
-
-## ABI Reference
-
-### HyperlaneMailboxABI
-
-- `dispatch(uint32 _destinationDomain, bytes32 _recipientAddress, bytes _messageBody) returns (bytes32)` [payable] - Send interchain message. Returns message ID
-- `quoteDispatch(uint32 _destinationDomain, bytes32 _recipientAddress, bytes _messageBody) returns (uint256)` - Quote fee for dispatching a message (view)
-- `process(bytes _metadata, bytes _message)` [payable] - Process an inbound message on the destination chain (called by relayers)
-- `delivered(bytes32 _id) returns (bool)` - Check if a message has been delivered (view)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/hyperlane.md](registry/hyperlane.md).
 
 ## Notes
 

@@ -1,22 +1,23 @@
 # SyncSwap
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 The leading DEX on zkSync Era with optimized gas efficiency for the ZK rollup environment. Supports classic constant product pools and stable pools with native account abstraction support.
 
 ## Category
 
-dex | Chains: zkSync
+dex | Chains and addresses: [registry/syncswap.md](registry/syncswap.md)
 
 ## Key Operations
 
 - **swap**: Swap tokens via path-based routing with encoded swap data and step-based execution
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import { protocolInfo, deployments, swap } from "@eco-incorp/sauce/protocols/syncswap";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### swap
 
@@ -57,17 +58,11 @@ function main(
 - `callbackData`: Set to `0x00` for standard swaps
 - Supports multi-step paths: add more entries to the `steps` array for multi-hop
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain  | Contract | Address                                      |
-| ------ | -------- | -------------------------------------------- |
-| zkSync | Router   | `0x2da10A1e27bF85cEdD8FFb1AbBe97e53391C0295` |
-
-## ABI Methods
-
-### SyncSwapRouterABI
-
-- `swap(tuple[](tuple[](address pool, bytes data, address callback, bytes callbackData) steps, address tokenIn, uint256 amountIn) paths, uint256 amountOutMin, uint256 deadline) -> tuple(address token, uint256 amount) amountOut` - Execute a swap through one or more paths, each containing one or more pool steps
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/syncswap.md](registry/syncswap.md).
 
 ## Notes
 

@@ -1,10 +1,12 @@
 # SpookySwap
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 The largest DEX on Fantom with UniV2-style constant product pools (x*y=k). Features yield farming, cross-chain bridges, and limit orders. The default trading venue on the Fantom network.
 
 ## Category
 
-dex | Chains: Fantom
+dex | Chains and addresses: [registry/spookyswap.md](registry/spookyswap.md)
 
 ## Key Operations
 
@@ -12,19 +14,12 @@ dex | Chains: Fantom
 - **addLiquidity**: Deposit two tokens to mint LP tokens
 - **removeLiquidity**: Burn LP tokens to withdraw underlying tokens
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  swap,
-  addLiquidity,
-  removeLiquidity,
-} from "@eco-incorp/sauce/protocols/spookyswap";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### swap
 
@@ -109,19 +104,11 @@ function main(
 
 - LP token must be approved to the router
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain  | Contract  | Address                                      |
-| ------ | --------- | -------------------------------------------- |
-| Fantom | V2 Router | `0xF491e7B69E4244ad4002BC14e878a34207E38c29` |
-
-## ABI Methods
-
-### SpookySwapRouterABI
-
-- `swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline) -> uint256[] amounts` - Swap exact input along path
-- `addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB, uint256 liquidity)` - Add liquidity and mint LP tokens
-- `removeLiquidity(address tokenA, address tokenB, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB)` - Burn LP tokens for underlying
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/spookyswap.md](registry/spookyswap.md).
 
 ## Notes
 

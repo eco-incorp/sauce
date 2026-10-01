@@ -1,288 +1,291 @@
-<!-- Generated from the SDK's registries: the names `sauce globals --chain <chain>` lists. Do not edit. -->
+<!-- Generated from the SDK's registries. Do not edit. -->
 
 # Protocol globals
 
 A program names a contract as `Namespace.Contract`: its address where a value is expected, a
 bound contract where a method is called. Naming one that is not deployed on the program's chain
-is a compile error. Each contract is also the compile-time define `Namespace_Contract` on the
-chains listed. A namespace's default contract (marked) is also called as `Namespace.method(...)`.
+is a compile error, unless `available(Namespace.Contract)` rules its branch out where the chain
+lacks it. Each contract is also the compile-time define `Namespace_Contract`. A
+namespace's default contract (marked) is also called as `Namespace.method(...)`. The chains each
+is deployed on, with its address there, are in the protocol's registry file in `sauce-protocols`
+and in each chain's file in `sauce-chains`.
 
 ## Contracts
 
-- `AaveV2.LendingPool` (`aave-v2`, default): ethereum, polygon, avalanche
-- `AaveV3.Pool` (`aave-v3`, default): ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll
-- `AaveV3.PoolAddressesProvider` (`aave-v3`): ethereum, optimism, polygon, monad, base, arbitrum, avalanche
-- `AaveV4.AvaxCorrelatedSpoke` (`aave-v4`): avalanche
-- `AaveV4.BluechipSpoke` (`aave-v4`): ethereum
-- `AaveV4.CoreHub` (`aave-v4`): ethereum, arc, avalanche
-- `AaveV4.EquitiesHub` (`aave-v4`): base
-- `AaveV4.EthenaCorrelatedSpoke` (`aave-v4`): ethereum
-- `AaveV4.EthenaEcosystemSpoke` (`aave-v4`): ethereum
-- `AaveV4.EtherfiESpoke` (`aave-v4`): ethereum
-- `AaveV4.ForexSpoke` (`aave-v4`): ethereum, arc, avalanche
-- `AaveV4.GlobalDollarHub` (`aave-v4`): ethereum
-- `AaveV4.GoldSpoke` (`aave-v4`): ethereum
-- `AaveV4.KelpESpoke` (`aave-v4`): ethereum
-- `AaveV4.LidoESpoke` (`aave-v4`): ethereum
-- `AaveV4.LombardBtcSpoke` (`aave-v4`): ethereum
-- `AaveV4.Mag7Spoke` (`aave-v4`): base
-- `AaveV4.MainSpoke` (`aave-v4`): ethereum, arc, avalanche
-- `AaveV4.PaxgGoldSpoke` (`aave-v4`): ethereum
-- `AaveV4.PlusHub` (`aave-v4`): ethereum
-- `AaveV4.PrimeHub` (`aave-v4`): ethereum
-- `AaveV4.UsdgMapleESpoke` (`aave-v4`): ethereum
-- `AaveV4.UsdgPendleSpoke` (`aave-v4`): ethereum
-- `Abracadabra.DegenBox` (`abracadabra`, default): ethereum, arbitrum
-- `Abracadabra.Mim` (`abracadabra`): ethereum, arbitrum
-- `Across.HubPool` (`across`): ethereum
-- `Across.SpokePool` (`across`): ethereum, optimism, polygon, zksync, arc, base, mode, arbitrum, linea, blast, scroll
-- `Aerodrome.PoolFactory` (`aerodrome`): base
-- `Aerodrome.Router` (`aerodrome`): base
-- `AerodromeSlipstream.CLFactory` (`aerodrome-slipstream`): arc, base
-- `AerodromeSlipstream.CLFactoryGaugeCaps` (`aerodrome-slipstream`): base
-- `AerodromeSlipstream.CLFactoryGaugesV3` (`aerodrome-slipstream`): base
-- `AerodromeSlipstream.Metarouter` (`aerodrome-slipstream`): arc
-- `AerodromeSlipstream.NonfungiblePositionManager` (`aerodrome-slipstream`): arc, base
-- `AerodromeSlipstream.NonfungiblePositionManagerGaugeCaps` (`aerodrome-slipstream`): base
-- `AerodromeSlipstream.NonfungiblePositionManagerGaugesV3` (`aerodrome-slipstream`): base
-- `Aevo.DepositContract` (`aevo`, default): ethereum
-- `Alchemix.AlETH` (`alchemix`): ethereum
-- `Alchemix.AlUSD` (`alchemix`): ethereum
-- `Alchemix.AlchemistAlETH` (`alchemix`): ethereum
-- `Alchemix.AlchemistAlUSD` (`alchemix`): ethereum
-- `Ambient.CrocSwapDex` (`ambient`, default): ethereum, scroll
-- `ArbitrumBridge.L1GatewayRouter` (`arbitrum-bridge`, default): ethereum
-- `ArbitrumBridge.L2GatewayRouter` (`arbitrum-bridge`): arbitrum
-- `Arrakis.Factory` (`arrakis`): ethereum
-- `Arrakis.Router` (`arrakis`, default): ethereum
-- `Axelar.GasService` (`axelar`): ethereum
-- `Axelar.Gateway` (`axelar`): ethereum, optimism, polygon, base, arbitrum, avalanche
-- `Axelar.ITS` (`axelar`): ethereum, optimism, polygon, base, arbitrum, avalanche
-- `BalancerV2.Vault` (`balancer-v2`, default): ethereum, optimism, bsc, gnosis, polygon, base, arbitrum, avalanche
-- `BaseBridge.L1StandardBridge` (`base-bridge`, default): ethereum
-- `BaseBridge.L2StandardBridge` (`base-bridge`): base
-- `Baseswap.V2Router` (`baseswap`, default): base
-- `Beefy.BIFI` (`beefy`): ethereum, optimism, bsc, polygon, base, arbitrum, avalanche
-- `Benqi.Comptroller` (`benqi`, default): avalanche
-- `Camelot.V2Factory` (`camelot`): arbitrum
-- `Camelot.V2Router` (`camelot`): arbitrum
-- `Camelot.V3Factory` (`camelot`): arbitrum
-- `Camelot.V3SwapRouter` (`camelot`): arbitrum
-- `Cbeth.CbETH` (`cbeth`, default): ethereum, base
-- `Cctp.TokenMessenger` (`cctp`, default): ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea
-- `Celer.Bridge` (`celer`, default): ethereum, optimism, bsc, polygon, arbitrum, avalanche
-- `Chainlink.EthUsdFeed` (`chainlink`): ethereum, arc
-- `Chainlink.FeedRegistry` (`chainlink`): ethereum
-- `Chainlink.VrfV2Coordinator` (`chainlink`): ethereum
-- `ChainlinkCcip.Router` (`chainlink-ccip`, default): ethereum, optimism, polygon, arc, base, arbitrum
-- `CircleGateway.GatewayMinter` (`circle-gateway`): ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche
-- `CircleGateway.GatewayWallet` (`circle-gateway`): ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche
-- `CompoundV2.CETH` (`compound-v2`): ethereum
-- `CompoundV2.CUSDC` (`compound-v2`): ethereum
-- `CompoundV2.Comptroller` (`compound-v2`): ethereum
-- `CompoundV3.CUSDCv3` (`compound-v3`): ethereum, optimism, polygon, base, arbitrum, scroll
-- `CompoundV3.CUSDTv3` (`compound-v3`): ethereum, arbitrum
-- `CompoundV3.CWETHv3` (`compound-v3`): ethereum, base
-- `Connext.EverclearSpoke` (`connext`, default): ethereum, optimism, base, arbitrum
-- `Convex.Booster` (`convex`, default): ethereum
-- `Convex.CvxRewardPool` (`convex`): ethereum
-- `Cowswap.GPv2Settlement` (`cowswap`, default): ethereum, arbitrum
-- `Crvusd.CrvUSD` (`crvusd`, default): ethereum
-- `Curve.AddressProvider` (`curve`): ethereum, gnosis, polygon, fantom, arbitrum, avalanche
-- `Curve.CrvToken` (`curve`): ethereum
-- `Curve.RouterNG` (`curve`): ethereum, optimism, base, arbitrum
-- `Curve.ThreePool` (`curve`): ethereum
-- `Debridge.DlnDestination` (`debridge`): ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche
-- `Debridge.DlnSource` (`debridge`): ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche
-- `Dodo.DODOV2Proxy` (`dodo`, default): ethereum, bsc
-- `Eigenlayer.CbETHStrategy` (`eigenlayer`): ethereum
-- `Eigenlayer.DelegationManager` (`eigenlayer`): ethereum
-- `Eigenlayer.RETHStrategy` (`eigenlayer`): ethereum
-- `Eigenlayer.StETHStrategy` (`eigenlayer`): ethereum
-- `Eigenlayer.StrategyManager` (`eigenlayer`): ethereum
-- `Ens.BaseRegistrar` (`ens`): ethereum
-- `Ens.Registry` (`ens`): ethereum
-- `Ethena.Susde` (`ethena`): ethereum
-- `Ethena.USDe` (`ethena`): ethereum
-- `Etherfi.EETH` (`etherfi`): ethereum
-- `Etherfi.LiquidityPool` (`etherfi`): ethereum
-- `Etherfi.WeETH` (`etherfi`): ethereum
-- `EulerV2.EthereumVaultConnector` (`euler-v2`, default): ethereum
-- `Fenix.Router` (`fenix`, default): blast
-- `Fluid.Liquidity` (`fluid`): ethereum, arbitrum
-- `Frax.Frax` (`frax`, default): ethereum
-- `FraxEther.FrxETHMinter` (`frax-ether`): ethereum
-- `FraxEther.SfrxETH` (`frax-ether`): ethereum
-- `GainsNetwork.Diamond` (`gains-network`, default): polygon, arbitrum
-- `GainsNetwork.Gns` (`gains-network`): arbitrum
-- `Gamma.UniProxy` (`gamma`): polygon
-- `Gamma.UniProxyLegacy` (`gamma`): ethereum
-- `Gelato.Automate` (`gelato`, default): ethereum, optimism, bsc, polygon, base, arbitrum, avalanche
-- `Gho.Gho` (`gho`, default): ethereum
-- `GmxV1.Glp` (`gmx-v1`): arbitrum
-- `GmxV1.PositionRouter` (`gmx-v1`): arbitrum
-- `GmxV1.Router` (`gmx-v1`): arbitrum, avalanche
-- `GmxV1.Vault` (`gmx-v1`): arbitrum, avalanche
-- `GmxV2.DataStore` (`gmx-v2`): arbitrum
-- `GmxV2.ExchangeRouter` (`gmx-v2`, default): arbitrum
-- `Harvest.Controller` (`harvest`): ethereum
-- `Harvest.DepositHelper` (`harvest`): ethereum
-- `Harvest.Farm` (`harvest`): ethereum
-- `Hegic.Hegic` (`hegic`): arbitrum
-- `Hegic.OperationalTreasury` (`hegic`, default): arbitrum
-- `Hop.L1EthBridge` (`hop`): ethereum
-- `Hop.L1UsdcBridge` (`hop`): ethereum
-- `Hop.L2AmmWrapper` (`hop`): optimism, polygon, base, arbitrum
-- `Hyperlane.Mailbox` (`hyperlane`, default): ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche
-- `Instadapp.FlashloanAggregator` (`instadapp`, default): ethereum
-- `Kelp.LRTDepositPool` (`kelp`): ethereum
-- `Kelp.RsETH` (`kelp`): ethereum
-- `Kim.V2Router` (`kim`, default): mode
-- `Kyberswap.ElasticFactory` (`kyberswap`): ethereum, optimism, bsc, polygon, arbitrum, avalanche
-- `Kyberswap.ElasticRouter` (`kyberswap`): ethereum, optimism, bsc, polygon, arbitrum, avalanche
-- `Kyberswap.MetaAggregationRouterV2` (`kyberswap`): ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche
-- `KyberswapAggregator.MetaAggregationRouter` (`kyberswap-aggregator`, default): ethereum, optimism, bsc, polygon, fantom, zksync, arc, base, arbitrum, avalanche, linea, scroll
-- `Layerbank.Core` (`layerbank`, default): scroll
-- `Layerzero.EndpointV2` (`layerzero`, default): ethereum, optimism, bsc, polygon, zksync, arc, base, arbitrum, avalanche, linea, scroll
-- `LevelFinance.LiquidityPool` (`level-finance`, default): bsc, arbitrum
-- `Lido.StETH` (`lido`): ethereum
-- `Lido.WstETH` (`lido`): ethereum, arbitrum
-- `Lifi.LiFiDiamond` (`lifi`, default): ethereum, optimism, bsc, gnosis, polygon, fantom, arc, base, arbitrum, avalanche
-- `LineaBridge.L1MessageService` (`linea-bridge`, default): ethereum
-- `LineaBridge.L2MessageService` (`linea-bridge`): linea
-- `LiquityV1.BorrowerOperations` (`liquity-v1`, default): ethereum
-- `LiquityV1.Lusd` (`liquity-v1`): ethereum
-- `LiquityV2.Bold` (`liquity-v2`, default): ethereum
-- `Lynex.Router` (`lynex`, default): linea
-- `Maker.Dai` (`maker`): ethereum
-- `Maker.Pot` (`maker`): ethereum
-- `Maker.SDAI` (`maker`): ethereum
-- `Maker.Usds` (`maker`): ethereum
-- `Maker.Vat` (`maker`): ethereum
-- `MantleMeth.METH` (`mantle-meth`): ethereum
-- `MantleMeth.Staking` (`mantle-meth`): ethereum
-- `Maverick.V2Factory` (`maverick`): ethereum
-- `Maverick.V2Router` (`maverick`): ethereum, base, arbitrum
-- `Moonwell.Comptroller` (`moonwell`, default): base
-- `MorphoBlue.Bundler3` (`morpho-blue`): ethereum
-- `MorphoBlue.Morpho` (`morpho-blue`, default): ethereum, monad, arc, base
-- `MuxProtocol.LiquidityPool` (`mux-protocol`): arbitrum
-- `MuxProtocol.OrderBook` (`mux-protocol`): arbitrum
-- `Olympus.Ohm` (`olympus`): ethereum
-- `Olympus.Staking` (`olympus`, default): ethereum
-- `Olympus.StakingHelper` (`olympus`): ethereum
-- `Oneinch.AggregationRouterV6` (`oneinch`, default): ethereum, optimism, bsc, polygon, base, arbitrum, avalanche
-- `Openocean.ExchangeV2` (`openocean`, default): ethereum, optimism, bsc, polygon, fantom, arbitrum, avalanche
-- `OptimismBridge.L1StandardBridge` (`optimism-bridge`, default): ethereum
-- `OptimismBridge.L2StandardBridge` (`optimism-bridge`): optimism
-- `Opyn.Controller` (`opyn`, default): ethereum
-- `Opyn.OSQTH` (`opyn`): ethereum
-- `PancakeswapV2.Factory` (`pancakeswap-v2`): ethereum, bsc, monad, opbnb, base, arbitrum, linea
-- `PancakeswapV2.Router` (`pancakeswap-v2`): ethereum, bsc, monad, opbnb, base, arbitrum, linea
-- `PancakeswapV3.Factory` (`pancakeswap-v3`): ethereum, bsc, base, arbitrum, linea
-- `PancakeswapV3.NonfungiblePositionManager` (`pancakeswap-v3`): ethereum, bsc, base, arbitrum, linea
-- `PancakeswapV3.SmartRouter` (`pancakeswap-v3`): ethereum, bsc, base, arbitrum, linea
-- `Paraswap.AugustusV5` (`paraswap`, default): ethereum, optimism, bsc, polygon, base, arbitrum, avalanche
-- `Paraswap.AugustusV6` (`paraswap`): ethereum, optimism, bsc, polygon, base, arbitrum, avalanche
-- `Pendle.Router` (`pendle`, default): ethereum, monad, arbitrum
-- `Permit2.Permit2` (`permit2`, default): ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche
-- `PerpetualProtocol.ClearingHouse` (`perpetual-protocol`): optimism
-- `PerpetualProtocol.Vault` (`perpetual-protocol`): optimism
-- `PolygonBridge.ChildChainManager` (`polygon-bridge`): polygon
-- `PolygonBridge.Erc20Predicate` (`polygon-bridge`): ethereum
-- `PolygonBridge.EtherPredicate` (`polygon-bridge`): ethereum
-- `PolygonBridge.RootChainManager` (`polygon-bridge`, default): ethereum
-- `Premia.PoolFactory` (`premia`): arbitrum
-- `Puffer.PufETH` (`puffer`): ethereum
-- `Puffer.PufferVault` (`puffer`, default): ethereum
-- `Pyth.Oracle` (`pyth`, default): ethereum
-- `Quickswap.V2Factory` (`quickswap`): polygon
-- `Quickswap.V2Router` (`quickswap`): polygon
-- `Quickswap.V3Factory` (`quickswap`): polygon
-- `Quickswap.V3SwapRouter` (`quickswap`): polygon
-- `Radiant.LendingPool` (`radiant`): arbitrum
-- `Ramses.Router` (`ramses`, default): arbitrum
-- `Reflexer.CoinJoin` (`reflexer`): ethereum
-- `Reflexer.ETHJoin` (`reflexer`): ethereum
-- `Reflexer.Rai` (`reflexer`): ethereum
-- `Reflexer.SAFEEngine` (`reflexer`): ethereum
-- `Renzo.EzETH` (`renzo`): ethereum
-- `Renzo.RestakeManager` (`renzo`): ethereum
-- `RocketPool.RETH` (`rocket-pool`): ethereum
-- `RocketPool.RocketDepositPool` (`rocket-pool`): ethereum
-- `Sablier.LockupLinear` (`sablier`, default): ethereum
-- `Safe.SafeL2V130` (`safe`): ethereum, optimism, polygon, arc, base, arbitrum
-- `Safe.SafeV141` (`safe`): ethereum, arc
-- `ScrollBridge.L1GatewayRouter` (`scroll-bridge`): ethereum
-- `ScrollBridge.L1ScrollMessenger` (`scroll-bridge`): ethereum
-- `ScrollBridge.L2GatewayRouter` (`scroll-bridge`): scroll
-- `ScrollBridge.L2ScrollMessenger` (`scroll-bridge`): scroll
-- `Seamless.Pool` (`seamless`, default): base
-- `Seamless.PoolAddressesProvider` (`seamless`): base
-- `Seaport.SeaportV16` (`seaport`, default): ethereum, optimism, polygon, arc, base, arbitrum
-- `Silo.SiloRepository` (`silo`, default): ethereum, arbitrum
-- `Socket.SocketGateway` (`socket`, default): ethereum, optimism, bsc, polygon, base, arbitrum, avalanche
-- `Sommelier.CellarRouter` (`sommelier`): ethereum
-- `Spark.Pool` (`spark`, default): ethereum
-- `Spark.PoolAddressesProvider` (`spark`): ethereum
-- `Spookyswap.V2Router` (`spookyswap`, default): fantom
-- `Squid.SquidRouter` (`squid`, default): ethereum, optimism, bsc, polygon, base, arbitrum, avalanche
-- `Stader.ETHx` (`stader`): ethereum
-- `Stader.StakePoolManager` (`stader`): ethereum
-- `Stargate.PoolNative` (`stargate`): ethereum, base, arbitrum
-- `Stargate.PoolUSDC` (`stargate`): ethereum, base, arbitrum
-- `Stargate.PoolUSDT` (`stargate`): ethereum
-- `Superfluid.CFAForwarder` (`superfluid`, default): ethereum, optimism, polygon, base, arbitrum
-- `Superfluid.Host` (`superfluid`): ethereum, optimism, polygon, base, arbitrum
-- `SushiswapV2.Factory` (`sushiswap-v2`): ethereum, optimism, bsc, polygon, fantom, arbitrum, avalanche
-- `SushiswapV2.Router` (`sushiswap-v2`): ethereum, optimism, bsc, polygon, fantom, arbitrum, avalanche
-- `Swell.RswETH` (`swell`): ethereum
-- `Swell.SwETH` (`swell`): ethereum
-- `Synapse.CctpRouter` (`synapse`): ethereum
-- `Synapse.SynapseBridge` (`synapse`, default): ethereum, optimism, polygon, base, arbitrum, avalanche
-- `Syncswap.Router` (`syncswap`, default): zksync
-- `SynthetixV3.CoreProxy` (`synthetix-v3`): base
-- `SynthetixV3.PerpsMarketProxy` (`synthetix-v3`): base
-- `SynthraV3.Factory` (`synthra-v3`): arc
-- `SynthraV3.NonfungiblePositionManager` (`synthra-v3`): arc
-- `SynthraV3.QuoterV2` (`synthra-v3`): arc
-- `SynthraV3.SwapRouter02` (`synthra-v3`): arc
-- `Thales.SpeedMarketsAMM` (`thales`): optimism
-- `Thales.ThalesAMM` (`thales`): optimism
-- `Thena.RouterV2` (`thena`, default): bsc
-- `Thruster.V3SwapRouter` (`thruster`, default): blast
-- `Tokemak.AutopoolRegistry` (`tokemak`): ethereum
-- `Tokemak.SystemRegistry` (`tokemak`): ethereum
-- `Tokemak.Toke` (`tokemak`): ethereum
-- `TraderJoe.LBFactory` (`trader-joe`): avalanche
-- `TraderJoe.LBRouter` (`trader-joe`): bsc, arbitrum, avalanche
-- `UniswapV2.Factory` (`uniswap-v2`): ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora
-- `UniswapV2.Router` (`uniswap-v2`): ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora
-- `UniswapV3.Factory` (`uniswap-v3`): ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche
-- `UniswapV3.NonfungiblePositionManager` (`uniswap-v3`): ethereum, optimism, polygon, monad, arc, base, arbitrum
-- `UniswapV3.QuoterV2` (`uniswap-v3`): ethereum, monad, arc
-- `UniswapV3.SwapRouter` (`uniswap-v3`): ethereum, optimism, polygon, arbitrum
-- `UniswapV3.SwapRouter02` (`uniswap-v3`): ethereum, bsc, monad, arc, base, celo, avalanche
-- `UniswapV4.PoolManager` (`uniswap-v4`): ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora
-- `UniswapV4.PositionManager` (`uniswap-v4`): ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche
-- `UniswapV4.StateView` (`uniswap-v4`): ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora
-- `UniswapV4.UniversalRouter` (`uniswap-v4`): ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche
-- `UnitflowV3.Factory` (`unitflow-v3`): arc
-- `UnitflowV3.Quoter` (`unitflow-v3`): arc
-- `UnitflowV3.Router` (`unitflow-v3`): arc
-- `Velodrome.PoolFactory` (`velodrome`): optimism
-- `Velodrome.RouterV2` (`velodrome`): optimism
-- `Venus.Comptroller` (`venus`): bsc
-- `Venus.VBNB` (`venus`): bsc
-- `Vertex.Clearinghouse` (`vertex`): arbitrum
-- `Vertex.Endpoint` (`vertex`): arbitrum
-- `Wormhole.CoreBridge` (`wormhole`): ethereum, optimism, polygon, arc, base, arbitrum, avalanche
-- `Wormhole.TokenBridge` (`wormhole`): ethereum, optimism, polygon, base, arbitrum, avalanche
-- `YearnV3.VaultFactory` (`yearn-v3`): ethereum
-- `Zerolend.Pool` (`zerolend`, default): zksync
-- `Zerox.ExchangeProxy` (`zerox`, default): ethereum, optimism, bsc, polygon, base, arbitrum, avalanche
-- `ZksyncBridge.DiamondProxy` (`zksync-bridge`, default): ethereum
-- `ZksyncBridge.L2Bridge` (`zksync-bridge`): zksync
+- `AaveV2.LendingPool` ([`aave-v2`](../../sauce-protocols/references/registry/aave-v2.md), default)
+- `AaveV3.Pool` ([`aave-v3`](../../sauce-protocols/references/registry/aave-v3.md), default)
+- `AaveV3.PoolAddressesProvider` ([`aave-v3`](../../sauce-protocols/references/registry/aave-v3.md))
+- `AaveV4.AvaxCorrelatedSpoke` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.BluechipSpoke` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.CoreHub` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.EquitiesHub` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.EthenaCorrelatedSpoke` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.EthenaEcosystemSpoke` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.EtherfiESpoke` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.ForexSpoke` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.GlobalDollarHub` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.GoldSpoke` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.KelpESpoke` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.LidoESpoke` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.LombardBtcSpoke` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.Mag7Spoke` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.MainSpoke` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.PaxgGoldSpoke` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.PlusHub` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.PrimeHub` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.UsdgMapleESpoke` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `AaveV4.UsdgPendleSpoke` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
+- `Abracadabra.DegenBox` ([`abracadabra`](../../sauce-protocols/references/registry/abracadabra.md), default)
+- `Abracadabra.Mim` ([`abracadabra`](../../sauce-protocols/references/registry/abracadabra.md))
+- `Across.HubPool` ([`across`](../../sauce-protocols/references/registry/across.md))
+- `Across.SpokePool` ([`across`](../../sauce-protocols/references/registry/across.md))
+- `Aerodrome.PoolFactory` ([`aerodrome`](../../sauce-protocols/references/registry/aerodrome.md))
+- `Aerodrome.Router` ([`aerodrome`](../../sauce-protocols/references/registry/aerodrome.md))
+- `AerodromeSlipstream.CLFactory` ([`aerodrome-slipstream`](../../sauce-protocols/references/registry/aerodrome-slipstream.md))
+- `AerodromeSlipstream.CLFactoryGaugeCaps` ([`aerodrome-slipstream`](../../sauce-protocols/references/registry/aerodrome-slipstream.md))
+- `AerodromeSlipstream.CLFactoryGaugesV3` ([`aerodrome-slipstream`](../../sauce-protocols/references/registry/aerodrome-slipstream.md))
+- `AerodromeSlipstream.Metarouter` ([`aerodrome-slipstream`](../../sauce-protocols/references/registry/aerodrome-slipstream.md))
+- `AerodromeSlipstream.NonfungiblePositionManager` ([`aerodrome-slipstream`](../../sauce-protocols/references/registry/aerodrome-slipstream.md))
+- `AerodromeSlipstream.NonfungiblePositionManagerGaugeCaps` ([`aerodrome-slipstream`](../../sauce-protocols/references/registry/aerodrome-slipstream.md))
+- `AerodromeSlipstream.NonfungiblePositionManagerGaugesV3` ([`aerodrome-slipstream`](../../sauce-protocols/references/registry/aerodrome-slipstream.md))
+- `Aevo.DepositContract` ([`aevo`](../../sauce-protocols/references/registry/aevo.md), default)
+- `Alchemix.AlETH` ([`alchemix`](../../sauce-protocols/references/registry/alchemix.md))
+- `Alchemix.AlUSD` ([`alchemix`](../../sauce-protocols/references/registry/alchemix.md))
+- `Alchemix.AlchemistAlETH` ([`alchemix`](../../sauce-protocols/references/registry/alchemix.md))
+- `Alchemix.AlchemistAlUSD` ([`alchemix`](../../sauce-protocols/references/registry/alchemix.md))
+- `Ambient.CrocSwapDex` ([`ambient`](../../sauce-protocols/references/registry/ambient.md), default)
+- `ArbitrumBridge.L1GatewayRouter` ([`arbitrum-bridge`](../../sauce-protocols/references/registry/arbitrum-bridge.md), default)
+- `ArbitrumBridge.L2GatewayRouter` ([`arbitrum-bridge`](../../sauce-protocols/references/registry/arbitrum-bridge.md))
+- `Arrakis.Factory` ([`arrakis`](../../sauce-protocols/references/registry/arrakis.md))
+- `Arrakis.Router` ([`arrakis`](../../sauce-protocols/references/registry/arrakis.md), default)
+- `Axelar.GasService` ([`axelar`](../../sauce-protocols/references/registry/axelar.md))
+- `Axelar.Gateway` ([`axelar`](../../sauce-protocols/references/registry/axelar.md))
+- `Axelar.ITS` ([`axelar`](../../sauce-protocols/references/registry/axelar.md))
+- `BalancerV2.Vault` ([`balancer-v2`](../../sauce-protocols/references/registry/balancer-v2.md), default)
+- `BaseBridge.L1StandardBridge` ([`base-bridge`](../../sauce-protocols/references/registry/base-bridge.md), default)
+- `BaseBridge.L2StandardBridge` ([`base-bridge`](../../sauce-protocols/references/registry/base-bridge.md))
+- `Baseswap.V2Router` ([`baseswap`](../../sauce-protocols/references/registry/baseswap.md), default)
+- `Beefy.BIFI` ([`beefy`](../../sauce-protocols/references/registry/beefy.md))
+- `Benqi.Comptroller` ([`benqi`](../../sauce-protocols/references/registry/benqi.md), default)
+- `Camelot.V2Factory` ([`camelot`](../../sauce-protocols/references/registry/camelot.md))
+- `Camelot.V2Router` ([`camelot`](../../sauce-protocols/references/registry/camelot.md))
+- `Camelot.V3Factory` ([`camelot`](../../sauce-protocols/references/registry/camelot.md))
+- `Camelot.V3SwapRouter` ([`camelot`](../../sauce-protocols/references/registry/camelot.md))
+- `Cbeth.CbETH` ([`cbeth`](../../sauce-protocols/references/registry/cbeth.md), default)
+- `Cctp.TokenMessenger` ([`cctp`](../../sauce-protocols/references/registry/cctp.md), default)
+- `Celer.Bridge` ([`celer`](../../sauce-protocols/references/registry/celer.md), default)
+- `Chainlink.EthUsdFeed` ([`chainlink`](../../sauce-protocols/references/registry/chainlink.md))
+- `Chainlink.FeedRegistry` ([`chainlink`](../../sauce-protocols/references/registry/chainlink.md))
+- `Chainlink.VrfV2Coordinator` ([`chainlink`](../../sauce-protocols/references/registry/chainlink.md))
+- `ChainlinkCcip.Router` ([`chainlink-ccip`](../../sauce-protocols/references/registry/chainlink-ccip.md), default)
+- `CircleGateway.GatewayMinter` ([`circle-gateway`](../../sauce-protocols/references/registry/circle-gateway.md))
+- `CircleGateway.GatewayWallet` ([`circle-gateway`](../../sauce-protocols/references/registry/circle-gateway.md))
+- `CompoundV2.CETH` ([`compound-v2`](../../sauce-protocols/references/registry/compound-v2.md))
+- `CompoundV2.CUSDC` ([`compound-v2`](../../sauce-protocols/references/registry/compound-v2.md))
+- `CompoundV2.Comptroller` ([`compound-v2`](../../sauce-protocols/references/registry/compound-v2.md))
+- `CompoundV3.CUSDCv3` ([`compound-v3`](../../sauce-protocols/references/registry/compound-v3.md))
+- `CompoundV3.CUSDTv3` ([`compound-v3`](../../sauce-protocols/references/registry/compound-v3.md))
+- `CompoundV3.CWETHv3` ([`compound-v3`](../../sauce-protocols/references/registry/compound-v3.md))
+- `Connext.EverclearSpoke` ([`connext`](../../sauce-protocols/references/registry/connext.md), default)
+- `Convex.Booster` ([`convex`](../../sauce-protocols/references/registry/convex.md), default)
+- `Convex.CvxRewardPool` ([`convex`](../../sauce-protocols/references/registry/convex.md))
+- `Cowswap.GPv2Settlement` ([`cowswap`](../../sauce-protocols/references/registry/cowswap.md), default)
+- `Crvusd.CrvUSD` ([`crvusd`](../../sauce-protocols/references/registry/crvusd.md), default)
+- `Curve.AddressProvider` ([`curve`](../../sauce-protocols/references/registry/curve.md))
+- `Curve.CrvToken` ([`curve`](../../sauce-protocols/references/registry/curve.md))
+- `Curve.RouterNG` ([`curve`](../../sauce-protocols/references/registry/curve.md))
+- `Curve.ThreePool` ([`curve`](../../sauce-protocols/references/registry/curve.md))
+- `Debridge.DlnDestination` ([`debridge`](../../sauce-protocols/references/registry/debridge.md))
+- `Debridge.DlnSource` ([`debridge`](../../sauce-protocols/references/registry/debridge.md))
+- `Dodo.DODOV2Proxy` ([`dodo`](../../sauce-protocols/references/registry/dodo.md), default)
+- `Eigenlayer.CbETHStrategy` ([`eigenlayer`](../../sauce-protocols/references/registry/eigenlayer.md))
+- `Eigenlayer.DelegationManager` ([`eigenlayer`](../../sauce-protocols/references/registry/eigenlayer.md))
+- `Eigenlayer.RETHStrategy` ([`eigenlayer`](../../sauce-protocols/references/registry/eigenlayer.md))
+- `Eigenlayer.StETHStrategy` ([`eigenlayer`](../../sauce-protocols/references/registry/eigenlayer.md))
+- `Eigenlayer.StrategyManager` ([`eigenlayer`](../../sauce-protocols/references/registry/eigenlayer.md))
+- `Ens.BaseRegistrar` ([`ens`](../../sauce-protocols/references/registry/ens.md))
+- `Ens.Registry` ([`ens`](../../sauce-protocols/references/registry/ens.md))
+- `Ethena.Susde` ([`ethena`](../../sauce-protocols/references/registry/ethena.md))
+- `Ethena.USDe` ([`ethena`](../../sauce-protocols/references/registry/ethena.md))
+- `Etherfi.EETH` ([`etherfi`](../../sauce-protocols/references/registry/etherfi.md))
+- `Etherfi.LiquidityPool` ([`etherfi`](../../sauce-protocols/references/registry/etherfi.md))
+- `Etherfi.WeETH` ([`etherfi`](../../sauce-protocols/references/registry/etherfi.md))
+- `EulerV2.EthereumVaultConnector` ([`euler-v2`](../../sauce-protocols/references/registry/euler-v2.md), default)
+- `Fenix.Router` ([`fenix`](../../sauce-protocols/references/registry/fenix.md), default)
+- `Fluid.Liquidity` ([`fluid`](../../sauce-protocols/references/registry/fluid.md))
+- `Frax.Frax` ([`frax`](../../sauce-protocols/references/registry/frax.md), default)
+- `FraxEther.FrxETHMinter` ([`frax-ether`](../../sauce-protocols/references/registry/frax-ether.md))
+- `FraxEther.SfrxETH` ([`frax-ether`](../../sauce-protocols/references/registry/frax-ether.md))
+- `GainsNetwork.Diamond` ([`gains-network`](../../sauce-protocols/references/registry/gains-network.md), default)
+- `GainsNetwork.Gns` ([`gains-network`](../../sauce-protocols/references/registry/gains-network.md))
+- `Gamma.UniProxy` ([`gamma`](../../sauce-protocols/references/registry/gamma.md))
+- `Gamma.UniProxyLegacy` ([`gamma`](../../sauce-protocols/references/registry/gamma.md))
+- `Gelato.Automate` ([`gelato`](../../sauce-protocols/references/registry/gelato.md), default)
+- `Gho.Gho` ([`gho`](../../sauce-protocols/references/registry/gho.md), default)
+- `GmxV1.Glp` ([`gmx-v1`](../../sauce-protocols/references/registry/gmx-v1.md))
+- `GmxV1.PositionRouter` ([`gmx-v1`](../../sauce-protocols/references/registry/gmx-v1.md))
+- `GmxV1.Router` ([`gmx-v1`](../../sauce-protocols/references/registry/gmx-v1.md))
+- `GmxV1.Vault` ([`gmx-v1`](../../sauce-protocols/references/registry/gmx-v1.md))
+- `GmxV2.DataStore` ([`gmx-v2`](../../sauce-protocols/references/registry/gmx-v2.md))
+- `GmxV2.ExchangeRouter` ([`gmx-v2`](../../sauce-protocols/references/registry/gmx-v2.md), default)
+- `Harvest.Controller` ([`harvest`](../../sauce-protocols/references/registry/harvest.md))
+- `Harvest.DepositHelper` ([`harvest`](../../sauce-protocols/references/registry/harvest.md))
+- `Harvest.Farm` ([`harvest`](../../sauce-protocols/references/registry/harvest.md))
+- `Hegic.Hegic` ([`hegic`](../../sauce-protocols/references/registry/hegic.md))
+- `Hegic.OperationalTreasury` ([`hegic`](../../sauce-protocols/references/registry/hegic.md), default)
+- `Hop.L1EthBridge` ([`hop`](../../sauce-protocols/references/registry/hop.md))
+- `Hop.L1UsdcBridge` ([`hop`](../../sauce-protocols/references/registry/hop.md))
+- `Hop.L2AmmWrapper` ([`hop`](../../sauce-protocols/references/registry/hop.md))
+- `Hyperlane.Mailbox` ([`hyperlane`](../../sauce-protocols/references/registry/hyperlane.md), default)
+- `Instadapp.FlashloanAggregator` ([`instadapp`](../../sauce-protocols/references/registry/instadapp.md), default)
+- `Kelp.LRTDepositPool` ([`kelp`](../../sauce-protocols/references/registry/kelp.md))
+- `Kelp.RsETH` ([`kelp`](../../sauce-protocols/references/registry/kelp.md))
+- `Kim.V2Router` ([`kim`](../../sauce-protocols/references/registry/kim.md), default)
+- `Kyberswap.ElasticFactory` ([`kyberswap`](../../sauce-protocols/references/registry/kyberswap.md))
+- `Kyberswap.ElasticRouter` ([`kyberswap`](../../sauce-protocols/references/registry/kyberswap.md))
+- `Kyberswap.MetaAggregationRouterV2` ([`kyberswap`](../../sauce-protocols/references/registry/kyberswap.md))
+- `KyberswapAggregator.MetaAggregationRouter` ([`kyberswap-aggregator`](../../sauce-protocols/references/registry/kyberswap-aggregator.md), default)
+- `Layerbank.Core` ([`layerbank`](../../sauce-protocols/references/registry/layerbank.md), default)
+- `Layerzero.EndpointV2` ([`layerzero`](../../sauce-protocols/references/registry/layerzero.md), default)
+- `LevelFinance.LiquidityPool` ([`level-finance`](../../sauce-protocols/references/registry/level-finance.md), default)
+- `Lido.StETH` ([`lido`](../../sauce-protocols/references/registry/lido.md))
+- `Lido.WstETH` ([`lido`](../../sauce-protocols/references/registry/lido.md))
+- `Lifi.LiFiDiamond` ([`lifi`](../../sauce-protocols/references/registry/lifi.md), default)
+- `LineaBridge.L1MessageService` ([`linea-bridge`](../../sauce-protocols/references/registry/linea-bridge.md), default)
+- `LineaBridge.L2MessageService` ([`linea-bridge`](../../sauce-protocols/references/registry/linea-bridge.md))
+- `LiquityV1.BorrowerOperations` ([`liquity-v1`](../../sauce-protocols/references/registry/liquity-v1.md), default)
+- `LiquityV1.Lusd` ([`liquity-v1`](../../sauce-protocols/references/registry/liquity-v1.md))
+- `LiquityV2.Bold` ([`liquity-v2`](../../sauce-protocols/references/registry/liquity-v2.md), default)
+- `Lynex.Router` ([`lynex`](../../sauce-protocols/references/registry/lynex.md), default)
+- `Maker.Dai` ([`maker`](../../sauce-protocols/references/registry/maker.md))
+- `Maker.Pot` ([`maker`](../../sauce-protocols/references/registry/maker.md))
+- `Maker.SDAI` ([`maker`](../../sauce-protocols/references/registry/maker.md))
+- `Maker.Usds` ([`maker`](../../sauce-protocols/references/registry/maker.md))
+- `Maker.Vat` ([`maker`](../../sauce-protocols/references/registry/maker.md))
+- `MantleMeth.METH` ([`mantle-meth`](../../sauce-protocols/references/registry/mantle-meth.md))
+- `MantleMeth.Staking` ([`mantle-meth`](../../sauce-protocols/references/registry/mantle-meth.md))
+- `Maverick.V2Factory` ([`maverick`](../../sauce-protocols/references/registry/maverick.md))
+- `Maverick.V2Router` ([`maverick`](../../sauce-protocols/references/registry/maverick.md))
+- `Moonwell.Comptroller` ([`moonwell`](../../sauce-protocols/references/registry/moonwell.md), default)
+- `MorphoBlue.Bundler3` ([`morpho-blue`](../../sauce-protocols/references/registry/morpho-blue.md))
+- `MorphoBlue.Morpho` ([`morpho-blue`](../../sauce-protocols/references/registry/morpho-blue.md), default)
+- `MuxProtocol.LiquidityPool` ([`mux-protocol`](../../sauce-protocols/references/registry/mux-protocol.md))
+- `MuxProtocol.OrderBook` ([`mux-protocol`](../../sauce-protocols/references/registry/mux-protocol.md))
+- `Olympus.Ohm` ([`olympus`](../../sauce-protocols/references/registry/olympus.md))
+- `Olympus.Staking` ([`olympus`](../../sauce-protocols/references/registry/olympus.md), default)
+- `Olympus.StakingHelper` ([`olympus`](../../sauce-protocols/references/registry/olympus.md))
+- `Oneinch.AggregationRouterV6` ([`oneinch`](../../sauce-protocols/references/registry/oneinch.md), default)
+- `Openocean.ExchangeV2` ([`openocean`](../../sauce-protocols/references/registry/openocean.md), default)
+- `OptimismBridge.L1StandardBridge` ([`optimism-bridge`](../../sauce-protocols/references/registry/optimism-bridge.md), default)
+- `OptimismBridge.L2StandardBridge` ([`optimism-bridge`](../../sauce-protocols/references/registry/optimism-bridge.md))
+- `Opyn.Controller` ([`opyn`](../../sauce-protocols/references/registry/opyn.md), default)
+- `Opyn.OSQTH` ([`opyn`](../../sauce-protocols/references/registry/opyn.md))
+- `PancakeswapV2.Factory` ([`pancakeswap-v2`](../../sauce-protocols/references/registry/pancakeswap-v2.md))
+- `PancakeswapV2.Router` ([`pancakeswap-v2`](../../sauce-protocols/references/registry/pancakeswap-v2.md))
+- `PancakeswapV3.Factory` ([`pancakeswap-v3`](../../sauce-protocols/references/registry/pancakeswap-v3.md))
+- `PancakeswapV3.NonfungiblePositionManager` ([`pancakeswap-v3`](../../sauce-protocols/references/registry/pancakeswap-v3.md))
+- `PancakeswapV3.SmartRouter` ([`pancakeswap-v3`](../../sauce-protocols/references/registry/pancakeswap-v3.md))
+- `Paraswap.AugustusV5` ([`paraswap`](../../sauce-protocols/references/registry/paraswap.md), default)
+- `Paraswap.AugustusV6` ([`paraswap`](../../sauce-protocols/references/registry/paraswap.md))
+- `Pendle.Router` ([`pendle`](../../sauce-protocols/references/registry/pendle.md), default)
+- `Permit2.Permit2` ([`permit2`](../../sauce-protocols/references/registry/permit2.md), default)
+- `PerpetualProtocol.ClearingHouse` ([`perpetual-protocol`](../../sauce-protocols/references/registry/perpetual-protocol.md))
+- `PerpetualProtocol.Vault` ([`perpetual-protocol`](../../sauce-protocols/references/registry/perpetual-protocol.md))
+- `PolygonBridge.ChildChainManager` ([`polygon-bridge`](../../sauce-protocols/references/registry/polygon-bridge.md))
+- `PolygonBridge.Erc20Predicate` ([`polygon-bridge`](../../sauce-protocols/references/registry/polygon-bridge.md))
+- `PolygonBridge.EtherPredicate` ([`polygon-bridge`](../../sauce-protocols/references/registry/polygon-bridge.md))
+- `PolygonBridge.RootChainManager` ([`polygon-bridge`](../../sauce-protocols/references/registry/polygon-bridge.md), default)
+- `Premia.PoolFactory` ([`premia`](../../sauce-protocols/references/registry/premia.md))
+- `Puffer.PufETH` ([`puffer`](../../sauce-protocols/references/registry/puffer.md))
+- `Puffer.PufferVault` ([`puffer`](../../sauce-protocols/references/registry/puffer.md), default)
+- `Pyth.Oracle` ([`pyth`](../../sauce-protocols/references/registry/pyth.md), default)
+- `Quickswap.V2Factory` ([`quickswap`](../../sauce-protocols/references/registry/quickswap.md))
+- `Quickswap.V2Router` ([`quickswap`](../../sauce-protocols/references/registry/quickswap.md))
+- `Quickswap.V3Factory` ([`quickswap`](../../sauce-protocols/references/registry/quickswap.md))
+- `Quickswap.V3SwapRouter` ([`quickswap`](../../sauce-protocols/references/registry/quickswap.md))
+- `Radiant.LendingPool` ([`radiant`](../../sauce-protocols/references/registry/radiant.md))
+- `Ramses.Router` ([`ramses`](../../sauce-protocols/references/registry/ramses.md), default)
+- `Reflexer.CoinJoin` ([`reflexer`](../../sauce-protocols/references/registry/reflexer.md))
+- `Reflexer.ETHJoin` ([`reflexer`](../../sauce-protocols/references/registry/reflexer.md))
+- `Reflexer.Rai` ([`reflexer`](../../sauce-protocols/references/registry/reflexer.md))
+- `Reflexer.SAFEEngine` ([`reflexer`](../../sauce-protocols/references/registry/reflexer.md))
+- `Renzo.EzETH` ([`renzo`](../../sauce-protocols/references/registry/renzo.md))
+- `Renzo.RestakeManager` ([`renzo`](../../sauce-protocols/references/registry/renzo.md))
+- `RocketPool.RETH` ([`rocket-pool`](../../sauce-protocols/references/registry/rocket-pool.md))
+- `RocketPool.RocketDepositPool` ([`rocket-pool`](../../sauce-protocols/references/registry/rocket-pool.md))
+- `Sablier.LockupLinear` ([`sablier`](../../sauce-protocols/references/registry/sablier.md), default)
+- `Safe.SafeL2V130` ([`safe`](../../sauce-protocols/references/registry/safe.md))
+- `Safe.SafeV141` ([`safe`](../../sauce-protocols/references/registry/safe.md))
+- `ScrollBridge.L1GatewayRouter` ([`scroll-bridge`](../../sauce-protocols/references/registry/scroll-bridge.md))
+- `ScrollBridge.L1ScrollMessenger` ([`scroll-bridge`](../../sauce-protocols/references/registry/scroll-bridge.md))
+- `ScrollBridge.L2GatewayRouter` ([`scroll-bridge`](../../sauce-protocols/references/registry/scroll-bridge.md))
+- `ScrollBridge.L2ScrollMessenger` ([`scroll-bridge`](../../sauce-protocols/references/registry/scroll-bridge.md))
+- `Seamless.Pool` ([`seamless`](../../sauce-protocols/references/registry/seamless.md), default)
+- `Seamless.PoolAddressesProvider` ([`seamless`](../../sauce-protocols/references/registry/seamless.md))
+- `Seaport.SeaportV16` ([`seaport`](../../sauce-protocols/references/registry/seaport.md), default)
+- `Silo.SiloRepository` ([`silo`](../../sauce-protocols/references/registry/silo.md), default)
+- `Socket.SocketGateway` ([`socket`](../../sauce-protocols/references/registry/socket.md), default)
+- `Sommelier.CellarRouter` ([`sommelier`](../../sauce-protocols/references/registry/sommelier.md))
+- `Spark.Pool` ([`spark`](../../sauce-protocols/references/registry/spark.md), default)
+- `Spark.PoolAddressesProvider` ([`spark`](../../sauce-protocols/references/registry/spark.md))
+- `Spookyswap.V2Router` ([`spookyswap`](../../sauce-protocols/references/registry/spookyswap.md), default)
+- `Squid.SquidRouter` ([`squid`](../../sauce-protocols/references/registry/squid.md), default)
+- `Stader.ETHx` ([`stader`](../../sauce-protocols/references/registry/stader.md))
+- `Stader.StakePoolManager` ([`stader`](../../sauce-protocols/references/registry/stader.md))
+- `Stargate.PoolNative` ([`stargate`](../../sauce-protocols/references/registry/stargate.md))
+- `Stargate.PoolUSDC` ([`stargate`](../../sauce-protocols/references/registry/stargate.md))
+- `Stargate.PoolUSDT` ([`stargate`](../../sauce-protocols/references/registry/stargate.md))
+- `Superfluid.CFAForwarder` ([`superfluid`](../../sauce-protocols/references/registry/superfluid.md), default)
+- `Superfluid.Host` ([`superfluid`](../../sauce-protocols/references/registry/superfluid.md))
+- `SushiswapV2.Factory` ([`sushiswap-v2`](../../sauce-protocols/references/registry/sushiswap-v2.md))
+- `SushiswapV2.Router` ([`sushiswap-v2`](../../sauce-protocols/references/registry/sushiswap-v2.md))
+- `Swell.RswETH` ([`swell`](../../sauce-protocols/references/registry/swell.md))
+- `Swell.SwETH` ([`swell`](../../sauce-protocols/references/registry/swell.md))
+- `Synapse.CctpRouter` ([`synapse`](../../sauce-protocols/references/registry/synapse.md))
+- `Synapse.SynapseBridge` ([`synapse`](../../sauce-protocols/references/registry/synapse.md), default)
+- `Syncswap.Router` ([`syncswap`](../../sauce-protocols/references/registry/syncswap.md), default)
+- `SynthetixV3.CoreProxy` ([`synthetix-v3`](../../sauce-protocols/references/registry/synthetix-v3.md))
+- `SynthetixV3.PerpsMarketProxy` ([`synthetix-v3`](../../sauce-protocols/references/registry/synthetix-v3.md))
+- `SynthraV3.Factory` ([`synthra-v3`](../../sauce-protocols/references/registry/synthra-v3.md))
+- `SynthraV3.NonfungiblePositionManager` ([`synthra-v3`](../../sauce-protocols/references/registry/synthra-v3.md))
+- `SynthraV3.QuoterV2` ([`synthra-v3`](../../sauce-protocols/references/registry/synthra-v3.md))
+- `SynthraV3.SwapRouter02` ([`synthra-v3`](../../sauce-protocols/references/registry/synthra-v3.md))
+- `Thales.SpeedMarketsAMM` ([`thales`](../../sauce-protocols/references/registry/thales.md))
+- `Thales.ThalesAMM` ([`thales`](../../sauce-protocols/references/registry/thales.md))
+- `Thena.RouterV2` ([`thena`](../../sauce-protocols/references/registry/thena.md), default)
+- `Thruster.V3SwapRouter` ([`thruster`](../../sauce-protocols/references/registry/thruster.md), default)
+- `Tokemak.AutopoolRegistry` ([`tokemak`](../../sauce-protocols/references/registry/tokemak.md))
+- `Tokemak.SystemRegistry` ([`tokemak`](../../sauce-protocols/references/registry/tokemak.md))
+- `Tokemak.Toke` ([`tokemak`](../../sauce-protocols/references/registry/tokemak.md))
+- `TraderJoe.LBFactory` ([`trader-joe`](../../sauce-protocols/references/registry/trader-joe.md))
+- `TraderJoe.LBRouter` ([`trader-joe`](../../sauce-protocols/references/registry/trader-joe.md))
+- `UniswapV2.Factory` ([`uniswap-v2`](../../sauce-protocols/references/registry/uniswap-v2.md))
+- `UniswapV2.Router` ([`uniswap-v2`](../../sauce-protocols/references/registry/uniswap-v2.md))
+- `UniswapV3.Factory` ([`uniswap-v3`](../../sauce-protocols/references/registry/uniswap-v3.md))
+- `UniswapV3.NonfungiblePositionManager` ([`uniswap-v3`](../../sauce-protocols/references/registry/uniswap-v3.md))
+- `UniswapV3.QuoterV2` ([`uniswap-v3`](../../sauce-protocols/references/registry/uniswap-v3.md))
+- `UniswapV3.SwapRouter` ([`uniswap-v3`](../../sauce-protocols/references/registry/uniswap-v3.md))
+- `UniswapV3.SwapRouter02` ([`uniswap-v3`](../../sauce-protocols/references/registry/uniswap-v3.md))
+- `UniswapV4.PoolManager` ([`uniswap-v4`](../../sauce-protocols/references/registry/uniswap-v4.md))
+- `UniswapV4.PositionManager` ([`uniswap-v4`](../../sauce-protocols/references/registry/uniswap-v4.md))
+- `UniswapV4.StateView` ([`uniswap-v4`](../../sauce-protocols/references/registry/uniswap-v4.md))
+- `UniswapV4.UniversalRouter` ([`uniswap-v4`](../../sauce-protocols/references/registry/uniswap-v4.md))
+- `UnitflowV3.Factory` ([`unitflow-v3`](../../sauce-protocols/references/registry/unitflow-v3.md))
+- `UnitflowV3.Quoter` ([`unitflow-v3`](../../sauce-protocols/references/registry/unitflow-v3.md))
+- `UnitflowV3.Router` ([`unitflow-v3`](../../sauce-protocols/references/registry/unitflow-v3.md))
+- `Velodrome.PoolFactory` ([`velodrome`](../../sauce-protocols/references/registry/velodrome.md))
+- `Velodrome.RouterV2` ([`velodrome`](../../sauce-protocols/references/registry/velodrome.md))
+- `Venus.Comptroller` ([`venus`](../../sauce-protocols/references/registry/venus.md))
+- `Venus.VBNB` ([`venus`](../../sauce-protocols/references/registry/venus.md))
+- `Vertex.Clearinghouse` ([`vertex`](../../sauce-protocols/references/registry/vertex.md))
+- `Vertex.Endpoint` ([`vertex`](../../sauce-protocols/references/registry/vertex.md))
+- `Wormhole.CoreBridge` ([`wormhole`](../../sauce-protocols/references/registry/wormhole.md))
+- `Wormhole.TokenBridge` ([`wormhole`](../../sauce-protocols/references/registry/wormhole.md))
+- `YearnV3.VaultFactory` ([`yearn-v3`](../../sauce-protocols/references/registry/yearn-v3.md))
+- `Zerolend.Pool` ([`zerolend`](../../sauce-protocols/references/registry/zerolend.md), default)
+- `Zerox.ExchangeProxy` ([`zerox`](../../sauce-protocols/references/registry/zerox.md), default)
+- `ZksyncBridge.DiamondProxy` ([`zksync-bridge`](../../sauce-protocols/references/registry/zksync-bridge.md), default)
+- `ZksyncBridge.L2Bridge` ([`zksync-bridge`](../../sauce-protocols/references/registry/zksync-bridge.md))
 
 ## Family aliases
 

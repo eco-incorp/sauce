@@ -1,22 +1,23 @@
 # Thruster
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Blast-native DEX with concentrated liquidity (V3-style) pools. Optimized for Blast's native yield on ETH and USDB, and gas rebate features. Fork of Uniswap V3 architecture.
 
 ## Category
 
-dex | Chains: Blast
+dex | Chains and addresses: [registry/thruster.md](registry/thruster.md)
 
 ## Key Operations
 
 - **swap**: Exact input single-hop swap with fee tier selection via V3 SwapRouter
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import { protocolInfo, deployments, swap } from "@eco-incorp/sauce/protocols/thruster";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### swap
 
@@ -52,19 +53,13 @@ function main(
 - `amountIn`: Exact input amount (in wei)
 - `amountOutMin`: Minimum output for slippage protection
 - `recipient`: Address to receive output tokens
-- `sqrtPriceLimitX96`: Set to `0` for no price limit
+- `sqrtPriceLimitX96`: `0` in this template, no price limit, so `amountOutMin` is the only bound
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain | Contract      | Address                                      |
-| ----- | ------------- | -------------------------------------------- |
-| Blast | V3 SwapRouter | `0x337827814155ECBf24D20231fCA4444F530c0555` |
-
-## ABI Methods
-
-### ThrusterV3SwapRouterABI
-
-- `exactInputSingle(tuple(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) -> uint256 amountOut` - Single-hop exact input swap
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/thruster.md](registry/thruster.md).
 
 ## Notes
 

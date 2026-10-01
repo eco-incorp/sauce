@@ -1,10 +1,12 @@
 # Velodrome
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 The central trading and liquidity marketplace on Optimism. Solidly-fork with ve(3,3) tokenomics, supporting both stable (correlated assets) and volatile (uncorrelated assets) pool types.
 
 ## Category
 
-dex | Chains: Optimism
+dex | Chains and addresses: [registry/velodrome.md](registry/velodrome.md)
 
 ## Key Operations
 
@@ -12,19 +14,12 @@ dex | Chains: Optimism
 - **addLiquidity**: Add liquidity to a stable or volatile pool
 - **removeLiquidity**: Remove liquidity from a stable or volatile pool
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  swap,
-  addLiquidity,
-  removeLiquidity,
-} from "@eco-incorp/sauce/protocols/velodrome";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### swap
 
@@ -127,24 +122,11 @@ function main(
 - `liquidity`: Amount of LP tokens to burn
 - LP token must be approved to the router
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract    | Address                                      |
-| -------- | ----------- | -------------------------------------------- |
-| Optimism | RouterV2    | `0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858` |
-| Optimism | PoolFactory | `0xF1046053aa5682b4F9a81b5481394DA16BE5FF5a` |
-
-## ABI Methods
-
-### VelodromeRouterABI
-
-- `swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, tuple[](address from, address to, bool stable, address factory) routes, address to, uint256 deadline) -> uint256[] amounts` - Swap with route tuples specifying pool type per hop
-- `addLiquidity(address tokenA, address tokenB, bool stable, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB, uint256 liquidity)` - Add liquidity to a stable or volatile pool
-- `removeLiquidity(address tokenA, address tokenB, bool stable, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB)` - Remove liquidity from a pool
-
-### VelodromePoolFactoryABI
-
-- `getPool(address tokenA, address tokenB, bool stable) -> address pool` - Look up pool address (view)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/velodrome.md](registry/velodrome.md).
 
 ## Notes
 

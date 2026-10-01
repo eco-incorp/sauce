@@ -4,7 +4,7 @@ Protocol for real-time finance enabling continuous token streams (per-second pay
 
 ## Category
 
-payments | Chains: Ethereum, Polygon, Arbitrum, Optimism, Base
+payments | Chains and addresses: [registry/superfluid.md](registry/superfluid.md)
 
 ## Key Operations
 
@@ -12,19 +12,12 @@ payments | Chains: Ethereum, Polygon, Arbitrum, Optimism, Base
 - **updateFlow**: Update the flow rate of an existing stream
 - **deleteFlow**: Stop/delete a payment stream
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  createFlow,
-  deleteFlow,
-  updateFlow,
-} from "@eco-incorp/sauce/protocols/superfluid";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Create payment stream
@@ -69,28 +62,11 @@ function main(
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract     | Address                                      |
-| -------- | ------------ | -------------------------------------------- |
-| Ethereum | host         | `0x3E14dC1b13c488a8d5D310918780c983bD5982E7` |
-| Ethereum | cfaForwarder | `0xcfA132E353cB4E398080B9700609bb008eceB125` |
-| Polygon  | host         | `0x3E14dC1b13c488a8d5D310918780c983bD5982E7` |
-| Polygon  | cfaForwarder | `0xcfA132E353cB4E398080B9700609bb008eceB125` |
-| Arbitrum | host         | `0x3E14dC1b13c488a8d5D310918780c983bD5982E7` |
-| Arbitrum | cfaForwarder | `0xcfA132E353cB4E398080B9700609bb008eceB125` |
-| Optimism | host         | `0x3E14dC1b13c488a8d5D310918780c983bD5982E7` |
-| Optimism | cfaForwarder | `0xcfA132E353cB4E398080B9700609bb008eceB125` |
-| Base     | host         | `0x3E14dC1b13c488a8d5D310918780c983bD5982E7` |
-| Base     | cfaForwarder | `0xcfA132E353cB4E398080B9700609bb008eceB125` |
-
-## ABI Methods
-
-### CFAForwarderABI
-
-- `createFlow(address,address,address,int96,bytes)` - Create stream. Params: token (Super Token), sender, receiver, flowrate (tokens per second as int96), userData (arbitrary bytes, 0x00 for none). Returns bool
-- `updateFlow(address,address,address,int96,bytes)` - Update flow rate. Params: token, sender, receiver, flowrate (new rate), userData. Returns bool
-- `deleteFlow(address,address,address,bytes)` - Delete stream. Params: token, sender, receiver, userData. Returns bool
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/superfluid.md](registry/superfluid.md).
 
 ## Notes
 

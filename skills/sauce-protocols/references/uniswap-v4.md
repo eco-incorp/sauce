@@ -1,10 +1,60 @@
 # Uniswap V4
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Singleton AMM with hooks architecture enabling custom pool logic, flash accounting, and native ETH support. All pools share a single PoolManager contract for gas savings on multi-hop swaps.
+
+## When to use it
+
+- Every pool lives in one PoolManager, keyed by `(currency0, currency1, fee, tickSpacing,
+hooks)`. A pool can attach a hook contract that runs around swaps and liquidity changes, and a
+  currency of `0x0` is the native coin.
+- A Sauce program swaps through the Sauce Router's `swapV4`, with a price limit; no
+  UniversalRouter commands are needed.
+
+## Pitfalls for a program
+
+- Exact input is a **negative** `amountSpecified` (`-amount`), the reverse of V3's pool.
+- A hook can change a pool's behaviour and fee: use hookless keys (`hooks: 0n`) unless you have
+  reviewed the hook.
+- A protocol fee can apply on top of the LP fee; both are in the pool's state
+  (`sauce-distributed-swap` reads them).
+- Anyone can initialize a key: a pool can exist with no liquidity at a stale price. Read its
+  liquidity before trusting its price.
+- A native-coin pool (`currency0` of `0x0`) is a different pair from the WETH pools.
+
+## In a Sauce program
+
+One guarded swap on the hookless 0.05% WETH/USDC pool:
+
+```sauce chain=base,arbitrum
+import { ISauceRouter } from "./artifacts/ISauceRouter.json";
+
+function main(amountIn: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256, recipient: Address) {
+  const self = ctx.self();
+  const zeroForOne = WETH < USDC;
+  const key = {
+    currency0: zeroForOne ? WETH : USDC,
+    currency1: zeroForOne ? USDC : WETH,
+    fee: 500n,
+    tickSpacing: 10n,
+    hooks: 0n
+  };
+  const before = USDC.balanceOf(self);
+  ISauceRouter.at(self).swapV4(UniswapV4.PoolManager, key, zeroForOne, -amountIn, sqrtPriceLimitX96, self, self);
+  const out = USDC.balanceOf(self) - before;
+  require(out >= minOut, "below minOut");
+  USDC.transfer(recipient, out);
+  const unspent = WETH.balanceOf(self);
+  if (unspent > 0n) {
+    WETH.transfer(recipient, unspent);
+  }
+}
+```
 
 ## Category
 
-dex | Chains: Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Avalanche, Blast, Arc
+dex | Chains and addresses: [registry/uniswap-v4.md](registry/uniswap-v4.md)
 
 ## Key Operations
 
@@ -12,19 +62,12 @@ dex | Chains: Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Avalanche, Blast
 - **addLiquidity**: Modify liquidity positions through the PositionManager
 - **removeLiquidity**: Decrease or remove liquidity positions through the PositionManager
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  swap,
-  addLiquidity,
-  removeLiquidity,
-} from "@eco-incorp/sauce/protocols/uniswap-v4";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### swap
 
@@ -73,67 +116,11 @@ function main(positionManagerAddress: Address, unlockData: bytes): Uint256 {
 
 - Same interface as addLiquidity but with negative liquidityDelta in the encoded data
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain     | Contract        | Address                                      |
-| --------- | --------------- | -------------------------------------------- |
-| Ethereum  | PoolManager     | `0x000000000004444c5dc75cB358380D2e3dE08A90` |
-| Ethereum  | UniversalRouter | `0x66a9893cc07d91d95644aedd05d03f95e1dba8af` |
-| Ethereum  | PositionManager | `0xbd216513d74c8cf14cf4747e6aaa6420ff64ee9e` |
-| Ethereum  | StateView       | `0x7ffe42c4a5deea5b0fec41c94c136cf115597227` |
-| Arbitrum  | PoolManager     | `0x360e68faccca8ca495c1b759fd9eee466db9fb32` |
-| Arbitrum  | UniversalRouter | `0xa51afafe0263b40edaef0df8781ea9aa03e381a3` |
-| Arbitrum  | PositionManager | `0xd88f38f930b7952f2db2432cb002e7abbf3dd869` |
-| Arbitrum  | StateView       | `0x76fd297e2d437cd7f76d50f01afe6160f86e9990` |
-| Optimism  | PoolManager     | `0x9a13f98cb987694c9f086b1f5eb990eea8264ec3` |
-| Optimism  | UniversalRouter | `0x851116d9223fabed8e56c0e6b8ad0c31d98b3507` |
-| Optimism  | PositionManager | `0x3c3ea4b57a46241e54610e5f022e5c45859a1017` |
-| Optimism  | StateView       | `0xc18a3169788f4f75a170290584eca6395c75ecdb` |
-| Base      | PoolManager     | `0x498581ff718922c3f8e6a244956af099b2652b2b` |
-| Base      | UniversalRouter | `0x6ff5693b99212da76ad316178a184ab56d299b43` |
-| Base      | PositionManager | `0x7c5f5a4bbd8fd63184577525326123b519429bdc` |
-| Base      | StateView       | `0xa3c0c9b65bad0b08107aa264b0f3db444b867a71` |
-| Polygon   | PoolManager     | `0x67366782805870060151383f4bbff9dab53e5cd6` |
-| Polygon   | UniversalRouter | `0x1095692a6237d83c6a72f3f5efedb9a670c49223` |
-| Polygon   | PositionManager | `0x1ec2ebf4f37e7363fdfe3551602425af0b3ceef9` |
-| Polygon   | StateView       | `0x5ea1bd7974c8a611cbab0bdcafcb1d9cc9b3ba5a` |
-| BSC       | PoolManager     | `0x28e2ea090877bf75740558f6bfb36a5ffee9e9df` |
-| BSC       | UniversalRouter | `0x1906c1d672b88cd1b9ac7593301ca990f94eae07` |
-| BSC       | PositionManager | `0x7a4a5c919ae2541aed11041a1aeee68f1287f95b` |
-| BSC       | StateView       | `0xd13dd3d6e93f276fafc9db9e6bb47c1180aee0c4` |
-| Avalanche | PoolManager     | `0x06380c0e0912312b5150364b9dc4542ba0dbbc85` |
-| Avalanche | UniversalRouter | `0x94b75331ae8d42c1b61065089b7d48fe14aa73b7` |
-| Avalanche | PositionManager | `0xb74b1f14d2754acfcbbe1a221023a5cf50ab8acd` |
-| Avalanche | StateView       | `0xc3c9e198c735a4b97e3e683f391ccbdd60b69286` |
-| Blast     | PoolManager     | `0x1631559198a9e474033433b2958dabc135ab6446` |
-| Blast     | StateView       | `0x12a88ae16f46dce4e8b15368008ab3380885df30` |
-| Unichain  | PoolManager     | `0x1f98400000000000000000000000000000000004` |
-| Unichain  | StateView       | `0x86e8631a016f9068c3f085faf484ee3f5fdee8f2` |
-| Zora      | PoolManager     | `0x0575338e4c17006ae181b47900a84404247ca30f` |
-| Zora      | StateView       | `0x385785af07d63b50d0a0ea57c4ff89d06adf7328` |
-| Ink       | PoolManager     | `0x360e68faccca8ca495c1b759fd9eee466db9fb32` |
-| Ink       | StateView       | `0x76fd297e2d437cd7f76d50f01afe6160f86e9990` |
-| Celo      | PoolManager     | `0x288dc841A52FCA2707c6947B3A777c5E56cd87BC` |
-| Celo      | StateView       | `0xbc21f8720babf4b20d195ee5c6e99c52b76f2bfb` |
-
-## ABI Methods
-
-### UniswapV4PoolManagerABI
-
-- `initialize(tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks), uint160 sqrtPriceX96) -> int24 tick` - Create and initialize a new pool with a starting price
-- `swap(tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks), tuple(bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96), bytes hookData) -> int256 delta` - Low-level swap (typically called through UniversalRouter, not directly)
-- `modifyLiquidity(tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks), tuple(int24 tickLower, int24 tickUpper, int256 liquidityDelta, bytes32 salt), bytes hookData) -> (int256 delta, int256 feeDelta)` - Low-level liquidity modification
-- `extsload(bytes32 slot) -> bytes32` - Read one raw storage slot (view)
-- `extsload(bytes32 startSlot, uint256 nSlots) -> bytes32[]` - Read `nSlots` consecutive raw storage slots (view)
-
-### UniswapV4UniversalRouterABI
-
-- `execute(bytes commands, bytes[] inputs, uint256 deadline)` - Execute a batch of commands (swap, settle, take, etc.) in sequence
-- `execute(bytes commands, bytes[] inputs)` - The same, with no deadline
-
-### UniswapV4PositionManagerABI
-
-- `modifyLiquidities(bytes unlockData, uint256 deadline)` - Modify one or more liquidity positions in a single transaction
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/uniswap-v4.md](registry/uniswap-v4.md).
 
 ### UniswapV4StateViewABI
 
@@ -159,9 +146,10 @@ StateView (v4-periphery `src/lens/StateView.sol`) reads the PoolManager's pool s
 - Pool key: `(currency0, currency1, fee, tickSpacing, hooks)` uniquely identifies a pool
 - `currency0` = address(0) means native ETH; V4 supports native ETH directly (no WETH wrapping needed)
 - `zeroForOne`: true = swap currency0 for currency1; false = swap currency1 for currency0
-- `amountSpecified`: negative = exact input; positive = exact output
+- `amountSpecified`: negative = exact input; positive = exact output (the reverse of Uniswap V3's pool `swap`)
 - Flash accounting: V4 uses transient storage for balance tracking within a transaction, settling at the end
 - Commands/inputs for the UniversalRouter must be constructed off-chain; this is more complex than V3 but more powerful
+- A Sauce program needs no UniversalRouter commands: the Sauce Router's `swapV4(poolManager, key, zeroForOne, -amount, sqrtPriceLimitX96, payer, recipient)` unlocks the PoolManager and settles the swap itself (`sauce-swaps`)
 - V4 is the newest Uniswap version; use it for advanced pool logic (custom hooks) or when gas efficiency on multi-hop matters most
 - From a Pot program, `@sauce/router`'s `uniswapV4(poolManager, tokenIn, tokenOut, amountIn, fee, tickSpacing, hooks, sqrtPriceLimitX96, minOut, recipient)` swaps one pool through the Pot's Sauce Router, which unlocks the PoolManager, swaps, takes the output and settles the input from the Pot — no UniversalRouter and no approval. The pool key is `tokenIn` and `tokenOut` in sort order (native ETH, the zero address, first) with `fee`, `tickSpacing` and `hooks`; the function passes `-amountIn`, exact input, and returns the amount out. The `uniswapV4Swap` action is the same call
 - On Arc (5042) the PositionManager's `WETH9()` is a stub that always reverts with `UnsupportedProtocolError()`. Arc's native coin is USDC at 18 decimals, so a pool keyed on `address(0)` is native USDC, a different currency from the 6-decimal ERC-20 `0x3600000000000000000000000000000000000000` over the same balance
