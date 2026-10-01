@@ -411,7 +411,7 @@ describe("sauce compile", () => {
         "  USDC.transfer(RECIPIENT, 5n);\n}).reward({ tokens: [{ token: USDC, amount: 7n }] });\n",
     );
     const published = await sauce(
-      ...["publish", intent, "--define", `SQRT_PRICE_LIMIT_X96=${max}`],
+      ...["intent", "publish", intent, "--define", `SQRT_PRICE_LIMIT_X96=${max}`],
       ...["--define", `RECIPIENT=${RECIPIENT}`, "--intent-deadline", "2000000000"],
       ...["--intent-creator", CREATOR, "--intent-execution-fee", "0"],
       ...["--from", CREATOR, "--format", "json"],
