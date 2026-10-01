@@ -56,7 +56,13 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { ERC20ABI } from "../protocols/erc20/abis.js";
 import { safeApproveStatements, safeTransferStatements } from "../token/safe.js";
 import { walk, type AstNode } from "./ast-walk.js";
-import { childProgram, enclosingLocals, moduleScope, unreachedFunctions } from "./intent-body.js";
+import {
+  childProgram,
+  enclosingLocals,
+  literalValue,
+  moduleScope,
+  unreachedFunctions,
+} from "./intent-body.js";
 import { denormalizeToEvm } from "./encode.js";
 import { rewardAssetsConflict } from "./intent.js";
 import { normalizeReward, normalizeRoute, toUniversalAddress } from "./normalize.js";
@@ -216,16 +222,13 @@ const fail = (message: string): never => {
 type Value = { readonly literal: bigint } | { readonly capture: string };
 
 interface Resolver {
-  (node: AstNode, what: string): Value;
+  /** `unknown` words the failure for a name nothing resolves, where the general one would mislead. */
+  (node: AstNode, what: string, unknown?: (name: string) => string): Value;
 }
 
 function literalOf(node: AstNode): bigint | undefined {
-  if (node.type === "Literal") {
-    const value = (node as { value?: unknown }).value;
-    if (typeof value === "bigint") return value;
-    if (typeof value === "number" && Number.isSafeInteger(value)) return BigInt(value);
-    if (typeof value === "boolean") return value ? 1n : 0n;
-  }
+  const value = literalValue(node);
+  if (value !== undefined) return value;
   if (node.type === "UnaryExpression" && (node as { operator?: string }).operator === "-") {
     fail("a negative literal is not a valid address or amount");
   }
@@ -236,7 +239,7 @@ function makeResolver(
   defines: ReadonlyMap<string, bigint>,
   outerLocals: ReadonlySet<string>,
 ): Resolver {
-  return (node, what) => {
+  return (node, what, unknown) => {
     const direct = literalOf(node);
     if (direct !== undefined) return { literal: direct };
     if (node.type === "Identifier") {
@@ -244,6 +247,7 @@ function makeResolver(
       const define = defines.get(name);
       if (define !== undefined) return { literal: define };
       if (outerLocals.has(name)) return { capture: name };
+      if (unknown !== undefined) return fail(unknown(name));
       return fail(
         `${what} refers to '${name}', which is neither a compile-time value nor a variable of the ` +
           `enclosing program. Declare it with \`const ${name} = ...\` before the intent, or supply ` +
@@ -380,7 +384,55 @@ interface RewardSpec {
   readonly nativeAmount?: Value;
 }
 
-function lowerReward(node: AstNode, resolve: Resolver): RewardSpec {
+/**
+ * Which `{ tokens: [...] }` object is being read: the reward, escrowed on the chain the enclosing
+ * program runs on, or the delivery, the intent's second argument, which the solver brings to the
+ * destination. One parser reads both, so every message it gives says which of the two it means —
+ * told about `reward.tokens` when the delivery was wrong, an author edits the reward, and the
+ * delivery stays wrong however many times they compile.
+ */
+interface TokenList {
+  readonly part: "reward" | "delivery";
+  /** The chain its names resolve on: the enclosing program's for the reward, the destination for
+   *  the delivery. */
+  readonly chain: CanonicalChain;
+}
+
+/** How a message names a field of `list`. */
+const fieldOf = (list: TokenList, path: string): string =>
+  list.part === "reward" ? `\`reward.${path}\`` : `the delivery's \`${path}\``;
+
+/** A token address of `list`. It is encoded into the intent, so it must be known when the intent is
+ *  built: a symbol, a literal or a define, never a value the program has only while it runs. */
+function tokenOf(node: AstNode, resolve: Resolver, list: TokenList): bigint {
+  const chain = list.chain.slug;
+  const subject = `the ${list.part} token`;
+  const where =
+    list.part === "delivery"
+      ? `The delivery — the intent's second argument, \`{ tokens: [...] }\` — is what the solver ` +
+        `brings to ${chain}, so its symbols are ${chain}'s: fix it there, not in \`.reward(...)\`.`
+      : `The reward — \`.reward({ tokens: [...] })\` — is escrowed on ${chain}, where the program ` +
+        `opening the intent runs, so its symbols are ${chain}'s.`;
+  const fix = `Use a symbol ${chain} registers, or the token's ${chain} address as a literal or a define.`;
+  if (node.type !== "Identifier" && literalOf(node) === undefined) {
+    return fail(
+      `${subject} is a ${node.type}, which is not known when the intent is built. ${where} ${fix}`,
+    );
+  }
+  const value = resolve(
+    node,
+    subject,
+    (name) =>
+      `${subject} '${name}' is not a token ${chain} registers, nor a define. ${where} ${fix}`,
+  );
+  if ("literal" in value) return value.literal;
+  return fail(
+    `${subject} '${value.capture}' is a variable of the program, known only while it runs, and an ` +
+      `intent names its tokens when it is built. ${where} ${fix}`,
+  );
+}
+
+function lowerReward(node: AstNode, resolve: Resolver, list: TokenList): RewardSpec {
   if (node.type !== "ObjectExpression") {
     return fail("`.reward(...)` takes an object, e.g. `{ tokens: [{ token: USDC, amount }] }`");
   }
@@ -391,10 +443,12 @@ function lowerReward(node: AstNode, resolve: Resolver): RewardSpec {
     const name = key?.type === "Identifier" ? (key as unknown as { name: string }).name : "";
     const value = (property as { value?: AstNode }).value!;
     if (name === "tokens") {
-      if (value.type !== "ArrayExpression") return fail("`reward.tokens` must be an array");
+      if (value.type !== "ArrayExpression") {
+        return fail(`${fieldOf(list, "tokens")} must be an array`);
+      }
       tokens = ((value as { elements?: AstNode[] }).elements ?? []).map((element) => {
         if (element === null || element.type !== "ObjectExpression") {
-          return fail("each `reward.tokens` entry must be `{ token, amount }`");
+          return fail(`each entry of ${fieldOf(list, "tokens")} must be \`{ token, amount }\``);
         }
         let token: bigint | undefined;
         let amount: Value | undefined;
@@ -405,24 +459,26 @@ function lowerReward(node: AstNode, resolve: Resolver): RewardSpec {
           // `{ token: USDC, amount }` -- shorthand's value IS the identifier.
           const fieldValue = (field as { value?: AstNode }).value!;
           if (fieldName === "token") {
-            const resolved = resolve(fieldValue, "`reward.tokens[].token`");
-            if (!("literal" in resolved)) {
-              return fail("a reward token address must be known when the intent is built");
-            }
-            token = resolved.literal;
+            token = tokenOf(fieldValue, resolve, list);
           } else if (fieldName === "amount") {
-            amount = resolve(fieldValue, "`reward.tokens[].amount`");
+            amount = resolve(fieldValue, fieldOf(list, "tokens[].amount"));
           } else {
-            return fail(`\`reward.tokens[].${fieldName}\` is not a field of a token amount`);
+            return fail(
+              `${fieldOf(list, `tokens[].${fieldName}`)} is not a field of a token amount`,
+            );
           }
         }
         if (token === undefined || amount === undefined) {
-          return fail("each `reward.tokens` entry needs both `token` and `amount`");
+          return fail(
+            `each entry of ${fieldOf(list, "tokens")} needs both \`token\` and \`amount\``,
+          );
         }
         return { token, amount };
       });
     } else if (name === "nativeAmount") {
-      nativeAmount = resolve(value, "`reward.nativeAmount`");
+      nativeAmount = resolve(value, fieldOf(list, "nativeAmount"));
+    } else if (list.part === "delivery") {
+      return fail(`\`${name}\` is not a field of the delivery, which takes only \`tokens\``);
     } else {
       return fail(
         `\`reward.${name}\` is not settable here. Deadlines, creator and prover come from the ` +
@@ -431,18 +487,23 @@ function lowerReward(node: AstNode, resolve: Resolver): RewardSpec {
     }
   }
   if (tokens.length === 0 && nativeAmount === undefined) {
-    return fail("`.reward(...)` must offer something — `tokens`, `nativeAmount`, or both");
+    return fail(
+      list.part === "reward"
+        ? "`.reward(...)` must offer something — `tokens`, `nativeAmount`, or both"
+        : "the delivery names no token: list what the solver brings in `tokens`, or leave the " +
+            "intent's second argument out",
+    );
   }
   return { tokens, nativeAmount };
 }
 
 /** `{ tokens: [{ token, amount }] }` — what the solver delivers to run the intent. Same shape as a
  *  reward leg, and deliberately the same parser, since the fields mean the same things. */
-function lowerDelivery(node: AstNode, resolve: Resolver): RewardSpec["tokens"] {
+function lowerDelivery(node: AstNode, resolve: Resolver, list: TokenList): RewardSpec["tokens"] {
   if (node.type !== "ObjectExpression") {
     return fail("an intent's second argument is `{ tokens: [{ token, amount }] }`");
   }
-  const spec = lowerReward(node, resolve);
+  const spec = lowerReward(node, resolve, list);
   if (spec.nativeAmount !== undefined) {
     return fail("`nativeAmount` belongs to the reward, not to what the solver delivers");
   }
@@ -588,17 +649,28 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
     // `USDC` is the enclosing chain's. Crossing them names an address with no code where the call
     // runs: a reward token from the destination fails SafeERC20's code check on the approval and
     // reverts the whole fulfilment, and a body token from here is not a token over there.
-    const defines = context.definesFor(site.chain);
+    //
+    // A top-level `const` of a literal is known when the file is compiled, so it is a value here
+    // exactly as a define is, and the same on both chains: what the file wrote. A define of the same
+    // name takes precedence, as the compiler gives a define over a module `const`, and a local of
+    // the opening function shadows it.
+    const opening = enclosingLocals(program, scope, site.start);
+    const fixed = [...scope.declarations].flatMap(([name, d]) =>
+      d.literal === undefined || opening.has(name) ? [] : [[name, d.literal] as const],
+    );
+    const compileTime = (chain: CanonicalChain) =>
+      new Map([...fixed, ...context.definesFor(chain)]);
+    const defines = compileTime(site.chain);
     // What the enclosing program can read where the intent opens: its locals there, and the
     // file's module-level values. A reward, a delivery or a token-write argument naming one is
     // spliced in at run time.
     const readable = new Set([
-      ...enclosingLocals(program, scope, site.start),
+      ...opening,
       ...scope.imports.keys(),
       ...[...scope.declarations].filter(([, d]) => d.kind === "variable").map(([name]) => name),
     ]);
     const resolve = makeResolver(defines, readable);
-    const resolveFunding = makeResolver(context.definesFor(context.source), readable);
+    const resolveFunding = makeResolver(compileTime(context.source), readable);
 
     /**
      * What the solver delivers to the destination Executor so this intent can run.
@@ -609,7 +681,9 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
      * arrive. A program's needs cannot be read off its source, so the general path asks.
      */
     const explicitDelivery =
-      site.delivery === undefined ? undefined : lowerDelivery(site.delivery, resolve);
+      site.delivery === undefined
+        ? undefined
+        : lowerDelivery(site.delivery, resolve, { part: "delivery", chain: site.chain });
 
     // TWO SHAPES, chosen by what the closure actually contains.
     //
@@ -723,7 +797,10 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
     }
 
     // On the enclosing chain: see `resolveFunding` above.
-    const reward = lowerReward(site.reward, resolveFunding);
+    const reward = lowerReward(site.reward, resolveFunding, {
+      part: "reward",
+      chain: context.source,
+    });
     // A native amount known to be zero offers nothing; any other (a literal or a run-time value)
     // is a native leg the source Portal would count against a leg of its native ERC-20.
     const offersNative =

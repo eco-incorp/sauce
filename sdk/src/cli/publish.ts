@@ -1,13 +1,13 @@
 /**
  * `sauce publish`: the intents a file opens, published from a wallet on the source chain — no Pot.
  *
- * For a file whose intents are FIXED when it is built: every amount a define or a literal. Then the
- * SDK's own lowering (`compileSauceProgram(...).intents`) has already encoded each intent exactly,
- * and publishing it is what the TypeScript builder hands a caller (`routes/portal.ts`
- * `intentSourceTxs`), sent from the wallet instead of a program. An amount the program measures on
- * chain (`const amount = USDC.balanceOf(ctx.self())`) exists only while the program runs, so such an
- * intent is published by running the program on a Pot — `sauce run` — and `publish` refuses it,
- * naming the value.
+ * For a file whose intents are FIXED when it is built: every amount a literal, a define or a
+ * top-level `const` of a literal. Then the SDK's own lowering (`compileSauceProgram(...).intents`)
+ * has already encoded each intent exactly, and publishing it is what the TypeScript builder hands a
+ * caller (`routes/portal.ts` `intentSourceTxs`), sent from the wallet instead of a program. An
+ * amount the program measures on chain (`const amount = USDC.balanceOf(ctx.self())`) exists only
+ * while the program runs, so such an intent is published by running the program on a Pot —
+ * `sauce run` — and `publish` refuses it, naming the value.
  *
  * So does a file that does anything besides open its intents: `publish` sends only the intents,
  * and silently dropping the rest of a program would be worse than refusing it.
@@ -158,8 +158,9 @@ function fixedIntents(input: ProgramInput, files: CliFiles): readonly LoweredInt
   if (measured !== undefined) {
     throw new CliError(
       `the intent to ${measured.destination.slug} uses ${measured.captures.map((name) => `\`${name}\``).join(", ")}, ` +
-        "measured on chain while the program runs, so it cannot be built from a wallet: use " +
-        "`sauce run` on a Pot",
+        "which the program measures or computes while it runs, so it cannot be built from a " +
+        "wallet: use `sauce run` on a Pot, or make it a literal, a define or a top-level `const` " +
+        "of a literal",
     );
   }
   const other = otherStatement(input.file, input.text);

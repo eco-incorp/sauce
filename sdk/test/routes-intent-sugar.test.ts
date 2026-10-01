@@ -169,6 +169,57 @@ describe("what the lowering produces", () => {
     });
   });
 
+  describe("a top-level `const` of a literal is baked in, as a define is", () => {
+    // Known when the file is compiled, so nothing is spliced at run time and the intent is fixed:
+    // `sauce publish` can build it from a wallet.
+    const site = `Arbitrum(() => {
+    USDC.transfer(RECIPIENT, AMOUNT);
+  }).reward({ tokens: [{ token: USDC, amount: AMOUNT }] });`;
+    const amountsOf = (source: string, overrides: Record<string, unknown> = {}) => {
+      const [lowered] = rewriteIntentSugar(source, context(overrides)).intents;
+      const call = decodeFunctionData({
+        abi: erc20Abi,
+        data: lowered!.intent.route.calls[0]!.data,
+      });
+      return {
+        captures: lowered!.captures,
+        transfer: call.args![1],
+        delivered: lowered!.intent.route.tokens[0]!.amount,
+        reward: lowered!.intent.reward.tokens[0]!.amount,
+      };
+    };
+    const fixed = { captures: [], transfer: 7n, delivered: 7n, reward: 7n };
+
+    it("in a module", () => {
+      expect(amountsOf(`const AMOUNT = 7n;\nfunction main() {\n  ${site}\n}`)).toEqual(fixed);
+    });
+
+    it("in a script, where the other top-level statements are the entry", () => {
+      expect(amountsOf(`const AMOUNT = 7n;\n${site}`)).toEqual(fixed);
+    });
+
+    it("but not where a local of the opening function shadows it", () => {
+      const source = `const AMOUNT = 7n;\nfunction main() {\n  const AMOUNT = USDC.balanceOf(ctx.self());\n  ${site}\n}`;
+      expect(amountsOf(source).captures).toEqual(["AMOUNT"]);
+    });
+
+    it("and a define of the same name replaces it, as it does in the compiler", () => {
+      const definesFor = () =>
+        new Map([
+          ["USDC", 0x7777777777777777777777777777777777777777n],
+          ["RECIPIENT", RECIPIENT],
+          ["AMOUNT", 9n],
+        ]);
+      expect(
+        amountsOf(`const AMOUNT = 7n;\nfunction main() {\n  ${site}\n}`, { definesFor }),
+      ).toEqual({ captures: [], transfer: 9n, delivered: 9n, reward: 9n });
+    });
+
+    it("while a computed `const` is still a value of the program", () => {
+      expect(amountsOf(`const AMOUNT = 7n * 1n;\n${site}`).captures).toEqual(["AMOUNT"]);
+    });
+  });
+
   it("fills the Portal, the prover and the destination from the registry", () => {
     const { intent, destination } = rewriteIntentSugar(TRANSFER_INTENT, context()).intents[0]!;
 
@@ -568,6 +619,58 @@ describe("what it refuses, and how clearly", () => {
       `  Arbitrum(() => {\n    ${body}\n  }).reward({ tokens: [{ token: USDC, amount }] });`,
     );
     expect(() => rewriteIntentSugar(source, context())).toThrow(message);
+  });
+
+  describe("a token it cannot resolve, named as the part it is in", () => {
+    // The delivery and the reward share one parser. When that parser called every token a reward
+    // token, an agent told "`reward.tokens[].token` refers to 'USDT0'" about the DELIVERY kept
+    // editing the reward, which was right all along, and never compiled.
+    const messageOf = (source: string): string => {
+      try {
+        rewriteIntentSugar(source, context());
+      } catch (error) {
+        return (error as Error).message;
+      }
+      throw new Error("expected the rewrite to refuse the source");
+    };
+    const intent = (deliveryToken: string, deliveryAmount = "amount", rewardToken = "USDC") =>
+      program(`  Arbitrum(() => {
+    if (amount > 1n) { USDC.transfer(RECIPIENT, amount); }
+  }, { tokens: [{ token: ${deliveryToken}, amount: ${deliveryAmount} }] }).reward({ tokens: [{ token: ${rewardToken}, amount }] });`);
+    const DELIVERY =
+      "The delivery — the intent's second argument, `{ tokens: [...] }` — is what the solver " +
+      "brings to arbitrum, so its symbols are arbitrum's: fix it there, not in `.reward(...)`. " +
+      "Use a symbol arbitrum registers, or the token's arbitrum address as a literal or a define.";
+
+    it("a delivery token the destination does not register", () => {
+      expect(messageOf(intent("USDT0"))).toBe(
+        `intent sugar: the delivery token 'USDT0' is not a token arbitrum registers, nor a define. ${DELIVERY}`,
+      );
+    });
+
+    it("a delivery token the program only has while it runs", () => {
+      expect(messageOf(intent("amount"))).toBe(
+        "intent sugar: the delivery token 'amount' is a variable of the program, known only while " +
+          `it runs, and an intent names its tokens when it is built. ${DELIVERY}`,
+      );
+    });
+
+    it("a delivery amount nothing resolves", () => {
+      expect(messageOf(intent("USDC", "mystery"))).toBe(
+        "intent sugar: the delivery's `tokens[].amount` refers to 'mystery', which is neither a " +
+          "compile-time value nor a variable of the enclosing program. Declare it with " +
+          "`const mystery = ...` before the intent, or supply it as a compile-time define.",
+      );
+    });
+
+    it("a reward token the enclosing chain does not register", () => {
+      expect(messageOf(intent("USDC", "amount", "USDT0"))).toBe(
+        "intent sugar: the reward token 'USDT0' is not a token base registers, nor a define. The " +
+          "reward — `.reward({ tokens: [...] })` — is escrowed on base, where the program opening " +
+          "the intent runs, so its symbols are base's. Use a symbol base registers, or the token's " +
+          "base address as a literal or a define.",
+      );
+    });
   });
 
   it("names the deadline and the creator when they are missing", () => {
