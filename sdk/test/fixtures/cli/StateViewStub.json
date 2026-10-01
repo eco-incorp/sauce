@@ -1,0 +1,74 @@
+{
+  "abi": [
+    {
+      "inputs": [{ "internalType": "bytes32", "name": "", "type": "bytes32" }],
+      "name": "getLiquidity",
+      "outputs": [{ "internalType": "uint128", "name": "", "type": "uint128" }],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [{ "internalType": "bytes32", "name": "poolId", "type": "bytes32" }],
+      "name": "getSlot0",
+      "outputs": [
+        { "internalType": "uint160", "name": "sqrtPriceX96", "type": "uint160" },
+        { "internalType": "int24", "name": "tick", "type": "int24" },
+        { "internalType": "uint24", "name": "protocolFee", "type": "uint24" },
+        { "internalType": "uint24", "name": "lpFee", "type": "uint24" }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        { "internalType": "bytes32", "name": "", "type": "bytes32" },
+        { "internalType": "int16", "name": "", "type": "int16" }
+      ],
+      "name": "getTickBitmap",
+      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        { "internalType": "bytes32", "name": "poolId", "type": "bytes32" },
+        { "internalType": "int24", "name": "tick", "type": "int24" }
+      ],
+      "name": "getTickLiquidity",
+      "outputs": [
+        { "internalType": "uint128", "name": "liquidityGross", "type": "uint128" },
+        { "internalType": "int128", "name": "liquidityNet", "type": "int128" }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        { "internalType": "bytes32", "name": "poolId", "type": "bytes32" },
+        { "internalType": "uint160", "name": "sqrtPriceX96", "type": "uint160" },
+        { "internalType": "int24", "name": "tick", "type": "int24" },
+        { "internalType": "uint24", "name": "protocolFee", "type": "uint24" },
+        { "internalType": "uint24", "name": "lpFee", "type": "uint24" },
+        { "internalType": "uint128", "name": "liquidity", "type": "uint128" }
+      ],
+      "name": "setPool",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        { "internalType": "bytes32", "name": "poolId", "type": "bytes32" },
+        { "internalType": "int16", "name": "word", "type": "int16" },
+        { "internalType": "uint256", "name": "bitmap", "type": "uint256" },
+        { "internalType": "int24", "name": "tick", "type": "int24" },
+        { "internalType": "int128", "name": "liquidityNet", "type": "int128" }
+      ],
+      "name": "setTick",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "creationCode": "0x6080604052348015600e575f5ffd5b506105298061001c5f395ff3fe608060405234801561000f575f5ffd5b5060043610610060575f3560e01c80631c7ccb4c146100645780636e90888a146100a1578063c815641c1461017f578063caedab5414610227578063ea7e24441461025c578063fa6793d5146102bf575b5f5ffd5b61008e610072366004610354565b600260209081525f928352604080842090915290825290205481565b6040519081526020015b60405180910390f35b61017d6100af3660046103a1565b604080516080810182526001600160a01b03968716815260029590950b602080870191825262ffffff958616878401908152948616606088019081525f998a52898252838a209751885493519651915199166001600160b81b031990931692909217600160a01b958716959095029490941765ffffffffffff60b81b1916600160b81b9186169190910262ffffff60d01b191617600160d01b9690941695909502929092179092556001909152912080546001600160801b0319166001600160801b03909216919091179055565b005b6101ef61018d366004610426565b5f9081526020818152604091829020825160808101845290546001600160a01b038116808352600160a01b820460020b93830184905262ffffff600160b81b83048116958401869052600160d01b909204909116606090920182905293919291565b604080516001600160a01b03909516855260029390930b602085015262ffffff91821692840192909252166060820152608001610098565b61023a61023536600461043d565b6102ff565b604080516001600160801b039093168352600f9190910b602083015201610098565b61017d61026a36600461045e565b5f85815260026020818152604080842060019890980b845296815286832095909555958152600384528481209290950b85529152912080546001600160801b0319166001600160801b03909216919091179055565b6102e76102cd366004610426565b60016020525f90815260409020546001600160801b031681565b6040516001600160801b039091168152602001610098565b5f828152600360209081526040808320600285900b8452909152812054600f0b81811261032c5780610335565b610335816104ba565b91509250929050565b8035600181900b811461034f575f5ffd5b919050565b5f5f60408385031215610365575f5ffd5b823591506103756020840161033e565b90509250929050565b8035600281900b811461034f575f5ffd5b803562ffffff8116811461034f575f5ffd5b5f5f5f5f5f5f60c087890312156103b6575f5ffd5b8635955060208701356001600160a01b03811681146103d3575f5ffd5b94506103e16040880161037e565b93506103ef6060880161038f565b92506103fd6080880161038f565b915060a08701356001600160801b0381168114610418575f5ffd5b809150509295509295509295565b5f60208284031215610436575f5ffd5b5035919050565b5f5f6040838503121561044e575f5ffd5b823591506103756020840161037e565b5f5f5f5f5f60a08688031215610472575f5ffd5b853594506104826020870161033e565b9350604086013592506104976060870161037e565b9150608086013580600f0b81146104ac575f5ffd5b809150509295509295909350565b5f81600f0b6f7fffffffffffffffffffffffffffffff1981036104eb57634e487b7160e01b5f52601160045260245ffd5b5f039291505056fea264697066735822122042c1932dee3047f2fa0d9f95879b1b44d6762bfdf051ce14763a1b84191fa41064736f6c63430008240033"
+}

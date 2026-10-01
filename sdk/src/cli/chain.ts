@@ -19,6 +19,7 @@ import {
   TransactionReceiptNotFoundError,
   type Abi,
   type Address,
+  type ContractFunctionParameters,
   type Hex,
   type PublicClient,
   type TransactionReceipt,
@@ -106,6 +107,70 @@ export async function connect(url: string, chain: CanonicalChain): Promise<Publi
   }
 
   return client;
+}
+
+/** One view call for {@link readAll}: a contract, an ABI holding the function, and its arguments. */
+export interface ViewCall {
+  readonly address: Address;
+  readonly abi: Abi;
+  readonly functionName: string;
+  readonly args?: readonly unknown[];
+}
+
+/** What one {@link ViewCall} answered: its decoded result, or why it has none. */
+export type ViewResult =
+  { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly error: string };
+
+/**
+ * How many calls one {@link readAll} `eth_call` carries. A deployless call returns its answers as
+ * the code of a contract it creates, which may not pass 24,576 bytes (EIP-170): about 64 of a V3
+ * pool's eight-word `ticks()`. A Slipstream tick is ten words, so this leaves room.
+ */
+const CALLS_PER_REQUEST = 32;
+
+/**
+ * `calls` through Multicall3's `aggregate3`, sent deployless (the call carries the contract's
+ * code), so nothing needs to be deployed on the chain: one `eth_call` per
+ * {@link CALLS_PER_REQUEST} calls, all sent at once. A call that reverts, or reaches an address
+ * with no code, fails alone; a request that fails fails the command, naming `what` it was reading.
+ */
+export async function readAll(
+  client: PublicClient,
+  what: string,
+  calls: readonly ViewCall[],
+): Promise<ViewResult[]> {
+  const chunks = Array.from({ length: Math.ceil(calls.length / CALLS_PER_REQUEST) }, (_, index) =>
+    calls.slice(index * CALLS_PER_REQUEST, (index + 1) * CALLS_PER_REQUEST),
+  );
+  const answered = await Promise.all(
+    chunks.map(
+      (chunk) =>
+        request(what, () =>
+          client.multicall({
+            contracts: chunk as unknown as ContractFunctionParameters[],
+            allowFailure: true,
+            deployless: true,
+            // The chunk is the batch: viem's own splits by calldata size, not by what comes back.
+            batchSize: 0,
+          }),
+        ) as Promise<
+          ReadonlyArray<
+            | { readonly status: "success"; readonly result: unknown }
+            | { readonly status: "failure"; readonly error: Error }
+          >
+        >,
+    ),
+  );
+
+  return answered.flat().map((result): ViewResult => {
+    if (result.status === "success") return { ok: true, value: result.result };
+    // The aggregate call itself failed — the endpoint, not one of the calls in it.
+    if ((result.error as { functionName?: string }).functionName === "aggregate3") {
+      throw new CliError(`reading ${what} failed: ${reasonOf(result.error)}`);
+    }
+
+    return { ok: false, error: reasonOf(result.error) };
+  });
 }
 
 /** Where each state-reading method takes its block, among its parameters. */
