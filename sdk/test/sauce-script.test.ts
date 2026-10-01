@@ -141,6 +141,33 @@ describe("SauceScript in an editor", () => {
     }
   });
 
+  it("checks every builtin's example in the SauceScript reference with no error", () => {
+    const reference = JSON.parse(
+      readFileSync(join(ROOT, "skills/sauce-script/references/builtins.json"), "utf8"),
+    ) as {
+      intrinsics: Array<{ name: string; example: Partial<Record<"evm" | "svm", string>> }>;
+    };
+    const examples = Object.fromEntries(
+      reference.intrinsics.flatMap(({ name, example }, index) =>
+        Object.entries(example).map(([target, text]) => [
+          join(work, `builtin-${index}-${target}.sauce.ts`),
+          `// ${name} (${target})\n${text}\n`,
+        ]),
+      ),
+    );
+    expect(Object.keys(examples).length).toBeGreaterThan(reference.intrinsics.length);
+    const checked = service(examples);
+    const shown = Object.keys(examples).flatMap((file) =>
+      checked
+        .getSemanticDiagnostics(file)
+        .map(
+          (d) =>
+            `${examples[file]!.split("\n")[0]} TS${d.code} ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`,
+        ),
+    );
+    expect(shown).toEqual([]);
+  });
+
   it("declares every function @sauce/token exports, on either arm, and nothing it does not", () => {
     const exported = (file: string): string[] =>
       [
