@@ -43,10 +43,10 @@
  *     approval is SUFFICIENT but not always CONSUMED — approving the full amount is never wrong.
  *
  * EVM-SOURCE GUARD: every helper here throws a named error when `intent.sourceChainId`'s kind isn't
- * `"evm"` — these are EVM Portal calldata, and the Solana Portal *program* is not in eco-routes on
- * `main` (zero `.rs` — design doc openQuestions 4/5). The DESTINATION may be `svm` and is fully
- * supported: an EVM-sourced reward with Borsh route bytes is exactly the
- * `DepositAddress_USDCTransfer_Solana.sol` shape.
+ * `"evm"` — these are EVM Portal calldata. The Solana Portal is a separate Anchor program, in
+ * `eco/eco-routes-svm`, with its own instructions and accounts, which these helpers do not build.
+ * The DESTINATION may be `svm` and is fully supported: an EVM-sourced reward with Borsh route bytes
+ * is exactly the `DepositAddress_USDCTransfer_Solana.sol` shape.
  */
 import {
   concatHex,
@@ -76,6 +76,7 @@ import {
   kindOf,
 } from "./encode.js";
 import type { IntentHashes } from "./encode.js";
+import { assertRewardAssetsDistinct } from "./intent.js";
 import { toUniversalAddress } from "./normalize.js";
 import type { AddressInput, Intent } from "./types.js";
 
@@ -102,8 +103,9 @@ function assertEvmSource(intent: Intent, helper: string): void {
   if (kindOf(intent.sourceChainId) !== "evm") {
     throw new Error(
       `portal.ts#${helper}: intent.sourceChainId (${intent.sourceChainId}) is not an EVM chain — ` +
-        `these are EVM Portal calldata helpers, and eco-routes has no Solana Portal PROGRAM on ` +
-        `\`main\` (zero .rs). The DESTINATION may be svm; only the SOURCE must be evm.`,
+        `these are EVM Portal calldata helpers, and the Solana Portal is a separate program ` +
+        `(eco/eco-routes-svm) whose instructions they do not build. The DESTINATION may be svm; ` +
+        `only the SOURCE must be evm.`,
     );
   }
 }
@@ -134,6 +136,7 @@ function portalAddress(target: PortalTarget): Hex {
 /** `Portal.publish(destination, routeBytes, reward)`. `value` is always `0n`. */
 export function publishTx(intent: Intent, target: PortalTarget): PortalTx {
   assertEvmSource(intent, "publishTx");
+  assertRewardAssetsDistinct(intent.sourceChainId, intent.reward);
   return {
     to: portalAddress(target),
     data: encodeFunctionData({
@@ -152,6 +155,7 @@ export function publishAndFundTx(
   target: PortalTarget,
 ): PortalTx {
   assertEvmSource(intent, "publishAndFundTx");
+  assertRewardAssetsDistinct(intent.sourceChainId, intent.reward);
   return {
     to: portalAddress(target),
     data: encodeFunctionData({
@@ -166,6 +170,7 @@ export function publishAndFundTx(
 /** `Portal.fund(destination, routeHash, reward, allowPartial)`. `value = reward.nativeAmount`. */
 export function fundTx(intent: Intent, allowPartial: boolean, target: PortalTarget): PortalTx {
   assertEvmSource(intent, "fundTx");
+  assertRewardAssetsDistinct(intent.sourceChainId, intent.reward);
   const rHash = hashIntent(intent).routeHash;
   return {
     to: portalAddress(target),
@@ -191,6 +196,7 @@ export function fundTx(intent: Intent, allowPartial: boolean, target: PortalTarg
  */
 export function approvalTxs(intent: Intent, target: PortalTarget): readonly PortalTx[] {
   assertEvmSource(intent, "approvalTxs");
+  assertRewardAssetsDistinct(intent.sourceChainId, intent.reward);
   const portal = portalAddress(target);
   const maxByToken = new Map<Hex, bigint>();
   for (const { token, amount } of intent.reward.tokens) {

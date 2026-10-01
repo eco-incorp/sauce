@@ -10,13 +10,13 @@ tokens and every protocol recorded there with its addresses.
 | [Ethereum](ethereum.md) | `ethereum` | 1 | EVM | yes | 0 | 3 | 96 |
 | [Optimism](optimism.md) | `optimism` | 10 | EVM | yes | 2 | 3 | 40 |
 | [Cronos](cronos.md) | `cronos` | 25 | EVM | no | — | 0 | 0 |
-| [BNB Chain](bsc.md) | `bsc` | 56 | EVM | yes | — | 0 | 29 |
+| [BNB Chain](bsc.md) | `bsc` | 56 | EVM | no | — | 0 | 29 |
 | [Gnosis](gnosis.md) | `gnosis` | 100 | EVM | no | — | 0 | 4 |
 | [Fuse](fuse.md) | `fuse` | 122 | EVM | no | — | 0 | 0 |
 | [Unichain](unichain.md) | `unichain` | 130 | EVM | yes | 10 | 0 | 3 |
 | [Polygon](polygon.md) | `polygon` | 137 | EVM | yes | 7 | 3 | 40 |
-| [Monad](monad.md) | `monad` | 143 | EVM | no | 15 | 2 | 8 |
-| [Sonic](sonic.md) | `sonic` | 146 | EVM | yes | 13 | 0 | 2 |
+| [Monad](monad.md) | `monad` | 143 | EVM | yes | 15 | 2 | 8 |
+| [Sonic](sonic.md) | `sonic` | 146 | EVM | no | 13 | 0 | 2 |
 | [Manta Pacific](manta.md) | `manta` | 169 | EVM | no | — | 0 | 0 |
 | [opBNB](opbnb.md) | `opbnb` | 204 | EVM | no | — | 0 | 1 |
 | [Fantom](fantom.md) | `fantom` | 250 | EVM | no | — | 0 | 7 |
@@ -38,9 +38,9 @@ tokens and every protocol recorded there with its addresses.
 | [Plasma](plasma.md) | `plasma` | 9745 | EVM | yes | — | 0 | 0 |
 | [Mode](mode.md) | `mode` | 34443 | EVM | no | — | 0 | 2 |
 | [Arbitrum One](arbitrum.md) | `arbitrum` | 42161 | EVM | yes | 3 | 2 | 59 |
-| [Celo](celo.md) | `celo` | 42220 | EVM | yes | — | 0 | 2 |
+| [Celo](celo.md) | `celo` | 42220 | EVM | no | — | 0 | 2 |
 | [Avalanche C-Chain](avalanche.md) | `avalanche` | 43114 | EVM | no | 1 | 0 | 33 |
-| [Ink](ink.md) | `ink` | 57073 | EVM | yes | — | 0 | 1 |
+| [Ink](ink.md) | `ink` | 57073 | EVM | no | — | 0 | 1 |
 | [Linea](linea.md) | `linea` | 59144 | EVM | no | 11 | 0 | 8 |
 | [Berachain](berachain.md) | `berachain` | 80094 | EVM | no | — | 0 | 0 |
 | [Blast](blast.md) | `blast` | 81457 | EVM | no | — | 0 | 5 |

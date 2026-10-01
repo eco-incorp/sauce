@@ -8,7 +8,7 @@ Eco's cross-chain intent protocol. A Portal publishes an intent, escrows its rew
 | --- | --- |
 | Category | Infrastructure and standards |
 | Family | none |
-| Namespace | `EcoRoutes` on ethereum, optimism, bsc, unichain, polygon, sonic, ronin, arc, base, plasma, arbitrum, celo, ink |
+| Namespace | `EcoRoutes` on ethereum, optimism, unichain, polygon, monad, ronin, arc, base, plasma, arbitrum |
 | Chains | none recorded |
 | Document | none |
 

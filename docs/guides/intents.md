@@ -83,14 +83,19 @@ Use
 the shared Pot — to predict the Pot and check that it is deployed, with the right `owner()` and
 `kitchen()`. Only use a result with `ready: true`.
 
-### Arc's Pot
+### One Portal, one Pot
 
-Arc's eco-routes Portal (`0xEC002CA16cE20c2a9F3C6200EF04E7d92a3dfBD8`) is not the Portal most other
-chains share, so its Executor (`0x95b2d45F49c68a54BDBa0356fc3034751A43b3D4`) and the Pot derived from
-it (`destinationPot("arc")`, `0x4edfB4576F91A9c2fE9aA50f669B7C81E4B82955`) are Arc's own. This prediction
-uses the pinned Kitchen release's Pot bytecode. The Kitchen, the matching engine and that Pot must be
-deployed on Arc before an intent to it can run; the release address alone does not confirm
-readiness.
+The registry records one eco-routes Portal, `0xEC000769A73b70e16f361a442292500b3BCf4A85`, on every
+EVM chain it has eco-routes on, Arc included. So one Executor
+(`0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082`) and one derived Pot
+(`destinationPot(chain)`, `0xDd330394620fBFF4D0AdcfA33B0D7b3622Db15B0`) serve every destination.
+This prediction uses the pinned Kitchen release's Pot bytecode. The Kitchen, the matching engine and
+that Pot must be deployed on the destination before an intent to it can run; the release address
+alone does not confirm readiness.
+
+A solver fills an intent only on the Portal it serves: an intent published on a different Portal
+deployment is not one it can fill. Set `options.portal` or `options.sourcePortal` only to a Portal
+you have confirmed a solver serves.
 
 The deployment helpers return the released addresses. They do not check that code is live at those
 addresses on your chain. The same helper confirms the Kitchen and engine have code, and reads the

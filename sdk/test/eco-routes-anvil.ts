@@ -48,7 +48,7 @@ const creation = (name: string): Hex =>
   ).creationCode;
 
 /** The Portal releases the suites plant: the one before proven cancellation, and 2.12.0. */
-export const PORTAL_FIXTURES = { pre: "Portal-2.10.0", v2_12: "Portal-2.12.0" } as const;
+export const PORTAL_FIXTURES = { pre: "Portal-2.10.0", v2_12: "Portal" } as const;
 
 const PORTAL = parseAbi(["function executor() view returns (address)"]);
 export const MAILBOX = parseAbi([
