@@ -15,7 +15,7 @@
 
 ## Tokens
 
-The registry names no token on this chain: a program uses `Token(<address>)`.
+The registry names no token on this chain: a mint is a define, and a token account an `Account` parameter (`sauce-solana`).
 
 ## Protocols
 

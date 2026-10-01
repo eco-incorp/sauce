@@ -669,7 +669,12 @@ function renderChain(chain) {
   lines.push(...chainExample(chain));
   lines.push("## Tokens", "");
   if (chain.tokens.length === 0) {
-    lines.push("The registry names no token on this chain: a program uses `Token(<address>)`.", "");
+    lines.push(
+      chain.kind === "svm"
+        ? "The registry names no token on this chain: a mint is a define, and a token account an `Account` parameter (`sauce-solana`)."
+        : "The registry names no token on this chain: a program uses `Token(<address>)`.",
+      "",
+    );
   } else {
     lines.push("| Symbol | Address | Decimals |", "| --- | --- | --- |");
     for (const t of chain.tokens)
