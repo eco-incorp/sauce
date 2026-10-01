@@ -389,6 +389,30 @@ describe("rewriteProtocolAccessors: VALUE position -- an accessor used as an add
     expect(out).toBe(source);
   });
 
+  it("tells onContract each reference it resolves: as written, with its chain and address", () => {
+    const heard: Array<[string, string, string, string]> = [];
+    rewriteProtocolAccessors(
+      `function main() {
+        Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);
+        USDC.approve(Cctp.TokenMessenger, 1n);
+        Ethereum.AaveV3.Pool.supply(1n, 2n, 3n, 0n);
+      }`,
+      BASE,
+      {
+        onContract: (reference, target) =>
+          heard.push([reference, target.protocol, target.chain.slug, target.address.toLowerCase()]),
+      },
+    );
+    expect(heard).toEqual(
+      expect.arrayContaining([
+        ["Uniswap.UniversalRouter", "uniswap-v4", "base", BASE_UNIVERSAL_ROUTER],
+        ["Ethereum.AaveV3.Pool", "aave-v3", "ethereum", ETHEREUM_AAVE_POOL.toLowerCase()],
+        ["Cctp.TokenMessenger", "cctp", "base", expect.stringMatching(/^0x[0-9a-f]{40}$/)],
+      ]),
+    );
+    expect(heard).toHaveLength(3);
+  });
+
   it("END TO END: USDC.approve(Cctp.TokenMessenger, x) compiles through openRoute (dot form as a spender)", () => {
     const built = openRoute(
       "base",

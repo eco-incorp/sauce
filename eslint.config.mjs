@@ -64,6 +64,12 @@ export default tseslint.config(
     rules: { "@typescript-eslint/no-explicit-any": "off" },
   },
   {
+    // The SauceScript declarations: `any` is what SauceScript itself returns where TypeScript has
+    // no type for it — `abi.decode`'s record, `new Array(n)`'s elements, an untyped ABI's methods.
+    files: ["sdk/sauce-script/builtins.d.ts"],
+    rules: { "@typescript-eslint/no-explicit-any": "off" },
+  },
+  {
     rules: {
       // Every one of the 13 findings was an empty CATCH — a deliberate "this may fail, carry on"
       // in a script or a test. The option exists for exactly that, and it leaves `no-empty` live

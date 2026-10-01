@@ -57,7 +57,8 @@ function browserSubpaths() {
   const subpaths = [];
   for (const [subpath, target] of Object.entries(manifest.exports)) {
     const file = typeof target === "string" ? target : target.default;
-    if (!file.endsWith(".js")) continue;
+    // A types-only export (`./sauce-script`) has no JavaScript to bundle.
+    if (file === undefined || !file.endsWith(".js")) continue;
     if (!subpath.includes("*")) {
       subpaths.push(subpath);
       continue;

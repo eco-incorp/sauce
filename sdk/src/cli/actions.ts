@@ -154,7 +154,7 @@ export async function actionsCommand(
     intents: {},
     contracts: lowering.contracts,
   };
-  const compiled = compileCommand(program, files);
+  const compiled = await compileCommand(program, files);
   const bytecode = compiled.json.bytecode as string;
   const size = compiled.json.size as number;
   const { chain } = lowering;

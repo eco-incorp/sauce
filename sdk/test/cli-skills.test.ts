@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { initProject } from "../src/cli/init.js";
+import { initProject, sauceScriptTsconfig } from "../src/cli/init.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import {
   DEFAULT_AGENTS,
@@ -470,6 +470,15 @@ describe("sauce init", () => {
     const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
     expect(manifest.name).toBe("my-app");
     expect(manifest.dependencies).toEqual({ [MANIFEST.name]: MANIFEST.version });
+    // The TypeScript the programs' editor plugin runs in: the range the package itself takes.
+    expect(manifest.devDependencies).toEqual({
+      typescript: (MANIFEST as { dependencies?: Record<string, string> }).dependencies?.typescript,
+    });
+    // The programs directory: its own TypeScript project, of SauceScript alone.
+    expect(JSON.parse(readFileSync(join(dir, "programs/tsconfig.json"), "utf8"))).toEqual(
+      sauceScriptTsconfig(MANIFEST.name),
+    );
+    expect(readFileSync(join(dir, "AGENTS.md"), "utf8")).toContain("Write programs in `programs/`");
     expect(readFileSync(join(dir, ".gitignore"), "utf8")).toMatch(/^sauce\.config\.json$/m);
     const config = JSON.parse(readFileSync(join(dir, "sauce.config.example.json"), "utf8"));
     for (const url of Object.values(config.rpcUrls as Record<string, string>)) {
