@@ -83,8 +83,9 @@ rules of its own on top of the language:
 - **Annotations go on function signatures only.** `function main(token: Address, amounts: Uint256[])`
   and `function half(x: Uint256): Uint256` compile; a parameter with no annotation is a `Uint256`.
   A local takes its type from its initializer: `let total = 0n;`, never `let total: Uint256 = 0n;`.
-- **Records are inline object types** in a signature, `orders: { amount: Uint256, to: Address }[]`;
-  there is no `interface` declaration.
+- **Records are inline object types** in a signature, `orders: { amount: Uint256, to: Address }[]`
+  (`;` between the fields works too, as a formatter writes them); there is no `interface`
+  declaration.
 - **No trailing comma** after `main`'s last parameter.
 - **A script declares no function and imports nothing**; a program with helper functions or an
   imported ABI declares `main`.
@@ -212,7 +213,9 @@ Compile errors fail the command; there is no warning channel. `sauce compile` po
 line and column, including on a line the package rewrote, and a `hint:` line names the flag or
 define to add. `X is not a declared variable` usually means a missing define or `main` parameter.
 `Unexpected token` usually means an annotation outside a signature, an `interface`, or a trailing
-comma after `main`'s last parameter. For any other message, find it in
+comma after `main`'s last parameter. `a function argument: expected a number, found a bool` at a
+call usually means the called function's parameter has no annotation, so it is a number: annotate
+it, `first: bool`. For any other message, find it in
 [references/builtins.md](references/builtins.md). `a nested function declaration is not supported`
 means a helper declared in a script: declare `main` beside it. `X is called but never declared`
 means a function that is not in scope, usually a typo.

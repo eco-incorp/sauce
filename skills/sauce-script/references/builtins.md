@@ -47,15 +47,19 @@ example program each, is `builtins.json`.
 
 ## 1. Types
 
-| Write                                                                          | Meaning                                                                                                                                                                                                                                                                                                           |
-| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Uint256`, `Address`, `number`, `bigint`                                       | A **number**: one unsigned 256-bit integer. An address is a number.                                                                                                                                                                                                                                               |
-| `bool`, `boolean`                                                              | A **bool**: true or false. It is kept apart from numbers, so `flag + 1n` is an error. Comparisons produce bools.                                                                                                                                                                                                  |
-| `bytes`, `string`                                                              | A **bytes value**. A `"text"` literal is its UTF-8 bytes.                                                                                                                                                                                                                                                         |
-| `T[]`                                                                          | An array whose elements all have type `T`                                                                                                                                                                                                                                                                         |
-| `{ a: T, b: U }`, or the name of an `interface`                                | A **record** with named fields                                                                                                                                                                                                                                                                                    |
-| `Account`, `Account<Writable>`, `Account<Signer>`, `Account<Writable, Signer>` | **SVM:** an account the transaction attaches, declared as a `main` parameter, optionally with the roles it must have. **EVM:** `Account` is just an address, and roles are an error: "`an Account role` is not available on the evm target; an `Account` is an address value on the EVM — write `Account` alone". |
-| `void`                                                                         | No value (return type only)                                                                                                                                                                                                                                                                                       |
+- `Uint256`, `Address`, `number`, `bigint`: A **number**: one unsigned 256-bit integer. An address
+  is a number.
+- `bool`, `boolean`: A **bool**: true or false. It is kept apart from numbers, so `flag + 1n` is an
+  error. Comparisons produce bools.
+- `bytes`, `string`: A **bytes value**. A `"text"` literal is its UTF-8 bytes.
+- `T[]`: An array whose elements all have type `T`
+- `{ a: T, b: U }`, or the name of an `interface`: A **record** with named fields
+- `Account`, `Account<Writable>`, `Account<Signer>`, `Account<Writable, Signer>`: **SVM:** an
+  account the transaction attaches, declared as a `main` parameter, optionally with the roles it
+  must have. **EVM:** `Account` is just an address, and roles are an error: "`an Account role` is
+  not available on the evm target; an `Account` is an address value on the EVM — write `Account`
+  alone".
+- `void`: No value (return type only)
 
 - A parameter without an annotation is a number. So is the result of a function without a return annotation,
   even one that returns a comparison or `true`: it comes back as 1 or 0. `if`, `while`, `&&` and `!` take that,
@@ -70,7 +74,9 @@ Common type errors:
 
 - "`<what>` requires a scalar value": you passed bytes, an array or a record where one value is needed.
 - "`<what>` requires a bytes value": you passed a value where bytes are needed.
-- "`<what>`: expected a number, found a bool".
+- "`<what>`: expected a number, found a bool". At a call site, "a function argument: expected a number,
+  found a bool" usually means the function's parameter has no annotation, so it is a number:
+  annotate it, `flag: bool`.
 - "`<what>`: expected an account, found a value" (and the reverse).
 
 A builtin that does not exist on your target fails as "`<name>` is not available on the `<evm|svm>` target",
@@ -101,19 +107,32 @@ usually followed by what to use instead.
 
 ## 3. Operators
 
-| Operators                                       | Operands                                  | Result    | Behaviour                                                                                                                                                                                              |
-| ----------------------------------------------- | ----------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `+ - * / % **`                                  | numbers                                   | number    | **Checked.** Overflow, underflow and division by zero revert. With constant operands they are compile errors: "constant `-` expression overflows 256 bits", "constant `/` expression divides by zero". |
-| `-x`                                            | a number                                  | number    | Two's-complement negation; it never fails. **Use `-x` for a negative amount.** `~x + 1n` reverts when `x` is `0`, because the `+` is checked. `-1n` is 2²⁵⁶ − 1.                                       |
-| `~x`                                            | a number                                  | number    | bitwise NOT. `~0n` is the maximum value.                                                                                                                                                               |
-| `& \| ^ << >>`                                  | numbers                                   | number    | Bitwise. `>>` fills with zeros; use `Math.sShr` for a signed shift.                                                                                                                                    |
-| `< <= > >=`                                     | scalars                                   | bool      | unsigned; use `Math.sLt` and friends for signed                                                                                                                                                        |
-| `== === != !==`                                 | scalars, or two accounts                  | bool      | Bytes cannot be compared: "a comparison operator requires a scalar value". Compare `crypto.keccak256(a) == crypto.keccak256(b)` instead.                                                               |
-| `!x`                                            | a scalar                                  | bool      |                                                                                                                                                                                                        |
-| `a && b`, `a \|\| b`                            | scalars                                   | bool      | Short-circuit. The result is true or false, not one of the operands.                                                                                                                                   |
-| `c ? a : b`                                     | `a` and `b` of the same type              | that type | "the two arms of `? :` must have the same type — …"                                                                                                                                                    |
-| `=`, and `+= -= *= /= %= **= &= \|= ^= <<= >>=` |                                           |           | Compound forms work on plain variables only: "a compound assignment to an array element …", "a compound assignment to a tuple field …".                                                                |
-| `x++`, `x--`, `++x`, `--x`                      | a plain variable, **as a statement only** |           | "`++`/`--` as a value (they are statement-only here — write `i += 1n`)"                                                                                                                                |
+- `+ - * / % **`, on numbers → number
+  - **Checked.** Overflow, underflow and division by zero revert. With constant operands they are
+    compile errors: "constant `-` expression overflows 256 bits", "constant `/` expression divides
+    by zero".
+- `-x`, on a number → number
+  - Two's-complement negation; it never fails. **Use `-x` for a negative amount.** `~x + 1n` reverts
+    when `x` is `0`, because the `+` is checked. `-1n` is 2²⁵⁶ − 1.
+- `~x`, on a number → number
+  - bitwise NOT. `~0n` is the maximum value.
+- `& | ^ << >>`, on numbers → number
+  - Bitwise. `>>` fills with zeros; use `Math.sShr` for a signed shift.
+- `< <= > >=`, on scalars → bool
+  - unsigned; use `Math.sLt` and friends for signed
+- `== === != !==`, on scalars, or two accounts → bool
+  - Bytes cannot be compared: "a comparison operator requires a scalar value". Compare
+    `crypto.keccak256(a) == crypto.keccak256(b)` instead.
+- `!x`, on a scalar → bool
+- `a && b`, `a || b`, on scalars → bool
+  - Short-circuit. The result is true or false, not one of the operands.
+- `c ? a : b`, on `a` and `b` of the same type → that type
+  - "the two arms of `? :` must have the same type — …"
+- `=`, and `+= -= *= /= %= **= &= |= ^= <<= >>=`
+  - Compound forms work on plain variables only: "a compound assignment to an array element …", "a
+    compound assignment to a tuple field …".
+- `x++`, `x--`, `++x`, `--x`, on a plain variable, **as a statement only**
+  - "`++`/`--` as a value (they are statement-only here — write `i += 1n`)"
 
 Accounts compare only with `==` and `!=`: "accounts compare for identity only — `==` and `!=`. …".
 `>>>`, `??`, `typeof`, `instanceof`, `in`, `void`, `delete` and unary `+` are not supported (see §14).
@@ -197,13 +216,36 @@ Available on **Both** targets. These are statements, except `eval`, which return
 reserved: you cannot declare a function named `require`, `revert`, `log` or `eval` ("`log` is a reserved
 builtin and cannot be a function name").
 
-| Form                                      | Types                                                                           | Behaviour and errors                                                                                                                                                                                                                                                                                                                                                                                  | Example                                              |
-| ----------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `require(cond)`, `require(cond, message)` | `cond`: scalar. `message`: bytes.                                               | Reverts unless `cond` is nonzero. "`require` takes 1 or 2 arguments (a condition and an optional bytes payload), got N"; "a `require` condition requires a scalar value". Used as a value: "`require` aborts execution and produces no value — use it as a statement".                                                                                                                                | `require(out >= minOut, "slippage");`                |
-| `revert()`, `revert(data)`                | `data`: bytes                                                                   | Reverts with `data` as the revert data. "`revert` takes at most 1 argument (an optional bytes payload), got 2"; "a revert payload requires a bytes value"                                                                                                                                                                                                                                             | `revert(abi.encode(code));`                          |
-| `throw data`                              | `data`: bytes                                                                   | The same as `revert(data)`. "a `throw` payload requires a bytes value".                                                                                                                                                                                                                                                                                                                               | `throw "below floor";`                               |
-| `log(data)`, `log(data, topic1, …)`       | `data`: bytes. Up to 4 scalar topics, **EVM only**.                             | Emits a log record. On SVM pass `data` alone: "`log with topics` is not available on the svm target; … call log(data) alone and fold any event discriminator into data (concat or abi.encode it in front of the fields)". Other errors: "`log` requires a bytes data payload — `log()` records nothing"; "`log` carries at most 4 indexed topics after its data payload, got 5".                      | `log(abi.encode(from, to, amount), TRANSFER_TOPIC);` |
-| `eval(program, ...args)`                  | `program`: compiled Sauce program bytes. Up to 16 scalar `args`. Returns bytes. | Runs another program and returns what it returns; `args` become its `main` arguments. If the inner program reverts, so does the outer one. On SVM the inner program can read accounts but cannot write them. Errors: "`eval` requires bytecode to run — `eval()` has nothing to execute"; "`eval` takes at most 16 arguments after its bytecode, got 17"; "an eval argument requires a scalar value". | `const result = eval(program, amount);`              |
+- `require(cond)`, `require(cond, message)`
+  - Types: `cond`: scalar. `message`: bytes.
+  - Reverts unless `cond` is nonzero. "`require` takes 1 or 2 arguments (a condition and an optional
+    bytes payload), got N"; "a `require` condition requires a scalar value". Used as a value:
+    "`require` aborts execution and produces no value — use it as a statement".
+  - Example: `require(out >= minOut, "slippage");`
+- `revert()`, `revert(data)`
+  - Types: `data`: bytes
+  - Reverts with `data` as the revert data. "`revert` takes at most 1 argument (an optional bytes
+    payload), got 2"; "a revert payload requires a bytes value"
+  - Example: `revert(abi.encode(code));`
+- `throw data`
+  - Types: `data`: bytes
+  - The same as `revert(data)`. "a `throw` payload requires a bytes value".
+  - Example: `throw "below floor";`
+- `log(data)`, `log(data, topic1, …)`
+  - Types: `data`: bytes. Up to 4 scalar topics, **EVM only**.
+  - Emits a log record. On SVM pass `data` alone: "`log with topics` is not available on the svm
+    target; … call log(data) alone and fold any event discriminator into data (concat or abi.encode
+    it in front of the fields)". Other errors: "`log` requires a bytes data payload — `log()`
+    records nothing"; "`log` carries at most 4 indexed topics after its data payload, got 5".
+  - Example: `log(abi.encode(from, to, amount), TRANSFER_TOPIC);`
+- `eval(program, ...args)`
+  - Types: `program`: compiled Sauce program bytes. Up to 16 scalar `args`. Returns bytes.
+  - Runs another program and returns what it returns; `args` become its `main` arguments. If the
+    inner program reverts, so does the outer one. On SVM the inner program can read accounts but
+    cannot write them. Errors: "`eval` requires bytecode to run — `eval()` has nothing to execute";
+    "`eval` takes at most 16 arguments after its bytecode, got 17"; "an eval argument requires a
+    scalar value".
+  - Example: `const result = eval(program, amount);`
 
 **Failure is atomic.** `require`, `revert`, `throw`, a failing call and every checked operation revert the whole
 transaction; nothing that ran before them survives. The only failure a program can survive is a failed
@@ -213,22 +255,65 @@ external call on EVM, with `.catch()` (§13).
 
 Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a declared variable").
 
-| Read                      | Returns | Targets  | On EVM                                                                             | On SVM                                                                                                                                                                                                       | Example                                         |
-| ------------------------- | ------- | -------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| `ctx.msgSender()`         | number  | **Both** | the immediate caller (`msg.sender`)                                                | the transaction's first signer                                                                                                                                                                               | `require(ctx.msgSender() == OWNER);`            |
-| `ctx.self()`              | number  | **Both** | the executing contract: the Pot, which holds the program's balances and allowances | the executing Sauce program's id                                                                                                                                                                             | `const held = USDC.balanceOf(ctx.self());`      |
-| `ctx.chainId()`           | number  | **Both** | the chain id                                                                       | 1399811149 on mainnet, 1399811150 on devnet                                                                                                                                                                  | `if (ctx.chainId() == 8453n) { … }`             |
-| `ctx.blockNumber()`       | number  | **Both** | the block number                                                                   | the **slot**                                                                                                                                                                                                 | `const at = ctx.blockNumber();`                 |
-| `ctx.timestamp()`         | number  | **Both** | the block time, in seconds                                                         | the cluster time, in seconds                                                                                                                                                                                 | `require(ctx.timestamp() <= deadline);`         |
-| `ctx.selfBalance()`       | number  | **Both** | the executing contract's balance, in wei                                           | the executing program's lamports                                                                                                                                                                             | `const wei = ctx.selfBalance();`                |
-| `ctx.msgData()`           | bytes   | **Both** | the program's whole input, arguments included                                      | the instruction data                                                                                                                                                                                         | `const input = ctx.msgData();`                  |
-| `ctx.balance(address)`    | number  | **Both** | the balance of `address`                                                           | the lamports of the attached account with that key. Pass `acct.address`, not the account itself ("ctx.balance's address: expected a value, found an account"). A key that is not attached fails at run time. | `ctx.balance(vault.address)`                    |
-| `ctx.msgValue()`          | number  | **EVM**  | the native value sent (`msg.value`)                                                | not available: "…; pass the amount as an argument and move the lamports with a system-program transfer through svm.call"                                                                                     | `require(ctx.msgValue() >= fee);`               |
-| `ctx.gasLeft()`           | number  | **EVM**  | the gas remaining                                                                  | not available                                                                                                                                                                                                | `const gas = ctx.gasLeft();`                    |
-| `ctx.codeSize(address)`   | number  | **EVM**  | the size of `address`'s code                                                       | not available                                                                                                                                                                                                | `require(ctx.codeSize(token) > 0n);`            |
-| `ctx.codeHash(address)`   | number  | **EVM**  | the hash of `address`'s code                                                       | not available                                                                                                                                                                                                | `require(ctx.codeHash(pool) == POOL_CODEHASH);` |
-| `ctx.isContract(address)` | bool    | **EVM**  | true if `address` has code                                                         | not available; check `acct.owner` instead                                                                                                                                                                    | `require(ctx.isContract(token));`               |
-| `ctx.isEOA(address)`      | bool    | **EVM**  | true if `address` has no code                                                      | not available                                                                                                                                                                                                | `require(ctx.isEOA(ctx.msgSender()));`          |
+- `ctx.msgSender()` → number, **Both**
+  - On EVM: the immediate caller (`msg.sender`)
+  - On SVM: the transaction's first signer
+  - Example: `require(ctx.msgSender() == OWNER);`
+- `ctx.self()` → number, **Both**
+  - On EVM: the executing contract: the Pot, which holds the program's balances and allowances
+  - On SVM: the executing Sauce program's id
+  - Example: `const held = USDC.balanceOf(ctx.self());`
+- `ctx.chainId()` → number, **Both**
+  - On EVM: the chain id
+  - On SVM: 1399811149 on mainnet, 1399811150 on devnet
+  - Example: `if (ctx.chainId() == 8453n) { … }`
+- `ctx.blockNumber()` → number, **Both**
+  - On EVM: the block number
+  - On SVM: the **slot**
+  - Example: `const at = ctx.blockNumber();`
+- `ctx.timestamp()` → number, **Both**
+  - On EVM: the block time, in seconds
+  - On SVM: the cluster time, in seconds
+  - Example: `require(ctx.timestamp() <= deadline);`
+- `ctx.selfBalance()` → number, **Both**
+  - On EVM: the executing contract's balance, in wei
+  - On SVM: the executing program's lamports
+  - Example: `const wei = ctx.selfBalance();`
+- `ctx.msgData()` → bytes, **Both**
+  - On EVM: the program's whole input, arguments included
+  - On SVM: the instruction data
+  - Example: `const input = ctx.msgData();`
+- `ctx.balance(address)` → number, **Both**
+  - On EVM: the balance of `address`
+  - On SVM: the lamports of the attached account with that key. Pass `acct.address`, not the account
+    itself ("ctx.balance's address: expected a value, found an account"). A key that is not attached
+    fails at run time.
+  - Example: `ctx.balance(vault.address)`
+- `ctx.msgValue()` → number, **EVM**
+  - On EVM: the native value sent (`msg.value`)
+  - On SVM: not available: "…; pass the amount as an argument and move the lamports with a
+    system-program transfer through svm.call"
+  - Example: `require(ctx.msgValue() >= fee);`
+- `ctx.gasLeft()` → number, **EVM**
+  - On EVM: the gas remaining
+  - On SVM: not available
+  - Example: `const gas = ctx.gasLeft();`
+- `ctx.codeSize(address)` → number, **EVM**
+  - On EVM: the size of `address`'s code
+  - On SVM: not available
+  - Example: `require(ctx.codeSize(token) > 0n);`
+- `ctx.codeHash(address)` → number, **EVM**
+  - On EVM: the hash of `address`'s code
+  - On SVM: not available
+  - Example: `require(ctx.codeHash(pool) == POOL_CODEHASH);`
+- `ctx.isContract(address)` → bool, **EVM**
+  - On EVM: true if `address` has code
+  - On SVM: not available; check `acct.owner` instead
+  - Example: `require(ctx.isContract(token));`
+- `ctx.isEOA(address)` → bool, **EVM**
+  - On EVM: true if `address` has no code
+  - On SVM: not available
+  - Example: `require(ctx.isEOA(ctx.msgSender()));`
 
 - A wrong argument count gives "`ctx.timestamp` takes 0 argument(s), but this call passes 1".
 - An unknown name gives "`ctx.origin` is not a context builtin".
@@ -237,11 +322,25 @@ Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a 
 
 ## 7. `crypto`
 
-| Call                                                       | Types                                                                 | Targets                                              | Behaviour and errors                                                                                                                                                                                                                                                                                                                                                                             | Example                                                                |
-| ---------------------------------------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| `crypto.keccak256(data)`                                   | `(bytes) → number`                                                    | **Both**                                             | The keccak-256 hash. A number argument gives "keccak256's argument requires a bytes value"; hash a word with `crypto.keccak256(x.toBytesBe(32n))`.                                                                                                                                                                                                                                               | `const topic = crypto.keccak256("Transfer(address,address,uint256)");` |
-| `crypto.ecdsaVerify(hash, signature, signer)`              | `(scalar, bytes, scalar) → bool`. `signature` is the 65-byte `r‖s‖v`. | **Both**                                             | True if `signer` signed `hash`. On EVM a contract signer is also checked (EIP-1271); on SVM only key signatures are checked. "ecdsaVerify's signature requires a bytes value"                                                                                                                                                                                                                    | `require(crypto.ecdsaVerify(digest, sig, owner));`                     |
-| `const [address, bump] = crypto.findPDA(programId, seeds)` | `programId`: number. `seeds`: `bytes[]`. Gives two numbers.           | **Both** (on EVM it derives the same Solana address) | Derives a Solana program address and its bump. **It must be destructured:** "`crypto.findPDA` produces two values — bind them by destructuring, as `const [address, bump] = crypto.findPDA(programId, seeds)`". `[a]` and `[, bump]` are fine. Seeds must be a `bytes[]` ("`crypto.findPDA`'s seeds argument must be a `bytes[]`, got …"). **At most 15 seeds;** more compile but fail when run. | ``const [vault, bump] = crypto.findPDA(PROGRAM, [hex`01`, "vault"]);`` |
+- `crypto.keccak256(data)`, **Both**
+  - Types: `(bytes) → number`
+  - The keccak-256 hash. A number argument gives "keccak256's argument requires a bytes value"; hash
+    a word with `crypto.keccak256(x.toBytesBe(32n))`.
+  - Example: `const topic = crypto.keccak256("Transfer(address,address,uint256)");`
+- `crypto.ecdsaVerify(hash, signature, signer)`, **Both**
+  - Types: `(scalar, bytes, scalar) → bool`. `signature` is the 65-byte `r‖s‖v`.
+  - True if `signer` signed `hash`. On EVM a contract signer is also checked (EIP-1271); on SVM only
+    key signatures are checked. "ecdsaVerify's signature requires a bytes value"
+  - Example: `require(crypto.ecdsaVerify(digest, sig, owner));`
+- `const [address, bump] = crypto.findPDA(programId, seeds)`, **Both** (on EVM it derives the same
+  Solana address)
+  - Types: `programId`: number. `seeds`: `bytes[]`. Gives two numbers.
+  - Derives a Solana program address and its bump. **It must be destructured:** "`crypto.findPDA`
+    produces two values — bind them by destructuring, as
+    `const [address, bump] = crypto.findPDA(programId, seeds)`". `[a]` and `[, bump]` are fine.
+    Seeds must be a `bytes[]` ("`crypto.findPDA`'s seeds argument must be a `bytes[]`, got …"). **At
+    most 15 seeds;** more compile but fail when run.
+  - Example: ``const [vault, bump] = crypto.findPDA(PROGRAM, [hex`01`, "vault"]);``
 
 An unknown name gives "`crypto.sha256` is not a crypto intrinsic".
 
@@ -254,17 +353,34 @@ These are SauceScript's integer functions, on **Both** targets. They are not Jav
 - Every result is a **number**, including the signed comparisons. `if (Math.sLt(a, b)) { … }` works, but
   returning one from a `: bool` function fails with "a return value: expected a bool, found a number".
 
-| Call                                                                     | Computes                                                  | Reverts when                                  | Example                                         |
-| ------------------------------------------------------------------------ | --------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------- |
-| `Math.sqrt(x)`                                                           | the integer square root                                   | never                                         | `const root = Math.sqrt(k);`                    |
-| `Math.mulDiv(x, y, d)`                                                   | ⌊x·y / d⌋, without intermediate overflow                  | `d` is 0, or the result does not fit 256 bits | `const fee = Math.mulDiv(amount, bps, 10000n);` |
-| `Math.addMod(a, b, n)`                                                   | (a + b) mod n                                             | `n` is 0                                      | `Math.addMod(a, b, P)`                          |
-| `Math.mulMod(a, b, n)`                                                   | (a · b) mod n                                             | `n` is 0                                      | `Math.mulMod(a, b, P)`                          |
-| `Math.sDiv(a, b)`                                                        | signed division                                           | `b` is 0                                      | `Math.sDiv(delta, 2n)`                          |
-| `Math.sMod(a, b)`                                                        | signed remainder                                          | `b` is 0                                      | `Math.sMod(delta, 3n)`                          |
-| `Math.sShr(value, bits)`                                                 | signed (arithmetic) right shift                           | never                                         | `Math.sShr(tick, 1n)`                           |
-| `Math.signExtend(value, byte)`                                           | sign-extends from byte `byte`, where 0 is the lowest byte | never                                         | `Math.signExtend(raw, 2n)` for an int24         |
-| `Math.sLt(a, b)`, `Math.sGt(a, b)`, `Math.sLte(a, b)`, `Math.sGte(a, b)` | signed comparisons, giving 1 or 0                         | never                                         | `if (Math.sLt(tick, 0n)) { … }`                 |
+- `Math.sqrt(x)`: the integer square root
+  - Reverts when: never
+  - Example: `const root = Math.sqrt(k);`
+- `Math.mulDiv(x, y, d)`: ⌊x·y / d⌋, without intermediate overflow
+  - Reverts when: `d` is 0, or the result does not fit 256 bits
+  - Example: `const fee = Math.mulDiv(amount, bps, 10000n);`
+- `Math.addMod(a, b, n)`: (a + b) mod n
+  - Reverts when: `n` is 0
+  - Example: `Math.addMod(a, b, P)`
+- `Math.mulMod(a, b, n)`: (a · b) mod n
+  - Reverts when: `n` is 0
+  - Example: `Math.mulMod(a, b, P)`
+- `Math.sDiv(a, b)`: signed division
+  - Reverts when: `b` is 0
+  - Example: `Math.sDiv(delta, 2n)`
+- `Math.sMod(a, b)`: signed remainder
+  - Reverts when: `b` is 0
+  - Example: `Math.sMod(delta, 3n)`
+- `Math.sShr(value, bits)`: signed (arithmetic) right shift
+  - Reverts when: never
+  - Example: `Math.sShr(tick, 1n)`
+- `Math.signExtend(value, byte)`: sign-extends from byte `byte`, where 0 is the lowest byte
+  - Reverts when: never
+  - Example: `Math.signExtend(raw, 2n)` for an int24
+- `Math.sLt(a, b)`, `Math.sGt(a, b)`, `Math.sLte(a, b)`, `Math.sGte(a, b)`: signed comparisons,
+  giving 1 or 0
+  - Reverts when: never
+  - Example: `if (Math.sLt(tick, 0n)) { … }`
 
 A wrong argument count gives "`Math.sqrt` takes 1 argument(s), but this call passes 2".
 
@@ -273,10 +389,24 @@ A wrong argument count gives "`Math.sqrt` takes 1 argument(s), but this call pas
 On SVM both give "`abi.encode` is not available on the svm target" (or `abi.decode`). Program arguments still
 work on SVM; they are decoded separately.
 
-| Call                             | Types                                                                                                            | Behaviour and errors                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Example                                                          |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `abi.encode(v1, …, vN)`          | 1 to 255 values of any type except accounts; returns bytes                                                       | Standard Solidity ABI encoding of the values as one argument list. A single record argument is encoded as its fields. "abi.encode requires at least one value to encode"; "abi.encode has 256 arguments, beyond the 255 …"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `return abi.encode(total, recipient);`                           |
-| `abi.decode(data, ["Shape", …])` | `data`: bytes. The shapes must be written in place as an array of strings. Returns a record with unnamed fields. | Read fields by position or by destructuring. Field types use SauceScript names: `"Uint256"`, `"Address"`, `"bool"`, `"bytes"`, `"string"`, `"number"`, `"bigint"`, `"boolean"`, any of them followed by `[]`, and records `"{Uint256, bool}"`. Solidity spellings are rejected: "`uint256` is not an abi.decode field type — …". Errors: "abi.decode takes exactly 2 arguments (data, shape), got N"; "abi.decode's first argument must be bytes"; shapes held in a variable give "abi.decode's second argument must be an array literal of shape strings, e.g. ["Uint256", "bytes[]"]"; `.name` on the result gives "this tuple's N field(s) are unnamed, so `.name` resolves against nothing — read a field by position instead (`t[0]`)". | `const [amount, to] = abi.decode(data, ["Uint256", "Address"]);` |
+- `abi.encode(v1, …, vN)`
+  - Types: 1 to 255 values of any type except accounts; returns bytes
+  - Standard Solidity ABI encoding of the values as one argument list. A single record argument is
+    encoded as its fields. "abi.encode requires at least one value to encode"; "abi.encode has 256
+    arguments, beyond the 255 …"
+  - Example: `return abi.encode(total, recipient);`
+- `abi.decode(data, ["Shape", …])`
+  - Types: `data`: bytes. The shapes must be written in place as an array of strings. Returns a
+    record with unnamed fields.
+  - Read fields by position or by destructuring. Field types use SauceScript names: `"Uint256"`,
+    `"Address"`, `"bool"`, `"bytes"`, `"string"`, `"number"`, `"bigint"`, `"boolean"`, any of them
+    followed by `[]`, and records `"{Uint256, bool}"`. Solidity spellings are rejected: "`uint256`
+    is not an abi.decode field type — …". Errors: "abi.decode takes exactly 2 arguments (data,
+    shape), got N"; "abi.decode's first argument must be bytes"; shapes held in a variable give
+    "abi.decode's second argument must be an array literal of shape strings, e.g. ["Uint256",
+    "bytes[]"]"; `.name` on the result gives "this tuple's N field(s) are unnamed, so `.name`
+    resolves against nothing — read a field by position instead (`t[0]`)".
+  - Example: `const [amount, to] = abi.decode(data, ["Uint256", "Address"]);`
 
 A `"bool"` field decodes as a bool, an `"Address"` field keeps only the address-sized low 20 bytes, and every
 other single-value field decodes as a number.
@@ -286,15 +416,30 @@ other single-value field decodes as a number.
 On SVM every function here gives "`evm.<name>` is not available on the svm target", with a pointer to the `svm`
 equivalent.
 
-| Call                             | Types                             | Behaviour and errors                                                                                                                                                                                                        | Example                                    |
-| -------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `evm.call(address, value, data)` | `(scalar, scalar, bytes) → bytes` | A call with native `value`; returns the raw return data. **This is the only way to send value with a call.** "`evm.call()` expects 3 argument(s), but this call passes 2"; "`evm.call()`'s calldata argument must be bytes" | ``evm.call(WETH, amount, hex`d0e30db0`);`` |
-| `evm.static(address, data)`      | `(scalar, bytes) → bytes`         | A read-only call (staticcall)                                                                                                                                                                                               | `const reply = evm.static(pool, query);`   |
-| `evm.delegate(address, data)`    | `(scalar, bytes) → bytes`         | A delegatecall                                                                                                                                                                                                              | `evm.delegate(library, data);`             |
-| `evm.sload(slot)`                | `(scalar) → number`               | Reads the executing contract's storage                                                                                                                                                                                      | `const count = evm.sload(0n);`             |
-| `evm.sstore(slot, value)`        | `(scalar, scalar)`, a statement   | Writes storage. Used as a value: "`evm.sstore` writes storage and produces no value — use it as a statement".                                                                                                               | `evm.sstore(0n, count + 1n);`              |
-| `evm.tload(key)`                 | `(scalar) → number`               | Reads transient storage (EIP-1153), which is cleared after the transaction                                                                                                                                                  | `const seen = evm.tload(KEY);`             |
-| `evm.tstore(key, value)`         | `(scalar, scalar)`, a statement   | Writes transient storage                                                                                                                                                                                                    | `evm.tstore(KEY, 1n);`                     |
+- `evm.call(address, value, data)`: `(scalar, scalar, bytes) → bytes`
+  - A call with native `value`; returns the raw return data. **This is the only way to send value
+    with a call.** "`evm.call()` expects 3 argument(s), but this call passes 2"; "`evm.call()`'s
+    calldata argument must be bytes"
+  - Example: ``evm.call(WETH, amount, hex`d0e30db0`);``
+- `evm.static(address, data)`: `(scalar, bytes) → bytes`
+  - A read-only call (staticcall)
+  - Example: `const reply = evm.static(pool, query);`
+- `evm.delegate(address, data)`: `(scalar, bytes) → bytes`
+  - A delegatecall
+  - Example: `evm.delegate(library, data);`
+- `evm.sload(slot)`: `(scalar) → number`
+  - Reads the executing contract's storage
+  - Example: `const count = evm.sload(0n);`
+- `evm.sstore(slot, value)`: `(scalar, scalar)`, a statement
+  - Writes storage. Used as a value: "`evm.sstore` writes storage and produces no value — use it as
+    a statement".
+  - Example: `evm.sstore(0n, count + 1n);`
+- `evm.tload(key)`: `(scalar) → number`
+  - Reads transient storage (EIP-1153), which is cleared after the transaction
+  - Example: `const seen = evm.tload(KEY);`
+- `evm.tstore(key, value)`: `(scalar, scalar)`, a statement
+  - Writes transient storage
+  - Example: `evm.tstore(KEY, 1n);`
 
 - Storage belongs to the executing contract, the Pot.
 - An unknown name gives "`evm.create` is not an evm builtin; `evm` is a reserved namespace root".
@@ -305,13 +450,34 @@ equivalent.
 On EVM every function here gives "`svm.<name>` is not available on the evm target", with a pointer to the
 `evm` equivalent.
 
-| Call                                   | Types                                   | Behaviour and errors                                                                                                                                                                                                                                                                                                                                                                                                                                            | Example                                                               |
-| -------------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `svm.sload(account, offset, length)`   | `(Account, scalar, scalar) → bytes`     | Reads `length` bytes of the account's data, starting at `offset`. Reading past the end fails the transaction, and that failure cannot be caught, so check `acct.dataLen` first. A number instead of an account gives "svm.sload's account: expected an account, found a value".                                                                                                                                                                                 | `const amount = svm.sload(tokenAccount, 64n, 8n).toLe();`             |
-| `svm.sstore(account, offset, data)`    | `(Account, scalar, bytes)`, a statement | Writes `data` into the account's data at `offset`. A `main` account parameter must be declared `Account<Writable, Signer>`: "`state` is not declared writable, so `svm.sstore` may not write it — declare it `Account<Writable>` (or `Account<Writable, Signer>`)", then "`state` is not declared a signer, so `svm.sstore` may not write it — … declare it `Account<Writable, Signer>`". The data must be bytes ("svm.sstore's value requires a bytes value"). | `svm.sstore(state, 0n, counter.toBytesLe(8n));`                       |
-| `svm.call(program, accounts, data)`    | `(Account, Account[], bytes) → bytes`   | Invokes another program with the listed accounts and returns the return data. The program is an account parameter too ("svm.call's program — declare the callee as an `Account` param: …"). The list must hold accounts, not numbers ("`svm.call`'s accounts argument must be an array of accounts, e.g. `[a, b]` of `Account` params"). `[]` is fine. **A failed call fails the whole transaction.**                                                           | `svm.call(tokenProgram, [source, destination, owner], instruction);`  |
-| `svm.remainingAccount(i)`              | `(number) → Account`                    | The `i`-th account attached after the ones `main` declares. **Only inside `main`.** "`svm.remainingAccount` takes one index, got N"                                                                                                                                                                                                                                                                                                                             | `const extra = svm.remainingAccount(0n);`                             |
-| `const rest = svm.remainingAccounts()` | `() → Account[]`                        | Every account attached after the declared ones. **Only as a `let`/`const` initializer, and only inside `main`:** "`svm.remainingAccounts()` can only initialize a `let`/`const` — … Bind it first (`const rest = svm.remainingAccounts();`), then use the binding".                                                                                                                                                                                             | `const rest = svm.remainingAccounts(); svm.call(router, rest, data);` |
+- `svm.sload(account, offset, length)`: `(Account, scalar, scalar) → bytes`
+  - Reads `length` bytes of the account's data, starting at `offset`. Reading past the end fails the
+    transaction, and that failure cannot be caught, so check `acct.dataLen` first. A number instead
+    of an account gives "svm.sload's account: expected an account, found a value".
+  - Example: `const amount = svm.sload(tokenAccount, 64n, 8n).toLe();`
+- `svm.sstore(account, offset, data)`: `(Account, scalar, bytes)`, a statement
+  - Writes `data` into the account's data at `offset`. A `main` account parameter must be declared
+    `Account<Writable, Signer>`: "`state` is not declared writable, so `svm.sstore` may not write it
+    — declare it `Account<Writable>` (or `Account<Writable, Signer>`)", then "`state` is not
+    declared a signer, so `svm.sstore` may not write it — … declare it `Account<Writable, Signer>`".
+    The data must be bytes ("svm.sstore's value requires a bytes value").
+  - Example: `svm.sstore(state, 0n, counter.toBytesLe(8n));`
+- `svm.call(program, accounts, data)`: `(Account, Account[], bytes) → bytes`
+  - Invokes another program with the listed accounts and returns the return data. The program is an
+    account parameter too ("svm.call's program — declare the callee as an `Account` param: …"). The
+    list must hold accounts, not numbers ("`svm.call`'s accounts argument must be an array of
+    accounts, e.g. `[a, b]` of `Account` params"). `[]` is fine. **A failed call fails the whole
+    transaction.**
+  - Example: `svm.call(tokenProgram, [source, destination, owner], instruction);`
+- `svm.remainingAccount(i)`: `(number) → Account`
+  - The `i`-th account attached after the ones `main` declares. **Only inside `main`.**
+    "`svm.remainingAccount` takes one index, got N"
+  - Example: `const extra = svm.remainingAccount(0n);`
+- `const rest = svm.remainingAccounts()`: `() → Account[]`
+  - Every account attached after the declared ones. **Only as a `let`/`const` initializer, and only
+    inside `main`:** "`svm.remainingAccounts()` can only initialize a `let`/`const` — … Bind it
+    first (`const rest = svm.remainingAccounts();`), then use the binding".
+  - Example: `const rest = svm.remainingAccounts(); svm.call(router, rest, data);`
 
 An unknown name gives "`svm.rent` is not an svm builtin; `svm` is a reserved namespace root".
 
@@ -319,26 +485,58 @@ An unknown name gives "`svm.rent` is not an svm builtin; `svm` is a reserved nam
 
 ### Methods (Both targets)
 
-| Method               | On                | Types                      | Behaviour and errors                                                                                                                                                                                                                                 | Example                                                 |
-| -------------------- | ----------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `.slice(start, end)` | bytes             | `(scalar, scalar) → bytes` | Covers bytes `start` up to, but not including, `end`. `end < start` reverts. Arrays have no `.slice`: "a bytes method's receiver requires a bytes value". "`.slice` takes exactly 2 arguments (start, end), got N"                                   | `const args = input.slice(4n, 68n);`                    |
-| `.concat(b1, b2, …)` | bytes             | `(...bytes) → bytes`       | Joins bytes values. "a `.concat` argument requires a bytes value"                                                                                                                                                                                    | `const call = selector.concat(abi.encode(to, amount));` |
-| `.toBe()`            | bytes, at most 32 | `() → number`              | Reads the bytes as a big-endian number. Longer input fails when run.                                                                                                                                                                                 | `const word = svm.sload(acct, 0n, 32n).toBe();`         |
-| `.toLe()`            | bytes, at most 32 | `() → number`              | Reads the bytes as a little-endian number (Solana's layout)                                                                                                                                                                                          | `const lamports = svm.sload(acct, 64n, 8n).toLe();`     |
-| `.toBytesBe(width)`  | a scalar          | `(scalar) → bytes`         | The low `width` bytes, big-endian, with `width` from 1 to 32. A constant outside that range gives "a `.toBytesBe`/`.toBytesLe` width must be between 1 and 32 bytes, got 33". A computed width above 32 reverts, and a computed 0 gives empty bytes. | `log(total.toBytesBe(32n));`                            |
-| `.toBytesLe(width)`  | a scalar          | `(scalar) → bytes`         | The same, little-endian                                                                                                                                                                                                                              | `const field = amount.toBytesLe(8n);`                   |
-| `.length`            | bytes or an array | number                     | The byte count or the element count. On a record, `.length` looks for a field named `length` ("`length` is not a field of this tuple — …"). It cannot be assigned.                                                                                   | `for (let i = 0n; i < amounts.length; i++) { … }`       |
+- `.slice(start, end)`, on bytes
+  - Types: `(scalar, scalar) → bytes`
+  - Covers bytes `start` up to, but not including, `end`. `end < start` reverts. Arrays have no
+    `.slice`: "a bytes method's receiver requires a bytes value". "`.slice` takes exactly 2
+    arguments (start, end), got N"
+  - Example: `const args = input.slice(4n, 68n);`
+- `.concat(b1, b2, …)`, on bytes
+  - Types: `(...bytes) → bytes`
+  - Joins bytes values. "a `.concat` argument requires a bytes value"
+  - Example: `const call = selector.concat(abi.encode(to, amount));`
+- `.toBe()`, on bytes, at most 32
+  - Types: `() → number`
+  - Reads the bytes as a big-endian number. Longer input fails when run.
+  - Example: `const word = svm.sload(acct, 0n, 32n).toBe();`
+- `.toLe()`, on bytes, at most 32
+  - Types: `() → number`
+  - Reads the bytes as a little-endian number (Solana's layout)
+  - Example: `const lamports = svm.sload(acct, 64n, 8n).toLe();`
+- `.toBytesBe(width)`, on a scalar
+  - Types: `(scalar) → bytes`
+  - The low `width` bytes, big-endian, with `width` from 1 to 32. A constant outside that range
+    gives "a `.toBytesBe`/`.toBytesLe` width must be between 1 and 32 bytes, got 33". A computed
+    width above 32 reverts, and a computed 0 gives empty bytes.
+  - Example: `log(total.toBytesBe(32n));`
+- `.toBytesLe(width)`, on a scalar
+  - Types: `(scalar) → bytes`
+  - The same, little-endian
+  - Example: `const field = amount.toBytesLe(8n);`
+- `.length`, on bytes or an array
+  - Types: number
+  - The byte count or the element count. On a record, `.length` looks for a field named `length`
+    ("`length` is not a field of this tuple — …"). It cannot be assigned.
+  - Example: `for (let i = 0n; i < amounts.length; i++) { … }`
 
 **Call methods on a variable, not on a literal.** ``hex`a9`.concat(d)`` and `"ab".concat(d)` are rejected
 ("calling anything other than a plain function name …"). Write ``const selector = hex`a9059cbb`; selector.concat(d)``.
 
 ### Account properties
 
-| Property       | Returns | SVM                               | EVM                                                                                                                                   | Example                                   |
-| -------------- | ------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `acct.address` | number  | the account's public key          | the address itself                                                                                                                    | `require(acct.address == EXPECTED_MINT);` |
-| `acct.owner`   | number  | the program that owns the account | not available: "`account.owner` is not available on the evm target; an address on the EVM is the code — check it with ctx.isContract" | `require(acct.owner == TOKEN_PROGRAM);`   |
-| `acct.dataLen` | number  | the account's data size, in bytes | not available                                                                                                                         | `require(acct.dataLen == 165n);`          |
+- `acct.address` → number
+  - On SVM: the account's public key
+  - On EVM: the address itself
+  - Example: `require(acct.address == EXPECTED_MINT);`
+- `acct.owner` → number
+  - On SVM: the program that owns the account
+  - On EVM: not available: "`account.owner` is not available on the evm target; an address on the
+    EVM is the code — check it with ctx.isContract"
+  - Example: `require(acct.owner == TOKEN_PROGRAM);`
+- `acct.dataLen` → number
+  - On SVM: the account's data size, in bytes
+  - On EVM: not available
+  - Example: `require(acct.dataLen == 165n);`
 
 - These properties are read-only: "`.owner` is read-only — …".
 - On SVM, compare accounts with `a == b` or `a != b`; ordering comparisons are rejected.
@@ -350,12 +548,15 @@ An unknown name gives "`svm.rent` is not an svm builtin; `svm` is a reserved nam
 **Bind an ABI** with `import ERC20 from "./erc20.abi.json"`, or with the compile option
 `inlineContracts: [["ERC20", abiJson]]`. Then call through it:
 
-| Form                                          | Kind of call                                                                       | Example                                                  |
-| --------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `ERC20.at(address).method(args)`              | read-only for `view` and `pure` methods; otherwise a regular call sending no value | `const balance = ERC20.at(token).balanceOf(ctx.self());` |
-| `ERC20.view(address).method(args)`            | always read-only                                                                   | `const supply = ERC20.view(token).totalSupply();`        |
-| `ERC20.lib(address).method(args)`             | always a delegatecall                                                              | `Library.lib(lib).run(x);`                               |
-| `const t = ERC20.at(address); t.method(args)` | the same, through a variable                                                       | `const t = ERC20.at(token); t.approve(router, amount);`  |
+- `ERC20.at(address).method(args)`: read-only for `view` and `pure` methods; otherwise a regular
+  call sending no value
+  - Example: `const balance = ERC20.at(token).balanceOf(ctx.self());`
+- `ERC20.view(address).method(args)`: always read-only
+  - Example: `const supply = ERC20.view(token).totalSupply();`
+- `ERC20.lib(address).method(args)`: always a delegatecall
+  - Example: `Library.lib(lib).run(x);`
+- `const t = ERC20.at(address); t.method(args)`: the same, through a variable
+  - Example: `const t = ERC20.at(token); t.approve(router, amount);`
 
 - **Results.**
   - A method with no outputs returns its raw return bytes.
@@ -380,10 +581,14 @@ from "@sauce/token"`), which handles tokens that return nothing, such as USDT. A
 
 ### `.catch()`: surviving a failed external call (EVM)
 
-| Form                                                    | Behaviour                                                                                                                                                                                                                | Example                                                                    |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| `<call>.catch(() => { … });`                            | If the call fails, its effects are undone and the block runs instead. The block may use and assign the enclosing function's variables. Works on bound contract calls and on `evm.call`, `evm.static` and `evm.delegate`. | `ERC20.at(t).approve(spender, amount).catch(() => { approved = false; });` |
-| `const v = <call>.catch(() => { return <constant>; });` | If the call fails, `v` is the constant. The call must return one value.                                                                                                                                                  | `const balance = ERC20.at(t).balanceOf(who).catch(() => { return 0n; });`  |
+- `<call>.catch(() => { … });`
+  - If the call fails, its effects are undone and the block runs instead. The block may use and
+    assign the enclosing function's variables. Works on bound contract calls and on `evm.call`,
+    `evm.static` and `evm.delegate`.
+  - Example: `ERC20.at(t).approve(spender, amount).catch(() => { approved = false; });`
+- `const v = <call>.catch(() => { return <constant>; });`
+  - If the call fails, `v` is the constant. The call must return one value.
+  - Example: `const balance = ERC20.at(t).balanceOf(who).catch(() => { return 0n; });`
 
 Rules and errors:
 

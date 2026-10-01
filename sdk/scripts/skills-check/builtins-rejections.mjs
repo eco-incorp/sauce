@@ -69,6 +69,12 @@ export const rejections = [
     targets: ["evm", "svm"],
     src: "function main(flag: bool): Uint256 { return flag + 1n; }",
   },
+  // A bool passed to a parameter with no annotation, which is therefore a number.
+  {
+    quotes: ["a function argument: expected a number, found a bool"],
+    targets: ["evm", "svm"],
+    src: "function pick(a: Uint256, b: Uint256, first) { if (first) { return a; } return b; } function main(a: Uint256, b: Uint256): Uint256 { return pick(a, b, a > b); }",
+  },
   {
     quotes: [
       "`<what>`: expected an account, found a value",
