@@ -393,6 +393,28 @@ try {
       `and builds its Pot and cook transactions`,
   );
 
+  // `sauce actions` loads the actions package from beside the SDK's build, by a path relative to
+  // the bin: only the installed tarball proves the two land where it looks. The sauce-actions
+  // skill's document names no chain and no address, so it lowers for two chains to one source.
+  const document = join(installedRoot, "skills/sauce-actions/examples/swap-by-key.json");
+  const lowered = ["ethereum", "base"].map((slug) =>
+    JSON.parse(sauce("actions", document, "--chain", slug, "--json")),
+  );
+  assert.equal(lowered[0].source, lowered[1].source, "one source for every chain");
+  assert.notEqual(lowered[0].bytecode, lowered[1].bytecode, "each chain's own addresses");
+  assert.match(lowered[0].source, /UniswapV3\.Factory\.getPool\(USDC, WETH, 500n\)/);
+  const actionsTx = JSON.parse(
+    sauce("tx", document, ...chain, "--owner", owner, "--value", "0", "--args", "1000000"),
+  );
+  assert.ok(
+    actionsTx.data.includes(lowered[0].bytecode.slice(2)),
+    "sauce tx cooks an actions document as it cooks a program",
+  );
+  console.log(
+    "Clean package install: sauce actions lowers the shipped document for two chains, and sauce tx " +
+      "cooks it",
+  );
+
   const project = join(work, "scaffolded");
   sauce("init", project);
   const scaffoldedManifest = JSON.parse(readFileSync(join(project, "package.json"), "utf8"));

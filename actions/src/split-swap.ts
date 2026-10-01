@@ -32,14 +32,19 @@ import {
   type Expr,
   type Stmt,
 } from "./emit.js";
+import {
+  resolveChain,
+  type CanonicalChain,
+  type ChainRef,
+} from "../../sdk/dist/chains/canonical.js";
 import { contractsFor, type BindingName } from "./abis.js";
 import { compiled, type CompiledProgram } from "./compose.js";
+import { resolveNames, usesNames } from "./names.js";
 import { parseActions } from "./program.js";
+import { ProgramError, type ProgramIssue } from "./semantics.js";
 import { lowerAction, routerImport, type ActionResult, type RouterFunction } from "./to-sauce.js";
 import { quoteCall, type QuoteOptions } from "./to-quote.js";
-import type { ApproveAction, SwapAction } from "./types.js";
-
-type Address = `0x${string}`;
+import type { Action, ApproveAction, Recipient, SwapAction, Token } from "./types.js";
 
 /** A swap of `amount` split greedily, `buckets` slices at a time, across `candidates`. */
 export interface SplitSwap {
@@ -61,16 +66,22 @@ export interface SplitSwap {
   /** Approvals to run first, each with an explicit `amount`. */
   readonly approvals?: readonly ApproveAction[];
   /** Sends the total output of `token` to `recipient` at the end; omit to keep it in the Pot. */
-  readonly sweep?: { readonly token: Address; readonly recipient: Address };
+  readonly sweep?: { readonly token: Token; readonly recipient: Recipient };
   /** The quoter contracts the candidates price through. */
   readonly quoters?: QuoteOptions;
+  /**
+   * The chain the split runs on, which its token symbols and namespace references resolve on —
+   * needed when any candidate, approval or the sweep names one. Each name becomes its address
+   * there, because the quotes are calldata built here.
+   */
+  readonly chain?: ChainRef;
 }
 
 const UINT_RE = /^(0|[1-9][0-9]*)$/;
 
 /** Compiles a split swap into one program. It takes no runtime arguments. */
 export function compileSplitSwap(swap: SplitSwap): CompiledProgram {
-  const candidates = parseActions(swap.candidates, "candidates") as SwapAction[];
+  let candidates = parseActions(swap.candidates, "candidates") as SwapAction[];
   candidates.forEach((candidate, i) => {
     for (const key of ["amount", "amountRef", "saveOutputAs"] as const) {
       if ((candidate as unknown as Record<string, unknown>)[key] !== undefined) {
@@ -80,7 +91,7 @@ export function compileSplitSwap(swap: SplitSwap): CompiledProgram {
       }
     }
   });
-  const approvals = parseActions(swap.approvals ?? [], "approvals") as ApproveAction[];
+  let approvals = parseActions(swap.approvals ?? [], "approvals") as ApproveAction[];
   approvals.forEach((approval, i) => {
     if (approval.type !== "approve" || approval.amount === undefined) {
       throw new Error(
@@ -89,6 +100,37 @@ export function compileSplitSwap(swap: SplitSwap): CompiledProgram {
     }
   });
   if (candidates.length === 0) throw new Error("a split swap needs at least one candidate");
+  candidates.forEach((candidate, i) => {
+    if ((candidate as { factory?: string }).factory !== undefined) {
+      throw new Error(
+        `candidates[${i}].factory: a split quotes each candidate at its pool's address, and a pool ` +
+          "named by its key is found only while the program runs — give `pool`",
+      );
+    }
+  });
+  let sweep = swap.sweep;
+  const chain = swap.chain === undefined ? undefined : splitChain(swap.chain);
+  const sweepAction: Action[] =
+    sweep === undefined ? [] : [{ type: "transfer", amount: "0", ...sweep }];
+  if (usesNames([...candidates, ...approvals, ...sweepAction])) {
+    if (chain === undefined) {
+      throw new Error(
+        "a split swap that names a token or a contract needs `chain`, the chain to resolve it on",
+      );
+    }
+    const issues: ProgramIssue[] = [];
+    const named = (actions: readonly Action[], path: string): Action[] => {
+      const result = resolveNames(actions, chain, path);
+      issues.push(...result.issues);
+
+      return result.resolved;
+    };
+    candidates = named(candidates, "candidates") as SwapAction[];
+    approvals = named(approvals, "approvals") as ApproveAction[];
+    const [resolvedSweep] = named(sweepAction, "sweep") as { token: Token }[];
+    if (sweep !== undefined) sweep = { ...sweep, token: resolvedSweep!.token };
+    if (issues.length > 0) throw new ProgramError(issues, chain);
+  }
   const n = swap.buckets;
   if (!Number.isSafeInteger(n) || n < 1) {
     throw new Error(`buckets must be a positive integer, got ${n}`);
@@ -145,17 +187,27 @@ export function compileSplitSwap(swap: SplitSwap): CompiledProgram {
   const swapAny = fn("swap_any", ["idx: Uint256", "amount: Uint256"], "Uint256", [
     ...outOfRangeGuard(N),
     ...blockDispatch(N, (i) => {
-      const built = use(lowerAction(emit, candidates[i]!, "amount", true));
+      const built = use(lowerAction(emit, candidates[i]!, "amount", true, `candidates[${i}]`));
 
       return [...built.stmts, `return ${built.output};`];
     }),
   ]);
 
-  const main = mainFn(emit, N, n, bucket, swap, approvals, use);
+  const main = mainFn(emit, N, n, bucket, { ...swap, sweep }, approvals, use);
   const source =
     routerImport([...router].sort()) + [...quoteFns, quoteAny, swapAny, main].join("\n\n") + "\n";
 
-  return compiled(source, contractsFor(bindings), []);
+  return compiled(source, contractsFor(bindings), [], {}, chain);
+}
+
+/** The split's chain, an EVM one the SDK knows. */
+function splitChain(ref: ChainRef): CanonicalChain {
+  const chain = resolveChain(ref);
+  if (chain === undefined || chain.kind !== "evm") {
+    throw new Error(`a split swap runs on an EVM chain the SDK knows; got ${String(ref)}`);
+  }
+
+  return chain;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -51,6 +51,7 @@ import {
   type BindingName,
   type MethodName,
 } from "./abis.js";
+import { CONTRACT_NAME_RE, isName, NATIVE } from "./names.js";
 import { safeApproveStatements, safeTransferStatements, type WordArg } from "./registry.js";
 import { consumesPrevious } from "./semantics.js";
 import { ACTION_SPECS } from "./spec.js";
@@ -119,8 +120,17 @@ function word(value: string | number | bigint): Expr {
   return `${BigInt(value).toString()}n`;
 }
 
-/** An address as a hex literal, so the emitted source reads like the addresses it was built from. */
+/**
+ * A token or contract field as the program reads it: a name is the program global of that name
+ * (`USDC`, `UniswapV3.Factory`), which the compile resolves on its chain; `"native"` is the zero
+ * address the venue keys the native currency as; an address is a hex literal, so the emitted source
+ * reads like the addresses it was built from. A name is emitted as written: `program.ts` admits
+ * only an identifier or `Identifier.Identifier`.
+ */
 function addr(value: string | bigint): Expr {
+  if (typeof value === "string" && isName(value)) return value;
+  if (value === NATIVE) return "0n";
+
   return `0x${BigInt(value).toString(16).padStart(40, "0")}n`;
 }
 
@@ -190,7 +200,11 @@ class Lowering {
   private readonly used = new Set<BindingName>();
   private readonly library = new Set<RouterFunction>();
 
-  constructor(readonly emit: Emitter) {}
+  /** `where` names the action in a revert message: `actions[2]`. */
+  constructor(
+    readonly emit: Emitter,
+    readonly where: string,
+  ) {}
 
   /** `IBinding.at(target).method(args)` — the expression, not yet a statement. */
   call<B extends BindingName>(binding: B, target: Expr, method: MethodName<B>, args: Expr[]): Expr {
@@ -267,6 +281,17 @@ class Lowering {
     return this.bind("bal", this.call("IErc20", token, "balanceOf", [SELF]));
   }
 
+  /**
+   * The Pot's balance of an asset a venue may pay in the native currency — `"native"` or the zero
+   * address, which Ambient and the Balancer V2 Vault key it as: its native balance, not an ERC-20
+   * read of the zero address, which has no code to answer.
+   */
+  assetBalance(asset: string): Expr {
+    const native = asset === NATIVE || (/^0x/i.test(asset) && BigInt(asset) === 0n);
+
+    return native ? this.nativeBalance() : this.selfBalance(addr(asset));
+  }
+
   /** The Pot's native balance, as a bound local. */
   nativeBalance(): Expr {
     return this.bind("nat", "ctx.selfBalance()");
@@ -282,6 +307,31 @@ class Lowering {
   result(output: Expr): ActionResult {
     return { stmts: this.stmts, output, bindings: [...this.used], router: [...this.library] };
   }
+}
+
+/**
+ * A pool given by its key, read from its factory while the program runs: by namespace when the
+ * factory is named (`UniswapV3.Factory.getPool(...)`, the registry's own ABI for it), through
+ * `binding` when it is an address. `field` picks the pool out of a struct the lookup returns. No
+ * pool under that key on this chain reads as the zero address, which reverts the program before
+ * anything moves.
+ */
+function keyedPool<B extends BindingName>(
+  l: Lowering,
+  factory: string,
+  binding: B,
+  method: MethodName<B>,
+  args: Expr[],
+  field?: string,
+): Expr {
+  const lookup = CONTRACT_NAME_RE.test(factory)
+    ? `${factory}.${method}(${args.join(", ")})`
+    : l.call(binding, addr(factory), method, args);
+  let pool = l.bind("pool", lookup);
+  if (field !== undefined) pool = l.bind("pool", `${pool}.${field}`);
+  l.stmts.push(`require(${pool} != 0n, "${l.where}: no pool under that key");`);
+
+  return pool;
 }
 
 /** A call whose declared output is the action's output when `needsOutput`. */
@@ -354,7 +404,13 @@ export function lowerActions(actions: readonly Action[]): Lowered {
     const needsOutput =
       action.saveOutputAs !== undefined || (next !== undefined && consumesPrevious(next));
 
-    const result = lowerAction(emit, action, amountOf(action, previous), needsOutput);
+    const result = lowerAction(
+      emit,
+      action,
+      amountOf(action, previous),
+      needsOutput,
+      `actions[${i}]`,
+    );
     body.push(...result.stmts);
     for (const b of result.bindings) bindings.add(b);
     for (const f of result.router) router.add(f);
@@ -419,8 +475,9 @@ export function lowerAction(
   action: Action,
   amount: Expr,
   needsOutput: boolean,
+  where = "action",
 ): ActionResult {
-  const l = new Lowering(emit);
+  const l = new Lowering(emit, where);
   switch (action.type) {
     case "uniswapV2Swap":
       return uniswapV2Swap(l, action, amount, needsOutput);
@@ -531,8 +588,15 @@ function uniswapV2Swap(
   amountIn: Expr,
   needsOutput: boolean,
 ): ActionResult {
+  const pair =
+    action.pool !== undefined
+      ? addr(action.pool)
+      : keyedPool(l, action.factory, "IUniswapV2Factory", "getPair", [
+          addr(action.tokenIn),
+          addr(action.tokenOut),
+        ]);
   const call = l.router("uniswapV2", [
-    addr(action.pool),
+    pair,
     addr(action.tokenIn),
     addr(action.tokenOut),
     amountIn,
@@ -550,8 +614,21 @@ function uniswapV3Swap(
   amountIn: Expr,
   needsOutput: boolean,
 ): ActionResult {
+  const tokens = [addr(action.tokenIn), addr(action.tokenOut)];
+  const pool =
+    action.pool !== undefined
+      ? addr(action.pool)
+      : action.fee !== undefined
+        ? keyedPool(l, action.factory, "IUniswapV3Factory", "getPool", [
+            ...tokens,
+            word(action.fee),
+          ])
+        : keyedPool(l, action.factory, "ISlipstreamFactory", "getPool", [
+            ...tokens,
+            word(action.tickSpacing),
+          ]);
   const call = l.router("uniswapV3", [
-    addr(action.pool),
+    pool,
     addr(action.tokenIn),
     addr(action.tokenOut),
     amountIn,
@@ -576,7 +653,7 @@ function uniswapV4Swap(
     amountIn,
     word(action.fee),
     word(action.tickSpacing),
-    addr(action.hooks),
+    action.hooks === undefined ? ZERO : addr(action.hooks),
     word(action.sqrtPriceLimitX96 ?? "0"),
     word(action.amountOutMin),
     swapRecipient(action, needsOutput),
@@ -651,13 +728,32 @@ function traderJoeLBSwap(
   amountIn: Expr,
   needsOutput: boolean,
 ): ActionResult {
+  const pair =
+    action.pool !== undefined
+      ? addr(action.pool)
+      : keyedPool(
+          l,
+          action.factory,
+          "ILBFactory",
+          "getLBPairInformation",
+          [addr(action.tokenIn), addr(action.tokenOut), word(action.binStep)],
+          "LBPair",
+        );
+  // The pair's own tokens, read from it when the action leaves them out.
+  const [tokenX, tokenY] =
+    action.tokenX !== undefined
+      ? [addr(action.tokenX), addr(action.tokenY)]
+      : [
+          l.bind("tokenX", l.call("ILBPair", pair, "getTokenX", [])),
+          l.bind("tokenY", l.call("ILBPair", pair, "getTokenY", [])),
+        ];
   const call = l.router("traderJoeLB", [
-    addr(action.pool),
+    pair,
     addr(action.tokenIn),
     addr(action.tokenOut),
     amountIn,
-    addr(action.tokenX),
-    addr(action.tokenY),
+    tokenX,
+    tokenY,
     word(action.amountOutMin),
     swapRecipient(action, needsOutput),
   ]);
@@ -745,7 +841,7 @@ function balancerV2BatchSwap(
   return balanceDelta(
     l,
     needsOutput,
-    () => l.selfBalance(addr(assetOut)),
+    () => l.assetBalance(assetOut),
     () =>
       l.exec("IBalancerV2Vault", addr(action.vault), "batchSwap", [
         ZERO, // GIVEN_IN
@@ -817,12 +913,12 @@ function ambientSwap(
   // inBaseQty, qty, tip, limitPrice, minOut, reserveFlags). It returns `bytes`, and settles to
   // msg.sender, so the output is the delta on the received side: the quote token when buying
   // (paying base), the base token otherwise.
-  const tokenOut = addr(action.isBuy ? action.quote : action.base);
+  const received = action.isBuy ? action.quote : action.base;
 
   return balanceDelta(
     l,
     needsOutput,
-    () => l.selfBalance(tokenOut),
+    () => l.assetBalance(received),
     () => {
       const cmd = l.bind(
         "cmd",
