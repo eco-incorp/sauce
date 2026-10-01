@@ -188,8 +188,9 @@ function exampleRows(text: string): ExampleRow[] {
     const example = header.indexOf("Example");
     if (example < 0) continue;
     const claim = header.includes("Targets") ? row[header.indexOf("Targets")]! : heading;
-    const targets: Target[] =
-      /\bEVM\b/.test(claim) && !/\bSVM\b/.test(claim)
+    const targets: Target[] = /\bBoth\b/.test(claim)
+      ? ["evm", "svm"]
+      : /\bEVM\b/.test(claim) && !/\bSVM\b/.test(claim)
         ? ["evm"]
         : /\bSVM\b/.test(claim) && !/\bEVM\b/.test(claim)
           ? ["svm"]
