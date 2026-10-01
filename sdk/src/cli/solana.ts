@@ -41,8 +41,8 @@ import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/t
 import type { AccountManifest } from "sauce-compiler";
 import { bytesToHex, formatUnits, hexToBytes, type Hex } from "viem";
 
-import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
+import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
 import {
   mainReturnType,
   parseEntryType,
@@ -572,6 +572,55 @@ const saltBytes = (salt: Hex): Uint8Array => hexToBytes(salt);
 
 const potOf = async (target: SvmTarget): Promise<Address> =>
   (await derivePotPda(kitchen(), target.owner, saltBytes(target.salt))).address;
+
+/** Whether the Kitchen has created `target`'s Pot on the cluster `rpcUrl` serves. */
+export async function svmPotExists(target: SvmTarget, rpcUrl: string): Promise<boolean> {
+  return exists(createSolanaRpc(rpcUrl), rpcUrl, await potOf(target), "the Pot");
+}
+
+/** The Pot's associated token account for one registered mint, and what it holds. */
+export interface SvmPotTokenAccount {
+  readonly symbol: string;
+  readonly mint: string;
+  readonly decimals: number;
+  /** The associated token account of the Pot for the mint (classic SPL Token). */
+  readonly account: Address;
+  readonly exists: boolean;
+  /** Base units, as a decimal string; `null` while the account does not exist. */
+  readonly balance: string | null;
+}
+
+/**
+ * The Pot's associated token account for every mint the chain's cluster registers — each one a
+ * classic SPL Token mint (the registry's own gate) — whether it exists, and its balance.
+ */
+export async function svmPotTokenAccounts(
+  target: SvmTarget,
+  rpcUrl: string,
+  chain: CanonicalChain,
+): Promise<readonly SvmPotTokenAccount[]> {
+  const pot = await potOf(target);
+  const rpc = createSolanaRpc(rpcUrl);
+
+  return Promise.all(
+    svmTokenRows(chain).map(async (row) => {
+      const [account] = await findAssociatedTokenPda({
+        owner: pot,
+        mint: address(row.mint),
+        tokenProgram: TOKEN_PROGRAM_ADDRESS,
+      });
+      const base = { symbol: row.symbol, mint: row.mint, decimals: row.decimals, account };
+      if (!(await exists(rpc, rpcUrl, account, `the Pot's ${row.symbol} account`))) {
+        return { ...base, exists: false, balance: null };
+      }
+      const { value } = await ask(rpcUrl, `the Pot's ${row.symbol} balance`, () =>
+        rpc.getTokenAccountBalance(account).send(),
+      );
+
+      return { ...base, exists: true, balance: value.amount };
+    }),
+  );
+}
 
 /** Names for the accounts a cook writes: the owner, the Pot, the Kitchen's fee config (where its
  *  fee goes), and each `--account` by its name (a token account named `pot:USDC` as what it is). */
@@ -1550,53 +1599,6 @@ async function deployment(
         : []),
     ],
   };
-}
-
-/** The Pot's associated token account for one registered mint, and what it holds. */
-export interface SvmPotTokenAccount {
-  readonly symbol: string;
-  readonly mint: string;
-  readonly decimals: number;
-  /** The associated token account of the Pot for the mint (classic SPL Token). */
-  readonly account: Address;
-  readonly exists: boolean;
-  /** Base units, as a decimal string; `null` while the account does not exist. */
-  readonly balance: string | null;
-}
-
-/**
- * The Pot's associated token account for every mint the chain's cluster registers — each one a
- * classic SPL Token mint (the registry's own gate) — whether it exists, and its balance: the
- * account `--account NAME=pot:<symbol>` passes.
- */
-export async function svmPotTokenAccounts(
-  target: SvmTarget,
-  rpcUrl: string,
-  chain: CanonicalChain,
-): Promise<readonly SvmPotTokenAccount[]> {
-  const pot = await potOf(target);
-  const rpc = createSolanaRpc(rpcUrl);
-
-  return Promise.all(
-    svmTokenRows(chain).map(async (row) => {
-      const [account] = await findAssociatedTokenPda({
-        owner: pot,
-        mint: address(row.mint),
-        tokenProgram: TOKEN_PROGRAM_ADDRESS,
-      });
-      const base = { symbol: row.symbol, mint: row.mint, decimals: row.decimals, account };
-      const { value } = await ask(rpcUrl, `the Pot's ${row.symbol} account`, () =>
-        rpc.getAccountInfo(account, { encoding: "base64" }).send(),
-      );
-      if (value === null) return { ...base, exists: false, balance: null };
-      // An SPL token account's amount: a u64, little-endian, at byte 64.
-      const data = new Uint8Array(getBase64Encoder().encode(value.data[0]));
-      const balance =
-        data.length >= 72 ? new DataView(data.buffer, data.byteOffset).getBigUint64(64, true) : 0n;
-
-      return { ...base, exists: true, balance: balance.toString() };
-    }),
-  );
 }
 
 /** `sauce pot --chain solana` with an endpoint: the prediction, and what the cluster has. */

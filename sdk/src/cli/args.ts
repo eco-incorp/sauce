@@ -370,13 +370,23 @@ export function parseDefinesFile(
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new UsageError(`--defines ${file}: expected one JSON object of NAME to value`);
   }
+
+  return parseDefineMap(parsed as Record<string, unknown>, `--defines ${file}`, target);
+}
+
+/**
+ * Defines given as one object of NAME to value, each value as `--defines` takes it: a string in
+ * `--define`'s syntax, a non-negative safe-integer number, or a boolean — and on a Solana program
+ * (`target` svm) a base58 public key. `where` names where they were given, for the errors.
+ */
+export function parseDefineMap(
+  entries: Readonly<Record<string, unknown>>,
+  where: string,
+  target: Target = "evm",
+): Record<string, DefineValue> {
   const defines: Record<string, DefineValue> = {};
-  for (const [name, raw] of Object.entries(parsed)) {
-    defines[defineName(name, `--defines ${file}`)] = defineValue(
-      raw,
-      `--defines ${file}: ${name}`,
-      target === "svm",
-    );
+  for (const [name, raw] of Object.entries(entries)) {
+    defines[defineName(name, where)] = defineValue(raw, `${where}: ${name}`, target === "svm");
   }
 
   return defines;

@@ -360,10 +360,6 @@ const UNDECLARED_NAMES = {
     CallToEOA:
       "the eco-routes Executor's error for a call to an address with no code; the registry declares the Portal's errors, not the Executor's",
   },
-  "sauce-actions": {
-    sauce_actions:
-      "the MCP server's tool that lowers an actions document; a tool name, not a package export",
-  },
   "sauce-distributed-swap": {
     globalState:
       "an Algebra pool's price read, `globalState()`; the registry has no Algebra pool ABI",
@@ -1111,6 +1107,8 @@ const COMPILER_DIR = packageRoot(
 for (const file of [
   ...walk(join(SDK_DIR, "sdk", "dist"), (p) => p.endsWith(".d.ts")),
   ...walk(join(SDK_DIR, "actions", "dist"), (p) => p.endsWith(".d.ts")),
+  // The MCP server's tool and input names, which a skill may name as `sauce mcp` serves them.
+  ...walk(join(SDK_DIR, "mcp", "dist"), (p) => p.endsWith(".js")),
   ...walk(join(SDK_DIR, "sdk", "dist", "std"), (p) => p.endsWith(".js")),
   ...walk(join(SDK_DIR, "sdk", "dist", "artifacts"), (p) => p.endsWith(".json")),
   ...walk(join(SDK_DIR, "sdk", "dist", "protocols"), (p) => /\.(json|js)$/.test(p)),

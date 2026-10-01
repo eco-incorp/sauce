@@ -4,35 +4,23 @@
  * (`cli-anvil.ts`) and the real eco-routes Portal (`evm/fixtures/Portal.json`, its own forge
  * creation code) at the address the SDK records for Base, so the CLI runs with no override.
  *
- * THE PORTAL IS PUT IN PLACE, NOT DEPLOYED THERE. A Portal's address is its deployer's, and its
- * Executor is the Portal's own second CREATE (`ECO_ROUTES_EXECUTOR_NONCE`), with each holding the
- * other's address as an immutable: the Portal's `executor`, the Executor's `portal` (its
- * `onlyPortal` check). So the suite deploys the fixture wherever it lands, then copies both
- * runtimes to the registry's Portal and the Executor derived from it, with exactly those two
- * immutables rewritten to the new addresses. The Portal's other immutables are untouched: its
- * chain id (8453, anvil's), its vault implementation, and its EIP-712 cache, which recomputes the
- * domain for an address that is not the cached one. `executor()` read back through the copy is the
- * Executor the SDK derives, and every fulfill below runs the copy's real `_fulfill`: the hash
- * check, the token pulls, `Executor.execute` and its `onlyPortal`.
+ * THE PORTAL IS PUT IN PLACE, NOT DEPLOYED THERE (`cli-anvil.ts#placePortal`, which says why):
+ * the fixture is deployed wherever it lands, then both runtimes are copied to the registry's
+ * Portal and the Executor derived from it, with exactly the two immutables that name each other
+ * rewritten. Its chain id (8453, anvil's), its vault implementation and its EIP-712 cache are
+ * untouched. `executor()` read back through the copy is the Executor the SDK derives, and every
+ * fulfill below runs the copy's real `_fulfill`: the hash check, the token pulls,
+ * `Executor.execute` and its `onlyPortal`.
  *
  * Nothing is ever sent: after every rehearsal the shared Pot is not deployed, the solver holds
  * nothing and the block has not moved.
  *
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite (CLAUDE.md).
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import {
-  encodeAbiParameters,
-  getAddress,
-  pad,
-  parseAbi,
-  zeroAddress,
-  type Address,
-  type Hex,
-} from "viem";
+import { join } from "node:path";
+import { getAddress, pad, parseAbi, type Address, type Hex } from "viem";
 
 import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { DEFAULT_SOLVER } from "../src/cli/fill.js";
@@ -42,6 +30,7 @@ import {
   FEE,
   fixture,
   jsonOf,
+  placePortal,
   registered,
   sauce,
   startChain,
@@ -49,10 +38,6 @@ import {
   type LocalChain,
 } from "./cli-anvil.js";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const PORTAL_CREATION = (
-  JSON.parse(readFileSync(join(HERE, "evm/fixtures/Portal.json"), "utf8")) as { creationCode: Hex }
-).creationCode;
 const PORTAL = parseAbi(["function executor() view returns (address)"]);
 
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
@@ -97,16 +82,6 @@ const MEASURED = [
   "",
 ].join("\n");
 
-/** `code` with every copy of the 20-byte immutable `from` replaced by `to`: a runtime holds one
- *  per place it reads the immutable. */
-function rewrite(code: Hex, from: Address, to: Address): Hex {
-  const needle = from.slice(2).toLowerCase();
-  const parts = code.toLowerCase().split(needle);
-  if (parts.length < 2) throw new Error(`the runtime holds no copy of ${from}`);
-
-  return parts.join(to.slice(2).toLowerCase()) as Hex;
-}
-
 describeEvm("sauce fill: a solver's fill, rehearsed on the destination", () => {
   let base: LocalChain;
   let work: string;
@@ -150,24 +125,8 @@ describeEvm("sauce fill: a solver's fill, rehearsed on the destination", () => {
     base = await startChain("base", 9300 + WORKER);
     usdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
     // The real Portal, deployed wherever it lands, then moved to the registry's address.
-    const deployed = await base.plant(
-      `${PORTAL_CREATION}${encodeAbiParameters([{ type: "address" }], [zeroAddress]).slice(2)}` as Hex,
-    );
-    const itsExecutor = await base.publicClient.readContract({
-      address: deployed,
-      abi: PORTAL,
-      functionName: "executor",
-    });
-    const portalCode = await base.publicClient.getCode({ address: deployed });
-    const executorCode = await base.publicClient.getCode({ address: itsExecutor });
-    await base.testClient.setCode({
-      address: portal,
-      bytecode: rewrite(portalCode!, itsExecutor, executor),
-    });
-    await base.testClient.setCode({
-      address: executor,
-      bytecode: rewrite(executorCode!, deployed, portal),
-    });
+    const placed = await placePortal(base);
+    expect(placed).toEqual({ portal, executor });
     expect(
       await base.publicClient.readContract({
         address: portal,
