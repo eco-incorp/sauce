@@ -749,6 +749,39 @@ export const READS_CHAIN: ToolAnnotations = { ...PURE, openWorldHint: true };
 
 const notesSchema = z.array(z.string()).optional();
 
+/** A refusal on a preview chain, as `refused` holds it (`sdk/src/cli/support.ts`). */
+const REFUSED = z.looseObject({
+  code: z.literal("preview-chain"),
+  action: z.string(),
+  message: z.string(),
+  supportedChains: z.array(z.looseObject({ slug: z.string(), id: z.number(), name: z.string() })),
+  previewChains: z.array(
+    z.looseObject({
+      slug: z.string(),
+      id: z.number(),
+      name: z.string(),
+      request: z.looseObject({}),
+    }),
+  ),
+});
+
+/**
+ * The output of a tool a preview chain refuses: every field optional, beside `refused`. A client
+ * validates an error result's structured content against the tool's output schema too (the MCP
+ * SDK's `callTool` does, once it has listed the tools), so a refusal — `{ refused }`, with none of
+ * the fields a built transaction has — has to satisfy it.
+ */
+export function refusable<Shape extends z.ZodRawShape>(
+  shape: Shape,
+): { [K in keyof Shape]: z.ZodOptional<Shape[K]> } & { refused: z.ZodOptional<typeof REFUSED> } {
+  return {
+    ...(Object.fromEntries(
+      Object.entries(shape).map(([key, field]) => [key, (field as z.ZodType).optional()]),
+    ) as unknown as { [K in keyof Shape]: z.ZodOptional<Shape[K]> }),
+    refused: REFUSED.optional(),
+  };
+}
+
 /** The sentence every tool that builds a transaction ends on. */
 export const UNSIGNED =
   "Nothing is signed or sent: the caller signs and sends with its own wallet or signer.";
@@ -1275,6 +1308,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         source: z.string(),
         parameters: z.array(z.string()),
         transaction: z.looseObject({}).optional(),
+        refused: REFUSED.optional(),
       },
       annotations: READS_CHAIN,
     },
@@ -1335,13 +1369,13 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "which needs an endpoint (its blockhash and the fee). `notes` say what must be true for " +
         `it to land: a deployed, funded Pot (sauce_pot deploys it). ${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: { ...PROGRAM, ...COOK },
-      output: {
-        chainId: z.number().optional(),
-        to: z.string().optional(),
-        data: z.string().optional(),
-        value: z.string().optional(),
-        transaction: z.string().optional(),
-      },
+      output: refusable({
+        chainId: z.number(),
+        to: z.string(),
+        data: z.string(),
+        value: z.string(),
+        transaction: z.string(),
+      }),
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
@@ -1417,6 +1451,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         owner: z.string(),
         salt: z.string(),
         deployed: z.boolean().nullable(),
+        refused: REFUSED.optional(),
       },
       annotations: READS_CHAIN,
     },
@@ -1586,7 +1621,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "wallet balances for the rehearsal only. A program that measures an amount on chain, or " +
         "does anything besides open intents, is refused: run it on a Pot (sauce_tx) instead. " +
         "dryRun works on every chain; the transactions only where the source and every " +
-        `destination, nested ones too, are supported. ${UNSIGNED} ${SUPPORTED_ONLY}`,
+        `destination are supported. ${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: {
         ...PROGRAM,
         from: z
@@ -1611,7 +1646,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         ),
         rpcUrl: RPC_URL,
       },
-      output: { intents: z.array(z.looseObject({ intentHash: z.string() })) },
+      output: refusable({ intents: z.array(z.looseObject({ intentHash: z.string() })) }),
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
@@ -1642,7 +1677,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           ),
         );
       }
-      // Before any endpoint: the source, and every chain the intents go to, at any depth.
+      // Before any endpoint: the source, and every chain the intents go to.
       requireSupported("publishing intents", programChains(program.input, program.files));
       const rpcUrl = from === undefined ? undefined : await reach.endpoint(chain, args.rpcUrl);
 

@@ -206,8 +206,8 @@ These are refused there, before any endpoint is reached:
 
 - `sauce_tx`, when the program's chain, or the destination of any intent it opens, is a preview
   chain;
-- `sauce_intent_publish` without `dryRun`, unless its source and every destination, nested ones
-  included, are supported;
+- `sauce_intent_publish` without `dryRun`, unless its source and every destination it opens are
+  supported (a cascade's later levels are not checked: keep them on supported chains);
 - `sauce_intent_fill` without `dryRun`, `sauce_intent_prove` and `sauce_intent_cancel`, by the
   intent's destination; `sauce_intent_claim` and `sauce_intent_refund`, by its source. An intent
   named by `txHash` is read from its source first, then refused by its destination where that is

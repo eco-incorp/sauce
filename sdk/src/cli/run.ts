@@ -103,7 +103,7 @@ import { livePrice, parsePriceToken, priceCommand, pricedChain, priceGiven } fro
 import { publishCommand } from "./publish.js";
 import { simulateCommand } from "./simulate.js";
 import {
-  intentChains,
+  intentDestinations,
   previewChainsNote,
   requireSupported,
   supportedChainNames,
@@ -630,7 +630,7 @@ function gated(gate: Gate, source: CanonicalChain, intents: readonly LoweredInte
       ? intents.map((intent) => intent.destination)
       : gate.by === "source"
         ? [source]
-        : [source, ...intentChains(intents)],
+        : [source, ...intentDestinations(intents)],
   );
 }
 

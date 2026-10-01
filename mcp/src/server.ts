@@ -12,7 +12,7 @@ import type { Endpoints } from "./config.js";
 import type { RpcGuard } from "./guard.js";
 import { CHAIN_SUPPORT_NEW_ISSUE_URL, supportedChainNames } from "./sdk.js";
 import { registerPrompts } from "./prompts.js";
-import { registerResources, SKILLS_INDEX } from "./resources.js";
+import { registerResources, SKILLS_INDEX, WRITE_IT_YOURSELF } from "./resources.js";
 import { registerSkillTools } from "./skilltools.js";
 import { registerIntentTools } from "./intents.js";
 import { registerTools, type WalletContext } from "./tools.js";
@@ -42,6 +42,8 @@ export function instructions(endpoints: Endpoints, wallets?: WalletContext): str
     `section of it). Start with sauce-overview. The same files are resources (${SKILLS_INDEX}).`,
     "For TypeScript against the SDK, or the sauce command, sauce_dev returns the package's own",
     "documents. To set a project up for a coding agent, call sauce_install_skills.",
+    "",
+    ...WRITE_IT_YOURSELF,
     "",
     "To write and run a program:",
     "1. sauce_globals for the chain (tokens, protocols): call names, never invent addresses.",

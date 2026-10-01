@@ -6,6 +6,22 @@
 //
 //   sauce run globals.sauce.ts --chain <chain> --config sauce.config.json --keystore <keystore> \
 //     --args <payee> <payer> <otherToken> <usdtAmount> <otherAmount> <usdcAmount>
+//
+//   payee: Address         who receives the USDT and the other token, and the Aave position
+//   payer: Address         whose `otherToken` moves: it approved this Pot for `otherAmount`
+//   otherToken: Address    any ERC-20 the chain does not name, such as its WETH
+//   usdtAmount: Uint256    USDT from the Pot to `payee`, in its smallest units (6 decimals):
+//                          1000000 is 1 USDT
+//   otherAmount: Uint256   `otherToken` from `payer` to `payee`, in its smallest units:
+//                          1000000000000000 is 0.001 WETH (18 decimals)
+//   usdcAmount: Uint256    the Pot's USDC supplied to Aave V3 for `payee`, in its smallest units
+//                          (6 decimals): 1000000 is 1 USDC
+//
+// On Ethereum, 1 USDT, 0.001 WETH from the payer, and 1 USDC supplied to Aave:
+//
+//   sauce run globals.sauce.ts --chain ethereum --config sauce.config.json \
+//     --keystore <keystore> --args <payee> <payer> 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2 \
+//     1000000 1000000000000000 1000000
 function main(
   payee: Address,
   payer: Address,

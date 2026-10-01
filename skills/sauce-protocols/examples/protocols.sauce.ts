@@ -5,6 +5,15 @@
 //
 //   sauce run protocols.sauce.ts --chain <chain> --config sauce.config.json --keystore <keystore> \
 //     --args <beneficiary> <amount>
+//
+//   beneficiary: Address  who the Aave V3 position is supplied for
+//   amount: Uint256       the Pot's USDC to supply, in its smallest units (6 decimals):
+//                         5000000000 is 5,000 USDC
+//
+// On Base, 5,000 USDC supplied for the beneficiary:
+//
+//   sauce run protocols.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+//     --args <beneficiary> 5000000000
 function main(beneficiary: Address, amount: Uint256) {
   // 1. Supply `amount` of the Pot's USDC to Aave V3 for `beneficiary`, approving exactly that.
   USDC.approve(AaveV3.Pool, amount);

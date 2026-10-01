@@ -6,8 +6,9 @@
 
 The examples here hop through Arbitrum and Optimism, which are preview chains for the initial
 release: the SDK builds them as shown, at your own risk, while the `sauce` command and the MCP server
-publish an intent only when its source and every destination, each nested one included, is
-Ethereum, Base or Solana ([Supported chains](../README.md#supported-chains)).
+publish an intent only when its source and destination are Ethereum, Base or Solana
+([Supported chains](../README.md#supported-chains)). They check the first level only, so keep every
+later level of a cascade on a supported chain too.
 
 Use the thunk form to receive the parent's destination as the child's source:
 

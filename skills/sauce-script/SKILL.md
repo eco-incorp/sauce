@@ -86,6 +86,42 @@ A `const` at the top of a script is the script's own local: a helper cannot read
 a define of the same name does not reach it, and the `sauce` command refuses such a define rather
 than ignore it. Declare `main` to share a module constant with helpers, or to return a value.
 
+## The file's header
+
+Every program starts with a comment that says how to run it, in this order:
+
+1. what the program does, in one line;
+2. the `sauce` command that runs it, with `--chain <chain>` and `--args` naming every `main`
+   parameter, in order: `--args <tokenIn> <tokenOut> <amountIn>`;
+3. one line per parameter, `name: Type`, then what it means and its units, in smallest units
+   (`5000000000` is 5,000 USDC, which has 6 decimals), and that an array or a record is passed as
+   JSON;
+4. one concrete run on a supported chain with real values: addresses taken from the registry
+   (`sauce globals --chain <chain> --tokens`), the developer's own inputs left as `<placeholders>`.
+
+An intent file, which has no `main`, lists its defines and its `--intent-…` flags the same way.
+
+```sauce chain=base
+// Pays each of `recipients` `amount` of the chain's USDC, from the Pot.
+//
+//   sauce run payout.sauce.ts --chain <chain> --config sauce.config.json --keystore <keystore> \
+//     --args <recipients> <amount>
+//
+//   recipients: Address[]  who is paid, a JSON array: '["<recipient>","<recipient>"]'
+//   amount: Uint256        what each is paid, in USDC's smallest units (6 decimals):
+//                          5000000 is 5 USDC
+//
+// On Base, 5 USDC to each of two recipients:
+//
+//   sauce run payout.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+//     --args '["<recipient>","<recipient>"]' 5000000
+function main(recipients: Address[], amount: Uint256) {
+  for (const to of recipients) {
+    USDC.transfer(to, amount);
+  }
+}
+```
+
 ## Runtime inputs and compile-time values
 
 | Value                                                                    | Write it as                                                                  | Arrives                                                            |
@@ -146,6 +182,11 @@ removed:
 
 ## Functions
 
+- **Call what exists directly.** Typed bindings, namespaces and library functions are called as
+  they are: `USDC.transfer(...)`, `UniswapV3.Factory.getPool(...)`, `uniswapV3(...)` from
+  `@sauce/router`. Do not wrap a single call in a helper, and do not hand-roll a raw selector with
+  `evm.static` and `abi.decode` where a typed binding or a namespace exists. Keep a helper only for
+  real logic used more than once.
 - Helpers are top-level `function` declarations, annotated on the signature. They may call each
   other and recurse; `main` is never called.
 - **Arrays and records are passed by reference**: a helper that writes `xs[i] = v` changes the

@@ -1,30 +1,225 @@
 /**
- * The release's chain gate, shared by every front end of the `sauce` command: this command and the
- * MCP server call the same {@link requireSupported}, from the command functions both of them call
+ * WHICH CHAINS THE `sauce` COMMAND AND ITS MCP SERVER BUILD TRANSACTIONS ON, and the gate that holds
+ * them to it — the CLI's own policy, not the SDK's: the registry keeps every chain and protocol,
+ * and the SDK's builders take any of them. Nothing outside `sdk/src/cli/` reads this module, and the
+ * package exports none of it; the MCP server imports it from here (`mcp/src/sdk.ts`), and the
+ * skills' generator and checker read the built module.
+ *
+ * For the initial release the command supports transactions on three chains: Ethereum, Base and
+ * Solana ({@link SUPPORTED_CHAIN_SLUGS}). Every other canonical chain is a PREVIEW chain: a program
+ * for it compiles, and the command simulates, rehearses and reads there, but builds no transaction
+ * for it to sign and sends none.
+ *
+ * {@link requireSupported} is the gate, called from the command functions both front ends call
  * (`txCommand`, `runCommand`, `potDeployCommand`, `publishCommand`, `fillCommand`, the lifecycle's
- * `build*`) and, where a front end reaches a network before those, from the front end too.
+ * `build*`) and, where a front end reaches a network or a key before those, from the front end
+ * too. Anything that leaves a transaction ready to sign — the unsigned JSON included — or sends one
+ * is refused on a preview chain: the cook (`tx`, `run`), a Pot's deployment, publishing intents,
+ * and every lifecycle step. A cook or a publish is refused by its own chain and each destination of
+ * the intents it opens ({@link intentDestinations}); each lifecycle step by the chain it is sent on.
+ * Compiling, simulating, dry runs and reads are never refused.
  *
- * Anything that leaves a transaction ready to sign — the unsigned JSON included — or sends one is
- * refused on a preview chain (`chains/support.ts`), before any network call or key: the cook
- * (`tx`, `run`), a Pot's deployment, publishing intents, and every lifecycle step. An intent is
- * published only when every chain it involves is supported: its source, its destination, and each
- * destination an intent nested in its body opens. Each lifecycle step is refused by the chain it is
- * sent on. Nothing else is: compiling, simulating, dry runs and every read work on every chain.
- *
- * The refusal names the supported chains and, for each preview chain, how to ask for it
- * (`chainSupportRequest`), as a message for a person and as {@link PreviewChainRefusal} for an
- * agent: the MCP server returns that structure as the tool's result.
+ * A developer who needs another chain asks for it with a GitHub issue on the repository, from the
+ * issue form `.github/ISSUE_TEMPLATE/chain-support.yml`, or adds a use case to the request already
+ * open for that chain. {@link chainSupportRequest} builds both links and the text to post; the
+ * form's field ids are {@link CHAIN_SUPPORT_FIELDS}, which `test/cli-chain-support.test.ts` holds
+ * to the form. The refusal carries them as a message for a person and as
+ * {@link PreviewChainRefusal} for an agent: the MCP server returns that structure as the result.
  */
-import type { CanonicalChain } from "../chains/canonical.js";
 import {
-  CHAIN_SUPPORT_NEW_ISSUE_URL,
-  chainSupportRequest,
-  isSupportedChain,
-  supportedChains,
-  type ChainSupportRequest,
-} from "../chains/support.js";
+  canonicalChains,
+  chainBySlug,
+  requireChain,
+  type CanonicalChain,
+  type ChainRef,
+} from "../chains/canonical.js";
 import type { LoweredIntent } from "../routes/intent-sugar.js";
 import { CliError } from "./args.js";
+
+/** `supported`: the release builds and sends transactions there. `preview`: compile and simulate. */
+export type ChainSupport = "supported" | "preview";
+
+/** The chains the release supports, by slug, in the order the docs name them. */
+export const SUPPORTED_CHAIN_SLUGS = ["ethereum", "base", "solana"] as const;
+
+const SUPPORTED = new Set<number>(
+  SUPPORTED_CHAIN_SLUGS.map((slug) => {
+    const chain = chainBySlug(slug);
+    if (chain === undefined) throw new Error(`cli/support: '${slug}' is not a canonical chain`);
+
+    return chain.id;
+  }),
+);
+
+/** Whether the release supports `ref`'s chain (`supported`) or only previews it (`preview`).
+ *  Throws for a chain the registry does not have. */
+export function chainSupport(ref: ChainRef): ChainSupport {
+  return SUPPORTED.has(requireChain(ref).id) ? "supported" : "preview";
+}
+
+/** `chainSupport(ref) === "supported"`; false for a chain the registry does not have. */
+export function isSupportedChain(ref: ChainRef): boolean {
+  try {
+    return chainSupport(ref) === "supported";
+  } catch {
+    return false;
+  }
+}
+
+/** The supported chains, in {@link SUPPORTED_CHAIN_SLUGS}' order. */
+export function supportedChains(): CanonicalChain[] {
+  return SUPPORTED_CHAIN_SLUGS.map((slug) => chainBySlug(slug)!);
+}
+
+/** Every other chain of the registry, id-ascending. */
+export function previewChains(): CanonicalChain[] {
+  return canonicalChains
+    .filter((chain) => !SUPPORTED.has(chain.id))
+    .slice()
+    .sort((a, b) => a.id - b.id);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Requesting a chain
+// ---------------------------------------------------------------------------------------------
+
+/** Where chain-support requests are filed. */
+export const CHAIN_SUPPORT_REPOSITORY = "eco-incorp/sauce";
+/** The label the issue form puts on every request, which the search for one filters on. */
+export const CHAIN_SUPPORT_LABEL = "chain-support";
+/** The issue form, under `.github/ISSUE_TEMPLATE/`. */
+export const CHAIN_SUPPORT_TEMPLATE = "chain-support.yml";
+/** What every request's title starts with. */
+export const CHAIN_SUPPORT_TITLE_PREFIX = "Chain support: ";
+
+/** The issue form's fields by id: the query parameters a new-issue URL prefills them with. */
+export const CHAIN_SUPPORT_FIELDS = {
+  chain: "chain",
+  chainId: "chain-id",
+  useCase: "use-case",
+  protocols: "protocols",
+  volume: "volume",
+  contact: "contact",
+} as const;
+
+/** The form's labels for those fields, the headings an issue made from it carries. */
+const FIELD_LABELS = {
+  chain: "Chain",
+  chainId: "Chain id",
+  useCase: "What you want to run there",
+  protocols: "Protocols and tokens",
+  volume: "Expected volume and timing",
+  contact: "Contact",
+} as const;
+
+const GITHUB = `https://github.com/${CHAIN_SUPPORT_REPOSITORY}`;
+
+/** A new chain-support request with nothing filled in: the form alone. */
+export const CHAIN_SUPPORT_NEW_ISSUE_URL = `${GITHUB}/issues/new?template=${CHAIN_SUPPORT_TEMPLATE}`;
+
+/** Every chain-support request, open or closed. */
+export const CHAIN_SUPPORT_ISSUES_URL = `${GITHUB}/issues?${new URLSearchParams({
+  q: `is:issue label:${CHAIN_SUPPORT_LABEL}`,
+})}`;
+
+/** The chain a request is for: a registry chain, or one the registry does not have yet. */
+export interface RequestedChain {
+  readonly name: string;
+  readonly id?: number;
+}
+
+/** What a request says beyond the chain, where the caller knows it. */
+export interface ChainSupportDetails {
+  /** What the requester wants to run on the chain. */
+  readonly useCase?: string;
+  /** Which protocols and tokens it needs. */
+  readonly protocols?: string;
+  /** The volume expected, and from when. */
+  readonly volume?: string;
+  /** How to reach the requester. */
+  readonly contact?: string;
+}
+
+/** The links and the text to ask for a chain with. */
+export interface ChainSupportRequest {
+  readonly chain: { readonly name: string; readonly id?: number; readonly slug?: string };
+  /** The issue's title: {@link CHAIN_SUPPORT_TITLE_PREFIX}, the chain's name and its id. */
+  readonly title: string;
+  /** The requests already filed for the chain, open or closed: add to one rather than repeat it. */
+  readonly searchUrl: string;
+  /** A new request from the issue form, its title and chain prefilled. */
+  readonly newIssueUrl: string;
+  /** The issue's body, as the form would write it, to post through GitHub's API or `gh`. */
+  readonly body: string;
+  /** A comment adding one more use case to an existing request. */
+  readonly comment: string;
+}
+
+/** The chain a request names: a registry chain by its record, or one it does not have as given. */
+function requested(chain: ChainRef | RequestedChain): ChainSupportRequest["chain"] {
+  if (typeof chain === "object" && !("slug" in chain)) {
+    return { name: chain.name, ...(chain.id === undefined ? {} : { id: chain.id }) };
+  }
+  const known = requireChain(chain);
+
+  return { name: known.name, id: known.id, slug: known.slug };
+}
+
+/**
+ * The request for `chain` — a registry chain (`ChainRef`), or `{ name, id }` for one it does not
+ * have — with the `details` known so far filled in and the rest left as `<placeholders>`.
+ */
+export function chainSupportRequest(
+  chain: ChainRef | RequestedChain,
+  details: ChainSupportDetails = {},
+): ChainSupportRequest {
+  const named = requested(chain);
+  const title = `${CHAIN_SUPPORT_TITLE_PREFIX}${named.name}${named.id === undefined ? "" : ` (${named.id})`}`;
+  const values: Partial<Record<keyof typeof CHAIN_SUPPORT_FIELDS, string>> = {
+    chain: named.name,
+    ...(named.id === undefined ? {} : { chainId: String(named.id) }),
+    ...details,
+  };
+  const prefilled = new URLSearchParams({ template: CHAIN_SUPPORT_TEMPLATE, title });
+  for (const [key, id] of Object.entries(CHAIN_SUPPORT_FIELDS)) {
+    const value = values[key as keyof typeof CHAIN_SUPPORT_FIELDS];
+    if (value !== undefined && value !== "") prefilled.set(id, value);
+  }
+  // What the form leaves for the requester: GitHub writes `_No response_` for an empty field.
+  const placeholder: Record<keyof typeof CHAIN_SUPPORT_FIELDS, string> = {
+    chain: named.name,
+    chainId: "<its chain id>",
+    useCase: `<what you want to run on ${named.name}>`,
+    protocols: "<the protocols and tokens it needs>",
+    volume: "<the volume you expect, and from when>",
+    contact: "_No response_",
+  };
+  const body = (Object.keys(FIELD_LABELS) as Array<keyof typeof FIELD_LABELS>)
+    .map((key) => `### ${FIELD_LABELS[key]}\n\n${values[key] ?? placeholder[key]}`)
+    .join("\n\n");
+  const comment = [
+    `Another use case for ${named.name}${named.id === undefined ? "" : ` (${named.id})`}:`,
+    "",
+    `- ${FIELD_LABELS.useCase}: ${values.useCase ?? placeholder.useCase}`,
+    `- ${FIELD_LABELS.protocols}: ${values.protocols ?? placeholder.protocols}`,
+    `- ${FIELD_LABELS.volume}: ${values.volume ?? placeholder.volume}`,
+  ].join("\n");
+
+  return {
+    chain: named,
+    title,
+    searchUrl: `${GITHUB}/issues?${new URLSearchParams({
+      q: `is:issue label:${CHAIN_SUPPORT_LABEL} "${named.name}"`,
+    })}`,
+    newIssueUrl: `${GITHUB}/issues/new?${prefilled}`,
+    body,
+    comment,
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// The gate
+// ---------------------------------------------------------------------------------------------
 
 /** A chain as a refusal names it. */
 export interface ChainSummary {
@@ -115,7 +310,11 @@ export function requireSupported(action: string, chains: readonly CanonicalChain
   if (refusal !== undefined) throw new PreviewChainError(refusal);
 }
 
-/** Every chain `intents` deliver to, and every chain an intent nested in one of their bodies does. */
-export function intentChains(intents: readonly LoweredIntent[]): CanonicalChain[] {
-  return intents.flatMap((intent) => [intent.destination, ...intentChains(intent.nested)]);
+/**
+ * The chain each of `intents` delivers to: what a cook or a publish that opens them is refused by,
+ * beside its own. An intent its body opens on the destination in turn (a cascade) is not among
+ * them: the lowering reports the intents a program opens itself, and no more.
+ */
+export function intentDestinations(intents: readonly LoweredIntent[]): CanonicalChain[] {
+  return intents.map((intent) => intent.destination);
 }

@@ -17,7 +17,8 @@
 // ONE SOURCE. Names come from `routes.sourceGlobals(chain)`, the function `sauce globals` prints;
 // protocols, their categories and deployments from `listProtocols()` and each `protocols/<slug>`
 // module; the Sauce release from `/deployments`; intents from the eco-routes registry; which chains
-// the release supports, and how to request another, from `chains/support.ts`. Which ABI
+// the `sauce` command supports, and how to request another, from the command's own
+// `cli/support.js` (the package exports none of it). Which ABI
 // export a deployment role speaks is the registry's own evidence map
 // (`test/fixtures/registry-abi/targets.json`, which `registry-abi.test.ts` holds to the deployed
 // code). The hand-written parts are the prose below: the category guidance and chain notes.
@@ -55,8 +56,9 @@ export const GENERATED_DIRS = ["sauce-chains/references", "sauce-protocols/refer
  * `protocols/eco-routes` module — passed in, so the skills checker can index the SDK it loaded
  * (an installed package, say) rather than this repository's build.
  */
-export function globalsIndex(sdk, ecoRoutes) {
-  const { routes, CANONICAL_CHAINS, nativeErc20, getChain, chainSupport } = sdk;
+export function globalsIndex(sdk, ecoRoutes, support) {
+  const { routes, CANONICAL_CHAINS, nativeErc20, getChain } = sdk;
+  const { chainSupport } = support;
   const chains = [...CANONICAL_CHAINS].sort((a, b) => a.id - b.id);
   const listed = chains.map((chain) => ({ chain, globals: routes.sourceGlobals(chain.slug) }));
 
@@ -207,16 +209,17 @@ const functionText = (f) => {
 
 /**
  * The data every generated file renders. `api` is `{ sdk, ecoRoutes, deployments, cctp, compiler,
- * loadProtocol(slug) }` — modules the caller loaded, so the checker can pass the installed
- * package's — and `documented(slug)` says whether the skill carries that protocol's document.
+ * support, loadProtocol(slug) }` — modules the caller loaded, so the checker can pass the installed
+ * package's; `support` is the `sauce` command's `cli/support.js` — and `documented(slug)` says
+ * whether the skill carries that protocol's document.
  */
 export async function skillsReferences(api, documented) {
-  const { sdk, ecoRoutes, deployments, cctp, compiler, loadProtocol } = api;
+  const { sdk, ecoRoutes, deployments, cctp, compiler, support, loadProtocol } = api;
   // An export a program can import: the compile serves `./protocols/<slug>/<Export>.json`.
   const served = (slug, name) =>
     compiler.resolveSdkModule(`./protocols/${slug}/${name}.json`) !== undefined;
   const targets = JSON.parse(readFileSync(TARGETS, "utf8")).protocols;
-  const globals = globalsIndex(sdk, ecoRoutes);
+  const globals = globalsIndex(sdk, ecoRoutes, support);
   const canonical = [...sdk.CANONICAL_CHAINS].sort((a, b) => a.id - b.id);
   const byId = new Map(canonical.map((chain) => [chain.id, chain]));
   const sourceGlobals = new Map(canonical.map((c) => [c.slug, sdk.routes.sourceGlobals(c.slug)]));
@@ -328,8 +331,8 @@ export async function skillsReferences(api, documented) {
       slug: chain.slug,
       name: chain.name,
       kind: chain.kind,
-      support: sdk.chainSupport(chain.slug),
-      request: sdk.chainSupportRequest(chain.slug),
+      support: support.chainSupport(chain.slug),
+      request: support.chainSupportRequest(chain.slug),
       key: names.chain.key,
       aliases: chain.aliases ?? [],
       coin,
@@ -361,9 +364,9 @@ export async function skillsReferences(api, documented) {
     protocols,
     familyMembers,
     support: {
-      supported: sdk.supportedChains().map((chain) => ({ slug: chain.slug, name: chain.name })),
-      newIssue: sdk.CHAIN_SUPPORT_NEW_ISSUE_URL,
-      issues: sdk.CHAIN_SUPPORT_ISSUES_URL,
+      supported: support.supportedChains().map((chain) => ({ slug: chain.slug, name: chain.name })),
+      newIssue: support.CHAIN_SUPPORT_NEW_ISSUE_URL,
+      issues: support.CHAIN_SUPPORT_ISSUES_URL,
     },
   };
 }
@@ -1036,6 +1039,8 @@ export async function loadApi(importFrom) {
     deployments: await importFrom("deployments/index.js"),
     cctp: await importFrom("protocols/cctp/index.js"),
     compiler: await importFrom("compiler.js"),
+    // The `sauce` command's chain support: the CLI's own module, not a package export.
+    support: await importFrom("cli/support.js"),
     loadProtocol: (slug) => importFrom(`protocols/${slug}/index.js`),
   };
 }

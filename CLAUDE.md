@@ -721,9 +721,11 @@ command that signs (`sdk/src/cli/wallets.ts`, `wallet-commands.ts`, `password.ts
 `wallet-send.ts`; all CLI, nothing else in `sdk/src` and no package export). A wallet is one file in
 `~/.sauce/wallets` (`--wallets <dir>`; `CliIo.walletsDir` in tests), `<name>.json`, created 0600 by
 a temporary file LINKED into place (never overwritten) in a directory created 0700. An EVM wallet is
-a Web3 Secret Storage v3 keystore exactly as geth and `cast wallet` write it: noble scrypt (geth's standard N=2^18, r=8, p=1), AES-128-CTR and a keccak MAC, in
-`signer.ts#encryptKeystore`. So `--keystore` and `cast` read it; `cli-wallet.test.ts` holds it to the definition's scrypt test vector
-byte for byte and decrypts a fresh one with OpenSSL's primitives and with `cast` (present in CI). A
+a Web3 Secret Storage v3 keystore exactly as geth and `cast wallet` write it: noble scrypt (geth's
+standard N=2^18, r=8, p=1), AES-128-CTR and a keccak MAC, in `signer.ts#encryptKeystore`. So
+`--keystore` and `cast` read it; `cli-wallet.test.ts` holds it to the definition's scrypt test
+vector byte for byte and decrypts a fresh one with OpenSSL's primitives and with `cast` (present in
+CI). A
 Solana wallet is the same envelope around the keypair's 64 bytes, marked `"kind": "solana"`, which
 `--keystore` refuses. The address is in the clear, so `list`, `address` and `signerAddress` need no
 password. `export` writes the key to `/dev/tty` itself (`terminal.ts#writeToTerminal`), past
@@ -751,32 +753,38 @@ is an error) and refused when others may write it. `sauce mcp --wallets` reads i
 `sdk/src/cli/mcp.ts`, before the server loads, from a source that is not the prompt (stdin is the
 protocol's), and passes it in `McpServeOptions.wallets`; `--wallets` is refused with `--http`, and
 `createSauceServer` registers the wallet tools only when given wallets, which only the stdio path
-gives. `sauce_wallet_send` normalizes another tool's whole result (`plannedTransactions`, in `wallet-send.ts`), rehearses an EVM plan in one `eth_simulateV1` block and preflights the
-policy before sending any, then sends each through `sendAndWait`; a Solana one through
-`sendPlannedSvm`. Tests: `cli-wallet.test.ts`, `cli-policy.test.ts`, `cli-wallet.e2e.test.ts`
+gives. `sauce_wallet_send` normalizes another tool's whole result (`plannedTransactions`, in
+`wallet-send.ts`), rehearses an EVM plan in one `eth_simulateV1` block and preflights the policy
+before sending any, then sends each through `sendAndWait`; a Solana one through `sendPlannedSvm`.
+Its output schema is `refusable(...)`, like every tool the release gate can refuse. Tests: `cli-wallet.test.ts`, `cli-policy.test.ts`, `cli-wallet.e2e.test.ts`
 (anvil, released gated stack), `cli-wallet-solana.e2e.test.ts` (LiteSVM), `mcp/test/wallets.test.ts`
 and `wallets.e2e.test.ts`; `transports.test.ts` runs `sauce mcp --wallets` over stdio and checks
 the HTTP server has no wallet tool. Every password and key in them is generated and thrown away.
 
-**Which chains execute.** `sdk/src/chains/support.ts` is the one list of the chains the release
-supports — Ethereum, Base and Solana (`SUPPORTED_CHAIN_SLUGS`) — and every other canonical chain is
-a PREVIEW chain; it also builds the chain-support request (`chainSupportRequest`: the GitHub search,
-the prefilled issue-form URL, the title, body and comment). The TypeScript builders take every chain:
-only the CLI and the MCP server are gated, by ONE function, `sdk/src/cli/support.ts#requireSupported`.
-It is called from the command functions both front ends share (`txCommand`, `runCommand`,
-`potDeployCommand` and `potCommand`'s deployment, `publishCommand` outside a dry run, `fillCommand`
-with `send`, the lifecycle `build*`, the Solana cook and Pot creation) and again wherever `run.ts` or
-a tool reaches a network or a key first, so the refusal always comes before either. A cook or a
-publish is refused when any chain it involves is preview: its own, and every intent destination at
-any depth (`LoweredIntent.nested`, `intentChains`); a lifecycle step by the chain it is sent on.
-Compiling, simulating, dry runs and reads are never gated, and no flag lifts the gate. A refusal is
-`PreviewChainError` with a `PreviewChainRefusal`: exit 1 from the command, `{ refused }` from a tool
-(`refusedResult`). The issue form is `.github/ISSUE_TEMPLATE/chain-support.yml`, its field ids held
-to `CHAIN_SUPPORT_FIELDS` by `chains-support.test.ts`; `cli-support.test.ts` and
-`mcp/test/support.test.ts` hold every gated path to its refusal before any request. To support a
-chain, add its slug, rebuild (the skills' chain references regenerate from the list), and update
-`docs/README.md#supported-chains` and the skills that name the three. A test that builds or sends a
-transaction through the CLI or MCP uses a supported chain.
+**Which chains execute.** The `sauce` command's policy, and the CLI's alone: nothing outside
+`sdk/src/cli/` changes for it, and the package exports none of it — the registry keeps every chain
+and the SDK's builders take any. `sdk/src/cli/support.ts` holds the list of the chains the command
+builds transactions on — Ethereum, Base and Solana (`SUPPORTED_CHAIN_SLUGS`); every other
+canonical chain is a PREVIEW chain — the chain-support request (`chainSupportRequest`: the GitHub
+search, the prefilled issue-form URL, the title, body and comment), and the ONE gate,
+`requireSupported`. The MCP server imports them from there (`mcp/src/sdk.ts`), and the skills'
+generator and checker read the built `cli/support.js`. The gate is called from the command
+functions both front ends share (`txCommand`, `runCommand`, `potDeployCommand` and `potCommand`'s
+deployment, `publishCommand` outside a dry run, `fillCommand` with `send`, the lifecycle `build*`,
+the Solana cook and Pot creation) and again wherever `run.ts` or a tool reaches a network or a key
+first, so the refusal always comes before either. A cook or a publish is refused by its own chain
+and the destination of each intent it opens (`intentDestinations`; a cascade's later levels are not
+seen, the lowering reporting only a program's own intents); a lifecycle step by the chain it is
+sent on. Compiling, simulating, dry runs and reads are never gated, and no flag lifts the gate. A
+refusal is `PreviewChainError` with a `PreviewChainRefusal`: exit 1 from the command, `{ refused }`
+from a tool (`refusedResult`), whose output schema is `refusable(...)` — every field optional
+beside `refused`, because a client validates an error's structured content too. The issue form is
+`.github/ISSUE_TEMPLATE/chain-support.yml`, its field ids held to `CHAIN_SUPPORT_FIELDS` by
+`cli-chain-support.test.ts`; `cli-support.test.ts` and `mcp/test/support.test.ts` hold every gated
+path to its refusal before any request. To support a chain, add its slug, rebuild (the skills'
+chain references regenerate from the list), and update `docs/README.md#supported-chains` and the
+skills that name the three. A test that builds or sends a transaction through the CLI or MCP uses a
+supported chain.
 
 ## Agent skills
 

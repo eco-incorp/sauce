@@ -16,6 +16,28 @@ On top of the runtime sit **intents**: an offer of work on another chain, with a
 this one, written as a chain name called as a function: `Ethereum(() => { ... }).reward({ ... })`.
 A solver decides whether to fill it (`sauce-intents`).
 
+## You write the program
+
+Write each program yourself, in SauceScript, for the task as it is asked. These skills teach the
+language, the names each chain offers and the patterns; their example programs show idioms and the
+rules a correct program follows. They are not templates to copy, adapt or choose between: never
+ask the user which example or existing file to start from. Ask only for the facts the request
+leaves open (an amount, a price limit, a recipient, the chain); decide the rest, write the
+program, and rehearse it with `sauce simulate`.
+
+Call typed bindings, namespaces and library functions directly: `USDC.transfer(...)`,
+`UniswapV3.Factory.getPool(...)`, `uniswapV3(...)` from `@sauce/router`. Do not wrap a single call
+in a helper, and do not hand-roll a raw selector with `evm.static` and `abi.decode` where a typed
+binding or a namespace exists. Keep a helper only for real logic used more than once.
+
+Start every program with a comment that says, in order: what it does, in one line; the `sauce`
+command that runs it, with `--chain <chain>` and `--args` naming every `main` parameter in order
+(`--args <tokenIn> <tokenOut> <amountIn>`); one line per parameter with its type, its meaning and
+its units, in smallest units (`5000000000` is 5,000 USDC, which has 6 decimals; an array or a
+record is passed as JSON); and one concrete invocation on a supported chain with real values,
+addresses taken from the registry and the developer's own inputs left as `<placeholders>`. An
+intent file lists its defines the same way. `sauce-script` shows one.
+
 ## Supported chains
 
 For the initial release, Sauce supports transactions on **Ethereum, Base and Solana** (`ethereum`,
@@ -113,7 +135,7 @@ server (`npx -y @eco-incorp/sauce mcp`); `sauce-run` maps each command to its to
 | Solana programs: accounts, SPL, the Kitchen                                              | `sauce-solana`           |
 | Compiling and running: the `sauce` commands, the Pot, funding, simulating, publishing    | `sauce-run`              |
 | Application code: compiling, arguments, cooks, actions and verification from TypeScript  | `sauce-typescript`       |
-| An example to start from                                                                 | `sauce-examples`         |
+| Complete programs, each showing an idiom                                                 | `sauce-examples`         |
 
 ## Rules for every program
 

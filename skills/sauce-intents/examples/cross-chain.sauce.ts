@@ -11,6 +11,18 @@
 //   sauce run cross-chain.sauce.ts --chain <chain> --config sauce.config.json \
 //     --keystore <keystore> --define BENEFICIARY=<address> --intent-deadline <unix seconds> \
 //     --intent-creator <address> --intent-execution-fee <Ethereum Kitchen fee in wei>
+//
+//   BENEFICIARY: Address               who the Aave V3 position on Ethereum is supplied for
+//   --intent-deadline: unix seconds    the last second a solver may fill it
+//   --intent-creator: Address          who may reclaim the reward if no solver earns it
+//   --intent-execution-fee: wei        Ethereum's Kitchen fee for the body's cook; `auto` reads it
+//                                      through --config
+//
+// From Base, with the fee read from Ethereum:
+//
+//   sauce run cross-chain.sauce.ts --chain base --config sauce.config.json \
+//     --keystore <keystore> --define BENEFICIARY=<address> --intent-deadline <unix seconds> \
+//     --intent-creator <address> --intent-execution-fee auto
 require(BENEFICIARY != 0n, "set BENEFICIARY");
 const amount = USDC.balanceOf(ctx.self());
 require(amount > 0n, "nothing to forward");

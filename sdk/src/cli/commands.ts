@@ -69,7 +69,7 @@ import type { CookVia } from "../svm/client.js";
 import { svmCookSize } from "./solana.js";
 import type { Funding } from "./funding.js";
 import {
-  intentChains,
+  intentDestinations,
   previewRefusal,
   requireSupported,
   type PreviewChainRefusal,
@@ -256,9 +256,9 @@ export function compileProgram(
 }
 
 /**
- * Every chain a cook of `input` involves: its own, and each chain an intent it opens goes to, at
- * any depth — what {@link requireSupported} is asked about before anything that publishes them. A
- * fee the intents' cooks are not given yet is zero here: the chains do not depend on it.
+ * The chains a cook of `input` is refused by: its own, and the destination of each intent it opens
+ * — what {@link requireSupported} is asked about before anything that publishes them. A fee the
+ * intents' cooks are not given yet is zero here: the chains do not depend on it.
  */
 export function programChains(input: ProgramInput, files: CliFiles): CanonicalChain[] {
   const probe = compileProgram(
@@ -266,7 +266,7 @@ export function programChains(input: ProgramInput, files: CliFiles): CanonicalCh
     files,
   );
 
-  return [input.chain, ...intentChains(probe.intents)];
+  return [input.chain, ...intentDestinations(probe.intents)];
 }
 
 /** The installed compiler's package name and version, read from its own manifest. */
@@ -597,7 +597,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
   const cook = cookOf(input, files);
   requireSupported("building the cook transaction", [
     input.chain,
-    ...intentChains(cook.program.intents),
+    ...intentDestinations(cook.program.intents),
   ]);
   const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, input.chain);
   const fee = client === undefined ? undefined : await kitchenFee(client, input.chain);
@@ -695,7 +695,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
     );
   }
   const cook = cookOf(input, files);
-  requireSupported("sending the cook", [input.chain, ...intentChains(cook.program.intents)]);
+  requireSupported("sending the cook", [input.chain, ...intentDestinations(cook.program.intents)]);
   const client = await connect(input.rpcUrl, input.chain);
   const state = await potState(client, cook.pot);
   const deployAction = `deploy Pot ${cook.pot}`;
