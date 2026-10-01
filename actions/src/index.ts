@@ -10,6 +10,7 @@ export type {
   ArgumentValues,
   CompiledProgram,
   CompileOptions,
+  ProgramIntentOptions,
 } from "./compose.js";
 
 export { quoteAction } from "./to-quote.js";

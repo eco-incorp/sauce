@@ -33,6 +33,13 @@ ids), or run `npx sauce globals --chain <chain>`.
 | [`../sauce-intents/examples/swap-on-base.sauce.ts`](../sauce-intents/examples/swap-on-base.sauce.ts)                           | `arbitrum`, `optimism`                              | An intent file whose body is the distributed swap: WETH delivered on Base is sold on every Uniswap V3 and V4 pool up to a limit, and the solver is paid in WETH on the source chain                                                                         | `sauce-intents`          |
 | [`../sauce-solana/examples/solana.sauce.ts`](../sauce-solana/examples/solana.sauce.ts)                                         | `solana`                                            | A Solana program: `Account` parameters with roles, the mint as a define, the `@sauce/token` SPL arm, proof the destination received the amount                                                                                                              | `sauce-solana`           |
 
+## Actions documents
+
+| Document                                                                                           | Chains                                     | Demonstrates                                                                                                        | Skill           |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- | --------------- |
+| [`../sauce-actions/examples/swap-by-key.json`](../sauce-actions/examples/swap-by-key.json)         | `ethereum`, `base`, `arbitrum`             | One swap by token symbols and a pool's factory key, the amount an argument: no chain and no address in the document | `sauce-actions` |
+| [`../sauce-actions/examples/swap-and-supply.json`](../sauce-actions/examples/swap-and-supply.json) | `ethereum`, `base`, `arbitrum`, `optimism` | Chaining: a swap's output saved by name, approved to the Aave pool and supplied on the Pot's behalf                 | `sauce-actions` |
+
 ## TypeScript runners
 
 | Runner                                                                                                               | Compiles and checks                                                                                                                                                 | Skill                    |
