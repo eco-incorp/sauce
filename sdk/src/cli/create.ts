@@ -673,7 +673,7 @@ async function proverFeeFor(
   if (plan === undefined || !plan.supported) return undefined;
   const { intentHash } = hashIntent(placeholder as never);
   const call = proverFeeCall({
-    prover: plan.destinationProver!,
+    prover: plan.destinationProver! as Address,
     sourceDomain: plan.sourceDomain!,
     destinationChainId: BigInt(destination.id),
     pairs: [{ intentHash, claimant: `0x${"11".repeat(20)}` }],

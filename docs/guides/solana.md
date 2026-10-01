@@ -227,12 +227,47 @@ supplies, so that instruction is not one it will run — and pointing the helper
 a different engine id does not add the missing bytes.
 
 The [SVM Portal's fulfillment](https://github.com/eco/eco-routes-svm/blob/5e544b72d368d9d1f0ee5269e2a1a5d2a9f8c2f2/programs/portal/src/instructions/fulfill.rs#L139-L192)
-forwards a route's instruction bytes to their target unchanged and signs for its
-own Executor PDA. It does not assemble a Kitchen call or sign for a Sauce Pot.
-A Portal integration that reaches the Kitchen therefore needs cook data and
-accounts built separately — the owner signature, the Pot, the fee configuration
-and payer, the engine, and staged metadata and code where they apply. That
-assembly is not in this package.
+forwards a route's instruction bytes to their target unchanged and signs each
+call for its own executor PDA. So the executor can own a Kitchen Pot and cook on
+it: the Solana counterpart of an EVM intent's cook on the Executor's shared Pot.
+`svm` builds that route:
+
+- `svmIntentPot({ portal, kitchen })` is the executor's Pot (the zero salt by
+  convention), which every intent's cook through that Portal shares: send on in the
+  program what the intent delivers.
+- `svmIntentPotInstruction(...)` is the Kitchen's `create_pot` with the executor as
+  owner and rent payer. One route carries it once, the rent its native amount.
+- `svmIntentCookInstruction({ portal, kitchen, engineProgram, bytecode, manifest,
+resolution, maxExecutionFee })` is the Kitchen's `cook` with the executor as owner
+  and fee payer, the fee the route's native amount, the program's accounts resolved
+  from its manifest as for any cook.
+- `svmRouteCalls(portal, instructions, tokens)` turns instructions into route calls.
+  The Portal hashes each call account's flags as the fill transaction carries them,
+  and a transaction gives an account one set of flags: an account written anywhere
+  (the executor paying the cook's fee, the executor's token account the fill funds) is
+  committed writable everywhere, and the executor never as a signer. A route committed
+  with each call's own flags is another intent, which no fill matches.
+
+Publish the route with the EVM Portal helpers (`routes.publishAndFundTx`); the
+intent syntax does not build it yet. Moving delivered tokens from the executor's
+token account into the Pot's is a route call before the cook (an SPL
+`TransferChecked`, the executor its authority). The fill must request the
+engine's heap frame, as every cook does; `sauce intent fill` adds it when a route
+call is the Kitchen's.
+
+A route's program runs through the Kitchen, on the executor's Pot: that is what
+these builders make, and the `sauce intent` commands take no `--via`. The direct
+entry ([Two ways to run a program](#two-ways-to-run-a-program), `via: "engine"`)
+is for a cook a wallet sends with its own authority. An executor issuing one is
+not something this package builds or tests.
+
+The Portal's own instructions are `buildPortalFulfillInstruction`,
+`buildPortalHyperProveInstructions` (the proof through the HyperProver, with the
+gas for Hyperlane's delivery paid in the same transaction) and
+`buildPortalCancelInstruction`. `decodeFulfillMarker` reads what the Portal
+recorded, and `svmTokenTransferCall` is the route call eco-routes' Solana deposit
+addresses publish. `sauce intent fill`, `prove` and `cancel` send them
+([CLI guide](cli.md#an-intent-to-solana)).
 
 One detail worth knowing if you are reading routes somebody already built:
 `execution.code` there means the finalized **code account**, not its metadata
