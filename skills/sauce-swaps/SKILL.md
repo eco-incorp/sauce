@@ -122,8 +122,7 @@ loose reference. `sauce-distributed-swap` works this through on Base.
 on every V3-style pool of the pair, but the fee comes on top, and it differs per pool: under one
 limit, the last unit a 1% pool fills costs about 1% more than the limit, a 0.05% pool's about
 0.05%. To bound the price paid, give each pool its own limit: `limit ÷ √(1 − fee)` selling token0,
-`limit × √(1 − fee)` selling token1 (`sauce-distributed-swap` computes it and reads each pool's
-fee).
+`limit × √(1 − fee)` selling token1 (`sauce-distributed-swap` computes it for each fee tier).
 
 A pool offered more than it can fill before its price reaches the limit **takes only what it
 can**: the Router pays exactly the pool's delta, and the rest of the input stays in the Pot. That
