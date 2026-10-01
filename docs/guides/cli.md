@@ -709,9 +709,12 @@ npx sauce globals --chain base --protocol UniswapV3  # one namespace, with its m
 lists every name a program compiled for the chain may use without declaring it: the token symbols
 with their addresses and decimals, each protocol namespace with its contracts' addresses (and, with
 `--protocol`, each method with every parameter and struct field named), the chain names that open
-intents, the defines, and the `@sauce/token` functions. `--json` prints the same for a program to
-read. It is `routes.sourceGlobals(chain)`, which reads the registries the compile reads and lists
-contracts through the protocol rewrite's own resolver, so a name it lists is one the compile
+intents, the defines, and the `@sauce/token` functions. On an EVM chain it also lists the
+interfaces: ABIs the registry knows with no fixed address (`Erc4626.Vault`, `Erc20.ERC20`), which a
+program binds to an address of its own, `Erc4626.Vault.at(vault).totalAssets()`; `--protocol
+Erc4626` lists their methods. `--json` prints the same for a program to read (`interfaces` beside
+`protocols`). It is `routes.sourceGlobals(chain)`, which reads the registries the compile reads and
+lists contracts through the protocol rewrite's own resolver, so a name it lists is one the compile
 accepts, at the address the program gets.
 
 ### `sauce price`

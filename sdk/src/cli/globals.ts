@@ -7,7 +7,11 @@
 import { getAddress, numberToHex } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
-import { sourceGlobals, type SourceNamespace } from "../routes/source-globals.js";
+import {
+  sourceGlobals,
+  type SourceInterface,
+  type SourceNamespace,
+} from "../routes/source-globals.js";
 import { SVM_TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { UsageError } from "./args.js";
 import type { CommandOutput } from "./commands.js";
@@ -33,7 +37,18 @@ function defineValue(value: bigint | boolean | number): string | boolean | numbe
 
 const squash = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-function namespaceNamed(namespaces: readonly SourceNamespace[], name: string): SourceNamespace {
+/** The namespace `--protocol` names: its deployed contracts on the chain, its interfaces, or
+ *  both. */
+interface Named {
+  readonly namespace?: SourceNamespace;
+  readonly interfaces: readonly SourceInterface[];
+}
+
+function namespaceNamed(
+  namespaces: readonly SourceNamespace[],
+  interfaces: readonly SourceInterface[],
+  name: string,
+): Named {
   const wanted = squash(name);
   const found =
     namespaces.find((ns) => ns.namespace === name) ??
@@ -42,14 +57,33 @@ function namespaceNamed(namespaces: readonly SourceNamespace[], name: string): S
         squash(ns.namespace) === wanted ||
         (ns.kind === "protocol" && ns.protocols.some((slug) => squash(slug) === wanted)),
     );
-  if (found === undefined) {
+  const key = found?.namespace;
+  const bound = interfaces.filter((one) =>
+    key === undefined
+      ? one.namespace === name ||
+        squash(one.namespace) === wanted ||
+        squash(one.protocol) === wanted
+      : one.namespace === key,
+  );
+  if (found === undefined && bound.length === 0) {
+    const names = [...new Set([...namespaces, ...interfaces].map((ns) => ns.namespace))].sort();
     throw new UsageError(
       `--protocol: '${name}' is not a namespace a program can use here; the chain has ` +
-        (namespaces.length === 0 ? "none" : namespaces.map((ns) => ns.namespace).join(", ")),
+        (names.length === 0 ? "none" : names.join(", ")),
     );
   }
 
-  return found;
+  return { ...(found === undefined ? {} : { namespace: found }), interfaces: bound };
+}
+
+/** An interface's lines: how a program binds it, and with `methods` what it can call. */
+function interfaceLines(one: SourceInterface, methods: boolean): string[] {
+  return [
+    `${one.namespace}.${one.name}.at(<address>)  interface (${one.protocolName}): no fixed address`,
+    ...(methods
+      ? one.methods.map((method) => `  ${method.declaration}  ${method.stateMutability}`)
+      : []),
+  ];
 }
 
 function namespaceLines(ns: SourceNamespace, methods: boolean): string[] {
@@ -74,15 +108,19 @@ function namespaceLines(ns: SourceNamespace, methods: boolean): string[] {
 /** `sauce globals`: the chain's tokens, protocol namespaces, chain names and ambient functions. */
 export function globalsCommand(input: GlobalsInput): CommandOutput {
   const globals = sourceGlobals(input.chain);
-  const one =
-    input.protocol === undefined ? undefined : namespaceNamed(globals.protocols, input.protocol);
+  const named =
+    input.protocol === undefined
+      ? undefined
+      : namespaceNamed(globals.protocols, globals.interfaces, input.protocol);
+  const one = named?.namespace;
   // No filter shows everything; any filter shows only what it names.
-  const all = !input.tokens && !input.protocols && one === undefined;
+  const all = !input.tokens && !input.protocols && named === undefined;
   const showTokens = all || input.tokens;
   const showProtocols = all || input.protocols;
   const { chain } = globals;
   const text: string[] = [`${chain.key}: ${chain.slug}, chain id ${chain.id} (${chain.kind})`];
   if (one !== undefined) text.push("", ...namespaceLines(one, true));
+  for (const bound of named?.interfaces ?? []) text.push("", ...interfaceLines(bound, true));
   const svm = chain.kind === "svm";
   // A devnet program compiles for the same chain, so its mints are not what a symbol resolves to:
   // they are listed for it to pass as defines, which override the registry's.
@@ -125,6 +163,14 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
     );
     for (const ns of globals.protocols)
       text.push(...namespaceLines(ns, false).map((l) => `  ${l}`));
+    text.push(
+      "",
+      `Interfaces (${globals.interfaces.length}): an ABI with no fixed address, bound to one the ` +
+        "program gives: <Namespace>.<Contract>.at(<address>).<method>(…)",
+      ...globals.interfaces.map(
+        (bound) => `  ${bound.namespace}.${bound.name}  (${bound.protocolName})`,
+      ),
+    );
   }
   if (all) {
     text.push(
@@ -149,7 +195,12 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
       ...(one === undefined ? {} : { protocol: one }),
       ...(showTokens ? { tokens: globals.tokens } : {}),
       ...(showTokens && svm ? { devnetTokens: devnet } : {}),
-      ...(showProtocols ? { protocols: globals.protocols } : {}),
+      // The interfaces asked for: every one beside the namespaces, or --protocol's own.
+      ...(showProtocols
+        ? { protocols: globals.protocols, interfaces: globals.interfaces }
+        : named !== undefined && named.interfaces.length > 0
+          ? { interfaces: named.interfaces }
+          : {}),
       ...(all
         ? {
             chains: globals.chains,

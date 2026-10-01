@@ -115,6 +115,7 @@ export type {
   SourceChainName,
   SourceContract,
   SourceGlobals,
+  SourceInterface,
   SourceMethod,
   SourceModule,
   SourceNamespace,
