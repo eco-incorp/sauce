@@ -19,9 +19,9 @@ import {
   destinationPot,
   routes,
   SAUCE_INTENT_POT_SALT,
-  v12GateKitchen,
   v12PredictPot,
 } from "@eco-incorp/sauce";
+import { v12KitchenAddress } from "@eco-incorp/sauce/deployments";
 import {
   ecoRoutesExecutor,
   ecoRoutesPortal,
@@ -135,25 +135,23 @@ for (const [what, value] of [
   check(swapped.calls.includes(word(value)), `the child uses ${what}`);
 }
 check(swapped.rewarded.join() === word(token("arbitrum", "WETH")), "the reward is Arbitrum's WETH");
-// An intent file imports nothing, so the body reaches every contract without a namespace by
-// selector, with evm.static and evm.call. These are the selectors sauce-intents tabulates.
+// The body swaps through @sauce/router and reads a pool's own state by selector, with
+// evm.static. These are the selectors sauce-intents tabulates.
 for (const [signature, selector] of [
   ["getPool(address,address,uint24)", "1698ee82"],
   ["getPool(address,address,int24)", "28af8d0b"],
   ["slot0()", "3850c7bd"],
   ["liquidity()", "1a686502"],
   ["fee()", "ddca3f43"],
-  ["extsload(bytes32)", "1e2eaeaf"],
-  ["swapV3(address,address,address,int256,uint160,address,address)", "a5e2989d"],
-  [
-    "swapV4(address,(address,address,uint24,int24,address),bool,int256,uint160,address,address)",
-    "7c9e9da3",
-  ],
 ] as const) {
   check(toFunctionSelector(signature) === `0x${selector}`, `${signature} is 0x${selector}`);
 }
-for (const selector of ["3850c7bd", "1a686502", "ddca3f43", "1e2eaeaf", "a5e2989d", "7c9e9da3"])
+for (const selector of ["3850c7bd", "1a686502", "ddca3f43"])
   check(swap.includes(`hex\`${selector}\``), `the body uses 0x${selector}`);
+check(
+  /import \{ uniswapV3, uniswapV4 \} from "@sauce\/router"/.test(swap),
+  "the body swaps through @sauce/router",
+);
 
 // ---- A token-only child is plain route calls for the destination's Executor: no Pot, no fee.
 // Inside the body, and in the delivery, a token symbol is the destination's: `USDC` here is
@@ -211,13 +209,9 @@ check(intent.route.nativeAmount === fee.base, "route.nativeAmount is Base's Kitc
 const executor = ecoRoutesExecutor("base");
 const pot = destinationPot("base");
 check(pot === v12PredictPot(executor, SAUCE_INTENT_POT_SALT), "the shared Pot is the Executor's");
-const deployPot = routes.sauceEvmDeployPotCall({
-  kitchen: v12GateKitchen(),
-  owner: executor,
-  salt: SAUCE_INTENT_POT_SALT,
-});
+const deployPot = routes.sauceEvmDeployPotCall({ owner: executor, salt: SAUCE_INTENT_POT_SALT });
 check(
-  getAddress(`0x${deployPot.target.slice(-40)}`) === getAddress(v12GateKitchen()),
+  getAddress(`0x${deployPot.target.slice(-40)}`) === getAddress(v12KitchenAddress()),
   "the Pot's deploy is a call to the Kitchen",
 );
 // 2. The route's tokens: what the solver holds and approves to the Portal, which pulls them.

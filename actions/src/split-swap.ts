@@ -35,7 +35,7 @@ import {
 import { contractsFor, type BindingName } from "./abis.js";
 import { compiled, type CompiledProgram } from "./compose.js";
 import { parseActions } from "./program.js";
-import { lowerAction, type ActionResult } from "./to-sauce.js";
+import { lowerAction, routerImport, type ActionResult, type RouterFunction } from "./to-sauce.js";
 import { quoteCall, type QuoteOptions } from "./to-quote.js";
 import type { ApproveAction, SwapAction } from "./types.js";
 
@@ -113,8 +113,10 @@ export function compileSplitSwap(swap: SplitSwap): CompiledProgram {
   const N = candidates.length;
   const emit = newEmitter();
   const bindings = new Set<BindingName>();
+  const router = new Set<RouterFunction>();
   const use = (result: ActionResult): ActionResult => {
     for (const b of result.bindings) bindings.add(b);
+    for (const f of result.router) router.add(f);
     return result;
   };
 
@@ -150,7 +152,8 @@ export function compileSplitSwap(swap: SplitSwap): CompiledProgram {
   ]);
 
   const main = mainFn(emit, N, n, bucket, swap, approvals, use);
-  const source = [...quoteFns, quoteAny, swapAny, main].join("\n\n") + "\n";
+  const source =
+    routerImport([...router].sort()) + [...quoteFns, quoteAny, swapAny, main].join("\n\n") + "\n";
 
   return compiled(source, contractsFor(bindings), []);
 }

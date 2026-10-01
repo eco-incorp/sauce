@@ -133,3 +133,4 @@ an ABI import bound to the address), and the ABI functions are generated in
 - Internal balances: users can keep tokens in the Vault to save gas on repeated trades
 - `userData` encoding varies by pool type - check Balancer docs for the specific pool's join/exit types
 - Use Balancer for multi-token pools (3+ tokens), weighted index exposure, or flash loans
+- From a Pot program, `@sauce/router` swaps through the Vault directly: `balancerV2(vault, tokenIn, tokenOut, amountIn, poolId, minOut, recipient)` approves the Vault for exactly `amountIn` and calls `swap` (GIVEN_IN, internal balances off) with `minOut` as its limit, returning the amount out; the allowance ends at zero. `tryBalancerV2` catches a failed swap, resets the approval and returns `0n`. The `balancerV2Swap` action is the same call

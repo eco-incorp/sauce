@@ -23,7 +23,7 @@ and program plus arguments is the `program` of the owner's `Pot.cook(engine, pro
 
 ```ts
 import { readFileSync } from "node:fs";
-import { destinationExecutionFee, routes, v12GateKitchen, v12PredictPot } from "@eco-incorp/sauce";
+import { destinationExecutionFee, routes, v12PredictPot } from "@eco-incorp/sauce";
 import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
 import { v12Pot } from "@eco-incorp/sauce/evm/engine";
 import { bytesToHex, concatHex, getAddress, type PublicClient } from "viem";
@@ -39,7 +39,7 @@ export async function cookTransactions(
 ) {
   const salt = `0x${"00".repeat(32)}` as const;
   const pot = v12PredictPot(owner, salt); // the owner's Pot, derived through the released Kitchen
-  const deploy = routes.sauceEvmDeployPotCall({ kitchen: v12GateKitchen(), owner, salt }); // once
+  const deploy = routes.sauceEvmDeployPotCall({ owner, salt }); // once, through the Kitchen
   const program = routes.compileSauceProgram(chain, readFileSync(file, "utf8"));
   const encoded = routes.encodeEntryArguments(program, args); // checked against main's types
   const engine = getAddress(v12EngineAddress());
@@ -64,8 +64,12 @@ export async function cookTransactions(
   Kitchen; the example sends it as an `eth_call` with the chain's client just before the cook.
 - `routes.sauceEvmDeployPotCall` and `routes.buildSauceEvmCall` return `{ to, data, value }` to send
   as a transaction, plus `target`, the same contract as a route's `calls` entry names it.
-- `v12EngineAddress()`, `v12KitchenAddress()` and `v12GateKitchen()` are recorded release
-  addresses: check the chain has code at them. Deploy the Pot only where it has no code yet.
+- `v12EngineAddress()` and `v12KitchenAddress()` are recorded release addresses, and the deploy
+  call goes to the Kitchen unless you pass `kitchen`: check the chain has code at them. Deploy the
+  Pot only where it has no code yet.
+- A Pot swaps through the Router its Kitchen handed it when it was minted. `potRouterUpdate(client,
+pot)` from `/evm/engine` reads both, and returns the `setRouter` call for the Pot's owner to send
+  when the Kitchen has a newer one.
 - A program that opens an intent also needs `options.intents`, `{ deadline, creator,
 executionFee }` (`sauce-intents`).
 
@@ -130,7 +134,7 @@ a recorded address, not proof of live code on the chain.
 - **Intents** (`sauce-intents`): `routes.hashIntent(intent)` gives the three hashes,
   `routes.encodeRouteEvm(intent.route)` the route bytes (decode with `routes.EVM_ROUTE_PARAM` for
   `fulfill`), `destinationPot(chain)` the shared Pot and
-  `routes.sauceEvmDeployPotCall({ kitchen: v12GateKitchen(), owner: ecoRoutesExecutor(chain), salt: SAUCE_INTENT_POT_SALT })`
+  `routes.sauceEvmDeployPotCall({ owner: ecoRoutesExecutor(chain), salt: SAUCE_INTENT_POT_SALT })`
   its deploy; the intents runner builds a rehearsal with them. For the source side,
   `routes.publishTx`, `routes.publishAndFundTx`, `routes.approvalTxs`,
   `routes.intentVaultAddressCall` and `routes.isIntentFundedCall` build the publication, funding

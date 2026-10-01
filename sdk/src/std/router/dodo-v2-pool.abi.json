@@ -1,0 +1,39 @@
+{
+  "$comment": "DODO V2 sellBase(to) and sellQuote(to), copied from the verified DVM implementation on Ethereum, 0x7cA7B5EAAf526d93705d28c1b47E9739595C90E7 (solc 0.6.9), which the WETH/USDC DVM 0x8B2F062d112aE1ac6Ccc6C358cc40C9518c847Dc clones. DPP and DSP pools declare the same two functions.",
+  "abi": [
+    {
+      "name": "sellBase",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "receiveQuoteAmount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "sellQuote",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "receiveBaseAmount",
+          "type": "uint256"
+        }
+      ]
+    }
+  ]
+}

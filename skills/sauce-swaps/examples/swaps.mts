@@ -1,15 +1,15 @@
-// Compiles swap-leg.sauce.ts for Base and Arbitrum the way `sauce compile` does, and pins the
-// Router facts the sauce-swaps skill states: which entry points take a sqrt-price limit, which pool
-// callbacks the Router services, and the unified entry point's pool types and exact-input signs.
-// Offline: nothing is sent.
+// Compiles swap-leg.sauce.ts for Base and Arbitrum the way `sauce compile` does, and pins the facts
+// the sauce-swaps skill states: the functions `@sauce/router` exports and their argument order, the
+// Router entry points that take a sqrt-price limit, which pool callbacks the Router services, and
+// what a callback is held to. Offline: nothing is sent.
 //
 //   node swaps.mts
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
-import { routes, swap } from "@eco-incorp/sauce";
-import { resolveSdkModule } from "@eco-incorp/sauce/compiler";
+import { routes } from "@eco-incorp/sauce";
+import { resolveSdkModule, resolveSdkPackage } from "@eco-incorp/sauce/compiler";
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`check failed: ${message}`);
@@ -24,10 +24,49 @@ for (const slug of ["base", "arbitrum"]) {
         "sqrtPriceLimitX96: Uint256, minOut: Uint256, recipient: Address",
     "main's inputs, as --args takes them",
   );
+  check(/from "@sauce\/router"/.test(leg.source), "the leg swaps through @sauce/router");
   console.log(`guarded V3 leg on ${slug}: ${leg.bytecode.length} bytes`);
 }
 
-// The Router ABI the program imports as ./artifacts/ISauceRouter.json.
+// The library the package serves for `import ... from "@sauce/router"`: its EVM arm, and every
+// function the skill lists, with its arguments in the order the skill gives them.
+const entry = resolveSdkPackage("@sauce/router");
+if (entry === undefined) throw new Error("the SDK serves @sauce/router");
+const library = resolveSdkModule(entry.replace(/\.js$/, ".evm.js"));
+if (library === undefined) throw new Error("@sauce/router has an EVM arm");
+const text = new TextDecoder().decode(library);
+const params = (name: string) => {
+  const found = new RegExp(`export function ${name}\\(([^)]*)\\)`).exec(text);
+  return found?.[1]
+    ?.split(",")
+    .map((p) => p.trim().split(":")[0]!.trim())
+    .filter(Boolean)
+    .join(", ");
+};
+const LIBRARY = {
+  uniswapV2: "pair, tokenIn, tokenOut, amountIn, feePpm, minOut, recipient",
+  uniswapV3: "pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient",
+  uniswapV4:
+    "poolManager, tokenIn, tokenOut, amountIn, fee, tickSpacing, hooks, sqrtPriceLimitX96, minOut, recipient",
+  curve: "pool, tokenIn, tokenOut, amountIn, i, j, uint256Indices, minOut, recipient",
+  balancerV2: "vault, tokenIn, tokenOut, amountIn, poolId, minOut, recipient",
+  dodoV2: "pool, tokenIn, tokenOut, amountIn, baseToken, quoteToken, minOut, recipient",
+  traderJoeLB: "pair, tokenIn, tokenOut, amountIn, tokenX, tokenY, minOut, recipient",
+  woofi: "pool, tokenIn, tokenOut, amountIn, minOut, recipient",
+  maverickV2: "pool, tokenIn, tokenOut, amountIn, minOut, recipient",
+};
+for (const [name, args] of Object.entries(LIBRARY)) {
+  check(params(name) === args, `@sauce/router's ${name}(${args})`);
+}
+for (const name of ["UniswapV2", "Curve", "BalancerV2", "TraderJoeLB"]) {
+  const base = name.charAt(0).toLowerCase() + name.slice(1);
+  check(params(`try${name}`) === params(base), `try${name} takes ${base}'s arguments`);
+}
+for (const name of ["DodoV2", "Woofi"]) {
+  check(params(`try${name}`) === undefined, `${name} has no try form`);
+}
+
+// The Router ABI the package serves, which `@sauce/router` calls for the venues that call back.
 interface AbiFunction {
   type: string;
   name: string;
@@ -41,28 +80,20 @@ const abi = (Array.isArray(parsed) ? parsed : parsed.abi).filter((f) => f.type =
 const has = (name: string) => abi.some((f) => f.name === name);
 const inputs = (name: string) => abi.find((f) => f.name === name)?.inputs.map((i) => i.name) ?? [];
 
-// Entry points and their price-limit parameter.
+check(inputs("swapV3").includes("sqrtPriceLimitX96"), "swapV3 takes a limit");
+check(inputs("swapV4").includes("sqrtPriceLimitX96"), "swapV4 takes a limit");
 check(
-  inputs("swapV3").join() ===
-    "pool,tokenIn,tokenOut,amountSpecified,sqrtPriceLimitX96,payer,recipient",
-  "swapV3",
-);
-check(
-  inputs("swapV4").join() ===
-    "poolManager,key,zeroForOne,amountSpecified,sqrtPriceLimitX96,payer,recipient",
-  "swapV4",
-);
-check(
-  inputs("swapInfinityCL").includes("sqrtPriceLimitX96"),
+  inputs("swapInfinityCL").join() ===
+    "vault,key,zeroForOne,amountSpecified,sqrtPriceLimitX96,payer,recipient,callback",
   "PancakeSwap Infinity CL takes a limit",
 );
-check(inputs("swapMaverickV2Bounded").includes("tickLimit"), "Maverick V2 is bounded by a tick");
 check(
-  !inputs("swapInfinityBin").includes("sqrtPriceLimitX96"),
+  inputs("swapInfinityBin").join() ===
+    "vault,key,swapForY,amountSpecified,payer,recipient,callback",
   "PancakeSwap Infinity Bin has no limit",
 );
 
-// The pool callbacks the Router services: which pool families swapV3/swapV4 can drive.
+// The pool callbacks the Router services: which pool families `uniswapV3`/`uniswapV4` can drive.
 for (const callback of [
   "uniswapV3SwapCallback",
   "pancakeV3SwapCallback",
@@ -90,25 +121,4 @@ const routerAbi = (
 const errors = routerAbi.filter((entry) => entry.type === "error").map((entry) => entry.name);
 check(errors.includes("InvalidPool"), "a pool that is not the requested pair is refused");
 check(errors.includes("InputExceedsAuthorized"), "a callback takes at most the exact input");
-
-// The unified swap(SwapParams): pool types, and exact input's sign per type.
-const types = Object.entries(swap.SwapPoolType).map(([name, value]) => ({
-  name,
-  value,
-  poolKey: swap.usesPoolKey(value),
-  callback: swap.isCallbackVenue(value),
-  negative: swap.amountSpecifiedFor(value, 5n) !== 5n,
-}));
-const names = (keep: (t: (typeof types)[number]) => boolean) =>
-  types
-    .filter(keep)
-    .map((t) => t.name)
-    .join();
-check(
-  types.map((t) => `${t.name}=${t.value}`).join() ===
-    "UniV2=0,UniV3=1,UniV4=2,Curve=3,BalancerV2=4,DODOV2=5,TraderJoeLB=6,MaverickV2=7,WOOFi=8",
-  "pool types",
-);
-check(names((t) => t.negative) === "UniV4", "only V4 takes exact input as negative");
-check(names((t) => t.callback) === "UniV3,UniV4,MaverickV2", "callback venues");
-check(names((t) => t.poolKey) === "UniV2,UniV4", "poolKey users");
+console.log(`@sauce/router: ${Object.keys(LIBRARY).join(", ")}`);

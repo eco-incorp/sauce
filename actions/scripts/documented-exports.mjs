@@ -20,6 +20,7 @@ export const NOT_EXPORTS = new Map([
   ["IERC20", "the route compiler's own ERC-20 binding"],
   ["I", "the prefix binding names start with"],
   ["argumentOffset", "a method of the `CompiledProgram` that `compileProgram` returns"],
+  ["v12RouterAddress", "the SDK's `./deployments` export, the Router address a quote is sent to"],
 ]);
 
 /**

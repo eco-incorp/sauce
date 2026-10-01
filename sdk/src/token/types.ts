@@ -1,6 +1,6 @@
 /**
- * The universal token interface — types + registry constants. Sibling module to `swap/` and
- * `deposit/`: compiler-free, SauceScript SOURCE emission only. See `sdk/src/token/index.ts` for the
+ * The universal token interface — types + registry constants. Sibling module to `deposit/`:
+ * compiler-free, SauceScript SOURCE emission only. See `sdk/src/token/index.ts` for the
  * module-level overview and `sdk/src/token/source.ts` for the per-target emission seam.
  */
 

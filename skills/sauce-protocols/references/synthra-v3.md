@@ -59,3 +59,5 @@ an ABI import bound to the address), and the ABI functions are generated in
 - Pools call back `synthraV3SwapCallback` (`0x13abb0ca`) and `synthraV3MintCallback`, not the `uniswapV3*` callbacks, so a contract that swaps or mints against a Synthra pool directly must implement the renamed callbacks
 - On Arc there is no wrapped native token; pools pair against USDC's ERC-20 interface `0x3600…0000`
 - Addresses come from docs.synthra.org's contract-addresses page
+- Through a Pot's Sauce Router instead of the protocol's own router: `@sauce/router`'s `uniswapV3(pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient)` calls the Router's `swapV3`, and only a generation-3 Router answers `synthraV3SwapCallback`; on an older one the swap reverts. A Pot for which `potRouterUpdate(client, pot)` returns nothing runs the Kitchen's Router, generation `v12RouterGeneration()`; otherwise its owner signs the update it returns
+- Every Sauce Router swap is exact input: the Router caps what the callback may take at the exact input

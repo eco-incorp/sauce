@@ -108,19 +108,19 @@ fill safe and bounded. The program covers four, the price-limit venues whose nam
 factory or a pool manager a program can call as it is; the chains each namespace contract is on are
 in [../sauce-globals/references/protocols.md](../sauce-globals/references/protocols.md):
 
-| Venue                | Router entry | Pool lookup                                                                                        | Fee                                      | Namespace                                                                                        |
-| -------------------- | ------------ | -------------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Uniswap V3           | `swapV3`     | `getPool(a, b, fee)`, fees `100n`, `500n`, `3000n`, `10000n`                                       | the tier                                 | `UniswapV3.Factory`                                                                              |
-| PancakeSwap V3       | `swapV3`     | `getPool(a, b, fee)`, fees `100n`, `500n`, `2500n`, `10000n`                                       | the tier                                 | `PancakeswapV3.Factory`                                                                          |
-| Aerodrome Slipstream | `swapV3`     | `getPool(a, b, tickSpacing)` on **every** factory, spacings `1n`, `50n`, `100n`, `200n`, `2000n`   | per pool, and it changes: read `fee()`   | `AerodromeSlipstream.CLFactory`, and on Base also `.CLFactoryGaugeCaps` and `.CLFactoryGaugesV3` |
-| Uniswap V4, hookless | `swapV4`     | none: the keys in `v4Keys`, each built into `{ currency0, currency1, fee, tickSpacing, hooks: 0 }` | the LP fee plus any protocol fee (below) | `UniswapV4.PoolManager` (the swap), `UniswapV4.StateView` (the reads)                            |
+| Venue                | Swap        | Pool lookup                                                                                        | Fee                                      | Namespace                                                                                        |
+| -------------------- | ----------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Uniswap V3           | `uniswapV3` | `getPool(a, b, fee)`, fees `100n`, `500n`, `3000n`, `10000n`                                       | the tier                                 | `UniswapV3.Factory`                                                                              |
+| PancakeSwap V3       | `uniswapV3` | `getPool(a, b, fee)`, fees `100n`, `500n`, `2500n`, `10000n`                                       | the tier                                 | `PancakeswapV3.Factory`                                                                          |
+| Aerodrome Slipstream | `uniswapV3` | `getPool(a, b, tickSpacing)` on **every** factory, spacings `1n`, `50n`, `100n`, `200n`, `2000n`   | per pool, and it changes: read `fee()`   | `AerodromeSlipstream.CLFactory`, and on Base also `.CLFactoryGaugeCaps` and `.CLFactoryGaugesV3` |
+| Uniswap V4, hookless | `uniswapV4` | none: the keys in `v4Keys`, each built into `{ currency0, currency1, fee, tickSpacing, hooks: 0 }` | the LP fee plus any protocol fee (below) | `UniswapV4.PoolManager` (the swap), `UniswapV4.StateView` (the reads)                            |
 
 A pair can have a Slipstream pool at the same tick spacing under more than one factory, each with its
 own fee, so the program asks every factory for every spacing.
 
 **Price-limit venues it leaves out, and why:**
 
-- **Synthra V3 and UnitFlow V3** (Arc): the same `swapV3` and `getPool(a, b, fee)`, through
+- **Synthra V3 and UnitFlow V3** (Arc): the same `uniswapV3` and `getPool(a, b, fee)`, through
   `SynthraV3.Factory` and `UnitflowV3.Factory`. Not in the program only to keep it to the venues of
   the chains it is checked on; add them as another venue (below).
 - **Algebra pools** (Camelot V3 on Arbitrum, QuickSwap V3 on Polygon): `Camelot.V3Factory` and
@@ -332,15 +332,18 @@ returns at least `amountIn ×` the limit's price. That is the recipe:
 
 ## One swap per pool
 
-- `swapV3(pool, tokenIn, tokenOut, remaining, limit, self, self)`: a positive amount
-  is exact input.
-- `swapV4(UniswapV4.PoolManager, key, zeroForOne, -remaining, limit, self, self)`:
-  a negative amount is exact input.
-- Each swap is given its pool's own limit, not the caller's.
-- `payer` and `recipient` are the Pot. Each helper returns the input the pool took (the Pot's input
-  balance before minus after), which is simpler than decoding the returned deltas, and `main`
-  subtracts it from what is still unsold. A ranked pool exists, has liquidity and is priced better
-  than its limit, so its swap is expected to succeed; a revert reverts the whole program.
+Each swap is a `@sauce/router` call (`sauce-swaps`), through the Pot's Router, which pays each pool
+only what it fills:
+
+- `uniswapV3(pool, tokenIn, tokenOut, remaining, limit, 0n, self)` for a V3-style pool;
+- `uniswapV4(UniswapV4.PoolManager, tokenIn, tokenOut, remaining, fee, tickSpacing, 0n, limit, 0n, self)`
+  for a hookless V4 pool, its key built from the two tokens.
+
+Each swap is given its pool's own limit, not the caller's. The floor is `0n` on each swap and the
+output stays in the Pot (`self`): the settlement checks the fill as a whole. Each helper returns the
+input the pool took (the Pot's input balance before minus after), and `main` subtracts it from what
+is still unsold. A ranked pool exists, has liquidity and is priced better than its limit, so its
+swap is expected to succeed; a revert reverts the whole program.
 
 ## Settlement and the result
 
@@ -421,7 +424,8 @@ in base units. Take each token's decimals from
 
 - **Another chain**: pass its `--chain`; the venues it has are used, and the others left out.
 - **Another venue**: add its lookups behind `if (available(<Namespace.Contract>))` and grow the
-  discovery array; `swapIntoV3` already drives every V3-style pool the Router services. For Algebra
+  discovery array; `swapIntoV3` (`uniswapV3`) already drives every V3-style pool the Router
+  services. For Algebra
   pools, read `globalState()` for the price.
 - **More V4 pools**: pass their `(fee, tickSpacing)` in `v4Keys`, found through the `Initialize`
   logs. A hooked pool needs its `hooks` address (in the pool id and the key) and a hook you have

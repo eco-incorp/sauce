@@ -189,8 +189,8 @@ file's defines as values. It may also use what the file declares: its imports (a
 and its helper functions, each compiled into the body's program for the destination. It calls
 contracts by namespace (`UniswapV3.Factory.getPool(...)`), through an imported binding, or by
 selector, with `evm.static(address, data)` for a read and `evm.call(address, value, data)` for a
-write, `data` being the selector bytes `.concat(abi.encode(...))`. The swap Router is reached
-through the Pot itself, `ctx.self()`. Every unsold input and every output leaves the destination Pot
+write, `data` being the selector bytes `.concat(abi.encode(...))`. A swap is a `@sauce/router`
+call (`sauce-swaps`), imported at the top of the file. Every unsold input and every output leaves the destination Pot
 before the body ends, and a refund the body makes lands on the destination chain. The body runs on
 the shared intent Pot, which holds nothing of anyone's between intents, so it may return a token's
 whole balance there, as the refunds below do; a program on an owner's Pot returns only what is left
@@ -203,19 +203,15 @@ fulfilment, so set it from the limit (`sauce-distributed-swap` has the recipe), 
 pool can pay.
 
 ```sauce chain=arbitrum define=AMOUNT_IN,REWARD,SQRT_PRICE_LIMIT_X96,MIN_OUT,RECIPIENT,REFUND_TO
-import { ISauceRouter } from "./artifacts/ISauceRouter.json";
+import { uniswapV3 } from "@sauce/router";
 
 Base(
   () => {
-    const self = ctx.self();
     const pool = UniswapV3.Factory.getPool(WETH, USDC, 500n); // Base's 0.05% tier
     require(pool != 0n, "no WETH/USDC pool at 0.05%");
-    const outBefore = USDC.balanceOf(self);
-    ISauceRouter.at(self).swapV3(pool, WETH, USDC, AMOUNT_IN, SQRT_PRICE_LIMIT_X96, self, self);
-    const out = USDC.balanceOf(self) - outBefore;
-    require(out >= MIN_OUT, "fill below MIN_OUT");
-    USDC.transfer(RECIPIENT, out);
-    const unsold = WETH.balanceOf(self); // the shared Pot: return all of it
+    // Pays RECIPIENT the USDC, and reverts the whole fulfilment below MIN_OUT.
+    uniswapV3(pool, WETH, USDC, AMOUNT_IN, SQRT_PRICE_LIMIT_X96, MIN_OUT, RECIPIENT);
+    const unsold = WETH.balanceOf(ctx.self()); // the shared Pot: return all of it
     if (unsold > 0n) {
       WETH.transfer(REFUND_TO, unsold);
     }
@@ -227,16 +223,14 @@ Base(
 `REWARD` must exceed what the solver delivers, `AMOUNT_IN`, by what filling costs it (below).
 [examples/swap-on-base.sauce.ts](examples/swap-on-base.sauce.ts) is the same with the distributed
 swap (`sauce-distributed-swap`) as the body: every Uniswap V3 and V4 pool with liquidity, best taker
-price first, each up to its own fee-adjusted limit. It calls the Router and reads the pools by
-selector, which needs no import:
+price first, each up to its own fee-adjusted limit. It swaps through `@sauce/router` and reads each
+pool's own state by selector, which needs no import:
 
-| Call                                                                                                      | Selector                                 |
-| --------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| a V3-style factory's `getPool(address,address,uint24)` (Uniswap V3, PancakeSwap V3)                       | `0x1698ee82`                             |
-| a Slipstream factory's `getPool(address,address,int24)`                                                   | `0x28af8d0b`                             |
-| a pool's `slot0()`, `liquidity()`, `fee()`                                                                | `0x3850c7bd`, `0x1a686502`, `0xddca3f43` |
-| the Router's `swapV3(address,address,address,int256,uint160,address,address)`                             | `0xa5e2989d`                             |
-| the Router's `swapV4(address,(address,address,uint24,int24,address),bool,int256,uint160,address,address)` | `0x7c9e9da3`                             |
+| Call                                                                                | Selector                                 |
+| ----------------------------------------------------------------------------------- | ---------------------------------------- |
+| a V3-style factory's `getPool(address,address,uint24)` (Uniswap V3, PancakeSwap V3) | `0x1698ee82`                             |
+| a Slipstream factory's `getPool(address,address,int24)`                             | `0x28af8d0b`                             |
+| a pool's `slot0()`, `liquidity()`, `fee()`                                          | `0x3850c7bd`, `0x1a686502`, `0xddca3f43` |
 
 ## Cascades
 

@@ -134,6 +134,10 @@ for (const [slug, expected] of Object.entries(VENUES)) {
     /__sauce_transfer\(tokenIn, refundTo, remaining\)/.test(program.source),
     "the refund is a SafeERC20 transfer of what is left of amountIn, not the Pot's balance",
   );
+  check(
+    /import \{ uniswapV3, uniswapV4 \} from "@sauce\/router"/.test(program.source),
+    "every swap is a @sauce/router call",
+  );
   // The program carries the address of exactly the venues the chain has.
   const bytecode = bytesToHex(program.bytecode).toLowerCase();
   const on = contracts.on(slug) as unknown as Record<

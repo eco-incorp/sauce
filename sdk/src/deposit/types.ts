@@ -2,11 +2,20 @@
  * `@eco-incorp/sauce`'s `deposit` module — E4.2, the universal deposit/stake/wrap adapter.
  *
  * Types + the per-protocol template registry shape. See `sdk/src/deposit/index.ts` for the
- * module-level overview, and `sdk/src/swap/types.ts` (E4.1) for the sibling module this one mirrors
- * — `Address`/`AddressInput`/`AmountInput` are re-used from there, not re-declared.
+ * module-level overview.
  */
-export type { Address, AddressInput, AmountInput, Hex } from "../swap/types.js";
-import type { AddressInput, AmountInput } from "../swap/types.js";
+
+/** A 20-byte EVM address, as an ordinary `0x`-prefixed hex string. */
+export type Address = `0x${string}`;
+
+/** A `0x`-prefixed hex byte string. */
+export type Hex = `0x${string}`;
+
+/** Anything the builders accept for an address-shaped field. */
+export type AddressInput = Address | bigint;
+
+/** Anything the builders accept for a numeric-shaped field. */
+export type AmountInput = bigint | number | string;
 
 /**
  * How a template's protocol call pulls in the token amount being deposited.
@@ -70,20 +79,17 @@ export interface DepositSpec {
  *
  * - `amount: "balance"` — emit a RUNTIME balance read instead of a baked-in literal (`IERC20.
  *   balanceOf(ctx.self())` on `token` or the WETH unwrap `target`, `ctx.selfBalance()` for a
- *   native-funded template) — the shape
- *   a swap-then-deposit program needs when the deposit amount is an earlier leg's (unknown at
- *   compile time) output.
- * - `amount: "delta"` — only meaningful inside `swapThenDepositSource` (it needs a pre-swap balance
- *   snapshot to compute against); `depositCallStatement`/`depositSource` alone reject it.
+ *   native-funded template) — the shape a program needs when the deposit amount is only known when
+ *   it runs, such as what an earlier swap delivered.
  * - `amount: "max"` — only accepted on a template with `allowsMaxAmount: true` (Aave/Spark
  *   `withdraw`'s documented `type(uint256).max` withdraw-all sentinel); rejected everywhere else.
  */
 export type DepositSourceSpec =
-  DepositSpec | (Omit<DepositSpec, "amount"> & { amount: "balance" | "delta" | "max" });
+  DepositSpec | (Omit<DepositSpec, "amount"> & { amount: "balance" | "max" });
 
 /**
  * A {@link DepositSpec}, fully normalized — bigint scalars (+ the `"self"` sentinel for a defaulted
- * `beneficiary`, matching `SwapParams`'s own convention), plus the resolved {@link DepositTemplate}.
+ * `beneficiary`), plus the resolved {@link DepositTemplate}.
  * `amount` stays a passthrough of whatever `toDeposit` was handed for the runtime-amount shapes
  * (`"balance"` etc.) so a caller can tell a concrete deposit from a source-only one apart.
  */
@@ -91,7 +97,7 @@ export interface NormalizedDeposit {
   template: DepositTemplate;
   target: bigint;
   token: bigint | null;
-  amount: bigint | "balance" | "delta" | "max";
+  amount: bigint | "balance" | "max";
   beneficiary: bigint | "self" | null;
   approvalPolicy: ApprovalPolicy;
   extra: Readonly<Record<string, bigint>>;

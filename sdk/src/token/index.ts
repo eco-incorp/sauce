@@ -7,7 +7,7 @@
  * `sdk/src/routes/chain-exports.generated.ts`); this module is also importable directly as
  * `token.Token`, or any of its named exports.
  *
- * Compiler-free, like `swap/` and `deposit/`: every function here returns SauceScript SOURCE (or a
+ * Compiler-free, like `deposit/`: every function here returns SauceScript SOURCE (or a
  * structured EVM `Call`); the caller runs `compile()` with explicit options. See
  * `sdk/src/token/source.ts` for the per-target emission seam and `sdk/src/token/api.ts` for the
  * `Token`/`TokenCall` builder shape.

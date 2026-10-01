@@ -3,10 +3,10 @@
  * compile shares the SDK's wasm instance and its `ready()`: in a browser, `await ready()` from
  * `@eco-incorp/sauce` or `@eco-incorp/sauce/compiler` once, and every compile here works.
  *
- * A generated program imports no module: its ABI bindings are handed to the compiler in memory as
- * `inlineContracts`, so the resolver only ever serves the entry — no caller modules, no
- * `resolvePackage`. That is why this is not the SDK's `routes/rs-compile.ts`, which also resolves
- * the SDK's own stdlib and a caller's files.
+ * A generated program's ABI bindings are handed to the compiler in memory as `inlineContracts`. The
+ * one module it may import is `@sauce/router`, for a swap at one of that library's venues, and the
+ * SDK serves it — and the `@sauce/token` and pool ABIs it imports in turn — from memory
+ * (`resolveSdkPackage`, `resolveSdkModule`), so no caller resolver and no filesystem is involved.
  */
 import type { CompileResult } from "sauce-compiler";
 
@@ -14,6 +14,7 @@ import type { CompileResult } from "sauce-compiler";
 // and `sdk/dist` are siblings.
 import { compile } from "../../sdk/dist/wasm-compiler.js";
 import type { ActionContracts } from "./abis.js";
+import { resolveSdkModule, resolveSdkPackage } from "./registry.js";
 
 const ENTRY = "main.js";
 
@@ -36,7 +37,8 @@ export function compileEvm(
   return compile({
     target: "evm",
     entry: ENTRY,
-    resolve: (path) => (path === ENTRY ? bytes : undefined),
+    resolve: (path) => (path === ENTRY ? bytes : resolveSdkModule(path)),
+    resolvePackage: (specifier) => resolveSdkPackage(specifier),
     inlineContracts: inlineContracts.length > 0 ? inlineContracts : undefined,
     compactArgs: options.compactArgs,
   });
