@@ -40,7 +40,6 @@ import {
   intentVaultAddressCall,
   isIntentFundedCall,
 } from "../src/routes/portal.js";
-import * as sauceRoute from "../src/routes/sauce-route.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { SETTLE_VECTORS, SETTLE_WIRE, settlePayload } from "../src/verify/index.js";
 import { v12Pot } from "../src/evm/engine.js";
@@ -78,8 +77,6 @@ const PAY = join(EXAMPLES, "pay.sauce.ts");
 const PORTAL_CREATION = (
   JSON.parse(readFileSync(join(HERE, "evm/fixtures/Portal.json"), "utf8")) as { creationCode: Hex }
 ).creationCode;
-/** PR #17's scoped route compile: an intent body's names resolve on its own chain. */
-const hasScopedRoutes = "compileScopedRoute" in sauceRoute;
 const SPLIT = join(EXAMPLES, "split.sauce.ts");
 
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
@@ -931,10 +928,9 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     ).toEqual([usdc.toLowerCase()]);
   }, 60_000);
 
-  // The route pays in the DESTINATION's USDC — Base's, not Arbitrum's. That is PR #17's fix to the
-  // SDK's intent scoping (a nested body's names resolve on its own chain), which this command
-  // inherits; until it has landed, `compileScopedRoute` does not exist and this waits for it.
-  (hasScopedRoutes ? it : it.skip)("names each chain's own USDC: Base's in the route", () => {
+  // The route pays in the DESTINATION's USDC — Base's, not Arbitrum's: a nested body's names
+  // resolve on its own chain, and the command compiles through that scoping.
+  it("names each chain's own USDC: Base's in the route", () => {
     const intent = theIntent(OWNER.address);
     const baseUsdc = registered(requireChain("base"), "USDC").toLowerCase();
     const routeTokens = intent.route.tokens.map((token) =>

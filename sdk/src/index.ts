@@ -30,6 +30,10 @@ export * from "./routes/chain-exports.generated.js";
 // dist/index.d.ts, carrying the ambient `declare global` block (`USDC`, `Uniswap`, ...)
 // into a consumer's type graph so their typed route closures check. Do not "clean it up".
 import "./routes/source-globals.generated.js";
+// The language's own builtins (`ctx`, `crypto.keccak256`, `hex`, ...) for the same typed closures,
+// generated from the SauceScript reference's builtins.json. Bare for the same reason, and installs
+// nothing either.
+import "./routes/builtins.generated.js";
 export { installRouteGlobals, uninstallRouteGlobals, routeGlobals } from "./routes/globals.js";
 export { destinationExecutionFee } from "./evm/execution-fee.js";
 export type { ExecutionFeeCall } from "./evm/execution-fee.js";

@@ -128,11 +128,15 @@ describe("routes globals: installRouteGlobals installs the composed accessors", 
       (sauce: string, o: IntentOptions): { reward: (r: number | bigint) => unknown };
       route: (sauce: string, o: IntentOptions) => { reward: (r: number | bigint) => unknown };
     };
-    const viaCall = (g.Base as OriginLike)("return 1n;", opts).reward(0n) as { intent: unknown };
-    const viaRoute = (g.Base as OriginLike).route("return 1n;", opts).reward(0n) as {
+    const viaCall = (g.Base as OriginLike)("function main() { return 1n; }", opts).reward(0n) as {
       intent: unknown;
     };
-    const viaNamedImport = chainAccessors.Base("return 1n;", opts).reward(0n);
+    const viaRoute = (g.Base as OriginLike)
+      .route("function main() { return 1n; }", opts)
+      .reward(0n) as {
+      intent: unknown;
+    };
+    const viaNamedImport = chainAccessors.Base("function main() { return 1n; }", opts).reward(0n);
     expect(viaCall.intent).toEqual(viaNamedImport.intent);
     expect(viaRoute.intent).toEqual(viaNamedImport.intent);
   });

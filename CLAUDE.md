@@ -285,6 +285,18 @@ than a paraphrase. Compiler _behavior_ — language features, constant folding, 
 must be verified against the pinned compiler implementation and executable probes; the runtime
 repository's documentation is not an independent correctness check.
 
+**The language reference is held to the compiler, and there is one.**
+`skills/sauce-script/references/builtins.md` (the SauceScript reference) and its `builtins.json`
+(every builtin, with an example program per target and the error on a target that lacks it) are the
+`sauce-script` skill's reference and the manual's: `docs/` links to them rather than keeping a copy.
+`pnpm skills:check` (`sdk/scripts/skills-check/builtins.mjs`) holds them: every builtin example
+compiles on each target it lists, every table example compiles on each target its row claims, and
+every error the page quotes (`…` and `N` as wildcards) is produced by a rejected program — a
+builtin's `unavailable` entry or a program in `skills-check/builtins-rejections.mjs`. A new example
+or quoted error needs a program behind it, and a compiler bump that changes a message fails there
+first. Keep the page version-free, free of engine internals and free of placeholder addresses (the
+skills' wording rules).
+
 Compiler migration inventories and implementation plans have been removed. Git history retains
 those investigations; do not add them back to the public SDK manual.
 
@@ -299,6 +311,14 @@ chain and recipe definitions. **SDK tests compile every protocol's
 `sauceFunctions` through the real compiler**, which is the installed npm package — there is nothing
 to build first, but the suites that import `./artifacts/*.json` need `sync-engine-artifacts` to have
 run (see the Foundry gotcha above).
+
+**Every route rewrite parses with `src/routes/parse.ts`**: acorn extended by
+`@sveltejs/acorn-typescript`, both pinned exactly (the plugin extends acorn's parser class). A route
+source is SauceScript, annotations included, so the rewrites must take what the compiler takes; a
+JavaScript-only parse rejected every typed helper. `ast-walk.ts#walk` steps over annotations and
+type-only declarations, so no rewrite reads a type name as a value. Do not add a second parser, and
+do not reintroduce a "rewrites cannot parse annotations" workaround: the compile seam's one remaining
+insertion is `ensureVoidMain`.
 
 **Every registry ABI is pinned against the deployed contract, offline.** `test/registry-abi.test.ts`
 checks each function, event and custom error of each `abis.ts` export against
@@ -401,6 +421,22 @@ list must only ever name modules the SDK resolves itself. Two DISTINCT mechanism
 share the word "ambient": ambient **DEFINES** (`chainDefines` — chain-scoped SCALARS: chainId,
 protocol addresses, token symbols) vs ambient **MODULES** (this — whole library exports).
 
+**Chain-scoped names are resolved per level.** In `Chain(() => …).reward(…)` (`intent-sugar.ts`)
+the body and the delivery argument resolve on the destination and the reward on the enclosing
+chain, which escrows and approves it. `sauce-route.ts#levelOn` gives each level on another chain
+its own values (`NESTED_SCOPE`, the registry's `chainDefines`) and DROPS every caller `defines`
+entry named like a chain-scoped value of the enclosing chain or the destination, and every `tokens`
+override — by name, not value, so `defines: chainDefines(base)` and a hand-picked `USDC` are
+treated alike. Caller names no chain uses (`RECIPIENT`) hold at every depth. Protocol accessors
+never had the problem: they fold each chain's literal address in. `openRoute` passes its own
+chain's ambient defines as `RouteScope.chainDefines` beside the options rather than in
+`compile.defines`, so its `defines` stay the caller's; `compileScopedRoute` takes the scope and
+`compileSauceRoute` is that with an empty one. Two defects came from mixing these up (Arbitrum's
+USDC as a reward on Base, Base's in an Arbitrum body). `routes-intent-reward-chain.test.ts` records
+every level's compile on three paths and decodes each level's `publishAndFund`;
+`routes-intent-chains.e2e.test.ts` runs them on three anvils whose USDC differs. A test that gives a
+symbol one address everywhere (a `tokens` override, a define) cannot see either defect.
+
 The **`Token(addr)` global wrapper** (`Token(addr).approve(spender, amt)` / `const t = Token(addr);
 t.approve(...)`, zero import) and the **`<Sym>.transfer(...)` symbol syntax** are TEXTUAL rewrites in
 `token-rewrite.ts`, run in `compileSauceRoute` before the compiler, and both lower a WRITE
@@ -456,6 +492,14 @@ the registry, not availability on every chain. Compilation still enforces the se
 deployments, the SauceScript subset, and ABI fidelity. The public root type graph must keep the
 generated ambient declaration import so downstream typed closures see the same declarations.
 
+The language's own builtins (`ctx`, `crypto.keccak256`, `hex`, `Math.mulDiv`, `require(c, msg)`,
+value methods, …) are declared beside them in `routes/builtins.generated.ts`, generated by
+`pnpm --filter './sdk' gen-builtins` from the reference's `builtins.json` — its data, not a
+second list. `crypto`, `Math`, `require` and `eval` are host names: the builtins MERGE into the
+host's declarations (DOM `Crypto`, Node's `webcrypto.Crypto` and `NodeJS.Require`, lib `Math`)
+rather than redeclaring them, which would clash under Node. `routes-builtins-types.test.ts`
+typechecks a closure using every builtin with DOM, Node, both and neither.
+
 **`actions/`** — JSON action programs (`{ version, chainId, actions }`) lowered to one SauceScript
 program. The public surface is deliberately small — `parseProgram`, `serializeProgram`,
 `programSchema`, `compileProgram`, `programIntent`, `quoteAction`, `compileSplitSwap`,
@@ -486,8 +530,9 @@ been checked.
 **The `sauce` bin** (`sdk/src/cli/`, built to `sdk/dist/cli/main.js`) is the package's command
 line: `compile`, `simulate`, `run`, `publish`, `tx`, `pot`, `globals`, `inspect`, `verify`,
 `init` and `skills install|update|status`, on EVM chains and (`solana.ts`) Solana. It adds no
-compile path of its own — `compileSauceProgram` (the compile half of `compileSauceRoute`) under
-`withChainAmbient` (the chain bundle `openRoute` uses) — and no encoder or decoder: the cook is
+compile path of its own — `compileSauceProgram` (the compile half of `compileSauceRoute`, with the
+chain bundle `openRoute` uses: `chainAmbient`'s modules and the chain's names as a `RouteScope`, so
+an intent the file opens resolves its body on its own chain) — and no encoder or decoder: the cook is
 `buildSauceEvmCall`, the Pot `v12PredictPot`/`potSalt`/`sauceEvmDeployPotCall`, arguments
 `encodeEntryArguments`/`decodeEntryArguments`, names `sourceGlobals`, settles
 `validateSettleProgram`/`verifySvmSettleExecution`, and Solana cooks `createSauceSvmClient`
@@ -497,7 +542,8 @@ compile path of its own — `compileSauceProgram` (the compile half of `compileS
 `--keypair`, scrubbing any key it was given from everything it prints. `run --fund` (`funding.ts`)
 wraps the file's source before that compile — a new `main` with the same signature that pulls
 through `@sauce/token` (`permitTransferFrom`, `permit`, `transferFrom`), calls the original
-renamed, and sweeps — signing Permit2 or EIP-2612 locally; `cli-funding.e2e.test.ts` runs every
+renamed, and sweeps; in a script, the pulls after its imports and the sweeps after its last
+statement — signing Permit2 or EIP-2612 locally; `cli-funding.e2e.test.ts` runs every
 mode against canonical Permit2's runtime (`test/fixtures/cli/Permit2.json`). `cli.e2e.test.ts` runs the
 EVM commands against anvils with the released gated stack (and one `cast send` line verbatim);
 `cli-solana.e2e.test.ts` runs the Solana ones against the released Kitchen and engine in LiteSVM
@@ -580,15 +626,14 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   are third-party facts and are exempt from the address, Portal and multicall rules only.
 - **Program conventions.** A program names no chain (`--chain <chain>` in its usage line, no
   `// @chain` header): runtime inputs are typed `main(...)` parameters passed with `--args`, and an
-  intent file is top-level statements whose values are defines left undeclared. Prettier formats
-  `skills/**/*.sauce.ts` with no trailing commas (`.prettierrc.json`), because the SDK's rewrite of
-  `main`'s parameters breaks on one after the last parameter.
+  intent file is top-level statements whose values are defines left undeclared.
 - **They describe this tree, and their runners pin it.** Where the SDK's behaviour shapes how a
   skill tells agents to write something, a runner asserts that behaviour, so the change that moves
-  it fails `skills:check` and the skill is rewritten with it. Today that covers, among others: an
-  intent body names destination tokens by address because a bare symbol there resolves on the
-  source chain (`sauce-intents/examples/intents.mts`), and a program for a chain carries
-  annotations on signatures only, with no `interface` (`sauce-script/examples/saucescript.mts`).
+  it fails `skills:check` and the skill is rewritten with it. Today that covers, among others: on
+  which chain each part of an intent resolves its names, the body and delivery on the destination
+  and the reward on the source (`sauce-intents/examples/intents.mts`), and that a program for a
+  chain compiles as written — annotations anywhere, `interface`, a script's helpers and imports
+  (`sauce-script/examples/saucescript.mts`).
 
 **`dev-tools/`** — compiler/argument helpers and a local SVM Kitchen execution harness, for
 developing the SDK; nothing of it ships in the package. Its `start:local`/`start:fork` scripts and

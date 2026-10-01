@@ -367,9 +367,9 @@ export function renderProgram(lowered: Lowered): string {
 }
 
 /**
- * `main` for an SDK route body: no annotations, because the route compiler's rewrite passes parse
- * plain JavaScript and add the `void` themselves. A route body is compiled with no arguments, so a
- * program with `argument` actions cannot be one.
+ * `main` for an SDK route body: no return annotation, because the route compiler's adapter adds the
+ * `void` itself. A route body is compiled with no arguments, so a program with `argument` actions
+ * cannot be one.
  */
 export function renderRouteBody(lowered: Lowered): string {
   if (lowered.parameters.length > 0) {

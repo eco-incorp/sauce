@@ -10,8 +10,8 @@ import type { Address } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
+import { mainSignature } from "../routes/entry.js";
 import { blankLiterals } from "../routes/rs-compile.js";
-import { wrapSauceBody } from "../routes/sauce-route.js";
 import {
   parseAddress,
   parseChain,
@@ -78,7 +78,7 @@ export function programChain(
  * define of the same name — which replaces a MODULE-level const — would be silently ignored.
  */
 export function definesReach(file: string, text: string, names: readonly string[]): void {
-  if (wrapSauceBody(text) === text) return;
+  if (mainSignature(text) !== undefined) return;
   const code = blankLiterals(text);
   for (const name of names) {
     if (new RegExp(`(^|[^.\\w$])(?:const|let)\\s+${name.replace(/\$/g, "\\$")}\\b`).test(code)) {

@@ -1,19 +1,15 @@
 /**
- * A program's `main(...)` parameters on the route path: letting the SDK's passes compile a typed
- * signature, reading it back, and encoding the values a caller passes for it.
+ * A program's `main(...)` parameters on the route path: reading its signature, and encoding the
+ * values a caller passes for it.
  *
- * TYPED `main`. The token, protocol and intent passes parse the program with acorn, which has no
- * TypeScript: `function main(token: Address, amounts: Uint256[])` does not parse. So the signature's
- * annotations are LIFTED before those passes — the parameter list reduced to its names, the return
- * type dropped — and put back after them, before the compiler sees the source. The passes never
- * touch `main`'s signature, and `restore` checks they did not. A signature with no annotation is
- * left exactly as written, so every untyped program compiles to the bytes it always did.
+ * The SDK's passes parse SauceScript with its annotations (`parse.ts`), so a typed `main` reaches
+ * the compiler exactly as written; this only reads it.
  *
  * ENTRY ARGUMENTS. A value for a parameter arrives at run time, appended to the program: ABI-v1
  * (`abi.encode` of the parameters in order, no selector) by default, compact-v1 under `compactArgs`.
  * `encodeEntryArguments` checks each value against the type the program declares and encodes it in
  * the encoding the program was compiled for. Only annotations are types here: a parameter without
- * one is a `Uint256`, as `rs-compile.ts#ensureTypedMainParams` declares it.
+ * one is a `Uint256`, as the compiler reads it.
  */
 import {
   bytesToHex,
@@ -32,6 +28,8 @@ import {
   encodeCompactArguments,
   type CompactValue,
 } from "../compact-arguments.js";
+import type { AstNode } from "./ast-walk.js";
+import { parseSauce } from "./parse.js";
 import { blankLiterals } from "./rs-compile.js";
 import type { CompiledSauceProgram } from "./sauce-route.js";
 
@@ -59,7 +57,7 @@ export type EntryValue =
 type ProgramEntry = Pick<CompiledSauceProgram, "entryEncoding" | "entrySchema" | "entryParams">;
 
 // ---------------------------------------------------------------------------------------------
-// Finding, lifting and restoring `main`'s signature
+// Finding `main`'s signature
 // ---------------------------------------------------------------------------------------------
 
 interface MainSignature {
@@ -71,8 +69,6 @@ interface MainSignature {
 }
 
 const MAIN = /(^|[^.\w$])function\s+main\s*\(/;
-/** Any function declaration's head, `function <name>(`. */
-const FUNCTION = /(^|[^.\w$])function\s+([A-Za-z_$][\w$]*)\s*\(/g;
 
 /** The end of the type starting at `from` in blanked `code`: at the body's `{` or end of input. */
 function endOfType(code: string, from: number): number {
@@ -145,80 +141,6 @@ function splitParam(param: string): { name: string; type?: string } {
     : { name: param.slice(0, colon).trim(), type: param.slice(colon + 1).trim() };
 }
 
-export interface LiftedSignature {
-  /** The source with every function's annotations removed, for the acorn-based passes. */
-  readonly source: string;
-  /** Puts the annotations back into what those passes made of `source`. */
-  readonly restore: (rewritten: string) => string;
-}
-
-/** One annotated function's signature, as written and as lifted. */
-interface Lifted {
-  readonly name: string;
-  readonly params: string;
-  readonly returns: string;
-  readonly names: string;
-}
-
-/** Every function declaration in `source`, in order: its name and where its signature is. */
-function declarations(source: string): Array<MainSignature & { readonly name: string }> {
-  const code = blankLiterals(source);
-  const found: Array<MainSignature & { readonly name: string }> = [];
-  for (const match of code.matchAll(FUNCTION)) {
-    const signature = signatureAt(code, match.index + match[0].length - 1);
-    if (signature !== undefined) found.push({ ...signature, name: match[2]! });
-  }
-
-  return found;
-}
-
-/**
- * `source` with the parameter and return annotations of every function — `main` and its helpers —
- * lifted out, and how to put them back. Functions with none are left as they are; a source with
- * none at all comes back unchanged, with a `restore` that changes nothing.
- */
-export function liftSignatures(source: string): LiftedSignature {
-  const lifted: Lifted[] = [];
-  let out = source;
-  // Right to left, so each splice leaves the offsets of those before it alone.
-  for (const fn of declarations(source).reverse()) {
-    const params = source.slice(fn.open + 1, fn.close);
-    const returns = source.slice(fn.close + 1, fn.returnEnd);
-    if (!params.includes(":") && returns === "") continue;
-    const names = splitTopLevel(params)
-      .map((param) => splitParam(param).name)
-      .join(", ");
-    out = `${out.slice(0, fn.open + 1)}${names})${out.slice(fn.returnEnd)}`;
-    lifted.push({ name: fn.name, params, returns, names });
-  }
-  if (lifted.length === 0) return { source, restore: (rewritten) => rewritten };
-
-  return {
-    source: out,
-    restore: (rewritten) => {
-      const found = declarations(rewritten);
-      const places = lifted.map((fn) => {
-        const at = found.find((candidate) => candidate.name === fn.name);
-        if (at === undefined || rewritten.slice(at.open + 1, at.close) !== fn.names) {
-          throw new Error(
-            `compileSauceRoute: ${fn.name}'s parameters changed while the SDK rewrote the program, ` +
-              "so its type annotations cannot be put back",
-          );
-        }
-
-        return { fn, at };
-      });
-      let restored = rewritten;
-      // Right to left again, by where each function now is.
-      for (const { fn, at } of places.sort((a, b) => b.at.open - a.at.open)) {
-        restored = `${restored.slice(0, at.open + 1)}${fn.params})${fn.returns}${restored.slice(at.close + 1)}`;
-      }
-
-      return restored;
-    },
-  };
-}
-
 /** `main`'s signature as a source writes it (`mainSignature`). */
 export interface MainSignatureText {
   /** Indices of the `(` opening the parameter list and the `)` closing it. */
@@ -280,15 +202,50 @@ export function mainSignature(source: string): MainSignatureText | undefined {
   };
 }
 
-/** `main`'s parameters as `source` declares them — every one, `Account` slots included. */
+/**
+ * `main`'s parameters as `source` declares them — every one, `Account` slots included. A record
+ * type named by an `interface` the file declares is spelled out inline (`{ amount: Uint256 }`),
+ * since that is what a value for it is encoded against.
+ */
 export function mainParams(source: string): EntryParam[] {
   const main = locateMain(source);
   if (main === undefined) return [];
+  const params = splitTopLevel(source.slice(main.open + 1, main.close)).map(splitParam);
+  const records = params.some((param) => param.type !== undefined) ? interfaces(source) : new Map();
 
-  return splitTopLevel(source.slice(main.open + 1, main.close)).map((param) => {
-    const { name, type } = splitParam(param);
+  return params.map(({ name, type }) => ({
+    name,
+    type: type === undefined ? "Uint256" : inlineRecords(type, records),
+  }));
+}
 
-    return { name, type: type ?? "Uint256" };
+/** Each `interface` the module declares, as the inline object type it names. */
+function interfaces(source: string): ReadonlyMap<string, string> {
+  const records = new Map<string, string>();
+  for (const node of (parseSauce(source) as unknown as { body: AstNode[] }).body) {
+    const declaration =
+      node.type === "ExportNamedDeclaration" ? (node.declaration as AstNode | null) : node;
+    if (declaration?.type !== "TSInterfaceDeclaration") continue;
+    const members = (declaration.body as { body: AstNode[] }).body.map((member) => {
+      const key = member.key as AstNode & { name: string };
+      const annotation = (member.typeAnnotation as { typeAnnotation: AstNode }).typeAnnotation;
+
+      return `${key.name}: ${source.slice(annotation.start, annotation.end)}`;
+    });
+    records.set((declaration.id as { name: string }).name, `{ ${members.join(", ")} }`);
+  }
+
+  return records;
+}
+
+/** `type` with every interface name in it replaced by its inline object type, recursively. */
+function inlineRecords(type: string, records: ReadonlyMap<string, string>, depth = 0): string {
+  if (records.size === 0 || depth > 16) return type;
+
+  return type.replace(/[A-Za-z_$][\w$]*/g, (name) => {
+    const record = records.get(name);
+
+    return record === undefined ? name : inlineRecords(record, records, depth + 1);
   });
 }
 

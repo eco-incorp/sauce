@@ -30,8 +30,8 @@ function baseOptions(overrides: Record<string, unknown> = {}) {
 describe("routes: callable alias === .route", () => {
   it("Base(sauce, opts) and Base.route(sauce, opts) produce deep-equal Intents", () => {
     const { Base } = chainAccessors;
-    const viaCall = Base("return 1n;", baseOptions()).reward(0n);
-    const viaRoute = Base.route("return 1n;", baseOptions()).reward(0n);
+    const viaCall = Base("function main() { return 1n; }", baseOptions()).reward(0n);
+    const viaRoute = Base.route("function main() { return 1n; }", baseOptions()).reward(0n);
     expect(viaCall.intent).toEqual(viaRoute.intent);
   });
 
@@ -89,7 +89,7 @@ describe("routes: EVM happy path", () => {
 describe("routes: stage immutability / branching", () => {
   it("one PendingSauceRoute reused for two .reward() calls yields independent Intents", () => {
     const { Ethereum } = chainAccessors;
-    const pending: PendingSauceRoute = Ethereum("return 1n;", baseOptions());
+    const pending: PendingSauceRoute = Ethereum("function main() { return 1n; }", baseOptions());
     const a = pending.reward(0n);
     const b = pending.reward(5n);
     expect(a.intent.reward.nativeAmount).toBe(0n);
@@ -98,7 +98,7 @@ describe("routes: stage immutability / branching", () => {
 
   it("intents() returns a fresh array each call", () => {
     const { Ethereum } = chainAccessors;
-    const built = Ethereum("return 1n;", baseOptions()).reward(0n);
+    const built = Ethereum("function main() { return 1n; }", baseOptions()).reward(0n);
     const a = built.intents();
     const b = built.intents();
     expect(a).not.toBe(b);
