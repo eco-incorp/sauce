@@ -153,6 +153,31 @@ The same commands take `--chain solana`, with three differences:
 
 `sauce-solana` covers writing them.
 
+## Without the CLI: the MCP tools
+
+The same steps are tools of the Sauce MCP server, for an agent with no local install but Node.js:
+`npx -y @eco-incorp/sauce mcp` starts it over stdio. A tool takes the program as text (`source`)
+and the command's flags as inputs of the same name in camelCase; `args` is `main`'s arguments as a
+JSON array. A tool that reads a chain takes `rpcUrl`, an endpoint for that one call, which is never
+returned. Nothing signs: the user signs and sends what `sauce_tx`, `sauce_pot` and `sauce_publish`
+return, with their own wallet.
+
+| Command          | Tool                                                  |
+| ---------------- | ----------------------------------------------------- |
+| `sauce globals`  | `sauce_globals`                                       |
+| `sauce compile`  | `sauce_compile`                                       |
+| `sauce pot`      | `sauce_pot`: the address, the deploy, deployed or not |
+| `sauce simulate` | `sauce_simulate`                                      |
+| `sauce tx`       | `sauce_tx`                                            |
+| `sauce publish`  | `sauce_publish`, unsigned or as a dry run             |
+| `sauce inspect`  | `sauce_inspect`                                       |
+| `sauce verify`   | `sauce_verify`                                        |
+| `sauce price`    | `sauce_price`                                         |
+| `sauce run`      | none: it signs                                        |
+
+`sauce_actions` compiles an action program written as JSON and builds its cook. `sauce_skills` and
+`sauce_skill` read these skills, and `sauce_install_skills` says how to install them locally.
+
 ## Rules
 
 - Never write an RPC URL or a key into a tracked file, a program or a command you commit.

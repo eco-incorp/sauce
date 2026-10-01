@@ -63,7 +63,8 @@ npx sauce run payout.sauce.ts --chain base --config sauce.config.json --keystore
 ```
 
 `sauce-run` covers each command. Endpoints come from a config file the developer passes, never
-from the program or the environment.
+from the program or the environment. Without the CLI, the same steps are tools of the Sauce MCP
+server (`npx -y @eco-incorp/sauce mcp`); `sauce-run` maps each command to its tool.
 
 ## Pick the next skill
 

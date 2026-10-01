@@ -887,6 +887,8 @@ const COMPILER_DIR = packageRoot(
 for (const file of [
   ...walk(join(SDK_DIR, "sdk", "dist"), (p) => p.endsWith(".d.ts")),
   ...walk(join(SDK_DIR, "actions", "dist"), (p) => p.endsWith(".d.ts")),
+  // The MCP server's tool and input names, which a skill may name as `sauce mcp` serves them.
+  ...walk(join(SDK_DIR, "mcp", "dist"), (p) => p.endsWith(".js")),
   ...walk(join(SDK_DIR, "sdk", "dist", "std"), (p) => p.endsWith(".js")),
   ...walk(join(SDK_DIR, "sdk", "dist", "artifacts"), (p) => p.endsWith(".json")),
   ...walk(join(SDK_DIR, "sdk", "dist", "protocols"), (p) => /\.(json|js)$/.test(p)),
