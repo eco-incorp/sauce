@@ -63,25 +63,20 @@ function main(amount: Uint256, to: Address): void {
     const out = compileSauceRoute("base", source, EXECUTION);
 
     expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
-    // The token write was rewritten and the annotations were left exactly where they were.
-    expect(out.source).toContain("__sauce_transfer(USDC, leg.to, leg.amount)");
-    expect(out.source).toContain("function doubled(xs: Uint256[]): Uint256[] {");
-    expect(out.source).toContain("const leg: Leg = legOf(");
+    // Nothing rewrites it: the compiler reads the token write, annotations and all, as written.
+    expect(out.source).toBe(source);
   });
 
-  it("compiles to the program the compiler makes of the source with the rewrite done by hand", () => {
-    // The only rewrite here is the protocol pass's bare `self`; the rest must reach the compiler
-    // byte for byte, annotations included.
+  it("compiles to the program the compiler makes of the source as written", () => {
+    // Even the bare `self` is the compiler's to resolve (through the extensions manifest): the
+    // source reaches it byte for byte, annotations included.
     const source = `${HELPERS}
 function main(amount: Uint256): Uint256 {
   const parts: Uint256[] = [amount, ctx.timestamp()];
   return total(doubled(parts)) + ctx.balance(self);
 }`;
     const routed = compileSauceRoute("base", source, EXECUTION);
-    const direct = compileWithRs({
-      source: source.replace("(self)", "(ctx.self())"),
-      target: "v12",
-    });
+    const direct = compileWithRs({ source, target: "v12", extensions: { chain: BASE } });
 
     expect(Array.from(routed.compiled.bytecode[0]!)).toEqual(Array.from(direct.bytecode[0]!));
   });

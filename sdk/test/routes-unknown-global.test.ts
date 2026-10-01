@@ -1,11 +1,12 @@
 /**
- * A name used as a token or a protocol that the destination does not have is reported as that.
+ * A name used as a token or a protocol that the destination does not have is reported as that, at
+ * the name.
  *
  * `DAIX.balanceOf(x)` names nothing on Base: `DAIX` is not a registered token, a protocol, a
- * declaration or a builtin. The token and protocol rewrites leave a name they do not know alone, so
- * it reached the compiler, which could only say "`this call expression` cannot be lowered to IR
- * yet". The route compiler knows what the chain has, so it says which name is unknown, on which
- * chain, and what it probably meant.
+ * declaration or a builtin. The compiler reads every name the chain has from the extensions manifest
+ * (`src/routes/extensions.ts`), so it reports an unknown one itself, located in the source as
+ * written; and a token or contract the chain lacks but another chain has carries the manifest's
+ * message saying where it is.
  */
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
 
@@ -17,38 +18,55 @@ const EXECUTION = {
 const compileOn = (chain: string, source: string, options = {}) =>
   compileSauceRoute(chain, source, EXECUTION, options);
 
+/** The refusal of `source` on `chain`: its last located message, and the text that message covers. */
+function refusal(chain: string, source: string): { message: string; covers: string } {
+  try {
+    compileOn(chain, source);
+  } catch (error) {
+    const located = (
+      error as {
+        diagnostics?: { message: string; start: { offset: number }; end: { offset: number } }[];
+      }
+    ).diagnostics?.at(-1);
+    if (located === undefined) throw error;
+    return {
+      message: located.message,
+      covers: source.slice(located.start.offset, located.end.offset),
+    };
+  }
+  throw new Error(`\`${source}\` compiled`);
+}
+
 describe("an unknown token or protocol name", () => {
-  it("is named, with the chain", () => {
-    expect(() =>
-      compileOn("base", "function main() { return DAIX.balanceOf(ctx.self()); }"),
-    ).toThrow("`DAIX` is not a token or protocol on base");
-  });
-
-  it("suggests the chain's near matches", () => {
-    expect(() =>
-      compileOn("base", "function main() { return USDCC.balanceOf(ctx.self()); }"),
-    ).toThrow(/`USDCC` is not a token or protocol on base\. Did you mean `USDC`\?/);
-    expect(() =>
-      compileOn(
-        "base",
-        `function main() { Uniswapp.UniversalRouter.execute("0x0a", ["0x00"], 1n); }`,
-      ),
-    ).toThrow(/`Uniswapp` is not a token or protocol on base\. Did you mean `Uniswap`/);
-  });
-
-  it("suggests from the chain it compiles for: Optimism has USDT, Base does not", () => {
-    expect(() =>
-      compileOn("optimism", "function main() { return USDTT.balanceOf(ctx.self()); }"),
-    ).toThrow(/Did you mean `USDT`\?/);
-    expect(() =>
-      compileOn("base", "function main() { return USDTT.balanceOf(ctx.self()); }"),
-    ).not.toThrow(/Did you mean `USDT`/);
+  it("is named where it is written", () => {
+    expect(refusal("base", "function main() { return DAIX.balanceOf(ctx.self()); }")).toEqual({
+      message: "`DAIX` is not a declared variable",
+      covers: "DAIX",
+    });
+    expect(
+      refusal("base", `function main() { Uniswapp.UniversalRouter.execute("0x0a", ["0x00"], 1n); }`)
+        .covers,
+    ).toBe("Uniswapp");
   });
 
   it("is reported in value position too", () => {
+    expect(
+      refusal("base", "function main() { USDC.approve(Uniswapp.UniversalRouter, 1n); }").covers,
+    ).toBe("Uniswapp");
+  });
+
+  it("a token the chain lacks says which chains have it: Optimism has USDT, Base does not", () => {
+    const { message, covers } = refusal(
+      "base",
+      "function main() { return USDT.balanceOf(ctx.self()); }",
+    );
+    expect(message).toMatch(
+      /^`USDT` is not a token base registers; it is registered on: .*optimism/,
+    );
+    expect(covers).toBe("USDT");
     expect(() =>
-      compileOn("base", "function main() { USDC.approve(Uniswapp.UniversalRouter, 1n); }"),
-    ).toThrow("`Uniswapp` is not a token or protocol on base");
+      compileOn("optimism", "function main() { return USDT.balanceOf(ctx.self()); }"),
+    ).not.toThrow();
   });
 });
 
@@ -65,7 +83,7 @@ describe("a name the program or the compile gives meaning to is not unknown", ()
     ],
     ["the `self` sugar", "function main(): Uint256 { return self.USDC; }"],
   ])("%s", (_name, source) => {
-    expect(() => compileOn("base", source)).not.toThrow(/is not a token or protocol/);
+    expect(() => compileOn("base", source)).not.toThrow(/is not a declared variable/);
   });
 
   it("a constant an ambient module exports", () => {

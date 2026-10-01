@@ -15,7 +15,7 @@
  * by the released engine. See `docs/guides/solana.md` for the execution boundary.
  */
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
-import type { AccountManifest, ResolveModule, ResolvePackage } from "sauce-compiler";
+import type { AbiParameter, AccountManifest, ResolveModule, ResolvePackage } from "sauce-compiler";
 import { bytesToHex } from "viem";
 
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
@@ -32,7 +32,6 @@ import {
 import { resolveTokenMap } from "./token-registry.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
 import { rewriteAvailability } from "./available.js";
-import { unknownGlobalError } from "./unknown-global.js";
 import { pascalOfSlug } from "./accessors.js";
 import { encodeCompactArguments } from "../compact-arguments.js";
 import { v12KitchenAddress } from "../deployments/index.js";
@@ -52,7 +51,8 @@ import {
   type IntentSugarDefaults,
   type LoweredIntent,
 } from "./intent-sugar.js";
-import { mainParams, type EntryParam } from "./entry.js";
+import { entryParamsOf, type EntryParam } from "./entry.js";
+import { isTokenSymbol } from "./extensions.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
 
 export interface SauceCompileOptions {
@@ -175,7 +175,7 @@ export interface RouteScope {
  * Whether compiles take the native path by default. Internal, and off: it exists so the two
  * pipelines can be compared on one corpus while the rewrites it replaces are removed one by one.
  */
-let nativePipeline = false;
+let nativePipeline = true;
 
 /** Set {@link RouteScope.native}'s default. Internal to the SDK and its tests. */
 export function useNativePipeline(on: boolean): void {
@@ -452,9 +452,8 @@ export function compileSauceProgram(
     { ...options, ambient: ambient.length > 0 ? ambient : options.ambient },
     scope,
   );
-  const entryParams = mainParams(program.source).filter(
-    (param) => resolved.kind !== "svm" || !/^Account\b/.test(param.type),
-  );
+  // The compiler's own reading of `main`, which leaves an SVM `Account` slot to the manifest.
+  const entryParams = entryParamsOf(program.entryParams);
 
   return {
     chain: resolved,
@@ -486,6 +485,7 @@ function compileForChain(
   readonly compiled: CompileResult;
   readonly source: string;
   readonly entryEncoding: "abi-v1" | "compact-v1";
+  readonly entryParams: readonly AbiParameter[];
   readonly manifest?: AccountManifest;
   readonly intents: readonly LoweredIntent[];
 } {
@@ -637,35 +637,17 @@ function compileForChain(
     }
   }
 
-  let rs: RsCompileResult;
-  try {
-    rs = compileWithRs({
-      source,
-      target,
-      resolve: options.resolve,
-      resolvePackage: options.resolvePackage,
-      defines,
-      contracts,
-      ambient: options.ambient,
-      compactArgs: options.compactArgs,
-    });
-  } catch (error) {
-    // A token or protocol name the chain does not have, reported as one rather than as the call
-    // the compiler could not lower. Asked only of a program the compiler refused.
-    throw (
-      unknownGlobalError(
-        source,
-        chain,
-        {
-          defines: Object.keys(defines ?? {}),
-          contracts: Object.keys(contracts ?? {}),
-          tokens: tokenMap.keys(),
-        },
-        error,
-      ) ?? error
-    );
-  }
-  const { manifest, entryEncoding, ...compiled } = rs;
+  const rs: RsCompileResult = compileWithRs({
+    source,
+    target,
+    resolve: options.resolve,
+    resolvePackage: options.resolvePackage,
+    defines,
+    contracts,
+    ambient: options.ambient,
+    compactArgs: options.compactArgs,
+  });
+  const { manifest, entryEncoding, entryParams, ...compiled } = rs;
 
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
@@ -673,8 +655,8 @@ function compileForChain(
   const { intents } = sugar;
 
   return manifest === undefined
-    ? { chain, compiled, source, entryEncoding, intents }
-    : { chain, compiled, source, entryEncoding, manifest, intents };
+    ? { chain, compiled, source, entryEncoding, entryParams, intents }
+    : { chain, compiled, source, entryEncoding, entryParams, manifest, intents };
 }
 
 /**
@@ -691,22 +673,36 @@ function compileNatively(
 ): {
   readonly compiled: CompileResult;
   readonly entryEncoding: "abi-v1" | "compact-v1";
+  readonly entryParams: readonly AbiParameter[];
   readonly manifest?: AccountManifest;
 } {
   const accessors = typeof options.accessors === "object" ? options.accessors : {};
-  const { manifest, entryEncoding, ...compiled } = compileWithRs({
+  // A define named like a token symbol is that token's address, as it was when the token rewrite
+  // read the symbol from the defines: `chainDefines(chain)` handed over as `defines` carries every
+  // symbol. As a define it would shadow the symbol's type and leave `USDC.transfer` nothing to call,
+  // so it overrides the manifest's token instead.
+  const defines: Record<string, DefineValue> = {};
+  const tokens: Record<string, AddressInput> = { ...options.tokens };
+  for (const [name, value] of Object.entries(options.defines ?? {})) {
+    if (isTokenSymbol(name) && typeof value === "bigint")
+      tokens[name] ??= `0x${value.toString(16)}`;
+    else defines[name] = value;
+  }
+  const { manifest, entryEncoding, entryParams, ...compiled } = compileWithRs({
     source,
     target,
     resolve: options.resolve,
     resolvePackage: options.resolvePackage,
-    defines: options.defines,
+    defines,
     contracts: options.contracts,
     ambient: options.ambient,
     compactArgs: options.compactArgs,
     extensions: {
       chain,
-      tokens: options.tokens,
+      tokens: Object.keys(tokens).length > 0 ? tokens : undefined,
       allowWidenedSelectors: accessors.allowWidenedSelectors,
+      protocols: options.accessors !== false,
+      self: options.accessors !== false && accessors.selfSugar !== false,
     },
   });
   if (compiled.bytecode.length === 0) {
@@ -714,6 +710,6 @@ function compileNatively(
   }
 
   return manifest === undefined
-    ? { compiled, entryEncoding }
-    : { compiled, entryEncoding, manifest };
+    ? { compiled, entryEncoding, entryParams }
+    : { compiled, entryEncoding, entryParams, manifest };
 }

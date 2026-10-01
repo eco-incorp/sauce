@@ -10,7 +10,6 @@ import { createRequire } from "node:module";
 import { dirname, join } from "path";
 import { fileURLToPath } from "node:url";
 import { resolveSdkModule, resolveSdkPackage } from "../src/embedded/resolve.js";
-import { ensureVoidMain } from "../src/routes/rs-compile.js";
 import { keccak256, toBytes, toHex } from "viem";
 import type { CompileResult as RustCompileResult, SauceTarget } from "sauce-compiler";
 
@@ -64,7 +63,7 @@ export function compileProgram(
   const entry = "main.js";
   const resolve = (path: string): Uint8Array | undefined => {
     const key = path.replace(/^\.\//, "");
-    if (key === entry) return Buffer.from(ensureVoidMain(source));
+    if (key === entry) return Buffer.from(source);
     for (const dir of baseDirs ?? []) {
       const full = join(dir, key);
       if (existsSync(full)) return readFileSync(full);
@@ -109,7 +108,7 @@ export function compileSource(
   const entry = "main.js";
   const resolve = (path: string): Uint8Array | undefined => {
     const key = path.replace(/^\.\//, "");
-    if (key === entry) return Buffer.from(ensureVoidMain(source));
+    if (key === entry) return Buffer.from(source);
     for (const dir of baseDirs) {
       const full = join(dir, key);
       if (existsSync(full)) return readFileSync(full);

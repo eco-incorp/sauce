@@ -16,12 +16,24 @@ const EXECUTION = {
   engine: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 } as const;
 
-/** Compiles `body` (a `main` body) for `chain`, returning the rewritten source and the bytecode. */
+/** Compiles `body` (a `main` body) for `chain`, returning the source as compiled and the bytecode. */
 function build(chain: string, body: string, tokens?: Record<string, `0x${string}`>) {
   const compiled = compileSauceRoute(chain, `function main() {\n${body}\n}`, EXECUTION, {
     tokens,
   });
   return { source: compiled.source, bytecode: compiled.compiled.bytecode[0]! };
+}
+
+/** `decided` compiles, on `chain`, to exactly the program that is only the branch it takes. */
+function same(
+  chain: string,
+  decided: string,
+  taken: string,
+  tokens?: Record<string, `0x${string}`>,
+): void {
+  expect(Array.from(build(chain, decided, tokens).bytecode)).toEqual(
+    Array.from(build(chain, taken, tokens).bytecode),
+  );
 }
 
 /** The one source that runs everywhere: PancakeSwap V3 where it is deployed, else nothing. */
@@ -41,15 +53,15 @@ describe("available(): one program, the venue only where the chain has it", () =
   });
 
   it("keeps the branch on a chain with the contract: Base calls its factory", () => {
-    const { source } = build("base", VENUE);
-    const address = BigInt(getDescriptor("pancakeswap-v3", "Factory")!.perChainAddress[8453]!);
-    expect(source).toContain(`IPancakeswapV3_Factory.view(${address}n).getPool`);
-    expect(source).not.toContain("available(");
+    same(
+      "base",
+      VENUE,
+      "let pool = 0n;\npool = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);\nreturn pool;",
+    );
   });
 
   it("folds the branch out on a chain without it: Optimism compiles to the program without it", () => {
     const folded = build("optimism", VENUE);
-    expect(folded.source).not.toContain("PancakeswapV3");
     const without = build("optimism", "let pool = 0n;\nreturn pool;");
     expect(Array.from(folded.bytecode)).toEqual(Array.from(without.bytecode));
   });
@@ -70,10 +82,16 @@ describe("available(): one program, the venue only where the chain has it", () =
       }
       return pool;
     `;
-    expect(build("base", ladder).source).not.toContain("IUniswapV3_Factory");
-    const optimism = build("optimism", ladder).source;
-    expect(optimism).toContain("IUniswapV3_Factory");
-    expect(optimism).not.toContain("PancakeswapV3");
+    same(
+      "base",
+      ladder,
+      "let pool = 0n;\npool = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);\nreturn pool;",
+    );
+    same(
+      "optimism",
+      ladder,
+      "let pool = 0n;\npool = UniswapV3.Factory.getPool(USDC, WETH, 500n);\nreturn pool;",
+    );
   });
 
   it("a guard that returns early removes the rest of its block on a chain without the contract", () => {
@@ -83,36 +101,35 @@ describe("available(): one program, the venue only where the chain has it", () =
       }
       return PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
     `;
-    expect(build("base", guard).source).toContain("IPancakeswapV3_Factory");
-    const optimism = build("optimism", guard);
-    expect(optimism.source).not.toContain("PancakeswapV3");
-    expect(Array.from(optimism.bytecode)).toEqual(
-      Array.from(build("optimism", "return 0n;").bytecode),
-    );
+    same("base", guard, "return PancakeswapV3.Factory.getPool(USDC, WETH, 500n);");
+    same("optimism", guard, "return 0n;");
   });
 
   it("?:, && and || fold the same way", () => {
-    const ternary = build(
+    same(
       "optimism",
       "return available(PancakeswapV3.Factory) ? PancakeswapV3.Factory.getPool(USDC, WETH, 500n) : 7n;",
+      "return 7n;",
     );
-    expect(ternary.source).toContain("return (7n);");
-    const and = build(
+    same(
       "optimism",
       "if (available(PancakeswapV3.Factory) && PancakeswapV3.Factory.getPool(USDC, WETH, 500n) > 0n) { return 1n; }\nreturn 0n;",
+      "if (false) { return 1n; }\nreturn 0n;",
     );
-    expect(and.source).not.toContain("PancakeswapV3");
-    const or = build(
+    same(
       "base",
       "if (!available(PancakeswapV3.Factory) || PancakeswapV3.Factory.getPool(USDC, WETH, 500n) == 0n) { return 1n; }\nreturn 0n;",
+      // The decided operand is its literal: what `||` is left with is the right operand.
+      "if (false || PancakeswapV3.Factory.getPool(USDC, WETH, 500n) == 0n) { return 1n; }\nreturn 0n;",
     );
-    expect(or.source).toContain("if ((IPancakeswapV3_Factory.view(");
   });
 
   it("anywhere else it is the literal, and a branch behind a runtime value stays live code", () => {
-    expect(
-      build("optimism", "const has = available(UniswapV3.Factory);\nreturn has;").source,
-    ).toContain("const has = true;");
+    same(
+      "optimism",
+      "const has = available(UniswapV3.Factory);\nreturn has;",
+      "const has = true;\nreturn has;",
+    );
     expect(() =>
       build(
         "optimism",
@@ -125,11 +142,11 @@ describe("available(): one program, the venue only where the chain has it", () =
 describe("available(): what it can name", () => {
   it("a token symbol, by the chain's token map: the registry and the caller's tokens", () => {
     const usdt = "return available(USDT) ? USDT.balanceOf(ctx.self()) : 0n;";
-    expect(build("ethereum", usdt).source).toContain("IERC20.at(USDT).balanceOf");
-    expect(build("base", usdt).source).not.toContain("USDT");
-    expect(
-      build("base", usdt, { USDT: "0x2222222222222222222222222222222222222222" }).source,
-    ).toContain("IERC20.at(USDT).balanceOf");
+    same("ethereum", usdt, "return USDT.balanceOf(ctx.self());");
+    same("base", usdt, "return 0n;");
+    same("base", usdt, "return USDT.balanceOf(ctx.self());", {
+      USDT: "0x2222222222222222222222222222222222222222",
+    });
   });
 
   it("a family member and a chain-qualified contract", () => {

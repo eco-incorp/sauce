@@ -10,8 +10,7 @@ import type { Address } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
-import { mainSignature } from "../routes/entry.js";
-import { blankLiterals } from "../routes/rs-compile.js";
+import { blankLiterals, mainSignature } from "../routes/entry.js";
 import {
   parseAddress,
   parseChain,

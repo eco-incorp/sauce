@@ -1,21 +1,19 @@
 /**
- * `ensureVoidMain` — the single compile seam's `: void` annotation, and the two ways the scan for
- * "does `main` return a value?" can read something that is not `main`'s own code.
- *
- * Each case COMPILES: an unannotated `main` that falls off the end is a compile error, so a missing
- * `: void` fails here rather than only showing up as a differently-shaped string.
+ * An unannotated `main` that falls off the end is a `: void` entry — the compiler infers it, so
+ * nothing annotates the source first. These are the shapes a text scan for "does `main` return a
+ * value?" got wrong when the SDK did annotate it (a helper's `return`, a word in a string or a
+ * comment, a brace in a literal): each must still compile, and one that does return a value must
+ * still be a value entry.
  */
-import { ensureVoidMain } from "../src/routes/rs-compile.js";
 import { compileSource } from "./helpers";
 
-/** `compileSource` runs `ensureVoidMain` itself, so a compile IS the assertion. */
+/** A compile IS the assertion: an unannotated `main` the compiler could not read as void fails. */
 const compiles = (source: string): number => compileSource(source, "evm").bytecode.length;
 
-describe("ensureVoidMain annotates a main that falls off the end", () => {
+describe("a main that falls off the end is void", () => {
   it("a bare void main", () => {
     const source = "function main() { evm.sstore(1n, 2n); }";
 
-    expect(ensureVoidMain(source)).toContain("function main(): void");
     expect(compiles(source)).toBeGreaterThan(0);
   });
 
@@ -26,7 +24,6 @@ describe("ensureVoidMain annotates a main that falls off the end", () => {
       "function double(x: Uint256): Uint256 { return x + x; }",
     ].join("\n");
 
-    expect(ensureVoidMain(source)).toContain("function main(): void");
     expect(compiles(source)).toBeGreaterThan(0);
   });
 
@@ -35,7 +32,6 @@ describe("ensureVoidMain annotates a main that falls off the end", () => {
     const source =
       'function main() { if (evm.sload(1n) > 0n) { throw "nothing to return here"; } }';
 
-    expect(ensureVoidMain(source)).toContain("function main(): void");
     expect(compiles(source)).toBeGreaterThan(0);
   });
 
@@ -47,7 +43,6 @@ describe("ensureVoidMain annotates a main that falls off the end", () => {
       "}",
     ].join("\n");
 
-    expect(ensureVoidMain(source)).toContain("function main(): void");
     expect(compiles(source)).toBeGreaterThan(0);
   });
 
@@ -59,7 +54,6 @@ describe("ensureVoidMain annotates a main that falls off the end", () => {
       "function double(x: Uint256): Uint256 { return x + x; }",
     ].join("\n");
 
-    expect(ensureVoidMain(source)).toContain("function main(): void");
     expect(compiles(source)).toBeGreaterThan(0);
   });
 
@@ -72,7 +66,6 @@ describe("ensureVoidMain annotates a main that falls off the end", () => {
       "}",
     ].join("\n");
 
-    expect(ensureVoidMain(source)).toContain("function main(): void");
     expect(compiles(source)).toBeGreaterThan(0);
   });
 
@@ -81,17 +74,7 @@ describe("ensureVoidMain annotates a main that falls off the end", () => {
     // can also be compiled; the `{`/`return` variant below is annotation-only for that reason.
     const source = "function main() { const tag = hex`2a`; evm.sstore(1n, 2n); }";
 
-    expect(ensureVoidMain(source)).toContain("function main(): void");
     expect(compiles(source)).toBeGreaterThan(0);
-  });
-
-  it("a template literal carrying a brace and the word return does not suppress it", () => {
-    // NOT compiled: an untagged template literal is outside the M1 subset ("this expression is not
-    // supported"), so the annotation is the whole assertion here. `mainBody` still has to blank it —
-    // the generators emit plain JS and nothing stops one carrying a backtick.
-    const source = "function main() { const label = `{ return }`; evm.sstore(1n, 2n); }";
-
-    expect(ensureVoidMain(source)).toContain("function main(): void");
   });
 
   it("a comment naming `function main(` before the real one does not steal the match", () => {
@@ -104,13 +87,6 @@ describe("ensureVoidMain annotates a main that falls off the end", () => {
       "function main() { helper(); }",
     ].join("\n");
 
-    expect(ensureVoidMain(source)).toBe(
-      [
-        "// mirrors function main(",
-        "function helper(): void { evm.sstore(3n, 4n); }",
-        "function main(): void { helper(); }",
-      ].join("\n"),
-    );
     expect(compiles(source)).toBeGreaterThan(0);
   });
 
@@ -119,49 +95,32 @@ describe("ensureVoidMain annotates a main that falls off the end", () => {
     // landed mid-comment.
     const source = "function main(/* takes ) nothing */) { evm.sstore(1n, 2n); }";
 
-    expect(ensureVoidMain(source)).toBe(
-      "function main(/* takes ) nothing */): void { evm.sstore(1n, 2n); }",
-    );
     expect(compiles(source)).toBeGreaterThan(0);
-  });
-
-  it("a paren inside a default-value string does not mis-locate the closing paren", () => {
-    // NOT compiled: a string-valued param default is outside the M1 subset, so the annotation is the
-    // whole assertion. The generators emit plain JS and nothing stops one carrying a paren in a string.
-    const source = 'function main(label = "a)b") { evm.sstore(1n, 2n); }';
-
-    expect(ensureVoidMain(source)).toBe(
-      'function main(label = "a)b"): void { evm.sstore(1n, 2n); }',
-    );
   });
 
   it("a string containing an unbalanced brace does not truncate the body's walk", () => {
     const source = 'function main() { if (evm.sload(1n) > 0n) { throw "}"; } evm.sstore(1n, 2n); }';
 
-    expect(ensureVoidMain(source)).toContain("function main(): void");
     expect(compiles(source)).toBeGreaterThan(0);
   });
 });
 
-describe("ensureVoidMain leaves a main it must not touch alone", () => {
+describe("a main that returns a value, or none at all, is left as it is", () => {
   it("an already-annotated main", () => {
     const source = "function main(): Uint256 { return 1n; }";
 
-    expect(ensureVoidMain(source)).toBe(source);
     expect(compiles(source)).toBeGreaterThan(0);
   });
 
   it("an unannotated main that returns a value", () => {
     const source = "function main() { return evm.sload(1n); }";
 
-    expect(ensureVoidMain(source)).toBe(source);
     expect(compiles(source)).toBeGreaterThan(0);
   });
 
   it("a value-returning main whose return sits inside a nested block", () => {
     const source = "function main() { if (evm.sload(1n) > 0n) { return 1n; } return 0n; }";
 
-    expect(ensureVoidMain(source)).toBe(source);
     expect(compiles(source)).toBeGreaterThan(0);
   });
 
@@ -170,13 +129,6 @@ describe("ensureVoidMain leaves a main it must not touch alone", () => {
     // `: void` while returning a value — the opposite failure to the block-comment one, equally silent.
     const source = 'function main() { if (evm.sload(1n) > 0n) { throw "}"; } return 1n; }';
 
-    expect(ensureVoidMain(source)).toBe(source);
     expect(compiles(source)).toBeGreaterThan(0);
-  });
-
-  it("a source with no main at all", () => {
-    const source = "function helper(x: Uint256): Uint256 { return x; }";
-
-    expect(ensureVoidMain(source)).toBe(source);
   });
 });

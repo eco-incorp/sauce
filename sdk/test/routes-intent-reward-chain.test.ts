@@ -43,6 +43,10 @@ const real = await import("../src/routes/rs-compile.js");
 interface Compile {
   readonly source: string;
   readonly defines: Readonly<Record<string, bigint | boolean | number>>;
+  /** The chain whose extensions manifest the compile read: where its token symbols come from. */
+  readonly chain: string | undefined;
+  /** Token overrides for that chain. */
+  readonly tokens: Readonly<Record<string, unknown>> | undefined;
   readonly bytecode: Hex;
 }
 /** Every compile since the last `record()`, in the order the pipeline made them: a nested
@@ -55,6 +59,8 @@ jest.unstable_mockModule("../src/routes/rs-compile.js", () => ({
     compiles.push({
       source: input.source,
       defines: input.defines ?? {},
+      chain: input.extensions?.chain.slug,
+      tokens: input.extensions?.tokens,
       bytecode: bytesToHex(result.bytecode[0]!),
     });
     return result;
@@ -244,7 +250,11 @@ function expectLevel(
 
   // The program's own names. Everything a chain defines is `on`'s value, and nothing only the
   // opener's chain defines survived into it.
-  expect(level.defines.USDC).toBe(BigInt(usdcOf(on)));
+  // A token symbol is the manifest's, for the chain the program compiles for — or an override for
+  // that chain, which must be its own token.
+  expect(level.chain).toBe(on);
+  const usdc = level.tokens?.USDC;
+  expect(usdc === undefined ? usdcOf(on) : address(BigInt(usdc as string))).toBe(usdcOf(on));
   const own = definesOf(on);
   const opened = opener === undefined ? {} : definesOf(opener);
   for (const [name, value] of Object.entries(level.defines)) {
@@ -384,7 +394,8 @@ describe.each(PATHS)("a caller's own defines, through %s", (_name, build) => {
       { arbitrum: "base" },
     ).values();
 
-    expect(level!.defines.USDC).toBe(chosen);
+    // A token symbol's define is that chain's token: an override the manifest carries.
+    expect(BigInt(level!.tokens!.USDC as string)).toBe(chosen);
     expect(level!.intent.reward.tokens.map((t) => lower(t.token))).toEqual([address(chosen)]);
     expect(level!.intent.route.tokens.map((t) => lower(t.token))).toEqual([usdcOf("arbitrum")]);
     expect(level!.intent.route.calls.map((c) => lower(c.target))).toEqual([usdcOf("arbitrum")]);

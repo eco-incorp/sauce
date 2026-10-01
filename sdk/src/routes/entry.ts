@@ -28,9 +28,7 @@ import {
   encodeCompactArguments,
   type CompactValue,
 } from "../compact-arguments.js";
-import type { AstNode } from "./ast-walk.js";
-import { parseSauce } from "./parse.js";
-import { blankLiterals } from "./rs-compile.js";
+import type { AbiParameter } from "sauce-compiler";
 import type { CompiledSauceProgram } from "./sauce-route.js";
 
 /** One of `main`'s runtime parameters, as the program declares it. */
@@ -59,6 +57,61 @@ type ProgramEntry = Pick<CompiledSauceProgram, "entryEncoding" | "entrySchema" |
 // ---------------------------------------------------------------------------------------------
 // Finding `main`'s signature
 // ---------------------------------------------------------------------------------------------
+
+/**
+ * Index of the closing quote of the string/template literal opening at `open`.
+ *
+ * Template interpolation does not nest here: `${…}` is scanned as ordinary string body, so a
+ * backtick inside one would end the literal early. That is sound only because the language subset
+ * rejects template literals outright (`\`{ return }\`` fails as "not supported in the M1 subset"),
+ * leaving `hex\`…\`` -- the one tagged form it accepts -- which cannot contain an interpolation.
+ */
+function endOfString(source: string, open: number): number {
+  const quote = source[open];
+  for (let i = open + 1; i < source.length; i++) {
+    if (source[i] === "\\") i++;
+    else if (source[i] === quote) return i;
+  }
+
+  return source.length;
+}
+
+/** Index of the last character of the `//` or block comment opening at `open`. */
+function endOfComment(source: string, open: number): number {
+  if (source[open + 1] === "/") {
+    const newline = source.indexOf("\n", open);
+
+    return newline === -1 ? source.length - 1 : newline;
+  }
+  const close = source.indexOf("*/", open);
+
+  return close === -1 ? source.length - 1 : close + 1;
+}
+
+/**
+ * `source` with every string, template literal and comment replaced by spaces (newlines kept).
+ * LENGTH-PRESERVING, so an index into the original still names the same character — which is what
+ * lets the brace search in `mainBody` run on the blanked copy.
+ */
+export function blankLiterals(source: string): string {
+  const blank = (text: string): string => text.replace(/[^\n]/g, " ");
+  const blanked: string[] = [];
+
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    const isLiteral = ch === '"' || ch === "'" || ch === "`";
+    const isComment = ch === "/" && (source[i + 1] === "/" || source[i + 1] === "*");
+    if (!isLiteral && !isComment) {
+      blanked.push(ch);
+      continue;
+    }
+    const end = isLiteral ? endOfString(source, i) : endOfComment(source, i);
+    blanked.push(blank(source.slice(i, end + 1)));
+    i = end;
+  }
+
+  return blanked.join("");
+}
 
 interface MainSignature {
   /** Index of the `(` opening the parameter list, and of the `)` closing it. */
@@ -204,50 +257,26 @@ export function mainSignature(source: string): MainSignatureText | undefined {
 }
 
 /**
- * `main`'s parameters as `source` declares them — every one, `Account` slots included. A record
- * type named by an `interface` the file declares is spelled out inline (`{ amount: Uint256 }`),
- * since that is what a value for it is encoded against.
+ * `main`'s parameters as the compiler read them (`compile()`'s `entryParams`, an ABI signature),
+ * spelled as the SauceScript types `encodeEntryArguments` encodes for: `Address`, `Uint256`, `bool`,
+ * `bytes`, `string`, `T[]` and an inline `{ field: T }` record. A record a parameter names by an
+ * `interface` comes back spelled out, since that is what a value for it is encoded against.
  */
-export function mainParams(source: string): EntryParam[] {
-  const main = locateMain(source);
-  if (main === undefined) return [];
-  const params = splitTopLevel(source.slice(main.open + 1, main.close)).map(splitParam);
-  const records = params.some((param) => param.type !== undefined) ? interfaces(source) : new Map();
-
-  return params.map(({ name, type }) => ({
-    name,
-    type: type === undefined ? "Uint256" : inlineRecords(type, records),
-  }));
+export function entryParamsOf(abi: readonly AbiParameter[]): EntryParam[] {
+  return abi.map((param) => ({ name: param.name, type: spelled(param) }));
 }
 
-/** Each `interface` the module declares, as the inline object type it names. */
-function interfaces(source: string): ReadonlyMap<string, string> {
-  const records = new Map<string, string>();
-  for (const node of (parseSauce(source) as unknown as { body: AstNode[] }).body) {
-    const declaration =
-      node.type === "ExportNamedDeclaration" ? (node.declaration as AstNode | null) : node;
-    if (declaration?.type !== "TSInterfaceDeclaration") continue;
-    const members = (declaration.body as { body: AstNode[] }).body.map((member) => {
-      const key = member.key as AstNode & { name: string };
-      const annotation = (member.typeAnnotation as { typeAnnotation: AstNode }).typeAnnotation;
-
-      return `${key.name}: ${source.slice(annotation.start, annotation.end)}`;
-    });
-    records.set((declaration.id as { name: string }).name, `{ ${members.join(", ")} }`);
+/** One ABI parameter's type, in SauceScript's spelling. */
+function spelled(param: AbiParameter): string {
+  const array = /^(.*)\[\d*\]$/.exec(param.type);
+  if (array !== null) return `${spelled({ ...param, type: array[1]! })}[]`;
+  if (param.type === "tuple") {
+    const fields = (param.components ?? []).map((field) => `${field.name}: ${spelled(field)}`);
+    return `{ ${fields.join(", ")} }`;
   }
-
-  return records;
-}
-
-/** `type` with every interface name in it replaced by its inline object type, recursively. */
-function inlineRecords(type: string, records: ReadonlyMap<string, string>, depth = 0): string {
-  if (records.size === 0 || depth > 16) return type;
-
-  return type.replace(/[A-Za-z_$][\w$]*/g, (name) => {
-    const record = records.get(name);
-
-    return record === undefined ? name : inlineRecords(record, records, depth + 1);
-  });
+  if (param.type === "address") return "Address";
+  if (/^u?int\d*$/.test(param.type)) return "Uint256";
+  return param.type;
 }
 
 // ---------------------------------------------------------------------------------------------

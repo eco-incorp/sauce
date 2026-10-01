@@ -11,7 +11,6 @@
  */
 import { decodeFunctionData, erc20Abi, type Hex } from "viem";
 
-import { compileProgram as compile } from "./helpers";
 import { requireChain } from "../src/chains/canonical.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
 import { rewriteIntentSugar } from "../src/routes/intent-sugar.js";
@@ -447,7 +446,7 @@ describe("a program with no sugar is not parsed for it", () => {
         pot: "0x1111111111111111111111111111111111111111",
         engine: "0x2222222222222222222222222222222222222222",
       }),
-    ).toThrow(SyntaxError);
+    ).toThrow(/parsing produced 1 error/);
   });
 
   it("still parses a program that mentions `reward` anywhere, even with no site", () => {
@@ -633,7 +632,9 @@ describe("through the real compile path", () => {
       { defines: { RECIPIENT }, intents: { deadline: 4_000_000_000n, creator: CREATOR } },
     );
 
-    expect(out.source).toContain("IERC20.at(");
-    expect(() => compile(out.source, { baseDirs: [] })).toBeDefined();
+    // The enclosing program's `Token(USDC)` is the compiler's, as written; the intent is lowered
+    // around it.
+    expect(out.source).toContain("const amount = Token(USDC).balanceOf(ctx.self());");
+    expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 });

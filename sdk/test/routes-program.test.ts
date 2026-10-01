@@ -5,7 +5,7 @@
 import { bytesToHex, encodeAbiParameters, hexToBytes } from "viem";
 
 import { encodeCompactArguments } from "../src/compact-arguments.js";
-import { encodeEntryArguments, mainParams } from "../src/routes/entry.js";
+import { encodeEntryArguments } from "../src/routes/entry.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import * as routes from "../src/routes/index.js";
@@ -148,12 +148,14 @@ describe("main's signature", () => {
   });
 
   it("reads main's parameters, an unannotated one a Uint256", () => {
-    expect(mainParams("function main(a, b: bool, c: Uint256[]) {}")).toEqual([
+    expect(
+      compileSauceProgram("base", "function main(a, b: bool, c: Uint256[]) {}").entryParams,
+    ).toEqual([
       { name: "a", type: "Uint256" },
       { name: "b", type: "bool" },
       { name: "c", type: "Uint256[]" },
     ]);
-    expect(mainParams("USDC.transfer(x, 1n);")).toEqual([]);
+    expect(compileSauceProgram("base", "USDC.transfer(ctx.self(), 1n);").entryParams).toEqual([]);
   });
 
   it("spells out a record an interface names, so a value for it can be encoded", () => {
@@ -249,7 +251,7 @@ describe("encodeEntryArguments", () => {
     );
   });
 
-  it("reads a record type's fields separated by ;, as a formatter writes them", () => {
+  it("reads a record type's fields separated by ;, as a formatter writes them, as one type", () => {
     const comma = compileSauceProgram(
       "base",
       "function main(legs: { amount: Uint256, to: Address }[]) {}",
@@ -258,8 +260,9 @@ describe("encodeEntryArguments", () => {
       "base",
       "function main(legs: { amount: Uint256; to: Address }[]) {}",
     );
+    expect(semicolon.entryParams).toEqual(comma.entryParams);
     expect(semicolon.entryParams).toEqual([
-      { name: "legs", type: "{ amount: Uint256; to: Address }[]" },
+      { name: "legs", type: "{ amount: Uint256, to: Address }[]" },
     ]);
     const legs = [[{ amount: 5n, to: PROVER }]];
     expect(encodeEntryArguments(semicolon, legs)).toEqual(encodeEntryArguments(comma, legs));

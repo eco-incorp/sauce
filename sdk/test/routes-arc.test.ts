@@ -30,7 +30,10 @@ const ARC_EXECUTION_FEE = 10n ** 16n;
 const ENGINE = v12EngineAddress() as Hex;
 
 const evm = (word: string): Hex => getAddress(denormalizeToEvm(word as Hex)) as Hex;
-const decimal = (address: string): string => `${BigInt(address)}n`;
+/** The bytecode of `program` on `chain`, every address in it written out. */
+const spelled = (chain: string, program: string): Uint8Array =>
+  routes.compileSauceRoute(chain, program, { pot: SHARED_POT, engine: ENGINE }).compiled
+    .bytecode[0]!;
 
 describe("Arc: the named export", () => {
   it("is the canonical Arc chain", () => {
@@ -57,9 +60,10 @@ describe("Arc: chain-scoped defines", () => {
       { pot: SHARED_POT, engine: ENGINE, value: ARC_EXECUTION_FEE },
       { defines: chainDefines(requireChain("arc")) },
     );
-    expect(compiled.source).toContain("__sauce_approve(USDC, ");
-    expect(compiled.source).toContain(decimal(ARC_SWAP_ROUTER02));
-    expect(compiled.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+    // Arc's USDC approving Arc's router: the program spelled with both addresses.
+    expect(compiled.compiled.bytecode[0]).toEqual(
+      spelled("arc", `Token(${ARC_USDC}).approve(${ARC_SWAP_ROUTER02}, 1_000_000n);`),
+    );
     expect(compiled.calls).toHaveLength(1);
     expect(evm(compiled.calls[0]!.target)).toBe(SHARED_POT);
     // The Kitchen fee rides as native value, unscaled: on Arc that is 18-decimal USDC.
@@ -77,8 +81,14 @@ describe("Arc: chain-scoped defines", () => {
       "USDC.approve(Uniswap.UniversalRouter, 1_000_000n);",
       { pot: SHARED_POT, engine: ENGINE },
     );
-    expect(onArc.source).toContain(decimal("0x4fcA4a51Ab4F23A7447b3284fBd7D73289A89Fb1"));
-    expect(onBase.source).not.toContain(decimal("0x4fcA4a51Ab4F23A7447b3284fBd7D73289A89Fb1"));
+    const arcRouter = "0x4fcA4a51Ab4F23A7447b3284fBd7D73289A89Fb1";
+    expect(onArc.compiled.bytecode[0]).toEqual(
+      spelled("arc", `Token(${ARC_USDC}).approve(${arcRouter}, 1_000_000n);`),
+    );
+    const baseRouter = "0x6fF5693b99212Da76ad316178A184AB56D299b43";
+    expect(onBase.compiled.bytecode[0]).toEqual(
+      spelled("base", `Token(${BASE_USDC}).approve(${baseRouter}, 1_000_000n);`),
+    );
   });
 });
 

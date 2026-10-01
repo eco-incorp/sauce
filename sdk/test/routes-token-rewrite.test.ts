@@ -182,7 +182,6 @@ describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with N
       pot: POT,
       engine: ENGINE,
     });
-    expect(compiled.source).toContain(`__sauce_transfer(USDC, ${TO}, 5n)`);
     expect(Array.from(compiled.compiled.bytecode[0]!)).toEqual(
       libraryProgram(`${USDC}n`, "transfer", `${TO}, 5n`),
     );
@@ -207,7 +206,7 @@ describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with N
     // leaving the compiler to report an un-lowerable call expression.
     expect(() =>
       compileSauceRoute("ronin", `USDC.transfer(${TO}, 5n);`, { pot: POT, engine: ENGINE }),
-    ).toThrow("`USDC` is not a token or protocol on ronin");
+    ).toThrow("`USDC` is not a token ronin registers");
   });
 });
 
@@ -276,15 +275,12 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
     expect(Array.from(sugarCompiled.bytecode[0]!)).toEqual(Array.from(u4Compiled.bytecode[0]!));
   });
 
-  it("THE DECISIVE STEP (a): self.USDC for a real chain rewrites to IERC20.at(<real Base USDC>n).balanceOf(ctx.self()) and compiles", () => {
-    const compiled = compileSauceRoute("base", `function main() { return self.USDC; }`, {
-      pot: POT,
-      engine: ENGINE,
-    });
-    expect(compiled.source).toContain(
-      `IERC20.at(${BigInt(USDC).toString()}n).balanceOf(ctx.self())`,
+  it("THE DECISIVE STEP (a): self.USDC for a real chain is the Pot's balance of the chain's USDC", () => {
+    const route = (source: string) =>
+      compileSauceRoute("base", source, { pot: POT, engine: ENGINE }).compiled.bytecode[0]!;
+    expect(route(`function main() { return self.USDC; }`)).toEqual(
+      route(`function main() { return Token(${USDC}).balanceOf(self); }`),
     );
-    expect(compiled.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 
   it("chain-scoped: Base USDC != Ethereum USDC in the emitted literal", () => {
@@ -296,9 +292,10 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
       pot: POT,
       engine: ENGINE,
     });
-    expect(baseCompiled.source).not.toBe(ethCompiled.source);
-    expect(baseCompiled.source).toContain(`${BigInt(USDC).toString()}n`);
-    expect(ethCompiled.source).not.toContain(`${BigInt(USDC).toString()}n`);
+    const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString("hex");
+    const baseUsdc = USDC.slice(2).toLowerCase();
+    expect(hex(baseCompiled.compiled.bytecode[0]!)).toContain(baseUsdc);
+    expect(hex(ethCompiled.compiled.bytecode[0]!)).not.toContain(baseUsdc);
   });
 
   describe("value-position guard: a call/lvalue shape is NOT rewritten", () => {
@@ -385,20 +382,10 @@ describe("balance sugar: rewriteTokenMembers with the Map form", () => {
 // --- U4 + protocol-accessor composition: the swapped-order regression lock ----------------------
 
 describe("composition: token pass + protocol-accessor pass in ONE compile", () => {
-  it("a body using BOTH Uniswap.UniversalRouter.execute(...) and self.USDC compiles, both rewritten, ERC20 import exactly once", () => {
-    const compiled = compileSauceRoute(
-      "base",
-      `function main() { Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n); return self.USDC; }`,
-      { pot: POT, engine: ENGINE },
-    );
-    expect(compiled.source).toContain("IUniswapV4_UniversalRouter.at(");
-    expect(compiled.source).toContain(
-      `IERC20.at(${BigInt(USDC).toString()}n).balanceOf(ctx.self())`,
-    );
-    const count = (
-      compiled.source.match(/import \{ IERC20 \} from "\.\/artifacts\/IERC20\.json";/g) ?? []
-    ).length;
-    expect(count).toBe(1);
+  it("a body using BOTH Uniswap.UniversalRouter.execute(...) and self.USDC compiles, as written", () => {
+    const source = `function main() { Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n); return self.USDC; }`;
+    const compiled = compileSauceRoute("base", source, { pot: POT, engine: ENGINE });
+    expect(compiled.source).toBe(source);
     expect(compiled.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 });
@@ -406,18 +393,18 @@ describe("composition: token pass + protocol-accessor pass in ONE compile", () =
 // --- SVM: registry-default token/balance-sugar behavior must never SILENTLY rewrite -------------
 
 describe("svm: the token/balance-sugar pass is refused by name for an svm destination", () => {
-  it("with accessors:false, self.USDC on a registered Solana mint is the named svm error", () => {
-    // Isolates the token/balance-sugar pass from the protocol-accessor pass's OWN self-sugar. The
-    // registry has Solana mints now, so the balance sugar recognises `self.USDC` and the svm guard
-    // names it, rather than the compiler failing on a bare `self`.
+  it("with accessors:false, holder.USDC on a registered Solana mint is the named svm error", () => {
+    // With no `self` (accessors:false gives the program none), a holder of the program's own: the
+    // registry has Solana mints, so `pot.USDC` reads through the mint's type, which names the svm
+    // refusal rather than leaving the compiler to fail on a property access.
     expect(() =>
       compileSauceRoute(
         "solana",
-        `function main() { return self.USDC; }`,
+        `function main(pot: Uint256) { return pot.USDC; }`,
         { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
         { accessors: false },
       ),
-    ).toThrow(/is svm — the ERC20 token rewrite .* is EVM-only/);
+    ).toThrow(/the ERC20 token syntax is EVM-only/);
   });
 
   it("a bare registered symbol is the mint's key, a value the program compiles with", () => {

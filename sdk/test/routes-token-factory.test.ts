@@ -203,14 +203,9 @@ describe("rewriteTokenFactory (unit)", () => {
 });
 
 describe("Token(addr) through compileSauceRoute", () => {
-  it("imports only what the lowering names, under the reserved names", () => {
-    const { source } = compileRoute(
-      `const t = Token(${USDC});\nt.approve(${SPENDER}, 5n);\nt.transfer(${SPENDER}, t.balanceOf(${SPENDER}));`,
-    );
-    expect(source.split("\n").slice(0, 2)).toEqual([
-      'import { IERC20 } from "./artifacts/IERC20.json";',
-      'import { transfer as __sauce_transfer, approve as __sauce_approve } from "@sauce/token";',
-    ]);
+  it("reaches the compiler as written: nothing is imported or renamed", () => {
+    const program = `const t = Token(${USDC});\nt.approve(${SPENDER}, 5n);\nt.transfer(${SPENDER}, t.balanceOf(${SPENDER}));`;
+    expect(compileRoute(program).source).toBe(program);
   });
 
   it("a write alone needs no IERC20 import", () => {
