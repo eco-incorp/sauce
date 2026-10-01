@@ -280,9 +280,10 @@ function cookOf(input: CookInput, files: CliFiles): Cook {
 
 /** The `sauce pot` that deploys `target`'s Pot. */
 function deployHint(chain: CanonicalChain, target: PotInput): string {
+  // `--deploy` signs as the owner, so the hint names the owner and where its key goes.
   return "owner" in target
-    ? `sauce pot --deploy --owner ${target.owner} --chain ${chain.slug}${target.flag === undefined ? "" : ` ${target.flag}`}`
-    : `sauce pot --deploy --owner <its owner> --chain ${chain.slug}`;
+    ? `sauce pot --deploy --owner ${target.owner} --chain ${chain.slug}${target.flag === undefined ? "" : ` ${target.flag}`} --keystore <its keystore>`
+    : `sauce pot --deploy --chain ${chain.slug} --keystore <its owner's keystore>`;
 }
 
 /** The cook's value: as given, or the Kitchen's fee — refusing a given one below the fee. */

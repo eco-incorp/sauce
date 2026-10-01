@@ -517,7 +517,7 @@ describe("sauce tx", () => {
     });
     expect(run.stderr).toContain(`Pot ${pot} belongs to ${OWNER} (salt ${SAUCE_INTENT_POT_SALT}).`);
     expect(run.stderr).toContain(
-      `It must be deployed (sauce pot --deploy --owner ${OWNER} --chain ethereum)`,
+      `It must be deployed (sauce pot --deploy --owner ${OWNER} --chain ethereum --keystore <its keystore>)`,
     );
     expect(run.stderr).toContain(`Send from ${OWNER}: cook() is onlyOwner.`);
   });
@@ -599,7 +599,7 @@ describe("sauce tx", () => {
       "treasury",
     );
     expect(hinted.stderr).toContain(
-      `sauce pot --deploy --owner ${OWNER} --chain ethereum --salt treasury`,
+      `sauce pot --deploy --owner ${OWNER} --chain ethereum --salt treasury --keystore <its keystore>`,
     );
   });
 

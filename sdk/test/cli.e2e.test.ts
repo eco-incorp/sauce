@@ -331,7 +331,7 @@ describeEvm("sauce, sent to a chain", () => {
       expect(run.code).toBe(0);
       expect(jsonOf(run).value).toBe(FEE.toString());
       expect(run.stderr).toContain(
-        `It is NOT deployed. Deploy it first (sauce pot --deploy --owner ${OWNER.address} --chain ethereum), then fund it.`,
+        `It is NOT deployed. Deploy it first (sauce pot --deploy --owner ${OWNER.address} --chain ethereum --keystore <its keystore>), then fund it.`,
       );
       expect(run.stdout + run.stderr).not.toContain(ethereum.rpcUrl);
     }, 60_000);
