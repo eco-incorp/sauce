@@ -92,7 +92,7 @@ npx sauce intent import <tx-hash> --chain <source> --config sauce.config.json
   with why not and from when.
 - `fill --send` fills it as a solver, from the signer: rehearsed first on the signer's real
   balances and not sent if it reverts, and what it spends (each delivered token, and the value)
-  shown for approval (`--yes` approves). It sends the approvals (zero first where a smaller one
+  shown for approval (`--auto-approve` approves). It sends the approvals (zero first where a smaller one
   stands), then `fulfillAndProve` with the prover's fee, or `fulfill` with `--no-prove`. It prints
   the Hyperlane message the proof travels as.
 - `prove` sends the proof of a filled or cancelled intent, paying the prover's fee; `claim` pays the
@@ -333,7 +333,8 @@ developer's:
 - **`--intent-execution-fee <wei>`** for a program body: the destination Kitchen's fee. It is
   mutable on chain and lives on the destination, so read it there just before sending: an
   `eth_call` of `executionFee()` on the destination's Kitchen (its address is in the chain's file in
-  `sauce-chains`). An increase before the fill makes the cook, and the fulfilment, revert.
+  `sauce-chains`), or pass `--intent-execution-fee auto`, which reads it through `--config`. An
+  increase before the fill makes the cook, and the fulfilment, revert.
 
 **Units and defines.** Amounts are base units (`AMOUNT=1000000` is 1 USDC); only `--assume-balance`
 and `--fund` take whole tokens. In a `--defines` file, write an address or any value past 2^53 as a

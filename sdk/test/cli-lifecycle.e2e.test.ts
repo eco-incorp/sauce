@@ -180,7 +180,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
       "fill",
       hash,
       store,
-      ...["--send", "--private-key", SOLVER_KEY, "--yes", "--json"],
+      ...["--send", "--private-key", SOLVER_KEY, "--auto-approve", "--json"],
     );
     expect(filled.code).toBe(0);
     const out = JSON.parse(filled.stdout) as { intents: Array<Record<string, unknown>> };
@@ -253,7 +253,14 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     const fill = await lifecycle("fill", hash, store, "--solver", SOLVER.address);
     expect(fill.code).toBe(1);
     // Its proof waits until the block that cancelled it is final (anvil finalizes 64 blocks back).
-    const unfinal = await lifecycle("prove", hash, store, "--private-key", OWNER_KEY, "--yes");
+    const unfinal = await lifecycle(
+      "prove",
+      hash,
+      store,
+      "--private-key",
+      OWNER_KEY,
+      "--auto-approve",
+    );
     expect(unfinal.code).toBe(1);
     expect(unfinal.stdout).toMatch(/was cancelled in block \d+ on base, which is not final yet/);
     await base.testClient.mine({ blocks: 70 });
@@ -263,7 +270,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
       store,
       "--private-key",
       OWNER_KEY,
-      "--yes",
+      "--auto-approve",
       "--json",
     );
     expect(proved.code).toBe(0);
@@ -342,7 +349,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
       "fill",
       hash,
       store,
-      ...["--send", "--private-key", SOLVER_KEY, "--yes", "--json"],
+      ...["--send", "--private-key", SOLVER_KEY, "--auto-approve", "--json"],
     );
     expect(filled.code).toBe(0);
     const [sent] = (JSON.parse(filled.stdout) as { intents: Array<Record<string, unknown>> })
@@ -364,7 +371,16 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
       ...["--token", "USDC", "--amount", "1.25", "--recipient", RECIPIENT],
       ...["--reward-token", "USDC", "--reward", "1.3", "--prover", "HyperProver"],
       ...["--fill-deadline", "+1h", "--reward-deadline", "+2h", "--out", out],
-      ...["--config", config, "--private-key", OWNER_KEY, "--yes", "--store", store, "--json"],
+      ...[
+        "--config",
+        config,
+        "--private-key",
+        OWNER_KEY,
+        "--auto-approve",
+        "--store",
+        store,
+        "--json",
+      ],
     );
     expect(run.code).toBe(0);
     // What it made and rehearsed, before anything was sent.

@@ -11,7 +11,6 @@
  */
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
-import { createInterface } from "node:readline";
 
 import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
 import {
@@ -44,12 +43,15 @@ import {
   compileProgram,
   potCommand,
   potDeployCommand,
+  potStatusCommand,
   readInput,
   runCommand,
   txCommand,
+  unapproved,
   type ArgsInput,
   type CliFiles,
   type CommandOutput,
+  type Approver,
   type Confirm,
   type CookInput,
   type PotInput,
@@ -80,7 +82,7 @@ import {
   storedTargets,
   type LifecycleContext,
   type Target,
-} from "./intents.js";
+} from "./intent-commands.js";
 import { interactiveIntents } from "./interactive.js";
 import { intentOf } from "./lifecycle.js";
 import type { Ask } from "./prompt.js";
@@ -88,6 +90,14 @@ import { defaultStoreDir, IntentStore } from "./store.js";
 import { globalsCommand } from "./globals.js";
 import { initProject } from "./init.js";
 import { inspectCommand, inspectFile } from "./inspect.js";
+import {
+  checkIntentPots,
+  destinationFee,
+  intentCooks,
+  missingPotNote,
+  uncheckedPotNote,
+  type Endpoints,
+} from "./intents.js";
 import { parsePriceToken, priceCommand, pricedChain } from "./price.js";
 import { publishCommand } from "./publish.js";
 import { simulateCommand } from "./simulate.js";
@@ -98,6 +108,7 @@ import {
   parsePubkey,
   svmPotCommand,
   svmPotDeployCommand,
+  svmPotStatusCommand,
   svmRunCommand,
   svmSimulateCommand,
   svmTxCommand,
@@ -106,7 +117,8 @@ import {
 } from "./solana.js";
 import type { Address as SvmAddress, KeyPairSigner } from "@solana/kit";
 import type { PrivateKeyAccount } from "viem/accounts";
-import { loadSigner, scrub, secret } from "./signer.js";
+import { keystoreAddress, loadSigner, scrub, secret } from "./signer.js";
+import { askOn, chooseTerminal, confirmOn, controllingTerminal, passwordOn } from "./terminal.js";
 import {
   AGENTS,
   describeStatus,
@@ -132,85 +144,71 @@ export interface CliIo extends CliFiles {
   readonly promptPassword: (prompt: string) => Promise<string>;
   /** Asks a yes/no question; `undefined` where there is no terminal to ask on. */
   readonly confirm: Confirm;
+  /** Whether a question can reach a terminal (`terminal.ts`). */
+  readonly canAsk: () => boolean;
+  /** All of stdin, to its end: a program given as `-`. Questions go elsewhere after it. */
+  readonly readStdin: () => string;
   /** Asks for a line of text; `undefined` where there is no terminal to ask on. */
   readonly ask?: Ask;
   /** Where the intent store is when `--store` does not say: `~/.sauce/intents` by default. */
   readonly storeDir?: string;
 }
 
-/** A line typed at the terminal, or `undefined` with no terminal to type it at. */
-function ask(question: string): Promise<string | undefined> {
-  if (!process.stdin.isTTY) return Promise.resolve(undefined);
-  const prompt = createInterface({ input: process.stdin, output: process.stderr });
-
-  return new Promise((resolve) => {
-    prompt.question(question, (answer) => {
-      prompt.close();
-      resolve(answer);
-    });
-  });
-}
-
-/** A yes/no answer typed at the terminal, or `undefined` with no terminal to type it at. */
-function confirm(question: string): Promise<boolean | undefined> {
-  if (!process.stdin.isTTY) return Promise.resolve(undefined);
-  const prompt = createInterface({ input: process.stdin, output: process.stderr });
-
-  return new Promise((resolve) => {
-    prompt.question(question, (answer) => {
-      prompt.close();
-      resolve(/^\s*y(?:es)?\s*$/i.test(answer));
-    });
-  });
-}
-
-/** A password typed at the terminal, echoing nothing. */
-function promptPassword(prompt: string): Promise<string> {
-  const stdin = process.stdin;
-  if (!stdin.isTTY) {
-    return Promise.reject(
-      new UsageError(
-        "no terminal to ask for the keystore password on: pass --password-file <path>",
-      ),
-    );
-  }
-
-  return new Promise((resolve, reject) => {
-    let typed = "";
-    const finish = (): void => {
-      stdin.off("data", onData);
-      stdin.setRawMode(false);
-      stdin.pause();
-      process.stderr.write("\n");
-    };
-    const onData = (chunk: string): void => {
-      for (const ch of chunk) {
-        if (ch === "\r" || ch === "\n") {
-          finish();
-          resolve(typed);
-
-          return;
-        }
-        if (ch === "\u0003") {
-          finish();
-          reject(new CliError("cancelled"));
-
-          return;
-        }
-        typed = ch === "\u007f" || ch === "\b" ? typed.slice(0, -1) : typed + ch;
-      }
-    };
-    process.stderr.write(prompt);
-    stdin.setEncoding("utf8");
-    stdin.setRawMode(true);
-    stdin.resume();
-    stdin.on("data", onData);
-  });
-}
-
 /** The real process's streams, filesystem, children and terminal. */
 export function nodeIo(): CliIo {
+  let stdinRead = false;
+  const terminal = () =>
+    chooseTerminal({
+      stdinRead,
+      stdin: process.stdin,
+      stderr: process.stderr,
+      controlling: controllingTerminal,
+    });
+
   return {
+    readStdin: () => {
+      stdinRead = true;
+
+      return readFileSync(0, "utf8");
+    },
+    canAsk: () => {
+      const found = terminal();
+      found?.close();
+
+      return found !== undefined;
+    },
+    confirm: async (question) => {
+      const found = terminal();
+      if (found === undefined) return undefined;
+      try {
+        return await confirmOn(found, question);
+      } finally {
+        found.close();
+      }
+    },
+    ask: async (question) => {
+      const found = terminal();
+      if (found === undefined) return undefined;
+      try {
+        return await askOn(found, question);
+      } finally {
+        found.close();
+      }
+    },
+    promptPassword: async (prompt) => {
+      const found = terminal();
+      if (found === undefined) {
+        throw new UsageError(
+          `${stdinRead ? "stdin carried the program, and there is " : ""}no terminal to ask for ` +
+            "the keystore password on: pass --password-file <path>",
+        );
+      }
+      try {
+        return await passwordOn(found, prompt);
+      } finally {
+        found.close();
+      }
+    },
     stdout: (text) => void process.stdout.write(text),
     stderr: (text) => void process.stderr.write(text),
     readText: (path) => readFileSync(path, "utf8"),
@@ -233,23 +231,34 @@ export function nodeIo(): CliIo {
         // npm is `npm.cmd` on Windows, which only a shell resolves.
         shell: process.platform === "win32",
       }).status ?? 1,
-    promptPassword,
-    confirm,
-    ask,
   };
 }
 
 /** This package's name and version, from the manifest three levels above `sdk/{src,dist}/cli`. */
-function packageInfo(): { name: string; version: string } {
+function packageInfo(): {
+  name: string;
+  version: string;
+  dependencies?: Record<string, string>;
+} {
   const manifest = new URL("../../../package.json", import.meta.url);
 
-  return JSON.parse(readFileSync(manifest, "utf8")) as { name: string; version: string };
+  return JSON.parse(readFileSync(manifest, "utf8")) as {
+    name: string;
+    version: string;
+    dependencies?: Record<string, string>;
+  };
 }
 
 const skillsSource = (): SkillsSource => {
-  const { name, version } = packageInfo();
+  const { name, version, dependencies } = packageInfo();
+  const typescript = dependencies?.typescript;
 
-  return { dir: PACKAGED_SKILLS, packageName: name, version };
+  return {
+    dir: PACKAGED_SKILLS,
+    packageName: name,
+    version,
+    ...(typescript === undefined ? {} : { typescript }),
+  };
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -302,12 +311,17 @@ const PROGRAM: FlagSpecs = {
   },
   "intent-execution-fee": {
     type: "string",
-    value: "<wei>",
-    help: "…the destination Kitchen's fee, when one runs a program",
+    value: "<wei|auto>",
+    help: "…the destination Kitchen's fee, when one runs a program; auto reads it",
   },
   "compact-args": {
     type: "boolean",
     help: "Take main's arguments as compact-v1, not ABI-v1",
+  },
+  "source-dir": {
+    type: "string",
+    value: "<dir>",
+    help: "Resolve the program's relative imports here (default: beside it; from stdin, .)",
   },
 };
 
@@ -431,7 +445,9 @@ const FORMAT: FlagSpecs = {
 /** The one `<file>` operand a compiling command takes. */
 function fileOperand(args: ParsedArgs): string {
   const [file, ...rest] = args.positionals;
-  if (file === undefined) throw new UsageError("missing <file>: the SauceScript program");
+  if (file === undefined) {
+    throw new UsageError("missing <file>: the SauceScript program, or - to read it from stdin");
+  }
   if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}: give one <file>`);
 
   return file;
@@ -500,14 +516,89 @@ function definesReach(file: string, text: string, names: readonly string[]): voi
   }
 }
 
-/** A program operand's input; `fallback` is its chain when neither `--chain` nor its header says. */
-function programInput(
+/**
+ * The endpoints the command reaches the chains a program's intents go to with: every chain in
+ * `--config`'s `rpcUrls`, or with `--rpc-url` only the program's own `source` chain.
+ */
+function endpointsOf(args: ParsedArgs, io: CliIo, source: CanonicalChain): Endpoints {
+  const rpcUrl = stringFlag(args, "rpc-url");
+  const config = stringFlag(args, "config");
+  let urls: Record<string, unknown> | undefined;
+
+  return (chain) => {
+    if (rpcUrl !== undefined) return chain.id === source.id ? endpoint(args, io, chain) : undefined;
+    if (config === undefined) return undefined;
+    urls ??= (() => {
+      try {
+        const parsed = JSON.parse(readInput(io, config)) as { rpcUrls?: unknown } | null;
+
+        return typeof parsed?.rpcUrls === "object" && parsed.rpcUrls !== null
+          ? (parsed.rpcUrls as Record<string, unknown>)
+          : {};
+      } catch {
+        return {};
+      }
+    })();
+    // A chain the file has no entry for is one the command does not reach; a bad entry is named.
+    return Object.hasOwn(urls, String(chain.id)) ? endpoint(args, io, chain) : undefined;
+  };
+}
+
+/**
+ * `--intent-execution-fee auto`: the fee the program's intents' destination Kitchens charge, read
+ * from each through `endpoints`. The program is compiled once with a fee of zero to find which
+ * intents run a program there; one with none pays no fee.
+ */
+async function autoExecutionFee(
+  input: ProgramInput,
+  io: CliIo,
+  endpoints: Endpoints,
+): Promise<bigint | undefined> {
+  const probe = compileProgram({ ...input, intents: { ...input.intents, executionFee: 0n } }, io);
+  const cooks = intentCooks(probe.intents);
+  if (cooks.length === 0) {
+    io.stderr("--intent-execution-fee auto: no intent here runs a program, so none pays a fee\n");
+
+    return undefined;
+  }
+  const fee = await destinationFee(cooks, endpoints);
+  const chains = [...new Set(cooks.map((cook) => cook.destination.slug))].join(" and ");
+  io.stderr(`--intent-execution-fee auto: the Kitchen on ${chains} charges ${fee} wei\n`);
+
+  return fee;
+}
+
+/** What stdin carried, named in messages. */
+export const STDIN = "<stdin>";
+
+/** A program's text, and where it came from. */
+interface ProgramText {
+  readonly file: string;
+  readonly text: string;
+  readonly stdin: boolean;
+}
+
+/** The program's text: a file's, or stdin's for `-`, read once — or one already read. */
+function programText(io: CliIo, operand: string | ProgramText): ProgramText {
+  if (typeof operand !== "string") return operand;
+
+  return operand === "-"
+    ? { file: STDIN, text: io.readStdin(), stdin: true }
+    : { file: operand, text: readInput(io, operand), stdin: false };
+}
+
+/**
+ * A program operand's input — a file, or `-` for stdin — and `fallback` its chain when neither
+ * `--chain` nor its header says.
+ */
+async function programInput(
   args: ParsedArgs,
   io: CliIo,
-  file = fileOperand(args),
+  operand: string | ProgramText = fileOperand(args),
   fallback?: CanonicalChain,
-): ProgramInput {
-  const text = readInput(io, file);
+): Promise<ProgramInput> {
+  const { file, text, stdin } = programText(io, operand);
+  const sourceDir = stringFlag(args, "source-dir");
   const chain = chainOf(args, file, text, fallback);
   const definesFile = stringFlag(args, "defines");
   const deadline = stringFlag(args, "intent-deadline");
@@ -522,10 +613,11 @@ function programInput(
     ...parseDefines(repeatedFlag(args, "define"), chain.kind),
   };
   definesReach(file, text, Object.keys(defines));
-
-  return {
+  const input: ProgramInput = {
     file,
     text,
+    ...(stdin ? { stdin } : {}),
+    ...(sourceDir === undefined ? {} : { sourceDir }),
     chain,
     compactArgs: args.values["compact-args"] === true,
     defines,
@@ -538,9 +630,17 @@ function programInput(
         : { rewardDeadline: parseUnixSeconds("intent-reward-deadline", rewardDeadline) }),
       ...(creator === undefined ? {} : { creator: parseAddress("intent-creator", creator) }),
       ...(prover === undefined ? {} : { prover: parseAddress("intent-prover", prover) }),
-      ...(fee === undefined ? {} : { executionFee: parseWei("intent-execution-fee", fee) }),
+      ...(fee === undefined || fee === "auto"
+        ? {}
+        : { executionFee: parseWei("intent-execution-fee", fee) }),
     },
   };
+  if (fee !== "auto") return input;
+  const executionFee = await autoExecutionFee(input, io, endpointsOf(args, io, chain));
+
+  return executionFee === undefined
+    ? input
+    : { ...input, intents: { ...input.intents, executionFee } };
 }
 
 /**
@@ -549,12 +649,12 @@ function programInput(
  * arguments and funding are every program's.
  */
 async function programOperand(args: ParsedArgs, io: CliIo): Promise<ProgramInput> {
-  const file = fileOperand(args);
-  const text = readInput(io, file);
+  // Read once, from the file or stdin (`-`), then told apart.
+  const operand = programText(io, fileOperand(args));
 
-  return isActionsDocument(text)
-    ? actionsProgram(actionsOperand(args, file, text))
-    : programInput(args, io, file);
+  return isActionsDocument(operand.text)
+    ? actionsProgram(actionsOperand(args, operand.file, operand.text))
+    : programInput(args, io, operand);
 }
 
 /** An actions document's input, from the flags a program command takes. */
@@ -639,8 +739,8 @@ function cookInput(
   args: ParsedArgs,
   io: CliIo,
   trailing: readonly string[] | undefined,
-  signer?: `0x${string}`,
-  program: ProgramInput = programInput(args, io),
+  signer: `0x${string}` | undefined,
+  program: ProgramInput,
 ): CookInput {
   const value = stringFlag(args, "value");
   if (repeatedFlag(args, "account").length > 0) {
@@ -710,6 +810,39 @@ const signerOf = (args: ParsedArgs, io: CliIo) => {
     io,
   );
 };
+
+/**
+ * The EVM signer's address, read with no more than it needs: a raw key's own, a keystore's
+ * `address` field (no password), and only for a keystore without one, the keystore unlocked.
+ */
+async function signerAddress(args: ParsedArgs, io: CliIo): Promise<`0x${string}`> {
+  const keystore = stringFlag(args, "keystore");
+  if (keystore !== undefined && stringFlag(args, "private-key") === undefined) {
+    const named = keystoreAddress(readInput(io, keystore));
+    if (named !== undefined) return named;
+  }
+
+  return (await signerOf(args, io)).address;
+}
+
+/**
+ * Who approves what a run sends before its cook: `--auto-approve`, which says so for each action it
+ * approves, or the person at the terminal (`io.confirm`).
+ */
+function approverOf(args: ParsedArgs, io: CliIo): Approver {
+  const auto = args.values["auto-approve"] === true;
+
+  return {
+    auto,
+    canAsk: auto || io.canAsk(),
+    approve: async (action, question) => {
+      if (!auto) return io.confirm(question);
+      io.stderr(`auto-approved: ${action}\n`);
+
+      return true;
+    },
+  };
+}
 
 /** Whether `simulate` was given a key: it signs `--fund`'s pulls, and nothing else there. */
 const hasSigner = (args: ParsedArgs): boolean =>
@@ -798,8 +931,7 @@ async function lifecycleContext(args: ParsedArgs, io: CliIo): Promise<LifecycleC
     store: storeOf(args, io),
     endpoint,
     ...(account === undefined ? {} : { account }),
-    yes: args.values.yes === true,
-    confirm: io.confirm,
+    approver: approverOf(args, io),
     ...(api === undefined ? {} : { api: { url: api, ...(key === undefined ? {} : { key }) } }),
   };
 }
@@ -809,7 +941,11 @@ async function lifecycleContext(args: ParsedArgs, io: CliIo): Promise<LifecycleC
  * file's, built as `publish` builds them (`--chain` its source). `--chain` with hashes must be
  * their source.
  */
-function lifecycleTargets(args: ParsedArgs, io: CliIo, store: IntentStore): Target[] {
+async function lifecycleTargets(
+  args: ParsedArgs,
+  io: CliIo,
+  store: IntentStore,
+): Promise<Target[]> {
   const operands = args.positionals;
   if (operands.length === 0) {
     throw new UsageError("missing <file | intent-hash>: the intent, by its file or its hash");
@@ -834,7 +970,7 @@ function lifecycleTargets(args: ParsedArgs, io: CliIo, store: IntentStore): Targ
     throw new UsageError("give one <file>, or one or more intent hashes");
   }
 
-  return fileTargets(programInput(args, io, operands[0]!), io, store);
+  return fileTargets(await programInput(args, io, operands[0]!), io, store);
 }
 
 /** The questions `sauce intent publish` asks with no file, as flags. */
@@ -941,15 +1077,17 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
   if (account === undefined) {
     return publishCommand({ ...program, dryRun: false, format: "json", rpcUrl, from: creator }, io);
   }
-  if (args.values.yes !== true) {
-    const answer = await io.confirm(`Publish ${created.file} from ${account.address}? [y/N] `);
-    if (answer === undefined) {
-      throw new UsageError(
-        `${created.file} is written; there is no terminal to approve publishing it on: pass --yes`,
-      );
-    }
-    if (!answer) throw new CliError(`${created.file} is written, and not published: you declined`);
+  const action = `publish ${created.file} from ${account.address}`;
+  const answer = await approverOf(args, io).approve(
+    action,
+    `Publish ${created.file} from ${account.address}? [y/N] `,
+  );
+  if (answer === undefined) {
+    throw new CliError(
+      `${created.file} is written, and not published: ${unapproved([action]).message}`,
+    );
   }
+  if (!answer) throw new CliError(`${created.file} is written, and not published: you declined`);
 
   return publishCommand(
     {
@@ -983,10 +1121,9 @@ const LIFECYCLE: FlagSpecs = {
   ...PROGRAM,
   ...ENDPOINT,
   ...EVM_SIGNER,
-  yes: {
+  "auto-approve": {
     type: "boolean",
-    short: "y",
-    help: "Approve what it spends (a fee, tokens) without asking",
+    help: "Approve what it spends beyond gas (a fee, tokens) without asking",
   },
   store: {
     type: "string",
@@ -1046,7 +1183,7 @@ function fundingOf(
     permit2On(chain);
   }
 
-  return async (client, pot, owner) => {
+  return async (client, pot, owner, plan = false) => {
     if (account !== undefined && account.address !== owner) {
       throw new UsageError(
         `the signer ${account.address} is not the owner of Pot ${pot}, ${owner}: --fund pulls the ` +
@@ -1064,9 +1201,8 @@ function fundingOf(
       requests,
       sweep,
       ...(account === undefined ? {} : { account }),
-      send,
-      yes: args.values.yes === true,
-      confirm: io.confirm,
+      send: send && !plan,
+      approver: approverOf(args, io),
     });
   };
 }
@@ -1224,7 +1360,7 @@ const lines = (text: readonly string[]): CommandOutput => ({ text: text.join("\n
 const INTENT_VERBS: Readonly<Record<string, Command>> = {
   publish: {
     usage: [
-      "sauce intent publish <file> --chain <source> --rpc-url <url> (--keystore <path> | --private-key <hex>) [options]",
+      "sauce intent publish <file | -> --chain <source> --rpc-url <url> (--keystore <path> | --private-key <hex>) [options]",
       "sauce intent publish [--source <chain>] [--destination <chain>] [--token <token>] [--amount <n>] …",
     ],
     summary: "Publish a file's fixed intents from a wallet (or make one, step by step)",
@@ -1233,7 +1369,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       ...ENDPOINT,
       ...SIGNER,
       ...CREATE,
-      yes: LIFECYCLE.yes!,
+      "auto-approve": LIFECYCLE["auto-approve"]!,
       from: {
         type: "string",
         value: "<address>",
@@ -1282,7 +1418,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "still needed is named). It writes the intent as a .sauce.ts file (--out, default",
       "intent-<source>-to-<destination>-<time>.sauce.ts) to keep and publish again, rehearses",
       "publishing it (--dry-run) and filling it on the destination (`sauce intent fill`), and",
-      "with a signer publishes it once you approve (or with --yes), storing it. --config names",
+      "with a signer publishes it once you approve (or with --auto-approve), storing it. --config names",
       "both chains' endpoints.",
       "",
       "Examples:",
@@ -1299,7 +1435,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       if (created !== undefined) {
         throw new UsageError(`--${created} makes a new intent: give it with no <file>`);
       }
-      const program = programInput(args, io);
+      const program = await programInput(args, io);
       if (program.chain.kind === "svm") {
         throw new UsageError(
           "sauce intent publish sends a source chain's Portal transactions from an EVM wallet. " +
@@ -1334,6 +1470,19 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         );
       }
 
+      // Before anything is sent: an intent whose Pot is not deployed is one no solver can fill.
+      const pots = await checkIntentPots(
+        intentCooks(compileProgram(program, io).intents),
+        endpointsOf(args, io, program.chain),
+      );
+      for (const check of pots) {
+        if (check.deployed !== true) {
+          io.stderr(
+            `${check.deployed === false ? missingPotNote(check) : uncheckedPotNote(check)}\n`,
+          );
+        }
+      }
+
       return publishCommand(
         {
           ...program,
@@ -1351,9 +1500,9 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
   },
   fill: {
     usage: [
-      "sauce intent fill <file> --chain <source> (--config <file> | --rpc-url <url>) [options]",
+      "sauce intent fill <file | -> --chain <source> (--config <file> | --rpc-url <url>) [options]",
       "sauce intent fill <intent-hash> (--config <file> | --rpc-url <url>) [options]",
-      "sauce intent fill <file | intent-hash> … --send (--keystore <path> | --private-key <hex>) [--yes]",
+      "sauce intent fill <file | intent-hash> … --send (--keystore <path> | --private-key <hex>) [--auto-approve]",
     ],
     summary: "Fill a file's (or a stored) intents on their destination: rehearsed, or --send",
     flags: {
@@ -1387,7 +1536,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         help: "Send the fill, from the signer, after rehearsing it",
       },
       ...EVM_SIGNER,
-      yes: LIFECYCLE.yes!,
+      "auto-approve": LIFECYCLE["auto-approve"]!,
       store: LIFECYCLE.store!,
       ...JSON_FLAG,
       ...HELP,
@@ -1411,7 +1560,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "--assume-balance finds it. With --send the signer is the solver and nothing is assumed: the",
       "rehearsal runs on its real balances, a fill that would revert is not sent, and what it",
       "spends (each token, the value and what it is for) is shown for you to approve at the",
-      "terminal, or with --yes. Then the transactions are sent in order, and the intent and its",
+      "terminal, or with --auto-approve. Then the transactions are sent in order, and the intent and its",
       "fill go into the store (--store, default ~/.sauce/intents).",
       "",
       "Prints the gas and what the fill moved — the transfers, each address's net change, labelled",
@@ -1460,8 +1609,8 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       if (sending && solver !== undefined) {
         throw new UsageError("--solver is for a rehearsal: with --send, the signer is the solver");
       }
-      if (args.values.yes === true && !sending) {
-        throw new UsageError("--yes approves what --send spends: give --send");
+      if (args.values["auto-approve"] === true && !sending) {
+        throw new UsageError("--auto-approve approves what --send spends: give --send");
       }
       const operands = args.positionals;
       let targets: readonly FillTarget[];
@@ -1478,7 +1627,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         );
         from = operands.length === 1 ? operands[0]! : "the intents named";
       } else {
-        const program = programInput(args, io);
+        const program = await programInput(args, io);
         targets = fillTargets(program, io);
         labels = defineLabels(program);
         from = program.file;
@@ -1498,7 +1647,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         ...(args.values["no-prove"] === true ? { prove: false } : {}),
         ...(account === undefined
           ? {}
-          : { send: { account, yes: args.values.yes === true, confirm: io.confirm, store } }),
+          : { send: { account, approver: approverOf(args, io), store } }),
       });
     },
   },
@@ -1511,7 +1660,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "For intents fulfilled (or cancelled) on their destination whose proof has not reached the",
       "source: Portal.prove(prover, sourceDomain, intentHashes, data) on the destination, from",
       "the signer, with the prover's fee — quoted from its fetchFee — as the value, which you",
-      "approve at the terminal or with --yes. Several hashes share one proof when they have one",
+      "approve at the terminal or with --auto-approve. Several hashes share one proof when they have one",
       "destination, source and prover. An intent the source has proven already is left out.",
       "Prints the transaction and the Hyperlane message the proof travels as. With no signer,",
       "prints the unsigned transaction instead.",
@@ -1527,7 +1676,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     run: async (args, io) => {
       const context = await lifecycleContext(args, io);
 
-      return proveCommand(lifecycleTargets(args, io, context.store), context);
+      return proveCommand(await lifecycleTargets(args, io, context.store), context);
     },
   },
   claim: {
@@ -1552,7 +1701,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     run: async (args, io) => {
       const context = await lifecycleContext(args, io);
 
-      return claimCommand(lifecycleTargets(args, io, context.store), context);
+      return claimCommand(await lifecycleTargets(args, io, context.store), context);
     },
   },
   refund: {
@@ -1576,7 +1725,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     run: async (args, io) => {
       const context = await lifecycleContext(args, io);
 
-      return refundCommand(lifecycleTargets(args, io, context.store), context);
+      return refundCommand(await lifecycleTargets(args, io, context.store), context);
     },
   },
   cancel: {
@@ -1614,7 +1763,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     run: async (args, io) => {
       const context = await lifecycleContext(args, io);
 
-      return cancelCommand(lifecycleTargets(args, io, context.store), context, {
+      return cancelCommand(await lifecycleTargets(args, io, context.store), context, {
         prove: args.values["and-prove"] === true,
       });
     },
@@ -1638,7 +1787,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     ].join("\n"),
     run: async (args, io) => {
       const context = await lifecycleContext(args, io);
-      const targets = lifecycleTargets(args, io, context.store);
+      const targets = await lifecycleTargets(args, io, context.store);
       const shown = await Promise.all(targets.map((target) => showCommand(target, context)));
 
       return {
@@ -1740,13 +1889,25 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
 
 const COMMANDS: Readonly<Record<string, Command>> = {
   compile: {
-    usage: "sauce compile <file> --chain <slug|id> [options]",
+    usage: "sauce compile <file | -> --chain <slug|id> [options]",
     summary: "Compile a SauceScript program; print its bytecode",
     flags: {
       ...PROGRAM,
+      "args-json": COOK["args-json"]!,
+      account: {
+        type: "string",
+        multiple: true,
+        value: "NAME=<address>",
+        help: "Solana: an account main takes (an address, pot or owner), to size the cook",
+      },
+      ...ENDPOINT,
       out: { type: "string", value: "<path>", help: "Write the output to a file, not stdout" },
-      json: { type: "boolean", help: "Print JSON: size, main's parameters, compiler, engine" },
+      json: {
+        type: "boolean",
+        help: "Print JSON: sizes, defines and contracts applied, main's parameters, engine",
+      },
       ...HELP,
+      ...ARGS,
     },
     details: [
       "Compiles the file as a standalone program for the chain (routes.compileSauceProgram):",
@@ -1757,13 +1918,45 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "the file. A file may name its chain in a leading `// @chain base` line. An actions",
       "document compiles too (`sauce actions`).",
       "",
-      "Example:",
+      "--json also says what the compile applied and how large the result is:",
+      "  defines    each define the file reads, its value, and where it came from: user (--define,",
+      "             --defines) or chain (a token symbol, a protocol contract, the chain id)",
+      "  contracts  each protocol contract it calls or reads (UniswapV3.Factory), resolved on its",
+      "             chain: an intent body's on the intent's own",
+      "  size       the program's bytes; payload: the program with main's arguments (--args)",
+      "  cook       on Solana, the cook's transaction against the 1232-byte limit, measured",
+      "             with --account where given and a distinct account for each other slot",
+      "  intentPots each intent that runs a program on its destination: the Pot it cooks on (the",
+      "             one the destination Portal's Executor owns, salt 0) and, with an endpoint",
+      "             for that chain (--config), whether it is deployed; a missing one is warned",
+      "             about, since no solver can fill the intent until it is",
+      "A define the file never reads is named on stderr: it changes nothing.",
+      "",
+      "Examples:",
       "  sauce compile pay.sauce.ts --chain base --define RECIPIENT=0x…",
+      "  sauce compile split.sauce.ts --chain base --json --args 0x… 1000000",
     ].join("\n"),
-    run: async (args, io) => {
-      const output = compileCommand(await programOperand(args, io), io);
+    trailing: "args",
+    run: async (args, io, trailing) => {
+      const program = await programOperand(args, io);
+      const accounts = repeatedFlag(args, "account");
+      if (accounts.length > 0 && program.chain.kind !== "svm") {
+        throw new UsageError(
+          `--account names a Solana program's accounts; a program on ${program.chain.slug} takes none`,
+        );
+      }
+      const output = await compileCommand(
+        {
+          ...program,
+          ...argsInput(args, io, trailing),
+          ...(accounts.length === 0 ? {} : { accounts: parseAccounts(accounts) }),
+          endpoints: endpointsOf(args, io, program.chain),
+        },
+        io,
+      );
       const out = stringFlag(args, "out");
       if (out === undefined) return output;
+      for (const note of output.notes ?? []) io.stderr(`${note}\n`);
       io.writeText(
         out,
         `${args.values.json === true ? JSON.stringify(output.json, null, 2) : output.text}\n`,
@@ -1773,7 +1966,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   actions: {
-    usage: "sauce actions <file> [--chain <slug|id>] [--compact-args] [--json]",
+    usage: "sauce actions <file | -> [--chain <slug|id>] [--compact-args] [--json]",
     summary: "Lower an actions document to SauceScript for a chain; print the source and bytecode",
     flags: {
       chain: {
@@ -1806,8 +1999,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "  sauce simulate swap.json --chain base --owner 0x… --rpc-url <url> --args 1000000",
     ].join("\n"),
     run: (args, io) => {
-      const file = fileOperand(args);
-      const text = readInput(io, file);
+      const { file, text } = programText(io, fileOperand(args));
       if (!isActionsDocument(text)) {
         throw new UsageError(
           `${file} is not an actions document (a JSON object with "actions"); compile a ` +
@@ -1820,8 +2012,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   simulate: {
     usage: [
-      "sauce simulate <file> --chain <slug|id> (--owner <address> | --pot <address>) --rpc-url <url> [options]",
-      "sauce simulate <file> --chain solana --owner <pubkey> --rpc-url <url> [--account NAME=<value>]… [options]",
+      "sauce simulate <file | -> --chain <slug|id> (--owner <address> | --pot <address>) --rpc-url <url> [options]",
+      "sauce simulate <file | -> --chain solana --owner <pubkey> --rpc-url <url> [--account NAME=<value>]… [options]",
     ],
     summary: "Rehearse the cook from the Pot's owner, with no key: what it did, or why it reverts",
     flags: {
@@ -1836,9 +2028,20 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         only: "evm",
       },
       ...FUND,
-      keystore: SIGNER.keystore!,
-      "password-file": SIGNER["password-file"]!,
-      "private-key": SIGNER["private-key"]!,
+      keystore: {
+        type: "string",
+        value: "<path>",
+        help: "The owner's keystore: names the owner (and signs --fund's pulls)",
+        only: "evm",
+      },
+      "password-file": { ...SIGNER["password-file"]!, only: "evm" },
+      "private-key": { ...SIGNER["private-key"]!, only: "evm" },
+      keypair: {
+        type: "string",
+        value: "<path>",
+        help: "The owner's keypair, naming the owner; nothing is signed",
+        only: "svm",
+      },
       ...JSON_FLAG,
       ...HELP,
       ...ARGS,
@@ -1889,12 +2092,6 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     run: async (args, io, trailing) => {
       const program = await programOperand(args, io);
       const funds = repeatedFlag(args, "fund").length > 0;
-      if (hasSigner(args) && !funds) {
-        throw new UsageError(
-          "simulate signs nothing but --fund's pulls: give --fund, or drop the key (the rehearsal " +
-            "runs from the Pot's owner without one)",
-        );
-      }
       const assume = repeatedFlag(args, "assume-balance");
       if (program.chain.kind === "svm") {
         fundingOf(args, io, program.chain, "", false, undefined);
@@ -1905,12 +2102,35 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           );
         }
 
-        return svmSimulateCommand(svmCookInput(args, io, trailing, program), io);
+        // A keypair names the owner; the rehearsal signs nothing with it.
+        const owner =
+          stringFlag(args, "keypair") === undefined
+            ? undefined
+            : (await keypairOf(args, io)).address;
+
+        return svmSimulateCommand(svmCookInput(args, io, trailing, program, owner), io);
       }
-      const input = cookInput(args, io, trailing, undefined, program);
+      if (stringFlag(args, "keypair") !== undefined) {
+        throw new UsageError(
+          "--keypair is a Solana keypair; on an EVM chain, name the owner with --keystore or " +
+            "--private-key, or --owner",
+        );
+      }
+      // A key names the owner, whose Pot the rehearsal runs on, and signs --fund's pulls if any.
+      const account = funds && hasSigner(args) ? await signerOf(args, io) : undefined;
+      const owner =
+        account?.address ?? (hasSigner(args) ? await signerAddress(args, io) : undefined);
+      if (owner !== undefined && stringFlag(args, "owner") !== undefined) {
+        if (parseAddress("owner", stringFlag(args, "owner")!) !== owner) {
+          throw new UsageError(
+            `--owner ${stringFlag(args, "owner")} is not the signer, ${owner}: with a key, the ` +
+              "owner is the key's. Leave --owner out, or give its key.",
+          );
+        }
+      }
+      const input = cookInput(args, io, trailing, owner, program);
       const assumed = assumedBalances(args, input.chain);
       const rpcUrl = requiredEndpoint(args, io, input.chain);
-      const account = funds && hasSigner(args) ? await signerOf(args, io) : undefined;
       const fund = fundingOf(args, io, input.chain, rpcUrl, false, account);
 
       return simulateCommand(
@@ -1921,8 +2141,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   run: {
     usage: [
-      "sauce run <file> --chain <slug|id> --rpc-url <url> (--keystore <path> | --private-key <hex>) [options]",
-      "sauce run <file> --chain solana --rpc-url <url> --keypair <path> [--account NAME=<value>]… [options]",
+      "sauce run <file | -> --chain <slug|id> --rpc-url <url> (--keystore <path> | --private-key <hex>) [options]",
+      "sauce run <file | -> --chain solana --rpc-url <url> --keypair <path> [--account NAME=<value>]… [options]",
     ],
     summary: "Compile, sign, send and wait for the cook on your Pot",
     flags: {
@@ -1931,10 +2151,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       ...ENDPOINT,
       ...SIGNER,
       ...FUND,
-      yes: {
+      "auto-approve": {
         type: "boolean",
-        short: "y",
-        help: "Deploy a missing Pot, or approve for --fund, without asking",
+        help: "Approve, without asking, what the run sends first: see below",
       },
       store: LIFECYCLE.store!,
       ...JSON_FLAG,
@@ -1944,10 +2163,17 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     details: [
       "Compiles the file, builds the cook on the signer's Pot (or --pot), rehearses it, signs it,",
       "sends it and waits for the receipt: prints the hash, status and gas used, and the decoded",
-      "reason when it reverts (exit 1). The signer is the owner. A Pot that is not deployed",
-      "yet is deployed first, in a transaction of its own, once you agree at the prompt — or",
-      "with --yes, which is also how to allow it with no terminal to ask on. The value",
-      "defaults to the Kitchen's execution fee, read from the chain.",
+      "reason when it reverts (exit 1). The signer is the owner. The value defaults to the",
+      "Kitchen's execution fee, read from the chain.",
+      "",
+      "What the run sends before its cook, each in a transaction of its own, it asks you to",
+      "approve at the terminal first; --auto-approve approves every one without asking, and says",
+      "`auto-approved: <action>` for each. They are:",
+      "  deploying the Pot, when it is not deployed yet (on Solana, creating it)",
+      "  approving Permit2 for a token --fund pulls, the first time (--fund-mode permit2)",
+      "  approving the Pot for the amount --fund pulls (--fund-mode allowance)",
+      "With no terminal to ask on (CI, a pipe, a program read from stdin with no terminal),",
+      "nothing is sent until they are approved: the run names every one it needs and stops.",
       "",
       "--fund TOKEN:amount gets tokens into the Pot in the same cook: the program is wrapped so",
       "it first pulls each amount from you, then runs, then (--sweep) returns what is left. The",
@@ -1984,8 +2210,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           {
             ...svmCookInput(args, io, trailing, program, signer.address),
             signer,
-            yes: args.values.yes === true,
-            confirm: io.confirm,
+            approver: approverOf(args, io),
           },
           io,
         );
@@ -2001,8 +2226,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           ...(fund === undefined ? {} : { fund }),
           rpcUrl,
           account,
-          yes: args.values.yes === true,
-          confirm: io.confirm,
+          approver: approverOf(args, io),
           onSent: storing(args, io, input.chain, rpcUrl),
         },
         io,
@@ -2018,7 +2242,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     flags: {
       ...ENDPOINT,
       ...EVM_SIGNER,
-      yes: LIFECYCLE.yes!,
+      "auto-approve": LIFECYCLE["auto-approve"]!,
       store: LIFECYCLE.store!,
       ...JSON_FLAG,
       ...HELP,
@@ -2061,8 +2285,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   tx: {
     usage: [
-      "sauce tx <file> --chain <slug|id> (--owner <address> | --pot <address>) [options]",
-      "sauce tx <file> --chain solana --owner <pubkey> --rpc-url <url> [--account NAME=<value>]… [options]",
+      "sauce tx <file | -> --chain <slug|id> (--owner <address> | --pot <address>) [options]",
+      "sauce tx <file | -> --chain solana --owner <pubkey> --rpc-url <url> [--account NAME=<value>]… [options]",
     ],
     summary: "Print the unsigned cook transaction, for a wallet to sign",
     flags: { ...PROGRAM, ...COOK, ...ENDPOINT, ...FORMAT, ...HELP, ...ARGS },
@@ -2103,7 +2327,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       deploy: { type: "boolean", help: "Send the deployment (needs an endpoint and a signer)" },
       ...ENDPOINT,
       ...SIGNER,
-      yes: { type: "boolean", short: "y", help: "Accepted: --deploy sends without asking" },
+      "auto-approve": {
+        type: "boolean",
+        help: "Accepted, approving nothing: --deploy itself is the approval",
+      },
       ...FORMAT,
       ...HELP,
     },
@@ -2114,7 +2341,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "code. The owner defaults to the signer. Deploying is permissionless: with --owner, the",
       "signer sends and pays for another owner's Pot, which is that owner's alone — how the Pot",
       "intents share on a chain (owner: its Portal's Executor) is deployed. The default salt is",
-      "zero: the one Pot an owner has by default.",
+      "zero: the one Pot an owner has by default. With a signer and no --owner, it is the",
+      "signer's own Pot, so `sauce pot --chain base --keystore <keystore>` prints your address and",
+      "your Pot (the keystore's own address field is read, with no password, where it has one).",
+      "With an endpoint and no --deploy, it also reads",
+      "the chain: whether the released engine and Kitchen are there, the Kitchen's fee, and",
+      "whether the Pot is deployed and whose it is (under `deployment`, and on stderr).",
       "",
       "On Solana a Pot is the Kitchen's PDA over (owner, salt): this prints it and the create_pot",
       "instruction; --deploy (with --keypair) creates it. There the owner signs create_pot, so",
@@ -2137,7 +2369,16 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           throw new UsageError("--format cast prints an EVM transaction; a Solana Pot has none");
         }
         if (args.values.deploy !== true) {
-          return svmPotCommand({ owner: svmOwner(args), ...saltOf(args) });
+          const rpcUrl = endpoint(args, io, chain);
+          const keyed =
+            stringFlag(args, "keypair") === undefined
+              ? undefined
+              : (await keypairOf(args, io)).address;
+          const target = { owner: svmOwner(args, keyed), ...saltOf(args) };
+
+          return rpcUrl === undefined
+            ? svmPotCommand(target)
+            : svmPotStatusCommand({ ...target, rpcUrl });
         }
         const signer = await keypairOf(args, io);
 
@@ -2153,9 +2394,26 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         });
       }
       if (args.values.deploy !== true) {
-        if (owner === undefined) throw new UsageError("missing --owner <address>: whose Pot");
+        // A signer, with no --owner, is asking for its own Pot: its address, without unlocking it
+        // where the keystore names it.
+        if (owner === undefined && !hasSigner(args)) {
+          throw new UsageError(
+            "missing --owner <address>: whose Pot (or a signer, --keystore or --private-key, for yours)",
+          );
+        }
+        if (stringFlag(args, "keypair") !== undefined) {
+          throw new UsageError(
+            "--keypair is a Solana keypair: on an EVM chain, --keystore or --private-key",
+          );
+        }
+        const rpcUrl = endpoint(args, io, chain);
+        const target = {
+          chain,
+          owner: owner === undefined ? await signerAddress(args, io) : parseAddress("owner", owner),
+          ...saltOf(args),
+        };
 
-        return potCommand({ chain, owner: parseAddress("owner", owner), ...saltOf(args) });
+        return rpcUrl === undefined ? potCommand(target) : potStatusCommand({ ...target, rpcUrl });
       }
       if (stringFlag(args, "format") === "cast") {
         throw new UsageError("--format cast prints the unsigned transaction; --deploy sends it");
@@ -2273,7 +2531,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   inspect: {
-    usage: "sauce inspect <hex | tx-hash | file> [--chain <slug|id>] [--source <file>] [options]",
+    usage:
+      "sauce inspect <hex | tx-hash | file | -> [--chain <slug|id>] [--source <file | ->] [options]",
     summary: "Take a cook, a Portal or Kitchen call, a program or a file apart",
     flags: {
       ...PROGRAM,
@@ -2302,17 +2561,33 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "  sauce inspect bridge.sauce.ts --chain arbitrum --intent-deadline 2000000000 --intent-creator 0x…",
     ].join("\n"),
     run: async (args, io) => {
-      const [operand] = args.positionals;
-      if (operand === undefined || !operand.startsWith("0x")) {
+      const [operand, ...extra] = args.positionals;
+      // `-`: stdin carries the hex, the hash or the program — whichever it reads as.
+      const piped = operand === "-" ? io.readStdin().trim() : undefined;
+      if (piped !== undefined && extra.length > 0) {
+        throw new UsageError(`unexpected argument ${extra[0]}`);
+      }
+      const word = piped ?? operand;
+      if (word === undefined || !/^0x[0-9a-fA-F]*$/.test(word)) {
         if (stringFlag(args, "source") !== undefined) {
           throw new UsageError("--source goes with hex: a file operand is its own source");
         }
-        const input = programInput(args, io);
+        const input = await programInput(
+          args,
+          io,
+          piped === undefined ? fileOperand(args) : { file: STDIN, text: piped, stdin: true },
+        );
 
         return inspectFile(input.file, compileProgram(input, io));
       }
-      const hex = hexOperand(args, "<hex | tx-hash | file>");
+      const hex =
+        piped === undefined
+          ? hexOperand(args, "<hex | tx-hash | file>")
+          : hexOperand({ ...args, positionals: [piped] }, "<hex | tx-hash | file>");
       const sourceFile = stringFlag(args, "source");
+      if (piped !== undefined && sourceFile === "-") {
+        throw new UsageError("stdin carries one thing: the hex, or --source's program, not both");
+      }
       const fetched = TX_HASH.test(hex) ? await transactionEndpoint(args, io) : undefined;
       if (TX_HASH.test(hex) && fetched === undefined) {
         throw new UsageError(
@@ -2321,7 +2596,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         );
       }
       const source =
-        sourceFile === undefined ? undefined : programInput(args, io, sourceFile, fetched?.chain);
+        sourceFile === undefined
+          ? undefined
+          : await programInput(args, io, sourceFile, fetched?.chain);
       const chainFlag = stringFlag(args, "chain");
       const chain =
         fetched?.chain ??
@@ -2518,7 +2795,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     details: [
       "Writes package.json (pinning this exact version), AGENTS.md (the project's instructions,",
       "which coding agents read), CLAUDE.md and GEMINI.md importing it for those agents, a",
-      ".gitignore for local config, sauce.config.example.json (placeholders only), and then",
+      ".gitignore for local config, sauce.config.example.json (placeholders only),",
+      "programs/tsconfig.json (SauceScript's names, and a plugin, for an editor checking the",
+      "programs there: kept apart from the project's other TypeScript), and then",
       "installs the agent skills (`sauce skills install`), for every agent unless --agent names",
       "some. It runs no package manager unless --install, which runs npm install.",
     ].join("\n"),
@@ -2613,6 +2892,12 @@ function mainHelp(): string {
     "or --config, and nothing is signed without --keystore or --private-key (on Solana,",
     "--keypair).",
     "",
+    "A program file may be `-`, read from stdin (`cat pay.sauce.ts | sauce compile - --chain",
+    "base`); it is never read without one. Its relative imports then resolve against the",
+    "current directory, or --source-dir. Questions go to the terminal (/dev/tty) instead of",
+    "stdin; with no terminal, a run names what it needs approved and sends nothing until",
+    "--auto-approve (and --password-file for a keystore) is given.",
+    "",
   ].join("\n");
 }
 
@@ -2696,17 +2981,15 @@ function notTaken(name: string, flag: string): string {
   );
   const own = commandOf(name.split(" "))!.command.flags;
   const why =
-    name === "simulate" && flag === "keypair"
-      ? "on Solana, simulate runs the cook from --owner and signs nothing"
-      : name === "tx" && SIGNING.has(flag)
-        ? "tx signs nothing: it prints the transaction unsigned, for a wallet (sauce run signs and sends it)"
-        : SIGNING.has(flag) && !Object.keys(own).some((key) => SIGNING.has(key))
-          ? `${name} signs nothing`
-          : REACHING.has(flag) && !("config" in own)
-            ? `${name} reads nothing from a chain`
-            : flag === "yes"
-              ? `${name} has nothing to ask`
-              : undefined;
+    name === "tx" && SIGNING.has(flag)
+      ? "tx signs nothing: it prints the transaction unsigned, for a wallet (sauce run signs and sends it)"
+      : SIGNING.has(flag) && !Object.keys(own).some((key) => SIGNING.has(key))
+        ? `${name} signs nothing`
+        : REACHING.has(flag) && !("config" in own)
+          ? `${name} reads nothing from a chain`
+          : flag === "auto-approve"
+            ? `${name} has nothing to ask`
+            : undefined;
 
   return (
     `--${flag} is not an option of sauce ${name}` +

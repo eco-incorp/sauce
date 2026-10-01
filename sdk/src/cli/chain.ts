@@ -26,6 +26,7 @@ import type { PrivateKeyAccount } from "viem/accounts";
 import kitchenArtifact from "../artifacts/V12Kitchen.json" with { type: "json" };
 import potArtifact from "../artifacts/V12Pot.json" with { type: "json" };
 import { resolveChain, type CanonicalChain } from "../chains/canonical.js";
+import { v12EngineAddress, v12KitchenAddress } from "../deployments/index.js";
 import { v12Pot } from "../evm/engine.js";
 import { destinationExecutionFee } from "../evm/execution-fee.js";
 import { PortalABI, ProverABI } from "../protocols/eco-routes/abis.js";
@@ -149,6 +150,49 @@ export async function kitchenFee(client: PublicClient, chain: CanonicalChain): P
   return fee.decode(answer.data);
 }
 
+/** Whether the released Sauce contracts a cook needs are on a chain, and its Kitchen's fee. */
+export interface Released {
+  readonly engine: { readonly address: Address; readonly deployed: boolean };
+  readonly kitchen: {
+    readonly address: Address;
+    readonly deployed: boolean;
+    /** The fee a cook pays, read where the Kitchen is there. */
+    readonly executionFee?: bigint;
+  };
+}
+
+/** The released engine and Kitchen on the connected chain: whether each has code, and the fee. */
+export async function releasedContracts(client: PublicClient): Promise<Released> {
+  const engine = getAddress(v12EngineAddress());
+  const kitchen = getAddress(v12KitchenAddress());
+  const hasCode = async (address: Address, what: string): Promise<boolean> => {
+    const code = await request(what, () => client.getCode({ address }));
+
+    return code !== undefined && code !== "0x";
+  };
+  const [engineThere, kitchenThere] = await Promise.all([
+    hasCode(engine, "the engine's code"),
+    hasCode(kitchen, "the Kitchen's code"),
+  ]);
+  let executionFee: bigint | undefined;
+  if (kitchenThere) {
+    const fee = destinationExecutionFee(kitchen);
+    const answer = await request("the Kitchen's executionFee()", () =>
+      client.call({ to: fee.to, data: fee.data }),
+    );
+    executionFee = answer.data === undefined ? undefined : fee.decode(answer.data);
+  }
+
+  return {
+    engine: { address: engine, deployed: engineThere },
+    kitchen: {
+      address: kitchen,
+      deployed: kitchenThere,
+      ...(executionFee === undefined ? {} : { executionFee }),
+    },
+  };
+}
+
 /** Whether `pot` is deployed, and whose it is. */
 export async function potState(
   client: PublicClient,
@@ -169,7 +213,7 @@ export async function potState(
  * the transaction in it. It never fails: a node that stays behind is caught by the read that
  * depends on it (`awaitPot`), or by the rehearsal of the transaction after it.
  */
-async function caughtUp(
+export async function caughtUp(
   client: PublicClient,
   block: bigint,
   wait: { readonly tries: number; readonly delayMs: number } = POT_WAIT,
@@ -310,8 +354,6 @@ export interface Sent {
   readonly status: "success" | "reverted";
   readonly gasUsed: bigint;
   readonly blockNumber: bigint;
-  /** What it cost in the native currency: gas used at the price it paid. */
-  readonly cost: bigint;
   /** The logs it emitted, as the receipt holds them. */
   readonly logs: ReadonlyArray<{
     readonly address: Address;
@@ -320,6 +362,8 @@ export interface Sent {
   }>;
   /** When it reverted: why, replayed at its block. */
   readonly reason?: string;
+  /** The receipt it landed with: what it cost, and its logs. */
+  readonly receipt?: TransactionReceipt;
 }
 
 /**
@@ -349,12 +393,12 @@ export async function sendAndWait(
     status: receipt.status,
     gasUsed: receipt.gasUsed,
     blockNumber: receipt.blockNumber,
-    cost: receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n),
     logs: receipt.logs.map((log) => ({
       address: getAddress(log.address),
       topics: log.topics as readonly Hex[],
       data: log.data,
     })),
+    receipt,
   };
   if (receipt.status === "success") {
     await caughtUp(client, receipt.blockNumber);

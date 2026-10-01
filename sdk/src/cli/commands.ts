@@ -10,7 +10,14 @@
  */
 import { createRequire } from "node:module";
 import { dirname, resolve as resolvePath } from "node:path";
-import { bytesToHex, getAddress, type Address, type Hex, type PublicClient } from "viem";
+import {
+  bytesToHex,
+  getAddress,
+  hexToBytes,
+  type Address,
+  type Hex,
+  type PublicClient,
+} from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import type { CanonicalChain } from "../chains/canonical.js";
@@ -25,6 +32,7 @@ import { v12PredictPot } from "../deployments/pot.js";
 /** The released Kitchen, which deploys every Pot (`V12Deployments.json`). */
 export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
 import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
+import type { AccessorTarget } from "../routes/protocol-rewrite.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import {
   compileSauceProgram,
@@ -37,11 +45,24 @@ import {
   connect,
   kitchenFee,
   potState,
+  releasedContracts,
   sendAndWait,
+  type Released,
   type Sent,
   type TxRequest,
 } from "./chain.js";
 import { describeCompileError } from "./diagnostics.js";
+import {
+  checkIntentPots,
+  intentCooks,
+  missingPotNote,
+  potCheckJson,
+  type PotCheck,
+  type Endpoints,
+} from "./intents.js";
+import { costJson, costLine, costOf, receiptEffects, receiptReport } from "./receipt.js";
+import { appliedDefines, contractCollector } from "./report.js";
+import { svmCookSize } from "./solana.js";
 import type { Funding } from "./funding.js";
 
 /** The filesystem the commands read, injected so the tests can drive them without a process. */
@@ -67,9 +88,14 @@ export interface CommandOutput {
 
 /** What every compiling command takes. */
 export interface ProgramInput {
+  /** The program's file, or `<stdin>` for a program read from stdin. */
   readonly file: string;
   /** The file's text, already read: its header chose `chain`. */
   readonly text: string;
+  /** The program came from stdin (`-`): it has no directory of its own. */
+  readonly stdin?: boolean;
+  /** Where its relative imports resolve: `--source-dir`, else beside the file (stdin: `.`). */
+  readonly sourceDir?: string;
   readonly chain: CanonicalChain;
   readonly defines: Record<string, DefineValue>;
   /** Compile `main`'s parameters for compact-v1 arguments instead of ABI-v1. */
@@ -123,8 +149,12 @@ export function castSend(to: Address, data: Hex, value?: bigint): string {
  * `compileSauceProgram` adds itself: the defines, the intent settings, the argument encoding, and a
  * resolver that serves the program's own relative imports from beside the file.
  */
-function compileOptions(input: ProgramInput, files: CliFiles): SauceCompileOptions {
-  const dir = dirname(resolvePath(input.file));
+function compileOptions(
+  input: ProgramInput,
+  files: CliFiles,
+  onContract?: (reference: string, target: AccessorTarget) => void,
+): SauceCompileOptions {
+  const dir = sourceDirOf(input);
   const { deadline, rewardDeadline, creator, prover, executionFee } = input.intents;
   const intents = {
     ...(deadline === undefined ? {} : { deadline }),
@@ -138,19 +168,38 @@ function compileOptions(input: ProgramInput, files: CliFiles): SauceCompileOptio
     defines: input.defines,
     ...(Object.keys(intents).length === 0 ? {} : { intents }),
     ...(input.compactArgs ? { compactArgs: true } : {}),
+    // The intents the program opens compile with these options too, so this hears their contracts.
+    ...(onContract === undefined ? {} : { accessors: { onContract } }),
     ...(input.contracts === undefined ? {} : { contracts: input.contracts }),
     resolve: (path) => files.readModule(resolvePath(dir, path)),
   };
 }
 
-/** Compiles the file as a standalone program, turning a failure into one message about the file. */
-export function compileProgram(input: ProgramInput, files: CliFiles): CompiledSauceProgram {
+/** The directory a program's relative imports resolve against. */
+export const sourceDirOf = (input: ProgramInput): string =>
+  resolvePath(input.sourceDir ?? (input.stdin === true ? "." : dirname(resolvePath(input.file))));
+
+/**
+ * Compiles the file as a standalone program, turning a failure into one message about the file.
+ * `onContract` is told each protocol contract the compile resolves.
+ */
+export function compileProgram(
+  input: ProgramInput,
+  files: CliFiles,
+  onContract?: (reference: string, target: AccessorTarget) => void,
+): CompiledSauceProgram {
   try {
-    return compileSauceProgram(input.chain, input.text, compileOptions(input, files));
+    return compileSauceProgram(input.chain, input.text, compileOptions(input, files, onContract));
   } catch (error) {
+    const described = describeCompileError(error, input.file, input.text, input.chain);
+    // A relative import that did not resolve, from a program with no directory of its own.
+    const imports = input.stdin === true && /import|resolv|\.\//i.test(String(error));
     throw new CliError(
-      `${input.file} does not compile for ${input.chain.slug}\n` +
-        describeCompileError(error, input.file, input.text, input.chain),
+      `${input.file} does not compile for ${input.chain.slug}\n${described}` +
+        (imports
+          ? `\nhint: the program came from stdin, so its relative imports resolve against ` +
+            `${sourceDirOf(input)}: pass --source-dir <dir> to resolve them elsewhere`
+          : ""),
     );
   }
 }
@@ -183,10 +232,54 @@ function pairedEngine(chain: CanonicalChain): Record<string, string> {
 const signatureOf = (params: readonly EntryParam[]): string =>
   `main(${params.map((param) => `${param.name}: ${param.type}`).join(", ")})`;
 
-/** `sauce compile`: the program's bytecode, and with `--json` what it pairs with and takes. */
-export function compileCommand(input: ProgramInput, files: CliFiles): CommandOutput {
-  const program = compileProgram(input, files);
+export interface CompileInput extends ProgramInput {
+  /** `main`'s arguments, when given: they size the payload a cook carries. */
+  readonly args?: ArgsInput;
+  /** Solana: accounts by slot name, as `--account` gives them, for sizing the cook. */
+  readonly accounts?: Readonly<Record<string, string>>;
+  /** Endpoints for the intents' destinations: where given, each intent's Pot is checked. */
+  readonly endpoints?: Endpoints;
+}
+
+/**
+ * `sauce compile`: the program's bytecode, and with `--json` what it pairs with and takes, what it
+ * was compiled with — the defines it reads and the protocol contracts it calls, each with where it
+ * came from — and how large it is: the program, the payload with `main`'s arguments, and on Solana
+ * the cook's transaction against the one-transaction limit.
+ */
+export async function compileCommand(input: CompileInput, files: CliFiles): Promise<CommandOutput> {
+  const collected = contractCollector();
+  const program = compileProgram(input, files, collected.onContract);
   const bytecode = bytesToHex(program.bytecode);
+  const { defines, unread } = appliedDefines(input.text, input.chain, input.defines);
+  // The payload is the program with its arguments appended: known once the arguments are.
+  const payload =
+    input.args === undefined && program.entryParams.length > 0
+      ? undefined
+      : hexToBytes(payloadOf(program, input.args));
+  const cook =
+    input.chain.kind === "svm" && payload !== undefined
+      ? await svmCookSize(payload, program.manifest ?? { accounts: [] }, input.accounts ?? {})
+      : undefined;
+  const cooks = intentCooks(program.intents);
+  const pots: readonly PotCheck[] =
+    input.endpoints === undefined ? cooks : await checkIntentPots(cooks, input.endpoints);
+  const notes = [
+    ...pots.filter((check) => check.deployed === false).map(missingPotNote),
+    ...unread.map(({ name, readOn }) =>
+      readOn.length === 0
+        ? `--define ${name}: ${input.file} never reads ${name}, so the define changes nothing`
+        : `--define ${name}: ${input.file} reads ${name} only in intents on ${readOn.join(", ")}, ` +
+          `where it is that chain's own: a define of a name each chain sets holds on ` +
+          `${input.chain.slug} alone, so this one changes nothing`,
+    ),
+    ...(cook === undefined || cook.fits
+      ? []
+      : [
+          `the cook is a ${cook.size}-byte transaction, past Solana's ${cook.limit}: \`sauce run\` ` +
+            "stages the program in a code buffer first; `sauce simulate` and `sauce tx` cannot",
+        ]),
+  ];
 
   return {
     text: bytecode,
@@ -196,13 +289,22 @@ export function compileCommand(input: ProgramInput, files: CliFiles): CommandOut
       target: input.chain.kind,
       bytecode,
       size: program.bytecode.length,
+      payload:
+        payload === undefined
+          ? null
+          : { size: payload.length, argumentsSize: payload.length - program.bytecode.length },
+      ...(cook === undefined ? {} : { cook }),
       entryEncoding: program.entryEncoding,
       entryParams: program.entryParams,
       entrySchema: program.entrySchema === undefined ? null : bytesToHex(program.entrySchema),
+      defines,
+      contracts: collected.contracts(),
+      ...(pots.length === 0 ? {} : { intentPots: pots.map(potCheckJson) }),
       compiler: compilerPackage(),
       engine: pairedEngine(input.chain),
       ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
     },
+    ...(notes.length === 0 ? {} : { notes }),
   };
 }
 
@@ -289,7 +391,13 @@ export interface CookInput extends ProgramInput {
    * `--fund`: called once the Pot is known to be there, with its owner, it makes what funding the
    * cook needs and returns how to wrap the program (`funding.ts`).
    */
-  readonly fund?: (client: PublicClient, pot: Address, owner: Address) => Promise<Funding>;
+  readonly fund?: (
+    client: PublicClient,
+    pot: Address,
+    owner: Address,
+    /** Only plan: say what it would need approved (`Funding.needs`), and send nothing. */
+    plan?: boolean,
+  ) => Promise<Funding>;
 }
 
 export interface Cook {
@@ -317,9 +425,9 @@ export function cookOf(input: CookInput, files: CliFiles): Cook {
 
 /** The `sauce pot` that deploys `target`'s Pot. */
 function deployHint(chain: CanonicalChain, target: PotInput): string {
-  // `--deploy` signs as the owner, so the hint names the owner and where its key goes.
+  // Any account may send the deployment; the hint names the owner, whose Pot it is.
   return "owner" in target
-    ? `sauce pot --deploy --owner ${target.owner} --chain ${chain.slug}${target.flag === undefined ? "" : ` ${target.flag}`} --keystore <its keystore>`
+    ? `sauce pot --deploy --owner ${target.owner} --chain ${chain.slug}${target.flag === undefined ? "" : ` ${target.flag}`} --keystore <keystore>`
     : `sauce pot --deploy --chain ${chain.slug} --keystore <its owner's keystore>`;
 }
 
@@ -404,13 +512,41 @@ const sentJson = (sent: Sent): Record<string, unknown> => ({
 /** Asks a yes/no question at the terminal; `undefined` when there is no terminal to ask on. */
 export type Confirm = (question: string) => Promise<boolean | undefined>;
 
+/**
+ * Who approves what a run does before its cook, each a transaction of its own: deploying a missing
+ * Pot, approving Permit2 for a token, approving the Pot for an amount. The person at the terminal,
+ * asked each in turn — or `--auto-approve`, which approves them all and says so for each.
+ */
+export interface Approver {
+  /** `--auto-approve`. */
+  readonly auto: boolean;
+  /** Whether a question can reach anyone: false with no terminal to ask on. */
+  readonly canAsk: boolean;
+  /**
+   * Approves `action` (`deploy Pot 0x…`): with `--auto-approve`, says `auto-approved: <action>` and
+   * goes ahead; else asks `question`. `undefined` when there is no one to ask.
+   */
+  readonly approve: (action: string, question: string) => Promise<boolean | undefined>;
+}
+
+/**
+ * Refuses a run that needs approvals with no terminal to ask on, before anything is sent: naming
+ * every action it would need approved, and how to approve them.
+ */
+export function unapproved(actions: readonly string[]): CliError {
+  return new CliError(
+    `nothing was sent: this run needs ${actions.length === 1 ? "an approval" : "approvals"}, and ` +
+      "there is no terminal to ask on:\n" +
+      actions.map((action) => `  ${action}\n`).join("") +
+      "Pass --auto-approve to approve them (and --password-file with a keystore).",
+  );
+}
+
 export interface RunInput extends CookInput, ChainAccess {
   readonly account: PrivateKeyAccount;
+  readonly approver: Approver;
   /** Called with the cook once it is sent, for what it published (the store); returns notes. */
   readonly onSent?: (sent: Sent) => Promise<readonly string[]>;
-  /** `--yes`: do what the run needs first (deploying the Pot) without asking. */
-  readonly yes: boolean;
-  readonly confirm: Confirm;
 }
 
 /** `sauce run`: compile, sign, send and wait — deploying the Pot first once it is agreed to. */
@@ -426,23 +562,33 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   const cook = cookOf(input, files);
   const client = await connect(input.rpcUrl, input.chain);
   const state = await potState(client, cook.pot);
+  const deployAction = `deploy Pot ${cook.pot}`;
+  // With no one to ask, every approval the run would need is named before anything is sent.
+  if (!input.approver.auto && !input.approver.canAsk) {
+    const needs = [
+      ...(!state.deployed && "owner" in target ? [deployAction] : []),
+      ...(input.fund === undefined
+        ? []
+        : ((await input.fund(client, cook.pot, signer, true)).needs ?? [])),
+    ];
+    if (needs.length > 0) throw unapproved(needs);
+  }
   let deployed: Sent | undefined;
   if (!state.deployed) {
     const missing = `Pot ${cook.pot} is not deployed on ${input.chain.slug}`;
     if (!("owner" in target)) {
       throw new CliError(`${missing}. Deploy it first: ${deployHint(input.chain, target)}`);
     }
-    const agreed = input.yes
-      ? true
-      : await input.confirm(
-          `Pot ${cook.pot} (owner ${target.owner}, salt ${target.salt}) is not deployed on ` +
-            `${input.chain.slug}. Deploy it now? [y/N] `,
-        );
+    const agreed = await input.approver.approve(
+      deployAction,
+      `Pot ${cook.pot} (owner ${target.owner}, salt ${target.salt}) is not deployed on ` +
+        `${input.chain.slug}. Deploy it now? [y/N] `,
+    );
     if (agreed !== true) {
       throw new CliError(
         agreed === undefined
-          ? `${missing}. Deploy it first (${deployHint(input.chain, target)}), or pass --yes to ` +
-              "deploy it before the cook"
+          ? `${missing}. Deploy it first (${deployHint(input.chain, target)}), or pass ` +
+              "--auto-approve to deploy it before the cook"
           : `${missing}, so nothing was sent. Deploy it with: ${deployHint(input.chain, target)}`,
       );
     }
@@ -479,12 +625,27 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   const sent = await sendAndWait(client, input.rpcUrl, input.account, request);
   const stored = input.onSent === undefined ? [] : await input.onSent(sent);
   const notes = [...(funding?.notes ?? []), ...stored];
+  // What the cook cost, and what it moved, from its receipt.
+  const cost = sent.receipt === undefined ? undefined : costOf(sent.receipt, value);
+  const effects =
+    sent.receipt === undefined || sent.status !== "success"
+      ? undefined
+      : receiptReport(
+          await receiptEffects(client, input.chain, sent.receipt, [
+            [signer, "you"],
+            [cook.pot, "the Pot"],
+          ]),
+        );
 
   return {
     text: [
       ...(deployed === undefined ? [] : [sentText(`deployed Pot ${cook.pot} in`, deployed)]),
       ...(funding?.sent ?? []).map((step) => sentText(step.what, step.sent)),
       sentText("cook", sent),
+      ...(cost === undefined
+        ? []
+        : [costLine(cost, input.chain, "the Kitchen's fee and any native the program spends")]),
+      ...(effects?.lines ?? []),
     ].join("\n"),
     json: {
       chain: input.chain.slug,
@@ -495,7 +656,11 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
       ...(funding === undefined
         ? {}
         : { funding: funding.sent.map((step) => ({ what: step.what, ...sentJson(step.sent) })) }),
-      cook: sentJson(sent),
+      cook: {
+        ...sentJson(sent),
+        ...(cost === undefined ? {} : { cost: costJson(cost) }),
+        ...(effects === undefined ? {} : { effects: effects.json }),
+      },
     },
     ...(notes.length === 0 ? {} : { notes }),
     ...(sent.status === "success" ? {} : { exitCode: 1 }),
@@ -541,6 +706,74 @@ export function potCommand(input: PotCommandInput): CommandOutput {
   };
 }
 
+/** What `sauce pot` reads off a chain: the released engine and Kitchen, and the Pot. */
+function deploymentLines(
+  chain: CanonicalChain,
+  released: Released,
+  pot: Address,
+  state: { readonly deployed: boolean; readonly owner?: Address },
+): { json: Record<string, unknown>; notes: string[] } {
+  const there = (deployed: boolean) => (deployed ? "deployed" : "NOT deployed");
+  const { engine, kitchen } = released;
+
+  return {
+    json: {
+      engine: { address: engine.address, deployed: engine.deployed },
+      kitchen: {
+        address: kitchen.address,
+        deployed: kitchen.deployed,
+        ...(kitchen.executionFee === undefined
+          ? {}
+          : { executionFee: kitchen.executionFee.toString() }),
+      },
+      pot: {
+        address: pot,
+        deployed: state.deployed,
+        ...(state.owner === undefined ? {} : { owner: state.owner }),
+      },
+    },
+    notes: [
+      `On ${chain.slug}: the engine ${engine.address} is ${there(engine.deployed)}; the Kitchen ` +
+        `${kitchen.address} is ${there(kitchen.deployed)}` +
+        (kitchen.executionFee === undefined
+          ? ""
+          : `, its execution fee ${kitchen.executionFee} wei`) +
+        `; the Pot ${pot} is ${there(state.deployed)}` +
+        (state.owner === undefined ? "." : `, owned by ${state.owner}.`),
+      ...(kitchen.deployed
+        ? []
+        : [
+            `The released Kitchen has no code on ${chain.slug}: no Pot can be deployed there, and no ` +
+              "cook runs.",
+          ]),
+      ...(engine.deployed || !kitchen.deployed
+        ? []
+        : [
+            `The released engine has no code on ${chain.slug}: a cook there has nothing to run on.`,
+          ]),
+    ],
+  };
+}
+
+/** `sauce pot` with an endpoint: the prediction, and what is deployed on the chain. */
+export async function potStatusCommand(
+  input: PotCommandInput & ChainAccess,
+): Promise<CommandOutput> {
+  const predicted = potCommand(input);
+  const pot = predicted.json.pot as Address;
+  const client = await connect(input.rpcUrl, input.chain);
+  const [released, state] = await Promise.all([releasedContracts(client), potState(client, pot)]);
+  const deployment = deploymentLines(input.chain, released, pot, state);
+  const json = { ...predicted.json, deployment: deployment.json };
+
+  return {
+    text: JSON.stringify(json, null, 2),
+    json,
+    cast: predicted.cast!,
+    notes: [...deployment.notes, ...(state.deployed ? [] : (predicted.notes ?? []))],
+  };
+}
+
 /** `sauce pot --deploy`: sends the Kitchen call, unless the Pot is already there. */
 export async function potDeployCommand(
   input: PotCommandInput & ChainAccess & { readonly account: PrivateKeyAccount },
@@ -548,6 +781,14 @@ export async function potDeployCommand(
   const predicted = potCommand(input);
   const pot = predicted.json.pot as Address;
   const client = await connect(input.rpcUrl, input.chain);
+  const released = await releasedContracts(client);
+  // A deployPot sent to an address with no code "succeeds" and deploys nothing.
+  if (!released.kitchen.deployed) {
+    throw new CliError(
+      `the released Kitchen ${released.kitchen.address} has no code on ${input.chain.slug}: no Pot ` +
+        "can be deployed there, so nothing was sent",
+    );
+  }
   const state = await potState(client, pot);
   if (state.deployed) {
     const json = { ...predicted.json, deployed: true, owner: state.owner };

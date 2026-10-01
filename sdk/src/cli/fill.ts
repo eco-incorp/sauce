@@ -60,8 +60,9 @@ import {
   compileProgram,
   kitchenAddress,
   type CliFiles,
+  unapproved,
+  type Approver,
   type CommandOutput,
-  type Confirm,
   type ProgramInput,
 } from "./commands.js";
 import {
@@ -82,6 +83,7 @@ import {
   type FillStep,
   type IntentRecord,
 } from "./lifecycle.js";
+import { costJson, costLine, costOf } from "./receipt.js";
 import type { IntentStore } from "./store.js";
 
 /** The solver a rehearsal fills from when none is named: an address nobody holds the key of. */
@@ -117,8 +119,8 @@ export interface FillInput {
   /** `--send`: the signer, which is the solver, and who approves what it spends. */
   readonly send?: {
     readonly account: PrivateKeyAccount;
-    readonly yes: boolean;
-    readonly confirm: Confirm;
+    /** Who approves what the fill spends: `--auto-approve`, or the person asked. */
+    readonly approver: Approver;
     readonly store?: IntentStore;
   };
 }
@@ -778,18 +780,28 @@ async function sendFill(input: FillInput, fill: Fill): Promise<SentFill> {
 function sentLines(done: SentFill): string[] {
   const { fill } = done;
   const native = nativeSymbol(fill.target.destination);
-  const cost = done.sent.reduce((sum, entry) => sum + entry.result.cost, 0n);
+  const costs = done.sent.map(({ step, result }) =>
+    result.receipt === undefined ? undefined : costOf(result.receipt, step.value),
+  );
   const lines = [
     `${head(fill)}${fill.plan.proves ? "filled, and its proof sent" : "filled"}, in ` +
       `${done.sent.length} transaction(s) on ${fill.target.destination.slug} from ${fill.plan.solver}:`,
-    ...done.sent.map(
-      ({ step, result }, index) =>
-        `  ${index + 1}. ${step.what}: ${result.hash}, block ${result.blockNumber}, gas used ` +
-        `${result.gasUsed}`,
-    ),
-    `Gas cost: ${formatUnits(cost, 18)} ${native}` +
+    ...done.sent.map(({ step, result }, index) => {
+      const cost = costs[index];
+
+      return (
+        `  ${index + 1}. ${step.what}: ${result.hash}, block ${result.blockNumber}` +
+        (cost === undefined
+          ? `, gas used ${result.gasUsed}`
+          : `; ${costLine(cost, fill.target.destination, step.kind === "fulfill" ? "the route's native amount and the proof's fee" : "none")}`)
+      );
+    }),
+    `In all: ${formatUnits(
+      costs.reduce((sum, cost) => sum + (cost?.total ?? 0n), 0n),
+      18,
+    )} ${native}` +
       (fill.plan.fee.prover > 0n
-        ? `, and ${formatUnits(fill.plan.fee.prover, 18)} ${native} paid for the proof`
+        ? `, ${formatUnits(fill.plan.fee.prover, 18)} of it the proof's fee`
         : ""),
     ...effectLines(done.effects),
     done.recordedClaimant === undefined
@@ -864,15 +876,13 @@ export async function fillCommand(input: FillInput): Promise<CommandOutput> {
   // Sending: say what it spends, and have it approved.
   const send = input.send;
   const spend = fills.flatMap((fill) => spendLines(fill));
-  if (!send.yes) {
-    const answer = await send.confirm(`${spend.join("\n")}\nSend them? [y/N] `);
-    if (answer === undefined) {
-      throw new UsageError(
-        `${spend.join("\n")}\nThere is no terminal to approve that on: pass --yes to send it`,
-      );
-    }
-    if (!answer) throw new CliError("not sent: you declined");
-  }
+  const action = `fill ${fills.map((fill) => fill.plan.hashes.intentHash).join(", ")}: ${spend
+    .at(-1)!
+    .replace(/^It spends /, "spend ")
+    .replace(/\.$/, "")}`;
+  const answer = await send.approver.approve(action, `${spend.join("\n")}\nSend them? [y/N] `);
+  if (answer === undefined) throw unapproved([action]);
+  if (!answer) throw new CliError("not sent: you declined");
   const done: SentFill[] = [];
   for (const fill of fills) {
     const result = await sendFill(input, fill);
@@ -882,7 +892,7 @@ export async function fillCommand(input: FillInput): Promise<CommandOutput> {
 
   return {
     text: [
-      ...(send.yes ? [...spend, ""] : []),
+      ...(send.approver.auto ? [...spend, ""] : []),
       done.map((entry) => sentLines(entry).join("\n")).join("\n\n"),
     ].join("\n"),
     json: {
@@ -903,7 +913,9 @@ export async function fillCommand(input: FillInput): Promise<CommandOutput> {
           status: result.status,
           block: result.blockNumber.toString(),
           gasUsed: result.gasUsed.toString(),
-          cost: result.cost.toString(),
+          ...(result.receipt === undefined
+            ? {}
+            : { cost: costJson(costOf(result.receipt, step.value)) }),
         })),
         fulfilled:
           entry.recordedClaimant === undefined ? null : { claimant: entry.recordedClaimant },

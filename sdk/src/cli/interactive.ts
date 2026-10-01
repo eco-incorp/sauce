@@ -2,7 +2,7 @@
  * `sauce intent` at a terminal: a picker over the intents the store keeps, each with where it
  * stands (read live where an endpoint is given), then a menu of what to do with the one picked —
  * its status, the fill (rehearsed, or sent with a signer), the proof, the claim, the refund, the
- * cancellation. Every action runs the very function its own command runs (`intents.ts`,
+ * cancellation. Every action runs the very function its own command runs (`intent-commands.ts`,
  * `fill.ts`), with the same approvals, so nothing here decides anything a flag would not.
  */
 import { requireChain } from "../chains/canonical.js";
@@ -16,7 +16,7 @@ import {
   showCommand,
   type LifecycleContext,
   type Target,
-} from "./intents.js";
+} from "./intent-commands.js";
 import { intentOf, intentStatus, type IntentStatus } from "./lifecycle.js";
 import { askChoice, type Ask } from "./prompt.js";
 
@@ -163,8 +163,7 @@ function run(action: Action, target: Target, context: LifecycleContext): Promise
           ? {
               send: {
                 account: context.account,
-                yes: context.yes,
-                confirm: context.confirm,
+                approver: context.approver,
                 store: context.store,
               },
             }

@@ -22,7 +22,8 @@
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite (CLAUDE.md), and a hard
  * failure without it — or without `cast` — in CI.
  */
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { once } from "node:events";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -31,9 +32,9 @@ import { encodeAbiParameters, getAddress, type Address, type Hex, zeroAddress } 
 import { privateKeyToAccount } from "viem/accounts";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { v12EngineAddress } from "../src/deployments/index.js";
+import { v12EngineAddress, v12KitchenAddress } from "../src/deployments/index.js";
 import { potSalt, SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
-import { ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
+import { ecoRoutesExecutorOf, ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
 import { denormalizeToEvm, hashIntent } from "../src/routes/encode.js";
 import {
   intentHashCall,
@@ -133,7 +134,7 @@ describeEvm("sauce, sent to a chain", () => {
       expect(run.code).toBe(0);
       expect(jsonOf(run).value).toBe(FEE.toString());
       expect(run.stderr).toContain(
-        `It is NOT deployed. Deploy it first (sauce pot --deploy --owner ${OWNER.address} --chain ethereum --keystore <its keystore>), then fund it.`,
+        `It is NOT deployed. Deploy it first (sauce pot --deploy --owner ${OWNER.address} --chain ethereum --keystore <keystore>), then fund it.`,
       );
       expect(run.stdout + run.stderr).not.toContain(ethereum.rpcUrl);
     }, 60_000);
@@ -334,6 +335,16 @@ describeEvm("sauce, sent to a chain", () => {
       expect(ok.stdout).toContain(`  1 USDC: ${labelled} (the Pot) -> ${THIRD_RECIPIENT}`);
       // Nothing moved: it was an eth_call.
       expect(await ethereum.balanceOf(usdc, THIRD_RECIPIENT)).toBe(0n);
+      // The owner's keystore names the owner, read from its address field: no password, no --owner.
+      const keyed = await sauce(
+        ...["simulate", PAY, "--salt", "e2e", ...defines(THIRD_RECIPIENT)],
+        ...["--rpc-url", ethereum.rpcUrl, ...KEYSTORE],
+      );
+      expect(keyed.code).toBe(0);
+      expect(keyed.stdout).toMatch(new RegExp(`^The cook succeeds from ${KEYSTORE_OWNER}`));
+      // And so does `sauce pot`: the signer's address and its Pot.
+      const mine = jsonOf(await sauce("pot", "--chain", "ethereum", "--salt", "e2e", ...KEYSTORE));
+      expect(mine).toMatchObject({ owner: KEYSTORE_OWNER, pot: labelled });
 
       const refusing = join(work, "refuses.sauce.ts");
       writeFileSync(refusing, '// @chain ethereum\nthrow "not today";\n');
@@ -422,7 +433,7 @@ describeEvm("sauce, sent to a chain", () => {
       );
     }, 60_000);
 
-    it("`sauce run --yes` deploys the signer's missing Pot, then cooks", async () => {
+    it("`sauce run --auto-approve` deploys the signer's missing Pot, then cooks", async () => {
       const fresh = v12PredictPot(RAW_OWNER, SAUCE_INTENT_POT_SALT) as Address;
       // Tokens can be sent to the address before the Pot exists.
       for (const token of [usdc, usdt]) await ethereum.mint(token, fresh, FUNDED);
@@ -434,10 +445,11 @@ describeEvm("sauce, sent to a chain", () => {
         ethereum.rpcUrl,
         "--private-key",
         RAW_KEY,
-        "--yes",
+        "--auto-approve",
       );
       expect(run.code).toBe(0);
       expect(run.stderr).toMatch(/warning: --private-key puts the key in your shell history/);
+      expect(run.stderr).toContain(`auto-approved: deploy Pot ${fresh}`);
       expect(run.stdout).toMatch(
         new RegExp(`^deployed Pot ${fresh} in 0x[0-9a-f]{64}: success`, "m"),
       );
@@ -463,7 +475,7 @@ describeEvm("sauce, sent to a chain", () => {
           lagging.url,
           "--private-key",
           RAW_KEY,
-          "--yes",
+          "--auto-approve",
         );
         expect(run.stderr).not.toMatch(/the Pot is not there/);
         expect(run.code).toBe(0);
@@ -505,7 +517,7 @@ describeEvm("sauce, sent to a chain", () => {
       };
       const run = (label: string, answer: boolean | undefined) =>
         sauceWith(
-          { confirm: answering(answer) },
+          { confirm: answering(answer), canAsk: () => true },
           "run",
           PAY,
           "--salt",
@@ -546,7 +558,10 @@ describeEvm("sauce, sent to a chain", () => {
         RAW_KEY,
       );
       expect(unasked.code).toBe(1);
-      expect(unasked.stderr).toMatch(/or pass --yes to deploy it before the cook/);
+      expect(unasked.stderr).toContain(
+        "nothing was sent: this run needs an approval, and there is no terminal to ask on:\n" +
+          `  deploy Pot ${salted("unasked")}\nPass --auto-approve`,
+      );
       expect(await ethereum.publicClient.getCode({ address: salted("unasked") })).toBeUndefined();
     }, 60_000);
 
@@ -694,6 +709,24 @@ describeEvm("a typed main, compiled for Base and for Arbitrum, run with --args",
           },
         },
       });
+      // What it cost — gas at its price, and the value, the Kitchen's fee — and what it moved, from
+      // the receipt's logs.
+      const receipt = await local.publicClient.getTransactionReceipt({ hash: hash as Hex });
+      const execution = receipt.gasUsed * receipt.effectiveGasPrice;
+      expect(inspected.cost).toEqual({
+        gasUsed: receipt.gasUsed.toString(),
+        gasPrice: receipt.effectiveGasPrice.toString(),
+        execution: execution.toString(),
+        value: FEE.toString(),
+        total: (execution + FEE).toString(),
+      });
+      const moved = (inspected.effects as { transfers: Array<{ from: string; to: string }> })
+        .transfers;
+      expect(moved).toHaveLength(RECIPIENTS.length * (alsoUsdc ? 2 : 1));
+      for (const transfer of moved) {
+        expect(transfer.from).toBe(pot);
+        expect(RECIPIENTS).toContain(transfer.to);
+      }
     }, 60_000);
   }
 
@@ -967,7 +1000,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
       arbitrum.rpcUrl,
       "--private-key",
       OTHER_KEY,
-      "--yes",
+      "--auto-approve",
     );
     expect(run.stderr).not.toMatch(/sauce run:/);
     expect(run.code).toBe(0);
@@ -1001,4 +1034,193 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     expect(extra.code).toBe(1);
     expect(extra.stderr).toContain(`${more}:5 does something besides open an intent`);
   }, 60_000);
+});
+
+describeEvm("what is deployed: the released contracts, a Pot, and an intent's destination", () => {
+  let base: LocalChain;
+  let bare: ChildProcess;
+  let work: string;
+  let config: string;
+  const BARE = `http://127.0.0.1:${9400 + WORKER}`;
+  const REWARD = 2_000_000n;
+  // An intent from Arbitrum whose body is a program on Base: its cook pays Base's Kitchen fee, on
+  // the Pot every intent through Base's Portal shares.
+  const INTENT = [
+    "// @chain arbitrum",
+    "Base(() => {",
+    "  require(AMOUNT > 0n);",
+    "  Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, AMOUNT);",
+    "}).reward({ tokens: [{ token: USDC, amount: REWARD }] });",
+    "",
+  ].join("\n");
+  const DEFINES = [
+    ...["--define", `RECIPIENT=${RECIPIENT}`, "--define", `AMOUNT=${AMOUNT}`],
+    ...["--define", `REWARD=${REWARD}`, "--intent-deadline", "2000000000"],
+    ...["--intent-creator", OWNER.address],
+  ];
+  const sharedPot = () =>
+    v12PredictPot(
+      getAddress(ecoRoutesExecutorOf(ecoRoutesPortal("base"))),
+      SAUCE_INTENT_POT_SALT,
+    ) as Address;
+
+  beforeAll(async () => {
+    work = mkdtempSync(join(tmpdir(), "sauce-cli-deployed-"));
+    base = await startChain("base", 9300 + WORKER);
+    // A chain with nothing of Sauce's on it.
+    bare = spawn("anvil", ["--port", String(9400 + WORKER), "--chain-id", "1", "--silent"], {
+      stdio: "ignore",
+    });
+    for (const deadline = Date.now() + 20_000; ;) {
+      const up = await fetch(BARE, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}',
+      }).then(
+        () => true,
+        () => false,
+      );
+      if (up) break;
+      if (Date.now() > deadline) throw new Error("the bare anvil did not come up");
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    config = join(work, "sauce.config.json");
+    writeFileSync(config, JSON.stringify({ rpcUrls: { "8453": base.rpcUrl } }));
+  }, 120_000);
+
+  afterAll(async () => {
+    rmSync(work, { recursive: true, force: true });
+    await base?.stop();
+    if (bare !== undefined && bare.exitCode === null) {
+      const exited = once(bare, "exit");
+      bare.kill();
+      await exited;
+    }
+  });
+
+  it("`sauce pot` with an endpoint reports the engine, the Kitchen and its fee, and the Pot", async () => {
+    const owner = getAddress("0x9999999999999999999999999999999999999999");
+    const pot = v12PredictPot(owner, SAUCE_INTENT_POT_SALT) as Address;
+    const status = async () => {
+      const run = await sauce("pot", "--chain", "base", "--owner", owner, "--rpc-url", base.rpcUrl);
+      expect(run.code).toBe(0);
+
+      return { out: JSON.parse(run.stdout) as Record<string, unknown>, stderr: run.stderr };
+    };
+    const before = await status();
+    expect(before.out.deployment).toEqual({
+      engine: { address: getAddress(v12EngineAddress()), deployed: true },
+      kitchen: { address: getAddress(v12KitchenAddress()), deployed: true, executionFee: `${FEE}` },
+      pot: { address: pot, deployed: false },
+    });
+    expect(before.stderr).toContain(`the Pot ${pot} is NOT deployed`);
+    await base.send(base.deployer, before.out.to as Address, before.out.data as Hex);
+    const after = await status();
+    expect(after.out.deployment).toMatchObject({ pot: { address: pot, deployed: true, owner } });
+    expect(after.stderr).toContain(`the Pot ${pot} is deployed, owned by ${owner}`);
+  }, 60_000);
+
+  it("names a chain with no Sauce contracts, and refuses to deploy a Pot there", async () => {
+    const run = await sauce(
+      "pot",
+      "--chain",
+      "ethereum",
+      "--owner",
+      OWNER.address,
+      "--rpc-url",
+      BARE,
+    );
+    expect(run.code).toBe(0);
+    expect(JSON.parse(run.stdout).deployment).toMatchObject({
+      engine: { deployed: false },
+      kitchen: { deployed: false },
+      pot: { deployed: false },
+    });
+    expect(run.stderr).toContain("The released Kitchen has no code on ethereum");
+    const deploy = await sauce(
+      ...["pot", "--deploy", "--chain", "ethereum", "--rpc-url", BARE],
+      ...["--private-key", OTHER_KEY],
+    );
+    expect(deploy.code).toBe(1);
+    expect(deploy.stderr).toMatch(
+      /has no code on ethereum: no Pot can be deployed there, so nothing was sent/,
+    );
+  }, 60_000);
+
+  it("reads the destination Kitchen's fee for --intent-execution-fee auto", async () => {
+    const file = join(work, "intent.sauce.ts");
+    writeFileSync(file, INTENT);
+    const auto = await sauce(
+      ...["compile", file, ...DEFINES, "--intent-execution-fee", "auto"],
+      ...["--config", config, "--json"],
+    );
+    expect(auto.code).toBe(0);
+    expect(auto.stderr).toContain(
+      `--intent-execution-fee auto: the Kitchen on base charges ${FEE} wei`,
+    );
+    const given = await sauce(...["compile", file, ...DEFINES, "--intent-execution-fee", `${FEE}`]);
+    expect(JSON.parse(auto.stdout).bytecode).toBe(given.stdout.trim());
+    // With no endpoint for Base, there is nothing to read the fee from.
+    const blind = await sauce("compile", file, ...DEFINES, "--intent-execution-fee", "auto");
+    expect(blind.code).toBe(2);
+    expect(blind.stderr).toMatch(
+      /reads the Kitchen's fee on base.*rpcUrls entry for chain id 8453/,
+    );
+  }, 60_000);
+
+  it("warns, compiling or publishing, while the destination's shared Pot is not deployed", async () => {
+    const file = join(work, "intent.sauce.ts");
+    writeFileSync(file, INTENT);
+    const pot = sharedPot();
+    const executor = getAddress(ecoRoutesExecutorOf(ecoRoutesPortal("base")));
+    const compile = async () =>
+      sauce(
+        ...[
+          "compile",
+          file,
+          ...DEFINES,
+          "--intent-execution-fee",
+          `${FEE}`,
+          "--config",
+          config,
+          "--json",
+        ],
+      );
+    const missing = await compile();
+    expect(missing.code).toBe(0);
+    expect(JSON.parse(missing.stdout).intentPots).toEqual([
+      { destination: "base", pot, executor, deployed: false },
+    ]);
+    expect(missing.stderr).toContain(
+      `warning: the intent to base cooks on Pot ${pot}, which is not deployed there, so no solver can fill it yet`,
+    );
+    expect(missing.stderr).toContain(`sauce pot --deploy --chain base --owner ${executor}`);
+    // Publishing says so before it sends anything; with no endpoint for Base, that it cannot check.
+    const unsigned = await sauce(
+      ...[
+        "intent",
+        "publish",
+        file,
+        ...DEFINES,
+        "--intent-execution-fee",
+        `${FEE}`,
+        "--format",
+        "json",
+      ],
+    );
+    expect(unsigned.stderr).toContain(`the intent to base cooks on Pot ${pot}`);
+    expect(unsigned.stderr).toContain("pass --config with an rpcUrls entry for chain id 8453");
+
+    // Deployed as the warning says — by any account, for the Executor — the warning goes away.
+    const deployed = await sauce(
+      ...["pot", "--deploy", "--chain", "base", "--owner", executor, "--rpc-url", base.rpcUrl],
+      ...["--private-key", OTHER_KEY],
+    );
+    expect(jsonOf(deployed)).toMatchObject({ pot, owner: executor, deployed: true });
+    const there = await compile();
+    expect(JSON.parse(there.stdout).intentPots).toEqual([
+      { destination: "base", pot, executor, deployed: true },
+    ]);
+    expect(there.stderr).not.toContain("warning:");
+  }, 90_000);
 });

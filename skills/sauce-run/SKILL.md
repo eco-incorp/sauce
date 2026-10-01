@@ -40,6 +40,11 @@ commands apply with differences in accounts, signing and fees: read `sauce-solan
   owner's Pot instead, the signer paying; the Pot is that owner's alone.
 - Pass each flag and each value as a word of its own, in any order: a shell variable holding
   several flags reaches the command as one word unless the shell splits it.
+- A program can come from stdin: give `-` as the file (`cat pay.sauce.ts | npx sauce compile -
+--chain base`). Its relative imports then resolve against the current directory, or
+  `--source-dir <dir>`. Stdin is then spent, so questions go to the terminal; with none, pass
+  `--password-file` for a keystore, and `--auto-approve` once the user agrees to what the run
+  lists.
 
 ## Steps
 
@@ -48,14 +53,20 @@ commands apply with differences in accounts, signing and fees: read `sauce-solan
    needs no import for. `--protocol UniswapV3` shows one namespace's methods with every parameter
    named; `--json` gives the same for a program to read. Use only names it lists.
 2. **Compile**, to check the program: `npx sauce compile pay.sauce.ts --chain ethereum`. It prints the
-   bytecode; `--json` adds the size, `main`'s parameters, the compiler and the engine it pairs with.
-   A failing compile points at the file's line and column, and its `hint:` lines name the flag or
-   define to add. Every command takes the chain as `--chain <slug or id>`. A file may name its own
-   chain instead, in a `// @chain base` line among the `//` comment lines it starts with (and
-   `// @target svm` alone picks Solana); `--chain` overrides it. Leave the line out of a file meant
-   for more than one chain.
-3. **Pot**: `npx sauce pot --chain base --owner <address>` prints the Pot's address, known before it
-   exists, and its deploy transaction.
+   bytecode; `--json` adds the size, `main`'s parameters, the compiler and the engine it pairs with,
+   and what the compile applied: `defines` (each define the file reads, its value, whether the user
+   or the chain set it, and the chain it applied on), `contracts` (each protocol contract it calls,
+   resolved on its chain), and `payload`, its size with `main`'s arguments given by `--args`. On
+   Solana, `cook` says whether the cook fits one transaction. A failing compile points at the
+   file's line and column, and its `hint:` lines name the flag or define to add. Every command
+   takes the chain as `--chain <slug or id>`. A file may name its own chain instead, in a
+   `// @chain base` line among the `//` comment lines it starts with (and `// @target svm` alone
+   picks Solana); `--chain` overrides it. Leave the line out of a file meant for more than one
+   chain.
+3. **Pot**: `npx sauce pot --chain base --owner <address>` (or `--keystore <keystore>` for the
+   signer's own) prints the Pot's address, known before it exists, and its deploy transaction.
+   With `--config sauce.config.json` it also says whether the chain has the released engine and
+   Kitchen (and the Kitchen's fee) and whether the Pot is deployed.
    `npx sauce pot --deploy --chain base --config sauce.config.json --keystore <keystore>` deploys the
    signer's Pot. `--salt <label>` names another Pot of the same owner (`--salt-hex <bytes32>` for an
    exact salt); use the same salt in every later command.
@@ -90,9 +101,12 @@ commands apply with differences in accounts, signing and fees: read `sauce-solan
    `--json` gives the same for a program to read.
 6. **Run**:
    `npx sauce run pay.sauce.ts --chain ethereum --config sauce.config.json --keystore <keystore> --args <recipient> 1000000`
-   compiles, rehearses, signs, sends and waits, then prints the hash, status and gas used. A Pot not
-   deployed yet is deployed first once the user agrees at the prompt; `--yes` agrees in advance, and
-   with no terminal it is required. Ask the user before passing `--yes`.
+   compiles, rehearses, signs, sends and waits, then prints the hash, status and gas used, what the
+   cook cost (gas, any L1 data fee, the value) and the tokens it moved. A Pot not
+   deployed yet is deployed first once the user agrees at the prompt. `--auto-approve` approves, in
+   advance, everything a run sends before its cook (deploying the Pot, approving Permit2 or the Pot
+   for `--fund`) and names each; with no terminal the run lists what it needs approved and sends
+   nothing until it is given. Ask the user before passing `--auto-approve`.
 7. **Check** what was sent:
    `npx sauce inspect <tx hash> --chain ethereum --config sauce.config.json --source pay.sauce.ts`
    reads the transaction back: the Pot, the engine, the arguments the program got, and the route and
@@ -137,6 +151,10 @@ Every value is checked against its declared type before anything is sent: `Addre
   or decimal: a JSON number loses precision. An address in a program is a hex integer with an `n`,
   as Base's USDC is `0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n`; on the command line it is plain
   hex.
+- In a project `sauce init` wrote, put programs in `programs/`: its `tsconfig.json` types them as
+  SauceScript, so an editor's TypeScript errors there are real ones (with the project's own
+  TypeScript running the editor). Elsewhere a program shows TypeScript errors that the compile
+  does not have; `sauce compile` is what decides.
 - `sauce-script` covers the language and what compiling for a chain adds to it.
 
 [examples/pay.sauce.ts](examples/pay.sauce.ts) pays a recipient in USDC and USDT, on any chain that registers both.
@@ -160,7 +178,10 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
 
 - **A file that opens intents** (`Arbitrum(() => { … }).reward({ … })`) also takes
   `--intent-deadline <unix seconds>`, `--intent-creator <address>` and, when an intent's body runs a
-  program, `--intent-execution-fee <wei>`. `sauce run` opens them from the Pot, which is the way when
+  program, `--intent-execution-fee <wei>` (`auto` reads it from the destination through
+  `--config`). With `--config`, `compile` and `sauce intent publish` warn while the Pot such an intent cooks on
+  is not deployed on its destination: no solver can fill it until then, and the warning names the
+  `sauce pot --deploy` that deploys it. `sauce run` opens them from the Pot, which is the way when
   an amount is measured on chain; `sauce intent publish` opens fixed ones from a wallet with no Pot, and
   `sauce intent publish <file> --chain <chain> --from <address> --format json` prints its unsigned approve
   and `publishAndFund` for any wallet to send. Both fund each reward by an approve and
@@ -184,5 +205,5 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
 - Never write an RPC URL or a key into a tracked file, a program or a command you commit.
 - Rehearse with `sauce simulate` (or `publish --dry-run`, and `sauce intent fill` for an intent's body)
   before the first real send.
-- Do not pass `--yes` or deploy a Pot without the user's go-ahead: deploying costs gas, and with
+- Do not pass `--auto-approve` or deploy a Pot without the user's go-ahead: deploying costs gas, and with
   `--fund` it also approves Permit2 (or the Pot) to move the user's tokens.

@@ -232,8 +232,7 @@ describe("the picker: sauce intent at a terminal", () => {
         {
           store,
           endpoint: () => undefined,
-          yes: false,
-          confirm: async () => undefined,
+          approver: { auto: false, canAsk: false, approve: async () => undefined },
         },
       );
       expect(code).toBe(0);
@@ -259,8 +258,7 @@ describe("the picker: sauce intent at a terminal", () => {
         {
           store: new IntentStore(dir),
           endpoint: () => undefined,
-          yes: false,
-          confirm: async () => undefined,
+          approver: { auto: false, canAsk: false, approve: async () => undefined },
         },
       );
       expect(stdout).toMatch(/^No intents in /);
