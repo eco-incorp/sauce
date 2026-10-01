@@ -1,10 +1,11 @@
-<!-- Generated from the SDK's registries: the names `sauce globals --chain <chain>` lists. Do not edit. -->
+<!-- Generated from the SDK's registries. Do not edit. -->
 
 # Chain globals
 
 A chain name opens an intent from inside a program (`Arbitrum(() => { ... }).reward({ ... })`) and
 qualifies a contract address (`Ethereum.UniswapV4.UniversalRouter`). An intent needs both chains
-to take intents; each line says whether its chain does.
+to take intents; each line says whether its chain does. Each chain's file in `sauce-chains` has
+the rest.
 
 - `Ethereum`: `ethereum`, 1, EVM, takes intents
 - `Optimism`: `optimism`, 10, EVM, takes intents

@@ -1,5 +1,6 @@
-// JSON action programs: validate at the edge, compile once with a runtime amount, and build (not
-// send) the quote that prices a swap action. Addresses come from the SDK's registries.
+// JSON action programs: validate at the edge, compile once for a chain with a runtime amount, and
+// build (not send) the quote that prices a swap action. Documents name tokens by registry symbol and
+// contracts by namespace, so one document compiles for every chain that has those names.
 import {
   ProgramError,
   compileProgram,
@@ -8,56 +9,37 @@ import {
   type ActionProgram,
   type UniswapV4SwapAction,
 } from "@eco-incorp/sauce/actions";
-import { contracts, routes } from "@eco-incorp/sauce";
 import { v12RouterAddress } from "@eco-incorp/sauce/deployments";
-import { toHex, zeroAddress, type Hex } from "viem";
+import { toHex } from "viem";
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`check failed: ${message}`);
 }
 
-// Action JSON takes explicit addresses; take them from the SDK's registries instead of memory.
-function token(chain: string, symbol: string): Hex {
-  const address = routes.registryTokenAddress(routes.chain(chain).chain, symbol);
-  if (address === undefined) throw new Error(`${symbol} is not registered on ${chain}`);
-  return toHex(address, { size: 20 });
-}
-function contract(address: Hex | undefined, what: string): Hex {
-  if (address === undefined) throw new Error(`${what} has no recorded address`);
-  return address;
-}
-const USDT = token("ethereum", "USDT");
-const USDC = token("ethereum", "USDC");
-// The spender of the approval below: Aave V3's Pool.
-const AAVE_POOL = contract(contracts.on("ethereum").AaveV3.Pool.address, "the Aave V3 Pool");
-const POOL_MANAGER = contract(
-  contracts.on("ethereum").UniswapV4.PoolManager.address,
-  "the Uniswap V4 PoolManager",
-);
 // The Sauce Router of the release, which quotes Uniswap V3 and V4 swap actions with the code that
 // swaps them. A Pot swaps through its own Router, the Kitchen's when it was minted.
-const ROUTER = contract(toHex(BigInt(v12RouterAddress()), { size: 20 }), "the Sauce Router");
+const ROUTER = toHex(BigInt(v12RouterAddress()), { size: 20 });
 
 // 1. Strict validation: every problem at once, each with a path. Amounts are base-10 STRINGS.
 try {
-  parseProgram({ version: 1, chainId: 1, actions: [{ type: "approve", token: USDT, amuont: 5 }] });
+  parseProgram({ version: 1, actions: [{ type: "approve", token: "USDT", amuont: 5 }] });
   throw new Error("expected rejection");
 } catch (error) {
   if (!(error instanceof ProgramError)) throw error;
   check(error.issues.length >= 1, "issues carry paths");
 }
 
-// 2. One compiled program for every amount: `argument` becomes a runtime parameter of `main`.
-//    Token writes in action programs are SafeERC20 (approve is forceApprove), so USDT is fine here.
+// 2. One compiled program for every amount: `argument` becomes a runtime parameter of `main`. The
+//    names resolve on the chain given; token writes are SafeERC20 (approve is forceApprove), so USDT
+//    is fine here.
 const reusable: ActionProgram = parseProgram({
   version: 1,
-  chainId: 1,
   actions: [
     { type: "argument", name: "amount" },
-    { type: "approve", token: USDT, spender: AAVE_POOL },
+    { type: "approve", token: "USDT", spender: "AaveV3.Pool" },
   ],
 });
-const compiled = compileProgram(reusable);
+const compiled = compileProgram(reusable, { chain: "ethereum" });
 const p1 = compiled.payload({ amount: 5n });
 const p2 = compiled.payload({ amount: "900000" });
 check(
@@ -69,24 +51,46 @@ check(
   !/IERC20\.at\([^)]*\)\.approve/.test(compiled.source),
   "the approve is not a typed IERC20 call",
 );
+// The same document compiles for another chain with those names, to that chain's addresses: the
+// source names them, and the bytecode holds each chain's own.
+const onOptimism = compileProgram(reusable, { chain: "optimism" });
+check(onOptimism.source === compiled.source, "the source names the tokens and contracts");
+check(
+  toHex(onOptimism.bytecode) !== toHex(compiled.bytecode),
+  "the bytecode holds each chain's addresses",
+);
 
-// 3. A quote is an eth_call you send yourself; nothing here touches the network. A swap action is
+// 3. A name the chain lacks throws ProgramError, with the issues and the chain: Base registers no
+//    USDT, so the same document does not compile there.
+try {
+  compileProgram(reusable, { chain: "base" });
+  throw new Error("expected rejection");
+} catch (error) {
+  if (!(error instanceof ProgramError)) throw error;
+  check(
+    error.chain?.slug === "base" && error.issues[0]?.path === "actions[1].token",
+    "the issue names the field and the chain",
+  );
+}
+
+// 4. A quote is an eth_call you send yourself; nothing here touches the network. A swap action is
 //    a call into @sauce/router, here its `uniswapV4`: a hookless USDC/USDT pool, named by its key.
 const swapAction: UniswapV4SwapAction = {
   type: "uniswapV4Swap",
-  poolManager: POOL_MANAGER,
-  tokenIn: USDC,
-  tokenOut: USDT,
+  poolManager: "UniswapV4.PoolManager",
+  tokenIn: "USDC",
+  tokenOut: "USDT",
   fee: 100,
   tickSpacing: 1,
-  hooks: zeroAddress, // hookless
   amount: "1000000",
   amountOutMin: "990000",
   recipient: "self",
 };
-const swapping = compileProgram(parseProgram({ version: 1, chainId: 1, actions: [swapAction] }));
+const swapping = compileProgram(parseProgram({ version: 1, actions: [swapAction] }), {
+  chain: "ethereum",
+});
 check(/from "@sauce\/router"/.test(swapping.source), "a swap action calls @sauce/router");
-const quote = quoteAction(swapAction, { router: ROUTER });
+const quote = quoteAction(swapAction, { chain: "ethereum", router: ROUTER });
 check(
   quote.data.startsWith("0x") && typeof quote.decode === "function",
   "quote = { to, data, decode }",

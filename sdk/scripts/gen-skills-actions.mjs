@@ -8,7 +8,7 @@
 // description, the ways it may name its pool, and each field's value kind, whether it is required,
 // and what it means. Nothing is added that the schema does not say.
 //
-// It reads a committed file, so it runs in the SDK's `build` beside `gen-skills-globals.mjs`, which
+// It reads a committed file, so it runs in the SDK's `build` beside `gen-skills-references.mjs`, which
 // rewrites the reference; the reference is committed, CI rebuilds and fails when that changed it, and
 // the skills checker (`check-skills.mjs`) compares it with `renderActionsReference()` the same way.
 //

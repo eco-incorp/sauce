@@ -1,10 +1,12 @@
 # QuickSwap
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 The leading DEX on Polygon with V2 (constant product, x*y=k) and V3 (Algebra-based concentrated liquidity with dynamic fees) pools. Low-fee trading powered by Polygon's infrastructure.
 
 ## Category
 
-dex | Chains: Polygon
+dex | Chains and addresses: [registry/quickswap.md](registry/quickswap.md)
 
 ## Key Operations
 
@@ -13,20 +15,12 @@ dex | Chains: Polygon
 - **addLiquidity**: Add liquidity to V2 pools
 - **removeLiquidity**: Remove liquidity from V2 pools
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  swapV2,
-  swapV3,
-  addLiquidity,
-  removeLiquidity,
-} from "@eco-incorp/sauce/protocols/quickswap";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### swapV2
 
@@ -78,7 +72,7 @@ function main(
 ```
 
 - No `fee` parameter: QuickSwap V3 uses Algebra protocol with dynamic fees (not fixed fee tiers)
-- `limitSqrtPrice`: Set to `0` for no price limit
+- `limitSqrtPrice`: `0` in this template, no price limit, so `amountOutMin` is the only bound. QuickSwap V3 is an Algebra pool, which the Sauce Router's `swapV3` drives with a real limit (`sauce-swaps`)
 
 ### addLiquidity
 
@@ -140,26 +134,11 @@ function main(
 
 - LP token must be approved to the V2 router
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain   | Contract      | Address                                      |
-| ------- | ------------- | -------------------------------------------- |
-| Polygon | V2 Factory    | `0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32` |
-| Polygon | V2 Router     | `0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff` |
-| Polygon | V3 Factory    | `0x411b0fAcC3489691f28ad58c47006AF5E3Ab3A28` |
-| Polygon | V3 SwapRouter | `0xf5b509bB0909a69B1c207E495f687a596C168e12` |
-
-## ABI Methods
-
-### QuickSwapV2RouterABI
-
-- `swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline) -> uint256[] amounts` - V2 swap exact input along path
-- `addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB, uint256 liquidity)` - Add V2 LP
-- `removeLiquidity(address tokenA, address tokenB, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB)` - Remove V2 LP
-
-### QuickSwapV3SwapRouterABI
-
-- `exactInputSingle(tuple(address tokenIn, address tokenOut, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 limitSqrtPrice)) -> uint256 amountOut` - V3 concentrated liquidity swap with dynamic fees
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/quickswap.md](registry/quickswap.md).
 
 ## Notes
 

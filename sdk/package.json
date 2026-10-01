@@ -60,7 +60,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "node scripts/gen-embedded-sources.mjs && node scripts/sync-engine-artifacts.mjs && tsc && node scripts/copy-verify-assets.mjs && node scripts/gen-skills-globals.mjs && node scripts/gen-skills-actions.mjs",
+    "build": "node scripts/gen-embedded-sources.mjs && node scripts/sync-engine-artifacts.mjs && tsc && node scripts/copy-verify-assets.mjs && node scripts/gen-skills-references.mjs && node scripts/gen-skills-actions.mjs",
     "typecheck": "node scripts/gen-embedded-sources.mjs && tsc --noEmit",
     "typecheck:test": "node scripts/gen-embedded-sources.mjs && tsc -p tsconfig.test.json --noEmit",
     "sync-engine-artifacts": "node scripts/sync-engine-artifacts.mjs",
@@ -68,7 +68,7 @@
     "gen-source-globals": "node scripts/gen-source-globals.mjs",
     "gen-builtins": "node scripts/gen-builtins.mjs",
     "gen-embedded-sources": "node scripts/gen-embedded-sources.mjs",
-    "gen-skills-globals": "node scripts/gen-skills-globals.mjs",
+    "gen-skills-references": "node scripts/gen-skills-references.mjs",
     "gen-skills-actions": "node scripts/gen-skills-actions.mjs",
     "test": "node scripts/gen-embedded-sources.mjs && NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs",
     "sync-eco-routes-addresses": "node scripts/sync-eco-routes-addresses.mjs"

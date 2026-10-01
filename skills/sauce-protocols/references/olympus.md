@@ -4,20 +4,19 @@ Decentralized reserve currency protocol. OHM staking and bonding mechanism with 
 
 ## Category
 
-staking | Chains: Ethereum
+staking | Chains and addresses: [registry/olympus.md](registry/olympus.md)
 
 ## Key Operations
 
 - **stake**: Stake OHM tokens
 - **unstake**: Unstake OHM tokens
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import { protocolInfo, deployments, stake, unstake } from "@eco-incorp/sauce/protocols/olympus";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Stake OHM
@@ -29,17 +28,11 @@ function main(stakingAddress: Address, to: Address, amount: Uint256): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | ohm      | `0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5` |
-| Ethereum | staking  | `0xB63cac384247597756545b500253ff8E607a8020` |
-
-## ABI Methods
-
-- `stake(address,uint256,bool,bool)` - Stake OHM
-- `unstake(address,uint256,bool,bool)` - Unstake OHM
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/olympus.md](registry/olympus.md).
 
 ## Notes
 

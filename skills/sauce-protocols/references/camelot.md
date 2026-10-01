@@ -1,10 +1,12 @@
 # Camelot
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Native Arbitrum DEX with dual AMM: V2 constant product pools (with native fee-on-transfer token support) and V3 concentrated liquidity pools (Algebra-based with dynamic fees, no fixed fee tiers).
 
 ## Category
 
-dex | Chains: Arbitrum
+dex | Chains and addresses: [registry/camelot.md](registry/camelot.md)
 
 ## Key Operations
 
@@ -13,20 +15,12 @@ dex | Chains: Arbitrum
 - **addLiquidity**: Add liquidity to V2 pools
 - **removeLiquidity**: Remove liquidity from V2 pools
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  swapV2,
-  swapV3,
-  addLiquidity,
-  removeLiquidity,
-} from "@eco-incorp/sauce/protocols/camelot";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### swapV2
 
@@ -90,7 +84,7 @@ function main(
 
 - `routerAddress`: Camelot V3 SwapRouter on Arbitrum
 - No `fee` parameter needed: Camelot V3 uses dynamic fees (Algebra-based), not fixed fee tiers
-- `limitSqrtPrice`: Set to `0` for no price limit
+- `limitSqrtPrice`: `0` in this template, no price limit, so `amountOutMin` is the only bound. Camelot V3 is an Algebra pool, which the Sauce Router's `swapV3` drives with a real limit (`sauce-swaps`)
 
 ### addLiquidity
 
@@ -152,26 +146,11 @@ function main(
 
 - LP token must be approved to the V2 router
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract      | Address                                      |
-| -------- | ------------- | -------------------------------------------- |
-| Arbitrum | V2 Factory    | `0x6EcCab422D763aC031210895C81787E87B43A652` |
-| Arbitrum | V2 Router     | `0xc873fEcbd354f5A56E00E710B90EF4201db2448d` |
-| Arbitrum | V3 Factory    | `0x1a3c9B1d2F0529D97f2afC5136Cc23e58f1FD35B` |
-| Arbitrum | V3 SwapRouter | `0x1F721E2E82F6676FCE4eA07A5958cF098D339e18` |
-
-## ABI Methods
-
-### CamelotV2RouterABI
-
-- `swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, address referrer, uint256 deadline)` - V2 swap with fee-on-transfer token support and referral. Note: no return value
-- `addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB, uint256 liquidity)` - Add V2 LP
-- `removeLiquidity(address tokenA, address tokenB, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB)` - Remove V2 LP
-
-### CamelotV3SwapRouterABI
-
-- `exactInputSingle(tuple(address tokenIn, address tokenOut, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 limitSqrtPrice)) -> uint256 amountOut` - V3 concentrated liquidity swap with dynamic fees
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/camelot.md](registry/camelot.md).
 
 ## Notes
 

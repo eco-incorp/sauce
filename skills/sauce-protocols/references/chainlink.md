@@ -4,19 +4,18 @@ Industry-standard decentralized oracle network providing price feeds, VRF random
 
 ## Category
 
-oracle | Chains: Ethereum, Arc
+oracle | Chains and addresses: [registry/chainlink.md](registry/chainlink.md)
 
 ## Key Operations
 
 - **getLatestPrice**: Read latest price from a Chainlink price feed aggregator
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import { protocolInfo, deployments, getLatestPrice } from "@eco-incorp/sauce/protocols/chainlink";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Get latest price from feed
@@ -33,25 +32,11 @@ function main(feedAddress: Address): {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract         | Address                                      |
-| -------- | ---------------- | -------------------------------------------- |
-| Ethereum | ethUsdFeed       | `0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419` |
-| Ethereum | feedRegistry     | `0x47Fb2585D2C56Fe188D0E6ec628a38b74fCeeeDf` |
-| Ethereum | vrfV2Coordinator | `0x271682DEB8C4E0901D1a1550aD2e64D568E69909` |
-
-## ABI Methods
-
-### AggregatorV3ABI
-
-- `latestRoundData()` - Get latest price data. Returns tuple: (roundId uint80, answer int256, startedAt uint256, updatedAt uint256, answeredInRound uint80). answer is the price with feed-specific decimals
-- `decimals()` - Get price feed decimal precision. Returns uint8 (usually 8 for USD feeds, 18 for ETH feeds)
-
-### FeedRegistryABI
-
-- `latestRoundData(address,address)` - Get latest price for a base/quote pair. Params: base (token address), quote (denomination address, use 0x348... for USD). Returns same tuple as AggregatorV3
-- `getFeed(address,address)` - Look up aggregator address for a pair. Params: base, quote. Returns aggregator address
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/chainlink.md](registry/chainlink.md).
 
 ## Notes
 
