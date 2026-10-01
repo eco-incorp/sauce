@@ -353,9 +353,10 @@ checks that a settle payload, a `Pot.cook`, a `Portal.publish[AndFund]` (its rou
 transaction runs the audited settle program, with the SDK's `validateSettleProgram`, and prints the
 `tokens`, `minOut` and `recipient` it carries. `--pin <keccak256>:<length>` also accepts a historical
 settle program. A cook must name the released engine, or one you name with `--engine <address>`:
-the right bytes on another interpreter are another computation. A rejection exits 1 with its code —
-the SDK's `SettleFailureCode` (`PROGRAM_HASH`, `TOKENS_OFFSET`, …), or `UNKNOWN_ENGINE`, or
-`NO_SETTLE` for an intent without a settle cook.
+the right bytes on another interpreter are another computation. A transaction must have succeeded:
+one that reverted, or has no receipt yet, settled nothing. A rejection exits 1 with its code — the
+SDK's `SettleFailureCode` (`PROGRAM_HASH`, `TOKENS_OFFSET`, …), or `UNKNOWN_ENGINE`, `NO_SETTLE` for
+an intent without a settle cook, `TX_FAILED` or `TX_PENDING`.
 
 ## Solana
 
@@ -400,13 +401,16 @@ simulates the cook from `--owner` with no signature and prints the compute units
 the program logs. `run` signs with `--keypair`, confirms by polling the endpoint (no websocket to
 configure), and prints the signature, status and compute units — and the logs when it fails. A
 program too large for one transaction is staged in a Kitchen code buffer first and the buffer is
-closed again after the cook. `tx` prints the cook as a base64 transaction signed by no one,
+closed again after the cook — or when staging or the cook's rehearsal fails; if closing it fails,
+the run still prints the cook and warns with the buffer's address. A failure is named for the
+program the logs show failing. `tx` prints the cook as a base64 transaction signed by no one,
 `{ chain, feePayer, pot, fee, transaction }`, for the owner's wallet to sign; its blockhash expires
 in about a minute.
 
 `sauce verify --chain solana <signature> --min-out <n> --spl-count <n>` checks a settle cook: the
 engine invocation it made, against the SDK's settle program recompiled for that floor and split
-(`svm.verifySvmSettleExecution`). It rejects with `NO_SETTLE` or `NOT_GENUINE`.
+(`svm.verifySvmSettleExecution`). It rejects with `TX_FAILED` (the transaction failed),
+`NO_SETTLE` or `NOT_GENUINE`.
 
 `sauce publish` does not work from Solana: the SDK has no Kitchen-built path for an intent that
 Solana's Portal runs ([Solana guide](solana.md#svm-destinations-in-eco-intents)). Open the intent
