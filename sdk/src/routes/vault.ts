@@ -20,12 +20,24 @@
  * (`0xff` for EVM Portal deployments; Portal's constructor is `IntentSource(address(new Vault()),
  * bytes1(0xff))`).
  *
- * `initCodeHash = keccak256(type(Proxy).creationCode ++ abi.encode(implementation))` — this is
- * SHIPPED AS EXPLICIT CONFIG (`VaultConfig.vaultInitCodeHash`), never a baked constant:
- * `type(Proxy).creationCode` depends on the exact solc version + optimizer settings used to deploy
- * Portal, and eco-routes commits no artifacts on `main` to derive it from. Obtain it from a real
- * deployment (or verify against a live `Portal.intentVaultAddress(intent)` call) before trusting a
- * `predictVaultAddress` result against any real chain — see this epic's design doc's `openQuestions`.
+ * `initCodeHash = keccak256(type(Proxy).creationCode ++ abi.encode(implementation))`, and both
+ * halves are known for an eco-routes Portal (`ecoRoutesVaultConfig` below):
+ *
+ *  - `implementation` is the Portal's first `CREATE` (`Portal`'s constructor passes
+ *    `address(new Vault())` to `IntentSource`), so it follows from the Portal address —
+ *    `protocols/eco-routes/lookup.ts#ecoRoutesVaultImplementationOf`, beside the Executor (its
+ *    second);
+ *  - `type(Proxy).creationCode` is `contracts/vault/Proxy.sol` compiled with eco-routes' own
+ *    `foundry.toml` — solc 0.8.27, via-IR, 1,000,000 optimizer runs, `paris`, and no CBOR metadata
+ *    (`cbor_metadata = false`, `bytecode_hash = "none"`), so the bytes are a function of the source
+ *    and those settings alone: {@link ECO_ROUTES_VAULT_PROXY_CREATION_CODE}.
+ *
+ * That is evidence, not an assumption. `test/fixtures/eco-routes-vaults.json` records, for every EVM
+ * Portal the registry carries, what the deployed Portal's own `intentVaultAddress` returned for a
+ * fixed intent (`scripts/capture-eco-routes-vaults.mjs`), and `eco-routes-vault.test.ts` requires the
+ * prediction to match each one and every registry Portal to be covered. A Portal built some other
+ * way (a different Proxy, another compiler) needs its own `vaultInitCodeHash`, which
+ * {@link predictVaultAddress} still takes as explicit config.
  *
  * DO NOT confuse this with eco-routes' own (superseded) `utils/intent.ts#intentVaultAddress` helper:
  * that models `salt = routeHash` with a Vault deployed with `(intentHash, reward)` constructor args,
@@ -41,6 +53,7 @@ import {
   type Hex,
 } from "viem";
 
+import { ecoRoutesVaultImplementationOf } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm } from "./encode.js";
 import { toUniversalAddress } from "./normalize.js";
 import type { AddressInput } from "./types.js";
@@ -49,7 +62,7 @@ export interface VaultConfig {
   /** The Portal contract — the CREATE2 deployer in the formula above. */
   readonly portal: AddressInput;
   /** `keccak256(type(Proxy).creationCode ++ abi.encode(vaultImplementation))` — see the module doc;
-   *  never derived here, always caller-supplied. */
+   *  {@link ecoRoutesVaultConfig} derives it for an eco-routes Portal. */
   readonly vaultInitCodeHash: Hex;
   /** CREATE2 prefix byte. Defaults to `0xff` (the live EVM Portal deployments' `CREATE2_PREFIX`;
    *  `0x41` is `PortalTron`'s, out of scope here). */
@@ -73,13 +86,15 @@ function assertByte1(value: Hex, label: string): void {
 /**
  * The off-chain twin of `IntentSource._getVault(intentHash)` -> `Clones.predict(intentHash,
  * CREATE2_PREFIX)`. Throws (rather than silently computing against a missing/malformed
- * `vaultInitCodeHash`) since there is no safe baked default — see the module doc.
+ * `vaultInitCodeHash`): the config names the Portal build, and {@link ecoRoutesVaultConfig} is the
+ * one for eco-routes' own.
  */
 export function predictVaultAddress(intentHash: Hex, config: VaultConfig): Hex {
   assertBytes32(intentHash, "intentHash");
   if (config.vaultInitCodeHash === undefined || config.vaultInitCodeHash === null) {
     throw new Error(
-      "predictVaultAddress: config.vaultInitCodeHash is required (no baked default — see vault.ts's module doc)",
+      "predictVaultAddress: config.vaultInitCodeHash is required — ecoRoutesVaultConfig(portal) gives " +
+        "it for an eco-routes Portal (see vault.ts's module doc)",
     );
   }
   assertBytes32(config.vaultInitCodeHash, "vaultInitCodeHash");
@@ -110,4 +125,35 @@ export function vaultInitCodeHash(proxyCreationCode: Hex, implementation: Addres
   combined.set(bytes, 0);
   combined.set(implBytes, bytes.length);
   return keccak256(combined);
+}
+
+/**
+ * `type(Proxy).creationCode` as eco-routes builds it: `contracts/vault/Proxy.sol` under its
+ * `foundry.toml` (solc 0.8.27, via-IR, 1,000,000 runs, `paris`, no CBOR metadata). Every vault is a
+ * `new Proxy{salt: intentHash}(implementation)` of these bytes, and every deployed Portal carries
+ * them — `test/fixtures/eco-routes-vaults.json` records each registry Portal's code embedding them
+ * and its `intentVaultAddress` agreeing with {@link ecoRoutesVaultConfig}, and the vendored Portal
+ * fixture embeds them too.
+ */
+export const ECO_ROUTES_VAULT_PROXY_CREATION_CODE: Hex =
+  "0x60a034606257601f60c938819003918201601f19168301916001600160401b03831184841017606757808492602094604052833981010312606257516001600160a01b0381168103606257608052604051604b9081607e82396080518160150152f35b600080fd5b634e487b7160e01b600052604160045260246000fdfe60806040523615604957366000803760008036817f00000000000000000000000000000000000000000000000000000000000000005af43d6000803e156044573d6000f35b3d6000fd5b00";
+
+/**
+ * The vault configuration of an eco-routes Portal: its vaults are CREATE2 clones, by `portal`,
+ * salted with the intent hash, of {@link ECO_ROUTES_VAULT_PROXY_CREATION_CODE} over the Portal's
+ * first `CREATE` (`ecoRoutesVaultImplementationOf`). Derived from the address alone — nothing is
+ * read from a chain — so an intent's vault is known before it is published, which is what lets a
+ * funder pay it directly.
+ */
+export function ecoRoutesVaultConfig(portal: AddressInput): VaultConfig {
+  const address = getAddress(denormalizeToEvm(toUniversalAddress(portal))) as Hex;
+
+  return {
+    portal: address,
+    vaultInitCodeHash: vaultInitCodeHash(
+      ECO_ROUTES_VAULT_PROXY_CREATION_CODE,
+      ecoRoutesVaultImplementationOf(address),
+    ),
+    prefix: "0xff",
+  };
 }

@@ -315,11 +315,11 @@ A token symbol resolves on the chain where its part runs:
 | The second argument, what is delivered | Arbitrum, the destination     | Arbitrum's   |
 | `.reward(...)`                         | The chain the program runs on | That chain's |
 
-The reward belongs to the enclosing chain because the program escrows it there: it approves that
-chain's Portal for the reward token and funds the intent in the same fulfillment. Resolving a name
-on the other chain names an address that is not that token where it is used. A reward token taken
-from the destination fails the approval's code check and reverts the fulfillment. A body token taken
-from the enclosing chain makes the intent unfulfillable.
+The reward belongs to the enclosing chain because the program escrows it there: it pays the reward
+token into the intent's vault on that chain's Portal and publishes the intent in the same
+fulfillment. Resolving a name on the other chain names an address that is not that token where it
+is used. A reward token taken from the destination fails the transfer's code check and reverts the
+fulfillment. A body token taken from the enclosing chain makes the intent unfulfillable.
 
 The rule repeats at every depth. An intent opened inside a body is funded on that body's chain, so
 its reward resolves there and its own body on its own destination. The same holds for the other
@@ -407,8 +407,27 @@ fields down so the common case sets none of them:
 | `destinationPortal`          | The Portal recorded in the child's route                             |
 | `pot`, `engine`              | Where a program body cooks, and on what; a named Pot is not deployed |
 | `executionFee`               | The cook's value                                                     |
-| `salt`, `allowPartial`       | The route salt, and partial funding                                  |
+| `fundVia`                    | How the reward is funded — see below                                 |
+| `salt`, `allowPartial`       | The route salt, and partial funding (`publishAndFund` only)          |
 | `generation`, `environment`  | Which eco-routes deployment to address                               |
+
+### How the reward is funded
+
+By default the program pays the reward into the intent's vault itself, then publishes the intent.
+In the same transaction it asks the source Portal for `intentVaultAddress` over the bytes it is
+about to publish, transfers each reward token there with
+[`SafeERC20`](protocols-and-tokens.md#writes-follow-safeerc20) semantics, sends the native amount
+from the Pot's balance, and calls `Portal.publish`. The Portal counts an intent funded when its
+vault holds the reward (`isIntentFunded`), which is what a solver checks once it has seen
+`IntentPublished`. Nothing is approved, so no allowance is left on the shared Pot and a USDT-style
+token needs no reset; a token whose transfer returns `false` reverts the fulfillment.
+
+`fundVia: "publishAndFund"` — in `compile.intents`, `IntentOptions.fundVia`, or
+`--intent-fund-via publishAndFund` on the command line — approves the Portal for each reward token
+instead (resetting a standing allowance first) and calls `publishAndFund`, forwarding the native
+amount as the call's value. The Portal pulls the reward into the same vault, records the intent
+`Funded` and emits `IntentFunded`. Choose it when something you rely on reads that event or status
+rather than the vault's balance. `allowPartial` applies only here.
 
 ### What is refused
 
@@ -445,14 +464,25 @@ For a built intent, prepare the source-chain requests:
 ```ts
 import type { routes } from "@eco-incorp/sauce";
 
-export function sourceTransactions(built: routes.BuiltIntent) {
-  return [...built.approvals(), built.publishAndFundCalldata(false)];
+export async function sourceTransactions(
+  built: routes.BuiltIntent,
+  ethCall: (request: Pick<routes.PortalReadCall<routes.Hex>, "to" | "data">) => Promise<routes.Hex>,
+) {
+  const read = built.vaultCall();
+  const vault = read.decode(await ethCall({ to: read.to, data: read.data }));
+  return built.sourceTxs({ vault });
 }
 ```
 
-Each request is `{ to, data, value }`. Send them from the intended funder on `built.source`, in order, waiting for successful approvals before funding. ERC-20 approvals authorize the **source Portal**, which pulls tokens into the intent vault. Native rewards are included as transaction `value`. `.approvals()` covers only the root reward, even when the intent has children.
+Each request is `{ to, data, value }`. Send them from the intended funder on `built.source`, in order. By default an intent is funded **by transfer to its vault**: one ERC-20 `transfer` per reward token to the vault (for the largest amount listed for it), a plain send of the native amount, then `Portal.publish`. The Portal counts an intent funded when its vault holds the reward (`isIntentFunded`), and that is what a solver checks after it sees `IntentPublished`. No approval is asked for, so none is left standing and a USDT-style token needs no reset. `sourceTxs()` covers only the root reward, even when the intent has children.
 
-`false` selects full funding; use partial funding only when the application deliberately supports it. `publishCalldata()` publishes without funding, and `fundCalldata(allowPartial)` funds separately. These methods do no RPC and send no transactions.
+**Pass the vault you read.** `vault` is checked against `predictVault()`, the SDK's own derivation, and a mismatch throws `IntentVaultMismatchError` before anything is built: a transfer is final, so an address two sources disagree on is not paid. Without `vault`, the derivation alone is used. It is held to the `intentVaultAddress` of every eco-routes Portal the SDK records.
+
+**Send the transfers first, and publish once they have landed.** The solver then sees `IntentPublished` with the vault already funded. If `publish` fails, the reward stays in the vault: publish again later, or refund it after the reward deadline. A token whose `transfer` returns `false` instead of reverting leaves the vault short, so check `fundedCall()` before sending `publish`. [`sauce publish`](cli.md#intents-run-or-publish) does all of this for you.
+
+`sourceTxs({ fundVia: "publishAndFund" })`, or `IntentOptions.fundVia: "publishAndFund"`, returns `[...approvals(), publishAndFundCalldata(allowPartial)]` instead. ERC-20 approvals authorize the **source Portal**, which pulls tokens into the vault, records the intent `Funded` and emits `IntentFunded`. Native rewards are included as transaction `value`. Wait for successful approvals before funding. `allowPartial` defaults to `false`; use partial funding only when the application deliberately supports it. Choose this mode when something you rely on reads the `IntentFunded` event or the `Funded` status rather than the vault's balance.
+
+`publishCalldata()` publishes without funding, and `fundCalldata(allowPartial)` funds separately. These methods do no RPC and send no transactions.
 
 Set `sourcePortal` while building, or pass `{ portal: sourcePortal }` to each helper. The destination `portal` is never silently reused as the submission target.
 
@@ -506,6 +536,6 @@ export async function readVault(
 }
 ```
 
-Execute this read on the source chain. `hashCall()` cross-checks hashes against the Portal; `fundedCall()` checks funding. `predictVault({ portal, vaultInitCodeHash })` provides an offline CREATE2 prediction when you have verified the deployed vault configuration.
+Execute this read on the source chain. `hashCall()` cross-checks hashes against the Portal; `fundedCall()` checks funding. `predictVault()` is the offline CREATE2 prediction of the same address, with nothing read from a chain: an eco-routes Portal's vaults are clones, salted with the intent hash, of a Proxy over the Portal's first `CREATE`, so the address follows from the Portal's own. For a Portal built some other way, pass its configuration: `predictVault({ portal, vaultInitCodeHash })`.
 
 For a Solana destination, build the execution with the Kitchen client rather than the SVM route helpers: the instruction those helpers emit is not one the Solana engine accepts, and staging the code does not change that. The [Solana guide](solana.md) has the supported path.

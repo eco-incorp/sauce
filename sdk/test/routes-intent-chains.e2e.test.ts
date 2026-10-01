@@ -2,7 +2,7 @@
  * An intent written inside a program, EXECUTED on chains whose tokens live at DIFFERENT addresses.
  *
  * `Chain(() => { ... }).reward({ ... })` names tokens on two chains at once: the body's run on the
- * destination, and the reward's are escrowed — and approved — on the chain the program runs on. The
+ * destination, and the reward's are escrowed — paid into the vault — on the chain the program runs on. The
  * only way to show that a lowering named the right chain's token is to give each chain a different
  * one, and to have every other chain's address be empty there, as it is on a real chain.
  *
@@ -50,6 +50,7 @@ import { requireChain } from "../src/chains/canonical.js";
 import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { v12EngineAddress } from "../src/deployments/index.js";
 import { v12Kitchen } from "../src/evm/engine.js";
+import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 import {
   EVM_REWARD_PARAM,
   EVM_ROUTE_PARAM,
@@ -344,13 +345,25 @@ class Chain {
     }
   }
 
-  rewardStatus(intentHash: Hex): Promise<number> {
+  /** Whether the Portal counts a published intent funded — `isIntentFunded` over the bytes it
+   *  logged, what a solver checks: its vault holds the reward. */
+  isFunded(published: Published): Promise<boolean> {
     return this.publicClient.readContract({
-      abi: portalAbi,
+      abi: PortalABI,
       address: this.portal,
-      functionName: "getRewardStatus",
-      args: [intentHash],
-    }) as Promise<number>;
+      functionName: "isIntentFunded",
+      args: [
+        published.destination,
+        published.route,
+        {
+          deadline: published.rewardDeadline,
+          creator: published.creator,
+          prover: published.prover,
+          nativeAmount: published.rewardNativeAmount,
+          tokens: published.rewardTokens.map((t) => ({ token: t.token, amount: t.amount })),
+        },
+      ],
+    }) as Promise<boolean>;
   }
 
   private publishedIn(logs: readonly Log[]): Published[] {
@@ -501,8 +514,8 @@ describeEvm("an intent created inside a program, across chains with different to
       await base.mint(base.usdc, base.pot, SEEDED);
       const held = await base.balanceOf(base.usdc, base.pot);
 
-      // ---- Base: the program measures its USDC, approves the Portal for it, publishes ----------
-      // The reward's approval and allowance read run HERE. Named on Arbitrum, they would hit an
+      // ---- Base: the program measures its USDC, pays it into the intent's vault, publishes -----
+      // The reward's transfer into the vault runs HERE. Named on Arbitrum, it would hit an
       // address with no code and SafeERC20's check would revert this whole fulfilment.
       const onBase = await base.fulfil(route, rewardHash);
       expect(onBase.status).toBe("success");
@@ -512,7 +525,7 @@ describeEvm("an intent created inside a program, across chains with different to
       expect(published!.rewardTokens.map((t) => [lower(t.token), t.amount])).toEqual([
         [lower(base.usdc), held],
       ]);
-      expect(await base.rewardStatus(published!.intentHash)).toBe(1); // funded
+      expect(await base.isFunded(published!)).toBe(true);
       expect(await base.balanceOf(base.usdc, base.pot)).toBe(0n);
 
       // ---- Arbitrum: a solver fulfils it from the route bytes Base logged -----------------------
@@ -555,7 +568,7 @@ describeEvm("an intent created inside a program, across chains with different to
       expect(toOptimism!.rewardTokens.map((t) => [lower(t.token), t.amount])).toEqual([
         [lower(arbitrum.usdc), held],
       ]);
-      expect(await arbitrum.rewardStatus(toOptimism!.intentHash)).toBe(1);
+      expect(await arbitrum.isFunded(toOptimism!)).toBe(true);
       expect(await arbitrum.balanceOf(arbitrum.usdc, arbitrum.pot)).toBe(0n);
 
       // ---- hop 3, on Optimism: the body pays out in Optimism's USDC -----------------------------
@@ -646,8 +659,8 @@ function main() {
   }, 300_000);
 
   it("CONTROL: a reward naming the DESTINATION's token reverts the fulfilment where it is funded", async () => {
-    // What the lowering used to build for `{ token: USDC }`, written out by hand: the approval and
-    // allowance read hit an address with no code on Base, and the whole fulfilment reverts. This is
+    // What the lowering used to build for `{ token: USDC }`, written out by hand: the transfer into
+    // the vault hits an address with no code on Base, and the whole fulfilment reverts. This is
     // the failure the suite above exists to rule out, shown to be real rather than assumed.
     const program = `function main() {
   const amount = USDC.balanceOf(ctx.self());

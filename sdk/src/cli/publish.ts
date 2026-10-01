@@ -4,14 +4,25 @@
  * For a file whose intents are FIXED when it is built: every amount a literal, a define or a
  * top-level `const` of a literal. Then the SDK's own lowering (`compileSauceProgram(...).intents`)
  * has already encoded each intent exactly, and publishing it is what the TypeScript builder hands a
- * caller: the reward approvals and `Portal.publishAndFund` (`routes/portal.ts`), sent from the
- * wallet instead of a program. An amount the program measures on chain
- * (`const amount = USDC.balanceOf(ctx.self())`) exists only while the program runs, so such an
- * intent is published by running the program on a Pot — `sauce run` — and `publish` refuses it,
- * naming the value.
+ * caller (`routes/portal.ts` `intentSourceTxs`), sent from the wallet instead of a program. An
+ * amount the program measures on chain (`const amount = USDC.balanceOf(ctx.self())`) exists only
+ * while the program runs, so such an intent is published by running the program on a Pot —
+ * `sauce run` — and `publish` refuses it, naming the value.
  *
  * So does a file that does anything besides open its intents: `publish` sends only the intents,
  * and silently dropping the rest of a program would be worse than refusing it.
+ *
+ * HOW THE REWARD IS FUNDED (`--intent-fund-via`). By default, `transfer`: each reward token is
+ * transferred to the intent's vault, the native amount sent to it, and then `Portal.publish` — no
+ * approval, so nothing for USDT to refuse and no allowance left standing. The vault is the SDK's
+ * offline derivation (`predictIntentVault`); with an endpoint it is also read from the Portal and
+ * the two must agree, or nothing is sent (a lying endpoint cannot redirect the reward). Only what
+ * the vault does not already hold is transferred, and before `publish` is sent the Portal is asked
+ * whether the intent is funded — so a token that returned `false`, or kept a fee, stops the
+ * publication with the funds still in the vault, where a later publish or a refund after the
+ * deadline recovers them. `publishAndFund`: each reward token approved to the Portal (reset to zero
+ * first when a smaller allowance stands, as SafeERC20's `forceApprove` does), then
+ * `publishAndFund`, which records the intent `Funded` and emits `IntentFunded`.
  */
 import {
   encodeFunctionData,
@@ -29,7 +40,20 @@ import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm, hashIntent } from "../routes/encode.js";
 import { isTypeDeclaration } from "../routes/ast-walk.js";
 import type { LoweredIntent } from "../routes/intent-sugar.js";
-import { approvalTxs, publishAndFundTx } from "../routes/portal.js";
+import {
+  approvalTxs,
+  assertIntentVault,
+  intentVaultAddressCall,
+  IntentVaultMismatchError,
+  isIntentFundedCall,
+  predictIntentVault,
+  publishAndFundTx,
+  publishTx,
+  rewardVaultLegs,
+  vaultTransferTx,
+  type IntentFundVia,
+  type VaultLeg,
+} from "../routes/portal.js";
 import { parseSauce } from "../routes/parse.js";
 import { CliError, UsageError } from "./args.js";
 import { assumeTokenBalance, mergeOverrides } from "./assume.js";
@@ -47,6 +71,7 @@ import { baseUnits, type FundRequest } from "./funding.js";
 const ERC20 = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
   "function approve(address spender, uint256 amount) returns (bool)",
+  "function balanceOf(address owner) view returns (uint256)",
 ]);
 
 /** A node of the SauceScript parser's tree, as far as this reads it. */
@@ -152,15 +177,130 @@ function fixedIntents(input: ProgramInput, files: CliFiles): readonly LoweredInt
 /** One transaction of the plan, and what it is for. */
 interface Step extends TxRequest {
   readonly what: string;
+  /** The `publish` that follows a vault's funding: sent only once the Portal counts it funded. */
+  readonly publishes?: boolean;
+}
+
+/** One intent's transactions, and the vault they fund. */
+interface Plan {
+  readonly intent: LoweredIntent;
+  readonly hash: Hex;
+  readonly fundVia: IntentFundVia;
+  /** Where the reward is escrowed: the SDK's derivation, which the Portal agreed with when
+   *  `vaultFrom` is `"read"`. */
+  readonly vault: Address;
+  readonly vaultFrom: "read" | "derived";
+  readonly steps: readonly Step[];
 }
 
 /**
- * The transactions that publish `intent` from `from`: each reward token approved to the Portal —
- * reset to zero first when a smaller allowance stands, as SafeERC20's `forceApprove` does, which
- * a USDT-style token requires — then `publishAndFund`. With no chain to read, the approvals are
- * the plain ones `approvalTxs` returns.
+ * The intent's vault: the SDK's derivation and, with an endpoint, the Portal's own answer, which
+ * must agree — a transfer is final, so an address two sources disagree on is not paid.
  */
-async function stepsFor(
+async function vaultOf(
+  intent: LoweredIntent,
+  portal: Hex,
+  client: PublicClient | undefined,
+): Promise<{ readonly vault: Address; readonly vaultFrom: "read" | "derived" }> {
+  const target = { portal };
+  if (client === undefined) {
+    return { vault: predictIntentVault(intent.intent, target), vaultFrom: "derived" };
+  }
+  const call = intentVaultAddressCall(intent.intent, target);
+  let reported: Hex;
+  try {
+    reported = call.decode((await client.call({ to: call.to, data: call.data })).data ?? "0x");
+  } catch (error) {
+    throw new CliError(
+      `could not read the intent's vault from the Portal ${portal}: ${revertReason(error)}`,
+    );
+  }
+  try {
+    return { vault: assertIntentVault(intent.intent, target, reported), vaultFrom: "read" };
+  } catch (error) {
+    if (error instanceof IntentVaultMismatchError) {
+      throw new CliError(
+        `the Portal ${portal} reports the intent's vault as ${error.reported}, but the SDK derives ` +
+          `${error.predicted}: refusing to send the reward to either, and nothing was sent. The ` +
+          "endpoint may be answering for another chain, or this Portal derives its vaults some " +
+          "other way. --intent-fund-via publishAndFund funds it through the Portal instead, " +
+          "which moves the reward itself.",
+      );
+    }
+    throw error;
+  }
+}
+
+/** What the vault already holds of one leg of the reward, read from the chain. */
+async function heldBy(client: PublicClient, vault: Address, leg: VaultLeg): Promise<bigint> {
+  return leg.token === undefined
+    ? client.getBalance({ address: vault })
+    : client.readContract({
+        address: leg.token,
+        abi: ERC20,
+        functionName: "balanceOf",
+        args: [vault],
+      });
+}
+
+/**
+ * The transactions that fund and publish `intent` from `from`, as `fundVia` says:
+ *
+ *  - `"transfer"`: what the vault does not hold yet of each reward leg, transferred to it (all of
+ *    it, with no chain to read), then `publish`;
+ *  - `"publishAndFund"`: each reward token approved to the Portal — reset to zero first when a
+ *    smaller allowance stands, as SafeERC20's `forceApprove` does, which a USDT-style token
+ *    requires — then `publishAndFund`. With no chain to read, the approvals are the plain ones
+ *    `approvalTxs` returns.
+ */
+async function planFor(
+  intent: LoweredIntent,
+  input: PublishInput,
+  portal: Hex,
+  client: PublicClient | undefined,
+  from: Address | undefined,
+): Promise<Plan> {
+  const fundVia = input.intents.fundVia ?? "transfer";
+  const hash = hashIntent(intent.intent).intentHash;
+  if (fundVia === "publishAndFund") {
+    return {
+      intent,
+      hash,
+      fundVia,
+      vault: predictIntentVault(intent.intent, { portal }),
+      vaultFrom: "derived",
+      steps: await approveSteps(intent, portal, client, from),
+    };
+  }
+  const { vault, vaultFrom } = await vaultOf(intent, portal, client);
+  const steps: Step[] = [];
+  const legs = rewardVaultLegs(intent.intent);
+  const holdings = await Promise.all(
+    legs.map((leg) => (client === undefined ? 0n : heldBy(client, vault, leg))),
+  );
+  for (const [index, leg] of legs.entries()) {
+    const held = holdings[index]!;
+    // Already there — a vault paid earlier, or a reward shared with another intent's — needs
+    // nothing more: `isIntentFunded` compares balances, not who paid them.
+    if (held >= leg.amount) continue;
+    const tx = vaultTransferTx(vault, { ...leg, amount: leg.amount - held });
+    steps.push({
+      what:
+        leg.token === undefined
+          ? `send ${nativeSymbol(input.chain)} to the vault`
+          : `transfer ${leg.token} to the vault`,
+      ...tx,
+      to: getAddress(tx.to),
+    });
+  }
+  const publish = publishTx(intent.intent, { portal });
+  steps.push({ what: "publish", ...publish, to: getAddress(publish.to), publishes: true });
+
+  return { intent, hash, fundVia, vault, vaultFrom, steps };
+}
+
+/** `fundVia: "publishAndFund"`'s transactions — see {@link planFor}. */
+async function approveSteps(
   intent: LoweredIntent,
   portal: Hex,
   client: PublicClient | undefined,
@@ -263,6 +403,28 @@ const stepJson = (step: Step): Record<string, string> => ({
   value: step.value.toString(),
 });
 
+/** An intent as each output names it: its hash, where it goes, how it is funded, and the vault. */
+const intentJson = (plan: Plan): Record<string, string> => ({
+  intentHash: plan.hash,
+  destination: plan.intent.destination.slug,
+  fundVia: plan.fundVia,
+  vault: plan.vault,
+});
+
+/** `Portal.isIntentFunded` for `plan`'s intent, as a call to simulate or send. */
+const fundedQuery = (plan: Plan, portal: Hex): TxRequest => {
+  const call = isIntentFundedCall(plan.intent.intent, { portal });
+
+  return { to: getAddress(call.to), data: call.data, value: 0n };
+};
+
+/** What the Portal says of `plan`'s intent now: whether its vault holds the reward. */
+async function fundedNow(client: PublicClient, plan: Plan, portal: Hex): Promise<boolean> {
+  const query = isIntentFundedCall(plan.intent.intent, { portal });
+
+  return query.decode((await client.call({ to: query.to, data: query.data })).data ?? "0x");
+}
+
 /** `sauce publish`: send, rehearse or print the Portal transactions of a file's fixed intents. */
 export async function publishCommand(input: PublishInput, files: CliFiles): Promise<CommandOutput> {
   const intents = fixedIntents(input, files);
@@ -270,24 +432,28 @@ export async function publishCommand(input: PublishInput, files: CliFiles): Prom
   const from = input.account?.address ?? input.from;
   const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, input.chain);
   const plans = await Promise.all(
-    intents.map(async (intent) => ({
-      intent,
-      hash: hashIntent(intent.intent).intentHash,
-      steps: await stepsFor(intent, portal, client, from),
-    })),
+    intents.map((intent) => planFor(intent, input, portal, client, from)),
   );
-  const summary = plans.map((plan) => `intent ${plan.hash} to ${plan.intent.destination.slug}`);
+  const summary = plans.map(
+    (plan) =>
+      `intent ${plan.hash} to ${plan.intent.destination.slug}, ` +
+      (plan.fundVia === "transfer"
+        ? `funded by transfer to its vault ${plan.vault}, then publish`
+        : `funded through publishAndFund into its vault ${plan.vault}`),
+  );
 
   if (input.format !== undefined) {
     const json = {
       chainId: input.chain.id,
       portal,
       intents: plans.map((plan) => ({
-        intentHash: plan.hash,
-        destination: plan.intent.destination.slug,
+        ...intentJson(plan),
+        vaultFrom: plan.vaultFrom,
         transactions: plan.steps.map(stepJson),
       })),
     };
+    const transfers = plans.some((plan) => plan.fundVia === "transfer");
+    const approvals = plans.some((plan) => plan.fundVia === "publishAndFund");
 
     return {
       text: JSON.stringify(json, null, 2),
@@ -297,13 +463,27 @@ export async function publishCommand(input: PublishInput, files: CliFiles): Prom
         .join("\n"),
       notes: [
         ...summary,
-        ...(client === undefined || from === undefined
+        ...(transfers && client === undefined
+          ? [
+              "Each vault is the SDK's offline derivation for the Portal, and every transfer is " +
+                "for the whole reward: with --rpc-url the vault is also read from the Portal, " +
+                "which must agree, and only what it does not hold yet is transferred.",
+            ]
+          : []),
+        ...(approvals && (client === undefined || from === undefined)
           ? [
               "Approvals are planned without reading the wallet's allowance: a USDT-style token " +
                 "with a different allowance standing needs approve(Portal, 0) first.",
             ]
           : []),
         "Send them in order, from the wallet that funds the reward.",
+        ...(transfers
+          ? [
+              "The transfers come first: publish only once they have landed. If publish fails, " +
+                "the reward stays in the vault — publish again, or refund it after the reward " +
+                "deadline.",
+            ]
+          : []),
       ],
     };
   }
@@ -318,11 +498,12 @@ export async function publishCommand(input: PublishInput, files: CliFiles): Prom
     }
     const calls = plans.flatMap((plan) => plan.steps);
     const assumed = await walletBalances(client, input, from);
-    let results: ReadonlyArray<{ status: string; error?: unknown; gasUsed?: bigint }>;
+    let results: ReadonlyArray<{ status: string; error?: unknown; gasUsed?: bigint; data?: Hex }>;
     try {
       ({ results } = await client.simulateCalls({
         account: from,
-        calls,
+        // After every transaction, the Portal is asked what a solver asks: is each intent funded.
+        calls: [...calls, ...plans.map((plan) => fundedQuery(plan, portal))],
         ...(assumed.overrides.length === 0 ? {} : { stateOverrides: assumed.overrides }),
       }));
     } catch (error) {
@@ -330,22 +511,38 @@ export async function publishCommand(input: PublishInput, files: CliFiles): Prom
         `the endpoint could not simulate the transactions together (eth_simulateV1): ${revertReason(error)}`,
       );
     }
-    const failed = results.findIndex((result) => result.status !== "success");
+    const failed = results.slice(0, calls.length).findIndex((r) => r.status !== "success");
+    const funded = plans.map((plan, index) => {
+      const result = results[calls.length + index];
+      if (failed >= 0 || result?.status !== "success") return undefined;
+
+      return isIntentFundedCall(plan.intent.intent, { portal }).decode(result.data ?? "0x");
+    });
     const lines = calls.map((step, index) =>
       results[index]?.status === "success"
         ? `${step.what}: succeeds, gas ${results[index]!.gasUsed}`
         : `${step.what}: reverts: ${revertReason(results[index]?.error)}`,
     );
+    const ok = failed < 0 && funded.every((value) => value === true);
 
     return {
-      text: [...summary, ...assumed.lines, ...lines].join("\n"),
+      text: [
+        ...summary,
+        ...assumed.lines,
+        ...lines,
+        ...plans.flatMap((plan, index) =>
+          funded[index] === undefined
+            ? []
+            : [`then Portal.isIntentFunded(${plan.hash}): ${funded[index]}`],
+        ),
+      ].join("\n"),
       json: {
-        ok: failed < 0,
+        ok,
         from,
         ...(assumed.json.length === 0 ? {} : { assumed: assumed.json }),
-        intents: plans.map((plan) => ({
-          intentHash: plan.hash,
-          destination: plan.intent.destination.slug,
+        intents: plans.map((plan, index) => ({
+          ...intentJson(plan),
+          ...(funded[index] === undefined ? {} : { funded: funded[index] }),
         })),
         transactions: calls.map((step, index) => ({
           ...stepJson(step),
@@ -358,7 +555,7 @@ export async function publishCommand(input: PublishInput, files: CliFiles): Prom
           "a solver fills it: `sauce fill` with the same file and flags, and the destination's " +
           "endpoint, rehearses that.",
       ],
-      ...(failed < 0 ? {} : { exitCode: 1 }),
+      ...(ok ? {} : { exitCode: 1 }),
     };
   }
   if (input.account === undefined) {
@@ -368,12 +565,28 @@ export async function publishCommand(input: PublishInput, files: CliFiles): Prom
     );
   }
   const sent: Array<{ readonly step: Step; readonly result: Sent }> = [];
+  const sentSoFar = (): string =>
+    sent.length === 0
+      ? "nothing was sent"
+      : `sent so far: ${sent.map(({ step, result }) => `${step.what} ${result.hash}`).join(", ")}`;
   for (const plan of plans) {
     for (const step of plan.steps) {
+      // The transfers have landed: the Portal must count the intent funded before it is published,
+      // because a transfer "succeeds" for a token that returns false, or that keeps a fee.
+      if (step.publishes === true && !(await fundedNow(client, plan, portal))) {
+        throw new CliError(
+          `the vault ${plan.vault} does not hold intent ${plan.hash}'s reward after the ` +
+            "transfers — a token that returned false, or kept a fee — so it is not published " +
+            `(${sentSoFar()}). What was paid stays in the vault: top it up and run sauce publish ` +
+            "again, which sends only what is missing, or refund it after the reward deadline.",
+        );
+      }
       const result = await sendAndWait(client, input.rpcUrl!, input.account, step);
       sent.push({ step, result });
       if (result.status !== "success") {
-        throw new CliError(`${step.what} ${result.hash} reverted: ${result.reason ?? "no reason"}`);
+        throw new CliError(
+          `${step.what} ${result.hash} reverted: ${result.reason ?? "no reason"} (${sentSoFar()})`,
+        );
       }
     }
   }
@@ -389,10 +602,7 @@ export async function publishCommand(input: PublishInput, files: CliFiles): Prom
     json: {
       from: input.account.address,
       portal,
-      intents: plans.map((plan) => ({
-        intentHash: plan.hash,
-        destination: plan.intent.destination.slug,
-      })),
+      intents: plans.map(intentJson),
       transactions: sent.map(({ step, result }) => ({
         what: step.what,
         hash: result.hash,
