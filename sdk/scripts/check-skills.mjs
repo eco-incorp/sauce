@@ -480,10 +480,7 @@ const COPY_FRAMING = [
   /\b(?:use|take) (?:it|this|one) as a template\b/i,
 ];
 // Skills a change of their own rewrites, with the reason; an exemption no longer needed fails.
-const COPY_FRAMING_EXEMPT = {
-  "sauce-distributed-swap":
-    "its own change rewrites the skill and its example, and removes this exemption",
-};
+const COPY_FRAMING_EXEMPT = {};
 const copyFramingUsed = new Set();
 // Docs inside the installed package are not the skills': a skill carries every fact it needs in its
 // SKILL.md and references/, which install with it. Only the TypeScript skill points into the package.
@@ -814,10 +811,7 @@ async function txOn(where, chain, argv) {
 }
 
 /** A program whose header predates the header rules, with the reason; an unneeded one fails. */
-const HEADER_EXEMPT = {
-  "sauce-distributed-swap/examples/distributed-swap.sauce.ts":
-    "its own change rewrites it with the header convention, and removes this exemption",
-};
+const HEADER_EXEMPT = {};
 const headerExemptUsed = new Set();
 /** Fails each of `problems`, unless the program is exempt, which then counts as needed. */
 const headerProblems = (where, file, problems) => {

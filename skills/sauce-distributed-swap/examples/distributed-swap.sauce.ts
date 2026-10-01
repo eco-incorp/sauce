@@ -7,17 +7,17 @@
 //     --args <payToken> <buyToken> <budget> <maxPrice> <minTokens> <maxAvgPrice> \
 //     <recipient> <refundTo>
 //
-//   payToken     Address  the token paid; the budget must be in the Pot (`--fund` pulls it in)
-//   buyToken     Address  the token bought
-//   budget       Uint256  the most payToken to spend, in its base units: 1000000000 is 1,000 USDC
-//   maxPrice     Uint256  the most one buyToken may cost, fees included, as payToken base units per
+//   payToken: Address     the token paid; the budget must be in the Pot (`--fund` pulls it in)
+//   buyToken: Address     the token bought
+//   budget: Uint256       the most payToken to spend, in its base units: 1000000000 is 1,000 USDC
+//   maxPrice: Uint256     the most one buyToken may cost, fees included, as payToken base units per
 //                         buyToken base unit times 1e18: the price in whole tokens times
 //                         10^(18 + payDecimals - buyDecimals), so 150 USDC (6 decimals) for SPCXc
 //                         (8 decimals) is 150 × 10^16 = 1500000000000000000
-//   minTokens    Uint256  the least buyToken to receive, in its base units; less reverts the cook
-//   maxAvgPrice  Uint256  the most the average may cost, in maxPrice's units; 0 turns it off
-//   recipient    Address  receives what is bought
-//   refundTo     Address  receives what is left of the budget
+//   minTokens: Uint256    the least buyToken to receive, in its base units; less reverts the cook
+//   maxAvgPrice: Uint256  the most the average may cost, in maxPrice's units; 0 turns it off
+//   recipient: Address    receives what is bought
+//   refundTo: Address     receives what is left of the budget
 //
 //   Buying SPCXc (8 decimals) on Base with up to 1,000 USDC, at most 150 USDC each, at least 6.6
 //   SPCXc in all and an average of at most 149.5:
