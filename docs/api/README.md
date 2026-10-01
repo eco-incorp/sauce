@@ -40,6 +40,9 @@ compiler inside a route body, with no host JavaScript object behind them. See
 
 ## Detailed references
 
+- [SauceScript reference](saucescript.md): every type, operator, statement, builtin and limit,
+  per target, checked against the compiler; [`builtins.json`](builtins.json) lists the builtins
+  with an example program each.
 - [Compiler](compiler.md): direct compilation, result metadata, compact argument encoding.
 - [Routes](routes.md): compile options, intent construction, nested execution, and submission helpers.
 - [Coverage](coverage.md): distinguish catalog entries, callable descriptors, and available deployments.

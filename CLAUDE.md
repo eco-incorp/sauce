@@ -282,6 +282,15 @@ than a paraphrase. Compiler _behavior_ — language features, constant folding, 
 must be verified against the pinned compiler implementation and executable probes; the runtime
 repository's documentation is not an independent correctness check.
 
+**The language reference is held to the compiler.** `docs/api/saucescript.md` (the SauceScript
+reference) and `docs/api/builtins.json` (every builtin, with an example program per target and the
+error on a target that lacks it) are checked by `sdk/test/docs-saucescript.test.ts`: every builtin
+example compiles on each target it lists, every table example is part of a program that compiles on
+each target its row claims, and every error the page quotes (`…` and `N` as wildcards) is produced
+by a rejected program — a builtin's `unavailable` entry or a case in `docs-saucescript.cases.ts`. A
+new example or quoted error needs a program behind it, and a compiler bump that changes a message
+fails here first. Keep the page version-free and free of engine internals.
+
 Compiler migration inventories and implementation plans have been removed. Git history retains
 those investigations; do not add them back to the public SDK manual.
 

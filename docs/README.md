@@ -45,6 +45,7 @@ Complete programs live in the [examples](examples/README.md).
 
 - [API entry points](api/README.md) — every published import and what it contains.
 - [Routes](api/routes.md) — chain entry points, intent options, built intents, nesting.
+- [SauceScript reference](api/saucescript.md) — every type, builtin, statement and limit, per target.
 - [Compiler](api/compiler.md) — `compile()` options and result, and the compact argument codec.
 - [Coverage](api/coverage.md) — which protocols, tokens and chains are actually registered.
 - [Examples](examples/README.md) — complete programs, and how they are kept working.

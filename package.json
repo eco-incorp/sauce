@@ -94,6 +94,7 @@
     "dev-tools/hardhat.config.cjs",
     "dev-tools/README.md",
     "docs/**/*.md",
+    "docs/api/builtins.json",
     "docs/examples/*.ts"
   ],
   "scripts": {
