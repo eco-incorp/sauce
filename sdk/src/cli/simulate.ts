@@ -113,12 +113,14 @@ async function potBalances(
     const symbol = info.symbol ?? want.request?.label ?? token;
     const start =
       want.amount ??
-      (await client.readContract({
-        address: token,
-        abi: BALANCE_OF,
-        functionName: "balanceOf",
-        args: [pot],
-      }));
+      (await client
+        .readContract({ address: token, abi: BALANCE_OF, functionName: "balanceOf", args: [pot] })
+        .catch((error: unknown) => {
+          throw new CliError(
+            `reading the Pot's ${symbol} balance failed: ` +
+              ((error as { shortMessage?: string }).shortMessage ?? "the call reverted"),
+          );
+        }));
     const amount = start + want.credit;
     const found = await assumeTokenBalance(client, token, pot, amount, symbol);
     overrides.push(found.override);
