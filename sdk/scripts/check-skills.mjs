@@ -1098,7 +1098,6 @@ for (const skill of skills) {
 
 const NAMESPACES = {
   routes: sdk.routes,
-  swap: sdk.swap,
   token: sdk.token,
   deposit: sdk.deposit,
   contracts: sdk.contracts,
@@ -1132,13 +1131,14 @@ for (const word of `main require throw ctx evm svm abi hex Math self catch at ow
 for (const skill of skills) {
   const allow = allowed(skill);
   for (const span of inlineCode(skill)) {
+    // A command line's words are file names and flags, checked against `--help` (5), not exports.
+    if (/^(?:npx )?sauce\s/.test(span)) continue;
     for (const m of span.matchAll(
-      /\b(routes|swap|token|deposit|contracts|svmVenues)\.([A-Za-z_$][\w$]*)/g,
+      /\b(routes|token|deposit|contracts|svmVenues)\.([A-Za-z_$][\w$]*)/g,
     )) {
       if (!(m[2] in NAMESPACES[m[1]]) && !KNOWN.has(m[2]))
         fail(rel(skill.path), `\`${m[1]}.${m[2]}\` is not in the package's ${m[1]}`);
     }
-    if (/^(?:npx )?sauce\s/.test(span)) continue;
     const head = /^([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)(?:\(|$)/.exec(span);
     if (!head) continue;
     for (const part of head[1].split(".")) {
