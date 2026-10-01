@@ -20,7 +20,7 @@ import {
   parseTarget,
   UsageError,
 } from "./args.js";
-import type { Confirm, CookInput, PotInput } from "./commands.js";
+import type { Approver, CookInput, PotInput } from "./commands.js";
 import {
   FUND_MODES,
   parseFund,
@@ -137,8 +137,8 @@ export interface FundingGiven {
   readonly send: boolean;
   /** Who signs the pulls; absent, a simulation credits the Pot instead. */
   readonly account?: PrivateKeyAccount;
-  readonly yes: boolean;
-  readonly confirm: Confirm;
+  /** Who approves the transactions a run sends before its cook (`--auto-approve`, or a person). */
+  readonly approver: Approver;
 }
 
 /**
@@ -184,7 +184,7 @@ export function fundingFor(given: FundingGiven): CookInput["fund"] {
   }
   const account = given.account;
 
-  return async (client, pot, owner) => {
+  return async (client, pot, owner, plan = false) => {
     if (account !== undefined && account.address !== owner) {
       throw new UsageError(
         `the signer ${account.address} is not the owner of Pot ${pot}, ${owner}: --fund pulls the ` +
@@ -202,9 +202,8 @@ export function fundingFor(given: FundingGiven): CookInput["fund"] {
       requests,
       sweep,
       ...(account === undefined ? {} : { account }),
-      send: given.send,
-      yes: given.yes,
-      confirm: given.confirm,
+      send: given.send && !plan,
+      approver: given.approver,
     });
   };
 }

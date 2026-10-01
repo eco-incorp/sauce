@@ -81,8 +81,8 @@ describe("fundingFor and assumedBalances", () => {
     rpcUrl: "http://127.0.0.1:9",
     sweep: false,
     send: false,
-    yes: false,
-    confirm: async () => undefined,
+    // A rehearsal sends nothing, so no one is asked to approve anything.
+    approver: { auto: false, canAsk: false, approve: async () => undefined },
   };
 
   it("is nothing without funding, and refuses a mode or a sweep with nothing to fund", () => {

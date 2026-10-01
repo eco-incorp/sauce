@@ -339,34 +339,55 @@ export async function laggingEndpoint(
 ): Promise<{ readonly url: string; served(): number; stop(): Promise<void> }> {
   let owed = 0;
   let served = 0;
-  const answer = async (request: { id: unknown; method: string }): Promise<unknown> => {
+  // The block it lags at: the one before the transaction it last relayed.
+  let behind = "latest";
+  const forward = async (request: unknown): Promise<{ result?: unknown }> =>
+    (await (
+      await fetch(upstream, {
+        method: "POST",
+        headers: { "content-type": "application/json", connection: "close" },
+        body: JSON.stringify(request),
+      })
+    ).json()) as { result?: unknown };
+  const answer = async (request: {
+    id: unknown;
+    method: string;
+    params?: unknown[];
+  }): Promise<unknown> => {
     if (request.method === "eth_getCode" && owed > 0) {
       owed--;
-      served++;
+      // The code as it was before that transaction: an older contract is there, a new one is not.
+      const old = await forward({ ...request, params: [request.params?.[0], behind] });
+      if (old.result === "0x") served++;
 
-      return { jsonrpc: "2.0", id: request.id, result: "0x" };
+      return old;
     }
-    const response = await fetch(upstream, {
-      method: "POST",
-      headers: { "content-type": "application/json", connection: "close" },
-      body: JSON.stringify(request),
-    });
-    if (request.method === "eth_sendRawTransaction") owed = stale;
+    if (request.method === "eth_sendRawTransaction") {
+      const latest = await forward({ jsonrpc: "2.0", id: 0, method: "eth_blockNumber" });
+      behind = latest.result as string;
+      owed = stale;
+    }
 
-    return response.json();
+    return forward(request);
   };
+  // The CLI's clients send one request at a time (viem's http transport does not batch unless
+  // asked to), so a batch is refused rather than relayed unlagged.
   const server = createServer((req, res) => {
-    let body = "";
-    req.on("data", (chunk: Buffer) => (body += chunk.toString()));
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
     req.on("end", () => {
-      const parsed = JSON.parse(body) as
-        { id: unknown; method: string } | Array<{ id: unknown; method: string }>;
-      void (Array.isArray(parsed) ? Promise.all(parsed.map(answer)) : answer(parsed)).then(
-        (out) => {
-          res.setHeader("content-type", "application/json");
-          res.end(JSON.stringify(out));
-        },
-      );
+      const parsed = JSON.parse(Buffer.concat(chunks).toString()) as
+        { id: unknown; method: string } | unknown[];
+      if (Array.isArray(parsed)) {
+        res.statusCode = 400;
+        res.end("laggingEndpoint relays one request at a time");
+
+        return;
+      }
+      void answer(parsed).then((out) => {
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify(out));
+      });
     });
   });
   server.listen(0, "127.0.0.1");

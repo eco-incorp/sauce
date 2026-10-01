@@ -91,6 +91,8 @@ export interface SkillsSource {
   readonly dir: string;
   readonly packageName: string;
   readonly version: string;
+  /** The TypeScript range the package itself depends on, for a project `sauce init` writes. */
+  readonly typescript?: string;
 }
 
 /** `--agent`: names, comma-separated or repeated; `all` is `DEFAULT_AGENTS`, and may be joined

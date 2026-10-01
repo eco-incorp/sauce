@@ -38,6 +38,7 @@ import { validateSettleProgram } from "../verify/decode.js";
 import { CliError } from "./args.js";
 import { connect, receiptOf } from "./chain.js";
 import type { CommandOutput } from "./commands.js";
+import { costJson, costLine, costOf, receiptEffects, receiptReport } from "./receipt.js";
 
 /** What a description needs to know beyond the bytes. */
 export interface InspectContext {
@@ -578,6 +579,17 @@ export async function inspectCommand(input: InspectInput): Promise<CommandOutput
   const status = receipt === undefined ? "pending" : receipt.status;
   const from = getAddress(transaction.from);
   const to = transaction.to === null ? null : getAddress(transaction.to);
+  // A landed transaction: what it cost, and what its logs record.
+  const cost = receipt === undefined ? undefined : costOf(receipt, transaction.value);
+  const effects =
+    receipt === undefined || receipt.status !== "success"
+      ? undefined
+      : receiptReport(
+          await receiptEffects(client, input.chain, receipt, [
+            [from, "the sender"],
+            ...(to === null ? [] : ([[to, "the callee"]] as const)),
+          ]),
+        );
 
   return {
     text: [
@@ -586,7 +598,9 @@ export async function inspectCommand(input: InspectInput): Promise<CommandOutput
           ? ""
           : `, block ${receipt.blockNumber}, gas used ${receipt.gasUsed}`),
       `  from ${from} to ${to ?? "(a contract creation)"}, value ${transaction.value}`,
+      ...(cost === undefined ? [] : [`  ${costLine(cost, input.chain, "what it carried")}`]),
       ...indent(part.lines),
+      ...indent(effects?.lines ?? []),
     ].join("\n"),
     json: {
       hash: input.hex,
@@ -599,7 +613,9 @@ export async function inspectCommand(input: InspectInput): Promise<CommandOutput
       from,
       to,
       value: transaction.value.toString(),
+      ...(cost === undefined ? {} : { cost: costJson(cost) }),
       ...part.json,
+      ...(effects === undefined ? {} : { effects: effects.json }),
     },
   };
 }
