@@ -105,6 +105,7 @@ for (const [what, value] of [
   ["Base's USDC", token("base", "USDC")],
   ["Base's Uniswap V3 factory", contract("base", "UniswapV3_Factory")],
   ["Base's Uniswap V4 PoolManager", contract("base", "UniswapV4_PoolManager")],
+  ["Base's Uniswap V4 StateView", contract("base", "UniswapV4_StateView")],
 ] as const) {
   check(swapped.calls.includes(word(value)), `the child uses ${what}`);
 }
