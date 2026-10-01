@@ -244,6 +244,24 @@ function shim(harness: EngineHarness): {
 
         return answer(id, { context, value: account.exists ? rpcAccount(account) : null });
       }
+      case "getTokenAccountBalance": {
+        // An SPL token account's amount: a u64, little-endian, at byte 64.
+        const account = harness.svm.getAccount(address(params[0] as string));
+        if (!account.exists) {
+          return Response.json({
+            id,
+            jsonrpc: "2.0",
+            error: { code: -32602, message: "Invalid param: could not find account" },
+          });
+        }
+        const data = new Uint8Array(account.data);
+        const amount = new DataView(data.buffer, data.byteOffset).getBigUint64(64, true);
+
+        return answer(id, {
+          context,
+          value: { amount: amount.toString(), decimals: 6, uiAmountString: "" },
+        });
+      }
       case "getMultipleAccounts":
         return answer(id, {
           context,

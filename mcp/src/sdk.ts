@@ -10,6 +10,7 @@
  */
 export { actionsCommand, actionsProgram } from "../../sdk/dist/cli/actions.js";
 export {
+  addressDefinesOf,
   CliError,
   parseAddress,
   parseChain,
@@ -29,6 +30,7 @@ export {
 export {
   compileCommand,
   compileProgram,
+  pastDeadline,
   potCommand,
   txCommand,
   type CliFiles,

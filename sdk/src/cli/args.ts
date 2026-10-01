@@ -339,15 +339,23 @@ export function addressDefines(
   fileText: string | undefined,
   target: Target = "evm",
 ): string[] {
-  const spelled = new Map<string, unknown>(
-    fileText === undefined ? [] : Object.entries(JSON.parse(fileText) as Record<string, unknown>),
-  );
+  const spelled: Record<string, unknown> =
+    fileText === undefined ? {} : { ...(JSON.parse(fileText) as Record<string, unknown>) };
   for (const raw of raws) {
     const eq = raw.indexOf("=");
-    if (eq > 0) spelled.set(raw.slice(0, eq), raw.slice(eq + 1));
+    if (eq > 0) spelled[raw.slice(0, eq)] = raw.slice(eq + 1);
   }
 
-  return [...spelled]
+  return addressDefinesOf(spelled, target);
+}
+
+/** The names among `entries` (NAME to value, as `parseDefineMap` takes them) whose value is
+ *  written as an address: what the MCP tools pass, beside `addressDefines`'s flags and file. */
+export function addressDefinesOf(
+  entries: Readonly<Record<string, unknown>>,
+  target: Target = "evm",
+): string[] {
+  return Object.entries(entries)
     .filter(([, raw]) => spelledAsAddress(raw, target === "svm"))
     .map(([name]) => name);
 }
