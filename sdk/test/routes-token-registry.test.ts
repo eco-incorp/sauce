@@ -88,8 +88,8 @@ describe("coverage matrix (pinned exactly -- a new row is a deliberate edit)", (
     expect(knownTokenSymbols(requireChain("ronin"))).toEqual([]);
   });
 
-  it("solana registers its cluster's classic SPL mints", () => {
-    expect(knownTokenSymbols(requireChain("solana"))).toEqual(["USDC", "USDT", "WSOL"]);
+  it("solana registers its cluster's mints, legacy SPL Token and Token-2022 alike", () => {
+    expect(knownTokenSymbols(requireChain("solana"))).toEqual(["PYUSD", "USDC", "USDT", "WSOL"]);
   });
 
   it("arbitrum and polygon deliberately do NOT register USDT (bridged/renamed symbol() mismatch)", () => {
@@ -124,7 +124,7 @@ describe("resolveTokenMap: the one precedence resolver", () => {
     const map = resolveTokenMap(solana, { USDC: DEVNET_USDC });
     expect(map.get("USDC")).toBe(BigInt(DEVNET_USDC));
     expect(map.get("USDT")).toBe(registryTokenAddress(solana, "USDT"));
-    expect([...map.keys()].sort()).toEqual(["USDC", "USDT", "WSOL"]);
+    expect([...map.keys()].sort()).toEqual(["PYUSD", "USDC", "USDT", "WSOL"]);
   });
 
   it("an evm chain the registry doesn't cover resolves to only the caller tokens", () => {
@@ -164,23 +164,24 @@ describe("SVM_TOKEN_REGISTRY: the Solana mints", () => {
     expect(mainnet.WSOL).toBe(NATIVE_MINT);
   });
 
-  it("pins the coverage: USDC, USDT and the wrapped native on mainnet; USDC and WSOL on devnet", () => {
+  it("pins the coverage and each mint's token program: PYUSD on Token-2022, the rest legacy", () => {
     expect(
       Object.fromEntries(
         Object.entries(SVM_TOKEN_REGISTRY).map(([cluster, rows]) => [
           cluster,
-          rows.map((row) => `${row.symbol} ${row.mint} ${row.decimals}`),
+          rows.map((row) => `${row.symbol} ${row.mint} ${row.decimals} ${row.tokenProgram}`),
         ]),
       ),
     ).toEqual({
       "mainnet-beta": [
-        "USDC EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v 6",
-        "USDT Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB 6",
-        "WSOL So11111111111111111111111111111111111111112 9",
+        "PYUSD 2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo 6 TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        "USDC EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v 6 TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "USDT Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB 6 TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "WSOL So11111111111111111111111111111111111111112 9 TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
       ],
       devnet: [
-        "USDC 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU 6",
-        "WSOL So11111111111111111111111111111111111111112 9",
+        "USDC 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU 6 TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "WSOL So11111111111111111111111111111111111111112 9 TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
       ],
     });
   });

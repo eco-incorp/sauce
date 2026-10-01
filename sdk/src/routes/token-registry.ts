@@ -31,9 +31,10 @@
  * thing it does on an EVM chain: a compile-time value, the mint's key, which the `@sauce/token` SVM
  * arm takes first (`balanceOf(USDC, account)`) — the define a program used to be handed as
  * `--define MINT=0x…`. The token SYNTAX (`USDC.transfer(...)`, `self.USDC`) stays EVM-only: an SPL
- * write needs account slots the sugar has nowhere to put, so on Solana it is refused by name. Only
- * classic SPL Token mints are registered, because that is the only token program the SVM arm reads
- * and writes; a Token-2022 mint (PYUSD) is not claimed.
+ * write needs account slots the sugar has nowhere to put, so on Solana it is refused by name. A row
+ * records its mint's token program, legacy SPL Token or Token-2022 (PYUSD): the SVM arm reads both
+ * and moves both with its checked writes, and the program is the `tokenProgram` account a write
+ * takes and the one a token account's address derives under.
  *
  * PROVENANCE GATE: a row lands only if (a) already pinned in-repo (`verify/vectors.ts`), or (b)
  * confirmed by a real RPC probe (via the paid Alchemy key in gitignored `sdk/.env`) checking
@@ -49,10 +50,12 @@
  * verified in this cut and is therefore also NOT claimed.
  */
 import { address as solanaAddress, getAddressEncoder } from "@solana/kit";
+import type { Address as SolanaAddress } from "@solana/kit";
 import { bytesToHex, getAddress, isAddress } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { CANONICAL_CHAINS, chainById } from "../chains/canonical.js";
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../svm/token-program.js";
 import type { AddressInput } from "./types.js";
 
 // Mirrors token-rewrite.ts's own `REWRITABLE_METHODS` -- duplicated here rather than imported.
@@ -239,10 +242,19 @@ export const TOKEN_REGISTRY: Readonly<Record<number, readonly TokenRegistryRow[]
 export type SvmTokenCluster = "mainnet-beta" | "devnet";
 
 export interface SvmTokenRow {
-  /** The ticker, uppercase: the mint's Metaplex metadata symbol, except where noted on the row. */
+  /**
+   * The ticker, uppercase: the mint's metadata symbol (Metaplex, or a Token-2022 mint's own
+   * TokenMetadata), except where noted on the row.
+   */
   readonly symbol: string;
   /** The mint's base58 address. */
   readonly mint: string;
+  /**
+   * The program that owns the mint, and so every token account of it: legacy SPL Token or
+   * Token-2022. A write's `tokenProgram` account, and the program a token account's associated
+   * address derives under.
+   */
+  readonly tokenProgram: SolanaAddress;
   /** The mint's 32-byte key as hex: the value a program compares an account's mint@0 against. */
   readonly address: `0x${string}`;
   /** Verification metadata only, as on the EVM rows. */
@@ -255,22 +267,34 @@ type SvmTokenEntry = Omit<SvmTokenRow, "address">;
 
 /**
  * PROVENANCE GATE for a mint: a probe of the cluster read the mint account and found it owned by the
- * classic SPL Token program (`Tokenkeg…`), 82 bytes and initialized, with the row's `decimals`, and
- * its Metaplex metadata symbol equal to the row's `symbol`. Two rows are named by more than that,
- * each saying why on the row.
+ * row's `tokenProgram` and initialized, with the row's `decimals`, and its metadata symbol (Metaplex,
+ * or a Token-2022 mint's TokenMetadata extension) equal to the row's `symbol`. Two rows are named by
+ * more than that, each saying why on the row.
  */
 const SVM_TOKEN_ENTRIES: Readonly<Record<SvmTokenCluster, readonly SvmTokenEntry[]>> = {
   // mainnet-beta -- probe-verified 2026-10-01 at slot 452280312.
   "mainnet-beta": [
+    // A Token-2022 mint (slot 452422229): a transfer fee config at 0 basis points, a transfer hook
+    // with no program, a permanent delegate and confidential transfers, each of which a checked write
+    // moves as it does a legacy mint. Its symbol is its own TokenMetadata's.
+    {
+      symbol: "PYUSD",
+      mint: "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo",
+      tokenProgram: TOKEN_2022_PROGRAM_ID,
+      decimals: 6,
+      source: "probe:solana@2026-10-01",
+    },
     {
       symbol: "USDC",
       mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      tokenProgram: TOKEN_PROGRAM_ID,
       decimals: 6,
       source: "probe:solana@2026-10-01",
     },
     {
       symbol: "USDT",
       mint: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+      tokenProgram: TOKEN_PROGRAM_ID,
       decimals: 6,
       source: "probe:solana@2026-10-01",
     },
@@ -280,6 +304,7 @@ const SVM_TOKEN_ENTRIES: Readonly<Record<SvmTokenCluster, readonly SvmTokenEntry
     {
       symbol: "WSOL",
       mint: "So11111111111111111111111111111111111111112",
+      tokenProgram: TOKEN_PROGRAM_ID,
       decimals: 9,
       source: "probe:solana@2026-10-01",
     },
@@ -291,12 +316,14 @@ const SVM_TOKEN_ENTRIES: Readonly<Record<SvmTokenCluster, readonly SvmTokenEntry
     {
       symbol: "USDC",
       mint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+      tokenProgram: TOKEN_PROGRAM_ID,
       decimals: 6,
       source: "probe:solana-devnet@2026-10-01; circle:usdc-contract-addresses",
     },
     {
       symbol: "WSOL",
       mint: "So11111111111111111111111111111111111111112",
+      tokenProgram: TOKEN_PROGRAM_ID,
       decimals: 9,
       source: "probe:solana-devnet@2026-10-01",
     },
@@ -348,6 +375,9 @@ for (const [cluster, rows] of Object.entries(SVM_TOKEN_REGISTRY)) {
     }
     if (seenSymbols.has(row.symbol) || seenMints.has(row.mint)) {
       throw new Error(`token-registry: ${cluster} registers '${row.symbol}' or its mint twice`);
+    }
+    if (row.tokenProgram !== TOKEN_PROGRAM_ID && row.tokenProgram !== TOKEN_2022_PROGRAM_ID) {
+      throw new Error(`token-registry: ${cluster} row '${row.symbol}' names no token program`);
     }
     seenSymbols.add(row.symbol);
     seenMints.add(row.mint);
