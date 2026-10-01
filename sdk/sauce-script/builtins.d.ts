@@ -207,7 +207,8 @@ declare function Token(address: SauceInt): SauceTokenSource;
 
 // `@sauce/token`, whose functions every program on a chain calls with no import: an EVM token is
 // an address; on Solana the mint is an address, its accounts `Account` slots, and a write names
-// the SPL Token program and the authority.
+// its token program and the authority (`transfer`/`approve` SPL Token only, the checked writes
+// either SPL Token or Token-2022, with the mint's account and its decimals).
 declare function balanceOf(token: SauceInt, account: SauceInt | Account): bigint;
 declare function totalSupply(token: SauceInt | Account): bigint;
 declare function decimals(token: SauceInt | Account): bigint;
@@ -246,6 +247,28 @@ declare function approve(
   authority: Account,
   amount: SauceInt,
 ): void;
+/** Solana only: a `TransferChecked` through the token program that owns the mint, either one. */
+declare function transferChecked(
+  token: SauceInt,
+  tokenProgram: Account,
+  source: Account,
+  mint: Account,
+  dest: Account,
+  authority: Account,
+  amount: SauceInt,
+  decimals: SauceInt,
+): void;
+/** Solana only: an `ApproveChecked` through the token program that owns the mint, either one. */
+declare function approveChecked(
+  token: SauceInt,
+  tokenProgram: Account,
+  source: Account,
+  mint: Account,
+  delegate: Account,
+  authority: Account,
+  amount: SauceInt,
+  decimals: SauceInt,
+): void;
 declare function permit(
   token: SauceInt,
   owner: SauceInt,
@@ -270,6 +293,7 @@ declare function permitTransferFrom(
 declare module "@sauce/token" {
   export const allowance: typeof globalThis.allowance;
   export const approve: typeof globalThis.approve;
+  export const approveChecked: typeof globalThis.approveChecked;
   export const balanceOf: typeof globalThis.balanceOf;
   export const decimals: typeof globalThis.decimals;
   export const ownerOf: typeof globalThis.ownerOf;
@@ -277,6 +301,7 @@ declare module "@sauce/token" {
   export const permitTransferFrom: typeof globalThis.permitTransferFrom;
   export const totalSupply: typeof globalThis.totalSupply;
   export const transfer: typeof globalThis.transfer;
+  export const transferChecked: typeof globalThis.transferChecked;
   export const transferFrom: typeof globalThis.transferFrom;
 }
 
