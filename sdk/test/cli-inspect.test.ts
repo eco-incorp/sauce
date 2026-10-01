@@ -26,12 +26,14 @@ import { v12EngineAddress } from "../src/deployments/index.js";
 import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
 import { v12Pot } from "../src/evm/engine.js";
 import { PortalABI } from "../src/protocols/eco-routes/abis.js";
+import { ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
 import { ERC20ABI } from "../src/protocols/erc20/abis.js";
 import { NAMESPACE_KEYS, resolveNamespace } from "../src/routes/accessor-index.js";
 import { chainDefines } from "../src/routes/ambient.js";
 import { encodeRoute, hashIntent } from "../src/routes/encode.js";
 import { decodeEntryArguments, encodeEntryArguments } from "../src/routes/entry.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
+import { predictIntentVault } from "../src/routes/portal.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { sourceGlobals } from "../src/routes/source-globals.js";
 import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../src/routes/token-registry.js";
@@ -337,11 +339,23 @@ describe("sauce inspect", () => {
     expect(intent).toMatchObject({
       destination: { id: "8453", chain: "base" },
       intentHash,
+      // The program pays the vault the Portal derives, so that is the one shown: the registry's.
+      vault: predictIntentVault(lowered!.intent, { portal: ecoRoutesPortal("arbitrum") }),
+      fundVia: "transfer",
       reward: { creator: CREATOR, tokens: [{ amount: "2000" }] },
       route: {
         calls: [{ function: "transfer", args: { to: RECIPIENT, amount: "1000" } }],
       },
     });
+    expect(fromFile.intents).toEqual([expect.objectContaining({ fundVia: "transfer" })]);
+    // Opted out, the program approves and calls publishAndFund, and says so.
+    const optedOut = await cookOf(fixed, ...defines, "--intent-fund-via", "publishAndFund");
+    const [approved] = (
+      json(await sauce("inspect", optedOut, "--chain", "arbitrum", "--json")).program as {
+        intents: Array<Record<string, unknown>>;
+      }
+    ).intents;
+    expect(approved).toMatchObject({ intentHash, fundVia: "publishAndFund" });
     // With no --chain there is no source chain to hash it for, and it says no more than it knows.
     const unhashed = json(await sauce("inspect", data, "--json"));
     expect((unhashed.program as { intents: object[] }).intents[0]).not.toHaveProperty("intentHash");
@@ -356,15 +370,18 @@ describe("sauce inspect", () => {
     const data = await cookOf(measured, ...INTENT_FLAGS, "--args", RECIPIENT);
     const fromBytes = json(await sauce("inspect", data, "--chain", "arbitrum", "--json"));
     expect((fromBytes.program as { intents: unknown[] }).intents).toEqual([
-      { destination: { id: "8453", chain: "base" }, measured: true },
+      { destination: { id: "8453", chain: "base" }, measured: true, fundVia: "transfer" },
     ]);
+    expect((await sauce("inspect", data, "--chain", "arbitrum")).stdout).toContain(
+      "funded: the program pays the reward into the intent's vault, then calls Portal.publish",
+    );
     // Given the source, the cook's intents are the compile's, named.
     const sourced = await sauce("inspect", data, "--source", measured, ...INTENT_FLAGS);
     expect(sourced.stdout).toMatch(/recipient: Address = 0x6666/);
     expect(sourced.stdout).toMatch(/reward: <amount> of 0x/);
   });
 
-  it("reads a Kitchen.deployPot, a Portal publishAndFund and an ERC-20 approve", async () => {
+  it("reads a Kitchen.deployPot, a transfer to a vault and the Portal publish after it", async () => {
     const pot = printed(
       await sauce("pot", "--chain", "base", "--owner", OWNER, "--salt", "treasury"),
     );
@@ -375,21 +392,32 @@ describe("sauce inspect", () => {
       pot: v12PredictPot(OWNER, potSalt("treasury")),
     });
     const fixed = file("fixed.sauce.ts", FIXED);
-    const published = printed(
-      await sauce(
-        "publish",
-        fixed,
-        "--define",
-        `RECIPIENT=${RECIPIENT}`,
-        ...INTENT_FLAGS,
-        "--format",
-        "json",
-      ),
-    ) as { intents: Array<{ intentHash: string; transactions: Array<{ data: Hex }> }> };
-    const [{ intentHash, transactions }] = published.intents as [
-      (typeof published.intents)[number],
-    ];
-    const [approve, publishAndFund] = transactions.map((tx) => tx.data);
+    const publishing = (...flags: string[]) =>
+      sauce(
+        ...["intent", "publish", fixed, "--define", `RECIPIENT=${RECIPIENT}`, ...INTENT_FLAGS],
+        ...["--format", "json", ...flags],
+      );
+    type Printed = {
+      intents: Array<{ intentHash: string; vault: Hex; transactions: Array<{ data: Hex }> }>;
+    };
+    const published = printed(await publishing()) as Printed;
+    const [{ intentHash, vault, transactions }] = published.intents as [Printed["intents"][number]];
+    const [transfer, publish] = transactions.map((tx) => tx.data);
+    // The transfer pays the vault the publish below names: the address inspect derives for it.
+    expect(json(await sauce("inspect", transfer!, "--json"))).toMatchObject({
+      call: "ERC20.transfer",
+      args: { to: vault, amount: "2000" },
+    });
+    const text = await sauce("inspect", publish!, "--chain", "arbitrum");
+    expect(text.stdout).toContain(`vault: ${vault}, funded once it holds the reward`);
+    expect(json(await sauce("inspect", publish!, "--chain", "arbitrum", "--json"))).toMatchObject({
+      call: "Portal.publish",
+      intent: { intentHash, vault, destination: { chain: "base" } },
+    });
+
+    // Opted out: an approve to the Portal, then publishAndFund of the same intent.
+    const optedOut = printed(await publishing("--intent-fund-via", "publishAndFund")) as Printed;
+    const [approve, publishAndFund] = optedOut.intents[0]!.transactions.map((tx) => tx.data);
     expect(json(await sauce("inspect", approve!, "--json"))).toMatchObject({
       call: "ERC20.approve",
       args: { amount: "2000" },
@@ -398,7 +426,7 @@ describe("sauce inspect", () => {
       json(await sauce("inspect", publishAndFund!, "--chain", "arbitrum", "--json")),
     ).toMatchObject({
       call: "Portal.publishAndFund",
-      intent: { intentHash, destination: { chain: "base" } },
+      intent: { intentHash, vault, destination: { chain: "base" } },
     });
   });
 

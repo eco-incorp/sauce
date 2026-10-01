@@ -12,20 +12,26 @@
  * `kitchen.so` and `engine-devnet.so`. So the assertion is not "the client built something
  * plausible" — it is "the gate accepted what the client built".
  */
-import { getBase64Encoder, getTransactionDecoder } from "@solana/kit";
+import { getBase64Encoder, getTransactionDecoder, type Address } from "@solana/kit";
 import {
   buildComputeBudgetPrepend,
   buildExecuteInstruction,
   buildHeapFramePrepend,
+  buildSetExecutionFeeInstruction,
   createSauceSvmClient,
+  deriveProgramDataPda,
+  ENGINE_FAULTS,
 } from "../../src/svm/index.js";
 import {
   HARNESS_POT_SALT,
   buildExecuteTransactionForHarness,
   describeSvm,
   expectFail,
+  sendInstructions,
   sendSigned,
+  stageProgram,
   startEngine,
+  toBigInt,
 } from "./engine-harness.js";
 import type { EngineHarness } from "./engine-harness.js";
 
@@ -73,6 +79,12 @@ const fetchStub = (harness: EngineHarness): { install: () => void; restore: () =
         returnData?: () => { data(): Uint8Array };
       };
       const failed = typeof result.err === "function" ? result.err.call(result) : undefined;
+      // Only a landed transaction's metadata is read: building it from a failed one is what aborts
+      // litesvm natively (`kitchen-bench.ts`).
+      const returned =
+        failed === undefined && typeof result.returnData === "function"
+          ? result.returnData.call(result).data()
+          : new Uint8Array();
 
       return Response.json({
         id,
@@ -83,9 +95,37 @@ const fetchStub = (harness: EngineHarness): { install: () => void; restore: () =
             accounts: null,
             err: failed ? String(failed) : null,
             logs: typeof result.logs === "function" ? result.logs.call(result) : [],
-            returnData: null,
+            returnData:
+              returned.length === 0
+                ? null
+                : {
+                    programId: harness.programId,
+                    data: [Buffer.from(returned).toString("base64"), "base64"],
+                  },
             unitsConsumed: 0,
           },
+        },
+      });
+    }
+
+    if (method === "getAccountInfo") {
+      const account = harness.svm.getAccount(params[0] as Address);
+
+      return Response.json({
+        id,
+        jsonrpc: "2.0",
+        result: {
+          context: { apiVersion: "2.0.0", slot: 100 },
+          value: account.exists
+            ? {
+                data: [Buffer.from(account.data).toString("base64"), "base64"],
+                executable: account.executable,
+                lamports: Number(account.lamports),
+                owner: account.programAddress,
+                rentEpoch: 0,
+                space: account.data.length,
+              }
+            : null,
         },
       });
     }
@@ -133,12 +173,103 @@ describeSvm("SauceSvmClient against the gated engine", () => {
     expect(result.err ?? null).toBeNull();
   });
 
-  it("refuses the SAME program invoked directly, bypassing the kitchen — the inertness that makes shipping the engine safe", async () => {
+  it("via engine, builds the engine's direct paid cook, which runs the program with no Kitchen", async () => {
+    const client = await createSauceSvmClient({
+      kitchen: harness.kitchen,
+      payer: harness.payer,
+      programId: harness.programId,
+      rpcUrl: RPC_URL,
+      via: "engine",
+    });
+
+    const result = await client.simulate(PROGRAM, { accounts: [] }, {});
+
+    expect(client.via).toBe("engine");
+    expect(result.err ?? null).toBeNull();
+    expect(toBigInt(result.returnData!)).toBe(42n);
+  });
+
+  it("quotes the Kitchen's fee, and a direct cook capped below it is refused", async () => {
+    const client = await createSauceSvmClient({
+      kitchen: harness.kitchen,
+      payer: harness.payer,
+      programId: harness.programId,
+      rpcUrl: RPC_URL,
+      via: "engine",
+    });
+    const { address: programData } = await deriveProgramDataPda(harness.kitchen);
+    const price = (fee: bigint) =>
+      sendInstructions(harness, [
+        buildSetExecutionFeeInstruction({
+          kitchen: harness.kitchen,
+          authority: harness.payer.address,
+          programData,
+          feeConfig: harness.feeConfig,
+          fee,
+        }),
+      ]);
+
+    await price(4_000n);
+    try {
+      expect(await client.executionFee()).toBe(4_000n);
+      const capped = await client.simulate(PROGRAM, { accounts: [] }, {});
+      // Custom(84): the engine's ExecutionFeeExceedsMaximum, as the client signed a zero cap.
+      expect(String(capped.err)).toContain(`code: ${ENGINE_FAULTS.ExecutionFeeExceedsMaximum}`);
+      const paid = await client.simulate(
+        PROGRAM,
+        { accounts: [] },
+        {},
+        { maxExecutionFee: 4_000n },
+      );
+      expect(paid.err ?? null).toBeNull();
+    } finally {
+      await price(0n);
+    }
+  });
+
+  it("via engine, a staged cook is pinned: a bare buffer address with no digest is refused", async () => {
+    const client = await createSauceSvmClient({
+      kitchen: harness.kitchen,
+      payer: harness.payer,
+      programId: harness.programId,
+      rpcUrl: RPC_URL,
+      via: "engine",
+    });
+    const staged = await stageProgram(harness, PROGRAM, 31n);
+
+    await expect(client.simulateStaged(staged.codeBuffer, { accounts: [] }, {})).rejects.toThrow(
+      /is pinned/,
+    );
+    const pinned = await client.simulateStaged(
+      {
+        address: staged.codeBuffer,
+        seed: new Uint8Array(32),
+        sha256: staged.sha256,
+        signatures: [],
+      },
+      { accounts: [] },
+      {},
+    );
+    expect(toBigInt(pinned.returnData!)).toBe(42n);
+    const wrong = new Uint8Array(staged.sha256).fill(1);
+    const refused = await client.simulateStaged(
+      staged.codeBuffer,
+      { accounts: [] },
+      {},
+      {
+        expectedSha256: wrong,
+      },
+    );
+    expect(String(refused.err)).toContain(`code: ${ENGINE_FAULTS.CodeHashMismatch}`);
+  });
+
+  it("refuses the SAME program invoked through the legacy execute, bypassing the kitchen — no Pot gate, no run", async () => {
     // The engine `.so` ships in the PUBLIC package (eco-incorp/v12 is private, so a packaged binary
-    // is the only way a consumer gets the engine). That is only safe because a leaked engine is
-    // INERT: it runs a program solely when the invocation arrived through a deployed kitchen cook.
-    // This is the negative that proves it — the SAME `PROGRAM` the cook above ran is handed straight
-    // to the engine's own `execute` discriminator, skipping the kitchen entirely. Before the gate
+    // is the only way a consumer gets the engine). Its legacy `execute` runs a program solely when
+    // the invocation arrived through a deployed kitchen cook, which signs a Pot; the engine's other
+    // way in, the direct cook above, is paid — it charges the Kitchen's fee first. This is the
+    // negative for the first — the SAME `PROGRAM` the cook above ran is handed straight to the
+    // engine's own `execute` discriminator, skipping the kitchen entirely. Before the gate
     // this exact shape (a self-contained program, empty account list) was the normal successful path,
     // so a failure here isolates the gate, not a malformed instruction. If a future engine build
     // regressed the gate to run un-gated bytecode, this is the test that fails instead of a runnable

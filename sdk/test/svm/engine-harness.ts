@@ -9,6 +9,7 @@
  * accounts, no provisioning; every execute transaction carries the
  * RequestHeapFrame prepend.
  */
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "fs";
 import { address, getAddressCodec, generateKeyPairSigner, lamports } from "@solana/kit";
 import type {
@@ -23,14 +24,21 @@ import {
   buildComputeBudgetPrepend,
   buildCookFromAccountInstruction,
   buildCookInstruction,
+  buildCreateCodeBufferInstruction,
   buildCreatePotInstruction,
   buildExecuteTransaction,
+  buildFinalizeCodeBufferInstruction,
+  buildGrowCodeBufferInstruction,
   buildHeapFramePrepend,
   buildInitializeExecutionFeeInstruction,
   buildSetExecutionFeeInstruction,
+  buildWriteCodeBufferInstruction,
+  deriveCodeBufferPda,
+  deriveCodePda,
   deriveExecutionFeeConfigPda,
   derivePotPda,
   deriveProgramDataPda,
+  GROWTH_STEP,
   MAX_POT_LEN,
   getTransactionSize,
   resolveAccounts,
@@ -81,6 +89,15 @@ const KITCHEN_SO = resolveArtifact(() => svmKitchenPath(process.env.SAUCE_KITCHE
 const KITCHEN_IDL_JSON = resolveArtifact(() =>
   svmKitchenIdlPath(process.env.SAUCE_KITCHEN_IDL_JSON),
 );
+
+/**
+ * SIMD-0268's feature gate, `raise_cpi_nesting_limit_to_8`: the invoke stack is 5 instructions deep
+ * without it (a top-level instruction and 4 levels of CPI) and 9 with it. LiteSVM's
+ * `FeatureSet.allEnabled()` turns it on; neither mainnet nor devnet had activated it when this was
+ * written (October 2026: no feature account at this address on either), so a suite
+ * measuring CPI depth as those clusters have it passes this to `startEngine`'s `withoutFeatures`.
+ */
+export const SIMD_0268_CPI_NESTING = "6TkHkRmP7JZy1fdM6fg5uXn76wChQBWGokHBJzrLB3mj" as Address;
 
 /** The salt every harness Pot is minted under. One Pot per harness is enough: suites that need
  *  distinct storage use distinct accounts in their tail, not distinct Pots. */
@@ -148,13 +165,20 @@ export const startEngine = async (
   /** Where to load the engine. Random by default (the gate keys off the kitchen); a suite driving
    *  code that names the released engine id — the CLI — loads it there. */
   engineProgramId?: Address,
+  /** Runtime features to leave OFF, by feature id — for a suite measuring what a cluster that has
+   *  not activated one does (`SIMD_0268_CPI_NESTING`). Every other feature is on. */
+  withoutFeatures: readonly Address[] = [],
 ): Promise<EngineHarness> => {
   // The default constructor's program runtime misses the
   // sol_remaining_compute_units syscall (the engine's GasLeft, 0x62 — the
   // SvmRoute CU-floor guard); rebuilding the runtime with every feature
   // enabled registers it, matching mainnet where the feature is long active.
+  const features = FeatureSet.allEnabled();
+  for (const feature of withoutFeatures) {
+    features.deactivate(new Uint8Array(getAddressCodec().encode(feature)));
+  }
   const svm = new LiteSVM()
-    .withFeatureSet(FeatureSet.allEnabled())
+    .withFeatureSet(features)
     .withBuiltins()
     .withPrecompiles()
     .withSysvars()
@@ -546,6 +570,64 @@ export const executeStaged = async (
   ];
 
   return sendInstructions(harness, instructions);
+};
+
+/** A program staged in a finalized Kitchen code buffer by {@link stageProgram}. */
+export interface StagedProgram {
+  codeBuffer: Address;
+  code: Address;
+  sha256: Uint8Array;
+}
+
+/**
+ * Stages `bytes` through the released Kitchen — create, grow, write in chunks, finalize — owned by
+ * the harness payer, and returns the finalized buffer. The code account then holds exactly `bytes`,
+ * which is what both staged cooks run: the Kitchen's `cook_from_account` and the engine's direct
+ * `cookAndPayFromAccount{,Pinned}`.
+ */
+export const stageProgram = async (
+  harness: EngineHarness,
+  bytes: Uint8Array,
+  nonce: bigint,
+): Promise<StagedProgram> => {
+  const owner = harness.payer.address;
+  const { address: codeBuffer } = await deriveCodeBufferPda(harness.kitchen, owner, nonce);
+  const { address: code } = await deriveCodePda(harness.kitchen, codeBuffer);
+  const accounts = { kitchen: harness.kitchen, owner, codeBuffer, code };
+  const grows = Math.ceil(bytes.length / GROWTH_STEP) - 1;
+  mustSucceed(
+    await sendInstructions(harness, [
+      buildCreateCodeBufferInstruction({ ...accounts, nonce, capacity: bytes.length }),
+      ...Array.from({ length: grows }, () => buildGrowCodeBufferInstruction(accounts)),
+    ]),
+    "create_code_buffer",
+  );
+  const CHUNK = 900;
+  for (let offset = 0; offset < bytes.length; offset += CHUNK) {
+    mustSucceed(
+      await sendInstructions(harness, [
+        buildWriteCodeBufferInstruction({
+          ...accounts,
+          offset,
+          chunk: bytes.subarray(offset, offset + CHUNK),
+        }),
+      ]),
+      `write_code_buffer at ${offset}`,
+    );
+  }
+  const sha256 = new Uint8Array(createHash("sha256").update(bytes).digest());
+  mustSucceed(
+    await sendInstructions(harness, [
+      buildFinalizeCodeBufferInstruction({
+        ...accounts,
+        len: bytes.length,
+        expectedSha256: sha256,
+      }),
+    ]),
+    "finalize_code_buffer",
+  );
+
+  return { codeBuffer, code, sha256 };
 };
 
 export { getTransactionSize };

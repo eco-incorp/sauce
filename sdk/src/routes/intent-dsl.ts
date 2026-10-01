@@ -49,10 +49,13 @@ import {
   approvalTxs,
   fundTx,
   intentHashCall,
+  intentSourceTxs,
   intentVaultAddressCall,
   isIntentFundedCall,
   publishAndFundTx,
   publishTx,
+  type IntentFundVia,
+  type IntentSourceTxsOptions,
   type PortalReadCall,
   type PortalTarget,
   type PortalTx,
@@ -67,7 +70,7 @@ import {
   type SauceSvmExecutionInput,
 } from "./sauce-route.js";
 import type { CompileResult } from "./compile-types.js";
-import { predictVaultAddress, type VaultConfig } from "./vault.js";
+import { ecoRoutesVaultConfig, predictVaultAddress, type VaultConfig } from "./vault.js";
 import type {
   AddressInput,
   CallInput,
@@ -122,6 +125,11 @@ interface IntentOptionsCommon {
   /** Which eco-routes deployment to address — generation and environment. Defaults to the current
    *  production one. */
   ecoRoutes?: EcoRoutesSelector;
+  /** How the reward reaches the vault: `"transfer"` (default) pays it in, then publishes;
+   *  `"publishAndFund"` approves the Portal and calls `publishAndFund`. The default for
+   *  `built.sourceTxs()`, and for every intent the route's own program opens
+   *  (`compile.intents.fundVia` wins there). See `portal.ts#IntentFundVia`. */
+  fundVia?: IntentFundVia;
 }
 
 /**
@@ -189,6 +197,15 @@ export interface BuiltIntent {
   encodeEVM(): { readonly route: Hex; readonly reward: Hex };
   encodeSVM(): { readonly route: Hex; readonly reward: Hex };
 
+  /**
+   * The source-chain transactions that fund and publish this intent from one wallet, in order:
+   * under the default `fundVia: "transfer"`, each reward token transferred to the vault (and the
+   * native amount sent to it), then `publish`; under `"publishAndFund"`, the approvals, then
+   * `publishAndFund`. Under `"transfer"`, pass the `vault` read with `vaultCall()`: it is checked
+   * against `predictVault()`, and a mismatch throws. Omitted, the prediction is used. HEAD reward
+   * only, like `approvals()`. `fundVia` defaults to `IntentOptions.fundVia`.
+   */
+  sourceTxs(options?: IntentSourceTxsOptions, target?: Partial<PortalTarget>): readonly PortalTx[];
   publishCalldata(target?: Partial<PortalTarget>): PortalTx;
   publishAndFundCalldata(allowPartial: boolean, target?: Partial<PortalTarget>): PortalTx;
   fundCalldata(allowPartial: boolean, target?: Partial<PortalTarget>): PortalTx;
@@ -199,10 +216,11 @@ export interface BuiltIntent {
   /** PRIMARY vault path: the on-chain `Portal.intentVaultAddress` read-call. The caller performs the
    *  `eth_call`; this module never does RPC. */
   vaultCall(target?: Partial<PortalTarget>): PortalReadCall<Hex>;
-  /** OPTION: the offline CREATE2 predictor — zero RPC, needs `config.vaultInitCodeHash`. */
-  predictVault(config: VaultConfig): Hex;
+  /** The offline CREATE2 prediction — zero RPC. Defaults to the eco-routes derivation for the
+   *  source Portal (`ecoRoutesVaultConfig`); pass `config` for a Portal built some other way. */
+  predictVault(config?: VaultConfig): Hex;
   /** @deprecated alias of `predictVault`, kept so the already-landed, unit-tested surface keeps working. */
-  vault(config: VaultConfig): Hex;
+  vault(config?: VaultConfig): Hex;
 
   /** Cross-check helpers: our off-chain `hash()` vs the chain's own, and funded status. */
   hashCall(target?: Partial<PortalTarget>): PortalReadCall<IntentHashes>;
@@ -418,8 +436,14 @@ function makeBuiltIntent(
   compiled: CompileResult,
   sourcePortal: AddressInput | undefined,
   children: readonly BuiltIntent[] = [],
+  fundVia?: IntentFundVia,
 ): BuiltIntent {
   const target = (t: Partial<PortalTarget> | undefined) => resolveTarget(t, sourcePortal);
+  const predict = (config: VaultConfig | undefined): Hex =>
+    predictVaultAddress(
+      hashIntent(intent).intentHash,
+      config ?? ecoRoutesVaultConfig(target(undefined).portal),
+    );
 
   return {
     intent,
@@ -442,6 +466,12 @@ function makeBuiltIntent(
     encodeSVM() {
       return { route: encodeRouteSvm(intent.route), reward: encodeRewardSvm(intent.reward) };
     },
+    sourceTxs(options, t) {
+      return intentSourceTxs(intent, target(t), {
+        ...options,
+        fundVia: options?.fundVia ?? fundVia,
+      });
+    },
     publishCalldata(t) {
       return publishTx(intent, target(t));
     },
@@ -457,11 +487,11 @@ function makeBuiltIntent(
     vaultCall(t) {
       return intentVaultAddressCall(intent, target(t));
     },
-    predictVault(config: VaultConfig): Hex {
-      return predictVaultAddress(hashIntent(intent).intentHash, config);
+    predictVault(config?: VaultConfig): Hex {
+      return predict(config);
     },
-    vault(config: VaultConfig): Hex {
-      return predictVaultAddress(hashIntent(intent).intentHash, config);
+    vault(config?: VaultConfig): Hex {
+      return predict(config);
     },
     hashCall(t) {
       return intentHashCall(intent, target(t));
@@ -555,6 +585,7 @@ export function openRoute(
       rewardDeadline:
         options.rewardDeadline === undefined ? undefined : toBigInt(options.rewardDeadline),
       creator: options.creator,
+      ...(options.fundVia === undefined ? {} : { fundVia: options.fundVia }),
       ...options.ecoRoutes,
       ...options.compile?.intents,
     },
@@ -978,6 +1009,7 @@ export function openRoute(
         // registry does not carry.
         options.sourcePortal ?? ecoRoutesPortal(source, options.ecoRoutes),
         nestedEntries.map((e) => e.built),
+        options.fundVia,
       );
     },
   };

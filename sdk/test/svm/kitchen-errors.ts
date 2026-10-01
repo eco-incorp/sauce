@@ -14,4 +14,5 @@
 export const KITCHEN_ERROR = {
   CodeBufferHashMismatch: 6003,
   PotSpaceOutOfRange: 6007,
+  ExecutionFeeExceedsMaximum: 6012,
 } as const;

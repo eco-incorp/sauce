@@ -517,6 +517,497 @@ export const PortalABI = [
     ],
   },
   {
+    type: "function",
+    name: "fulfillAndProve",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "intentHash",
+        type: "bytes32",
+      },
+      {
+        name: "route",
+        type: "tuple",
+        components: [
+          {
+            name: "salt",
+            type: "bytes32",
+          },
+          {
+            name: "deadline",
+            type: "uint64",
+          },
+          {
+            name: "portal",
+            type: "address",
+          },
+          {
+            name: "nativeAmount",
+            type: "uint256",
+          },
+          {
+            name: "tokens",
+            type: "tuple[]",
+            components: [
+              {
+                name: "token",
+                type: "address",
+              },
+              {
+                name: "amount",
+                type: "uint256",
+              },
+            ],
+          },
+          {
+            name: "calls",
+            type: "tuple[]",
+            components: [
+              {
+                name: "target",
+                type: "address",
+              },
+              {
+                name: "data",
+                type: "bytes",
+              },
+              {
+                name: "value",
+                type: "uint256",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        name: "rewardHash",
+        type: "bytes32",
+      },
+      {
+        name: "claimant",
+        type: "bytes32",
+      },
+      {
+        name: "prover",
+        type: "address",
+      },
+      {
+        name: "sourceChainDomainID",
+        type: "uint64",
+      },
+      {
+        name: "data",
+        type: "bytes",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes[]",
+      },
+    ],
+  },
+  {
+    type: "function",
+    name: "prove",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "prover",
+        type: "address",
+      },
+      {
+        name: "sourceChainDomainID",
+        type: "uint64",
+      },
+      {
+        name: "intentHashes",
+        type: "bytes32[]",
+      },
+      {
+        name: "data",
+        type: "bytes",
+      },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "withdraw",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "destination",
+        type: "uint64",
+      },
+      {
+        name: "routeHash",
+        type: "bytes32",
+      },
+      {
+        name: "reward",
+        type: "tuple",
+        components: [
+          {
+            name: "deadline",
+            type: "uint64",
+          },
+          {
+            name: "creator",
+            type: "address",
+          },
+          {
+            name: "prover",
+            type: "address",
+          },
+          {
+            name: "nativeAmount",
+            type: "uint256",
+          },
+          {
+            name: "tokens",
+            type: "tuple[]",
+            components: [
+              {
+                name: "token",
+                type: "address",
+              },
+              {
+                name: "amount",
+                type: "uint256",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "batchWithdraw",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "destinations",
+        type: "uint64[]",
+      },
+      {
+        name: "routeHashes",
+        type: "bytes32[]",
+      },
+      {
+        name: "rewards",
+        type: "tuple[]",
+        components: [
+          {
+            name: "deadline",
+            type: "uint64",
+          },
+          {
+            name: "creator",
+            type: "address",
+          },
+          {
+            name: "prover",
+            type: "address",
+          },
+          {
+            name: "nativeAmount",
+            type: "uint256",
+          },
+          {
+            name: "tokens",
+            type: "tuple[]",
+            components: [
+              {
+                name: "token",
+                type: "address",
+              },
+              {
+                name: "amount",
+                type: "uint256",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "refund",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "destination",
+        type: "uint64",
+      },
+      {
+        name: "routeHash",
+        type: "bytes32",
+      },
+      {
+        name: "reward",
+        type: "tuple",
+        components: [
+          {
+            name: "deadline",
+            type: "uint64",
+          },
+          {
+            name: "creator",
+            type: "address",
+          },
+          {
+            name: "prover",
+            type: "address",
+          },
+          {
+            name: "nativeAmount",
+            type: "uint256",
+          },
+          {
+            name: "tokens",
+            type: "tuple[]",
+            components: [
+              {
+                name: "token",
+                type: "address",
+              },
+              {
+                name: "amount",
+                type: "uint256",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "refundTo",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "destination",
+        type: "uint64",
+      },
+      {
+        name: "routeHash",
+        type: "bytes32",
+      },
+      {
+        name: "reward",
+        type: "tuple",
+        components: [
+          {
+            name: "deadline",
+            type: "uint64",
+          },
+          {
+            name: "creator",
+            type: "address",
+          },
+          {
+            name: "prover",
+            type: "address",
+          },
+          {
+            name: "nativeAmount",
+            type: "uint256",
+          },
+          {
+            name: "tokens",
+            type: "tuple[]",
+            components: [
+              {
+                name: "token",
+                type: "address",
+              },
+              {
+                name: "amount",
+                type: "uint256",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        name: "refundee",
+        type: "address",
+      },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "cancel",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "intentHash",
+        type: "bytes32",
+      },
+      {
+        name: "route",
+        type: "tuple",
+        components: [
+          {
+            name: "salt",
+            type: "bytes32",
+          },
+          {
+            name: "deadline",
+            type: "uint64",
+          },
+          {
+            name: "portal",
+            type: "address",
+          },
+          {
+            name: "nativeAmount",
+            type: "uint256",
+          },
+          {
+            name: "tokens",
+            type: "tuple[]",
+            components: [
+              {
+                name: "token",
+                type: "address",
+              },
+              {
+                name: "amount",
+                type: "uint256",
+              },
+            ],
+          },
+          {
+            name: "calls",
+            type: "tuple[]",
+            components: [
+              {
+                name: "target",
+                type: "address",
+              },
+              {
+                name: "data",
+                type: "bytes",
+              },
+              {
+                name: "value",
+                type: "uint256",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        name: "rewardHash",
+        type: "bytes32",
+      },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "cancelAndProve",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "intentHash",
+        type: "bytes32",
+      },
+      {
+        name: "route",
+        type: "tuple",
+        components: [
+          {
+            name: "salt",
+            type: "bytes32",
+          },
+          {
+            name: "deadline",
+            type: "uint64",
+          },
+          {
+            name: "portal",
+            type: "address",
+          },
+          {
+            name: "nativeAmount",
+            type: "uint256",
+          },
+          {
+            name: "tokens",
+            type: "tuple[]",
+            components: [
+              {
+                name: "token",
+                type: "address",
+              },
+              {
+                name: "amount",
+                type: "uint256",
+              },
+            ],
+          },
+          {
+            name: "calls",
+            type: "tuple[]",
+            components: [
+              {
+                name: "target",
+                type: "address",
+              },
+              {
+                name: "data",
+                type: "bytes",
+              },
+              {
+                name: "value",
+                type: "uint256",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        name: "rewardHash",
+        type: "bytes32",
+      },
+      {
+        name: "prover",
+        type: "address",
+      },
+      {
+        name: "sourceChainDomainID",
+        type: "uint64",
+      },
+      {
+        name: "data",
+        type: "bytes",
+      },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "version",
+    stateMutability: "pure",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "string",
+      },
+    ],
+  },
+  {
     type: "event",
     name: "IntentPublished",
     inputs: [
@@ -981,9 +1472,13 @@ export const PortalABI = [
 ] as const;
 
 /**
- * What every eco-routes prover shares (`IProver`): the proof a source chain reads, and the events
- * it announces a proof by. A prover's own errors differ by kind (Hyperlane, Polymer, …) and are
- * raised to the mailbox or the Portal that called it, never to a caller of these, so none is here.
+ * What every eco-routes prover shares (`IProver`): the proof a source chain reads, the events it
+ * announces a proof by, its kind (`getProofType`), its Portal and the senders it trusts — and what
+ * a MESSAGE-BRIDGE prover adds (`MessageBridgeProver`: Hyperlane's `HyperProver`, `MetaProver`,
+ * `LayerZeroProver`): the fee the destination Portal's `prove` forwards to it, quoted for one
+ * message (`fetchFee(sourceChainDomainID, encodedProofs, data)`), and its refusal of a smaller one
+ * (`InsufficientFee`). Polymer's prover takes no fee, its proof relayed off-chain, so it has
+ * neither (`targets.json` exempts its deployments).
  */
 export const ProverABI = [
   {
@@ -1010,6 +1505,59 @@ export const ProverABI = [
             type: "uint64",
           },
         ],
+      },
+    ],
+  },
+  {
+    type: "function",
+    name: "getProofType",
+    stateMutability: "pure",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "string",
+      },
+    ],
+  },
+  {
+    type: "function",
+    name: "version",
+    stateMutability: "pure",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "string",
+      },
+    ],
+  },
+  {
+    type: "function",
+    name: "PORTAL",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+      },
+    ],
+  },
+  {
+    type: "function",
+    name: "isWhitelisted",
+    stateMutability: "view",
+    inputs: [
+      {
+        name: "addr",
+        type: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
       },
     ],
   },
@@ -1053,6 +1601,41 @@ export const ProverABI = [
         name: "intentHash",
         type: "bytes32",
         indexed: false,
+      },
+    ],
+  },
+  {
+    type: "function",
+    name: "fetchFee",
+    stateMutability: "view",
+    inputs: [
+      {
+        name: "domainID",
+        type: "uint64",
+      },
+      {
+        name: "encodedProofs",
+        type: "bytes",
+      },
+      {
+        name: "data",
+        type: "bytes",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "InsufficientFee",
+    inputs: [
+      {
+        name: "requiredFee",
+        type: "uint256",
       },
     ],
   },
