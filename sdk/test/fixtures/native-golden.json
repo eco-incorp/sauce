@@ -1,0 +1,274 @@
+{
+  "docs/examples/cross-chain-cascade.sauce.ts@arbitrum": {
+    "defines": ["RECIPIENT"],
+    "sha256": "bb52b119c4f02f4f92394c80afa95d0581ec815596c11990eb9c1b49bda724e0"
+  },
+  "docs/examples/cross-chain-cascade.sauce.ts@base": {
+    "defines": ["RECIPIENT"],
+    "sha256": "4172c99f2823eae5546560e8487e581e5ba839d84da6eae548374be2da66589f"
+  },
+  "docs/examples/cross-chain-cascade.sauce.ts@ethereum": {
+    "defines": ["RECIPIENT"],
+    "sha256": "d8ea10799b4da266763f51470e9315ef2a873af048ae992f10e43bd544d8abeb"
+  },
+  "docs/examples/cross-chain-intent.sauce.ts@arbitrum": {
+    "defines": ["RECIPIENT", "MIN_AMOUNT"],
+    "sha256": "e23c6bd27a680bb372b1569bd712d031f8e312b34684fbf3b456c2bdab6df8f0"
+  },
+  "docs/examples/cross-chain-intent.sauce.ts@base": {
+    "defines": ["RECIPIENT", "MIN_AMOUNT"],
+    "sha256": "f2b6863f27c10ddcb6b2b4520ac60b935a944158df251ea58d7e8bbf5cc70bff"
+  },
+  "docs/examples/cross-chain-intent.sauce.ts@ethereum": {
+    "defines": ["RECIPIENT", "MIN_AMOUNT"],
+    "sha256": "1b5fa42dca8f1c42190383a8b3565b4efa20c5b8e8a6b3971e75c522b8baf9fa"
+  },
+  "docs/examples/router-route.sauce.ts@arbitrum": {
+    "defines": [],
+    "sha256": "7af72b79e6cb06b47e0bd2da227438d07d3d928203f46ee49caef743b4372d23"
+  },
+  "docs/examples/router-route.sauce.ts@base": {
+    "defines": [],
+    "sha256": "7af72b79e6cb06b47e0bd2da227438d07d3d928203f46ee49caef743b4372d23"
+  },
+  "docs/examples/router-route.sauce.ts@ethereum": {
+    "defines": [],
+    "sha256": "7af72b79e6cb06b47e0bd2da227438d07d3d928203f46ee49caef743b4372d23"
+  },
+  "docs/examples/router-swap.sauce.ts@arbitrum": {
+    "defines": ["MIN_OUT"],
+    "sha256": "3fe2ad3a917b2a8383dc3e05e187a84e15d36382bf4635fbba5bb6f713391f4b"
+  },
+  "docs/examples/router-swap.sauce.ts@base": {
+    "defines": ["MIN_OUT"],
+    "sha256": "3fe2ad3a917b2a8383dc3e05e187a84e15d36382bf4635fbba5bb6f713391f4b"
+  },
+  "docs/examples/router-swap.sauce.ts@ethereum": {
+    "defines": ["MIN_OUT"],
+    "sha256": "3fe2ad3a917b2a8383dc3e05e187a84e15d36382bf4635fbba5bb6f713391f4b"
+  },
+  "docs/examples/venue-where-deployed.sauce.ts@arbitrum": {
+    "defines": [],
+    "sha256": "146ef412aeb449b1bc89f872718f082d258e8fb79daddf4b9e5fd79c1945db05"
+  },
+  "docs/examples/venue-where-deployed.sauce.ts@base": {
+    "defines": [],
+    "sha256": "91b121a4a834b73256ddc6037125895bf31f8f8f879d341dbe83ad3c71130348"
+  },
+  "docs/examples/venue-where-deployed.sauce.ts@ethereum": {
+    "defines": [],
+    "sha256": "638c00ed4f36d7847a37d8587d0b024f5b9e9c7ff85e40bf903190a3de810a4b"
+  },
+  "sdk/src/recipes/cctp-split.sauce.ts@arbitrum": {
+    "defines": [],
+    "sha256": "7ba2fbbd0c47134f6da1d5dcd277142e054585300c41255533f4dec0473ea4a0"
+  },
+  "sdk/src/recipes/cctp-split.sauce.ts@base": {
+    "defines": [],
+    "sha256": "2a651c94970ce698e015becab3c46d60aead6c0c2be0d2c8c1e617a144ce2eb9"
+  },
+  "sdk/src/recipes/cctp-split.sauce.ts@ethereum": {
+    "defines": [],
+    "sha256": "e26cfdcc9c934cbd1898a607b3d41a740cf0571465c7e19f664964ad1c95ff3f"
+  },
+  "sdk/src/recipes/plain-transfer.sauce.ts@arbitrum": {
+    "defines": [],
+    "sha256": "d4d85acb136695345eb6ab62041a27d8295482db6162b3fa050e9a1c97052062"
+  },
+  "sdk/src/recipes/plain-transfer.sauce.ts@base": {
+    "defines": [],
+    "sha256": "36aa6608d8f6b226cc0d5ac79aea2e6cfc1d9b6ebb23f0f9cdbbd134212da287"
+  },
+  "sdk/src/recipes/plain-transfer.sauce.ts@ethereum": {
+    "defines": [],
+    "sha256": "899efc464d5608c29babb3ce269a4119b0cc5210d47cde9ebe1556b5cf86ef2e"
+  },
+  "sdk/src/recipes/settle.sauce.ts@arbitrum": {
+    "defines": [],
+    "sha256": "0c47d45119360293374f844455195e2da22cacf38df5299f22c5385cb4e36cee"
+  },
+  "sdk/src/recipes/settle.sauce.ts@base": {
+    "defines": [],
+    "sha256": "0c47d45119360293374f844455195e2da22cacf38df5299f22c5385cb4e36cee"
+  },
+  "sdk/src/recipes/settle.sauce.ts@ethereum": {
+    "defines": [],
+    "sha256": "0c47d45119360293374f844455195e2da22cacf38df5299f22c5385cb4e36cee"
+  },
+  "sdk/test/fixtures/sauce-script/demo/intent/usdc-to-weth-on-base.sauce.ts@arbitrum": {
+    "defines": ["AMOUNT_IN", "SQRT_PRICE_LIMIT_X96", "MIN_OUT", "RECIPIENT", "REFUND_TO", "REWARD"],
+    "sha256": "bf4721de333f0f1a6fb690f4058d35c8c1abf3fbf4d1112a518f06cf9e6a36f5"
+  },
+  "sdk/test/fixtures/sauce-script/demo/intent/usdc-to-weth-on-base.sauce.ts@base": {
+    "defines": ["AMOUNT_IN", "SQRT_PRICE_LIMIT_X96", "MIN_OUT", "RECIPIENT", "REFUND_TO", "REWARD"],
+    "sha256": "18a9f10990a49d134208af3a93e43e4ec7501e5d1ecfbbb8694b8e29f038bfcf"
+  },
+  "sdk/test/fixtures/sauce-script/demo/intent/usdc-to-weth-on-base.sauce.ts@ethereum": {
+    "defines": ["AMOUNT_IN", "SQRT_PRICE_LIMIT_X96", "MIN_OUT", "RECIPIENT", "REFUND_TO", "REWARD"],
+    "sha256": "bfcad8d60506783ca99fa92978d04f5c728ed7551f6bebf6359e88d16e9a60cf"
+  },
+  "sdk/test/fixtures/sauce-script/demo/solana/pay-usdc-keep-minimum.sauce.ts@solana": {
+    "defines": [],
+    "sha256": "e1899157b6d420e69a103c7bfacd02a7dea5f45e4a17fdd576ea646c0d2e7df7"
+  },
+  "sdk/test/fixtures/sauce-script/demo/usdc-to-weth.sauce.ts@arbitrum": {
+    "defines": [],
+    "sha256": "0010242f66fc3d7f82f3cc278f963f64e07900ee5ec82a7725de2e6483998e29"
+  },
+  "sdk/test/fixtures/sauce-script/demo/usdc-to-weth.sauce.ts@base": {
+    "defines": [],
+    "sha256": "993adbc206f6476263c4fe1c0a9a0ad4e73be10da89fec22021cd2e88b771665"
+  },
+  "sdk/test/fixtures/sauce-script/demo/usdc-to-weth.sauce.ts@ethereum": {
+    "defines": [],
+    "sha256": "86070a358dddb36052f79f2bbf0327ca6dc165b6ceb805d82c1251a74b436e16"
+  },
+  "skills/sauce-chains/examples/chains.sauce.ts@arbitrum": {
+    "defines": [],
+    "sha256": "a0647e3fcc7f5d9250a372880604861ce590d7d4e313159742e1b1258cbfe959"
+  },
+  "skills/sauce-chains/examples/chains.sauce.ts@base": {
+    "defines": [],
+    "sha256": "73246088aa9cf652f9e9405e2326dbe9ae686793aa6d0d902f7d3325a53e67f5"
+  },
+  "skills/sauce-chains/examples/chains.sauce.ts@ethereum": {
+    "defines": [],
+    "sha256": "584d45f6896d5db59b7f0fd80f39f4da9455861f51209330fc8f7c3bebf8e52e"
+  },
+  "skills/sauce-distributed-swap/examples/distributed-swap.sauce.ts@arbitrum": {
+    "defines": [],
+    "sha256": "5c5581665b82e2bb4029969c6d31647dfd7e823673959c3d6cbbbb6d1f35573c"
+  },
+  "skills/sauce-distributed-swap/examples/distributed-swap.sauce.ts@base": {
+    "defines": [],
+    "sha256": "9472dbc0a7d8defaef1256478e2611dcb7a531fca29657c82a659871196ed644"
+  },
+  "skills/sauce-distributed-swap/examples/distributed-swap.sauce.ts@ethereum": {
+    "defines": [],
+    "sha256": "29f268fbe340ce9a00a0933c1c0844bfbb4a10546a22fdaf0939472f494e527e"
+  },
+  "skills/sauce-globals/examples/globals.sauce.ts@arbitrum": {
+    "defines": [],
+    "error": true
+  },
+  "skills/sauce-globals/examples/globals.sauce.ts@base": {
+    "defines": [],
+    "error": true
+  },
+  "skills/sauce-globals/examples/globals.sauce.ts@ethereum": {
+    "defines": [],
+    "sha256": "02bb330131874e6e377560bbb37ae00a6de5ee394fc6d894b70dcbce34c35b53"
+  },
+  "skills/sauce-intents/examples/cross-chain.sauce.ts@arbitrum": {
+    "defines": ["BENEFICIARY"],
+    "sha256": "363b19455a15afa0ae4d13bda7184d7906f09441ef40355a7a76abb0333a1fce"
+  },
+  "skills/sauce-intents/examples/cross-chain.sauce.ts@base": {
+    "defines": ["BENEFICIARY"],
+    "sha256": "96008876489f369cabdf6d412dee65b1488b52dea6027e6d0b66b3e05de9f221"
+  },
+  "skills/sauce-intents/examples/cross-chain.sauce.ts@ethereum": {
+    "defines": ["BENEFICIARY"],
+    "sha256": "d60b613f3e22b0b79f23eef31b12c5fcad2bf839096aa5ef7fb58ed627a5d079"
+  },
+  "skills/sauce-intents/examples/fund-by-transfer.sauce.ts@arbitrum": {
+    "defines": [],
+    "sha256": "57b527b6950da641689eca76117f73cf9ce84800c5ebfd15f28295fdceae37d0"
+  },
+  "skills/sauce-intents/examples/fund-by-transfer.sauce.ts@base": {
+    "defines": [],
+    "sha256": "57b527b6950da641689eca76117f73cf9ce84800c5ebfd15f28295fdceae37d0"
+  },
+  "skills/sauce-intents/examples/fund-by-transfer.sauce.ts@ethereum": {
+    "defines": [],
+    "sha256": "57b527b6950da641689eca76117f73cf9ce84800c5ebfd15f28295fdceae37d0"
+  },
+  "skills/sauce-intents/examples/swap-on-base.sauce.ts@arbitrum": {
+    "defines": [
+      "AMOUNT_IN",
+      "SQRT_PRICE_LIMIT_X96",
+      "RECIPIENT",
+      "REFUND_TO",
+      "MIN_OUT",
+      "MIN_AVG_PRICE",
+      "REWARD"
+    ],
+    "sha256": "f0eec6dbeae5aa9a539c1b5ed869e71e8ef88982fe7d4cbe02a3f8c718d7fb8f"
+  },
+  "skills/sauce-intents/examples/swap-on-base.sauce.ts@base": {
+    "defines": [
+      "AMOUNT_IN",
+      "SQRT_PRICE_LIMIT_X96",
+      "RECIPIENT",
+      "REFUND_TO",
+      "MIN_OUT",
+      "MIN_AVG_PRICE",
+      "REWARD"
+    ],
+    "sha256": "a71321f66b545448889a37e1e08debec0207787bd53a003ee13df4b1f1cd5659"
+  },
+  "skills/sauce-intents/examples/swap-on-base.sauce.ts@ethereum": {
+    "defines": [
+      "AMOUNT_IN",
+      "SQRT_PRICE_LIMIT_X96",
+      "RECIPIENT",
+      "REFUND_TO",
+      "MIN_OUT",
+      "MIN_AVG_PRICE",
+      "REWARD"
+    ],
+    "sha256": "895fa51fc7abdd8da6e4c4bc11508d580392b72c7444ecf8714ccbb6efc8d20c"
+  },
+  "skills/sauce-protocols/examples/protocols.sauce.ts@arbitrum": {
+    "defines": [],
+    "sha256": "cbbc56ca9052b594b469613dd3c97eb08472c3192250c1fa078a69dd2d3b3a91"
+  },
+  "skills/sauce-protocols/examples/protocols.sauce.ts@base": {
+    "defines": [],
+    "sha256": "153310e64b60f38b92c39edce2705f6261dd7622309ab9d13d282fe3d8f5ef80"
+  },
+  "skills/sauce-protocols/examples/protocols.sauce.ts@ethereum": {
+    "defines": [],
+    "sha256": "e7a7252d4c0039679f92402e341d7950745721bcc3e8c326befd19ca3d9ee582"
+  },
+  "skills/sauce-run/examples/pay.sauce.ts@arbitrum": {
+    "defines": [],
+    "error": true
+  },
+  "skills/sauce-run/examples/pay.sauce.ts@base": {
+    "defines": [],
+    "error": true
+  },
+  "skills/sauce-run/examples/pay.sauce.ts@ethereum": {
+    "defines": [],
+    "sha256": "48bff725d84208847d1ac1b3a73b22dae11ed4c9652089e289172f0cdb7b9ba5"
+  },
+  "skills/sauce-run/examples/split.sauce.ts@arbitrum": {
+    "defines": [],
+    "sha256": "e9473a1f65004f567fbbac9213e1b5e2acd932f95f852bcd3109a891942075a1"
+  },
+  "skills/sauce-run/examples/split.sauce.ts@base": {
+    "defines": [],
+    "sha256": "77aa7047a13fae40ece485065954593675430698e8020e8ab1662879c70742b4"
+  },
+  "skills/sauce-run/examples/split.sauce.ts@ethereum": {
+    "defines": [],
+    "sha256": "b259557902a9647c9d50232a0294ac82eeb679d3947fa8cdd183eeb0eae6710a"
+  },
+  "skills/sauce-solana/examples/solana.sauce.ts@solana": {
+    "defines": [],
+    "sha256": "7539df205f2d224fa0eb81bd1a67139c4c96d8b62aad49c0cf7d37aa1c92d98c"
+  },
+  "skills/sauce-swaps/examples/swap-leg.sauce.ts@arbitrum": {
+    "defines": [],
+    "sha256": "9693b87bf567cd4e3802163fecb7df169a7630af92f58a4e16b7d45bfd4b049b"
+  },
+  "skills/sauce-swaps/examples/swap-leg.sauce.ts@base": {
+    "defines": [],
+    "sha256": "e58f8fac17f726a5d28f6c0b26b6dab578e7a64a1ce72108f7be7c88501c5a7b"
+  },
+  "skills/sauce-swaps/examples/swap-leg.sauce.ts@ethereum": {
+    "defines": [],
+    "sha256": "9693b87bf567cd4e3802163fecb7df169a7630af92f58a4e16b7d45bfd4b049b"
+  }
+}

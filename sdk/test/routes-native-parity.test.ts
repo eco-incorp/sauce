@@ -18,7 +18,8 @@
  * Needs a compiler with the extensions manifest (the v12 stack ending at program literals); with
  * the published 2.4.0 the suite is skipped.
  */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26,9 +27,16 @@ import { compile } from "../src/wasm-compiler.js";
 import { resolveSdkModule, resolveSdkPackage } from "../src/embedded/resolve.js";
 import { CANONICAL_CHAINS, requireChain } from "../src/chains/canonical.js";
 import { compileSauceProgram, useNativePipeline } from "../src/routes/sauce-route.js";
-import { chainKey, EXTENSIONS_PATH, serveExtensions } from "../src/routes/extensions.js";
+import {
+  chainKey,
+  EXTENSIONS_PATH,
+  isTokenSymbol,
+  serveExtensions,
+} from "../src/routes/extensions.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
+const GOLDEN = join(ROOT, "sdk/test/fixtures/native-golden.json");
+const sha256Hex = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 
 /** Whether the installed compiler reads an extensions manifest. */
 const native = ((): boolean => {
@@ -94,7 +102,8 @@ function rewritten(chain: string, source: string): { outcome: Outcome; defines: 
     const free =
       /`([A-Z_][A-Z0-9_]*)` is not a declared variable/.exec(result.message)?.[1] ??
       /refers to '([A-Z_][A-Z0-9_]*)'/.exec(result.message)?.[1];
-    if (free === undefined || free in defines) break;
+    // A token symbol a chain lacks is not a parameter the program left free: it is the refusal.
+    if (free === undefined || free in defines || isTokenSymbol(free)) break;
     defines[free] = FILLER;
     result = outcome(chain, source, false, defines);
   }
@@ -109,9 +118,17 @@ function prependedImports(rewrittenSource: string, original: string): string {
     .join("\n");
 }
 
-function expectParity(chain: string, source: string): void {
+/** The native outcomes this run saw, by case — written to the golden fixture on request. */
+const golden: Record<string, { defines: string[]; sha256?: string; error?: true }> = {};
+
+function expectParity(chain: string, source: string, name?: string): void {
   const { outcome: old, defines } = rewritten(chain, source);
   const fresh = outcome(chain, source, true, defines);
+  if (name !== undefined) {
+    golden[`${name}@${chain}`] = fresh.ok
+      ? { defines: Object.keys(defines), sha256: sha256Hex(fresh.bytecode) }
+      : { defines: Object.keys(defines), error: true };
+  }
   if (!old.ok) {
     expect(fresh.ok).toBe(false);
     return;
@@ -211,9 +228,18 @@ const SHAPES: readonly (readonly [string, string])[] = [
 describeNative("native pipeline: the corpus compiles as the rewrites compiled it", () => {
   for (const { name, source, chains } of CORPUS) {
     for (const chain of chains) {
-      it(`${name} on ${chain}`, () => expectParity(chain, source));
+      it(`${name} on ${chain}`, () => expectParity(chain, source, name));
     }
   }
+  // `UPDATE_NATIVE_GOLDEN=1` records what the native pipeline compiled every case to, proven equal
+  // to the rewrites above, for `routes-native-golden.test.ts` to hold it to once they are gone.
+  afterAll(() => {
+    if (process.env.UPDATE_NATIVE_GOLDEN !== "1") return;
+    const sorted = Object.fromEntries(
+      Object.entries(golden).sort(([a], [b]) => a.localeCompare(b)),
+    );
+    writeFileSync(GOLDEN, `${JSON.stringify(sorted, null, 2)}\n`);
+  });
 });
 
 describeNative("native pipeline: each shape the rewrites lowered", () => {
