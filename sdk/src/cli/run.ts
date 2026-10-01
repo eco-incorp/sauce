@@ -77,8 +77,9 @@ import {
   type LifecycleContext,
   type Target,
 } from "./intent-commands.js";
+import { svmFillCommand } from "./intent-svm.js";
 import { interactiveIntents } from "./interactive.js";
-import { intentOf } from "./lifecycle.js";
+import { intentOf, intentRecord } from "./lifecycle.js";
 import type { Ask } from "./prompt.js";
 import { defaultStoreDir, IntentStore } from "./store.js";
 import { globalsCommand } from "./globals.js";
@@ -897,6 +898,8 @@ const storing =
 async function lifecycleContext(args: ParsedArgs, io: CliIo): Promise<LifecycleContext> {
   const endpoint = await endpointLookup(args, io);
   const account = hasSigner(args) ? await signerOf(args, io) : undefined;
+  const keypair = stringFlag(args, "keypair");
+  const svmSigner = keypair === undefined ? undefined : await loadKeypair(keypair, io);
   const api = stringFlag(args, "api");
   const keyFile = stringFlag(args, "api-key-file");
   if (keyFile !== undefined && api === undefined) {
@@ -910,6 +913,7 @@ async function lifecycleContext(args: ParsedArgs, io: CliIo): Promise<LifecycleC
     store: storeOf(args, io),
     endpoint,
     ...(account === undefined ? {} : { account }),
+    ...(svmSigner === undefined ? {} : { svmSigner }),
     approver: approverOf(args, io),
     ...(api === undefined ? {} : { api: { url: api, ...(key === undefined ? {} : { key }) } }),
   };
@@ -1102,6 +1106,12 @@ const LIFECYCLE: FlagSpecs = {
   ...PROGRAM,
   ...ENDPOINT,
   ...EVM_SIGNER,
+  keypair: {
+    type: "string",
+    value: "<path>",
+    help: "Sign a step on Solana (an intent's fill, proof or cancellation there) with a keypair file",
+    only: "svm",
+  },
   "auto-approve": {
     type: "boolean",
     help: "Approve what it spends beyond gas (a fee, tokens) without asking",
@@ -1440,6 +1450,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "sauce intent fill <file | -> --chain <source> (--config <file> | --rpc-url <url>) [options]",
       "sauce intent fill <intent-hash> (--config <file> | --rpc-url <url>) [options]",
       "sauce intent fill <file | intent-hash> … --send (--keystore <path> | --private-key <hex>) [--auto-approve]",
+      "sauce intent fill <intent-hash> --config <file> --claimant <address> --send --keypair <path>   (to Solana)",
     ],
     summary: "Fill a file's (or a stored) intents on their destination: rehearsed, or --send",
     flags: {
@@ -1456,13 +1467,13 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       },
       solver: {
         type: "string",
-        value: "<address>",
-        help: "Rehearse as this account (default: one nobody holds the key of)",
+        value: "<address|key>",
+        help: "Rehearse as this account (default: one nobody holds the key of; on Solana, required)",
       },
       claimant: {
         type: "string",
         value: "<address|bytes32>",
-        help: "Who claims the reward, as fulfill records it (default: the solver)",
+        help: "Who claims the reward, as fulfill records it (default: the solver; for Solana, required)",
       },
       "no-prove": {
         type: "boolean",
@@ -1473,6 +1484,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         help: "Send the fill, from the signer, after rehearsing it",
       },
       ...EVM_SIGNER,
+      keypair: LIFECYCLE.keypair!,
       "auto-approve": LIFECYCLE["auto-approve"]!,
       store: LIFECYCLE.store!,
       ...JSON_FLAG,
@@ -1511,7 +1523,15 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "the source prover trusts the destination's), and --rpc-url serves intents that all go to",
       "one chain. The intent must be fixed when it is built, as for publish: one using a value the",
       "program measures on chain has no route until it runs (name it by the hash `sauce run`",
-      "stored). A Solana destination is not filled. Needs an endpoint that serves eth_simulateV1.",
+      "stored). Needs an endpoint that serves eth_simulateV1.",
+      "",
+      "An intent to Solana (one `sauce intent import` stored from its publishing transaction) is",
+      "filled through Solana's Portal program: Portal.fulfill, the solver's token accounts paying",
+      "the route's tokens, rehearsed by simulateTransaction on the accounts as they are (Solana's",
+      "simulation takes no overrides: --solver names a Solana key, whose accounts pay). --claimant,",
+      "an address on the source chain, is required: the reward pays it, and a Solana key is none.",
+      "With --send and --keypair it is sent, then its proof through the HyperProver, the IGP's gas",
+      "paid in the same transaction, each spend approved.",
       "",
       "Examples:",
       "  sauce intent fill swap-on-base.sauce.ts --chain arbitrum --config sauce.config.json \\",
@@ -1537,7 +1557,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         );
       }
       const sending = args.values.send === true;
-      if (!sending && hasSigner(args)) {
+      if (!sending && (hasSigner(args) || stringFlag(args, "keypair") !== undefined)) {
         throw new UsageError(
           "a signer goes with --send: without it, fill rehearses and signs nothing (--solver " +
             "names who it rehearses as)",
@@ -1571,6 +1591,36 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         targets = fillTargets(program, io);
         labels = defineLabels(program);
         from = program.file;
+      }
+      const onSolana = targets.filter((target) => target.destination.kind === "svm");
+      if (onSolana.length > 0) {
+        if (onSolana.length !== targets.length) {
+          throw new UsageError(
+            "fill the intents to Solana apart from the others: they are filled through another " +
+              "Portal, with another signer",
+          );
+        }
+        const context = await lifecycleContext(args, io);
+        if (sending && context.svmSigner === undefined) {
+          throw new UsageError("sending a fill on Solana needs its signer: --keypair <path>");
+        }
+
+        return svmFillCommand(
+          {
+            targets: targets.map((target) => {
+              const record = intentRecord(target.intent, { sourcePortal: target.sourcePortal });
+
+              return store.has(record.intentHash)
+                ? { record, stored: store.load(record.intentHash) }
+                : { record };
+            }),
+            ...(solver === undefined ? {} : { solver: parsePubkey("solver", solver) }),
+            ...(claimant === undefined ? {} : { claimant: claimant as `0x${string}` }),
+            ...(args.values["no-prove"] === true ? { prove: false } : {}),
+            send: sending,
+          },
+          context,
+        );
       }
       const account = sending ? await signerOf(args, io) : undefined;
       const lookup = config === undefined ? undefined : await endpointLookup(args, io);

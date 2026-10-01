@@ -73,12 +73,14 @@ export interface StoreEvent {
   /** The chain it happened on. */
   readonly chain: string;
   readonly chainId: number;
-  readonly tx?: Hex;
+  /** The transaction: its hash, or on Solana its signature. */
+  readonly tx?: string;
+  /** The block it landed in, or on Solana the slot. */
   readonly block?: string;
   /** When: the block's time where there is a block, else the moment it was recorded (ISO 8601). */
   readonly time: string;
-  /** Who sent it, or who it paid. */
-  readonly from?: Hex;
+  /** Who sent it, or who it paid: an address, or a Solana key. */
+  readonly from?: string;
   /** A Hyperlane message a proof travels as. */
   readonly message?: Hex;
 }

@@ -24,3 +24,4 @@ export * from "./token-extensions.js";
 export * from "./venues/index.js";
 export * from "./recipes/index.js";
 export * from "./accessors.js";
+export * from "./portal.js";
