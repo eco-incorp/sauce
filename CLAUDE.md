@@ -527,7 +527,10 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   `skills-check/offline-guard.mjs` preloaded; the globals index fresh, compilable and covering
   every name a program uses; the SauceScript reference
   (`sauce-script/references/builtins.{md,json}`, with `skills-check/builtins*.mjs`) to the
-  compiler; and the wording rules below.
+  compiler; and the wording rules below. Its exceptions live in the checker, never as markers in a
+  shipped skill (they mean nothing to the agent reading it): a name inline code may use although
+  the package never declares it (an external contract's function) is an `UNDECLARED_NAMES` entry,
+  per skill and with its reason, and an entry the skill no longer needs fails the check.
 - **Wording rules, enforced.** No version numbers or release talk; no agent's name, install path or
   instructions file (the skills reach every agent); no engine internals (opcodes, mnemonics, stack
   effects, bytecode bytes); no placeholder or unrecorded address (every `0x` address must be one the

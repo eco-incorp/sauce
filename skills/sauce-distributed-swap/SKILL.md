@@ -3,8 +3,6 @@ name: sauce-distributed-swap
 description: Writing a Sauce program that distributes one exact-input swap across every pool on a chain that supports a price limit (Uniswap V3 and its forks such as PancakeSwap V3, Aerodrome Slipstream, Algebra, Synthra and UnitFlow pools, plus Uniswap V4), never trading past a common sqrtPriceLimitX96 and never stranding input. Covers which venues qualify, making one program compile on every chain whatever venues it has, discovering pools through the factories, ordering them best price first, one swap per pool with the leftover flowing on, and settlement with a minimum output, an average-price floor and a refund, all as main(...) inputs. Use when asked for a distributed, split, multi-venue, aggregated or best-execution swap, "swap across all protocols", "fill up to a price limit", a limit-order-like swap, or routing one trade through several pools.
 ---
 
-<!-- check:allow globalState poolByPair liquidity extsload -->
-
 # A distributed swap across price-limit venues
 
 The reference program is

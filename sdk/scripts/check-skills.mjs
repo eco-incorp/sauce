@@ -311,14 +311,22 @@ const inlineCode = (skill) =>
   [...skill.prose.matchAll(/`([^`\n]+)`/g)]
     .map((m) => m[1].trim())
     .filter((s) => !FILE_LIKE.test(s));
-// `<!-- check:allow a b -->` lists names a skill mentions although the SDK does not declare them
-// (an external contract's function, a name that is wrong on purpose).
-const allowed = (skill) =>
-  new Set(
-    [...skill.text.matchAll(/<!--\s*check:allow\s+([^>]*?)\s*-->/g)].flatMap((m) =>
-      m[1].split(/\s+/),
-    ),
-  );
+// Names a skill's inline code uses although the package never declares them, per skill, each with
+// why: an external contract's function, or a name that is wrong on purpose. They live here rather
+// than in the skills, where a marker would mean nothing to the agent reading them, and an entry the
+// skill no longer needs fails the check, so the list cannot outlive its reason.
+const UNDECLARED_NAMES = {
+  "sauce-script": {
+    arr: "the rejected `arr.push(x)`: JavaScript's push, which SauceScript has no form of",
+  },
+  "sauce-distributed-swap": {
+    globalState:
+      "an Algebra pool's price read, `globalState()`; the registry has no Algebra pool ABI",
+    poolByPair: "an Algebra factory's pool lookup; the registry has no Algebra factory ABI",
+  },
+};
+const undeclaredUsed = new Set(); // "<skill>/<name>"
+const allowed = (skill) => new Set(Object.keys(UNDECLARED_NAMES[skill.dir] ?? {}));
 
 // ---- 1. Frontmatter ---------------------------------------------------------------------------------
 // https://agentskills.io/specification: these are the fields a SKILL.md may carry.
@@ -920,13 +928,26 @@ for (const skill of skills) {
       if (/^[A-Z][A-Z0-9_]*$/.test(part)) continue; // ALL_CAPS: defines and constants by convention
       if (/^[A-Z][A-Za-z0-9]*_[A-Z][A-Za-z0-9]*$/.test(part)) continue; // a Namespace_Contract define
       counts.identifiers++;
-      if (!KNOWN.has(part) && !allow.has(part))
+      if (KNOWN.has(part)) continue;
+      if (allow.has(part)) undeclaredUsed.add(`${skill.dir}/${part}`);
+      else
         fail(
           rel(skill.path),
           `inline code \`${span}\` names "${part}", which the package never declares`,
         );
     }
   }
+  if (/<!--\s*check:/.test(skill.text))
+    fail(rel(skill.path), "carries a check marker; the checker's exceptions live in the checker");
+}
+for (const [dir, names] of Object.entries(UNDECLARED_NAMES)) {
+  if (!skills.some((skill) => skill.dir === dir)) continue;
+  for (const name of Object.keys(names))
+    if (!undeclaredUsed.has(`${dir}/${name}`))
+      fail(
+        `check-skills.mjs UNDECLARED_NAMES`,
+        `${dir} no longer names "${name}"; remove the exception`,
+      );
 }
 
 // ---- 8. The index of globals: fresh, compilable, and covering every use ---------------------------------
