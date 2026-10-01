@@ -6,6 +6,11 @@
  * A tool that reads a chain uses the call's own `rpcUrl`, else the server's endpoint for that chain
  * from `--config`, else says plainly that it has none (`reach.ts`). Every result and every error is
  * scrubbed of both, so no endpoint URL — which usually carries a provider key — leaves the server.
+ *
+ * A tool that returns a transaction builds it only on a chain the release supports: on a preview
+ * chain it is refused by the command's own gate (`sdk/src/cli/support.ts`), before any endpoint is
+ * reached, and the refusal comes back as the result's `refused` (`refusedResult`) — the supported
+ * chains, and how to ask for that one — which the calling agent can act on.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
@@ -23,6 +28,8 @@ import {
   addressDefinesOf,
   assumedBalances,
   CANONICAL_CHAINS,
+  CHAIN_SUPPORT_NEW_ISSUE_URL,
+  chainSupport,
   compileCommand,
   compileProgram,
   connect,
@@ -52,15 +59,20 @@ import {
   priceCommand,
   pricedChain,
   priceGiven,
+  previewRefusal,
+  PreviewChainError,
   programChain,
+  programChains,
   publishCommand,
   registeredBalances,
+  requireSupported,
   simulateCommand,
   svmPotCommand,
   svmPotExists,
   svmPotTokenAccounts,
   svmSimulateCommand,
   svmTxCommand,
+  supportedChainNames,
   svmVerifyCommand,
   txCommand,
   UsageError,
@@ -71,6 +83,7 @@ import {
   type CompileInput,
   type CookInput,
   type IntentRecord,
+  type PreviewChainRefusal,
   type ProgramInput,
   type SvmCookInput,
 } from "./sdk.js";
@@ -96,8 +109,8 @@ export const LIMITS = {
 export const chainRef = z
   .union([z.string().min(1).max(64), z.number().int().nonnegative()])
   .describe(
-    "The chain: its slug (base, arbitrum, solana), an alias, or its numeric id (8453). " +
-      "sauce_chains lists every one.",
+    "The chain: its slug (base, ethereum, solana), an alias, or its numeric id (8453). " +
+      "sauce_chains lists every one, and which the release supports.",
   );
 
 /** An integer as a JSON number (exact to 2^53) or as a decimal or 0x-hex string. */
@@ -691,6 +704,24 @@ export function errorText(
   return toolTerms(scrub(error instanceof Error ? error.message : String(error)));
 }
 
+/**
+ * A tool refused on a preview chain: an error result whose structured content is the refusal, as
+ * `refused` — the supported chains, and for each preview chain the GitHub search for an existing
+ * request, the prefilled new one, and the title, body and comment to post.
+ */
+export const refusedResult = (
+  refusal: PreviewChainRefusal,
+  scrub: (text: string) => string,
+): CallToolResult => {
+  const structured = scrubbed({ refused: refusal }, scrub) as Record<string, unknown>;
+
+  return {
+    isError: true,
+    structuredContent: structured,
+    content: [{ type: "text", text: JSON.stringify(structured, null, 2) }],
+  };
+};
+
 const result = (output: ToolOutput, scrub: (text: string) => string): CallToolResult => {
   const notes = output.notes ?? [];
   const structured = scrubbed(
@@ -719,6 +750,14 @@ const notesSchema = z.array(z.string()).optional();
 /** The sentence every tool that builds a transaction ends on. */
 export const UNSIGNED =
   "Nothing is signed or sent: the caller signs and sends with its own wallet or signer.";
+
+/** What every tool that builds a transaction says about where it builds one. */
+export const SUPPORTED_ONLY =
+  `It builds transactions only on ${supportedChainNames()}, the chains this release supports. On ` +
+  "any other (a preview chain: sauce_chains marks each) it is refused before any endpoint is " +
+  "reached, with `refused`: the supported chains, the search for an existing request for that " +
+  "chain and a prefilled new one, and the title, body and comment to post. Offer the user that " +
+  "request; compile and simulate work on every chain.";
 
 // ---------------------------------------------------------------------------------------------
 // The tools
@@ -784,6 +823,8 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
         try {
           return result(await run(args as never, reach), reach.scrub);
         } catch (error) {
+          if (error instanceof PreviewChainError) return refusedResult(error.refusal, reach.scrub);
+
           return {
             isError: true,
             content: [{ type: "text", text: errorText(error, reach.scrub) }],
@@ -806,9 +847,13 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       title: "List the chains",
       description:
         "Lists every chain a Sauce program can run on, to choose the `chain` the other tools " +
-        "take: each chain's slug, numeric id, name, kind (evm or svm) and aliases, and " +
-        "`endpoint`: whether this server has its own RPC endpoint for it. A tool that reads a " +
-        "chain without one needs the call's rpcUrl. Reads nothing.",
+        "take: each chain's slug, numeric id, name, kind (evm or svm) and aliases, `support`, " +
+        `and \`endpoint\`. \`support\` is "supported" for ${supportedChainNames()}, where this ` +
+        'release builds transactions, and "preview" for every other chain: programs compile ' +
+        "and simulate there, but the tools that build a transaction refuse it (`refused` says " +
+        "how to request the chain). `endpoint` is whether this server has its own RPC endpoint " +
+        "for the chain; a tool that reads a chain without one needs the call's rpcUrl. Reads " +
+        "nothing.",
       input: {},
       output: {
         chains: z.array(
@@ -816,9 +861,12 @@ export function registerTools(server: McpServer, context: ToolContext): void {
             slug: z.string(),
             id: z.number(),
             kind: z.enum(["evm", "svm"]),
+            support: z.enum(["supported", "preview"]),
             endpoint: z.boolean(),
           }),
         ),
+        supported: z.array(z.string()),
+        requestChain: z.string(),
       },
       annotations: PURE,
     },
@@ -830,8 +878,13 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           name: chain.name,
           kind: chain.kind,
           aliases: chain.aliases,
+          support: chainSupport(chain),
           endpoint: endpoints.chainIds.includes(chain.id),
         })),
+        supported: CANONICAL_CHAINS.filter((chain) => chainSupport(chain) === "supported").map(
+          (chain) => chain.slug,
+        ),
+        requestChain: CHAIN_SUPPORT_NEW_ISSUE_URL,
       },
     }),
   );
@@ -1145,8 +1198,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "report for the generated program (bytecode, size, entryParams, …) with `source` (the " +
         "generated SauceScript), `parameters` (the argument actions, in the order main takes " +
         "them as args) and the bindings it calls through; given owner or pot, also " +
-        "`transaction`: the unsigned cook, exactly as sauce_tx returns it. EVM chains only. " +
-        UNSIGNED,
+        "`transaction`: the unsigned cook, exactly as sauce_tx returns it — on a preview chain " +
+        "the report with `refused` instead of it. EVM chains only. " +
+        `${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: {
         program: z
           .union([z.string().min(2).max(LIMITS.source), z.looseObject({})])
@@ -1186,24 +1240,31 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         compactArgs: args.compactArgs === true,
       };
       const report = await actionsCommand(input);
-      const building =
+      const cook =
         args.owner !== undefined || args.pot !== undefined
-          ? await cookTransaction(
-              args,
-              {
-                input: await actionsProgram(input),
-                files: callFiles(ACTIONS_FILE, text, {}).files,
-              },
-              reach,
-            )
+          ? { input: await actionsProgram(input), files: callFiles(ACTIONS_FILE, text, {}).files }
           : undefined;
+      // The report on every chain; its cook only on a supported one, before any endpoint.
+      const refused =
+        cook === undefined
+          ? undefined
+          : previewRefusal("building the cook transaction", programChains(cook.input, cook.files));
+      const building =
+        cook === undefined || refused !== undefined
+          ? undefined
+          : await cookTransaction(args, cook, reach);
 
       return {
         json: {
           ...report.json,
           ...(building === undefined ? {} : { transaction: building.json }),
+          ...(refused === undefined ? {} : { refused }),
         },
-        notes: [...(report.notes ?? []), ...(building?.notes ?? [])],
+        notes: [
+          ...(report.notes ?? []),
+          ...(building?.notes ?? []),
+          ...(refused === undefined ? [] : [refused.message]),
+        ],
       };
     },
   );
@@ -1222,7 +1283,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "feePayer, pot, fee, maxExecutionFee, transaction }: the Kitchen cook (or, via engine, " +
         "the engine's own paid cook, with no Pot) as a base64 transaction for the owner to sign, " +
         "which needs an endpoint (its blockhash and the fee). `notes` say what must be true for " +
-        `it to land: a deployed, funded Pot (sauce_pot deploys it). ${UNSIGNED}`,
+        `it to land: a deployed, funded Pot (sauce_pot deploys it). ${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: { ...PROGRAM, ...COOK },
       output: {
         chainId: z.number().optional(),
@@ -1235,6 +1296,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
     },
     async (args, reach) => {
       const program = programOf(args);
+      // Before any endpoint: the chain, and every chain an intent the program opens goes to.
+      requireSupported(
+        "building the cook transaction",
+        programChains(program.input, program.files),
+      );
       const output = await cookTransaction(args, program, reach);
       if (program.input.chain.kind === "svm") return fromCommand(output);
       const chain = program.input.chain;
@@ -1282,8 +1348,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "send the deployment — and reads what the cook will need: on an EVM chain the Kitchen's " +
         "fee (the least a cook's value can be) and the Pot's balance of the native currency and " +
         "of every token the chain registers; on Solana the Pot's associated token account for " +
-        "each registered mint, whether it exists, and its balance. " +
-        UNSIGNED,
+        "each registered mint, whether it exists, and its balance. On a preview chain the Pot " +
+        "is predicted and read, and the deployment is left out: `refused` says why, and how to " +
+        `request the chain. ${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: {
         chain: chainRef,
         ...POT,
@@ -1468,7 +1535,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "each intent's isIntentFunded after them (intents[].funded), assumeBalance giving that " +
         "wallet balances for the rehearsal only. A program that measures an amount on chain, or " +
         "does anything besides open intents, is refused: run it on a Pot (sauce_tx) instead. " +
-        UNSIGNED,
+        "dryRun works on every chain; the transactions only where the source and every " +
+        `destination, nested ones too, are supported. ${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: {
         ...PROGRAM,
         from: z
@@ -1524,6 +1592,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           ),
         );
       }
+      // Before any endpoint: the source, and every chain the intents go to, at any depth.
+      requireSupported("publishing intents", programChains(program.input, program.files));
       const rpcUrl = from === undefined ? undefined : await reach.endpoint(chain, args.rpcUrl);
 
       return withRecords(

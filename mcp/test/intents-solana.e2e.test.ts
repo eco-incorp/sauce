@@ -1,13 +1,13 @@
 /**
- * An intent from Arbitrum to Solana, filled through the intent tools: LiteSVM running the programs
+ * An intent from Base to Solana, filled through the intent tools: LiteSVM running the programs
  * mainnet runs (the pinned dump, `sdk/test/svm/eco-routes-svm.ts`: the Portal, the HyperProver,
  * Hyperlane's Mailbox and IGP), reached through a JSON-RPC shim over the bank
  * (`sdk/test/svm/rpc-shim.ts`), which checks every signature it is sent. The server builds the
  * fill as a base64 transaction for the solver's Solana key, with every signature but the fee
  * payer's; the test signs it with that key, here, and lands it.
  *
- * Solana's side only: the record is built from the intent as Arbitrum would publish it, and nothing
- * reads Arbitrum (`sdk/test/cli-intent-solana.e2e.test.ts` runs the whole life with the CLI).
+ * Solana's side only: the record is built from the intent as Base would publish it, and nothing
+ * reads Base (`sdk/test/cli-intent-solana.e2e.test.ts` runs the whole life with the CLI).
  */
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
@@ -84,7 +84,7 @@ const SOLANA_URL = "http://127.0.0.1:65533/";
 const NOW = 1_790_000_000n;
 const USDC = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 const PORTAL = programId("portal");
-/** The solver's account on Arbitrum, which the reward pays: a Solana key is no claimant there. */
+/** The solver's account on Base, which the reward pays: a Solana key is no claimant there. */
 const CLAIMANT: Hex = "0x90F79bf6EB2c4f870365E785982E1f101E93b906";
 const AMOUNT = 1_000_000n;
 
@@ -96,10 +96,10 @@ describe("the intent tools on a Solana destination", () => {
   let recipient: Awaited<ReturnType<typeof generateKeyPairSigner>>["address"];
   const rpcUrls = { solana: SOLANA_URL };
 
-  /** An Arbitrum -> Solana intent: AMOUNT USDC to `recipient`, as eco-routes' deposit address. */
+  /** An Base -> Solana intent: AMOUNT USDC to `recipient`, as eco-routes' deposit address. */
   const record = async (salt: string, deadline: bigint) => {
     const intent: Intent = {
-      sourceChainId: 42161n,
+      sourceChainId: 8453n,
       destination: 1399811149n,
       route: {
         salt: `0x${salt.repeat(32)}`,
@@ -120,7 +120,7 @@ describe("the intent tools on a Solana destination", () => {
       reward: {
         deadline: deadline + 3600n,
         creator: toUniversalAddress("0x70997970C51812dc3A010C7d01b50e0d17dc79C8"),
-        prover: toUniversalAddress(ecoRoutesContract("arbitrum", "HyperProver")!),
+        prover: toUniversalAddress(ecoRoutesContract("base", "HyperProver")!),
         nativeAmount: 0n,
         tokens: [
           {
@@ -131,7 +131,7 @@ describe("the intent tools on a Solana destination", () => {
       },
     };
 
-    return intentRecord(intent, { sourcePortal: ecoRoutesPortal("arbitrum") });
+    return intentRecord(intent, { sourcePortal: ecoRoutesPortal("base") });
   };
 
   before(async () => {
@@ -238,7 +238,7 @@ describe("the intent tools on a Solana destination", () => {
     const intent = await record("02", NOW + 60n);
     assert.match(
       failed(await mcp.call("sauce_intent_cancel", { intent, from: solver.address, rpcUrls })),
-      /needs arbitrum's endpoint \(chain id 42161\): pass rpcUrls/,
+      /needs base's endpoint \(chain id 8453\): pass rpcUrls/,
     );
   });
 });
