@@ -36,6 +36,48 @@ export function compileSplTransfer(amount: bigint) {
 
 The account references are names, not addresses. `manifest.accounts` records their order and required roles. Resolve them to the mint, source token account, destination token account, authority, and token program before execution. Amounts are smallest-unit integers. The builder reads mint decimals for the checked instruction and defaults to the classic SPL Token program. Set the builder's top-level `tokenProgram: "token-2022"` for a supported Token-2022 operation; `svm.tokenProgram` names the account reference and must resolve to that token program.
 
+## `@sauce/token` and Token-2022
+
+A Solana mint belongs to one of two token programs, and so does every token account of it: the SPL Token program (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) or Token-2022 (`TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`). USDC and USDT are SPL Token mints; PYUSD (registered as `PYUSD`) and the tokenized stocks are Token-2022 mints. `@sauce/token`'s SVM arm takes both:
+
+- **Reads**, either program: `balanceOf(mint, account)`, `ownerOf(mint, account)`, `allowance(mint, account, spender)`, `totalSupply(mintAccount)`, `decimals(mintAccount)`. A Token-2022 account or mint is held to its base layout and, where it carries extensions, to its account-type byte.
+- **Checked writes**, either program: `transferChecked(mint, tokenProgram, source, mintAccount, dest, authority, amount, decimals)` and `approveChecked(mint, tokenProgram, source, mintAccount, delegate, authority, amount, decimals)`. `tokenProgram` must be one of the two and own the source, the destination and the mint; `mintAccount` must be `mint`; `decimals` must be the mint's.
+- **Legacy writes**, SPL Token only and unchanged: `transfer`, `transferFrom` and `approve`. Token-2022 refuses its plain transfer for a mint with a transfer fee, a transfer hook or a pause, so a program that moves a Token-2022 token uses `transferChecked`.
+
+What Token-2022's extensions do is the token program's: a transfer fee is withheld from what the destination receives, so a program measures the balance it got rather than the amount it sent; a scaled UI amount is a display multiplier, and every amount a program sees is raw; a paused mint, or a frozen account (a mint whose default account state is frozen starts every new account frozen), fails the transfer with Token-2022's own error. A transfer hook with no program set is no hook. One that names a program is refused by the library as `transfer hook`, before anything moves: the hook's extra accounts are not passed.
+
+A program's accounts depend on the mint's program, and the SDK resolves them per mint. `resolveSvmToken` reads the mint through a loader that returns each account's owner, which is the only way to tell an extensionless Token-2022 mint from a legacy one; the result gives the `tokenProgram` and `mintAccount` to attach and the `decimals` to pass, and `svmTokenAccount` derives a holder's associated token account under that program:
+
+```ts
+import { createSolanaRpc, type Address } from "@solana/kit";
+import {
+  coalescingOwnedAccountLoader,
+  kitBatchAccountLoader,
+  resolveSvmToken,
+  svmTokenAccount,
+  svmTokenToSend,
+} from "@eco-incorp/sauce/svm";
+
+export async function planTransfer(rpcUrl: string, mint: Address, pot: Address, epoch: bigint) {
+  const load = coalescingOwnedAccountLoader(kitBatchAccountLoader(createSolanaRpc(rpcUrl)));
+  const token = await resolveSvmToken(load, mint);
+  if (token.transferRefusals.length > 0) throw new Error(token.transferRefusals.join("; "));
+
+  return {
+    accounts: {
+      tokenProgram: token.tokenProgram,
+      mint: token.mint,
+      source: await svmTokenAccount(token, pot),
+    },
+    decimals: token.decimals,
+    // What to send at `epoch` for the destination to receive exactly 1,000 base units.
+    amount: svmTokenToSend(token, 1_000n, epoch),
+  };
+}
+```
+
+`svmTokenReceived` is the other direction: what a transfer of an amount delivers. Both apply the mint's transfer fee exactly as Token-2022 computes it. On the command line, `--account` names the same accounts by token: `program:PYUSD`, `mint:PYUSD`, `pot:PYUSD` ([CLI guide](cli.md#solana)).
+
 ## Two ways to run a program
 
 The released engine has two entry points, and the SDK builds a cook for each. A client chooses with

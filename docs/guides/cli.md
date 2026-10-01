@@ -1000,10 +1000,13 @@ Three things differ, and a fourth is Solana's alone: how the cook reaches the en
 **Accounts.** A Solana program declares every account it touches as an `Account` parameter of
 `main` — `Account<Writable>`, `Account<Signer>` — and `sauce compile --json` reports them in its
 `manifest`. Pass each to `simulate`, `run` and `tx` as `--account NAME=<value>`, where the value is
-an address, `pot` (the Pot, which the Kitchen signs for), `owner` (the signer), or a token account
-by whose it is: `pot:USDC` is the Pot's own USDC account — its associated token account for the
-mint, under the classic SPL Token program — `pot:<mint>` the same for any mint, and `owner:USDC` the
-owner's (a direct cook, `--via engine`, has no Pot, so no `pot:` account). A slot with no `--account` is named with the role it needs, and `simulate` notes each
+an address, `pot` (the Pot, which the Kitchen signs for), `owner` (the signer), or an account named
+by its token: `pot:USDC` is the Pot's own USDC account — its associated token account for the mint,
+under the token program that owns the mint — `pot:<mint>` the same for any mint, and `owner:USDC`
+the owner's (a direct cook, `--via engine`, has no Pot, so no `pot:` account); `mint:USDC` is the
+mint and `program:USDC` its token program, SPL Token or Token-2022, the accounts
+`transferChecked` takes. A registered symbol's program is the registry's; any other mint's is read
+from the cluster. A slot with no `--account` is named with the role it needs, and `simulate` notes each
 account it was given that the cluster does not have (a guard on it fails with no message of its
 own).
 
@@ -1058,7 +1061,8 @@ configure), and prints the signature, status and compute units — and the logs 
 program too large for one transaction is staged in a Kitchen code buffer first and the buffer is
 closed again after the cook — or when staging or the cook's rehearsal fails; if closing it fails,
 the run still prints the cook and warns with the buffer's address. A failure is named for the
-program the logs show failing — the Kitchen's or the engine's refusals by name. `tx` prints the
+program the logs show failing — the Kitchen's or the engine's refusals by name, and a token
+program's in the words it logged. `tx` prints the
 cook as a base64 transaction signed by no one, `{ chain, via, feePayer, pot, fee, maxExecutionFee,
 transaction }`, for the owner's wallet to sign; its blockhash expires in about a minute.
 

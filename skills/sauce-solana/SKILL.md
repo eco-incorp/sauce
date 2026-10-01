@@ -1,6 +1,6 @@
 ---
 name: sauce-solana
-description: Writing and running Sauce programs on Solana (the SVM target) — declaring every account as an Account parameter with Writable/Signer roles, the account manifest the compile returns, passing accounts by name with --account, the @sauce/token SPL arm (transfer, approve, balanceOf with account parameters), svm.call CPIs and svm.sload byte reads, account .owner and .dataLen checks, a 32-byte key as a define, runtime arguments without Account slots, and how a program runs with sauce run --chain solana, through the Kitchen on the owner's Pot or directly on the engine (--via engine). Use when the user targets Solana, SPL tokens, Token-2022, PDAs or CPIs, account manifests, lamport fees, CPI depth, LiteSVM, or Solana venues such as Raydium, Orca or Meteora.
+description: Writing and running Sauce programs on Solana (the SVM target) — declaring every account as an Account parameter with Writable/Signer roles, the account manifest the compile returns, passing accounts by name with --account, the @sauce/token arm for SPL Token and Token-2022 (balanceOf and the other reads, transferChecked and approveChecked for either program, the legacy transfer and approve) and what Token-2022's extensions do to a program (transfer fees, scaled UI amounts, pauses, frozen accounts, transfer hooks), svm.call CPIs and svm.sload byte reads, account .owner and .dataLen checks, a 32-byte key as a define, runtime arguments without Account slots, and how a program runs with sauce run --chain solana, through the Kitchen on the owner's Pot or directly on the engine (--via engine). Use when the user targets Solana, SPL tokens, Token-2022, PYUSD or tokenized stocks on Solana, PDAs or CPIs, account manifests, lamport fees, CPI depth, LiteSVM, or Solana venues such as Raydium, Orca or Meteora.
 ---
 
 # Sauce on Solana
@@ -10,8 +10,9 @@ A Solana program must declare every account it touches before it runs. In SauceS
 **account manifest**, and each is attached by name when the program runs. A program for Solana is
 compiled with `--chain solana`. Its signatures are annotated. Protocol namespaces and the token
 methods (`USDC.transfer(...)`) do not exist there; the `@sauce/token` functions do, with no import,
-and a registered token symbol (`USDC`, `USDT`, `WSOL`) is its mint's 32-byte key, a value they take:
-`balanceOf(USDC, account)`. `sauce globals --chain solana` lists the mints, and devnet's.
+and a registered token symbol (`USDC`, `USDT`, `WSOL`, `PYUSD`) is its mint's 32-byte key, a value
+they take: `balanceOf(USDC, account)`. `sauce globals --chain solana` lists the mints, devnet's, and
+which are Token-2022 mints.
 
 ```sauce chain=solana define=MINT
 const MINT = 0n; // the SPL mint's 32-byte key: a define replaces it
@@ -112,7 +113,8 @@ one, so a slot that must sign cannot be `pot` there.
 ## Token accounts
 
 An SPL token account is 165 bytes, and `acct.owner` is the program that owns it (the SPL Token
-program), not whose balance it is:
+program, or Token-2022), not whose balance it is. A Token-2022 account has the same first 165 bytes,
+then its extensions:
 
 | Bytes   | Field                              | Read                               |
 | ------- | ---------------------------------- | ---------------------------------- |
@@ -161,10 +163,11 @@ a given account the cluster does not have, and
 `sauce pot --chain solana --owner <pubkey> --config sauce.config.json` lists the Pot's account for
 each registered mint, whether it exists and what it holds.
 
-The Pot's USDC sits in its associated token account, the ATA of (Pot, mint). Derive it with
-`findAssociatedTokenPda` and create it with `getCreateAssociatedTokenIdempotentInstruction`, both
-from `@solana-program/token`, then fund it with an ordinary SPL transfer from any wallet: `--fund`
-is EVM only. `@solana/kit` and `@solana-program/token` are dependencies of the package, not of your
+The Pot's USDC sits in its associated token account, the ATA of (Pot, mint) under the mint's token
+program. Derive it with `findAssociatedTokenPda` and create it with
+`getCreateAssociatedTokenIdempotentInstruction`, both from `@solana-program/token`, passing the
+mint's token program as `tokenProgram` (Token-2022 for PYUSD), then fund it with an ordinary
+transfer from any wallet: `--fund` is EVM only. `@solana/kit` and `@solana-program/token` are dependencies of the package, not of your
 project: add them to it before importing them (to build a payer, derive an ATA or send a transfer).
 
 ## Transaction size
@@ -177,32 +180,89 @@ Kitchen, Pot or salt and adds about 100 bytes less: about 798 for the program an
 four accounts. What costs bytes:
 
 - each `require` message, byte for byte;
-- each `@sauce/token` call, which inlines its own checks and their reasons (a second `transfer` adds
-  about 50 bytes, a `balanceOf` about 140);
+- each `@sauce/token` function, which carries its own checks and their reasons: a `transfer` about
+  280 bytes and a second about 50, a `transferChecked` about 500, a first read (`balanceOf`) about
+  260, and a read of another kind about 40 more (the reads share their checks). A program that moves
+  a Token-2022 token and measures what arrived is past one transaction, and `sauce run` stages it;
 - each account, about 33 bytes;
 - arguments: `--compact-args` encodes them compactly (a `Uint256` takes 7 bytes instead of 32).
 
 ## `@sauce/token` on Solana
 
-The SPL arm takes the mint first, then the accounts: `transfer(mint, tokenProgram, source, dest,
-authority, amount)`, `approve(mint, tokenProgram, source, delegate, authority, amount)`,
-`transferFrom` (the same instruction: SPL has one transfer for owners and delegates),
-`balanceOf(mint, account)`, `allowance(mint, account, spender)`, `ownerOf(mint, account)`,
-`totalSupply(mintAccount)`, `decimals(mintAccount)`. Every function requires the classic SPL Token
-program as the account owner and callee, checks the mint, and rejects amounts above `u64`; a
-Token-2022 account is refused. Each check reverts with its reason, which `sauce simulate` prints:
-`not a token account` (Token-2022's too), `wrong mint`, `not a mint`, `uninitialized mint`,
-`not the token program` and `amount over u64`. SPL tracks one delegate per account, so a second
-`approve` replaces the first.
+Solana has two token programs, and every mint belongs to one, with every token account of it: the
+SPL Token program (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) or Token-2022
+(`TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`). USDC, USDT and WSOL are SPL Token mints; PYUSD and
+the tokenized stocks are Token-2022 mints. The arm takes the mint first, then the accounts:
+
+- **Reads, either program:** `balanceOf(mint, account)`, `allowance(mint, account, spender)`,
+  `ownerOf(mint, account)`, `totalSupply(mintAccount)`, `decimals(mintAccount)`.
+- **Checked writes, either program:** `transferChecked(mint, tokenProgram, source, mintAccount, dest,
+authority, amount, decimals)` and `approveChecked(mint, tokenProgram, source, mintAccount,
+delegate, authority, amount, decimals)`. `tokenProgram` is the program that owns the mint, the
+  source and the destination; the account after the source is the mint's own, which must be the
+  mint named first; `decimals` must be the mint's.
+- **Legacy writes, SPL Token only:** `transfer(mint, tokenProgram, source, dest, authority, amount)`,
+  `approve(mint, tokenProgram, source, delegate, authority, amount)`, and `transferFrom` (the same
+  instruction: SPL has one transfer for owners and delegates). They refuse a Token-2022 account or
+  program. Move a Token-2022 token with `transferChecked`: Token-2022 refuses its plain transfer for
+  a mint with a transfer fee, a transfer hook or a pause.
+
+Every function checks the account's program and mint, and every write rejects an amount above
+`u64`. Each check reverts with its reason, which `sauce simulate` prints: `not a token account`,
+`wrong mint`, `not a mint`, `uninitialized mint`, `not the token program`, `amount over u64`,
+`wrong decimals` and `transfer hook`. SPL tracks one delegate per account, so a second approval
+replaces the first.
 
 A transfer's `authority` may be the source's owner or its delegate, so a transfer that succeeds does
 not show whose account `source` is. `ownerOf(mint, account)` reads the token account's owner (the
-wallet or PDA whose balance it is, not `account.owner`, the SPL Token program): before treating a
+wallet or PDA whose balance it is, not `account.owner`, the token program): before treating a
 balance as the Pot's, `require(ownerOf(USDC, source) == authority, "not the Pot's account")`.
 
-Token-2022 and `TransferChecked` are not in the `@sauce/token` arm: a program for them calls the
-token program itself with `svm.call`, or is generated by the SDK's token builder from TypeScript
-(`sauce-typescript`).
+### Token-2022 mints and their extensions
+
+A Token-2022 mint carries extensions, which the token program applies to every transfer. What each
+does to a program:
+
+| Extension                                            | What a program sees                                                                                                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Transfer fee                                         | The destination receives the amount less the fee, which the mint withholds. Measure what arrived (`balanceOf` before and after), never the amount sent. |
+| Scaled UI amount                                     | A display multiplier, for wallets. Balances, amounts and transfers are raw base units; a program never sees a UI amount.                                |
+| Pausable                                             | While the issuer has paused the mint, every transfer fails: `Token-2022 refused: Transferring, minting, and burning is paused on this mint`.            |
+| Default account state, frozen                        | A new account starts frozen until the issuer thaws it, and a transfer into or out of a frozen account fails: `Token-2022 refused: Account is frozen`.   |
+| Transfer hook with no program                        | No hook: the mint transfers as any other. Tokenized stocks carry one.                                                                                   |
+| Transfer hook that names a program                   | Refused, `transfer hook`, before anything moves: the hook's own accounts are not passed.                                                                |
+| Permanent delegate, confidential transfers, metadata | Nothing for a program: reads and checked writes work as on a legacy mint.                                                                               |
+
+A paused mint or a frozen account fails the whole transaction with the token program's error, as
+any failed call does; `sauce simulate` prints it.
+
+```sauce chain=solana
+function main(
+  tokenProgram: Account,
+  source: Account<Writable>,
+  mint: Account,
+  destination: Account<Writable>,
+  pot: Account<Signer>,
+  amount: Uint256
+): Uint256 {
+  require(ownerOf(PYUSD, source) == pot.address, "not the Pot's account");
+  const before = balanceOf(PYUSD, destination);
+  transferChecked(PYUSD, tokenProgram, source, mint, destination, pot, amount, 6n);
+  return balanceOf(PYUSD, destination) - before;
+}
+```
+
+`--account` names each of its accounts by its token: `program:PYUSD` is the token program that owns
+the mint, `mint:PYUSD` the mint, `pot:PYUSD` the Pot's account for it and `owner:PYUSD` the
+owner's; any other mint by its base58 address (`program:<mint>`), its program read from the
+cluster. A token account's address derives from its owner, its mint and the mint's token program, so
+the Pot's PYUSD account is not where an SPL Token derivation puts it:
+
+```sh
+npx sauce run token-2022.sauce.ts --chain solana --config sauce.config.json --keypair <keypair> \
+  --account tokenProgram=program:PYUSD --account source=pot:PYUSD --account mint=mint:PYUSD \
+  --account destination=<token account> --account pot=pot --args 400
+```
 
 ## Running
 
@@ -254,5 +314,6 @@ npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypai
 ## Example
 
 [examples/solana.sauce.ts](examples/solana.sauce.ts) is the program above;
-[examples/solana.mts](examples/solana.mts) compiles it, checks the manifest order and roles and the
-arguments, and confirms the client refuses to run without an `rpcUrl`.
+[examples/token-2022.sauce.ts](examples/token-2022.sauce.ts) moves PYUSD with `transferChecked`;
+[examples/solana.mts](examples/solana.mts) compiles both, checks the manifest order and roles and the
+arguments, the mints' token programs, and confirms the client refuses to run without an `rpcUrl`.
