@@ -217,8 +217,21 @@ function argumentValues(params: readonly EntryParam[], args: ArgsInput): EntryVa
   });
 }
 
-/** The program with its encoded arguments appended: the `program` a cook runs. */
-export function payloadOf(program: CompiledSauceProgram, args: ArgsInput | undefined): Hex {
+/** Rewrites `main`'s values, and the parameters they are encoded for, before they are encoded. */
+export type AdaptArguments = (
+  program: CompiledSauceProgram,
+  values: EntryValue[],
+) => { readonly program: CompiledSauceProgram; readonly values: EntryValue[] };
+
+/**
+ * The program with its encoded arguments appended: the `program` a cook runs. `adapt` sees the
+ * values first (on Solana it turns a public key into the word the engine reads).
+ */
+export function payloadOf(
+  program: CompiledSauceProgram,
+  args: ArgsInput | undefined,
+  adapt?: AdaptArguments,
+): Hex {
   const params = program.entryParams;
   if (args === undefined) {
     if (params.length > 0) {
@@ -232,7 +245,9 @@ export function payloadOf(program: CompiledSauceProgram, args: ArgsInput | undef
   }
   let encoded: Uint8Array;
   try {
-    encoded = encodeEntryArguments(program, argumentValues(params, args));
+    const values = argumentValues(params, args);
+    const adapted = adapt === undefined ? { program, values } : adapt(program, values);
+    encoded = encodeEntryArguments(adapted.program, adapted.values);
   } catch (error) {
     if (error instanceof UsageError) throw error;
     throw new UsageError(`${args.from}: ${(error as Error).message}`);
