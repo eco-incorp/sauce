@@ -33,6 +33,7 @@ import {
   verifySignature,
   type Address,
   type KeyPairSigner,
+  type ReadonlyUint8Array,
   type Transaction,
 } from "@solana/kit";
 import { FailedTransactionMetadata } from "litesvm";
@@ -98,7 +99,22 @@ const json = (run: Run): Record<string, unknown> => {
 // The cluster: a JSON-RPC shim over the bank
 // ---------------------------------------------------------------------------------------------
 
-const b64 = (bytes: Uint8Array): string => getBase64Decoder().decode(bytes);
+const b64 = (bytes: ReadonlyUint8Array): string => getBase64Decoder().decode(bytes);
+
+/** An account as the JSON-RPC API encodes it (`encoding: "base64"`). */
+const rpcAccount = (account: {
+  readonly data: ReadonlyUint8Array;
+  readonly executable: boolean;
+  readonly lamports: bigint;
+  readonly programAddress: Address;
+}) => ({
+  data: [b64(account.data), "base64"],
+  executable: account.executable,
+  lamports: Number(account.lamports),
+  owner: account.programAddress,
+  rentEpoch: 0,
+  space: account.data.length,
+});
 
 /** A LiteSVM error as the JSON-RPC API spells it. */
 function rpcError(err: unknown): unknown {
@@ -223,20 +239,17 @@ function shim(harness: EngineHarness): {
       case "getAccountInfo": {
         const account = harness.svm.getAccount(address(params[0] as string));
 
+        return answer(id, { context, value: account.exists ? rpcAccount(account) : null });
+      }
+      case "getMultipleAccounts":
         return answer(id, {
           context,
-          value: account.exists
-            ? {
-                data: [b64(account.data), "base64"],
-                executable: account.executable,
-                lamports: Number(account.lamports),
-                owner: account.programAddress,
-                rentEpoch: 0,
-                space: account.data.length,
-              }
-            : null,
+          value: (params[0] as string[]).map((key) => {
+            const account = harness.svm.getAccount(address(key));
+
+            return account.exists ? rpcAccount(account) : null;
+          }),
         });
-      }
       case "simulateTransaction": {
         const refused = tooLarge(id, params[0] as string);
         if (refused !== undefined) return refused;
@@ -254,11 +267,25 @@ function shim(harness: EngineHarness): {
         const failed = result instanceof FailedTransactionMetadata;
         const meta = result.meta();
         const data = meta.returnData().data();
+        // The accounts asked for, as the transaction leaves them; a failed one leaves none.
+        const asked = (params[1] as { accounts?: { addresses: string[] } } | undefined)?.accounts;
+        const post = failed ? [] : result.postAccounts();
+        const accounts =
+          asked === undefined || failed
+            ? null
+            : asked.addresses.map((key) => {
+                // An account the transaction left with no lamports is closed: the RPC answers null.
+                const after = post.find((account) => account.address === key);
+                if (after !== undefined) return after.lamports > 0n ? rpcAccount(after) : null;
+                const now = harness.svm.getAccount(address(key));
+
+                return now.exists ? rpcAccount(now) : null;
+              });
 
         return answer(id, {
           context,
           value: {
-            accounts: null,
+            accounts,
             err: failed ? rpcError(result.err()) : null,
             logs: meta.logs(),
             returnData:
@@ -692,6 +719,69 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     const missing = await sauce(...base, "--salt", "vault", "--rpc-url", RPC_URL, "--args", "1");
     expect(missing.stderr).toMatch(
       /missing --account for tokenProgram \(readonly\), source \(writable\)/,
+    );
+  }, 60_000);
+
+  it("`sauce simulate` shows what the cook moved, from the accounts as it leaves them", async () => {
+    const pot = await potOf(hexToBytes(potSalt("vault")));
+    const { source, dest, flags } = accountsFor(pot, 1_000n);
+    const base = ["simulate", sweep, "--define", mintDefine, "--owner", owner.signer.address];
+    const flagged = [...base, "--salt", "vault", "--rpc-url", RPC_URL, ...flags];
+    const sentBefore = rpc.sent.length;
+    const out = json(await sauce(...flagged, "--json", "--args", "400"));
+    // In the transaction's account order, which follows the addresses: compared as a set.
+    expect(out.tokenChanges).toHaveLength(2);
+    expect(out.tokenChanges).toEqual(
+      expect.arrayContaining([
+        {
+          account: source,
+          label: "source",
+          mint,
+          owner: pot,
+          before: "1000",
+          after: "600",
+          delta: "-400",
+          decimals: 6,
+          formatted: "-0.0004",
+        },
+        {
+          account: dest,
+          label: "dest",
+          mint,
+          owner: expect.any(String),
+          before: "0",
+          after: "400",
+          delta: "400",
+          decimals: 6,
+          formatted: "0.0004",
+        },
+      ]),
+    );
+    // The owner pays the Kitchen's fee and the transaction's: its lamports fall by at least both.
+    const lamportChanges = out.lamportChanges as Array<{ account: string; delta: string }>;
+    const paid = lamportChanges.find((change) => change.account === owner.signer.address);
+    expect(paid).toMatchObject({ label: "the owner" });
+    expect(-BigInt(paid!.delta)).toBeGreaterThanOrEqual(FEE);
+    expect(lamportChanges).toContainEqual(
+      expect.objectContaining({ label: "the Kitchen's fee config", delta: FEE.toString() }),
+    );
+    // Read back, not applied: the accounts hold what they held.
+    expect(tokenAmount(harness, source)).toBe(1_000n);
+    expect(tokenAmount(harness, dest)).toBe(0n);
+    expect(rpc.sent.length).toBe(sentBefore);
+
+    const text = await sauce(...flagged, "--args", "400");
+    expect(text.stdout).toContain("Token balance changes:\n");
+    expect(text.stdout).toContain(
+      `\n  ${source} (source), owned by ${pot} (the Pot): -0.0004 of mint ${mint}\n`,
+    );
+    expect(text.stdout).toMatch(
+      new RegExp(`\\n {2}${dest} \\(dest\\), owned by \\w+: \\+0\\.0004 of mint ${mint}\\n`),
+    );
+    expect(text.stdout).toMatch(
+      new RegExp(
+        `Lamport changes:\\n(?: {2}.*\\n)*? {2}${owner.signer.address} \\(the owner\\): -\\d+ lamports, the transaction's fee included`,
+      ),
     );
   }, 60_000);
 
