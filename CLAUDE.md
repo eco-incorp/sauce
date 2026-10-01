@@ -407,6 +407,22 @@ ABIs come from Sourcify, Blockscout and keyless Etherscan-compatible APIs. The f
 or key; the suite greps it. Review the fixture diff before committing it: a changed selector map is
 a contract upgrade to look at, not noise.
 
+**Every token-registry row is pinned to the chain, offline, and the stock tokens come from their
+issuers.** `test/token-registry-evidence.test.ts` checks each EVM row of `TOKEN_REGISTRY` against
+`test/fixtures/token-registry/evidence.json`: code at the address, `symbol()` and `decimals()`.
+`node scripts/capture-token-registry.mjs --recapture --rpc-config rpc.config.json [--chains <id>,…]`
+(from `sdk/`, no build needed) writes it, reading endpoints only from that file, as the registry-ABI
+capture does. A row added without recapturing fails the test. The tokenized stocks (Backed's
+xStocks and bTokens and Ondo's on Ethereum, Coinbase's on Base) are
+`src/routes/stock-tokens.generated.ts`, written by `pnpm --filter './sdk' sync-stock-tokens` from
+each issuer's own list (`STOCK_ISSUERS` in `stock-tokens.ts`, never an aggregator), and merged into
+`TOKEN_REGISTRY` as rows with `stock`. Sync, then recapture, and review the address diff. A stock's symbol is its issuer's ticker with "." as "_"
+(`TSLAx`, `bTSLA`, `BRK_Bx`), so it is not always uppercase: the registry keeps symbols unique per
+chain without regard to case, and the CLI looks them up that way. Coinbase's are B20 tokens,
+precompiles of the Base node whose account holds the single byte `0xef`: anvil cannot run them
+(`OpcodeNotFound`), so no anvil-replayed suite can move one. Solana's tokenized stocks are all
+Token-2022 mints and are not registered (the SVM token arm takes classic SPL Token only).
+
 `src/std/` is the SauceScript **standard library** — source shipped for the compiler to consume, not
 TypeScript. `src/std/token/` is `@sauce/token` (an ERC20/SPL token interface behind one import), and
 **the SDK owns it**: this directory is the source of truth, edited here like any other source. The

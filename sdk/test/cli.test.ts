@@ -812,8 +812,25 @@ describe("sauce compile", () => {
     );
     expect(run.code).toBe(1);
     expect(run.stderr).toMatch(
-      /hint: USDT is not a registered token on base \(it has USDC, WETH\)/,
+      /hint: USDT is not a registered token on base \(it has USDC, WETH, 67 stock tokens\)/,
     );
+  });
+
+  it("names a stock token's symbol in its issuer's case", async () => {
+    const program = file(
+      "stock.sauce.ts",
+      "function main() {\n  require(SPCXC.balanceOf(ctx.self()) >= 0n);\n}\n",
+    );
+    const run = await sauce("compile", program, "--chain", "base");
+    expect(run.code).toBe(1);
+    expect(run.stderr).toContain(
+      "hint: SPCXC is SPCXc on base: a token's symbol is case-sensitive",
+    );
+    const fixed = file(
+      "stock-fixed.sauce.ts",
+      "function main() {\n  require(SPCXc.balanceOf(ctx.self()) >= 0n);\n}\n",
+    );
+    expect((await sauce("compile", fixed, "--chain", "base")).code).toBe(0);
   });
 
   it("needs no fee for --intent-execution-fee auto when no intent runs a program", async () => {

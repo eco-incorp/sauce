@@ -133,7 +133,12 @@ describe("sourceGlobals: the names a program on a chain may use", () => {
     const globals = sourceGlobals(base);
     expect(globals.tokens).toEqual(
       [...TOKEN_REGISTRY[8453]!]
-        .map(({ symbol, address, decimals }) => ({ symbol, address, decimals }))
+        .map(({ symbol, address, decimals, stock }) => ({
+          symbol,
+          address,
+          decimals,
+          ...(stock === undefined ? {} : { stock }),
+        }))
         .sort((a, b) => (a.symbol < b.symbol ? -1 : 1)),
     );
     expect(globals.defines).toEqual(chainDefines(base));
@@ -185,6 +190,10 @@ describe("sauce globals", () => {
     expect(all.code).toBe(0);
     expect(all.stdout).toMatch(
       /^ {2}USDC {2}0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 {2}6 decimals$/m,
+    );
+    // A stock token in its own list, with what it is, so a search for the company finds it.
+    expect(all.stdout).toMatch(
+      /^ {4}SPCXc +0xb2000000000000000000007b9fcbd005511aCBd5 {2}8 decimals {2}Space Exploration Technologies Corp\. \(Coinbase\)$/m,
     );
     expect(all.stdout).toMatch(/^ {2}UniswapV4 {2}\(Uniswap V4\)$/m);
     expect(all.stdout).toContain("transfer(token: Address, to: Address, amount: Uint256): void");

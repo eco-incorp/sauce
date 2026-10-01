@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { CANONICAL_CHAINS, getAllChainIds } from "../src/chains/index.js";
 import { listProtocols } from "../src/protocols/index.js";
 import { listDescriptors } from "../src/descriptors/query.js";
+import { STOCK_ISSUERS } from "../src/routes/stock-tokens.js";
 import { TOKEN_REGISTRY } from "../src/routes/token-registry.js";
 
 /** `TOKEN_REGISTRY` maps a chain id to a LIST of rows, not a symbol-keyed object. */
@@ -79,6 +80,16 @@ describe("docs/api/coverage.md still states the registry sizes it has", () => {
       /(\d+) symbols distributed across \d+ EVM chains/,
       () => new Set(Object.values(TOKEN_REGISTRY).flatMap(symbolsOf)).size,
     ],
+    [
+      "distinct stock symbols",
+      /(\d+) of them tokenized stocks/,
+      () =>
+        new Set(
+          Object.values(TOKEN_REGISTRY).flatMap((rows) =>
+            symbolsOf(rows.filter((row) => row.stock !== undefined)),
+          ),
+        ).size,
+    ],
   ])("%s", (_name, pattern, actual) => {
     expect(stated(pattern)).toBe(actual());
   });
@@ -91,8 +102,32 @@ describe("docs/api/coverage.md still states the registry sizes it has", () => {
       // after it, so the chain's display name can change without failing.
       const row = new RegExp(`\\|\\s*${chainId}\\s*\\|([^|]*)\\|`).exec(COVERAGE);
       expect(row).not.toBeNull();
-      for (const symbol of symbolsOf(rows)) {
+      // Its tokenized stocks are counted per issuer in the next table instead.
+      for (const symbol of symbolsOf(rows.filter((r) => r.stock === undefined))) {
         expect(row![1]).toContain(symbol);
+      }
+    }
+  });
+
+  it("counts every chain's tokenized stocks per issuer, with examples it registers", () => {
+    for (const [chainId, rows] of Object.entries(TOKEN_REGISTRY)) {
+      const counts = new Map<string, number>();
+      for (const row of rows) {
+        if (row.stock !== undefined) {
+          counts.set(row.stock.issuer, (counts.get(row.stock.issuer) ?? 0) + 1);
+        }
+      }
+      for (const [issuer, count] of counts) {
+        // `| Base | 8453 | Coinbase | 58 | `TSLAc`, `SPCXc`, `NVDAc` |`
+        const name = STOCK_ISSUERS[issuer as keyof typeof STOCK_ISSUERS].name;
+        const row = new RegExp(
+          `\\|\\s*${chainId}\\s*\\|\\s*${name}[^|]*\\|\\s*(\\d+)\\s*\\|([^|]*)\\|`,
+        ).exec(COVERAGE);
+        expect(row).not.toBeNull();
+        expect(Number(row![1])).toBe(count);
+        for (const [, symbol] of row![2]!.matchAll(/`([^`]+)`/g)) {
+          expect(rows.find((r) => r.symbol === symbol)?.stock?.issuer).toBe(issuer);
+        }
       }
     }
   });

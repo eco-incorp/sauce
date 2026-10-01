@@ -152,9 +152,16 @@ async function tokenOn(
   }
   const [given, decimalsText] = raw.split(":");
   if (given === undefined || !isAddress(given, { strict: false })) {
+    // The chain's tokens by name, less its tokenized stocks: Ethereum has over a thousand.
+    const listed = rows.filter((row) => row.stock === undefined).map((row) => row.symbol);
+    const stocks = rows.length - listed.length;
+    const more =
+      stocks > 0
+        ? `, one of its ${stocks} stock tokens (sauce globals --chain ${chain.slug} --tokens)`
+        : "";
     throw new UsageError(
       `--${flag}: '${raw}' is not a token on ${chain.slug}: one of ` +
-        `${rows.map((row) => row.symbol).join(", ") || "(none recorded)"}, or an address`,
+        `${listed.join(", ") || "(none recorded)"}${more}, or an address`,
     );
   }
   const address = getAddress(given);
@@ -184,7 +191,8 @@ async function tokenOn(
 
 /** Asks which token, from `chain`'s registry or by address. */
 async function askToken(ask: Ask, chain: CanonicalChain, question: string, fallback?: string) {
-  const rows = TOKEN_REGISTRY[chain.id] ?? [];
+  // A tokenized stock is still a choice by address: Ethereum has over a thousand of them.
+  const rows = (TOKEN_REGISTRY[chain.id] ?? []).filter((row) => row.stock === undefined);
   const choices = [
     ...rows.map((row) => ({ label: `${row.symbol} (${row.address})`, value: row.symbol })),
     { label: "another token, by address", value: "" },
