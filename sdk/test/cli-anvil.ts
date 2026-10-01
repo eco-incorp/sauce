@@ -18,6 +18,7 @@ import {
   createPublicClient,
   createTestClient,
   createWalletClient,
+  encodeAbiParameters,
   encodeFunctionData,
   getAddress,
   http,
@@ -28,18 +29,29 @@ import {
   type PublicClient,
   type TestClient,
   type WalletClient,
+  zeroAddress,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { requireChain, type CanonicalChain } from "../src/chains/canonical.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { v12EngineAddress } from "../src/deployments/index.js";
+import { ecoRoutesExecutorOf, ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 import * as gated from "./evm/gated-engine.js";
 
 export const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
-export const describeEvm = RUNTIME_HEX_PATH ? describe : describe.skip;
+/** jest's `describe`, as far as `describeEvm` uses it — typed here, and read when called rather
+ *  than when this module loads, so a suite on another runner (`mcp/test`) can import the harness. */
+interface Describe {
+  (name: string, fn: () => void): void;
+  readonly skip: (name: string, fn: () => void) => void;
+}
+const jestDescribe = (): Describe => (globalThis as unknown as { describe: Describe }).describe;
+/** `describe`, or `describe.skip` without the engine. */
+export const describeEvm = (name: string, fn: () => void): void =>
+  (RUNTIME_HEX_PATH ? jestDescribe() : jestDescribe().skip)(name, fn);
 if (!RUNTIME_HEX_PATH && process.env.CI) {
   throw new Error(
     "SAUCE_V12_RUNTIME_CREATION_HEX is unset in CI. This suite must never skip there — see the " +
@@ -237,6 +249,72 @@ export const potOwner = (local: LocalChain, pot: Address): Promise<Address> =>
 /** The registry's address for `symbol` on `chain`, as the program names it. */
 export const registered = (chain: CanonicalChain, symbol: string): Address =>
   getAddress(numberToHex(registryTokenAddress(chain, symbol)!, { size: 20 }));
+
+/** `code` with every copy of the 20-byte immutable `from` replaced by `to`: a runtime holds one
+ *  per place it reads the immutable. */
+function rewriteImmutable(code: Hex, from: Address, to: Address): Hex {
+  const needle = from.slice(2).toLowerCase();
+  const parts = code.toLowerCase().split(needle);
+  if (parts.length < 2) throw new Error(`the runtime holds no copy of ${from}`);
+
+  return parts.join(to.slice(2).toLowerCase()) as Hex;
+}
+
+/**
+ * The real eco-routes Portal (`evm/fixtures/Portal.json`, its own forge creation code) at the
+ * address the SDK records for `local`'s chain, with its Executor where the SDK derives it, so a
+ * fill runs the Portal's real `_fulfill` with no override.
+ *
+ * THE PORTAL IS PUT IN PLACE, NOT DEPLOYED THERE. A Portal's address is its deployer's, and its
+ * Executor is the Portal's own second CREATE (`ECO_ROUTES_EXECUTOR_NONCE`), with each holding the
+ * other's address as an immutable: the Portal's `executor`, the Executor's `portal` (its
+ * `onlyPortal` check). So this deploys the fixture wherever it lands, then copies both runtimes to
+ * the registry's Portal and the Executor derived from it, with exactly those two immutables
+ * rewritten to the new addresses. The Portal's other immutables are untouched: its chain id
+ * (anvil's, which `startChain` sets to the chain's), its vault implementation, and its EIP-712
+ * cache, which recomputes the domain for an address that is not the cached one.
+ */
+export async function placePortal(
+  local: LocalChain,
+): Promise<{ readonly portal: Address; readonly executor: Address }> {
+  const portal = getAddress(ecoRoutesPortal(local.chain.slug));
+  const executor = getAddress(ecoRoutesExecutorOf(portal));
+  const creation = (
+    JSON.parse(readFileSync(join(HERE, "evm/fixtures/Portal.json"), "utf8")) as {
+      creationCode: Hex;
+    }
+  ).creationCode;
+  const deployed = await local.plant(
+    `${creation}${encodeAbiParameters([{ type: "address" }], [zeroAddress]).slice(2)}` as Hex,
+  );
+  const itsExecutor = await local.publicClient.readContract({
+    address: deployed,
+    abi: PORTAL_EXECUTOR,
+    functionName: "executor",
+  });
+  const portalCode = await local.publicClient.getCode({ address: deployed });
+  const executorCode = await local.publicClient.getCode({ address: itsExecutor });
+  await local.testClient.setCode({
+    address: portal,
+    bytecode: rewriteImmutable(portalCode!, itsExecutor, executor),
+  });
+  await local.testClient.setCode({
+    address: executor,
+    bytecode: rewriteImmutable(executorCode!, deployed, portal),
+  });
+  const placed = await local.publicClient.readContract({
+    address: portal,
+    abi: PORTAL_EXECUTOR,
+    functionName: "executor",
+  });
+  if (getAddress(placed) !== executor) {
+    throw new Error(`the placed Portal's executor is ${placed}, not ${executor}`);
+  }
+
+  return { portal, executor };
+}
+
+const PORTAL_EXECUTOR = parseAbi(["function executor() view returns (address)"]);
 
 /** Deploys the owner's Pot with the transaction `sauce pot` prints, returning its address. */
 export async function deployPot(
