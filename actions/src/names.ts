@@ -111,13 +111,14 @@ export function chainNames(chain: CanonicalChain): ChainNames {
       });
     }
   }
-  const names: ChainNames = {
-    chain,
-    tokens: new Map(globals.tokens.map((t) => [t.symbol, t.address])),
-    stocks: new Set(globals.tokens.filter((t) => t.stock !== undefined).map((t) => t.symbol)),
-    contracts,
-    namespaces,
-  };
+  // The tokens and, among them, the stocks, in one pass: once per chain, as the whole listing is.
+  const tokens = new Map<string, Address>();
+  const stocks = new Set<string>();
+  for (const token of globals.tokens) {
+    tokens.set(token.symbol, token.address);
+    if (token.stock !== undefined) stocks.add(token.symbol);
+  }
+  const names: ChainNames = { chain, tokens, stocks, contracts, namespaces };
   cache.set(chain.id, names);
 
   return names;
