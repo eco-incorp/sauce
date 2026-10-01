@@ -10,8 +10,10 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -273,6 +275,56 @@ describe("install, update and status over a package upgrade", () => {
     updateTarget(project, upgraded, target!, true);
     expect(read(".claude/skills/alpha/SKILL.md")).toMatch(/alpha v2/);
     expect(statusOf(project, upgraded, target!).state).toBe("up to date");
+  });
+
+  it("refuses a record that names a file outside the skills directory, even with --force", () => {
+    const source = packageAt("1.0.0");
+    const [target] = targetsFor(["claude"]);
+    installTarget(project, source, target!);
+    // Outside the project entirely, with the digest the crafted record claims for it.
+    const victim = join(work, "victim.txt");
+    writeFileSync(victim, "keep me\n");
+    const sha256 = createHash("sha256").update("keep me\n").digest("hex");
+    const record = JSON.parse(read(`.claude/skills/${INSTALL_RECORD}`));
+    for (const key of ["../../victim.txt", "/etc/hosts", "alpha/../../../victim.txt", "a\\b"]) {
+      write(
+        `.claude/skills/${INSTALL_RECORD}`,
+        JSON.stringify({ ...record, files: { ...record.files, [key]: sha256 } }),
+      );
+      for (const force of [false, true]) {
+        expect(() => updateTarget(project, source, target!, force)).toThrow(
+          new RegExp(
+            `lists '${key.replace(/[\\.^$|?*+()[\]{}/]/g, "\\$&")}', which is not a file inside`,
+          ),
+        );
+      }
+      expect(() => statusOf(project, source, target!)).toThrow(/sauce did not write it/);
+    }
+    expect(readFileSync(victim, "utf8")).toBe("keep me\n");
+  });
+
+  it("does not write or delete through a symbolic link", () => {
+    const source = packageAt("1.0.0");
+    const [target] = targetsFor(["claude"]);
+    const elsewhere = join(work, "elsewhere");
+    mkdirSync(elsewhere);
+    mkdirSync(join(project, ".claude", "skills"), { recursive: true });
+    symlinkSync(elsewhere, join(project, ".claude", "skills", "alpha"));
+    expect(() => installTarget(project, source, target!)).toThrow(
+      /goes through the symbolic link \.claude\/skills\/alpha: sauce does not write or delete/,
+    );
+    expect(readdirSync(elsewhere)).toEqual([]);
+    // And an installed file swapped for a link is neither rewritten nor removed through it.
+    rmSync(join(project, ".claude"), { recursive: true });
+    installTarget(project, source, target!);
+    rmSync(join(project, ".claude/skills/beta"), { recursive: true });
+    symlinkSync(elsewhere, join(project, ".claude/skills/beta"));
+    writeFileSync(join(elsewhere, "SKILL.md"), "not sauce's\n");
+    rmSync(join(source.dir, "beta"), { recursive: true });
+    expect(() => updateTarget(project, { ...source, version: "1.1.0" }, target!, true)).toThrow(
+      /symbolic link/,
+    );
+    expect(readFileSync(join(elsewhere, "SKILL.md"), "utf8")).toBe("not sauce's\n");
   });
 
   it("never overwrites a file it did not write, even on the first install", () => {

@@ -35,7 +35,15 @@
  * reports, and fails while a target is outdated.
  */
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -305,14 +313,77 @@ interface InstallRecord {
   readonly files: Readonly<Record<string, string>>;
 }
 
+/** A record key as sauce writes one: a `/`-separated path to a file inside the skills directory —
+ *  never absolute, never climbing out with `..`, no empty or `.` segment, no backslash. */
+const inside = (key: string): boolean =>
+  key !== "" &&
+  !key.startsWith("/") &&
+  !key.includes("\\") &&
+  !/^[A-Za-z]:/.test(key) &&
+  key.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
+
+/**
+ * The install record in `dir`, refused unless it is one sauce could have written. Its keys become
+ * paths that `update` deletes and rewrites, so a record crafted to name `../../anything` — say, in a
+ * cloned repository — must never reach the filesystem.
+ */
 function readRecord(dir: string): InstallRecord | undefined {
   const path = join(dir, INSTALL_RECORD);
   if (!existsSync(path)) return undefined;
+  const refuse = (why: string): never => {
+    throw new CliError(`${path} ${why}: sauce did not write it. Delete it and install again.`);
+  };
+  let record: unknown;
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as InstallRecord;
+    record = JSON.parse(readFileSync(path, "utf8"));
   } catch {
-    throw new CliError(`${path} is not the record sauce writes: delete it and install again`);
+    return refuse("is not JSON");
   }
+  const { package: name, version, files } = (record ?? {}) as Partial<InstallRecord>;
+  if (
+    typeof name !== "string" ||
+    typeof version !== "string" ||
+    files === null ||
+    typeof files !== "object" ||
+    Array.isArray(files)
+  ) {
+    return refuse("is not the record sauce writes");
+  }
+  for (const [key, sha256] of Object.entries(files)) {
+    if (!inside(key)) return refuse(`lists '${key}', which is not a file inside ${dir}`);
+    if (typeof sha256 !== "string" || !/^[0-9a-f]{64}$/.test(sha256)) {
+      return refuse(`gives '${key}' no sha256`);
+    }
+  }
+
+  return { package: name, version, files };
+}
+
+/**
+ * Refuses a path, relative to `project`, that goes through a symbolic link: sauce writes and deletes
+ * only files that really are inside the project's skills directories.
+ */
+function refuseLinks(project: string, path: string): void {
+  let at = project;
+  for (const segment of path.split(sep)) {
+    at = join(at, segment);
+    const stat = lstatSync(at, { throwIfNoEntry: false });
+    // Not there yet, so neither is anything beyond it.
+    if (stat === undefined) return;
+    if (stat.isSymbolicLink()) {
+      throw new CliError(
+        `${path} goes through the symbolic link ${relative(project, at)}: sauce does not write or ` +
+          "delete through a link",
+      );
+    }
+  }
+}
+
+/** Writes `bytes` to `path` (relative to `project`), creating its directory — never through a link. */
+function place(project: string, path: string, bytes: Uint8Array | string): void {
+  refuseLinks(project, path);
+  mkdirSync(dirname(join(project, path)), { recursive: true });
+  writeFileSync(join(project, path), bytes);
 }
 
 function directoryStatus(project: string, source: SkillsSource, target: Target): TargetStatus {
@@ -398,9 +469,14 @@ export function statusOf(project: string, source: SkillsSource, target: Target):
 // Install and update
 // ---------------------------------------------------------------------------------------------
 
-function writeRecord(dir: string, source: SkillsSource, files: Record<string, string>): void {
+function writeRecord(
+  project: string,
+  target: Target,
+  source: SkillsSource,
+  files: Record<string, string>,
+): void {
   const record: InstallRecord = { package: source.packageName, version: source.version, files };
-  writeFileSync(join(dir, INSTALL_RECORD), `${JSON.stringify(record, null, 2)}\n`);
+  place(project, join(target.path, INSTALL_RECORD), `${JSON.stringify(record, null, 2)}\n`);
 }
 
 /** What `install` or `update` did to one target. */
@@ -417,12 +493,16 @@ function writeBlock(project: string, source: SkillsSource): void {
   const block = readBlock(project);
   const text = blockText(source);
   if (block !== undefined) {
-    writeFileSync(file, `${block.text.slice(0, block.start)}${text}${block.text.slice(block.end)}`);
+    place(
+      project,
+      INDEX_FILE,
+      `${block.text.slice(0, block.start)}${text}${block.text.slice(block.end)}`,
+    );
   } else if (existsSync(file)) {
     const existing = readFileSync(file, "utf8");
-    writeFileSync(file, `${existing.replace(/\n*$/, "\n\n")}${text}\n`);
+    place(project, INDEX_FILE, `${existing.replace(/\n*$/, "\n\n")}${text}\n`);
   } else {
-    writeFileSync(file, `${text}\n`);
+    place(project, INDEX_FILE, `${text}\n`);
   }
 }
 
@@ -458,12 +538,11 @@ export function installTarget(project: string, source: SkillsSource, target: Tar
       lines.push(`  kept       ${join(target.path, path)} (already there, and different)`);
       continue;
     }
-    mkdirSync(dirname(local), { recursive: true });
-    writeFileSync(local, bytes);
+    place(project, join(target.path, ...path.split("/")), bytes);
     recorded[path] = digest(bytes);
     lines.push(`  wrote      ${join(target.path, path)}`);
   }
-  writeRecord(dir, source, recorded);
+  writeRecord(project, target, source, recorded);
 
   return { target, lines: [`installed ${label(target)}`, ...lines] };
 }
@@ -516,6 +595,7 @@ export function updateTarget(
         continue;
       }
       if (bytes === undefined) {
+        refuseLinks(project, file.path);
         rmSync(local);
         removeEmptyParents(dirname(local), dir);
         counts.removed++;
@@ -523,15 +603,14 @@ export function updateTarget(
         continue;
       }
       if (file.change !== "current") {
-        mkdirSync(dirname(local), { recursive: true });
-        writeFileSync(local, bytes);
+        place(project, file.path, bytes);
         if (file.change === "add") counts.added++;
         else counts.updated++;
         lines.push(`  ${file.change === "add" ? "added  " : "updated"}    ${file.path}`);
       }
       recorded[path] = digest(bytes);
     }
-    writeRecord(dir, source, recorded);
+    writeRecord(project, target, source, recorded);
   }
 
   return {
