@@ -100,15 +100,16 @@ jobs:
         run: pnpm --filter './sdk' build
 
       # The build regenerates the agent skills' index of globals (`gen-skills-globals.mjs`, from
-      # `routes.sourceGlobals`, the list `sauce globals` prints). The index is committed, so a
-      # registry change that did not commit the regenerated index leaves the tree dirty here.
-      - name: Agent skills — the committed index of globals is current
+      # `routes.sourceGlobals`, the list `sauce globals` prints) and the protocol documents' index
+      # (`gen-skills-protocol-index.mjs`, from the protocol registry). Both are committed, so a
+      # registry change that did not commit the regenerated files leaves the tree dirty here.
+      - name: Agent skills — the committed generated indexes are current
         run: |
           set -euo pipefail
           if [ -n "$(git status --porcelain -- skills)" ]; then
             git status --porcelain -- skills
             git diff -- skills
-            echo "::error::the SDK build changed skills/: rebuild the SDK and commit skills/sauce-globals/references"
+            echo "::error::the SDK build changed skills/: rebuild the SDK and commit the regenerated skills/ files"
             exit 1
           fi
 

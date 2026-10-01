@@ -30,7 +30,8 @@
 //   7. every `@eco-incorp/sauce/...` subpath and `node_modules/@eco-incorp/sauce/...` path exists,
 //      and every identifier in inline code is one the package declares;
 //   8. the index of globals (sauce-globals/references) is what `gen-skills-globals.mjs` writes,
-//      everything it lists compiles on its chains, and every global a skill uses is listed;
+//      everything it lists compiles on its chains, and every global a skill uses is listed; the
+//      protocol documents' index is what `gen-skills-protocol-index.mjs` writes from the registry;
 //   9. the SauceScript reference (sauce-script/references) compiles every example it gives and is
 //      refused every form it rejects, with the messages it quotes.
 import { spawnSync } from "node:child_process";
@@ -51,6 +52,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 
 import { globalsIndex, renderGlobalsIndex } from "./gen-skills-globals.mjs";
+import { protocolIndex, renderProtocolIndex } from "./gen-skills-protocol-index.mjs";
 import { checkBuiltins, checkBuiltinsJson } from "./skills-check/builtins.mjs";
 
 // ---- Arguments and resolution -------------------------------------------------------------------
@@ -1062,6 +1064,23 @@ for (const [name, text] of Object.entries(renderGlobalsIndex(GLOBALS))) {
   for (const { where, text, defines } of sauceSources) uses(where, text, true, defines);
   for (const skill of skills)
     for (const span of inlineCode(skill)) uses(rel(skill.path), span, false);
+}
+
+// ---- 8b. The protocol documents' index: what gen-skills-protocol-index.mjs writes from the registry ------
+{
+  const path = join(PROTOCOL_DOCUMENTS, "index.md");
+  const text = renderProtocolIndex(
+    await protocolIndex(
+      sdk,
+      (slug) => load(`${PKG}/protocols/${slug}`),
+      (slug) => existsSync(join(PROTOCOL_DOCUMENTS, `${slug}.md`)),
+    ),
+  );
+  if (!existsSync(path) || read(path) !== text)
+    fail(
+      rel(path),
+      "is stale: rebuild the SDK (`gen-skills-protocol-index.mjs` writes it) and commit it",
+    );
 }
 
 // ---- 9. The SauceScript reference: every example compiles, every rejection is refused ---------------------

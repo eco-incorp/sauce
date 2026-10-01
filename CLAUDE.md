@@ -508,7 +508,12 @@ copies into a project: `sauce-overview` (the entry point), `sauce-script`, `sauc
 - **One set of protocol documents.** `skills/sauce-protocols/references/*.md` is the only copy of
   the per-protocol documents. `gen-embedded-sources.mjs` embeds them for `src/skills/loader.ts`, so
   the `/skills` export (`getProtocolSkill`, unchanged API) returns exactly what an agent reads.
-  Edit them there; `skills-loader.test.ts` pins the count.
+  Edit them there; `skills-loader.test.ts` pins the count. Their `index.md` is the exception: it is
+  GENERATED from the protocol registry (each protocol's category, recorded chains and template
+  names, and the protocols per chain) by `sdk/scripts/gen-skills-protocol-index.mjs` at the end of
+  every SDK `build`, committed and prettier-ignored like the globals index below, and held to the
+  registry by `skills:check` and CI's clean-tree check. A hand-kept chain table there had drifted;
+  change its prose in the generator.
 - **The index of globals is generated.** `sdk/scripts/gen-skills-globals.mjs` writes
   `skills/sauce-globals/references/{tokens,protocols,chains}.md` from `routes.sourceGlobals` — the
   function `sauce globals` prints, never a second derivation — at the end of every SDK `build`. The
