@@ -30,7 +30,14 @@ import {
   UsageError,
   walletName,
 } from "./sdk.js";
-import { chainRef, LIMITS, toolRegistrar, type ToolContext, type WalletContext } from "./tools.js";
+import {
+  chainRef,
+  LIMITS,
+  refusable,
+  toolRegistrar,
+  type ToolContext,
+  type WalletContext,
+} from "./tools.js";
 
 /** The wallet tools, in the order `tools/list` gives them. */
 export const WALLET_TOOL_NAMES = [
@@ -210,16 +217,14 @@ export function registerWalletTools(
               "logged.",
           ),
       },
-      // Each field optional: a refusal on a preview chain comes back as `refused` alone.
-      output: {
-        wallet: z.string().optional(),
-        from: z.string().optional(),
-        chain: z.string().optional(),
-        ok: z.boolean().optional(),
-        sent: z.array(z.looseObject({ hash: z.string(), status: z.string() })).optional(),
-        policy: z.string().nullable().optional(),
-        refused: z.looseObject({}).optional(),
-      },
+      output: refusable({
+        wallet: z.string(),
+        from: z.string(),
+        chain: z.string(),
+        ok: z.boolean(),
+        sent: z.array(z.looseObject({ hash: z.string(), status: z.string() })),
+        policy: z.string().nullable(),
+      }),
       annotations: SENDS,
     },
     async (args, reach) => {
