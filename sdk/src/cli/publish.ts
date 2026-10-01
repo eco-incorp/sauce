@@ -39,7 +39,7 @@ import type { PrivateKeyAccount } from "viem/accounts";
 import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm, hashIntent } from "../routes/encode.js";
 import { isTypeDeclaration } from "../routes/ast-walk.js";
-import type { LoweredIntent } from "../routes/intent-sugar.js";
+import type { LoweredIntent } from "../routes/intent-host.js";
 import {
   approvalTxs,
   assertIntentVault,

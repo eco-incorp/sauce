@@ -438,7 +438,6 @@ Each of these is a compile error naming the construct, never a silently differen
 - A missing `deadline`, a missing `creator`, or a missing `executionFee` for a program body.
 - A chain with no eco-routes deployment, or a pair with no prover deployed on both sides.
 - A program body that calls the function opening it.
-- A program body using a module variable that a local of the opening function shadows.
 
 Inside a program body an unknown name is the _compiler's_ error rather than this lowering's, and
 reads the same way: it names the variable that is not declared.

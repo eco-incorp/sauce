@@ -5,7 +5,8 @@
 //     from (`CONTRACT_LINKS`, every protocol's ABIs and deployments), and the TypeScript type of the
 //     host tree `Base.UniswapV3.QuoterV2`;
 //   src/routes/source-globals.generated.ts — the declarations a compiled route body sees: the same
-//     namespaces as Sauce scalars (`UniswapV3.QuoterV2`), the token symbols, and `available`.
+//     namespaces as Sauce scalars (`UniswapV3.QuoterV2`) and the token symbols. A name a chain lacks
+//     is zero there, so a program guards it with a comparison: `if (UniswapV3.Factory != 0n)`.
 //
 // WHERE A CONTRACT COMES FROM. A protocol's `addresses.ts` names each deployed contract by a role
 // key, and its `abis.ts` exports ABIs; `test/fixtures/registry-abi/targets.json` binds the two — it
@@ -310,7 +311,6 @@ const reserved = new Map([
   ["chain", "the chain front door"],
   ["chainId", "the chain id define"],
   ["CHAIN_ID", "the chain id define"],
-  ["available", "the presence check"],
 ]);
 function claim(name, what) {
   if (!ts.isIdentifierText(name, ts.ScriptTarget.Latest))
@@ -476,12 +476,6 @@ ${globalDeclarations.join("\n")}
   /** Destination chain identity supplied by openRoute. */
   const chainId: bigint;
   const CHAIN_ID: bigint;
-  /**
-   * Whether the destination chain has a registry contract or token, decided at compile time:
-   * \`available(UniswapV3.Factory)\`, \`available(Arbitrum.UniswapV3.Factory)\`, \`available(USDT)\`.
-   * A branch it rules out (\`if\`, \`?:\`, \`&&\`, \`||\`) is removed before anything in it resolves.
-   */
-  function available(name: bigint): boolean;
 }
 `;
 

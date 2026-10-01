@@ -57,8 +57,14 @@ describe("Arc: chain-scoped defines", () => {
       { pot: SHARED_POT, engine: ENGINE, value: ARC_EXECUTION_FEE },
       { defines: chainDefines(requireChain("arc")) },
     );
-    expect(compiled.source).toContain("__sauce_approve(USDC, ");
-    expect(compiled.source).toContain(decimal(ARC_SWAP_ROUTER02));
+    // The write is `@sauce/token`'s, on Arc's USDC, to Arc's SwapRouter02: the program the same
+    // call written by hand compiles to.
+    const written = routes.compileSauceRoute(
+      "arc",
+      `import { approve } from "@sauce/token";\napprove(${decimal(ARC_USDC)}, ${decimal(ARC_SWAP_ROUTER02)}, 1_000_000n);`,
+      { pot: SHARED_POT, engine: ENGINE, value: ARC_EXECUTION_FEE },
+    );
+    expect(compiled.compiled.bytecode[0]).toEqual(written.compiled.bytecode[0]);
     expect(compiled.compiled.bytecode[0]!.length).toBeGreaterThan(0);
     expect(compiled.calls).toHaveLength(1);
     expect(evm(compiled.calls[0]!.target)).toBe(SHARED_POT);
@@ -77,8 +83,12 @@ describe("Arc: chain-scoped defines", () => {
       "USDC.approve(Uniswap.UniversalRouter, 1_000_000n);",
       { pot: SHARED_POT, engine: ENGINE },
     );
-    expect(onArc.source).toContain(decimal("0x4fcA4a51Ab4F23A7447b3284fBd7D73289A89Fb1"));
-    expect(onBase.source).not.toContain(decimal("0x4fcA4a51Ab4F23A7447b3284fBd7D73289A89Fb1"));
+    const carries = (compiled: typeof onArc, address: string) =>
+      Buffer.from(compiled.compiled.bytecode[0]!)
+        .toString("hex")
+        .includes(address.slice(2).toLowerCase());
+    expect(carries(onArc, "0x4fcA4a51Ab4F23A7447b3284fBd7D73289A89Fb1")).toBe(true);
+    expect(carries(onBase, "0x4fcA4a51Ab4F23A7447b3284fBd7D73289A89Fb1")).toBe(false);
   });
 });
 

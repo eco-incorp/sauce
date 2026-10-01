@@ -17,7 +17,7 @@
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { chainAmbient, chainDefines } from "./ambient.js";
-import { isSauceClosure, sauceBodyToSource, type SauceBody } from "./closure.js";
+import { isSauceClosure, closureText, type SauceBody } from "./closure.js";
 import {
   encodeRewardEvm,
   encodeRewardSvm,
@@ -550,8 +550,10 @@ export function openRoute(
     execution = { pot: resolved.pot, engine: resolved.engine, value: evm.value };
   }
 
+  // A closure is compiled as the entry as it stands: its own text, `Function.prototype.toString`'s,
+  // with nothing wrapped around it or cut out of it.
   const closure = isSauceClosure(sauce);
-  const sauceSource = closure ? sauceBodyToSource(sauce) : sauce;
+  const sauceSource = closure ? closureText(sauce) : sauce;
 
   // Chain-scoped ambient defines (chainId, protocol/contract addresses, caller token symbols) sit
   // UNDERNEATH the caller's own IntentOptions.defines, which sits underneath the most-specific
@@ -596,20 +598,29 @@ export function openRoute(
 
   let compiledRoute: CompiledSauceRoute;
   try {
-    compiledRoute = compileScopedRoute(destination, sauceSource, execution, compileOptions, scope);
+    compiledRoute = compileScopedRoute(
+      destination,
+      sauceSource,
+      execution,
+      compileOptions,
+      scope,
+      closure ? "closure" : "module",
+    );
   } catch (err) {
-    // The compiler reports a free identifier as "`X` is not a declared variable", inside a larger
-    // rustc-style diagnostic — so match the sentence rather than a message prefix.
-    const undeclared =
-      err instanceof Error ? /`([^`]+)` is not a declared variable/.exec(err.message) : null;
-    if (closure && undeclared !== null) {
-      const name = undeclared[1]!;
+    // A free identifier is the compiler's `UnknownIdentifier`, located in the closure's own text.
+    const unknown = (
+      err as {
+        diagnostics?: { code?: string; start: { offset: number }; end: { offset: number } }[];
+      }
+    ).diagnostics?.find((diagnostic) => diagnostic.code === "UnknownIdentifier");
+    if (closure && unknown !== undefined) {
+      const name = sauceSource.slice(unknown.start.offset, unknown.end.offset);
       throw new Error(
         `openRoute: closure route body references '${name}', which is not defined — a closure ` +
           `captures nothing by construction; supply '${name}' via IntentOptions.defines (or a chain-scoped ` +
           `ambient define) instead.`,
         // Keep the compiler's own diagnostic reachable: this message names the fix, the cause
-        // carries the full rustc-style report the regex above only matched one sentence of.
+        // carries the full rustc-style report.
         { cause: err },
       );
     }

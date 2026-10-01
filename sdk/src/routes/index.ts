@@ -102,7 +102,7 @@ export type {
 } from "./sauce-route.js";
 export { decodeEntryArguments, encodeEntryArguments } from "./entry.js";
 export type { EntryParam, EntryValue } from "./entry.js";
-export type { LoweredIntent } from "./intent-sugar.js";
+export type { LoweredIntent } from "./intent-host.js";
 
 export {
   ECO_ROUTES_VAULT_PROXY_CREATION_CODE,
@@ -112,7 +112,7 @@ export {
 } from "./vault.js";
 export type { VaultConfig } from "./vault.js";
 
-export { isSauceClosure, sauceBodyToSource } from "./closure.js";
+export { closureText, isSauceClosure } from "./closure.js";
 export { chainAmbient, chainDefines } from "./ambient.js";
 export type { AmbientDefinesOptions } from "./ambient.js";
 export { sourceGlobals } from "./source-globals.js";
@@ -126,8 +126,6 @@ export type {
   SourceNamespace,
   SourceToken,
 } from "./source-globals.js";
-export { rewriteTokenMembers, REWRITABLE_METHODS, tokenImportLines } from "./token-rewrite.js";
-export type { SafeWrite, TokenImports, TokenRewriteResult, TokenSymbols } from "./token-rewrite.js";
 export {
   knownTokenSymbols,
   registryTokenAddress,

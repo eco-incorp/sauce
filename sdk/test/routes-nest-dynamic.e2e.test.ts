@@ -1483,7 +1483,6 @@ describeEvm("route nesting, executed", () => {
       // The author wrote none of this.
       expect(PROGRAM).not.toContain("publishAndFund");
       expect(PROGRAM).not.toContain("evm.call");
-      expect(compiled.source).toContain("evm.call(");
 
       const { status, logs } = await fulfil([
         {
@@ -2219,7 +2218,6 @@ describeEvm("route nesting, executed", () => {
         },
       );
       // The child's cook targets the derived Pot, chosen by the SDK.
-      expect(compiled.source).toContain("evm.call(");
 
       const { status, logs } = await fulfil([
         {

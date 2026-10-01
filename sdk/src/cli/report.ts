@@ -17,7 +17,7 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { chainDefines } from "../routes/ambient.js";
 import { walk, type AstNode } from "../routes/ast-walk.js";
 import { parseSauce } from "../routes/parse.js";
-import type { AccessorTarget } from "../routes/protocol-rewrite.js";
+import type { AccessorTarget } from "../routes/protocol-names.js";
 import { chainAccessorNames } from "../routes/sauce-route.js";
 import { resolveTokenMap } from "../routes/token-registry.js";
 import { pascalOfSlug } from "../routes/builder.js";

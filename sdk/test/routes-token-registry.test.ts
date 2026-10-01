@@ -14,7 +14,7 @@ import {
   resolveTokenMap,
   svmTokenRows,
 } from "../src/routes/token-registry.js";
-import { REWRITABLE_METHODS } from "../src/routes/token-rewrite.js";
+import { TOKEN_METHODS } from "../src/routes/host.js";
 import { NATIVE_MINT } from "../src/svm/prepends.js";
 import { USDC_MINT } from "../src/svm/venues/hylo/index.js";
 
@@ -35,7 +35,7 @@ describe("TOKEN_REGISTRY module-eval invariants", () => {
     for (const rows of Object.values(TOKEN_REGISTRY)) {
       for (const row of rows) {
         expect(row.symbol).toMatch(/^[A-Z][A-Z0-9]{1,10}$/);
-        for (const method of REWRITABLE_METHODS) {
+        for (const method of TOKEN_METHODS) {
           expect(row.symbol.toUpperCase()).not.toBe(method.toUpperCase());
         }
       }

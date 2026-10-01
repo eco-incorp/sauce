@@ -47,6 +47,39 @@ export interface EntryParam {
   readonly type: string;
 }
 
+/**
+ * `main`'s parameters as the compiler reports them (`CompileResult.entryParams`, an ABI signature)
+ * in the SauceScript spelling `EntryParam` carries — nothing is read from the source.
+ */
+export function entryParamsOf(
+  params: readonly {
+    readonly name: string;
+    readonly type: string;
+    readonly components?: unknown;
+  }[],
+): EntryParam[] {
+  return params.map((param) => ({ name: param.name, type: entryTypeOf(param) }));
+}
+
+function entryTypeOf(param: { readonly type: string; readonly components?: unknown }): string {
+  if (param.type.endsWith("[]")) {
+    return `${entryTypeOf({ ...param, type: param.type.slice(0, -2) })}[]`;
+  }
+  if (param.type === "tuple") {
+    const fields = (param.components as { name: string; type: string; components?: unknown }[])
+      .map((field) => `${field.name}: ${entryTypeOf(field)}`)
+      .join(", ");
+    return `{ ${fields} }`;
+  }
+  const scalar: Readonly<Record<string, string>> = {
+    address: "Address",
+    bool: "bool",
+    bytes: "bytes",
+    string: "string",
+  };
+  return scalar[param.type] ?? "Uint256";
+}
+
 /** A value for an entry parameter: a scalar as a bigint, safe-integer number or integer string, an
  *  address as hex, a `bool` as a boolean, `bytes` as a `Uint8Array` or hex, an array as an array,
  *  and a tuple as an array of its fields in order or an object naming them. */

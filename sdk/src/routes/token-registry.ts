@@ -1,7 +1,7 @@
 /**
- * Per-chain token symbol -> address registry, the DEFAULT source for U4's `rewriteTokenMembers`
- * (`token-rewrite.ts`) and the balance sugar it now also implements — so a bare `USDC.transfer(to,
- * amt)` inside a `Base.route(...)` compiles with NO `IntentOptions.tokenDefines`.
+ * Per-chain token symbol -> address registry, the DEFAULT source of the token symbols a chain's host
+ * declares (`host.ts`) — so a bare `USDC.transfer(to, amt)` inside a `Base.route(...)` compiles
+ * with NO `IntentOptions.tokenDefines`.
  *
  * DISCOVERY (measured, not assumed): this SDK has no existing per-chain token-address source to
  * reuse. `protocols/erc20/addresses.ts` is deliberately empty ("ERC20 is a standard interface, not
@@ -55,16 +55,10 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { CANONICAL_CHAINS, chainById } from "../chains/canonical.js";
 import type { AddressInput } from "./types.js";
 
-// Mirrors token-rewrite.ts's own `REWRITABLE_METHODS` -- duplicated here rather than imported.
-// token-rewrite.ts imports accessor-index.ts (for the balance-sugar holder-rejection checks),
-// which imports builder.ts, which imports intent-dsl.ts, which imports sauce-route.ts, which
-// imports THIS file (`resolveTokenMap`) -- so an import of token-rewrite.ts's export back here
-// would close a genuine module-eval cycle: this file's own top-level validation loop (below) runs
-// synchronously as part of resolving that cycle, before token-rewrite.ts's own top-level code has
-// reached its `export const REWRITABLE_METHODS = ...` line, tripping a TDZ `ReferenceError`
-// (confirmed reachable — this is not a hypothetical). Three well-known method names duplicated is
-// a far smaller cost than restructuring that import graph; token-rewrite.ts's own module doc cross-
-// references this list for anyone changing one who needs to remember the other.
+// The `Token` type's methods (`host.ts#TOKEN_METHODS`) -- duplicated here rather than imported,
+// since host.ts imports THIS file and this file's own top-level validation loop (below) runs while
+// that import resolves. A symbol may not be spelled like one: `USDC.transfer` is a method of the
+// symbol, never another symbol.
 const REWRITABLE_METHODS: ReadonlySet<string> = new Set([
   "transfer",
   "approve",
@@ -417,6 +411,17 @@ const tokensByChain = new Map<number, Readonly<Record<string, RegistryToken>>>()
 /** Every registry token on `chain`, by symbol, each a frozen {@link RegistryToken}: an EVM chain's
  *  tokens, or a Solana cluster's registered mints. The same objects on every call. Empty for a
  *  chain the registry has no row for. */
+/** Every token symbol some chain registers, EVM or Solana. */
+let anySymbols: ReadonlySet<string> | undefined;
+export function registryTokenSymbols(): ReadonlySet<string> {
+  anySymbols ??= new Set(
+    [...Object.values(TOKEN_REGISTRY), ...Object.values(SVM_TOKEN_REGISTRY)]
+      .flat()
+      .map((row) => row.symbol),
+  );
+  return anySymbols;
+}
+
 export function registryTokens(chain: CanonicalChain): Readonly<Record<string, RegistryToken>> {
   let tokens = tokensByChain.get(chain.id);
   if (tokens === undefined) {

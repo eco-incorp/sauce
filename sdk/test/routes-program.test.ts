@@ -306,9 +306,11 @@ describe("encodeEntryArguments", () => {
       "base",
       "function main(legs: { amount: Uint256; to: Address }[]) {}",
     );
+    // The compiler reports the parameter's type, whichever separator the source wrote.
     expect(semicolon.entryParams).toEqual([
-      { name: "legs", type: "{ amount: Uint256; to: Address }[]" },
+      { name: "legs", type: "{ amount: Uint256, to: Address }[]" },
     ]);
+    expect(semicolon.entryParams).toEqual(comma.entryParams);
     const legs = [[{ amount: 5n, to: PROVER }]];
     expect(encodeEntryArguments(semicolon, legs)).toEqual(encodeEntryArguments(comma, legs));
   });

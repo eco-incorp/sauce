@@ -20,16 +20,11 @@ import { requireChain } from "../src/chains/canonical.js";
 import { v12KitchenAddress } from "../src/deployments/index.js";
 import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { v12Kitchen } from "../src/evm/engine.js";
-import {
-  ecoRoutesExecutorOf,
-  ecoRoutesPortal,
-  ecoRoutesProver,
-} from "../src/protocols/eco-routes/lookup.js";
+import { ecoRoutesExecutorOf } from "../src/protocols/eco-routes/lookup.js";
 import { denormalizeToEvm } from "../src/routes/encode.js";
 import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
-import { rewriteIntentSugar } from "../src/routes/intent-sugar.js";
-import { compileSauceRoute } from "../src/routes/sauce-route.js";
+import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 
 const GUIDE = readFileSync(
@@ -37,31 +32,15 @@ const GUIDE = readFileSync(
   "utf8",
 );
 
-const BASE = requireChain("base");
 const ARBITRUM = requireChain("arbitrum");
-const ZORA = requireChain("zora");
 const CREATOR = "0x3333333333333333333333333333333333333333" as const;
+const RECIPIENT = 0x9999999999999999999999999999999999999999n;
 
-const context = (overrides: Record<string, unknown> = {}) =>
-  ({
-    source: BASE,
-    chains: new Map([
-      ["Arbitrum", ARBITRUM],
-      ["Zora", ZORA],
-    ]),
-    definesFor: () =>
-      new Map([
-        ["USDC", 0x7777777777777777777777777777777777777777n],
-        ["RECIPIENT", 0x9999999999999999999999999999999999999999n],
-      ]),
-    portalOf: (chain: typeof BASE) => ecoRoutesPortal(chain),
-    proverFor: (from: typeof BASE, to: typeof BASE) => ecoRoutesProver(from, to),
-    defaults: { deadline: 4_000_000_000n, creator: CREATOR },
-    compileChild: () => {
-      throw new Error("no child program expected in these cases");
-    },
-    ...overrides,
-  }) as never;
+/** `program` compiled for Base, with every intent option a refusal below does not take away. */
+const lower = (
+  program: string,
+  intents: Record<string, unknown> = { deadline: 4_000_000_000n, creator: CREATOR },
+) => compileSauceProgram("base", program, { defines: { RECIPIENT }, intents });
 
 const wrap = (body: string, reward = "{ tokens: [{ token: USDC, amount }] }", chain = "Arbitrum") =>
   `function main() {\n  const amount = 5n;\n  ${chain}(() => {\n    ${body}\n  }).reward(${reward});\n}`;
@@ -74,44 +53,42 @@ const REFUSALS: readonly {
 }[] = [
   {
     documented: "neither a compile-time value nor a variable of the enclosing program",
-    trigger: () => rewriteIntentSugar(wrap("USDC.transfer(mystery, amount);"), context()),
-    message: /neither a compile-time value nor a variable/,
+    trigger: () => lower(wrap("USDC.transfer(mystery, amount);")),
+    message: /`mystery` is not a declared variable/,
   },
   {
     documented: "a token entry missing `token` or `amount`",
     trigger: () =>
-      rewriteIntentSugar(
-        wrap("USDC.transfer(RECIPIENT, amount);", "{ tokens: [{ token: USDC }] }"),
-        context(),
-      ),
+      lower(wrap("USDC.transfer(RECIPIENT, amount);", "{ tokens: [{ token: USDC }] }")),
     message: /needs both `token` and `amount`/,
   },
   {
     documented: "A missing `deadline`",
-    trigger: () =>
-      rewriteIntentSugar(wrap("USDC.transfer(RECIPIENT, amount);"), context({ defaults: {} })),
+    trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);"), {}),
     message: /needs a `deadline`/,
   },
   {
     documented: "a missing `creator`",
-    trigger: () =>
-      rewriteIntentSugar(
-        wrap("USDC.transfer(RECIPIENT, amount);"),
-        context({ defaults: { deadline: 1n } }),
-      ),
+    trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);"), { deadline: 1n }),
     message: /needs a `creator`/,
   },
   {
     documented: "A chain with no eco-routes deployment",
     trigger: () =>
-      rewriteIntentSugar(wrap("USDC.transfer(RECIPIENT, amount);", undefined, "Zora"), context()),
+      lower(
+        wrap(
+          "Token(0x7777777777777777777777777777777777777777).transfer(RECIPIENT, amount);",
+          undefined,
+          "Zora",
+        ),
+      ),
     message: /eco-routes v3 is not deployed on zora/,
   },
   {
     documented: "A program body that calls the function opening it",
     trigger: () =>
-      rewriteIntentSugar(
-        `function payout(amount) {
+      lower(
+        `function payout(amount: Uint256) {
   Arbitrum(() => {
     if (amount > 0n) { payout(amount); }
   }).reward({ tokens: [{ token: USDC, amount }] });
@@ -119,28 +96,9 @@ const REFUSALS: readonly {
 function main() {
   payout(5n);
 }`,
-        context(),
+        { deadline: 4_000_000_000n, creator: CREATOR, executionFee: 0n },
       ),
-    message: /calls `payout`, the function that opens it/,
-  },
-  {
-    documented:
-      "A program body using a module variable that a local of the opening function shadows",
-    trigger: () =>
-      rewriteIntentSugar(
-        `let total = 0n;
-function half() {
-  return total / 2n;
-}
-function main() {
-  const total = 5n;
-  Arbitrum(() => {
-    if (half() > 0n) { USDC.transfer(RECIPIENT, total); }
-  }).reward({ tokens: [{ token: USDC, amount: total }] });
-}`,
-        context(),
-      ),
-    message: /module variable `total`, which a local of the function opening the intent shadows/,
+    message: /contains itself/,
   },
 ];
 
@@ -199,29 +157,17 @@ describe("the guide's refusal list is the lowering's", () => {
 });
 
 describe("the guide's account of which chain a name resolves on is the lowering's", () => {
-  // A different USDC per chain, so each part's chain shows in the address it names. Executed with
-  // the real registry, across three chains, in `routes-intent-chains.e2e.test.ts`.
-  const USDC_ON = new Map([
-    [BASE.slug, 0x1111111111111111111111111111111111111111n],
-    [ARBITRUM.slug, 0x2222222222222222222222222222222222222222n],
-  ]);
+  // The real registry, where USDC is a different address on each chain, so each part's chain shows
+  // in the address it names. Executed across three chains in `routes-intent-chains.e2e.test.ts`.
   const lowered = () =>
-    rewriteIntentSugar(
-      `function main() {
+    lower(`function main() {
   const amount = 5n;
   Arbitrum(() => {
     USDC.transfer(RECIPIENT, amount);
   }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount }] });
-}`,
-      context({
-        definesFor: (chain: typeof BASE) =>
-          new Map([
-            ["USDC", USDC_ON.get(chain.slug)!],
-            ["RECIPIENT", 0x9999999999999999999999999999999999999999n],
-          ]),
-      }),
-    ).intents[0]!.intent;
-  const onChain = (slug: string) => `0x${"00".repeat(12)}${USDC_ON.get(slug)!.toString(16)}`;
+}`).intents[0]!.intent;
+  const onChain = (slug: string) =>
+    `0x${"00".repeat(12)}${registryTokenAddress(requireChain(slug), "USDC")!.toString(16).padStart(40, "0")}`;
   const guide = GUIDE.replace(/\s+/g, " ");
 
   const CLAIMS: readonly { readonly documented: string; readonly holds: () => boolean }[] = [
@@ -236,16 +182,15 @@ describe("the guide's account of which chain a name resolves on is the lowering'
     },
     {
       documented: "| `.reward(...)` | The chain the program runs on | That chain's |",
-      holds: () => lowered().reward.tokens[0]!.token === onChain(BASE.slug),
+      holds: () => lowered().reward.tokens[0]!.token === onChain("base"),
     },
     {
-      // Through the real compile: a caller's `USDC` is Base's, so the reward's transfer into the
-      // vault is a call on it, while the Arbitrum body keeps Arbitrum's registry USDC.
+      // A caller's `USDC` is Base's: the reward it escrows, while the Arbitrum body keeps Arbitrum's
+      // registry USDC.
       documented: "is a name on the chain the program is compiled for",
       holds: () => {
         const chosen = 0x7777777777777777777777777777777777777777n;
-        const arbitrumUsdc = registryTokenAddress(ARBITRUM, "USDC")!.toString(16);
-        const source = compileSauceRoute(
+        const [intent] = compileSauceProgram(
           "base",
           `function main() {
   const amount = 5n;
@@ -253,13 +198,15 @@ describe("the guide's account of which chain a name resolves on is the lowering'
     USDC.transfer(RECIPIENT, amount);
   }).reward({ tokens: [{ token: USDC, amount }] });
 }`,
-          { pot: CREATOR, engine: CREATOR },
           {
             defines: { USDC: chosen, RECIPIENT: 1n },
             intents: { deadline: 4_000_000_000n, creator: CREATOR },
           },
-        ).source.toLowerCase();
-        return source.includes(`evm.call(${chosen}n`) && source.includes(arbitrumUsdc);
+        ).intents;
+        return (
+          BigInt(intent!.intent.reward.tokens[0]!.token) === chosen &&
+          intent!.intent.route.calls[0]!.target === onChain(ARBITRUM.slug)
+        );
       },
     },
   ];
@@ -274,6 +221,26 @@ describe("the guide's account of which chain a name resolves on is the lowering'
 
   it("no longer says every name inside the intent is the destination's", () => {
     expect(guide).not.toContain("Resolving it against the enclosing chain would put");
+  });
+
+  it("a body reading a module variable that a local of the opening function shadows compiles", () => {
+    // It used to be refused: the two `total`s are now each read from where they live.
+    expect(() =>
+      lower(
+        `let total = 0n;
+function half(): Uint256 {
+  return total / 2n;
+}
+function main() {
+  const total = 5n;
+  Arbitrum(() => {
+    if (half() > 0n) { USDC.transfer(RECIPIENT, total); }
+  }).reward({ tokens: [{ token: USDC, amount: total }] });
+}`,
+        { deadline: 4_000_000_000n, creator: CREATOR, executionFee: 0n },
+      ),
+    ).not.toThrow();
+    expect(GUIDE).not.toContain("a local of the opening function shadows");
   });
 });
 
@@ -298,7 +265,7 @@ describe("the guide's account of the destination Pot is the builder's", () => {
     .encodeDeployPot(ecoRoutesExecutorOf(PORTAL), SAUCE_INTENT_POT_SALT)
     .slice(2, 10);
   const programChild = () =>
-    compileSauceRoute(
+    compileSauceProgram(
       "base",
       `function main() {
   const amount = USDC.balanceOf(ctx.self());
@@ -306,12 +273,14 @@ describe("the guide's account of the destination Pot is the builder's", () => {
     if (amount > 0n) { USDC.transfer(RECIPIENT, amount); }
   }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount }] });
 }`,
-      { pot: PORTAL, engine: PORTAL },
       {
         defines: { RECIPIENT: 0x9999999999999999999999999999999999999999n },
         intents: { deadline: 4_000_000_000n, creator: CREATOR, executionFee: 0n },
       },
-    ).source.toLowerCase();
+    )
+      .intents[0]!.intent.route.calls.map((call) => call.data)
+      .join("")
+      .toLowerCase();
 
   const CLAIMS: readonly { readonly documented: string; readonly holds: () => boolean }[] = [
     {

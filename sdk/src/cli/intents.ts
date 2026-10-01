@@ -13,7 +13,7 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { v12PotAbi } from "../evm/engine.js";
 import { ecoRoutesExecutorOf } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm } from "../routes/encode.js";
-import type { LoweredIntent } from "../routes/intent-sugar.js";
+import type { LoweredIntent } from "../routes/intent-host.js";
 import { CliError, UsageError } from "./args.js";
 import { connect, kitchenFee, potState } from "./chain.js";
 

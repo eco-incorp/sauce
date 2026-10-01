@@ -1,28 +1,19 @@
 /**
- * The SDK's rewrites parse TypeScript-annotated SauceScript.
+ * TypeScript-annotated SauceScript through the route compiler.
  *
  * The compiler takes annotations, and needs them: an unannotated parameter is a number, so a helper
- * that takes or returns an array, a record or bytes has to say so. The token, protocol and intent
- * rewrites run before the compiler on the same source, and they parsed it as JavaScript, so an
- * annotated program failed in the SDK ("Unexpected token") before the compiler ever saw it.
- *
- * Each case below goes through the rewrite that has to parse it, and is checked against the
- * compiler: a rewrite that mangled an annotation would make the program fail to compile or change
- * what it compiles to.
+ * that takes or returns an array, a record or bytes has to say so. Nothing in the SDK reads the
+ * program's text, so an annotation reaches the compiler exactly as written; each case is checked
+ * against the compiler, so a program that changed on the way would fail to compile or compile to
+ * something else.
  */
-import { compileWithRs } from "../src/routes/rs-compile.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
-import { rewriteProtocolAccessors } from "../src/routes/protocol-rewrite.js";
-import { rewriteTokenFactory, rewriteTokenMembers } from "../src/routes/token-rewrite.js";
-import { requireChain } from "../src/chains/canonical.js";
-import { registryTokenAddress } from "../src/routes/token-registry.js";
 
 const EXECUTION = {
   pot: "0x1111111111111111111111111111111111111111",
   engine: "0x2222222222222222222222222222222222222222",
 } as const;
 const RECIPIENT = 0x9999999999999999999999999999999999999999n;
-const BASE = requireChain("base");
 
 /** Helpers that take and return arrays and records — they cannot be written without annotations. */
 const HELPERS = `interface Leg {
@@ -63,25 +54,24 @@ function main(amount: Uint256, to: Address): void {
     const out = compileSauceRoute("base", source, EXECUTION);
 
     expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
-    // The token write was rewritten and the annotations were left exactly where they were.
-    expect(out.source).toContain("__sauce_transfer(USDC, leg.to, leg.amount)");
-    expect(out.source).toContain("function doubled(xs: Uint256[]): Uint256[] {");
-    expect(out.source).toContain("const leg: Leg = legOf(");
+    // What the compiler was given is the program, annotations and all.
+    expect(out.source).toBe(source);
   });
 
-  it("compiles to the program the compiler makes of the source with the rewrite done by hand", () => {
-    // The only rewrite here is the protocol pass's bare `self`; the rest must reach the compiler
-    // byte for byte, annotations included.
+  it("compiles to the program the compiler makes of the source with its names written by hand", () => {
+    // The one name the chain gives this program is `self`, a read of `@sauce/context`; the rest
+    // reaches the compiler byte for byte, annotations included.
     const source = `${HELPERS}
 function main(amount: Uint256): Uint256 {
   const parts: Uint256[] = [amount, ctx.timestamp()];
   return total(doubled(parts)) + ctx.balance(self);
 }`;
     const routed = compileSauceRoute("base", source, EXECUTION);
-    const direct = compileWithRs({
-      source: source.replace("(self)", "(ctx.self())"),
-      target: "v12",
-    });
+    const direct = compileSauceRoute(
+      "base",
+      `import { self as me } from "@sauce/context";\n${source.replace("(self)", "(me())")}`,
+      EXECUTION,
+    ).compiled;
 
     expect(Array.from(routed.compiled.bytecode[0]!)).toEqual(Array.from(direct.bytecode[0]!));
   });
@@ -114,59 +104,5 @@ function main(amount: Uint256): Uint256 {
     });
 
     expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
-    expect(out.source).toContain("function main(amount: Uint256): void {");
-  });
-});
-
-describe("each rewrite parses annotations on its own", () => {
-  const annotated = `function pay(token: Address, to: Address, amount: Uint256): void {
-  const t = Token(token);
-  t.transfer(to, amount);
-}
-function main(to: Address): Uint256 {
-  pay(USDC, to, 1n);
-  return Aave.Pool.getUserAccountData(to).totalDebtBase;
-}`;
-
-  it("the token-member pass", () => {
-    const usdc = registryTokenAddress(BASE, "USDC")!;
-    const out = rewriteTokenMembers(
-      `function main(to: Address): Uint256 { return USDC.balanceOf(to); }`,
-      new Map([["USDC", usdc]]),
-    );
-    expect(out.source).toBe(
-      "function main(to: Address): Uint256 { return IERC20.at(USDC).balanceOf(to); }",
-    );
-  });
-
-  it("the Token(addr) pass", () => {
-    const out = rewriteTokenFactory(annotated);
-    expect(out.source).toContain(
-      "function pay(token: Address, to: Address, amount: Uint256): void {",
-    );
-    expect(out.source).toContain("const t = token;");
-    expect(out.source).toContain("__sauce_transfer(t, to, amount)");
-  });
-
-  it("the protocol-accessor pass", () => {
-    const out = rewriteProtocolAccessors(annotated, BASE);
-    expect(out.accessorSites).toBe(1);
-    expect(out.source).toContain("function main(to: Address): Uint256 {");
-  });
-
-  it("reads an annotated parameter as the binding it is", () => {
-    // `self` as an annotated parameter is a declaration, so the whole-program shadow rule leaves
-    // every `self` alone, exactly as it does for an unannotated one.
-    const out = rewriteProtocolAccessors(
-      "function f(self: Address): Address { return self; }\nfunction main(): Address { return f(self); }",
-      BASE,
-    );
-    expect(out.source).toBe(
-      "function f(self: Address): Address { return self; }\nfunction main(): Address { return f(self); }",
-    );
-  });
-
-  it("still reports a syntax error as one", () => {
-    expect(() => rewriteProtocolAccessors("function main( { }", BASE)).toThrow(SyntaxError);
   });
 });

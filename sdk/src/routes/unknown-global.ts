@@ -2,43 +2,28 @@
  * A name used as a token or a protocol that the destination does not have, reported as that.
  *
  * `DAIX.balanceOf(x)` and `Uniswapp.UniversalRouter` name nothing: not a registered token, not a
- * protocol, not a declaration of the program and not a builtin. The token and protocol rewrites
- * leave a name they do not know alone, which is right for them, so it reached the compiler, and the
- * compiler could only say "`this call expression` cannot be lowered to IR yet". The route compiler
- * knows what the chain has, so it says which name, on which chain, and what it probably meant.
+ * protocol, not a declaration of the program and not a builtin. The chain's host (`host.ts`)
+ * declares nothing for them, so the compiler refuses the program and says where — a structured
+ * diagnostic with a `code` and the span of the name. The route compiler knows what the chain has,
+ * so it says which name, on which chain, and what it probably meant.
  *
- * Consulted only once the compiler has refused the program (`sauce-route.ts`), on the source it
- * refused. So a program the compiler accepts is never refused here, and a name only the compiler
- * knows — an export of an ambient module — cannot be mistaken for an unknown one. By then a
- * registered token is a define, and every protocol namespace and chain key the registry knows has
- * been resolved, or refused with the protocol rewrite's own error.
+ * Consulted only once the compiler has refused the program, on the diagnostics it threw: a program
+ * the compiler accepts is never refused here, and the name is the text the compiler pointed at.
  */
 import type { CanonicalChain } from "../chains/canonical.js";
 import { addressOn } from "../descriptors/query.js";
-import { collectDeclaredNames, walk, type AstNode } from "./ast-walk.js";
-import { isChainKey, NAMESPACE_KEYS, resolveNamespace } from "./accessor-index.js";
+import { NAMESPACE_KEYS, resolveNamespace } from "./accessor-index.js";
 import { pascalOfSlug } from "./builder.js";
-import { parseSauce } from "./parse.js";
 
-/** The compiler's own namespace roots, and the `self` sugar the protocol rewrite resolves. */
-const BUILTIN_ROOTS: ReadonlySet<string> = new Set([
-  "ctx",
-  "crypto",
-  "Math",
-  "abi",
-  "evm",
-  "svm",
-  "self",
-]);
+/** The diagnostics a name nothing declares produces: an unknown value, or a call of one. */
+const UNKNOWN_CODES: ReadonlySet<string> = new Set(["UnknownIdentifier", "UnresolvedCall"]);
 
-/** What else gives a name meaning in this compile, beside the program's own declarations. */
-export interface KnownNames {
-  /** Every compile-time value the compile defines: token symbols, chain values, caller defines. */
-  readonly defines: Iterable<string>;
-  /** Contract bindings the caller supplies (`compile.contracts`). */
-  readonly contracts: Iterable<string>;
-  /** The chain's registered token symbols, for suggestions. */
-  readonly tokens: Iterable<string>;
+/** The part of a diagnostic this reads. */
+interface Located {
+  readonly path?: string;
+  readonly code?: string;
+  readonly start: { readonly offset: number };
+  readonly end: { readonly offset: number };
 }
 
 /** Optimal string alignment distance: edits, with an adjacent swap counting as one. */
@@ -100,37 +85,40 @@ function headline(error: unknown): string | undefined {
 }
 
 /**
- * For a compile that failed with `cause`: an error naming the first member access (`X.y`,
- * `X.y(...)`) whose root `X` nothing gives meaning to on `chain`, with the chain's near matches
- * among its tokens and protocols. `undefined` when there is none, and the compiler's error stands.
+ * For a compile of `source` (the entry, at `entry`) that failed with `cause`: an error naming the
+ * first name the compiler could not resolve whose root is a dotted member (`X.y`, `X.y(...)`) and
+ * one the chain's host `declined` when the compiler asked about it, with
+ * the chain's near matches among `tokens` and its protocols. `undefined` when there is none, and the
+ * compiler's error stands.
  */
 export function unknownGlobalError(
   source: string,
+  entry: string,
   chain: CanonicalChain,
-  known: KnownNames,
+  declined: ReadonlySet<string>,
+  tokens: Iterable<string>,
   cause: unknown,
 ): Error | undefined {
-  const program = parseSauce(source);
-  const meaningful = new Set([
-    ...collectDeclaredNames(program),
-    ...known.defines,
-    ...known.contracts,
-    ...BUILTIN_ROOTS,
-  ]);
-  let unknown: AstNode | undefined;
-  walk(program, (node) => {
-    if (unknown !== undefined || node.type !== "MemberExpression") return;
-    if ((node as { computed?: boolean }).computed === true) return;
-    const object = (node as { object?: AstNode }).object;
-    if (object?.type !== "Identifier") return;
-    const name = (object as unknown as { name: string }).name;
-    if (meaningful.has(name) || isChainKey(name) || resolveNamespace(name) !== undefined) return;
-    unknown = object;
-  });
-  if (unknown === undefined) return undefined;
+  const diagnostics =
+    (cause as { diagnostics?: readonly Located[] } | undefined)?.diagnostics ?? [];
+  const name = diagnostics
+    .filter((d) => d.path === entry && d.code !== undefined && UNKNOWN_CODES.has(d.code))
+    // The name as written, when it is the root of a member access: the span is the access, or
+    // the root alone with a `.` after it.
+    .map((d) => {
+      const text = source.slice(d.start.offset, d.end.offset);
+      const root = /^[A-Za-z_$][\w$]*/.exec(text)?.[0];
+      const member =
+        root !== undefined &&
+        (text[root.length] === "." || (text === root && source[d.end.offset] === "."));
+      // Only a name the chain's host was asked about and does not declare: a name the program
+      // binds — a local, an import — is never asked about.
+      return root !== undefined && member && declined.has(root) ? root : undefined;
+    })
+    .find((root): root is string => root !== undefined);
+  if (name === undefined) return undefined;
 
-  const name = (unknown as unknown as { name: string }).name;
-  const matches = nearMatches(name, [...known.tokens, ...protocolsOn(chain)]);
+  const matches = nearMatches(name, [...tokens, ...protocolsOn(chain)]);
   const suggestion =
     matches.length === 0
       ? ""

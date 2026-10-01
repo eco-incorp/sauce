@@ -34,7 +34,7 @@ export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
 import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
 import { MAX_SQRT_PRICE_X96, MIN_SQRT_PRICE_X96 } from "../price.js";
 import type { IntentFundVia } from "../routes/portal.js";
-import type { AccessorTarget } from "../routes/protocol-rewrite.js";
+import type { AccessorTarget } from "../routes/protocol-names.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import {
   compileSauceProgram,

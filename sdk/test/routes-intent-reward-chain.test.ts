@@ -8,9 +8,9 @@
  * the whole fulfilment. A body token resolved on the enclosing chain is not a token where the body
  * runs, so the intent can never be fulfilled.
  *
- * Every compile the route pipeline makes is recorded — the program's, and each nested intent's
- * program — so each level's `publish` is decoded from that level's own lowered source, with
- * the Portal's ABI, and checked against the chain it runs on. Three paths build the same programs:
+ * Every intent the compile binds is recorded — the program's, and each nested intent's — with the
+ * arguments its `@sauce/intents` call receives, so each level's `publish` is decoded from the bytes
+ * that level sends, with the Portal's ABI, and checked against the chain it runs on. Three paths build the same programs:
  * a plain `compileSauceRoute`, one handed a chain's ambient defines as its `defines`, and the
  * `Base(program, options)` builder. Each case uses the SDK's REAL registry, where `USDC` is a
  * different address on every chain involved; a suite that gives a symbol one address everywhere
@@ -21,7 +21,14 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { bytesToHex, decodeAbiParameters, decodeFunctionData, erc20Abi, type Hex } from "viem";
+import {
+  bytesToHex,
+  decodeAbiParameters,
+  decodeFunctionData,
+  erc20Abi,
+  hexToBytes,
+  type Hex,
+} from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
 import { v12EngineAddress } from "../src/deployments/index.js";
@@ -38,28 +45,69 @@ import { registryTokenAddress } from "../src/routes/token-registry.js";
 const { jest } = import.meta as unknown as {
   jest: { unstable_mockModule(path: string, factory: () => unknown): void };
 };
-const real = await import("../src/routes/rs-compile.js");
+const realCompile = await import("../src/routes/rs-compile.js");
+const realIntents = await import("../src/routes/intent-host.js");
 
+type Bound = ReturnType<ReturnType<typeof realIntents.intentHost>["bind"]>;
 interface Compile {
-  readonly source: string;
+  /** Where the program publishing the intent runs. */
+  readonly on: string;
+  /** The defines that program was compiled with: the caller's own, never a chain's names. */
   readonly defines: Readonly<Record<string, bigint | boolean | number>>;
-  readonly bytecode: Hex;
+  /** What its `@sauce/intents` call receives: the Portal, the publish calldata and its splices, … */
+  readonly bound: Bound;
+  /** The program the intent's body compiled to, when it is one. */
+  readonly body?: Hex;
 }
-/** Every compile since the last `record()`, in the order the pipeline made them: a nested
- *  intent's program is compiled while its parent is being lowered, so it comes first. */
+/** Every intent bound since the last `record()`, in the order the compile bound them: a nested
+ *  intent's is bound while its parent's body compiles, so it comes first. */
 let compiles: Compile[] = [];
+/** The defines of the compile in progress at each depth: the root's, then each body's. */
+let rootDefines: Readonly<Record<string, bigint | boolean | number>> = {};
 jest.unstable_mockModule("../src/routes/rs-compile.js", () => ({
-  ...real,
-  compileWithRs: (input: Parameters<typeof real.compileWithRs>[0]) => {
-    const result = real.compileWithRs(input);
-    compiles.push({
-      source: input.source,
-      defines: input.defines ?? {},
-      bytecode: bytesToHex(result.bytecode[0]!),
-    });
-    return result;
+  ...realCompile,
+  compileWithRs: (input: Parameters<typeof realCompile.compileWithRs>[0]) => {
+    rootDefines = input.defines ?? {};
+    return realCompile.compileWithRs(input);
   },
 }));
+jest.unstable_mockModule("../src/routes/intent-host.js", () => ({
+  ...realIntents,
+  intentHost: (level: Parameters<typeof realIntents.intentHost>[0]) => {
+    const host = realIntents.intentHost({
+      ...level,
+      programOn: (destination) => {
+        const options = level.programOn(destination);
+        definesOfLevel.set(
+          destination.slug,
+          Object.fromEntries((options.defines ?? []).map(([name, value]) => [name, BigInt(value)])),
+        );
+        return options;
+      },
+    });
+    return {
+      ...host,
+      bind: (site: Parameters<typeof host.bind>[0]) => {
+        const bound = host.bind(site);
+        const body =
+          site.receiver !== undefined && "fields" in site.receiver
+            ? site.receiver.fields[0]?.[1]
+            : undefined;
+        compiles.push({
+          on: level.source.slug,
+          defines: definesOfLevel.get(level.source.slug) ?? rootDefines,
+          bound,
+          ...(body !== undefined && "program" in body
+            ? { body: bytesToHex(body.program.bytecode) }
+            : {}),
+        });
+        return bound;
+      },
+    };
+  },
+}));
+/** Each body's chain -> the defines its program was given, as the level opening it chose them. */
+const definesOfLevel = new Map<string, Readonly<Record<string, bigint | boolean | number>>>();
 const { compileSauceRoute } = await import("../src/routes/sauce-route.js");
 const { openRoute } = await import("../src/routes/intent-dsl.js");
 const { chainDefines } = await import("../src/routes/ambient.js");
@@ -136,6 +184,7 @@ const CHAIN_DEFINE_PATHS = PATHS.slice(1);
 /** Runs `build` and returns every compile it made. */
 function record(build: () => void): Compile[] {
   compiles = [];
+  definesOfLevel.clear();
   build();
   return compiles;
 }
@@ -154,26 +203,21 @@ interface DecodedRoute {
 /** A value the program would splice in at run time, filled with this so the payload decodes. */
 const SPLICED = 0x5911ced5911ced5911ced5911ced5911ced5911cedn;
 
+/** A bound byte string with each run-time value written in as {@link SPLICED}. */
+function filled(argument: Bound[number]): Hex {
+  if (!("bytes" in argument)) throw new Error("expected a byte string");
+  const bytes = new Uint8Array(argument.bytes);
+  const word = hexToBytes(`0x${SPLICED.toString(16).padStart(64, "0")}`);
+  for (const splice of argument.splices ?? []) bytes.set(word, splice.offset);
+  return bytesToHex(bytes);
+}
+
 /**
- * The `publish` a lowered site sends, rebuilt from the rewritten source: its literal hex
- * segments, concatenated around a fixed word wherever the program splices a run-time value. What
- * comes back is decoded by the Portal's ABI — so it is the intent as the Portal would receive it.
+ * The `publish` a bound site sends: its calldata, with a fixed word wherever the program splices a
+ * run-time value, decoded by the Portal's ABI — so it is the intent as the Portal would receive it.
  */
-function publishedBy(source: string, site = 0) {
-  const segments = new Map<string, string>();
-  for (const [, name, hex] of source.matchAll(/const (i\d+_s\d+) = hex`([0-9a-f]*)`;/g)) {
-    segments.set(name!, hex!);
-  }
-  const data = new RegExp(`const i${site}_data = ([^;]+);`).exec(source)?.[1];
-  if (data === undefined) throw new Error(`no lowered intent #${site} in the source`);
-  const parts = [
-    data.split(".concat(")[0]!,
-    ...[...data.matchAll(/\.concat\(([^)]+\)?)\)/g)].map((m) => m[1]!),
-  ];
-  const payload = parts
-    .map((part) => segments.get(part) ?? SPLICED.toString(16).padStart(64, "0"))
-    .join("");
-  const { args } = decodeFunctionData({ abi: PortalABI, data: `0x${payload}` });
+function publishedBy(bound: Bound) {
+  const { args } = decodeFunctionData({ abi: PortalABI, data: filled(bound[1]!) });
   const [destination, routeBytes, reward] = args as unknown as [
     bigint,
     Hex,
@@ -184,30 +228,28 @@ function publishedBy(source: string, site = 0) {
   return { destination, route, reward };
 }
 
-/** Every address the rewritten source calls, reads or code-checks, in source order. */
-function addressesUsedBy(source: string): { readonly kind: string; readonly target: Hex }[] {
-  const used = [...source.matchAll(/(evm\.static|evm\.call|ctx\.codeSize)\((\d+)n/g)].map((m) => ({
-    kind: m[1]!,
-    target: address(BigInt(m[2]!)),
-  }));
-  // Every such call, or none of them: an address spelled any other way (a hex literal, a local)
-  // would otherwise drop out of the list, and the checks over it would pass having checked nothing.
-  const calls = source.match(/(evm\.static|evm\.call|ctx\.codeSize)\(/g) ?? [];
-  if (used.length === 0 || used.length !== calls.length) {
-    throw new Error(`read ${used.length} of the ${calls.length} addresses the source calls`);
+/** The Portal a bound site publishes through and funds the vault of, and the reward tokens it
+ *  transfers there: what `@sauce/intents#publish` is handed. */
+function fundingOf(bound: Bound): { readonly portal: Hex; readonly tokens: readonly Hex[] } {
+  const portal = bound[0]!;
+  if (!("value" in portal)) throw new Error("expected the Portal as a word");
+  const rewards = hexToBytes(filled(bound[3]!));
+  const tokens: Hex[] = [];
+  for (let at = 0; at < rewards.length; at += 64) {
+    tokens.push(lower(`0x${bytesToHex(rewards.slice(at, at + 32)).slice(26)}`) as Hex);
   }
-  return used;
+  return { portal: lower(portal.value) as Hex, tokens };
 }
 
-/** Each compile that lowered an intent, keyed `<on>-><to>` by the chains the test knows it spans.
- *  `on` is where the compiled program runs; the intent it publishes goes to `to`. */
+/** Each bound intent, keyed `<on>-><to>` by the chains the test knows it spans. `on` is where the
+ *  program publishing it runs; the intent goes to `to`. */
 function levelsOf(recorded: readonly Compile[], topology: Readonly<Record<string, Slug>>) {
   const levels = new Map<string, Compile & { readonly intent: ReturnType<typeof publishedBy> }>();
   for (const compile of recorded) {
-    if (!/const i0_data = /.test(compile.source)) continue;
-    const intent = publishedBy(compile.source);
+    const intent = publishedBy(compile.bound);
     const to = (Object.keys(topology) as Slug[]).find((slug) => idOf(slug) === intent.destination);
-    if (to === undefined) throw new Error(`an intent to chain ${intent.destination} was lowered`);
+    if (to === undefined) throw new Error(`an intent to chain ${intent.destination} was bound`);
+    expect(compile.on).toBe(topology[to]);
     levels.set(`${topology[to]}->${to}`, { ...compile, intent });
   }
   return levels;
@@ -229,30 +271,23 @@ function expectLevel(
   const { destination, route, reward } = level.intent;
   expect(destination).toBe(idOf(to));
 
-  // Funded here: the reward token, and every address the funding touches — `on`'s Portal, asked
-  // for the intent's vault, then the reward token's transfer into it, then the same Portal's
-  // `publish`.
+  // Funded here: the reward token, and the Portal the funding asks for the vault and publishes
+  // through — `on`'s.
   expect(reward.tokens.map((t) => lower(t.token))).toEqual([usdcOf(on)]);
-  const used = addressesUsedBy(level.source);
-  const portal = lower(ecoRoutesPortal(on));
-  expect(used.at(-1)).toEqual({ kind: "evm.call", target: portal });
-  const [vaultRead, ...funding] = used.slice(0, -1);
-  expect(vaultRead).toEqual({ kind: "evm.static", target: portal });
-  expect(funding.map((u) => u.kind)).toEqual(expect.arrayContaining(["evm.call", "ctx.codeSize"]));
-  for (const { target } of funding) expect(target).toBe(usdcOf(on));
+  const funding = fundingOf(level.bound);
+  expect(funding.portal).toBe(lower(ecoRoutesPortal(on)));
+  expect(funding.tokens).toEqual([usdcOf(on)]);
 
   // Run there: what the solver delivers, and every call the route makes on a token.
   expect(route.tokens.map((t) => lower(t.token))).toEqual([usdcOf(to)]);
   expect(lower(route.calls[0]!.target)).toBe(usdcOf(to));
 
-  // The program's own names. Everything a chain defines is `on`'s value, and nothing only the
-  // opener's chain defines survived into it.
-  expect(level.defines.USDC).toBe(BigInt(usdcOf(on)));
-  const own = definesOf(on);
+  // The program's own compile-time values are the caller's alone: a chain's names are its host's,
+  // so nothing the opener's chain defines can reach a program on another chain.
   const opened = opener === undefined ? {} : definesOf(opener);
-  for (const [name, value] of Object.entries(level.defines)) {
-    if (name in own) expect([name, value]).toEqual([name, own[name]]);
-    else expect([name, name in opened]).toEqual([name, false]);
+  const own = definesOf(on);
+  for (const name of Object.keys(level.defines)) {
+    expect([name, name in opened && !(name in own)]).toEqual([name, false]);
   }
 }
 
@@ -299,9 +334,10 @@ describe.each(PATHS)("through %s", (_name, build) => {
       .args as readonly [Hex, Hex];
     expect(lower(engine)).toBe(lower(v12EngineAddress()));
 
-    // Level 2, on Arbitrum: the program that cook runs is the recorded compile, byte for byte.
+    // Level 2, on Arbitrum: the program that cook runs is the body the compiler compiled, byte for
+    // byte, followed by the words it captures.
     const second = levels.get("arbitrum->optimism")!;
-    expect(lower(program).startsWith(lower(second.bytecode))).toBe(true);
+    expect(lower(program).startsWith(lower(first.body!))).toBe(true);
     expectLevel(second, "arbitrum", "optimism", "base");
     // A caller's define that no chain defines holds at every depth.
     const payout = decodeFunctionData({ abi: erc20Abi, data: second.intent.route.calls[0]!.data });
@@ -309,15 +345,15 @@ describe.each(PATHS)("through %s", (_name, build) => {
   });
 });
 
-describe("every path lowers every level to the same source", () => {
+describe("every path binds every level to the same bytes", () => {
   it.each([
     ["the README example", README_EXAMPLE],
     ["the cascade", CASCADE_EXAMPLE],
   ])("%s", (_name, program) => {
-    const sources = PATHS.map(([, build]) =>
-      record(() => build(program, { RECIPIENT, MIN_AMOUNT: 1n })).map((c) => c.source),
+    const bound = PATHS.map(([, build]) =>
+      record(() => build(program, { RECIPIENT, MIN_AMOUNT: 1n })).map((c) => c.bound),
     );
-    for (const other of sources.slice(1)) expect(other).toEqual(sources[0]);
+    for (const other of bound.slice(1)) expect(other).toEqual(bound[0]);
   });
 });
 
@@ -387,7 +423,6 @@ describe.each(PATHS)("a caller's own defines, through %s", (_name, build) => {
       { arbitrum: "base" },
     ).values();
 
-    expect(level!.defines.USDC).toBe(chosen);
     expect(level!.intent.reward.tokens.map((t) => lower(t.token))).toEqual([address(chosen)]);
     expect(level!.intent.route.tokens.map((t) => lower(t.token))).toEqual([usdcOf("arbitrum")]);
     expect(level!.intent.route.calls.map((c) => lower(c.target))).toEqual([usdcOf("arbitrum")]);
