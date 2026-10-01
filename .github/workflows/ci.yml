@@ -232,6 +232,14 @@ jobs:
       - name: Documentation — links and executable examples
         run: pnpm docs:check
 
+      # The agent skills `sauce skills install` ships: every program compiled through the `sauce`
+      # bin on each chain its index names and its command line run offline, every command line's
+      # flags held to the CLI, every runner executed with the network disabled, the SauceScript
+      # reference held to the compiler, and the wording rules (no versions, agent names, engine
+      # internals or invented addresses). It needs the SDK and actions builds above.
+      - name: Agent skills — examples, commands and wording
+        run: pnpm skills:check
+
       - name: Actions — unit tests
         run: pnpm --filter './actions' test:unit
 

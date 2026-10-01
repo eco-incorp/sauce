@@ -92,6 +92,7 @@
   ],
   "scripts": {
     "docs:check": "node docs/scripts/check-docs.mjs",
+    "skills:check": "node sdk/scripts/check-skills.mjs",
     "check:browser": "node sdk/scripts/check-browser-bundles.mjs && node sdk/scripts/check-browser-compile.mjs",
     "build": "pnpm -r --filter './sdk' --filter './actions' build",
     "typecheck": "pnpm -r typecheck",

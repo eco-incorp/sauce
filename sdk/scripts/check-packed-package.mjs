@@ -6,8 +6,8 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { documentedExports } from "../../actions/scripts/documented-exports.mjs";
 
@@ -407,10 +407,36 @@ try {
   ]) {
     assert.ok(existsSync(join(project, file)), `sauce init writes ${file}`);
   }
-  const shippedSkills = readdirSync(join(installedRoot, "skills"), { recursive: true }).filter(
-    (file) => /\.[a-z]+$/.test(file),
+  // Every agent skill in the repository ships, byte for byte, and nothing else does.
+  const skillFiles = (dir) =>
+    readdirSync(dir, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => relative(dir, join(entry.parentPath, entry.name)).split(sep).join("/"))
+      .sort();
+  const shippedSkills = skillFiles(join(installedRoot, "skills"));
+  assert.deepEqual(shippedSkills, skillFiles(join(root, "skills")), "the package ships skills/");
+  for (const file of shippedSkills) {
+    assert.ok(
+      readFileSync(join(installedRoot, "skills", file)).equals(
+        readFileSync(join(root, "skills", file)),
+      ),
+      `skills/${file} ships verbatim`,
+    );
+  }
+  for (const skill of ["sauce-overview", "sauce-run", "sauce-protocols", "sauce-examples"]) {
+    assert.ok(shippedSkills.includes(`${skill}/SKILL.md`), `the package ships the ${skill} skill`);
+  }
+  // The per-protocol documents the /skills export serves are the sauce-protocols skill's files.
+  const protocolSkills = await import(
+    pathToFileURL(join(installedRoot, installedManifest.exports["./skills"].default)).href
   );
-  assert.ok(shippedSkills.includes("sauce-run/SKILL.md"), "the package ships the sauce-run skill");
+  for (const slug of protocolSkills.listSkillSlugs()) {
+    assert.equal(
+      protocolSkills.getProtocolSkill(slug),
+      readFileSync(join(installedRoot, "skills/sauce-protocols/references", `${slug}.md`), "utf8"),
+      `getProtocolSkill("${slug}") is the shipped sauce-protocols reference`,
+    );
+  }
   // Claude Code reads .claude/skills; Codex, Cursor, Copilot and Gemini CLI read .agents/skills.
   for (const dir of [".claude/skills", ".agents/skills"]) {
     for (const file of shippedSkills) {
@@ -428,6 +454,48 @@ try {
   console.log(
     `Clean package install: sauce init scaffolds a project pinned to ${installedManifest.version}, ` +
       `whose ${shippedSkills.length} skill files then check clean for every agent`,
+  );
+
+  // `sauce skills install` on its own, for one agent: only the directory that agent reads, every
+  // shipped file verbatim, and the record `update` and `status` read.
+  const codexProject = join(work, "codex-project");
+  sauce("skills", "install", "--agent", "codex", "--dir", codexProject);
+  assert.ok(!existsSync(join(codexProject, ".claude")), "--agent codex writes no .claude/skills");
+  for (const file of shippedSkills) {
+    assert.ok(
+      readFileSync(join(codexProject, ".agents/skills", file)).equals(
+        readFileSync(join(installedRoot, "skills", file)),
+      ),
+      `sauce skills install --agent codex writes ${file} verbatim`,
+    );
+  }
+  const record = JSON.parse(
+    readFileSync(join(codexProject, ".agents/skills/.sauce-skills.json"), "utf8"),
+  );
+  assert.equal(record.version, installedManifest.version, "the install records the version");
+  assert.deepEqual(Object.keys(record.files).sort(), shippedSkills, "and every file it wrote");
+  assert.match(
+    sauce("skills", "status", "--dir", codexProject),
+    /: up to date \(/,
+    "status: the codex install is current",
+  );
+  console.log(
+    `Clean package install: sauce skills install --agent codex writes the ${shippedSkills.length} ` +
+      "skill files to .agents/skills and nothing else",
+  );
+
+  // The skills as that install left them, checked against the INSTALLED package as the repository
+  // checks its own: every program compiled through the installed bin, every command line, every
+  // runner executed offline from the project, the way an agent runs one.
+  execFileSync(
+    process.execPath,
+    [join(root, "sdk/scripts/check-skills.mjs"), "--skills", join(codexProject, ".agents/skills")],
+    { cwd: work, stdio: "inherit", env: smokeEnv },
+  );
+  assert.match(
+    sauce("skills", "status", "--dir", codexProject),
+    /: up to date \(/,
+    "the check leaves the installed skills as they were",
   );
 
   // The same browser gates the repository runs, against the INSTALLED package and resolved from
