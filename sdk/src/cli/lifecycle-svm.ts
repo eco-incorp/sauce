@@ -18,8 +18,10 @@ import {
   createSolanaRpc,
   createTransactionMessage,
   generateKeyPairSigner,
+  getBase64Decoder,
   getBase64Encoder,
   getBase64EncodedWireTransaction,
+  getTransactionDecoder,
   partiallySignTransactionMessageWithSigners,
   pipe,
   setTransactionMessageFeePayer,
@@ -27,6 +29,7 @@ import {
   type Address as SvmAddress,
   type Base64EncodedWireTransaction,
   type Instruction,
+  type TransactionMessageBytesBase64,
 } from "@solana/kit";
 import { bytesToHex, type Hex } from "viem";
 
@@ -486,18 +489,30 @@ export async function svmCancelTransaction(
   );
 }
 
-/** What the fee payer spends beyond the fee, as `rehearsal` leaves its account: rents and gas. */
+/**
+ * What the fee payer spends beyond the fee, as `rehearsal` (of `tx`) leaves its account: the
+ * accounts' rents, the IGP's gas. A simulation charges the fee too, so the cluster's fee for the
+ * message (`getFeeForMessage`) is taken off.
+ */
 export async function svmSpend(
   rpc: SvmRpc,
   payer: SvmAddress,
+  tx: SvmTxJson,
   rehearsal: SvmRehearsal,
 ): Promise<bigint> {
-  const before = await ask("the fee payer's balance", () => rpc.getBalance(payer).send());
   const after = rehearsal.after.get(payer)?.lamports;
+  if (after === undefined) return 0n;
+  const message = getBase64Decoder().decode(
+    getTransactionDecoder().decode(new Uint8Array(getBase64Encoder().encode(tx.transaction)))
+      .messageBytes,
+  );
+  const [before, fee] = await Promise.all([
+    ask("the fee payer's balance", () => rpc.getBalance(payer).send()),
+    ask("the transaction's fee", () =>
+      rpc.getFeeForMessage(message as TransactionMessageBytesBase64).send(),
+    ),
+  ]);
+  const spent = BigInt(before.value) - after - BigInt(fee.value ?? 0n);
 
-  return after === undefined
-    ? 0n
-    : BigInt(before.value) - after > 0n
-      ? BigInt(before.value) - after
-      : 0n;
+  return spent > 0n ? spent : 0n;
 }

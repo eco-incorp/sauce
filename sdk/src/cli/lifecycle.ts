@@ -2170,7 +2170,7 @@ async function buildSvmProve(
       prover: proverJson(plan),
     };
   }
-  const spend = await svmSpend(rpc, payer, rehearsal);
+  const spend = await svmSpend(rpc, payer, tx, rehearsal);
 
   return {
     ready: true,
@@ -2249,7 +2249,7 @@ async function buildSvmCancel(
   if (!rehearsal.ok) {
     return notReady(`the cancellation fails on ${destinationChain.slug}: ${rehearsal.reason}`);
   }
-  const spend = await svmSpend(rpc, payer, rehearsal);
+  const spend = await svmSpend(rpc, payer, tx, rehearsal);
 
   return {
     ready: true,

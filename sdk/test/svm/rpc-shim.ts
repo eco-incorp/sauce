@@ -118,6 +118,13 @@ export function solanaShim(svm: LiteSVM, url: string): SolanaShim {
           context: context(),
           value: (params[0] as string[]).map(account),
         });
+      case "getFeeForMessage": {
+        // The base fee: 5000 lamports per signature the message requires, its header's first byte.
+        const message = new Uint8Array(getBase64Encoder().encode(params[0] as string));
+        const versioned = (message[0]! & 0x80) !== 0;
+
+        return answer(id, { context: context(), value: 5000 * message[versioned ? 1 : 0]! });
+      }
       case "getMinimumBalanceForRentExemption":
         return answer(id, Number(svm.minimumBalanceForRentExemption(BigInt(params[0] as number))));
       case "simulateTransaction": {

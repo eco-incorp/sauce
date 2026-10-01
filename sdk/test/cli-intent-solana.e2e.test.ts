@@ -302,6 +302,11 @@ describeEvm(
         "--json",
       );
       expect(proved.code).toBe(0);
+      // What the proof spends beyond its fee: the IGP's gas for the message, as mainnet's IGP
+      // quotes it, and the message accounts' rent.
+      const [proof] = (JSON.parse(proved.stdout) as { transactions: Array<{ value: string }> })
+        .transactions;
+      expect(BigInt(proof!.value)).toBeGreaterThan(0n);
       expect(await relayLast()).toBe(1);
       const claim = await run(store, "claim", hash, "--private-key", SOLVER_KEY);
       expect(claim.code).toBe(1);

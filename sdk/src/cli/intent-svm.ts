@@ -121,7 +121,9 @@ export async function svmFillCommand(
               ),
         ),
       )
-      .catch(() => watch.map(() => null));
+      .catch(() => {
+        throw new CliError(`reading the accounts the fill writes from ${chain.slug} failed`);
+      });
     const rehearsal = await rehearseSvm(rpc, fillTx, watch);
     const moved = watch.flatMap((key, index) => {
       const was = tokenAccount(before[index]);
@@ -133,7 +135,11 @@ export async function svmFillCommand(
         `  ${key}: ${delta > 0n ? "+" : "-"}${amountText(now.mint, delta > 0n ? delta : -delta)}`,
       ];
     });
-    const spends = fill.delivers.map((token) => amountText(token.token, BigInt(token.amount)));
+    const native = BigInt(record.route.nativeAmount);
+    const spends = [
+      ...fill.delivers.map((token) => amountText(token.token, BigInt(token.amount))),
+      ...(native > 0n ? [`${formatUnits(native, 9)} SOL, the route's native amount`] : []),
+    ];
     const head = [
       `Filling ${record.intentHash} on ${chain.slug} from ${solver}, ${fill.transactions.length} transaction(s):`,
       ...fill.transactions.map((tx, index) => `  ${index + 1}. ${tx.what}`),
