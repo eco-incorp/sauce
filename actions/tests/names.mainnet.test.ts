@@ -8,11 +8,16 @@
  */
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Hex } from "viem";
 
+import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
+import { POT_SALT } from "../../sdk/test/evm/gated-engine.js";
 import { compileProgram } from "../src/index.js";
 import type { ActionProgram } from "../src/types.js";
-import { skipReason, startAnvil, type Anvil } from "./anvil.js";
+import { OWNER_KEY, skipReason, startAnvil, type Anvil } from "./anvil.js";
 import type { ChainName } from "./mainnet.js";
 import { balanceOf, setBalance, type BalanceSlot } from "./swap-venues.js";
 
@@ -165,6 +170,56 @@ describe("a chain-agnostic action document, executed", () => {
         assert.equal(receipt.status, "reverted");
         assert.equal(await balanceOf(env(), venue.USDC, env().pot), 1_000_000_000n);
       });
+
+      if (venue.chain === "ethereum") {
+        it("sauce run sends the document's cook on the owner's Pot, as it runs a .sauce.ts", async () => {
+          // An amount as an argument action, so the run passes it as main's --args.
+          const document = {
+            ...ROUND_TRIP,
+            actions: [
+              { type: "argument", name: "amount" },
+              { ...ROUND_TRIP.actions[0], amount: undefined },
+              ROUND_TRIP.actions[1],
+            ],
+          };
+          const work = mkdtempSync(join(tmpdir(), "sauce-actions-run-"));
+          const path = join(work, "round-trip.json");
+          writeFileSync(path, JSON.stringify(document));
+          await fund("USDC", 1_000_000_000n)();
+          let stdout = "";
+          let stderr = "";
+          try {
+            const code = await runCli(
+              [
+                "run",
+                path,
+                "--chain",
+                venue.chain,
+                "--rpc-url",
+                env().rpc,
+                "--private-key",
+                OWNER_KEY,
+                "--salt-hex",
+                POT_SALT,
+                "--json",
+                "--args",
+                "1000000000",
+              ],
+              {
+                ...nodeIo(),
+                stdout: (text) => void (stdout += text),
+                stderr: (text) => void (stderr += text),
+              },
+            );
+            assert.equal(code, 0, `${stderr}\n${stdout}`);
+          } finally {
+            rmSync(work, { recursive: true, force: true });
+          }
+          assert.equal((JSON.parse(stdout) as { cook: { status: string } }).cook.status, "success");
+          const usdc = await balanceOf(env(), venue.USDC, env().pot);
+          assert.ok(usdc > 900_000_000n && usdc < 1_000_000_000n, `came back with ${usdc}`);
+        });
+      }
 
       if (venue.chain === "base") {
         it("an Aerodrome Slipstream pool by its factory and tick spacing, through the Router", async () => {

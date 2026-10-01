@@ -154,6 +154,37 @@ export function lowerProgram(program: ActionProgram, chain?: ChainRef): LoweredP
   return { chain: target, program: parsed, lowered: lowerActions(parsed.actions) };
 }
 
+/** An action program as the SauceScript it lowers to on one chain: what `sauce actions` prints. */
+export interface ProgramSource {
+  readonly chain: CanonicalChain;
+  /** The document as parsed: canonical, every name as written. */
+  readonly program: ActionProgram;
+  /** A standalone program, `main`'s parameters typed — the source `compileProgram` compiles. */
+  readonly source: string;
+  /** The ABI bindings `source` calls through, which its compile takes as `contracts`. */
+  readonly contracts: ActionContracts;
+  /** The `argument` names, in the order `main` takes them. */
+  readonly parameters: readonly string[];
+}
+
+/**
+ * The SauceScript an action program lowers to for `chain` (else its `chainId`), checked there but
+ * not compiled: with `contracts`, `routes.compileSauceProgram(chain, source, { contracts })`
+ * compiles it to the bytes `compileProgram` returns. The `sauce` command's `actions` reads this,
+ * and hands the source to the compile and cook every other program goes through.
+ */
+export function programSource(program: ActionProgram, chain?: ChainRef): ProgramSource {
+  const lowered = lowerProgram(program, chain);
+
+  return {
+    chain: lowered.chain,
+    program: lowered.program,
+    source: renderProgram(lowered.lowered),
+    contracts: lowered.lowered.contracts,
+    parameters: lowered.lowered.parameters,
+  };
+}
+
 /**
  * Compiles an action program standalone, for `options.chain` or its own `chainId`. Its `argument`
  * actions become runtime arguments.
