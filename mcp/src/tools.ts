@@ -12,7 +12,7 @@ import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/
 import { formatUnits, parseAbi, type Address, type Hex } from "viem";
 import * as z from "zod";
 
-import { noEndpoint, type Endpoints } from "./config.js";
+import type { Endpoints } from "./config.js";
 import { callFiles, DEFAULT_FILE } from "./files.js";
 import type { RpcGuard } from "./guard.js";
 import { callReach, type Reach } from "./reach.js";
@@ -26,13 +26,12 @@ import {
   compileProgram,
   connect,
   definesReach,
-  defineLabels,
-  fillCommand,
   fillTargets,
   fundingFor,
   globalsCommand,
   inspectCommand,
   inspectFile,
+  intentRecord,
   kitchenFee,
   parseAccounts,
   parseAddress,
@@ -68,6 +67,7 @@ import {
   type CommandOutput,
   type CompileInput,
   type CookInput,
+  type IntentRecord,
   type ProgramInput,
   type SvmCookInput,
 } from "./sdk.js";
@@ -90,7 +90,7 @@ export const LIMITS = {
 // Input schemas
 // ---------------------------------------------------------------------------------------------
 
-const chainRef = z
+export const chainRef = z
   .union([z.string().min(1).max(64), z.number().int().nonnegative()])
   .describe(
     "The chain: its slug (base, arbitrum, solana), an alias, or its numeric id (8453). " +
@@ -112,7 +112,7 @@ const RPC_URL = z
       "yourself. A server served over HTTP reaches only public https endpoints.",
   );
 
-const PROGRAM = {
+export const PROGRAM = {
   source: z
     .string()
     .min(1)
@@ -172,6 +172,20 @@ const PROGRAM = {
     .describe(
       "For intents the program opens: their creator (0x address), who may reclaim an unearned " +
         "reward.",
+    ),
+  intentRewardDeadline: integer
+    .optional()
+    .describe(
+      "For intents the program opens: from when an unproven intent's reward may be refunded, " +
+        "as Unix seconds (default: the intent's deadline).",
+    ),
+  intentProver: z
+    .string()
+    .max(64)
+    .optional()
+    .describe(
+      "For intents the program opens: the reward's prover (0x address; default the registry's " +
+        "for the pair).",
     ),
   intentExecutionFee: integer
     .optional()
@@ -238,7 +252,7 @@ const COOK = {
 };
 
 /** Endpoints by chain, for a call that reads more than one: each intent's destination. */
-const RPC_URLS = z.record(z.string().max(64), z.string().min(1).max(2048)).optional();
+export const RPC_URLS = z.record(z.string().max(64), z.string().min(1).max(2048)).optional();
 
 const TOKEN_AMOUNTS = z
   .array(z.string().min(3).max(200))
@@ -254,11 +268,11 @@ const TOKEN_AMOUNTS = z
 // Reading a call's arguments into the commands' inputs
 // ---------------------------------------------------------------------------------------------
 
-type ProgramArgs = z.infer<z.ZodObject<typeof PROGRAM>>;
+export type ProgramArgs = z.infer<z.ZodObject<typeof PROGRAM>>;
 type CookArgs = Omit<ProgramArgs, "source"> & z.infer<z.ZodObject<typeof COOK>>;
 
 /** A program and the files it compiles from: what every compiling tool starts with. */
-interface Program {
+export interface Program {
   readonly input: ProgramInput;
   readonly files: CliFiles;
 }
@@ -275,9 +289,17 @@ function integerText(value: string | number, name: string): string {
 
 /** The intents a program opens, as `ProgramInput.intents` takes them. */
 function intentsOf(
-  args: Pick<ProgramArgs, "intentDeadline" | "intentCreator" | "intentExecutionFee">,
+  args: Pick<
+    ProgramArgs,
+    | "intentDeadline"
+    | "intentRewardDeadline"
+    | "intentCreator"
+    | "intentProver"
+    | "intentExecutionFee"
+  >,
 ) {
-  const { intentDeadline, intentCreator, intentExecutionFee } = args;
+  const { intentDeadline, intentRewardDeadline, intentCreator, intentProver } = args;
+  const { intentExecutionFee } = args;
 
   return {
     ...(intentDeadline === undefined
@@ -288,6 +310,15 @@ function intentsOf(
             integerText(intentDeadline, "intentDeadline"),
           ),
         }),
+    ...(intentRewardDeadline === undefined
+      ? {}
+      : {
+          rewardDeadline: parseUnixSeconds(
+            "intent-reward-deadline",
+            integerText(intentRewardDeadline, "intentRewardDeadline"),
+          ),
+        }),
+    ...(intentProver === undefined ? {} : { prover: parseAddress("intent-prover", intentProver) }),
     ...(intentCreator === undefined
       ? {}
       : { creator: parseAddress("intent-creator", intentCreator) }),
@@ -302,7 +333,7 @@ function intentsOf(
   };
 }
 
-function programOf(args: ProgramArgs, fallback?: CanonicalChain): Program {
+export function programOf(args: ProgramArgs, fallback?: CanonicalChain): Program {
   const moduleText = Object.values(args.modules ?? {});
   if (moduleText.length > LIMITS.modules) {
     throw new UsageError(`modules: at most ${LIMITS.modules} files`);
@@ -343,7 +374,7 @@ const argsOf = (args: { readonly args?: readonly unknown[] | undefined }) =>
   args.args === undefined ? {} : { args: { from: "--args-json" as const, values: args.args } };
 
 /** A call's `rpcUrls`, each reached as `reach` reaches a call's URL: by chain id. */
-async function endpointsByChain(
+export async function endpointsByChain(
   urls: Readonly<Record<string, string>> | undefined,
   reach: Reach,
 ): Promise<ReadonlyMap<number, string>> {
@@ -512,8 +543,8 @@ const NO_APPROVER = { auto: false, canAsk: false, approve: async () => undefined
 /** The name an actions document goes by in messages: it comes from the call, not a file. */
 const ACTIONS_FILE = "actions.json";
 /** An intent's claimant, as fulfill records it: an address, or 32 bytes. */
-const CLAIMANT = /^0x(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/;
-const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
+export const CLAIMANT = /^0x(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/;
+export const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 
 function hexArg(raw: string, what: string): Hex {
   if (!HEX.test(raw)) throw new UsageError(`${what}: not 0x-prefixed hex bytes`);
@@ -526,12 +557,49 @@ function hexArg(raw: string, what: string): Hex {
 // ---------------------------------------------------------------------------------------------
 
 /** What a tool returns: the command's JSON, and its notes — what must be true for it to land. */
-interface ToolOutput {
+/**
+ * `output`'s intents, each with its `record`: the intent in full, as the intent tools take it, so
+ * what is published here is named there with no import. A file whose intents cannot be built
+ * without running it (one the publish refuses anyway) gets none.
+ */
+function withRecords(program: Program, output: CommandOutput): ToolOutput {
+  const intents = output.json.intents as Array<Record<string, unknown>> | undefined;
+  let records: Map<string, IntentRecord>;
+  try {
+    records = new Map(
+      fillTargets(program.input, program.files).map((target) => {
+        const record = intentRecord(target.intent, { sourcePortal: target.sourcePortal });
+
+        return [record.intentHash.toLowerCase(), record];
+      }),
+    );
+  } catch {
+    return fromCommand(output);
+  }
+
+  return {
+    json: {
+      ...output.json,
+      ...(intents === undefined
+        ? {}
+        : {
+            intents: intents.map((intent) => {
+              const record = records.get(String(intent.intentHash).toLowerCase());
+
+              return record === undefined ? intent : { ...intent, record };
+            }),
+          }),
+    },
+    notes: output.notes,
+  };
+}
+
+export interface ToolOutput {
   readonly json: Record<string, unknown>;
   readonly notes?: readonly string[] | undefined;
 }
 
-const fromCommand = (output: CommandOutput): ToolOutput => ({
+export const fromCommand = (output: CommandOutput): ToolOutput => ({
   json: output.json,
   notes: output.notes,
 });
@@ -588,12 +656,12 @@ const PURE: ToolAnnotations = {
   openWorldHint: false,
 };
 /** May read a chain, through an endpoint, and never writes one. */
-const READS_CHAIN: ToolAnnotations = { ...PURE, openWorldHint: true };
+export const READS_CHAIN: ToolAnnotations = { ...PURE, openWorldHint: true };
 
 const notesSchema = z.array(z.string()).optional();
 
 /** The sentence every tool that builds a transaction ends on. */
-const UNSIGNED =
+export const UNSIGNED =
   "Nothing is signed or sent: the caller signs and sends with its own wallet or signer.";
 
 // ---------------------------------------------------------------------------------------------
@@ -617,27 +685,32 @@ export const TOOL_NAMES = [
   "sauce_pot",
   "sauce_simulate",
   "sauce_intent_publish",
-  "sauce_intent_fill",
   "sauce_inspect",
   "sauce_verify",
 ] as const;
 
-export function registerTools(server: McpServer, context: ToolContext): void {
+/** One tool's registration: what `tools/list` says of it, and what a call runs. */
+export type ToolRegistrar = <Input extends z.ZodRawShape, Output extends z.ZodRawShape>(
+  name: string,
+  config: {
+    readonly title: string;
+    readonly description: string;
+    readonly input: Input;
+    readonly output: Output;
+    readonly annotations: ToolAnnotations;
+  },
+  run: (args: z.infer<z.ZodObject<Input>>, reach: Reach) => Promise<ToolOutput> | ToolOutput,
+) => void;
+
+/**
+ * Registers tools on `server` whose handlers return a ToolOutput; a throw becomes an error
+ * result. Each call gets its own reach: its rpcUrl, scrubbed from everything it returns, and
+ * released after.
+ */
+export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegistrar {
   const { endpoints, guard } = context;
 
-  // Registers one tool whose handler returns a ToolOutput; a throw becomes an error result. Each
-  // call gets its own reach: its rpcUrl, scrubbed from everything it returns, and released after.
-  const tool = <Input extends z.ZodRawShape, Output extends z.ZodRawShape>(
-    name: (typeof TOOL_NAMES)[number],
-    config: {
-      readonly title: string;
-      readonly description: string;
-      readonly input: Input;
-      readonly output: Output;
-      readonly annotations: ToolAnnotations;
-    },
-    run: (args: z.infer<z.ZodObject<Input>>, reach: Reach) => Promise<ToolOutput> | ToolOutput,
-  ): void => {
+  return (name, config, run) => {
     server.registerTool(
       name,
       {
@@ -653,7 +726,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       async (args: unknown) => {
         const reach = callReach(endpoints, guard);
         try {
-          return result(await run(args as z.infer<z.ZodObject<Input>>, reach), reach.scrub);
+          return result(await run(args as never, reach), reach.scrub);
         } catch (error) {
           return {
             isError: true,
@@ -665,6 +738,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       },
     );
   };
+}
+
+export function registerTools(server: McpServer, context: ToolContext): void {
+  const { endpoints } = context;
+  const tool = toolRegistrar(server, context);
 
   tool(
     "sauce_chains",
@@ -1310,7 +1388,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "For a program that only opens cross-chain intents whose amounts are fixed when it is " +
         "built (every amount a define or a literal): the source chain's transactions that " +
         "publish and fund each intent from a wallet — each reward token's approve to the " +
-        "Portal, then Portal.publishAndFund — with each intent's hash. Send them in order from " +
+        "Portal, then Portal.publishAndFund — with each intent's hash and its `record`, the " +
+        "intent in full, which sauce_intent_status and the other intent tools take. Send them in order from " +
         "the wallet that funds the reward. With `from` and an endpoint, the approvals are " +
         "planned against that wallet's standing allowance (a USDT-style reset to 0 first where " +
         "needed). dryRun rehearses them together through eth_simulateV1 from `from` instead, " +
@@ -1357,7 +1436,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       if (args.dryRun === true) {
         if (from === undefined) throw new UsageError("a dry run needs whose wallet: give from");
 
-        return fromCommand(
+        return withRecords(
+          program,
           await publishCommand(
             {
               ...program.input,
@@ -1372,7 +1452,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       }
       const rpcUrl = from === undefined ? undefined : await reach.endpoint(chain, args.rpcUrl);
 
-      return fromCommand(
+      return withRecords(
+        program,
         await publishCommand(
           {
             ...program.input,
@@ -1383,100 +1464,6 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           },
           program.files,
         ),
-      );
-    },
-  );
-
-  tool(
-    "sauce_intent_fill",
-    {
-      title: "Rehearse a solver filling an intent on its destination",
-      description:
-        "For a program that opens cross-chain intents fixed when it is built (as " +
-        "sauce_intent_publish takes): what happens on each intent's DESTINATION chain when a " +
-        "solver fills it, rehearsed there with no key and nothing sent — the other half of " +
-        "sauce_intent_publish's dryRun, which rehearses the source. Give the same inputs as " +
-        "sauce_intent_publish (chain is the SOURCE) and the destination's endpoint: rpcUrl when " +
-        "every intent goes to one chain, " +
-        "rpcUrls by chain otherwise. One eth_simulateV1 block from the solver: the destination's " +
-        "shared intent Pot deployed when the route cooks on it and it is not there yet, the " +
-        "solver's approval of the Portal for each token the route delivers, then " +
-        "Portal.fulfill with the route's native amount (the Kitchen's fee for its cook) as " +
-        "value. The solver is given the route's tokens and that value for the rehearsal. " +
-        "Returns, per intent, ok with the gas and what the fill moved (transfers, net changes, " +
-        "what it left in the shared Pot and the Portal's Executor), or the decoded reason it " +
-        "reverts — a revert is a result (ok: false), not an error. Needs an endpoint that " +
-        "serves eth_simulateV1; a Solana destination is not rehearsed. Nothing is signed or sent.",
-      input: {
-        ...PROGRAM,
-        solver: z
-          .string()
-          .max(64)
-          .optional()
-          .describe("The 0x account the fill comes from (default: one nobody holds the key of)."),
-        claimant: z
-          .string()
-          .max(80)
-          .optional()
-          .describe(
-            "Who claims the reward, as fulfill records it: a 0x address or 32 bytes of hex " +
-              "(default: the solver).",
-          ),
-        rpcUrl: z
-          .string()
-          .min(1)
-          .max(2048)
-          .optional()
-          .describe(
-            "The DESTINATION chain's endpoint, when every intent goes to one chain: used for " +
-              "this call only, never returned or logged.",
-          ),
-        rpcUrls: RPC_URLS.describe(
-          'Each destination\'s endpoint by chain (slug or id): { "base": "<url>" }. ' +
-            "Used for this call only, never returned or logged.",
-        ),
-      },
-      output: {
-        ok: z.boolean(),
-        chain: z.string(),
-        intents: z.array(
-          z.looseObject({ ok: z.boolean(), intentHash: z.string(), destination: z.string() }),
-        ),
-      },
-      annotations: READS_CHAIN,
-    },
-    async (args, reach) => {
-      const program = programOf(args);
-      if (args.rpcUrl !== undefined && args.rpcUrls !== undefined) {
-        throw new UsageError("give rpcUrl (one destination) or rpcUrls (by chain), not both");
-      }
-      const solver = args.solver === undefined ? undefined : parseAddress("solver", args.solver);
-      if (args.claimant !== undefined && !CLAIMANT.test(args.claimant)) {
-        throw new UsageError(
-          `claimant: '${args.claimant}' is neither an address (20 bytes) nor 32 bytes of hex`,
-        );
-      }
-      const byChain = await endpointsByChain(args.rpcUrls, reach);
-      const one =
-        args.rpcUrl === undefined
-          ? undefined
-          : await reach.endpoint(program.input.chain, args.rpcUrl);
-
-      return fromCommand(
-        await fillCommand({
-          intents: fillTargets(program.input, program.files),
-          from: program.input.file,
-          labels: defineLabels(program.input),
-          endpointOf: (chain) => {
-            const url = byChain.get(chain.id) ?? one ?? endpoints.endpoint(chain);
-            if (url === undefined) throw noEndpoint(chain, endpoints, "Rehearsing a fill");
-
-            return url;
-          },
-          endpointFlag: one === undefined ? "--config" : "--rpc-url",
-          ...(solver === undefined ? {} : { solver }),
-          ...(args.claimant === undefined ? {} : { claimant: args.claimant as Hex }),
-        }),
       );
     },
   );

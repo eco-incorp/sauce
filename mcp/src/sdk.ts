@@ -53,7 +53,25 @@ export {
   pricedChain,
   priceGiven,
 } from "../../sdk/dist/cli/price.js";
-export { defineLabels, fillCommand, fillTargets } from "../../sdk/dist/cli/fill.js";
+export {
+  defineLabels,
+  fillCommand,
+  fillTargets,
+  type FillTarget,
+} from "../../sdk/dist/cli/fill.js";
+export {
+  buildCancel,
+  buildClaim,
+  buildFill,
+  buildProve,
+  buildRefund,
+  importIntents,
+  INTENT_SCHEMA,
+  intentOf,
+  intentRecord,
+  intentStatus,
+  type IntentRecord,
+} from "../../sdk/dist/cli/lifecycle.js";
 export { publishCommand } from "../../sdk/dist/cli/publish.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";
 export { simulateCommand } from "../../sdk/dist/cli/simulate.js";
@@ -70,4 +88,8 @@ export {
   type SvmCookInput,
 } from "../../sdk/dist/cli/solana.js";
 export { parsePin, verifyCommand } from "../../sdk/dist/cli/verify.js";
-export { CANONICAL_CHAINS, type CanonicalChain } from "../../sdk/dist/chains/canonical.js";
+export {
+  CANONICAL_CHAINS,
+  requireChain,
+  type CanonicalChain,
+} from "../../sdk/dist/chains/canonical.js";
