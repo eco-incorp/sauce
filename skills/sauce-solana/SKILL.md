@@ -235,8 +235,10 @@ npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypai
 - The engine program is `2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT` and the Kitchen
   `SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot` ([../sauce-chains/references/solana.md](../sauce-chains/references/solana.md));
   confirm both are deployed on the cluster (`getAccountInfo` returns an executable account).
-- `sauce intent publish` does not work from Solana; open an intent from an EVM chain. A failed `sauce run`
-  prints the program logs.
+- `sauce intent publish` does not work from Solana; open an intent from an EVM chain. Its
+  destination may be Solana: `sauce intent fill`, `prove` and `cancel` act on it there with
+  `--keypair` (`sauce-intents`), and take no `--via`: an intent's program on Solana runs
+  through the Kitchen. A failed `sauce run` prints the program logs.
 - For a local run, the package ships the engine and Kitchen programs, to load into a local
   validator or LiteSVM; `sauce-typescript` says where they are. Setting one up is outside this
   skill.

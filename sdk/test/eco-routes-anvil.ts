@@ -124,8 +124,13 @@ export async function deployMailbox(
 }
 
 /** The registry's HyperProver on `local`'s chain: the real one, serving the registry's Portal through
- *  `mailbox`, and trusting the registry's HyperProver address on every chain (all share it). */
-export async function plantHyperProver(local: LocalChain, mailbox: Address): Promise<Address> {
+ *  `mailbox`, and trusting the registry's HyperProver address on every chain (all share it) and
+ *  each of `senders` (32 bytes: Solana's HyperProver dispatcher, as mainnet's whitelist it). */
+export async function plantHyperProver(
+  local: LocalChain,
+  mailbox: Address,
+  senders: readonly Hex[] = [],
+): Promise<Address> {
   const prover = getAddress(ecoRoutesContract(local.chain, "HyperProver"));
   const portal = getAddress(ecoRoutesPortal(local.chain));
   await local.plant(
@@ -136,7 +141,7 @@ export async function plantHyperProver(local: LocalChain, mailbox: Address): Pro
         { type: "bytes32[]" },
         { type: "tuple[]", components: [{ type: "uint64" }, { type: "uint64" }] },
       ],
-      [mailbox, portal, [pad(prover)], []],
+      [mailbox, portal, [pad(prover), ...senders], []],
     ).slice(2)}` as Hex,
     prover,
   );

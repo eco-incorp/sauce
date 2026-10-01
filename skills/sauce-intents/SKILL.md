@@ -106,6 +106,26 @@ npx sauce intent import <tx-hash> --chain <source> --config sauce.config.json
 - `sauce intent` alone, at a terminal, lists the stored intents with where each stands, and runs
   these on the one picked.
 
+**An intent to Solana.** An intent an EVM chain publishes for Solana is filled, proven and
+cancelled on Solana, through its Portal program, and claimed or refunded on its source as above.
+The config gives Solana's endpoint under its chain id, `1399811149`.
+
+```sh
+npx sauce intent import <tx-hash> --chain <source> --config sauce.config.json
+npx sauce intent fill <intent-hash> --config sauce.config.json --solver <solana-key> --claimant <address>
+npx sauce intent fill <intent-hash> --config sauce.config.json --claimant <address> --send --keypair <keypair>
+npx sauce intent cancel <intent-hash> --config sauce.config.json --keypair <keypair>
+```
+
+- `--claimant` is required: the address on the source chain the reward pays. A Solana key is not
+  one.
+- The rehearsal runs on the solver's accounts as they are, since Solana's simulation takes no
+  overrides: the solver must hold the route's tokens.
+- `fill --send` sends the fill, then the proof through the HyperProver, with Hyperlane's gas paid in
+  the same transaction. Each spend is approved.
+- `prove` and `cancel` sign with `--keypair`, which pays their fee. A cancellation's proof waits
+  until the slot that cancelled it is finalized.
+
 The Portal's functions, events and errors, with selectors and topics, are in
 [references/portal.md](references/portal.md).
 
