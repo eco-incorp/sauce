@@ -95,6 +95,8 @@ describeEvm(
     let usdt: Address;
     let pusdt: Address;
     let falsePull: Address;
+    /** USDT's shape again, by address, for an approval of Permit2 that starts nonzero. */
+    let tether: Address;
     const MINTED = 100_000_000n;
 
     /** The program the suite funds: pays `amount` of `token` to `to` from the Pot, returns it. */
@@ -162,7 +164,8 @@ describeEvm(
       falsePull = getAddress(
         await local.plant(tokenCreation("FalsePullPermitERC20", "FALSE", CLI_FIXTURES)),
       );
-      for (const token of [usdc, usdt, pusdt, falsePull])
+      tether = getAddress(await local.plant(tokenCreation("NoReturnERC20", "TETHER")));
+      for (const token of [usdc, usdt, pusdt, falsePull, tether])
         await local.mint(token, OWNER.address, MINTED);
       pot = await deployPot(local);
     }, 120_000);
@@ -319,6 +322,84 @@ describeEvm(
         }
         expect(await balance(usdc, RECIPIENT)).toBe(before + 2n);
       }, 60_000);
+
+      it("resets a smaller approval of Permit2 to zero first, as a USDT-shaped token requires", async () => {
+        // Nonzero to nonzero is refused by this token, so a straight approve would revert.
+        await local.send(
+          local.owner,
+          tether,
+          encodeFunctionData({
+            abi: parseAbi(["function approve(address, uint256)"]),
+            functionName: "approve",
+            args: [permit2, 1n],
+          }),
+        );
+        const done = await run(["--fund", `${tether}:2`, "--yes"], [tether, RECIPIENT, "2000000"]);
+        expect(done.code).toBe(0);
+        const tx = "0x[0-9a-f]{64}: success, gas used \\d+, block \\d+";
+        expect(done.stdout).toMatch(
+          new RegExp(
+            `^reset ${tether}'s allowance to ${permit2} ${tx}\\n` +
+              `approve ${tether} to ${permit2} ${tx}\\ncook ${tx}\\n$`,
+          ),
+        );
+        expect(await allowance(tether, permit2)).toBe(maxUint256);
+        expect(await balance(tether, RECIPIENT)).toBe(2_000_000n);
+      }, 60_000);
+
+      it("funds two tokens in one run, and sweeps both", async () => {
+        const two = join(work, "two.sauce.ts");
+        writeFileSync(
+          two,
+          [
+            "// @chain ethereum",
+            "function main(a: Address, b: Address, to: Address, amount: Uint256) {",
+            "  transfer(a, to, amount);",
+            "  transfer(b, to, amount);",
+            "}",
+            "",
+          ].join("\n"),
+        );
+        const before = {
+          usdc: await balance(usdc, RECIPIENT),
+          usdt: await balance(usdt, RECIPIENT),
+        };
+        const owned = {
+          usdc: await balance(usdc, OWNER.address),
+          usdt: await balance(usdt, OWNER.address),
+        };
+        const potHeld = await balance(usdc, pot);
+        const done = record(
+          await sauceWith(
+            { confirm: unasked },
+            "run",
+            two,
+            "--rpc-url",
+            local.rpcUrl,
+            "--private-key",
+            OWNER_KEY,
+            "--fund",
+            "USDC:1",
+            "--fund",
+            "USDT:1",
+            "--sweep",
+            "--args",
+            usdc,
+            usdt,
+            RECIPIENT,
+            "400000",
+          ),
+        );
+        expect(notes(done)).toBe("");
+        expect(done.code).toBe(0);
+        expect(await balance(usdc, RECIPIENT)).toBe(before.usdc + 400_000n);
+        expect(await balance(usdt, RECIPIENT)).toBe(before.usdt + 400_000n);
+        // The sweep empties the Pot of both — the USDC it held before the run included.
+        expect(await balance(usdc, pot)).toBe(0n);
+        expect(await balance(usdt, pot)).toBe(0n);
+        expect(await balance(usdc, OWNER.address)).toBe(owned.usdc - 400_000n + potHeld);
+        expect(await balance(usdt, OWNER.address)).toBe(owned.usdt - 400_000n);
+      }, 60_000);
     });
 
     describe("permit: the token's own EIP-2612", () => {
@@ -444,6 +525,7 @@ describeEvm(
     describe("transfer, and the native currency", () => {
       it("transfers to the Pot first, in a transaction of its own", async () => {
         const potBefore = await balance(usdt, pot);
+        const paid = await balance(usdt, RECIPIENT);
         const done = await run(
           ["--fund", "USDT:1", "--fund-mode", "transfer", "--json"],
           [usdt, RECIPIENT, "1000000"],
@@ -454,7 +536,7 @@ describeEvm(
           ["transfer 1000000 USDT to the Pot", "success"],
         ]);
         expect(await balance(usdt, pot)).toBe(potBefore);
-        expect(await balance(usdt, RECIPIENT)).toBe(3_000_000n);
+        expect(await balance(usdt, RECIPIENT)).toBe(paid + 1_000_000n);
       }, 60_000);
 
       it("sends ETH as the cook's value, and --sweep returns what the program did not spend", async () => {
@@ -536,7 +618,8 @@ describeEvm(
             "--args",
             usdc,
             RECIPIENT,
-            "1",
+            // The Pot as it is holds no USDC (the multi-token run swept it), so it pays nothing.
+            "0",
           ),
         );
         expect(done.code).toBe(0);
@@ -569,6 +652,65 @@ describeEvm(
         expect(refused.stderr).toContain(
           `the signer ${privateKeyToAccount(OTHER_KEY).address} is not the owner of Pot ${pot}`,
         );
+      }, 60_000);
+
+      /** `sauce simulate` of the program with the owner's key and `flags` before its arguments. */
+      const simulateWith = async (flags: readonly string[], args: readonly string[]) =>
+        record(
+          await sauceWith(
+            { confirm: unasked },
+            "simulate",
+            program,
+            "--pot",
+            pot,
+            "--rpc-url",
+            local.rpcUrl,
+            "--private-key",
+            OWNER_KEY,
+            ...flags,
+            "--args",
+            ...args,
+          ),
+        );
+
+      it("in permit mode, signs the permit and rehearses the pull, sending nothing", async () => {
+        const nonceOf = () =>
+          local.publicClient.readContract({
+            address: pusdt,
+            abi: nonces,
+            functionName: "nonces",
+            args: [OWNER.address],
+          });
+        const [nonce, paid] = [await nonceOf(), await balance(pusdt, RECIPIENT)];
+        const done = await simulateWith(
+          ["--fund", `${pusdt}:1`, "--fund-mode", "permit", "--json"],
+          [pusdt, RECIPIENT, "1000000"],
+        );
+        expect(jsonOf(done)).toMatchObject({ ok: true });
+        expect(await nonceOf()).toBe(nonce);
+        expect(await balance(pusdt, RECIPIENT)).toBe(paid);
+      }, 60_000);
+
+      it("in allowance mode, says the Pot may not pull yet, and the rehearsal fails there", async () => {
+        const done = await simulateWith(
+          ["--fund", "USDC:1", "--fund-mode", "allowance"],
+          [usdc, RECIPIENT, "1"],
+        );
+        expect(done.code).toBe(1);
+        expect(done.stdout).toMatch(/^The cook reverts: /);
+        expect(notes(done)).toBe(
+          "USDC: the Pot may not pull it yet; sauce run would ask to approve it\n",
+        );
+        expect(await allowance(usdc, pot)).toBe(0n);
+      }, 60_000);
+
+      it("in transfer mode, says the run would transfer first, and rehearses the Pot as it is", async () => {
+        const done = await simulateWith(
+          ["--fund", "USDC:1", "--fund-mode", "transfer"],
+          [usdc, RECIPIENT, "0"],
+        );
+        expect(done.code).toBe(0);
+        expect(notes(done)).toBe("USDC: sauce run would transfer it to the Pot first\n");
       }, 60_000);
     });
 

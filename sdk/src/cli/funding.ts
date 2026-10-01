@@ -259,7 +259,13 @@ async function forceApprove(
         `approving ${spender} for ${funded.request.label} reverted in ${result.hash}`,
       );
     }
-    sent.push({ what: `approve ${funded.request.label} to ${spender}`, sent: result });
+    sent.push({
+      what:
+        value === 0n
+          ? `reset ${funded.request.label}'s allowance to ${spender}`
+          : `approve ${funded.request.label} to ${spender}`,
+      sent: result,
+    });
   };
   if (current > 0n) await approve(0n);
   await approve(amount);

@@ -228,6 +228,33 @@ describe("the funding wrapper", () => {
     );
   });
 
+  it("keeps every helper beside the program, and renames only main", () => {
+    const source = [
+      "function half(x: Uint256): Uint256 {",
+      "  return x / 2n;",
+      "}",
+      "",
+      "function pay(token: Address, to: Address, amount: Uint256): void {",
+      "  transfer(token, to, amount);",
+      "}",
+      "",
+      "function main(token: Address, to: Address, amount: Uint256) {",
+      "  pay(token, to, half(amount));",
+      "}",
+      "",
+    ].join("\n");
+    const wrapped = wrapProgram(source, IMPORTS, [PULL], []);
+    expect(wrapped).toContain("function half(x: Uint256): Uint256 {\n  return x / 2n;\n}");
+    expect(wrapped).toContain("function pay(token: Address, to: Address, amount: Uint256): void {");
+    expect(wrapped).toContain(
+      "function __sauce_program(token: Address, to: Address, amount: Uint256): void {\n" +
+        "  pay(token, to, half(amount));\n}",
+    );
+    expect(wrapped.match(/function main\(/g)).toHaveLength(1);
+    expect(wrapped).toMatch(/\n {2}__sauce_program\(token, to, amount\);\n\}\n$/);
+    compiles(wrapped);
+  });
+
   it("calls a void main without capturing a result", () => {
     const wrapped = wrapProgram("function main(amount: Uint256): void {\n}\n", IMPORTS, [PULL], []);
     expect(wrapped).toContain("function main(amount: Uint256): void {");
