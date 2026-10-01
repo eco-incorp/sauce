@@ -24,8 +24,9 @@ function main(
 }
 ```
 
-- Pools are keyed by `(tokenA, tokenB, tickSpacing)`. `tickSpacingToFee(tickSpacing)` gives a spacing's default fee
-- On Base, ask the factory of the generation the pool was created in: a pool exists under one CLFactory only (the WETH/USDC tick-spacing-100 pool is under the initial one)
+- Pools are keyed by `(tokenA, tokenB, tickSpacing)` within one factory
+- On Base, **ask every CLFactory**: each generation keeps its own pools, so a pair can have a pool at the same tick spacing under more than one. The WETH/USDC tick-spacing-50 pool exists under all three factories, tick spacing 1 under the initial and Gauges V3 ones, and tick spacing 100 under the initial one only
+- **The fee is per pool and changes over time**: read the pool's `fee()` (selector `0xddca3f43`, in millionths) when it matters. The same pair at the same tick spacing can charge different fees under different factories, and `tickSpacingToFee(tickSpacing)` is only the factory's default for a spacing: Base's WETH/USDC pools charge other fees than it
 
 ## Deployed Addresses
 
