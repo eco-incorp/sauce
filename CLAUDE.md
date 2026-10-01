@@ -147,28 +147,35 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   sync has not run is not green**: with no `sdk/{src,dist}/artifacts/`, the tests that import
   `./artifacts/*.json` fail. Run `pnpm --filter './sdk' sync-engine-artifacts`.
 - **Mainnet state (`actions/tests/state/*.genesis.json.gz`)** — no test forks a live chain. The
-  actions mainnet suites replay Ethereum at `PINNED_BLOCK` (`actions/tests/mainnet.ts`) from one
-  gzipped anvil genesis per suite: every account and storage slot that suite read, at their values
-  in that block. Replay pins the block number, its timestamp, chain id 1 and a 12-second block
-  interval, refuses to fork, and makes any non-loopback `fetch` throw, so a suite that starts reading
-  something new FAILS (a missing slot reads as zero) rather than reaching the network. Blob sizes at
-  capture: actions ~680 KB, quote ~270 KB, split-swap ~80 KB.
+  actions mainnet suites replay a chain at its pinned block (`CHAINS` in `actions/tests/mainnet.ts`:
+  Ethereum at `PINNED_BLOCK` 26,070,000, Base at 51,966,000, Avalanche C-Chain at 96,424,000) from
+  one gzipped anvil genesis per suite: every account and storage slot that suite read, at their
+  values in that block. Replay pins the block number, its timestamp, the chain id and the chain's
+  block interval (12 s on Ethereum, 2 s on Base and Avalanche — WOOFi's oracle goes stale 120 s
+  after its last post), refuses to fork, and makes any non-loopback `fetch` throw, so a suite that
+  starts reading something new FAILS (a missing slot reads as zero) rather than reaching the
+  network. Blob sizes at capture: actions ~680 KB, quote ~270 KB, split-swap ~80 KB, and the swap
+  venue suites `swap` (Ethereum) ~110 KB, `swap-base` ~90 KB, `swap-avalanche` ~30 KB.
 
   **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
-  `PINNED_BLOCK` (then recapture all three, and revisit every pinned figure: pools, strategy ids,
-  the live Rocket Pool deposit pool, expected outputs). With an Ethereum archive RPC:
+  pinned block (then recapture every suite on that chain, and revisit every pinned figure: pools,
+  strategy ids, the live Rocket Pool deposit pool, expected outputs). The RPC comes from one file,
+  `sdk/rpc.config.json` (gitignored; chain id -> URL, the file `capture-registry-abi.mjs` reads),
+  never from the environment, and it must serve state at the pinned block; public RPCs that did at
+  capture time: `eth.drpc.org`, `mainnet.base.org`, `api.avax.network/ext/bc/C/rpc`.
 
   ```sh
-  FORK_URL=<archive rpc> pnpm --filter './actions' capture-mainnet
+  pnpm --filter './actions' capture-mainnet                      # every suite
+  RECAPTURE_ANVIL_STATE=1 pnpm --filter './actions' exec tsx --test tests/swap-base.mainnet.test.ts
   ```
 
-  Capture forks at `PINNED_BLOCK` through a local recording proxy (`tests/mainnet-recorder.mjs`, its
-  own process, retrying an upstream request that hangs) and rewrites each suite's blob from what it
-  answered. Anvil's own mechanisms cannot do this: a fork's `anvil_dumpState` holds only
-  locally modified accounts, and Foundry's RPC cache drops whatever was fetched after a snapshot when
-  the suite reverts it. Capture a WHOLE suite — a `--test-name-pattern` run writes a blob with only
-  those tests' state. Never print the RPC; `stop()` refuses to write a blob that mentions it, and
-  grep the blobs for the host before committing anyway.
+  Capture forks at the pinned block through a local recording proxy (`tests/mainnet-recorder.mjs`,
+  its own process, retrying an upstream request that hangs or is rate-limited) and rewrites each
+  suite's blob from what it answered. Anvil's own mechanisms cannot do this: a fork's
+  `anvil_dumpState` holds only locally modified accounts, and Foundry's RPC cache drops whatever was
+  fetched after a snapshot when the suite reverts it. Capture a WHOLE suite — a
+  `--test-name-pattern` run writes a blob with only those tests' state. Never print the RPC; `stop()`
+  refuses to write a blob that mentions it, and grep the blobs for the host before committing anyway.
 
 - **`SAUCE_ENGINE_SO` / `SAUCE_RUST_ENGINE_SO`** — the path to the Solana engine, fetched by
   `pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines`, which digest-verifies it against

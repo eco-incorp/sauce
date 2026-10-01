@@ -58,9 +58,24 @@ function record({ method, params = [] }, result) {
   }
 }
 
+/** True when `status`/`text` is the upstream refusing for load, not answering: worth a retry. */
+function throttled(status, text) {
+  if (status === 429 || status >= 500) return true;
+  try {
+    return [JSON.parse(text)]
+      .flat()
+      .some(
+        (r) => r?.error && /rate limit|too many requests|capacity/i.test(r.error.message ?? ""),
+      );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * POSTs `body` upstream. An RPC occasionally never answers, and anvil — mid-transaction, waiting on
- * this proxy — would then hang with it, so each attempt times out and is retried.
+ * this proxy — would then hang with it, so each attempt times out and is retried. A public RPC also
+ * rate-limits, so a throttled answer is retried too, with a longer back-off.
  */
 async function forward(body) {
   for (let attempt = 1; ; attempt++) {
@@ -71,9 +86,14 @@ async function forward(body) {
         body,
         signal: AbortSignal.timeout(20_000),
       });
-      return { status: response.status, text: await response.text() };
+      const answer = { status: response.status, text: await response.text() };
+      if (attempt < 12 && throttled(answer.status, answer.text)) {
+        await new Promise((r) => setTimeout(r, 1_000 * attempt));
+        continue;
+      }
+      return answer;
     } catch (error) {
-      if (attempt === 4) throw error;
+      if (attempt >= 4) throw error;
       await new Promise((r) => setTimeout(r, 500 * attempt));
     }
   }

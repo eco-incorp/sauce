@@ -30,7 +30,7 @@ import { privateKeyToAccount } from "viem/accounts";
 // The SDK's own harness, so every suite in the repository stands the stack up one way: from
 // creation code, at the release addresses.
 import { startGatedEngine } from "../../sdk/test/evm/gated-engine.js";
-import { startMainnet } from "./mainnet.js";
+import { startMainnet, type ChainName } from "./mainnet.js";
 
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -80,19 +80,19 @@ async function freePort(): Promise<number> {
 export type Anvil = Awaited<ReturnType<typeof startAnvil>>;
 
 /**
- * Starts anvil on a free port — empty, or, with `mainnet`, Ethereum mainnet frozen at the pinned
- * block from that suite's captured state (`mainnet.ts`) — deploys the engine, the Kitchen and the
- * Pot, and returns clients plus `cook`. Stop it with `stop()`, and await it: in capture mode it
- * writes the suite's state.
+ * Starts anvil on a free port — empty, or, with `mainnet`, a chain (`chain`, Ethereum by default)
+ * frozen at its pinned block from that suite's captured state (`mainnet.ts`) — deploys the engine,
+ * the Kitchen and the Pot, and returns clients plus `cook`. Stop it with `stop()`, and await it: in
+ * capture mode it writes the suite's state.
  */
-export async function startAnvil(options: { mainnet?: string } = {}) {
+export async function startAnvil(options: { mainnet?: string; chain?: ChainName } = {}) {
   const creation = engineCreationCode();
   if (creation === undefined) throw new Error(skipReason() as string);
 
   let rpc: string;
   let stopNode: () => Promise<void>;
   if (options.mainnet !== undefined) {
-    const node = await startMainnet(options.mainnet);
+    const node = await startMainnet(options.mainnet, options.chain);
     rpc = node.rpc;
     stopNode = () => node.stop();
   } else {
@@ -133,7 +133,7 @@ export async function startAnvil(options: { mainnet?: string } = {}) {
   const walletClient = createWalletClient({ account, chain, transport: http(rpc) });
   const testClient = createTestClient({ chain, mode: "anvil", transport: http(rpc) });
 
-  const { engine, pot, cookData } = await startGatedEngine(
+  const { engine, pot, router, cookData } = await startGatedEngine(
     { publicClient: publicClient as never, walletClient, testClient: testClient as never },
     account.address,
     creation,
@@ -176,6 +176,7 @@ export async function startAnvil(options: { mainnet?: string } = {}) {
     testClient,
     walletClient,
     engine,
+    router,
     pot,
     cook,
     send,
