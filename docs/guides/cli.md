@@ -19,6 +19,7 @@ through an endpoint you name on the command line.
 | `sauce pot`      | Predict a Pot's address, and deploy it or print the transaction that does         |
 | `sauce globals`  | List the tokens, protocols and other names a program on a chain can use           |
 | `sauce price`    | Turn a price into a pool's `sqrtPriceX96`, a swap's limit and average-price floor |
+| `sauce pools`    | List a pair's price-limit pools on a chain, deepest first, with their prices      |
 | `sauce inspect`  | Take a cook, a Kitchen or Portal call, a program or a file apart                  |
 | `sauce verify`   | Check that a payload, cook, intent or transaction runs the audited settle program |
 | `sauce init`     | Scaffold a project that uses this package                                         |
@@ -87,13 +88,13 @@ For the initial release, the command builds and sends transactions on three chai
 **Base** and **Solana**. Every other chain it knows is a **preview chain**, where it compiles,
 rehearses and reads but builds no transaction ([Supported chains](../README.md#supported-chains)).
 
-| On a preview chain                                                                                                         | Does                                                                           |
-| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `compile`, `actions`, `simulate`, `globals`, `price`, `inspect`, `verify`, `intent status`, `intent import`, `intent list` | What it does everywhere                                                        |
-| `intent publish --dry-run`, `intent fill` without `--send`                                                                 | Rehearses, sending nothing                                                     |
-| `pot`                                                                                                                      | Predicts the Pot, and with an endpoint reads it, but leaves the deployment out |
-| `tx`, `run`, `pot --deploy`, `pot --format cast`                                                                           | Refused                                                                        |
-| `intent publish`, also with `--format`; `intent fill --send`; `intent prove`, `claim`, `refund`, `cancel`                  | Refused                                                                        |
+| On a preview chain                                                                                                                  | Does                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `compile`, `actions`, `simulate`, `globals`, `price`, `pools`, `inspect`, `verify`, `intent status`, `intent import`, `intent list` | What it does everywhere                                                        |
+| `intent publish --dry-run`, `intent fill` without `--send`                                                                          | Rehearses, sending nothing                                                     |
+| `pot`                                                                                                                               | Predicts the Pot, and with an endpoint reads it, but leaves the deployment out |
+| `tx`, `run`, `pot --deploy`, `pot --format cast`                                                                                    | Refused                                                                        |
+| `intent publish`, also with `--format`; `intent fill --send`; `intent prove`, `claim`, `refund`, `cancel`                           | Refused                                                                        |
 
 The refusal comes before the command reaches an endpoint or reads a key. A cook or a publish is
 refused when any chain it involves is a preview chain: the program's own, and the destination of
@@ -988,10 +989,68 @@ order on the chain (token0 is the lower address): the `sqrtPriceX96` a Uniswap V
 fork) trades at, which is also the swap's `sqrtPriceLimitX96` — a floor when selling token0, a
 ceiling when selling token1 — and, for selling the base token and for buying it, the `minAvgPrice` a
 program compares a fill against, `out * 1e18 >= minAvgPrice * spent`, rounded up so the check never
-passes a worse average. A token is a symbol the chain registers, or `0x…:<decimals>`.
-`--sqrt-price-x96` reads a pool's price back. The conversion is the package's
+passes a worse average. A token is a symbol the chain registers, or `0x…:<decimals>`, or with an
+endpoint the address alone: its decimals and symbol are read from the token (`readFromChain` in
+`--json`). `--sqrt-price-x96` reads a pool's price back. The conversion is the package's
 `sqrtPriceX96FromPrice` and `priceFromSqrtPriceX96`, which a TypeScript program imports from the
 root; without an endpoint, nothing reaches a network.
+
+### `sauce pools`
+
+```sh
+npx sauce pools --chain base USDC WETH --config sauce.config.json
+npx sauce pools --chain base USDC 0x<token> --config sauce.config.json --json
+npx sauce pools --chain base WETH USDC --v4-key 50:1 --config sauce.config.json
+```
+
+lists every pool of a pair at the price-limit venues the registry records on the chain, read now:
+Uniswap V3 and PancakeSwap V3 at each fee tier their factory enables (the tiers tried are 0.01%,
+0.02%, 0.03%, 0.04%, 0.05%, 0.25%, 0.3% and 1%), Aerodrome Slipstream at each tick spacing each of
+its CLFactories enables, and hookless Uniswap V4 pools at the keys `100:1`, `500:10`, `3000:60`
+and `10000:200`, and any `--v4-key <fee>:<tickSpacing>`. A token is a registered symbol or an
+address, whose decimals and symbol are read from the token (or given, `0x…:8`). It needs an
+endpoint, and reads everything in five rounds, each a few `eth_call`s carrying up to 32 reads
+apiece (Multicall3's `aggregate3`, sent deployless, so it needs nothing deployed). It reads on every
+chain, preview chains included.
+
+Pools with liquidity at their price come first, **deepest first, by that liquidity** (`sortedBy`
+in `--json`), which is in the same units at every venue for one pair. For each:
+
+- the venue, the contract a program finds it through as the program names it
+  (`AerodromeSlipstream.CLFactoryGaugesV3`), and the pool's address — for a V4 pool, its id and
+  key;
+- its fee, read from the pool: Slipstream's is set per pool; a V4 pool's LP fee and its protocol
+  fee, which is charged on top and differs by direction, from StateView;
+- tick spacing, liquidity, tick and `sqrtPriceX96`;
+- both directions, paying the first token for the second and then the reverse: what one token
+  costs in the other at the pool's price (`mid`) and with the fee (`taker`), in whole tokens,
+  decimals-aware; that taker price as the distributed swap's `maxPrice` — the paid token's base
+  units per bought base unit, times 1e18, which is the price times
+  10^(18 + paid decimals − bought decimals), so 150 USDC for an 8-decimal token is
+  `1500000000000000000` — the pool trading only to a `maxPrice` above it; and `depth1Pct`, how
+  much of the paid token, fee included, moves the pool's price 1% against the taker, walked
+  through its initialized ticks.
+
+Then the pools with no liquidity at their price, or none at all, listed apart as skipped (`empty`):
+a swap passes them by. Last, what was looked at (`checked`): the tiers each factory enables, the
+tick spacings each Slipstream factory enables, and the V4 keys tried, with any venue that could not
+be read. A pool that answers wrongly is left out with a note on stderr.
+
+```text
+USDC/SPCXc on base: 3 pools with liquidity, deepest first (by liquidity at the pool's price)
+  token0  USDC   0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913  6 decimals
+  token1  SPCXc  0x…  8 decimals, read from the token
+
+1. Aerodrome Slipstream 0x…
+   AerodromeSlipstream.CLFactoryGaugesV3 0xf8f2eB4940CFE7d13603DDDD87f123820Fc061Ef
+   fee 0.05% (read from the pool), tick spacing 10, liquidity 206953500095168, tick -3968
+   sqrtPriceX96  64972491279845651558239670148
+   buy SPCXc with USDC  148.771 USDC each, 148.696 before the fee; 128966 USDC moves it 1%
+                        maxPrice 1487706738131601814
+   buy USDC with SPCXc  0.00672848 SPCXc each, 0.00672512 before the fee; 1267.21 SPCXc moves it 1%
+                        maxPrice 672848166136197636
+…
+```
 
 ### `sauce inspect`
 

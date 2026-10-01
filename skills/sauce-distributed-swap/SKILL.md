@@ -15,6 +15,8 @@ skill explains its design and gives every value a run on Base needs. The same sw
 cross-chain intent, paid for on another chain, is
 [../sauce-intents/examples/swap-on-base.sauce.ts](../sauce-intents/examples/swap-on-base.sauce.ts).
 
+To see a pair's pools before a swap (each venue's pools, fees, prices both ways and depth), run `sauce pools --chain <chain> <tokenA> <tokenB> --config sauce.config.json`.
+
 ## The design
 
 The caller gives **one limit: the worst marginal price they accept, fees included**. The limit does
