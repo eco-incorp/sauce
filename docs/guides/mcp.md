@@ -164,7 +164,7 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_globals`        | `sauce globals`  | The chain's token symbols, protocol namespaces and contracts (with `protocol`, its methods), chain names, defines and `@sauce/token` functions                                               |
 | `sauce_price`          | `sauce price`    | A pair's price as the pool's `sqrtPriceX96` (also the swap's limit) and each direction's `minAvgPrice`; from `price`, `sqrtPriceX96` or a `pool` read now; with `slippageBps`, the `limits`  |
 | `sauce_compile`        | `sauce compile`  | `bytecode`, `size`, `entryParams`, `entryEncoding`, `entrySchema`, the `defines` given, `compiler`, `engine`, and on Solana the `manifest`                                                   |
-| `sauce_actions`        | —                | An action program (JSON) as its generated `source`, `compile` (as `sauce_compile`), and, given a Pot, the unsigned cook `transaction`                                                        |
+| `sauce_actions`        | `sauce actions`  | An actions document (JSON) compiled for a chain: `sauce_compile`'s report with the generated `source`, its `parameters` and bindings, and, given a Pot, the unsigned cook `transaction`      |
 | `sauce_tx`             | `sauce tx`       | EVM `{ chainId, to, data, value }`, the cook on the Pot, with `from` (who signs) and the `kitchenFee` read; Solana `{ chain, feePayer, pot, fee, transaction }`, base64 and signed by no one |
 | `sauce_pot`            | `sauce pot`      | The Pot's address, its unsigned deployment (EVM `Kitchen.deployPot`; Solana `create_pot`), `deployed` (null with no endpoint), and with an endpoint what it holds and the Kitchen's fee      |
 | `sauce_simulate`       | `sauce simulate` | `ok`, the `path` taken, gas, what `main` returns, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts                                                       |
@@ -222,10 +222,13 @@ and a `minAvgPrice` that also pays the pool's fee (`feePpm`, or the pool's own).
 `rpcUrl`. `sauce_intent_fill` takes the same program inputs, with `chain` the source; its endpoint is the
 DESTINATION's: `rpcUrl` when every intent goes to one chain, else `rpcUrls`, each destination's by
 chain (`{ "base": "<url>" }`). `solver` and `claimant` default to an account nobody holds the key
-of. Together they rehearse both sides of an intent before anything is signed. `sauce_actions` takes the document as `program`, an object or its JSON text, validated
-against the [action-program schema](../../actions/action-program.schema.json), also served as
-`sauce://actions/schema.json`. It lowers the document with the same function the `sauce` command
-does, then compiles it.
+of. Together they rehearse both sides of an intent before anything is signed.
+
+`sauce_actions` takes the document as `program`, an object or its JSON text, validated against the
+[action-program schema](../../actions/action-program.schema.json), also served as
+`sauce://actions/schema.json`, and `chain` for a document without a `chainId`. It calls the
+function `sauce actions` runs, so its names (tokens by symbol, contracts by namespace) resolve on
+that chain as they do for the command.
 
 Error messages and notes are the `sauce` command's, in the tools' words: a flag is named as the
 tool input (`--salt-hex` as `saltHex`, `--args` as `args`), and a command line as the tool
