@@ -55,12 +55,20 @@ function loadCanonicalChains() {
   return chains;
 }
 
-/** chain id -> the registry's token symbols there, in registry order. */
-function loadTokenSymbols() {
-  const registry = load("src/routes/token-registry.ts").TOKEN_REGISTRY;
-  return new Map(
-    Object.entries(registry).map(([id, rows]) => [Number(id), rows.map((row) => row.symbol)]),
+/** chain id -> the registry's token symbols there, in registry order: an EVM chain's tokens, and
+ *  a Solana chain's registered mints (what `registryTokens` puts on its export). */
+function loadTokenSymbols(chains) {
+  const { TOKEN_REGISTRY, svmTokenRows } = load("src/routes/token-registry.ts");
+  const symbols = new Map(
+    Object.entries(TOKEN_REGISTRY).map(([id, rows]) => [Number(id), rows.map((row) => row.symbol)]),
   );
+  for (const chain of chains.filter((c) => c.kind === "svm")) {
+    symbols.set(
+      chain.id,
+      svmTokenRows(chain).map((row) => row.symbol),
+    );
+  }
+  return symbols;
 }
 
 /** The one fixed, non-chain global this generator also emits -- see gen-route-globals.mjs's
@@ -160,7 +168,7 @@ export const Token: TokenApi & TokenFactory = tokenApi as TokenApi & TokenFactor
 function main() {
   const args = new Set(process.argv.slice(2));
   const chains = loadCanonicalChains();
-  const text = render(chains, loadTokenSymbols());
+  const text = render(chains, loadTokenSymbols(chains));
 
   if (args.has("--stdout")) {
     process.stdout.write(text);

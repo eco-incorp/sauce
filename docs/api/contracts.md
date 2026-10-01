@@ -36,12 +36,12 @@ program and in TypeScript. This page lists both surfaces; the
 
 `import { Base } from "@eco-incorp/sauce"` — one export per canonical chain — carries:
 
-| Property               | What it is                                                                                 |
-| ---------------------- | ------------------------------------------------------------------------------------------ |
-| `Base(body, options)`  | Opens an intent on Base; see [routes](routes.md#chain-entry-points)                        |
-| `Base.chain`, `.route` | The chain record, and the same intent entry point                                          |
-| `Base.<Symbol>`        | A registry token: a frozen `{ address, decimals, symbol, chain }` (`routes.RegistryToken`) |
-| `Base.<Namespace>`     | A protocol or family namespace, typed by the generated `contracts.ChainContracts`          |
+| Property               | What it is                                                                                                                                                                                            |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Base(body, options)`  | Opens an intent on Base; see [routes](routes.md#chain-entry-points)                                                                                                                                   |
+| `Base.chain`, `.route` | The chain record, and the same intent entry point                                                                                                                                                     |
+| `Base.<Symbol>`        | A registry token: a frozen `{ address, decimals, symbol, chain }` (`routes.RegistryToken`); on `Solana`, a registered mint, its `address` the mint's 32-byte key as hex and `mint` its base58 address |
+| `Base.<Namespace>`     | A protocol or family namespace, typed by the generated `contracts.ChainContracts`                                                                                                                     |
 
 A chain's token properties are exactly its registry rows, and the type names only those: `Base.USDT`
 is a type error and `undefined`. `routes.registryTokens(chain)` returns the same objects for a

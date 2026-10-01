@@ -402,20 +402,30 @@ function toBigIntAddress(input: AddressInput): bigint {
 /** One registry token on one chain, as a chain export carries it (`Base.USDC`): the same row a
  *  compiled program's `USDC` resolves to on that chain. */
 export interface RegistryToken {
+  /** On an EVM chain the token's address; on Solana the mint's 32-byte key as hex, the value a
+   *  program's symbol resolves to. */
   readonly address: `0x${string}`;
   readonly decimals: number;
   readonly symbol: string;
   readonly chain: CanonicalChain;
+  /** On Solana, the mint's base58 address. */
+  readonly mint?: string;
 }
 
 const tokensByChain = new Map<number, Readonly<Record<string, RegistryToken>>>();
 
-/** Every registry token on `chain`, by symbol, each a frozen {@link RegistryToken}. The same objects
- *  on every call. Empty for a chain the registry has no row for, and for an svm chain. */
+/** Every registry token on `chain`, by symbol, each a frozen {@link RegistryToken}: an EVM chain's
+ *  tokens, or a Solana cluster's registered mints. The same objects on every call. Empty for a
+ *  chain the registry has no row for. */
 export function registryTokens(chain: CanonicalChain): Readonly<Record<string, RegistryToken>> {
   let tokens = tokensByChain.get(chain.id);
   if (tokens === undefined) {
-    const rows = chain.kind === "evm" ? (TOKEN_REGISTRY[chain.id] ?? []) : [];
+    const rows: ReadonlyArray<{
+      address: `0x${string}`;
+      decimals: number;
+      symbol: string;
+      mint?: string;
+    }> = chain.kind === "evm" ? (TOKEN_REGISTRY[chain.id] ?? []) : svmTokenRows(chain);
     tokens = Object.freeze(
       Object.fromEntries(
         rows.map((row) => [
@@ -425,6 +435,7 @@ export function registryTokens(chain: CanonicalChain): Readonly<Record<string, R
             decimals: row.decimals,
             symbol: row.symbol,
             chain,
+            ...(row.mint === undefined ? {} : { mint: row.mint }),
           }),
         ]),
       ),
