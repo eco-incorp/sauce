@@ -17,16 +17,10 @@ A program is plain JSON. You can write it by hand, store it, sign it, generate i
       "weth": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
     },
     {
-      "type": "approve",
-      "token": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-      "spender": "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45"
-    },
-    {
-      "type": "uniswapV3ExactInput",
-      "router": "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45",
+      "type": "uniswapV3Swap",
+      "pool": "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640",
       "tokenIn": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
       "tokenOut": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-      "fee": 500,
       "amountOutMin": "3000000000",
       "recipient": "self",
       "saveOutputAs": "usdc"
@@ -47,7 +41,7 @@ A program is plain JSON. You can write it by hand, store it, sign it, generate i
 }
 ```
 
-This wraps 1 ETH, approves the router for exactly what was wrapped, swaps it for USDC into the executing Pot, approves Aave for whatever the swap returned, and supplies it on the owner's behalf. Only the first action names an amount: each approve and the swap spend the previous action's output, and the supply spends the output saved as `usdc`.
+This wraps 1 ETH, swaps it for USDC in Uniswap V3's 0.05% pool into the executing Pot, approves Aave for whatever the swap returned, and supplies it on the owner's behalf. Only the first action names an amount: the swap spends the wrap's output, the approve the swap's, and the supply spends the output saved as `usdc`. The swap is a call into [`@sauce/router`](../api/router.md), the SauceScript library a hand-written program calls for the same swap.
 
 ## Compile and run a program
 
@@ -93,7 +87,7 @@ A program is `{ "version": 1, "chainId": <chain>, "actions": [ … ] }`. Every a
 | 32-byte values (`poolId`)                                     | `0x` + 64 hex digits.                                                        |
 | Fee tiers, indices, domains, endpoint ids, Unix-second times  | JSON integers.                                                               |
 
-JSON numbers cannot represent integers above 2^53, so the parser rejects an amount written as a number instead of rounding it. Each amount must also fit the width of the field it becomes: a Uniswap V4 `amountOutMin` is a `uint128`, and a larger value is an error rather than a silently truncated one.
+JSON numbers cannot represent integers above 2^53, so the parser rejects an amount written as a number instead of rounding it. Each amount must also fit the width of the field it becomes: an Ambient `amountOutMin` is a `uint128`, and a larger value is an error rather than a silently truncated one.
 
 The same words mean the same thing on every action: `amount` is what it spends, `amountOutMin` is the least output it accepts before the venue reverts, and `recipient` receives its output.
 
@@ -254,25 +248,31 @@ An intent route is compiled without arguments, so `programIntent` refuses a prog
 
 ## Quotes and split swaps
 
-`quoteAction(action, quoters)` returns the `eth_call` that prices a swap action at its own `amount` — `{ to, data, decode }`. Send it with a JSON-RPC client and pass the result to `decode` for the output amount. It needs no balance or allowance. Venues that price through a separate contract take its address in `quoters`: `uniswapV3Quoter` (QuoterV2), `uniswapV4Quoter`, `maverickQuoter`, `ambientImpact` (CrocImpact) and `fluidDexResolver`. Send the Balancer V3 quote from the zero address: its Vault answers a query only outside a transaction.
+`quoteAction(action, quoters)` returns the `eth_call` that prices a swap action at its own `amount` — `{ to, data, decode }`. Send it with a JSON-RPC client and pass the result to `decode` for the output amount. It needs no balance or allowance. Venues that price through a separate contract take its address in `quoters`: `router`, the Sauce Router, which quotes `uniswapV3Swap` and `uniswapV4Swap` with the same code that swaps them (`v12RouterAddress()` from `@eco-incorp/sauce/deployments` is the release's), `maverickQuoter`, `ambientImpact` (CrocImpact) and `fluidDexResolver`. The rest price on the contract the action names: a Uniswap V2 pair's reserves, a Curve pool's `get_dy`, a DODO pool's `querySellBase`/`querySellQuote`, an LB pair's `getSwapOut` (zero when the pair cannot take the whole input, since the swap would revert), WooPPV2's `query`. Send the Balancer V3 quote from the zero address: its Vault answers a query only outside a transaction.
 
-`compileSplitSwap({ candidates, amount, buckets, amountOutMin, approvals, sweep, quoters })` compiles one program that divides `amount` into `buckets` equal slices and hands each, in turn, to the candidate whose on-chain quote pays most for it, then executes every candidate's share. Candidates are ordinary swap actions without an amount; each delivers to the Pot. `amountOutMin` bounds the total output, checked once after every leg, and `"0"` waives it explicitly. A candidate must have an on-chain quote with a runtime amount, which every swap has except Uniswap V4, Balancer and Carbon.
+`compileSplitSwap({ candidates, amount, buckets, amountOutMin, approvals, sweep, quoters })` compiles one program that divides `amount` into `buckets` equal slices and hands each, in turn, to the candidate whose on-chain quote pays most for it, then executes every candidate's share. Candidates are ordinary swap actions without an amount; each delivers to the Pot. `amountOutMin` bounds the total output, checked once after every leg, and `"0"` waives it explicitly. A candidate must have an on-chain quote with a runtime amount, which every swap has except the three Balancer swaps and Carbon. `approvals` run first, for a candidate that pulls through a periphery contract; a `@sauce/router` swap needs none.
 
 ## What the compiled program does
 
-Each action becomes an ABI-bound call, `IBinding.at(address).method(...)`, the same form an SDK route body compiles to; the compiler derives the selector and argument encoding from the ABI. Inspect the result with `compileProgram(program).source`:
+A swap at one of [`@sauce/router`](../api/router.md)'s venues becomes a call into that library, with the action's fields as its arguments; every other action becomes an ABI-bound call, `IBinding.at(address).method(...)`, the same form an SDK route body compiles to. The compiler derives each selector and argument encoding from the ABI. Inspect the result with `compileProgram(program).source`:
 
 ```js
-const amt1 = ISwapRouter02.at(0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45n).exactInputSingle({
-  tokenIn: 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2n,
-  tokenOut: 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n,
-  fee: 500n,
-  recipient: ctx.self(),
-  amountIn: t_out1,
-  amountOutMinimum: 3000000000n,
-  sqrtPriceLimitX96: 0n,
-});
-let v_usdc = amt1;
+import { uniswapV3 } from "@sauce/router";
+
+function main(): void {
+  // … the wrap, whose output is t_out0 …
+  const amt1 = uniswapV3(
+    0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640n, // pool
+    0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2n, // tokenIn
+    0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n, // tokenOut
+    t_out0, // amountIn: the previous action's output
+    0n, // sqrtPriceLimitX96: none
+    3000000000n, // minOut
+    ctx.self(), // recipient: the Pot, because a later action spends the output
+  );
+  let v_usdc = amt1;
+  // … the approve and the supply, spending v_usdc …
+}
 ```
 
 - ABIs come from the SDK's protocol registry wherever it declares the exact function an action calls, and from a fragment in the actions package otherwise.
@@ -283,29 +283,36 @@ let v_usdc = amt1;
 
 ## Supported actions
 
-Every action below is executed in CI against the deployed Ethereum contracts it names, through the released engine and a real Pot, replayed from mainnet state at a pinned block — and its calldata is compared byte for byte with the intended Solidity call. "Output" is what a later action spends; see [chaining amounts](#chaining-amounts).
+Every action below is executed in CI against the deployed contracts it names, through the released engine and a real Pot, replayed from chain state at a pinned block — Ethereum's, and Avalanche's for `traderJoeLBSwap` and Base's for `woofiSwap` — and every one that calls its contracts itself has its calldata compared byte for byte with the intended Solidity call. "Output" is what a later action spends; see [chaining amounts](#chaining-amounts).
 
 ### Swaps
 
-| Action                        | Calls                                                                             | Output   |
-| ----------------------------- | --------------------------------------------------------------------------------- | -------- |
-| `uniswapV3ExactInput`         | SwapRouter02 `exactInputSingle`                                                   | received |
-| `uniswapV3ExactInputMultiHop` | SwapRouter02 `exactInput`                                                         | received |
-| `uniswapV4ExactInput`         | ERC-20 `transfer` to the Universal Router, then `execute` (swap, settle, take)    | received |
-| `uniswapV4ExactInputMultiHop` | The same, along a path                                                            | received |
-| `curveSwap`                   | Pool `exchange(int128,int128,uint256,uint256)`                                    | received |
-| `curveRouterNGSwap`           | RouterNG `exchange(address[11],uint256[5][5],uint256,uint256,address[5],address)` | received |
-| `balancerV2Swap`              | Vault `swap`                                                                      | received |
-| `balancerV2BatchSwap`         | Vault `batchSwap`                                                                 | received |
-| `balancerV3Swap`              | Router `swapSingleTokenExactIn`, pulling through Permit2                          | received |
-| `uniswapV2Swap`               | Router `swapExactTokensForTokens`                                                 | received |
-| `ambientSwap`                 | CrocSwapDex `userCmd(1, …)`                                                       | received |
-| `dodoSwap`                    | DODO proxy `dodoSwapV2TokenToToken`, or `dodoSwapV1` with `"version": "v1"`       | received |
-| `maverickSwap`                | Maverick V2 router `exactInputSingle`                                             | received |
-| `maverickMultiHopSwap`        | Maverick V2 router `exactInputMultiHop`                                           | received |
-| `carbonSwap`                  | CarbonController `tradeBySourceAmount`                                            | received |
-| `fraxswapSwap`                | Router `swapExactTokensForTokens`                                                 | received |
-| `fluidDexT1Swap`              | Pool `swapIn`                                                                     | received |
+Each swap at one of `@sauce/router`'s nine venues is that library's function, so the action and a Sauce program calling it run the same code. The first three go through the Pot's Router, which answers their pools' callbacks; the others call the pool directly. See the [`@sauce/router` reference](../api/router.md) for what each does and refuses.
+
+| Action            | Calls                                                                           | Output   |
+| ----------------- | ------------------------------------------------------------------------------- | -------- |
+| `uniswapV3Swap`   | `@sauce/router` `uniswapV3`: the Router's `swapV3`                              | received |
+| `uniswapV4Swap`   | `@sauce/router` `uniswapV4`: the Router's `swapV4`                              | received |
+| `maverickV2Swap`  | `@sauce/router` `maverickV2`: the Router's `swap`                               | received |
+| `uniswapV2Swap`   | `@sauce/router` `uniswapV2`: the pair's reserves, a push, then `swap`           | received |
+| `curveSwap`       | `@sauce/router` `curve`: an exact approval, then `exchange(i, j, dx, min_dy)`   | received |
+| `balancerV2Swap`  | `@sauce/router` `balancerV2`: an exact approval of the Vault, then Vault `swap` | received |
+| `dodoV2Swap`      | `@sauce/router` `dodoV2`: a push, then `sellBase` or `sellQuote`                | received |
+| `traderJoeLBSwap` | `@sauce/router` `traderJoeLB`: a push, then `swap(swapForY, to)`                | received |
+| `woofiSwap`       | `@sauce/router` `woofi`: a push, then WooPPV2 `swap`                            | received |
+
+The venues the library does not cover, each through its own contract:
+
+| Action                | Calls                                                                             | Output   |
+| --------------------- | --------------------------------------------------------------------------------- | -------- |
+| `curveRouterNGSwap`   | RouterNG `exchange(address[11],uint256[5][5],uint256,uint256,address[5],address)` | received |
+| `balancerV2BatchSwap` | Vault `batchSwap`                                                                 | received |
+| `balancerV3Swap`      | Router `swapSingleTokenExactIn`, pulling through Permit2                          | received |
+| `ambientSwap`         | CrocSwapDex `userCmd(1, …)`                                                       | received |
+| `dodoV1Swap`          | DODO proxy `dodoSwapV1`, for legacy V1 (Classical) pairs                          | received |
+| `carbonSwap`          | CarbonController `tradeBySourceAmount`                                            | received |
+| `fraxswapSwap`        | Router `swapExactTokensForTokens`                                                 | received |
+| `fluidDexT1Swap`      | Pool `swapIn`                                                                     | received |
 
 ### Bridges
 
@@ -354,15 +361,17 @@ Every action below is executed in CI against the deployed Ethereum contracts it 
 
 ### Notes
 
-- **Approvals.** A venue that pulls from the Pot needs an approval first; the field docs in the schema say which. DODO pulls through its DODOApprove contract, not the proxy. Balancer V3's router pulls through Permit2: `approve` the token to Permit2, then `permit2Approve` the router. A Hyperlane warp route that charges a fee pulls the amount plus the fee, so approve more than the amount.
-- **Uniswap V4** transfers the input to the Universal Router and settles from the router's balance, so the input must be an ERC-20; native ETH input is not supported.
-- **Curve `curveSwap`** calls the pool's 4-argument `exchange`, which older pools implement without a return value; the pool pays the Pot, which forwards the balance delta to `recipient`.
+- **Approvals.** A `@sauce/router` swap needs none: it pushes its input to the pool, or approves exactly its input itself (`curveSwap`, `balancerV2Swap`, leaving a zero allowance), or the Pot's Router pays the pool from the Pot. Any other venue that pulls from the Pot needs an approval first; the field docs in the schema say which. DODO V1 pulls through its DODOApprove contract, not the proxy. Balancer V3's router pulls through Permit2: `approve` the token to Permit2, then `permit2Approve` the router. A Hyperlane warp route that charges a fee pulls the amount plus the fee, so approve more than the amount.
+- **Paths.** A swap through several pools is several swap actions: each spends the previous one's output, which arrives in the Pot. The Uniswap and Maverick periphery routers' multi-hop entry points are not actions; Curve's RouterNG and Balancer's `batchSwap` are, because they reach swap types and Vault netting the per-pool functions do not.
+- **Direction and orientation** come from the action's own fields, and a trade that contradicts them is refused before anything moves: a Uniswap V2 or V4 direction is the sort order of `tokenIn` and `tokenOut`; `dodoV2Swap` and `traderJoeLBSwap` must trade the `baseToken`/`quoteToken` or `tokenX`/`tokenY` they name, which must be the pool's own; the Router checks a V3 or Maverick pool's tokens itself.
+- **Uniswap V4** takes the pool key as `tokenIn` and `tokenOut` in sort order with `fee`, `tickSpacing` and `hooks`; the zero address is native ETH, which the Pot pays from its own balance.
+- **Curve `curveSwap`** calls the pool's 4-argument `exchange` in the pool's `indexType` (`int128` for StableSwap and NG pools, `uint256` for CryptoSwap), which older pools implement without a return value; the pool pays the Pot, which forwards the balance delta to `recipient`.
+- **WOOFi `woofiSwap`** trades at the WooPPV2 itself, not the WooRouterV2, and needs a positive `amountOutMin`: the pool prices from an oracle and passes it as its own `minToAmount`.
 - **Balancer V2 batch** amounts are per step: a later step's `"0"` spends the previous step's output.
 - **Across** deposits from the Pot, which is refunded if no relayer fills; the relayer keeps `relayerFee`, so the destination receives `amount - relayerFee`. `quoteTimestamp` must be within the SpokePool's quote buffer of the block time, and `fillDeadline` within its fill buffer.
 - **Stargate** sends in taxi mode and refunds the Pot. **CCTP** lets anyone relay the mint (`destinationCaller` is zero); `maxFee` defaults to `"0"` and `minFinalityThreshold` to 2000, a standard transfer.
 - **Lido withdrawals** mint the withdrawal NFT to `owner`, which claims the ETH once Lido finalizes it.
 - **Rocket Pool** upgrades move the deposit pool: read the live address from RocketStorage. rETH refuses to move in the block it was minted in, so a program cannot stake and then transfer or burn the same rETH.
-- **Maverick** V2's router is `0x62e31802c6145A2D5E842EeD8efe01fC224422fA` on Ethereum. A multi-hop `path` is, per hop, the pool's 20 bytes followed by one byte for `tokenAIn`.
 - **Fluid DEX T1** takes no native value from this action, so it sells the pool's ERC-20 side (for the wstETH/ETH pool, wstETH for ETH), pulling it by allowance.
 
 ### On Arc
@@ -384,7 +393,7 @@ changes:
   `0x16BF93e259ee7f7074453a2948379C35C6851b71`, quoted about 0.054 USDC to Base on 2026-09-28.
 
 What the registry has on Arc for these actions: Uniswap V2, V3 and V4 (`uniswapV2Swap`,
-`uniswapV3ExactInput`, `uniswapV4ExactInput` and their multi-hop forms), CCTP (`cctpBridge`; Arc is
+`uniswapV3Swap`, `uniswapV4Swap`), CCTP (`cctpBridge`; Arc is
 domain 26), Across (`acrossBridge`, ERC-20 deposits; Arc's SpokePool has no wrapped native token), and
 Permit2. It has no Arc deployment of Curve, Balancer, DODO, Maverick, Fluid, Carbon, Fraxswap,
 Ambient, Aave V3, Compound V3, Stargate, Lido, Rocket Pool or ether.fi. The CI runs above replay
@@ -392,4 +401,4 @@ Ethereum; no action is executed against Arc.
 
 ## TypeScript types
 
-Every type is the JSON it describes. `ActionProgram` is the document, `Action` the union of every action, `ActionType` its `type`, and each action has its own interface (`UniswapV3ExactInputAction`, `AaveV3SupplyAction`, …), grouped as `SwapAction`, `BridgeAction`, `WrapAction`, `StakeAction`, `LendingAction`, `TokenAction` and `SourceAction`. A program typed in TypeScript is already valid input for `serializeProgram`, and `parseProgram` returns the same shape it accepts.
+Every type is the JSON it describes. `ActionProgram` is the document, `Action` the union of every action, `ActionType` its `type`, and each action has its own interface (`UniswapV3SwapAction`, `AaveV3SupplyAction`, …), grouped as `SwapAction` (with `RouterSwapAction`, the nine `@sauce/router` swaps), `BridgeAction`, `WrapAction`, `StakeAction`, `LendingAction`, `TokenAction` and `SourceAction`. A program typed in TypeScript is already valid input for `serializeProgram`, and `parseProgram` returns the same shape it accepts.

@@ -35,6 +35,7 @@ import {
   encodeAbiParameters,
   encodeFunctionData,
   encodePacked,
+  getAddress,
   http,
   keccak256,
   parseAbi,
@@ -61,12 +62,7 @@ import { toUniversalAddress } from "../src/routes/normalize.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 import type { Intent } from "../src/routes/types.js";
-import {
-  gateAnchors,
-  installEngineAt,
-  startGatedEngine,
-  type GatedEngine,
-} from "./evm/gated-engine.js";
+import { gateAnchors, startGatedEngine, type GatedEngine } from "./evm/gated-engine.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -230,9 +226,12 @@ class Chain {
       testClient: this.testClient,
       walletClient: this.walletClient,
     };
+    // The harness deploys the engine at its release address, which a route built with no `engine`
+    // cooks on.
     this.engine = await startGatedEngine(clients, DEPLOYER.address, runtimeCreationCode);
-    // A route built with no `engine` cooks on the released address.
-    await installEngineAt(clients, this.engine.engine, v12EngineAddress() as Address);
+    if (getAddress(this.engine.engine) !== getAddress(v12EngineAddress())) {
+      throw new Error(`the harness put the engine at ${this.engine.engine}`);
+    }
 
     this.portal = await this.deploy(
       `${PORTAL_FIXTURE.creationCode}${encodeAbiParameters([{ type: "address" }], ["0x0000000000000000000000000000000000000000"]).slice(2)}` as Hex,

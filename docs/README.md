@@ -51,5 +51,6 @@ Complete programs live in the [examples](examples/README.md).
 - [Contracts and tokens](api/contracts.md) — every protocol namespace and token, in a program and in TypeScript.
 - [SauceScript reference](../skills/sauce-script/references/builtins.md) — every type, builtin, statement and limit, per target.
 - [Compiler](api/compiler.md) — `compile()` options and result, and the compact argument codec.
+- [`@sauce/router`](api/router.md) — the SauceScript swap library: one function per venue.
 - [Coverage](api/coverage.md) — which protocols, tokens and chains are actually registered.
 - [Examples](examples/README.md) — complete programs, and how they are kept working.

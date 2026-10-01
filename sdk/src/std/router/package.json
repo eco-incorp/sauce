@@ -1,0 +1,7 @@
+{
+  "name": "@sauce/router",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SauceScript swap library: one function per venue, taking run-time arguments and returning the amount received. `main` names the NEUTRAL BASE the compiler suffixes per target (router.evm.js); there is no router.js and no SVM arm, because every venue here is an EVM contract and the Pot's Router is an EVM contract, so importing the package for any other target fails at the import instead of compiling something wrong.",
+  "main": "router.js"
+}

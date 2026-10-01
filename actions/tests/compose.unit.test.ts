@@ -23,7 +23,8 @@ const PERSON = "0x6000000000000000000000000000000000000004" as Address;
 const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as Address;
 const USDC_ARB = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" as Address;
 const WETH_BASE = "0x4200000000000000000000000000000000000006" as Address;
-const ROUTER_BASE = "0x2626664c2603336E57B271c5C0b26F421741e481" as Address;
+/** Uniswap V3's WETH/USDC 0.05% pool on Base. */
+const POOL_BASE = "0xd0b53D9277642d899DF5C87A3966A349A798F224" as Address;
 const AAVE_ARB = "0x794a61358D6845594F94dc1DB02A252b5b4814aD" as Address;
 
 const options = (extra: Record<string, unknown> = {}) => ({
@@ -53,7 +54,7 @@ describe("an action program as an intent route", () => {
   });
 
   it("compiles to the same program the standalone compile produces", () => {
-    const program = sampleProgram("uniswapV3ExactInput");
+    const program = sampleProgram("uniswapV3Swap");
     const built = programIntent(program, options()).reward(reward);
     assert.deepEqual(built.compiled.bytecode[0], compileProgram(program).bytecode);
   });
@@ -76,12 +77,20 @@ describe("an action program as an intent route", () => {
   it("refuses a caller binding that would shadow an action binding with a different ABI", () => {
     assert.throws(
       () =>
-        programIntent(sampleProgram("uniswapV3ExactInput"), {
+        programIntent(sampleProgram("curveRouterNGSwap"), {
           ...options(),
-          compile: { contracts: { ISwapRouter02: { abi: [] } } },
+          compile: { contracts: { ICurveRouterNG: { abi: [] } } },
         }),
-      /already binds 'ISwapRouter02' to a different ABI/,
+      /already binds 'ICurveRouterNG' to a different ABI/,
     );
+  });
+
+  it("a swap at a @sauce/router venue imports the library, which the route compiler serves", () => {
+    for (const type of ["uniswapV2Swap", "curveSwap", "uniswapV4Swap"] as const) {
+      const program = sampleProgram(type);
+      const built = programIntent(program, options()).reward(reward);
+      assert.deepEqual(built.compiled.bytecode[0], compileProgram(program).bytecode, type);
+    }
   });
 });
 
@@ -92,17 +101,11 @@ describe("an action program in a dynamic cascade", () => {
     chainId: 8453,
     actions: [
       {
-        type: "approve",
+        type: "uniswapV3Swap",
         amount: "1000000000000000000",
-        token: WETH_BASE,
-        spender: ROUTER_BASE,
-      },
-      {
-        type: "uniswapV3ExactInput",
-        router: ROUTER_BASE,
+        pool: POOL_BASE,
         tokenIn: WETH_BASE,
         tokenOut: USDC_BASE,
-        fee: 500,
         amountOutMin: "1",
         recipient: "self",
       },

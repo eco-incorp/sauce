@@ -73,7 +73,7 @@ server (`npx -y @eco-incorp/sauce mcp`); `sauce-run` maps each command to its to
 | The language: the two program forms, `main(...)` inputs and defines, compile errors     | `sauce-script`           |
 | Names with no import: tokens, `Token(...)`, protocol namespaces, chains, `ctx`          | `sauce-globals`          |
 | Any protocol's contracts; factories, routers and pools; the per-protocol documents      | `sauce-protocols`        |
-| Any swap: the Router's entry points, price limits, callbacks, the guard every leg needs | `sauce-swaps`            |
+| Any swap: `@sauce/router`, price limits, the Pot's Router, the guard every leg needs    | `sauce-swaps`            |
 | One swap split across every price-limit venue on a chain                                | `sauce-distributed-swap` |
 | Continuing on another chain: intents, cascades, rewards                                 | `sauce-intents`          |
 | Solana programs: accounts, SPL, the Kitchen                                             | `sauce-solana`           |

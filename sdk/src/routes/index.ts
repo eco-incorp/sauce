@@ -67,7 +67,6 @@ export type {
 } from "./types.js";
 
 export {
-  assertSauceEvmLive,
   buildSauceCall,
   buildSauceCalls,
   buildSauceEvmCall,

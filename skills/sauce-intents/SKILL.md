@@ -99,12 +99,12 @@ The body can be any program for the destination, such as a complete swap:
 [examples/swap-on-base.sauce.ts](examples/swap-on-base.sauce.ts) runs the distributed swap
 (`sauce-distributed-swap`) on Base for WETH a solver delivers there, and pays the solver in WETH on
 the source chain. The body is written inside the braces and uses the file's defines as values. It
-may also use what the file declares: its imports (an ABI, a library) and its helper functions, each
-compiled into the body's program for the destination. It calls contracts by namespace
-(`UniswapV3.Factory.getPool(...)`), through an imported binding, or by selector, with
-`evm.static(address, data)` for a read and `evm.call(address, value, data)` for a write, `data` being
-the selector bytes `.concat(abi.encode(...))`. The swap Router is reached through the Pot itself,
-`ctx.self()`. Every unsold input and every output leaves the destination Pot before the body ends.
+may also use what the file declares: its imports and its helper functions, each compiled into the
+body's program for the destination. That swap imports `@sauce/router` at the top of the file
+(`sauce-swaps`) and calls `uniswapV3` and `uniswapV4` in the body; it reads pools by namespace
+(`UniswapV3.Factory.getPool(...)`, `UniswapV4.StateView.getSlot0(...)`), and a pool's own `slot0()`
+by selector, with `evm.static(address, data)`. Every unsold input and every output leaves the
+destination Pot before the body ends.
 
 ## Cascades
 
