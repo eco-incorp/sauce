@@ -428,7 +428,7 @@ async function rehearseFill(input: FillInput, target: FillTarget): Promise<Fill>
       ? []
       : [
           [
-            plan.prover.destinationProver,
+            plan.prover.destinationProver as Address,
             plan.prover.kind === undefined ? "the prover" : `the ${plan.prover.kind} prover`,
           ] as const,
         ]),
