@@ -8,6 +8,7 @@ import { getAddress, numberToHex } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { sourceGlobals, type SourceNamespace } from "../routes/source-globals.js";
+import { SVM_TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { UsageError } from "./args.js";
 import type { CommandOutput } from "./commands.js";
 
@@ -19,13 +20,13 @@ export interface GlobalsInput {
   readonly protocol?: string;
 }
 
-/** A define as JSON: an address-sized value as its checksummed address, anything else in decimal. */
+/** A define as JSON: an address-sized value as its checksummed address, a wider one (a Solana
+ *  mint's key) as 32 bytes of hex, anything else in decimal. */
 function defineValue(value: bigint | boolean | number): string | boolean | number {
   if (typeof value !== "bigint") return value;
+  if (value >= 1n << 160n && value < 1n << 256n) return numberToHex(value, { size: 32 });
 
-  return value >= 1n << 64n && value < 1n << 160n
-    ? getAddress(numberToHex(value, { size: 20 }))
-    : value.toString();
+  return value >= 1n << 64n ? getAddress(numberToHex(value, { size: 20 })) : value.toString();
 }
 
 const squash = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -81,11 +82,25 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
   const text: string[] = [`${chain.key}: ${chain.slug}, chain id ${chain.id} (${chain.kind})`];
   if (one !== undefined) text.push("", ...namespaceLines(one, true));
   const svm = chain.kind === "svm";
+  // A devnet program compiles for the same chain, so its mints are not what a symbol resolves to:
+  // they are listed for it to pass as defines, which override the registry's.
+  const devnet = svm ? SVM_TOKEN_REGISTRY.devnet : [];
   if (showTokens && svm) {
+    const rows = [...globals.tokens, ...devnet];
+    const width = Math.max(0, ...rows.map((token) => token.symbol.length));
+    const mintWidth = Math.max(0, ...rows.map((token) => (token.mint ?? "").length));
+    const line = (token: (typeof rows)[number]): string =>
+      `${token.symbol.padEnd(width)}  ${(token.mint ?? "").padEnd(mintWidth)}  ${token.address}  ` +
+      `${token.decimals} decimals`;
     text.push(
       "",
-      "Tokens: none by symbol. An SVM program takes its token accounts as Account parameters and",
-      "moves them with the @sauce/token functions below.",
+      `Tokens (${globals.tokens.length}): the symbol is the mint's 32-byte key, a value for the ` +
+        "@sauce/token functions: balanceOf(USDC, account)",
+      ...globals.tokens.map((token) => `  ${line(token)}`),
+      "  On devnet, pass a mint that differs as a define, which wins (--define USDC=0x…):",
+      ...devnet.map((token) => `    ${line(token)}`),
+      "  Any other mint: --define MINT=<mint, as 32-byte hex>. Token accounts are Account",
+      "  parameters; USDC.transfer(…) and the other token methods are EVM-only.",
     );
   } else if (showTokens) {
     text.push(
@@ -131,6 +146,7 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
       chain,
       ...(one === undefined ? {} : { protocol: one }),
       ...(showTokens ? { tokens: globals.tokens } : {}),
+      ...(showTokens && svm ? { devnetTokens: devnet } : {}),
       ...(showProtocols ? { protocols: globals.protocols } : {}),
       ...(all
         ? {

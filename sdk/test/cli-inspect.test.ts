@@ -35,7 +35,7 @@ import { toUniversalAddress } from "../src/routes/normalize.js";
 import { rewriteProtocolAccessors } from "../src/routes/protocol-rewrite.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { sourceGlobals } from "../src/routes/source-globals.js";
-import { TOKEN_REGISTRY } from "../src/routes/token-registry.js";
+import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../src/routes/token-registry.js";
 import {
   SETTLE_PROGRAM,
   SETTLE_REJECTIONS,
@@ -147,9 +147,17 @@ describe("sourceGlobals: the names a program on a chain may use", () => {
         ]),
       },
     ]);
-    // Solana: no symbols, no EVM contracts, the SVM arm's functions.
+    // Solana: its mints as 32-byte keys, no EVM contracts, the SVM arm's functions.
     const solana = sourceGlobals("solana");
-    expect([solana.tokens, solana.protocols]).toEqual([[], []]);
+    expect(solana.tokens).toEqual(
+      SVM_TOKEN_REGISTRY["mainnet-beta"].map(({ symbol, address, decimals, mint }) => ({
+        symbol,
+        address,
+        decimals,
+        mint,
+      })),
+    );
+    expect(solana.protocols).toEqual([]);
     expect(solana.modules[0]!.functions).toContain(
       "transfer(token: Address, tokenProgram: Account, source: Account, dest: Account, authority: Account, amount: Uint256): void",
     );
@@ -190,6 +198,29 @@ describe("sauce globals", () => {
     expect((full.defines as Record<string, unknown>).USDC).toBe(
       "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     );
+  });
+
+  it("prints Solana's mints, base58 and as the key a program holds, and devnet's", async () => {
+    const usdc = SVM_TOKEN_REGISTRY["mainnet-beta"].find((row) => row.symbol === "USDC")!;
+    const devnet = SVM_TOKEN_REGISTRY.devnet.find((row) => row.symbol === "USDC")!;
+    const run = await sauce("globals", "--chain", "solana", "--tokens");
+    expect(run.code).toBe(0);
+    expect(run.stdout).not.toContain("none by symbol");
+    expect(run.stdout).toMatch(
+      new RegExp(`^ {2}USDC {2}${usdc.mint} {2}${usdc.address} {2}6 decimals$`, "m"),
+    );
+    expect(run.stdout).toMatch(
+      new RegExp(`^ {4}USDC {2}${devnet.mint} {2}${devnet.address} {2}6 decimals$`, "m"),
+    );
+    const out = json(await sauce("globals", "--chain", "solana", "--json"));
+    expect(out.tokens).toContainEqual({
+      symbol: "USDC",
+      address: usdc.address,
+      decimals: 6,
+      mint: usdc.mint,
+    });
+    expect(out.devnetTokens).toContainEqual(devnet);
+    expect((out.defines as Record<string, unknown>).USDC).toBe(usdc.address);
   });
 
   it("names a namespace the chain does not have, and what it does have", async () => {
