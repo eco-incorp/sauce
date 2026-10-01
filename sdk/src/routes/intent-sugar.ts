@@ -347,16 +347,14 @@ function collectCaptures(
   outerLocals: ReadonlySet<string>,
   defines: ReadonlyMap<string, bigint>,
 ): string[] {
+  // Every name the body binds, in every binding form: `const [p] = ...` declares `p` as plainly as
+  // `const p = ...` does. Missing a pattern made the body's own local a capture -- the parent
+  // spliced a variable only the child has, and the child declared a parameter of the same name.
   const declared = new Set<string>();
-  const read: string[] = [];
   for (const statement of body) {
-    walk(statement, (node) => {
-      if (node.type === "VariableDeclarator") {
-        const id = (node as { id?: AstNode }).id;
-        if (id?.type === "Identifier") declared.add((id as unknown as { name: string }).name);
-      }
-    });
+    for (const name of collectDeclaredNames(statement)) declared.add(name);
   }
+  const read: string[] = [];
   for (const statement of body) {
     walk(statement, (node) => {
       if (node.type !== "Identifier") return;
