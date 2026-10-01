@@ -379,7 +379,12 @@ export async function registeredBalances(
     (TOKEN_REGISTRY[chain.id] ?? []).map(async (row) => {
       const token = getAddress(row.address);
       const balance = await client
-        .readContract({ address: token, abi: BALANCE_OF, functionName: "balanceOf", args: [holder] })
+        .readContract({
+          address: token,
+          abi: BALANCE_OF,
+          functionName: "balanceOf",
+          args: [holder],
+        })
         .catch(() => null);
 
       return { symbol: row.symbol, address: token, decimals: row.decimals, balance };
