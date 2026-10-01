@@ -839,7 +839,7 @@ Three things differ, and a fourth is Solana's alone: how the cook reaches the en
 an address, `pot` (the Pot, which the Kitchen signs for), `owner` (the signer), or a token account
 by whose it is: `pot:USDC` is the Pot's own USDC account — its associated token account for the
 mint, under the classic SPL Token program — `pot:<mint>` the same for any mint, and `owner:USDC` the
-owner's. A slot with no `--account` is named with the role it needs, and `simulate` notes each
+owner's (a direct cook, `--via engine`, has no Pot, so no `pot:` account). A slot with no `--account` is named with the role it needs, and `simulate` notes each
 account it was given that the cluster does not have (a guard on it fails with no message of its
 own).
 
