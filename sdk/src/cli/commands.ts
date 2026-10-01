@@ -77,7 +77,11 @@ export interface ProgramInput {
   /** `Chain(() => …).reward(…)` inside the program: what the SDK cannot look up. */
   readonly intents: {
     readonly deadline?: bigint;
+    /** From when an unproven intent's reward may be refunded; the route's deadline by default. */
+    readonly rewardDeadline?: bigint;
     readonly creator?: Address;
+    /** The reward's prover; the registry's for the pair by default. */
+    readonly prover?: Address;
     readonly executionFee?: bigint;
   };
 }
@@ -116,10 +120,12 @@ export function castSend(to: Address, data: Hex, value?: bigint): string {
  */
 function compileOptions(input: ProgramInput, files: CliFiles): SauceCompileOptions {
   const dir = dirname(resolvePath(input.file));
-  const { deadline, creator, executionFee } = input.intents;
+  const { deadline, rewardDeadline, creator, prover, executionFee } = input.intents;
   const intents = {
     ...(deadline === undefined ? {} : { deadline }),
+    ...(rewardDeadline === undefined ? {} : { rewardDeadline }),
     ...(creator === undefined ? {} : { creator }),
+    ...(prover === undefined ? {} : { prover }),
     ...(executionFee === undefined ? {} : { executionFee }),
   };
 
@@ -394,6 +400,8 @@ export type Confirm = (question: string) => Promise<boolean | undefined>;
 
 export interface RunInput extends CookInput, ChainAccess {
   readonly account: PrivateKeyAccount;
+  /** Called with the cook once it is sent, for what it published (the store); returns notes. */
+  readonly onSent?: (sent: Sent) => Promise<readonly string[]>;
   /** `--yes`: do what the run needs first (deploying the Pot) without asking. */
   readonly yes: boolean;
   readonly confirm: Confirm;
@@ -463,6 +471,8 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
     (funding?.value ?? 0n);
   const request: TxRequest = { to: cook.pot, data: funded.data, value };
   const sent = await sendAndWait(client, input.rpcUrl, input.account, request);
+  const stored = input.onSent === undefined ? [] : await input.onSent(sent);
+  const notes = [...(funding?.notes ?? []), ...stored];
 
   return {
     text: [
@@ -481,7 +491,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
         : { funding: funding.sent.map((step) => ({ what: step.what, ...sentJson(step.sent) })) }),
       cook: sentJson(sent),
     },
-    ...(funding === undefined || funding.notes.length === 0 ? {} : { notes: funding.notes }),
+    ...(notes.length === 0 ? {} : { notes }),
     ...(sent.status === "success" ? {} : { exitCode: 1 }),
   };
 }

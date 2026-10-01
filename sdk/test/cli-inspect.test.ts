@@ -377,6 +377,7 @@ describe("sauce inspect", () => {
     const fixed = file("fixed.sauce.ts", FIXED);
     const published = printed(
       await sauce(
+        "intent",
         "publish",
         fixed,
         "--define",

@@ -1,5 +1,5 @@
 /**
- * `sauce publish`: the intents a file opens, published from a wallet on the source chain — no Pot.
+ * `sauce intent publish`: the intents a file opens, published from a wallet on the source chain — no Pot.
  *
  * For a file whose intents are FIXED when it is built: every amount a define or a literal. Then the
  * SDK's own lowering (`compileSauceProgram(...).intents`) has already encoded each intent exactly,
@@ -111,7 +111,7 @@ function otherStatement(file: string, text: string): string | undefined {
 function fixedIntents(input: ProgramInput, files: CliFiles): readonly LoweredIntent[] {
   if (input.chain.kind !== "evm") {
     throw new UsageError(
-      `sauce publish sends source-chain Portal transactions, and ${input.chain.slug} is not an ` +
+      `sauce intent publish sends source-chain Portal transactions, and ${input.chain.slug} is not an ` +
         "EVM chain: the eco-routes Portal this SDK addresses is EVM only.",
     );
   }
@@ -208,6 +208,8 @@ export interface PublishInput extends ProgramInput {
   readonly from?: Address;
   /** `--assume-balance`, with a dry run: what the wallet holds, for the rehearsal only. */
   readonly assume?: readonly FundRequest[];
+  /** Called with each transaction sent, for what it published (the store); returns notes. */
+  readonly onSent?: (sent: Sent) => Promise<readonly string[]>;
 }
 
 /** The wallet's balances `--assume-balance` sets for a dry run, as state overrides, and lines that
@@ -261,7 +263,7 @@ const stepJson = (step: Step): Record<string, string> => ({
   value: step.value.toString(),
 });
 
-/** `sauce publish`: send, rehearse or print the Portal transactions of a file's fixed intents. */
+/** `sauce intent publish`: send, rehearse or print the Portal transactions of a file's fixed intents. */
 export async function publishCommand(input: PublishInput, files: CliFiles): Promise<CommandOutput> {
   const intents = fixedIntents(input, files);
   const portal = ecoRoutesPortal(input.chain);
@@ -353,7 +355,7 @@ export async function publishCommand(input: PublishInput, files: CliFiles): Prom
       notes: [
         `This rehearses publishing on ${input.chain.slug} only. What the intent does runs on ` +
           `${[...new Set(plans.map((plan) => plan.intent.destination.slug))].join(" and ")}, when ` +
-          "a solver fills it: `sauce fill` with the same file and flags, and the destination's " +
+          "a solver fills it: `sauce intent fill` with the same file and flags, and the destination's " +
           "endpoint, rehearses that.",
       ],
       ...(failed < 0 ? {} : { exitCode: 1 }),
@@ -366,6 +368,7 @@ export async function publishCommand(input: PublishInput, files: CliFiles): Prom
     );
   }
   const sent: Array<{ readonly step: Step; readonly result: Sent }> = [];
+  const stored: string[] = [];
   for (const plan of plans) {
     for (const step of plan.steps) {
       const result = await sendAndWait(client, input.rpcUrl!, input.account, step);
@@ -373,6 +376,7 @@ export async function publishCommand(input: PublishInput, files: CliFiles): Prom
       if (result.status !== "success") {
         throw new CliError(`${step.what} ${result.hash} reverted: ${result.reason ?? "no reason"}`);
       }
+      if (input.onSent !== undefined) stored.push(...(await input.onSent(result)));
     }
   }
 
@@ -398,5 +402,6 @@ export async function publishCommand(input: PublishInput, files: CliFiles): Prom
         gasUsed: result.gasUsed.toString(),
       })),
     },
+    ...(stored.length === 0 ? {} : { notes: stored }),
   };
 }
