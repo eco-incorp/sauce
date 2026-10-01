@@ -39,6 +39,8 @@ export function readEndpoints(text: string, path: string): Endpoints {
     throw new UsageError(`--config ${path}: expected { "rpcUrls": { "<chain id>": "<url>" } }`);
   }
   const entries = Object.entries(urls as Record<string, unknown>);
+  // Every URL a secret before any entry is checked, so no failure below can print one.
+  for (const [, url] of entries) if (typeof url === "string") secret(url);
   for (const [id, url] of entries) {
     // Each id as a chain's id is written, so the lookup by `String(chain.id)` finds it: no `08453`.
     if (!/^(?:0|[1-9]\d*)$/.test(id)) {
@@ -47,14 +49,16 @@ export function readEndpoints(text: string, path: string): Endpoints {
     if (typeof url !== "string") {
       throw new UsageError(`--config ${path}: rpcUrls["${id}"] is not a string`);
     }
-    // Before anything else can fail and print it.
-    secret(url);
     // A placeholder fails `endpointFor` at the first call for its chain; refuse it here instead.
     if (/^<.*>$/.test(url.trim())) {
       throw new UsageError(
         `--config ${path}: rpcUrls["${id}"] is a placeholder: replace it with the chain's URL, ` +
           "or remove the entry",
       );
+    }
+    // An endpoint is reached over HTTP: anything else (file:, data:) is refused, never fetched.
+    if (!/^https?:\/\//i.test(url.trim())) {
+      throw new UsageError(`--config ${path}: rpcUrls["${id}"] is not an http(s) URL`);
     }
   }
   const chainIds = entries.map(([id]) => Number(id));

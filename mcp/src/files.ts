@@ -13,6 +13,7 @@ export const DEFAULT_FILE = "program.sauce.ts";
 
 /** A path a call names: relative, `/`-separated, and inside the program's directory tree. */
 function cleanPath(path: string, what: string): string {
+  if (path.includes("\0")) throw new UsageError(`${what}: a path holds a NUL byte`);
   const clean = posix.normalize(path.replace(/\\/g, "/")).replace(/^\.\//, "");
   if (clean === "" || clean === "." || clean.startsWith("../") || clean === "..") {
     throw new UsageError(`${what} '${path}' is not a relative path inside the program's tree`);

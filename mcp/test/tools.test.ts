@@ -246,6 +246,26 @@ describe("sauce_compile", () => {
       ),
       /not a relative path inside the program's tree/,
     );
+    // A Windows separator is a separator, and one file given twice is refused.
+    const windows = { "lib\\math.sauce.ts": modules["lib/math.sauce.ts"] };
+    assert.equal(
+      ok(await mcp.call("sauce_compile", { source, chain: "base", modules: windows })).bytecode,
+      out.bytecode,
+    );
+    assert.match(
+      failed(
+        await mcp.call("sauce_compile", {
+          source,
+          chain: "base",
+          modules: { ...modules, "./lib/math.sauce.ts": "" },
+        }),
+      ),
+      /given twice/,
+    );
+    assert.match(
+      failed(await mcp.call("sauce_compile", { source, chain: "base", file: "a\u0000b.sauce.ts" })),
+      /NUL byte/,
+    );
   });
 
   it("fails with the line that does not compile, and says what each CLI flag is here", async () => {

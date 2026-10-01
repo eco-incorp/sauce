@@ -12,12 +12,17 @@ import { registerPrompts } from "./prompts.js";
 import { registerResources, SKILLS_INDEX } from "./resources.js";
 import { registerTools } from "./tools.js";
 
-/** This package's name and version, from the manifest at its root, two levels above this module
- *  in `mcp/{src,dist}`. */
-export function packageInfo(): { readonly name: string; readonly version: string } {
-  const manifest = new URL("../../package.json", import.meta.url);
+let manifest: { readonly name: string; readonly version: string } | undefined;
 
-  return JSON.parse(readFileSync(manifest, "utf8")) as { name: string; version: string };
+/** This package's name and version, from the manifest at its root, two levels above this module
+ *  in `mcp/{src,dist}` — read once: a stateless HTTP server builds a server per request. */
+export function packageInfo(): { readonly name: string; readonly version: string } {
+  manifest ??= JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as {
+    name: string;
+    version: string;
+  };
+
+  return manifest;
 }
 
 /** What the server tells a client about itself when it connects. */

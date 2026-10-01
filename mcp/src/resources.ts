@@ -111,8 +111,16 @@ export function skillsIndex(skills: readonly Skill[]): string {
   ].join("\n");
 }
 
+const indexes = new WeakMap<readonly Skill[], string>();
+
 export function registerResources(server: McpServer, dir: string = PACKAGED_SKILLS): void {
   const skills = shippedSkills(dir);
+  const index = (): string => {
+    const built = indexes.get(skills) ?? skillsIndex(skills);
+    indexes.set(skills, built);
+
+    return built;
+  };
   server.registerResource(
     "skills-index",
     SKILLS_INDEX,
@@ -124,7 +132,7 @@ export function registerResources(server: McpServer, dir: string = PACKAGED_SKIL
       mimeType: "text/markdown",
     },
     (uri) => ({
-      contents: [{ uri: uri.href, mimeType: "text/markdown", text: skillsIndex(skills) }],
+      contents: [{ uri: uri.href, mimeType: "text/markdown", text: index() }],
     }),
   );
   for (const skill of skills) {

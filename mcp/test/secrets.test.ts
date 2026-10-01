@@ -104,6 +104,7 @@ describe("a server with endpoints", () => {
       () => endpointsFor({ "08453": EVM_URL }),
       /rpcUrls key '08453' is not a chain id/,
     );
+    assert.throws(() => endpointsFor({ "8453": "file:///etc/passwd" }), /is not an http\(s\) URL/);
   });
 
   it("scrubs a URL from any message that would carry one", () => {
