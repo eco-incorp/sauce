@@ -298,6 +298,11 @@ describeEvm("sauce fill: a solver's fill, rehearsed on the destination", () => {
       ...["--intent-deadline", "1000", "--intent-creator", CREATOR],
     );
     expect(run.code).toBe(1);
+    // fill rehearses it anyway, where compile and publish refuse it, and says so.
+    expect(run.stderr).toContain(
+      "--intent-deadline 1000 (1970-01-01T00:16:40.000Z) has passed: an intent can be filled " +
+        "only until its deadline: the rehearsal shows the Portal refusing it",
+    );
     expect(run.stdout).toContain(
       "the fill reverts: IntentExpired(): the route's deadline, 1000 (1970-01-01T00:16:40.000Z), " +
         "has passed",

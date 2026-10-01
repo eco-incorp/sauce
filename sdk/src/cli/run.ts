@@ -14,6 +14,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
 import {
+  addressDefines,
   CliError,
   describeFlags,
   parseAddress,
@@ -567,9 +568,15 @@ async function programInput(
     ...parseDefines(repeatedFlag(args, "define"), chain.kind),
   };
   definesReach(file, text, Object.keys(defines));
+  const addresses = addressDefines(
+    repeatedFlag(args, "define"),
+    definesFile === undefined ? undefined : readInput(io, definesFile),
+    chain.kind,
+  );
   const input: ProgramInput = {
     file,
     text,
+    ...(addresses.length === 0 ? {} : { addressDefines: addresses }),
     ...(stdin ? { stdin } : {}),
     ...(sourceDir === undefined ? {} : { sourceDir }),
     chain,
@@ -604,7 +611,37 @@ async function programOperand(args: ParsedArgs, io: CliIo): Promise<ProgramInput
 
   return isActionsDocument(operand.text)
     ? actionsProgram(actionsOperand(args, operand.file, operand.text))
-    : programInput(args, io, operand);
+    : liveDeadline(await programInput(args, io, operand));
+}
+
+/** Why `--intent-deadline` has passed, or `undefined` while it is still ahead. */
+function pastDeadline(program: ProgramInput): string | undefined {
+  const deadline = program.intents.deadline;
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  if (deadline === undefined || deadline > now) return undefined;
+
+  return (
+    `--intent-deadline ${deadline} (${new Date(Number(deadline) * 1000).toISOString()}) has ` +
+    "passed: an intent can be filled only until its deadline"
+  );
+}
+
+/**
+ * `program`, refused when its intents' deadline has passed: the commands that build an intent to
+ * publish (compile, simulate, tx, run, publish) would build one no solver could ever fill. `fill`
+ * rehearses one anyway, with a note, and `inspect` reads what was.
+ */
+function liveDeadline(program: ProgramInput): ProgramInput {
+  const past = pastDeadline(program);
+  if (past !== undefined) {
+    const later = BigInt(Math.floor(Date.now() / 1000)) + 86_400n;
+    throw new UsageError(
+      `${past}, so this one never could be. Give a later Unix time in seconds, such as ${later} ` +
+        "(a day from now).",
+    );
+  }
+
+  return program;
 }
 
 /** An actions document's input, from the flags a program command takes. */
@@ -1418,7 +1455,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "    --intent-deadline 2000000000 --intent-creator 0x…",
     ].join("\n"),
     run: async (args, io) => {
-      const program = await programInput(args, io);
+      const program = liveDeadline(await programInput(args, io));
       if (program.chain.kind === "svm") {
         throw new UsageError(
           "sauce publish sends a source chain's Portal transactions from an EVM wallet. " +
@@ -1535,6 +1572,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     ].join("\n"),
     run: async (args, io) => {
       const program = await programInput(args, io);
+      const past = pastDeadline(program);
+      if (past !== undefined) io.stderr(`${past}: the rehearsal shows the Portal refusing it\n`);
       const rpcUrl = stringFlag(args, "rpc-url");
       const config = stringFlag(args, "config");
       if (rpcUrl === undefined && config === undefined) {

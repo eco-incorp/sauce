@@ -328,6 +328,44 @@ describe("sauce compile", () => {
     });
   });
 
+  it("shows a define as an address only where it was written as one, whatever its size", async () => {
+    // A price limit just under MAX_SQRT_RATIO is 160 bits wide, and still a number.
+    const limit = "1461446703485210103287273052203988822378723970341";
+    const program = file(
+      "limit.sauce.ts",
+      "const LIMIT = 0n;\nconst RECIPIENT = 0n;\nconst SMALL = 0n;\nfunction main() {\n" +
+        "  require(LIMIT > SMALL && RECIPIENT != 0n);\n}\n",
+    );
+    const defines = file("values.json", JSON.stringify({ RECIPIENT, SMALL: "0x1234" }));
+    const run = await sauce(
+      ...["compile", program, "--chain", "base", "--json"],
+      ...["--define", `LIMIT=${limit}`, "--defines", defines],
+    );
+    expect(run.code).toBe(0);
+    expect((JSON.parse(run.stdout) as { defines: unknown[] }).defines).toEqual([
+      { name: "LIMIT", value: limit, source: "user", chain: "base" },
+      { name: "RECIPIENT", value: RECIPIENT, source: "user", chain: "base" },
+      { name: "SMALL", value: "4660", source: "user", chain: "base" },
+    ]);
+  });
+
+  it("refuses an intent deadline that has passed, which no solver could ever fill", async () => {
+    const run = await sauce(
+      "compile",
+      file("pay.sauce.ts", PAY),
+      "--chain",
+      "base",
+      ...PAY_DEFINES,
+      "--intent-deadline",
+      "1728432000",
+    );
+    expect(run.code).toBe(2);
+    expect(run.stderr).toContain(
+      "--intent-deadline 1728432000 (2024-10-09T00:00:00.000Z) has passed: an intent can be " +
+        "filled only until its deadline, so this one never could be. Give a later Unix time",
+    );
+  });
+
   it("compiles for Solana, reporting the account manifest", async () => {
     const program = file(
       "svm.sauce.ts",
@@ -363,11 +401,12 @@ describe("sauce compile", () => {
     const arbitrum = routes.chainDefines(requireChain("arbitrum"));
     const address = (value: unknown) =>
       getAddress(`0x${(value as bigint).toString(16).padStart(40, "0")}`);
-    const report = appliedDefines(text, requireChain("base"), {
-      RECIPIENT: BigInt(recipient),
-      USDC: BigInt(mine),
-      WETH: BigInt(mine),
-    });
+    const report = appliedDefines(
+      text,
+      requireChain("base"),
+      { RECIPIENT: BigInt(recipient), USDC: BigInt(mine), WETH: BigInt(mine) },
+      new Set(["RECIPIENT", "USDC", "WETH"]),
+    );
     expect(report.defines).toEqual([
       { name: "RECIPIENT", value: getAddress(recipient), source: "user", chain: "arbitrum" },
       {

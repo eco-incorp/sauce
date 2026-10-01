@@ -322,6 +322,36 @@ export function parseDefines(
   return defines;
 }
 
+/** Whether a define's value is written as an address: `0x` and 40 hex digits, or on Solana a
+ *  base58 public key. */
+const spelledAsAddress = (raw: unknown, svm: boolean): boolean =>
+  typeof raw === "string" &&
+  (/^0x[0-9a-fA-F]{40}$/.test(raw) || (svm && solanaKey(raw) !== undefined));
+
+/**
+ * The defines whose value is written as an address, from `--define`'s `NAME=VALUE`s and a
+ * `--defines` file's text, `--define` winning as it does for the value. A report shows those as
+ * addresses and every other number as the integer it is, whatever its size: a price limit near
+ * 2^160 is not an address.
+ */
+export function addressDefines(
+  raws: readonly string[],
+  fileText: string | undefined,
+  target: Target = "evm",
+): string[] {
+  const spelled = new Map<string, unknown>(
+    fileText === undefined ? [] : Object.entries(JSON.parse(fileText) as Record<string, unknown>),
+  );
+  for (const raw of raws) {
+    const eq = raw.indexOf("=");
+    if (eq > 0) spelled.set(raw.slice(0, eq), raw.slice(eq + 1));
+  }
+
+  return [...spelled]
+    .filter(([, raw]) => spelledAsAddress(raw, target === "svm"))
+    .map(([name]) => name);
+}
+
 /**
  * `--defines <file.json>`: one JSON object of NAME to value — a string in `--define`'s syntax, a
  * non-negative safe-integer number, or a boolean. `file` is only for the errors.

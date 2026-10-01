@@ -98,6 +98,9 @@ export interface ProgramInput {
   readonly sourceDir?: string;
   readonly chain: CanonicalChain;
   readonly defines: Record<string, DefineValue>;
+  /** The defines whose value was written as an address (`args.ts#addressDefines`), which a
+   *  report shows as one. */
+  readonly addressDefines?: readonly string[];
   /** Compile `main`'s parameters for compact-v1 arguments instead of ABI-v1. */
   readonly compactArgs: boolean;
   /** `Chain(() => …).reward(…)` inside the program: what the SDK cannot look up. */
@@ -245,7 +248,12 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
   const collected = contractCollector();
   const program = compileProgram(input, files, collected.onContract);
   const bytecode = bytesToHex(program.bytecode);
-  const { defines, unread } = appliedDefines(input.text, input.chain, input.defines);
+  const { defines, unread } = appliedDefines(
+    input.text,
+    input.chain,
+    input.defines,
+    new Set(input.addressDefines ?? []),
+  );
   // The payload is the program with its arguments appended: known once the arguments are.
   const payload =
     input.args === undefined && program.entryParams.length > 0
@@ -690,7 +698,7 @@ export function potCommand(input: PotCommandInput): CommandOutput {
     json,
     cast: castSend(kitchen, call.data),
     notes: [
-      `Kitchen.deployPot on the released Kitchen. Any account may send it, the Pot is ` +
+      `This is Kitchen.deployPot on the released Kitchen. Any account may send it: the Pot is ` +
         `${input.owner}'s either way, and it deploys once.`,
     ],
   };

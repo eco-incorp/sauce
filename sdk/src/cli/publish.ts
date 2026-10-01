@@ -345,10 +345,21 @@ export async function publishCommand(input: PublishInput, files: CliFiles): Prom
           intentHash: plan.hash,
           destination: plan.intent.destination.slug,
         })),
-        transactions: calls.map((step, index) => ({
-          ...stepJson(step),
-          status: results[index]?.status ?? "not run",
-        })),
+        // What the text says of each, as fields: its gas, or why it reverts.
+        transactions: calls.map((step, index) => {
+          const result = results[index];
+
+          return {
+            ...stepJson(step),
+            status: result?.status ?? "not run",
+            ...(result?.status === "success" && result.gasUsed !== undefined
+              ? { gasUsed: result.gasUsed.toString() }
+              : {}),
+            ...(result !== undefined && result.status !== "success"
+              ? { reason: revertReason(result.error) }
+              : {}),
+          };
+        }),
       },
       notes: [
         `This rehearses publishing on ${input.chain.slug} only. What the intent does runs on ` +

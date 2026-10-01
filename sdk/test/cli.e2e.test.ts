@@ -885,9 +885,14 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
         "endpoint, rehearses that.\n",
     );
     expect(run.code).toBe(0);
+    // Each with its gas, as the text gives it.
+    const gas = expect.stringMatching(/^[1-9]\d*$/);
     expect(JSON.parse(run.stdout)).toMatchObject({
       ok: true,
-      transactions: [{ status: "success" }, { status: "success" }],
+      transactions: [
+        { status: "success", gasUsed: gas },
+        { status: "success", gasUsed: gas },
+      ],
     });
     expect(await arbitrum.balanceOf(usdc, OWNER.address)).toBe(REWARD);
   }, 60_000);
@@ -906,6 +911,11 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     expect(short.stdout).toMatch(
       /^publishAndFund: reverts: (InsufficientFunds\(0x[0-9a-f]{64}\)|revert data 0x07b90620[0-9a-f]{64})$/m,
     );
+    // And in JSON, the reason beside the transaction.
+    const shortJson = JSON.parse((await dryRun("--json")).stdout) as {
+      transactions: Array<{ reason?: string }>;
+    };
+    expect(shortJson.transactions[1]!.reason).toMatch(/^(InsufficientFunds|revert data)/);
     const run = await dryRun("--assume-balance", "USDC:2", "--json");
     expect(run.code).toBe(0);
     expect(JSON.parse(run.stdout)).toMatchObject({
