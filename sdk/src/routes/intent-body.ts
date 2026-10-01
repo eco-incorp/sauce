@@ -243,7 +243,7 @@ const isMain = (node: AstNode): boolean =>
 
 /** Reads the file's top level: which names it declares, and what is its entry. */
 export function moduleScope(program: AstNode): ModuleScope {
-  const statements = ((program as { body?: AstNode[] }).body ?? []).map(unwrapExport);
+  const statements = topLevel(program).map(unwrapExport);
   const main = statements.find(isMain);
   const script = main === undefined;
   const declarations = new Map<string, Declaration>();
@@ -312,6 +312,24 @@ export function moduleScope(program: AstNode): ModuleScope {
   if (main !== undefined) entry.push(main);
 
   return { script, declarations, imports, entry };
+}
+
+/**
+ * A module's top-level statements — or, for a closure entry (`() => { … }`, compiled with
+ * `entryKind: "closure"`), its block's: the compiler declares the functions there module functions
+ * and runs the rest as `main`, which is a script's reading of the same statements.
+ */
+function topLevel(program: AstNode): AstNode[] {
+  const body = (program as { body?: AstNode[] }).body ?? [];
+  const [only] = body;
+  if (body.length === 1 && only!.type === "ExpressionStatement") {
+    const closure = (only as { expression?: AstNode }).expression;
+    if (closure?.type === "ArrowFunctionExpression" || closure?.type === "FunctionExpression") {
+      const block = (closure as { body?: AstNode }).body;
+      return block?.type === "BlockStatement" ? ((block as { body?: AstNode[] }).body ?? []) : [];
+    }
+  }
+  return body;
 }
 
 /** The top-level function a site sits in, if it is not at a script's top level. */
