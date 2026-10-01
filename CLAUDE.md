@@ -691,7 +691,8 @@ use. The intent tools (`mcp/src/intents.ts`: `sauce_intent_import`, `sauce_inten
 its `record` (which `sauce_intent_publish` returns per intent) or by `txHash` and its source
 `chain`, and gives each chain's endpoint in `rpcUrls`. `intents.e2e.test.ts` runs a whole intent
 through them on two anvils with eco-routes' Portal and HyperProver (`sdk/test/eco-routes-anvil.ts`),
-signing each unsigned transaction itself.
+signing each unsigned transaction itself; `intents-solana.e2e.test.ts` builds a Solana fill through
+them in LiteSVM behind `sdk/test/svm/rpc-shim.ts`, signs it as the fee payer and lands it.
 
 It never signs and takes no key under any name (`tools.test.ts` fails a tool input that looks like
 one), and reads no environment. A tool reads a chain through the call's own `rpcUrl`, else the

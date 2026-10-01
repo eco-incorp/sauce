@@ -269,6 +269,13 @@ The creator's way back:
   `sauce_intent_prove` once the block it landed in is final (give that block in `cancelledIn`), then
   refund. `prove: true` sends the proof at once, before finality, and the result warns.
 
+For an intent to Solana, the destination's steps — fill, prove and cancel — come back as Solana
+transactions: `feePayer` and `transaction`, a base64 wire transaction with every signature in but
+the fee payer's. Pass the Solana key that pays and signs as `from`; a fill also needs `claimant`,
+the address on the EVM source the reward pays. Sign each with that key, last, and send it within
+about a minute, before its blockhash expires. `dryRun` rehearses an EVM destination's fill only;
+a Solana fill is rehearsed as it is built. Claim and refund stay on the EVM source.
+
 A step that cannot happen yet is a result, `ready: false` with `why`, not an error. Each tool reads
 the chains it needs through `rpcUrls`, each chain's endpoint by slug or id; `rpcUrl` is the endpoint
 of the chain the tool names (the source for import, claim and refund, the destination for fill,
@@ -300,6 +307,7 @@ The other transactions:
   transfers into the vault first, then `publish` once they have landed.
 - `sauce_intent_fill`'s go in order from the solver it names (`from`): the Portal pulls what the
   route delivers from the account that calls `fulfill`.
+- On Solana, each transaction is signed last by its `feePayer`, the `from` the call named.
 - The proof, claim, refund and cancellation can be sent from any account. Each `transactions`
   entry names its `chainId`; the sender pays the gas and the value, and the reward goes to the
   claimant or the creator, never the sender.
