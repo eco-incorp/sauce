@@ -16,8 +16,10 @@ import type {
   ResolvePackage,
   SauceTarget as RsTarget,
 } from "sauce-compiler";
+import type { CanonicalChain } from "../chains/canonical.js";
 import { resolveSdkModule, resolveSdkPackage, sdkStdPath } from "../embedded/resolve.js";
 import { compile } from "../wasm-compiler.js";
+import { EXTENSIONS_PATH, serveExtensions, type ExtensionsOptions } from "./extensions.js";
 
 const ENTRY = "main.js";
 
@@ -70,11 +72,18 @@ function toInlineContracts(
  * resolves to the SDK's copy whatever the caller supplies. Every other path reaches the caller's
  * `resolve` before the SDK's embedded ABIs, so a caller can serve its own `./artifacts/IERC20.json`.
  */
-function makeResolve(source: string, own: ResolveModule | undefined): ResolveModule {
+function makeResolve(
+  source: string,
+  own: ResolveModule | undefined,
+  extensions?: (path: string) => Uint8Array | undefined,
+): ResolveModule {
   const entryBytes = new TextEncoder().encode(source);
 
   return (path) => {
     if (path === ENTRY) return entryBytes;
+    // The manifest is the SDK's, like the standard library: a caller's `resolve` never serves it.
+    const manifest = extensions?.(path);
+    if (manifest !== undefined) return manifest;
     if (own !== undefined && sdkStdPath(path) === undefined) {
       const bytes = own(path);
       if (bytes !== undefined && bytes !== null) return bytes;
@@ -212,6 +221,13 @@ export interface RsCompileInput {
   ambient?: string[];
   /** Compile for compact-v1 entry arguments, returning the schema they must be encoded against. */
   compactArgs?: boolean;
+  /**
+   * Give the program the extensions manifest for `chain` (`extensions.ts`): every chain's tokens,
+   * protocols and the SDK's global spellings, resolved by the compiler with no source rewrite.
+   */
+  extensions?: ExtensionsOptions & { readonly chain: CanonicalChain };
+  /** `"closure"`: `source` is one function expression, as `Function.prototype.toString` prints it. */
+  entryKind?: "module" | "closure";
 }
 
 /** The seam's `CompileResult`, plus what `compileSauceProgram` reports beyond it: how entry
@@ -231,10 +247,17 @@ export interface RsCompileResult extends CompileResult {
  * returns none, and an SVM caller that needs the attach contract compiles through `svm/` directly.
  */
 export function compileWithRs(input: RsCompileInput): RsCompileResult {
+  const extensions =
+    input.extensions === undefined
+      ? undefined
+      : serveExtensions(input.extensions.chain, input.extensions);
+  const source = input.entryKind === "closure" ? input.source : ensureVoidMain(input.source);
   const result = compile({
     target: mapTarget(input.target),
     entry: ENTRY,
-    resolve: makeResolve(ensureVoidMain(input.source), input.resolve),
+    ...(extensions === undefined ? {} : { extensions: EXTENSIONS_PATH }),
+    ...(input.entryKind === undefined ? {} : { entryKind: input.entryKind }),
+    resolve: makeResolve(source, input.resolve, extensions),
     resolvePackage: makeResolvePackage(input.resolvePackage),
     inlineContracts: toInlineContracts(input.contracts),
     ambient: input.ambient,

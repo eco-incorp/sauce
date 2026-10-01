@@ -158,11 +158,28 @@ type DefineValue = bigint | boolean | number;
  */
 export interface RouteScope {
   /**
+   * Compile natively: the compiler reads the extensions manifest (`extensions.ts`) and resolves the
+   * token, protocol and `available(…)` syntax itself, and none of the SDK's source rewrites run.
+   * Defaults to {@link useNativePipeline}'s setting.
+   */
+  readonly native?: boolean;
+  /**
    * The compile-time values that belong to ONE chain: `chainId`, its protocol contracts and its
    * token symbols (`ambient.ts#chainDefines`). A function rather than values because the values
    * differ per chain, and a program names more than one chain as soon as it opens an intent.
    */
   readonly chainDefines?: (chain: ChainRefResolved) => Readonly<Record<string, DefineValue>>;
+}
+
+/**
+ * Whether compiles take the native path by default. Internal, and off: it exists so the two
+ * pipelines can be compared on one corpus while the rewrites it replaces are removed one by one.
+ */
+let nativePipeline = false;
+
+/** Set {@link RouteScope.native}'s default. Internal to the SDK and its tests. */
+export function useNativePipeline(on: boolean): void {
+  nativePipeline = on;
 }
 
 /** What a nested level resolves its chain-scoped names with: its own chain's registry values and
@@ -206,7 +223,10 @@ function levelOn(
       : Object.fromEntries(
           Object.entries(options.defines).filter(([name]) => !chainScoped.has(name)),
         );
-  return { options: { ...options, defines, tokens: undefined }, scope: NESTED_SCOPE };
+  return {
+    options: { ...options, defines, tokens: undefined },
+    scope: { ...NESTED_SCOPE, native: scope.native },
+  };
 }
 
 /** Every name the program can read as a compile-time scalar on `chain`: the chain's token symbols,
@@ -495,8 +515,10 @@ function compileForChain(
 
   // `available(...)` FIRST: it removes the branches that name a contract or token this chain lacks,
   // before any other pass resolves a name in them (see available.ts). A closure body is left for its
-  // own chain's compile.
-  source = rewriteAvailability(source, chain, tokenMap).source;
+  // own chain's compile. Natively, the compiler decides it.
+  if (!(scope.native ?? nativePipeline)) {
+    source = rewriteAvailability(source, chain, tokenMap).source;
+  }
 
   // The intent sugar runs next, on the source as written but for decided `available(...)`
   // branches. It reads `USDC` and `RECIPIENT` as compile-time values itself, so a token rewrite
@@ -528,6 +550,21 @@ function compileForChain(
     },
   });
   source = sugar.source;
+  if (scope.native ?? nativePipeline) {
+    // The chain's scalar spellings stay defines: a program may declare `const UniswapV3_Factory =
+    // 0n;` as the default a chain overrides, which a manifest name — losing to every declaration —
+    // could not do. Token symbols are not among them: a define has no type, and a symbol's methods
+    // are its type's.
+    const symbols = resolveTokenMap(chain, options.tokens);
+    const chainScalars = Object.fromEntries(
+      Object.entries(scope.chainDefines?.(chain) ?? {}).filter(([name]) => !symbols.has(name)),
+    );
+    const native = compileNatively(chain, source, target, {
+      ...options,
+      defines: { ...chainScalars, ...options.defines },
+    });
+    return { ...native, chain, source, intents: sugar.intents };
+  }
   let contracts: ContractsConfig | undefined = options.contracts;
   // Seed the resolved token map into defines UNDERNEATH the caller's own options.defines -- closes
   // a latent gap where a direct compileSauceRoute(..., { tokens }) call emitted a bare `USDC`
@@ -638,4 +675,45 @@ function compileForChain(
   return manifest === undefined
     ? { chain, compiled, source, entryEncoding, intents }
     : { chain, compiled, source, entryEncoding, manifest, intents };
+}
+
+/**
+ * The native half of {@link compileForChain}: the program as written — after the intent sugar,
+ * which still lowers as text — compiled with the extensions manifest for `chain`. The compiler gives
+ * it the chain's tokens, protocols, `chainId`, `Token`, `self` and `available` itself, so no define
+ * carries a chain-scoped name and no rewrite runs; `defines` is exactly the caller's.
+ */
+function compileNatively(
+  chain: CanonicalChain,
+  source: string,
+  target: CompileTarget,
+  options: SauceCompileOptions,
+): {
+  readonly compiled: CompileResult;
+  readonly entryEncoding: "abi-v1" | "compact-v1";
+  readonly manifest?: AccountManifest;
+} {
+  const accessors = typeof options.accessors === "object" ? options.accessors : {};
+  const { manifest, entryEncoding, ...compiled } = compileWithRs({
+    source,
+    target,
+    resolve: options.resolve,
+    resolvePackage: options.resolvePackage,
+    defines: options.defines,
+    contracts: options.contracts,
+    ambient: options.ambient,
+    compactArgs: options.compactArgs,
+    extensions: {
+      chain,
+      tokens: options.tokens,
+      allowWidenedSelectors: accessors.allowWidenedSelectors,
+    },
+  });
+  if (compiled.bytecode.length === 0) {
+    throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
+  }
+
+  return manifest === undefined
+    ? { compiled, entryEncoding }
+    : { compiled, entryEncoding, manifest };
 }
