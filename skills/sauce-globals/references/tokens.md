@@ -84,6 +84,7 @@ On EVM chains:
 On Solana:
 
 - `balanceOf(token: Address, account: Account): Uint256`
+- `ownerOf(token: Address, account: Account): Address`
 - `totalSupply(token: Account): Uint256`
 - `decimals(token: Account): Uint256`
 - `allowance(token: Address, account: Account, spender: Address): Uint256`

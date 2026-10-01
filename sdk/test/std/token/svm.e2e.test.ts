@@ -362,6 +362,96 @@ describeStdToken("@sauce/token e2e: the SVM arm against real SPL accounts", () =
     expect(tokenAmount(harness, dest)).toBe(TRANSFERRED);
   });
 
+  it("ownerOf reads owner@32 off a real SPL token account", async () => {
+    const mint = randomAddress();
+    const owner = randomAddress();
+    const account = setTokenAccount(harness, randomAddress(), mint, owner, TOKEN_BALANCE);
+
+    const returnData = await run(
+      harness,
+      `import { ownerOf } from "@sauce/token"; function main(account: Account): Address { return ownerOf(${literal(mint)}, account); }`,
+      { account: { address: account, role: AccountRole.READONLY } },
+    );
+
+    // The full word: the owner is a 32-byte key, and its bytes come back big-endian, as written.
+    expect(toBigInt(returnData)).toBe(BigInt(literal(owner).slice(0, -1)));
+  });
+
+  it("ownerOf refuses an account of another mint, or one SPL Token does not own", async () => {
+    const mint = randomAddress();
+    const entry = `import { ownerOf } from "@sauce/token"; function main(account: Account): Address { return ownerOf(${literal(mint)}, account); }`;
+    const otherMint = setTokenAccount(
+      harness,
+      randomAddress(),
+      randomAddress(),
+      harness.payer.address,
+      TOKEN_BALANCE,
+    );
+    // The genuine layout, of the right mint, written into an account another program owns.
+    const forged = randomAddress();
+    const data = tokenAccountData(mint, harness.payer.address, TOKEN_BALANCE);
+    harness.svm.setAccount({
+      address: forged,
+      data,
+      executable: false,
+      lamports: lamports(harness.svm.minimumBalanceForRentExemption(BigInt(data.length))),
+      programAddress: randomAddress(),
+      space: BigInt(data.length),
+    });
+
+    for (const address of [otherMint, forged]) {
+      const slots = { account: { address, role: AccountRole.READONLY } };
+      const { ok } = await sendInstructions(harness, instructionsFor(harness, entry, slots));
+      expect(ok).toBe(false);
+    }
+  });
+
+  it("a delegate's transfer spends someone else's balance, and ownerOf tells the two apart", async () => {
+    // The gap ownerOf closes: SPL accepts the delegate as the transfer's authority, so a transfer
+    // that succeeds with `authority` attached says nothing about whose `source` is.
+    const mint = randomAddress();
+    const holder = randomAddress();
+    const delegated = setDelegatedTokenAccount(
+      harness,
+      randomAddress(),
+      mint,
+      holder,
+      harness.payer.address,
+      DELEGATED,
+    );
+    const own = setTokenAccount(
+      harness,
+      randomAddress(),
+      mint,
+      harness.payer.address,
+      TOKEN_BALANCE,
+    );
+    const dest = setTokenAccount(harness, randomAddress(), mint, harness.payer.address, 0n);
+    const slots = (source: Address) => ({
+      tokenProgram: { address: TOKEN_PROGRAM, role: AccountRole.READONLY },
+      source: { address: source, role: AccountRole.WRITABLE },
+      dest: { address: dest, role: AccountRole.WRITABLE },
+      authority: { address: harness.payer.address, role: AccountRole.READONLY_SIGNER },
+    });
+    const params = "tokenProgram: Account, source: Account, dest: Account, authority: Account";
+    const move = `transfer(${literal(mint)}, tokenProgram, source, dest, authority, ${TRANSFERRED}n);`;
+    const unchecked = `import { transfer } from "@sauce/token"; function main(${params}): void { ${move} }`;
+    const checked = `import { ownerOf, transfer } from "@sauce/token"; function main(${params}): void { require(ownerOf(${literal(mint)}, source) == authority, "source is not the authority's"); ${move} }`;
+
+    await run(harness, unchecked, slots(delegated));
+    expect(tokenAmount(harness, delegated)).toBe(TOKEN_BALANCE - TRANSFERRED);
+
+    const refused = await sendInstructions(
+      harness,
+      instructionsFor(harness, checked, slots(delegated)),
+    );
+    expect(refused.ok).toBe(false);
+    expect(tokenAmount(harness, delegated)).toBe(TOKEN_BALANCE - TRANSFERRED);
+
+    await run(harness, checked, slots(own));
+    expect(tokenAmount(harness, own)).toBe(TOKEN_BALANCE - TRANSFERRED);
+  });
+
   it("approve sets a delegate the library then reads back through allowance", async () => {
     const mint = randomAddress();
     const delegate = randomAddress();
