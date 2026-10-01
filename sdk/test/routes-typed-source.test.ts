@@ -12,9 +12,7 @@
  */
 import { compileWithRs } from "../src/routes/rs-compile.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
-import { rewriteTokenFactory, rewriteTokenMembers } from "../src/routes/token-rewrite.js";
 import { requireChain } from "../src/chains/canonical.js";
-import { registryTokenAddress } from "../src/routes/token-registry.js";
 
 const EXECUTION = {
   pot: "0x1111111111111111111111111111111111111111",
@@ -112,8 +110,9 @@ function main(amount: Uint256): Uint256 {
   });
 });
 
-describe("each rewrite parses annotations on its own", () => {
-  const annotated = `function pay(token: Address, to: Address, amount: Uint256): void {
+describe("annotations reach the compiler with the token and protocol syntax around them", () => {
+  it("a bound Token in an annotated helper, a token symbol and a protocol call compile as written", () => {
+    const annotated = `function pay(token: Address, to: Address, amount: Uint256): void {
   const t = Token(token);
   t.transfer(to, amount);
 }
@@ -121,24 +120,8 @@ function main(to: Address): Uint256 {
   pay(USDC, to, 1n);
   return Aave.Pool.getUserAccountData(to).totalDebtBase;
 }`;
-
-  it("the token-member pass", () => {
-    const usdc = registryTokenAddress(BASE, "USDC")!;
-    const out = rewriteTokenMembers(
-      `function main(to: Address): Uint256 { return USDC.balanceOf(to); }`,
-      new Map([["USDC", usdc]]),
-    );
-    expect(out.source).toBe(
-      "function main(to: Address): Uint256 { return IERC20.at(USDC).balanceOf(to); }",
-    );
-  });
-
-  it("the Token(addr) pass", () => {
-    const out = rewriteTokenFactory(annotated);
-    expect(out.source).toContain(
-      "function pay(token: Address, to: Address, amount: Uint256): void {",
-    );
-    expect(out.source).toContain("const t = token;");
-    expect(out.source).toContain("__sauce_transfer(t, to, amount)");
+    const out = compileSauceRoute("base", annotated, EXECUTION);
+    expect(out.source).toBe(annotated);
+    expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 });
