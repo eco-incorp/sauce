@@ -130,4 +130,17 @@ describeSvm("binding a slot to the Pot: the owner check, and re-deriving the add
 
     expect(new TextDecoder().decode(refused.revertData)).toBe("pot is not the wallet's Pot");
   });
+
+  // The harness Pot's salt is not zero, so the case above already runs the skill's `--define SALT`
+  // path. This is the other half: the derivation is the salt's, so the program compiled with the
+  // default salt (zero) refuses the same, real Pot.
+  it("the re-derivation is the salt's: compiled for the zero salt, it refuses the real Pot", async () => {
+    expect(toBigInt(HARNESS_POT_SALT)).not.toBe(0n);
+    const zeroSalt = compileSauceProgram("solana", rederived(), {
+      defines: { KITCHEN: word(harness.kitchen) },
+    }).bytecode;
+    const refused = expectFail(await cook(zeroSalt, [pot(), wallet()]));
+
+    expect(new TextDecoder().decode(refused.revertData)).toBe("pot is not the wallet's Pot");
+  });
 });
