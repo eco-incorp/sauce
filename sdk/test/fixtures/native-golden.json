@@ -123,6 +123,276 @@
     "defines": [],
     "sha256": "86070a358dddb36052f79f2bbf0327ca6dc165b6ceb805d82c1251a74b436e16"
   },
+  "shape: a bound Token@arbitrum": {
+    "source": "function main(t: Address): Uint256 { const token = Token(t); token.transfer(t, 1n); return token.balanceOf(t); }",
+    "defines": [],
+    "sha256": "290730a0cf663603c0276bf8106aa0044f5c001cad54924120de844a230ce60e"
+  },
+  "shape: a bound Token@base": {
+    "source": "function main(t: Address): Uint256 { const token = Token(t); token.transfer(t, 1n); return token.balanceOf(t); }",
+    "defines": [],
+    "sha256": "290730a0cf663603c0276bf8106aa0044f5c001cad54924120de844a230ce60e"
+  },
+  "shape: a bound Token@optimism": {
+    "source": "function main(t: Address): Uint256 { const token = Token(t); token.transfer(t, 1n); return token.balanceOf(t); }",
+    "defines": [],
+    "sha256": "290730a0cf663603c0276bf8106aa0044f5c001cad54924120de844a230ce60e"
+  },
+  "shape: a chain-qualified address@arbitrum": {
+    "source": "function main(): Uint256 { return Arbitrum.UniswapV3.Factory; }",
+    "defines": [],
+    "sha256": "7915fdd380439b9b1e4f1b9317795ea0666830a4e95f0a5f8c737c0f1349dd2f"
+  },
+  "shape: a chain-qualified address@base": {
+    "source": "function main(): Uint256 { return Arbitrum.UniswapV3.Factory; }",
+    "defines": [],
+    "sha256": "7915fdd380439b9b1e4f1b9317795ea0666830a4e95f0a5f8c737c0f1349dd2f"
+  },
+  "shape: a chain-qualified address@optimism": {
+    "source": "function main(): Uint256 { return Arbitrum.UniswapV3.Factory; }",
+    "defines": [],
+    "sha256": "7915fdd380439b9b1e4f1b9317795ea0666830a4e95f0a5f8c737c0f1349dd2f"
+  },
+  "shape: a family alias@arbitrum": {
+    "source": "function main(): Uint256 { return Uniswap.UniversalRouter; }",
+    "defines": [],
+    "sha256": "6729040e1ffb9cf5f09dc20d2dd6f0417954d00ebdb69e4f0a0f54c154b4e939"
+  },
+  "shape: a family alias@base": {
+    "source": "function main(): Uint256 { return Uniswap.UniversalRouter; }",
+    "defines": [],
+    "sha256": "f056e63d358747298b9b3ff240f81ccbff2792c49dacccf09b515039413b8377"
+  },
+  "shape: a family alias@optimism": {
+    "source": "function main(): Uint256 { return Uniswap.UniversalRouter; }",
+    "defines": [],
+    "sha256": "2c71d25b2895b8cfcc50d61ab052936a2b955114fd606d5ba8586f2eff61d5ba"
+  },
+  "shape: a guard that leaves@arbitrum": {
+    "source": "function main(): Uint256 { if (!available(PancakeswapV3.Factory)) { return 0n; } return PancakeswapV3.Factory; }",
+    "defines": [],
+    "sha256": "fa14bf361276185106ff29027c3077d4b51b937681741b2298c2a2b9a1f81adb"
+  },
+  "shape: a guard that leaves@base": {
+    "source": "function main(): Uint256 { if (!available(PancakeswapV3.Factory)) { return 0n; } return PancakeswapV3.Factory; }",
+    "defines": [],
+    "sha256": "fa14bf361276185106ff29027c3077d4b51b937681741b2298c2a2b9a1f81adb"
+  },
+  "shape: a guard that leaves@optimism": {
+    "source": "function main(): Uint256 { if (!available(PancakeswapV3.Factory)) { return 0n; } return PancakeswapV3.Factory; }",
+    "defines": [],
+    "sha256": "f046feff6545dac65b59bbc6c18c872a0faa70770a6c2ea384aae8713143c533"
+  },
+  "shape: a holder's balance@arbitrum": {
+    "source": "function main(pool: Address): Uint256 { return pool.WETH; }",
+    "defines": [],
+    "sha256": "18500f8eee089073e183638017c443fc0da98a48efe2d7576b907b2a57db99d3"
+  },
+  "shape: a holder's balance@base": {
+    "source": "function main(pool: Address): Uint256 { return pool.WETH; }",
+    "defines": [],
+    "sha256": "8908fdeae1ccc1e9880fc9d114cbd7058edbc8f4529a9b85867ac562104fc61c"
+  },
+  "shape: a holder's balance@optimism": {
+    "source": "function main(pool: Address): Uint256 { return pool.WETH; }",
+    "defines": [],
+    "sha256": "8908fdeae1ccc1e9880fc9d114cbd7058edbc8f4529a9b85867ac562104fc61c"
+  },
+  "shape: a protocol address@arbitrum": {
+    "source": "function main(): Uint256 { return Cctp.TokenMessenger; }",
+    "defines": [],
+    "sha256": "02f9a5bb1d163e72dbaf333be7e8229ff52f05119b2d19303f110686bed2f85c"
+  },
+  "shape: a protocol address@base": {
+    "source": "function main(): Uint256 { return Cctp.TokenMessenger; }",
+    "defines": [],
+    "sha256": "02f9a5bb1d163e72dbaf333be7e8229ff52f05119b2d19303f110686bed2f85c"
+  },
+  "shape: a protocol address@optimism": {
+    "source": "function main(): Uint256 { return Cctp.TokenMessenger; }",
+    "defines": [],
+    "sha256": "02f9a5bb1d163e72dbaf333be7e8229ff52f05119b2d19303f110686bed2f85c"
+  },
+  "shape: a protocol call@arbitrum": {
+    "source": "function main(a: Address, b: Address): Address { return UniswapV3.Factory.getPool(a, b, 500n); }",
+    "defines": [],
+    "sha256": "c38b9ac8588d924848926b5085ae269b0bddb2d6472386d9f885e32036497b26"
+  },
+  "shape: a protocol call@base": {
+    "source": "function main(a: Address, b: Address): Address { return UniswapV3.Factory.getPool(a, b, 500n); }",
+    "defines": [],
+    "sha256": "3e650e6bfd3bfec0802e72108ce60a9601ca1bfa822f878f33af1069dc8552fe"
+  },
+  "shape: a protocol call@optimism": {
+    "source": "function main(a: Address, b: Address): Address { return UniswapV3.Factory.getPool(a, b, 500n); }",
+    "defines": [],
+    "sha256": "c38b9ac8588d924848926b5085ae269b0bddb2d6472386d9f885e32036497b26"
+  },
+  "shape: a script@arbitrum": {
+    "source": "USDC.transfer(0x1111111111111111111111111111111111111111, 5n);",
+    "defines": [],
+    "sha256": "ed16e6df4591dd9b0d4b53f59f0e0ee7e6f7153ef9e4d5a5d010cc10c383160f"
+  },
+  "shape: a script@base": {
+    "source": "USDC.transfer(0x1111111111111111111111111111111111111111, 5n);",
+    "defines": [],
+    "sha256": "4a1d88c96282db37337531f6c5e4633cb76e35f91cc385aa8d9f5cf6d891635e"
+  },
+  "shape: a script@optimism": {
+    "source": "USDC.transfer(0x1111111111111111111111111111111111111111, 5n);",
+    "defines": [],
+    "sha256": "a2e09073285e381ac74e20c00ada5a43e708a9fe298675f7e155f6f4cb05f994"
+  },
+  "shape: a token approve@arbitrum": {
+    "source": "function main(): void { USDC.approve(0x1111111111111111111111111111111111111111, 5n); }",
+    "defines": [],
+    "sha256": "c0787a6a0ec562dbc55ccd441d92f5e9a026db2aa8a02aead81f81a949a83218"
+  },
+  "shape: a token approve@base": {
+    "source": "function main(): void { USDC.approve(0x1111111111111111111111111111111111111111, 5n); }",
+    "defines": [],
+    "sha256": "c005fa7c51198996e1349095c40f5801c63aa01d7a9fc7cde976282d78acbf98"
+  },
+  "shape: a token approve@optimism": {
+    "source": "function main(): void { USDC.approve(0x1111111111111111111111111111111111111111, 5n); }",
+    "defines": [],
+    "sha256": "97c50300307ecf649e84e09450b0675f9fe9ef9b98ce385f1c33f5b782721cfd"
+  },
+  "shape: a token read@arbitrum": {
+    "source": "function main(): Uint256 { return USDC.balanceOf(ctx.self()); }",
+    "defines": [],
+    "sha256": "c34310adb74fac3f7eeeaf0300421ef19fd7795bd910449b27bc839c98b80a7f"
+  },
+  "shape: a token read@base": {
+    "source": "function main(): Uint256 { return USDC.balanceOf(ctx.self()); }",
+    "defines": [],
+    "sha256": "1c79e914c3c867a5f1d4e0426118ceb1e1fbbb8096ec8c076e40757fd4628f9d"
+  },
+  "shape: a token read@optimism": {
+    "source": "function main(): Uint256 { return USDC.balanceOf(ctx.self()); }",
+    "defines": [],
+    "sha256": "f4e7154b7f6fd1651ca05b04cd2f9438ba9481c153abeee5f70bda2a02241e2d"
+  },
+  "shape: a token transferFrom@arbitrum": {
+    "source": "function main(a: Address): void { USDC.transferFrom(a, 0x1111111111111111111111111111111111111111, 5n); }",
+    "defines": [],
+    "sha256": "ab706c4e0e0731321a6447659101949af61b2c4fbfaee510f27a058175f45ae7"
+  },
+  "shape: a token transferFrom@base": {
+    "source": "function main(a: Address): void { USDC.transferFrom(a, 0x1111111111111111111111111111111111111111, 5n); }",
+    "defines": [],
+    "sha256": "8919644cdf9a3d6f39481ee862a368a4f762175201014b5f9f8c92a1987dfb2b"
+  },
+  "shape: a token transferFrom@optimism": {
+    "source": "function main(a: Address): void { USDC.transferFrom(a, 0x1111111111111111111111111111111111111111, 5n); }",
+    "defines": [],
+    "sha256": "a3045e32cf6170e8bf62a7991f0c8ed59e5b6ec76232eab4b1968a73112f7c59"
+  },
+  "shape: a token write@arbitrum": {
+    "source": "function main(): void { USDC.transfer(0x1111111111111111111111111111111111111111, 5n); }",
+    "defines": [],
+    "sha256": "ed16e6df4591dd9b0d4b53f59f0e0ee7e6f7153ef9e4d5a5d010cc10c383160f"
+  },
+  "shape: a token write@base": {
+    "source": "function main(): void { USDC.transfer(0x1111111111111111111111111111111111111111, 5n); }",
+    "defines": [],
+    "sha256": "4a1d88c96282db37337531f6c5e4633cb76e35f91cc385aa8d9f5cf6d891635e"
+  },
+  "shape: a token write@optimism": {
+    "source": "function main(): void { USDC.transfer(0x1111111111111111111111111111111111111111, 5n); }",
+    "defines": [],
+    "sha256": "a2e09073285e381ac74e20c00ada5a43e708a9fe298675f7e155f6f4cb05f994"
+  },
+  "shape: an interface at an address@arbitrum": {
+    "source": "function main(v: Address, a: Address): Uint256 { return Erc4626.Vault.at(v).balanceOf(a); }",
+    "defines": [],
+    "error": true
+  },
+  "shape: an interface at an address@base": {
+    "source": "function main(v: Address, a: Address): Uint256 { return Erc4626.Vault.at(v).balanceOf(a); }",
+    "defines": [],
+    "error": true
+  },
+  "shape: an interface at an address@optimism": {
+    "source": "function main(v: Address, a: Address): Uint256 { return Erc4626.Vault.at(v).balanceOf(a); }",
+    "defines": [],
+    "error": true
+  },
+  "shape: an underscore spelling@arbitrum": {
+    "source": "function main(): Uint256 { return UniswapV3_Factory; }",
+    "defines": [],
+    "sha256": "7915fdd380439b9b1e4f1b9317795ea0666830a4e95f0a5f8c737c0f1349dd2f"
+  },
+  "shape: an underscore spelling@base": {
+    "source": "function main(): Uint256 { return UniswapV3_Factory; }",
+    "defines": [],
+    "sha256": "4f1eefe437d8c4b414b01f5cfc80993ecd2dfed2b81db2e48ad08346110c2829"
+  },
+  "shape: an underscore spelling@optimism": {
+    "source": "function main(): Uint256 { return UniswapV3_Factory; }",
+    "defines": [],
+    "sha256": "7915fdd380439b9b1e4f1b9317795ea0666830a4e95f0a5f8c737c0f1349dd2f"
+  },
+  "shape: available of a token@arbitrum": {
+    "source": "function main(): Uint256 { return available(USDC) ? 1n : 0n; }",
+    "defines": [],
+    "sha256": "9773e8dff39c3b90cd58b882417a77130b87591397e461fab192dc4885ed292e"
+  },
+  "shape: available of a token@base": {
+    "source": "function main(): Uint256 { return available(USDC) ? 1n : 0n; }",
+    "defines": [],
+    "sha256": "9773e8dff39c3b90cd58b882417a77130b87591397e461fab192dc4885ed292e"
+  },
+  "shape: available of a token@optimism": {
+    "source": "function main(): Uint256 { return available(USDC) ? 1n : 0n; }",
+    "defines": [],
+    "sha256": "9773e8dff39c3b90cd58b882417a77130b87591397e461fab192dc4885ed292e"
+  },
+  "shape: available, decided true@arbitrum": {
+    "source": "function main(): Uint256 { if (available(UniswapV3.Factory)) { return UniswapV3.Factory; } return 0n; }",
+    "defines": [],
+    "sha256": "7915fdd380439b9b1e4f1b9317795ea0666830a4e95f0a5f8c737c0f1349dd2f"
+  },
+  "shape: available, decided true@base": {
+    "source": "function main(): Uint256 { if (available(UniswapV3.Factory)) { return UniswapV3.Factory; } return 0n; }",
+    "defines": [],
+    "sha256": "4f1eefe437d8c4b414b01f5cfc80993ecd2dfed2b81db2e48ad08346110c2829"
+  },
+  "shape: available, decided true@optimism": {
+    "source": "function main(): Uint256 { if (available(UniswapV3.Factory)) { return UniswapV3.Factory; } return 0n; }",
+    "defines": [],
+    "sha256": "7915fdd380439b9b1e4f1b9317795ea0666830a4e95f0a5f8c737c0f1349dd2f"
+  },
+  "shape: chainId@arbitrum": {
+    "source": "function main(): Uint256 { return chainId + CHAIN_ID; }",
+    "defines": [],
+    "sha256": "eb361b5755fd68bd839ad08d1294c68e1757f7d69a0d4ee3f0221c3cd919a93d"
+  },
+  "shape: chainId@base": {
+    "source": "function main(): Uint256 { return chainId + CHAIN_ID; }",
+    "defines": [],
+    "sha256": "be97e88bc348fa474c78da5f2ab3ebd75a2fc17466a4e137a440798df2f9e58b"
+  },
+  "shape: chainId@optimism": {
+    "source": "function main(): Uint256 { return chainId + CHAIN_ID; }",
+    "defines": [],
+    "sha256": "4dfbdaf0255df165daac33dca5f436bc5bcebe88f0ed1f434b107d99818791e9"
+  },
+  "shape: Token(address)@arbitrum": {
+    "source": "function main(t: Address): void { Token(t).approve(0x1111111111111111111111111111111111111111, 5n); }",
+    "defines": [],
+    "sha256": "6a345d8f91638a52961d09f50baad16db621733fbd3fa5326053d0fc95c02ba8"
+  },
+  "shape: Token(address)@base": {
+    "source": "function main(t: Address): void { Token(t).approve(0x1111111111111111111111111111111111111111, 5n); }",
+    "defines": [],
+    "sha256": "6a345d8f91638a52961d09f50baad16db621733fbd3fa5326053d0fc95c02ba8"
+  },
+  "shape: Token(address)@optimism": {
+    "source": "function main(t: Address): void { Token(t).approve(0x1111111111111111111111111111111111111111, 5n); }",
+    "defines": [],
+    "sha256": "6a345d8f91638a52961d09f50baad16db621733fbd3fa5326053d0fc95c02ba8"
+  },
   "skills/sauce-chains/examples/chains.sauce.ts@arbitrum": {
     "defines": [],
     "sha256": "a0647e3fcc7f5d9250a372880604861ce590d7d4e313159742e1b1258cbfe959"

@@ -1,5 +1,6 @@
 /**
- * Every corpus program compiles to the bytecode the native pipeline was proven to produce.
+ * Every corpus program, and one program per shape the SDK's rewrites lowered, compiles to the
+ * bytecode the native pipeline was proven to produce.
  *
  * `routes-native-parity.test.ts` showed, case by case, that the native pipeline compiles the corpus
  * exactly as the SDK's source rewrites did. This holds it there once those rewrites are deleted: the
@@ -23,7 +24,12 @@ const GOLDEN = JSON.parse(
   readFileSync(join(ROOT, "sdk/test/fixtures/native-golden.json"), "utf8"),
 ) as Record<
   string,
-  { readonly defines: readonly string[]; readonly sha256?: string; readonly error?: true }
+  {
+    readonly source?: string;
+    readonly defines: readonly string[];
+    readonly sha256?: string;
+    readonly error?: true;
+  }
 >;
 
 const INTENTS = {
@@ -33,12 +39,13 @@ const INTENTS = {
 } as const;
 const FILLER = 0x3333333333333333333333333333333333333333n;
 
-describe("the corpus compiles to its recorded bytecode", () => {
+describe("the corpus and the shapes compile to their recorded bytecode", () => {
   for (const [key, expected] of Object.entries(GOLDEN)) {
     const at = key.lastIndexOf("@");
     const [file, chain] = [key.slice(0, at), key.slice(at + 1)];
     it(key, () => {
-      const source = readFileSync(join(ROOT, file), "utf8");
+      // A shape case carries its source; a corpus case names its file.
+      const source = expected.source ?? readFileSync(join(ROOT, file), "utf8");
       const defines = Object.fromEntries(expected.defines.map((name) => [name, FILLER]));
       const compile = () =>
         compileSauceProgram(chain, source, { intents: INTENTS, defines } as never).bytecode;

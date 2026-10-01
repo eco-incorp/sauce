@@ -119,15 +119,22 @@ function prependedImports(rewrittenSource: string, original: string): string {
 }
 
 /** The native outcomes this run saw, by case — written to the golden fixture on request. */
-const golden: Record<string, { defines: string[]; sha256?: string; error?: true }> = {};
+const golden: Record<
+  string,
+  { source?: string; defines: string[]; sha256?: string; error?: true }
+> = {};
 
-function expectParity(chain: string, source: string, name?: string): void {
+/** `name` names the case in the golden fixture; `inline` stores its source there, for a case that is
+ *  not a file. */
+function expectParity(chain: string, source: string, name?: string, inline = false): void {
   const { outcome: old, defines } = rewritten(chain, source);
   const fresh = outcome(chain, source, true, defines);
   if (name !== undefined) {
-    golden[`${name}@${chain}`] = fresh.ok
-      ? { defines: Object.keys(defines), sha256: sha256Hex(fresh.bytecode) }
-      : { defines: Object.keys(defines), error: true };
+    golden[`${name}@${chain}`] = {
+      ...(inline ? { source } : {}),
+      defines: Object.keys(defines),
+      ...(fresh.ok ? { sha256: sha256Hex(fresh.bytecode) } : { error: true as const }),
+    };
   }
   if (!old.ok) {
     expect(fresh.ok).toBe(false);
@@ -231,21 +238,12 @@ describeNative("native pipeline: the corpus compiles as the rewrites compiled it
       it(`${name} on ${chain}`, () => expectParity(chain, source, name));
     }
   }
-  // `UPDATE_NATIVE_GOLDEN=1` records what the native pipeline compiled every case to, proven equal
-  // to the rewrites above, for `routes-native-golden.test.ts` to hold it to once they are gone.
-  afterAll(() => {
-    if (process.env.UPDATE_NATIVE_GOLDEN !== "1") return;
-    const sorted = Object.fromEntries(
-      Object.entries(golden).sort(([a], [b]) => a.localeCompare(b)),
-    );
-    writeFileSync(GOLDEN, `${JSON.stringify(sorted, null, 2)}\n`);
-  });
 });
 
 describeNative("native pipeline: each shape the rewrites lowered", () => {
   for (const [what, source] of SHAPES) {
     for (const chain of ["base", "optimism", "arbitrum"]) {
-      it(`${what} on ${chain}`, () => expectParity(chain, source));
+      it(`${what} on ${chain}`, () => expectParity(chain, source, `shape: ${what}`, true));
     }
   }
 });
@@ -307,4 +305,12 @@ describeNative("the manifest", () => {
     expect(document.current).toBe("Base");
     expect(Object.keys(document.chains).sort()).toEqual(CANONICAL_CHAINS.map(chainKey).sort());
   });
+});
+
+// `UPDATE_NATIVE_GOLDEN=1` records what the native pipeline compiled every case to, proven equal
+// to the rewrites above, for `routes-native-golden.test.ts` to hold it to once they are gone.
+afterAll(() => {
+  if (process.env.UPDATE_NATIVE_GOLDEN !== "1") return;
+  const sorted = Object.fromEntries(Object.entries(golden).sort(([a], [b]) => a.localeCompare(b)));
+  writeFileSync(GOLDEN, `${JSON.stringify(sorted, null, 2)}\n`);
 });
