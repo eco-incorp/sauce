@@ -162,8 +162,8 @@ cook adds about 404 bytes and 33 more per account (538 with four accounts), so w
 program and its arguments have about 694 bytes. What costs bytes:
 
 - each `require` message, byte for byte;
-- each `@sauce/token` call, which inlines its own checks (a second `transfer` adds about 40 bytes, a
-  `balanceOf` about 110);
+- each `@sauce/token` call, which inlines its own checks and their reasons (a second `transfer` adds
+  about 50 bytes, a `balanceOf` about 140);
 - each account, about 33 bytes;
 - arguments: `--compact-args` encodes them compactly (a `Uint256` takes 7 bytes instead of 32).
 
