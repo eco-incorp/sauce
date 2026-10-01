@@ -213,6 +213,18 @@ describe("sauce_price", () => {
 });
 
 describe("sauce_compile", () => {
+  it("compiles a program file that starts with a #! line as the file without it", async () => {
+    const program = "function main(to: Address) {\n  USDC.transfer(to, 1n);\n}\n";
+    const plain = ok(await mcp.call("sauce_compile", { source: program, chain: "base" }));
+    const shebang = ok(
+      await mcp.call("sauce_compile", {
+        source: `#!/usr/bin/env -S npx -y @eco-incorp/sauce simulate\n${program}`,
+        chain: "base",
+      }),
+    );
+    assert.equal(shebang.bytecode, plain.bytecode);
+  });
+
   it("compiles for the chain: bytecode, size, main's parameters, defines, compiler, engine", async () => {
     const out = ok(
       await mcp.call("sauce_compile", {

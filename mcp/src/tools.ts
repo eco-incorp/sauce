@@ -63,6 +63,7 @@ import {
   PreviewChainError,
   programChain,
   programChains,
+  withoutShebang,
   publishCommand,
   registeredBalances,
   requireSupported,
@@ -378,7 +379,9 @@ function intentsOf(
   };
 }
 
-export function programOf(args: ProgramArgs, fallback?: CanonicalChain): Program {
+export function programOf(given: ProgramArgs, fallback?: CanonicalChain): Program {
+  // A `#!` line, as a program file may start with, is blanked as the command blanks it.
+  const args = { ...given, source: withoutShebang(given.source) };
   const moduleText = Object.values(args.modules ?? {});
   if (moduleText.length > LIMITS.modules) {
     throw new UsageError(`modules: at most ${LIMITS.modules} files`);

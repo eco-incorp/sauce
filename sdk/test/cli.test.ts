@@ -237,6 +237,42 @@ describe("sauce (no command)", () => {
   });
 });
 
+describe("a program file that is a command: a leading #! line", () => {
+  const SHEBANG = "#!/usr/bin/env -S npx -y @eco-incorp/sauce simulate";
+  // USDC.transfer lowers to an import the SDK puts above the program, which a #! line has to
+  // precede to be one: the line is blanked, so the import is free to go first.
+  const PROGRAM =
+    "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n";
+
+  it("compiles to the same bytecode as the file without it, from a file or from stdin", async () => {
+    const plain = await sauce("compile", file("plain.sauce.ts", PROGRAM), "--chain", "base");
+    expect(plain.code).toBe(0);
+    const run = await sauce(
+      ...["compile", file("pay.sauce.ts", `${SHEBANG}\n${PROGRAM}`), "--chain", "base"],
+    );
+    expect([run.code, run.stderr]).toEqual([0, ""]);
+    expect(run.stdout).toBe(plain.stdout);
+    const piped = await sauceWith(
+      { readStdin: () => `${SHEBANG}\n${PROGRAM}` },
+      ...["compile", "-", "--chain", "base"],
+    );
+    expect(piped.stdout).toBe(plain.stdout);
+  });
+
+  it("keeps the file's own line numbers in a compile error", async () => {
+    const run = await sauce(
+      ...[
+        "compile",
+        file("broken.sauce.ts", `${SHEBANG}\n${PROGRAM.replace("amount);", "nope);")}`),
+      ],
+      ...["--chain", "base"],
+    );
+    expect(run.code).toBe(1);
+    expect(run.stderr).toMatch(/broken\.sauce\.ts:3:/);
+    expect(run.stderr).toContain("nope");
+  });
+});
+
 describe("sauce compile", () => {
   it("compiles a file byte-for-byte as openRoute compiles the same body", async () => {
     const run = await sauce(

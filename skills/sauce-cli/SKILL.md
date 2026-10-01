@@ -202,6 +202,32 @@ Every value is checked against its declared type before anything is sent: `Addre
 [examples/split.sauce.ts](examples/split.sauce.ts) takes its token, recipients and amount as
 arguments.
 
+## A program file as a command
+
+A program file whose first line is
+
+```sh
+#!/usr/bin/env -S npx -y @eco-incorp/sauce simulate
+```
+
+runs as a command once it is executable (`chmod +x pay.sauce.ts`):
+
+```sh
+./pay.sauce.ts --chain base --config sauce.config.json --owner <address> --args <recipient> 1000000
+```
+
+is `sauce simulate pay.sauce.ts` with those words after it: the cook rehearsed from the owner's
+Pot, gas and what it moved, or why it reverts. It rehearses only, so running the file never spends;
+sending it is `sauce run` on the same file. The compile ignores the line, and keeps the file's own
+line numbers in its errors:
+
+```sauce chain=base,ethereum
+#!/usr/bin/env -S npx -y @eco-incorp/sauce simulate
+function main(recipient: Address, amount: Uint256) {
+  USDC.transfer(recipient, amount);
+}
+```
+
 ## Actions documents
 
 An actions document is JSON: a list of protocol operations in place of a program (`sauce-actions`

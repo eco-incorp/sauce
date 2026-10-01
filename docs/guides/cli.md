@@ -569,6 +569,19 @@ sauce compile: pay.sauce.ts does not compile for base
 hint: if RECIPIENT is a value you supply, pass --define RECIPIENT=<value>
 ```
 
+### A program file as a command
+
+A program file may start with a `#!` line that runs it through `sauce simulate`:
+
+```sh
+#!/usr/bin/env -S npx -y @eco-incorp/sauce simulate
+```
+
+After `chmod +x pay.sauce.ts`, `./pay.sauce.ts --chain base --config sauce.config.json --owner
+<address> --args <recipient> 1000000` rehearses the cook, exactly as `sauce simulate pay.sauce.ts`
+with those flags does. Running the file never spends: sending it is still `sauce run`. The command
+blanks the line before compiling, so the program and its error positions are the file's own.
+
 ### In an editor
 
 A program file is checked by an editor as TypeScript, which does not know SauceScript's names.

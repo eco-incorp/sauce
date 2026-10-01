@@ -86,7 +86,14 @@ import type { Ask } from "./prompt.js";
 import { defaultStoreDir, IntentStore } from "./store.js";
 import { globalsCommand } from "./globals.js";
 import { initProject } from "./init.js";
-import { assumedBalances, definesReach, fundingFor, potTarget, programChain } from "./inputs.js";
+import {
+  assumedBalances,
+  definesReach,
+  fundingFor,
+  potTarget,
+  programChain,
+  withoutShebang,
+} from "./inputs.js";
 import { inspectCommand, inspectFile } from "./inspect.js";
 import {
   checkIntentPots,
@@ -588,9 +595,10 @@ interface ProgramText {
 function programText(io: CliIo, operand: string | ProgramText): ProgramText {
   if (typeof operand !== "string") return operand;
 
+  // A `#!` line, which makes the file a command, is blanked: the compile never sees it.
   return operand === "-"
-    ? { file: STDIN, text: io.readStdin(), stdin: true }
-    : { file: operand, text: readInput(io, operand), stdin: false };
+    ? { file: STDIN, text: withoutShebang(io.readStdin()), stdin: true }
+    : { file: operand, text: withoutShebang(readInput(io, operand)), stdin: false };
 }
 
 /**
