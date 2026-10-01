@@ -7,9 +7,11 @@
  * compiler could only say "`this call expression` cannot be lowered to IR yet". The route compiler
  * knows what the chain has, so it says which name, on which chain, and what it probably meant.
  *
- * Runs after the token rewrite and before the protocol rewrite (`sauce-route.ts`): a registered
- * token is a define by then, and a protocol namespace or a chain key is the protocol rewrite's to
- * resolve or refuse, with its own errors.
+ * Consulted only once the compiler has refused the program (`sauce-route.ts`), on the source it
+ * refused. So a program the compiler accepts is never refused here, and a name only the compiler
+ * knows — an export of an ambient module — cannot be mistaken for an unknown one. By then a
+ * registered token is a define, and every protocol namespace and chain key the registry knows has
+ * been resolved, or refused with the protocol rewrite's own error.
  */
 import type { CanonicalChain } from "../chains/canonical.js";
 import { addressOn } from "../descriptors/query.js";
@@ -87,11 +89,27 @@ function nearMatches(name: string, candidates: Iterable<string>): string[] {
     .slice(0, 3);
 }
 
+/** The compiler's own account of a failure: the last line of its chain of causes. */
+function headline(error: unknown): string | undefined {
+  const message = String((error as Error | undefined)?.message ?? error).replace(
+    new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g"),
+    "",
+  );
+  const causes = [...message.matchAll(/─▶ (.+)/g)];
+  return causes.length === 0 ? undefined : causes[causes.length - 1]![1]!.trim();
+}
+
 /**
- * Throws for the first member access (`X.y`, `X.y(...)`) whose root `X` nothing gives meaning to on
- * `chain`, naming it and the chain's near matches among its tokens and protocols.
+ * For a compile that failed with `cause`: an error naming the first member access (`X.y`,
+ * `X.y(...)`) whose root `X` nothing gives meaning to on `chain`, with the chain's near matches
+ * among its tokens and protocols. `undefined` when there is none, and the compiler's error stands.
  */
-export function assertKnownGlobals(source: string, chain: CanonicalChain, known: KnownNames): void {
+export function unknownGlobalError(
+  source: string,
+  chain: CanonicalChain,
+  known: KnownNames,
+  cause: unknown,
+): Error | undefined {
   const program = parseSauce(source);
   const meaningful = new Set([
     ...collectDeclaredNames(program),
@@ -109,7 +127,7 @@ export function assertKnownGlobals(source: string, chain: CanonicalChain, known:
     if (meaningful.has(name) || isChainKey(name) || resolveNamespace(name) !== undefined) return;
     unknown = object;
   });
-  if (unknown === undefined) return;
+  if (unknown === undefined) return undefined;
 
   const name = (unknown as unknown as { name: string }).name;
   const matches = nearMatches(name, [...known.tokens, ...protocolsOn(chain)]);
@@ -117,9 +135,12 @@ export function assertKnownGlobals(source: string, chain: CanonicalChain, known:
     matches.length === 0
       ? ""
       : ` Did you mean ${matches.map((match) => `\`${match}\``).join(" or ")}?`;
-  throw new Error(
+  const compiler = headline(cause);
+  return new Error(
     `compileSauceRoute: \`${name}\` is not a token or protocol on ${chain.slug}.${suggestion} ` +
       "A token the registry does not carry is `Token(address)`, or a `tokens` entry in the " +
-      "compile options; a contract binding needs its ABI imported, or passed as `contracts`.",
+      "compile options; a contract binding needs its ABI imported, or passed as `contracts`." +
+      (compiler === undefined ? "" : ` The compiler reported: ${compiler}`),
+    { cause },
   );
 }

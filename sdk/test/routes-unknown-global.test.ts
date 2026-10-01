@@ -68,6 +68,18 @@ describe("a name the program or the compile gives meaning to is not unknown", ()
     expect(() => compileOn("base", source)).not.toThrow(/is not a token or protocol/);
   });
 
+  it("a constant an ambient module exports", () => {
+    // An ambient module broadcasts its exports with no import, so nothing in the program declares
+    // `CFG`; only the compiler knows the name. A program it compiles is never refused here.
+    const lib = new TextEncoder().encode("export const CFG = { fee: 30n };");
+    const out = compileOn("base", "function main(): Uint256 { return CFG.fee; }", {
+      ambient: ["./lib.ts"],
+      resolve: (path: string) => (path === "./lib.ts" ? lib : undefined),
+    });
+
+    expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+  });
+
   it("a contract binding the caller supplies", () => {
     const abi = [
       {

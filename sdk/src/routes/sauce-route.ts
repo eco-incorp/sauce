@@ -31,7 +31,7 @@ import {
 } from "./token-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
 import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
-import { assertKnownGlobals } from "./unknown-global.js";
+import { unknownGlobalError } from "./unknown-global.js";
 import { pascalOfSlug } from "./accessors.js";
 import { encodeCompactArguments } from "../compact-arguments.js";
 import { v12KitchenAddress } from "../deployments/index.js";
@@ -442,15 +442,6 @@ export function compileScopedRoute(
     source = [...tokenImportLines({ writes, erc20 }), source].join("\n");
   }
 
-  // A token or protocol name the chain does not have, reported as one rather than left for the
-  // compiler to fail on as a call it cannot lower. After the token pass, whose symbols are defines
-  // by now; before the protocol pass, which resolves or refuses every namespace it knows.
-  assertKnownGlobals(source, chain, {
-    defines: Object.keys(defines ?? {}),
-    contracts: Object.keys(contracts ?? {}),
-    tokens: tokenMap.keys(),
-  });
-
   if (options.accessors !== false) {
     const accessorOpts: ProtocolRewriteOptions =
       typeof options.accessors === "object" ? options.accessors : {};
@@ -470,16 +461,34 @@ export function compileScopedRoute(
     }
   }
 
-  const compiled = compileWithRs({
-    source,
-    target,
-    resolve: options.resolve,
-    resolvePackage: options.resolvePackage,
-    defines,
-    contracts,
-    ambient: options.ambient,
-    compactArgs: options.compactArgs,
-  });
+  let compiled: CompileResult;
+  try {
+    compiled = compileWithRs({
+      source,
+      target,
+      resolve: options.resolve,
+      resolvePackage: options.resolvePackage,
+      defines,
+      contracts,
+      ambient: options.ambient,
+      compactArgs: options.compactArgs,
+    });
+  } catch (error) {
+    // A token or protocol name the chain does not have, reported as one rather than as the call
+    // the compiler could not lower. Asked only of a program the compiler refused.
+    throw (
+      unknownGlobalError(
+        source,
+        chain,
+        {
+          defines: Object.keys(defines ?? {}),
+          contracts: Object.keys(contracts ?? {}),
+          tokens: tokenMap.keys(),
+        },
+        error,
+      ) ?? error
+    );
+  }
 
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
