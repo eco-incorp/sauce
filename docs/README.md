@@ -62,6 +62,7 @@ Complete programs live in the [examples](examples/README.md).
 | Compile and run a program file from a terminal                  | [The sauce command](guides/cli.md)                     |
 | Have a coding agent write and run programs                      | [Agent skills](guides/cli.md#agent-skills)             |
 | Give a coding agent Sauce's tools and skills over MCP           | [The MCP server](guides/mcp.md)                        |
+| Give an agent a wallet of its own, with a policy that limits it | [Agent wallets](guides/cli.md#agent-wallets)           |
 | Generate programs from structured data                          | [Builders](guides/builders-and-actions.md)             |
 | Write protocol actions as JSON, then run them or make an intent | [Actions](guides/actions.md)                           |
 | Plan accounts, stage code and execute on Solana                 | [Solana](guides/solana.md)                             |

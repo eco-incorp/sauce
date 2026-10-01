@@ -71,15 +71,27 @@ provider URL often carries a key.
 Nothing is signed without one of these, and the signer is always the Pot's owner (on Solana with
 `--via engine`, which uses no Pot, the signer is the program's authority):
 
+- `--wallet <name>`: a wallet `sauce wallet` keeps, EVM or Solana ([Agent wallets](#agent-wallets)).
 - `--keystore <path>`: a JSON keystore (Web3 Secret Storage v3, scrypt or PBKDF2, as `cast wallet`
-  and geth write). The password is asked for at the terminal without echo, or read from
-  `--password-file <path>`.
+  and geth write).
 - `--private-key <hex>`: works, with a warning: it lands in your shell history.
 - `--keypair <path>`, on Solana: a keypair file, the JSON array of 64 bytes `solana-keygen` writes.
 
-Keys are read from those paths only — never from the environment or the config file — and no
-command prints one: everything a command writes passes through a filter that removes any key it
-was given, error messages included.
+A wallet's or a keystore's password comes from one source you name, or else it is asked for at the
+terminal without echo:
+
+- `--password-env <NAME>`: the environment variable NAME, and no other.
+- `--password-file <path>`: the file's text, one trailing newline dropped. A file that anyone but
+  you can read or write is refused: `chmod 600` it.
+- `--password-command "<command>"`: what the command prints, one trailing newline dropped. A secret
+  manager's CLI (`pass show sauce`, `op read op://…`) fits. It runs with no stdin, and if it fails,
+  the error gives its exit status and never its output.
+
+There is no `--password <value>`: a value on the command line lands in shell history and the
+process list. `--password-env` is the command's one read of the environment, and only of the
+variable you name. Keys are read from the paths and wallets named only, never from the config file,
+and no command prints one or a password: everything a command writes passes through a filter that
+removes any secret it was given, error messages included.
 
 ## Supported and preview chains
 
@@ -1147,6 +1159,84 @@ destination may be Solana, and `sauce intent fill`, `prove` and `cancel` act on 
 ([An intent to Solana](#an-intent-to-solana)). A `main` argument of type `Address` is a 32-byte
 public key on Solana: pass it in base58 (or as 32 bytes of hex), and the command encodes the whole
 key as the word the engine reads (ABI-v1 only, not under `--compact-args`).
+
+## Agent wallets
+
+An agent with no wallet can make one, and keep it. `sauce wallet` keeps keys in a wallet directory,
+`~/.sauce/wallets` (or `--wallets <dir>`), each encrypted under a password the agent holds, in its
+`.env` or its secret store, and names by source. The password is never an argument:
+
+```sh
+npx sauce wallet new agent --password-env SAUCE_WALLET_PASSWORD             # an EVM wallet
+npx sauce wallet new agent-sol --solana --password-env SAUCE_WALLET_PASSWORD
+npx sauce wallet list                                                       # no password needed
+npx sauce wallet address agent
+```
+
+| Verb      | Does                                                                                                                                                                                                      |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `new`     | Generates a key and stores it as `<name>.json`, created `0600` in a directory created `0700`, written once and never overwritten. `--solana` makes a Solana keypair. The password is 8 characters or more |
+| `list`    | Each wallet's name, kind (`evm` or `solana`), address, and whether a policy limits it                                                                                                                     |
+| `address` | One wallet's address                                                                                                                                                                                      |
+| `import`  | A key you have, read from a file or stdin (`-`), never from the command line: an EVM private key, a keystore (opened with the password, which the wallet keeps), or a Solana keypair file                 |
+| `export`  | The key, shown on the terminal itself (never stdout) once you type the wallet's name. It refuses without a terminal, and the MCP server has no such tool                                                  |
+
+An EVM wallet's file is a Web3 Secret Storage v3 keystore (scrypt, AES-128-CTR, a keccak-256 MAC),
+exactly as geth and `cast wallet` write one, so `--keystore <file>` and `cast wallet` read it too.
+A Solana wallet's file is the same envelope around the keypair's 64 bytes, marked
+`"kind": "solana"`. Each file names its address in the clear, so `list` and `address` need no
+password.
+
+Every command that signs takes `--wallet <name>` with the same password source: `run`,
+`pot --deploy`, `simulate --fund`, `intent publish`, `intent fill --send` and the steps after it,
+with an EVM wallet on an EVM chain and a Solana wallet on Solana:
+
+```sh
+npx sauce run pay.sauce.ts --chain base --config sauce.config.json \
+  --wallet agent --password-env SAUCE_WALLET_PASSWORD --args <recipient> 1000000
+```
+
+### A wallet's policy
+
+`<name>.policy.json`, beside the wallet, limits what it sends. Every field is optional, and every
+amount is a string, in whole units or in base units ending in `n`, as `--fund` takes them:
+
+```json
+{
+  "chains": ["base", "ethereum"],
+  "to": ["<address>"],
+  "native": { "perTransaction": "0.01", "perDay": "0.05" },
+  "tokens": { "USDC": { "perTransaction": "100", "perDay": "500" } }
+}
+```
+
+- `chains` names the only chains it sends on, and `to` the only addresses a transaction goes to
+  (on Solana, the programs its instructions call).
+- `native` is the chain's native coin leaving the wallet or the Pot the transaction cooks on. On
+  Solana the fee and any rent are included.
+- `tokens` are named by registry symbol or by address (an ERC-20, a Solana mint). They count what
+  leaves the wallet or its Pot, and an approval above what the limit leaves room for is refused
+  (an approval of Permit2 aside, which moves nothing without a signature in a later cook). A token
+  the policy does not name is not limited.
+- `perDay` is the last 24 hours, every chain together, counted from `<name>.ledger.jsonl` beside
+  the wallet.
+
+What a transaction moves is measured, not read from its calldata. An EVM transaction is rehearsed
+with `eth_simulateV1`, and its token and native transfers out of the wallet and its Pot are
+counted. A Solana transaction is simulated with the accounts it writes reported. A limit that
+cannot be measured on the endpoint (no `eth_simulateV1`, for one) refuses the send. A refused send
+names the limit and sends nothing:
+
+```text
+sauce run: refused by the policy of wallet agent (…/agent.policy.json): tokens.USDC.perTransaction is 100 USDC, and this transaction sends 250 USDC
+```
+
+With no policy file, sends work, and each says that no limits are set. A policy file that others
+can write is refused: they could loosen it.
+
+**It is a hot wallet.** Whoever holds its file and its password holds the key, and an agent sends
+from it without asking anyone. Keep small balances in it, and set a policy. Every wallet send also
+holds to the [supported chains](#supported-and-preview-chains).
 
 ## Agent skills
 
