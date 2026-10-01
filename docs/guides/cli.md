@@ -25,7 +25,9 @@ through an endpoint you name on the command line.
 | `sauce skills`   | Install, update or check this package's agent skills in a project                 |
 
 Every command takes `--help`. A mistyped invocation exits 2. A program that does not compile, a
-cook that reverts, a rejected settle and an outdated skills install exit 1.
+cook that reverts, a rejected settle, an outdated skills install and a transaction on a
+[preview chain](#supported-and-preview-chains) exit 1. For the initial release, transactions are
+built and sent on Ethereum, Base and Solana only.
 
 ## Install
 
@@ -78,6 +80,46 @@ Nothing is signed without one of these, and the signer is always the Pot's owner
 Keys are read from those paths only — never from the environment or the config file — and no
 command prints one: everything a command writes passes through a filter that removes any key it
 was given, error messages included.
+
+## Supported and preview chains
+
+For the initial release, the command builds and sends transactions on three chains: **Ethereum**,
+**Base** and **Solana**. Every other chain it knows is a **preview chain**, where it compiles,
+rehearses and reads but builds no transaction ([Supported chains](../README.md#supported-chains)).
+
+| On a preview chain                                                                                                         | Does                                                                           |
+| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `compile`, `actions`, `simulate`, `globals`, `price`, `inspect`, `verify`, `intent status`, `intent import`, `intent list` | What it does everywhere                                                        |
+| `intent publish --dry-run`, `intent fill` without `--send`                                                                 | Rehearses, sending nothing                                                     |
+| `pot`                                                                                                                      | Predicts the Pot, and with an endpoint reads it, but leaves the deployment out |
+| `tx`, `run`, `pot --deploy`, `pot --format cast`                                                                           | Refused                                                                        |
+| `intent publish`, also with `--format`; `intent fill --send`; `intent prove`, `claim`, `refund`, `cancel`                  | Refused                                                                        |
+
+The refusal comes before the command reaches an endpoint or reads a key. A cook or a publish is
+refused when any chain it involves is a preview chain: the program's own, and the destination of
+every intent it opens (a cascade's later levels, opened inside an intent's body, are not checked:
+keep them on supported chains). A step after publishing is refused by the chain its
+transaction is sent on — a fill, a proof or a cancellation by the intent's destination, a claim or
+a refund by its source. The command exits 1 and says why, which chains are supported, and how to ask
+for the one it refused:
+
+```text
+sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. For the initial release, the sauce command and its MCP server build and send transactions only on Ethereum, Base and Solana. On a preview chain a program still compiles, and simulate and dry runs rehearse it.
+To ask for Optimism: add your use case to its request if there is one (https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Optimism%22), or open one (https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Optimism+%2810%29&chain=Optimism&chain-id=10).
+```
+
+The first link searches the chain-support requests already filed for that chain; the second opens
+a new one from the issue form, its title (`Chain support: <name> (<id>)`), chain and chain id
+filled in. The form also asks what you want to run there, the protocols and tokens it needs, the
+volume you expect and from when, and, optionally, how to reach you. If a request for the chain
+exists, add your use case to it as a comment instead of opening another.
+
+`sauce pot` on a preview chain prints the Pot's address, owner, salt and Kitchen with no `to`,
+`data` or `value`, and adds `refused` to its JSON — the same refusal as an object: `code`
+(`"preview-chain"`), `action`, `message`, `supportedChains` and `previewChains`, each with its
+`request`. `sauce --help` and the `--help` of every refused command say the same. There is no flag
+that lifts the refusal. The TypeScript SDK is not gated: its builders still build transactions for
+every registry chain, at your own risk.
 
 ## The flow on an EVM chain
 
@@ -621,7 +663,7 @@ There are two ways to get such a file's intents onto the chain:
   result.
 
   ```sh
-  npx sauce intent publish bridge.sauce.ts --chain arbitrum --config sauce.config.json \
+  npx sauce intent publish bridge.sauce.ts --chain ethereum --config sauce.config.json \
     --keystore ~/.keys/me.json --intent-deadline 2000000000 --intent-creator 0xYou
   ```
 
@@ -634,7 +676,9 @@ There are two ways to get such a file's intents onto the chain:
   `reason` in `--json`); `--assume-balance USDC:2` (repeatable, `ETH:` for the
   native currency) gives that wallet the reward for the rehearsal only, by state override, as
   `simulate` gives a Pot one. `--format json` (or `cast`) prints the transactions unsigned, with
-  `--from <address>` when there is no signer.
+  `--from <address>` when there is no signer. Publishing, sent or printed, needs a supported source
+  and supported destinations ([Supported and preview chains](#supported-and-preview-chains)); a
+  dry run rehearses on any chain.
 
   The Portal counts an intent funded when its vault holds the reward (`isIntentFunded`), which is
   what a solver checks once it sees `IntentPublished`, so paying the vault directly needs no
@@ -683,14 +727,14 @@ chains' endpoints:
 ### Making one: `sauce intent publish` with no file
 
 With no file, `publish` makes the intent, step by step: the source and destination chains (those
-with a Portal), the token delivered (a registry symbol, or an address whose decimals it reads), how
+with a Portal that are [supported](#supported-and-preview-chains): Ethereum and Base), the token delivered (a registry symbol, or an address whose decimals it reads), how
 much and to whom (you, by default), the reward, the fill and reward deadlines, the prover (the ones
 the registry records on both chains), and how the reward is funded (a transfer to the vault by
 default, or `publishAndFund`). At a terminal it asks for each; every question has a flag, so it
 also runs with none:
 
 ```sh
-npx sauce intent publish --source arbitrum --destination base --token USDC --amount 1 \
+npx sauce intent publish --source ethereum --destination base --token USDC --amount 1 \
   --recipient 0xYou --reward-token USDC --reward 1.01 --prover HyperProver \
   --fill-deadline +1h --reward-deadline +1d --config sauce.config.json --keystore ~/.keys/me.json
 ```
@@ -719,7 +763,7 @@ nothing. It takes the file and the flags `publish` does (or the intent's hash), 
 destination's endpoint:
 
 ```sh
-npx sauce intent fill swap.sauce.ts --chain arbitrum --config sauce.config.json \
+npx sauce intent fill swap.sauce.ts --chain ethereum --config sauce.config.json \
   --defines swap.defines.json --intent-deadline 2000000000 --intent-creator 0xYou \
   --intent-execution-fee 3744785386350 --no-prove
 ```
@@ -749,7 +793,7 @@ define), the Portal's `IntentFulfilled` record, and what the fill left in the sh
 Portal's Executor:
 
 ```text
-Intent 0xf261…5d2c from arbitrum to base: the fill succeeds, gas used 1874288
+Intent 0xf261…5d2c from ethereum to base: the fill succeeds, gas used 1874288
 Rehearsed with eth_simulateV1 on base, one block from the solver 0x5A0c…F111; nothing was signed or sent:
   1. approve the Portal for 998 USDC (gas 55425)
   2. Portal.fulfill(0xf261…5d2c, route, 0xe94c…0a6c, 0x5A0c…F111) with 3744785386350 wei: the route's nativeAmount, the Kitchen's fee for its cook (gas 1874288)
@@ -795,7 +839,8 @@ not filled.
 
 ### Filling it for real: `sauce intent fill --send`
 
-With `--send` and a signer, the signer is the solver, and the fill is sent:
+A rehearsal sends nothing, so it runs on a preview chain too. With `--send` and a signer, the
+signer is the solver, and the fill is sent — to a supported destination only:
 
 ```sh
 npx sauce intent fill 0x<intent hash> --config sauce.config.json --send --keystore ~/.keys/me.json
@@ -815,8 +860,8 @@ travels as (the Hyperlane explorer finds it by that id). The intent and the fill
 
 ```sh
 npx sauce intent prove 0x<intent hash> --config sauce.config.json --keystore ~/.keys/me.json
-npx sauce intent claim 0x<intent hash> --chain arbitrum --config sauce.config.json --keystore ~/.keys/me.json
-npx sauce intent refund 0x<intent hash> --chain arbitrum --config sauce.config.json --keystore ~/.keys/me.json
+npx sauce intent claim 0x<intent hash> --chain ethereum --config sauce.config.json --keystore ~/.keys/me.json
+npx sauce intent refund 0x<intent hash> --chain ethereum --config sauce.config.json --keystore ~/.keys/me.json
 npx sauce intent cancel 0x<intent hash> --config sauce.config.json --keystore ~/.keys/me.json
 ```
 
@@ -845,7 +890,9 @@ npx sauce intent cancel 0x<intent hash> --config sauce.config.json --keystore ~/
   destination: a reorg that let a fill in first would leave that solver unpaid. `--and-prove`
   sends `cancelAndProve` instead, proving at once.
 
-With no signer, each prints its transactions unsigned, for a wallet to send in order.
+With no signer, each prints its transactions unsigned, for a wallet to send in order. Signed or
+unsigned, each is refused on a preview chain: `prove` and `cancel` by the intent's destination,
+`claim` and `refund` by its source.
 
 ### An intent to Solana
 
@@ -854,7 +901,7 @@ deposit) is filled, proven and cancelled through Solana's Portal program, and cl
 its source like any other. Store it from the transaction that published it, then:
 
 ```sh
-npx sauce intent import 0x<tx hash> --chain arbitrum --config sauce.config.json
+npx sauce intent import 0x<tx hash> --chain base --config sauce.config.json
 npx sauce intent fill 0x<intent hash> --config sauce.config.json --solver <solana key> --claimant 0xYou
 npx sauce intent fill 0x<intent hash> --config sauce.config.json --claimant 0xYou \
   --send --keypair ~/.config/solana/id.json

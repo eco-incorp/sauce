@@ -49,7 +49,7 @@ const SVM_PAY = [
 ].join("\n");
 
 const INTENT = [
-  "// @chain arbitrum",
+  "// @chain ethereum",
   "Base(() => {",
   "  USDC.transfer(RECIPIENT, 5n);",
   "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
@@ -768,7 +768,7 @@ describe("sauce_intent_publish", () => {
 
   it("builds the unsigned transfer into the vault and publish of a fixed intent", async () => {
     const out = ok(await mcp.call("sauce_intent_publish", args)) as Published;
-    assert.equal(out.chainId, 42161);
+    assert.equal(out.chainId, 1);
     assert.equal(out.intents.length, 1);
     assert.equal(out.intents[0]!.destination, "base");
     assert.match(out.intents[0]!.intentHash, /^0x[0-9a-f]{64}$/);
@@ -801,7 +801,7 @@ describe("sauce_intent_publish", () => {
     );
     assert.match(
       failed(await mcp.call("sauce_intent_publish", { ...args, dryRun: true, from: OWNER })),
-      /A dry run needs an RPC endpoint for arbitrum/,
+      /A dry run needs an RPC endpoint for ethereum/,
     );
     assert.match(
       failed(await mcp.call("sauce_intent_publish", { ...args, assumeBalance: ["USDC:1"] })),

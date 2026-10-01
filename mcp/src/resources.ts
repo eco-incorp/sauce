@@ -15,6 +15,26 @@ import { PACKAGED_SKILLS } from "./sdk.js";
 
 export const SKILLS_SCHEME = "sauce://skills/";
 export const SKILLS_INDEX = `${SKILLS_SCHEME}index`;
+
+/**
+ * How an agent writes a program, as the server's instructions, the prompts and the skill tools say
+ * it (the sauce-overview skill says it in full): it writes the program itself, never from a copied
+ * example, calls things directly, and heads the file with how to run it.
+ */
+export const WRITE_IT_YOURSELF: readonly string[] = [
+  "WRITE EACH PROGRAM YOURSELF, in SauceScript, for the task as asked. The skills teach the",
+  "language, each chain's names and the patterns; their examples show idioms and the rules a",
+  "correct program follows, and are not templates to copy, adapt or choose between. Never ask",
+  "the user which example or existing file to start from: ask only for facts the request leaves",
+  "open (an amount, a price limit, a recipient, the chain), then decide, write the program and",
+  "rehearse it with sauce_simulate. Call typed bindings, namespaces and library functions",
+  "directly: no helper around a single call, and no raw selector through evm.static and",
+  "abi.decode where a binding or namespace exists; keep a helper only for real logic used more",
+  "than once. Head every program with a comment: what it does; the sauce command that runs it,",
+  "with --args naming every main parameter in order; one line per parameter with its type,",
+  "meaning and units (smallest units: 5000000000 is 5,000 USDC); and a concrete example on a",
+  "supported chain.",
+];
 export const ACTIONS_SCHEMA = "sauce://actions/schema.json";
 /** The schema the package ships beside `actions/dist`, two levels above this module. */
 const ACTIONS_SCHEMA_FILE = fileURLToPath(

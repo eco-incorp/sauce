@@ -11,6 +11,22 @@
 //     --define MINT=<mint> --account tokenProgram=<SPL Token program> \
 //     --account source=<the Pot's token account> --account destination=<token account> \
 //     --account authority=pot --args <amount>
+//
+//   MINT: define                 the SPL mint paid, base58
+//   tokenProgram: Account        the SPL Token program
+//   source: Account<Writable>    the token account paying, the Pot's: pot:<mint>
+//   destination: Account<Writable>  the token account paid
+//   authority: Account<Signer>   who signs for `source`: pot, the Pot itself
+//   amount: Uint256              how much, in the mint's smallest units: USDC has 6 decimals, so
+//                                1000000 is 1 USDC
+//
+// On Solana, 1 USDC from the Pot's USDC account:
+//
+//   sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypair <keypair> \
+//     --define MINT=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v \
+//     --account tokenProgram=TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA \
+//     --account source=pot:EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v \
+//     --account destination=<token account> --account authority=pot --args 1000000
 const MINT = 0n; // the SPL mint's 32-byte key: a define replaces it
 
 function main(

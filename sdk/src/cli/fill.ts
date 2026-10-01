@@ -86,6 +86,7 @@ import {
 } from "./lifecycle.js";
 import { costJson, costLine, costOf } from "./receipt.js";
 import type { IntentStore } from "./store.js";
+import { requireSupported } from "./support.js";
 
 /** The solver a rehearsal fills from when none is named: an address nobody holds the key of. */
 export const DEFAULT_SOLVER: Address = getAddress("0x5a0ce0000000000000000000000000000000f111");
@@ -853,6 +854,13 @@ function sentLines(done: SentFill): string[] {
 /** `sauce intent fill`: a solver's fill of each intent, rehearsed on its destination, and with `--send`,
  *  sent. */
 export async function fillCommand(input: FillInput): Promise<CommandOutput> {
+  // A rehearsal fills nothing, on any chain; a fill is sent only on a supported destination.
+  if (input.send !== undefined) {
+    requireSupported(
+      "sending a fill",
+      input.intents.map((target) => target.destination),
+    );
+  }
   const destinations = new Set(input.intents.map((target) => target.destination.slug));
   if (input.endpointFlag === "--rpc-url" && destinations.size > 1) {
     throw new UsageError(

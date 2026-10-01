@@ -1,7 +1,7 @@
 /**
- * An intent's whole life through the intent tools, on two anvils standing in for Arbitrum (the
+ * An intent's whole life through the intent tools, on two anvils standing in for Ethereum (the
  * source) and Base (the destination), with every transaction built by the server UNSIGNED and
- * signed and sent here, by a key the server never sees: published and funded on Arbitrum, read
+ * signed and sent here, by a key the server never sees: published and funded on Ethereum, read
  * back from its transaction, filled and proven on Base, the proof carried back, claimed; refunded
  * after the reward's deadline and not before; cancelled after the route's deadline, the
  * cancellation proven and refunded before the reward's.
@@ -48,7 +48,7 @@ const REWARD = 1_050_000n;
 /** What the Mailbox charges per message: the prover's quoted fee. */
 const HYPERLANE_FEE = 7_777n;
 
-/** Base USDC to RECIPIENT, for Arbitrum USDC: a body of plain transfers. */
+/** Base USDC to RECIPIENT, for Ethereum USDC: a body of plain transfers. */
 const INTENT = [
   "Base(() => {",
   "  USDC.transfer(RECIPIENT, AMOUNT);",
@@ -87,11 +87,11 @@ describe(
     skip: RUNTIME_HEX_PATH === undefined,
   },
   () => {
-    let arbitrum: LocalChain;
+    let ethereum: LocalChain;
     let base: LocalChain;
-    let arbitrumUsdc: Address;
+    let ethereumUsdc: Address;
     let baseUsdc: Address;
-    let arbitrumMailbox: Address;
+    let ethereumMailbox: Address;
     let baseMailbox: Address;
     let mcp: Connected;
     let rpcUrls: Record<string, string>;
@@ -129,18 +129,18 @@ describe(
       const out = ok(
         await mcp.call("sauce_intent_publish", {
           source: INTENT,
-          chain: "arbitrum",
+          chain: "ethereum",
           defines: { RECIPIENT, AMOUNT: String(AMOUNT), REWARD: String(REWARD) },
           intentDeadline: String(route),
           intentRewardDeadline: String(reward),
           intentCreator: OWNER.address,
           from: OWNER.address,
-          rpcUrl: arbitrum.rpcUrl,
+          rpcUrl: ethereum.rpcUrl,
           ...(fundVia === undefined ? {} : { intentFundVia: fundVia }),
         }),
       ) as { intents: Array<{ record: IntentRecord; transactions: Tx[] }> };
       const [intent] = out.intents;
-      const hashes = await sendAll(arbitrum, arbitrum.owner, intent!.transactions);
+      const hashes = await sendAll(ethereum, ethereum.owner, intent!.transactions);
 
       return {
         record: intent!.record,
@@ -153,32 +153,32 @@ describe(
       ok(await mcp.call(tool, { ...args, rpcUrls }));
 
     before(async () => {
-      [arbitrum, base] = await Promise.all([
-        startChain("arbitrum", await freePort()),
+      [ethereum, base] = await Promise.all([
+        startChain("ethereum", await freePort()),
         startChain("base", await freePort()),
       ]);
-      arbitrumUsdc = await arbitrum.plant(fixture("MockERC20"), registered(arbitrum.chain, "USDC"));
+      ethereumUsdc = await ethereum.plant(fixture("MockERC20"), registered(ethereum.chain, "USDC"));
       baseUsdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
-      for (const local of [arbitrum, base]) await plantPortal(local, PORTAL_FIXTURES.v2_12);
-      arbitrumMailbox = await deployMailbox(arbitrum, HYPERLANE_FEE);
+      for (const local of [ethereum, base]) await plantPortal(local, PORTAL_FIXTURES.v2_12);
+      ethereumMailbox = await deployMailbox(ethereum, HYPERLANE_FEE);
       baseMailbox = await deployMailbox(base, HYPERLANE_FEE);
-      await plantHyperProver(arbitrum, arbitrumMailbox);
+      await plantHyperProver(ethereum, ethereumMailbox);
       await plantHyperProver(base, baseMailbox);
-      await arbitrum.mint(arbitrumUsdc, OWNER.address, 10n * REWARD);
+      await ethereum.mint(ethereumUsdc, OWNER.address, 10n * REWARD);
       await base.mint(baseUsdc, SOLVER.address, 10n * AMOUNT);
       // The solver pays the proof's fee on Base, and gas on both chains.
-      for (const local of [arbitrum, base]) {
+      for (const local of [ethereum, base]) {
         await local.testClient.setBalance({ address: SOLVER.address, value: 10n ** 20n });
       }
-      rpcUrls = { arbitrum: arbitrum.rpcUrl, base: base.rpcUrl };
+      rpcUrls = { ethereum: ethereum.rpcUrl, base: base.rpcUrl };
       mcp = await connect();
     });
 
     after(async () => {
       await mcp?.close();
-      await Promise.all([arbitrum?.stop(), base?.stop()]);
+      await Promise.all([ethereum?.stop(), base?.stop()]);
       // Every byte the server sent: never an endpoint.
-      for (const local of [arbitrum, base]) {
+      for (const local of [ethereum, base]) {
         assert.ok(!mcp.received.join("\n").includes(local.rpcUrl.replace("http://", "")));
       }
     });
@@ -190,13 +190,13 @@ describe(
       assert.deepEqual(steps, ["transfer", "publish"]);
 
       // The same intent, read back from its transaction alone.
-      const imported = (await call("sauce_intent_import", { txHash: tx, chain: "arbitrum" })) as {
+      const imported = (await call("sauce_intent_import", { txHash: tx, chain: "ethereum" })) as {
         intents: Array<{ record: IntentRecord; funded: boolean }>;
       };
       assert.equal(imported.intents.length, 1);
       assert.equal(imported.intents[0]!.record.intentHash, record.intentHash);
       assert.equal(imported.intents[0]!.funded, true);
-      const funded = (await call("sauce_intent_status", { txHash: tx, chain: "arbitrum" })) as {
+      const funded = (await call("sauce_intent_status", { txHash: tx, chain: "ethereum" })) as {
         state: string;
         source: { rewardStatus: string; funded: boolean };
         can: Record<string, { ok: boolean; why: string }>;
@@ -232,7 +232,7 @@ describe(
       assert.match(early.why!, /prove|proof/);
 
       // Hyperlane's delivery, mocked; the provers on both sides are real.
-      assert.equal(await relay(base, baseMailbox, sent.at(-1)!, arbitrum, arbitrumMailbox), 1);
+      assert.equal(await relay(base, baseMailbox, sent.at(-1)!, ethereum, ethereumMailbox), 1);
       const proven = (await call("sauce_intent_status", { intent: record })) as { state: string };
       assert.equal(proven.state, "proven");
 
@@ -242,10 +242,10 @@ describe(
       assert.equal(claim.ready, true);
       assert.equal(claim.from, null, "any account may send it");
       assert.equal(getAddress(claim.claims[0]!.claimant), SOLVER.address);
-      const before = await arbitrum.balanceOf(arbitrumUsdc, SOLVER.address);
+      const before = await ethereum.balanceOf(ethereumUsdc, SOLVER.address);
       // Sent by someone else entirely: the reward still goes to the claimant.
-      await sendAll(arbitrum, arbitrum.deployer, claim.transactions);
-      assert.equal(await arbitrum.balanceOf(arbitrumUsdc, SOLVER.address), before + REWARD);
+      await sendAll(ethereum, ethereum.deployer, claim.transactions);
+      assert.equal(await ethereum.balanceOf(ethereumUsdc, SOLVER.address), before + REWARD);
       const claimed = (await call("sauce_intent_status", { intent: record })) as { state: string };
       assert.equal(claimed.state, "claimed");
     });
@@ -256,7 +256,7 @@ describe(
       const deadlines = [start + 3700n, start + 7300n] as const;
       const { record, tx, steps } = await publish(...deadlines, "publishAndFund");
       assert.deepEqual(steps, ["approve", "publishAndFund"]);
-      const imported = (await call("sauce_intent_import", { txHash: tx, chain: "arbitrum" })) as {
+      const imported = (await call("sauce_intent_import", { txHash: tx, chain: "ethereum" })) as {
         intents: Array<{ funded: boolean }>;
       };
       assert.equal(imported.intents[0]!.funded, true);
@@ -270,20 +270,20 @@ describe(
     });
 
     it("refunds an unfilled intent from the reward's deadline, not before", async () => {
-      const start = await now(arbitrum);
+      const start = await now(ethereum);
       const { record } = await publish(start + 60n, start + 600n);
       const early = (await call("sauce_intent_refund", { intent: record })) as Plan;
       assert.equal(early.ready, false);
       assert.match(early.why!, /not before the reward's deadline/);
-      await warp(arbitrum, 700);
+      await warp(ethereum, 700);
       const refund = (await call("sauce_intent_refund", { intent: record })) as Plan & {
         refundee: Address;
       };
       assert.equal(refund.ready, true);
       assert.equal(getAddress(refund.refundee), OWNER.address);
-      const before = await arbitrum.balanceOf(arbitrumUsdc, OWNER.address);
-      await sendAll(arbitrum, arbitrum.deployer, refund.transactions);
-      assert.equal(await arbitrum.balanceOf(arbitrumUsdc, OWNER.address), before + REWARD);
+      const before = await ethereum.balanceOf(ethereumUsdc, OWNER.address);
+      await sendAll(ethereum, ethereum.deployer, refund.transactions);
+      assert.equal(await ethereum.balanceOf(ethereumUsdc, OWNER.address), before + REWARD);
     });
 
     it("cancels after the route's deadline, proves it, and refunds before the reward's", async () => {
@@ -318,7 +318,7 @@ describe(
       assert.equal(prove.ready, true, prove.why);
       assert.equal(prove.fee, String(HYPERLANE_FEE));
       const [proof] = await sendAll(base, solverOn(base), prove.transactions);
-      assert.equal(await relay(base, baseMailbox, proof!, arbitrum, arbitrumMailbox), 1);
+      assert.equal(await relay(base, baseMailbox, proof!, ethereum, ethereumMailbox), 1);
       const cancelProven = (await call("sauce_intent_status", { intent: record })) as {
         state: string;
       };
@@ -327,9 +327,9 @@ describe(
       // Refunded at once, well before the reward's deadline.
       const refund = (await call("sauce_intent_refund", { intent: record })) as Plan;
       assert.equal(refund.ready, true, refund.why);
-      const before = await arbitrum.balanceOf(arbitrumUsdc, OWNER.address);
-      await sendAll(arbitrum, arbitrum.deployer, refund.transactions);
-      assert.equal(await arbitrum.balanceOf(arbitrumUsdc, OWNER.address), before + REWARD);
+      const before = await ethereum.balanceOf(ethereumUsdc, OWNER.address);
+      await sendAll(ethereum, ethereum.deployer, refund.transactions);
+      assert.equal(await ethereum.balanceOf(ethereumUsdc, OWNER.address), before + REWARD);
     });
   },
 );

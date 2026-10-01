@@ -95,6 +95,13 @@ describe("sauce run --fund, refused before anything is sent", () => {
 
   /** `sauce run` against an endpoint nothing listens on: a refusal must come before it is reached. */
   async function run(...flags: string[]): Promise<{ code: number; stderr: string }> {
+    return command("run", ...flags);
+  }
+
+  async function command(
+    name: string,
+    ...flags: string[]
+  ): Promise<{ code: number; stderr: string }> {
     let stderr = "";
     const io: CliIo = {
       ...nodeIo(),
@@ -102,7 +109,7 @@ describe("sauce run --fund, refused before anything is sent", () => {
       stderr: (text) => void (stderr += text),
     };
     const code = await runCli(
-      ["run", program, "--rpc-url", "http://127.0.0.1:9", "--private-key", OWNER_KEY, ...flags],
+      [name, program, "--rpc-url", "http://127.0.0.1:9", "--private-key", OWNER_KEY, ...flags],
       io,
     );
 
@@ -110,7 +117,12 @@ describe("sauce run --fund, refused before anything is sent", () => {
   }
 
   it("permit2 on a chain whose registry records no Permit2", async () => {
-    const refused = await run("--chain", "linea", "--fund", `${TOKEN}:1`);
+    // Linea is a preview chain, which `run` refuses before its funding; `simulate` takes --fund
+    // there, and refuses the mode just as early.
+    expect((await run("--chain", "linea", "--fund", `${TOKEN}:1`)).stderr).toMatch(
+      /linea \(Linea, chain id 59144\), a preview chain/,
+    );
+    const refused = await command("simulate", "--chain", "linea", "--fund", `${TOKEN}:1`);
     expect(refused.code).toBe(2);
     expect(refused.stderr).toContain(
       "Permit2 is not registered on linea: fund with --fund-mode permit, allowance or transfer",
