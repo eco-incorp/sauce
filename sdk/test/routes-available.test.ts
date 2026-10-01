@@ -1,15 +1,11 @@
 /**
- * `available(<name>)`: one program that uses a venue only on the chains that have it. The check is
- * decided at compile time for the chain the program is compiled for, and the branch it rules out is
- * removed from the source before any name in it resolves — the compiler itself would still resolve
- * a dead branch's names, so without this a program naming PancakeSwap V3 could not compile for a
- * chain without it at all. See `src/routes/available.ts`.
+ * `available(<name>)`: one program that uses a venue only on the chains that have it. The compiler
+ * decides it for the chain the program is compiled for, from the extensions manifest, and never
+ * lowers the branch it rules out — so a program naming PancakeSwap V3 compiles for a chain without
+ * it, where a branch that only folded away would still have had its names resolved.
  */
-import { requireChain } from "../src/chains/canonical.js";
 import { getDescriptor } from "../src/descriptors/query.js";
-import { rewriteAvailability } from "../src/routes/available.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
-import { resolveTokenMap } from "../src/routes/token-registry.js";
 
 const EXECUTION = {
   pot: "0x1111111111111111111111111111111111111111",
@@ -150,76 +146,87 @@ describe("available(): what it can name", () => {
   });
 
   it("a family member and a chain-qualified contract", () => {
-    const base = requireChain("base");
-    const tokens = resolveTokenMap(base);
-    expect(
-      rewriteAvailability("const a = available(Uniswap.UniversalRouter);", base, tokens).source,
-    ).toBe("const a = true;");
+    same(
+      "base",
+      "const a = available(Uniswap.UniversalRouter);\nreturn a;",
+      "const a = true;\nreturn a;",
+    );
     // Named on another chain, the check is that chain's, whatever the program is compiled for.
-    expect(
-      rewriteAvailability("const a = available(Optimism.PancakeswapV3.Factory);", base, tokens)
-        .source,
-    ).toBe("const a = false;");
+    same(
+      "base",
+      "const a = available(Optimism.PancakeswapV3.Factory);\nreturn a;",
+      "const a = false;\nreturn a;",
+    );
   });
 
   it("on an svm chain no EVM contract is available", () => {
-    const solana = requireChain("solana");
-    expect(
-      rewriteAvailability(
-        "const a = available(UniswapV3.Factory);",
-        solana,
-        resolveTokenMap(solana),
-      ).source,
-    ).toBe("const a = false;");
+    const solana = (body: string) =>
+      Array.from(
+        compileSauceRoute("solana", `function main() {\n${body}\n}`, {
+          code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          accounts: [],
+        }).compiled.bytecode[0]!,
+      );
+    expect(solana("const a = available(UniswapV3.Factory);\nreturn a;")).toEqual(
+      solana("const a = false;\nreturn a;"),
+    );
   });
 
   it.each([
     [
       "a contract the protocol does not have",
       "available(UniswapV3.Factroy)",
-      /Unknown contract 'Factroy'/,
+      /`UniswapV3` has no `Factroy`/,
     ],
-    [
-      "a symbol no chain registers",
-      "available(USDX)",
-      /'USDX' is not a contract or token in the registry/,
-    ],
+    ["a symbol no chain registers", "available(USDX)", /`USDX` is not a name any chain declares/],
     [
       "a namespace no registry protocol has",
       "available(Nope.Factory)",
-      /'Nope.Factory' is not a contract or token/,
+      /`Nope` is not a name any chain declares/,
     ],
     [
       "a protocol without a contract",
       "available(UniswapV3)",
-      /names a protocol; name one of its contracts/,
+      /`UniswapV3` is not something a chain deploys/,
     ],
     ["an ambiguous family name", "available(Uniswap.Factory)", /ambiguous under Uniswap/],
-    ["an interface", "available(Erc4626.Vault)", /is an interface — no chain deploys it/],
-    ["an expression", "available(1n)", /takes a registry name/],
+    ["an interface", "available(Erc4626.Vault)", /`Erc4626.Vault` is an interface/],
+    ["an expression", "available(1n)", /not an expression/],
   ])("fails closed on %s, even in a branch it would remove", (_what, call, error) => {
-    const base = requireChain("base");
-    expect(() =>
-      rewriteAvailability(`if (false) { const a = ${call}; }`, base, resolveTokenMap(base)),
-    ).toThrow(error);
+    expect(() => build("base", `if (false) { const a = ${call}; }\nreturn 0n;`)).toThrow(error);
   });
 
   it("a program that declares its own available keeps it", () => {
-    const base = requireChain("base");
-    const source = "function available(x) { return x; }\nconst a = available(UniswapV3.Factory);";
-    expect(rewriteAvailability(source, base, resolveTokenMap(base))).toEqual({
-      source,
-      rewrote: false,
-      sites: 0,
-    });
+    expect(
+      Array.from(
+        compileSauceRoute(
+          "base",
+          "function available(x: Uint256): Uint256 { return x; }\nfunction main(): Uint256 { return available(5n); }",
+          EXECUTION,
+        ).compiled.bytecode[0]!,
+      ),
+    ).toEqual(
+      Array.from(
+        compileSauceRoute(
+          "base",
+          "function other(x: Uint256): Uint256 { return x; }\nfunction main(): Uint256 { return other(5n); }",
+          EXECUTION,
+        ).compiled.bytecode[0]!,
+      ),
+    );
   });
 
-  it("a closure body is left for its own chain's compile", () => {
-    const base = requireChain("base");
-    const source =
-      "Optimism(() => { if (available(PancakeswapV3.Factory)) { f(); } });\nconst a = available(PancakeswapV3.Factory);";
-    expect(rewriteAvailability(source, base, resolveTokenMap(base)).source).toBe(
-      "Optimism(() => { if (available(PancakeswapV3.Factory)) { f(); } });\nconst a = true;",
-    );
+  it("a program for another chain decides it for that chain", () => {
+    // Optimism has no PancakeSwap V3; Base, where this compiles, does. The program literal's
+    // `available` is Optimism's: its code is the program that returns 0n there.
+    const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString("hex");
+    const parent = compileSauceRoute(
+      "base",
+      "function main(): bytes { const p = Optimism(() => available(PancakeswapV3.Factory) ? 1n : 0n); return p.code; }",
+      EXECUTION,
+    ).compiled.bytecode[0]!;
+    const child = compileSauceRoute("optimism", "function main() { return 0n; }", EXECUTION)
+      .compiled.bytecode[0]!;
+    expect(hex(parent)).toContain(hex(child));
   });
 });
