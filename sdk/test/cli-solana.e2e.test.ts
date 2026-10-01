@@ -1302,7 +1302,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
   it("refuses EVM keys, --pot and --value on Solana, and a publish from it", async () => {
     const base = ["run", sweep, "--define", mintDefine, "--rpc-url", RPC_URL];
     expect((await sauce(...base, "--private-key", `0x${"11".repeat(32)}`)).stderr).toMatch(
-      /--keystore and --private-key are EVM keys: on Solana, sign with --keypair/,
+      /--keystore and --private-key are EVM keys: on Solana, sign with --wallet <name> \(a Solana wallet\) or --keypair/,
     );
     expect(
       (await sauce("simulate", sweep, "--pot", owner.signer.address, "--rpc-url", RPC_URL)).stderr,

@@ -73,7 +73,7 @@ const nonces = parseAbi(["function nonces(address) view returns (uint256)"]);
 /** What a run printed to stderr besides the warning every `--private-key` signer gets. */
 const notes = (run: Run): string =>
   run.stderr.replace(
-    "warning: --private-key puts the key in your shell history and in the process list; prefer --keystore\n",
+    "warning: --private-key puts the key in your shell history and in the process list; prefer --keystore or --wallet\n",
     "",
   );
 
