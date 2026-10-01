@@ -1,5 +1,7 @@
 # Synthra V3
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Concentrated-liquidity spot DEX on Arc: a Uniswap V3 fork with renamed pool callbacks.
 
 ## Category

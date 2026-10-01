@@ -1,5 +1,7 @@
 # Camelot
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Native Arbitrum DEX with dual AMM: V2 constant product pools (with native fee-on-transfer token support) and V3 concentrated liquidity pools (Algebra-based with dynamic fees, no fixed fee tiers).
 
 ## Category
@@ -90,7 +92,7 @@ function main(
 
 - `routerAddress`: Camelot V3 SwapRouter on Arbitrum
 - No `fee` parameter needed: Camelot V3 uses dynamic fees (Algebra-based), not fixed fee tiers
-- `limitSqrtPrice`: Set to `0` for no price limit
+- `limitSqrtPrice`: `0` in this template, no price limit, so `amountOutMin` is the only bound. Camelot V3 is an Algebra pool, which the Sauce Router's `swapV3` drives with a real limit (`sauce-swaps`)
 
 ### addLiquidity
 

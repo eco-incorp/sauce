@@ -1,5 +1,7 @@
 # Ramses
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Arbitrum-native ve(3,3) DEX with concentrated liquidity support. Features gauge voting, bribes, and protocol-owned liquidity mechanisms. Solidly-fork architecture.
 
 ## Category

@@ -1,5 +1,7 @@
 # Trader Joe
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Liquidity Book DEX with variable-width bins for concentrated liquidity. Uses discrete price bins instead of continuous curves, allowing LPs to concentrate liquidity at specific price points. Native to Avalanche with expansion to Arbitrum and BSC.
 
 ## Category

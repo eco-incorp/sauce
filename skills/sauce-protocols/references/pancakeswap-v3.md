@@ -1,5 +1,7 @@
 # PancakeSwap V3
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Concentrated liquidity AMM on BNB Chain and multiple EVM chains. Built on Uniswap V3 architecture with custom fee tiers and farming integration via the SmartRouter.
 
 ## Category
@@ -51,7 +53,7 @@ function main(
 - `amountIn`: Exact input amount (in wei)
 - `amountOutMin`: Minimum output for slippage protection
 - `recipient`: Address to receive output tokens
-- `sqrtPriceLimitX96`: Set to `0` to accept any price
+- `sqrtPriceLimitX96`: `0` in this template, no price limit, so `amountOutMin` is the only bound. Through the Sauce Router, set a real limit (`sauce-swaps`)
 - Note: SmartRouter does NOT include a `deadline` param in the struct (unlike Uniswap V3)
 
 ## Key Addresses
@@ -95,6 +97,6 @@ function main(
 - SmartRouter struct does NOT include `deadline` (unlike Uniswap V3's router)
 - Factory address is the same across all chains; SmartRouter addresses vary
 - NFPM address is consistent across all chains (`0x46A15B...`)
-- Input token must be ERC20-approved to the SmartRouter for swaps
+- Swapping through the SmartRouter needs the input token approved to it; the Sauce Router needs no approval, since its callback pays the pool from the Pot (`sauce-swaps`)
 - Both tokens must be ERC20-approved to the NFPM for minting positions
 - Prefer V3 over V2 for major pairs on BSC for better capital efficiency

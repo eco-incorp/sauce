@@ -1,5 +1,7 @@
 # Balancer V2
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Generalized AMM with weighted pools, single Vault architecture, and flash loans. Supports custom pool types (weighted, stable, linear, composable stable) and multi-token pools with up to 8 tokens per pool.
 
 ## Category

@@ -1,5 +1,7 @@
 # KyberSwap
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Multi-chain DEX with concentrated liquidity protocol (KyberSwap Elastic) and a meta-aggregation router that routes across multiple DEXes for best execution. Features dynamic fees and anti-sniping protection.
 
 ## Category
@@ -52,7 +54,7 @@ function main(
 - `amountIn`: Exact input amount (in wei)
 - `amountOutMin`: Minimum output for slippage protection (named `minAmountOut` not `amountOutMinimum`)
 - `recipient`: Address to receive output tokens
-- `limitSqrtP`: Price limit (set to `0` for no limit; named `limitSqrtP` not `sqrtPriceLimitX96`)
+- `limitSqrtP`: Price limit (`0` is no limit, which leaves `amountOutMin` as the only bound; named `limitSqrtP` not `sqrtPriceLimitX96`)
 
 ## Key Addresses
 

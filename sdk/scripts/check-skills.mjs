@@ -18,7 +18,8 @@
 //   2. every file reads the same for every agent and every release: no version numbers or release
 //      talk, no agent's name or install path, no engine internals (opcodes, mnemonics, stack
 //      effects, bytecode bytes), no placeholder or unrecorded address, no Portal or prover outside
-//      the intents skill, no RPC endpoint, and no description of Sauce as a multicall;
+//      the intents skill, no RPC endpoint, and no description of Sauce as a multicall; and every
+//      protocol document with a swap template opens with the one pointer to `sauce-swaps`;
 //   3. the `sauce-examples` index lists every example file on disk and nothing else, each example
 //      is referenced by its own skill, and every program names the chains it is checked on there;
 //   4. every program compiles through the `sauce` command on each chain its index row names, run
@@ -485,6 +486,44 @@ for (const skill of skills) {
     wording(skill, file);
   }
 }
+
+// ---- 2b. A protocol document with a swap template leads a Sauce program to the Router --------------
+// One line, the same in every such document: a protocol's own router template is for a pool the
+// Sauce Router does not service, and a zero price limit there leaves the minimum output alone.
+const SWAP_POINTER =
+  "> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a " +
+  "price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools " +
+  "under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.";
+const swapDocuments = [];
+for (const info of sdk.listProtocols()) {
+  const path = join(PROTOCOL_DOCUMENTS, `${info.slug}.md`);
+  if (!existsSync(path)) continue;
+  let module = {};
+  try {
+    module = await load(`${PKG}/protocols/${info.slug}`);
+  } catch {}
+  const templates = Object.entries(module)
+    .filter(([, value]) => typeof value === "string")
+    .map(([name]) => name);
+  if (!["dex", "aggregator"].includes(info.category) && !templates.some((t) => /swap/i.test(t)))
+    continue;
+  swapDocuments.push(info.slug);
+  const text = read(path);
+  if (/^# [^\n]+\n\n([^\n]*)/.exec(text)?.[1] !== SWAP_POINTER)
+    fail(rel(path), "swaps, so its first line after the title is SWAP_POINTER (check-skills.mjs)");
+  text.split("\n").forEach((line, i) => {
+    if (
+      /\b(?:sqrtPriceLimitX96|limitSqrtPrice|limitSqrtP|limitPrice)\b/.test(line) &&
+      /\b(?:no (?:price )?limit|any price)\b/i.test(line) &&
+      !/\bonly bound\b/.test(line)
+    )
+      fail(
+        `${rel(path)}:${i + 1}`,
+        "offers no price limit without saying minOut is then the only bound",
+      );
+  });
+}
+if (swapDocuments.length === 0) fail(rel(PROTOCOL_DOCUMENTS), "no protocol document swaps");
 
 // ---- 3. Examples and the index ---------------------------------------------------------------------
 const allExamples = new Set(); // "<skill>/examples/<file>"

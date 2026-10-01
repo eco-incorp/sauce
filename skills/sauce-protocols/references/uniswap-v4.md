@@ -1,5 +1,7 @@
 # Uniswap V4
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Singleton AMM with hooks architecture enabling custom pool logic, flash accounting, and native ETH support. All pools share a single PoolManager contract for gas savings on multi-hop swaps.
 
 ## Category
@@ -124,8 +126,9 @@ function main(positionManagerAddress: Address, unlockData: bytes): Uint256 {
 - Pool key: `(currency0, currency1, fee, tickSpacing, hooks)` uniquely identifies a pool
 - `currency0` = address(0) means native ETH; V4 supports native ETH directly (no WETH wrapping needed)
 - `zeroForOne`: true = swap currency0 for currency1; false = swap currency1 for currency0
-- `amountSpecified`: positive = exact input; negative = exact output
+- `amountSpecified`: negative = exact input; positive = exact output (the reverse of Uniswap V3's pool `swap`)
 - Flash accounting: V4 uses transient storage for balance tracking within a transaction, settling at the end
 - Commands/inputs for the UniversalRouter must be constructed off-chain; this is more complex than V3 but more powerful
+- A Sauce program needs no UniversalRouter commands: the Sauce Router's `swapV4(poolManager, key, zeroForOne, -amount, sqrtPriceLimitX96, payer, recipient)` unlocks the PoolManager and settles the swap itself (`sauce-swaps`)
 - V4 is the newest Uniswap version; use it for advanced pool logic (custom hooks) or when gas efficiency on multi-hop matters most
 - On Arc (5042) the PositionManager's `WETH9()` is a stub that always reverts with `UnsupportedProtocolError()`. Arc's native coin is USDC at 18 decimals, so a pool keyed on `address(0)` is native USDC, a different currency from the 6-decimal ERC-20 `0x3600000000000000000000000000000000000000` over the same balance

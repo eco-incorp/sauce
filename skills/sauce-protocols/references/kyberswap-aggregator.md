@@ -1,5 +1,7 @@
 # KyberSwap Aggregator
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Meta aggregator that routes through multiple aggregators and DEXes for optimal swap execution.
 
 ## Category

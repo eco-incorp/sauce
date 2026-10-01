@@ -1,5 +1,7 @@
 # Thruster
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Blast-native DEX with concentrated liquidity (V3-style) pools. Optimized for Blast's native yield on ETH and USDB, and gas rebate features. Fork of Uniswap V3 architecture.
 
 ## Category
@@ -52,7 +54,7 @@ function main(
 - `amountIn`: Exact input amount (in wei)
 - `amountOutMin`: Minimum output for slippage protection
 - `recipient`: Address to receive output tokens
-- `sqrtPriceLimitX96`: Set to `0` for no price limit
+- `sqrtPriceLimitX96`: `0` in this template, no price limit, so `amountOutMin` is the only bound
 
 ## Key Addresses
 

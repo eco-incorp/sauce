@@ -1,5 +1,7 @@
 # Uniswap V3
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Concentrated liquidity AMM allowing LPs to allocate capital within custom price ranges for higher capital efficiency. Supports multiple fee tiers per pair and NFT-based liquidity positions.
 
 ## Category
@@ -60,7 +62,7 @@ function main(
 - `amountIn`: Exact amount of input token (in wei)
 - `amountOutMin`: Minimum output for slippage protection
 - `recipient`: Address to receive output tokens
-- `sqrtPriceLimitX96`: Set to `0` to accept any price (no limit)
+- `sqrtPriceLimitX96`: `0` in this template, no price limit, so `amountOutMin` is the only bound. Through the Sauce Router, set a real limit (`sauce-swaps`)
 
 ### addLiquidity (mint position)
 

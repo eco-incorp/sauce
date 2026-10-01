@@ -513,7 +513,10 @@ copies into a project: `sauce-overview` (the entry point), `sauce-script`, `sauc
   names, and the protocols per chain) by `sdk/scripts/gen-skills-protocol-index.mjs` at the end of
   every SDK `build`, committed and prettier-ignored like the globals index below, and held to the
   registry by `skills:check` and CI's clean-tree check. A hand-kept chain table there had drifted;
-  change its prose in the generator.
+  change its prose in the generator. Every document whose protocol swaps (a `dex` or `aggregator`, or
+  a template named for a swap) opens with the one line `SWAP_POINTER` in `check-skills.mjs`, leading
+  a Sauce program to `sauce-swaps`, and a zero price limit in one must say the minimum output is
+  then the only bound; the checker requires both.
 - **The index of globals is generated.** `sdk/scripts/gen-skills-globals.mjs` writes
   `skills/sauce-globals/references/{tokens,protocols,chains}.md` from `routes.sourceGlobals` — the
   function `sauce globals` prints, never a second derivation — at the end of every SDK `build`. The

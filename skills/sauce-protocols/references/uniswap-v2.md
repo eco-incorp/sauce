@@ -1,5 +1,7 @@
 # Uniswap V2
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Constant product AMM (x*y=k) with permissionless pair creation. The most forked DEX protocol in DeFi, deployed across 9 chains with identical interfaces.
 
 ## Category

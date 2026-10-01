@@ -1,5 +1,7 @@
 # Ambient
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Single-contract DEX (formerly CrocSwap) with ambient (full-range) and concentrated liquidity in one unified pool. Extremely gas-efficient architecture where all liquidity lives in one contract.
 
 ## Category
@@ -46,7 +48,7 @@ function main(
 - `inBaseQty`: `true` = qty is denominated in base token; `false` = qty is in quote token
 - `qty`: Amount to swap (in wei)
 - `minOut`: Minimum output for slippage protection
-- Additional params set to `0`: `tip` (optional tip), `limitPrice` (no price limit), `reserveFlags` (no reserve usage)
+- Additional params set to `0`: `tip` (optional tip), `limitPrice` (no price limit, so `minOut` is the only bound), `reserveFlags` (no reserve usage)
 
 ## Key Addresses
 
@@ -70,7 +72,7 @@ function main(
 - Common pool indices: `420` (standard on Ethereum), `36000` (stable pairs on Scroll)
 - `isBuy` + `inBaseQty` together determine the exact swap semantics
 - `tip`: Optional tip in basis points for priority execution (usually `0`)
-- `limitPrice`: Price limit as sqrt price Q64.64 fixed-point (set to `0` for no limit)
+- `limitPrice`: Price limit as sqrt price Q64.64 fixed-point (`0` is no limit, which leaves `minOut` as the only bound)
 - `reserveFlags`: Bitmask for using surplus collateral (set to `0` for standard swaps)
 - `userCmd` is the universal command interface for all non-swap operations (adding/removing liquidity, etc.)
 - callpath `1` = liquidity operations, `3` = warm path operations
