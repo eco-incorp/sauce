@@ -226,9 +226,39 @@ describe("sauce_compile", () => {
     assert.match(out.bytecode as string, /^0x[0-9a-f]+$/);
     assert.equal(out.size, ((out.bytecode as string).length - 2) / 2);
     assert.deepEqual(out.entryParams, []);
-    assert.deepEqual(out.defines, { RECIPIENT, AMOUNT: "1000000" });
+    // Each define the program reads, with where it came from: the call's, or the chain's.
+    assert.deepEqual(
+      (out.defines as Array<{ name: string; value: string; source: string }>).map(
+        ({ name, value, source }) => [name, value, source],
+      ),
+      [
+        ["AMOUNT", "1000000", "user"],
+        ["RECIPIENT", RECIPIENT, "user"],
+        ["USDC", "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", "chain"],
+      ],
+    );
+    // main takes nothing, so the payload is the program itself.
+    assert.deepEqual(out.payload, { size: out.size, argumentsSize: 0 });
     assert.equal((out.engine as { release: string }).release, "v12-evm");
     assert.equal((out.compiler as { name: string }).name, "@eco-incorp/sauce-compiler");
+  });
+
+  it("sizes the payload main's args make, and refuses accounts off Solana", async () => {
+    const out = ok(
+      await mcp.call("sauce_compile", { source: PAY, chain: "base", args: [RECIPIENT, "1"] }),
+    );
+    // Two ABI words appended to the program.
+    assert.deepEqual(out.payload, { size: (out.size as number) + 64, argumentsSize: 64 });
+    assert.match(
+      failed(
+        await mcp.call("sauce_compile", {
+          source: PAY,
+          chain: "base",
+          accounts: { mint: "pot" },
+        }),
+      ),
+      /accounts names a Solana program's accounts; a program on base takes none/,
+    );
   });
 
   it("reports main's runtime parameters, and the compact-v1 schema with compactArgs", async () => {
@@ -254,7 +284,13 @@ describe("sauce_compile", () => {
       }),
     );
     assert.equal(out.chain, "solana");
-    assert.deepEqual(out.defines, { MINT });
+    assert.deepEqual(
+      (out.defines as Array<{ name: string; source: string }>).map(({ name, source }) => [
+        name,
+        source,
+      ]),
+      [["MINT", "user"]],
+    );
     const manifest = out.manifest as { accounts: Array<{ name?: string; kind: string }> };
     assert.deepEqual(
       manifest.accounts.filter((entry) => entry.kind === "slot").map((entry) => entry.name),

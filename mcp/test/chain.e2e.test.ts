@@ -99,6 +99,18 @@ function answering(answers: ReadonlyArray<readonly [string, readonly bigint[]]>)
   return `0x60003560e01c${dispatch}600080fd${bodies.map((each) => each.body).join("")}`;
 }
 
+/** An intent whose body is a program, so it cooks on the destination's shared intent Pot. */
+const COOKED = [
+  "Base(",
+  "  () => {",
+  "    const got = Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).balanceOf(ctx.self());",
+  "    Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, got);",
+  "  },",
+  "  { tokens: [{ token: 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n, amount: 5n }] },",
+  ").reward({ tokens: [{ token: USDC, amount: 7n }] });",
+  "",
+].join("\n");
+
 /** A port nothing is listening on, so this suite never collides with another's anvil. */
 async function freePort(): Promise<number> {
   const server = createServer();
@@ -370,6 +382,33 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     const notes = (out.notes as string[]).join(" ");
     assert.match(notes, /sauce_intent_fill with the same inputs/);
     assert.doesNotMatch(notes, /sauce fill|--/);
+  });
+
+  it("checks the Pot an intent's cook needs on its destination, through rpcUrls", async () => {
+    type PotCheck = { destination: string; pot: string; deployed: boolean | null };
+    const args = {
+      source: COOKED,
+      chain: "arbitrum",
+      defines: { RECIPIENT },
+      intentDeadline: 2_000_000_000,
+      intentCreator: NOBODY,
+      intentExecutionFee: String(FEE),
+    };
+    const unchecked = ok(await mcp.call("sauce_compile", args));
+    assert.deepEqual(
+      (unchecked.intentPots as PotCheck[]).map((check) => [check.destination, check.deployed]),
+      [["base", null]],
+      "no endpoint for the destination, so not checked",
+    );
+    const checked = ok(
+      await mcp.call("sauce_compile", { ...args, rpcUrls: { base: base.rpcUrl } }),
+    );
+    const [pot] = checked.intentPots as PotCheck[];
+    assert.deepEqual([pot!.destination, pot!.deployed], ["base", false]);
+    const notes = (checked.notes as string[]).join(" ");
+    assert.match(notes, /is not deployed there, so no solver can fill it yet/);
+    assert.match(notes, /sauce_pot \(its unsigned deployment, which any account may send\)/);
+    assert.doesNotMatch(notes, /--|sauce pot/);
   });
 
   it("rehearses a solver filling the intent on its destination, through the call's endpoint", async () => {
