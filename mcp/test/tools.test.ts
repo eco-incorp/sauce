@@ -629,6 +629,50 @@ describe("sauce_publish", () => {
   });
 });
 
+describe("sauce_fill", () => {
+  const intent = {
+    source: [
+      "Base(() => {",
+      "  USDC.transfer(RECIPIENT, 5n);",
+      "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
+      "",
+    ].join("\n"),
+    chain: "arbitrum",
+    defines: { RECIPIENT },
+    intentDeadline: 2_000_000_000,
+    intentCreator: OWNER,
+  };
+
+  it("takes the destination's endpoint one way, a claimant of 20 or 32 bytes", async () => {
+    assert.match(
+      failed(
+        await mcp.call("sauce_fill", {
+          ...intent,
+          rpcUrl: "http://127.0.0.1:9/",
+          rpcUrls: { base: "http://127.0.0.1:9/" },
+        }),
+      ),
+      /give rpcUrl \(one destination\) or rpcUrls \(by chain\), not both/,
+    );
+    assert.match(
+      failed(await mcp.call("sauce_fill", { ...intent, claimant: "0x1234" })),
+      /claimant: '0x1234' is neither an address \(20 bytes\) nor 32 bytes of hex/,
+    );
+    assert.match(
+      failed(
+        await mcp.call("sauce_fill", { ...intent, rpcUrls: { nowhere: "http://127.0.0.1:9/" } }),
+      ),
+      /nowhere/,
+    );
+  });
+
+  it("names the destination it needs an endpoint for", async () => {
+    const message = failed(await mcp.call("sauce_fill", intent));
+    assert.match(message, /Rehearsing a fill needs an RPC endpoint for base \(chain id 8453\)/);
+    assert.match(message, /Pass rpcUrl with the call/);
+  });
+});
+
 describe("sauce_inspect", () => {
   it("takes the cook sauce_tx built back apart, checked against its source", async () => {
     const tx = ok(

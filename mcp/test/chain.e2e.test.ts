@@ -30,6 +30,7 @@ import {
   FEE,
   fixture,
   OWNER,
+  placePortal,
   registered,
   RUNTIME_HEX_PATH,
   startChain,
@@ -110,6 +111,10 @@ async function freePort(): Promise<number> {
 
 describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, () => {
   let local: LocalChain;
+  /** The intent's destination, which only a call's own rpcUrl reaches. */
+  let base: LocalChain;
+  let baseUsdc: Address;
+  let basePortal: Address;
   let mcp: Connected;
   let usdc: Address;
 
@@ -121,14 +126,20 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       `${PORTAL_CREATION}${encodeAbiParameters([{ type: "address" }], [zeroAddress]).slice(2)}` as Hex,
       ecoRoutesPortal("arbitrum") as Address,
     );
+    base = await startChain("base", await freePort());
+    baseUsdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
+    basePortal = (await placePortal(base)).portal;
     mcp = await connect(endpointsFor({ [String(local.chain.id)]: local.rpcUrl }));
   });
 
   after(async () => {
     await mcp?.close();
     await local?.stop();
-    // Every byte the server sent, across every test: never the endpoint.
-    assert.ok(!mcp.received.join("\n").includes(local.rpcUrl.replace("http://", "")));
+    await base?.stop();
+    // Every byte the server sent, across every test: never an endpoint.
+    for (const chain of [local, base]) {
+      assert.ok(!mcp.received.join("\n").includes(chain.rpcUrl.replace("http://", "")));
+    }
   });
 
   const pot = getAddress(v12PredictPot(NOBODY, `0x${"00".repeat(32)}`) as Address);
@@ -355,5 +366,53 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       ["success", "success"],
     );
     assert.equal(await local.balanceOf(usdc, NOBODY), 0n);
+    // The other side is the destination's, and its tool is named.
+    const notes = (out.notes as string[]).join(" ");
+    assert.match(notes, /sauce_fill with the same inputs/);
+    assert.doesNotMatch(notes, /sauce fill|--/);
+  });
+
+  it("rehearses a solver filling the intent on its destination, through the call's endpoint", async () => {
+    type Fill = {
+      ok: boolean;
+      destination: string;
+      portal: string;
+      calls: Array<{ kind: string; status: string }>;
+    };
+    const args = {
+      source: INTENT,
+      chain: "arbitrum",
+      defines: { RECIPIENT },
+      intentDeadline: 2_000_000_000,
+      intentCreator: NOBODY,
+    };
+    const block = await base.publicClient.getBlockNumber();
+    for (const reach of [{ rpcUrl: base.rpcUrl }, { rpcUrls: { base: base.rpcUrl } }]) {
+      const out = ok(await mcp.call("sauce_fill", { ...args, ...reach })) as {
+        ok: boolean;
+        chain: string;
+        intents: Fill[];
+      };
+      assert.equal(out.ok, true);
+      assert.equal(out.chain, "arbitrum");
+      const [fill] = out.intents;
+      assert.equal(fill!.destination, "base");
+      assert.equal(getAddress(fill!.portal), basePortal);
+      assert.deepEqual(
+        fill!.calls.map((call) => [call.kind, call.status]),
+        [
+          ["approve", "success"],
+          ["fulfill", "success"],
+        ],
+      );
+    }
+    // A rehearsal: nothing landed on the destination.
+    assert.equal(await base.publicClient.getBlockNumber(), block);
+    assert.equal(await base.balanceOf(baseUsdc, RECIPIENT), 0n);
+    // The server has no endpoint of its own for the destination.
+    assert.match(
+      failed(await mcp.call("sauce_fill", args)),
+      /Rehearsing a fill needs an RPC endpoint for base .* Pass rpcUrl with the call/,
+    );
   });
 });
