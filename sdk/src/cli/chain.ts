@@ -356,6 +356,8 @@ export interface Sent {
   readonly blockNumber: bigint;
   /** When it reverted: why, replayed at its block. */
   readonly reason?: string;
+  /** The receipt it landed with: what it cost, and its logs. */
+  readonly receipt?: TransactionReceipt;
 }
 
 /**
@@ -385,6 +387,7 @@ export async function sendAndWait(
     status: receipt.status,
     gasUsed: receipt.gasUsed,
     blockNumber: receipt.blockNumber,
+    receipt,
   };
   if (receipt.status === "success") {
     await caughtUp(client, receipt.blockNumber);

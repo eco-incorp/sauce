@@ -1259,6 +1259,29 @@ describe("sauce pot", () => {
     expect(byDefault.salt).toBe(SAUCE_INTENT_POT_SALT);
   });
 
+  it("is the signer's own Pot with a signer and no --owner, unlocking nothing it need not", async () => {
+    // A keystore that names its address: read, never decrypted (there is no password to give).
+    const named = file(
+      "named.keystore.json",
+      JSON.stringify({ address: OWNER.slice(2).toLowerCase(), version: 3, crypto: {} }),
+    );
+    const fromKeystore = JSON.parse(
+      (await sauce("pot", "--chain", "base", "--keystore", named)).stdout,
+    ) as { owner: string; pot: string };
+    expect(fromKeystore).toMatchObject({ owner: OWNER, pot: v12PredictPot(OWNER) });
+    // A raw key's own address (anvil's second dev account is OWNER).
+    const fromKey = await sauce(
+      ...["pot", "--chain", "base", "--private-key"],
+      "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
+    );
+    expect(JSON.parse(fromKey.stdout)).toMatchObject({ owner: OWNER });
+    // A keystore without one has to be unlocked: with no terminal, that needs --password-file.
+    const unnamed = file("unnamed.keystore.json", JSON.stringify({ version: 3, crypto: {} }));
+    const locked = await sauce("pot", "--chain", "base", "--keystore", unnamed);
+    expect(locked.code).toBe(2);
+    expect(locked.stderr).toMatch(/pass --password-file/);
+  });
+
   it("refuses a missing owner, and an owner that is not the chain's kind of address", async () => {
     expect((await sauce("pot", "--chain", "base")).stderr).toMatch(/missing --owner <address>/);
     expect((await sauce("pot", "--owner", OWNER)).stderr).toMatch(/missing --chain/);
@@ -1401,8 +1424,8 @@ describe("flags in any order", () => {
         /--keystore is not an option of sauce tx: tx signs nothing: it prints the transaction unsigned/,
       ],
       [
-        ["simulate", program, "--chain", "solana", "--owner", OWNER, "--keypair", "id.json"],
-        /--keypair is not an option of sauce simulate: on Solana, simulate runs the cook from --owner/,
+        ["tx", program, "--chain", "solana", "--owner", OWNER, "--keypair", "id.json"],
+        /--keypair is not an option of sauce tx: tx signs nothing/,
       ],
       [
         ["compile", program, "--chain", "base", "--auto-approve"],

@@ -240,7 +240,10 @@ describeEvm(
         const done = await run(["--fund", "USDC:1000000n"], [usdc, RECIPIENT, "1000000"], unasked);
         expect(notes(done)).toBe("");
         expect(done.code).toBe(0);
-        expect(done.stdout).toMatch(/^cook 0x[0-9a-f]{64}: success, gas used \d+, block \d+\n$/);
+        // The cook, alone: then what it cost and moved.
+        expect(done.stdout).toMatch(
+          /^cook 0x[0-9a-f]{64}: success, gas used \d+, block \d+\ncost /,
+        );
         expect(await balance(usdc, RECIPIENT)).toBe(2_000_000n);
         expect(await balance(usdc, pot)).toBe(500_000n);
       }, 60_000);
@@ -348,7 +351,7 @@ describeEvm(
         expect(done.stdout).toMatch(
           new RegExp(
             `^reset ${tether}'s allowance to ${permit2} ${tx}\\n` +
-              `approve ${tether} to ${permit2} ${tx}\\ncook ${tx}\\n$`,
+              `approve ${tether} to ${permit2} ${tx}\\ncook ${tx}\\ncost `,
           ),
         );
         expect(await allowance(tether, permit2)).toBe(maxUint256);
@@ -858,12 +861,20 @@ describeEvm(
         ),
       );
       expect(done.code).toBe(0);
+      // What was sent, in order; after the cook, what it cost and moved.
+      const lines = done.stdout.trim().split("\n");
       expect(
-        done.stdout
-          .trim()
-          .split("\n")
+        lines
+          .slice(
+            0,
+            lines.findIndex((line) => line.startsWith("cost ")),
+          )
           .map((line) => line.split(" 0x")[0]),
       ).toEqual(["deployed Pot", "approve USDC to", "cook"]);
+      expect(done.stdout).toMatch(
+        /^cost [\d.]+ ETH: gas \d+ at \d+ wei = [\d.]+ ETH, value [\d.]+ ETH/m,
+      );
+      expect(done.stdout).toContain(`  1 USDC: `);
       expect(await balance(usdc, RECIPIENT)).toBe(before + 1_000_000n);
       expect(await balance(usdc, signer)).toBe(9_000_000n);
     }, 120_000);

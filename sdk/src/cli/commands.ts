@@ -60,6 +60,7 @@ import {
   type PotCheck,
   type Endpoints,
 } from "./intents.js";
+import { costJson, costLine, costOf, receiptEffects, receiptReport } from "./receipt.js";
 import { appliedDefines, contractCollector } from "./report.js";
 import { svmCookSize } from "./solana.js";
 import type { Funding } from "./funding.js";
@@ -605,12 +606,27 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
     (funding?.value ?? 0n);
   const request: TxRequest = { to: cook.pot, data: funded.data, value };
   const sent = await sendAndWait(client, input.rpcUrl, input.account, request);
+  // What the cook cost, and what it moved, from its receipt.
+  const cost = sent.receipt === undefined ? undefined : costOf(sent.receipt, value);
+  const effects =
+    sent.receipt === undefined || sent.status !== "success"
+      ? undefined
+      : receiptReport(
+          await receiptEffects(client, input.chain, sent.receipt, [
+            [signer, "you"],
+            [cook.pot, "the Pot"],
+          ]),
+        );
 
   return {
     text: [
       ...(deployed === undefined ? [] : [sentText(`deployed Pot ${cook.pot} in`, deployed)]),
       ...(funding?.sent ?? []).map((step) => sentText(step.what, step.sent)),
       sentText("cook", sent),
+      ...(cost === undefined
+        ? []
+        : [costLine(cost, input.chain, "the Kitchen's fee and any native the program spends")]),
+      ...(effects?.lines ?? []),
     ].join("\n"),
     json: {
       chain: input.chain.slug,
@@ -621,7 +637,11 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
       ...(funding === undefined
         ? {}
         : { funding: funding.sent.map((step) => ({ what: step.what, ...sentJson(step.sent) })) }),
-      cook: sentJson(sent),
+      cook: {
+        ...sentJson(sent),
+        ...(cost === undefined ? {} : { cost: costJson(cost) }),
+        ...(effects === undefined ? {} : { effects: effects.json }),
+      },
     },
     ...(funding === undefined || funding.notes.length === 0 ? {} : { notes: funding.notes }),
     ...(sent.status === "success" ? {} : { exitCode: 1 }),

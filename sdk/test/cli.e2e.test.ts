@@ -338,6 +338,16 @@ describeEvm("sauce, sent to a chain", () => {
       expect(ok.stdout).toContain(`  1 USDC: ${labelled} (the Pot) -> ${THIRD_RECIPIENT}`);
       // Nothing moved: it was an eth_call.
       expect(await ethereum.balanceOf(usdc, THIRD_RECIPIENT)).toBe(0n);
+      // The owner's keystore names the owner, read from its address field: no password, no --owner.
+      const keyed = await sauce(
+        ...["simulate", PAY, "--salt", "e2e", ...defines(THIRD_RECIPIENT)],
+        ...["--rpc-url", ethereum.rpcUrl, ...KEYSTORE],
+      );
+      expect(keyed.code).toBe(0);
+      expect(keyed.stdout).toMatch(new RegExp(`^The cook succeeds from ${KEYSTORE_OWNER}`));
+      // And so does `sauce pot`: the signer's address and its Pot.
+      const mine = jsonOf(await sauce("pot", "--chain", "ethereum", "--salt", "e2e", ...KEYSTORE));
+      expect(mine).toMatchObject({ owner: KEYSTORE_OWNER, pot: labelled });
 
       const refusing = join(work, "refuses.sauce.ts");
       writeFileSync(refusing, '// @chain ethereum\nthrow "not today";\n');
@@ -702,6 +712,24 @@ describeEvm("a typed main, compiled for Base and for Arbitrum, run with --args",
           },
         },
       });
+      // What it cost — gas at its price, and the value, the Kitchen's fee — and what it moved, from
+      // the receipt's logs.
+      const receipt = await local.publicClient.getTransactionReceipt({ hash: hash as Hex });
+      const execution = receipt.gasUsed * receipt.effectiveGasPrice;
+      expect(inspected.cost).toEqual({
+        gasUsed: receipt.gasUsed.toString(),
+        gasPrice: receipt.effectiveGasPrice.toString(),
+        execution: execution.toString(),
+        value: FEE.toString(),
+        total: (execution + FEE).toString(),
+      });
+      const moved = (inspected.effects as { transfers: Array<{ from: string; to: string }> })
+        .transfers;
+      expect(moved).toHaveLength(RECIPIENTS.length * (alsoUsdc ? 2 : 1));
+      for (const transfer of moved) {
+        expect(transfer.from).toBe(pot);
+        expect(RECIPIENTS).toContain(transfer.to);
+      }
     }, 60_000);
   }
 

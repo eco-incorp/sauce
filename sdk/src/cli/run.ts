@@ -94,7 +94,7 @@ import {
 } from "./solana.js";
 import type { Address as SvmAddress, KeyPairSigner } from "@solana/kit";
 import type { PrivateKeyAccount } from "viem/accounts";
-import { loadSigner, scrub, secret } from "./signer.js";
+import { keystoreAddress, loadSigner, scrub, secret } from "./signer.js";
 import { chooseTerminal, confirmOn, controllingTerminal, passwordOn } from "./terminal.js";
 import {
   AGENTS,
@@ -710,6 +710,20 @@ const signerOf = (args: ParsedArgs, io: CliIo) => {
 };
 
 /**
+ * The EVM signer's address, read with no more than it needs: a raw key's own, a keystore's
+ * `address` field (no password), and only for a keystore without one, the keystore unlocked.
+ */
+async function signerAddress(args: ParsedArgs, io: CliIo): Promise<`0x${string}`> {
+  const keystore = stringFlag(args, "keystore");
+  if (keystore !== undefined && stringFlag(args, "private-key") === undefined) {
+    const named = keystoreAddress(readInput(io, keystore));
+    if (named !== undefined) return named;
+  }
+
+  return (await signerOf(args, io)).address;
+}
+
+/**
  * Who approves what a run sends before its cook: `--auto-approve`, which says so for each action it
  * approves, or the person at the terminal (`io.confirm`).
  */
@@ -1052,9 +1066,18 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         only: "evm",
       },
       ...FUND,
-      keystore: SIGNER.keystore!,
+      keystore: {
+        type: "string",
+        value: "<path>",
+        help: "The owner's keystore: names the owner (and signs --fund's pulls)",
+      },
       "password-file": SIGNER["password-file"]!,
       "private-key": SIGNER["private-key"]!,
+      keypair: {
+        type: "string",
+        value: "<path>",
+        help: "Solana: the owner's keypair, naming the owner; nothing is signed",
+      },
       ...JSON_FLAG,
       ...HELP,
       ...ARGS,
@@ -1103,12 +1126,6 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     run: async (args, io, trailing) => {
       const program = await programInput(args, io);
       const funds = repeatedFlag(args, "fund").length > 0;
-      if (hasSigner(args) && !funds) {
-        throw new UsageError(
-          "simulate signs nothing but --fund's pulls: give --fund, or drop the key (the rehearsal " +
-            "runs from the Pot's owner without one)",
-        );
-      }
       const assume = repeatedFlag(args, "assume-balance");
       if (program.chain.kind === "svm") {
         fundingOf(args, io, program.chain, "", false, undefined);
@@ -1119,12 +1136,35 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           );
         }
 
-        return svmSimulateCommand(svmCookInput(args, io, trailing, program), io);
+        // A keypair names the owner; the rehearsal signs nothing with it.
+        const owner =
+          stringFlag(args, "keypair") === undefined
+            ? undefined
+            : (await keypairOf(args, io)).address;
+
+        return svmSimulateCommand(svmCookInput(args, io, trailing, program, owner), io);
       }
-      const input = cookInput(args, io, trailing, undefined, program);
+      if (stringFlag(args, "keypair") !== undefined) {
+        throw new UsageError(
+          "--keypair is a Solana keypair; on an EVM chain, name the owner with --keystore or " +
+            "--private-key, or --owner",
+        );
+      }
+      // A key names the owner, whose Pot the rehearsal runs on, and signs --fund's pulls if any.
+      const account = funds && hasSigner(args) ? await signerOf(args, io) : undefined;
+      const owner =
+        account?.address ?? (hasSigner(args) ? await signerAddress(args, io) : undefined);
+      if (owner !== undefined && stringFlag(args, "owner") !== undefined) {
+        if (parseAddress("owner", stringFlag(args, "owner")!) !== owner) {
+          throw new UsageError(
+            `--owner ${stringFlag(args, "owner")} is not the signer, ${owner}: with a key, the ` +
+              "owner is the key's. Leave --owner out, or give its key.",
+          );
+        }
+      }
+      const input = cookInput(args, io, trailing, owner, program);
       const assumed = assumedBalances(args, input.chain);
       const rpcUrl = requiredEndpoint(args, io, input.chain);
-      const account = funds && hasSigner(args) ? await signerOf(args, io) : undefined;
       const fund = fundingOf(args, io, input.chain, rpcUrl, false, account);
 
       return simulateCommand(
@@ -1395,7 +1435,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "code. The owner defaults to the signer. Deploying is permissionless: with --owner, the",
       "signer sends and pays for another owner's Pot, which is that owner's alone — how the Pot",
       "intents share on a chain (owner: its Portal's Executor) is deployed. The default salt is",
-      "zero: the one Pot an owner has by default. With an endpoint and no --deploy, it also reads",
+      "zero: the one Pot an owner has by default. With a signer and no --owner, it is the",
+      "signer's own Pot, so `sauce pot --chain base --keystore <keystore>` prints your address and",
+      "your Pot (the keystore's own address field is read, with no password, where it has one).",
+      "With an endpoint and no --deploy, it also reads",
       "the chain: whether the released engine and Kitchen are there, the Kitchen's fee, and",
       "whether the Pot is deployed and whose it is (under `deployment`, and on stderr).",
       "",
@@ -1421,7 +1464,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         }
         if (args.values.deploy !== true) {
           const rpcUrl = endpoint(args, io, chain);
-          const target = { owner: svmOwner(args), ...saltOf(args) };
+          const keyed =
+            stringFlag(args, "keypair") === undefined
+              ? undefined
+              : (await keypairOf(args, io)).address;
+          const target = { owner: svmOwner(args, keyed), ...saltOf(args) };
 
           return rpcUrl === undefined
             ? svmPotCommand(target)
@@ -1441,9 +1488,24 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         });
       }
       if (args.values.deploy !== true) {
-        if (owner === undefined) throw new UsageError("missing --owner <address>: whose Pot");
+        // A signer, with no --owner, is asking for its own Pot: its address, without unlocking it
+        // where the keystore names it.
+        if (owner === undefined && !hasSigner(args)) {
+          throw new UsageError(
+            "missing --owner <address>: whose Pot (or a signer, --keystore or --private-key, for yours)",
+          );
+        }
+        if (stringFlag(args, "keypair") !== undefined) {
+          throw new UsageError(
+            "--keypair is a Solana keypair: on an EVM chain, --keystore or --private-key",
+          );
+        }
         const rpcUrl = endpoint(args, io, chain);
-        const target = { chain, owner: parseAddress("owner", owner), ...saltOf(args) };
+        const target = {
+          chain,
+          owner: owner === undefined ? await signerAddress(args, io) : parseAddress("owner", owner),
+          ...saltOf(args),
+        };
 
         return rpcUrl === undefined ? potCommand(target) : potStatusCommand({ ...target, rpcUrl });
       }
@@ -1988,17 +2050,15 @@ function notTaken(name: string, flag: string): string {
   const takers = Object.keys(COMMANDS).filter((other) => flag in COMMANDS[other]!.flags);
   const own = COMMANDS[name]!.flags;
   const why =
-    name === "simulate" && flag === "keypair"
-      ? "on Solana, simulate runs the cook from --owner and signs nothing"
-      : name === "tx" && SIGNING.has(flag)
-        ? "tx signs nothing: it prints the transaction unsigned, for a wallet (sauce run signs and sends it)"
-        : SIGNING.has(flag) && !Object.keys(own).some((key) => SIGNING.has(key))
-          ? `${name} signs nothing`
-          : REACHING.has(flag) && !("config" in own)
-            ? `${name} reads nothing from a chain`
-            : flag === "auto-approve"
-              ? `${name} has nothing to ask`
-              : undefined;
+    name === "tx" && SIGNING.has(flag)
+      ? "tx signs nothing: it prints the transaction unsigned, for a wallet (sauce run signs and sends it)"
+      : SIGNING.has(flag) && !Object.keys(own).some((key) => SIGNING.has(key))
+        ? `${name} signs nothing`
+        : REACHING.has(flag) && !("config" in own)
+          ? `${name} reads nothing from a chain`
+          : flag === "auto-approve"
+            ? `${name} has nothing to ask`
+            : undefined;
 
   return (
     `--${flag} is not an option of sauce ${name}` +
