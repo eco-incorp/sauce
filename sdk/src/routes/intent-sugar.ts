@@ -51,6 +51,7 @@ import { safeApproveStatements } from "../token/safe.js";
 import { walk, type AstNode } from "./ast-walk.js";
 import { childProgram, enclosingLocals, moduleScope, unreachedFunctions } from "./intent-body.js";
 import { denormalizeToEvm } from "./encode.js";
+import { rewardAssetsConflict } from "./intent.js";
 import { normalizeReward, normalizeRoute, toUniversalAddress } from "./normalize.js";
 import { publishAndFundTx } from "./portal.js";
 import { parseSauce } from "./parse.js";
@@ -697,6 +698,17 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
 
     // On the enclosing chain: see `resolveFunding` above.
     const reward = lowerReward(site.reward, resolveFunding);
+    // A native amount known to be zero offers nothing; any other (a literal or a run-time value)
+    // is a native leg the source Portal would count against a leg of its native ERC-20.
+    const offersNative =
+      reward.nativeAmount !== undefined &&
+      !("literal" in reward.nativeAmount && reward.nativeAmount.literal === 0n);
+    const conflict = rewardAssetsConflict(
+      context.source.id,
+      offersNative,
+      reward.tokens.map((t) => addressHex(t.token)),
+    );
+    if (conflict !== undefined) fail(conflict);
     const { defaults } = context;
     const rewardDeadline = defaults.rewardDeadline ?? requireDeadline(defaults);
     const child: Intent = {
