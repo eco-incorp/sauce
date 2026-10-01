@@ -1200,6 +1200,8 @@ export interface UniswapV4PoolManagerMethods {
   "initialize"(arg0: { "currency0": bigint; "currency1": bigint; "fee": bigint; "tickSpacing": bigint; "hooks": bigint }, arg1: bigint): bigint;
   "swap"(arg0: { "currency0": bigint; "currency1": bigint; "fee": bigint; "tickSpacing": bigint; "hooks": bigint }, arg1: { "zeroForOne": boolean; "amountSpecified": bigint; "sqrtPriceLimitX96": bigint }, arg2: (string | SauceBytes)): bigint;
   "modifyLiquidity"(arg0: { "currency0": bigint; "currency1": bigint; "fee": bigint; "tickSpacing": bigint; "hooks": bigint }, arg1: { "tickLower": bigint; "tickUpper": bigint; "liquidityDelta": bigint; "salt": bigint }, arg2: (string | SauceBytes)): [bigint, bigint] & { "delta": bigint; "feeDelta": bigint };
+  "extsload"(arg0: bigint): bigint;
+  "extsload"(arg0: bigint, arg1: bigint): SauceArray<bigint>;
 }
 
 export interface UniswapV4PositionManagerMethods {
@@ -1209,6 +1211,21 @@ export interface UniswapV4PositionManagerMethods {
 export interface UniswapV4UniversalRouterMethods {
   "execute"(arg0: (string | SauceBytes), arg1: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>), arg2: bigint): void;
   "execute"(arg0: (string | SauceBytes), arg1: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>)): void;
+}
+
+export interface UniswapV4StateViewMethods {
+  "getSlot0"(arg0: bigint): [bigint, bigint, bigint, bigint] & { "sqrtPriceX96": bigint; "tick": bigint; "protocolFee": bigint; "lpFee": bigint };
+  "getLiquidity"(arg0: bigint): bigint;
+  "getTickInfo"(arg0: bigint, arg1: bigint): [bigint, bigint, bigint, bigint] & { "liquidityGross": bigint; "liquidityNet": bigint; "feeGrowthOutside0X128": bigint; "feeGrowthOutside1X128": bigint };
+  "getTickLiquidity"(arg0: bigint, arg1: bigint): [bigint, bigint] & { "liquidityGross": bigint; "liquidityNet": bigint };
+  "getTickFeeGrowthOutside"(arg0: bigint, arg1: bigint): [bigint, bigint] & { "feeGrowthOutside0X128": bigint; "feeGrowthOutside1X128": bigint };
+  "getTickBitmap"(arg0: bigint, arg1: bigint): bigint;
+  "getFeeGrowthGlobals"(arg0: bigint): [bigint, bigint] & { "feeGrowthGlobal0": bigint; "feeGrowthGlobal1": bigint };
+  "getFeeGrowthInside"(arg0: bigint, arg1: bigint, arg2: bigint): [bigint, bigint] & { "feeGrowthInside0X128": bigint; "feeGrowthInside1X128": bigint };
+  "getPositionInfo"(arg0: bigint, arg1: bigint): [bigint, bigint, bigint] & { "liquidity": bigint; "feeGrowthInside0LastX128": bigint; "feeGrowthInside1LastX128": bigint };
+  "getPositionInfo"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): [bigint, bigint, bigint] & { "liquidity": bigint; "feeGrowthInside0LastX128": bigint; "feeGrowthInside1LastX128": bigint };
+  "getPositionLiquidity"(arg0: bigint, arg1: bigint): bigint;
+  "poolManager"(): bigint;
 }
 
 export interface UnitflowV3FactoryMethods {
@@ -1963,6 +1980,7 @@ export interface UniswapV4Source {
   readonly PoolManager: SauceContract<UniswapV4PoolManagerMethods>;
   readonly PositionManager: SauceContract<UniswapV4PositionManagerMethods>;
   readonly UniversalRouter: SauceContract<UniswapV4UniversalRouterMethods>;
+  readonly StateView: SauceContract<UniswapV4StateViewMethods>;
 }
 
 export interface UnitflowV3Source {
@@ -2101,6 +2119,7 @@ export interface UniswapFamilySource {
   readonly PoolManager: UniswapV4Source["PoolManager"];
   readonly PositionManager: UniswapV4Source["PositionManager"];
   readonly UniversalRouter: UniswapV4Source["UniversalRouter"];
+  readonly StateView: UniswapV4Source["StateView"];
 }
 
 export interface UnitflowFamilySource {

@@ -410,6 +410,26 @@ describe("rewriteProtocolAccessors: every registry protocol, every contract kind
     expect(compile(rewritten, { contracts }).bytecode[0]!.length).toBeGreaterThan(0);
   });
 
+  it("Uniswap V4's StateView and PoolManager.extsload read pool state, on every V4 chain", () => {
+    const source = `function main() {
+      const poolId = 0x1234n;
+      const [sqrtPriceX96, tick, protocolFee, lpFee] = UniswapV4.StateView.getSlot0(poolId);
+      const raw = UniswapV4.PoolManager.extsload(poolId);
+      return sqrtPriceX96 + UniswapV4.StateView.getLiquidity(poolId) + raw;
+    }`;
+    for (const slug of getDescriptor("uniswap-v4", "StateView")!.chains) {
+      const { source: rewritten, contracts } = rewriteProtocolAccessors(source, requireChain(slug));
+      expect(Object.keys(contracts).sort()).toEqual([
+        "IUniswapV4_PoolManager",
+        "IUniswapV4_StateView",
+      ]);
+      expect(compile(rewritten, { contracts }).bytecode[0]!.length).toBeGreaterThan(0);
+    }
+    expect(getDescriptor("uniswap-v4", "StateView")!.chains).toEqual(
+      getDescriptor("uniswap-v4", "PoolManager")!.chains,
+    );
+  });
+
   it("shape E: an interface is called at the address the program supplies", () => {
     const source = `function main() { return Erc4626.Vault.at(0x1234n).deposit(1n, ctx.self()); }`;
     const { source: rewritten, contracts } = rewriteProtocolAccessors(source, BASE);

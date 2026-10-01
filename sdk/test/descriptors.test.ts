@@ -206,8 +206,8 @@ describe("descriptors: registry totals + purity", () => {
     const protocolSlugs = new Set(DESCRIPTORS.map((d) => d.protocol));
     const kinds = (kind: string) => DESCRIPTORS.filter((d) => d.kind === kind).length;
     expect(protocolSlugs).toEqual(new Set(listProtocolSlugs()));
-    expect(DESCRIPTORS.length).toBe(299);
-    expect(kinds("singleton")).toBe(221);
+    expect(DESCRIPTORS.length).toBe(300);
+    expect(kinds("singleton")).toBe(222);
     expect(kinds("address-only")).toBe(55);
     expect(kinds("interface")).toBe(23);
   });

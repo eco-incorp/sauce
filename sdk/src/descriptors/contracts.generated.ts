@@ -414,7 +414,7 @@ export const PROTOCOL_SOURCES = {
   "zksync-bridge": { abis: zksyncBridgeAbis, deployments: zksyncBridgeDeployments },
 } as const;
 
-/** One entry per contract: 299 contracts across 135 protocols. */
+/** One entry per contract: 300 contracts across 135 protocols. */
 export const CONTRACT_LINKS = [
   { protocol: "aave-v2", contract: "LendingPool", kind: "singleton", roleKey: "lendingPool", abiExport: "LendingPoolABI" },
   { protocol: "aave-v3", contract: "Pool", kind: "singleton", roleKey: "pool", abiExport: "PoolABI" },
@@ -697,6 +697,7 @@ export const CONTRACT_LINKS = [
   { protocol: "uniswap-v4", contract: "PoolManager", kind: "singleton", roleKey: "poolManager", abiExport: "UniswapV4PoolManagerABI" },
   { protocol: "uniswap-v4", contract: "PositionManager", kind: "singleton", roleKey: "positionManager", abiExport: "UniswapV4PositionManagerABI" },
   { protocol: "uniswap-v4", contract: "UniversalRouter", kind: "singleton", roleKey: "universalRouter", abiExport: "UniswapV4UniversalRouterABI" },
+  { protocol: "uniswap-v4", contract: "StateView", kind: "singleton", roleKey: "stateView", abiExport: "UniswapV4StateViewABI" },
   { protocol: "unitflow-v3", contract: "Factory", kind: "singleton", roleKey: "factory", abiExport: "UnitFlowV3FactoryABI", caveats: ["getPool(address,address,uint24) is checked against the deployed bytecode only: the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Factory's (UnitFlow-Finance/UnitFlowV3-contract) and the selector is proven by the factory bytecode","feeAmountTickSpacing(uint24) is checked against the deployed bytecode only: the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Factory's (UnitFlow-Finance/UnitFlowV3-contract) and the selector is proven by the factory bytecode"] },
   { protocol: "unitflow-v3", contract: "Router", kind: "singleton", roleKey: "router", abiExport: "UnitFlowV3RouterABI" },
   { protocol: "unitflow-v3", contract: "Quoter", kind: "singleton", roleKey: "quoter", abiExport: "UnitFlowV3QuoterABI" },
@@ -1374,6 +1375,7 @@ export interface UniswapV4Contracts {
   readonly PoolManager: Contract<typeof uniswapV4Abis.UniswapV4PoolManagerABI>;
   readonly PositionManager: Contract<typeof uniswapV4Abis.UniswapV4PositionManagerABI>;
   readonly UniversalRouter: Contract<typeof uniswapV4Abis.UniswapV4UniversalRouterABI>;
+  readonly StateView: Contract<typeof uniswapV4Abis.UniswapV4StateViewABI>;
 }
 
 export interface UnitflowV3Contracts {
@@ -1512,6 +1514,7 @@ export interface UniswapFamilyContracts {
   readonly PoolManager: UniswapV4Contracts["PoolManager"];
   readonly PositionManager: UniswapV4Contracts["PositionManager"];
   readonly UniversalRouter: UniswapV4Contracts["UniversalRouter"];
+  readonly StateView: UniswapV4Contracts["StateView"];
 }
 
 export interface UnitflowFamilyContracts {
