@@ -98,6 +98,12 @@ export interface SimulateOpts {
   appendPayerSigner?: boolean;
   /** This cook's `max_execution_fee`, in place of the client's `maxExecutionFee`. */
   maxExecutionFee?: bigint;
+  /**
+   * Accounts whose state after the transaction `simulate`/`simulateStaged` report, in order, as
+   * `SimulateExecuteResult.accounts` — what a cook moved, read back without sending it. The
+   * execute paths ignore it.
+   */
+  accounts?: readonly Address[];
 }
 
 export interface ExecuteOpts extends SimulateOpts {
@@ -366,7 +372,11 @@ export async function createSauceSvmClient({
       opts,
     );
 
-    return simulateExecute(rpc, transaction);
+    return simulateExecute(
+      rpc,
+      transaction,
+      opts.accounts === undefined ? {} : { accounts: opts.accounts },
+    );
   }
 
   async function buildStagedTransaction(
@@ -426,7 +436,11 @@ export async function createSauceSvmClient({
       opts,
     );
 
-    return simulateExecute(rpc, transaction);
+    return simulateExecute(
+      rpc,
+      transaction,
+      opts.accounts === undefined ? {} : { accounts: opts.accounts },
+    );
   }
 
   async function autoComputeUnitPrepends(

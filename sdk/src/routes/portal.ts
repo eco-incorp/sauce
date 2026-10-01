@@ -20,6 +20,14 @@
  * argument below is `encodeRoute(intent.route, intent.destination)` — literally the function
  * `routeHash` calls.
  *
+ * THE DESTINATION SIDE (`fulfillTx`, `fulfillApprovalTxs`) is the one exception to the `bytes`
+ * rule, because the deployed `Inbox.fulfill(bytes32,Route,bytes32,bytes32)` has no `bytes` form:
+ * it takes the `Route` tuple and hashes `abi.encode(route)` itself. That is safe exactly where it
+ * applies — an EVM destination, whose route IS ABI-encoded — and the tuple handed over is
+ * `encode.ts`'s `evmRouteTuple`, the value `encodeRouteEvm` (and so `routeHash`) encodes. Verified
+ * against eco-routes `Inbox.sol` on `main` and the Base Portal (2.6), whose code carries the
+ * `fulfill` selector this ABI entry encodes.
+ *
  * FUNDING MECHANICS (`IntentSource._fundIntent`/`_fundToken`/`_fundNative`, read verbatim):
  *   - the funder is `msg.sender` of `publishAndFund`/`fund` (a separate `funder` address exists only
  *     on the `*For` permit variants — out of scope here);
@@ -44,7 +52,7 @@ import { decodeAbiParameters, encodeFunctionData, type Hex } from "viem";
 
 import { PortalABI } from "../protocols/eco-routes/abis.js";
 import { ERC20ABI } from "../protocols/erc20/abis.js";
-import { denormalizeToEvm, encodeRoute, hashIntent, kindOf } from "./encode.js";
+import { denormalizeToEvm, encodeRoute, evmRouteTuple, hashIntent, kindOf } from "./encode.js";
 import type { IntentHashes } from "./encode.js";
 import { toUniversalAddress } from "./normalize.js";
 import type { AddressInput, Intent } from "./types.js";
@@ -169,6 +177,93 @@ export function approvalTxs(intent: Intent, target: PortalTarget): readonly Port
     if (previous === undefined || amount > previous) maxByToken.set(evmToken, amount);
   }
   return [...maxByToken].map(([token, amount]) => ({
+    to: token,
+    data: encodeFunctionData({ abi: ERC20ABI, functionName: "approve", args: [portal, amount] }),
+    value: 0n,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// The destination side: what a solver sends to fulfil an intent
+// ---------------------------------------------------------------------------
+
+/** What `fulfill` takes besides the intent. */
+export interface FulfillOptions {
+  /**
+   * Who claims the reward on the source chain once the fulfilment is proven, as the Portal
+   * records it: a 20-byte EVM address (left-padded to 32 bytes) or the 32 bytes another VM's
+   * address is. Never zero: `Inbox._fulfill` refuses that with `ZeroClaimant()`.
+   */
+  readonly claimant: AddressInput;
+}
+
+function assertEvmDestination(intent: Intent, helper: string): void {
+  if (kindOf(intent.destination) !== "evm") {
+    throw new Error(
+      `portal.ts#${helper}: intent.destination (${intent.destination}) is not an EVM chain — this ` +
+        "is the EVM Portal's fulfill calldata; a Solana destination is fulfilled through the " +
+        "Solana Portal program.",
+    );
+  }
+}
+
+/** The destination Portal: the one the route records, which `Inbox._fulfill` requires it to be
+ *  (`route.portal != address(this)` reverts `InvalidPortal`). */
+function destinationPortalOf(intent: Intent): Hex {
+  return denormalizeToEvm(intent.route.portal);
+}
+
+/**
+ * `Portal.fulfill(intentHash, route, rewardHash, claimant)` on the DESTINATION chain: what a solver
+ * sends to run an intent's route (`Inbox.fulfill`, read verbatim).
+ *
+ *  - `to` is the Portal the route records — never a parameter, since any other Portal refuses it;
+ *  - `route` is {@link evmRouteTuple}, the exact value `routeHash` is taken over, and `intentHash`
+ *    and `rewardHash` are {@link hashIntent}'s: the Portal recomputes
+ *    `keccak256(abi.encodePacked(uint64 chainid, keccak256(abi.encode(route)), rewardHash))` and
+ *    refuses a mismatch with `InvalidHash`;
+ *  - `value` is `route.nativeAmount` — what the route's calls spend, the Kitchen's fee for each cook
+ *    among them. `_fulfill` refuses less (`InsufficientNativeAmount`) and refunds any excess.
+ *
+ * The Portal pulls each `route.tokens` entry from the solver (`safeTransferFrom(msg.sender,
+ * executor, amount)`), so the solver approves the Portal first: {@link fulfillApprovalTxs}.
+ */
+export function fulfillTx(intent: Intent, options: FulfillOptions): PortalTx {
+  assertEvmDestination(intent, "fulfillTx");
+  const claimant = toUniversalAddress(options.claimant);
+  if (/^0x0{64}$/.test(claimant)) {
+    throw new Error("portal.ts#fulfillTx: the claimant is zero, which the Portal refuses");
+  }
+  const { intentHash, rewardHash } = hashIntent(intent);
+
+  return {
+    to: destinationPortalOf(intent),
+    data: encodeFunctionData({
+      abi: PortalABI,
+      functionName: "fulfill",
+      args: [intentHash, evmRouteTuple(intent.route), rewardHash, claimant],
+    }),
+    value: intent.route.nativeAmount,
+  };
+}
+
+/**
+ * The solver's approvals `fulfill` spends: one `approve(portal, amount)` per DISTINCT route token,
+ * in first-seen order, to the Portal the route records. Entries naming the same token SUM — unlike
+ * the reward's approvals ({@link approvalTxs}), which take the largest — because `_fulfill`
+ * `safeTransferFrom`s every `route.tokens` entry in turn, each spending its own share of the one
+ * allowance. A standing allowance is the caller's to read: a token like USDT refuses to move a
+ * nonzero allowance to another nonzero value, which takes an `approve(portal, 0)` first.
+ */
+export function fulfillApprovalTxs(intent: Intent): readonly PortalTx[] {
+  assertEvmDestination(intent, "fulfillApprovalTxs");
+  const portal = destinationPortalOf(intent);
+  const sumByToken = new Map<Hex, bigint>();
+  for (const { token, amount } of intent.route.tokens) {
+    const evmToken = denormalizeToEvm(token);
+    sumByToken.set(evmToken, (sumByToken.get(evmToken) ?? 0n) + amount);
+  }
+  return [...sumByToken].map(([token, amount]) => ({
     to: token,
     data: encodeFunctionData({ abi: ERC20ABI, functionName: "approve", args: [portal, amount] }),
     value: 0n,

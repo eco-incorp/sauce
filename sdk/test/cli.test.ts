@@ -1275,6 +1275,82 @@ describe("sauce publish, offline", () => {
   });
 });
 
+describe("sauce fill, offline", () => {
+  const INTENT = [
+    "// @chain arbitrum",
+    "Base(() => {",
+    "  Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, 5n);",
+    "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
+    "",
+  ].join("\n");
+  const FLAGS = [
+    "--define",
+    `RECIPIENT=${RECIPIENT}`,
+    "--intent-deadline",
+    "2000000000",
+    "--intent-creator",
+    CREATOR,
+  ];
+  /** An endpoint nothing listens on: every refusal below comes before any request. */
+  const NOWHERE = ["--rpc-url", "http://127.0.0.1:9/"];
+
+  it("needs the destination's endpoint", async () => {
+    const run = await sauce("fill", file("bridge.sauce.ts", INTENT), ...FLAGS);
+    expect(run.code).toBe(2);
+    expect(run.stderr).toMatch(
+      /missing --config <file> \(or --rpc-url <url>\): the endpoint of each intent's destination/,
+    );
+  });
+
+  it("refuses a claimant that is neither 20 nor 32 bytes", async () => {
+    const run = await sauce(
+      "fill",
+      file("bridge.sauce.ts", INTENT),
+      ...FLAGS,
+      ...NOWHERE,
+      "--claimant",
+      "0x1234",
+    );
+    expect(run.code).toBe(2);
+    expect(run.stderr).toMatch(/--claimant: '0x1234' is neither an address/);
+  });
+
+  it("refuses a file with no intent, and one whose intents --rpc-url cannot all reach", async () => {
+    const none = await sauce(
+      "fill",
+      file("none.sauce.ts", "require(chainId == 42161n);\n"),
+      "--chain",
+      "arbitrum",
+      ...NOWHERE,
+    );
+    expect(none.code).toBe(2);
+    expect(none.stderr).toMatch(/opens no intent: there is nothing for a solver to fill/);
+    const two = await sauce(
+      "fill",
+      file(
+        "two.sauce.ts",
+        `${INTENT}Optimism(() => {\n  Token(0x0b2c639c533813f4aa9d7837caf62653d097ff85n).transfer(RECIPIENT, 5n);\n}).reward({ tokens: [{ token: USDC, amount: 7n }] });\n`,
+      ),
+      ...FLAGS,
+      ...NOWHERE,
+    );
+    expect(two.code).toBe(2);
+    expect(two.stderr).toMatch(/intents go to base and optimism: --rpc-url names one endpoint/);
+  });
+
+  it("refuses a source chain with no Portal to publish through", async () => {
+    const run = await sauce(
+      "fill",
+      file("svm.sauce.ts", "function main() {}\n"),
+      "--chain",
+      "solana",
+      ...NOWHERE,
+    );
+    expect(run.code).toBe(2);
+    expect(run.stderr).toMatch(/rehearses intents an EVM chain opens, and solana is not one/);
+  });
+});
+
 describe("defines a script cannot see", () => {
   it("refuses a define that a script's own top-level const would silently shadow", async () => {
     const script = file("script.sauce.ts", "const AMOUNT = 5n;\nrequire(AMOUNT > 0n);\n");

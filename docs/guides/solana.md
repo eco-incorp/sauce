@@ -111,6 +111,10 @@ export async function simulateProgram(
 
 For the transfer above, the resolution keys are `sourceAta`, `mint`, `destinationAta`, `owner`, and `tokenProgram`. A non-payer transaction authority should be supplied as `{ address, signer: transactionSigner }`; an address alone cannot provide its signature. A Pot PDA that the Kitchen signs for must be attached with `signer: false` in the transaction resolution. That override represents a signature supplied during invocation, not permission to bypass the program's authority requirement — and a direct cook has no Kitchen to supply it.
 
+Pass `{ accounts: [...] }` to `simulate` to see what the cook would move: the result's `accounts`
+holds each one's state after the transaction (`lamports`, `owner`, `data`), or `null` where it no
+longer exists, read without sending anything.
+
 After successful simulation, `client.execute(bytecode, manifest, resolution, { computeUnitLimit: "auto" })` simulates for compute budgeting and sends the transaction. `maxExecutionFee` in client configuration is the lamport fee ceiling each cook signs; its default is zero and fails when the Kitchen charges a positive fee. A cook's own `maxExecutionFee` option overrides it. Lookup-table helpers can create or extend an address lookup table and wait until it is usable.
 
 ### Select the released programs and quote the fee

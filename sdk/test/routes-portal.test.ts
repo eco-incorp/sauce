@@ -5,10 +5,19 @@
  * registered `PortalABI` and asserted against `encodeRoute`/`decodeRewardEvm` — the agreement
  * portal.ts's module doc claims, checked rather than assumed.
  */
-import { decodeAbiParameters, decodeFunctionData, encodeAbiParameters, type Hex } from "viem";
+import {
+  decodeAbiParameters,
+  decodeFunctionData,
+  encodeAbiParameters,
+  encodePacked,
+  keccak256,
+  type Hex,
+} from "viem";
 
 import {
   approvalTxs,
+  fulfillApprovalTxs,
+  fulfillTx,
   fundTx,
   intentHashCall,
   intentVaultAddressCall,
@@ -21,12 +30,14 @@ import {
   encodeRoute,
   encodeRouteSvm,
   EVM_REWARD_PARAM,
+  EVM_ROUTE_PARAM,
   hashIntent,
 } from "../src/routes/encode.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
 import type { Intent, Reward, Route, UniversalAddress } from "../src/routes/types.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
 import { PortalABI } from "../src/protocols/eco-routes/abis.js";
+import { ERC20ABI } from "../src/protocols/erc20/abis.js";
 
 const evmAddr = (byte: string): UniversalAddress =>
   toUniversalAddress(("0x" + byte.repeat(20)) as Hex);
@@ -335,6 +346,94 @@ describe("portal.ts: cross-VM — SVM destination", () => {
     // Borsh, not ABI: the route bytes are exactly the Borsh blob encodeRouteSvm produces, not an
     // abi.encode(route) the Intent-tuple overload would have produced instead.
     expect(routeBytes).toBe(encodeRouteSvm(intent.route));
+  });
+});
+
+describe("portal.ts: fulfillTx", () => {
+  const CLAIMANT = "0x9999999999999999999999999999999999999999" as const;
+  const intent = evmIntent({
+    sourceChainId: 42161n,
+    route: baseRoute({
+      nativeAmount: 1234n,
+      tokens: [{ token: evmAddr("77"), amount: 5n }],
+      calls: [{ target: evmAddr("44"), data: "0xdeadbeef", value: 1234n }],
+    }),
+  });
+
+  it("goes to the route's own Portal with the route's native amount", () => {
+    const tx = fulfillTx(intent, { claimant: CLAIMANT });
+    expect(tx.to).toBe(PORTAL);
+    expect(tx.value).toBe(1234n);
+  });
+
+  it("carries the hashes hashIntent computes, and a route the Portal hashes to the same routeHash", () => {
+    const tx = fulfillTx(intent, { claimant: CLAIMANT });
+    const decoded = decodeFunctionData({ abi: PortalABI, data: tx.data });
+    expect(decoded.functionName).toBe("fulfill");
+    const [intentHash, route, rewardHash, claimant] = decoded.args as readonly [
+      Hex,
+      unknown,
+      Hex,
+      Hex,
+    ];
+    const expected = hashIntent(intent);
+    expect(intentHash).toBe(expected.intentHash);
+    expect(rewardHash).toBe(expected.rewardHash);
+    expect(claimant).toBe(toUniversalAddress(CLAIMANT));
+    // What `Inbox._fulfill` does with the tuple it is given: `keccak256(abi.encode(route))`, then
+    // `keccak256(abi.encodePacked(uint64 chainid, routeHash, rewardHash))`.
+    const routeHash = keccak256(encodeAbiParameters([EVM_ROUTE_PARAM], [route as never]));
+    expect(routeHash).toBe(expected.routeHash);
+    expect(
+      keccak256(
+        encodePacked(["uint64", "bytes32", "bytes32"], [intent.destination, routeHash, rewardHash]),
+      ),
+    ).toBe(intentHash);
+  });
+
+  it("takes a 32-byte claimant as it is, and refuses a zero one", () => {
+    const wide = `0x${"ab".repeat(32)}` as Hex;
+    const decoded = decodeFunctionData({
+      abi: PortalABI,
+      data: fulfillTx(intent, { claimant: wide }).data,
+    });
+    expect(decoded.args[3]).toBe(wide);
+    expect(() => fulfillTx(intent, { claimant: `0x${"00".repeat(20)}` })).toThrow(/zero/);
+  });
+
+  it("refuses a Solana destination", () => {
+    const svm = evmIntent({
+      destination: SOLANA_CHAIN_ID,
+      route: baseRoute({ portal: svmAddr("22"), calls: [] }),
+    });
+    expect(() => fulfillTx(svm, { claimant: CLAIMANT })).toThrow(/not an EVM chain/);
+    expect(() => fulfillApprovalTxs(svm)).toThrow(/not an EVM chain/);
+  });
+});
+
+describe("portal.ts: fulfillApprovalTxs", () => {
+  it("one approve to the route's Portal per distinct route token, the entries SUMMED, first-seen order", () => {
+    const intent = evmIntent({
+      route: baseRoute({
+        tokens: [
+          { token: evmAddr("77"), amount: 5n },
+          { token: evmAddr("88"), amount: 2n },
+          { token: evmAddr("77"), amount: 3n },
+        ],
+      }),
+    });
+    const txs = fulfillApprovalTxs(intent);
+    expect(txs.map((tx) => tx.to)).toEqual([`0x${"77".repeat(20)}`, `0x${"88".repeat(20)}`]);
+    const args = txs.map((tx) => decodeFunctionData({ abi: ERC20ABI, data: tx.data }).args);
+    expect(args).toEqual([
+      [PORTAL, 8n],
+      [PORTAL, 2n],
+    ]);
+    expect(txs.every((tx) => tx.value === 0n)).toBe(true);
+  });
+
+  it("nothing for a route that delivers no tokens", () => {
+    expect(fulfillApprovalTxs(evmIntent())).toEqual([]);
   });
 });
 
