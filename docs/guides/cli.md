@@ -1167,7 +1167,7 @@ at the package root:
 | `sauce-distributed-swap` | One exact-input swap split across every price-limit venue on a chain                          |
 | `sauce-intents`          | Cross-chain intents written in Sauce: rewards, cascades, run or publish                       |
 | `sauce-solana`           | Programs for Solana: accounts, the SPL token functions, the Kitchen                           |
-| `sauce-run`              | Everything on this page: compiling, funding, simulating, running and publishing               |
+| `sauce-cli`              | Everything on this page: compiling, funding, simulating, running and publishing               |
 | `sauce-typescript`       | The same from application code: compiling, arguments, cooks, actions and verification         |
 | `sauce-examples`         | An index of every example program and runner, with the chains each is checked on              |
 

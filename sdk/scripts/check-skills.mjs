@@ -20,7 +20,8 @@
 //      effects, bytecode bytes), no placeholder or unrecorded address, no Portal or prover outside
 //      the intents skill, no RPC endpoint, no description of Sauce as a multicall, and nothing that
 //      tells the reader to copy, adapt or start from an example (the agent writes each program
-//      itself: COPY_FRAMING); and every protocol document with a swap template opens with the one
+//      itself: COPY_FRAMING), no skill named in code (`sauce-<name>`) that the package does not
+//      ship; and every protocol document with a swap template opens with the one
 //      pointer to `sauce-swaps`;
 //   3. the `sauce-examples` index lists every example file on disk and nothing else, each example
 //      is referenced by its own skill, and every program and actions document names the chains it
@@ -558,6 +559,9 @@ const anchors = (file) =>
       .replace(/\s/g, "-"),
   );
 
+/** Every skill the package ships, by name: what a `sauce-<name>` in a skill must be. */
+const SKILL_NAMES = new Set(skills.map((skill) => skill.dir));
+
 function wording(skill, file) {
   const text = read(file);
   const where = (i) => `${rel(file)}:${i + 1}`;
@@ -573,6 +577,10 @@ function wording(skill, file) {
         fail(where(i), "names a placeholder address; take it from the SDK or write <address>");
     for (const [pattern, what] of NOT_PORTABLE)
       if (pattern.test(line)) fail(where(i), `names ${what}`);
+    // A skill named in code is one the package ships: a renamed or removed skill fails here.
+    for (const m of line.matchAll(/`(sauce-[a-z0-9-]+)`/g))
+      if (!SKILL_NAMES.has(m[1]))
+        fail(where(i), `names the skill \`${m[1]}\`, which the package does not ship`);
     for (const m of line.matchAll(/(?:\.\.\/)+[\w@.-][\w@./-]*/g)) {
       if (!resolve(dirname(file), m[0]).startsWith(SKILLS_DIR + "/"))
         fail(where(i), `names ${m[0]}, a path that leaves the skills directory`);

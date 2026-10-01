@@ -453,7 +453,7 @@ in base units. Take each token's decimals from
   reviewed.
 - The input must be in the Pot before the program runs: for a direct cook, the Pot's owner funds it
   (or `--fund` pulls it in with the cook); for an intent, the solver delivers it (`sauce-intents`).
-  Compile and send it with `sauce-run`.
+  Compile and send it with `sauce-cli`.
 
 ## Before sending
 

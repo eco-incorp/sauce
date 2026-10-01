@@ -741,7 +741,7 @@ supported chain.
 `skills/` holds the Agent Skills (agentskills.io) the package ships and `sauce skills install`
 copies into a project: `sauce-overview` (the entry point), `sauce-script`, `sauce-globals`,
 `sauce-chains`, `sauce-protocols`, `sauce-swaps`, `sauce-distributed-swap`, `sauce-intents`,
-`sauce-solana`, `sauce-run`, `sauce-actions`, `sauce-typescript` and the `sauce-examples` index.
+`sauce-solana`, `sauce-cli`, `sauce-actions`, `sauce-typescript` and the `sauce-examples` index.
 Each is a `SKILL.md` plus `examples/` (`.sauce.ts` programs, `.json` actions documents and `.mts`
 runners) and, for six of them, `references/`.
 
@@ -807,7 +807,7 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   Portal and multicall rules only; the generated references are exempt from the Portal rule (a
   chain's file records its eco-routes deployment).
 - **Execution-agnostic.** Not every agent has the SDK installed: some have only the `sauce` CLI, or a
-  remote compiler, and sign by local means. Every skill but `sauce-run` (the CLI) and
+  remote compiler, and sign by local means. Every skill but `sauce-cli` (the CLI) and
   `sauce-typescript` (the SDK) teaches the program, what compiling for a chain produces (bytecode,
   and the cook transaction: `to`, `data`, `value`), the CLI as one way to compile and send, and
   `sauce tx`'s unsigned JSON as the hand-off to any signer. Runners may use the SDK to pin facts;

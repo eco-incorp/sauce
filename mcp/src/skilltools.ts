@@ -331,7 +331,7 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
             .string()
             .min(1)
             .max(100)
-            .describe("The skill's name, as sauce_skills lists it: sauce-overview, sauce-run, …"),
+            .describe("The skill's name, as sauce_skills lists it: sauce-overview, sauce-cli, …"),
           path: z
             .string()
             .min(1)

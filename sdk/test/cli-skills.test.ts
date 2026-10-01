@@ -4,6 +4,7 @@
  * upgrade and a user's edit are told apart.
  */
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -153,8 +154,37 @@ describe("the packaged skills", () => {
     entry.isDirectory(),
   );
 
-  it("ships at least the sauce-run skill", () => {
-    expect(skills.map((entry) => entry.name)).toContain("sauce-run");
+  it("ships at least the sauce-cli skill", () => {
+    expect(skills.map((entry) => entry.name)).toContain("sauce-cli");
+  });
+
+  it("updates an install from before the rename: sauce-run goes, sauce-cli comes", () => {
+    // The skills as a package shipped them before sauce-cli was sauce-run.
+    const old = join(work, "before-rename");
+    cpSync(PACKAGED_SKILLS, old, { recursive: true });
+    cpSync(join(old, "sauce-cli"), join(old, "sauce-run"), { recursive: true });
+    rmSync(join(old, "sauce-cli"), { recursive: true });
+    const skillFile = join(old, "sauce-run", "SKILL.md");
+    writeFileSync(
+      skillFile,
+      readFileSync(skillFile, "utf8").replace("name: sauce-cli", "name: sauce-run"),
+    );
+    const before: SkillsSource = { dir: old, packageName: MANIFEST.name, version: "0.0.1" };
+    const now: SkillsSource = {
+      dir: PACKAGED_SKILLS,
+      packageName: MANIFEST.name,
+      version: "0.0.2",
+    };
+    for (const target of targetsFor(DEFAULT_AGENTS)) {
+      installTarget(project, before, target);
+      expect(existsSync(join(project, target.path, "sauce-run", "SKILL.md"))).toBe(true);
+      updateTarget(project, now, target, false);
+      expect(existsSync(join(project, target.path, "sauce-run"))).toBe(false);
+      expect(readFileSync(join(project, target.path, "sauce-cli", "SKILL.md"), "utf8")).toBe(
+        readFileSync(join(PACKAGED_SKILLS, "sauce-cli", "SKILL.md"), "utf8"),
+      );
+      expect(statusOf(project, now, target).state).toBe("up to date");
+    }
   });
 
   it.each(skills.map((entry) => entry.name))(
@@ -385,11 +415,11 @@ describe("the commands", () => {
     expect(first.stdout).toContain(`installed claude (${join(".claude", "skills")})`);
     expect(first.stdout).toContain(`installed ${shared}`);
     expect(first.stdout).toContain(
-      `wrote      ${join(".agents", "skills", "sauce-run", "SKILL.md")}`,
+      `wrote      ${join(".agents", "skills", "sauce-cli", "SKILL.md")}`,
     );
     for (const skills of [".claude/skills", ".agents/skills"]) {
-      expect(readFileSync(join(project, skills, "sauce-run/SKILL.md"), "utf8")).toBe(
-        readFileSync(join(PACKAGED_SKILLS, "sauce-run", "SKILL.md"), "utf8"),
+      expect(readFileSync(join(project, skills, "sauce-cli/SKILL.md"), "utf8")).toBe(
+        readFileSync(join(PACKAGED_SKILLS, "sauce-cli", "SKILL.md"), "utf8"),
       );
     }
     // No AGENTS.md index unless asked for.
@@ -403,7 +433,7 @@ describe("the commands", () => {
     const only = join(work, "only");
     mkdirSync(only);
     await sauce("skills", "install", "--agent", "gemini", "--dir", only);
-    expect(existsSync(join(only, ".agents/skills/sauce-run/SKILL.md"))).toBe(true);
+    expect(existsSync(join(only, ".agents/skills/sauce-cli/SKILL.md"))).toBe(true);
     expect(existsSync(join(only, ".claude"))).toBe(false);
   });
 
@@ -417,22 +447,22 @@ describe("the commands", () => {
     );
     expect(current.stdout).toContain(`agents-md (AGENTS.md): up to date (${MANIFEST.version})`);
 
-    write(".claude/skills/sauce-run/SKILL.md", "edited\n");
+    write(".claude/skills/sauce-cli/SKILL.md", "edited\n");
     const edited = await sauce("skills", "status", ...dir());
     expect(edited.code).toBe(0);
     expect(edited.stdout).toMatch(
-      /: modified\n {2}modified {2}\.claude\/skills\/sauce-run\/SKILL\.md/,
+      /: modified\n {2}modified {2}\.claude\/skills\/sauce-cli\/SKILL\.md/,
     );
 
     // An install that predates a file the package ships now is outdated.
     const record = JSON.parse(read(`.agents/skills/${INSTALL_RECORD}`));
-    delete record.files["sauce-run/examples/split.sauce.ts"];
+    delete record.files["sauce-cli/examples/split.sauce.ts"];
     write(`.agents/skills/${INSTALL_RECORD}`, JSON.stringify(record));
-    rmSync(join(project, ".agents/skills/sauce-run/examples/split.sauce.ts"));
+    rmSync(join(project, ".agents/skills/sauce-cli/examples/split.sauce.ts"));
     const outdated = await sauce("skills", "status", ...dir());
     expect(outdated.code).toBe(1);
     expect(outdated.stdout).toContain(
-      `add       ${join(".agents", "skills", "sauce-run", "examples", "split.sauce.ts")}`,
+      `add       ${join(".agents", "skills", "sauce-cli", "examples", "split.sauce.ts")}`,
     );
     const update = await sauce("skills", "update", ...dir());
     expect(update.code).toBe(0);
@@ -490,7 +520,7 @@ describe("sauce init", () => {
     expect(agentsMd).toMatch(/^# AGENTS\.md\n/);
     expect(agentsMd).toContain("<!-- sauce-skills:begin ");
     for (const skills of [".claude/skills", ".agents/skills"]) {
-      expect(existsSync(join(dir, skills, "sauce-run", "SKILL.md"))).toBe(true);
+      expect(existsSync(join(dir, skills, "sauce-cli", "SKILL.md"))).toBe(true);
     }
     expect(run.stdout).toMatch(/Next:\n {2}cd .*My App\n {2}npm install\n/);
   });
@@ -499,7 +529,7 @@ describe("sauce init", () => {
     const dir = join(work, "app");
     await sauce("init", dir);
     // By default every agent: both skills directories, both instruction pointers, no index block.
-    for (const file of [".claude/skills/sauce-run/SKILL.md", ".agents/skills/sauce-run/SKILL.md"]) {
+    for (const file of [".claude/skills/sauce-cli/SKILL.md", ".agents/skills/sauce-cli/SKILL.md"]) {
       expect(existsSync(join(dir, file))).toBe(true);
     }
     expect(readFileSync(join(dir, "CLAUDE.md"), "utf8")).toBe("@AGENTS.md\n");

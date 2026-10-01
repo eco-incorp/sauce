@@ -76,7 +76,7 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
             text: [
               `Write a Sauce program that does this${chain === undefined ? "" : ` on ${chain}`}: ${task}`,
               "",
-              `Read the Sauce skills first (with sauce_skill, or as resources: ${readList(skills, solana(chain) ? ["sauce-overview", "sauce-solana", "sauce-run"] : ["sauce-overview", "sauce-script", "sauce-run"])}),`,
+              `Read the Sauce skills first (with sauce_skill, or as resources: ${readList(skills, solana(chain) ? ["sauce-overview", "sauce-solana", "sauce-cli"] : ["sauce-overview", "sauce-script", "sauce-cli"])}),`,
               "and follow them.",
               ...WRITE_IT_YOURSELF,
               "Then, with this server's tools:",

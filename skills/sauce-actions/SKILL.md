@@ -7,7 +7,7 @@ description: Write a Sauce program as a JSON actions document instead of SauceSc
 
 An **actions document** is JSON: an ordered list of protocol operations — swap on a pool, approve,
 supply to a lending pool, bridge, wrap, stake — that compiles to one Sauce program. The program
-runs every action in order, atomically, in one transaction on the Pot (`sauce-run`), exactly as a
+runs every action in order, atomically, in one transaction on the Pot (`sauce-cli`), exactly as a
 hand-written SauceScript program would: a swap is the same `@sauce/router` call a program makes.
 
 ```json chain=ethereum,base,arbitrum
@@ -139,7 +139,7 @@ npx sauce actions swap.json --chain base --json
 ```
 
 `compile`, `simulate`, `tx` and `run` take the document wherever they take a `.sauce.ts` file, with
-the same flags (`sauce-run` covers the Pot, endpoints, signers and funding):
+the same flags (`sauce-cli` covers the Pot, endpoints, signers and funding):
 
 ```sh
 npx sauce simulate swap.json --chain base --owner <address> --rpc-url <url> \

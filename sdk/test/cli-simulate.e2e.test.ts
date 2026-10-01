@@ -38,7 +38,7 @@ import {
 } from "./cli-anvil.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PAY = join(HERE, "../../skills/sauce-run/examples/pay.sauce.ts");
+const PAY = join(HERE, "../../skills/sauce-cli/examples/pay.sauce.ts");
 /** An owner nobody holds the key of, with nothing: no Pot, no native currency, no tokens. */
 const OWNER: Address = "0x5a0Ce0000000000000000000000000000000Beef";
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";

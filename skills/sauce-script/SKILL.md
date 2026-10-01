@@ -133,7 +133,7 @@ function main(recipients: Address[], amount: Uint256) {
 
 `main`'s parameters are taken in declaration order, ABI-encoded by default, and appended to the
 program's bytecode: that is the payload a cook runs. `--args` and `--args-json` of `sauce run`,
-`simulate` and `tx` encode them (`sauce-run`); `sauce-typescript` covers encoding them from
+`simulate` and `tx` encode them (`sauce-cli`); `sauce-typescript` covers encoding them from
 TypeScript. A program compiles for every chain the SDK knows; for the initial release its cook is
 built and sent only on Ethereum, Base and Solana, and on every other chain (a preview chain) it is
 compiled and simulated (`sauce-chains`).

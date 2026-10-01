@@ -116,9 +116,9 @@ owner's Pot, `cook(engine, program)` with `main`'s arguments appended to the pro
 Kitchen's fee. `sauce tx` prints that transaction unsigned, `{ chainId, to, data, value }`, for
 any wallet or signer to send; `sauce run` signs and sends it itself, deploying the Pot first if it
 is not there. Both work on a supported chain only; on a preview chain, compile and simulate.
-`sauce-run` covers each command. Endpoints come from a config file the developer passes, never
+`sauce-cli` covers each command. Endpoints come from a config file the developer passes, never
 from the program or the environment. Without the CLI, the same steps are tools of the Sauce MCP
-server (`npx -y @eco-incorp/sauce mcp`); `sauce-run` maps each command to its tool.
+server (`npx -y @eco-incorp/sauce mcp`); `sauce-cli` maps each command to its tool.
 
 ## Pick the next skill
 
@@ -133,7 +133,7 @@ server (`npx -y @eco-incorp/sauce mcp`); `sauce-run` maps each command to its to
 | Protocol operations as JSON data, not a program: actions documents                       | `sauce-actions`          |
 | Continuing on another chain: intents, cascades, rewards                                  | `sauce-intents`          |
 | Solana programs: accounts, SPL, the Kitchen                                              | `sauce-solana`           |
-| Compiling and running: the `sauce` commands, the Pot, funding, simulating, publishing    | `sauce-run`              |
+| Compiling and running: the `sauce` commands, the Pot, funding, simulating, publishing    | `sauce-cli`              |
 | Application code: compiling, arguments, cooks, actions and verification from TypeScript  | `sauce-typescript`       |
 | Complete programs, each showing an idiom                                                 | `sauce-examples`         |
 
@@ -155,7 +155,7 @@ server (`npx -y @eco-incorp/sauce mcp`); `sauce-run` maps each command to its to
 
 ## Example
 
-[../sauce-run/examples/pay.sauce.ts](../sauce-run/examples/pay.sauce.ts) pays a recipient in USDC
+[../sauce-cli/examples/pay.sauce.ts](../sauce-cli/examples/pay.sauce.ts) pays a recipient in USDC
 and USDT, and
 [../sauce-distributed-swap/examples/distributed-swap.sauce.ts](../sauce-distributed-swap/examples/distributed-swap.sauce.ts)
 is a complete swap. `sauce-examples` lists every example in every skill.

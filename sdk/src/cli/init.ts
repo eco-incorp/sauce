@@ -101,7 +101,7 @@ export function scaffold(
       "",
       "- Use the agent skills the package installed (`npx sauce skills status` lists them).",
       "  Start with `sauce-overview`, which says what Sauce is and which skill covers a task;",
-      "  `sauce-run` covers compiling a program, rehearsing it and running it on a Pot. They",
+      "  `sauce-cli` covers compiling a program, rehearsing it and running it on a Pot. They",
       "  describe the pinned version of the package.",
       "- Run the package's CLI as `npx sauce` (`npx sauce --help`). `sauce simulate` rehearses a",
       "  program with no key, `sauce run` signs and sends it, and `sauce tx` prints the unsigned",
