@@ -35,7 +35,11 @@ Run the project's pinned copy, `npx sauce <command> --help`, for every option.
    exists. `npx sauce pot --deploy --chain base --config sauce.config.json --keystore <path>`
    deploys the signer's Pot. `--salt <label>` names another Pot of the same owner (`--salt-hex` for
    an exact 32-byte salt); use the same salt in every later command.
-4. **Fund** the Pot with what the program spends: send its address the tokens, from any wallet.
+4. **Fund** the Pot with what the program spends: send its address the tokens, from any wallet —
+   or pass `--fund USDC:1.5` (repeatable; `USDC:1500000n` in base units, `ETH:0.01` as value) to
+   `run`, which pulls it from the signer into the Pot in the same cook (`--sweep` returns what is
+   left). The default `--fund-mode permit2` signs a one-time Permit2 transfer; the first time per
+   token it asks to approve Permit2. `simulate --fund` with the owner's key rehearses it.
 5. **Rehearse**: `npx sauce simulate pay.sauce.ts --chain base --owner <address>`, with the
    endpoint, runs the cook as an `eth_call` from the owner — no key, nothing sent — and prints the
    gas it needs or the decoded reason it reverts.
@@ -120,4 +124,5 @@ The same commands take `--chain solana` (or a `// @chain solana` header), with t
 
 - Never write an RPC URL or a key into a tracked file, a program or a command you commit.
 - Rehearse with `sauce simulate` (or `publish --dry-run`) before the first real send.
-- Do not pass `--yes` or deploy a Pot without the user's go-ahead: deploying costs gas.
+- Do not pass `--yes` or deploy a Pot without the user's go-ahead: deploying costs gas, and with
+  `--fund` it also approves Permit2 (or the Pot) to move the user's tokens.

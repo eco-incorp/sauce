@@ -92,7 +92,8 @@ npx sauce compile pay.sauce.ts --chain base --define RECIPIENT=0x… --define AM
 # 3. Deploy your Pot (once). Its address is known before it exists.
 npx sauce pot --deploy --chain base --config sauce.config.json --keystore ~/.keys/me.json
 
-# 4. Fund the Pot with what the program spends: send its address the tokens, from any wallet.
+# 4. Fund the Pot with what the program spends: send its address the tokens, from any wallet —
+#    or let `sauce run --fund` pull them in with the cook (see "Funding a run" below).
 
 # 5. Rehearse the cook from the Pot's owner: no key, nothing sent.
 npx sauce simulate pay.sauce.ts --chain base --owner 0xYou --config sauce.config.json \
@@ -128,6 +129,83 @@ advance.
 
 `simulate` prints `The cook succeeds from 0x…: gas …, returns 0x…`, or `The cook reverts: <reason>`
 and exits 1. It needs the Pot deployed.
+
+### Funding a run: `--fund`
+
+A program spends what its Pot holds. Instead of sending the Pot tokens first, `sauce run` can pull
+them from your wallet in the same transaction as the cook:
+
+```sh
+npx sauce run pay.sauce.ts --chain base --config sauce.config.json --keystore ~/.keys/me.json \
+  --fund USDC:1.5 --sweep --define RECIPIENT=0x… --define AMOUNT=1000000
+```
+
+`--fund <TOKEN|address>:<amount>` names a token the chain registers (`sauce globals --tokens`) or
+any ERC-20 by address, and an amount in whole units — `USDC:1.5`, by the registry's decimals or
+the token's own — or in base units ending in `n`, as SauceScript writes an integer:
+`USDC:1500000n`. Repeat it for more tokens. `ETH:<amount>` (or `native:`) is the chain's native
+currency: it rides as the cook's value, on top of the Kitchen's fee.
+
+The command wraps the program: a new `main`, with the same parameters, first pulls each amount from
+you into the Pot, then calls the program's own `main` with the arguments as given, then, with
+`--sweep`, sends the Pot's whole balance of each funded token (and of the native currency, when
+`ETH` is funded) back to you. It is one cook, so the pulls, the program and the sweep succeed or
+revert together. The pulls are `@sauce/token`'s, the same functions a program can call itself
+([Pulling tokens in](protocols-and-tokens.md#pulling-tokens-in)). Your balance of each token is
+checked before anything is sent.
+
+`--fund-mode` chooses how the Pot is allowed to pull:
+
+| Mode                | You sign or send                                               | What stands afterwards                        |
+| ------------------- | -------------------------------------------------------------- | --------------------------------------------- |
+| `permit2` (default) | A Permit2 signature for exactly this amount, to this Pot, once | Nothing for the Pot; your approval of Permit2 |
+| `permit`            | The token's own EIP-2612 `permit` signature, for the Pot       | Nothing: the pull spends it                   |
+| `allowance`         | An `approve` of the Pot for the amount, in a transaction first | The Pot's allowance, until a cook spends it   |
+| `transfer`          | A plain `transfer` to the Pot, in a transaction first          | Nothing                                       |
+
+**Why `permit2` is the default.** It works for every ERC-20, USDT included, where `permit` needs a
+token that implements EIP-2612. It gives the Pot no allowance at all: each signature is for one
+amount, to one spender, with a fresh nonce Permit2 spends and a deadline ten minutes out, so it
+cannot be replayed or used late. And it is one transaction per run, the cook itself. Permit2 is
+the canonical deployment the registry records (`sauce globals --protocols` lists it as
+`Permit2.Permit2`).
+
+The first time you fund a token through Permit2, Permit2 itself needs your approval for that token
+— a standing approval, as Permit2 is meant to have; each spend still needs your signature. The run
+asks, as it does before deploying a Pot:
+
+```text
+Permit2 (0x000000000022D473030F116dDEE9F6B43aC78BA3) may move 0 of your USDC (base units), and this run needs 1500000. Approve Permit2 for USDC now? [y/N]
+```
+
+`y` sends the approval (reset to zero first when a smaller one stands, as USDT requires) and then
+the cook; anything else sends nothing. With no terminal to ask on, the run fails unless you pass
+`--yes`. `--fund-mode allowance` asks the same about approving the Pot, and warns when it leaves an
+allowance standing. `permit` refuses a token whose `DOMAIN_SEPARATOR()` does not match its name,
+version and address, before sending anything.
+
+**Every pull is a `safeTransferFrom`.** In `permit` and `allowance` modes the program pulls with
+`@sauce/token`'s `transferFrom`, which has OpenZeppelin `SafeERC20` semantics: a token that returns
+nothing (USDT) is accepted, and one that returns `false` reverts the whole run. In `permit2` mode
+Permit2's `permitTransferFrom` moves the tokens with Solmate's `SafeTransferLib.safeTransferFrom`,
+with the same outcome for both kinds of token. The `permit` call itself is checked as OpenZeppelin's
+`safePermit` checks it: the token's nonce for you must move by exactly one.
+
+Security notes:
+
+- Signatures are made locally, by the signer you gave, over EIP-712 data the command prints nothing
+  of; no key is ever printed. A Permit2 signature names the Pot as its spender, and only the Pot's
+  owner can cook on the Pot, so nobody else can use it.
+- A revert inside Permit2 is reported by name: `SignatureExpired(…)` for a passed deadline,
+  `InvalidNonce()` for a nonce already spent.
+- `allowance` mode's approval is its own transaction: if the cook then fails, the allowance stands
+  until a later cook spends it or you change it. `transfer` mode's transfer is likewise sent before
+  the cook, and the tokens stay in the Pot if the cook fails.
+
+`sauce simulate --fund` rehearses the same wrapped cook, with nothing sent. The pulls carry your
+signature, so give the owner's key (`--keystore` or `--private-key`) to sign them; without a key
+the funding is skipped and a note says so. An approval `run` would ask for is reported, not made,
+and `transfer` mode's transfer is not rehearsed.
 
 ### Pots and salts
 
@@ -296,6 +374,12 @@ There are two ways to get such a file's intents onto the chain:
   `--dry-run` rehearses the transactions together (`eth_simulateV1`) and sends nothing;
   `--format json` (or `cast`) prints them unsigned, with `--from <address>` when there is no
   signer.
+
+  `publish` approves the Portal for exactly the reward, and `publishAndFund` spends that approval
+  in the next transaction, so no allowance stands once it lands. It does not go through Permit2:
+  the Portal's Permit2 path (`publishAndFundFor` with Permit2 as its permit contract) pulls through
+  a Permit2 _allowance_ to the intent's vault, which takes an on-chain `Permit2.approve` per intent
+  — the same number of transactions, plus a standing approval of Permit2.
 
 Publishing from Solana is not supported: see [Solana](#solana).
 

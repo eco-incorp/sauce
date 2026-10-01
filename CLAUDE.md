@@ -484,7 +484,11 @@ compile path of its own — `compileSauceProgram` (the compile half of `compileS
 (`cookTransaction`). It is Node-only and deliberately in no `exports` entry and no barrel
 (`cli.test.ts` fails if a barrel exports it), reads no environment, reaches a network only through
 `--rpc-url` or a `--config` file, and signs only with `--keystore`, `--private-key` or
-`--keypair`, scrubbing any key it was given from everything it prints. `cli.e2e.test.ts` runs the
+`--keypair`, scrubbing any key it was given from everything it prints. `run --fund` (`funding.ts`)
+wraps the file's source before that compile — a new `main` with the same signature that pulls
+through `@sauce/token` (`permitTransferFrom`, `permit`, `transferFrom`), calls the original
+renamed, and sweeps — signing Permit2 or EIP-2612 locally; `cli-funding.e2e.test.ts` runs every
+mode against canonical Permit2's runtime (`test/fixtures/cli/Permit2.json`). `cli.e2e.test.ts` runs the
 EVM commands against anvils with the released gated stack (and one `cast send` line verbatim);
 `cli-solana.e2e.test.ts` runs the Solana ones against the released Kitchen and engine in LiteSVM
 through a JSON-RPC shim; the packed check runs the installed bin through `npx`. The agent skills
