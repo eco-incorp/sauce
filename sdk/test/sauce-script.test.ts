@@ -141,6 +141,22 @@ describe("SauceScript in an editor", () => {
     }
   });
 
+  it("declares every function @sauce/token exports, on either arm, and nothing it does not", () => {
+    const exported = (file: string): string[] =>
+      [
+        ...readFileSync(join(SDK, "src/std/token", file), "utf8").matchAll(
+          /^export function (\w+)/gm,
+        ),
+      ].map((match) => match[1]!);
+    const library = [...new Set([...exported("token.evm.js"), ...exported("token.svm.js")])].sort();
+    const builtins = readFileSync(join(SDK, "sauce-script/builtins.d.ts"), "utf8");
+    const module = /declare module "@sauce\/token" \{([^}]*)\}/.exec(builtins)![1]!;
+    const declared = [...module.matchAll(/export const (\w+)/g)].map((match) => match[1]!).sort();
+    expect(declared).toEqual(library);
+    // And each is the global a program calls with no import.
+    for (const name of library) expect(builtins).toContain(`declare function ${name}(`);
+  });
+
   it("still reports a real mistake: a misspelled builtin, a wrong argument count, an unknown method", () => {
     const program = (name: string, body: string): Record<string, string> => ({
       [join(work, `${name}.sauce.ts`)]: body,

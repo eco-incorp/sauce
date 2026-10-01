@@ -212,6 +212,8 @@ declare function balanceOf(token: SauceInt, account: SauceInt | Account): bigint
 declare function totalSupply(token: SauceInt | Account): bigint;
 declare function decimals(token: SauceInt | Account): bigint;
 declare function allowance(token: SauceInt, owner: SauceInt | Account, spender: SauceInt): bigint;
+/** Solana only: whose token account `account` is, a wallet or a PDA such as a Pot. */
+declare function ownerOf(token: SauceInt, account: Account): bigint;
 declare function transfer(token: SauceInt, to: SauceInt, amount: SauceInt): void;
 declare function transfer(
   token: SauceInt,
@@ -270,6 +272,7 @@ declare module "@sauce/token" {
   export const approve: typeof globalThis.approve;
   export const balanceOf: typeof globalThis.balanceOf;
   export const decimals: typeof globalThis.decimals;
+  export const ownerOf: typeof globalThis.ownerOf;
   export const permit: typeof globalThis.permit;
   export const permitTransferFrom: typeof globalThis.permitTransferFrom;
   export const totalSupply: typeof globalThis.totalSupply;
