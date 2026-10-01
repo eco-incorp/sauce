@@ -6,6 +6,7 @@ import {
   sendAndConfirmTransactionFactory,
 } from "@solana/kit";
 import type {
+  Address,
   Commitment,
   GetEpochInfoApi,
   GetSignatureStatusesApi,
@@ -30,6 +31,21 @@ export interface SimulateExecuteResult {
   /** Present iff the failure was a sauce REVERT — payload is the revert data. */
   revert?: { payload: Uint8Array };
   err?: unknown;
+  /**
+   * The state the transaction leaves each account the caller asked for in (`accounts`), in that
+   * order: `null` where the account does not exist afterwards. Absent when none was asked for, or
+   * when the node returned none — a failed simulation commits nothing to report.
+   */
+  accounts?: readonly (SimulatedAccount | null)[];
+}
+
+/** An account as a simulation leaves it. */
+export interface SimulatedAccount {
+  readonly lamports: bigint;
+  /** The program that owns it. */
+  readonly owner: Address;
+  readonly data: Uint8Array;
+  readonly executable: boolean;
 }
 
 function decodeBase64(data: string): Uint8Array {
@@ -57,6 +73,28 @@ function isSauceRevert(err: unknown, executeInstructionIndex: number): boolean {
   );
 }
 
+/** The `accounts` a simulation answered, decoded; `undefined` when none were asked for or given. */
+function postAccounts(
+  answered: unknown,
+  requested: readonly Address[] | undefined,
+): readonly (SimulatedAccount | null)[] | undefined {
+  if (requested === undefined || requested.length === 0 || !Array.isArray(answered)) {
+    return undefined;
+  }
+
+  return answered.map((account: unknown) => {
+    if (account === null || typeof account !== "object") return null;
+    const { lamports, owner, data, executable } = account as {
+      lamports: bigint | number;
+      owner: Address;
+      data: readonly [string, string];
+      executable: boolean;
+    };
+
+    return { lamports: BigInt(lamports), owner, data: decodeBase64(data[0]), executable };
+  });
+}
+
 function instructionCount(transaction: Transaction): number {
   const compiled = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes);
 
@@ -71,6 +109,8 @@ export interface SimulateExecuteOptions {
    * the transaction is composed differently.
    */
   executeInstructionIndex?: number;
+  /** Accounts whose state after the transaction the result reports (`accounts`), in order. */
+  accounts?: readonly Address[];
 }
 
 /**
@@ -84,18 +124,31 @@ export interface SimulateExecuteOptions {
 export async function simulateExecute(
   rpc: Rpc<SimulateTransactionApi>,
   transaction: Transaction,
-  { executeInstructionIndex }: SimulateExecuteOptions = {},
+  { executeInstructionIndex, accounts: requested }: SimulateExecuteOptions = {},
 ): Promise<SimulateExecuteResult> {
   const wireTransaction = getBase64EncodedWireTransaction(transaction);
   const { value } = await rpc
-    .simulateTransaction(wireTransaction, { encoding: "base64", replaceRecentBlockhash: true })
+    .simulateTransaction(wireTransaction, {
+      encoding: "base64",
+      replaceRecentBlockhash: true,
+      ...(requested === undefined || requested.length === 0
+        ? {}
+        : { accounts: { addresses: [...requested], encoding: "base64" as const } }),
+    })
     .send();
 
   const logs = value.logs ? [...value.logs] : [];
   const returnData = value.returnData ? decodeBase64(value.returnData.data[0]) : undefined;
+  const accounts = postAccounts((value as { accounts?: unknown }).accounts, requested);
 
   if (value.err === null) {
-    return { ok: true, unitsConsumed: value.unitsConsumed, returnData, logs };
+    return {
+      ok: true,
+      unitsConsumed: value.unitsConsumed,
+      returnData,
+      logs,
+      ...(accounts === undefined ? {} : { accounts }),
+    };
   }
 
   const executeIndex = executeInstructionIndex ?? instructionCount(transaction) - 1;

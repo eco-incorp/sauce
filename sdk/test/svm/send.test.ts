@@ -81,6 +81,47 @@ describe("simulateExecute", () => {
     expect(args()[1]).toEqual({ encoding: "base64", replaceRecentBlockhash: true });
   });
 
+  it("asks for the accounts given, and decodes their state after the transaction", async () => {
+    const tracked = [
+      address("Vote111111111111111111111111111111111111111"),
+      address("Config1111111111111111111111111111111111111"),
+    ];
+    const { rpc, args } = simulateRpcStub({
+      err: null,
+      logs: [],
+      returnData: null,
+      unitsConsumed: 1n,
+      accounts: [
+        {
+          data: ["3q2+7w==", "base64"],
+          executable: false,
+          lamports: 2_039_280,
+          owner: PROGRAM_ID,
+          rentEpoch: 0,
+          space: 4,
+        },
+        null,
+      ],
+    });
+
+    const result = await simulateExecute(rpc, transaction, { accounts: tracked });
+
+    expect(args()[1]).toEqual({
+      encoding: "base64",
+      replaceRecentBlockhash: true,
+      accounts: { addresses: tracked, encoding: "base64" },
+    });
+    expect(result.accounts).toEqual([
+      {
+        lamports: 2_039_280n,
+        owner: PROGRAM_ID,
+        data: new Uint8Array([0xde, 0xad, 0xbe, 0xef]),
+        executable: false,
+      },
+      null,
+    ]);
+  });
+
   it("maps Custom(0) to a sauce revert with the returnData payload", async () => {
     // transaction = [heap frame, execute] — the execute instruction is index 1.
     const err = { InstructionError: [1, { Custom: 0 }] };

@@ -74,6 +74,13 @@ import {
   type ProgramInput,
 } from "./commands.js";
 import { secret } from "./signer.js";
+import {
+  accountsNow,
+  movedBy,
+  svmMovedJson,
+  svmMovedLines,
+  writableAccounts,
+} from "./svm-effects.js";
 
 /** The released programs, from the release record the SDK ships. */
 const kitchen = (): Address => address(v12SvmKitchenProgramId());
@@ -486,6 +493,22 @@ const saltBytes = (salt: Hex): Uint8Array => hexToBytes(salt);
 const potOf = async (target: SvmTarget): Promise<Address> =>
   (await derivePotPda(kitchen(), target.owner, saltBytes(target.salt))).address;
 
+/** Names for the accounts a cook writes: the owner, the Pot, the Kitchen's fee config (where its
+ *  fee goes), and each `--account` by its name. */
+async function accountLabels(input: SvmCookInput, pot: Address): Promise<Map<string, string>> {
+  const labels = new Map<string, string[]>();
+  const add = (account: string, name: string) =>
+    labels.set(account, [...(labels.get(account) ?? []), name]);
+  add(input.owner, "the owner");
+  add(pot, "the Pot");
+  add((await deriveExecutionFeeConfigPda(kitchen())).address, "the Kitchen's fee config");
+  for (const [name, value] of Object.entries(input.accounts)) {
+    if (value !== "pot" && value !== "owner") add(value, name);
+  }
+
+  return new Map([...labels].map(([account, names]) => [account, names.join(", ")]));
+}
+
 /** The `sauce pot` that creates `target`'s Pot. */
 const createHint = (target: SvmTarget): string =>
   `sauce pot --deploy --chain solana --keypair <the owner's keypair>${target.flag === undefined ? "" : ` ${target.flag}`}`;
@@ -632,7 +655,7 @@ async function prepare(
 async function fits(
   prepared: Prepared,
   prepends: readonly Instruction[] = [],
-): Promise<{ fits: boolean; size: number }> {
+): Promise<{ fits: boolean; size: number; transaction: Transaction }> {
   const transaction = await prepared.client.cookTransaction(
     prepared.bytecode,
     prepared.manifest,
@@ -641,7 +664,7 @@ async function fits(
   );
   const size = getTransactionSize(transaction);
 
-  return { fits: size <= TRANSACTION_SIZE_LIMIT, size };
+  return { fits: size <= TRANSACTION_SIZE_LIMIT, size, transaction };
 }
 
 /** The payload a cook carries — the program, and the arguments appended to it — in bytes. */
@@ -713,8 +736,10 @@ export async function svmSimulateCommand(
   if (!alone.fits) throw tooLarge(prepared, alone.size, "a simulation, which sends nothing,");
   const created = await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot");
   const prepends = created ? [] : [createPotInstruction(input, prepared.pot)];
+  let built = alone.transaction;
   if (!created) {
     const together = await fits(prepared, prepends);
+    built = together.transaction;
     if (!together.fits) {
       const over = together.size - TRANSACTION_SIZE_LIMIT;
       throw new CliError(
@@ -725,12 +750,29 @@ export async function svmSimulateCommand(
       );
     }
   }
+  // What the cook moved: every account it may write, read now and as the simulation leaves it.
+  const tracked = writableAccounts(built);
+  const before = await ask(input.rpcUrl, "the accounts the cook writes", () =>
+    accountsNow(prepared.rpc, tracked),
+  );
   const result = await prepared.client.simulate(
     prepared.bytecode,
     prepared.manifest,
     prepared.accounts,
-    { prepends },
+    { prepends, accounts: tracked },
   );
+  const moved =
+    result.ok && result.accounts !== undefined
+      ? await movedBy(
+          prepared.rpc,
+          input.chain,
+          tracked,
+          before,
+          result.accounts,
+          await accountLabels(input, prepared.pot),
+          input.owner,
+        )
+      : undefined;
   const json = {
     ok: result.ok,
     chain: "solana",
@@ -743,6 +785,7 @@ export async function svmSimulateCommand(
       ? {}
       : { computeUnits: result.unitsConsumed.toString() }),
     ...(result.ok ? {} : { reason: simulated(result) }),
+    ...(result.ok ? (moved === undefined ? { moved: null } : svmMovedJson(moved)) : {}),
     logs: result.logs,
   };
   const how = [
@@ -760,8 +803,17 @@ export async function svmSimulateCommand(
       text: [
         `The cook succeeds from ${input.owner}: ${result.unitsConsumed ?? "?"} compute units`,
         ...how,
+        ...(moved === undefined ? [] : svmMovedLines(moved)),
       ].join("\n"),
       json,
+      ...(moved === undefined
+        ? {
+            notes: [
+              "the endpoint returned no account states from simulateTransaction, so what the " +
+                "cook moved is not shown",
+            ],
+          }
+        : {}),
     };
   }
   const short = await ownerShort(prepared, input, !created);

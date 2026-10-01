@@ -1,0 +1,150 @@
+/**
+ * What a simulated Solana cook moved, from account states alone (`cli/svm-effects.ts`): token
+ * account layouts read and refused, a registered mint named by its symbol, created and closed
+ * accounts, and lamports. Executing a cook and reading its accounts back is `cli-solana.e2e.test.ts`.
+ */
+import { address, getAddressEncoder, type Address } from "@solana/kit";
+
+import { requireChain } from "../src/chains/canonical.js";
+import { movedBy, svmMovedJson, svmMovedLines } from "../src/cli/svm-effects.js";
+import type { SimulatedAccount } from "../src/svm/index.js";
+
+const SOLANA = requireChain("solana");
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022 = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+const USDC = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+/** A mint the registry does not record, whose account the stub does not serve either. */
+const OTHER_MINT = address("SysvarC1ock11111111111111111111111111111111");
+const WSOL = address("So11111111111111111111111111111111111111112");
+const SOURCE = address("Vote111111111111111111111111111111111111111");
+const DEST = address("Config1111111111111111111111111111111111111");
+const MINTED = address("Stake11111111111111111111111111111111111111");
+const MINT_ACCOUNT = address("SysvarRent111111111111111111111111111111111");
+const OWNER = address("11111111111111111111111111111111");
+
+/** An SPL token account: mint, owner, amount, then the rest of the 165 bytes. */
+function tokenAccount(mint: Address, owner: Address, amount: bigint, size = 165): Uint8Array {
+  const data = new Uint8Array(size);
+  data.set(getAddressEncoder().encode(mint), 0);
+  data.set(getAddressEncoder().encode(owner), 32);
+  new DataView(data.buffer).setBigUint64(64, amount, true);
+
+  return data;
+}
+
+const account = (data: Uint8Array, owner: Address = TOKEN_PROGRAM, lamports = 2_039_280n) =>
+  ({ lamports, owner, data, executable: false }) satisfies SimulatedAccount;
+
+/** An RPC that answers `getMultipleAccounts` for the mints: decimals at byte 44. */
+function mintRpc(decimals: Record<string, number>) {
+  return {
+    getMultipleAccounts: (addresses: Address[]) => ({
+      send: async () => ({
+        value: addresses.map((key) => {
+          if (decimals[key] === undefined) return null;
+          const data = new Uint8Array(82);
+          data[44] = decimals[key]!;
+
+          return {
+            lamports: 1n,
+            owner: TOKEN_PROGRAM,
+            data: [Buffer.from(data).toString("base64"), "base64"],
+            executable: false,
+          };
+        }),
+      }),
+    }),
+  } as unknown as Parameters<typeof movedBy>[0];
+}
+
+describe("what a Solana cook moved", () => {
+  const labels = new Map<string, string>([
+    [SOURCE, "source"],
+    [OWNER, "the owner"],
+  ]);
+
+  it("reads token balances, names a registered mint, and counts created and closed accounts", async () => {
+    const tracked = [SOURCE, DEST, MINTED, OWNER];
+    const before = [
+      account(tokenAccount(USDC, OWNER, 1_500_000n)),
+      account(tokenAccount(OTHER_MINT, OWNER, 9n)),
+      null,
+      account(new Uint8Array(0), OWNER, 10_000_000n),
+    ];
+    const after = [
+      account(tokenAccount(USDC, OWNER, 500_000n)),
+      null,
+      account(tokenAccount(USDC, OWNER, 1_000_000n, 170), TOKEN_2022),
+      account(new Uint8Array(0), OWNER, 9_995_000n),
+    ];
+    // A Token-2022 account past 165 bytes is one only when byte 165 says so (2).
+    after[2]!.data[165] = 2;
+    const moved = await movedBy(
+      mintRpc({ [USDC]: 6 }),
+      SOLANA,
+      tracked,
+      before,
+      after,
+      labels,
+      OWNER,
+    );
+
+    expect(svmMovedJson(moved).tokenChanges).toEqual([
+      expect.objectContaining({
+        account: SOURCE,
+        label: "source",
+        symbol: "USDC",
+        delta: "-1000000",
+        formatted: "-1",
+      }),
+      // Closed: its balance ends at zero. Its mint is not registered and has no decimals here.
+      expect.objectContaining({ account: DEST, before: "9", after: "0", delta: "-9" }),
+      expect.objectContaining({ account: MINTED, before: "0", after: "1000000", symbol: "USDC" }),
+    ]);
+    const lines = svmMovedLines(moved);
+    expect(lines).toContain(`  ${SOURCE} (source), owned by ${OWNER} (the owner): -1 USDC`);
+    expect(lines).toContain(
+      `  ${DEST}, owned by ${OWNER} (the owner): -9 of mint ${OTHER_MINT} (base units)`,
+    );
+    expect(lines).toContain(
+      `  ${OWNER} (the owner): -5000 lamports, the transaction's fee included`,
+    );
+  });
+
+  it("takes a registered mint's decimals from the registry when the cluster does not answer", async () => {
+    const moved = await movedBy(
+      mintRpc({}),
+      SOLANA,
+      [SOURCE],
+      [account(tokenAccount(WSOL, OWNER, 2_000_000_000n))],
+      [account(tokenAccount(WSOL, OWNER, 500_000_000n))],
+      labels,
+      OWNER,
+    );
+
+    expect(svmMovedLines(moved)).toContain(
+      `  ${SOURCE} (source), owned by ${OWNER} (the owner): -1.5 WSOL`,
+    );
+  });
+
+  it("reads no balance out of a mint, or an extended Token-2022 mint", async () => {
+    const mint = new Uint8Array(82);
+    const extendedMint = tokenAccount(USDC, OWNER, 5n, 200);
+    extendedMint[165] = 1;
+    const tracked = [MINT_ACCOUNT, SOURCE];
+    const moved = await movedBy(
+      mintRpc({}),
+      SOLANA,
+      tracked,
+      [account(mint), account(extendedMint, TOKEN_2022)],
+      [account(mint), account(tokenAccount(USDC, OWNER, 7n, 200), TOKEN_2022)],
+      labels,
+      OWNER,
+    );
+
+    expect(moved.tokens).toEqual([]);
+    expect(svmMovedLines(moved)).toEqual([
+      "It changed no token balance and no account's lamports.",
+    ]);
+  });
+});
