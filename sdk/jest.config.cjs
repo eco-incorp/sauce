@@ -1,15 +1,18 @@
+const { availableParallelism } = process.getBuiltinModule("node:os");
+
 /** @type {import('ts-jest').JestConfigWithTsJest} */
 module.exports = {
   preset: "ts-jest/presets/default-esm",
   testEnvironment: "node",
-  roots: ["<rootDir>/test"],
-  // A worker that ends a test file holding more than this is replaced before its next file. Every
-  // test file re-imports the SDK under ESM and its modules stay reachable in the process that ran
-  // them, and the suites that typecheck probes against the whole SDK (`routes-*-types`,
-  // `routes-source-globals*`) each build TypeScript programs of over a gigabyte: one process running
-  // the whole suite — a two-core runner, running in band — reached V8's heap limit on CI and aborted
-  // the run. A limit makes jest use workers even then and replace one once it has grown past it.
+  // A process that runs many suites keeps a part of each one's module graph: measured in band, the
+  // heap grows about 5 MB per suite and passes 2 GB before the last of them, which is the default
+  // heap limit on CI's 2-vCPU runner, and the suites that typecheck probes against the whole SDK
+  // (`routes-*-types`, `routes-source-globals*`) each build TypeScript programs of over a gigabyte.
+  // A worker past 1 GB after a suite is replaced instead. That needs workers, and jest runs in band
+  // — with nothing to replace — when it has only one, so there are always at least two.
   workerIdleMemoryLimit: "1GB",
+  maxWorkers: Math.max(2, availableParallelism() - 1),
+  roots: ["<rootDir>/test"],
   extensionsToTreatAsEsm: [".ts"],
   moduleNameMapper: {
     "^(\\.{1,2}/.*)\\.js$": "$1",
