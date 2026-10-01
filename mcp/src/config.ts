@@ -40,7 +40,8 @@ export function readEndpoints(text: string, path: string): Endpoints {
   }
   const entries = Object.entries(urls as Record<string, unknown>);
   for (const [id, url] of entries) {
-    if (!/^\d+$/.test(id)) {
+    // Each id as a chain's id is written, so the lookup by `String(chain.id)` finds it: no `08453`.
+    if (!/^(?:0|[1-9]\d*)$/.test(id)) {
       throw new UsageError(`--config ${path}: rpcUrls key '${id}' is not a chain id`);
     }
     if (typeof url !== "string") {
@@ -48,6 +49,13 @@ export function readEndpoints(text: string, path: string): Endpoints {
     }
     // Before anything else can fail and print it.
     secret(url);
+    // A placeholder fails `endpointFor` at the first call for its chain; refuse it here instead.
+    if (/^<.*>$/.test(url.trim())) {
+      throw new UsageError(
+        `--config ${path}: rpcUrls["${id}"] is a placeholder: replace it with the chain's URL, ` +
+          "or remove the entry",
+      );
+    }
   }
   const chainIds = entries.map(([id]) => Number(id));
 

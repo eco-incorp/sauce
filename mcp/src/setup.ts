@@ -156,6 +156,14 @@ function tomlBlock(input: SetupInput): string {
 }
 
 const TABLE = new RegExp(`^\\[mcp_servers\\.${SERVER_NAME}\\]\\s*$`, "m");
+/** The same server written another way TOML allows — a quoted or spaced header, a comment after
+ *  it, a dotted key or an inline table — which setup does not rewrite: appending its own table
+ *  beside one of these would define the server twice, and Codex would refuse the whole file. */
+const OTHER_SPELLING = new RegExp(
+  `^\\s*(?:\\[\\s*mcp_servers\\s*\\.\\s*["']?${SERVER_NAME}["']?\\s*[\\].]|` +
+    `(?:mcp_servers\\s*\\.\\s*)?["']?${SERVER_NAME}["']?\\s*[.=])`,
+  "m",
+);
 
 function writeToml(project: string, target: TomlTarget, input: SetupInput): SetupFile["state"] {
   const file = join(project, target.path);
@@ -168,6 +176,7 @@ function writeToml(project: string, target: TomlTarget, input: SetupInput): Setu
   }
   const text = readFileSync(file, "utf8");
   const at = TABLE.exec(text);
+  if (at === null && OTHER_SPELLING.test(text)) return "kept";
   if (at === null) {
     writeFileSync(
       file,
@@ -181,7 +190,7 @@ function writeToml(project: string, target: TomlTarget, input: SetupInput): Setu
   const next = /^\[/m.exec(rest);
   const end = next === null ? text.length : at.index + at[0].length + next.index;
   const existing = text.slice(at.index, end);
-  if (existing.trimEnd() === block.trimEnd()) return "unchanged";
+  if (existing.replace(/\r\n/g, "\n").trimEnd() === block.trimEnd()) return "unchanged";
   if (!input.force) return "kept";
   writeFileSync(
     file,
@@ -219,7 +228,10 @@ export function setupLines(files: readonly SetupFile[]): string[] {
     ...files.map(
       (file) =>
         `  ${file.state.padEnd(9)} ${file.path.padEnd(width)}  (${file.agents.join(", ")})` +
-        (file.state === "kept" ? `: its "${SERVER_NAME}" entry differs; --force replaces it` : ""),
+        (file.state === "kept"
+          ? `: it already names a "${SERVER_NAME}" server, which differs; edit it, or --force ` +
+            "replaces a JSON entry or a [mcp_servers.sauce] table"
+          : ""),
     ),
     ...(files.some((file) => file.path.startsWith(".codex"))
       ? ["Codex reads .codex/config.toml only in a project it trusts."]

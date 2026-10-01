@@ -95,6 +95,17 @@ describe("a server with endpoints", () => {
     assert.ok(!everything.includes("127.0.0.1:9"), "no endpoint host in any output");
   });
 
+  it("refuses a config with a placeholder or a chain id written another way, at start", () => {
+    assert.throws(
+      () => endpointsFor({ "8453": "<RPC_URL for Base>" }),
+      /rpcUrls\["8453"\] is a placeholder/,
+    );
+    assert.throws(
+      () => endpointsFor({ "08453": EVM_URL }),
+      /rpcUrls key '08453' is not a chain id/,
+    );
+  });
+
   it("scrubs a URL from any message that would carry one", () => {
     const text = errorText(new Error(`request to ${EVM_URL} failed; also ${SVM_URL}`));
     assert.ok(!text.includes(SECRET));

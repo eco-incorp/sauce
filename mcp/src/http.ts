@@ -57,7 +57,11 @@ function refuse(res: ServerResponse, status: number, message: string): void {
  */
 function hostsAllowed(options: HttpOptions): readonly string[] | undefined {
   if (isLoopback(options.host) || options.allowedHosts.length > 0) {
-    return [...LOOPBACK, ...options.allowedHosts.map((host) => host.toLowerCase())];
+    // A name given with a port is the name: the Host check compares hostnames, port dropped.
+    return [
+      ...LOOPBACK,
+      ...options.allowedHosts.map((host) => (hostnameOf(host, false) ?? host).toLowerCase()),
+    ];
   }
 
   return undefined;
@@ -92,8 +96,9 @@ async function handle(req: IncomingMessage, res: ServerResponse, options: HttpOp
     maxRequestBodySize: options.maxBody,
   });
   res.on("close", () => {
-    void transport.close();
-    void server.close();
+    // Closing what this one request opened; nothing to report if either was already closed.
+    transport.close().catch(() => {});
+    server.close().catch(() => {});
   });
   await server.connect(transport);
   await transport.handleRequest(req, res);

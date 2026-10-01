@@ -40,9 +40,10 @@ The server ships no RPC URL and reads no environment variable. The chains it rea
 { "rpcUrls": { "1": "https://…", "8453": "https://…", "1399811149": "https://…" } }
 ```
 
-The file is checked when the server starts, so a malformed one stops it. No tool result, error or
-log line ever contains a URL from it, nor its path: provider URLs carry keys, and on a remote
-server the file is the operator's. `sauce_chains` says which chains have an endpoint.
+The file is checked when the server starts, so a malformed one, or a `<…>` placeholder left in it,
+stops it there rather than failing a tool call later. No tool result, error or log line ever
+contains a URL from it, nor its path: provider URLs carry keys, and on a remote server the file is
+the operator's. `sauce_chains` says which chains have an endpoint.
 
 Without `--config` every tool that needs a chain says so plainly, naming the chain and the entry it
 would need. What still works with no endpoint: compiling, the chain's names, the EVM cook (given

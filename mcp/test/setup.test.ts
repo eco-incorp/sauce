@@ -106,6 +106,36 @@ describe("sauce-mcp setup", () => {
     assert.doesNotMatch(readFileSync(join(project, ".codex/config.toml"), "utf8"), /old\.json/);
   });
 
+  it("leaves a sauce server Codex's file already names another way alone", () => {
+    mkdirSync(join(project, ".codex"));
+    for (const spelling of [
+      '[mcp_servers."sauce"]\ncommand = "other"\n',
+      "[mcp_servers.sauce] # mine\ncommand = 'other'\n",
+      '[mcp_servers]\nsauce = { command = "other" }\n',
+      'mcp_servers.sauce.command = "other"\n',
+    ]) {
+      writeFileSync(join(project, ".codex/config.toml"), spelling);
+      for (const force of [false, true]) {
+        assert.deepEqual(
+          run({ agents: ["codex"], force }).map((file) => file.state),
+          ["kept"],
+          spelling,
+        );
+        assert.equal(readFileSync(join(project, ".codex/config.toml"), "utf8"), spelling);
+      }
+    }
+  });
+
+  it("reads its own table back as unchanged whatever the file's line endings", () => {
+    run({ agents: ["codex"] });
+    const file = join(project, ".codex/config.toml");
+    writeFileSync(file, readFileSync(file, "utf8").replace(/\n/g, "\r\n"));
+    assert.deepEqual(
+      run({ agents: ["codex"] }).map((each) => each.state),
+      ["unchanged"],
+    );
+  });
+
   it("leaves a file that is not plain JSON alone, saying what to add", () => {
     mkdirSync(join(project, ".vscode"));
     writeFileSync(join(project, ".vscode/mcp.json"), '{\n  // mine\n  "servers": {}\n}\n');

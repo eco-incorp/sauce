@@ -152,7 +152,8 @@ describe("Streamable HTTP, in process", () => {
     http = await serveHttp({
       port: 0,
       host: "127.0.0.1",
-      allowedHosts: ["sauce.example"],
+      // Named with a port, as an operator might: the hostname is what is compared.
+      allowedHosts: ["sauce.example:443"],
       maxBody: 64 * 1024,
       server: () => createSauceServer({ endpoints: NO_ENDPOINTS }),
     });
