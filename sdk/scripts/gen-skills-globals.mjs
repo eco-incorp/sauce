@@ -10,6 +10,10 @@
 // (`nativeErc20`), whether a chain opens and receives intents (`ecoRoutesPortal`), and the devnet
 // mints a Solana program passes as defines (`routes.SVM_TOKEN_REGISTRY`).
 //
+// It leaves one namespace out: `EcoRoutes`, the Portal and its provers. A program opens an intent
+// with the chain syntax (`Arbitrum(() => { ... }).reward(...)`, the `sauce-intents` skill), which
+// finds them itself; it never calls them by name, and the skills keep the Portal to that one skill.
+//
 // It reads the BUILT SDK (`dist/`), so it runs after `tsc` in `build`, which rewrites the files.
 // The files are committed: CI rebuilds and fails when that changed them, and the skills checker
 // (`check-skills.mjs`) compares them with `globalsIndex()` the same way.
@@ -24,6 +28,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const SDK = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** Where the files go, beside the `sauce-globals` skill that links them. */
 export const GLOBALS_DIR = join(SDK, "..", "skills", "sauce-globals", "references");
+
+/** The eco-routes namespace, which the index leaves to the intent syntax (see above). */
+const INTENT_PROTOCOL = "eco-routes";
 
 const HEADER =
   "<!-- Generated from the SDK's registries: the names `sauce globals --chain <chain>` lists. Do not edit. -->";
@@ -82,6 +89,7 @@ export function globalsIndex(sdk, ecoRoutes) {
   for (const { chain, globals } of listed) {
     for (const ns of globals.protocols) {
       for (const contract of ns.contracts) {
+        if (contract.protocol === INTENT_PROTOCOL) continue;
         const name = `${ns.namespace}.${contract.name}`;
         if (ns.kind === "protocol") {
           const entry = contracts.get(name) ?? {
