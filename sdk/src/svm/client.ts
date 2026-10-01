@@ -20,7 +20,11 @@ import {
   fetchAlt,
   waitForAltActive,
 } from "./alt.js";
-import { assertNoExecutePin } from "./instructions.js";
+import {
+  assertNoExecutePin,
+  buildCookAndPayFromAccountPinnedInstruction,
+  buildCookAndPayInstruction,
+} from "./instructions.js";
 import { buildComputeBudgetPrepend, buildHeapFramePrepend } from "./prepends.js";
 import { resolveAccounts } from "./resolve.js";
 import {
@@ -29,6 +33,7 @@ import {
   deriveCodePda,
   deriveExecutionFeeConfigPda,
   derivePotPda,
+  fetchExecutionFee,
 } from "./kitchen.js";
 import type { AccountResolution } from "./resolve.js";
 import { recommendedComputeUnitLimit, sendExecute, simulateExecute } from "./send.js";
@@ -36,30 +41,50 @@ import type { SendExecuteResult, SimulateExecuteResult } from "./send.js";
 import { buildExecuteTransaction } from "./transaction.js";
 import type { SignedExecuteTransaction } from "./transaction.js";
 
+/**
+ * How a cook reaches the engine.
+ *
+ * - `"kitchen"`: the Kitchen's `cook` (or `cook_from_account`), which CPIs the engine and signs the
+ *   owner's Pot. The program can act as its Pot — hold assets in it, write its storage — and the
+ *   Kitchen charges the execution fee first. The engine runs one level down the invoke stack.
+ * - `"engine"`: the engine's own `cookAndPay` (or the staged, pinned `cookAndPayFromAccountPinned`).
+ *   The engine charges the same fee, into the same treasury, then runs the program as the top-level
+ *   instruction: no Pot, nothing signed for one — the program acts with the transaction's own
+ *   signatures, such as the wallet's — and one more level of CPI depth for what it calls.
+ */
+export type CookVia = "kitchen" | "engine";
+
 export interface SauceSvmClientConfig {
   /** Your cluster's JSON-RPC URL. Required: the SDK ships no RPC endpoints and has no default. */
   rpcUrl: string;
   /** Defaults to rpcUrl with the protocol swapped to ws(s). */
   wsUrl?: string;
-  /** The ENGINE. Named per call rather than compiled in, and still the interpreter that runs — but
-   *  it is no longer what a transaction talks to. */
+  /** The ENGINE. Named per call rather than compiled in: the interpreter that runs, which a
+   *  Kitchen cook CPIs and a direct cook (`via: "engine"`) calls itself. */
   programId: Address;
   /**
-   * The KITCHEN every execution goes through.
+   * The KITCHEN, required either way.
    *
-   * A released engine refuses any invocation that did not arrive through a kitchen cook, so this is
-   * not optional: without it there is no way to reach the interpreter at all.
+   * A Kitchen cook goes through it: the engine's legacy instructions refuse any invocation that did
+   * not arrive through one. A direct cook does not, but pays the fee its `["execution_fee"]` config
+   * sets, into that config — the engine re-derives the account against the Kitchen it bakes in.
    */
   kitchen: Address;
   payer: TransactionSigner;
   /** Which of the payer's Pots to run as. Defaults to the all-zero salt — the natural "primary". */
   potSalt?: Uint8Array;
   /**
-   * What the caller consents to pay per cook, in lamports. Defaults to zero, which succeeds only
-   * while the kitchen is priced at zero — a kitchen with a positive fee refuses, rather than
-   * silently spending the payer's SOL on a quote they never saw.
+   * What the caller consents to pay per cook, in lamports: every cook signs it as its
+   * `max_execution_fee`, and the Kitchen (or, `via: "engine"`, the engine) charges the configured
+   * fee only while it is at most this — a higher one refuses the cook before anything runs.
+   * Defaults to zero, which succeeds only while the kitchen is priced at zero — a kitchen with a
+   * positive fee refuses, rather than silently spending the payer's SOL on a quote they never saw.
+   * Quote it with `executionFee()`; a cook's own `maxExecutionFee` option overrides this one.
    */
   maxExecutionFee?: bigint;
+  /** How every cook reaches the engine: through the Kitchen (the default) or directly. See
+   *  {@link CookVia}. `potSalt` means nothing to a direct cook, which runs as no Pot. */
+  via?: CookVia;
 }
 
 export interface SimulateOpts {
@@ -71,6 +96,8 @@ export interface SimulateOpts {
    * NoSigner is lazy, so everything else runs (and simulates) signerless.
    */
   appendPayerSigner?: boolean;
+  /** This cook's `max_execution_fee`, in place of the client's `maxExecutionFee`. */
+  maxExecutionFee?: bigint;
 }
 
 export interface ExecuteOpts extends SimulateOpts {
@@ -100,11 +127,15 @@ export interface StagedArgs {
 
 export interface SimulateStagedOpts extends SimulateOpts {
   /**
-   * REJECTED, not enforced. Passing this THROWS.
+   * Through the Kitchen: REJECTED, not enforced. Passing this THROWS.
    *
    * `execute_from_account` on the released engine takes no payload, so this was being forwarded
    * and then dropped while documented as an applied pin. The enforceable content pin is the
    * kitchen's, given to `buildFinalizeCodeBufferInstruction` when the buffer is finalized.
+   *
+   * `via: "engine"`: the pin the engine enforces. A direct staged cook is always
+   * `cookAndPayFromAccountPinned`, and this is its digest — required unless the buffer is a
+   * `StagedBuffer`, whose `sha256` is used (the two must agree when both are given).
    */
   expectedSha256?: Uint8Array;
 }
@@ -133,6 +164,14 @@ export interface EnsureLookupTableOpts {
 export interface SauceSvmClient {
   /** Fee-payer / lookup-table authority public key — the ALT-address selection excludes it (signers cannot be looked up). */
   readonly payerAddress: Address;
+  /** How this client's cooks reach the engine. */
+  readonly via: CookVia;
+  /**
+   * The Kitchen's execution fee now, in lamports, from its fee config — what a cook pays either
+   * way. Compare it with what you will pay, and give it as `maxExecutionFee`, so a cook pays what
+   * was quoted or, if the fee rises before it lands, fails.
+   */
+  executionFee(): Promise<bigint>;
   /**
    * Creates (or, with `opts.existing`, extends) an address lookup table over
    * `addresses`, waits for it to warm up, and returns it in the shape the
@@ -176,11 +215,10 @@ export interface SauceSvmClient {
     opts?: SimulateStagedOpts,
   ): Promise<SimulateExecuteResult>;
   /**
-   * Executes a finalized buffer, hash-pinned, in ONE instruction. With `args`,
-   * the per-execution values are encoded into the instruction payload
-   * (encodePayloadArgs) after the flags byte and pin — the staged program
-   * reads them through its CALLDATA prologue, so one staged buffer serves
-   * every argument set without restaging.
+   * Executes a finalized code buffer in ONE instruction: the Kitchen's `cook_from_account`, or
+   * (`via: "engine"`) the engine's `cookAndPayFromAccountPinned`, pinned to the staged digest. The
+   * buffer is the code buffer's metadata address (or the `StagedBuffer`); its code account is
+   * derived from it. A staged program's arguments are part of the staged bytes.
    */
   executeStaged(
     buffer: Address | StagedBuffer,
@@ -197,6 +235,39 @@ export interface SauceSvmClient {
   ): Promise<SignedExecuteTransaction>;
 }
 
+/**
+ * The digest a direct staged cook pins: the caller's `expectedSha256`, else the `StagedBuffer`'s
+ * own. A direct cook runs the code account with the transaction's signatures and the engine checks
+ * nothing else about that account, so the client makes no unpinned direct cook —
+ * `buildCookAndPayFromAccountInstruction` is the raw builder for a caller who wants one.
+ */
+function directPin(
+  buffer: Address | StagedBuffer,
+  expectedSha256: Uint8Array | undefined,
+): Uint8Array {
+  const staged = typeof buffer === "string" ? undefined : buffer.sha256;
+  if (
+    expectedSha256 !== undefined &&
+    staged !== undefined &&
+    (expectedSha256.length !== staged.length || expectedSha256.some((b, i) => b !== staged[i]))
+  ) {
+    throw new Error(
+      "expectedSha256 disagrees with the StagedBuffer's sha256: the pin must be the staged bytes' digest",
+    );
+  }
+  const pin = expectedSha256 ?? staged;
+  if (pin === undefined) {
+    throw new Error(
+      'a staged cook via "engine" is pinned: the engine runs the code account with the ' +
+        "transaction's signatures and checks nothing else about it. Pass the StagedBuffer staging " +
+        "returned, or the staged bytes' sha256 as expectedSha256.",
+    );
+  }
+  if (pin.length !== 32) throw new Error("expectedSha256 must be exactly 32 bytes");
+
+  return pin;
+}
+
 export async function createSauceSvmClient({
   rpcUrl,
   wsUrl,
@@ -205,7 +276,11 @@ export async function createSauceSvmClient({
   payer,
   potSalt = new Uint8Array(32),
   maxExecutionFee = 0n,
+  via = "kitchen",
 }: SauceSvmClientConfig): Promise<SauceSvmClient> {
+  if (via !== "kitchen" && via !== "engine") {
+    throw new Error(`createSauceSvmClient: via must be "kitchen" or "engine", got ${String(via)}`);
+  }
   // The type already requires it; this is for callers the type does not reach (plain JS, a config
   // object built at runtime), who would otherwise get an opaque failure from inside the RPC client.
   if (typeof rpcUrl !== "string" || rpcUrl.trim() === "") {
@@ -251,17 +326,28 @@ export async function createSauceSvmClient({
     const accounts = resolveAccounts(manifest, resolution, payer.address, {
       appendPayerSigner: opts.appendPayerSigner,
     });
-    const executeInstruction = buildCookInstruction({
-      kitchen,
-      owner: payer.address,
-      engineProgram: programId,
-      potSalt,
-      pot,
-      feeConfig,
-      bytecode,
-      maxExecutionFee,
-      tail: accounts,
-    });
+    const cap = opts.maxExecutionFee ?? maxExecutionFee;
+    const executeInstruction =
+      via === "engine"
+        ? buildCookAndPayInstruction({
+            engineProgram: programId,
+            feeConfig,
+            feePayer: payer.address,
+            maxExecutionFee: cap,
+            bytecode,
+            tail: accounts,
+          })
+        : buildCookInstruction({
+            kitchen,
+            owner: payer.address,
+            engineProgram: programId,
+            potSalt,
+            pot,
+            feeConfig,
+            bytecode,
+            maxExecutionFee: cap,
+            tail: accounts,
+          });
 
     return signExecuteTransaction(executeInstruction, prepends, opts.lookupTables);
   }
@@ -294,21 +380,34 @@ export async function createSauceSvmClient({
     const accounts = resolveAccounts(manifest, resolution, payer.address, {
       appendPayerSigner: opts.appendPayerSigner,
     });
-    assertNoExecutePin(opts.expectedSha256);
+    const cap = opts.maxExecutionFee ?? maxExecutionFee;
+    if (via === "kitchen") assertNoExecutePin(opts.expectedSha256);
+    const pin = via === "engine" ? directPin(buffer, opts.expectedSha256) : undefined;
 
     const { address: code } = await deriveCodePda(kitchen, address);
-    const executeInstruction = buildCookFromAccountInstruction({
-      kitchen,
-      owner: payer.address,
-      codeBuffer: address,
-      code,
-      engineProgram: programId,
-      potSalt,
-      pot,
-      feeConfig,
-      maxExecutionFee,
-      tail: accounts,
-    });
+    const executeInstruction =
+      pin !== undefined
+        ? buildCookAndPayFromAccountPinnedInstruction({
+            engineProgram: programId,
+            code,
+            expectedSha256: pin,
+            feeConfig,
+            feePayer: payer.address,
+            maxExecutionFee: cap,
+            tail: accounts,
+          })
+        : buildCookFromAccountInstruction({
+            kitchen,
+            owner: payer.address,
+            codeBuffer: address,
+            code,
+            engineProgram: programId,
+            potSalt,
+            pot,
+            feeConfig,
+            maxExecutionFee: cap,
+            tail: accounts,
+          });
 
     return signExecuteTransaction(executeInstruction, prepends, opts.lookupTables);
   }
@@ -421,6 +520,7 @@ export async function createSauceSvmClient({
           prepends: opts.prepends,
           lookupTables: opts.lookupTables,
           appendPayerSigner: opts.appendPayerSigner,
+          maxExecutionFee: opts.maxExecutionFee,
         }),
       opts,
     );
@@ -441,6 +541,7 @@ export async function createSauceSvmClient({
           lookupTables: opts.lookupTables,
           appendPayerSigner: opts.appendPayerSigner,
           expectedSha256: opts.expectedSha256,
+          maxExecutionFee: opts.maxExecutionFee,
         }),
       opts,
     );
@@ -450,6 +551,8 @@ export async function createSauceSvmClient({
 
   return {
     payerAddress: payer.address,
+    via,
+    executionFee: () => fetchExecutionFee(rpc, kitchen),
     ensureLookupTable,
     simulate,
     cookTransaction,
