@@ -16,7 +16,15 @@ import { dirname, join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { encodeAbiParameters, getAddress, zeroAddress, type Address, type Hex } from "viem";
+import {
+  encodeAbiParameters,
+  formatUnits,
+  getAddress,
+  zeroAddress,
+  toFunctionSelector,
+  type Address,
+  type Hex,
+} from "viem";
 
 import {
   FEE,
@@ -30,7 +38,7 @@ import {
 import { v12KitchenAddress } from "../../sdk/dist/deployments/index.js";
 import { v12PredictPot } from "../../sdk/dist/deployments/pot.js";
 import { ecoRoutesPortal } from "../../sdk/dist/protocols/eco-routes/lookup.js";
-import { connect, endpointsFor, ok, type Connected } from "./harness.js";
+import { connect, endpointsFor, failed, ok, type Connected } from "./harness.js";
 
 const SDK_TEST = join(dirname(fileURLToPath(import.meta.url)), "../../sdk/test");
 const PORTAL_CREATION = (
@@ -42,6 +50,8 @@ const PORTAL_CREATION = (
 /** An owner nobody holds the key of, with nothing: no Pot, no native currency, no tokens. */
 const NOBODY: Address = "0x5a0Ce0000000000000000000000000000000Beef";
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
+/** An owner whose Pot, not deployed, holds USDC: for reading balances, apart from NOBODY's. */
+const HOLDER: Address = "0x7777777777777777777777777777777777777777";
 const PAY = [
   "function main(recipient: Address, amount: Uint256) {",
   "  USDC.transfer(recipient, amount);",
@@ -54,6 +64,39 @@ const INTENT = [
   "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
   "",
 ].join("\n");
+
+/**
+ * Runtime code answering each listed function with fixed words, and reverting anything else: a
+ * stand-in for a Uniswap V3 pool's five reads, with no pool behind them.
+ */
+function answering(answers: ReadonlyArray<readonly [string, readonly bigint[]]>): Hex {
+  const hex = (value: bigint | number, bytes: number) =>
+    BigInt.asUintN(bytes * 8, BigInt(value))
+      .toString(16)
+      .padStart(bytes * 2, "0");
+  // selector = calldata >> 224; one DUP1 PUSH4 EQ PUSH2 JUMPI per function; else revert.
+  const head = 6 + answers.length * 11 + 4;
+  let at = head;
+  const bodies = answers.map(([, words]) => {
+    const body =
+      "5b" +
+      words.map((word, index) => `7f${hex(word, 32)}61${hex(index * 32, 2)}52`).join("") +
+      `61${hex(words.length * 32, 2)}6000f3`;
+    const start = at;
+    at += body.length / 2;
+
+    return { start, body };
+  });
+  const dispatch = answers
+    .map(([signature], index) => {
+      const selector = toFunctionSelector(signature).slice(2);
+
+      return `8063${selector}1461${hex(bodies[index]!.start, 2)}57`;
+    })
+    .join("");
+
+  return `0x60003560e01c${dispatch}600080fd${bodies.map((each) => each.body).join("")}`;
+}
 
 /** A port nothing is listening on, so this suite never collides with another's anvil. */
 async function freePort(): Promise<number> {
@@ -95,10 +138,48 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     const tx = ok(await mcp.call("sauce_tx", { ...pay, owner: NOBODY }));
     assert.equal(tx.to, pot);
     assert.equal(tx.value, FEE.toString());
+    assert.equal(tx.from, NOBODY, "who signs it");
+    assert.deepEqual(tx.kitchenFee, {
+      wei: FEE.toString(),
+      native: formatUnits(FEE, 18),
+      readFrom: "arbitrum",
+    });
     assert.ok((tx.notes as string[]).some((note) => /It is NOT deployed/.test(note)));
+    assert.ok(!(tx.notes as string[]).some((note) => /--|sauce pot/.test(note)), "no flags");
     const predicted = ok(await mcp.call("sauce_pot", { chain: "arbitrum", owner: NOBODY }));
     assert.equal(predicted.pot, pot);
     assert.equal(predicted.deployed, false);
+    assert.equal((predicted.kitchenFee as { wei: string }).wei, FEE.toString());
+  });
+
+  it("reads what the Pot holds: native, and each token the chain registers", async () => {
+    const holderPot = getAddress(v12PredictPot(HOLDER, `0x${"00".repeat(32)}`) as Address);
+    await local.mint(usdc, holderPot, 2_500_000n);
+    type Held = {
+      native: { wei: string };
+      tokens: Array<{
+        symbol: string;
+        address: string;
+        balance: string | null;
+        formatted: string | null;
+      }>;
+    };
+    const out = ok(await mcp.call("sauce_pot", { chain: "arbitrum", owner: HOLDER }));
+    assert.equal(out.pot, holderPot);
+    const held = out.balances as Held;
+    assert.equal(held.native.wei, "0");
+    const row = held.tokens.find((token) => token.symbol === "USDC")!;
+    assert.deepEqual(
+      [getAddress(row.address), row.balance, row.formatted],
+      [usdc, "2500000", "2.5"],
+    );
+    // A registered token with no code on this chain reads as unknown, not as zero.
+    assert.ok(held.tokens.some((token) => token.symbol !== "USDC" && token.balance === null));
+    const bare = ok(
+      await mcp.call("sauce_pot", { chain: "arbitrum", owner: HOLDER, balances: false }),
+    );
+    assert.equal(bare.balances, undefined);
+    assert.equal(bare.deployed, false, "still says whether it is deployed");
   });
 
   it("rehearses the cook on a Pot not deployed yet, holding an assumed balance", async () => {
@@ -142,9 +223,13 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       await mcp.call("sauce_simulate", { ...pay, owner: NOBODY, fund: ["USDC:1.5"] }),
     );
     assert.equal(funded.ok, true);
+    // The command's reason, in the tool's words: the input, not the flag.
+    const because = (funded.assumed as Array<{ because: string }>).map((each) => each.because);
     assert.ok(
-      (funded.assumed as Array<{ because: string }>).some((each) => /--fund/.test(each.because)),
+      because.some((each) => /\bfund\b/.test(each)),
+      because.join("; "),
     );
+    assert.ok(!because.some((each) => each.includes("--")), because.join("; "));
   });
 
   it("builds a deployment the owner's own wallet signs, then sees the Pot deployed", async () => {
@@ -154,8 +239,13 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     await local.send(local.owner, unsigned.to as Address, unsigned.data as Hex);
     const after = ok(await mcp.call("sauce_pot", { chain: "arbitrum", owner: OWNER.address }));
     assert.equal(after.deployed, true);
+    assert.ok((after.notes as string[]).some((note) => /do not send the deployment/.test(note)));
     const tx = ok(await mcp.call("sauce_tx", { ...pay, owner: OWNER.address }));
     assert.ok((tx.notes as string[]).some((note) => /It is deployed/.test(note)));
+    // Named by its address alone, the Pot's owner is read from the chain: who signs.
+    const byPot = ok(await mcp.call("sauce_tx", { ...pay, pot: after.pot }));
+    assert.equal(byPot.to, after.pot);
+    assert.equal(getAddress(byPot.from as Address), getAddress(OWNER.address));
   });
 
   it("fetches a transaction by hash and takes it apart", async () => {
@@ -200,6 +290,50 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
         await caller.close();
       }
     }
+  });
+
+  it("reads a pool's price now, and puts the limits slippageBps from it", async () => {
+    const weth = registered(local.chain, "WETH");
+    const [token0, token1] = [weth, usdc].sort((a, b) =>
+      a.toLowerCase() < b.toLowerCase() ? -1 : 1,
+    );
+    const pair = { chain: "arbitrum", base: "WETH", quote: "USDC" };
+    const quoted = ok(await mcp.call("sauce_price", { ...pair, price: "2700" }));
+    const sqrtPriceX96 = BigInt(quoted.sqrtPriceX96 as string);
+    const pool: Address = "0x9999999999999999999999999999999999999999";
+    await local.testClient.setCode({
+      address: pool,
+      bytecode: answering([
+        ["slot0()", [sqrtPriceX96, -197_000n, 1n, 1n, 1n, 0n, 1n]],
+        ["liquidity()", [123_456_789n]],
+        ["fee()", [500n]],
+        ["token0()", [BigInt(token0!)]],
+        ["token1()", [BigInt(token1!)]],
+      ]),
+    });
+    const out = ok(await mcp.call("sauce_price", { ...pair, pool, slippageBps: 30 })) as Record<
+      string,
+      unknown
+    > & { pool: Record<string, unknown>; limits: { feePpm: number } };
+    assert.equal(Math.round(Number(out.price)), 2700);
+    assert.equal(out.sqrtPriceX96, sqrtPriceX96.toString());
+    assert.deepEqual(out.pool, {
+      address: pool,
+      sqrtPriceX96: sqrtPriceX96.toString(),
+      tick: -197_000,
+      liquidity: "123456789",
+      feePpm: 500,
+      readFrom: "arbitrum",
+    });
+    assert.equal(out.limits.feePpm, 500, "the pool's own fee, when feePpm is not given");
+    const given = ok(await mcp.call("sauce_price", { ...pair, pool, slippageBps: 30, feePpm: 0 }));
+    assert.equal((given.limits as { feePpm: number }).feePpm, 0);
+
+    // A pool of another pair, and an address that is not a pool, are refused by name.
+    const other = failed(await mcp.call("sauce_price", { ...pair, quote: `${RECIPIENT}:6`, pool }));
+    assert.match(other, /the pool trades 0x\w+ and 0x\w+, not WETH and /);
+    const token = failed(await mcp.call("sauce_price", { ...pair, pool: usdc }));
+    assert.match(token, /reading the pool's .* failed .*: is .* a V3-style pool on this chain\?/);
   });
 
   it("rehearses an intent's publish from a wallet that does not hold the reward yet", async () => {

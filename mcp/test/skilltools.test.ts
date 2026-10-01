@@ -29,7 +29,12 @@ describe("sauce_skills", () => {
     const out = ok(await mcp.call("sauce_skills")) as {
       package: string;
       version: string;
-      skills: Array<{ name: string; description: string; files: string[] }>;
+      skills: Array<{
+        name: string;
+        description: string;
+        files: Array<{ path: string; bytes: number }>;
+        references?: { count: number; some: string[] };
+      }>;
     };
     assert.equal(out.package, packageInfo().name);
     assert.equal(out.version, packageInfo().version);
@@ -39,7 +44,13 @@ describe("sauce_skills", () => {
     );
     for (const skill of out.skills) {
       assert.ok(skill.description.length > 20, `${skill.name} says when to use it`);
-      assert.equal(skill.files[0], "SKILL.md");
+      assert.equal(skill.files[0]!.path, "SKILL.md");
+      assert.ok(skill.files[0]!.bytes > 0, "with its size");
+      const shipped = skills.find((each) => each.name === skill.name)!.files.length;
+      // A skill with many references lists a few, and counts them all.
+      const listed = skill.files.length + (skill.references?.count ?? 0);
+      assert.equal(listed, shipped, `${skill.name}: every file listed or counted`);
+      if (skill.references !== undefined) assert.ok(skill.references.some.length <= 12);
     }
     assert.ok(out.skills.some((skill) => skill.name === "sauce-overview"));
   });
@@ -57,6 +68,31 @@ describe("sauce_skill", () => {
         assert.equal(out.text, readFileSync(join(PACKAGED_SKILLS, file.path), "utf8"));
       }
     }
+  });
+
+  it("returns one section of a file, or the lines that hold a term", async () => {
+    const overview = readFileSync(join(PACKAGED_SKILLS, "sauce-overview", "SKILL.md"), "utf8");
+    const heading = /^## (.+)$/m.exec(overview)![1]!;
+    const section = ok(
+      await mcp.call("sauce_skill", { skill: "sauce-overview", section: heading }),
+    );
+    assert.ok((section.text as string).startsWith(`## ${heading}`));
+    assert.ok((section.text as string).length < overview.length);
+    assert.equal(section.bytes, overview.length);
+    const word = "Pot";
+    const query = ok(await mcp.call("sauce_skill", { skill: "sauce-overview", query: word }));
+    for (const line of (query.text as string).split("\n").filter((each) => each !== "…")) {
+      assert.match(line, /^\d+: /, "every line numbered");
+    }
+    assert.ok((query.text as string).includes(word));
+    assert.match(
+      failed(await mcp.call("sauce_skill", { skill: "sauce-overview", section: "no such part" })),
+      /has no heading holding 'no such part': its headings are/,
+    );
+    assert.match(
+      failed(await mcp.call("sauce_skill", { skill: "sauce-overview", query: "zzqqzz" })),
+      /holds no 'zzqqzz'/,
+    );
   });
 
   it("serves nothing else: an unknown skill, an unlisted file, or a path out of the skill", async () => {
@@ -152,31 +188,55 @@ describe("sauce_install_skills", () => {
         notes: string[];
       };
       assert.deepEqual(out.skillsFrom, reads[agent], agent);
+      // Pinned to this server's own version, everywhere.
+      const pinned = `@eco-incorp/sauce@${packageInfo().version}`;
+      assert.equal(out.commands.add, `npm install --save-exact ${pinned}`);
       assert.equal(
         out.commands.install,
-        `npx -y @eco-incorp/sauce@latest skills install --agent ${agent} --dir "my app"`,
+        `npx -y ${pinned} skills install --agent ${agent} --dir "my app"`,
       );
-      assert.match(out.commands.update!, /@latest skills update --agent/);
-      assert.match(out.commands.status!, /@latest skills status --agent/);
-      assert.match(out.commands.init!, /@latest init "my app" --agent/);
+      assert.equal(
+        out.commands.update,
+        `npx -y ${pinned} skills update --agent ${agent} --dir "my app"`,
+      );
+      assert.equal(
+        out.commands.status,
+        `npx -y ${pinned} skills status --agent ${agent} --dir "my app"`,
+      );
+      assert.equal(out.commands.init, `npx -y ${pinned} init "my app" --agent ${agent}`);
+      assert.ok(!JSON.stringify(out).includes("@latest"));
       assert.ok(out.notes.some((note) => /no-op on a project already installed/.test(note)));
       if (agent === "agents-md") {
         assert.equal(out.mcp, undefined);
         continue;
       }
       assert.match(out.mcp!.config, /"npx"/);
-      assert.match(out.mcp!.config, /"@eco-incorp\/sauce"/);
+      assert.ok(out.mcp!.config.includes(`"${pinned}"`), "the entry mcp setup writes");
       assert.match(out.mcp!.config, /"mcp"/);
+      assert.equal(
+        out.commands.mcpSetup,
+        `npx -y ${pinned} mcp setup --agent ${agent} --dir "my app"`,
+      );
     }
     const claude = ok(await mcp.call("sauce_install_skills", { agent: "claude" })) as {
       mcp: { path: string; config: string };
     };
     assert.equal(claude.mcp.path, ".mcp.json");
-    assert.deepEqual(JSON.parse(claude.mcp.config), {
-      mcpServers: {
-        sauce: { type: "stdio", command: "npx", args: ["-y", "@eco-incorp/sauce", "mcp"] },
-      },
-    });
+    const { configSnippet, launch } = await import("../src/setup.js");
+    assert.equal(
+      claude.mcp.config,
+      configSnippet(
+        "claude",
+        launch({ packageName: "@eco-incorp/sauce", version: packageInfo().version }),
+      ).text,
+      "exactly what mcp setup writes",
+    );
+    const withConfig = ok(
+      await mcp.call("sauce_install_skills", { agent: "cursor", config: "rpc.json" }),
+    ) as { commands: Record<string, string>; mcp: { config: string }; notes: string[] };
+    assert.match(withConfig.mcp.config, /"--config",\s*"rpc.json"/);
+    assert.match(withConfig.commands.mcpSetup!, /--config "rpc.json"$/);
+    assert.ok(withConfig.notes.some((note) => /placeholder/.test(note)));
     const codex = ok(await mcp.call("sauce_install_skills", { agent: "codex" })) as {
       mcp: { path: string; config: string };
     };

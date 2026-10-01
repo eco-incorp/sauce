@@ -114,6 +114,21 @@ describe("sauce_globals", () => {
     assert.equal((one.protocol as { namespace: string }).namespace, "UniswapV3");
   });
 
+  it("lists every namespace's contracts without their methods, which `protocol` gives", async () => {
+    type Namespace = { namespace: string; contracts: Array<Record<string, unknown>> };
+    const all = ok(await mcp.call("sauce_globals", { chain: "base", protocols: true })) as {
+      protocols: Namespace[];
+    };
+    const contracts = all.protocols.flatMap((each) => each.contracts);
+    assert.ok(contracts.length > 10);
+    assert.ok(contracts.every((contract) => !("methods" in contract)));
+    assert.ok(contracts.every((contract) => typeof contract.address === "string"));
+    const one = ok(await mcp.call("sauce_globals", { chain: "base", protocol: "UniswapV3" })) as {
+      protocol: Namespace;
+    };
+    assert.ok(one.protocol.contracts.some((contract) => Array.isArray(contract.methods)));
+  });
+
   it("names an unknown chain or namespace as the error", async () => {
     assert.match(failed(await mcp.call("sauce_globals", { chain: "nowhere" })), /nowhere/);
     assert.match(
@@ -141,10 +156,51 @@ describe("sauce_price", () => {
     assert.equal(Math.round(Number(back.price)), 2700);
   });
 
+  it("puts each direction's limit slippageBps from the price, its floor paying the fee", async () => {
+    type Side = { price: string; sqrtPriceLimitX96: string; minAvgPrice: string };
+    const pair = { chain: "base", base: "WETH", quote: "USDC" };
+    const out = ok(
+      await mcp.call("sauce_price", { ...pair, price: "2700", slippageBps: 50, feePpm: 3000 }),
+    ) as { limits: { slippageBps: number; feePpm: number; sell: Side; buy: Side } };
+    assert.deepEqual([out.limits.slippageBps, out.limits.feePpm], [50, 3000]);
+    assert.deepEqual([out.limits.sell.price, out.limits.buy.price].map(Number), [2686.5, 2713.5]);
+    // Each limit is the pool's price there; each floor is the price there, net of the fee.
+    const at = async (price: string) =>
+      ok(await mcp.call("sauce_price", { ...pair, price })) as {
+        sell: Side;
+        buy: Side;
+      };
+    assert.equal(out.limits.sell.sqrtPriceLimitX96, (await at("2686.5")).sell.sqrtPriceLimitX96);
+    assert.equal(out.limits.buy.sqrtPriceLimitX96, (await at("2713.5")).buy.sqrtPriceLimitX96);
+    // 2700 * 0.995 * 0.997.
+    assert.equal(out.limits.sell.minAvgPrice, (await at("2678.4405")).sell.minAvgPrice);
+    // 2700 * 1.005 / 0.997, to the 24 places the tool computes it to.
+    const worst = (await at("2721.664994984954864593781344")).buy.minAvgPrice;
+    assert.equal(out.limits.buy.minAvgPrice, worst);
+    const feeless = ok(
+      await mcp.call("sauce_price", { ...pair, price: "2700", slippageBps: 50 }),
+    ) as { limits: { feePpm: number; sell: Side } };
+    assert.equal(feeless.limits.feePpm, 0);
+    assert.equal(feeless.limits.sell.minAvgPrice, (await at("2686.5")).sell.minAvgPrice);
+  });
+
+  it("reads a pool only through an endpoint, and says so without one", async () => {
+    const message = failed(
+      await mcp.call("sauce_price", {
+        chain: "base",
+        base: "WETH",
+        quote: "USDC",
+        pool: "0xd0b53D9277642d899DF5C87A3966A349A798F224",
+      }),
+    );
+    assert.match(message, /Reading a pool needs an RPC endpoint for base/);
+    assert.match(message, /Pass rpcUrl with the call/);
+  });
+
   it("takes one of price and sqrtPriceX96, on an EVM chain", async () => {
     assert.match(
       failed(await mcp.call("sauce_price", { chain: "base", base: "WETH", quote: "USDC" })),
-      /missing <price>/,
+      /give one of price, sqrtPriceX96, or pool/,
     );
     assert.match(
       failed(
@@ -279,8 +335,9 @@ describe("sauce_compile", () => {
     );
     assert.match(message, /program\.sauce\.ts does not compile for base/);
     const chainless = failed(await mcp.call("sauce_compile", { source: PAY }));
-    assert.match(chainless, /missing --chain/);
-    assert.match(chainless, /names the sauce command's flags/);
+    // The command's message, in this tool's words: the input, not the flag.
+    assert.match(chainless, /missing chain <slug\|id>/);
+    assert.doesNotMatch(chainless, /--chain/);
   });
 
   it("refuses a define the program would never see, and a malformed one", async () => {
@@ -399,6 +456,13 @@ describe("sauce_tx", () => {
     assert.ok((cook.args[1] as string).startsWith(compiled.bytecode as string));
     assert.ok((cook.args[1] as string).includes(RECIPIENT.slice(2).toLowerCase()));
     assert.ok((out.notes as string[]).some((note) => /cook\(\) is onlyOwner/.test(note)));
+    // Who signs it; the fee as given, since no endpoint read it; and that it is not a rehearsal.
+    assert.equal(out.from, OWNER);
+    assert.equal(out.kitchenFee, null);
+    assert.ok(
+      (out.notes as string[]).some((note) => /fee was not read \(no endpoint\)/.test(note)),
+    );
+    assert.ok((out.notes as string[]).some((note) => /run sauce_simulate/.test(note)));
   });
 
   it("derives a named Pot from its salt label, or takes the Pot by address", async () => {
@@ -423,6 +487,7 @@ describe("sauce_tx", () => {
       }),
     );
     assert.equal(byAddress.data, named.data);
+    assert.equal(byAddress.from, null, "a Pot's owner is read from the chain, and none was given");
   });
 
   it("says plainly what it needs that a server without an endpoint cannot give", async () => {
@@ -467,6 +532,10 @@ describe("sauce_tx", () => {
       ),
       /not both/,
     );
+    const potless = failed(
+      await mcp.call("sauce_tx", { source: PAY, chain: "base", value: 0, args: [RECIPIENT, 1] }),
+    );
+    assert.match(potless, /give owner \(.*to rehearse, any address will do\) or pot/);
   });
 });
 
