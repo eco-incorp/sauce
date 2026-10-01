@@ -144,9 +144,14 @@ function main(pot: Account<Signer>, potUsdc: Account): Uint256 {
 }
 ```
 
-run with `--account pot=pot` and the Pot's USDC account in the second slot. Passing the Pot for
-that slot fails the checks with no message (the Pot is not an SPL token account), and so does an
-account that does not exist: **a Pot with no USDC account holds no USDC**.
+run with `--account pot=pot` and the Pot's USDC account in the second slot:
+`--account potUsdc=pot:USDC` passes it, the Pot's associated token account for the mint
+(`pot:<mint>` for any mint, `owner:USDC` for the owner's). Passing the Pot for that slot fails the
+checks with no message (the Pot is not an SPL token account), and so does an account that does not
+exist: **a Pot with no USDC account holds no USDC**. `sauce simulate` names a given account the
+cluster does not have, and
+`sauce pot --chain solana --owner <pubkey> --config sauce.config.json` lists the Pot's account for
+each registered mint, whether it exists and what it holds.
 
 The Pot's USDC sits in its associated token account, the ATA of (Pot, mint). Derive it with
 `findAssociatedTokenPda` and create it with `getCreateAssociatedTokenIdempotentInstruction`, both

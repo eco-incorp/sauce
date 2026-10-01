@@ -417,7 +417,10 @@ in base units. Take each token's decimals from
   is quote per base: 2,686.5 USDC per WETH, WETH being the token priced; `USDC WETH 2686.5` would be
   2,686.5 WETH per USDC. Selling WETH (WETH → USDC) takes the `sell` block, a floor; buying it
   (USDC → WETH) the `buy` block, a ceiling. `--sqrt-price-x96 <value>` reads a pool's price back.
-  It reads no network.
+  It reads no network. `sauce price --chain base 2686.5 USDC per WETH` says the same in words, and
+  its first line gives the price both ways round; with `--config sauce.config.json` it also reads
+  the pair's price now from its deepest Uniswap V3 pool and warns when the price given is 10x or
+  more off, naming a price written the wrong way round.
 - **By hand, from a human price to `sqrtPriceX96`**: with `P` the price of one whole token0 in whole
   token1 and `d0`, `d1` the decimals, `sqrtPriceX96 = floor(sqrt(P × 10^d1 / 10^d0) × 2^96)`,
   computed in integers as the integer square root of `P × 10^d1 × 2^192 / 10^d0`. A price quoted
