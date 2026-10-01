@@ -60,13 +60,22 @@ engine accepts only Pots created by its own Kitchen, with the Pot bytecode it wa
 Kitchen release that changes the Pot's bytecode starts a new family of Pot addresses, and a Pot
 from an earlier family keeps running on the engine built for it.
 
+#### A Pot's Router
+
 A Pot's swaps run on **its own Router**. Router self-calls and the pools' mid-swap callbacks reach
 the Pot's fallback, which delegatecalls `pot.router()`: the Kitchen's Router when the Pot was
 minted, until the Pot's owner points it elsewhere with `setRouter`. The Kitchen's owner moves the
-Router that NEW Pots start on and nothing else — the Kitchen cannot move an existing Pot. So after
-a Router rollout, `potRouterUpdate(client, pot)` from `@eco-incorp/sauce/evm/engine` reads both
-through your client and returns the `setRouter` call for the Pot's owner to sign, or nothing when
-the Pot is already current. Nothing sends it for you.
+Router that NEW Pots start on and nothing else — the Kitchen cannot move an existing Pot, and a
+Router change moves no Pot address. So after a Router rollout, `potRouterUpdate(client, pot)` from
+`@eco-incorp/sauce/evm/engine` reads both through your client and returns the `setRouter` call for
+the Pot's owner to sign, or nothing when the Pot is already current. Nothing sends it for you, and
+a call from anyone but the owner reverts with `NotOwner()`. It throws for a Pot of an earlier
+Kitchen release, which has no `setRouter` and keeps its Router for good.
+[pot-router.ts](../examples/pot-router.ts) shows the check.
+
+`v12PotAbi` and `v12KitchenAbi` from the same subpath are the released contracts' complete ABIs,
+including the Kitchen's owner-only administration (`initialize`, `setRouter`, `setExecutionFee`,
+ownership transfer and upgrade).
 
 Every cook must send the Kitchen's current `executionFee()` as native value, even for a program that
 moves only ERC-20s. Native the program itself spends is on top of that. A balance already sitting in
@@ -103,9 +112,9 @@ a cascade, not one call stack spanning chains. See [create an intent](../guides/
 ## Versions travel with artifacts
 
 A compiled program is paired with an engine that understands it, by exact package version in both
-directions: compiler 2.4.0 output runs on v12-evm 1.1.0 and v12-svm 1.3.0, and 2.3.0 output only on
-the engines before them. The compiler reports what it produced; it does not inspect an address to
-find out what is deployed there. The SDK pins one compiler, ships the engines of its row of
+directions: each compiler release names the engine releases its output runs on, and those engines
+run no other compiler's output. The compiler reports what it produced; it does not inspect an
+address to find out what is deployed there. The SDK pins one compiler, ships the engines of its row of
 `V12_RELEASE_SETS`, and refuses to build a cook for an engine another row names
 ([which engine runs a program](../api/compiler.md#which-engine-runs-a-program)). Read the deployment
 helpers in `@eco-incorp/sauce/deployments` for released engine and Kitchen addresses, and confirm the
