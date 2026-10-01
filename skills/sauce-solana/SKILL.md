@@ -73,27 +73,21 @@ npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypai
 ## The Pot's key
 
 The Pot is an account the program is given: declare it as `pot: Account<Signer>`, pass it as
-`--account pot=pot`, and read `pot.address`. A `Signer` slot alone does not prove it is the Pot
-(`pot=owner` satisfies it too), and `ctx.msgSender()` does not either: it is the first signer among
-the accounts the engine receives, which, with a `pot` slot attached as the Pot, is the Pot itself.
+`--account pot=pot`, and read `pot.address`. Nothing about the slot alone proves it is the Pot:
 
-To bind the slot to the executing Pot, check its owner program: **the engine owns every Pot
-account, and `ctx.self()` on Solana is the engine's program id**. Only the Pot running this cook can
-sign (the Kitchen signs for it), so a signing account the engine owns is that Pot; the owner's
-wallet, owned by the System program, fails the check.
+- a `Signer` slot takes any signer (`pot=owner` satisfies it too);
+- `ctx.msgSender()` is only the first signer among the accounts the engine receives;
+- `pot.owner == ctx.self()` says only that the engine owns the account. **The engine owns every
+  Pot, but not only Pots**: a keypair account assigned to the engine, which the transaction signs,
+  passes the check as well. It keeps the owner's wallet out (the System program owns that) and
+  lets a lookalike in.
 
-```sauce chain=solana
-function main(pot: Account<Signer>, amount: Uint256) {
-  require(pot.owner == ctx.self(), "pot is not the Pot running this cook");
-  require(amount > 0n);
-}
-```
-
-To bind it to one owner's Pot instead, re-derive it from that owner, attached as a signer slot of
-its own (`--account wallet=owner`): the Pot is the Kitchen's program address for the seeds `"pot"`,
-the owner and the 32-byte salt (zero unless `--salt` names another). `KITCHEN` is the Kitchen
-program, as a define: `--define KITCHEN=SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot` (or its
-32-byte hex, `0x068ddbf2073c779081c9b11a48aea267e5545cb7f387144de6b7ff8c7138818b`). Bind an
+**To bind the slot to the Pot, re-derive the Pot's address and require the slot to be it.** The Pot
+is the Kitchen's program address for the seeds `"pot"`, its owner and the 32-byte salt (zero unless
+`--salt` names another), and only a Kitchen cook can make that address sign, so a signing slot at
+that address is the Pot. Take the owner as a signer slot of its own (`--account wallet=owner`).
+`KITCHEN` is the Kitchen program, as a define: `--define KITCHEN=SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot`
+(or its 32-byte hex, `0x068ddbf2073c779081c9b11a48aea267e5545cb7f387144de6b7ff8c7138818b`). Bind an
 account's key to a local before calling a method on it.
 
 ```sauce chain=solana define=KITCHEN
@@ -105,6 +99,13 @@ function main(pot: Account<Signer>, wallet: Account<Signer>) {
   require(pot.address == expected, "pot is not the wallet's Pot");
 }
 ```
+
+```sh
+npx sauce run pot.sauce.ts --chain solana --config sauce.config.json --keypair <keypair> \
+  --define KITCHEN=SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot --account pot=pot --account wallet=owner
+```
+
+A Pot under another salt is the same program with `--define SALT=<the salt, as 32-byte hex>`.
 
 ## Token accounts
 
@@ -136,15 +137,21 @@ the symbol. The Solana file in `sauce-chains` lists every registered mint, mainn
 account of its own, so a program reading it takes that account as a parameter and checks whose it
 is:
 
-```sauce chain=solana
-function main(pot: Account<Signer>, potUsdc: Account): Uint256 {
-  require(pot.owner == ctx.self(), "pot is not the Pot running this cook");
+```sauce chain=solana define=KITCHEN
+const SALT = 0n; // the Pot's salt, zero by default
+
+function main(pot: Account<Signer>, wallet: Account<Signer>, potUsdc: Account): Uint256 {
+  const owner = wallet.address;
+  const [expected] = crypto.findPDA(KITCHEN, ["pot", owner.toBytesBe(32n), SALT.toBytesBe(32n)]);
+  require(pot.address == expected, "pot is not the wallet's Pot");
   require(ownerOf(USDC, potUsdc) == pot.address, "not the Pot's USDC account");
   return balanceOf(USDC, potUsdc);
 }
 ```
 
-run with `--account pot=pot` and the Pot's USDC account in the second slot. Passing the Pot for
+run with `--account pot=pot --account wallet=owner`, the Pot's USDC account in the third slot and
+`--define KITCHEN=…` as above. The first check binds `pot` to the wallet's Pot; the second binds
+the token account to `pot`. Passing the Pot for
 that slot fails the checks with no message (the Pot is not an SPL token account), and so does an
 account that does not exist: **a Pot with no USDC account holds no USDC**.
 
