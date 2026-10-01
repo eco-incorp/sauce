@@ -49,7 +49,9 @@ import type { ResolvedAccountMeta } from "../../../src/svm/index.js";
 import { compileStdToken } from "./harness.js";
 import type { AccountManifest } from "./harness.js";
 import {
+  TOKEN_2022_PROGRAM,
   TOKEN_PROGRAM,
+  expectFail,
   expectOk,
   randomAddress,
   sendInstructions,
@@ -156,6 +158,22 @@ const run = (
   );
 
 /**
+ * Run `entry`, which must be refused, and return the reason it reverted with: the `require`'s
+ * message, which the engine returns as the failed cook's return data. Every check the library makes
+ * names what it refused, so each failure below is asserted by WHICH check fired, not merely by the
+ * transaction failing — a failure for some other reason (an account the test attached wrongly) would
+ * otherwise pass as the refusal under test.
+ */
+const reasonOf = (
+  harness: EngineHarness,
+  entry: string,
+  slots: Record<string, ResolvedAccountMeta>,
+): Promise<string> =>
+  sendInstructions(harness, instructionsFor(harness, entry, slots)).then((result) =>
+    new TextDecoder().decode(expectFail(result).revertData),
+  );
+
+/**
  * A real 82-byte SPL `Mint`: `mint_authority` COption::None @0, `supply` u64 LE @36, `decimals` @44,
  * `is_initialized` @45, `freeze_authority` COption::None @46 — the layout `totalSupply`/`decimals`
  * read by byte range. (The harness's own `setMint` leaves `supply` at zero, which cannot distinguish
@@ -253,9 +271,27 @@ describeStdToken("@sauce/token e2e: the SVM arm against real SPL accounts", () =
     const entry = `import { balanceOf } from "@sauce/token"; function main(account: Account): Uint256 { return balanceOf(${literal(randomAddress())}, account); }`;
     const slots = { account: { address: account, role: AccountRole.READONLY } };
 
-    const { ok } = await sendInstructions(harness, instructionsFor(harness, entry, slots));
+    expect(await reasonOf(harness, entry, slots)).toBe("wrong mint");
+  });
 
-    expect(ok).toBe(false);
+  it("balanceOf refuses a Token-2022 account, as every function here does", async () => {
+    // The same 165-byte layout, of the right mint, owned by Token-2022 rather than legacy SPL Token.
+    const mint = randomAddress();
+    const account = setTokenAccount(
+      harness,
+      randomAddress(),
+      mint,
+      harness.payer.address,
+      TOKEN_BALANCE,
+      TOKEN_2022_PROGRAM,
+    );
+    const entry = `import { balanceOf } from "@sauce/token"; function main(account: Account): Uint256 { return balanceOf(${literal(mint)}, account); }`;
+
+    expect(
+      await reasonOf(harness, entry, {
+        account: { address: account, role: AccountRole.READONLY },
+      }),
+    ).toBe("not a token account");
   });
 
   it("totalSupply and decimals read a real SPL mint", async () => {
@@ -278,7 +314,7 @@ describeStdToken("@sauce/token e2e: the SVM arm against real SPL accounts", () =
   });
 
   it.each(["totalSupply", "decimals"])(
-    "%s rejects token accounts and uninitialized mints",
+    "%s rejects token accounts, mints SPL Token does not own, and uninitialized mints",
     async (method) => {
       const tokenAccount = setTokenAccount(
         harness,
@@ -287,23 +323,36 @@ describeStdToken("@sauce/token e2e: the SVM arm against real SPL accounts", () =
         harness.payer.address,
         TOKEN_BALANCE,
       );
-      const uninitializedMint = randomAddress();
-      const data = new Uint8Array(82);
-      new DataView(data.buffer).setBigUint64(36, TOTAL_SUPPLY, true);
-      data[44] = Number(DECIMALS);
-      harness.svm.setAccount({
-        address: uninitializedMint,
-        data,
-        executable: false,
-        lamports: lamports(harness.svm.minimumBalanceForRentExemption(BigInt(data.length))),
-        programAddress: TOKEN_PROGRAM,
-        space: BigInt(data.length),
-      });
+      const mintImage = (initialized: boolean) => {
+        const data = new Uint8Array(82);
+        new DataView(data.buffer).setBigUint64(36, TOTAL_SUPPLY, true);
+        data[44] = Number(DECIMALS);
+        data[45] = initialized ? 1 : 0;
+        return data;
+      };
+      const planted = (data: Uint8Array, programAddress: Address): Address => {
+        const address = randomAddress();
+        harness.svm.setAccount({
+          address,
+          data,
+          executable: false,
+          lamports: lamports(harness.svm.minimumBalanceForRentExemption(BigInt(data.length))),
+          programAddress,
+          space: BigInt(data.length),
+        });
+        return address;
+      };
       const entry = `import { ${method} } from "@sauce/token"; function main(token: Account): Uint256 { return ${method}(token); }`;
-      for (const address of [tokenAccount, uninitializedMint]) {
+      const cases: Array<[Address, string]> = [
+        // Owned by SPL Token, but 165 bytes: the size check.
+        [tokenAccount, "not a mint"],
+        // A genuine mint's bytes, written into an account another program owns: the owner check.
+        [planted(mintImage(true), randomAddress()), "not a mint"],
+        [planted(mintImage(false), TOKEN_PROGRAM), "uninitialized mint"],
+      ];
+      for (const [address, reason] of cases) {
         const slots = { token: { address, role: AccountRole.READONLY } };
-        const { ok } = await sendInstructions(harness, instructionsFor(harness, entry, slots));
-        expect(ok).toBe(false);
+        expect(await reasonOf(harness, entry, slots)).toBe(reason);
       }
     },
   );
@@ -334,6 +383,34 @@ describeStdToken("@sauce/token e2e: the SVM arm against real SPL accounts", () =
 
     expect(toBigInt(matching)).toBe(DELEGATED);
     expect(toBigInt(other)).toBe(0n);
+  });
+
+  it("allowance refuses an account of another mint, or one SPL Token does not own", async () => {
+    const mint = randomAddress();
+    const entry = `import { allowance } from "@sauce/token"; function main(account: Account): Uint256 { return allowance(${literal(mint)}, account, ${literal(randomAddress())}); }`;
+    const otherMint = setTokenAccount(
+      harness,
+      randomAddress(),
+      randomAddress(),
+      harness.payer.address,
+      TOKEN_BALANCE,
+    );
+    const token2022 = setTokenAccount(
+      harness,
+      randomAddress(),
+      mint,
+      harness.payer.address,
+      TOKEN_BALANCE,
+      TOKEN_2022_PROGRAM,
+    );
+
+    for (const [address, reason] of [
+      [otherMint, "wrong mint"],
+      [token2022, "not a token account"],
+    ] as const) {
+      const slots = { account: { address, role: AccountRole.READONLY } };
+      expect(await reasonOf(harness, entry, slots)).toBe(reason);
+    }
   });
 
   it("transfer moves the balance through a real SPL Token CPI", async () => {
@@ -399,10 +476,12 @@ describeStdToken("@sauce/token e2e: the SVM arm against real SPL accounts", () =
       space: BigInt(data.length),
     });
 
-    for (const address of [otherMint, forged]) {
+    for (const [address, reason] of [
+      [otherMint, "wrong mint"],
+      [forged, "not a token account"],
+    ] as const) {
       const slots = { account: { address, role: AccountRole.READONLY } };
-      const { ok } = await sendInstructions(harness, instructionsFor(harness, entry, slots));
-      expect(ok).toBe(false);
+      expect(await reasonOf(harness, entry, slots)).toBe(reason);
     }
   });
 
@@ -441,11 +520,9 @@ describeStdToken("@sauce/token e2e: the SVM arm against real SPL accounts", () =
     await run(harness, unchecked, slots(delegated));
     expect(tokenAmount(harness, delegated)).toBe(TOKEN_BALANCE - TRANSFERRED);
 
-    const refused = await sendInstructions(
-      harness,
-      instructionsFor(harness, checked, slots(delegated)),
+    expect(await reasonOf(harness, checked, slots(delegated))).toBe(
+      "source is not the authority's",
     );
-    expect(refused.ok).toBe(false);
     expect(tokenAmount(harness, delegated)).toBe(TOKEN_BALANCE - TRANSFERRED);
 
     await run(harness, checked, slots(own));
@@ -482,5 +559,55 @@ describeStdToken("@sauce/token e2e: the SVM arm against real SPL accounts", () =
     );
 
     expect(toBigInt(returnData)).toBe(DELEGATED);
+  });
+
+  // Every write checks its callee, its source's owner and mint, and the amount, before it calls,
+  // and each refusal is named; the source's balance is untouched by any of them.
+  describe.each(["transfer", "transferFrom", "approve"])("%s refuses, naming", (method) => {
+    const second = method === "approve" ? "delegate" : "dest";
+    const write = (mint: Address, amount: bigint) =>
+      `import { ${method} } from "@sauce/token"; function main(tokenProgram: Account, source: Account, ${second}: Account, authority: Account): void { ${method}(${literal(mint)}, tokenProgram, source, ${second}, authority, ${amount}n); }`;
+    const refusal = async (
+      reason: string,
+      overrides: {
+        tokenProgram?: Address;
+        mint?: Address;
+        amount?: bigint;
+        sourceProgram?: Address;
+      },
+    ) => {
+      const mint = randomAddress();
+      const source = setTokenAccount(
+        harness,
+        randomAddress(),
+        mint,
+        harness.payer.address,
+        TOKEN_BALANCE,
+        overrides.sourceProgram,
+      );
+      const other = setTokenAccount(harness, randomAddress(), mint, harness.payer.address, 0n);
+      const entry = write(overrides.mint ?? mint, overrides.amount ?? TRANSFERRED);
+
+      expect(
+        await reasonOf(harness, entry, {
+          tokenProgram: {
+            address: overrides.tokenProgram ?? TOKEN_PROGRAM,
+            role: AccountRole.READONLY,
+          },
+          source: { address: source, role: AccountRole.WRITABLE },
+          [second]: { address: other, role: AccountRole.WRITABLE },
+          authority: { address: harness.payer.address, role: AccountRole.READONLY_SIGNER },
+        }),
+      ).toBe(reason);
+      expect(tokenAmount(harness, source)).toBe(TOKEN_BALANCE);
+    };
+
+    it("a callee that is not the SPL Token program", () =>
+      refusal("not the token program", { tokenProgram: TOKEN_2022_PROGRAM }));
+    it("a source SPL Token does not own", () =>
+      refusal("not a token account", { sourceProgram: TOKEN_2022_PROGRAM }));
+    it("a source of another mint", () => refusal("wrong mint", { mint: randomAddress() }));
+    it("an amount no SPL account can hold", () =>
+      refusal("amount over u64", { amount: 0x1_0000_0000_0000_0000n }));
   });
 });
