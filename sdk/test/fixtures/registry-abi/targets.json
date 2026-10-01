@@ -345,10 +345,38 @@
     },
     "eco-routes": {
       "PortalABI": {
-        "roles": ["Portal"]
+        "roles": ["Portal"],
+        "required": {
+          "publish(uint64,bytes,(uint64,address,address,uint256,(address,uint256)[]))": "routes/portal.ts publishTx, the transaction that publishes an intent whose vault was paid directly — the SDK's default way to fund one, from a wallet (sauce publish) or a Pot",
+          "intentVaultAddress(uint64,bytes,(uint64,address,address,uint256,(address,uint256)[]))": "the program a Pot runs to fund an intent it opens (routes/intent-sugar.ts), which reads the vault it pays from the Portal in the same cook, and sauce publish's cross-check of the SDK's offline vault prediction"
+        }
       },
       "ProverABI": {
-        "roles": ["HyperProver", "MetaProver", "PolymerProver", "LayerZeroProver"]
+        "roles": ["HyperProver", "MetaProver", "PolymerProver", "LayerZeroProver"],
+        "exempt": {
+          "fetchFee(uint64,bytes,bytes)": {
+            "1:0xec0ded087ee6c55991bb4d4567ca1134c5353ed6": "a PolymerProver: its proof is relayed through Polymer's prover API rather than paid for in prove, so it has no fetchFee",
+            "10:0xec0ded087ee6c55991bb4d4567ca1134c5353ed6": "a PolymerProver: its proof is relayed through Polymer's prover API rather than paid for in prove, so it has no fetchFee",
+            "130:0xec0ded087ee6c55991bb4d4567ca1134c5353ed6": "a PolymerProver: its proof is relayed through Polymer's prover API rather than paid for in prove, so it has no fetchFee",
+            "137:0xec0ded087ee6c55991bb4d4567ca1134c5353ed6": "a PolymerProver: its proof is relayed through Polymer's prover API rather than paid for in prove, so it has no fetchFee",
+            "143:0xec0ded087ee6c55991bb4d4567ca1134c5353ed6": "a PolymerProver: its proof is relayed through Polymer's prover API rather than paid for in prove, so it has no fetchFee",
+            "5042:0xec0ded087ee6c55991bb4d4567ca1134c5353ed6": "a PolymerProver: its proof is relayed through Polymer's prover API rather than paid for in prove, so it has no fetchFee",
+            "8453:0xec0ded087ee6c55991bb4d4567ca1134c5353ed6": "a PolymerProver: its proof is relayed through Polymer's prover API rather than paid for in prove, so it has no fetchFee",
+            "9745:0xec0ded087ee6c55991bb4d4567ca1134c5353ed6": "a PolymerProver: its proof is relayed through Polymer's prover API rather than paid for in prove, so it has no fetchFee",
+            "42161:0xec0ded087ee6c55991bb4d4567ca1134c5353ed6": "a PolymerProver: its proof is relayed through Polymer's prover API rather than paid for in prove, so it has no fetchFee"
+          },
+          "error InsufficientFee(uint256)": {
+            "1:0xec0ded087ee6c55991bb4d4567ca1134c5353ed6": "a PolymerProver: it charges no fee, so it never reverts InsufficientFee",
+            "10:0xec0ded087ee6c55991bb4d4567ca1134c5353ed6": "a PolymerProver: it charges no fee, so it never reverts InsufficientFee",
+            "130:0xec0ded087ee6c55991bb4d4567ca1134c5353ed6": "a PolymerProver: it charges no fee, so it never reverts InsufficientFee",
+            "137:0xec0ded087ee6c55991bb4d4567ca1134c5353ed6": "a PolymerProver: it charges no fee, so it never reverts InsufficientFee",
+            "143:0xec0ded087ee6c55991bb4d4567ca1134c5353ed6": "a PolymerProver: it charges no fee, so it never reverts InsufficientFee",
+            "5042:0xec0ded087ee6c55991bb4d4567ca1134c5353ed6": "a PolymerProver: it charges no fee, so it never reverts InsufficientFee",
+            "8453:0xec0ded087ee6c55991bb4d4567ca1134c5353ed6": "a PolymerProver: it charges no fee, so it never reverts InsufficientFee",
+            "9745:0xec0ded087ee6c55991bb4d4567ca1134c5353ed6": "a PolymerProver: it charges no fee, so it never reverts InsufficientFee",
+            "42161:0xec0ded087ee6c55991bb4d4567ca1134c5353ed6": "a PolymerProver: it charges no fee, so it never reverts InsufficientFee"
+          }
+        }
       }
     },
     "eigenlayer": {

@@ -492,6 +492,497 @@
       ]
     },
     {
+      "type": "function",
+      "name": "fulfillAndProve",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "intentHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "route",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "salt",
+              "type": "bytes32"
+            },
+            {
+              "name": "deadline",
+              "type": "uint64"
+            },
+            {
+              "name": "portal",
+              "type": "address"
+            },
+            {
+              "name": "nativeAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "tokens",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "token",
+                  "type": "address"
+                },
+                {
+                  "name": "amount",
+                  "type": "uint256"
+                }
+              ]
+            },
+            {
+              "name": "calls",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "target",
+                  "type": "address"
+                },
+                {
+                  "name": "data",
+                  "type": "bytes"
+                },
+                {
+                  "name": "value",
+                  "type": "uint256"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "rewardHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "claimant",
+          "type": "bytes32"
+        },
+        {
+          "name": "prover",
+          "type": "address"
+        },
+        {
+          "name": "sourceChainDomainID",
+          "type": "uint64"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes[]"
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "prove",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "prover",
+          "type": "address"
+        },
+        {
+          "name": "sourceChainDomainID",
+          "type": "uint64"
+        },
+        {
+          "name": "intentHashes",
+          "type": "bytes32[]"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "withdraw",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "destination",
+          "type": "uint64"
+        },
+        {
+          "name": "routeHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "reward",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "deadline",
+              "type": "uint64"
+            },
+            {
+              "name": "creator",
+              "type": "address"
+            },
+            {
+              "name": "prover",
+              "type": "address"
+            },
+            {
+              "name": "nativeAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "tokens",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "token",
+                  "type": "address"
+                },
+                {
+                  "name": "amount",
+                  "type": "uint256"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "batchWithdraw",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "destinations",
+          "type": "uint64[]"
+        },
+        {
+          "name": "routeHashes",
+          "type": "bytes32[]"
+        },
+        {
+          "name": "rewards",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "deadline",
+              "type": "uint64"
+            },
+            {
+              "name": "creator",
+              "type": "address"
+            },
+            {
+              "name": "prover",
+              "type": "address"
+            },
+            {
+              "name": "nativeAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "tokens",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "token",
+                  "type": "address"
+                },
+                {
+                  "name": "amount",
+                  "type": "uint256"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "refund",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "destination",
+          "type": "uint64"
+        },
+        {
+          "name": "routeHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "reward",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "deadline",
+              "type": "uint64"
+            },
+            {
+              "name": "creator",
+              "type": "address"
+            },
+            {
+              "name": "prover",
+              "type": "address"
+            },
+            {
+              "name": "nativeAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "tokens",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "token",
+                  "type": "address"
+                },
+                {
+                  "name": "amount",
+                  "type": "uint256"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "refundTo",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "destination",
+          "type": "uint64"
+        },
+        {
+          "name": "routeHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "reward",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "deadline",
+              "type": "uint64"
+            },
+            {
+              "name": "creator",
+              "type": "address"
+            },
+            {
+              "name": "prover",
+              "type": "address"
+            },
+            {
+              "name": "nativeAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "tokens",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "token",
+                  "type": "address"
+                },
+                {
+                  "name": "amount",
+                  "type": "uint256"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "refundee",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "cancel",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "intentHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "route",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "salt",
+              "type": "bytes32"
+            },
+            {
+              "name": "deadline",
+              "type": "uint64"
+            },
+            {
+              "name": "portal",
+              "type": "address"
+            },
+            {
+              "name": "nativeAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "tokens",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "token",
+                  "type": "address"
+                },
+                {
+                  "name": "amount",
+                  "type": "uint256"
+                }
+              ]
+            },
+            {
+              "name": "calls",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "target",
+                  "type": "address"
+                },
+                {
+                  "name": "data",
+                  "type": "bytes"
+                },
+                {
+                  "name": "value",
+                  "type": "uint256"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "rewardHash",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "cancelAndProve",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "intentHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "route",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "salt",
+              "type": "bytes32"
+            },
+            {
+              "name": "deadline",
+              "type": "uint64"
+            },
+            {
+              "name": "portal",
+              "type": "address"
+            },
+            {
+              "name": "nativeAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "tokens",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "token",
+                  "type": "address"
+                },
+                {
+                  "name": "amount",
+                  "type": "uint256"
+                }
+              ]
+            },
+            {
+              "name": "calls",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "target",
+                  "type": "address"
+                },
+                {
+                  "name": "data",
+                  "type": "bytes"
+                },
+                {
+                  "name": "value",
+                  "type": "uint256"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "rewardHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "prover",
+          "type": "address"
+        },
+        {
+          "name": "sourceChainDomainID",
+          "type": "uint64"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "version",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
       "type": "event",
       "name": "IntentPublished",
       "inputs": [
