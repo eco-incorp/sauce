@@ -5,6 +5,8 @@
  * transaction back off a chain is `cli.e2e.test.ts`.
  */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -498,6 +500,116 @@ describe("sauce verify", () => {
 });
 
 // ---------------------------------------------------------------------------------------------
+
+describe("a transaction read by hash: what its receipt says", () => {
+  // A JSON-RPC endpoint on loopback serving one Base transaction — a settle cook — with whichever
+  // receipt a test sets: mined, reverted, not yet mined, or an error reading it.
+  const HASH = `0x${"ab".repeat(32)}` as Hex;
+  const BLOCK = `0x${"cd".repeat(32)}`;
+  let receipt: "success" | "reverted" | "none" | "error" = "success";
+  let server: Server;
+  let url: string;
+
+  beforeAll(async () => {
+    const input = v12Pot.encodeCook(ENGINE, settlePayload(SETTLE_VECTORS[0]!.args));
+    const pot = v12PredictPot(OWNER);
+    const answer = (method: string): { result?: unknown; error?: unknown } => {
+      switch (method) {
+        case "eth_chainId":
+          return { result: "0x2105" };
+        case "eth_getTransactionByHash":
+          return {
+            result: {
+              hash: HASH,
+              nonce: "0x1",
+              blockHash: BLOCK,
+              blockNumber: "0x10",
+              transactionIndex: "0x0",
+              from: OWNER.toLowerCase(),
+              to: pot.toLowerCase(),
+              value: "0x0",
+              gas: "0x100000",
+              gasPrice: "0x1",
+              input,
+              type: "0x0",
+              chainId: "0x2105",
+              v: "0x1b",
+              r: "0x1",
+              s: "0x1",
+            },
+          };
+        case "eth_getTransactionReceipt":
+          if (receipt === "error") return { error: { code: -32000, message: "header not found" } };
+          if (receipt === "none") return { result: null };
+
+          return {
+            result: {
+              transactionHash: HASH,
+              transactionIndex: "0x0",
+              blockHash: BLOCK,
+              blockNumber: "0x10",
+              from: OWNER.toLowerCase(),
+              to: pot.toLowerCase(),
+              cumulativeGasUsed: "0x5208",
+              gasUsed: "0x5208",
+              contractAddress: null,
+              logs: [],
+              logsBloom: `0x${"00".repeat(256)}`,
+              status: receipt === "success" ? "0x1" : "0x0",
+              effectiveGasPrice: "0x1",
+              type: "0x0",
+            },
+          };
+      }
+
+      return { error: { code: -32601, message: `no ${method}` } };
+    };
+    server = createServer((request, response) => {
+      let body = "";
+      request.on("data", (chunk) => (body += chunk));
+      request.on("end", () => {
+        const { id, method } = JSON.parse(body) as { id: number; method: string };
+        response.setHeader("content-type", "application/json");
+        response.end(JSON.stringify({ jsonrpc: "2.0", id, ...answer(method) }));
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+  afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
+
+  it("`inspect` says pending only when there is no receipt, and reports a failure to read one", async () => {
+    receipt = "none";
+    const pending = json(await sauce("inspect", HASH, "--rpc-url", url, "--json"));
+    expect(pending).toMatchObject({ status: "pending", call: "Pot.cook" });
+    receipt = "error";
+    const failed = await sauce("inspect", HASH, "--rpc-url", url);
+    expect(failed.code).toBe(1);
+    expect(failed.stderr).toMatch(/reading the transaction's receipt failed/);
+    receipt = "success";
+    expect(json(await sauce("inspect", HASH, "--rpc-url", url, "--json"))).toMatchObject({
+      status: "success",
+    });
+  });
+
+  it("`verify` accepts a mined settle, and rejects one that reverted or is not mined", async () => {
+    receipt = "success";
+    expect(json(await sauce("verify", HASH, "--rpc-url", url, "--json"))).toMatchObject({
+      valid: true,
+      hash: HASH,
+      engine: ENGINE,
+    });
+    for (const [state, code] of [
+      ["reverted", "TX_FAILED"],
+      ["none", "TX_PENDING"],
+    ] as const) {
+      receipt = state;
+      const run = await sauce("verify", HASH, "--rpc-url", url, "--json");
+      expect(run.code).toBe(1);
+      expect(JSON.parse(run.stdout)).toMatchObject({ valid: false, code });
+    }
+  });
+});
 
 describe("decodeEntryArguments: encodeEntryArguments, inverted", () => {
   const params = [

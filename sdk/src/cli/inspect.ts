@@ -36,7 +36,7 @@ import type { CompiledSauceProgram } from "../routes/sauce-route.js";
 import type { Reward, Route, UniversalAddress } from "../routes/types.js";
 import { validateSettleProgram } from "../verify/decode.js";
 import { CliError } from "./args.js";
-import { connect } from "./chain.js";
+import { connect, receiptOf } from "./chain.js";
 import type { CommandOutput } from "./commands.js";
 
 /** What a description needs to know beyond the bytes. */
@@ -573,7 +573,7 @@ export async function inspectCommand(input: InspectInput): Promise<CommandOutput
       `no transaction ${input.hex} on ${input.chain.slug}: ${(error as { shortMessage?: string }).shortMessage ?? "not found"}`,
     );
   }
-  const receipt = await client.getTransactionReceipt({ hash: input.hex }).catch(() => undefined);
+  const receipt = await receiptOf(client, input.hex);
   const part = describeData(transaction.input, input);
   const status = receipt === undefined ? "pending" : receipt.status;
   const from = getAddress(transaction.from);

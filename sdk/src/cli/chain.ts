@@ -13,10 +13,12 @@ import {
   getAddress,
   hexToBytes,
   http,
+  TransactionReceiptNotFoundError,
   type Abi,
   type Address,
   type Hex,
   type PublicClient,
+  type TransactionReceipt,
 } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
@@ -96,6 +98,22 @@ export async function connect(url: string, chain: CanonicalChain): Promise<Publi
   }
 
   return client;
+}
+
+/**
+ * A transaction's receipt, or `undefined` while it has none (pending, or dropped). Any other failure
+ * to read it is an error, not a pending transaction.
+ */
+export async function receiptOf(
+  client: PublicClient,
+  hash: Hex,
+): Promise<TransactionReceipt | undefined> {
+  try {
+    return await client.getTransactionReceipt({ hash });
+  } catch (error) {
+    if (error instanceof TransactionReceiptNotFoundError) return undefined;
+    throw new CliError(`reading the transaction's receipt failed: ${reasonOf(error)}`);
+  }
 }
 
 /** The canonical chain `url` serves, for a command given an endpoint and no `--chain`. */

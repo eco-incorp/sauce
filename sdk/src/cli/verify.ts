@@ -6,7 +6,9 @@
  * A rejection exits 1 and names the SDK's `SettleFailureCode`. Two more checks are the CLI's own,
  * because `/verify` leaves them to its caller and a command line has no caller to leave them to:
  * the engine a cook names must be the released one (or one named with `--engine`) — `UNKNOWN_ENGINE`
- * — and an intent must carry a settle cook at all — `NO_SETTLE`.
+ * — and an intent must carry a settle cook at all — `NO_SETTLE`. A transaction hash is refused
+ * when the transaction reverted (`TX_FAILED`) or has no receipt yet (`TX_PENDING`): it settled
+ * nothing, whatever its calldata carries.
  */
 import { decodeFunctionData, getAddress, type Address, type Hex } from "viem";
 
@@ -24,7 +26,7 @@ import {
 import { extractEvmSettleFromCalls } from "../verify/intent.js";
 import { SETTLE_WIRE } from "../verify/wire.js";
 import { CliError, UsageError } from "./args.js";
-import { connect } from "./chain.js";
+import { connect, receiptOf } from "./chain.js";
 import type { CommandOutput } from "./commands.js";
 
 /** `--pin <hash:bytes>`: a program hash and the length the payload splits at. */
@@ -142,6 +144,7 @@ const released = (): Address => getAddress(v12EngineAddress());
 export async function verifyCommand(input: VerifyInput): Promise<CommandOutput> {
   let data = input.hex;
   let transaction: Record<string, unknown> = {};
+  let landed: Rejected | undefined;
   if (input.rpcUrl !== undefined) {
     if (input.chain === undefined) throw new CliError("verify: a transaction hash needs its chain");
     const client = await connect(input.rpcUrl, input.chain);
@@ -158,6 +161,17 @@ export async function verifyCommand(input: VerifyInput): Promise<CommandOutput> 
         `no transaction ${input.hex} on ${input.chain.slug}: ${(error as { shortMessage?: string }).shortMessage ?? "not found"}`,
       );
     }
+    // A transaction that reverted settled nothing, and one not yet mined has settled nothing yet.
+    const receipt = await receiptOf(client, input.hex);
+    landed =
+      receipt === undefined
+        ? new Rejected(
+            "TX_PENDING",
+            "the transaction has no receipt yet: it settled nothing so far",
+          )
+        : receipt.status !== "success"
+          ? new Rejected("TX_FAILED", "the transaction reverted, so it settled nothing")
+          : undefined;
   }
   const accepted: ProgramPin[] = [
     { hash: SETTLE_WIRE.PROGRAM_HASH as Hex, bytes: SETTLE_WIRE.PROGRAM_BYTES },
@@ -165,6 +179,7 @@ export async function verifyCommand(input: VerifyInput): Promise<CommandOutput> 
   ];
   const engines = [released(), ...input.engines.map((engine) => getAddress(engine))];
   try {
+    if (landed !== undefined) throw landed;
     const found = findSettle(data, accepted);
     if (found.engine !== undefined && !engines.includes(found.engine)) {
       throw new Rejected(
