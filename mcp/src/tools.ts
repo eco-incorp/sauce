@@ -192,6 +192,15 @@ export const PROGRAM = {
     .describe(
       "For intents that run a program on their destination: that chain's Kitchen fee, in wei.",
     ),
+  intentFundVia: z
+    .enum(["transfer", "publishAndFund"])
+    .optional()
+    .describe(
+      "For intents the program opens: how their reward reaches the intent's vault. transfer " +
+        "(default) pays it into the vault, then Portal.publish; publishAndFund approves the " +
+        "Portal, then Portal.publishAndFund, which emits IntentFunded (for an intent built from " +
+        "a solver's quote).",
+    ),
 };
 
 const POT = {
@@ -296,10 +305,11 @@ function intentsOf(
     | "intentCreator"
     | "intentProver"
     | "intentExecutionFee"
+    | "intentFundVia"
   >,
 ) {
   const { intentDeadline, intentRewardDeadline, intentCreator, intentProver } = args;
-  const { intentExecutionFee } = args;
+  const { intentExecutionFee, intentFundVia } = args;
 
   return {
     ...(intentDeadline === undefined
@@ -330,6 +340,7 @@ function intentsOf(
             integerText(intentExecutionFee, "intentExecutionFee"),
           ),
         }),
+    ...(intentFundVia === undefined ? {} : { fundVia: intentFundVia }),
   };
 }
 
@@ -1386,16 +1397,21 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       title: "Build an intent's unsigned publish transactions",
       description:
         "For a program that only opens cross-chain intents whose amounts are fixed when it is " +
-        "built (every amount a define or a literal): the source chain's transactions that " +
-        "publish and fund each intent from a wallet — each reward token's approve to the " +
-        "Portal, then Portal.publishAndFund — with each intent's hash and its `record`, the " +
-        "intent in full, which sauce_intent_status and the other intent tools take. Send them in order from " +
-        "the wallet that funds the reward. With `from` and an endpoint, the approvals are " +
-        "planned against that wallet's standing allowance (a USDT-style reset to 0 first where " +
-        "needed). dryRun rehearses them together through eth_simulateV1 from `from` instead, " +
-        "assumeBalance giving that wallet balances for the rehearsal only. A program that " +
-        "measures an amount on chain, or does anything besides open intents, is refused: run " +
-        `it on a Pot (sauce_tx) instead. ${UNSIGNED}`,
+        "built (every amount a define or a literal): the source chain's transactions that fund " +
+        "and publish each intent from a wallet — each reward token transferred to the intent's " +
+        "vault (and a native reward sent to it), then Portal.publish, with no approval — with " +
+        "each intent's hash, vault and `record`, the intent in full, which sauce_intent_status " +
+        "and the other intent tools take. Send them in order from the wallet that funds the " +
+        "reward, the transfers first, and publish once they have landed. The vault is the " +
+        "package's own computation; with `from` and an endpoint it is also read from the Portal " +
+        "and must agree, or the tool refuses, and only what the vault does not hold yet is " +
+        "transferred. intentFundVia publishAndFund gives each reward token's approve to the " +
+        "Portal (a USDT-style reset to 0 first where needed), then Portal.publishAndFund, " +
+        "instead. dryRun rehearses them together through eth_simulateV1 from `from` and reports " +
+        "each intent's isIntentFunded after them (intents[].funded), assumeBalance giving that " +
+        "wallet balances for the rehearsal only. A program that measures an amount on chain, or " +
+        "does anything besides open intents, is refused: run it on a Pot (sauce_tx) instead. " +
+        UNSIGNED,
       input: {
         ...PROGRAM,
         from: z
@@ -1403,8 +1419,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           .max(64)
           .optional()
           .describe(
-            "The 0x wallet that publishes and funds: plans exact approvals, and is dryRun's " +
-              "sender.",
+            "The 0x wallet that funds and publishes: with an endpoint, the vault is read and " +
+              "only what it lacks is transferred (or, with intentFundVia publishAndFund, the " +
+              "approvals are planned against its allowance); dryRun's sender.",
           ),
         dryRun: z
           .boolean()

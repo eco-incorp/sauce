@@ -83,13 +83,15 @@ npx sauce intent import <tx-hash> --chain <source> --config sauce.config.json
 
 - `publish` with no file asks, at a terminal, for the chains, the token and amount delivered and
   to whom, the reward (suggested: what is delivered plus a margin over the solver's destination
-  costs), the deadlines and the prover, writes the intent as a `.sauce.ts` file, rehearses
-  publishing and filling it, and publishes it once approved. Each question has a flag
-  (`--source`, `--destination`, `--token`, `--amount`, `--recipient`, `--reward-token`,
-  `--reward`, `--prover`, `--fill-deadline`, `--reward-deadline`), so it runs without a terminal.
+  costs), the deadlines, the prover and how the reward is funded (a transfer to the vault by
+  default), writes the intent as a `.sauce.ts` file, rehearses publishing and filling it, and
+  publishes it once approved. Each question has a flag (`--source`, `--destination`, `--token`,
+  `--amount`, `--recipient`, `--reward-token`, `--reward`, `--prover`, `--fill-deadline`,
+  `--reward-deadline`, `--intent-fund-via`), so it runs without a terminal.
 - `status` prints the intent's state on both chains (unfunded, funded, filled, cancelled, proven,
   cancelProven, claimed, refunded), its deadlines, and whether each next step can be taken now,
-  with why not and from when.
+  with why not and from when. An intent funded by a transfer into its vault counts as funded,
+  though the Portal's status for it stays Initial.
 - `fill --send` fills it as a solver, from the signer: rehearsed first on the signer's real
   balances and not sent if it reverts, and what it spends (each delivered token, and the value)
   shown for approval (`--auto-approve` approves). It sends the approvals (zero first where a smaller one
@@ -136,19 +138,30 @@ The file is compiled for the **source** chain, the one that pays the reward (`--
 
 ## Publishing and funding
 
-| Way                                       | What is sent                                                               | Emits                             | Choose it when                                                                      |
-| ----------------------------------------- | -------------------------------------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------- |
-| (a) From a wallet, `sauce intent publish` | `approve(Portal, reward)` per token, then `publishAndFund`                 | `IntentPublished`, `IntentFunded` | every amount is known when you build it, and a wallet pays                          |
-| (b) From a Pot, `sauce run`               | the same, by the Pot, inside the cook                                      | `IntentPublished`, `IntentFunded` | an amount is measured on chain, or the intent must open atomically with other steps |
-| (c) Transfer into the vault, then publish | a token transfer to `intentVaultAddress(...)`, then `publish`: no approval | `IntentPublished`                 | an intent solvers discover from its publication; no allowance, USDT needs nothing   |
+| Way                                       | What is sent                                                                                     | Emits                             | Choose it when                                                                      |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------- | ----------------------------------------------------------------------------------- |
+| (a) From a wallet, `sauce intent publish` | a transfer of each reward token to the intent's vault, then `publish`: no approval               | `IntentPublished`                 | every amount is known when you build it, and a wallet pays                          |
+| (b) From a Pot, `sauce run`               | the same, by the Pot, inside the cook, with the vault read from the Portal                       | `IntentPublished`                 | an amount is measured on chain, or the intent must open atomically with other steps |
+| (c) Transfer into the vault, by hand      | a token transfer to `intentVaultAddress(...)`, then `publish`, for an intent you encode yourself | `IntentPublished`                 | the intent was not built from a file the package compiles                           |
+| `--intent-fund-via publishAndFund`        | (a) or (b) with `approve(Portal, reward)` per token, then `publishAndFund`                       | `IntentPublished`, `IntentFunded` | an intent built from a solver's quote (below)                                       |
+
+Funding by transfer needs no approval, so no allowance is left standing and USDT needs nothing
+special. The vault counts whatever it holds, so `isIntentFunded` is true from the moment the
+transfer lands; the intent's status stays Initial (only `publishAndFund` or `fund` set Funded), and
+`isIntentFunded`, the check solvers make, accepts either. The reward always goes into the vault
+**before** `publish` is sent, so a solver that sees `IntentPublished` finds the intent funded.
 
 **(a) From a wallet.** `sauce intent publish` builds each intent before anything runs, so every amount
 must be a literal, a define or a top-level `const` of a literal, and the file may do nothing but
 open intents (a file with an amount measured or computed on chain is refused, with `sauce run` named
-instead). The wallet approves each reward token to the
-**Portal** for exactly the reward (with an endpoint, a smaller allowance already standing is reset
-to zero first, as USDT requires) and calls `publishAndFund(destination, route, reward, false)`,
-which pulls the reward into the vault and marks the intent Funded.
+instead). For each intent it computes the vault from the
+Portal's address and the intent and, with an endpoint, reads it from the Portal's
+`intentVaultAddress`: the two must agree, or nothing is sent. The wallet then transfers each reward
+token to the vault (and sends a native reward to it), only what the vault does not hold yet, and
+calls `publish(destination, route, reward)` once the Portal reports the intent funded. A token whose
+transfer returns `false` stops it there, before the intent is published, with what was paid still
+in the vault: top it up and run it again, or `refund` after the deadline. A second run that finds
+the vault funded only publishes.
 
 ```sh
 npx sauce intent publish pay-on-arbitrum.sauce.ts --chain base --config sauce.config.json \
@@ -159,18 +172,21 @@ npx sauce intent publish pay-on-arbitrum.sauce.ts --chain base --from <address> 
   --intent-deadline <unix seconds> --intent-creator <address>
 ```
 
-- `--dry-run` rehearses the approve and `publishAndFund` together from the wallet and sends
-  nothing; `--assume-balance USDC:1` (whole tokens) gives the wallet the reward for the rehearsal
-  only, so a wallet that does not hold it yet can rehearse. Without `--dry-run`,
-  `--keystore <keystore>` in place of `--from` signs and sends them.
+- `--dry-run` rehearses the transfers and `publish` together from the wallet, then reports what
+  `isIntentFunded` returns after them, and sends nothing; `--assume-balance USDC:1` (whole tokens)
+  gives the wallet the reward for the rehearsal only, so a wallet that does not hold it yet can
+  rehearse. Without `--dry-run`, `--keystore <keystore>` in place of `--from` signs and sends them.
 - `--format json` (or `cast`) with `--from` and no signer prints the transactions, unsigned, for that
-  wallet to send in order. With no endpoint each approve is planned without reading the standing
-  allowance; with one, it reads it.
+  wallet to send in order, transfers first, with each intent's `vault`. With no endpoint the vault
+  is the package's own computation and each transfer is for the whole reward; with one, the vault
+  is also read from the Portal and only what it does not hold yet is transferred. Send `publish`
+  only once the transfers have landed.
 
 **(b) From a Pot.** `sauce run` cooks the file on your Pot, and opening the intent is one of its
-steps: the Pot approves the Portal (zero first when an allowance stands) and calls `publishAndFund`
-in the same transaction as everything else, so nothing is published unless the whole cook
-succeeds. Values measured while it runs can flow into the intent: in
+steps: in the same transaction as everything else, the Pot reads the intent's vault from the Portal
+(`intentVaultAddress` over the very bytes it then publishes), transfers each reward token there,
+sends a native reward, and calls `publish`, so nothing is published unless the whole cook succeeds,
+and a token whose transfer returns `false` reverts it. Values measured while it runs can flow into the intent: in
 `const amount = USDC.balanceOf(ctx.self())`, `amount` does not exist until the program runs, and
 using it inside the braces, in the delivery or in the reward is enough. The package encodes the
 intent with a slot for it, and the program writes the measured value in before it publishes. Any
@@ -182,18 +198,15 @@ npx sauce run cross-chain.sauce.ts --chain base --config sauce.config.json --key
   --intent-execution-fee <wei>
 ```
 
-**(c) Transfer into the vault, then publish.** The vault counts whatever it holds, so the reward can
-be sent straight to it and the intent published after: no approval, so no allowance left standing
-and nothing special for USDT, and `isIntentFunded` is true from the moment the transfer lands. The
-intent's status stays Initial (only `publishAndFund` or `fund` set Funded), and `isIntentFunded`,
-the check solvers make, accepts either. From a Pot, do both in one cook, with the program reading the vault from the Portal
-itself so it cannot be wrong:
+**(c) Transfer into the vault, by hand.** (a) and (b) do this for every intent a file opens. For an
+intent encoded some other way, do the same in one cook, with the program reading the vault from the
+Portal itself so it cannot be wrong:
 [examples/fund-by-transfer.sauce.ts](examples/fund-by-transfer.sauce.ts) takes the intent as
 `publish`'s three arguments, transfers each reward token to
 `intentVaultAddress(destination, route, reward)` and calls `publish(destination, route, reward)`,
-which returns the intent hash and the vault. Those three arguments are the first three of the
-`publishAndFund` that `sauce intent publish … --from <address> --format json` prints for the file; decode
-them with its signature (in [references/portal.md](references/portal.md)).
+which returns the intent hash and the vault. For an intent file, those three arguments are the
+arguments of the `publish` that `sauce intent publish … --from <address> --format json` prints; decode them
+with its signature (in [references/portal.md](references/portal.md)).
 
 ```sh
 npx sauce run fund-by-transfer.sauce.ts --chain base --config sauce.config.json \
@@ -203,14 +216,19 @@ npx sauce run fund-by-transfer.sauce.ts --chain base --config sauce.config.json 
 - **From a wallet**, it is two transactions: **transfer first, then publish**, so a solver that sees
   `IntentPublished` finds the intent funded. If the publish fails or is never sent, nothing is lost:
   publish later (the vault still holds the reward), or `refund` after the deadline.
-- **What the CLI emits today**: `sauce intent publish` and `sauce run` fund every intent with the approve
-  and `publishAndFund` of (a) and (b); (c) is written by hand, as in the example.
-- A native reward (`reward.nativeAmount`) is native coin sent to the vault the same way; the example
-  funds tokens only and refuses a native reward.
+- **What the CLI emits**: `sauce intent publish` and `sauce run` fund every intent this way by default, as
+  (a) and (b) describe; `--intent-fund-via publishAndFund` gives the approve and `publishAndFund`
+  instead.
+- A native reward (`reward.nativeAmount`) is native coin sent to the vault the same way, by
+  `sauce intent publish` and `sauce run` alike; the example funds tokens only and refuses a native reward.
 
 **Quoted intents.** A solver that quoted an intent marks its quote funded when it sees
 `IntentFunded`, which only `publishAndFund` and `fund` emit. For an intent built from a solver's
-quote, fund it with `publishAndFund`, (a) or (b), not by transfer.
+quote, fund it with `publishAndFund`: (a) or (b) with `--intent-fund-via publishAndFund`, not by
+transfer. The wallet then approves each reward token to the **Portal** for exactly the reward (with
+an endpoint, a smaller allowance already standing is reset to zero first, as USDT requires), and
+`publishAndFund(destination, route, reward, false)` pulls the reward into the same vault and marks
+the intent Funded; from a Pot, the same happens inside the cook.
 
 `sauce inspect <file> --chain <chain>` with the same defines and intent flags prints each intent
 the file opens: its destination, hashes, the route's calls and the reward, with every measured value
@@ -315,11 +333,11 @@ Arbitrum(
 
 Each level is a separate fulfilment by a solver, later, on its own chain: a failure on a later hop
 does not undo an earlier one. The child is published and funded **by the parent's body**, as (b)
-above: when the Arbitrum level runs, the shared Pot there approves Arbitrum's Portal and calls
-`publishAndFund`, paying the Optimism level's reward from what it holds, in Arbitrum's USDC, so the
-child is published like any other intent and any solver can discover it. Each level's deadline must
-be no earlier than its parent's. (The TypeScript cascade builder, `.nest()` in `sauce-typescript`,
-instead funds a child by a transfer into its vault by default, with no publication of its own, and
+above: when the Arbitrum level runs, the shared Pot there pays the Optimism level's reward into its
+vault on Arbitrum's Portal from what it holds, in Arbitrum's USDC, and calls `publish`, so the child
+is published like any other intent and any solver can discover it. Each level's deadline must be no
+earlier than its parent's. (The TypeScript cascade builder, `.nest()` in `sauce-typescript`, also
+funds a child by a transfer into its vault by default, but with no publication of its own, and
 takes `publishAndFund` as an option.)
 
 ## What the compile supplies, and what you pass
@@ -369,8 +387,8 @@ prover deployed on both sides.
 
 ## Rehearse both sides before a solver does
 
-- **The source side**: `sauce intent publish --dry-run --assume-balance …` (above) rehearses the approve and
-  `publishAndFund`; `sauce simulate` rehearses a file run from a Pot.
+- **The source side**: `sauce intent publish --dry-run --assume-balance …` (above) rehearses the transfers
+  into the vault and `publish`; `sauce simulate` rehearses a file run from a Pot.
 - **The fill, on the destination**: the body runs there, when a solver fills the intent, and that is
   where a swap misses its minimum or a refund fails. Rehearse it with `sauce intent fill`, the same file
   and flags, before publishing; it signs nothing and sends nothing:
@@ -412,7 +430,7 @@ npx sauce simulate one-pool-body.sauce.ts --chain base --owner <address> \
   (`anvil --fork-url <destination endpoint>`), with any client:
   1. Get the intent: `sauce inspect <file> --chain <source> --json`, with the same defines and
      intent flags, prints each intent's `intentHash`, `routeHash`, `rewardHash`, route and reward;
-     the raw route bytes are the `route` argument of the `publishAndFund` that
+     the raw route bytes are the `route` argument of the `publish` that
      `sauce intent publish <file> … --from <address> --format json` prints (their keccak-256 is
      `routeHash`).
   2. Make sure the shared Pot exists (above).

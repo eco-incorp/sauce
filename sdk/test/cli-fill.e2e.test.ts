@@ -5,10 +5,10 @@
  * creation code) at the address the SDK records for Base, so the CLI runs with no override.
  *
  * THE PORTAL IS PUT IN PLACE, NOT DEPLOYED THERE (`cli-anvil.ts#placePortal`, which says why):
- * the fixture is deployed wherever it lands, then both runtimes are copied to the registry's
- * Portal and the Executor derived from it, with exactly the two immutables that name each other
- * rewritten. Its chain id (8453, anvil's), its vault implementation and its EIP-712 cache are
- * untouched. `executor()` read back through the copy is the Executor the SDK derives, and every
+ * the fixture is deployed wherever it lands, then its runtime, its Executor's and its vault
+ * implementation's are copied to the registry's Portal and the two addresses derived from it, with
+ * the addresses they name each other by rewritten. Its chain id (8453, anvil's) and its EIP-712
+ * cache are untouched. `executor()` read back through the copy is the Executor the SDK derives, and every
  * fulfill below runs the copy's real `_fulfill`: the hash check, the token pulls,
  * `Executor.execute` and its `onlyPortal`.
  *
@@ -24,7 +24,11 @@ import { getAddress, pad, parseAbi, type Address, type Hex } from "viem";
 
 import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { DEFAULT_SOLVER } from "../src/cli/fill.js";
-import { ecoRoutesExecutorOf, ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
+import {
+  ecoRoutesExecutorOf,
+  ecoRoutesPortal,
+  ecoRoutesVaultImplementationOf,
+} from "../src/protocols/eco-routes/lookup.js";
 import {
   describeEvm,
   FEE,
@@ -126,7 +130,11 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
     usdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
     // The real Portal, deployed wherever it lands, then moved to the registry's address.
     const placed = await placePortal(base);
-    expect(placed).toEqual({ portal, executor });
+    expect(placed).toEqual({
+      portal,
+      executor,
+      vaultImplementation: ecoRoutesVaultImplementationOf(portal),
+    });
     expect(
       await base.publicClient.readContract({
         address: portal,

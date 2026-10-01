@@ -35,6 +35,8 @@ import { connect, kitchenFee } from "./chain.js";
 import { nativeSymbol, tokenInfo } from "./effects.js";
 import { proverPlan } from "./lifecycle.js";
 import { askChoice, askText, missingFlags, type Ask } from "./prompt.js";
+import { parseFundVia } from "./args.js";
+import type { IntentFundVia } from "../routes/portal.js";
 
 /** What the flags gave; the rest is asked. */
 export interface CreateGiven {
@@ -48,6 +50,8 @@ export interface CreateGiven {
   readonly prover?: string;
   readonly fillDeadline?: string;
   readonly rewardDeadline?: string;
+  /** `--intent-fund-via`: how the reward reaches its vault. Default `transfer`. */
+  readonly fundVia?: string;
   readonly out?: string;
 }
 
@@ -73,6 +77,7 @@ export interface Created {
   readonly deadline: bigint;
   readonly rewardDeadline: bigint;
   readonly prover: Address;
+  readonly fundVia: IntentFundVia;
   readonly creator?: Address;
   /** For a person: what was chosen, and why the defaults are what they are. */
   readonly summary: readonly string[];
@@ -543,6 +548,29 @@ export async function createIntent(input: CreateInput): Promise<Created> {
     rewardDeadlineRaw === undefined
       ? undefined
       : parseWhen("reward-deadline", rewardDeadlineRaw, input.now);
+  // How the reward reaches its vault. It has a default, so with no terminal and no flag it is
+  // that default rather than a missing flag.
+  const fundViaRaw =
+    input.given.fundVia ??
+    (input.ask === undefined
+      ? undefined
+      : await askChoice(
+          input.ask,
+          "Funding: how the reward reaches the intent's vault:",
+          [
+            {
+              label: "transfer each reward token to the vault, then publish (no approval)",
+              value: "transfer",
+            },
+            {
+              label:
+                "approve the Portal, then publishAndFund (records it Funded and emits IntentFunded)",
+              value: "publishAndFund",
+            },
+          ],
+          0,
+        ));
+  const fundVia = parseFundVia(fundViaRaw ?? "transfer");
   if (missing.length > 0) throw missingFlags("sauce intent publish", missing);
   if (deadline! <= input.now) throw new UsageError("the fill deadline is already past");
   if (rewardDeadline! < deadline!) {
@@ -566,7 +594,8 @@ export async function createIntent(input: CreateInput): Promise<Created> {
     "Written by `sauce intent publish`. Publish it again with the same deadlines and prover:",
     `  sauce intent publish ${out} --chain ${source!.slug} --config <file> --keystore <path> \\`,
     `    --intent-deadline ${deadline} --intent-reward-deadline ${rewardDeadline} \\`,
-    `    --intent-prover ${prover}${input.signer === undefined ? "" : ` --intent-creator ${input.signer}`}`,
+    `    --intent-prover ${prover}${input.signer === undefined ? "" : ` --intent-creator ${input.signer}`}` +
+      (fundVia === "transfer" ? "" : ` --intent-fund-via ${fundVia}`),
   ];
   const text = intentText({
     destination: destination!,
@@ -587,12 +616,16 @@ export async function createIntent(input: CreateInput): Promise<Created> {
     deadline: deadline!,
     rewardDeadline: rewardDeadline!,
     prover: prover!,
+    fundVia,
     ...(input.signer === undefined ? {} : { creator: input.signer }),
     summary: [
       `Wrote ${out}:`,
       ...text.split("\n").map((line) => `  ${line}`),
       `fill by ${new Date(Number(deadline!) * 1000).toISOString()}, refundable from ` +
         `${new Date(Number(rewardDeadline!) * 1000).toISOString()} if no fill is proven`,
+      fundVia === "transfer"
+        ? "funded by a transfer of the reward to its vault, then publish"
+        : "funded by approving the Portal, then publishAndFund",
       ...marginLines,
     ],
   };

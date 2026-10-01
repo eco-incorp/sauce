@@ -133,7 +133,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     await plantHyperProver(arbitrum, arbitrumMailbox);
     await plantHyperProver(base, baseMailbox);
     // The creator holds the rewards; the solver what it delivers, and gas on Base.
-    await arbitrum.mint(arbitrumUsdc, OWNER.address, 10n * REWARD);
+    await arbitrum.mint(arbitrumUsdc, OWNER.address, 20n * REWARD);
     await base.mint(baseUsdc, SOLVER.address, 10n * AMOUNT);
     config = join(work, "sauce.config.json");
     writeFileSync(
@@ -162,6 +162,16 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
         .split("\n")
         .map((line) => (JSON.parse(line) as { event: string }).event);
     expect(events()).toEqual(["published", "funded"]);
+    // Funded by a transfer into its vault, the default: the Portal's status stays Initial, and
+    // isIntentFunded counts it funded, which is what a solver checks.
+    const published = jsonOf(
+      await sauce("intent", "show", hash, "--config", config, "--store", store, "--json"),
+    );
+    expect(published.status).toMatchObject({
+      state: "funded",
+      source: { rewardStatus: "Initial", funded: true },
+      can: { fill: { ok: true } },
+    });
 
     // The rehearsal, by hash: fulfillAndProve with the Hyperlane fee in its value.
     const rehearsal = jsonOf(
@@ -223,6 +233,27 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     const refund = await lifecycle("refund", hash, store, "--private-key", OWNER_KEY);
     expect(refund.code).toBe(1);
     expect(refund.stdout).toContain("the vault holds nothing to refund");
+  }, 240_000);
+
+  it("publishes through publishAndFund with --intent-fund-via, recorded Funded", async () => {
+    const store = mkdtempSync(join(work, "store-"));
+    const start = await now(base);
+    const out = jsonOf(
+      await sauce(
+        ...["intent", "publish", file, ...intentFlags(start + 3605n, start + 7200n)],
+        ...["--intent-fund-via", "publishAndFund"],
+        ...["--rpc-url", arbitrum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
+      ),
+    );
+    expect((out.transactions as Array<{ what: string }>).at(-1)!.what).toBe("publishAndFund");
+    const hash = (out.intents as Array<{ intentHash: Hex }>)[0]!.intentHash;
+    const shown = jsonOf(
+      await sauce("intent", "show", hash, "--config", config, "--store", store, "--json"),
+    );
+    expect(shown.status).toMatchObject({
+      state: "funded",
+      source: { rewardStatus: "Funded", funded: true },
+    });
   }, 240_000);
 
   it("refunds an unfilled intent from the reward's deadline, not before", async () => {
@@ -559,7 +590,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     );
     const hash = (out.intents as Array<{ intentHash: Hex }>)[0]!.intentHash;
     const publishTx = (out.transactions as Array<{ what: string; hash: Hex }>).find(
-      (tx) => tx.what === "publishAndFund",
+      (tx) => tx.what === "publish",
     )!.hash;
     // A fresh store learns it from the transaction alone.
     const fresh = mkdtempSync(join(work, "store-"));

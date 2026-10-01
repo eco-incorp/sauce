@@ -99,11 +99,20 @@ describe("compileSauceProgram", () => {
     const [lowered] = program.intents;
     expect(lowered!.captures).toEqual([]);
     expect(lowered!.destination.slug).toBe("base");
-    // No slot to fill: the program carries the publishAndFund calldata as it is.
-    const portal = routes.publishAndFundTx(lowered!.intent, false, {
-      portal: "0x3333333333333333333333333333333333333333",
+    expect(lowered!.fundVia).toBe("transfer");
+    // No slot to fill: the program carries the publish calldata as it is, and pays the vault itself.
+    const target = { portal: "0x3333333333333333333333333333333333333333" } as const;
+    const publish = routes.publishTx(lowered!.intent, target);
+    expect(bytesToHex(program.bytecode)).toContain(publish.data.slice(10, 200));
+
+    // Opted out, it carries the publishAndFund calldata instead.
+    const optedOut = compileSauceProgram("arbitrum", body, {
+      defines: { RECIPIENT: BigInt(RECIPIENT) },
+      intents: { deadline: 2_000_000_000n, creator: CREATOR, fundVia: "publishAndFund" },
     });
-    expect(bytesToHex(program.bytecode)).toContain(portal.data.slice(10, 200));
+    expect(optedOut.intents[0]!.fundVia).toBe("publishAndFund");
+    const publishAndFund = routes.publishAndFundTx(optedOut.intents[0]!.intent, false, target);
+    expect(bytesToHex(optedOut.bytecode)).toContain(publishAndFund.data.slice(10, 200));
   });
 
   it("reports compact-v1 with its schema, and on Solana the accounts apart from the arguments", () => {

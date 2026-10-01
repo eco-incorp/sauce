@@ -48,6 +48,7 @@ import {
 } from "../src/deployments/index.js";
 import { derivePotPda } from "../src/svm/kitchen.js";
 import { potSalt, SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
+import { ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
 import { v12Kitchen, v12Pot } from "../src/evm/engine.js";
 import * as root from "../src/index.js";
 import * as routes from "../src/routes/index.js";
@@ -1218,17 +1219,47 @@ describe("sauce intent publish, offline", () => {
       intents: { deadline: 2_000_000_000n, creator: CREATOR },
     }).intents;
     expect(out.chainId).toBe(42161);
+    const portal = ecoRoutesPortal("arbitrum");
+    const vault = routes.predictIntentVault(intent!.intent, { portal });
     expect(out.intents).toEqual([
       {
         intentHash: routes.hashIntent(intent!.intent).intentHash,
         destination: "base",
+        fundVia: "transfer",
+        vault,
+        vaultFrom: "derived",
         transactions: [
-          expect.objectContaining({ what: expect.stringMatching(/^approve /) }),
-          expect.objectContaining({ what: "publishAndFund", value: "0" }),
+          {
+            what: expect.stringMatching(/^transfer 0x[0-9a-fA-F]{40} to the vault$/),
+            to: expect.stringMatching(/^0x/),
+            data: routes.vaultTransferTxs(intent!.intent, vault)[0]!.data,
+            value: "0",
+          },
+          {
+            what: "publish",
+            to: portal,
+            data: routes.publishTx(intent!.intent, { portal }).data,
+            value: "0",
+          },
         ],
       },
     ]);
-    expect(run.stderr).toMatch(/Approvals are planned without reading the wallet's allowance/);
+    expect(run.stderr).toMatch(/Each vault is the SDK's offline derivation for the Portal/);
+    expect(run.stderr).not.toMatch(/Approvals are planned/);
+
+    // Opted out, the approvals and publishAndFund, as before.
+    const optedOut = await sauce(
+      ...["intent", "publish", file("bridge.sauce.ts", INTENT), ...FLAGS],
+      ...["--intent-fund-via", "publishAndFund", "--format", "json"],
+    );
+    expect(
+      (JSON.parse(optedOut.stdout) as { intents: Array<{ transactions: unknown[] }> }).intents[0]!
+        .transactions,
+    ).toEqual([
+      expect.objectContaining({ what: expect.stringMatching(/^approve /) }),
+      expect.objectContaining({ what: "publishAndFund", value: "0" }),
+    ]);
+    expect(optedOut.stderr).toMatch(/Approvals are planned without reading the wallet's allowance/);
     const cast = await sauce(
       "intent",
       "publish",
