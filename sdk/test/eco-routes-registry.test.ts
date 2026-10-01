@@ -64,6 +64,39 @@ describe("eco-routes: the production deployment", () => {
     expect(() => ecoRoutesPortal(chain)).toThrow(/is not deployed on/);
   });
 
+  // The vendored table also holds chains the SDK has no canonical entry for (World Chain 480,
+  // HyperEVM 999), which no lookup above can name. Pin every EVM row of it directly.
+  it("every EVM chain in the vendored table records the same Portal and provers", () => {
+    const evm = Object.entries(ECO_ROUTES_ADDRESSES.v3.chains)
+      .map(
+        ([id, environments]) =>
+          [id, (environments as { default?: Record<string, string> }).default] as const,
+      )
+      .filter(([, row]) => row?.Portal !== undefined && /^0x[0-9a-fA-F]{40}$/.test(row.Portal));
+    expect(evm.map(([id]) => id).sort((a, b) => Number(a) - Number(b))).toEqual([
+      "1",
+      "10",
+      "130",
+      "137",
+      "143",
+      "480",
+      "999",
+      "2020",
+      "5042",
+      "8453",
+      "9745",
+      "42161",
+      "728126428",
+    ]);
+    for (const [id, row] of evm) {
+      if (id === "728126428") continue; // Tron: its own Portal, outside this SDK's chains.
+      expect([id, getAddress(row!.Portal!)]).toEqual([id, PORTAL]);
+      if (id === "2020") continue; // Ronin: the Portal alone.
+      expect([id, getAddress(row!.HyperProver!)]).toEqual([id, HYPER_PROVER]);
+      expect([id, getAddress(row!.PolymerProver!)]).toEqual([id, POLYMER_PROVER]);
+    }
+  });
+
   it("Solana records the live eco-routes-svm programs", () => {
     const solana = ecoRoutesDeployment("solana")!;
     expect(solana.Portal).toBe(svmKey("EcoowmRRrMyYtQCuh5fCvMDWcD6B9ZDZkpgedf2bWKXi"));

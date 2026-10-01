@@ -228,6 +228,8 @@ describe("Arc: a reward cannot offer native value and USDC together", () => {
     };
     expect(() => routes.publishAndFundTx(intent, false, { portal: PORTAL })).toThrow(REFUSAL);
     expect(() => routes.approvalTxs(intent, { portal: PORTAL })).toThrow(REFUSAL);
+    expect(() => routes.fundTx(intent, false, { portal: PORTAL })).toThrow(REFUSAL);
+    expect(() => routes.publishTx(intent, { portal: PORTAL })).toThrow(REFUSAL);
   });
 
   it("an intent a program opens on Arc is refused when it is compiled", () => {
