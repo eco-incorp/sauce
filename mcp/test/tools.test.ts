@@ -370,68 +370,103 @@ describe("sauce_compile", () => {
 });
 
 describe("sauce_actions", () => {
-  const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
-  const ROUTER = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45";
+  /** Names only, no chainId: the same document on every chain that registers them. */
   const DOCUMENT = {
     version: 1,
-    chainId: 1,
     actions: [
       { type: "argument", name: "amount" },
-      { type: "wrapETH", weth: WETH },
-      { type: "approve", token: WETH, spender: ROUTER },
+      {
+        type: "uniswapV3Swap",
+        tokenIn: "USDC",
+        tokenOut: "WETH",
+        factory: "UniswapV3.Factory",
+        fee: 500,
+        amountOutMin: "1",
+        recipient: "self",
+      },
     ],
   };
+  type Report = {
+    bytecode: string;
+    chain: string;
+    source: string;
+    parameters: string[];
+    entryParams: unknown[];
+    transaction?: unknown;
+  };
 
-  it("lowers the document with the shared function, and compiles that source as sauce_compile would", async () => {
-    const out = ok(await mcp.call("sauce_actions", { program: DOCUMENT })) as {
-      source: string;
-      compile: { bytecode: string; chain: string; entryParams: unknown[] };
-      transaction?: unknown;
-    };
-    const { actionSource } = await import("../../actions/dist/source.js");
-    const lowered = actionSource(DOCUMENT);
-    assert.equal(out.source, lowered.source);
-    assert.equal(out.compile.chain, "ethereum");
-    assert.deepEqual(out.compile.entryParams, [{ name: "a_amount", type: "Uint256" }]);
+  it("returns what sauce actions does: the lowered source and its compile", async () => {
+    const out = ok(await mcp.call("sauce_actions", { program: DOCUMENT, chain: "base" })) as Report;
+    // The command's own function, called directly.
+    const { actionsCommand } = await import("../../sdk/dist/cli/actions.js");
+    const command = await actionsCommand({
+      file: "actions.json",
+      text: JSON.stringify(DOCUMENT),
+      chain: "base",
+    });
+    assert.equal(out.source, command.json.source);
+    assert.equal(out.bytecode, command.json.bytecode);
+    assert.equal(out.chain, "base");
+    assert.deepEqual(out.parameters, ["amount"]);
+    assert.deepEqual(out.entryParams, [{ name: "a_amount", type: "Uint256" }]);
     assert.equal(out.transaction, undefined, "no Pot given, no transaction");
-    // The same document as JSON text is the same program.
-    const text = ok(await mcp.call("sauce_actions", { program: JSON.stringify(DOCUMENT) }));
-    assert.equal((text.compile as { bytecode: string }).bytecode, out.compile.bytecode);
+    // As JSON text, the same program; on another chain, that chain's names.
+    const text = ok(
+      await mcp.call("sauce_actions", { program: JSON.stringify(DOCUMENT), chain: 8453 }),
+    ) as Report;
+    assert.equal(text.bytecode, out.bytecode);
+    const ethereum = ok(
+      await mcp.call("sauce_actions", { program: DOCUMENT, chain: "ethereum" }),
+    ) as Report;
+    assert.notEqual(ethereum.bytecode, out.bytecode);
   });
 
   it("builds the unsigned cook for a Pot, with the argument actions as main's arguments", async () => {
     const out = ok(
       await mcp.call("sauce_actions", {
         program: DOCUMENT,
+        chain: "base",
         owner: OWNER,
         value: "0",
         args: ["1000"],
       }),
-    ) as {
-      compile: { bytecode: string };
-      transaction: { to: string; data: string; value: string };
-    };
+    ) as Report & { transaction: { to: string; data: string; value: string } };
     assert.equal(out.transaction.to, v12PredictPot(OWNER, `0x${"00".repeat(32)}`));
     assert.equal(out.transaction.value, "0");
     const cook = decodeFunctionData({ abi: v12PotAbi, data: out.transaction.data as Hex });
-    assert.ok((cook.args[1] as string).startsWith(out.compile.bytecode));
+    assert.ok((cook.args[1] as string).startsWith(out.bytecode));
     assert.ok((cook.args[1] as string).endsWith((1000).toString(16).padStart(64, "0")));
   });
 
-  it("names each problem in a document, and a chain that is not its chainId", async () => {
+  it("names each problem: a missing chain, a name the chain lacks, a field, bad JSON", async () => {
+    const chainless = failed(await mcp.call("sauce_actions", { program: DOCUMENT }));
+    assert.match(chainless, /missing chain <slug\|id>: actions.json has no chainId/);
+    assert.doesNotMatch(chainless, /--chain/);
     assert.match(
       failed(
         await mcp.call("sauce_actions", {
-          program: { version: 1, chainId: 1, actions: [{ type: "approve", token: "nope" }] },
+          program: {
+            ...DOCUMENT,
+            actions: [DOCUMENT.actions[0], { ...DOCUMENT.actions[1], tokenIn: "NOSUCHTOKEN" }],
+          },
+          chain: "base",
+        }),
+      ),
+      /actions\.json does not compile for base:\n\s+actions\[1\]\.tokenIn/,
+    );
+    assert.match(
+      failed(
+        await mcp.call("sauce_actions", {
+          program: { version: 1, actions: [{ type: "approve", token: "USDC" }] },
+          chain: "base",
         }),
       ),
       /actions\[0\]/,
     );
     assert.match(
-      failed(await mcp.call("sauce_actions", { program: DOCUMENT, chain: "base" })),
-      /is not the program's chainId 1 \(ethereum\)/,
+      failed(await mcp.call("sauce_actions", { program: "{not json", chain: "base" })),
+      /actions\.json is not JSON/,
     );
-    assert.match(failed(await mcp.call("sauce_actions", { program: "{not json" })), /not JSON/);
   });
 });
 
