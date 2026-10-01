@@ -113,45 +113,52 @@ const svm = build(
 );
 check(svm.manifest?.accounts[0]?.kind === "slot", "SVM Account parameters become manifest slots");
 
-// A file compiled for a chain (`sauce compile --chain`, `routes.compileSauceProgram`) is read as
-// JavaScript first, which adds rules of its own on top of the language.
+// A file compiled for a chain (`sauce compile --chain`, `routes.compileSauceProgram`) gets the
+// chain's names and the token syntax lowered, and otherwise reaches the compiler as written.
 const forChain = (source: string) => {
   try {
     return routes.compileSauceProgram("base", source);
-  } catch {
-    return undefined;
+  } catch (error) {
+    return stripVTControlCharacters(String((error as Error).message));
   }
 };
-const typed = forChain(
+const compiled = (source: string) => {
+  const result = forChain(source);
+  check(typeof result !== "string", `compiles for a chain:\n${source}\n${String(result)}`);
+  return result;
+};
+const typed = compiled(
   "function half(x: Uint256): Uint256 { return x / 2n; }\nfunction main(to: Address, amount, items: { amount: Uint256, to: Address }[]) { USDC.transfer(to, half(amount)); require(items.length > 0n); }",
 );
-check(typed !== undefined, "annotations on main's and a helper's signature compile");
 check(
   typed.entryParams.map((p) => `${p.name}: ${p.type}`).join(", ") ===
     "to: Address, amount: Uint256, items: { amount: Uint256, to: Address }[]",
   "a parameter with no annotation is a Uint256",
 );
-check(
-  forChain("function main(x: Uint256) { let y: Uint256 = x; require(y > 0n); }") === undefined,
-  "no annotation on a local",
+compiled("function main(x: Uint256) { let y: Uint256 = x; require(y > 0n); }"); // an annotated local
+const records = compiled(
+  "interface Order { amount: Uint256; to: Address; }\nfunction main(orders: Order[]) { for (const o of orders) { USDC.transfer(o.to, o.amount); } }",
 );
 check(
-  forChain(
-    "interface Order { amount: Uint256; }\nfunction main(x: Uint256) { require(x > 0n); }",
-  ) === undefined,
-  "no interface: an inline object type in a signature instead",
+  records.entryParams[0]?.type === "{ amount: Uint256, to: Address }[]",
+  "an interface parameter is encoded as the record it names",
 );
-check(
-  forChain("function main(\n  a: Uint256,\n  b: Uint256,\n) { require(a > b); }") === undefined,
-  "no trailing comma after main's last parameter",
+compiled("function main(\n  a: Uint256,\n  b: Uint256,\n) { require(a > b); }"); // a trailing comma
+// A script: its statements are the entry, beside its imports and helpers.
+compiled(
+  'import { balanceOf as held } from "@sauce/token";\nfunction twice(x: Uint256): Uint256 { return x * 2n; }\nrequire(twice(held(USDC, ctx.self())) >= 0n);',
 );
+compiled("require(chainId == 8453n);");
+// ...and its top-level consts are its own locals, which a helper cannot read.
 check(
-  forChain("function twice(x) { return x * 2n; }\nrequire(twice(1n) == 2n);") === undefined,
-  "a top-level script declares no function: a program with helpers declares main",
-);
-check(
-  forChain("require(chainId == 8453n);") !== undefined,
-  "a top-level script runs its statements",
+  /`FEE` is not a declared variable/.test(
+    String(
+      forChain(
+        "const FEE = 3n;\nfunction f(x: Uint256): Uint256 { return x * FEE; }\nrequire(f(1n) == 3n);",
+      ),
+    ),
+  ),
+  "a helper cannot read a script's const",
 );
 
 console.log(

@@ -1,6 +1,6 @@
 ---
 name: sauce-typescript
-description: The TypeScript side of Sauce (@eco-incorp/sauce) — compiling a .sauce.ts program for a chain from application code exactly as the sauce command does, encoding its main(...) arguments and the Pot.cook transaction, deriving and deploying the owner's Pot, the raw compiler with typed programs and compact arguments, JSON action programs, settlement verification, browser compilation with ready(), and the rule that the package embeds no RPC. Use when writing application or script code that compiles, encodes, verifies or submits Sauce programs, or when the user asks which import or subpath to use.
+description: The TypeScript side of Sauce (@eco-incorp/sauce) — compiling a .sauce.ts program for a chain from application code exactly as the sauce command does, encoding its main(...) arguments and the Pot.cook transaction, deriving and deploying the owner's Pot, the raw compiler and compact arguments, JSON action programs, settlement verification, browser compilation with ready(), and the rule that the package embeds no RPC. Use when writing application or script code that compiles, encodes, verifies or submits Sauce programs, or when the user asks which import or subpath to use.
 ---
 
 # Sauce from TypeScript
@@ -57,9 +57,9 @@ executionFee }` (`sauce-intents`).
 
 ## The raw compiler
 
-`compile({ target, entry, resolve, ... })` from `/compiler` compiles a **typed** program and resolves
-nothing for you: no registry names, no chain defines. Reach for it for full control of the source
-and resolver, typed programs the way the reference writes them, and compact arguments.
+`compile({ target, entry, resolve, ... })` from `/compiler` compiles a program and resolves nothing
+for you: no registry names, no chain defines, no token syntax. Reach for it for full control of the
+source and resolver, and for compact arguments.
 
 - ABI-v1 arguments by default; `compactArgs: true` returns an `entrySchema` for
   `encodeCompactArguments`/`decodeCompactArguments` (`scalarWidth` keeps offsets fixed).

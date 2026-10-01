@@ -15,7 +15,7 @@ function main(
   source: Account<Writable>,
   destination: Account<Writable>,
   authority: Account<Signer>,
-  amount: Uint256
+  amount: Uint256,
 ): Uint256 {
   const before = balanceOf(MINT, destination);
   transfer(MINT, tokenProgram, source, destination, authority, amount);
