@@ -4,23 +4,13 @@ Restaking protocol that enables staked ETH to secure additional protocols (AVS).
 
 ## Category
 
-restaking | Chains: Ethereum
+restaking | Chains and addresses: [registry/eigenlayer.md](registry/eigenlayer.md)
 
 ## Key Operations
 
 - **depositIntoStrategy**: Deposit LSTs (stETH, rETH, cbETH) into a restaking strategy
 - **delegateTo**: Delegate restaked assets to an operator (via DelegationManager)
 - **undelegate**: Undelegate from an operator, initiating withdrawal
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  depositIntoStrategy,
-} from "@eco-incorp/sauce/protocols/eigenlayer";
-```
 
 ## SauceScript Examples
 
@@ -38,33 +28,11 @@ function main(
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract          | Address                                      |
-| -------- | ----------------- | -------------------------------------------- |
-| Ethereum | strategyManager   | `0x858646372CC42E1A627fcE94aa7A7033e7CF075A` |
-| Ethereum | delegationManager | `0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A` |
-| Ethereum | stETHStrategy     | `0x93c4b944D05dfe6df7645A86cd2206016c51564D` |
-| Ethereum | rETHStrategy      | `0x1BeE69b7dFFfA4E2d53C2a2Df135C388AD25dCD2` |
-| Ethereum | cbETHStrategy     | `0x54945180dB7943c0ed0FEE7EdaB2Bd24620256bc` |
-
-## ABI Methods
-
-### StrategyManagerABI
-
-- `depositIntoStrategy(address,address,uint256)` - Deposit token into strategy. Params: strategy address, token address, amount. Returns shares
-- `stakerDepositShares(address staker, address strategy)` - Query staker's deposit shares in a strategy (renamed from `stakerStrategyShares`)
-
-### DelegationManagerABI
-
-- `delegateTo(address,tuple,bytes32)` - Delegate to operator. Tuple is (signature bytes, expiry uint256). Use empty sig + max expiry
-- `undelegate(address)` - Undelegate staker. Returns withdrawal root bytes32[]
-- `isDelegated(address)` - Check if address is delegated to an operator
-
-### StrategyABI
-
-- `sharesToUnderlyingView(uint256)` - Convert shares to underlying token amount
-- `underlyingToSharesView(uint256)` - Convert underlying amount to shares
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/eigenlayer.md](registry/eigenlayer.md).
 
 ## Notes
 

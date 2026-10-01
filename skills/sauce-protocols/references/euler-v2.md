@@ -4,7 +4,7 @@ Modular lending platform built on the Ethereum Vault Connector (EVC). Supports p
 
 ## Category
 
-lending | Chains: Ethereum (1)
+lending | Chains and addresses: [registry/euler-v2.md](registry/euler-v2.md)
 
 ## SauceScript Functions
 
@@ -75,26 +75,11 @@ function main(vaultAddress: Address, amount: Uint256, receiver: Address): Uint25
 - Requires ERC-20 approval of the underlying to the vault
 - Returns the number of debt shares burned
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract               | Address                                      |
-| -------- | ---------------------- | -------------------------------------------- |
-| Ethereum | ethereumVaultConnector | `0x0C9a3dd6b8F28529d72d7f9cE918D493519EE383` |
-
-## ABI Reference
-
-### EVaultABI
-
-- `deposit(uint256 amount, address receiver) returns (uint256 shares)` - Deposit underlying, receive vault shares
-- `withdraw(uint256 amount, address receiver, address owner) returns (uint256 shares)` - Withdraw underlying by amount
-- `borrow(uint256 amount, address receiver) returns (uint256 shares)` - Borrow underlying tokens
-- `repay(uint256 amount, address receiver) returns (uint256 shares)` - Repay borrowed debt
-- `redeem(uint256 shares, address receiver, address owner) returns (uint256 amount)` - Redeem vault shares for underlying
-
-### EVCABI
-
-- `enableCollateral(address account, address vault)` - Enable an EVault as collateral for an account
-- `enableController(address account, address vault)` - Enable an EVault as debt controller for an account
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/euler-v2.md](registry/euler-v2.md).
 
 ## Notes
 

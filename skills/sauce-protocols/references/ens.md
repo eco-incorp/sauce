@@ -4,18 +4,12 @@ Ethereum Name Service - the decentralized naming system for wallets, websites, a
 
 ## Category
 
-infrastructure | Chains: Ethereum
+infrastructure | Chains and addresses: [registry/ens.md](registry/ens.md)
 
 ## Key Operations
 
 - **setResolver**: Set the resolver contract for an ENS name
 - **setOwner**: Transfer ownership of an ENS name
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, setResolver, setOwner } from "@eco-incorp/sauce/protocols/ens";
-```
 
 ## SauceScript Examples
 
@@ -37,26 +31,11 @@ function main(registryAddress: Address, node: Uint256, owner: Address): Uint256 
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract      | Address                                      |
-| -------- | ------------- | -------------------------------------------- |
-| Ethereum | registry      | `0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e` |
-| Ethereum | baseRegistrar | `0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85` |
-
-## ABI Methods
-
-### ENSRegistryABI
-
-- `owner(bytes32)` - Query owner of a name node. Params: node (namehash). Returns owner address
-- `resolver(bytes32)` - Query resolver of a name node. Params: node. Returns resolver address
-- `setOwner(bytes32,address)` - Transfer name ownership. Params: node, owner (new owner)
-- `setResolver(bytes32,address)` - Set resolver contract. Params: node, resolver (new resolver)
-
-### BaseRegistrarABI
-
-- `nameExpires(uint256)` - Check when a .eth name expires. Params: id (label hash as uint256). Returns expiry timestamp
-- `reclaim(uint256,address)` - Reclaim ENS registry ownership. Params: id (label hash), owner. Only callable by registrant
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/ens.md](registry/ens.md).
 
 ## Notes
 

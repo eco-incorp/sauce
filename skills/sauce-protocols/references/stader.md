@@ -4,17 +4,11 @@ Multi-chain liquid staking protocol. ETHx is Stader's non-rebasing liquid stakin
 
 ## Category
 
-liquid-staking | Chains: Ethereum
+liquid-staking | Chains and addresses: [registry/stader.md](registry/stader.md)
 
 ## Key Operations
 
 - **deposit**: Stake ETH to receive ETHx
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, deposit } from "@eco-incorp/sauce/protocols/stader";
-```
 
 ## SauceScript Examples
 
@@ -27,24 +21,11 @@ function main(stakePoolManagerAddress: Address, receiver: Address): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract         | Address                                      |
-| -------- | ---------------- | -------------------------------------------- |
-| Ethereum | ETHx             | `0xA35b1B31Ce002FBF2058D22F30f95D405200A15b` |
-| Ethereum | stakePoolManager | `0xcf5EA1b38380f6aF39068375516Daf40Ed70D299` |
-
-## ABI Methods
-
-### StakePoolManagerABI
-
-- `deposit(address)` - Stake ETH (payable), receive ETHx. Param: receiver address. Returns ETHx amount
-- `getExchangeRate()` - Current ETHx/ETH exchange rate
-
-### ETHxABI
-
-- `balanceOf(address)` - Query ETHx balance
-- `approve(address,uint256)` - Approve ETHx spending
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/stader.md](registry/stader.md).
 
 ## Notes
 

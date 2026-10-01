@@ -6,7 +6,7 @@ Concentrated-liquidity spot DEX on Arc: a Uniswap V3 fork with renamed pool call
 
 ## Category
 
-dex | Chains: Arc (5042)
+dex | Chains and addresses: [registry/synthra-v3.md](registry/synthra-v3.md)
 
 ## SauceScript Functions
 
@@ -42,14 +42,11 @@ function main(
 - SwapRouter02's params have no `deadline`
 - `tokenIn` must be `approve`d to the router
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain | Contract                   | Address                                      |
-| ----- | -------------------------- | -------------------------------------------- |
-| Arc   | Factory                    | `0x6307fc239C7964942c1BfFE51930E55606619c74` |
-| Arc   | SwapRouter02               | `0xa50eDe66a573eE5bB37E28AF5789B76aE5FEb828` |
-| Arc   | QuoterV2                   | `0x9c179A7335B3fc841F59Aa6a62daf6d5c61b65D7` |
-| Arc   | NonfungiblePositionManager | `0x2743b771659fD9CE13970d7367e7e84AF6a31049` |
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/synthra-v3.md](registry/synthra-v3.md).
 
 ## Notes
 

@@ -4,7 +4,7 @@ Omnichain liquidity transport protocol built on LayerZero. Provides native asset
 
 ## Category
 
-bridge | Direction: L2-to-L2, L1-to-L2, L2-to-L1 (any-to-any) | Chains: Ethereum (1), Arbitrum (42161), Base (8453)
+bridge | Direction: L2-to-L2, L1-to-L2, L2-to-L1 (any-to-any) | Chains and addresses: [registry/stargate.md](registry/stargate.md)
 
 ## SauceScript Functions
 
@@ -50,27 +50,11 @@ function main(
 - Requires native token (ETH) for LayerZero messaging fee (sent as msg.value)
 - Requires ERC-20 approval to the pool for non-native tokens
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract   | Address                                      |
-| -------- | ---------- | -------------------------------------------- |
-| Ethereum | poolNative | `0x77b2043768d28E9C9aB44E1aBfC95944bcE57931` |
-| Ethereum | poolUSDC   | `0xc026395860Db2d07ee33e05fE50ed7bD583189C7` |
-| Ethereum | poolUSDT   | `0x933597a323Eb81cAe705C5bC29985172fd5A3973` |
-| Arbitrum | poolNative | `0xA45B5130f36CDcA45667738e2a258AB09f4A5f7F` |
-| Arbitrum | poolUSDC   | `0xe8CDF27AcD73a434D661C84887215F7598e7d0d3` |
-| Base     | poolNative | `0xdc181Bd607330aeeBEF6ea62e03e5e1Fb4B6F7C7` |
-| Base     | poolUSDC   | `0x27a16dc786820B16E5c9028b75B99F6f604b5d26` |
-
-## ABI Reference
-
-### StargatePoolABI
-
-- `send(SendParam _sendParam, MessagingFee _fee, address _refundAddress) returns (MessagingReceipt msgReceipt, OFTReceipt oftReceipt)` [payable] - Bridge tokens to destination chain
-- `quoteOFT(SendParam _sendParam) returns (OFTLimit oftLimit, OFTFeeDetail[] oftFeeDetails, OFTReceipt oftReceipt)` - Quote bridge limits, fees and the amount received (view)
-
-SendParam tuple: `(uint32 dstEid, bytes32 to, uint256 amountLD, uint256 minAmountLD, bytes extraOptions, bytes composeMsg, bytes oftCmd)`
-MessagingFee tuple: `(uint256 nativeFee, uint256 lzTokenFee)`
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/stargate.md](registry/stargate.md).
 
 ## Notes
 

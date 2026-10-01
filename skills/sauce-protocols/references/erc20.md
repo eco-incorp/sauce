@@ -4,7 +4,7 @@ The standard interface for fungible tokens on EVM chains (EIP-20). Defines trans
 
 ## Category
 
-infrastructure | Chains: (standard interface, any chain)
+infrastructure | Chains and addresses: [registry/erc20.md](registry/erc20.md)
 
 ## Key Operations
 
@@ -13,20 +13,6 @@ infrastructure | Chains: (standard interface, any chain)
 - **transferFrom**: Transfer tokens from one address to another (requires approval)
 - **balanceOf**: Query token balance of an address
 - **allowance**: Query remaining approved amount for a spender
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  transfer,
-  approve,
-  transferFrom,
-  balanceOf,
-  storageTransfer,
-} from "@eco-incorp/sauce/protocols/erc20";
-```
 
 ## SauceScript Examples
 
@@ -76,24 +62,11 @@ function main(to: Address, amount: Uint256): Uint256 {
 }
 ```
 
-## ABI Methods
+## Deployments and ABI
 
-### ERC20ABI
-
-- `transfer(address,uint256)` - Transfer tokens. Params: to (recipient), amount (token amount). Returns bool success
-- `approve(address,uint256)` - Approve spender. Params: spender (authorized address), amount (max transfer amount). Returns bool success
-- `transferFrom(address,address,uint256)` - Transfer from approved address. Params: from (source), to (destination), amount. Returns bool success
-- `balanceOf(address)` - Query balance. Params: account. Returns uint256 balance
-- `allowance(address,address)` - Query allowance. Params: owner, spender. Returns uint256 remaining allowance
-- `totalSupply()` - Total token supply. Returns uint256
-- `name()` - Token name. Returns string
-- `symbol()` - Token symbol. Returns string
-- `decimals()` - Token decimals. Returns uint8 (typically 18; USDC/USDT use 6)
-
-### Events
-
-- `Transfer(address indexed from, address indexed to, uint256 value)` - Emitted on transfer and transferFrom
-- `Approval(address indexed owner, address indexed spender, uint256 value)` - Emitted on approve
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/erc20.md](registry/erc20.md).
 
 ## Notes
 

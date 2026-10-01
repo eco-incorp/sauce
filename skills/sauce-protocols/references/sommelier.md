@@ -4,25 +4,13 @@ ERC-4626 strategy vaults (Cellars) managed by off-chain strategists via Cosmos v
 
 ## Category
 
-yield | Chains: Ethereum
+yield | Chains and addresses: [registry/sommelier.md](registry/sommelier.md)
 
 ## Key Operations
 
 - **deposit**: Deposit assets into Cellar vault
 - **withdraw**: Withdraw assets from Cellar
 - **redeem**: Redeem Cellar shares
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  deposit,
-  withdraw,
-  redeem,
-} from "@eco-incorp/sauce/protocols/sommelier";
-```
 
 ## SauceScript Examples
 
@@ -36,17 +24,11 @@ function main(cellarAddress: Address, assets: Uint256, receiver: Address): Uint2
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract     | Address                                      |
-| -------- | ------------ | -------------------------------------------- |
-| Ethereum | cellarRouter | `0x6b7f87279982d919Bbf85182DDeAB179B366d8f2` |
-
-## ABI Methods
-
-- `deposit(uint256,address)` - Deposit assets
-- `withdraw(uint256,address,address)` - Withdraw assets
-- `redeem(uint256,address,address)` - Redeem shares
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/sommelier.md](registry/sommelier.md).
 
 ## Notes
 

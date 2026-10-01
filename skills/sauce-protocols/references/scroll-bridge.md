@@ -4,7 +4,7 @@ Official Scroll zkEVM bridge via L1ScrollMessenger and L1GatewayRouter. Deposits
 
 ## Category
 
-native L2 bridge | Direction: L1 to L2 (Ethereum to Scroll) | Chains: Ethereum (1), Scroll (534352)
+native L2 bridge | Direction: L1 to L2 (Ethereum to Scroll) | Chains and addresses: [registry/scroll-bridge.md](registry/scroll-bridge.md)
 
 ## SauceScript Functions
 
@@ -51,25 +51,11 @@ function main(
 - Requires ERC-20 approval to the L1GatewayRouter
 - Requires ETH as msg.value for L2 gas fees
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract          | Address                                      |
-| -------- | ----------------- | -------------------------------------------- |
-| Ethereum | l1ScrollMessenger | `0x6774Bcbd5ceCeF1336b5300fb5186a12DDD8b367` |
-| Ethereum | l1GatewayRouter   | `0xF8B1378579659D8F7EE5f3C929c2f3E332E41Fd6` |
-| Scroll   | l2ScrollMessenger | `0x781e90f1c8Fc4611c9b7497C3B47F99Ef6969CbC` |
-| Scroll   | l2GatewayRouter   | `0x4C0926FF5252A435FD19e10ED15e5a249Ba19d79` |
-
-## ABI Reference
-
-### ScrollL1GatewayRouterABI
-
-- `depositETH(uint256 _amount, uint256 _gasLimit)` [payable] - Deposit ETH to your own address on Scroll
-- `depositERC20(address _token, uint256 _amount, uint256 _gasLimit)` [payable] - Deposit ERC-20 tokens to your own address on Scroll
-
-### ScrollL1MessengerABI
-
-- `sendMessage(address to, uint256 value, bytes message, uint256 gasLimit)` [payable] - Send arbitrary message from L1 to L2 (low-level messaging)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/scroll-bridge.md](registry/scroll-bridge.md).
 
 ## Notes
 

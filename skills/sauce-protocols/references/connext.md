@@ -4,7 +4,7 @@ Cross-chain liquidity protocol rebranded as Everclear. Uses intents and a cleari
 
 ## Category
 
-bridge | Direction: any-to-any (L2-to-L2, L1-to-L2, L2-to-L1) | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453)
+bridge | Direction: any-to-any (L2-to-L2, L1-to-L2, L2-to-L1) | Chains and addresses: [registry/connext.md](registry/connext.md)
 
 ## SauceScript Functions
 
@@ -47,20 +47,11 @@ function main(
 - `ttl`: Time-to-live in seconds (86400 = 24 hours). Intent expires if unfilled
 - Requires ERC-20 approval to the EverclearSpoke
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract       | Address                                      |
-| -------- | -------------- | -------------------------------------------- |
-| Ethereum | everclearSpoke | `0xa05A3380889115bf313f1Db9d5f335157Be4D816` |
-| Arbitrum | everclearSpoke | `0xa05A3380889115bf313f1Db9d5f335157Be4D816` |
-| Optimism | everclearSpoke | `0xa05A3380889115bf313f1Db9d5f335157Be4D816` |
-| Base     | everclearSpoke | `0xa05A3380889115bf313f1Db9d5f335157Be4D816` |
-
-## ABI Reference
-
-### EverclearSpokeABI
-
-- `newIntent(uint32[] destinations, address receiver, address inputAsset, address outputAsset, uint256 amount, uint256 amountOutMin, uint48 ttl, bytes data) returns (bytes32 intentId, Intent intent)` - Create a cross-chain transfer intent. Solvers compete to fill the intent on the destination chain. A `bytes32`-typed overload takes non-EVM receivers and assets
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/connext.md](registry/connext.md).
 
 ## Notes
 

@@ -4,18 +4,12 @@ Curve Finance native stablecoin using LLAMMA (Lending-Liquidating AMM Algorithm)
 
 ## Category
 
-cdp | Chains: Ethereum
+cdp | Chains and addresses: [registry/crvusd.md](registry/crvusd.md)
 
 ## Key Operations
 
 - **transfer**: Transfer crvUSD tokens
 - **approve**: Approve crvUSD token spender
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, transfer, approve } from "@eco-incorp/sauce/protocols/crvusd";
-```
 
 ## SauceScript Examples
 
@@ -35,19 +29,11 @@ function main(crvusdAddress: Address, spender: Address, amount: Uint256): Uint25
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | crvusd   | `0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E` |
-
-## ABI Methods
-
-### CrvUSDERC20ABI
-
-- `transfer(address,uint256)` - Transfer crvUSD. Params: to, amount. Returns bool
-- `approve(address,uint256)` - Approve spender. Params: spender, amount. Returns bool
-- `balanceOf(address)` - Query balance. Params: account. Returns uint256
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/crvusd.md](registry/crvusd.md).
 
 ## Notes
 

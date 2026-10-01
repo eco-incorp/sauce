@@ -4,25 +4,13 @@ Yield farming protocol that automatically compounds rewards across DeFi strategi
 
 ## Category
 
-yield | Chains: Ethereum
+yield | Chains and addresses: [registry/harvest.md](registry/harvest.md)
 
 ## Key Operations
 
 - **deposit**: Deposit tokens into Harvest vault
 - **withdraw**: Withdraw tokens from vault
 - **getPricePerFullShare**: Query vault share price
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  deposit,
-  withdraw,
-  getPricePerFullShare,
-} from "@eco-incorp/sauce/protocols/harvest";
-```
 
 ## SauceScript Examples
 
@@ -37,18 +25,11 @@ function main(vaultAddress: Address, amount: Uint256): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract   | Address                                      |
-| -------- | ---------- | -------------------------------------------- |
-| Ethereum | controller | `0x222412af183BCeAdEFd72e4Cb1b71f1889953b1C` |
-| Ethereum | farm       | `0xa0246c9032bC3A600820415aE600c6388619A14D` |
-
-## ABI Methods
-
-- `deposit(uint256) returns (uint256)` - Deposit tokens
-- `withdraw(uint256) returns (uint256)` - Withdraw shares
-- `getPricePerFullShare()` - Get share price
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/harvest.md](registry/harvest.md).
 
 ## Notes
 

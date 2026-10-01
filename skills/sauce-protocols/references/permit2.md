@@ -4,23 +4,12 @@ Universal token approval infrastructure by Uniswap. Provides a single approval c
 
 ## Category
 
-infrastructure | Chains: Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Avalanche, Arc
+infrastructure | Chains and addresses: [registry/permit2.md](registry/permit2.md)
 
 ## Key Operations
 
 - **approve**: Set token allowance for a spender via Permit2
 - **transferFrom**: Transfer tokens using a Permit2 allowance
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  approve,
-  transferFrom,
-} from "@eco-incorp/sauce/protocols/permit2";
-```
 
 ## SauceScript Examples
 
@@ -54,19 +43,11 @@ function main(
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain        | Contract | Address                                      |
-| ------------ | -------- | -------------------------------------------- |
-| All 7 chains | permit2  | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
-
-## ABI Methods
-
-### Permit2ABI
-
-- `approve(address,address,uint160,uint48)` - Set token allowance. Params: token, spender, amount (uint160 max), expiration (uint48 unix timestamp). No return value
-- `transferFrom(address,address,uint160,address)` - Transfer using allowance. Params: from, to, amount (uint160), token. No return value
-- `lockdown(tuple[])` - Revoke all approvals for specified token/spender pairs. Params: approvals (array of {token, spender} tuples). Emergency function to revoke compromised approvals
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/permit2.md](registry/permit2.md).
 
 ## Notes
 

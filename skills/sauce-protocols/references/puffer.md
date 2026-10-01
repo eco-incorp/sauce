@@ -4,18 +4,12 @@ Liquid restaking protocol that issues pufETH via an ERC-4626 vault. Deposits are
 
 ## Category
 
-restaking | Chains: Ethereum
+restaking | Chains and addresses: [registry/puffer.md](registry/puffer.md)
 
 ## Key Operations
 
 - **deposit**: Deposit assets into PufferVault, receive pufETH shares
 - **redeem**: Redeem pufETH shares for underlying assets
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, deposit, redeem } from "@eco-incorp/sauce/protocols/puffer";
-```
 
 ## SauceScript Examples
 
@@ -40,21 +34,11 @@ function main(
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract             | Address                                      |
-| -------- | -------------------- | -------------------------------------------- |
-| Ethereum | pufETH / pufferVault | `0xD9A442856C234a39a81a089C06451EBAa4306a72` |
-
-## ABI Methods
-
-### PufferVaultABI (ERC-4626)
-
-- `deposit(uint256,address)` - Deposit assets, receive pufETH shares. Returns shares minted
-- `redeem(uint256,address,address)` - Redeem shares for assets. Params: shares, receiver, owner
-- `convertToShares(uint256)` - Preview shares for asset amount
-- `convertToAssets(uint256)` - Preview assets for share amount
-- `balanceOf(address)` - Query pufETH balance
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/puffer.md](registry/puffer.md).
 
 ## Notes
 

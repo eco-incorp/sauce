@@ -4,7 +4,7 @@ Modular liquidity protocol powering perpetual futures and synthetic assets on Ba
 
 ## Category
 
-synthetics | Chains: Base
+synthetics | Chains and addresses: [registry/synthetix-v3.md](registry/synthetix-v3.md)
 
 ## Key Operations
 
@@ -13,17 +13,6 @@ synthetics | Chains: Base
 - **delegateCollateral**: Delegate collateral to a pool (via CoreProxy)
 - **commitOrder**: Commit a perps trade order (via PerpsMarketProxy)
 - **modifyCollateral**: Modify perps account collateral
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  deposit,
-  withdraw,
-} from "@eco-incorp/sauce/protocols/synthetix-v3";
-```
 
 ## SauceScript Examples
 
@@ -55,25 +44,11 @@ function main(
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain | Contract         | Address                                      |
-| ----- | ---------------- | -------------------------------------------- |
-| Base  | coreProxy        | `0x32C222A9A159782aFD7529c87FA34b96CA72C696` |
-| Base  | perpsMarketProxy | `0x0A2AF931eFFd34b81ebcc57E3d3c9B1E1dE1C9Ce` |
-
-## ABI Methods
-
-### CoreProxyABI
-
-- `deposit(uint128,address,uint256)` - Deposit collateral. Params: accountId, collateralType, tokenAmount
-- `withdraw(uint128,address,uint256)` - Withdraw collateral. Same params as deposit
-- `delegateCollateral(uint128,uint128,address,uint256,uint256)` - Delegate to pool. Params: accountId, poolId, collateralType, amount, leverage
-
-### PerpsMarketProxyABI
-
-- `commitOrder(tuple)` - Commit perps order. Tuple: { marketId uint128, accountId uint128, sizeDelta int128, settlementStrategyId uint128, acceptablePrice uint256, trackingCode bytes32, referrer address }
-- `modifyCollateral(uint128,uint128,int256)` - Modify perps collateral. Params: accountId, synthMarketId, amountDelta (positive=add, negative=remove)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/synthetix-v3.md](registry/synthetix-v3.md).
 
 ## Notes
 

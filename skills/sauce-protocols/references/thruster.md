@@ -6,17 +6,11 @@ Blast-native DEX with concentrated liquidity (V3-style) pools. Optimized for Bla
 
 ## Category
 
-dex | Chains: Blast
+dex | Chains and addresses: [registry/thruster.md](registry/thruster.md)
 
 ## Key Operations
 
 - **swap**: Exact input single-hop swap with fee tier selection via V3 SwapRouter
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, swap } from "@eco-incorp/sauce/protocols/thruster";
-```
 
 ## SauceScript Examples
 
@@ -56,17 +50,11 @@ function main(
 - `recipient`: Address to receive output tokens
 - `sqrtPriceLimitX96`: `0` in this template, no price limit, so `amountOutMin` is the only bound
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain | Contract      | Address                                      |
-| ----- | ------------- | -------------------------------------------- |
-| Blast | V3 SwapRouter | `0x337827814155ECBf24D20231fCA4444F530c0555` |
-
-## ABI Methods
-
-### ThrusterV3SwapRouterABI
-
-- `exactInputSingle(tuple(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) -> uint256 amountOut` - Single-hop exact input swap
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/thruster.md](registry/thruster.md).
 
 ## Notes
 

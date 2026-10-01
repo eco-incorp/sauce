@@ -4,7 +4,7 @@ Legacy version of Aave lending protocol. Still holds significant TVL on Ethereum
 
 ## Category
 
-lending | Chains: Ethereum (1), Polygon (137), Avalanche (43114)
+lending | Chains and addresses: [registry/aave-v2.md](registry/aave-v2.md)
 
 ## SauceScript Functions
 
@@ -98,22 +98,11 @@ function main(
 - Requires ERC-20 approval to the LendingPool
 - Returns the actual repaid amount
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain     | Contract    | Address                                      |
-| --------- | ----------- | -------------------------------------------- |
-| Ethereum  | lendingPool | `0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9` |
-| Polygon   | lendingPool | `0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf` |
-| Avalanche | lendingPool | `0x4F01AeD16D97E3aB5ab2B501154DC9bb0F1A5A2C` |
-
-## ABI Reference
-
-### LendingPoolABI
-
-- `deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)` - Deposit asset into pool
-- `withdraw(address asset, uint256 amount, address to) returns (uint256)` - Withdraw asset from pool
-- `borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf)` - Borrow asset
-- `repay(address asset, uint256 amount, uint256 rateMode, address onBehalfOf) returns (uint256)` - Repay borrowed asset
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/aave-v2.md](registry/aave-v2.md).
 
 ## Notes
 

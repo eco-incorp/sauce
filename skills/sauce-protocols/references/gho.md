@@ -4,18 +4,12 @@ Aave-native decentralized stablecoin minted against Aave V3 collateral. Multi-co
 
 ## Category
 
-cdp | Chains: Ethereum
+cdp | Chains and addresses: [registry/gho.md](registry/gho.md)
 
 ## Key Operations
 
 - **transfer**: Transfer GHO tokens
 - **approve**: Approve GHO token spender
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, transfer, approve } from "@eco-incorp/sauce/protocols/gho";
-```
 
 ## SauceScript Examples
 
@@ -35,19 +29,11 @@ function main(ghoAddress: Address, spender: Address, amount: Uint256): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | gho      | `0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f` |
-
-## ABI Methods
-
-### GhoTokenABI
-
-- `transfer(address,uint256)` - Transfer GHO. Params: to, amount. Returns bool
-- `approve(address,uint256)` - Approve spender. Params: spender, amount. Returns bool
-- `balanceOf(address)` - Query balance. Params: account. Returns uint256
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/gho.md](registry/gho.md).
 
 ## Notes
 

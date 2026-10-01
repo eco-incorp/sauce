@@ -6,17 +6,11 @@ Single-contract DEX (formerly CrocSwap) with ambient (full-range) and concentrat
 
 ## Category
 
-dex | Chains: Ethereum, Scroll
+dex | Chains and addresses: [registry/ambient.md](registry/ambient.md)
 
 ## Key Operations
 
 - **swap**: Swap tokens via the CrocSwapDex contract with base/quote pair addressing
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, swap } from "@eco-incorp/sauce/protocols/ambient";
-```
 
 ## SauceScript Examples
 
@@ -50,19 +44,11 @@ function main(
 - `minOut`: Minimum output for slippage protection
 - Additional params set to `0`: `tip` (optional tip), `limitPrice` (no price limit, so `minOut` is the only bound), `reserveFlags` (no reserve usage)
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract    | Address                                      |
-| -------- | ----------- | -------------------------------------------- |
-| Ethereum | CrocSwapDex | `0xAaAaAAAaA24eEeb8d57D431224f73832bC34f688` |
-| Scroll   | CrocSwapDex | `0xaaaaAAAACB71BF2C8CaE522EA5fa455571A74106` |
-
-## ABI Methods
-
-### CrocSwapDexABI
-
-- `swap(address base, address quote, uint256 poolIdx, bool isBuy, bool inBaseQty, uint128 qty, uint16 tip, uint128 limitPrice, uint128 minOut, uint8 reserveFlags) -> (int128 baseFlow, int128 quoteFlow)` - Execute a swap with full parameter control. Returns signed token flows (negative = tokens out from user)
-- `userCmd(uint16 callpath, bytes cmd) -> bytes result` - Execute arbitrary protocol commands (advanced: liquidity operations, governance, etc.)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/ambient.md](registry/ambient.md).
 
 ## Notes
 

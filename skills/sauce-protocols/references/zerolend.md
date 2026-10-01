@@ -4,7 +4,7 @@ Leading lending protocol on zkSync Era. Aave V3 fork optimized for zero-knowledg
 
 ## Category
 
-lending | Chains: zkSync (324)
+lending | Chains and addresses: [registry/zerolend.md](registry/zerolend.md)
 
 ## SauceScript Functions
 
@@ -85,20 +85,11 @@ function main(
 - `amount`: Use `type(uint256).max` to repay full debt
 - Requires ERC-20 approval to the Pool
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain  | Contract | Address                                      |
-| ------ | -------- | -------------------------------------------- |
-| zkSync | pool     | `0x4d9429246EA989C9CeE203B43F6d1C7D83e3B8F8` |
-
-## ABI Reference
-
-### ZeroLendPoolABI
-
-- `supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)` - Supply asset to earn interest
-- `withdraw(address asset, uint256 amount, address to) returns (uint256)` - Withdraw supplied asset
-- `borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf)` - Borrow against collateral
-- `repay(address asset, uint256 amount, uint256 interestRateMode, address onBehalfOf) returns (uint256)` - Repay debt
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/zerolend.md](registry/zerolend.md).
 
 ## Notes
 

@@ -6,25 +6,13 @@ The central trading and liquidity marketplace on Base. Fork of Velodrome with ve
 
 ## Category
 
-dex | Chains: Base
+dex | Chains and addresses: [registry/aerodrome.md](registry/aerodrome.md)
 
 ## Key Operations
 
 - **swap**: Swap tokens with route-based routing specifying stable or volatile pool type
 - **addLiquidity**: Add liquidity to a stable or volatile pool
 - **removeLiquidity**: Remove liquidity from a stable or volatile pool
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  swap,
-  addLiquidity,
-  removeLiquidity,
-} from "@eco-incorp/sauce/protocols/aerodrome";
-```
 
 ## SauceScript Examples
 
@@ -129,24 +117,11 @@ function main(
 - `liquidity`: Amount of LP tokens to burn
 - LP token must be approved to the router
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain | Contract    | Address                                      |
-| ----- | ----------- | -------------------------------------------- |
-| Base  | Router      | `0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43` |
-| Base  | PoolFactory | `0x420DD381b31aEf6683db6B902084cB0FFECe40Da` |
-
-## ABI Methods
-
-### AerodromeRouterABI
-
-- `swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, tuple[](address from, address to, bool stable, address factory) routes, address to, uint256 deadline) -> uint256[] amounts` - Swap with route tuples specifying pool type per hop
-- `addLiquidity(address tokenA, address tokenB, bool stable, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB, uint256 liquidity)` - Add liquidity to a stable or volatile pool
-- `removeLiquidity(address tokenA, address tokenB, bool stable, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB)` - Remove liquidity from a pool
-
-### AerodromePoolFactoryABI
-
-- `getPool(address tokenA, address tokenB, bool stable) -> address pool` - Look up pool address (view)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/aerodrome.md](registry/aerodrome.md).
 
 ## Notes
 

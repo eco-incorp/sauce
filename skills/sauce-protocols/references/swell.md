@@ -4,23 +4,12 @@ Liquid staking and restaking protocol for Ethereum. Offers swETH for liquid stak
 
 ## Category
 
-liquid-staking | Chains: Ethereum
+liquid-staking | Chains and addresses: [registry/swell.md](registry/swell.md)
 
 ## Key Operations
 
 - **stakeSwETH**: Deposit ETH for swETH (liquid staking)
 - **stakeRswETH**: Deposit ETH for rswETH (liquid restaking)
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  stakeSwETH,
-  stakeRswETH,
-} from "@eco-incorp/sauce/protocols/swell";
-```
 
 ## SauceScript Examples
 
@@ -42,26 +31,11 @@ function main(rswethAddress: Address): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | swETH    | `0xf951E335afb289353dc249e82926178EaC7DEd78` |
-| Ethereum | rswETH   | `0xFAe103DC9cf190eD75350761e95403b7b8aFa6c0` |
-
-## ABI Methods
-
-### SwETHABI
-
-- `deposit()` - Stake ETH (payable), receive swETH. Returns nothing: read the minted amount as a balance change
-- `swETHToETHRate()` - Current swETH/ETH exchange rate
-- `balanceOf(address)` - Query swETH balance
-
-### RswETHABI
-
-- `deposit()` - Stake ETH (payable), receive rswETH. Returns nothing: read the minted amount as a balance change
-- `rswETHToETHRate()` - Current rswETH/ETH exchange rate
-- `balanceOf(address)` - Query rswETH balance
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/swell.md](registry/swell.md).
 
 ## Notes
 

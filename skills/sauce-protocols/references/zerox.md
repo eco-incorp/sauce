@@ -6,17 +6,11 @@ DEX aggregation protocol powering swaps across the DeFi ecosystem. Exchange Prox
 
 ## Category
 
-aggregator | Chains: Ethereum, Arbitrum, Optimism, Polygon, BSC, Avalanche, Base
+aggregator | Chains and addresses: [registry/zerox.md](registry/zerox.md)
 
 ## Key Operations
 
 - **transformERC20**: Execute a token swap via the Exchange Proxy transformer pipeline
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, transformERC20 } from "@eco-incorp/sauce/protocols/zerox";
-```
 
 ## SauceScript Examples
 
@@ -25,24 +19,11 @@ import { protocolInfo, deployments, transformERC20 } from "@eco-incorp/sauce/pro
 // The transformERC20 function uses transformations array populated from API response.
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain     | Contract      | Address                                      |
-| --------- | ------------- | -------------------------------------------- |
-| Ethereum  | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` |
-| Arbitrum  | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` |
-| Optimism  | exchangeProxy | `0xDEF1ABE32c034e558Cdd535791643C58a13aCC10` |
-| Polygon   | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` |
-| BSC       | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` |
-| Avalanche | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` |
-| Base      | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` |
-
-## ABI Methods
-
-### ExchangeProxyABI
-
-- `transformERC20(address,address,uint256,uint256,tuple[])` - Execute token swap via transformer pipeline. Payable. Params: inputToken, outputToken, inputTokenAmount, minOutputTokenAmount, transformations (array of Transformation tuples). Returns outputTokenAmount
-  - Transformation tuple: `{ deploymentNonce (uint32), data (bytes) }` - Each transformation specifies a deployed transformer and its calldata
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/zerox.md](registry/zerox.md).
 
 ## Notes
 

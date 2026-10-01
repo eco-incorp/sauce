@@ -4,7 +4,7 @@ Cross-Chain Interoperability Protocol by Chainlink. Enterprise-grade cross-chain
 
 ## Category
 
-cross-chain messaging + token transfer | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), Arc (5042)
+cross-chain messaging + token transfer | Direction: any-to-any | Chains and addresses: [registry/chainlink-ccip.md](registry/chainlink-ccip.md)
 
 ## SauceScript Functions
 
@@ -41,26 +41,11 @@ function main(
 - Requires native token (ETH) as msg.value when `feeToken` is `address(0)`
 - Requires ERC-20 approval to the Router for any tokens in `tokenAmounts`
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | router   | `0x80226fc0Ee2b096224EeAc085Bb9a8cba1146f7D` |
-| Arbitrum | router   | `0x141fa059441E0ca23ce184B6A78bafD2A517DdE8` |
-| Optimism | router   | `0x3206695CaE29952f4b0c22a169725a865bc8Ce0f` |
-| Base     | router   | `0x881e3A65B4d4a04dD529061dd0071cf975F58bCD` |
-| Polygon  | router   | `0x849c5ED5a80F5B408Dd4969b78c2C8fdf0565Bfe` |
-
-## ABI Reference
-
-### CCIPRouterABI
-
-- `ccipSend(uint64 destinationChainSelector, EVM2AnyMessage message) returns (bytes32 messageId)` [payable] - Send cross-chain message and/or tokens. Returns message ID for tracking
-- `getFee(uint64 destinationChainSelector, EVM2AnyMessage message) returns (uint256 fee)` - Estimate fee for a CCIP message before sending (view)
-- `isChainSupported(uint64 chainSelector) returns (bool)` - Check if a destination chain selector is supported (view)
-
-EVM2AnyMessage tuple: `(bytes receiver, bytes data, EVMTokenAmount[] tokenAmounts, address feeToken, bytes extraArgs)`
-EVMTokenAmount tuple: `(address token, uint256 amount)`
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/chainlink-ccip.md](registry/chainlink-ccip.md).
 
 ## Notes
 

@@ -4,7 +4,7 @@ Leading lending protocol on Scroll. Compound-style markets (lTokens), but every 
 
 ## Category
 
-lending | Chains: Scroll (534352)
+lending | Chains and addresses: [registry/layerbank.md](registry/layerbank.md)
 
 ## SauceScript Functions
 
@@ -70,31 +70,11 @@ function main(coreAddress: Address, lTokenAddress: Address, amount: Uint256): Ui
 
 - Requires ERC-20 approval of underlying to the lToken
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain  | Contract | Address                                      |
-| ------ | -------- | -------------------------------------------- |
-| Scroll | core     | `0xEC53c830f4444a8A56455c6836b5D2aA794289Aa` |
-
-## ABI Reference
-
-### LayerBankCoreABI
-
-- `enterMarkets(address[] lTokens)` - Enable lTokens as collateral
-- `exitMarket(address lToken)` - Remove lToken from collateral
-- `supply(address lToken, uint256 uAmount) returns (uint256)` [payable] - Supply underlying, receive lTokens
-- `redeemToken(address lToken, uint256 lAmount) returns (uint256)` - Redeem lTokens for underlying
-- `redeemUnderlying(address lToken, uint256 uAmount) returns (uint256)` - Redeem an exact underlying amount
-- `borrow(address lToken, uint256 amount)` - Borrow underlying
-- `repayBorrow(address lToken, uint256 amount)` [payable] - Repay borrow debt
-
-### LTokenABI (read side)
-
-- `balanceOf(address account) returns (uint256)` - lToken balance
-- `underlyingBalanceOf(address account) returns (uint256)` - Underlying value of the balance
-- `borrowBalanceOf(address account) returns (uint256)` - Outstanding borrow
-- `exchangeRate() returns (uint256)` - lToken/underlying exchange rate
-- `underlying() returns (address)` - The market's underlying token
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/layerbank.md](registry/layerbank.md).
 
 ## Notes
 

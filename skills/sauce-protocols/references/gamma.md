@@ -4,24 +4,12 @@ Active concentrated liquidity management protocol. Manages Uniswap V3, Algebra, 
 
 ## Category
 
-yield | Chains: Ethereum, Polygon
+yield | Chains and addresses: [registry/gamma.md](registry/gamma.md)
 
 ## Key Operations
 
 - **deposit**: Deposit token pair into Gamma Hypervisor via UniProxy
 - **withdraw**: Withdraw liquidity from Hypervisor
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  deposit,
-  depositLegacy,
-  withdraw,
-} from "@eco-incorp/sauce/protocols/gamma";
-```
 
 ## SauceScript Examples
 
@@ -48,33 +36,11 @@ function main(hypervisorAddress: Address, shares: Uint256, to: Address, from: Ad
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                                                                   |
-| -------- | -------- | ----------------------------------------------------------------------------------------- |
-| Ethereum | uniProxy | `0xf5bfa20f4a77933fee0c7bb7f39e7642a070d599` (an older UniProxy: use `UniProxyLegacyABI`) |
-| Polygon  | uniProxy | `0xA42d55074869491D60Ac05490376B74cF19B00e6`                                              |
-
-## ABI Methods
-
-### UniProxyABI
-
-- `deposit(uint256,uint256,address,address,uint256[4])` - Deposit tokens. Params: deposit0, deposit1, to (receiver), pos (hypervisor address), minIn[4] (slippage, use [0,0,0,0])
-- `getDepositAmount(address,address,uint256)` - Preview required token1 amount for given token0 deposit. Params: pos, token, deposit amount. Returns (amountStart, amountEnd)
-
-### UniProxyLegacyABI
-
-The Ethereum UniProxy is an older deployment; its `deposit` has no `minIn` (the `depositLegacy` template calls it).
-
-- `deposit(uint256,uint256,address,address)` - Deposit tokens. Params: deposit0, deposit1, to (receiver), pos (hypervisor address). Returns shares
-- `getDepositAmount(address,address,uint256)` - As on the current UniProxy
-
-### HypervisorABI
-
-- `withdraw(uint256,address,address,uint256[4])` - Withdraw by burning shares. Params: shares, to, from, minAmounts[4]. Returns (amount0, amount1)
-- `balanceOf(address)` - Query Hypervisor share balance
-- `totalSupply()` - Total shares outstanding
-- `getTotalAmounts()` - Total (amount0, amount1) managed
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/gamma.md](registry/gamma.md).
 
 ## Notes
 
@@ -83,3 +49,4 @@ The Ethereum UniProxy is an older deployment; its `deposit` has no `minIn` (the 
 - Use getDepositAmount() to find correct token1 amount for your token0 deposit
 - The uint256[4] minIn/minAmounts array provides slippage protection (use zeros for no limit)
 - Approve both token0 and token1 to UniProxy before depositing
+- The Ethereum UniProxy is an older deployment; its `deposit` has no `minIn` (the `depositLegacy` template calls it).

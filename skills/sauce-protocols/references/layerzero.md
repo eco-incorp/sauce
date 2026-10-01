@@ -4,7 +4,7 @@ Omnichain interoperability protocol enabling cross-chain messaging. Powers OFT t
 
 ## Category
 
-cross-chain messaging | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), BSC (56), Avalanche (43114), zkSync (324), Linea (59144), Scroll (534352), Arc (5042)
+cross-chain messaging | Direction: any-to-any | Chains and addresses: [registry/layerzero.md](registry/layerzero.md)
 
 ## SauceScript Functions
 
@@ -36,30 +36,11 @@ function main(
 - `payInLzToken`: false = pay fees in native token, true = pay in ZRO token
 - Requires native token (ETH) for messaging fees (sent as msg.value)
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain     | Contract   | Address                                      |
-| --------- | ---------- | -------------------------------------------- |
-| Ethereum  | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` |
-| Arbitrum  | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` |
-| Optimism  | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` |
-| Base      | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` |
-| Polygon   | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` |
-| BSC       | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` |
-| Avalanche | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` |
-| zkSync    | endpointV2 | `0xd07C30aF3Ff30D96BDc9c6044958230Eb797DDBF` |
-| Linea     | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` |
-| Scroll    | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` |
-
-## ABI Reference
-
-### LayerZeroEndpointV2ABI
-
-- `send(MessagingParams _params, address _refundAddress) returns (MessagingReceipt receipt)` [payable] - Send omnichain message. Pay fees as msg.value (native token)
-- `quote(MessagingParams _params, address _sender) returns (MessagingFee fee)` - Quote messaging fee before sending (view)
-
-MessagingParams tuple: `(uint32 dstEid, bytes32 receiver, bytes message, bytes options, bool payInLzToken)`
-MessagingFee tuple: `(uint256 nativeFee, uint256 lzTokenFee)`
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/layerzero.md](registry/layerzero.md).
 
 ## Notes
 

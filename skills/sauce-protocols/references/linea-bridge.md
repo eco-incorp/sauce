@@ -4,7 +4,7 @@ Official Linea zkEVM bridge via L1MessageService. Deposits ETH from Ethereum to 
 
 ## Category
 
-native L2 bridge | Direction: L1 to L2 (Ethereum to Linea) | Chains: Ethereum (1), Linea (59144)
+native L2 bridge | Direction: L1 to L2 (Ethereum to Linea) | Chains and addresses: [registry/linea-bridge.md](registry/linea-bridge.md)
 
 ## SauceScript Functions
 
@@ -27,19 +27,11 @@ function main(messageServiceAddress: Address, recipient: Address, fee: Uint256):
 - `_calldata`: Optional calldata to execute on L2 when message is delivered. `0x00` for simple ETH transfers
 - ETH amount (minus fee) is sent as `msg.value`
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract         | Address                                      |
-| -------- | ---------------- | -------------------------------------------- |
-| Ethereum | l1MessageService | `0xd19d4B5d358258f05D7B411E21A1460D11B0876F` |
-| Linea    | l2MessageService | `0x508Ca82Df566dCD1B0DE8296e70a96332cD644ec` |
-
-## ABI Reference
-
-### LineaL1MessageServiceABI
-
-- `sendMessage(address _to, uint256 _fee, bytes _calldata)` [payable] - Send ETH and/or message from L1 to L2. `msg.value` = amount to bridge + fee
-- `claimMessage(address _from, address _to, uint256 _fee, uint256 _value, address _feeRecipient, bytes _calldata, uint256 _nonce)` - Claim a message on the destination side (called by relayers or self-claim)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/linea-bridge.md](registry/linea-bridge.md).
 
 ## Notes
 

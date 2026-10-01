@@ -4,7 +4,7 @@ DeFi options protocol known for Squeeth (squared ETH), a power perpetual that pr
 
 ## Category
 
-options | Chains: Ethereum
+options | Chains and addresses: [registry/opyn.md](registry/opyn.md)
 
 ## Key Operations
 
@@ -12,17 +12,6 @@ options | Chains: Ethereum
 - **withdrawCollateral**: Withdraw ETH collateral from a vault
 - **mintSqueeth**: Mint oSQTH (open squeeth position) by depositing ETH collateral
 - **deposit**: Deposit additional ETH collateral to an existing vault
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  burnSqueeth,
-  withdrawCollateral,
-} from "@eco-incorp/sauce/protocols/opyn";
-```
 
 ## SauceScript Examples
 
@@ -49,21 +38,11 @@ function main(controllerAddress: Address, vaultId: Uint256, amount: Uint256): Ui
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract   | Address                                      |
-| -------- | ---------- | -------------------------------------------- |
-| Ethereum | controller | `0x64187ae08781B09368e6253F9E94951243A493D5` |
-| Ethereum | oSQTH      | `0xf1B99e3E573A1a9C5E6B2Ce818b617F0E664E86B` |
-
-## ABI Methods
-
-### ControllerABI
-
-- `mintPowerPerpAmount(uint256,uint256,uint256)` - Mint oSQTH. Params: vaultId (0 to create new), powerPerpAmount (oSQTH to mint), uniTokenId (Uniswap LP NFT as collateral, 0 for ETH). Payable (send ETH as collateral). Returns (vaultId, wPowerPerpAmount)
-- `burnPowerPerpAmount(uint256,uint256,uint256) returns (uint256)` - Burn oSQTH to close position. Params: vaultId, powerPerpAmount (oSQTH to burn), withdrawAmount (ETH collateral to withdraw)
-- `deposit(uint256)` - Deposit additional ETH collateral. Params: vaultId. Payable (ETH sent = deposit amount)
-- `withdraw(uint256,uint256)` - Withdraw ETH collateral. Params: vaultId, amount (ETH to withdraw)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/opyn.md](registry/opyn.md).
 
 ## Notes
 

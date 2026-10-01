@@ -4,7 +4,7 @@ Cross-chain bridge and DEX with multi-chain AMM pools. Supports token swaps and 
 
 ## Category
 
-bridge | Direction: any-to-any (L1-to-L2, L2-to-L2, L2-to-L1) | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), Avalanche (43114)
+bridge | Direction: any-to-any (L1-to-L2, L2-to-L2, L2-to-L1) | Chains and addresses: [registry/synapse.md](registry/synapse.md)
 
 ## SauceScript Functions
 
@@ -32,25 +32,11 @@ function main(
 - `token`: ERC-20 token to bridge
 - Requires ERC-20 approval to the SynapseBridge
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain     | Contract      | Address                                      |
-| --------- | ------------- | -------------------------------------------- |
-| Ethereum  | synapseBridge | `0x2796317b0fF8538F253012862c06787Adfb8cEB6` |
-| Ethereum  | cctpRouter    | `0x12715a66773BD9C54534a01aBF01d05F6B4Bd35E` |
-| Arbitrum  | synapseBridge | `0x6F4e8eba4d337f874AB57478AcC2Cb5BacDc19c9` |
-| Optimism  | synapseBridge | `0xAf41a65F786339e7911F4acDAD6BD49426F2Dc6b` |
-| Base      | synapseBridge | `0xf07d1C752fAb503E47FEF309bf14fbDD3E867089` |
-| Polygon   | synapseBridge | `0x8F5BBB2BB8c2Ee94639E55d5F41de9b4839C1280` |
-| Avalanche | synapseBridge | `0xC05e61d0E7a63D27546389B7aD62FdFf5A91aACE` |
-
-## ABI Reference
-
-### SynapseBridgeABI
-
-- `deposit(address to, uint256 chainId, address token, uint256 amount)` - Deposit tokens for bridging to destination chain
-- `depositAndSwap(address to, uint256 chainId, address token, uint256 amount, uint8 tokenIndexFrom, uint8 tokenIndexTo, uint256 minDy, uint256 deadline)` - Deposit with swap on destination (e.g. nUSD to USDC). Use token indices from the destination AMM pool
-- `redeem(address to, uint256 chainId, address token, uint256 amount)` - Redeem bridge tokens (for wrapped/synthetic assets like nUSD, nETH)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/synapse.md](registry/synapse.md).
 
 ## Notes
 

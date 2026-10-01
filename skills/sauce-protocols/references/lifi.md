@@ -4,7 +4,7 @@ Multi-chain bridge and DEX aggregator via LiFiDiamond proxy. Routes through opti
 
 ## Category
 
-bridge aggregator | Direction: any-to-any | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Base (8453), Polygon (137), BSC (56), Avalanche (43114), Gnosis (100), Fantom (250), Arc (5042)
+bridge aggregator | Direction: any-to-any | Chains and addresses: [registry/lifi.md](registry/lifi.md)
 
 ## SauceScript Functions
 
@@ -68,30 +68,11 @@ function main(
 - `hasSourceSwaps` / `hasDestinationCall`: `true` only with pre-bridge swaps or a destination call
 - Requires ERC-20 approval to the LiFi Diamond
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain     | Contract    | Address                                      |
-| --------- | ----------- | -------------------------------------------- |
-| Ethereum  | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` |
-| Arbitrum  | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` |
-| Optimism  | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` |
-| Base      | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` |
-| Polygon   | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` |
-| BSC       | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` |
-| Avalanche | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` |
-| Gnosis    | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` |
-| Fantom    | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` |
-
-## ABI Reference
-
-### LiFiDiamondABI
-
-- `startBridgeTokensViaAcrossV4(BridgeData _bridgeData, AcrossV4Data _acrossData)` [payable] - Bridge through Across V4 (AcrossFacetV4)
-- `extractBridgeData(bytes data) returns (BridgeData bridgeData)` - Decode bridge data from raw calldata (pure)
-
-AcrossV4Data tuple: `(bytes32 receiverAddress, bytes32 refundAddress, bytes32 sendingAssetId, bytes32 receivingAssetId, uint256 outputAmount, uint128 outputAmountMultiplier, bytes32 exclusiveRelayer, uint32 quoteTimestamp, uint32 fillDeadline, uint32 exclusivityParameter, bytes message)`
-
-BridgeData tuple: `(bytes32 transactionId, string bridge, string integrator, address referrer, address sendingAssetId, address receiver, uint256 minAmount, uint256 destinationChainId, bool hasSourceSwaps, bool hasDestinationCall)`
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/lifi.md](registry/lifi.md).
 
 ## Notes
 

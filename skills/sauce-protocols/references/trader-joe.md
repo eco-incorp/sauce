@@ -6,17 +6,11 @@ Liquidity Book DEX with variable-width bins for concentrated liquidity. Uses dis
 
 ## Category
 
-dex | Chains: Avalanche, Arbitrum, BSC
+dex | Chains and addresses: [registry/trader-joe.md](registry/trader-joe.md)
 
 ## Key Operations
 
 - **swap**: Swap exact input tokens via Liquidity Book path routing
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, swap } from "@eco-incorp/sauce/protocols/trader-joe";
-```
 
 ## SauceScript Examples
 
@@ -46,26 +40,11 @@ function main(
 - `amountOutMin`: Minimum output for slippage protection
 - `recipient`: Address to receive output tokens
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain     | Contract   | Address                                      |
-| --------- | ---------- | -------------------------------------------- |
-| Avalanche | LB Factory | `0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c` |
-| Avalanche | LB Router  | `0x18556DA13313f3532c54711497A8FedAC273220E` |
-| Arbitrum  | LB Router  | `0x18556da13313f3532c54711497a8fedac273220e` |
-| BSC       | LB Router  | `0xb4315e873dBcf96Ffd0acd8EA43f689D8c20fB30` |
-
-## ABI Methods
-
-### LBRouterABI
-
-- `swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, tuple(uint256[] pairBinSteps, uint8[] versions, address[] tokenPath) path, address to, uint256 deadline) -> uint256 amountOut` - Swap exact input through LB path
-- `swapTokensForExactTokens(uint256 amountOut, uint256 amountInMax, tuple(uint256[] pairBinSteps, uint8[] versions, address[] tokenPath) path, address to, uint256 deadline) -> uint256[] amountsIn` - Swap to get exact output
-- `addLiquidity(tuple(address tokenX, address tokenY, uint256 binStep, uint256 amountX, uint256 amountY, uint256 amountXMin, uint256 amountYMin, uint256 activeIdDesired, uint256 idSlippage, int256[] deltaIds, uint256[] distributionX, uint256[] distributionY, address to, address refundTo, uint256 deadline)) -> (uint256 amountXAdded, uint256 amountYAdded, uint256 amountXLeft, uint256 amountYLeft, uint256[] depositIds, uint256[] liquidityMinted)` - Add liquidity with precise bin distribution control
-
-### LBFactoryABI
-
-- `getLBPairInformation(address tokenA, address tokenB, uint256 binStep) -> tuple(uint16 binStep, address LBPair, bool createdByOwner, bool ignoredForRouting)` - Look up LB pair info for a token pair and bin step (view)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/trader-joe.md](registry/trader-joe.md).
 
 ## Notes
 

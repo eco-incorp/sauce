@@ -6,17 +6,11 @@ Mode-native DEX. Its V2 router is a Camelot fork: swaps take a plain token path 
 
 ## Category
 
-dex | Chains: Mode
+dex | Chains and addresses: [registry/kim.md](registry/kim.md)
 
 ## Key Operations
 
 - **swap**: Swap tokens along a token path
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, swap } from "@eco-incorp/sauce/protocols/kim";
-```
 
 ## SauceScript Examples
 
@@ -53,18 +47,11 @@ function main(
 - `recipient`: Address to receive output tokens
 - The swap returns nothing: measure the output as the recipient's balance change
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain | Contract  | Address                                      |
-| ----- | --------- | -------------------------------------------- |
-| Mode  | V2 Router | `0x5D61c537393cf21893BE619E36fC94cd73C77DD3` |
-
-## ABI Methods
-
-### KimRouterABI
-
-- `swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, address referrer, uint256 deadline)` - Swap along a token path. `referrer` may be the zero address
-- `addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB, uint256 liquidity)` - Add liquidity to a pair
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/kim.md](registry/kim.md).
 
 ## Notes
 

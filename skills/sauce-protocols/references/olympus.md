@@ -4,18 +4,12 @@ Decentralized reserve currency protocol. OHM staking and bonding mechanism with 
 
 ## Category
 
-staking | Chains: Ethereum
+staking | Chains and addresses: [registry/olympus.md](registry/olympus.md)
 
 ## Key Operations
 
 - **stake**: Stake OHM tokens
 - **unstake**: Unstake OHM tokens
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, stake, unstake } from "@eco-incorp/sauce/protocols/olympus";
-```
 
 ## SauceScript Examples
 
@@ -29,17 +23,11 @@ function main(stakingAddress: Address, to: Address, amount: Uint256): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | ohm      | `0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5` |
-| Ethereum | staking  | `0xB63cac384247597756545b500253ff8E607a8020` |
-
-## ABI Methods
-
-- `stake(address,uint256,bool,bool)` - Stake OHM
-- `unstake(address,uint256,bool,bool)` - Unstake OHM
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/olympus.md](registry/olympus.md).
 
 ## Notes
 

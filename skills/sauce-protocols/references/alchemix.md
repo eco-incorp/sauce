@@ -4,7 +4,7 @@ Self-repaying loan protocol. Deposit yield-bearing collateral to borrow syntheti
 
 ## Category
 
-cdp | Chains: Ethereum
+cdp | Chains and addresses: [registry/alchemix.md](registry/alchemix.md)
 
 ## Key Operations
 
@@ -12,19 +12,6 @@ cdp | Chains: Ethereum
 - **withdraw**: Withdraw collateral
 - **mint**: Borrow synthetic asset (alUSD or alETH) against collateral
 - **burn**: Repay synthetic asset debt
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  deposit,
-  withdraw,
-  mint,
-  burn,
-} from "@eco-incorp/sauce/protocols/alchemix";
-```
 
 ## SauceScript Examples
 
@@ -69,25 +56,11 @@ function main(alchemistAddress: Address, amount: Uint256, recipient: Address): U
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract       | Address                                      |
-| -------- | -------------- | -------------------------------------------- |
-| Ethereum | alchemistAlUSD | `0x5C6374a2ac4EBC38DeA0Fc1F8716e5Ea1ADD94dd` |
-| Ethereum | alchemistAlETH | `0x062Bf725dC4cDF947aa79Ca2aaCCD4F385b13b5c` |
-| Ethereum | alUSD          | `0xBC6DA0FE9aD5f3b0d58160288917AA56653660E9` |
-| Ethereum | alETH          | `0x0100546F2cD4C9D97f798fFC9755E47865FF7Ee6` |
-
-## ABI Methods
-
-### AlchemistABI
-
-- `deposit(address,uint256,address)` - Deposit yield-bearing collateral. Params: yieldToken (e.g. yvDAI, yvUSDC), amount, recipient. Returns shares
-- `withdraw(address,uint256,address)` - Withdraw collateral. Params: yieldToken, shares (deposit shares to burn), recipient. Returns amountWithdrawn
-- `mint(uint256,address)` - Borrow synthetic asset. Params: amount (alUSD/alETH to mint), recipient. Max borrow = 50% of collateral value
-- `burn(uint256,address)` - Repay debt by burning synthetic. Params: amount (alUSD/alETH to burn), recipient (whose debt to repay). Returns uint256
-- `liquidate(address,uint256,uint256)` - Liquidate undercollateralized position. Params: yieldToken, shares, minimumAmountOut. Returns uint256
-- `accounts(address)` - Query account info. Params: owner. Returns (debt as int256, depositedTokens as address[])
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/alchemix.md](registry/alchemix.md).
 
 ## Notes
 

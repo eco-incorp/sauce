@@ -4,17 +4,11 @@ High-fidelity oracle network providing low-latency price feeds from institutiona
 
 ## Category
 
-oracle | Chains: Ethereum
+oracle | Chains and addresses: [registry/pyth.md](registry/pyth.md)
 
 ## Key Operations
 
 - **getPrice**: Read price from Pyth oracle by price feed ID
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, getPrice } from "@eco-incorp/sauce/protocols/pyth";
-```
 
 ## SauceScript Examples
 
@@ -30,23 +24,11 @@ function main(
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | oracle   | `0x4305FB66699C3B2702D4d05CF36551390A4c69C6` |
-
-## ABI Methods
-
-### PythOracleABI
-
-- `getPrice(bytes32)` - Get price for a feed ID. Params: id (bytes32 price feed identifier). Returns Price tuple: (price int64, conf uint64, expo int32, publishTime uint256)
-  - `price` - Latest price value
-  - `conf` - Confidence interval (uncertainty)
-  - `expo` - Price exponent (e.g. -8 means divide by 10^8)
-  - `publishTime` - When price was published
-- `updatePriceFeeds(bytes[])` - Submit price updates on-chain. Payable (requires update fee). Params: updateData (Pyth price update VAAs from Hermes API)
-- `getUpdateFee(bytes[])` - Get fee required for price update. Params: updateData. Returns feeAmount in wei
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/pyth.md](registry/pyth.md).
 
 ## Notes
 

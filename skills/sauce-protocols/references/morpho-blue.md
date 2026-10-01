@@ -4,7 +4,7 @@ Minimal and gas-efficient lending primitive with permissionless market creation.
 
 ## Category
 
-lending | Chains: Ethereum (1), Base (8453), Arc (5042)
+lending | Chains and addresses: [registry/morpho-blue.md](registry/morpho-blue.md)
 
 ## SauceScript Functions
 
@@ -162,26 +162,11 @@ function main(
 
 - Requires ERC-20 approval of loanToken to the Morpho address
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | morpho   | `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` |
-| Ethereum | bundler3 | `0x6566194141eefa99Af43Bb5Aa71460Ca2Dc90245` |
-| Base     | morpho   | `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` |
-
-## ABI Reference
-
-### MorphoABI
-
-- `supply(MarketParams marketParams, uint256 assets, uint256 shares, address onBehalf, bytes data) returns (uint256 assetsSupplied, uint256 sharesSupplied)` - Supply loan tokens (specify assets OR shares, set other to 0)
-- `withdraw(MarketParams marketParams, uint256 assets, uint256 shares, address onBehalf, address receiver) returns (uint256 assetsWithdrawn, uint256 sharesWithdrawn)` - Withdraw loan tokens
-- `borrow(MarketParams marketParams, uint256 assets, uint256 shares, address onBehalf, address receiver) returns (uint256 assetsBorrowed, uint256 sharesBorrowed)` - Borrow loan tokens
-- `repay(MarketParams marketParams, uint256 assets, uint256 shares, address onBehalf, bytes data) returns (uint256 assetsRepaid, uint256 sharesRepaid)` - Repay borrowed debt
-- `supplyCollateral(MarketParams marketParams, uint256 assets, address onBehalf, bytes data)` - Supply collateral tokens (required before borrowing)
-- `withdrawCollateral(MarketParams marketParams, uint256 assets, address onBehalf, address receiver)` - Withdraw collateral tokens
-
-MarketParams tuple: `(address loanToken, address collateralToken, address oracle, address irm, uint256 lltv)`
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/morpho-blue.md](registry/morpho-blue.md).
 
 ## Notes
 

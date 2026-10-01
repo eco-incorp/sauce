@@ -6,17 +6,11 @@ Meta aggregator that routes through multiple aggregators and DEXes for optimal s
 
 ## Category
 
-aggregator | Chains: Ethereum, Arbitrum, BSC, Polygon, Optimism, Avalanche, Base, Fantom, Linea, Scroll, zkSync, Arc
+aggregator | Chains and addresses: [registry/kyberswap-aggregator.md](registry/kyberswap-aggregator.md)
 
 ## Key Operations
 
 - **swap**: Execute swap via meta aggregation router
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, swap } from "@eco-incorp/sauce/protocols/kyberswap-aggregator";
-```
 
 ## SauceScript Examples
 
@@ -58,31 +52,11 @@ function main(
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain         | Contract              | Address                                      |
-| ------------- | --------------------- | -------------------------------------------- |
-| 11 EVM chains | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` |
-| zkSync        | metaAggregationRouter | `0x3F95eF3f2eAca871858dbE20A93c01daF6C2e923` |
-
-## ABI Methods
-
-### KyberSwapMetaAggregationRouterABI
-
-- `swap(tuple)` - Execute meta-aggregated swap. Payable. Returns (returnAmount, gasUsed). Execution tuple:
-  - `callTarget` (address) - Underlying aggregator/DEX contract to call
-  - `approveTarget` (address) - Contract to approve tokens to (may differ from callTarget)
-  - `targetData` (bytes) - Calldata for the underlying aggregator
-  - `desc` (tuple) - Swap description:
-    - `srcToken`, `dstToken` - Token addresses
-    - `srcReceivers` (address[]), `srcAmounts` (uint256[]) - Fee split receivers/amounts
-    - `feeReceivers` (address[]), `feeAmounts` (uint256[]) - Additional fee receivers
-    - `dstReceiver` - Output token recipient
-    - `amount` - Input amount
-    - `minReturnAmount` - Minimum output (slippage protection)
-    - `flags` - Behavior flags
-    - `permit` (bytes) - EIP-2612 permit data
-  - `clientData` (bytes) - Client tracking data
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/kyberswap-aggregator.md](registry/kyberswap-aggregator.md).
 
 ## Notes
 

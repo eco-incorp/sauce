@@ -4,19 +4,13 @@ Decentralized options protocol with an AMM-based pricing model and concentrated 
 
 ## Category
 
-options | Chains: Arbitrum
+options | Chains and addresses: [registry/premia.md](registry/premia.md)
 
 ## Key Operations
 
 - **exercise**: Exercise a long options position to claim profit
 - **settle**: Settle a short options position after expiry
 - **trade**: Buy or sell options via the Premia AMM
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, exercise, settle } from "@eco-incorp/sauce/protocols/premia";
-```
 
 ## SauceScript Examples
 
@@ -38,19 +32,11 @@ function main(poolAddress: Address): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract    | Address                                      |
-| -------- | ----------- | -------------------------------------------- |
-| Arbitrum | poolFactory | `0xAE4fB6622F25f397587F11638dA8CE88C27b5645` |
-
-## ABI Methods
-
-### DiamondABI (a Premia v3 pool)
-
-- `trade(uint256 size, bool isBuy, uint256 premiumLimit, address referrer) returns (uint256 totalPremium, (int256 collateral, int256 longs, int256 shorts) delta)` - Buy/sell options from the pool's AMM. `size` is 18-decimal
-- `exercise() returns (uint256 exerciseValue, uint256 exerciseFee)` - Exercise the caller's long position after maturity
-- `settle() returns (uint256 collateral)` - Settle the caller's short position after maturity
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/premia.md](registry/premia.md).
 
 ## Notes
 

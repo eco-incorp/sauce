@@ -6,17 +6,11 @@ Arbitrum-native ve(3,3) DEX with concentrated liquidity support. Features gauge 
 
 ## Category
 
-dex | Chains: Arbitrum
+dex | Chains and addresses: [registry/ramses.md](registry/ramses.md)
 
 ## Key Operations
 
 - **swap**: Swap tokens with route-based routing specifying stable or volatile pool type
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, swap } from "@eco-incorp/sauce/protocols/ramses";
-```
 
 ## SauceScript Examples
 
@@ -54,18 +48,11 @@ function main(
 - Routes support multi-hop: `[{from: A, to: B, stable: false}, {from: B, to: C, stable: true}]`
 - Note: Ramses routes do NOT include a `factory` field (unlike Velodrome/Aerodrome)
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Arbitrum | Router   | `0xAAA87963EFeB6f7E0a2711F397663105Acb1805e` |
-
-## ABI Methods
-
-### RamsesRouterABI
-
-- `swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, tuple[](address from, address to, bool stable) routes, address to, uint256 deadline) -> uint256[] amounts` - Swap with route tuples specifying pool type per hop
-- `addLiquidity(address tokenA, address tokenB, bool stable, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB, uint256 liquidity)` - Add liquidity to a stable or volatile pool
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/ramses.md](registry/ramses.md).
 
 ## Notes
 

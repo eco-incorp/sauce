@@ -4,7 +4,7 @@ Decentralized borrowing protocol offering interest-free loans against ETH collat
 
 ## Category
 
-cdp | Chains: Ethereum
+cdp | Chains and addresses: [registry/liquity-v1.md](registry/liquity-v1.md)
 
 ## Key Operations
 
@@ -12,17 +12,6 @@ cdp | Chains: Ethereum
 - **repayLUSD**: Repay LUSD debt on an open Trove
 - **openTrove**: Open a new Trove by depositing ETH and borrowing LUSD
 - **adjustTrove**: Adjust Trove collateral and/or debt
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  closeTrove,
-  repayLUSD,
-} from "@eco-incorp/sauce/protocols/liquity-v1";
-```
 
 ## SauceScript Examples
 
@@ -48,21 +37,11 @@ function main(borrowerOpsAddress: Address, amount: Uint256): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract           | Address                                      |
-| -------- | ------------------ | -------------------------------------------- |
-| Ethereum | lusd               | `0x5f98805A4E8be255a32880FDeC7F6728C6568bA0` |
-| Ethereum | borrowerOperations | `0x24179CD81c9e782A4096035f7eC97fB8B783e007` |
-
-## ABI Methods
-
-### BorrowerOperationsABI
-
-- `openTrove(uint256,uint256,address,address)` - Open new Trove. Payable (send ETH as collateral). Params: maxFeePercentage (max borrowing fee, e.g. 5e16 = 5%), LUSDAmount (LUSD to borrow), upperHint (sorted troves hint), lowerHint (sorted troves hint)
-- `closeTrove()` - Close Trove. Must repay all LUSD debt first. Returns all ETH collateral
-- `adjustTrove(uint256,uint256,uint256,bool,address,address)` - Adjust Trove. Payable (send ETH to add collateral). Params: maxFeePercentage, collWithdrawal (ETH to withdraw), LUSDChange (LUSD amount to change), isDebtIncrease (true=borrow more, false=repay), upperHint, lowerHint
-- `repayLUSD(uint256,address,address)` - Repay LUSD debt. Params: LUSDAmount, upperHint, lowerHint (sorted-trove hints; the zero address is valid)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/liquity-v1.md](registry/liquity-v1.md).
 
 ## Notes
 

@@ -6,25 +6,13 @@ Base-native DEX with UniV2-style constant product pools (x*y=k). Features yield 
 
 ## Category
 
-dex | Chains: Base
+dex | Chains and addresses: [registry/baseswap.md](registry/baseswap.md)
 
 ## Key Operations
 
 - **swap**: Swap exact input tokens through a routing path
 - **addLiquidity**: Deposit two tokens to mint LP tokens
 - **removeLiquidity**: Burn LP tokens to withdraw underlying tokens
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  swap,
-  addLiquidity,
-  removeLiquidity,
-} from "@eco-incorp/sauce/protocols/baseswap";
-```
 
 ## SauceScript Examples
 
@@ -111,19 +99,11 @@ function main(
 
 - LP token must be approved to the router
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain | Contract  | Address                                      |
-| ----- | --------- | -------------------------------------------- |
-| Base  | V2 Router | `0x327Df1E6de05895d2ab08513aaDD9313Fe505d86` |
-
-## ABI Methods
-
-### BaseSwapRouterABI
-
-- `swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline) -> uint256[] amounts` - Swap exact input along path
-- `addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB, uint256 liquidity)` - Add liquidity and mint LP tokens
-- `removeLiquidity(address tokenA, address tokenB, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB)` - Burn LP tokens for underlying
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/baseswap.md](registry/baseswap.md).
 
 ## Notes
 

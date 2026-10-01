@@ -6,17 +6,11 @@ Proactive Market Maker (PMM) DEX with capital-efficient liquidity provision. Unl
 
 ## Category
 
-dex | Chains: Ethereum, BSC
+dex | Chains and addresses: [registry/dodo.md](registry/dodo.md)
 
 ## Key Operations
 
 - **swap**: Swap tokens via DODO V2 Proxy with pair-based routing
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, swap } from "@eco-incorp/sauce/protocols/dodo";
-```
 
 ## SauceScript Examples
 
@@ -57,18 +51,11 @@ function main(
 - `direction`: Bitmask encoding which side of each pool to use. Each bit represents a pool: `0` = sell base token, `1` = sell quote token. For a single pool, use `0` or `1`. For multi-pool, combine bits (e.g., `0b01` = first pool sell quote, second pool sell base)
 - `isIncentive`: Set to `false` (incentive mining flag, usually disabled)
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | V2 Proxy | `0xa356867fDCeA8e71AEaf87805808803806231FDc` |
-| BSC      | V2 Proxy | `0x8F8Dd7DB1bDA5eD3da8C9dAf3bFA471c12d58486` |
-
-## ABI Methods
-
-### DODOV2ProxyABI
-
-- `dodoSwapV2TokenToToken(address fromToken, address toToken, uint256 fromTokenAmount, uint256 minReturnAmount, address[] dodoPairs, uint256 directions, bool isIncentive, uint256 deadLine) -> uint256 returnAmount` - Execute a token-to-token swap through one or more DODO pools
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/dodo.md](registry/dodo.md).
 
 ## Notes
 

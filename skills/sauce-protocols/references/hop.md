@@ -4,7 +4,7 @@ Token bridge for rollups using bonders for fast withdrawals. Supports ETH, USDC,
 
 ## Category
 
-bridge | Direction: L1-to-L2 (sendToL2), L2-to-L2/L1 (swapAndSend) | Chains: Ethereum (1), Arbitrum (42161), Optimism (10), Polygon (137), Base (8453)
+bridge | Direction: L1-to-L2 (sendToL2), L2-to-L2/L1 (swapAndSend) | Chains and addresses: [registry/hop.md](registry/hop.md)
 
 ## SauceScript Functions
 
@@ -43,26 +43,11 @@ function main(
 - `relayer`/`relayerFee`: Set to zero for standard transfers
 - Requires ERC-20 approval to the L1Bridge for ERC-20 tokens, or send ETH as msg.value
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract              | Address                                      |
-| -------- | --------------------- | -------------------------------------------- |
-| Ethereum | l1EthBridge           | `0xb8901acb165ed027e32754e0ffe830802919727f` |
-| Ethereum | l1UsdcBridge          | `0x3666f603Cc164936C1b87e207F36BEBa4AC5f18a` |
-| Arbitrum | l2AmmWrapper (WETH)   | `0x33ceb27b39d2Bb7D2e61F7564d3Df29344020417` |
-| Optimism | l2AmmWrapper (WETH)   | `0x86cA30bEF97fB651b8d866D45503684b90cb3312` |
-| Polygon  | l2AmmWrapper (USDC.e) | `0x76b22b8C1079A44F1211D867D68b1eda76a635A7` |
-| Base     | l2AmmWrapper (WETH)   | `0x10541b07d8Ad2647Dc6cD67abd4c03575dade261` |
-
-## ABI Reference
-
-### HopL1BridgeABI
-
-- `sendToL2(uint256 chainId, address recipient, uint256 amount, uint256 amountOutMin, uint256 deadline, address relayer, uint256 relayerFee)` [payable] - Bridge tokens from L1 to L2
-
-### HopL2AmmWrapperABI
-
-- `swapAndSend(uint256 chainId, address recipient, uint256 amount, uint256 bonderFee, uint256 amountOutMin, uint256 deadline, uint256 destinationAmountOutMin, uint256 destinationDeadline)` [payable] - Bridge tokens from L2 to another L2 or back to L1. Swaps canonical token to hToken, sends via bonder
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/hop.md](registry/hop.md).
 
 ## Notes
 

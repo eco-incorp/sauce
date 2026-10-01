@@ -6,17 +6,11 @@ Dynamic distribution AMM with directional liquidity positioning. Allows LPs to f
 
 ## Category
 
-dex | Chains: Ethereum, Arbitrum, Base
+dex | Chains and addresses: [registry/maverick.md](registry/maverick.md)
 
 ## Key Operations
 
 - **swap**: Exact input single swap via V2 Router, specifying pool address and direction
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, swap } from "@eco-incorp/sauce/protocols/maverick";
-```
 
 ## SauceScript Examples
 
@@ -46,25 +40,11 @@ function main(
 - `recipient`: Address to receive output tokens
 - Note: parameter order is `(recipient, pool, tokenAIn, amountIn, amountOutMin)` - recipient comes FIRST
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract   | Address                                      |
-| -------- | ---------- | -------------------------------------------- |
-| Ethereum | V2 Router  | `0x62e31802c6145A2D5E842EeD8efe01fC224422fA` |
-| Ethereum | V2 Factory | `0x0A7e848Aca42d879EF06507Fca0E7b33A0a63c1e` |
-| Arbitrum | V2 Router  | `0x5c3b380e5Aeec389d1014Da3Eb372FA2C9e0fc76` |
-| Base     | V2 Router  | `0x5eDEd0d7E76C563FF081Ca01D9d12D6B404Df527` |
-
-## ABI Methods
-
-### MaverickV2RouterABI
-
-- `exactInputSingle(address recipient, address pool, bool tokenAIn, uint256 amountIn, uint256 amountOutMinimum) -> uint256 amountOut` - Swap exact input in a specific pool
-- `exactOutputSingle(address recipient, address pool, bool tokenAIn, uint256 amountOut, uint256 amountInMaximum) -> (uint256 amountIn, uint256 amountOut)` - Swap to get exact output from a specific pool
-
-### MaverickV2FactoryABI
-
-- `lookup(address tokenA, address tokenB, uint256 startIndex, uint256 endIndex) -> address[] pools` - Look up a page of the pools for a token pair (view)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/maverick.md](registry/maverick.md).
 
 ## Notes
 

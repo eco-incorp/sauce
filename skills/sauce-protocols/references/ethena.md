@@ -4,7 +4,7 @@ Synthetic dollar protocol providing USDe, a crypto-native dollar backed by delta
 
 ## Category
 
-cdp | Chains: Ethereum
+cdp | Chains and addresses: [registry/ethena.md](registry/ethena.md)
 
 ## Key Operations
 
@@ -12,18 +12,6 @@ cdp | Chains: Ethereum
 - **cooldownAssets**: Start cooldown period to unstake (by asset amount)
 - **cooldownShares**: Start cooldown period to unstake (by share amount)
 - **unstake**: Complete unstake after cooldown period
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  stakeUSDe,
-  cooldownAssets,
-  unstake,
-} from "@eco-incorp/sauce/protocols/ethena";
-```
 
 ## SauceScript Examples
 
@@ -51,27 +39,11 @@ function main(susdeAddress: Address, receiver: Address): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | usde     | `0x4c9EDD5852cd905f086C759E8383e09bff1e68b3` |
-| Ethereum | susde    | `0x9D39A5DE30e57443BfF2A8307A4256c8797A3497` |
-
-## ABI Methods
-
-### StakedUSDeABI (ERC-4626 + cooldown)
-
-- `deposit(uint256,address)` - Stake USDe, receive sUSDe. Params: assets (USDe amount), receiver. Returns shares (sUSDe minted)
-- `withdraw(uint256,address,address)` - Withdraw by asset amount (after cooldown). Params: assets, receiver, owner. Returns shares burned
-- `redeem(uint256,address,address)` - Redeem by share amount (after cooldown). Params: shares, receiver, owner. Returns assets
-- `cooldownAssets(uint256)` - Start cooldown by specifying USDe amount. Params: assets. Returns shares that will be burned
-- `cooldownShares(uint256)` - Start cooldown by specifying sUSDe amount. Params: shares. Returns assets that will be received
-- `unstake(address)` - Complete unstake after cooldown. Params: receiver (address to receive USDe)
-
-### USDeABI
-
-- `approve(address,uint256)` - Approve USDe spender. Params: spender, amount. Returns bool
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/ethena.md](registry/ethena.md).
 
 ## Notes
 

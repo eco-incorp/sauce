@@ -4,18 +4,12 @@ Flash loan aggregator that routes across Aave, Maker, Balancer and other sources
 
 ## Category
 
-infrastructure | Chains: Ethereum
+infrastructure | Chains and addresses: [registry/instadapp.md](registry/instadapp.md)
 
 ## Key Operations
 
 - **getRoutes**: Query available flash loan routes and their IDs
 - **flashLoan**: Execute a flash loan via optimal route
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, getRoutes } from "@eco-incorp/sauce/protocols/instadapp";
-```
 
 ## SauceScript Examples
 
@@ -29,18 +23,11 @@ function main(aggregatorAddress: Address): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract            | Address                                      |
-| -------- | ------------------- | -------------------------------------------- |
-| Ethereum | flashloanAggregator | `0xE6054aE0Dba269560061D736e7510Ce64fCD517d` |
-
-## ABI Methods
-
-### FlashAggregatorABI
-
-- `flashLoan(address[],uint256[],uint256,bytes,bytes)` - Execute flash loan. Params: tokens (array of token addresses), amounts (array of borrow amounts), route (route ID from getRoutes), data (callback data for the receiver), extraData (additional route-specific data)
-- `getRoutes()` - List available flash loan routes. Returns routes (uint16[] of available route IDs). Pure function
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/instadapp.md](registry/instadapp.md).
 
 ## Notes
 

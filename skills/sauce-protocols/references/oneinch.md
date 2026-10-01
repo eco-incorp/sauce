@@ -6,18 +6,12 @@ Leading DEX aggregator that finds optimal swap routes across multiple liquidity 
 
 ## Category
 
-aggregator | Chains: Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Avalanche
+aggregator | Chains and addresses: [registry/oneinch.md](registry/oneinch.md)
 
 ## Key Operations
 
 - **unoswap**: Single-source optimized swap via AggregationRouter
 - **swap**: Multi-source aggregated swap with custom routing
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, unoswap } from "@eco-incorp/sauce/protocols/oneinch";
-```
 
 ## SauceScript Examples
 
@@ -36,25 +30,11 @@ function main(
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain     | Contract            | Address                                      |
-| --------- | ------------------- | -------------------------------------------- |
-| Ethereum  | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` |
-| Arbitrum  | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` |
-| Optimism  | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` |
-| Base      | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` |
-| Polygon   | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` |
-| BSC       | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` |
-| Avalanche | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` |
-
-## ABI Methods
-
-### AggregationRouterV6ABI
-
-- `swap(address,tuple,bytes)` - Multi-source swap. Params: executor, desc (SwapDescription tuple: srcToken, dstToken, srcReceiver, dstReceiver, amount, minReturnAmount, flags), data (executor calldata). Payable. Returns (returnAmount, spentAmount)
-  - SwapDescription tuple: `{ srcToken, dstToken, srcReceiver, dstReceiver, amount, minReturnAmount, flags }`
-- `unoswap(uint256,uint256,uint256,uint256)` - Single-pool optimized swap. Params: token (source token address as uint256), amount, minReturn, dex (pool address packed with protocol and direction flags). Returns returnAmount
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/oneinch.md](registry/oneinch.md).
 
 ## Notes
 

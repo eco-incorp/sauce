@@ -4,7 +4,7 @@ Circle's chain-abstracted USDC balance. Deposit USDC into the GatewayWallet on o
 
 ## Category
 
-cross-chain | Chains: Ethereum (1), Optimism (10), Polygon (137), Unichain (130), Sonic (146), Sei (1329), Base (8453), Arbitrum (42161), Avalanche (43114), Arc (5042)
+cross-chain | Chains and addresses: [registry/circle-gateway.md](registry/circle-gateway.md)
 
 ## SauceScript Functions
 
@@ -53,42 +53,11 @@ function main(minterAddress: Address, attestationPayload: bytes, signature: byte
 }
 ```
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain             | Contract      | Address                                      |
-| ----------------- | ------------- | -------------------------------------------- |
-| Every chain above | GatewayWallet | `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE` |
-| Every chain above | GatewayMinter | `0x2222222d7164433c4C09B0b0D809a9b52C04C205` |
-
-| Chain     | Circle domain |
-| --------- | ------------- |
-| Ethereum  | 0             |
-| Avalanche | 1             |
-| Optimism  | 2             |
-| Arbitrum  | 3             |
-| Base      | 6             |
-| Polygon   | 7             |
-| Unichain  | 10            |
-| Sonic     | 13            |
-| Sei       | 16            |
-| Arc       | 26            |
-
-## ABI Reference
-
-### GatewayWalletABI
-
-- `deposit(address token, uint256 value)` - Deposit into the caller's own Gateway balance
-- `depositFor(address token, address depositor, uint256 value)` - Deposit into another depositor's balance
-- `totalBalance(address token, address depositor) returns (uint256)` - Available plus withdrawing (view)
-- `availableBalance(address token, address depositor) returns (uint256)` - Spendable balance (view)
-- `isTokenSupported(address token) returns (bool)` (view)
-- `domain() returns (uint32)` - This chain's Circle domain, as in the table above (view)
-
-### GatewayMinterABI
-
-- `gatewayMint(bytes attestationPayload, bytes signature)` - Mint from a Circle-signed attestation
-- `isTokenSupported(address token) returns (bool)` (view)
-- `domain() returns (uint32)` (view)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/circle-gateway.md](registry/circle-gateway.md).
 
 ## Notes
 

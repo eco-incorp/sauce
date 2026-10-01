@@ -6,25 +6,13 @@ The central trading and liquidity marketplace on Optimism. Solidly-fork with ve(
 
 ## Category
 
-dex | Chains: Optimism
+dex | Chains and addresses: [registry/velodrome.md](registry/velodrome.md)
 
 ## Key Operations
 
 - **swap**: Swap tokens with route-based routing specifying stable or volatile pool type
 - **addLiquidity**: Add liquidity to a stable or volatile pool
 - **removeLiquidity**: Remove liquidity from a stable or volatile pool
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  swap,
-  addLiquidity,
-  removeLiquidity,
-} from "@eco-incorp/sauce/protocols/velodrome";
-```
 
 ## SauceScript Examples
 
@@ -129,24 +117,11 @@ function main(
 - `liquidity`: Amount of LP tokens to burn
 - LP token must be approved to the router
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract    | Address                                      |
-| -------- | ----------- | -------------------------------------------- |
-| Optimism | RouterV2    | `0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858` |
-| Optimism | PoolFactory | `0xF1046053aa5682b4F9a81b5481394DA16BE5FF5a` |
-
-## ABI Methods
-
-### VelodromeRouterABI
-
-- `swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, tuple[](address from, address to, bool stable, address factory) routes, address to, uint256 deadline) -> uint256[] amounts` - Swap with route tuples specifying pool type per hop
-- `addLiquidity(address tokenA, address tokenB, bool stable, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB, uint256 liquidity)` - Add liquidity to a stable or volatile pool
-- `removeLiquidity(address tokenA, address tokenB, bool stable, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB)` - Remove liquidity from a pool
-
-### VelodromePoolFactoryABI
-
-- `getPool(address tokenA, address tokenB, bool stable) -> address pool` - Look up pool address (view)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/velodrome.md](registry/velodrome.md).
 
 ## Notes
 

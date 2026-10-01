@@ -4,17 +4,11 @@ On-chain options trading protocol allowing users to buy call and put options on 
 
 ## Category
 
-options | Chains: Arbitrum
+options | Chains and addresses: [registry/hegic.md](registry/hegic.md)
 
 ## Key Operations
 
 - **exerciseOption**: Exercise an options position to claim profit
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, exerciseOption } from "@eco-incorp/sauce/protocols/hegic";
-```
 
 ## SauceScript Examples
 
@@ -28,18 +22,11 @@ function main(treasuryAddress: Address, optionId: Uint256, account: Address): Ui
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract            | Address                                                    |
-| -------- | ------------------- | ---------------------------------------------------------- |
-| Arbitrum | hegic               | `0x431402e8b9dE9aa016C743880e04E517074D8cEC` (HEGIC token) |
-| Arbitrum | operationalTreasury | `0xec096ea6eB9aa5ea689b0CF00882366E92377371`               |
-
-## ABI Methods
-
-### HegicABI
-
-- `payOff(uint256 positionID, address account)` - Exercise an option by ID on the OperationalTreasury; the payout goes to `account`
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/hegic.md](registry/hegic.md).
 
 ## Notes
 

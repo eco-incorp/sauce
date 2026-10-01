@@ -6,25 +6,13 @@ Decentralized perpetual exchange with multi-asset liquidity pool (GLP). Supports
 
 ## Category
 
-perpetuals | Chains: Arbitrum, Avalanche
+perpetuals | Chains and addresses: [registry/gmx-v1.md](registry/gmx-v1.md)
 
 ## Key Operations
 
 - **openPosition**: Open/increase leveraged position via PositionRouter
 - **closePosition**: Close/decrease leveraged position
 - **swap**: Swap tokens via GMX Router
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  openPosition,
-  closePosition,
-  swap,
-} from "@eco-incorp/sauce/protocols/gmx-v1";
-```
 
 ## SauceScript Examples
 
@@ -98,34 +86,11 @@ function main(
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain     | Contract       | Address                                      |
-| --------- | -------------- | -------------------------------------------- |
-| Arbitrum  | vault          | `0x489ee077994B6658eAfA855C308275EAd8097C4A` |
-| Arbitrum  | router         | `0xaBBc5F99639c9B6bCb58544ddf04EFA6802F4064` |
-| Arbitrum  | positionRouter | `0xb87a436B93fFE9D75c5cFA7bAcFff96430b09868` |
-| Arbitrum  | glp            | `0x4277f8F2c384827B5273592FF7CeBd9f2C1ac258` |
-| Avalanche | vault          | `0x9ab2De34A33fB459b538c43f251eB825645e8595` |
-| Avalanche | router         | `0x5F719c2F1095F7B9fc68a68e35B51194f4b6abe8` |
-
-## ABI Methods
-
-### PositionRouterABI
-
-- `createIncreasePosition(address[],address,uint256,uint256,uint256,bool,uint256,uint256,bytes32,address) returns (bytes32)` - Open/increase. Params: path, indexToken, amountIn, minOut, sizeDelta, isLong, acceptablePrice, executionFee, referralCode, callbackTarget (zero for none). Returns the request key
-- `createDecreasePosition(address[],address,uint256,uint256,bool,address,uint256,uint256,uint256,bool,address) returns (bytes32)` - Close/decrease. Params: path, indexToken, collateralDelta, sizeDelta, isLong, receiver, acceptablePrice, minOut, executionFee, withdrawETH, callbackTarget (zero for none). Returns the request key
-
-### RouterABI
-
-- `approvePlugin(address)` - Approve PositionRouter as plugin (required once)
-- `swap(address[],uint256,uint256,address)` - Swap tokens. Params: path, amountIn, minOut, receiver
-
-### VaultABI
-
-- `swap(address,address,address)` - Direct swap (internal)
-- `increasePosition(address,address,address,uint256,bool)` - Direct increase (internal)
-- `decreasePosition(address,address,address,uint256,uint256,bool,address)` - Direct decrease (internal)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/gmx-v1.md](registry/gmx-v1.md).
 
 ## Notes
 

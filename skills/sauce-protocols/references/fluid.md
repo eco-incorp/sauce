@@ -4,7 +4,7 @@ Liquidity layer that unifies lending and DEX liquidity. Deposited assets simulta
 
 ## Category
 
-lending | Chains: Ethereum (1), Arbitrum (42161)
+lending | Chains and addresses: [registry/fluid.md](registry/fluid.md)
 
 ## SauceScript Functions
 
@@ -82,25 +82,11 @@ function main(
 - `negativeDebtDelta`: the repayment as a negative `int256`, passed in two's complement (`2**256 - amount`)
 - Requires ERC-20 approval of the debt token to the Vault
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract  | Address                                      |
-| -------- | --------- | -------------------------------------------- |
-| Ethereum | liquidity | `0x52Aa899454998Be5b000Ad077a46Bbe360F4e497` |
-| Arbitrum | liquidity | `0x52Aa899454998Be5b000Ad077a46Bbe360F4e497` |
-
-## ABI Reference
-
-### FluidLendingABI (an fToken)
-
-- `deposit(uint256 assets, address receiver) returns (uint256 shares)` - ERC-4626 deposit
-- `withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)` - ERC-4626 withdraw
-- `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)` - ERC-4626 redeem
-- `asset() returns (address)` - The underlying token
-
-### FluidVaultABI (a Vault)
-
-- `operate(uint256 nftId, int256 newCol, int256 newDebt, address to) returns (uint256, int256, int256)` [payable] - Change a position's collateral and debt in one call; positive deltas deposit/borrow, negative ones withdraw/repay
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/fluid.md](registry/fluid.md).
 
 ## Notes
 

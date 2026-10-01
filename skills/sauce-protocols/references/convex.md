@@ -4,25 +4,13 @@ Yield optimizer for Curve Finance LP tokens. Deposit Curve LP tokens to earn boo
 
 ## Category
 
-yield | Chains: Ethereum
+yield | Chains and addresses: [registry/convex.md](registry/convex.md)
 
 ## Key Operations
 
 - **deposit**: Deposit Curve LP tokens into Convex pool (with auto-staking)
 - **withdraw**: Withdraw Curve LP tokens from Convex pool
 - **getReward**: Claim accumulated CRV + CVX + extra rewards
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  deposit,
-  withdraw,
-  getReward,
-} from "@eco-incorp/sauce/protocols/convex";
-```
 
 ## SauceScript Examples
 
@@ -52,28 +40,11 @@ function main(rewardPoolAddress: Address, account: Address): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract      | Address                                      |
-| -------- | ------------- | -------------------------------------------- |
-| Ethereum | booster       | `0xF403C135812408BFbE8713b5A23a04b3D48AAE31` |
-| Ethereum | cvxRewardPool | `0xCF50b810E57Ac33B91dCF525C6ddd9881B139332` |
-
-## ABI Methods
-
-### BoosterABI
-
-- `deposit(uint256,uint256,bool)` - Deposit LP tokens. Params: pool ID (pid), amount, stake in reward pool (true recommended)
-- `withdraw(uint256,uint256)` - Withdraw LP tokens. Params: pool ID, amount
-- `poolLength()` - Total number of pools
-- `poolInfo(uint256)` - Get pool info: (lptoken, token, gauge, crvRewards, stash, shutdown)
-
-### BaseRewardPoolABI
-
-- `getReward(address,bool)` - Claim rewards. Params: account, claimExtras (true = claim extra reward tokens too)
-- `earned(address)` - Query pending CRV rewards
-- `balanceOf(address)` - Query staked balance in reward pool
-- `withdrawAndUnwrap(uint256,bool)` - Withdraw and unwrap in one tx. Params: amount, claim rewards
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/convex.md](registry/convex.md).
 
 ## Notes
 

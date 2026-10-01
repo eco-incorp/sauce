@@ -4,7 +4,7 @@ Official Optimism L1StandardBridge for depositing ETH and ERC-20 tokens from Eth
 
 ## Category
 
-native L2 bridge | Direction: L1 to L2 (Ethereum to Optimism) | Chains: Ethereum (1), Optimism (10)
+native L2 bridge | Direction: L1 to L2 (Ethereum to Optimism) | Chains and addresses: [registry/optimism-bridge.md](registry/optimism-bridge.md)
 
 ## SauceScript Functions
 
@@ -52,21 +52,11 @@ function main(
 - `_extraData`: Optional extra data (typically `0x00`)
 - Requires ERC-20 approval to the L1StandardBridge
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract         | Address                                      |
-| -------- | ---------------- | -------------------------------------------- |
-| Ethereum | l1StandardBridge | `0x99C9fc46f92E8a1c0deC1b1747d010903E884bE1` |
-| Optimism | l2StandardBridge | `0x4200000000000000000000000000000000000010` |
-
-## ABI Reference
-
-### OptimismL1StandardBridgeABI
-
-- `depositETH(uint32 _minGasLimit, bytes _extraData)` [payable] - Deposit ETH to your own address on L2. Amount = msg.value
-- `depositERC20(address _l1Token, address _l2Token, uint256 _amount, uint32 _minGasLimit, bytes _extraData)` - Deposit ERC-20 tokens to your own address on L2
-- `depositETHTo(address _to, uint32 _minGasLimit, bytes _extraData)` [payable] - Deposit ETH to a specific recipient on L2
-- `depositERC20To(address _l1Token, address _l2Token, address _to, uint256 _amount, uint32 _minGasLimit, bytes _extraData)` - Deposit ERC-20 tokens to a specific recipient on L2
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/optimism-bridge.md](registry/optimism-bridge.md).
 
 ## Notes
 

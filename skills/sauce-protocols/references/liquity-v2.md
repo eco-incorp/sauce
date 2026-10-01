@@ -4,23 +4,12 @@ Next generation of Liquity protocol with user-set interest rates, multi-collater
 
 ## Category
 
-cdp | Chains: Ethereum
+cdp | Chains and addresses: [registry/liquity-v2.md](registry/liquity-v2.md)
 
 ## Key Operations
 
 - **transfer**: Transfer BOLD tokens
 - **approve**: Approve BOLD token spender
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  transfer,
-  approve,
-} from "@eco-incorp/sauce/protocols/liquity-v2";
-```
 
 ## SauceScript Examples
 
@@ -40,19 +29,11 @@ function main(boldAddress: Address, spender: Address, amount: Uint256): Uint256 
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | bold     | `0x6440f144b7e50D6a8439336510312d2F54beB01D` |
-
-## ABI Methods
-
-### BoldTokenABI
-
-- `transfer(address,uint256)` - Transfer BOLD tokens. Params: to, amount. Returns bool
-- `approve(address,uint256)` - Approve spender. Params: spender, amount. Returns bool
-- `balanceOf(address)` - Query balance. Params: account. Returns uint256
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/liquity-v2.md](registry/liquity-v2.md).
 
 ## Notes
 

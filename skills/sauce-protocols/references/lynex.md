@@ -6,17 +6,11 @@ Linea-native ve(3,3) DEX and liquidity marketplace. Solidly-fork with gauge voti
 
 ## Category
 
-dex | Chains: Linea
+dex | Chains and addresses: [registry/lynex.md](registry/lynex.md)
 
 ## Key Operations
 
 - **swap**: Swap tokens with route-based routing specifying stable or volatile pool type
-
-## SDK Usage
-
-```typescript
-import { protocolInfo, deployments, swap } from "@eco-incorp/sauce/protocols/lynex";
-```
 
 ## SauceScript Examples
 
@@ -54,18 +48,11 @@ function main(
 - Routes support multi-hop: `[{from: A, to: B, stable: false}, {from: B, to: C, stable: true}]`
 - Note: Lynex routes do NOT include a `factory` field (unlike Velodrome/Aerodrome)
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain | Contract | Address                                      |
-| ----- | -------- | -------------------------------------------- |
-| Linea | Router   | `0x610D2f07b7EdC67565160F587F37636194C34E74` |
-
-## ABI Methods
-
-### LynexRouterABI
-
-- `swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, tuple[](address from, address to, bool stable) routes, address to, uint256 deadline) -> uint256[] amounts` - Swap with route tuples specifying pool type per hop
-- `addLiquidity(address tokenA, address tokenB, bool stable, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB, uint256 liquidity)` - Add liquidity to a stable or volatile pool
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/lynex.md](registry/lynex.md).
 
 ## Notes
 

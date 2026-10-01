@@ -4,25 +4,13 @@ Frax Finance's liquid staking derivative. Two tokens: frxETH (pegged 1:1 to ETH)
 
 ## Category
 
-liquid-staking | Chains: Ethereum
+liquid-staking | Chains and addresses: [registry/frax-ether.md](registry/frax-ether.md)
 
 ## Key Operations
 
 - **submitAndDeposit**: Stake ETH and deposit directly into sfrxETH vault (one-step)
 - **deposit**: Deposit frxETH into sfrxETH vault
 - **redeem**: Redeem sfrxETH shares for frxETH
-
-## SDK Usage
-
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  submitAndDeposit,
-  deposit,
-  redeem,
-} from "@eco-incorp/sauce/protocols/frax-ether";
-```
 
 ## SauceScript Examples
 
@@ -54,26 +42,11 @@ function main(
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract     | Address                                      |
-| -------- | ------------ | -------------------------------------------- |
-| Ethereum | sfrxETH      | `0xac3E018457B222d93114458476f3E3416Abbe38F` |
-| Ethereum | frxETHMinter | `0xbAFA44EFE7901E04E39Dad13167D089C559c1138` |
-
-## ABI Methods
-
-### FrxETHMinterABI
-
-- `submitAndDeposit(address)` - Stake ETH (payable) and auto-deposit into sfrxETH vault. Returns sfrxETH shares
-
-### SfrxETHABI (ERC-4626)
-
-- `deposit(uint256,address)` - Deposit frxETH, receive sfrxETH shares
-- `redeem(uint256,address,address)` - Redeem sfrxETH shares for frxETH. Params: shares, receiver, owner
-- `convertToShares(uint256)` - Preview shares for frxETH amount
-- `convertToAssets(uint256)` - Preview frxETH for sfrxETH amount
-- `balanceOf(address)` - Query sfrxETH balance
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/frax-ether.md](registry/frax-ether.md).
 
 ## Notes
 
