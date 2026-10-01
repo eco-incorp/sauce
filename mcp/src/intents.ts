@@ -50,6 +50,7 @@ import {
   PROGRAM,
   programOf,
   READS_CHAIN,
+  refusable,
   RPC_URLS,
   SUPPORTED_ONLY,
   toolRegistrar,
@@ -529,9 +530,9 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
           .describe("Rehearse the fill (eth_simulateV1) instead of building it; nothing signed."),
         ...endpointInputs("The destination chain"),
       },
-      output: {
+      output: refusable({
         intents: z.array(z.looseObject({ intentHash: z.string() })),
-      },
+      }),
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
@@ -690,7 +691,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         from: FEE_PAYER,
         ...endpointInputs("The destination chain"),
       },
-      output: PLAN_OUTPUT,
+      output: refusable(PLAN_OUTPUT),
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
@@ -720,7 +721,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         `out, saying why. ${NOT_YET} Any account may send it: the reward goes to the claimant, ` +
         `not the sender. Needs the source chain's endpoint. ${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: { ...MANY, ...endpointInputs("The source chain") },
-      output: { ...PLAN_OUTPUT, claims: z.array(z.looseObject({})).optional() },
+      output: refusable({ ...PLAN_OUTPUT, claims: z.array(z.looseObject({})) }),
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
@@ -747,11 +748,11 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         `may send it: the reward goes to the creator. Needs the source chain's endpoint. ${UNSIGNED} ` +
         SUPPORTED_ONLY,
       input: { ...ONE, ...endpointInputs("The source chain") },
-      output: {
+      output: refusable({
         ...PLAN_OUTPUT,
-        refundee: z.string().optional(),
-        moves: z.array(z.unknown()).optional(),
-      },
+        refundee: z.string(),
+        moves: z.array(z.unknown()),
+      }),
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
@@ -792,7 +793,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         from: FEE_PAYER,
         ...endpointInputs("The destination chain"),
       },
-      output: PLAN_OUTPUT,
+      output: refusable(PLAN_OUTPUT),
       annotations: READS_CHAIN,
     },
     async (args, reach) => {

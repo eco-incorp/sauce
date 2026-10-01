@@ -1,8 +1,8 @@
 # A request for a chain the release does not support yet. Sauce's initial release builds and sends
 # transactions on Ethereum, Base and Solana; every other chain is a preview chain (compile and
 # simulate only). The `sauce` command and its MCP server link here, prefilled, when they refuse a
-# preview chain (`sdk/src/chains/support.ts#chainSupportRequest`), so the field ids below are query
-# parameters of that link: `sdk/test/chains-support.test.ts` holds the two to each other.
+# preview chain (`sdk/src/cli/support.ts#chainSupportRequest`), so the field ids below are query
+# parameters of that link: `sdk/test/cli-chain-support.test.ts` holds the two to each other.
 name: Chain support request
 description: Ask for a chain Sauce does not support yet, or add your use case to a request.
 title: "Chain support: "

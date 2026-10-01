@@ -1,13 +1,16 @@
 ---
 name: sauce-examples
-description: Index of every example in the Sauce skills — each SauceScript program (.sauce.ts) with the chains it is checked on and the sauce command that runs it, and each TypeScript runner (.mts), what it demonstrates and which skill explains it. Use when the user says "show me an example", "sample Sauce program", "example .sauce file", "how do I write X in Sauce", or wants a starting point to copy (a payment, a swap, a distributed swap, a cross-chain intent, a protocol call, a Solana transfer).
+description: Index of every example in the Sauce skills — each SauceScript program (.sauce.ts) with the chains it is checked on and the sauce command that runs it, and each TypeScript runner (.mts), what it demonstrates and which skill explains it. Use when the user says "show me an example", "sample Sauce program", "example .sauce file", "how do I write X in Sauce", or wants to see how a complete program does something (a payment, a swap, a distributed swap, a cross-chain intent, a protocol call, a Solana transfer).
 ---
 
 # Sauce examples
 
-Every example lives in the skill that explains it. Copy the closest program, then read its skill
-before changing it. A program names no chain: `--chain` picks one, and the chains below are the
-ones it is checked on.
+Every example lives in the skill that explains it, and demonstrates an idiom. Read one for the
+pattern, with its skill, then write the program the task needs (`sauce-overview`): an example is not
+a template to fill in. A program names no chain: `--chain` picks one, and the chains below are the
+ones it is checked on. Each program's first comment lines say what it does, give the `sauce`
+command that runs it with every `main` parameter named, say what each parameter is and its units,
+and show one run on a supported chain with real values.
 
 For the initial release, Sauce supports transactions on Ethereum, Base and Solana. A chain marked
 (preview) is a preview chain: the program is compiled for it, and its cook is checked to be

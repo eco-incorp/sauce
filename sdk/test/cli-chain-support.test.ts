@@ -1,7 +1,8 @@
 /**
- * The release's support levels (`src/chains/support.ts`) and the chain-support request they link to:
- * the three supported chains, every other one a preview chain, and the request's URLs held to the
- * issue form they open (`.github/ISSUE_TEMPLATE/chain-support.yml`), field by field.
+ * The chains the `sauce` command supports (`src/cli/support.ts`) and the chain-support request it
+ * links to: the three supported chains, every other one a preview chain, the request's URLs held
+ * to the issue form they open (`.github/ISSUE_TEMPLATE/chain-support.yml`), field by field — and
+ * none of it in the package's API, which keeps every chain.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -9,6 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import { canonicalChains, requireChain } from "../src/chains/canonical.js";
 import * as chains from "../src/chains/index.js";
+import * as root from "../src/index.js";
 import {
   CHAIN_SUPPORT_FIELDS,
   CHAIN_SUPPORT_ISSUES_URL,
@@ -23,7 +25,7 @@ import {
   previewChains,
   SUPPORTED_CHAIN_SLUGS,
   supportedChains,
-} from "../src/chains/support.js";
+} from "../src/cli/support.js";
 
 const FORM = readFileSync(
   join(
@@ -76,10 +78,16 @@ describe("support levels", () => {
     expect(isSupportedChain("hyperliquid")).toBe(false);
   });
 
-  it("is exported from the chains entry point, beside the registry", () => {
-    expect(chains.chainSupport).toBe(chainSupport);
-    expect(chains.chainSupportRequest).toBe(chainSupportRequest);
-    expect(chains.supportedChains).toBe(supportedChains);
+  it("is the command's policy alone: the package exports none of it", () => {
+    for (const name of [
+      "chainSupport",
+      "chainSupportRequest",
+      "supportedChains",
+      "previewChains",
+    ]) {
+      expect(name in chains).toBe(false);
+      expect(name in root).toBe(false);
+    }
   });
 });
 

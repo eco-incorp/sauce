@@ -24,7 +24,6 @@ import {
 } from "viem";
 
 import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
-import { isSupportedChain } from "../chains/support.js";
 import { priceFromSqrtPriceX96 } from "../price.js";
 import { ecoRoutesDeployment, ecoRoutesProver } from "../protocols/eco-routes/lookup.js";
 import { deployments as uniswapV3 } from "../protocols/uniswap-v3/addresses.js";
@@ -36,7 +35,7 @@ import { connect, kitchenFee } from "./chain.js";
 import { nativeSymbol, tokenInfo } from "./effects.js";
 import { proverPlan } from "./lifecycle.js";
 import { askChoice, askText, missingFlags, type Ask } from "./prompt.js";
-import { requireSupported } from "./support.js";
+import { isSupportedChain, requireSupported } from "./support.js";
 import { parseFundVia } from "./args.js";
 import type { IntentFundVia } from "../routes/portal.js";
 

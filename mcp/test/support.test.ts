@@ -12,7 +12,7 @@ import { after, afterEach, before, describe, it } from "node:test";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import { requireChain } from "../../sdk/dist/chains/canonical.js";
-import { chainSupportRequest } from "../../sdk/dist/chains/support.js";
+import { chainSupportRequest } from "../../sdk/dist/cli/support.js";
 import { fillTargets } from "../../sdk/dist/cli/fill.js";
 import { intentRecord } from "../../sdk/dist/cli/lifecycle.js";
 import { connect, ok, textOf, type Connected } from "./harness.js";
@@ -88,6 +88,9 @@ before(async () => {
   await once(server, "listening");
   url = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   mcp = await connect();
+  // As every client does: listed, the tools' output schemas are what the client then validates
+  // each result against, an error's structured content included.
+  await mcp.client.listTools();
 });
 after(async () => {
   await mcp.close();

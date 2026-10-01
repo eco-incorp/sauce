@@ -21,14 +21,15 @@ read. What they do not do on a preview chain is build or send a transaction. `tx
 `pot --deploy` (and the deployment `pot` prints), `intent publish`, `intent fill --send`, `prove`,
 `claim`, `refund` and `cancel` are refused there before any endpoint is reached or any key is read,
 with the supported chains and a link to request the chain. An intent publishes only when its source
-and every destination it opens, nested ones included, are supported. Each step after publishing is
-refused by the chain it is sent on: a fill, a proof or a cancellation by the destination, a claim or
-a refund by the source.
+and every destination it opens are supported; the later levels of a cascade (an intent opened inside
+another's body) are not checked, so keep every level on a supported chain. Each step after
+publishing is refused by the chain it is sent on: a fill, a proof or a cancellation by the
+destination, a claim or a refund by the source.
 
 The TypeScript SDK is not gated. Its builders take every registry chain and build its
 transactions, and an integrator who submits one on a preview chain does so at their own risk.
-`chainSupport(chain)`, `supportedChains()` and `previewChains()` say which chain is which
-([coverage](api/coverage.md#supported-and-preview-chains)).
+The MCP server's `sauce_chains` gives each chain's support, and every refusal names the supported
+chains.
 
 To ask for a chain, first
 [search the existing requests](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support)
@@ -82,6 +83,5 @@ Complete programs live in the [examples](examples/README.md).
 - [SauceScript reference](../skills/sauce-script/references/builtins.md) — every type, builtin, statement and limit, per target.
 - [Compiler](api/compiler.md) — `compile()` options and result, and the compact argument codec.
 - [`@sauce/router`](api/router.md) — the SauceScript swap library: one function per venue.
-- [Coverage](api/coverage.md) — which protocols, tokens and chains are actually registered, and
-  which chains are supported.
+- [Coverage](api/coverage.md) — which protocols, tokens and chains are actually registered.
 - [Examples](examples/README.md) — complete programs, and how they are kept working.

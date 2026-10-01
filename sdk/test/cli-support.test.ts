@@ -11,13 +11,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { chainSupportRequest } from "../src/chains/support.js";
 import { fillTargets } from "../src/cli/fill.js";
 import { intentRecord } from "../src/cli/lifecycle.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { IntentStore } from "../src/cli/store.js";
 import {
-  intentChains,
+  chainSupportRequest,
+  intentDestinations,
   PreviewChainError,
   previewRefusal,
   requireSupported,
@@ -166,21 +166,6 @@ const TO_ARBITRUM_PROGRAM = [
 /** Arbitrum to Base: Arbitrum is its source. */
 const TO_BASE =
   "Base(() => {\n  USDC.transfer(RECIPIENT, 5n);\n}).reward({ tokens: [{ token: USDC, amount: 7n }] });\n";
-/** Base to Ethereum, whose body opens an intent on to Arbitrum. */
-const CASCADE = [
-  "function main() {",
-  "  Ethereum(",
-  "    () => {",
-  "      const arrived = USDC.balanceOf(ctx.self());",
-  "      Arbitrum(() => {",
-  "        USDC.transfer(RECIPIENT, arrived);",
-  "      }).reward({ tokens: [{ token: USDC, amount: arrived }] });",
-  "    },",
-  "    { tokens: [{ token: USDC, amount: 5n }] },",
-  "  ).reward({ tokens: [{ token: USDC, amount: 7n }] });",
-  "}",
-  "",
-].join("\n");
 
 describe("the gate", () => {
   it("refuses only a preview chain, naming each one once with its request", () => {
@@ -209,14 +194,12 @@ describe("the gate", () => {
     expect(() => requireSupported("sending the cook", [optimism!])).toThrow(PreviewChainError);
   });
 
-  it("follows an intent into the intents its body opens, at any depth", () => {
-    const { intents } = compileSauceProgram("base", CASCADE, {
+  it("takes a program's intents by their destinations", () => {
+    const { intents } = compileSauceProgram("base", TO_ARBITRUM, {
       defines: { RECIPIENT: BigInt(RECIPIENT) },
-      intents: { deadline: 2_000_000_000n, creator: CREATOR, executionFee: 0n },
+      intents: { deadline: 2_000_000_000n, creator: CREATOR },
     });
-    expect(intents.map((intent) => intent.destination.slug)).toEqual(["ethereum"]);
-    expect(intents[0]!.nested.map((intent) => intent.destination.slug)).toEqual(["arbitrum"]);
-    expect(intentChains(intents).map((chain) => chain.slug)).toEqual(["ethereum", "arbitrum"]);
+    expect(intentDestinations(intents).map((chain) => chain.slug)).toEqual(["arbitrum"]);
   });
 });
 
@@ -245,7 +228,7 @@ describe("refused on a preview chain, before any network call", () => {
     expect(recorded()).toEqual([]);
   });
 
-  it("a cook that publishes an intent to a preview chain, at any depth", async () => {
+  it("a cook that publishes an intent to a preview chain", async () => {
     const { config, recorded } = await endpoints(8453, 42161);
     const flags = ["--chain", "base", "--owner", OWNER, "--config", config, ...INTENT_FLAGS];
     expectRefused(
@@ -271,10 +254,6 @@ describe("refused on a preview chain, before any network call", () => {
       ),
       "arbitrum",
       /^sauce run: sending the cook is refused/,
-    );
-    expectRefused(
-      await sauce("tx", file("cascade.sauce.ts", CASCADE), ...flags, "--intent-execution-fee", "0"),
-      "arbitrum",
     );
     expect(recorded()).toEqual([]);
   });

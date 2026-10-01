@@ -97,7 +97,8 @@ rehearses and reads but builds no transaction ([Supported chains](../README.md#s
 
 The refusal comes before the command reaches an endpoint or reads a key. A cook or a publish is
 refused when any chain it involves is a preview chain: the program's own, and the destination of
-every intent it opens, nested intents included. A step after publishing is refused by the chain its
+every intent it opens (a cascade's later levels, opened inside an intent's body, are not checked:
+keep them on supported chains). A step after publishing is refused by the chain its
 transaction is sent on — a fill, a proof or a cancellation by the intent's destination, a claim or
 a refund by its source. The command exits 1 and says why, which chains are supported, and how to ask
 for the one it refused:
