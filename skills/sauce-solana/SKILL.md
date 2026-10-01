@@ -52,7 +52,8 @@ npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypai
   `svm.call(program, [accounts...], data)` is a CPI to an attached program account.
 - Scalar parameters are runtime arguments (`--args`); `Account` parameters are not encoded. A
   32-byte key the program needs as a value, such as a mint, is a define: `--define MINT=<hex>`. A
-  define also overrides a registered symbol, which is how a devnet program names devnet's USDC.
+  define also overrides a registered symbol, which is how a devnet program names devnet's USDC; a
+  module `const USDC = …` does not, since the symbol is itself a define and a define wins.
 - On Solana `ctx.self()` is the executing Sauce program's id, `ctx.msgSender()` the transaction's
   first signer, and `ctx.balance(acct.address)` an attached account's lamports. `ctx.msgValue`,
   `ctx.gasLeft`, `ctx.codeSize` and the other EVM reads are rejected; move lamports with a
