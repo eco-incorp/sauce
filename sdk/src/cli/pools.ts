@@ -5,12 +5,12 @@
  * each with its fee, liquidity and price both ways round, before and after the fee, and the
  * distributed swap's `maxPrice` at that price.
  *
- * Everything is read in five requests, each one `eth_call` (`chain.ts#readAll`): the pools the
- * V3-style factories have and the tick spacings Slipstream's enable; the Slipstream pools; every
- * pool's state; then, for its depth, the tick bitmap around each pool's price and the ticks set in
- * it. The
- * venues are the registry's (`descriptors`), at the addresses a program reaches them by, so a pool
- * listed here is one `UniswapV3.Factory.getPool` (and the rest) finds in a program.
+ * Everything is read in five rounds (`chain.ts#readAll`, each `eth_call` carrying up to 32 reads):
+ * the pools the V3-style factories have and the tick spacings Slipstream's enable, beside the
+ * tokens' decimals; the Slipstream pools; every pool's state; then, for its depth, the tick bitmap
+ * around each pool's price and the ticks set in it. The venues are the registry's (`descriptors`),
+ * at the addresses a program reaches them by, so a pool listed here is one
+ * `UniswapV3.Factory.getPool` (and the rest) finds in a program.
  */
 import { encodeAbiParameters, getAddress, keccak256, parseAbi, zeroAddress } from "viem";
 import type { Abi, Address, Hex, PublicClient } from "viem";
@@ -469,15 +469,20 @@ export async function poolsCommand(input: PoolsInput): Promise<CommandOutput> {
   const [token0, token1] = BigInt(a.address) < BigInt(b.address) ? [a, b] : [b, a];
   v3.forEach((venue, index) => {
     const answers = factories.slice(index * 2 * V3_FEES.length, (index + 1) * 2 * V3_FEES.length);
-    const failed = answers.find((answer) => !answer.ok);
-    const enabled = V3_FEES.filter((_, at) => (value<number>(answers[2 * at]) ?? 0) > 0);
+    const tiers = answers.filter((_, at) => at % 2 === 0);
+    const byTier = answers.filter((_, at) => at % 2 === 1);
+    // A factory that answers no lookup is unread; one that does not say its tiers was asked them all.
+    const unread = byTier.every((answer) => !answer.ok) ? byTier[0] : undefined;
+    const enabled = tiers.every((answer) => answer.ok)
+      ? V3_FEES.filter((_, at) => (value<number>(tiers[at]) ?? 0) > 0)
+      : V3_FEES;
     checked.push({
       venue,
       at: enabled.map(String),
-      ...(failed?.ok === false ? { error: failed.error } : {}),
+      ...(unread?.ok === false ? { error: unread.error } : {}),
     });
-    V3_FEES.forEach((_, at) => {
-      const pool = value<Address>(answers[2 * at + 1]);
+    byTier.forEach((answer) => {
+      const pool = value<Address>(answer);
       if (pool !== undefined && pool !== zeroAddress) found.push({ venue, pool });
     });
   });
@@ -699,7 +704,9 @@ const emptiness = (pool: Pool): string | undefined =>
     ? "not initialized: it has no price"
     : pool.liquidity === 0n
       ? "no liquidity at its price"
-      : undefined;
+      : pool.fee >= 1_000_000
+        ? "its fee is 100%: nothing paid reaches the pool"
+        : undefined;
 
 function report(found: {
   readonly chain: CanonicalChain;
