@@ -427,7 +427,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     };
     const block = await base.publicClient.getBlockNumber();
     for (const reach of [{ rpcUrl: base.rpcUrl }, { rpcUrls: { base: base.rpcUrl } }]) {
-      const out = ok(await mcp.call("sauce_intent_fill", { ...args, ...reach })) as {
+      const out = ok(await mcp.call("sauce_intent_fill", { ...args, ...reach, dryRun: true })) as {
         ok: boolean;
         chain: string;
         intents: Fill[];
@@ -450,8 +450,34 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     assert.equal(await base.balanceOf(baseUsdc, RECIPIENT), 0n);
     // The server has no endpoint of its own for the destination.
     assert.match(
-      failed(await mcp.call("sauce_intent_fill", args)),
+      failed(await mcp.call("sauce_intent_fill", { ...args, dryRun: true })),
       /Rehearsing a fill needs an RPC endpoint for base .* Pass rpcUrl with the call/,
     );
+
+    // Built, for a solver to sign: its approval, then the fill. No prover this server drives is on
+    // this destination, so it is fulfill, proven later; and this solver holds nothing yet.
+    type Built = {
+      intentHash: string;
+      proves: boolean;
+      transactions: Array<{ chainId: number; to: string; what: string; value: string }>;
+    };
+    const built = ok(
+      await mcp.call("sauce_intent_fill", { ...args, from: NOBODY, rpcUrl: base.rpcUrl }),
+    ) as { from: string; intents: Built[]; notes: string[] };
+    assert.equal(built.from, NOBODY);
+    const [fill] = built.intents;
+    assert.equal(fill!.proves, false);
+    const [approve, fulfill] = fill!.transactions;
+    assert.equal(fill!.transactions.length, 2);
+    assert.ok(approve!.what.startsWith("approve the Portal for"), approve!.what);
+    assert.ok(fulfill!.what.startsWith("Portal.fulfill("), fulfill!.what);
+    assert.equal(getAddress(fulfill!.to), basePortal);
+    assert.ok(fill!.transactions.every((tx) => tx.chainId === 8453));
+    assert.ok(
+      built.notes.some((note) => /holds .* and the fill delivers/.test(note)),
+      built.notes.join("; "),
+    );
+    assert.ok(built.notes.some((note) => new RegExp(`Only ${NOBODY} may send these`).test(note)));
+    assert.equal(await base.publicClient.getBlockNumber(), block, "built, not sent");
   });
 });

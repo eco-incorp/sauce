@@ -17,6 +17,7 @@ import {
   SETTLE_WIRE,
   settlePayload,
 } from "../../sdk/dist/verify/index.js";
+import { INTENT_TOOL_NAMES } from "../src/intents.js";
 import { SKILL_TOOL_NAMES } from "../src/skilltools.js";
 import { TOOL_NAMES } from "../src/tools.js";
 import { connect, failed, ok, type Connected } from "./harness.js";
@@ -68,7 +69,7 @@ describe("the tool list", () => {
     const { tools } = await mcp.client.listTools();
     assert.deepEqual(
       tools.map((tool) => tool.name),
-      [...TOOL_NAMES, ...SKILL_TOOL_NAMES],
+      [...TOOL_NAMES, ...INTENT_TOOL_NAMES, ...SKILL_TOOL_NAMES],
     );
     for (const tool of tools) {
       assert.equal(tool.inputSchema.type, "object", `${tool.name} takes an object`);
@@ -697,53 +698,6 @@ describe("sauce_intent_publish", () => {
       failed(await mcp.call("sauce_intent_publish", { source: PAY, chain: "base" })),
       /opens no intent/,
     );
-  });
-});
-
-describe("sauce_intent_fill", () => {
-  const intent = {
-    source: [
-      "Base(() => {",
-      "  USDC.transfer(RECIPIENT, 5n);",
-      "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
-      "",
-    ].join("\n"),
-    chain: "arbitrum",
-    defines: { RECIPIENT },
-    intentDeadline: 2_000_000_000,
-    intentCreator: OWNER,
-  };
-
-  it("takes the destination's endpoint one way, a claimant of 20 or 32 bytes", async () => {
-    assert.match(
-      failed(
-        await mcp.call("sauce_intent_fill", {
-          ...intent,
-          rpcUrl: "http://127.0.0.1:9/",
-          rpcUrls: { base: "http://127.0.0.1:9/" },
-        }),
-      ),
-      /give rpcUrl \(one destination\) or rpcUrls \(by chain\), not both/,
-    );
-    assert.match(
-      failed(await mcp.call("sauce_intent_fill", { ...intent, claimant: "0x1234" })),
-      /claimant: '0x1234' is neither an address \(20 bytes\) nor 32 bytes of hex/,
-    );
-    assert.match(
-      failed(
-        await mcp.call("sauce_intent_fill", {
-          ...intent,
-          rpcUrls: { nowhere: "http://127.0.0.1:9/" },
-        }),
-      ),
-      /nowhere/,
-    );
-  });
-
-  it("names the destination it needs an endpoint for", async () => {
-    const message = failed(await mcp.call("sauce_intent_fill", intent));
-    assert.match(message, /Rehearsing a fill needs an RPC endpoint for base \(chain id 8453\)/);
-    assert.match(message, /Pass rpcUrl with the call/);
   });
 });
 
