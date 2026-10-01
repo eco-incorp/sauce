@@ -3,7 +3,15 @@
  * written where each coding agent reads them, with a record of what was written so that a package
  * upgrade and a user's edit are told apart.
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,10 +19,11 @@ import { fileURLToPath } from "node:url";
 import { initProject } from "../src/cli/init.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import {
-  detectAgents,
+  DEFAULT_AGENTS,
   INSTALL_RECORD,
   installTarget,
   PACKAGED_SKILLS,
+  parseAgents,
   statusOf,
   targetsFor,
   updateTarget,
@@ -122,15 +131,57 @@ describe("where each agent's skills go", () => {
     expect(index.trimEnd().endsWith("<!-- sauce-skills:end -->")).toBe(true);
   });
 
-  it("detects the agents a project already shows signs of, else claude and agents-md", () => {
-    expect(detectAgents(project)).toEqual(["claude", "agents-md"]);
-    mkdirSync(join(project, ".cursor"));
-    write("GEMINI.md", "# mine\n");
-    expect(detectAgents(project)).toEqual(["cursor", "gemini"]);
-    write(".github/copilot-instructions.md", "mine\n");
-    mkdirSync(join(project, ".claude"));
-    expect(detectAgents(project)).toEqual(["claude", "cursor", "copilot", "gemini"]);
+  it("`all` is every agent that reads a skills directory: two directories, no AGENTS.md index", () => {
+    expect(parseAgents(["all"])).toEqual(["claude", "codex", "cursor", "copilot", "gemini"]);
+    expect(parseAgents(["all"])).toEqual(DEFAULT_AGENTS);
+    expect(targetsFor(DEFAULT_AGENTS).map((target) => [target.kind, target.path])).toEqual([
+      ["directory", join(".claude", "skills")],
+      ["directory", join(".agents", "skills")],
+    ]);
+    // The index block only when asked for.
+    expect(parseAgents(["all,agents-md"])).toEqual([...DEFAULT_AGENTS, "agents-md"]);
+    expect(parseAgents(["codex", "codex"])).toEqual(["codex"]);
+    expect(parseAgents([])).toBeUndefined();
   });
+});
+
+describe("the packaged skills", () => {
+  // https://agentskills.io/specification: the frontmatter every agent above reads.
+  const skills = readdirSync(PACKAGED_SKILLS, { withFileTypes: true }).filter((entry) =>
+    entry.isDirectory(),
+  );
+
+  it("ships at least the sauce-run skill", () => {
+    expect(skills.map((entry) => entry.name)).toContain("sauce-run");
+  });
+
+  it.each(skills.map((entry) => entry.name))(
+    "%s follows the Agent Skills specification",
+    (name) => {
+      const text = readFileSync(join(PACKAGED_SKILLS, name, "SKILL.md"), "utf8");
+      const frontmatter = /^---\n([^]*?)\n---\n/.exec(text);
+      expect(frontmatter).not.toBeNull();
+      const fields = Object.fromEntries(
+        frontmatter![1]!.split("\n").map((line) => {
+          const at = line.indexOf(":");
+
+          return [line.slice(0, at).trim(), line.slice(at + 1).trim()];
+        }),
+      ) as Record<string, string>;
+      // name: 1-64 characters, lowercase letters, digits and hyphens, no leading, trailing or
+      // doubled hyphen, and the same as its directory.
+      expect(fields.name).toBe(name);
+      expect(fields.name!.length).toBeLessThanOrEqual(64);
+      expect(fields.name).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+      // description: present, at most 1024 characters.
+      expect(fields.description?.length ?? 0).toBeGreaterThan(0);
+      expect(fields.description!.length).toBeLessThanOrEqual(1024);
+      // Every file it links to ships beside it.
+      for (const [, link] of text.matchAll(/\]\(([^)#:]+)\)/g)) {
+        expect([link, existsSync(join(PACKAGED_SKILLS, name, link!))]).toEqual([link, true]);
+      }
+    },
+  );
 });
 
 describe("install, update and status over a package upgrade", () => {
@@ -275,19 +326,33 @@ describe("install, update and status over a package upgrade", () => {
 describe("the commands", () => {
   const dir = (): string[] => ["--dir", project];
 
-  it("install detects the agents, writes each, and a second run is a no-op", async () => {
-    mkdirSync(join(project, ".codex"));
+  it("installs for every agent by default, verbatim, and a second run is a no-op", async () => {
     const first = await sauce("skills", "install", ...dir());
     expect(first.code).toBe(0);
-    expect(first.stdout).toContain(`installed codex (${join(".agents", "skills")})`);
+    const shared = `codex, cursor, copilot, gemini (${join(".agents", "skills")})`;
+    expect(first.stdout).toContain(`installed claude (${join(".claude", "skills")})`);
+    expect(first.stdout).toContain(`installed ${shared}`);
     expect(first.stdout).toContain(
       `wrote      ${join(".agents", "skills", "sauce-run", "SKILL.md")}`,
     );
-    expect(readFileSync(join(project, ".agents/skills/sauce-run/SKILL.md"), "utf8")).toBe(
-      readFileSync(join(PACKAGED_SKILLS, "sauce-run", "SKILL.md"), "utf8"),
-    );
+    for (const skills of [".claude/skills", ".agents/skills"]) {
+      expect(readFileSync(join(project, skills, "sauce-run/SKILL.md"), "utf8")).toBe(
+        readFileSync(join(PACKAGED_SKILLS, "sauce-run", "SKILL.md"), "utf8"),
+      );
+    }
+    // No AGENTS.md index unless asked for.
+    expect(existsSync(join(project, "AGENTS.md"))).toBe(false);
     const second = await sauce("skills", "install", ...dir());
-    expect(second.stdout).toBe(`skills are up to date (codex (${join(".agents", "skills")}))\n`);
+    expect(second.stdout).toBe(
+      `skills are up to date (claude (${join(".claude", "skills")}))\n` +
+        `skills are up to date (${shared})\n`,
+    );
+    // One agent named alone gets the one directory it reads.
+    const only = join(work, "only");
+    mkdirSync(only);
+    await sauce("skills", "install", "--agent", "gemini", "--dir", only);
+    expect(existsSync(join(only, ".agents/skills/sauce-run/SKILL.md"))).toBe(true);
+    expect(existsSync(join(only, ".claude"))).toBe(false);
   });
 
   it("status exits 0 when current, 1 when outdated, and lists a local edit either way", async () => {
@@ -372,6 +437,13 @@ describe("sauce init", () => {
   it("is idempotent, and overwrites nothing without --force", async () => {
     const dir = join(work, "app");
     await sauce("init", dir);
+    // By default every agent: both skills directories, both instruction pointers, no index block.
+    for (const file of [".claude/skills/sauce-run/SKILL.md", ".agents/skills/sauce-run/SKILL.md"]) {
+      expect(existsSync(join(dir, file))).toBe(true);
+    }
+    expect(readFileSync(join(dir, "CLAUDE.md"), "utf8")).toBe("@AGENTS.md\n");
+    expect(readFileSync(join(dir, "GEMINI.md"), "utf8")).toBe("@./AGENTS.md\n");
+    expect(readFileSync(join(dir, "AGENTS.md"), "utf8")).not.toContain("sauce-skills:begin");
     const again = await sauce("init", dir);
     expect(again.code).toBe(0);
     expect(again.stdout).toMatch(/unchanged +AGENTS\.md/);

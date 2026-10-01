@@ -4,22 +4,24 @@
  *
  * ONE SOURCE. The package carries the skills once, as Agent Skills directories (`skills/<name>/`,
  * a `SKILL.md` and what it refers to — https://agentskills.io/specification). Nothing per tool is
- * stored; each target is produced from that at install time:
+ * stored; each target is produced from that at install time. Where each agent reads them:
  *
- * | agent       | where its skills go                                   | documented at                    |
- * | ----------- | ----------------------------------------------------- | -------------------------------- |
- * | `claude`    | `.claude/skills/`                                     | code.claude.com/docs/en/skills   |
- * | `codex`     | `.agents/skills/`                                     | developers.openai.com/codex/skills |
- * | `cursor`    | `.agents/skills/` (it also reads `.cursor/skills/`)   | cursor.com/docs/skills           |
- * | `copilot`   | `.agents/skills/` (it also reads `.github/skills/`)   | docs.github.com (create skills)  |
- * | `gemini`    | `.agents/skills/` (it also reads `.gemini/skills/`)   | geminicli.com/docs/cli/skills    |
- * | `agents-md` | `.agents/skills/`, indexed in a block of `AGENTS.md`  | agents.md                        |
+ * - `claude`: `.claude/skills/`, and nothing under `.agents/` (code.claude.com/docs/en/skills).
+ * - `codex`: `.agents/skills/` from the working directory up to the repository root
+ *   (learn.chatgpt.com/docs/build-skills).
+ * - `cursor`: `.agents/skills/` and `.cursor/skills/`, and it loads `.claude/skills/` too
+ *   (cursor.com/docs/skills).
+ * - `copilot`: `.github/skills/`, `.claude/skills/` or `.agents/skills/` (docs.github.com, "Adding
+ *   agent skills").
+ * - `gemini`: `.gemini/skills/` or its `.agents/skills/` alias (geminicli.com/docs/cli/skills).
  *
- * Every tool but Claude Code reads `.agents/skills/` natively, so one copy there serves them all —
- * a copy per tool would only show each of them the same skill twice. Claude Code reads nothing
- * under `.agents/`, so it gets its own. A tool that reads no skills, only `AGENTS.md`, gets an
- * index: a block of that file, owned by this command and delimited by markers, listing each skill
- * and where its `SKILL.md` is. The user's own text around the block is never touched.
+ * So `.claude/skills/` and `.agents/skills/` between them reach all five natively, and those two
+ * are what an install writes by default (and what `--agent all` means). An agent named alone gets
+ * the one of the two it reads.
+ *
+ * `agents-md` is opt-in, for a tool that reads `AGENTS.md` (agents.md) but no skills directory:
+ * the skills go to `.agents/skills/` and an index of them into a block of `AGENTS.md`, owned by this
+ * command and delimited by markers. The user's own text around the block is never touched.
  *
  * WHAT WAS INSTALLED. Each skills directory holds `.sauce-skills.json`: the package and version
  * the files came from and the sha256 of each as written. The index block carries the same in its
@@ -45,6 +47,10 @@ export const PACKAGED_SKILLS = fileURLToPath(new URL("../../../skills/", import.
 
 export const AGENTS = ["claude", "codex", "cursor", "copilot", "gemini", "agents-md"] as const;
 export type Agent = (typeof AGENTS)[number];
+
+/** The agents an install serves when none is named, and what `--agent all` means: every agent
+ *  that reads a skills directory. `agents-md`, an index in `AGENTS.md`, is only ever asked for. */
+export const DEFAULT_AGENTS: readonly Agent[] = ["claude", "codex", "cursor", "copilot", "gemini"];
 
 /** The install record, inside each skills directory. */
 export const INSTALL_RECORD = ".sauce-skills.json";
@@ -79,45 +85,18 @@ export interface SkillsSource {
   readonly version: string;
 }
 
-/** `--agent`: names, comma-separated or repeated, or `all`; `undefined` to detect. */
+/** `--agent`: names, comma-separated or repeated; `all` is `DEFAULT_AGENTS`, and may be joined
+ *  by `agents-md`. `undefined` when none is given. */
 export function parseAgents(raws: readonly string[]): Agent[] | undefined {
   if (raws.length === 0) return undefined;
   const names = raws.flatMap((raw) => raw.split(",")).map((name) => name.trim());
-  if (names.includes("all")) return [...AGENTS];
   for (const name of names) {
-    if (!(AGENTS as readonly string[]).includes(name)) {
+    if (name !== "all" && !(AGENTS as readonly string[]).includes(name)) {
       throw new UsageError(`--agent: '${name}' is not one of ${AGENTS.join(", ")}, all`);
     }
   }
 
-  return [...new Set(names)] as Agent[];
-}
-
-/**
- * The agents a project already shows signs of: its own config directory or instructions file.
- * None found means `claude` and `agents-md`, which between them reach every tool above.
- */
-export function detectAgents(project: string): Agent[] {
-  const has = (...paths: string[]): boolean =>
-    paths.some((path) => existsSync(join(project, path)));
-  const found = AGENTS.filter((agent) => {
-    switch (agent) {
-      case "claude":
-        return has(".claude", "CLAUDE.md");
-      case "codex":
-        return has(".codex", ".agents");
-      case "cursor":
-        return has(".cursor", ".cursorrules");
-      case "copilot":
-        return has(join(".github", "copilot-instructions.md"), join(".github", "skills"));
-      case "gemini":
-        return has(".gemini", "GEMINI.md");
-      case "agents-md":
-        return has(INDEX_FILE);
-    }
-  });
-
-  return found.length > 0 ? found : ["claude", "agents-md"];
+  return [...new Set(names.flatMap((name) => (name === "all" ? DEFAULT_AGENTS : [name as Agent])))];
 }
 
 /** The places `agents` read skills from, each once. */
@@ -141,7 +120,7 @@ export function installedTargets(project: string): Target[] {
   const targets: Target[] = [];
   for (const [path, agents] of [
     [CLAUDE_DIR, ["claude"]],
-    [SHARED_DIR, AGENTS.filter((agent) => DIRECTORY[agent] === SHARED_DIR)],
+    [SHARED_DIR, DEFAULT_AGENTS.filter((agent) => DIRECTORY[agent] === SHARED_DIR)],
   ] as const) {
     if (existsSync(join(project, path, INSTALL_RECORD))) {
       targets.push({ kind: "directory", path, agents });

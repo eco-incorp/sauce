@@ -76,7 +76,7 @@ import { loadSigner, scrub, secret } from "./signer.js";
 import {
   AGENTS,
   describeStatus,
-  detectAgents,
+  DEFAULT_AGENTS,
   installedTargets,
   installTarget,
   PACKAGED_SKILLS,
@@ -1211,18 +1211,19 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         type: "string",
         multiple: true,
         value: "<agent>",
-        help: `${AGENTS.join(", ")} or all (default: detected)`,
+        help: `${AGENTS.join(", ")} or all (default: all)`,
       },
       dir: { type: "string", value: "<project>", help: "The project (default .)" },
       force: { type: "boolean", help: "update: overwrite files edited since they were installed" },
       ...HELP,
     },
     details: [
-      "The skills ship once, as Agent Skills directories, and are written where each agent",
-      "reads them: .claude/skills/ for claude; .agents/skills/ for codex, cursor, copilot and",
-      "gemini, which all read it; and for agents-md, .agents/skills/ plus an index block in",
-      "AGENTS.md. Without --agent: install detects the agents a project shows signs of (or",
-      "claude and agents-md); update and status take the targets installed.",
+      "The skills ship once, as Agent Skills directories, and are written where agents read",
+      "them: .claude/skills/ (claude) and .agents/skills/ (codex, cursor, copilot, gemini), which",
+      "between them reach all five. That is the default, and what --agent all means; an agent",
+      "named alone gets the one it reads. --agent agents-md, only when asked for, also writes an",
+      "index of the skills into a block of AGENTS.md, for a tool that reads that file but no",
+      "skills directory. update and status take the targets installed.",
       "",
       "  install  The first install. Never overwrites: on a project already installed it says",
       "           whether the skills are current, and to run update if not.",
@@ -1251,7 +1252,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         asked !== undefined
           ? targetsFor(asked)
           : sub === "install"
-            ? targetsFor(detectAgents(project))
+            ? targetsFor(DEFAULT_AGENTS)
             : installedTargets(project);
       if (targets.length === 0) {
         throw new CliError(
@@ -1297,16 +1298,15 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
     details: [
       "Writes package.json (pinning this exact version), AGENTS.md (the project's instructions,",
-      "which coding agents read), CLAUDE.md or GEMINI.md importing it for those agents, a",
+      "which coding agents read), CLAUDE.md and GEMINI.md importing it for those agents, a",
       ".gitignore for local config, sauce.config.example.json (placeholders only), and then",
-      "installs the agent skills (`sauce skills install`). The agents default to those the",
-      "directory shows signs of, else claude and agents-md. It runs no package manager unless",
-      "--install, which runs npm install.",
+      "installs the agent skills (`sauce skills install`), for every agent unless --agent names",
+      "some. It runs no package manager unless --install, which runs npm install.",
     ].join("\n"),
     run: (args, io) => {
       const [dir = ".", ...rest] = args.positionals;
       if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}: give one <dir>`);
-      const agents = parseAgents(repeatedFlag(args, "agent")) ?? detectAgents(dir);
+      const agents = parseAgents(repeatedFlag(args, "agent")) ?? DEFAULT_AGENTS;
       const result = initProject(dir, skillsSource(), agents, args.values.force === true);
       io.stdout(
         [

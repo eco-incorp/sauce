@@ -380,7 +380,7 @@ try {
   );
 
   const project = join(work, "scaffolded");
-  sauce("init", project, "--agent", "all");
+  sauce("init", project);
   const scaffoldedManifest = JSON.parse(readFileSync(join(project, "package.json"), "utf8"));
   assert.deepEqual(
     scaffoldedManifest.dependencies,
@@ -400,7 +400,7 @@ try {
     (file) => /\.[a-z]+$/.test(file),
   );
   assert.ok(shippedSkills.includes("sauce-run/SKILL.md"), "the package ships the sauce-run skill");
-  // Claude Code reads .claude/skills; every other agent reads .agents/skills.
+  // Claude Code reads .claude/skills; Codex, Cursor, Copilot and Gemini CLI read .agents/skills.
   for (const dir of [".claude/skills", ".agents/skills"]) {
     for (const file of shippedSkills) {
       assert.equal(
@@ -410,16 +410,9 @@ try {
       );
     }
   }
-  assert.match(
-    readFileSync(join(project, "AGENTS.md"), "utf8"),
-    new RegExp(
-      `<!-- sauce-skills:begin ${name}@${installedManifest.version.replace(/\./g, "\\.")} `,
-    ),
-    "sauce init indexes the skills in AGENTS.md",
-  );
   // status exits non-zero on anything outdated, so execFileSync throwing is the failure.
   const status = sauce("skills", "status", "--dir", project);
-  assert.equal(status.match(/: up to date \(/g)?.length, 3, `every target is current:\n${status}`);
+  assert.equal(status.match(/: up to date \(/g)?.length, 2, `every target is current:\n${status}`);
   assert.match(sauce("skills", "install", "--dir", project), /^skills are up to date \(/);
   console.log(
     `Clean package install: sauce init scaffolds a project pinned to ${installedManifest.version}, ` +
