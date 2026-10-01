@@ -315,6 +315,39 @@ describeSvm("the engine's two Solana entry points: through the Kitchen, and dire
         ENGINE_FAULTS.AccountNotSigner,
       );
     });
+
+    /**
+     * What the `sauce-solana` skill tells a program to rely on, and not to: an account the engine
+     * owns that signs is not proof of the Pot. A keypair account assigned to the engine, signed by
+     * the transaction, passes `pot.owner == ctx.self()` whichever way the cook arrives — the Kitchen
+     * hands its tail's own signatures on. Only re-deriving the Pot's address binds the slot, and
+     * only a Kitchen cook can make that address sign.
+     */
+    it.each(VIAS)(
+      "%s: a signing account the engine owns passes pot.owner == ctx.self() without being the Pot",
+      async (via) => {
+        const lookalike = await generateKeyPairSigner();
+        harness.svm.setAccount({
+          address: lookalike.address,
+          data: new Uint8Array(8),
+          executable: false,
+          lamports: lamports(10_000_000n),
+          programAddress: harness.programId,
+          space: 8n,
+        });
+        const check = program(
+          'function main(pot: Account<Signer>) { require(pot.owner == ctx.self(), "not the Pot"); }',
+        ).bytecode;
+
+        expectOk(
+          await run(
+            cook(via, check, [
+              { address: lookalike.address, role: AccountRole.READONLY_SIGNER, signer: lookalike },
+            ]),
+          ),
+        );
+      },
+    );
   });
 
   describe("staged programs", () => {
