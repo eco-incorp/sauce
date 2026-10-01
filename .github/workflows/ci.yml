@@ -99,6 +99,19 @@ jobs:
       - name: SDK — build
         run: pnpm --filter './sdk' build
 
+      # The build regenerates the agent skills' index of globals (`gen-skills-globals.mjs`, from
+      # `routes.sourceGlobals`, the list `sauce globals` prints). The index is committed, so a
+      # registry change that did not commit the regenerated index leaves the tree dirty here.
+      - name: Agent skills — the committed index of globals is current
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain -- skills)" ]; then
+            git status --porcelain -- skills
+            git diff -- skills
+            echo "::error::the SDK build changed skills/: rebuild the SDK and commit skills/sauce-globals/references"
+            exit 1
+          fi
+
       # SAUCE_RUST_ENGINE_SO / SAUCE_V12_RUNTIME_CREATION_HEX come from $GITHUB_ENV, exported by the
       # engine steps above. Both @sauce/token e2e suites hard-fail in CI when either is unset, so a
       # broken export is loud rather than a silent skip.
