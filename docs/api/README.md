@@ -20,7 +20,7 @@ are suffixes of that package name; `.` means `@eco-incorp/sauce` itself.
 | `/svm/recipes/settle.sauce.ts` | SVM settlement source asset                                                                                                                |
 | `/evm/engine`                  | EVM Pot and Kitchen ABIs and call encoders (`v12PotAbi`, `v12KitchenAbi`, `v12Pot`, `v12Kitchen`)                                          |
 | `/verify`                      | EVM settlement encoding, structural decoding, and validation against the pinned program                                                    |
-| `/skills`                      | Protocol Markdown index and skill-file loaders                                                                                             |
+| `/skills`                      | The per-protocol documents (the `sauce-protocols` agent skill's references) and their index, as text                                       |
 
 The [`exports` map](../../package.json) defines this list. There is no `/routes`, `/token`,
 `/swap`, `/deposit`, or `/contracts` subpath; import these namespaces from the root:
@@ -63,14 +63,19 @@ const aaveMarkdown = getProtocolSkill("aave-v3");
 const availableSkills = listSkillSlugs();
 ```
 
-Skill files are Markdown written for AI coding assistants; loading one reads a document and
-performs no protocol operation. `getProtocolSkill` throws for a slug absent from `listSkillSlugs()`.
+Each document is Markdown written for coding agents; loading one reads a document and performs no
+protocol operation. `getProtocolSkill` throws for a slug absent from `listSkillSlugs()`. The
+documents are the `sauce-protocols` agent skill's references
+([`skills/sauce-protocols/references/`](../../skills/sauce-protocols/references/index.md)), the same
+files `sauce skills install` puts in a project ([Agent skills](../guides/cli.md#agent-skills)), so the
+text this export returns is the text an agent reads.
 
 ## Where each import runs
 
 Every import runs in Node **24 or newer** and in a browser, with one exception:
 `/svm/engine-artifacts` returns filesystem paths to the packaged engine binaries for a local
-LiteSVM harness, and is Node-only.
+LiteSVM harness, and is Node-only. The [`sauce` command](../guides/cli.md) is not an import at
+all: it is the package's executable, and Node-only too.
 
 Anything that compiles — `/compiler`, route compilation, the builders, the recipes, `/actions`,
 `/svm/verify` — needs one `await ready()` first in a browser, while the compiler's WebAssembly
