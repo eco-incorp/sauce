@@ -20,6 +20,7 @@ import {
   type FieldKind,
   type Fields,
 } from "./spec.js";
+import { CONTRACT_NAME_RE, NATIVE, TOKEN_SYMBOL_RE } from "./names.js";
 import { IDENTIFIER_RE, ProgramError, programIssues, type ProgramIssue } from "./semantics.js";
 import type { Action, ActionProgram, ActionType } from "./types.js";
 
@@ -94,6 +95,11 @@ class Checker {
     switch (kind.k) {
       case "address":
         this.address(path, value);
+        break;
+      case "token":
+      case "contract":
+      case "tokenContract":
+        this.named(path, value, kind);
         break;
       case "recipient":
         if (value !== "self") this.address(path, value, ' or "self"');
@@ -189,6 +195,74 @@ class Checker {
     }
 
     return this.issues.length === start;
+  }
+
+  /**
+   * A token or contract field: an address, or a name in the spelling a program uses — a registry
+   * token symbol, a `Namespace.Contract` reference, or `"native"` where the field takes it. Only
+   * the spelling is checked here; whether the name exists is the compiled chain's question.
+   */
+  private named(
+    path: string,
+    value: unknown,
+    kind: Extract<FieldKind, { k: "token" | "contract" | "tokenContract" }>,
+  ): void {
+    const symbols = kind.k !== "contract";
+    const contracts = kind.k !== "token";
+    const native = kind.k === "token" && kind.native === true;
+    const expected = [
+      symbols ? 'a registry token symbol ("USDC")' : undefined,
+      contracts ? 'a protocol contract ("UniswapV3.Factory")' : undefined,
+      native ? '"native"' : undefined,
+      "an address (0x + 40 hex digits)",
+    ].filter((part) => part !== undefined);
+    const wanted = `expected ${expected.slice(0, -1).join(", ")} or ${expected.at(-1)}`;
+    if (typeof value === "string" && /^0x/i.test(value)) {
+      this.address(path, value);
+      return;
+    }
+    if (typeof value !== "string") {
+      this.fail(path, `${wanted}, got ${describe(value)}`);
+      return;
+    }
+    if (value === NATIVE) {
+      if (!native) {
+        this.fail(
+          path,
+          `"native" is not a token this field takes — only a venue that trades the native ` +
+            `currency itself takes it (uniswapV4Swap, ambientSwap, balancerV2BatchSwap); ${wanted}`,
+        );
+      }
+      return;
+    }
+    if (TOKEN_SYMBOL_RE.test(value)) {
+      if (!symbols) {
+        this.fail(
+          path,
+          `${JSON.stringify(value)} is a token symbol, and this field is a protocol contract: ` +
+            `name it as "Namespace.Contract" ("UniswapV3.Factory"), or give its address`,
+        );
+      }
+      return;
+    }
+    if (CONTRACT_NAME_RE.test(value)) {
+      if (!contracts) {
+        this.fail(
+          path,
+          `${JSON.stringify(value)} is a protocol contract, and this field is a token: give its ` +
+            'registry symbol ("USDC") or its address',
+        );
+      }
+      return;
+    }
+    const upper = value.toUpperCase();
+    const hint =
+      native && (upper === "ETH" || upper === "NATIVE")
+        ? ' — the native currency is "native"'
+        : symbols && TOKEN_SYMBOL_RE.test(upper)
+          ? ` — symbols are upper case: did you mean ${JSON.stringify(upper)}?`
+          : "";
+    this.fail(path, `${wanted}, got ${describe(value)}${hint}`);
   }
 
   private address(path: string, value: unknown, alternative = ""): void {
@@ -288,6 +362,7 @@ function checkAction(c: Checker, path: string, value: unknown): Action | undefin
   }
   const before = c.issues.length;
   if (!c.object(path, value, spec.fields, extra)) return undefined;
+  alternatives(c, path, value, spec);
 
   if (spec.spends && has(value, "amount"))
     c.value(`${path}.amount`, value.amount, { k: "uint", bits: 256 });
@@ -317,6 +392,65 @@ function checkAction(c: Checker, path: string, value: unknown): Action | undefin
 
   return ordered(copy, actionKeys(spec), spec.fields) as unknown as Action;
 }
+
+/** `fields` as a person reads them: `pool`, `factory + fee`. */
+const spelled = (fields: readonly string[]): string => fields.map((f) => `\`${f}\``).join(" + ");
+
+/**
+ * The action's `oneOf` and `together` rules: it carries exactly the fields of one alternative (a
+ * pool by its address, or by its key), and fields that go together are given together.
+ */
+function alternatives(
+  c: Checker,
+  path: string,
+  value: Record<string, unknown>,
+  spec: ActionSpec,
+): void {
+  for (const group of spec.together ?? []) {
+    const given = group.filter((key) => has(value, key));
+    if (given.length > 0 && given.length < group.length) {
+      const missing = group.filter((key) => !has(value, key));
+      c.fail(
+        `${path}.${missing[0]}`,
+        `missing: ${spelled(group)} go together — give ${missing.length === 1 ? "it" : "them"} ` +
+          `too, or leave ${spelled(given)} out`,
+      );
+    }
+  }
+  const options = spec.oneOf;
+  if (options === undefined) return;
+  const named = [...new Set(options.flat())];
+  const given = named.filter((key) => has(value, key));
+  if (options.some((option) => sameSet(option, given))) return;
+  const ways = options.map(spelled).join(", or ");
+  if (given.length === 0) {
+    c.fail(`${path}.${options[0]![0]}`, `missing: give ${ways}`);
+    return;
+  }
+  // The alternative the action came closest to, to name what is extra or missing from it.
+  const nearest = [...options].sort(
+    (a, b) => distanceTo(a, given) - distanceTo(b, given) || a.length - b.length,
+  )[0]!;
+  const extra = given.filter((key) => !nearest.includes(key));
+  const missing = nearest.filter((key) => !given.includes(key));
+  if (extra.length > 0) {
+    c.fail(
+      `${path}.${extra[0]}`,
+      `${spelled(extra)} cannot go with ${spelled(given.filter((key) => !extra.includes(key)))}: ` +
+        `give exactly one of ${ways}`,
+    );
+    return;
+  }
+  c.fail(`${path}.${missing[0]}`, `missing: with ${spelled(given)}, give ${spelled(missing)} too`);
+}
+
+const sameSet = (a: readonly string[], b: readonly string[]): boolean =>
+  a.length === b.length && a.every((key) => b.includes(key));
+
+/** How many fields `given` would add or drop to become `option`. */
+const distanceTo = (option: readonly string[], given: readonly string[]): number =>
+  option.filter((key) => !given.includes(key)).length +
+  given.filter((key) => !option.includes(key)).length;
 
 /** `value` rebuilt with its keys in `keys` order (nested objects follow their field order too). */
 function ordered(
@@ -369,10 +503,7 @@ function check(input: unknown): Checked {
   }
 
   if (!isPlainObject(value)) {
-    c.fail(
-      "$",
-      `expected an action program object ({ version, chainId, actions }), got ${describe(value)}`,
-    );
+    c.fail("$", `expected an action program object ({ version, actions }), got ${describe(value)}`);
     return { issues: c.issues };
   }
   for (const key of Object.keys(value)) {
@@ -394,9 +525,9 @@ function check(input: unknown): Checked {
         : `unsupported version ${describe(value.version)}; this package reads version ${PROGRAM_VERSION}`,
     );
   }
+  // Optional: a document that names its tokens and contracts is for any chain that has them.
   if (has(value, "chainId"))
     c.value("chainId", value.chainId, { k: "int", min: 1, max: Number.MAX_SAFE_INTEGER });
-  else c.fail("chainId", "missing — the chain every action executes on");
 
   const actions: Action[] = [];
   if (!Array.isArray(value.actions)) {
@@ -416,10 +547,16 @@ function check(input: unknown): Checked {
   }
 
   // The chaining rules read every action, so they run only once every action is well formed.
-  if (c.issues.length === 0) c.issues.push(...programIssues(actions, value.chainId as number));
+  const chainId = has(value, "chainId") ? (value.chainId as number) : undefined;
+  if (c.issues.length === 0) c.issues.push(...programIssues(actions, chainId));
   if (c.issues.length > 0) return { issues: c.issues };
 
-  return { program: { version: PROGRAM_VERSION, chainId: value.chainId as number, actions } };
+  return {
+    program:
+      chainId === undefined
+        ? { version: PROGRAM_VERSION, actions }
+        : { version: PROGRAM_VERSION, chainId, actions },
+  };
 }
 
 /**

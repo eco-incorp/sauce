@@ -84,6 +84,11 @@ export interface ProgramInput {
      *  `"transfer"` into the vault then `publish` (the default), or `"publishAndFund"`. */
     readonly fundVia?: IntentFundVia;
   };
+  /**
+   * ABI bindings the program calls through without declaring them — an actions document's
+   * (`actions.ts`), whose generated source names `IErc20` and the like. Absent for a file.
+   */
+  readonly contracts?: SauceCompileOptions["contracts"];
 }
 
 /** An input file's text — the program, a defines file — or a precise reason it has none. */
@@ -132,6 +137,7 @@ function compileOptions(input: ProgramInput, files: CliFiles): SauceCompileOptio
     defines: input.defines,
     ...(Object.keys(intents).length === 0 ? {} : { intents }),
     ...(input.compactArgs ? { compactArgs: true } : {}),
+    ...(input.contracts === undefined ? {} : { contracts: input.contracts }),
     resolve: (path) => files.readModule(resolvePath(dir, path)),
   };
 }

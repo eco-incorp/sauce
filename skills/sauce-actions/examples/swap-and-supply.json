@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "actions": [
+    { "type": "argument", "name": "wethIn" },
+    {
+      "type": "uniswapV3Swap",
+      "tokenIn": "WETH",
+      "tokenOut": "USDC",
+      "factory": "UniswapV3.Factory",
+      "fee": 500,
+      "amountOutMin": "1",
+      "recipient": "self",
+      "saveOutputAs": "usdc"
+    },
+    { "type": "approve", "token": "USDC", "spender": "AaveV3.Pool", "amountRef": "usdc" },
+    {
+      "type": "aaveV3Supply",
+      "pool": "AaveV3.Pool",
+      "token": "USDC",
+      "onBehalfOf": "self",
+      "amountRef": "usdc"
+    }
+  ]
+}

@@ -24,7 +24,7 @@ everything from one name.
 | Workspace    | Internal name                 | Published as                                                                                                                                          | Role                                                                                                      |
 | ------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`); bin `sauce` | 135-protocol registry, chains, recipes, SVM/EVM engine clients, the `/skills` loader, the `sauce` command |
-| `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`, `/actions/action-program.schema.json`                                                                                                     | JSON action programs → SauceScript, intents                                                               |
+| `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`, `/actions/action-program.schema.json`                                                                                                     | JSON action programs → SauceScript, intents; `sauce actions` lowers them                                  |
 | `dev-tools/` | `@eco-incorp/sauce-dev-tools` | not published                                                                                                                                         | Dev harness: compile helpers, local SVM Kitchen runner, legacy recipe runner                              |
 
 This repo was **extracted from the engine repo** (now `eco-incorp/v12`, checked out at `../v12`),
@@ -99,6 +99,13 @@ its action, and beside the Router's unified `swap` where the Router runs the ven
 (`tests/swap-venues.ts`) — and `traderJoeLBSwap`/`woofiSwap`, whose venues Ethereum lacks, run
 there; `actions.mainnet` counts them as executed elsewhere. `quote.mainnet` deploys the stack too:
 the Router quotes `uniswapV3Swap`/`uniswapV4Swap`, and is held to Uniswap's own quoters.
+`names.unit` compiles documents by token symbol, namespace and pool key for two chains through the
+real compiler, and every refusal of a name a chain lacks; `cli.unit` drives `sauce actions` and an
+actions document through `compile`/`tx` via the built bin's `runCli` (here, not in `sdk/test`,
+because the command loads `actions/dist`, which CI builds after the SDK's tests).
+`names.mainnet` (`test:mainnet`) executes one chain-agnostic document — symbols, namespaces, pools by
+key — on Ethereum, Base and Avalanche state, against the same trade by address, and through
+`sauce run`.
 After changing an action's fields in `actions/src/spec.ts`, run `pnpm --filter './actions'
 gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.json` is stale.
 
@@ -161,8 +168,9 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   block interval (12 s on Ethereum, 2 s on Base and Avalanche — WOOFi's oracle goes stale 120 s
   after its last post), refuses to fork, and makes any non-loopback `fetch` throw, so a suite that
   starts reading something new FAILS (a missing slot reads as zero) rather than reaching the
-  network. Blob sizes at capture: actions ~680 KB, quote ~270 KB, split-swap ~80 KB, and the swap
-  venue suites `swap` (Ethereum) ~110 KB, `swap-base` ~90 KB, `swap-avalanche` ~30 KB.
+  network. Blob sizes at capture: actions ~680 KB, quote ~270 KB, split-swap ~80 KB, the swap
+  venue suites `swap` (Ethereum) ~110 KB, `swap-base` ~90 KB, `swap-avalanche` ~30 KB, and the names
+  suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB.
 
   **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
   pinned block (then recapture every suite on that chain, and revisit every pinned figure: pools,
@@ -556,8 +564,22 @@ host's declarations (DOM `Crypto`, Node's `webcrypto.Crypto` and `NodeJS.Require
 rather than redeclaring them, which would clash under Node. `routes-builtins-types.test.ts`
 typechecks a closure using every builtin with DOM, Node, both and neither.
 
-**`actions/`** — JSON action programs (`{ version, chainId, actions }`) lowered to one SauceScript
-program. The public surface is deliberately small — `parseProgram`, `serializeProgram`,
+**`actions/`** — JSON action programs (`{ version, chainId?, actions }`) lowered to one SauceScript
+program. A token field takes a registry symbol (`"USDC"`) and a contract field a namespace reference
+(`"UniswapV3.Factory"`) beside an address (`spec.ts`'s `token`/`contract`/`tokenContract` kinds,
+spelling checked by `program.ts`); the generated source carries the NAME, so a document with no
+`chainId` compiles for any chain where its names exist. Every compile is for one chain
+(`options.chain`, else the document's `chainId`; a document with one compiles for that chain only)
+through `routes.compileSauceProgram`, which resolves the names; `names.ts` checks each name on that
+chain first (`routes.sourceGlobals`, the compile's own list) so a missing one is a located
+`ProgramError` naming the chain, and resolves them to addresses for the rules that compare tokens
+and for `to-quote.ts`, which builds calldata itself. A swap may give its pool by KEY instead of by
+address (`spec.ts`'s `oneOf` alternatives, which the schema expresses as `oneOf`): `uniswapV2Swap`
+`factory` (getPair), `uniswapV3Swap` `factory` + `fee` or + `tickSpacing` (Slipstream),
+`traderJoeLBSwap` `factory` + `binStep` (its X/Y read from the pair when left out); the program
+reads the pool on chain and reverts on the zero address. `quoteAction` and `compileSplitSwap` refuse
+a key (a quote is an `eth_call` at the pool). `programSource` (`compose.ts`, not exported from the
+index) is what `sauce actions` lowers with. The public surface is deliberately small — `parseProgram`, `serializeProgram`,
 `programSchema`, `compileProgram`, `programIntent`, `quoteAction`, `compileSplitSwap`,
 `ProgramError` and the types — and the types ARE the JSON (no per-action chain, one `amount`, one
 `amountOutMin`, `recipient` everywhere); keep it that way rather than adding parallel entry points.
@@ -568,7 +590,7 @@ holds the cross-action rules. `to-sauce.ts` emits every protocol call as an ABI 
 (`IBinding.at(addr).method(...)`) from the catalogue in `abis.ts` — except a swap at one of
 `@sauce/router`'s venues, which is a call into that library (`uniswapV2Swap` -> `uniswapV2(...)`,
 the nine `RouterSwapAction`s), imported by the generated program and resolved from memory by
-`compile.ts`, so actions and SauceScript share one swap implementation; a binding takes the
+the SDK's resolver, so actions and SauceScript share one swap implementation; a binding takes the
 registry ABI wherever the registry declares the function exactly (same canonical signature, so same
 selector), and a method declares an output ONLY when an action reads it: compiler 2.3.0 decodes
 declared outputs even when discarded, and decoding empty return data reverts (3pool-era Curve). A
@@ -587,8 +609,14 @@ quotes and, for the split swap, the same quoter calls as SauceScript over fixed 
 been checked.
 
 **The `sauce` bin** (`sdk/src/cli/`, built to `sdk/dist/cli/main.js`) is the package's one
-executable: `compile`, `simulate`, `run`, `publish`, `tx`, `pot`, `globals`, `inspect`, `verify`,
-`init` and `skills install|update|status`, on EVM chains and (`solana.ts`) Solana. It adds no
+executable: `compile`, `actions`, `simulate`, `run`, `publish`, `tx`, `pot`, `globals`, `inspect`,
+`verify`, `init` and `skills install|update|status`, on EVM chains and (`solana.ts`) Solana.
+`actions.ts` takes an actions document as a program operand: `sauce actions` prints what it lowers
+to, and `compile`/`tx`/`simulate`/`run` accept one wherever they take a file, as an ordinary
+`ProgramInput` (the generated source, plus its ABI bindings in `contracts`). It loads
+`actions/dist/compose.js` at run time by a path relative to itself — the SDK builds first, so it
+cannot import a package not yet built — and `actionsCommand` is also what the MCP server's
+`sauce_actions` tool calls. It adds no
 compile path of its own — `compileSauceProgram` (the compile half of `compileSauceRoute`, with the
 chain bundle `openRoute` uses: `chainAmbient`'s modules and the chain's names as a `RouteScope`, so
 an intent the file opens resolves its body on its own chain) — and no encoder or decoder: the cook is
@@ -615,8 +643,9 @@ through a JSON-RPC shim; the packed check runs the installed bin through `npx`. 
 `skills/` holds the Agent Skills (agentskills.io) the package ships and `sauce skills install`
 copies into a project: `sauce-overview` (the entry point), `sauce-script`, `sauce-globals`,
 `sauce-protocols`, `sauce-swaps`, `sauce-distributed-swap`, `sauce-intents`, `sauce-solana`,
-`sauce-run`, `sauce-typescript` and the `sauce-examples` index. Each is a `SKILL.md` plus
-`examples/` (`.sauce.ts` programs and `.mts` runners) and, for three of them, `references/`.
+`sauce-run`, `sauce-actions`, `sauce-typescript` and the `sauce-examples` index. Each is a
+`SKILL.md` plus `examples/` (`.sauce.ts` programs, `.json` actions documents and `.mts` runners)
+and, for four of them, `references/`.
 
 - **One set of protocol documents.** `skills/sauce-protocols/references/*.md` is the only copy of
   the per-protocol documents. `gen-embedded-sources.mjs` embeds them for `src/skills/loader.ts`, so
@@ -629,6 +658,10 @@ copies into a project: `sauce-overview` (the entry point), `sauce-script`, `sauc
   the chain syntax, never by calling them, and the skills keep the Portal to `sauce-intents`. The
   files are committed and prettier-ignored; CI fails when the build changed `skills/`, so commit
   the regenerated files with any registry change (`pnpm --filter './sdk' gen-skills-globals`).
+- **The actions reference is generated too.** `sdk/scripts/gen-skills-actions.mjs` renders
+  `skills/sauce-actions/references/actions.md` (every action and field) from the committed
+  `actions/action-program.schema.json`, in the same `build` step; regenerate the schema after a
+  `spec.ts` change, then rebuild and commit both. Committed, prettier-ignored, and held the same way.
 - **The checker.** `pnpm skills:check` (`sdk/scripts/check-skills.mjs`, build SDK and actions
   first) runs in CI after `docs:check`, and the packed check reruns it (`--skills <dir>`) on the
   copy `sauce skills install` writes into a project from the tarball — a project, because Node does
@@ -636,6 +669,9 @@ copies into a project: `sauce-overview` (the entry point), `sauce-script`, `sauc
   to the example files on disk, both ways; every program compiled through the `sauce` bin
   (in-process `runCli`) on each chain its index row names, running the `//   sauce …` usage line in
   its header offline (`compile`, then `tx` with `main`'s arguments sampled from its declared types);
+  every actions document (`.json`, no `chainId`) lowered through `sauce actions` on each chain its
+  row names, its cook built by `tx`, and ` ```json chain=a,b ` blocks lowered (` ```json fails `
+  refused);
   every `sauce …` command line in a skill to the flags that command's `--help` lists; ` ```sauce
 chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refused;
   ` ```ts ` blocks and runners typechecked, and runners executed with
