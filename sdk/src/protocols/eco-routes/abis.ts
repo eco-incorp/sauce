@@ -1443,9 +1443,13 @@ export const PortalABI = [
 ] as const;
 
 /**
- * What every eco-routes prover shares (`IProver`): the proof a source chain reads, and the events
- * it announces a proof by. A prover's own errors differ by kind (Hyperlane, Polymer, …) and are
- * raised to the mailbox or the Portal that called it, never to a caller of these, so none is here.
+ * What every eco-routes prover shares (`IProver`): the proof a source chain reads, the events it
+ * announces a proof by, its kind (`getProofType`), its Portal and the senders it trusts — and what
+ * a MESSAGE-BRIDGE prover adds (`MessageBridgeProver`: Hyperlane's `HyperProver`, `MetaProver`,
+ * `LayerZeroProver`): the fee the destination Portal's `prove` forwards to it, quoted for one
+ * message (`fetchFee(sourceChainDomainID, encodedProofs, data)`), and its refusal of a smaller one
+ * (`InsufficientFee`). Polymer's prover takes no fee, its proof relayed off-chain, so it has
+ * neither (`targets.json` exempts its deployments).
  */
 export const ProverABI = [
   {
@@ -1571,16 +1575,6 @@ export const ProverABI = [
       },
     ],
   },
-] as const;
-
-/**
- * What a MESSAGE-BRIDGE prover adds to {@link ProverABI} (`MessageBridgeProver`: Hyperlane's
- * `HyperProver`, `MetaProver`, `LayerZeroProver`): the fee the destination Portal's `prove`
- * forwards to it, quoted from the bridge for one message (`fetchFee(sourceChainDomainID,
- * encodedProofs, data)`), and the refusal of a fee below it. Polymer's prover carries no fee: its
- * proof is relayed off-chain, so it is not here.
- */
-export const MessageBridgeProverABI = [
   {
     type: "function",
     name: "fetchFee",

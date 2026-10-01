@@ -49,7 +49,7 @@ import type { PrivateKeyAccount } from "viem/accounts";
 import type { CanonicalChain } from "../chains/canonical.js";
 import { v12EngineAddress } from "../deployments/index.js";
 import { v12PotAbi } from "../evm/engine.js";
-import { MessageBridgeProverABI, PortalABI } from "../protocols/eco-routes/abis.js";
+import { PortalABI, ProverABI } from "../protocols/eco-routes/abis.js";
 import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm } from "../routes/encode.js";
 import type { Intent } from "../routes/types.js";
@@ -135,7 +135,7 @@ const EXECUTOR_ERRORS = parseAbi([
  *  and SafeERC20's on a route token pull), the Executor's, and a message-bridge prover's fee. */
 const FULFILL_ERRORS = [
   ...PortalABI.filter((item) => item.type === "error"),
-  ...MessageBridgeProverABI.filter((item) => item.type === "error"),
+  ...ProverABI.filter((item) => item.type === "error"),
   ...EXECUTOR_ERRORS,
 ] as const;
 

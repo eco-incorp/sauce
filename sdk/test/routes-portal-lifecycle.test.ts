@@ -17,7 +17,7 @@ import {
   type Hex,
 } from "viem";
 
-import { MessageBridgeProverABI, PortalABI, ProverABI } from "../src/protocols/eco-routes/abis.js";
+import { PortalABI, ProverABI } from "../src/protocols/eco-routes/abis.js";
 import { encodeRoute, evmRouteTuple, hashIntent } from "../src/routes/encode.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
 import {
@@ -176,15 +176,13 @@ describe("the destination after the fill", () => {
       data: "0x",
     });
     expect(fee.to).toBe(PROVER.toLowerCase());
-    expect(decodeFunctionData({ abi: MessageBridgeProverABI, data: fee.data }).args).toEqual([
+    expect(decodeFunctionData({ abi: ProverABI, data: fee.data }).args).toEqual([
       42161n,
       message,
       "0x",
     ]);
     expect(
-      fee.decode(
-        encodeFunctionResult({ abi: MessageBridgeProverABI, functionName: "fetchFee", result: 5n }),
-      ),
+      fee.decode(encodeFunctionResult({ abi: ProverABI, functionName: "fetchFee", result: 5n })),
     ).toBe(5n);
   });
 

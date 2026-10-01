@@ -65,7 +65,7 @@ import {
   type Hex,
 } from "viem";
 
-import { MessageBridgeProverABI, PortalABI, ProverABI } from "../protocols/eco-routes/abis.js";
+import { PortalABI, ProverABI } from "../protocols/eco-routes/abis.js";
 import { ERC20ABI } from "../protocols/erc20/abis.js";
 import {
   decodeRoute,
@@ -680,7 +680,7 @@ export function proverFeeCall(options: {
   return {
     to: denormalizeToEvm(toUniversalAddress(options.prover)),
     data: encodeFunctionData({
-      abi: MessageBridgeProverABI,
+      abi: ProverABI,
       functionName: "fetchFee",
       args: [
         options.sourceDomain,
@@ -689,7 +689,7 @@ export function proverFeeCall(options: {
       ],
     }),
     decode: (result) =>
-      decodeFunctionResult({ abi: MessageBridgeProverABI, functionName: "fetchFee", data: result }),
+      decodeFunctionResult({ abi: ProverABI, functionName: "fetchFee", data: result }),
   };
 }
 

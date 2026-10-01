@@ -785,6 +785,14 @@ const storing =
 async function lifecycleContext(args: ParsedArgs, io: CliIo): Promise<LifecycleContext> {
   const endpoint = await endpointLookup(args, io);
   const account = hasSigner(args) ? await signerOf(args, io) : undefined;
+  const api = stringFlag(args, "api");
+  const keyFile = stringFlag(args, "api-key-file");
+  if (keyFile !== undefined && api === undefined) {
+    throw new UsageError("--api-key-file goes with --api");
+  }
+  const key = keyFile === undefined ? undefined : readInput(io, keyFile).trim();
+  if (key !== undefined) secret(key);
+  if (api !== undefined) secret(api);
 
   return {
     store: storeOf(args, io),
@@ -792,6 +800,7 @@ async function lifecycleContext(args: ParsedArgs, io: CliIo): Promise<LifecycleC
     ...(account === undefined ? {} : { account }),
     yes: args.values.yes === true,
     confirm: io.confirm,
+    ...(api === undefined ? {} : { api: { url: api, ...(key === undefined ? {} : { key }) } }),
   };
 }
 
@@ -954,11 +963,26 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
   );
 }
 
+/** The Eco API gateway, an optional second source of an intent's status. */
+const API: FlagSpecs = {
+  api: {
+    type: "string",
+    value: "<url>",
+    help: "Also ask the Eco API gateway at this URL (none is built in)",
+  },
+  "api-key-file": { type: "string", value: "<path>", help: "…and send the key in this file" },
+};
+
 /** The flags every lifecycle command takes. */
+/** An intent command's signer: an EVM one, since the Portal it drives is an EVM contract. */
+const EVM_SIGNER: FlagSpecs = Object.fromEntries(
+  Object.entries(SIGNER).filter(([name]) => name !== "keypair"),
+);
+
 const LIFECYCLE: FlagSpecs = {
   ...PROGRAM,
   ...ENDPOINT,
-  ...SIGNER,
+  ...EVM_SIGNER,
   yes: {
     type: "boolean",
     short: "y",
@@ -1362,7 +1386,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         type: "boolean",
         help: "Send the fill, from the signer, after rehearsing it",
       },
-      ...SIGNER,
+      ...EVM_SIGNER,
       yes: LIFECYCLE.yes!,
       store: LIFECYCLE.store!,
       ...JSON_FLAG,
@@ -1598,14 +1622,16 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
   status: {
     usage: "sauce intent status <file | intent-hash…> --config <file>",
     summary: "Where intents stand on both chains, and what can be done next",
-    flags: { ...PROGRAM, ...ENDPOINT, store: LIFECYCLE.store!, ...JSON_FLAG, ...HELP },
+    flags: { ...PROGRAM, ...ENDPOINT, ...API, store: LIFECYCLE.store!, ...JSON_FLAG, ...HELP },
     details: [
       "Reads each intent on its source chain (the reward's status, what its vault holds, the",
       "proof its prover records) and its destination (whether the Portal recorded a fill or a",
       "cancellation, and whether it can cancel), wherever --config gives an endpoint, and prints",
       "its state — unfunded, funded, filled, cancelled, proven, cancelProven, claimed or refunded",
       "— its deadlines, and whether it can be filled, proven, claimed, refunded or cancelled now,",
-      "with why not and from when. Nothing is sent.",
+      "with why not and from when. Nothing is sent. --api <url> also asks the Eco API gateway",
+      "there (GET /v1/intents/status) and prints its word beside the chains' state, which stays",
+      "the truth; --api-key-file sends a key with it. No URL is built in.",
       "",
       "Example:",
       "  sauce intent status 0x<intent hash> --config sauce.config.json",
@@ -1645,7 +1671,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
   show: {
     usage: "sauce intent show <intent-hash> [--config <file>] [--store <dir>]",
     summary: "One stored intent: its route, reward, deadlines and events, and where it stands",
-    flags: { ...ENDPOINT, store: LIFECYCLE.store!, ...JSON_FLAG, ...HELP },
+    flags: { ...ENDPOINT, ...API, store: LIFECYCLE.store!, ...JSON_FLAG, ...HELP },
     details: [
       "Prints the intent the store keeps under that hash — its route and reward, its deadlines,",
       "its creator and prover, and every event recorded for it — and, with --config, its state on",
@@ -1991,7 +2017,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     summary: "Publish, fill, prove, claim, refund and cancel cross-chain intents",
     flags: {
       ...ENDPOINT,
-      ...SIGNER,
+      ...EVM_SIGNER,
       yes: LIFECYCLE.yes!,
       store: LIFECYCLE.store!,
       ...JSON_FLAG,

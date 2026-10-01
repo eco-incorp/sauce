@@ -349,9 +349,6 @@
       },
       "ProverABI": {
         "roles": ["HyperProver", "MetaProver", "PolymerProver", "LayerZeroProver"]
-      },
-      "MessageBridgeProverABI": {
-        "roles": ["HyperProver", "MetaProver", "LayerZeroProver"]
       }
     },
     "eigenlayer": {

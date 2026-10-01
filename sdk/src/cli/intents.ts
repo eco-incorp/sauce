@@ -29,6 +29,7 @@ import {
   buildProve,
   buildRefund,
   dispatchedMessages,
+  gatewayStatus,
   importIntents,
   intentOf,
   intentRecord,
@@ -59,6 +60,8 @@ export interface LifecycleContext {
   /** `--yes`: approve what the command spends without asking. */
   readonly yes: boolean;
   readonly confirm: Confirm;
+  /** `--api`: the Eco API gateway, an optional second source of status (and its key). */
+  readonly api?: { readonly url: string; readonly key?: string };
 }
 
 /** An intent a command acts on, and whether the store has it already. */
@@ -603,15 +606,33 @@ export async function showCommand(
   context: LifecycleContext,
 ): Promise<CommandOutput> {
   const endpoints = endpointsOf([target], context);
-  const status =
-    Object.keys(endpoints).length === 0 ? undefined : await intentStatus(target.record, endpoints);
+  const [status, gateway] = await Promise.all([
+    Object.keys(endpoints).length === 0 ? undefined : intentStatus(target.record, endpoints),
+    context.api === undefined
+      ? undefined
+      : gatewayStatus(context.api.url, target.record.intentHash, context.api.key).then(
+          (answer) => answer ?? null,
+        ),
+  ]);
+  const lines = statusLines(target, status);
+  if (gateway !== undefined) {
+    lines.push(
+      gateway === null
+        ? "  the gateway (--api) has no entry for it"
+        : `  the gateway (--api) says ${gateway.status}` +
+            (gateway.destinationTx === undefined
+              ? ""
+              : `, destination tx ${gateway.destinationTx}`),
+    );
+  }
 
   return {
-    text: statusLines(target, status).join("\n"),
+    text: lines.join("\n"),
     json: {
       record: target.record,
       events: target.stored?.events ?? [],
       ...(status === undefined ? {} : { status }),
+      ...(gateway === undefined ? {} : { gateway }),
     },
     notes: [
       ...(target.stored?.warnings ?? []),

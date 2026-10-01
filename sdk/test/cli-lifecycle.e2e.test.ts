@@ -355,8 +355,9 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     const out = join(work, "made.sauce.ts");
     const run = await sauce(
       ...["intent", "publish", "--source", "arbitrum", "--destination", "base"],
-      ...["--token", "USDC", "--amount", "1", "--recipient", RECIPIENT],
-      ...["--reward-token", "USDC", "--reward", "1.05", "--prover", "HyperProver"],
+      // Amounts no other test publishes: an intent equal to one already claimed is refused.
+      ...["--token", "USDC", "--amount", "1.25", "--recipient", RECIPIENT],
+      ...["--reward-token", "USDC", "--reward", "1.3", "--prover", "HyperProver"],
       ...["--fill-deadline", "+1h", "--reward-deadline", "+2h", "--out", out],
       ...["--config", config, "--private-key", OWNER_KEY, "--yes", "--store", store, "--json"],
     );
@@ -367,7 +368,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(run.stderr).toContain("Filling, rehearsed on base (as a solver will):");
     expect(run.stderr).toMatch(/the solver's costs on base: ~250000 gas/);
     expect(readFileSync(out, "utf8")).toContain(
-      `USDC.transfer(${RECIPIENT.toLowerCase()}n, 1000000n);`,
+      `USDC.transfer(${RECIPIENT.toLowerCase()}n, 1250000n);`,
     );
     const published = JSON.parse(run.stdout) as { intents: Array<{ intentHash: Hex }> };
     const hash = published.intents[0]!.intentHash;

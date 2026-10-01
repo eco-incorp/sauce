@@ -1742,6 +1742,68 @@ export function dispatchedMessages(
     .map((log) => ({ mailbox: getAddress(log.address), id: log.topics[1]! }));
 }
 
+/** What the Eco API gateway says of an intent: its own status word, beside the chains' state. */
+export interface GatewayStatus {
+  /** `pending`, `filled`, `settled`, `refundable`, `refunded`, … as the gateway words it. */
+  readonly status: string;
+  readonly destinationTx?: Hex;
+  readonly updatedAt?: string;
+}
+
+/**
+ * The gateway's status of `intentHash` from `GET <api>/v1/intents/status?intentHash=…` — an
+ * OPTIONAL second source, at a URL the caller gives (none is built in), beside the on-chain reads
+ * that are the truth. `apiKey`, when given, goes in `x-api-key`. `undefined` when the gateway has no
+ * entry for the intent; a failure is an error naming the status, never the URL or the key.
+ */
+export async function gatewayStatus(
+  api: string,
+  intentHash: Hex,
+  apiKey?: string,
+): Promise<GatewayStatus | undefined> {
+  const url = `${api.replace(/\/+$/, "")}/v1/intents/status?${new URLSearchParams({ intentHash })}`;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        accept: "application/json",
+        ...(apiKey === undefined ? {} : { "x-api-key": apiKey }),
+      },
+    });
+  } catch {
+    throw new CliError("the gateway (--api) could not be reached");
+  }
+  if (!response.ok) {
+    throw new CliError(
+      `the gateway (--api) answered ${response.status}` +
+        (response.status === 401 || response.status === 403
+          ? ": it needs an API key (--api-key-file)"
+          : ""),
+    );
+  }
+  const page = (await response.json().catch(() => ({}))) as {
+    results?: ReadonlyArray<{
+      intentHashes?: readonly string[];
+      status?: string;
+      destinationTx?: { txHash?: string };
+      updatedAt?: string | number;
+    }>;
+  };
+  const wanted = intentHash.toLowerCase();
+  const entry = (page.results ?? []).find((result) =>
+    (result.intentHashes ?? []).some((hash) => hash.toLowerCase() === wanted),
+  );
+  if (entry?.status === undefined) return undefined;
+
+  return {
+    status: entry.status,
+    ...(entry.destinationTx?.txHash === undefined
+      ? {}
+      : { destinationTx: entry.destinationTx.txHash as Hex }),
+    ...(entry.updatedAt === undefined ? {} : { updatedAt: String(entry.updatedAt) }),
+  };
+}
+
 // ---------------------------------------------------------------------------------------------
 // Importing
 // ---------------------------------------------------------------------------------------------
