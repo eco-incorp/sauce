@@ -16,7 +16,7 @@ import { pbkdf2 } from "@noble/hashes/pbkdf2";
 import { scrypt } from "@noble/hashes/scrypt";
 import { sha256 } from "@noble/hashes/sha2";
 import { keccak_256 } from "@noble/hashes/sha3";
-import { bytesToHex, hexToBytes, type Hex } from "viem";
+import { bytesToHex, getAddress, hexToBytes, isAddress, type Address, type Hex } from "viem";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 
 import { UsageError } from "./args.js";
@@ -129,6 +129,23 @@ function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
  * The private key in a Web3 Secret Storage (v3) keystore. The MAC is checked before anything is
  * decrypted, so a wrong password is reported as one rather than yielding a wrong key.
  */
+/**
+ * The address a keystore names in the clear — its `address` field, which every v3 keystore a
+ * wallet writes carries — so the signer's address is known without its password. `undefined` for a
+ * keystore without one, which has to be unlocked to learn it.
+ */
+export function keystoreAddress(json: string): Address | undefined {
+  try {
+    const field = (JSON.parse(json) as { address?: unknown }).address;
+    if (typeof field !== "string") return undefined;
+    const spelled = field.startsWith("0x") ? field : `0x${field}`;
+
+    return isAddress(spelled, { strict: false }) ? getAddress(spelled) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function decryptKeystore(json: string, password: string): Hex {
   secret(password);
   let keystore: KeystoreV3;

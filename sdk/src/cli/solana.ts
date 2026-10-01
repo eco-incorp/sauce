@@ -28,6 +28,7 @@ import {
   isAddress,
   TRANSACTION_SIZE_LIMIT,
   type Address,
+  type Blockhash,
   type Instruction,
   type KeyPairSigner,
   type Signature,
@@ -46,11 +47,14 @@ import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
 import { verifySvmSettleExecution, type SvmSettleExecutionVerification } from "../svm/verify.js";
 import {
   buildCloseCodeBufferInstruction,
+  buildComputeBudgetPrepend,
+  buildCookInstruction,
   buildCreateCodeBufferInstruction,
   buildCreatePotInstruction,
   buildExecuteTransaction,
   buildFinalizeCodeBufferInstruction,
   buildGrowCodeBufferInstruction,
+  buildHeapFramePrepend,
   buildWriteCodeBufferInstruction,
   createSauceSvmClient,
   deriveCodeBufferPda,
@@ -59,6 +63,7 @@ import {
   derivePotPda,
   GROWTH_STEP,
   MAX_POT_LEN,
+  resolveAccounts,
   type AccountResolution,
   type SauceSvmClient,
   type SimulateExecuteResult,
@@ -67,10 +72,11 @@ import { CliError, UsageError, type SaltChoice } from "./args.js";
 import {
   compileProgram,
   payloadOf,
+  unapproved,
+  type Approver,
   type ArgsInput,
   type CliFiles,
   type CommandOutput,
-  type Confirm,
   type ProgramInput,
 } from "./commands.js";
 import { secret } from "./signer.js";
@@ -206,7 +212,7 @@ export const ACCOUNT_WAIT = { tries: 60, delayMs: 1000 };
  * simulation reads the same way: cooking straight after creating its Pot would fail on a Pot that
  * is there.
  */
-async function awaitAccount(
+export async function awaitAccount(
   rpc: Rpc,
   url: string,
   account: Address,
@@ -667,6 +673,91 @@ async function fits(
   return { fits: size <= TRANSACTION_SIZE_LIMIT, size, transaction };
 }
 
+/** A placeholder key, distinct per `index`, for an account a size estimate has no address for. */
+const placeholderKey = (index: number): Address =>
+  getBase58Decoder().decode(new Uint8Array(32).fill(index + 1)) as Address;
+
+/** Whether a cook fits one transaction, measured without a cluster. */
+export interface SvmCookSize {
+  readonly size: number;
+  readonly limit: number;
+  readonly fits: boolean;
+  /** The slots measured with a placeholder: no `--account` named them. */
+  readonly assumed: readonly string[];
+  /** The program reads accounts after its named ones, which add to the size. */
+  readonly remaining: boolean;
+}
+
+/**
+ * The size of the cook that carries `bytecode` inline, offline: the transaction `run` sends (heap
+ * frame, compute-unit limit, the Kitchen's `cook`) for `manifest`, with each account `--account`
+ * gives where it is given — `pot` and `owner` are the cook's own — and a distinct account for every
+ * other slot, so a size is the most those slots can make it. The blockhash and signature are fixed
+ * widths, so a placeholder of each measures the same.
+ */
+export async function svmCookSize(
+  bytecode: Uint8Array,
+  manifest: AccountManifest,
+  given: Readonly<Record<string, string>>,
+): Promise<SvmCookSize> {
+  const owner = placeholderKey(0);
+  const target: SvmTarget = { owner, salt: `0x${"00".repeat(32)}` };
+  const pot = await potOf(target);
+  const slots = manifest.accounts.filter((entry) => entry.kind === "slot");
+  const assumed = slots.filter((slot) => !Object.hasOwn(given, slot.name)).map((s) => s.name);
+  const named: AccountManifest = { accounts: slots };
+  const signer = unsignedSigner(owner);
+  // The accounts given, as a cook resolves them; every other slot a distinct account, which signs
+  // for itself where the slot asks for a signer.
+  const resolved: AccountResolution = resolution(
+    named,
+    Object.fromEntries(slots.map((slot) => [slot.name, given[slot.name] ?? "pot"])),
+    owner,
+    pot,
+    signer,
+  );
+  slots.forEach((slot, index) => {
+    if (Object.hasOwn(given, slot.name)) return;
+    const at = placeholderKey(index + 1);
+    resolved[slot.name] = /signer/.test(slot.requires)
+      ? { address: at, signer: unsignedSigner(at) }
+      : at;
+  });
+  const { address: feeConfig } = await deriveExecutionFeeConfigPda(kitchen());
+  const cook = buildCookInstruction({
+    kitchen: kitchen(),
+    owner,
+    engineProgram: engine(),
+    potSalt: saltBytes(target.salt),
+    pot,
+    feeConfig,
+    bytecode,
+    maxExecutionFee: 0n,
+    tail: resolveAccounts(named, resolved, owner),
+  });
+  const transaction = await buildExecuteTransaction({
+    payer: signer,
+    instructions: [
+      buildHeapFramePrepend(),
+      ...buildComputeBudgetPrepend({ unitLimit: 1_400_000 }),
+      cook,
+    ],
+    latestBlockhash: {
+      blockhash: placeholderKey(254) as unknown as Blockhash,
+      lastValidBlockHeight: 0n,
+    },
+  });
+  const size = getTransactionSize(transaction);
+
+  return {
+    size,
+    limit: TRANSACTION_SIZE_LIMIT,
+    fits: size <= TRANSACTION_SIZE_LIMIT,
+    assumed,
+    remaining: manifest.accounts.some((entry) => entry.kind === "remaining"),
+  };
+}
+
 /** The payload a cook carries — the program, and the arguments appended to it — in bytes. */
 const payloadSize = (prepared: Prepared): string => {
   const program = prepared.program.bytecode.length;
@@ -983,8 +1074,7 @@ async function stage(
 
 export interface SvmRunInput extends SvmCookInput {
   readonly signer: KeyPairSigner;
-  readonly yes: boolean;
-  readonly confirm: Confirm;
+  readonly approver: Approver;
 }
 
 const sentLine = (what: string, sent: SvmSent): string =>
@@ -1003,16 +1093,19 @@ const sentJson = (sent: SvmSent): Record<string, unknown> => ({
 async function ensurePot(input: SvmRunInput, rpc: Rpc, pot: Address): Promise<SvmSent | undefined> {
   if (await exists(rpc, input.rpcUrl, pot, "the Pot")) return undefined;
   const missing = `Pot ${pot} is not deployed on solana`;
-  const agreed = input.yes
-    ? true
-    : await input.confirm(
-        `Pot ${pot} (owner ${input.owner}, salt ${input.salt}) is not deployed on solana. ` +
-          "Deploy it now? [y/N] ",
-      );
+  const action = `create Pot ${pot}`;
+  // With no one to ask, creating it is the one approval a Solana run needs: named before it sends.
+  if (!input.approver.auto && !input.approver.canAsk) throw unapproved([action]);
+  const agreed = await input.approver.approve(
+    action,
+    `Pot ${pot} (owner ${input.owner}, salt ${input.salt}) is not deployed on solana. ` +
+      "Deploy it now? [y/N] ",
+  );
   if (agreed !== true) {
     throw new CliError(
       agreed === undefined
-        ? `${missing}. Create it first (${createHint(input)}), or pass --yes to create it before the cook`
+        ? `${missing}. Create it first (${createHint(input)}), or pass --auto-approve to create ` +
+            "it before the cook"
         : `${missing}, so nothing was sent. Create it with: ${createHint(input)}`,
     );
   }
@@ -1279,6 +1372,61 @@ export async function svmPotCommand(target: SvmTarget): Promise<CommandOutput> {
         "it creates the Pot once.",
     ],
   };
+}
+
+/** The released programs on the cluster, and the Pot: what a cook there needs. */
+async function deployment(
+  rpc: Rpc,
+  url: string,
+  pot: Address,
+): Promise<{ json: Record<string, unknown>; notes: string[] }> {
+  const program = async (at: Address, what: string): Promise<boolean> => {
+    const { value } = await ask(url, what, () =>
+      rpc.getAccountInfo(at, { encoding: "base64" }).send(),
+    );
+
+    return value !== null && value.executable;
+  };
+  const [engineThere, kitchenThere, potThere] = await Promise.all([
+    program(engine(), "the engine program"),
+    program(kitchen(), "the Kitchen program"),
+    exists(rpc, url, pot, "the Pot"),
+  ]);
+  const fee = kitchenThere ? await kitchenFee(rpc, url).catch(() => undefined) : undefined;
+  const there = (deployed: boolean) => (deployed ? "deployed" : "NOT deployed");
+
+  return {
+    json: {
+      engine: { address: engine(), deployed: engineThere },
+      kitchen: {
+        address: kitchen(),
+        deployed: kitchenThere,
+        ...(fee === undefined ? {} : { executionFee: fee.toString() }),
+      },
+      pot: { address: pot, deployed: potThere },
+    },
+    notes: [
+      `On the cluster: the engine ${engine()} is ${there(engineThere)}; the Kitchen ${kitchen()} ` +
+        `is ${there(kitchenThere)}` +
+        (fee === undefined ? "" : `, its execution fee ${fee} lamports`) +
+        `; the Pot ${pot} is ${there(potThere)}.`,
+      ...(kitchenThere && fee === undefined
+        ? ["The Kitchen has no execution-fee config on this cluster: a cook there is refused."]
+        : []),
+    ],
+  };
+}
+
+/** `sauce pot --chain solana` with an endpoint: the prediction, and what the cluster has. */
+export async function svmPotStatusCommand(
+  target: SvmTarget & { readonly rpcUrl: string },
+): Promise<CommandOutput> {
+  const predicted = await svmPotCommand(target);
+  const pot = predicted.json.pot as Address;
+  const found = await deployment(createSolanaRpc(target.rpcUrl), target.rpcUrl, pot);
+  const json = { ...predicted.json, deployment: found.json };
+
+  return { text: JSON.stringify(json, null, 2), json, notes: found.notes };
 }
 
 /** `sauce pot --deploy --chain solana`: creates the signer's Pot unless it is already there. */

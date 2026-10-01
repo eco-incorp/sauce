@@ -563,6 +563,19 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       instruction: { programAddress: KITCHEN },
     });
     expect(harness.svm.getAccount(pot).exists).toBe(false);
+    // With an endpoint, it reads the cluster: the released programs, the fee, the Pot.
+    const status = async () =>
+      json(
+        await sauce(
+          ...["pot", "--chain", "solana", "--owner", owner.signer.address, "--salt", "vault"],
+          ...["--rpc-url", RPC_URL],
+        ),
+      ).deployment;
+    expect(await status()).toEqual({
+      engine: { address: v12SvmEngineProgramId(), deployed: true },
+      kitchen: { address: KITCHEN, deployed: true, executionFee: `${FEE}` },
+      pot: { address: pot, deployed: false },
+    });
     const deploy = ["pot", "--deploy", "--chain", "solana", "--rpc-url", RPC_URL];
     const created = await sauce(...deploy, "--keypair", owner.path, "--salt", "vault");
     expect(json(created)).toMatchObject({ pot, deployed: true, createPot: { status: "success" } });
@@ -573,10 +586,11 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     });
     const again = await sauce(...deploy, "--keypair", owner.path, "--salt", "vault");
     expect(again.stderr).toMatch(/is already created on solana/);
-    // The signer is the owner: --owner naming someone else is refused.
+    expect(await status()).toMatchObject({ pot: { address: pot, deployed: true } });
+    // The signer is the owner, who signs create_pot: --owner naming someone else is refused.
     const other = await sauce(...deploy, "--keypair", owner.path, "--owner", harness.payer.address);
     expect(other.code).toBe(2);
-    expect(other.stderr).toMatch(/is not the signer/);
+    expect(other.stderr).toMatch(/is not the signer, .*: on Solana the owner signs create_pot/);
   }, 60_000);
 
   it("`sauce simulate` reads a revert's message from the engine's return data in the logs", async () => {
@@ -823,7 +837,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(run.stdout + run.stderr).not.toContain(secret);
   }, 60_000);
 
-  it("asks before creating a missing Pot; --yes creates it, then cooks", async () => {
+  it("asks before creating a missing Pot; --auto-approve creates it, then cooks", async () => {
     const salt = hexToBytes(potSalt("fresh"));
     const pot = await potOf(salt);
     const { dest, flags } = accountsFor(pot, 50n);
@@ -843,13 +857,15 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       "50",
     ];
     const noTerminal = await sauce(...argv);
+    // No terminal: the approval it needs is named before anything is sent.
     expect(noTerminal.code).toBe(1);
-    expect(noTerminal.stderr).toMatch(
-      /is not deployed on solana\. Create it first .*or pass --yes/,
+    expect(noTerminal.stderr).toContain(
+      "nothing was sent: this run needs an approval, and there is no terminal to ask on:\n" +
+        `  create Pot ${pot}\nPass --auto-approve`,
     );
     let asked = "";
     const declined = await sauceWith(
-      { confirm: async (question) => ((asked = question), false) },
+      { confirm: async (question) => ((asked = question), false), canAsk: () => true },
       ...argv,
     );
     expect(asked).toBe(
@@ -858,8 +874,9 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     );
     expect(declined.stderr).toMatch(/so nothing was sent/);
     expect(harness.svm.getAccount(pot).exists).toBe(false);
-    const yes = await sauce(...argv.slice(0, -2), "--yes", "--args", "50");
+    const yes = await sauce(...argv.slice(0, -2), "--auto-approve", "--args", "50");
     expect(yes.code).toBe(0);
+    expect(yes.stderr).toContain(`auto-approved: create Pot ${pot}`);
     expect(yes.stdout).toMatch(new RegExp(`^created Pot ${pot} in \\w+: success`, "m"));
     expect(yes.stdout).toMatch(/^cook \w+: success/m);
     expect(tokenAmount(harness, dest)).toBe(50n);
@@ -1118,6 +1135,14 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
         expect(bare).toBeLessThanOrEqual(1232);
         break;
       }
+    }
+    // `sauce compile --json` measures that same transaction offline, on either side of the limit.
+    for (const length of [bytes - 1, bytes]) {
+      const [, limited] = await sizes(length);
+      const compiled = json(
+        await sauce("compile", blobProgram(`window-${length}.sauce.ts`, length), "--json"),
+      );
+      expect(compiled.cook).toMatchObject({ size: limited, limit: 1232, fits: limited <= 1232 });
     }
     const out = json(await runVault("run", blobProgram("window.sauce.ts", bytes), "--json"));
     expect(out).toMatchObject({ cook: { status: "success" }, staged: expect.any(Object) });
