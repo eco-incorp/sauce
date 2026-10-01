@@ -62,6 +62,7 @@ import {
 } from "./intents.js";
 import { costJson, costLine, costOf, receiptEffects, receiptReport } from "./receipt.js";
 import { appliedDefines, contractCollector } from "./report.js";
+import { mainReturnType } from "../routes/entry.js";
 import { svmCookSize } from "./solana.js";
 import type { Funding } from "./funding.js";
 
@@ -299,6 +300,8 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       entryEncoding: program.entryEncoding,
       entryParams: program.entryParams,
       entrySchema: program.entrySchema === undefined ? null : bytesToHex(program.entrySchema),
+      // What main returns, as it declares it: `simulate` reads the cook's return data as this.
+      returnType: mainReturnType(input.text) ?? null,
       defines,
       contracts: collected.contracts(),
       ...(pots.length === 0 ? {} : { intentPots: pots.map(potCheckJson) }),

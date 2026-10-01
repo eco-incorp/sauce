@@ -9,10 +9,12 @@
 import {
   createPublicClient,
   createWalletClient,
+  custom,
   decodeErrorResult,
   getAddress,
   hexToBytes,
   http,
+  numberToHex,
   parseAbi,
   TransactionReceiptNotFoundError,
   type Abi,
@@ -103,6 +105,75 @@ export async function connect(url: string, chain: CanonicalChain): Promise<Publi
   }
 
   return client;
+}
+
+/** Where each state-reading method takes its block, among its parameters. */
+const BLOCK_PARAM: Readonly<Record<string, number>> = {
+  eth_call: 1,
+  eth_estimateGas: 1,
+  eth_simulateV1: 1,
+  eth_createAccessList: 1,
+  eth_getBalance: 1,
+  eth_getCode: 1,
+  eth_getTransactionCount: 1,
+  eth_getStorageAt: 2,
+  eth_getProof: 2,
+};
+
+const MOVING = new Set(["latest", "pending", "safe", "finalized"]);
+
+/** `params` of `method` with its block, where the request names a moving one (or none), pinned. */
+function pinnedParams(method: string, params: unknown, block: Hex): unknown {
+  const at = BLOCK_PARAM[method];
+  if (at === undefined || !Array.isArray(params)) return params;
+  const pinned = [...(params as unknown[])];
+  const given = pinned[at];
+  if (given === undefined || given === null || (typeof given === "string" && MOVING.has(given))) {
+    while (pinned.length < at) pinned.push(null);
+    pinned[at] = block;
+  }
+
+  return pinned;
+}
+
+/** The block `--block` names: a number (decimal or 0x hex) or a tag; the latest when none. */
+async function blockNumberOf(client: PublicClient, given: string | undefined): Promise<bigint> {
+  if (given === undefined || given === "latest") {
+    return request("the latest block", () => client.getBlockNumber({ cacheTime: 0 }));
+  }
+  if (/^(\d+|0x[0-9a-fA-F]+)$/.test(given)) return BigInt(given);
+  if (given === "safe" || given === "finalized" || given === "earliest") {
+    const block = await request(`the ${given} block`, () => client.getBlock({ blockTag: given }));
+
+    return block.number;
+  }
+  throw new UsageError(
+    `--block: '${given}' is not a block number or a tag (latest, safe, finalized, earliest)`,
+  );
+}
+
+/**
+ * The chain `url` serves, read as of one block: every state read the client sends (`eth_call`,
+ * `eth_simulateV1`, balances, code, storage, gas estimates) at `block`, so a rehearsal and what it
+ * reads first agree, and say which block they saw. `block` is `--block`'s text; without it, the
+ * latest block when the command starts.
+ */
+export async function connectAt(
+  url: string,
+  chain: CanonicalChain,
+  block: string | undefined,
+): Promise<{ readonly client: PublicClient; readonly block: bigint }> {
+  const free = await connect(url, chain);
+  const number = await blockNumberOf(free, block);
+  const tag = numberToHex(number);
+  const client: PublicClient = createPublicClient({
+    transport: custom({
+      request: ({ method, params }: { method: string; params?: unknown }) =>
+        free.request({ method, params: pinnedParams(method, params, tag) } as never),
+    }),
+  });
+
+  return { client, block: number };
 }
 
 /**

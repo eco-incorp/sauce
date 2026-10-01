@@ -1200,6 +1200,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         help: "Give the Pot this balance, for the rehearsal only: USDC:2, ETH:0.1",
         only: "evm",
       },
+      block: {
+        type: "string",
+        value: "<number|tag>",
+        help: "Rehearse on this block: a number, or latest, safe, finalized (default: latest)",
+        only: "evm",
+      },
       ...FUND,
       keystore: {
         type: "string",
@@ -1274,6 +1280,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
               "account overrides, so on solana the rehearsal runs on the accounts as they are",
           );
         }
+        if (stringFlag(args, "block") !== undefined) {
+          throw new UsageError(
+            "--block is for EVM chains: Solana's simulateTransaction runs on the cluster's " +
+              "current state, at no slot it can be given",
+          );
+        }
 
         // A keypair names the owner; the rehearsal signs nothing with it.
         const owner =
@@ -1306,8 +1318,16 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       const rpcUrl = requiredEndpoint(args, io, input.chain);
       const fund = fundingOf(args, io, input.chain, rpcUrl, false, account);
 
+      const block = stringFlag(args, "block");
+
       return simulateCommand(
-        { ...input, rpcUrl, assume: assumed, ...(fund === undefined ? {} : { fund }) },
+        {
+          ...input,
+          rpcUrl,
+          assume: assumed,
+          ...(fund === undefined ? {} : { fund }),
+          ...(block === undefined ? {} : { block }),
+        },
         io,
       );
     },

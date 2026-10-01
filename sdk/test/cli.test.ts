@@ -15,6 +15,7 @@ import {
   getAddress,
   hexToBytes,
   keccak256,
+  numberToHex,
   stringToBytes,
   type Hex,
   type PublicClient,
@@ -299,6 +300,7 @@ describe("sauce compile", () => {
       entryEncoding: "abi-v1",
       entryParams: [],
       entrySchema: null,
+      returnType: null,
       defines: [
         { name: "AMOUNT", value: "1000", source: "user", chain: "ethereum" },
         { name: "RECIPIENT", value: RECIPIENT, source: "user", chain: "ethereum" },
@@ -1670,6 +1672,57 @@ describe("flags in any order", () => {
   });
 });
 
+describe("what main returned", () => {
+  const word = (value: bigint) => numberToHex(value, { size: 32 }).slice(2);
+  const data = (...values: bigint[]) => `0x${values.map(word).join("")}` as Hex;
+  const base = requireChain("base");
+
+  it("reads the cook's return data as the type main declares", async () => {
+    const { decodeReturned, returnedLine } = await import("../src/cli/returned.js");
+    const usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+    expect(decodeReturned("Address", data(BigInt(usdc)), base)).toBe(usdc);
+    expect(decodeReturned("Uint256", data(42n), base)).toBe("42");
+    expect(decodeReturned("bool", data(1n), base)).toBe(true);
+    // An array: its elements one word each, no length in front.
+    expect(decodeReturned("Uint256[]", data(1n, 2n, 3n), base)).toEqual(["1", "2", "3"]);
+    expect(decodeReturned("Uint256[]", "0x", base)).toEqual([]);
+    // A record: its fields one word each, in order; an array of records, one after another.
+    const record = "{ token: Address, out: Uint256 }";
+    expect(decodeReturned(record, data(BigInt(usdc), 5n), base)).toEqual({ token: usdc, out: "5" });
+    expect(decodeReturned(`${record}[]`, data(BigInt(usdc), 5n, BigInt(usdc), 6n), base)).toEqual([
+      { token: usdc, out: "5" },
+      { token: usdc, out: "6" },
+    ]);
+    // bytes as they are.
+    expect(decodeReturned("bytes", "0x1234", base)).toBe("0x1234");
+    // A shape that does not fit is not guessed at.
+    expect(decodeReturned("Uint256", data(1n, 2n), base)).toBeUndefined();
+    expect(decodeReturned(`${record}[]`, data(1n, 2n, 3n), base)).toBeUndefined();
+    expect(returnedLine("Uint256", data(1n, 2n), base)).toBe(
+      "main returns Uint256: the data above does not read as one",
+    );
+    expect(returnedLine(record, data(BigInt(usdc), 5n), base)).toBe(
+      `main returns ${record}: { token: ${usdc}, out: 5 }`,
+    );
+    // On Solana an address is a 32-byte key, shown in base58.
+    const solana = requireChain("solana");
+    const mint = routes.registryTokens(solana).USDC!;
+    expect(decodeReturned("Address", mint.address, solana)).toBe(mint.mint);
+  });
+
+  it("finds main's declared return type, an interface spelled out", async () => {
+    const { mainReturnType } = await import("../src/routes/entry.js");
+    expect(mainReturnType("function main(): Address {\n  return 0n;\n}\n")).toBe("Address");
+    expect(mainReturnType("function main() {\n}\n")).toBeUndefined();
+    expect(mainReturnType("function main(): void {\n}\n")).toBeUndefined();
+    expect(
+      mainReturnType(
+        "interface Out { token: Address; out: Uint256 }\nfunction main(): Out[] {\n  return [];\n}\n",
+      ),
+    ).toBe("{ token: Address, out: Uint256 }[]");
+  });
+});
+
 describe("a program from stdin", () => {
   const PROGRAM = "function main(to: Address) {\n  USDC.transfer(to, 5n);\n}\n";
   const piped = (text: string) => ({ readStdin: () => text });
@@ -1971,6 +2024,7 @@ describe("the CLI stays out of the browser-facing surface", () => {
       await import("../src/cli/intents.js"),
       await import("../src/cli/receipt.js"),
       await import("../src/cli/terminal.js"),
+      await import("../src/cli/returned.js"),
     ].flatMap((module) => Object.keys(module));
     expect(cli.length).toBeGreaterThan(0);
     const routes = root.routes as Record<string, unknown>;
