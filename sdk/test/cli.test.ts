@@ -242,7 +242,8 @@ describe("sauce compile", () => {
       file("ambient.sauce.ts", body),
       "--chain",
       "base",
-      ...PAY_DEFINES,
+      "--define",
+      `RECIPIENT=${RECIPIENT}`,
     );
     expect(run.stderr).toBe("");
     expect(run.stdout).toMatch(/^0x[0-9a-f]+\n$/);
@@ -279,9 +280,27 @@ describe("sauce compile", () => {
       target: "evm",
       bytecode: expect.stringMatching(/^0x[0-9a-f]+$/),
       size: ((out.bytecode as string).length - 2) / 2,
+      payload: { size: ((out.bytecode as string).length - 2) / 2, argumentsSize: 0 },
       entryEncoding: "abi-v1",
       entryParams: [],
       entrySchema: null,
+      defines: [
+        { name: "AMOUNT", value: "1000", source: "user" },
+        { name: "RECIPIENT", value: RECIPIENT, source: "user" },
+        {
+          name: "USDC",
+          value: getAddress(routes.TOKEN_REGISTRY[1]!.find((t) => t.symbol === "USDC")!.address),
+          source: "chain",
+          kind: "token",
+        },
+        {
+          name: "USDT",
+          value: getAddress(routes.TOKEN_REGISTRY[1]!.find((t) => t.symbol === "USDT")!.address),
+          source: "chain",
+          kind: "token",
+        },
+      ],
+      contracts: [],
       compiler: { name: "@eco-incorp/sauce-compiler", version: compiler.version },
       engine: {
         release: "v12-evm",
@@ -307,6 +326,137 @@ describe("sauce compile", () => {
       expect(out.manifest).toEqual({ accounts: [{ kind: "remaining", from: 0 }] });
       expect(out.engine).toMatchObject({ release: "v12-svm", programId: expect.any(String) });
     }
+  });
+
+  it("reports the defines it applied and where each came from, and the contracts it resolved", async () => {
+    // A venue the chain sets (UniswapV3_Factory), one the user sets, one the user sets and never
+    // reads, and a namespace call — at the top and inside an intent body, on that intent's chain.
+    const program = file(
+      "venues.sauce.ts",
+      [
+        "const UniswapV3_Factory = 0n;",
+        "const PANCAKE = 0n;",
+        "function main(amount: Uint256) {",
+        "  require(UniswapV3_Factory != 0n && PANCAKE != 0n && amount > 0n);",
+        "  const pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);",
+        "  require(pool != 0n);",
+        "  Arbitrum(() => {",
+        "    const there = UniswapV3.Factory.getPool(1n, 2n, 3n);",
+        "    require(there != 0n);",
+        "  }).reward({ tokens: [{ token: USDC, amount: amount }] });",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const pancake = "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865";
+    const run = await sauce(
+      "compile",
+      program,
+      "--chain",
+      "base",
+      "--define",
+      `PANCAKE=${pancake}`,
+      "--define",
+      "UNUSED=5",
+      "--intent-deadline",
+      "2000000000",
+      "--intent-creator",
+      CREATOR,
+      "--intent-execution-fee",
+      "0",
+      "--json",
+      "--args",
+      "1000",
+    );
+    expect(run.code).toBe(0);
+    expect(run.stderr).toContain("--define UNUSED: ");
+    expect(run.stderr).toContain("never reads UNUSED, so the define changes nothing");
+    const out = JSON.parse(run.stdout) as Record<string, unknown>;
+    const base = routes.chainDefines(requireChain("base"));
+    const address = (value: unknown) =>
+      getAddress(`0x${(value as bigint).toString(16).padStart(40, "0")}`);
+    expect(out.defines).toEqual([
+      { name: "PANCAKE", value: pancake, source: "user" },
+      { name: "USDC", value: address(base.USDC), source: "chain", kind: "token" },
+      {
+        name: "UniswapV3_Factory",
+        value: address(base.UniswapV3_Factory),
+        source: "chain",
+        kind: "contract",
+      },
+      { name: "WETH", value: address(base.WETH), source: "chain", kind: "token" },
+    ]);
+    const arbitrum = routes.chainDefines(requireChain("arbitrum"));
+    expect(out.contracts).toEqual([
+      {
+        reference: "UniswapV3.Factory",
+        contract: "UniswapV3.Factory",
+        chain: "arbitrum",
+        address: address(arbitrum.UniswapV3_Factory),
+      },
+      {
+        reference: "UniswapV3.Factory",
+        contract: "UniswapV3.Factory",
+        chain: "base",
+        address: address(base.UniswapV3_Factory),
+      },
+    ]);
+    // main(amount): one ABI-v1 word after the program.
+    expect(out.payload).toEqual({ size: (out.size as number) + 32, argumentsSize: 32 });
+    // Without its arguments the payload is not known.
+    const bare = JSON.parse(
+      (
+        await sauce(
+          "compile",
+          program,
+          "--chain",
+          "base",
+          "--define",
+          `PANCAKE=${pancake}`,
+          "--intent-deadline",
+          "2000000000",
+          "--intent-creator",
+          CREATOR,
+          "--intent-execution-fee",
+          "0",
+          "--json",
+        )
+      ).stdout,
+    ) as Record<string, unknown>;
+    expect(bare.payload).toBeNull();
+  });
+
+  it("says whether a Solana cook fits one transaction, for its accounts", async () => {
+    const program = file(
+      "pay.sauce.ts",
+      [
+        "function main(tokenProgram: Account, source: Account<Writable>, dest: Account<Writable>, pot: Account<Signer>, amount: Uint256) {",
+        "  transfer(1n, tokenProgram, source, dest, pot, amount);",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const sized = async (...extra: string[]) =>
+      JSON.parse(
+        (await sauce("compile", program, "--chain", "solana", "--json", ...extra)).stdout,
+      ) as { cook?: { size: number; limit: number; fits: boolean; assumed: string[] } };
+    expect((await sized()).cook).toBeUndefined();
+    const distinct = (await sized("--args", "5")).cook!;
+    expect(distinct).toMatchObject({ limit: 1232, fits: true });
+    expect(distinct.assumed).toEqual(["tokenProgram", "source", "dest", "pot"]);
+    // The Pot named as itself is the cook's own account, which the Kitchen signs for: the
+    // transaction carries one key and one signature fewer than for a signer of its own.
+    const pot = (await sized("--account", "pot=pot", "--args", "5")).cook!;
+    expect(pot.assumed).toEqual(["tokenProgram", "source", "dest"]);
+    expect(pot.size).toBeLessThan(distinct.size);
+    // Past the limit: said on stderr, and that `run` stages it.
+    const large = file(
+      "large.sauce.ts",
+      `function main(x: Uint256) {\n${Array.from({ length: 60 }, (_, i) => `  require(x != ${i}n, "${"x".repeat(20)}${i}");`).join("\n")}\n}\n`,
+    );
+    const run = await sauce("compile", large, "--chain", "solana", "--json", "--args", "99");
+    expect(JSON.parse(run.stdout).cook).toMatchObject({ fits: false });
+    expect(run.stderr).toMatch(/past Solana's 1232: `sauce run` stages the program/);
   });
 
   it("takes a Solana program's key defines in base58, as --account takes them", async () => {

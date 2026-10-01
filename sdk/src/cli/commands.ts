@@ -10,7 +10,14 @@
  */
 import { createRequire } from "node:module";
 import { dirname, resolve as resolvePath } from "node:path";
-import { bytesToHex, getAddress, type Address, type Hex, type PublicClient } from "viem";
+import {
+  bytesToHex,
+  getAddress,
+  hexToBytes,
+  type Address,
+  type Hex,
+  type PublicClient,
+} from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import type { CanonicalChain } from "../chains/canonical.js";
@@ -25,6 +32,7 @@ import { v12PredictPot } from "../deployments/pot.js";
 /** The released Kitchen, which deploys every Pot (`V12Deployments.json`). */
 export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
 import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
+import type { AccessorTarget } from "../routes/protocol-rewrite.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import {
   compileSauceProgram,
@@ -42,6 +50,8 @@ import {
   type TxRequest,
 } from "./chain.js";
 import { describeCompileError } from "./diagnostics.js";
+import { appliedDefines, contractCollector } from "./report.js";
+import { svmCookSize } from "./solana.js";
 import type { Funding } from "./funding.js";
 
 /** The filesystem the commands read, injected so the tests can drive them without a process. */
@@ -114,7 +124,11 @@ export function castSend(to: Address, data: Hex, value?: bigint): string {
  * `compileSauceProgram` adds itself: the defines, the intent settings, the argument encoding, and a
  * resolver that serves the program's own relative imports from beside the file.
  */
-function compileOptions(input: ProgramInput, files: CliFiles): SauceCompileOptions {
+function compileOptions(
+  input: ProgramInput,
+  files: CliFiles,
+  onContract?: (reference: string, target: AccessorTarget) => void,
+): SauceCompileOptions {
   const dir = dirname(resolvePath(input.file));
   const { deadline, creator, executionFee } = input.intents;
   const intents = {
@@ -127,14 +141,23 @@ function compileOptions(input: ProgramInput, files: CliFiles): SauceCompileOptio
     defines: input.defines,
     ...(Object.keys(intents).length === 0 ? {} : { intents }),
     ...(input.compactArgs ? { compactArgs: true } : {}),
+    // The intents the program opens compile with these options too, so this hears their contracts.
+    ...(onContract === undefined ? {} : { accessors: { onContract } }),
     resolve: (path) => files.readModule(resolvePath(dir, path)),
   };
 }
 
-/** Compiles the file as a standalone program, turning a failure into one message about the file. */
-export function compileProgram(input: ProgramInput, files: CliFiles): CompiledSauceProgram {
+/**
+ * Compiles the file as a standalone program, turning a failure into one message about the file.
+ * `onContract` is told each protocol contract the compile resolves.
+ */
+export function compileProgram(
+  input: ProgramInput,
+  files: CliFiles,
+  onContract?: (reference: string, target: AccessorTarget) => void,
+): CompiledSauceProgram {
   try {
-    return compileSauceProgram(input.chain, input.text, compileOptions(input, files));
+    return compileSauceProgram(input.chain, input.text, compileOptions(input, files, onContract));
   } catch (error) {
     throw new CliError(
       `${input.file} does not compile for ${input.chain.slug}\n` +
@@ -171,10 +194,45 @@ function pairedEngine(chain: CanonicalChain): Record<string, string> {
 const signatureOf = (params: readonly EntryParam[]): string =>
   `main(${params.map((param) => `${param.name}: ${param.type}`).join(", ")})`;
 
-/** `sauce compile`: the program's bytecode, and with `--json` what it pairs with and takes. */
-export function compileCommand(input: ProgramInput, files: CliFiles): CommandOutput {
-  const program = compileProgram(input, files);
+export interface CompileInput extends ProgramInput {
+  /** `main`'s arguments, when given: they size the payload a cook carries. */
+  readonly args?: ArgsInput;
+  /** Solana: accounts by slot name, as `--account` gives them, for sizing the cook. */
+  readonly accounts?: Readonly<Record<string, string>>;
+}
+
+/**
+ * `sauce compile`: the program's bytecode, and with `--json` what it pairs with and takes, what it
+ * was compiled with — the defines it reads and the protocol contracts it calls, each with where it
+ * came from — and how large it is: the program, the payload with `main`'s arguments, and on Solana
+ * the cook's transaction against the one-transaction limit.
+ */
+export async function compileCommand(input: CompileInput, files: CliFiles): Promise<CommandOutput> {
+  const collected = contractCollector();
+  const program = compileProgram(input, files, collected.onContract);
   const bytecode = bytesToHex(program.bytecode);
+  const { defines, unread } = appliedDefines(input.text, input.chain, input.defines);
+  // The payload is the program with its arguments appended: known once the arguments are.
+  const payload =
+    input.args === undefined && program.entryParams.length > 0
+      ? undefined
+      : hexToBytes(payloadOf(program, input.args));
+  const cook =
+    input.chain.kind === "svm" && payload !== undefined
+      ? await svmCookSize(payload, program.manifest ?? { accounts: [] }, input.accounts ?? {})
+      : undefined;
+  const notes = [
+    ...unread.map(
+      (name) =>
+        `--define ${name}: ${input.file} never reads ${name}, so the define changes nothing`,
+    ),
+    ...(cook === undefined || cook.fits
+      ? []
+      : [
+          `the cook is a ${cook.size}-byte transaction, past Solana's ${cook.limit}: \`sauce run\` ` +
+            "stages the program in a code buffer first; `sauce simulate` and `sauce tx` cannot",
+        ]),
+  ];
 
   return {
     text: bytecode,
@@ -184,13 +242,21 @@ export function compileCommand(input: ProgramInput, files: CliFiles): CommandOut
       target: input.chain.kind,
       bytecode,
       size: program.bytecode.length,
+      payload:
+        payload === undefined
+          ? null
+          : { size: payload.length, argumentsSize: payload.length - program.bytecode.length },
+      ...(cook === undefined ? {} : { cook }),
       entryEncoding: program.entryEncoding,
       entryParams: program.entryParams,
       entrySchema: program.entrySchema === undefined ? null : bytesToHex(program.entrySchema),
+      defines,
+      contracts: collected.contracts(),
       compiler: compilerPackage(),
       engine: pairedEngine(input.chain),
       ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
     },
+    ...(notes.length === 0 ? {} : { notes }),
   };
 }
 

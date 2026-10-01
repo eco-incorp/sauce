@@ -855,9 +855,20 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     summary: "Compile a SauceScript program; print its bytecode",
     flags: {
       ...PROGRAM,
+      "args-json": COOK["args-json"]!,
+      account: {
+        type: "string",
+        multiple: true,
+        value: "NAME=<address>",
+        help: "Solana: an account main takes (an address, pot or owner), to size the cook",
+      },
       out: { type: "string", value: "<path>", help: "Write the output to a file, not stdout" },
-      json: { type: "boolean", help: "Print JSON: size, main's parameters, compiler, engine" },
+      json: {
+        type: "boolean",
+        help: "Print JSON: sizes, defines and contracts applied, main's parameters, engine",
+      },
       ...HELP,
+      ...ARGS,
     },
     details: [
       "Compiles the file as a standalone program for the chain (routes.compileSauceProgram):",
@@ -867,13 +878,40 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "one file compiles for any chain whose names it uses. Relative imports are read from beside",
       "the file. A file may name its chain in a leading `// @chain base` line.",
       "",
-      "Example:",
+      "--json also says what the compile applied and how large the result is:",
+      "  defines    each define the file reads, its value, and where it came from: user (--define,",
+      "             --defines) or chain (a token symbol, a protocol contract, the chain id)",
+      "  contracts  each protocol contract it calls or reads (UniswapV3.Factory), resolved on its",
+      "             chain: an intent body's on the intent's own",
+      "  size       the program's bytes; payload: the program with main's arguments (--args)",
+      "  cook       on Solana, the cook's transaction against the 1232-byte limit, measured",
+      "             with --account where given and a distinct account for each other slot",
+      "A define the file never reads is named on stderr: it changes nothing.",
+      "",
+      "Examples:",
       "  sauce compile pay.sauce.ts --chain base --define RECIPIENT=0x…",
+      "  sauce compile split.sauce.ts --chain base --json --args 0x… 1000000",
     ].join("\n"),
-    run: (args, io) => {
-      const output = compileCommand(programInput(args, io), io);
+    trailing: "args",
+    run: async (args, io, trailing) => {
+      const program = programInput(args, io);
+      const accounts = repeatedFlag(args, "account");
+      if (accounts.length > 0 && program.chain.kind !== "svm") {
+        throw new UsageError(
+          `--account names a Solana program's accounts; a program on ${program.chain.slug} takes none`,
+        );
+      }
+      const output = await compileCommand(
+        {
+          ...program,
+          ...argsInput(args, io, trailing),
+          ...(accounts.length === 0 ? {} : { accounts: parseAccounts(accounts) }),
+        },
+        io,
+      );
       const out = stringFlag(args, "out");
       if (out === undefined) return output;
+      for (const note of output.notes ?? []) io.stderr(`${note}\n`);
       io.writeText(
         out,
         `${args.values.json === true ? JSON.stringify(output.json, null, 2) : output.text}\n`,

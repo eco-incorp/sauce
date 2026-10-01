@@ -28,6 +28,7 @@ import {
   isAddress,
   TRANSACTION_SIZE_LIMIT,
   type Address,
+  type Blockhash,
   type Instruction,
   type KeyPairSigner,
   type Signature,
@@ -46,11 +47,14 @@ import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
 import { verifySvmSettleExecution, type SvmSettleExecutionVerification } from "../svm/verify.js";
 import {
   buildCloseCodeBufferInstruction,
+  buildComputeBudgetPrepend,
+  buildCookInstruction,
   buildCreateCodeBufferInstruction,
   buildCreatePotInstruction,
   buildExecuteTransaction,
   buildFinalizeCodeBufferInstruction,
   buildGrowCodeBufferInstruction,
+  buildHeapFramePrepend,
   buildWriteCodeBufferInstruction,
   createSauceSvmClient,
   deriveCodeBufferPda,
@@ -59,6 +63,7 @@ import {
   derivePotPda,
   GROWTH_STEP,
   MAX_POT_LEN,
+  resolveAccounts,
   type AccountResolution,
   type SauceSvmClient,
   type SimulateExecuteResult,
@@ -642,6 +647,91 @@ async function fits(
   const size = getTransactionSize(transaction);
 
   return { fits: size <= TRANSACTION_SIZE_LIMIT, size };
+}
+
+/** A placeholder key, distinct per `index`, for an account a size estimate has no address for. */
+const placeholderKey = (index: number): Address =>
+  getBase58Decoder().decode(new Uint8Array(32).fill(index + 1)) as Address;
+
+/** Whether a cook fits one transaction, measured without a cluster. */
+export interface SvmCookSize {
+  readonly size: number;
+  readonly limit: number;
+  readonly fits: boolean;
+  /** The slots measured with a placeholder: no `--account` named them. */
+  readonly assumed: readonly string[];
+  /** The program reads accounts after its named ones, which add to the size. */
+  readonly remaining: boolean;
+}
+
+/**
+ * The size of the cook that carries `bytecode` inline, offline: the transaction `run` sends (heap
+ * frame, compute-unit limit, the Kitchen's `cook`) for `manifest`, with each account `--account`
+ * gives where it is given — `pot` and `owner` are the cook's own — and a distinct account for every
+ * other slot, so a size is the most those slots can make it. The blockhash and signature are fixed
+ * widths, so a placeholder of each measures the same.
+ */
+export async function svmCookSize(
+  bytecode: Uint8Array,
+  manifest: AccountManifest,
+  given: Readonly<Record<string, string>>,
+): Promise<SvmCookSize> {
+  const owner = placeholderKey(0);
+  const target: SvmTarget = { owner, salt: `0x${"00".repeat(32)}` };
+  const pot = await potOf(target);
+  const slots = manifest.accounts.filter((entry) => entry.kind === "slot");
+  const assumed = slots.filter((slot) => !Object.hasOwn(given, slot.name)).map((s) => s.name);
+  const named: AccountManifest = { accounts: slots };
+  const signer = unsignedSigner(owner);
+  // The accounts given, as a cook resolves them; every other slot a distinct account, which signs
+  // for itself where the slot asks for a signer.
+  const resolved: AccountResolution = resolution(
+    named,
+    Object.fromEntries(slots.map((slot) => [slot.name, given[slot.name] ?? "pot"])),
+    owner,
+    pot,
+    signer,
+  );
+  slots.forEach((slot, index) => {
+    if (Object.hasOwn(given, slot.name)) return;
+    const at = placeholderKey(index + 1);
+    resolved[slot.name] = /signer/.test(slot.requires)
+      ? { address: at, signer: unsignedSigner(at) }
+      : at;
+  });
+  const { address: feeConfig } = await deriveExecutionFeeConfigPda(kitchen());
+  const cook = buildCookInstruction({
+    kitchen: kitchen(),
+    owner,
+    engineProgram: engine(),
+    potSalt: saltBytes(target.salt),
+    pot,
+    feeConfig,
+    bytecode,
+    maxExecutionFee: 0n,
+    tail: resolveAccounts(named, resolved, owner),
+  });
+  const transaction = await buildExecuteTransaction({
+    payer: signer,
+    instructions: [
+      buildHeapFramePrepend(),
+      ...buildComputeBudgetPrepend({ unitLimit: 1_400_000 }),
+      cook,
+    ],
+    latestBlockhash: {
+      blockhash: placeholderKey(254) as unknown as Blockhash,
+      lastValidBlockHeight: 0n,
+    },
+  });
+  const size = getTransactionSize(transaction);
+
+  return {
+    size,
+    limit: TRANSACTION_SIZE_LIMIT,
+    fits: size <= TRANSACTION_SIZE_LIMIT,
+    assumed,
+    remaining: manifest.accounts.some((entry) => entry.kind === "remaining"),
+  };
 }
 
 /** The payload a cook carries — the program, and the arguments appended to it — in bytes. */

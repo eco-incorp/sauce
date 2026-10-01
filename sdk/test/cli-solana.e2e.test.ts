@@ -1029,6 +1029,14 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
         break;
       }
     }
+    // `sauce compile --json` measures that same transaction offline, on either side of the limit.
+    for (const length of [bytes - 1, bytes]) {
+      const [, limited] = await sizes(length);
+      const compiled = json(
+        await sauce("compile", blobProgram(`window-${length}.sauce.ts`, length), "--json"),
+      );
+      expect(compiled.cook).toMatchObject({ size: limited, limit: 1232, fits: limited <= 1232 });
+    }
     const out = json(await runVault("run", blobProgram("window.sauce.ts", bytes), "--json"));
     expect(out).toMatchObject({ cook: { status: "success" }, staged: expect.any(Object) });
   }, 120_000);
