@@ -1,22 +1,23 @@
 # Ambient
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Single-contract DEX (formerly CrocSwap) with ambient (full-range) and concentrated liquidity in one unified pool. Extremely gas-efficient architecture where all liquidity lives in one contract.
 
 ## Category
 
-dex | Chains: Ethereum, Scroll
+dex | Chains and addresses: [registry/ambient.md](registry/ambient.md)
 
 ## Key Operations
 
 - **swap**: Swap tokens via the CrocSwapDex contract with base/quote pair addressing
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import { protocolInfo, deployments, swap } from "@eco-incorp/sauce/protocols/ambient";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### swap
 
@@ -46,21 +47,13 @@ function main(
 - `inBaseQty`: `true` = qty is denominated in base token; `false` = qty is in quote token
 - `qty`: Amount to swap (in wei)
 - `minOut`: Minimum output for slippage protection
-- Additional params set to `0`: `tip` (optional tip), `limitPrice` (no price limit), `reserveFlags` (no reserve usage)
+- Additional params set to `0`: `tip` (optional tip), `limitPrice` (no price limit, so `minOut` is the only bound), `reserveFlags` (no reserve usage)
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract    | Address                                      |
-| -------- | ----------- | -------------------------------------------- |
-| Ethereum | CrocSwapDex | `0xAaAaAAAaA24eEeb8d57D431224f73832bC34f688` |
-| Scroll   | CrocSwapDex | `0xaaaaAAAACB71BF2C8CaE522EA5fa455571A74106` |
-
-## ABI Methods
-
-### CrocSwapDexABI
-
-- `swap(address base, address quote, uint256 poolIdx, bool isBuy, bool inBaseQty, uint128 qty, uint16 tip, uint128 limitPrice, uint128 minOut, uint8 reserveFlags) -> (int128 baseFlow, int128 quoteFlow)` - Execute a swap with full parameter control. Returns signed token flows (negative = tokens out from user)
-- `userCmd(uint16 callpath, bytes cmd) -> bytes result` - Execute arbitrary protocol commands (advanced: liquidity operations, governance, etc.)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/ambient.md](registry/ambient.md).
 
 ## Notes
 
@@ -70,7 +63,7 @@ function main(
 - Common pool indices: `420` (standard on Ethereum), `36000` (stable pairs on Scroll)
 - `isBuy` + `inBaseQty` together determine the exact swap semantics
 - `tip`: Optional tip in basis points for priority execution (usually `0`)
-- `limitPrice`: Price limit as sqrt price Q64.64 fixed-point (set to `0` for no limit)
+- `limitPrice`: Price limit as sqrt price Q64.64 fixed-point (`0` is no limit, which leaves `minOut` as the only bound)
 - `reserveFlags`: Bitmask for using surplus collateral (set to `0` for standard swaps)
 - `userCmd` is the universal command interface for all non-swap operations (adding/removing liquidity, etc.)
 - callpath `1` = liquidity operations, `3` = warm path operations

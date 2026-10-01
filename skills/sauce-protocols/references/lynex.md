@@ -1,22 +1,23 @@
 # Lynex
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Linea-native ve(3,3) DEX and liquidity marketplace. Solidly-fork with gauge voting and support for both stable and volatile pool types on the Linea zkEVM network.
 
 ## Category
 
-dex | Chains: Linea
+dex | Chains and addresses: [registry/lynex.md](registry/lynex.md)
 
 ## Key Operations
 
 - **swap**: Swap tokens with route-based routing specifying stable or volatile pool type
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import { protocolInfo, deployments, swap } from "@eco-incorp/sauce/protocols/lynex";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### swap
 
@@ -52,18 +53,11 @@ function main(
 - Routes support multi-hop: `[{from: A, to: B, stable: false}, {from: B, to: C, stable: true}]`
 - Note: Lynex routes do NOT include a `factory` field (unlike Velodrome/Aerodrome)
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain | Contract | Address                                      |
-| ----- | -------- | -------------------------------------------- |
-| Linea | Router   | `0x610D2f07b7EdC67565160F587F37636194C34E74` |
-
-## ABI Methods
-
-### LynexRouterABI
-
-- `swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, tuple[](address from, address to, bool stable) routes, address to, uint256 deadline) -> uint256[] amounts` - Swap with route tuples specifying pool type per hop
-- `addLiquidity(address tokenA, address tokenB, bool stable, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) -> (uint256 amountA, uint256 amountB, uint256 liquidity)` - Add liquidity to a stable or volatile pool
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/lynex.md](registry/lynex.md).
 
 ## Notes
 

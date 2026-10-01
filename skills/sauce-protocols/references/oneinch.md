@@ -1,23 +1,54 @@
 # 1inch
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Leading DEX aggregator that finds optimal swap routes across multiple liquidity sources. Supports limit orders and Fusion mode for gasless swaps.
+
+## When to use it
+
+- An aggregator: its router fills a swap across many venues along a route its off-chain API
+  quotes. Use it for a route the program does not want to choose itself.
+
+## Pitfalls for a program
+
+- The calldata is quoted for one sender, amount and moment: quote it for the Pot (the swap's
+  sender) and send it soon.
+- Approve the router for exactly `amountIn`, and clear the allowance after.
+- The calldata's own minimum is not yours: check the output as a balance delta against your
+  `minOut`.
+
+## In a Sauce program
+
+Forward a 1inch quote for the Pot, checked by the WETH received:
+
+```sauce chain=base,arbitrum
+function main(amountIn: Uint256, minOut: Uint256, call: bytes, recipient: Address) {
+  const self = ctx.self();
+  const before = WETH.balanceOf(self);
+  USDC.approve(Oneinch.AggregationRouterV6, amountIn);
+  evm.call(Oneinch.AggregationRouterV6, 0n, call);
+  const out = WETH.balanceOf(self) - before;
+  require(out >= minOut, "below minOut");
+  USDC.approve(Oneinch.AggregationRouterV6, 0n);
+  WETH.transfer(recipient, out);
+}
+```
 
 ## Category
 
-aggregator | Chains: Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Avalanche
+aggregator | Chains and addresses: [registry/oneinch.md](registry/oneinch.md)
 
 ## Key Operations
 
 - **unoswap**: Single-source optimized swap via AggregationRouter
 - **swap**: Multi-source aggregated swap with custom routing
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import { protocolInfo, deployments, unoswap } from "@eco-incorp/sauce/protocols/oneinch";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Unoswap (single-source swap)
@@ -34,25 +65,11 @@ function main(
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain     | Contract            | Address                                      |
-| --------- | ------------------- | -------------------------------------------- |
-| Ethereum  | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` |
-| Arbitrum  | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` |
-| Optimism  | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` |
-| Base      | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` |
-| Polygon   | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` |
-| BSC       | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` |
-| Avalanche | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` |
-
-## ABI Methods
-
-### AggregationRouterV6ABI
-
-- `swap(address,tuple,bytes)` - Multi-source swap. Params: executor, desc (SwapDescription tuple: srcToken, dstToken, srcReceiver, dstReceiver, amount, minReturnAmount, flags), data (executor calldata). Payable. Returns (returnAmount, spentAmount)
-  - SwapDescription tuple: `{ srcToken, dstToken, srcReceiver, dstReceiver, amount, minReturnAmount, flags }`
-- `unoswap(uint256,uint256,uint256,uint256)` - Single-pool optimized swap. Params: token (source token address as uint256), amount, minReturn, dex (pool address packed with protocol and direction flags). Returns returnAmount
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/oneinch.md](registry/oneinch.md).
 
 ## Notes
 

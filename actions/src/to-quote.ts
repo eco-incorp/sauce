@@ -35,7 +35,10 @@ import {
   type Stmt,
 } from "./emit.js";
 
+import { resolveChain, type ChainRef } from "../../sdk/dist/chains/canonical.js";
+import { resolveNames, usesNames } from "./names.js";
 import { parseActions } from "./program.js";
+import { ProgramError } from "./semantics.js";
 import type {
   SwapAction,
   UniswapV2SwapAction,
@@ -87,6 +90,11 @@ export interface QuoteCall extends Quote {
  */
 export interface QuoteOptions {
   /**
+   * The chain the swap is on: needed when the action names a token or a contract, which resolve
+   * there to the addresses the quote calls.
+   */
+  readonly chain?: ChainRef;
+  /**
    * The Sauce Router, for `uniswapV3Swap` and `uniswapV4Swap`: the contract that swaps them prices
    * them, with its own `quote`, which needs no tokens. A Pot's Router is the Kitchen's Router until
    * the Pot's owner moves it; `v12RouterAddress()` from `@eco-incorp/sauce/deployments` is the
@@ -126,6 +134,13 @@ function concatHex(a: Hex, b: Hex): Hex {
 const decodeUint256 = (data: Hex): bigint => decodeAbiParameters([{ type: "uint256" }], data)[0];
 
 const ZERO_ADDR = "0x0000000000000000000000000000000000000000" as Address;
+
+/**
+ * A token or contract field of an action `quoteCall` was given: an address, because `quoteAction`
+ * and the split swap resolve every name on their chain first, and a quote is calldata built here.
+ */
+const at = (value: string | undefined): Address =>
+  (value === "native" ? ZERO_ADDR : value) as Address;
 
 // ---------------------------------------------------------------------------
 // On-chain extraction — every helper yields a Fragment whose expr is a uint256
@@ -330,7 +345,7 @@ function makeDynamic(
   };
 }
 
-function required(options: QuoteOptions, name: keyof QuoteOptions): Address {
+function required(options: QuoteOptions, name: Exclude<keyof QuoteOptions, "chain">): Address {
   const value = options[name];
   if (!value) throw new Error(`quoting this action needs \`${name}\` in the quote options`);
   return value;
@@ -346,7 +361,24 @@ function required(options: QuoteOptions, name: keyof QuoteOptions): Address {
  * separate quoter take its address from `options`.
  */
 export function quoteAction(action: SwapAction, options: QuoteOptions = {}): Quote {
-  const [checked] = parseActions([action], "action") as [SwapAction];
+  let [checked] = parseActions([action], "action") as [SwapAction];
+  if ((checked as { factory?: string }).factory !== undefined) {
+    throw new Error(
+      "quoteAction prices a pool at its address, and a pool named by its key (`factory`) is found " +
+        "only on chain: read it there first (the factory's getPool/getPair), then give `pool`",
+    );
+  }
+  if (usesNames([checked])) {
+    const chain = options.chain === undefined ? undefined : resolveChain(options.chain);
+    if (chain === undefined) {
+      throw new Error(
+        "quoteAction: the action names a token or a contract — pass `chain` to resolve it on",
+      );
+    }
+    const { resolved, issues } = resolveNames([checked], chain, "action");
+    if (issues.length > 0) throw new ProgramError(issues, chain);
+    checked = resolved[0] as SwapAction;
+  }
   const amount = (checked as { amount?: string }).amount;
   const explicit = checked.type === "carbonSwap" || checked.type === "balancerV2BatchSwap";
   if (amount === undefined && !explicit) {
@@ -380,7 +412,7 @@ export function quoteCall(
     case "curveRouterNGSwap":
       return quoteCurveRouterNG(action, amountIn);
     case "fraxswapSwap":
-      return quoteFraxswap(action.router, action.path, amountIn);
+      return quoteFraxswap(at(action.router), action.path.map(at), amountIn);
     case "balancerV2BatchSwap":
       return quoteBalV2Batch(action);
     case "balancerV3Swap":
@@ -432,7 +464,7 @@ function quoteCurve(action: CurveSwapAction, amountIn: bigint): QuoteCall {
           CurveThreePoolABI,
           "get_dy(int128,int128,uint256)",
         );
-  const to = action.pool;
+  const to = at(action.pool);
   const data = callData(fn, [BigInt(action.i), BigInt(action.j), amountIn]);
   return {
     to,
@@ -459,7 +491,7 @@ function quoteCurveRouterNG(action: CurveRouterNGSwapAction, amountIn: bigint): 
     CurveRouterNGABI,
     "get_dy(address[11],uint256[5][5],uint256,address[5])",
   );
-  const to = action.router;
+  const to = at(action.router);
   const data = callData(fn, [
     route,
     swapParams.map((r) => r.map((v) => BigInt(v))),
@@ -485,7 +517,7 @@ function quoteUniswapV2(action: UniswapV2SwapAction, amountIn: bigint): QuoteCal
   const fee = BigInt(action.feePpm === undefined || action.feePpm === 0 ? 3000 : action.feePpm);
   const zeroForOne = BigInt(action.tokenIn) < BigInt(action.tokenOut);
   const [inIndex, outIndex] = zeroForOne ? [0, 1] : [1, 0];
-  const to = action.pool;
+  const to = at(action.pool);
   const data = sel("getReserves()");
   const price = (reserveIn: bigint, reserveOut: bigint): bigint => {
     const inWithFee = amountIn * (1_000_000n - fee);
@@ -612,9 +644,9 @@ function buildQueryBatchSwap(
 /** BalancerV2 single swap — converted to `queryBatchSwap`. */
 function quoteBalV2Single(action: BalancerV2SwapAction, amountIn: bigint): QuoteCall {
   const base = buildQueryBatchSwap(
-    action.vault,
+    at(action.vault),
     [{ poolId: action.poolId, assetInIndex: 0n, assetOutIndex: 1n, amount: amountIn }],
-    [action.tokenIn, action.tokenOut],
+    [at(action.tokenIn), at(action.tokenOut)],
     1,
   );
   // Neither `toSauce` nor `toSauceDynamic`, here or on the batch variant: the Vault implements
@@ -629,14 +661,14 @@ function quoteBalV2Single(action: BalancerV2SwapAction, amountIn: bigint): Quote
 function quoteBalV2Batch(action: BalancerV2BatchSwapAction): QuoteCall {
   const lastStep = action.steps[action.steps.length - 1];
   return buildQueryBatchSwap(
-    action.vault,
+    at(action.vault),
     action.steps.map((s) => ({
       poolId: s.poolId,
       assetInIndex: BigInt(s.assetInIndex),
       assetOutIndex: BigInt(s.assetOutIndex),
       amount: BigInt(s.amount),
     })),
-    action.assets,
+    action.assets.map(at),
     lastStep.assetOutIndex,
   );
 }
@@ -647,7 +679,7 @@ function quoteBalV2Batch(action: BalancerV2BatchSwapAction): QuoteCall {
  * on-chain form.
  */
 function quoteBalV3(action: BalancerV3SwapAction, amountIn: bigint): QuoteCall {
-  const to = action.router;
+  const to = at(action.router);
   const data = concatHex(
     sel("querySwapSingleTokenExactIn(address,address,address,uint256,address,bytes)"),
     encodeAbiParameters(
@@ -659,7 +691,7 @@ function quoteBalV3(action: BalancerV3SwapAction, amountIn: bigint): QuoteCall {
         { type: "address" },
         { type: "bytes" },
       ],
-      [action.pool, action.tokenIn, action.tokenOut, amountIn, ZERO_ADDR, "0x"],
+      [at(action.pool), at(action.tokenIn), at(action.tokenOut), amountIn, ZERO_ADDR, "0x"],
     ),
   );
   return { to, data, decode: decodeUint256 };
@@ -670,7 +702,7 @@ function quoteBalV3(action: BalancerV3SwapAction, amountIn: bigint): QuoteCall {
  * Uses the action's tradeActions as-is (caller must provide valid strategy IDs + amounts).
  */
 function quoteCarbon(action: CarbonSwapAction): QuoteCall {
-  const to = action.controller;
+  const to = at(action.controller);
   const data = concatHex(
     sel("calculateTradeTargetAmount(address,address,(uint256,uint128)[])"),
     encodeAbiParameters(
@@ -686,8 +718,8 @@ function quoteCarbon(action: CarbonSwapAction): QuoteCall {
         },
       ],
       [
-        action.sourceToken,
-        action.targetToken,
+        at(action.sourceToken),
+        at(action.targetToken),
         action.tradeActions.map((ta) => ({
           strategyId: BigInt(ta.strategyId),
           amount: BigInt(ta.amount),
@@ -704,7 +736,7 @@ function quoteCarbon(action: CarbonSwapAction): QuoteCall {
  */
 function quoteDodoV2(action: DodoV2SwapAction, amountIn: bigint): QuoteCall {
   const sellingBase = BigInt(action.tokenIn) === BigInt(action.baseToken);
-  const to = action.pool;
+  const to = at(action.pool);
   const data = concatHex(
     sel(sellingBase ? "querySellBase(address,uint256)" : "querySellQuote(address,uint256)"),
     encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [ZERO_ADDR, amountIn]),
@@ -737,8 +769,16 @@ function quoteDodoV1(action: DodoV1SwapAction, amountIn: bigint): QuoteCall {
  * (`LBPair__OutOfLiquidity`) rather than fill it partly.
  */
 function quoteTraderJoeLB(action: TraderJoeLBSwapAction, amountIn: bigint): QuoteCall {
-  const swapForY = BigInt(action.tokenIn) === BigInt(action.tokenX);
-  const to = action.pool;
+  // The quote's direction is whether the input is the pair's X: the program reads X from the pair
+  // when the action leaves it out, and an eth_call built here cannot.
+  if (action.tokenX === undefined) {
+    throw new Error(
+      "quoting a traderJoeLBSwap needs its tokenX and tokenY — the pair's getTokenX() and " +
+        "getTokenY() — to know which way it trades; the swap reads them itself, the quote cannot",
+    );
+  }
+  const swapForY = BigInt(at(action.tokenIn)) === BigInt(at(action.tokenX));
+  const to = at(action.pool);
   const data = concatHex(
     sel("getSwapOut(uint128,bool)"),
     encodeAbiParameters([{ type: "uint128" }, { type: "bool" }], [amountIn, swapForY]),
@@ -769,12 +809,12 @@ function quoteTraderJoeLB(action: TraderJoeLBSwapAction, amountIn: bigint): Quot
 
 /** WOOFi — the WooPPV2's own `query(fromToken, toToken, fromAmount)` (view). */
 function quoteWoofi(action: WoofiSwapAction, amountIn: bigint): QuoteCall {
-  const to = action.pool;
+  const to = at(action.pool);
   const data = concatHex(
     sel("query(address,address,uint256)"),
     encodeAbiParameters(
       [{ type: "address" }, { type: "address" }, { type: "uint256" }],
-      [action.tokenIn, action.tokenOut, amountIn],
+      [at(action.tokenIn), at(action.tokenOut), amountIn],
     ),
   );
   return {
@@ -838,21 +878,21 @@ function quoteThroughRouter(
 ): QuoteCall {
   const v4 = action.type === "uniswapV4Swap";
   const [c0, c1] =
-    BigInt(action.tokenIn) < BigInt(action.tokenOut)
-      ? [action.tokenIn, action.tokenOut]
-      : [action.tokenOut, action.tokenIn];
+    BigInt(at(action.tokenIn)) < BigInt(at(action.tokenOut))
+      ? [at(action.tokenIn), at(action.tokenOut)]
+      : [at(action.tokenOut), at(action.tokenIn)];
   const encode = (amountSpecified: bigint): Hex =>
     callData(ROUTER_QUOTE, [
       {
         poolType: v4 ? 2 : 1,
-        pool: v4 ? action.poolManager : action.pool,
+        pool: at(v4 ? action.poolManager : action.pool),
         poolKey: v4
           ? {
               currency0: c0,
               currency1: c1,
               fee: action.fee,
               tickSpacing: action.tickSpacing,
-              hooks: action.hooks,
+              hooks: action.hooks ?? ZERO_ADDR,
             }
           : {
               currency0: ZERO_ADDR,
@@ -862,8 +902,8 @@ function quoteThroughRouter(
               hooks: ZERO_ADDR,
             },
         stateView: ZERO_ADDR,
-        tokenIn: action.tokenIn,
-        tokenOut: action.tokenOut,
+        tokenIn: at(action.tokenIn),
+        tokenOut: at(action.tokenOut),
         amountSpecified,
         sqrtPriceLimitX96: BigInt(action.sqrtPriceLimitX96 ?? 0),
       },
@@ -871,9 +911,9 @@ function quoteThroughRouter(
   const data = encode(v4 ? -amountIn : amountIn);
   // The amount's word, found rather than counted: a static struct, so it has a fixed offset.
   const probe = encode(AMOUNT_SENTINEL).slice(2);
-  const at = probe.indexOf(AMOUNT_SENTINEL.toString(16).padStart(64, "0"));
-  if (at < 0 || at % 2 !== 0) throw new Error("quote: the Router quote's amount word moved");
-  const offset = at / 2;
+  const word = probe.indexOf(AMOUNT_SENTINEL.toString(16).padStart(64, "0"));
+  if (word < 0 || word % 2 !== 0) throw new Error("quote: the Router quote's amount word moved");
+  const offset = word / 2;
   const dynamic = makeDynamic("call", router, data, offset, words(4), nthWord(1));
 
   return {
@@ -913,7 +953,7 @@ function quoteMaverickV2(
       ],
       // No tick limit, as the Router's swap applies none: the extreme tick in the swap's direction
       // (up when selling token A).
-      [action.pool, amountIn, tokenAIn, false, tokenAIn ? 2 ** 31 - 1 : -(2 ** 31)],
+      [at(action.pool), amountIn, tokenAIn, false, tokenAIn ? 2 ** 31 - 1 : -(2 ** 31)],
     ),
   );
   return {
@@ -954,8 +994,8 @@ function quoteAmbient(action: AmbientSwapAction, amountIn: bigint, impact: Addre
         { type: "uint128" },
       ],
       [
-        action.base,
-        action.quote,
+        at(action.base),
+        at(action.quote),
         BigInt(action.poolIdx),
         action.isBuy,
         action.inBaseQty,
@@ -1002,7 +1042,7 @@ function quoteFluidT1(
     sel("estimateSwapIn(address,bool,uint256,uint256)"),
     encodeAbiParameters(
       [{ type: "address" }, { type: "bool" }, { type: "uint256" }, { type: "uint256" }],
-      [action.pool, action.swap0to1, amountIn, 0n],
+      [at(action.pool), action.swap0to1, amountIn, 0n],
     ),
   );
   return {
