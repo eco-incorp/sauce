@@ -44,7 +44,7 @@
     "typescript": "^5.7.0"
   },
   "dependencies": {
-    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.4.0",
+    "sauce-compiler": "link:/private/tmp/claude-501/-Users-er-Documents-Projects-sauce-sdk/b8103582-3631-4c07-910b-dbccf6c38038/scratchpad/sauce-compiler-local",
     "@uniswap/v3-core": "^1.0.1",
     "dotenv": "^17.3.1",
     "viem": "^2.45.1"
