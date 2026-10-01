@@ -65,6 +65,14 @@ describe("toolTerms", () => {
     }
     assert.equal(toolTerms("then sauce intent claim --chain base"), "then sauce_intent_claim");
     assert.equal(toolTerms("--intent-fund-via publishAndFund"), "intentFundVia publishAndFund");
+    assert.equal(
+      toolTerms("a claim needs arbitrum's endpoint (chain id 42161)"),
+      'a claim needs arbitrum\'s endpoint (chain id 42161): pass rpcUrls { "arbitrum": "<url>" } with the call',
+    );
+    assert.equal(
+      toolTerms("--intent-reward-deadline 1, --no-prove"),
+      "intentRewardDeadline 1, prove: false",
+    );
     assert.equal(toolTerms("no flags, no commands"), "no flags, no commands");
   });
 });

@@ -154,24 +154,30 @@ Each tool is the `sauce` command named beside it, called with the same inputs: t
 very functions the command does. Each returns its JSON as the tool's structured content, with the
 same JSON as text. Where there are `notes`, they say what must be true for a transaction to land.
 
-| Tool                   | Like                   | Returns                                                                                                                                                                                                                                                           |
-| ---------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sauce_skills`         | —                      | Every agent skill with when to use it and its files' sizes, and the package version                                                                                                                                                                               |
-| `sauce_skill`          | —                      | One skill's `SKILL.md`, or a file under its `references/` or `examples/`; with `section` or `query`, only that part                                                                                                                                               |
-| `sauce_dev`            | —                      | For TypeScript against the SDK: the TypeScript skill and the package's guides, API pages and examples for a topic or a question                                                                                                                                   |
-| `sauce_install_skills` | `sauce skills`         | For one agent, pinned to the server's version: the commands that add the package and install, update and check the skills, where it reads them, and its MCP configuration                                                                                         |
-| `sauce_chains`         | —                      | Every chain: slug, id, name, kind, aliases, and whether the server has its own endpoint for it                                                                                                                                                                    |
-| `sauce_globals`        | `sauce globals`        | The chain's token symbols, protocol namespaces and contracts (with `protocol`, its methods), chain names, defines and `@sauce/token` functions                                                                                                                    |
-| `sauce_price`          | `sauce price`          | A pair's price as the pool's `sqrtPriceX96` (also the swap's limit) and each direction's `minAvgPrice`; from `price`, `sqrtPriceX96` or a `pool` read now; with `slippageBps`, the `limits`                                                                       |
-| `sauce_compile`        | `sauce compile`        | `bytecode`, `size`, `entryParams`, `entryEncoding`, `entrySchema`, each define it reads and where it came from, the `contracts` it calls, `compiler`, `engine`, on Solana the `manifest`; with `args` the `payload`, and with `rpcUrls` each intent's Pot checked |
-| `sauce_actions`        | `sauce actions`        | An actions document (JSON) compiled for a chain: `sauce_compile`'s report with the generated `source`, its `parameters` and bindings, and, given a Pot, the unsigned cook `transaction`                                                                           |
-| `sauce_tx`             | `sauce tx`             | EVM `{ chainId, to, data, value }`, the cook on the Pot, with `from` (who signs) and the `kitchenFee` read; Solana `{ chain, via, feePayer, pot, fee, maxExecutionFee, transaction }`, base64 and signed by no one                                                |
-| `sauce_pot`            | `sauce pot`            | The Pot's address, its unsigned deployment (EVM `Kitchen.deployPot`; Solana `create_pot`), `deployed` (null with no endpoint), and with an endpoint what it holds and the Kitchen's fee                                                                           |
-| `sauce_simulate`       | `sauce simulate`       | `ok`, the `path` taken, gas, what `main` returns, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts                                                                                                                            |
-| `sauce_intent_publish` | `sauce intent publish` | Each fixed intent's `intentHash`, its `vault` and its unsigned `transactions` (transfers into the vault, then `Portal.publish`; with `intentFundVia: "publishAndFund"`, approvals then `Portal.publishAndFund`); with `dryRun`, their status and `funded`         |
-| `sauce_intent_fill`    | `sauce intent fill`    | Per intent, a solver's fill rehearsed on its destination: `ok`, the calls and gas, what moved and what it left in the shared Pot and the Executor; or the decoded `reason`                                                                                        |
-| `sauce_inspect`        | `sauce inspect`        | A cook, Kitchen, Portal or ERC-20 call, or a program, taken apart; with `source`, the arguments decoded against `main`                                                                                                                                            |
-| `sauce_verify`         | `sauce verify`         | `valid` with the settle's tokens, `minOut` and recipient, or `valid: false` with the rejection `code`                                                                                                                                                             |
+| Tool                   | Like                   | Returns                                                                                                                                                                                                                                                                                                    |
+| ---------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sauce_skills`         | —                      | Every agent skill with when to use it and its files' sizes, and the package version                                                                                                                                                                                                                        |
+| `sauce_skill`          | —                      | One skill's `SKILL.md`, or a file under its `references/` or `examples/`; with `section` or `query`, only that part                                                                                                                                                                                        |
+| `sauce_dev`            | —                      | For TypeScript against the SDK: the TypeScript skill and the package's guides, API pages and examples for a topic or a question                                                                                                                                                                            |
+| `sauce_install_skills` | `sauce skills`         | For one agent, pinned to the server's version: the commands that add the package and install, update and check the skills, where it reads them, and its MCP configuration                                                                                                                                  |
+| `sauce_chains`         | —                      | Every chain: slug, id, name, kind, aliases, and whether the server has its own endpoint for it                                                                                                                                                                                                             |
+| `sauce_globals`        | `sauce globals`        | The chain's token symbols, protocol namespaces and contracts (with `protocol`, its methods), chain names, defines and `@sauce/token` functions                                                                                                                                                             |
+| `sauce_price`          | `sauce price`          | A pair's price as the pool's `sqrtPriceX96` (also the swap's limit) and each direction's `minAvgPrice`; from `price`, `sqrtPriceX96` or a `pool` read now; with `slippageBps`, the `limits`                                                                                                                |
+| `sauce_compile`        | `sauce compile`        | `bytecode`, `size`, `entryParams`, `entryEncoding`, `entrySchema`, each define it reads and where it came from, the `contracts` it calls, `compiler`, `engine`, on Solana the `manifest`; with `args` the `payload`, and with `rpcUrls` each intent's Pot checked                                          |
+| `sauce_actions`        | `sauce actions`        | An actions document (JSON) compiled for a chain: `sauce_compile`'s report with the generated `source`, its `parameters` and bindings, and, given a Pot, the unsigned cook `transaction`                                                                                                                    |
+| `sauce_tx`             | `sauce tx`             | EVM `{ chainId, to, data, value }`, the cook on the Pot, with `from` (who signs) and the `kitchenFee` read; Solana `{ chain, via, feePayer, pot, fee, maxExecutionFee, transaction }`, base64 and signed by no one                                                                                         |
+| `sauce_pot`            | `sauce pot`            | The Pot's address, its unsigned deployment (EVM `Kitchen.deployPot`; Solana `create_pot`), `deployed` (null with no endpoint), and with an endpoint what it holds and the Kitchen's fee                                                                                                                    |
+| `sauce_simulate`       | `sauce simulate`       | `ok`, the `path` taken, gas, what `main` returns, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts                                                                                                                                                                     |
+| `sauce_intent_publish` | `sauce intent publish` | Each fixed intent's `intentHash`, its `vault`, its `record` (what the other intent tools take) and its unsigned `transactions` (transfers into the vault, then `Portal.publish`; with `intentFundVia: "publishAndFund"`, approvals then `Portal.publishAndFund`); with `dryRun`, their status and `funded` |
+| `sauce_intent_fill`    | `sauce intent fill`    | For the solver `from`, its unsigned fill on the destination: approvals, then `fulfillAndProve` (the prover's fee in its value) or `fulfill`; with `dryRun`, the fill rehearsed: the calls and gas, what moved, or the decoded `reason`                                                                     |
+| `sauce_intent_import`  | `sauce intent import`  | The intents a source transaction published, each its `record`, vault, block and whether it was funded                                                                                                                                                                                                      |
+| `sauce_intent_status`  | `sauce intent status`  | `state`, both sides as read, the deadlines, the prover, and `can`: whether fill, prove, claim, refund and cancel can happen now, why not, and from when                                                                                                                                                    |
+| `sauce_intent_prove`   | `sauce intent prove`   | The unsigned `Portal.prove` for one or more fills or cancellations, its bridge fee in its value                                                                                                                                                                                                            |
+| `sauce_intent_claim`   | `sauce intent claim`   | The unsigned `withdraw` (`batchWithdraw` for several) that pays each proven intent's claimant                                                                                                                                                                                                              |
+| `sauce_intent_refund`  | `sauce intent refund`  | The unsigned `refund` that returns the reward to its creator                                                                                                                                                                                                                                               |
+| `sauce_intent_cancel`  | `sauce intent cancel`  | The unsigned `cancel` (or, with `prove`, `cancelAndProve`) that stops an unfilled intent after its route's deadline                                                                                                                                                                                        |
+| `sauce_inspect`        | `sauce inspect`        | A cook, Kitchen, Portal or ERC-20 call, or a program, taken apart; with `source`, the arguments decoded against `main`                                                                                                                                                                                     |
+| `sauce_verify`         | `sauce verify`         | `valid` with the settle's tokens, `minOut` and recipient, or `valid: false` with the rejection `code`                                                                                                                                                                                                      |
 
 A revert and a rejected settle are results (`ok: false`, `valid: false`), not errors. An error is a
 call that could not be answered: a program that does not compile, an input that is wrong, a chain
@@ -230,10 +236,50 @@ With `slippageBps`, `limits` gives each direction's `sqrtPriceLimitX96` that far
 and a `minAvgPrice` that also pays the pool's fee (`feePpm`, or the pool's own).
 
 `sauce_intent_publish` takes `from` (the wallet that funds the reward), `dryRun`, `assumeBalance`,
-`rpcUrl`, and the program inputs, `intentFundVia` among them. `sauce_intent_fill` takes the same program inputs, with `chain` the source; its endpoint is the
-DESTINATION's: `rpcUrl` when every intent goes to one chain, else `rpcUrls`, each destination's by
-chain (`{ "base": "<url>" }`). `solver` and `claimant` default to an account nobody holds the key
-of. Together they rehearse both sides of an intent before anything is signed.
+`rpcUrl`, and the program inputs, `intentFundVia` among them. The program inputs also take the
+reward's deadline and prover: `intentRewardDeadline`
+(Unix seconds; the intent's deadline by default) and `intentProver` (the registry's for the pair by
+default).
+
+### An intent's life
+
+The server keeps no intents: each call names one, by its `record` — the JSON
+`sauce_intent_publish`, `sauce_intent_import` and `sauce_intent_status` return, checked against its
+own hash before anything is built from it — or by the transaction that published it, `txHash` with
+its source `chain` (and `index` when it published several). `sauce_intent_fill` also takes the
+program itself, with the same inputs as `sauce_intent_publish`.
+
+1. `sauce_intent_publish`: the creator's transactions on the source chain. Or `sauce_intent_import`
+   for an intent published elsewhere.
+2. `sauce_intent_status`: where it stands, and `can`, what can happen next and from when.
+3. `sauce_intent_fill` with `from`, the solver: its transactions on the destination. With `dryRun`,
+   the same fill rehearsed, from any solver. A fill that proves itself (`fulfillAndProve`) needs no
+   step 4.
+4. `sauce_intent_prove`: the proof of fills or cancellations, sent from the destination; the
+   bridge delivers it to the source's prover.
+5. `sauce_intent_claim`: the reward paid to each proven fill's claimant, on the source.
+
+The creator's way back:
+
+- `sauce_intent_refund` returns the reward from the reward's deadline when no one proved a fill, or
+  earlier once a proven cancellation is recorded on the source. A source Portal that cannot refuse
+  to pay a cancellation is never refunded early.
+- `sauce_intent_cancel` stops an unfilled intent after its route's deadline. Anyone may send it,
+  and only a destination Portal that can cancel takes it. Prove the cancellation with
+  `sauce_intent_prove` once the block it landed in is final (give that block in `cancelledIn`), then
+  refund. `prove: true` sends the proof at once, before finality, and the result warns.
+
+For an intent to Solana, the destination's steps — fill, prove and cancel — come back as Solana
+transactions: `feePayer` and `transaction`, a base64 wire transaction with every signature in but
+the fee payer's. Pass the Solana key that pays and signs as `from`; a fill also needs `claimant`,
+the address on the EVM source the reward pays. Sign each with that key, last, and send it within
+about a minute, before its blockhash expires. `dryRun` rehearses an EVM destination's fill only;
+a Solana fill is rehearsed as it is built. Claim and refund stay on the EVM source.
+
+A step that cannot happen yet is a result, `ready: false` with `why`, not an error. Each tool reads
+the chains it needs through `rpcUrls`, each chain's endpoint by slug or id; `rpcUrl` is the endpoint
+of the chain the tool names (the source for import, claim and refund, the destination for fill,
+prove and cancel). The server's own endpoints fill the gaps.
 
 `sauce_actions` takes the document as `program`, an object or its JSON text, validated against the
 [action-program schema](../../actions/action-program.schema.json), also served as
@@ -259,6 +305,12 @@ The other transactions:
 - `sauce_pot`'s deployment can be sent from any account.
 - `sauce_intent_publish`'s transactions go in order, from the wallet that funds the reward: the
   transfers into the vault first, then `publish` once they have landed.
+- `sauce_intent_fill`'s go in order from the solver it names (`from`): the Portal pulls what the
+  route delivers from the account that calls `fulfill`.
+- On Solana, each transaction is signed last by its `feePayer`, the `from` the call named.
+- The proof, claim, refund and cancellation can be sent from any account. Each `transactions`
+  entry names its `chainId`; the sender pays the gas and the value, and the reward goes to the
+  claimant or the creator, never the sender.
 - On Solana, `sauce_tx`'s `transaction` is base64, for the owner to sign and send. Its blockhash
   expires in about a minute.
 

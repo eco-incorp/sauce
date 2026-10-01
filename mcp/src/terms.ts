@@ -36,6 +36,11 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
   [command("sauce (?:intent )?(publish|fill)"), "sauce_intent_$1"],
   [command("sauce intent (status|import|prove|claim|refund|cancel)"), "sauce_intent_$1"],
   [command("sauce (globals|compile|simulate|tx|pot|inspect|verify|price)"), "sauce_$1"],
+  // The lifecycle core's refusal for a chain it has no endpoint of: the call can give one.
+  [
+    /needs ([\w-]+)'s endpoint \(chain id (\d+)\)/g,
+    'needs $1\'s endpoint (chain id $2): pass rpcUrls { "$1": "<url>" } with the call',
+  ],
   // A flag, as the input of the same meaning. `--config` is the operator's, and stays.
   [/pass them after --args, in order, or as --args-json/g, "pass them as args, in order"],
   [/--args-json\b|--args\b/g, "args"],
@@ -53,6 +58,9 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
   [/--intent-creator\b/g, "intentCreator"],
   [/--intent-execution-fee\b/g, "intentExecutionFee"],
   [/--intent-fund-via\b/g, "intentFundVia"],
+  [/--intent-reward-deadline\b/g, "intentRewardDeadline"],
+  [/--intent-prover\b/g, "intentProver"],
+  [/--no-prove\b/g, "prove: false"],
   [/--max-execution-fee\b/g, "maxExecutionFee"],
   [/--via\b/g, "via"],
   [/--compact-args\b/g, "compactArgs"],
@@ -74,7 +82,9 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
 
 /** `text` in the tools' words. */
 export function toolTerms(text: string): string {
-  if (!text.includes("--") && !text.includes("sauce ")) return text;
+  if (!text.includes("--") && !text.includes("sauce ") && !text.includes("endpoint (chain id")) {
+    return text;
+  }
   let out = text;
   for (const [pattern, replacement] of STEPS) out = out.replace(pattern, replacement);
 
