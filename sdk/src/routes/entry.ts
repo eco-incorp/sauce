@@ -219,6 +219,67 @@ export function liftSignatures(source: string): LiftedSignature {
   };
 }
 
+/** `main`'s signature as a source writes it (`mainSignature`). */
+export interface MainSignatureText {
+  /** Indices of the `(` opening the parameter list and the `)` closing it. */
+  readonly open: number;
+  readonly close: number;
+  /** The parameter list's text, and the return annotation's (`: Type`, or empty). */
+  readonly params: string;
+  readonly returns: string;
+  /** The parameters' names, in order. */
+  readonly names: string[];
+  /** Whether `main` returns a value: a non-`void` annotation or, with none, a `return <value>`. */
+  readonly returnsValue: boolean;
+}
+
+/**
+ * Whether the body whose `{` is at `brace` in blanked `code` returns a value: a `return` with an
+ * operand, outside any arrow function's own block (an intent's closure) inside it.
+ */
+function bodyReturnsValue(code: string, brace: number): boolean {
+  const token = /=>\s*\{|[{}]|(?<![.\w$])return\b(?!\s*[;}])/g;
+  token.lastIndex = brace;
+  let depth = 0;
+  const arrows: number[] = [];
+  for (let found = token.exec(code); found !== null; found = token.exec(code)) {
+    const text = found[0];
+    if (text === "}") {
+      if (arrows.at(-1) === depth) arrows.pop();
+      if (--depth === 0) return false;
+    } else if (text.endsWith("{")) {
+      depth++;
+      if (text.startsWith("=>")) arrows.push(depth);
+    } else if (arrows.length === 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/** `main`'s signature as `source` writes it; `undefined` with no `main`. */
+export function mainSignature(source: string): MainSignatureText | undefined {
+  const main = locateMain(source);
+  if (main === undefined) return undefined;
+  const params = source.slice(main.open + 1, main.close);
+  const returns = source.slice(main.close + 1, main.returnEnd);
+  const code = blankLiterals(source);
+  const brace = code.indexOf("{", main.returnEnd);
+
+  return {
+    open: main.open,
+    close: main.close,
+    params,
+    returns,
+    names: splitTopLevel(params).map((param) => splitParam(param).name),
+    returnsValue:
+      returns.trim() === ""
+        ? brace >= 0 && bodyReturnsValue(code, brace)
+        : !/^:\s*void$/.test(returns.trim()),
+  };
+}
+
 /** `main`'s parameters as `source` declares them — every one, `Account` slots included. */
 export function mainParams(source: string): EntryParam[] {
   const main = locateMain(source);
