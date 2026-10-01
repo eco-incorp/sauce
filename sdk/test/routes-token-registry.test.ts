@@ -2,14 +2,21 @@
  * Per-chain token registry (`token-registry.ts`) -- module-eval invariants, coverage matrix, and
  * the one precedence resolver (`resolveTokenMap`).
  */
+import { getAddressEncoder } from "@solana/kit";
+import { bytesToHex } from "viem";
+
 import { requireChain } from "../src/chains/canonical.js";
 import {
+  SVM_TOKEN_REGISTRY,
   TOKEN_REGISTRY,
   knownTokenSymbols,
   registryTokenAddress,
   resolveTokenMap,
+  svmTokenRows,
 } from "../src/routes/token-registry.js";
 import { REWRITABLE_METHODS } from "../src/routes/token-rewrite.js";
+import { NATIVE_MINT } from "../src/svm/prepends.js";
+import { USDC_MINT } from "../src/svm/venues/hylo/index.js";
 
 // verify/vectors.ts's own pinned Base USDC/WETH constants -- one source of truth; drift in either
 // turns this red.
@@ -81,8 +88,8 @@ describe("coverage matrix (pinned exactly -- a new row is a deliberate edit)", (
     expect(knownTokenSymbols(requireChain("ronin"))).toEqual([]);
   });
 
-  it("an svm chain returns an empty symbol list", () => {
-    expect(knownTokenSymbols(requireChain("solana"))).toEqual([]);
+  it("solana registers its cluster's classic SPL mints", () => {
+    expect(knownTokenSymbols(requireChain("solana"))).toEqual(["USDC", "USDT", "WSOL"]);
   });
 
   it("arbitrum and polygon deliberately do NOT register USDT (bridged/renamed symbol() mismatch)", () => {
@@ -111,11 +118,13 @@ describe("resolveTokenMap: the one precedence resolver", () => {
     expect(map.get("FOO")).toBe(BigInt(FOO));
   });
 
-  it("an svm chain resolves to only the caller tokens (no registry rows exist for an svm chain id)", () => {
-    const USDC = "0x7777777777777777777777777777777777777777" as const;
-    const map = resolveTokenMap(requireChain("solana"), { USDC });
-    expect(map.size).toBe(1);
-    expect(map.get("USDC")).toBe(BigInt(USDC));
+  it("an svm chain resolves its mints' keys, and a caller token overrides one PER KEY", () => {
+    const solana = requireChain("solana");
+    const DEVNET_USDC = SVM_TOKEN_REGISTRY.devnet.find((row) => row.symbol === "USDC")!.address;
+    const map = resolveTokenMap(solana, { USDC: DEVNET_USDC });
+    expect(map.get("USDC")).toBe(BigInt(DEVNET_USDC));
+    expect(map.get("USDT")).toBe(registryTokenAddress(solana, "USDT"));
+    expect([...map.keys()].sort()).toEqual(["USDC", "USDT", "WSOL"]);
   });
 
   it("an evm chain the registry doesn't cover resolves to only the caller tokens", () => {
@@ -123,5 +132,56 @@ describe("resolveTokenMap: the one precedence resolver", () => {
     const map = resolveTokenMap(requireChain("ronin"), { USDC });
     expect(map.size).toBe(1);
     expect(map.get("USDC")).toBe(BigInt(USDC));
+  });
+});
+
+describe("SVM_TOKEN_REGISTRY: the Solana mints", () => {
+  const keyOf = (mint: string) =>
+    bytesToHex(new Uint8Array(getAddressEncoder().encode(mint as never)));
+
+  it("a canonical solana program resolves mainnet-beta's mints", () => {
+    expect(svmTokenRows(requireChain("solana"))).toBe(SVM_TOKEN_REGISTRY["mainnet-beta"]);
+    expect(svmTokenRows(requireChain("base"))).toEqual([]);
+  });
+
+  it("each row's key is its mint's 32 bytes, and symbols and mints are unique per cluster", () => {
+    for (const rows of Object.values(SVM_TOKEN_REGISTRY)) {
+      expect(new Set(rows.map((row) => row.symbol)).size).toBe(rows.length);
+      expect(new Set(rows.map((row) => row.mint)).size).toBe(rows.length);
+      for (const row of rows) {
+        expect(row.address).toMatch(/^0x[0-9a-f]{64}$/);
+        expect(row.address).toBe(keyOf(row.mint));
+        expect(row.symbol).toMatch(/^[A-Z][A-Z0-9]{1,10}$/);
+      }
+    }
+  });
+
+  it("agrees with the mints the SDK already records", () => {
+    const mainnet = Object.fromEntries(
+      SVM_TOKEN_REGISTRY["mainnet-beta"].map((row) => [row.symbol, row.mint]),
+    );
+    expect(mainnet.USDC).toBe(USDC_MINT);
+    expect(mainnet.WSOL).toBe(NATIVE_MINT);
+  });
+
+  it("pins the coverage: USDC, USDT and the wrapped native on mainnet; USDC and WSOL on devnet", () => {
+    expect(
+      Object.fromEntries(
+        Object.entries(SVM_TOKEN_REGISTRY).map(([cluster, rows]) => [
+          cluster,
+          rows.map((row) => `${row.symbol} ${row.mint} ${row.decimals}`),
+        ]),
+      ),
+    ).toEqual({
+      "mainnet-beta": [
+        "USDC EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v 6",
+        "USDT Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB 6",
+        "WSOL So11111111111111111111111111111111111111112 9",
+      ],
+      devnet: [
+        "USDC 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU 6",
+        "WSOL So11111111111111111111111111111111111111112 9",
+      ],
+    });
   });
 });

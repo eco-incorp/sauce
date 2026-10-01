@@ -26,6 +26,7 @@ import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js"
 
 const BASE = requireChain("base");
 const ARBITRUM = requireChain("arbitrum");
+const SOLANA = requireChain("solana");
 const RECIPIENT = 0x9999999999999999999999999999999999999999n;
 const RECIPIENT_ADDRESS = "0x9999999999999999999999999999999999999999" as const;
 const CREATOR = "0x3333333333333333333333333333333333333333" as const;
@@ -246,6 +247,24 @@ describe("a body that is not just token writes becomes a program", () => {
     expect(result.intents[0]!.captures).toContain("amount");
   });
 
+  it("a token write on Solana takes the program path, never ERC-20 calldata aimed at the mint", () => {
+    // On Solana `USDC` is the mint's 32-byte key, so the direct-call shape would be a `transfer`
+    // call whose target is the mint: a route no solver can run, with the reward escrowed behind it.
+    const source = program(
+      `  Solana(() => {\n    USDC.transfer(RECIPIENT, amount);\n  }).reward({ tokens: [{ token: USDC, amount }] });`,
+    );
+    const compileChild = () => {
+      throw new Error("compiled as a program");
+    };
+
+    expect(() =>
+      rewriteIntentSugar(
+        source,
+        context({ chains: new Map([["Solana", SOLANA]]), proverFor: () => CREATOR, compileChild }),
+      ),
+    ).toThrow("compiled as a program");
+  });
+
   it("lowers an intent opened inside an intent, recursively", () => {
     const source = program(`  Arbitrum(() => {
     const got = USDC.balanceOf(ctx.self());
@@ -430,6 +449,26 @@ describe("what it refuses, and how clearly", () => {
 });
 
 describe("through the real compile path", () => {
+  it("builds no Solana intent from a token write", () => {
+    // The program path: an SVM child, which this sugar does not build (it derives an EVM Pot), and
+    // whose compile would refuse the token syntax by name. Either way, nothing is published.
+    expect(() =>
+      compileSauceRoute(
+        "base",
+        `function main() {
+  Solana(() => {
+    USDC.transfer(RECIPIENT, 5n);
+  }).reward({ tokens: [{ token: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913n, amount: 7n }] });
+}`,
+        {
+          pot: "0x1111111111111111111111111111111111111111",
+          engine: "0x2222222222222222222222222222222222222222",
+        },
+        { defines: { RECIPIENT }, intents: { deadline: 4_000_000_000n, creator: CREATOR } },
+      ),
+    ).toThrow();
+  });
+
   it("compiles, with no Portal or selector written by the caller", () => {
     const out = compileSauceRoute(
       "base",

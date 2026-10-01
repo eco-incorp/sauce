@@ -67,8 +67,8 @@ describe("--fund <TOKEN|address>:<amount>", () => {
     expect(() => parseFund(raw, base)).toThrow(message);
   });
 
-  it("registers no symbol off EVM", () => {
-    expect(() => parseFund("USDC:1", solana)).toThrow("USDC is not a token solana registers");
+  it("refuses off EVM, where a program spends from the accounts it is given", () => {
+    expect(() => parseFund("USDC:1", solana)).toThrow("--fund is for EVM chains");
   });
 });
 
