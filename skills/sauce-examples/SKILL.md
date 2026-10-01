@@ -35,6 +35,13 @@ names alone ([../sauce-globals/references/tokens.md](../sauce-globals/references
 | [`../sauce-intents/examples/fund-by-transfer.sauce.ts`](../sauce-intents/examples/fund-by-transfer.sauce.ts)                   | `base`, `arbitrum`                                  | Funds an intent by a transfer into its vault, then publishes it: one cook on a Pot, no approval                                                                                                                                                                                                                                                         | `sauce-intents`          |
 | [`../sauce-solana/examples/solana.sauce.ts`](../sauce-solana/examples/solana.sauce.ts)                                         | `solana`                                            | A Solana program: `Account` parameters with roles, the mint as a define, the `@sauce/token` SPL arm, proof the destination received the amount                                                                                                                                                                                                          | `sauce-solana`           |
 
+## Actions documents
+
+| Document                                                                                           | Chains                                     | Demonstrates                                                                                                        | Skill           |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- | --------------- |
+| [`../sauce-actions/examples/swap-by-key.json`](../sauce-actions/examples/swap-by-key.json)         | `ethereum`, `base`, `arbitrum`             | One swap by token symbols and a pool's factory key, the amount an argument: no chain and no address in the document | `sauce-actions` |
+| [`../sauce-actions/examples/swap-and-supply.json`](../sauce-actions/examples/swap-and-supply.json) | `ethereum`, `base`, `arbitrum`, `optimism` | Chaining: a swap's output saved by name, approved to the Aave pool and supplied on the Pot's behalf                 | `sauce-actions` |
+
 ## TypeScript runners
 
 | Runner                                                                                                               | Compiles and checks                                                                                                                                                                                        | Skill                    |

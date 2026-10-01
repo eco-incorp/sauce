@@ -3,6 +3,7 @@
  * from, and that every value a source action produces is read. `program.ts` runs the structural
  * checks first, so by the time these run every field has its declared type.
  */
+import type { CanonicalChain } from "../../sdk/dist/chains/canonical.js";
 import { getChain, nativeErc20 } from "../../sdk/dist/chains/index.js";
 
 import { ACTION_SPECS } from "./spec.js";
@@ -14,17 +15,25 @@ export interface ProgramIssue {
   readonly message: string;
 }
 
-/** Thrown for a program that breaks any rule. `issues` lists every problem found, in order. */
+/**
+ * Thrown for a program that breaks any rule. `issues` lists every problem found, in order; `chain`
+ * is set when they are the compiled chain's — a name it lacks — rather than the document's own.
+ */
 export class ProgramError extends Error {
   readonly issues: readonly ProgramIssue[];
+  readonly chain?: CanonicalChain;
 
-  constructor(issues: readonly ProgramIssue[]) {
+  constructor(issues: readonly ProgramIssue[], chain?: CanonicalChain) {
+    const count = `${issues.length} ${issues.length === 1 ? "issue" : "issues"}`;
     super(
-      `invalid action program (${issues.length} ${issues.length === 1 ? "issue" : "issues"}):\n` +
+      (chain === undefined
+        ? `invalid action program (${count}):\n`
+        : `the action program does not compile for ${chain.name} (${chain.slug}, chain ${chain.id}) (${count}):\n`) +
         issues.map((i) => `  ${i.path}: ${i.message}`).join("\n"),
     );
     this.name = "ProgramError";
     this.issues = issues;
+    if (chain !== undefined) this.chain = chain;
   }
 }
 
@@ -189,21 +198,40 @@ export function programIssues(actions: readonly Action[], chainId?: number): Pro
   return issues;
 }
 
-/** True when two addresses are the same, however each is cased. */
-const same = (a: string, b: string): boolean => BigInt(a) === BigInt(b);
+/** A token value as the address it names, or `undefined` for a name not yet resolved. */
+const valueOf = (value: string): bigint | undefined =>
+  value === "native" ? 0n : /^0x/i.test(value) ? BigInt(value) : undefined;
+
+/**
+ * Whether two token values are the same token: two addresses however cased, two identical names,
+ * `"native"` and the zero address. `undefined` when only the chain can tell — a name beside an
+ * address — which the compile decides once every name is resolved on its chain.
+ */
+const same = (a: string, b: string): boolean | undefined => {
+  const [x, y] = [valueOf(a), valueOf(b)];
+  if (x !== undefined && y !== undefined) return x === y;
+
+  return a === b ? true : x === undefined && y === undefined ? false : undefined;
+};
 
 /**
  * What `@sauce/router` would refuse when the program runs, refused here instead, with a path: a
  * swap of a token for itself; a DODO V2 or Trader Joe LB trade that is not between the two tokens
  * the action says the pool holds; and a WOOFi swap with no floor, which the pool needs because it
- * prices from an oracle.
+ * prices from an oracle. A comparison only the chain can decide (a name beside an address) is left
+ * to the compile, which runs these again on the resolved addresses.
  */
 function swapIssues(action: Action, i: number): ProgramIssue[] {
   const at = (key: string): string => `actions[${i}].${key}`;
   const issues: ProgramIssue[] = [];
-  const pair = (a: string, b: string, names: string): void => {
+  const pair = (a: string | undefined, b: string | undefined, names: string): void => {
+    if (a === undefined || b === undefined) return;
     const { tokenIn, tokenOut } = action as { tokenIn: string; tokenOut: string };
-    if ((same(tokenIn, a) && same(tokenOut, b)) || (same(tokenIn, b) && same(tokenOut, a))) return;
+    const straight = [same(tokenIn, a), same(tokenOut, b)];
+    const crossed = [same(tokenIn, b), same(tokenOut, a)];
+    const holds = (pair: (boolean | undefined)[]) =>
+      pair.includes(false) ? false : pair.includes(undefined) ? undefined : true;
+    if (holds(straight) !== false || holds(crossed) !== false) return;
     issues.push({
       path: at("tokenIn"),
       message:
@@ -222,7 +250,7 @@ function swapIssues(action: Action, i: number): ProgramIssue[] {
     case "dodoV2Swap":
     case "traderJoeLBSwap":
     case "woofiSwap":
-      if (same(action.tokenIn, action.tokenOut)) {
+      if (same(action.tokenIn, action.tokenOut) === true) {
         issues.push({ path: at("tokenOut"), message: "is tokenIn: a swap needs two tokens" });
         return issues;
       }

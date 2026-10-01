@@ -170,7 +170,7 @@ window.__sauce = (async () => {
       `  settle        ${expected.settle.length / 2} bytes\n` +
       `  swap/deposit  ${expected.swap[0].length / 2} / ${expected.deposit[0].length / 2} bytes\n` +
       `  compact       evm ${expected.raw.evm.bytecode.length / 2}, svm ${expected.raw.svm.bytecode.length / 2} bytes\n` +
-      `  actions       ${expected.action.length / 2} bytes\n` +
+      `  actions       ${expected.action.length / 2} bytes; by names on base ${expected.actionNamed.length / 2} bytes\n` +
       `  before ready() a compile throws: ${notReady}`,
   );
 } finally {

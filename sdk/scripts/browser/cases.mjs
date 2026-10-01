@@ -117,6 +117,27 @@ export async function run(source) {
     }),
   );
 
+  // An actions document by names and a pool key, with no chainId: it resolves on the chain it is
+  // compiled for, through the same registries, in the browser as in Node.
+  const named = compileProgram(
+    {
+      version: 1,
+      actions: [
+        { type: "argument", name: "amount" },
+        {
+          type: "uniswapV3Swap",
+          tokenIn: "USDC",
+          tokenOut: "WETH",
+          factory: "UniswapV3.Factory",
+          fee: 500,
+          amountOutMin: "1",
+          recipient: "self",
+        },
+      ],
+    },
+    { chain: "base" },
+  );
+
   return {
     readme: {
       bytecode: built.compiled.bytecode.map(hex),
@@ -127,5 +148,6 @@ export async function run(source) {
     swap: swapRoute.compiled.bytecode.map(hex),
     deposit: depositRoute.compiled.bytecode.map(hex),
     action: hex(action.bytecode),
+    actionNamed: hex(named.bytecode),
   };
 }
