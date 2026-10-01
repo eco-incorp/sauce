@@ -26,6 +26,7 @@ import {
   encodeFunctionData,
   getAbiItem,
   getAddress,
+  hexToBytes,
   isAddressEqual,
   parseAbi,
   toEventSelector,
@@ -72,6 +73,22 @@ import { CliError, UsageError } from "./args.js";
 import { connect, kitchenFee, potState, type TxRequest } from "./chain.js";
 import { kitchenAddress } from "./commands.js";
 import { formatAmount, tokenInfo, type TokenInfo } from "./effects.js";
+import {
+  planSvmFill,
+  readSvmDestination,
+  rehearseSvm,
+  svmCancelTransaction,
+  svmFinalizedSlot,
+  svmProgramExists,
+  svmProveTransaction,
+  svmRpc,
+  svmSpend,
+  type SvmHyperRoute,
+  type SvmRpc,
+  type SvmTxJson,
+} from "./lifecycle-svm.js";
+import { svmHyperDispatcherPda, svmKeyOf, universalOfSvmKey } from "../svm/portal.js";
+import { address as svmAddress } from "@solana/kit";
 
 // ---------------------------------------------------------------------------------------------
 // The intent, as JSON
@@ -269,6 +286,9 @@ const txJson = (chain: CanonicalChain, tx: TxRequest, what: string): TxJson => (
   what,
 });
 
+/** A transaction a plan returns: an EVM chain's, or Solana's (`transaction`, base64). */
+export type AnyTxJson = TxJson | SvmTxJson;
+
 /** A {@link TxJson} as a transaction to send. */
 export const txRequest = (tx: TxJson): TxRequest => ({
   to: tx.to,
@@ -307,6 +327,16 @@ class Chains {
 
   async maybe(chain: CanonicalChain): Promise<PublicClient | undefined> {
     return this.has(chain) ? this.get(chain, "") : undefined;
+  }
+
+  /** A Solana client for `chain`; `why` says what it is needed for, when there is no endpoint. */
+  svm(chain: CanonicalChain, why: string): SvmRpc {
+    const url = this.endpoints[String(chain.id)];
+    if (url === undefined) {
+      throw new UsageError(`${why} needs ${chain.slug}'s endpoint (chain id ${chain.id})`);
+    }
+
+    return svmRpc(url);
   }
 }
 
@@ -448,8 +478,9 @@ const proverRead = <T>(
 export interface ProverPlan {
   /** The reward's prover, on the source chain: where the proof is recorded. */
   readonly sourceProver: Address;
-  /** The prover on the destination chain that sends the proof, when one was found. */
-  readonly destinationProver?: Address;
+  /** The prover on the destination chain that sends the proof, when one was found: an EVM
+   *  address, or on Solana a program id. */
+  readonly destinationProver?: string;
   /** Its `getProofType()`: "Hyperlane", "Polymer", "LayerZero", "Metalayer", … */
   readonly kind?: string;
   /** Whether this command can prove through it; `why` says why not. */
@@ -587,6 +618,95 @@ export async function proverPlan(
   };
 }
 
+/** The registry's Solana key (32-byte hex) for `where`, as a program id. */
+function registrySvmKey(
+  chain: CanonicalChain,
+  where: { generation: string; environment: string; role: string },
+): string | undefined {
+  const table = (
+    ECO_ROUTES_ADDRESSES as Record<
+      string,
+      { chains: Record<string, Record<string, Record<string, string>>> }
+    >
+  )[where.generation]?.chains[String(chain.id)]?.[where.environment]?.[where.role];
+
+  return table === undefined ? undefined : svmKeyOf(table as Hex);
+}
+
+/**
+ * Which program on Solana proves `intent` to its EVM source, and whether this module can drive it:
+ * the registry's Solana address for the reward prover's role. Only the HyperProver: its message
+ * goes through Hyperlane's Mailbox with the gas paid to the IGP in the same transaction
+ * (`svm/portal.ts`), its sender the HyperProver's dispatcher, which the source prover must
+ * whitelist (checked when the source is readable).
+ */
+async function svmProverPlan(
+  intent: Intent,
+  destination: SvmRpc,
+  source?: PublicClient,
+): Promise<ProverPlan & { readonly hyper?: SvmHyperRoute }> {
+  const sourceChain = requireChain(Number(intent.sourceChainId));
+  const destinationChain = requireChain(Number(intent.destination));
+  const sourceProver = getAddress(denormalizeToEvm(intent.reward.prover));
+  const role = registryRole(sourceChain, sourceProver);
+  const program = role === undefined ? undefined : registrySvmKey(destinationChain, role);
+  const base = { sourceProver } as const;
+  if (role === undefined || program === undefined) {
+    return {
+      ...base,
+      supported: false,
+      why: `the reward's prover ${sourceProver} is no registry prover with a ${destinationChain.slug} counterpart`,
+    };
+  }
+  const kind = role.role.replace(/Prover$/, "");
+  const plan = { ...base, destinationProver: program, kind: kind === "Hyper" ? "Hyperlane" : kind };
+  if (role.role !== "HyperProver") {
+    return {
+      ...plan,
+      supported: false,
+      why:
+        role.role === "PolymerProver"
+          ? "a Polymer proof is fetched from Polymer's prover API and submitted to the source " +
+            "chain's prover by a relayer, which this command does not do"
+          : `this command proves from Solana through the HyperProver, and ${program} is a ${role.role}`,
+    };
+  }
+  if (!(await svmProgramExists(destination, svmAddress(program)))) {
+    return {
+      ...plan,
+      supported: false,
+      why: `the HyperProver ${program} is not a program on Solana`,
+    };
+  }
+  if (source !== undefined) {
+    const sender = await svmHyperDispatcherPda(svmAddress(program));
+    const trusted = await tryRead<boolean>(
+      source,
+      proverRead(sourceProver, "isWhitelisted", [universalOfSvmKey(sender)]),
+    );
+    if (trusted === false) {
+      return {
+        ...plan,
+        supported: false,
+        why:
+          `the reward's prover ${sourceProver} on ${sourceChain.slug} does not whitelist Solana's ` +
+          `HyperProver dispatcher ${sender}, so it would refuse the proof`,
+      };
+    }
+  }
+
+  return {
+    ...plan,
+    supported: true,
+    sourceDomain: BigInt(sourceChain.id),
+    hyper: {
+      hyperProver: svmAddress(program),
+      sourceChainId: intent.sourceChainId,
+      sourceProver,
+    },
+  };
+}
+
 /** The bridge fee for proving these (intent, claimant) pairs through `plan`'s prover. */
 async function proofFee(
   destination: PublicClient,
@@ -597,7 +717,7 @@ async function proofFee(
   return readCall(
     destination,
     proverFeeCall({
-      prover: plan.destinationProver!,
+      prover: plan.destinationProver! as Address,
       sourceDomain: plan.sourceDomain!,
       destinationChainId,
       pairs,
@@ -847,7 +967,7 @@ export async function planFill(
   const fill = proves
     ? fulfillAndProveTx(intent, {
         claimant,
-        prover: prover.destinationProver!,
+        prover: prover.destinationProver! as Address,
         sourceDomain: prover.sourceDomain!,
         data: prover.data!,
         fee,
@@ -898,15 +1018,20 @@ export async function planFill(
 export async function buildFill(
   record: IntentRecord,
   endpoints: Endpoints,
-  options: { readonly from: Address; readonly claimant?: Hex; readonly prove?: boolean },
+  options: {
+    /** The solver: an EVM address, or for a Solana destination its Solana key. */
+    readonly from: string;
+    readonly claimant?: Hex;
+    readonly prove?: boolean;
+  },
 ): Promise<{
-  readonly from: Address;
-  readonly transactions: readonly TxJson[];
+  readonly from: string;
+  readonly transactions: readonly AnyTxJson[];
   readonly proves: boolean;
   readonly fee: { readonly prover: string; readonly kitchen: string };
   readonly prover: ReturnType<typeof proverJson>;
   readonly delivers: ReadonlyArray<{
-    readonly token: Address;
+    readonly token: string;
     readonly symbol?: string;
     readonly amount: string;
     readonly held: string;
@@ -916,9 +1041,10 @@ export async function buildFill(
   const intent = intentOf(record);
   const chains = new Chains(endpoints);
   const destination = requireChain(Number(intent.destination));
+  if (destination.kind === "svm") return buildSvmFill(intent, chains, options);
   const client = await chains.get(destination, "a fill");
   const plan = await planFill(client, intent, {
-    solver: options.from,
+    solver: getAddress(options.from),
     ...(options.claimant === undefined ? {} : { claimant: options.claimant }),
     ...(options.prove === undefined ? {} : { prove: options.prove }),
     ...(chains.has(requireChain(Number(intent.sourceChainId)))
@@ -997,7 +1123,8 @@ export interface IntentStatus {
   };
   readonly destination?: {
     readonly chain: string;
-    readonly portal: Address;
+    /** An EVM address, or Solana's program id. */
+    readonly portal: string;
     /** What `claimants[intentHash]` holds: the claimant, `null` while unfilled. */
     readonly claimant: Hex | null;
     readonly cancelled: boolean;
@@ -1125,7 +1252,8 @@ async function readSource(
 }
 
 interface DestinationRead {
-  readonly portal: Address;
+  /** The Portal: an EVM address, or Solana's program id. */
+  readonly portal: string;
   readonly claimant: Hex | null;
   readonly canCancel: boolean;
   readonly time: bigint;
@@ -1170,32 +1298,41 @@ export async function intentStatus(
   const sourceChain = requireChain(Number(intent.sourceChainId));
   const destinationChain = requireChain(Number(intent.destination));
   const notes: string[] = [];
-  if (sourceChain.kind !== "evm" || destinationChain.kind !== "evm") {
+  if (sourceChain.kind !== "evm") {
     throw new CliError(
-      "this reads intents between EVM chains; one to or from Solana is fulfilled and proven " +
-        "through Solana's Portal program, which it does not read",
+      `this reads intents an EVM chain published; one ${sourceChain.slug} published lives in ` +
+        "Solana's Portal program, whose reward side it does not read",
     );
   }
+  const onSolana = destinationChain.kind === "svm";
   const sourceClient = await chains.maybe(sourceChain);
-  const destinationClient = await chains.maybe(destinationChain);
+  const destinationRpc =
+    onSolana && chains.has(destinationChain) ? chains.svm(destinationChain, "") : undefined;
+  const destinationClient = onSolana ? undefined : await chains.maybe(destinationChain);
   if (sourceClient === undefined) {
     notes.push(
       `no ${sourceChain.slug} endpoint: the funding, the proof and the claim are not read`,
     );
   }
-  if (destinationClient === undefined) {
+  if (destinationClient === undefined && destinationRpc === undefined) {
     notes.push(`no ${destinationChain.slug} endpoint: the fill and the cancellation are not read`);
   }
   const [source, destination] = await Promise.all([
     sourceClient === undefined
       ? undefined
       : readSource(sourceClient, intent, getAddress(record.source.portal)),
-    destinationClient === undefined ? undefined : readDestination(destinationClient, intent),
+    destinationRpc !== undefined
+      ? readSvmDestination(destinationRpc, intent)
+      : destinationClient === undefined
+        ? undefined
+        : readDestination(destinationClient, intent),
   ]);
   const prover =
-    destinationClient === undefined
-      ? undefined
-      : await proverPlan(intent, destinationClient, sourceClient);
+    destinationRpc !== undefined
+      ? await svmProverPlan(intent, destinationRpc, sourceClient)
+      : destinationClient === undefined
+        ? undefined
+        : await proverPlan(intent, destinationClient, sourceClient);
   const routeDeadline = intent.route.deadline;
   const rewardDeadline = intent.reward.deadline;
   const proof = source?.proof ?? null;
@@ -1366,7 +1503,8 @@ export async function intentStatus(
 export interface Plan {
   readonly ready: boolean;
   readonly why?: string;
-  readonly transactions: readonly TxJson[];
+  /** In order: EVM transactions (`TxJson`), or Solana's (`SvmTxJson`) for a Solana step. */
+  readonly transactions: readonly AnyTxJson[];
   readonly notes: readonly string[];
 }
 
@@ -1389,9 +1527,11 @@ export async function buildProve(
   records: readonly IntentRecord[],
   endpoints: Endpoints,
   options: {
-    /** The destination block each cancelled intent was cancelled in, by intent hash, where known:
-     *  its proof waits until that block is final, as eco-routes asks. */
+    /** The destination block (on Solana, the slot) each cancelled intent was cancelled in, by
+     *  intent hash, where known: its proof waits until that block is final, as eco-routes asks. */
     readonly cancelledIn?: Readonly<Record<string, string>>;
+    /** On Solana, the account that pays the proof's fee and gas. */
+    readonly from?: string;
   } = {},
 ): Promise<Plan & { readonly fee?: string; readonly prover?: ReturnType<typeof proverJson> }> {
   if (records.length === 0) throw new UsageError("no intent to prove");
@@ -1411,6 +1551,7 @@ export async function buildProve(
       );
     }
   }
+  if (destinationChain.kind === "svm") return buildSvmProve(intents, chains, options);
   const destination = await chains.get(destinationChain, "a proof");
   const source = await chains.maybe(sourceChain);
   const notes: string[] = [];
@@ -1487,7 +1628,12 @@ export async function buildProve(
   const fee = await proofFee(destination, plan, intents[0]!.destination, pairs);
   const tx = proveTx(
     pairs.map((pair) => pair.intent),
-    { prover: plan.destinationProver!, sourceDomain: plan.sourceDomain!, data: plan.data!, fee },
+    {
+      prover: plan.destinationProver! as Address,
+      sourceDomain: plan.sourceDomain!,
+      data: plan.data!,
+      fee,
+    },
   );
   const cancelled = pairs.filter((pair) => isCancelled(pair.claimant)).length;
 
@@ -1718,12 +1864,17 @@ export async function buildRefund(
 export async function buildCancel(
   record: IntentRecord,
   endpoints: Endpoints,
-  options: { readonly prove?: boolean } = {},
+  options: {
+    readonly prove?: boolean;
+    /** On Solana, the account that pays the cancellation's fee (and, proving, its gas). */
+    readonly from?: string;
+  } = {},
 ): Promise<Plan & { readonly fee?: string; readonly prover?: ReturnType<typeof proverJson> }> {
   const intent = intentOf(record);
   const sourceChain = requireChain(Number(intent.sourceChainId));
   const destinationChain = requireChain(Number(intent.destination));
   const chains = new Chains(endpoints);
+  if (destinationChain.kind === "svm") return buildSvmCancel(record, intent, chains, options);
   const destination = await chains.get(destinationChain, "a cancellation");
   const sourceClient = await chains.get(
     sourceChain,
@@ -1787,7 +1938,7 @@ export async function buildCancel(
     { intentHash: hashIntent(intent).intentHash, claimant: CANCELLED_CLAIMANT_BYTES32 },
   ]);
   const tx = cancelAndProveTx(intent, {
-    prover: plan.destinationProver!,
+    prover: plan.destinationProver! as Address,
     sourceDomain: plan.sourceDomain!,
     data: plan.data!,
     fee,
@@ -1810,6 +1961,302 @@ export async function buildCancel(
         "refund service to cancel, wait for finality, then prove: a reorg past the deadline that " +
         "re-includes a fill would leave that solver unpaid.",
     ],
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// An intent to Solana
+// ---------------------------------------------------------------------------------------------
+
+/** A claimant on the source chain as the 32 bytes Solana's Portal records: an EVM address, padded. */
+function claimant32(claimant: Hex | undefined, chain: CanonicalChain): Hex {
+  if (claimant === undefined) {
+    throw new UsageError(
+      `a fill on ${chain.slug} needs the claimant, an address on the intent's source chain that the ` +
+        "reward pays (--claimant <address>): the Solana key that fills it is not one",
+    );
+  }
+  const bytes = hexToBytes(claimant);
+  if (bytes.length !== 20 && bytes.length !== 32) {
+    throw new UsageError(`the claimant ${claimant} is neither an address nor 32 bytes`);
+  }
+
+  return toUniversalAddress(claimant);
+}
+
+/** The Solana fee payer a step is sent from: `from`, a Solana key. */
+function svmPayer(from: string | undefined, what: string): ReturnType<typeof svmAddress> {
+  if (from === undefined) {
+    throw new UsageError(
+      `${what} on Solana needs the account that pays its fee (--keypair <path>)`,
+    );
+  }
+  try {
+    return svmAddress(from);
+  } catch {
+    throw new UsageError(
+      `${from} is not a Solana key: ${what} on Solana is paid by a Solana account`,
+    );
+  }
+}
+
+async function buildSvmFill(
+  intent: Intent,
+  chains: Chains,
+  options: { readonly from: string; readonly claimant?: Hex; readonly prove?: boolean },
+): ReturnType<typeof buildFill> {
+  const destination = requireChain(Number(intent.destination));
+  const sourceChain = requireChain(Number(intent.sourceChainId));
+  const rpc = chains.svm(destination, "a fill");
+  const solver = svmPayer(options.from, "a fill");
+  const claimant = claimant32(options.claimant, destination);
+  const source = await chains.maybe(sourceChain);
+  const [there, prover] = await Promise.all([
+    readSvmDestination(rpc, intent),
+    svmProverPlan(intent, rpc, source),
+  ]);
+  if (options.prove === true && !prover.supported) {
+    throw new CliError(`the fill cannot prove itself: ${prover.why}`);
+  }
+  const proves = options.prove !== false && prover.supported;
+  const plan = await planSvmFill(rpc, destination, intent, { solver, claimant });
+  const notes = [...plan.notes];
+  if (there.claimant !== null) {
+    notes.push(
+      isCancelled(there.claimant)
+        ? "it is cancelled on Solana: the fulfill fails"
+        : `it is filled already on Solana, for claimant ${there.claimant}: the fulfill fails`,
+    );
+  }
+  if (options.prove === undefined && !prover.supported) {
+    notes.push(`it is filled without its proof: ${prover.why}`);
+  }
+  const { intentHash } = hashIntent(intent);
+  const transactions: AnyTxJson[] = [plan.transaction];
+  if (proves) {
+    transactions.push(
+      await svmProveTransaction(
+        rpc,
+        destination,
+        svmAddress(there.portal),
+        [intentHash],
+        prover.hyper!,
+        solver,
+        `Portal.prove(${prover.destinationProver}, ${sourceChain.id}, [${intentHash}]) through ` +
+          `Hyperlane to ${sourceChain.slug}, the IGP's gas paid`,
+      ),
+    );
+    notes.push(
+      "The second transaction proves the fill, so send it once the first has landed. It shares " +
+        "the first's blockhash, which lasts about a minute; past that, build the proof again " +
+        "(`sauce intent prove`).",
+    );
+  }
+
+  return {
+    from: solver,
+    transactions,
+    proves,
+    fee: { prover: "0", kitchen: "0" },
+    prover: proverJson(prover),
+    delivers: plan.tokens.map((token) => ({
+      token: token.mint,
+      amount: token.amount.toString(),
+      held: token.held.toString(),
+    })),
+    notes,
+  };
+}
+
+async function buildSvmProve(
+  intents: readonly Intent[],
+  chains: Chains,
+  options: { readonly cancelledIn?: Readonly<Record<string, string>>; readonly from?: string },
+): ReturnType<typeof buildProve> {
+  const destinationChain = requireChain(Number(intents[0]!.destination));
+  const sourceChain = requireChain(Number(intents[0]!.sourceChainId));
+  const rpc = chains.svm(destinationChain, "a proof");
+  const source = await chains.maybe(sourceChain);
+  const payer = svmPayer(options.from, "a proof");
+  const notes: string[] = [];
+  const pairs: Array<{ intent: Intent; intentHash: Hex; claimant: Hex }> = [];
+  let portal: string | undefined;
+  for (const intent of intents) {
+    const { intentHash } = hashIntent(intent);
+    const there = await readSvmDestination(rpc, intent);
+    portal = there.portal;
+    if (there.claimant === null) {
+      return {
+        ready: false,
+        why: `${intentHash} is neither filled nor cancelled on ${destinationChain.slug}: there is nothing to prove`,
+        transactions: [],
+        notes,
+      };
+    }
+    if (source !== undefined) {
+      const proof = await tryRead(source, provenIntentCall(intent));
+      if (
+        proof !== undefined &&
+        proof.claimant !== zeroAddress &&
+        proof.destination === intent.destination
+      ) {
+        notes.push(
+          `${intentHash} is proven on ${sourceChain.slug} already, for ${proof.claimant}: left out`,
+        );
+        continue;
+      }
+    }
+    if (isCancelled(there.claimant)) {
+      // As on an EVM destination: the cancellation is proven once the slot that recorded it is
+      // final (eco-routes' proven-cancellation design, §1).
+      const slot = options.cancelledIn?.[intentHash];
+      if (slot === undefined) {
+        notes.push(
+          `${intentHash} was cancelled in a slot this does not know: prove it once that slot is ` +
+            `final on ${destinationChain.slug}`,
+        );
+      } else {
+        const finalized = await svmFinalizedSlot(rpc);
+        if (finalized < BigInt(slot)) {
+          return {
+            ready: false,
+            why:
+              `${intentHash} was cancelled in slot ${slot} on ${destinationChain.slug}, which is ` +
+              `not final yet (the finalized slot is ${finalized}): prove it once it is`,
+            transactions: [],
+            notes,
+          };
+        }
+      }
+    }
+    pairs.push({ intent, intentHash, claimant: there.claimant });
+  }
+  if (pairs.length === 0) {
+    return { ready: false, why: "every intent is proven already", transactions: [], notes };
+  }
+  const plan = await svmProverPlan(pairs[0]!.intent, rpc, source);
+  if (!plan.supported) {
+    return { ready: false, why: plan.why!, transactions: [], notes, prover: proverJson(plan) };
+  }
+  const cancelled = pairs.filter((pair) => isCancelled(pair.claimant)).length;
+  const tx = await svmProveTransaction(
+    rpc,
+    destinationChain,
+    svmAddress(portal!),
+    pairs.map((pair) => pair.intentHash),
+    plan.hyper!,
+    payer,
+    `Portal.prove(${plan.destinationProver}, ${sourceChain.id}, [${pairs.map((pair) => pair.intentHash).join(", ")}]) ` +
+      `through Hyperlane, the IGP's gas paid: carries ${pairs.length - cancelled} fill(s)` +
+      (cancelled === 0 ? "" : ` and ${cancelled} cancellation(s)`) +
+      ` to ${sourceChain.slug}`,
+  );
+  const rehearsal = await rehearseSvm(rpc, tx, [payer]);
+  if (!rehearsal.ok) {
+    return {
+      ready: false,
+      why: `the proof fails on ${destinationChain.slug}: ${rehearsal.reason}`,
+      transactions: [],
+      notes,
+      prover: proverJson(plan),
+    };
+  }
+  const spend = await svmSpend(rpc, payer, rehearsal);
+
+  return {
+    ready: true,
+    transactions: [{ ...tx, value: spend.toString() }],
+    fee: spend.toString(),
+    prover: proverJson(plan),
+    notes,
+  };
+}
+
+async function buildSvmCancel(
+  record: IntentRecord,
+  intent: Intent,
+  chains: Chains,
+  options: { readonly prove?: boolean; readonly from?: string },
+): ReturnType<typeof buildCancel> {
+  const sourceChain = requireChain(Number(intent.sourceChainId));
+  const destinationChain = requireChain(Number(intent.destination));
+  const rpc = chains.svm(destinationChain, "a cancellation");
+  const sourceClient = await chains.get(
+    sourceChain,
+    "a cancellation (to check the source Portal refuses to pay a cancellation)",
+  );
+  const payer = svmPayer(options.from, "a cancellation");
+  const [there, here] = await Promise.all([
+    readSvmDestination(rpc, intent),
+    readSource(sourceClient, intent, getAddress(record.source.portal)),
+  ]);
+  const deadline = intent.route.deadline;
+  const notReady = (why: string) => ({ ready: false, why, transactions: [], notes: [] });
+  if (!there.canCancel) {
+    return notReady(
+      `the destination Portal ${there.portal} on ${destinationChain.slug} has no cancel: refund ` +
+        `after the reward's deadline, ${iso(intent.reward.deadline)}`,
+    );
+  }
+  if (!here.refusesCancelledClaimant) {
+    return notReady(
+      `the source Portal ${here.portal} on ${sourceChain.slug} would pay a proven cancellation to ` +
+        `${CANCELLED_CLAIMANT}, an address nobody controls (it predates eco-routes 2.12), so it ` +
+        `is not cancelled: refund after the reward's deadline, ${iso(intent.reward.deadline)}`,
+    );
+  }
+  if (isCancelled(there.claimant)) {
+    return notReady("it is cancelled already: prove the cancellation, then refund");
+  }
+  if (there.claimant !== null) return notReady(`it was filled, for claimant ${there.claimant}`);
+  if (there.time <= deadline) {
+    return notReady(
+      `not before the route's deadline, ${iso(deadline)}, has passed (${deadline + 1n - there.time}s ` +
+        `by ${destinationChain.slug}'s clock)`,
+    );
+  }
+  if (here.status === "Refunded" || here.status === "Withdrawn") {
+    return notReady(
+      `its reward was ${here.status === "Refunded" ? "refunded" : "claimed"} already`,
+    );
+  }
+  const { intentHash } = hashIntent(intent);
+  const plan = options.prove === true ? await svmProverPlan(intent, rpc, sourceClient) : undefined;
+  if (plan !== undefined && !plan.supported) {
+    return { ...notReady(plan.why!), prover: proverJson(plan) };
+  }
+  const tx = await svmCancelTransaction(
+    rpc,
+    destinationChain,
+    intent,
+    payer,
+    plan?.hyper,
+    plan === undefined
+      ? `Portal.cancel(${intentHash}, route, rewardHash) on ${destinationChain.slug}: records the intent cancelled`
+      : `Portal.cancel(${intentHash}, route, rewardHash), then Portal.prove(${plan.destinationProver}, ` +
+          `${sourceChain.id}, [${intentHash}]) through Hyperlane, the IGP's gas paid`,
+  );
+  const rehearsal = await rehearseSvm(rpc, tx, [payer]);
+  if (!rehearsal.ok) {
+    return notReady(`the cancellation fails on ${destinationChain.slug}: ${rehearsal.reason}`);
+  }
+  const spend = await svmSpend(rpc, payer, rehearsal);
+
+  return {
+    ready: true,
+    transactions: [{ ...tx, value: plan === undefined ? "0" : spend.toString() }],
+    ...(plan === undefined ? {} : { fee: spend.toString(), prover: proverJson(plan) }),
+    notes:
+      plan === undefined
+        ? [
+            "Once the cancel is final on the destination, prove it (`sauce intent prove`), then " +
+              "refund (`sauce intent refund`): eco-routes asks for the proof to wait for finality.",
+          ]
+        : [
+            "warning: this proves the cancellation before the destination is final. eco-routes " +
+              "asks a refund service to cancel, wait for finality, then prove: a rollback past the " +
+              "deadline that re-includes a fill would leave that solver unpaid.",
+          ],
   };
 }
 
