@@ -526,11 +526,16 @@ function endpoint(args: ParsedArgs, io: CliIo, chain: CanonicalChain): string | 
     throw new UsageError("give --rpc-url or --config, not both");
   }
 
-  return endpointFor(
+  const url = endpointFor(
     chain,
     rpcUrl,
     config === undefined ? undefined : { path: config, text: readInput(io, config) },
   );
+  // A provider URL often carries a key: whatever reports it — this CLI, viem, the Solana client —
+  // it is scrubbed from everything printed.
+  if (url !== undefined) secret(url);
+
+  return url;
 }
 
 function requiredEndpoint(args: ParsedArgs, io: CliIo, chain: CanonicalChain): string {
@@ -666,6 +671,7 @@ async function transactionEndpoint(
 
     return { rpcUrl: requiredEndpoint(args, io, chain), chain };
   }
+  secret(rpcUrl);
   const chain = chainFlag === undefined ? await chainServedBy(rpcUrl) : parseChain(chainFlag);
 
   return { rpcUrl: requiredEndpoint(args, io, chain), chain };

@@ -28,6 +28,7 @@ import {
   UsageError,
 } from "../src/cli/args.js";
 import { castSend } from "../src/cli/commands.js";
+import { failureReason } from "../src/cli/solana.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import {
   v12DeployedAddresses,
@@ -1046,6 +1047,37 @@ describe("sauce pot", () => {
     const svm = await sauce("pot", "--owner", OWNER, "--chain", "solana");
     expect(svm.code).toBe(2);
     expect(svm.stderr).toMatch(/is not a Solana address \(a base58 public key\)/);
+  });
+
+  it("names a Solana failure only for the program the logs show failing", () => {
+    const engine = v12SvmEngineProgramId();
+    const kitchen = v12SvmKitchenProgramId();
+    const token = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+    const at = (code: number) => ({ InstructionError: [2, { Custom: code }] });
+    const logs = (...failed: Array<[string, number]>) => [
+      `Program ${kitchen} invoke [1]`,
+      ...failed.map(
+        ([program, code]) =>
+          `Program ${program} failed: custom program error: 0x${code.toString(16)}`,
+      ),
+    ];
+    const thrown = new TextEncoder().encode("too small");
+    // The engine's revert, carried up through the Kitchen: the program's own text.
+    expect(failureReason(at(0), logs([engine, 0], [kitchen, 0]), thrown)).toBe(
+      'the program threw "too small"',
+    );
+    // The Kitchen's own error, by name.
+    expect(failureReason(at(6012), logs([kitchen, 6012]))).toMatch(
+      /^the Kitchen refused: ExecutionFeeExceedsMaximum/,
+    );
+    // SPL Token's code 0 is not a Sauce revert, and another program's 6012 is not the Kitchen's.
+    expect(failureReason(at(0), logs([token, 0], [engine, 0], [kitchen, 0]), thrown)).toBe(
+      `program ${token} failed with custom program error 0 (0x0); the logs say why`,
+    );
+    const anchor = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
+    expect(failureReason(at(6012), logs([anchor, 6012], [kitchen, 6012]))).toBe(
+      `program ${anchor} failed with custom program error 6012 (0x177c); the logs say why`,
+    );
   });
 
   it("derives a Solana Pot as the Kitchen's PDA over (owner, salt), offline", async () => {

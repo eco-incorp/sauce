@@ -29,6 +29,7 @@ import {
   type Address,
   type Instruction,
   type KeyPairSigner,
+  type Signature,
   type SignatureBytes,
   type Transaction,
   type TransactionPartialSigner,
@@ -200,13 +201,37 @@ function kitchenErrors(): ReadonlyMap<number, string> {
   }
 }
 
-/** A transaction error, read: the program's thrown text, a Kitchen error by name, or as given. */
-function reasonOf(err: unknown, returnData?: Uint8Array): string {
+/**
+ * The program whose own instruction failed. A transaction error names only the top-level
+ * instruction, whose program may merely have passed on a failure from deep in a CPI; the logs say
+ * where it began — a callee's `failed` line comes before each of its callers'.
+ */
+function failedProgram(logs: readonly string[]): string | undefined {
+  for (const line of logs) {
+    const failed = /^Program (\w+) failed: /.exec(line);
+    if (failed !== null) return failed[1];
+  }
+
+  return undefined;
+}
+
+/**
+ * A transaction error, read: the Sauce program's thrown text when the ENGINE failed with its revert
+ * code, a Kitchen error by name when the KITCHEN failed, and otherwise the code and the program it
+ * came from. Custom codes collide across programs (every Anchor program numbers from 6000; System
+ * and SPL Token both use 0), so a code is named only for the program the logs show failing.
+ */
+export function failureReason(
+  err: unknown,
+  logs: readonly string[],
+  returnData?: Uint8Array,
+): string {
   const detail = (err as { InstructionError?: [unknown, unknown] } | null)?.InstructionError;
   const custom = (detail?.[1] as { Custom?: unknown } | undefined)?.Custom;
+  const program = failedProgram(logs);
   if (custom !== undefined) {
     const code = Number(custom);
-    if (code === 0) {
+    if (program === engine() && code === 0) {
       const text =
         returnData === undefined || returnData.length === 0
           ? ""
@@ -216,15 +241,17 @@ function reasonOf(err: unknown, returnData?: Uint8Array): string {
         ? `the program threw "${text}"`
         : `the program reverted${returnData?.length ? ` with ${bytesToHex(returnData)}` : ""}`;
     }
-    const named = kitchenErrors().get(code);
+    const named = program === kitchen() ? kitchenErrors().get(code) : undefined;
     if (named !== undefined) return `the Kitchen refused: ${named}`;
 
     return (
-      `instruction ${detail![0]} failed with custom program error ${code} ` +
-      `(0x${code.toString(16)}); the program logs say which program and why`
+      `${program === undefined ? `instruction ${detail![0]}` : `program ${program}`} failed with ` +
+      `custom program error ${code} (0x${code.toString(16)}); the logs say why`
     );
   }
-  if (detail !== undefined) return `instruction ${detail[0]} failed: ${String(detail[1])}`;
+  if (detail !== undefined) {
+    return `${program === undefined ? `instruction ${detail[0]}` : `program ${program}`} failed: ${String(detail[1])}`;
+  }
 
   return JSON.stringify(err, (_key, value: unknown) =>
     typeof value === "bigint" ? value.toString() : value,
@@ -239,6 +266,21 @@ export interface SvmSent {
   readonly logs: readonly string[];
 }
 
+/** Polls until `signature` is confirmed (or a minute passes); its error, or null. */
+async function confirmed(rpc: Rpc, url: string, signature: string): Promise<unknown> {
+  for (let tries = 0; tries < 120; tries++) {
+    const { value } = await ask(url, "the transaction's status", () =>
+      rpc.getSignatureStatuses([signature as Signature]).send(),
+    );
+    const status = value[0];
+    if (status !== null && status !== undefined && status.confirmationStatus !== "processed") {
+      return status.err;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new CliError(`transaction ${signature} was not confirmed within a minute`);
+}
+
 /** Sends `transaction` and polls until it is confirmed (or fails, or a minute passes). */
 async function sendAndConfirm(rpc: Rpc, url: string, transaction: Transaction): Promise<SvmSent> {
   const signature = getSignatureFromTransaction(transaction);
@@ -251,40 +293,39 @@ async function sendAndConfirm(rpc: Rpc, url: string, transaction: Transaction): 
       })
       .send(),
   );
+  // The status is the verdict: it is what confirmed, and it carries the error.
+  const statusErr = await confirmed(rpc, url, signature);
+  // The transaction itself — its logs, units and return data — can lag its status on a node.
+  let response;
   for (let tries = 0; ; tries++) {
-    const { value } = await ask(url, "the transaction's status", () =>
-      rpc.getSignatureStatuses([signature]).send(),
+    response = await ask(url, "the confirmed transaction", () =>
+      rpc
+        .getTransaction(signature, {
+          commitment: "confirmed",
+          encoding: "base64",
+          maxSupportedTransactionVersion: 0,
+        })
+        .send(),
     );
-    const status = value[0];
-    if (status !== null && status !== undefined && status.confirmationStatus !== "processed") break;
-    if (tries >= 120)
-      throw new CliError(`transaction ${signature} was not confirmed within a minute`);
+    if (response !== null || tries >= 20) break;
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  const response = await ask(url, "the confirmed transaction", () =>
-    rpc
-      .getTransaction(signature, {
-        commitment: "confirmed",
-        encoding: "base64",
-        maxSupportedTransactionVersion: 0,
-      })
-      .send(),
-  );
   const meta = response?.meta;
   const returnData =
     meta?.returnData === undefined || meta.returnData === null
       ? undefined
       : new Uint8Array(getBase64Encoder().encode(meta.returnData.data[0]));
-  const err = meta?.err ?? null;
+  const err = statusErr ?? meta?.err ?? null;
+  const logs = meta?.logMessages ?? [];
 
   return {
     signature,
     ok: err === null,
-    ...(err === null ? {} : { reason: reasonOf(err, returnData) }),
+    ...(err === null ? {} : { reason: failureReason(err, logs, returnData) }),
     ...(meta?.computeUnitsConsumed === undefined
       ? {}
       : { computeUnits: meta.computeUnitsConsumed }),
-    logs: meta?.logMessages ?? [],
+    logs,
   };
 }
 
@@ -314,8 +355,9 @@ async function sendInstructions(
       .send(),
   );
   if (value.err !== null) {
+    const logs = value.logs ?? [];
     throw new CliError(
-      `${what} would fail, so nothing was sent: ${reasonOf(value.err)}\n${(value.logs ?? []).join("\n")}`,
+      `${what} would fail, so nothing was sent: ${failureReason(value.err, logs)}\n${logs.join("\n")}`,
     );
   }
 
@@ -469,13 +511,16 @@ async function prepare(
   return { rpc, pot, fee, program, bytecode, client, accounts, manifest };
 }
 
-/** Whether the cook carrying `bytecode` fits in one transaction. */
+/**
+ * Whether the cook carrying `bytecode` fits in one transaction — measured as `run` sends it, with
+ * the SetComputeUnitLimit instruction its rehearsal adds (any limit encodes to the same size).
+ */
 async function fits(prepared: Prepared): Promise<{ fits: boolean; size: number }> {
   const transaction = await prepared.client.cookTransaction(
     prepared.bytecode,
     prepared.manifest,
     prepared.accounts,
-    {},
+    { computeUnitLimit: 1_400_000 },
   );
   const size = getTransactionSize(transaction);
 
@@ -489,11 +534,8 @@ const tooLarge = (bytes: number, size: number, what: string): CliError =>
       "`sauce run` stages it.",
   );
 
-function simulated(result: SimulateExecuteResult): string {
-  const revert = result.revert?.payload;
-
-  return reasonOf(result.err, revert);
-}
+const simulated = (result: SimulateExecuteResult): string =>
+  failureReason(result.err, result.logs, result.revert?.payload);
 
 /** `sauce simulate` on Solana: the cook, simulated from the Pot's owner — no key. */
 export async function svmSimulateCommand(
@@ -577,39 +619,91 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
   };
 }
 
-/** Stages `bytecode` in a fresh code buffer: create, grow, write in chunks, finalize. */
+interface Staged {
+  readonly codeBuffer: Address;
+  readonly code: Address;
+  readonly sha256: Uint8Array;
+  readonly sent: readonly SvmSent[];
+}
+
+/**
+ * Closes a code buffer, returning its rent. Never throws: a failure is the reason it stays open,
+ * which the caller reports with the buffer's address.
+ */
+async function closeBuffer(
+  rpc: Rpc,
+  url: string,
+  signer: TransactionSigner,
+  buffer: { readonly codeBuffer: Address; readonly code: Address },
+): Promise<{ sent?: SvmSent; open?: string }> {
+  try {
+    const sent = await sendInstructions(
+      rpc,
+      url,
+      signer,
+      [
+        buildCloseCodeBufferInstruction({
+          kitchen: kitchen(),
+          owner: signer.address,
+          codeBuffer: buffer.codeBuffer,
+          code: buffer.code,
+        }),
+      ],
+      "closing the code buffer",
+    );
+    if (sent.ok) return { sent };
+
+    return {
+      sent,
+      open: `the code buffer ${buffer.codeBuffer} is still open (closing it failed in ${sent.signature}: ${sent.reason}); its rent stays there until it is closed`,
+    };
+  } catch (error) {
+    return {
+      open: `the code buffer ${buffer.codeBuffer} is still open (closing it failed: ${(error as Error).message.split("\n")[0]}); its rent stays there until it is closed`,
+    };
+  }
+}
+
+/**
+ * Stages `bytecode` in a fresh code buffer: create, grow, write in chunks, finalize. A failure
+ * after the buffer exists closes it again, and says so — or names it, when that fails too.
+ */
 async function stage(
   rpc: Rpc,
   url: string,
   signer: TransactionSigner,
   bytecode: Uint8Array,
-): Promise<{ codeBuffer: Address; code: Address; sha256: Uint8Array; sent: SvmSent[] }> {
+): Promise<Staged> {
   const nonce = randomBytes(8).readBigUInt64LE(0);
   const { address: codeBuffer } = await deriveCodeBufferPda(kitchen(), signer.address, nonce);
   const { address: code } = await deriveCodePda(kitchen(), codeBuffer);
   const accounts = { kitchen: kitchen(), owner: signer.address, codeBuffer, code };
   const sent: SvmSent[] = [];
+  const step = async (instructions: readonly Instruction[], what: string): Promise<void> => {
+    const result = await sendInstructions(rpc, url, signer, instructions, what);
+    sent.push(result);
+    if (!result.ok) {
+      throw new CliError(`${what} failed in ${result.signature}: ${result.reason}`);
+    }
+  };
   const grows = Math.ceil(bytecode.length / GROWTH_STEP) - 1;
-  sent.push(
-    await sendInstructions(
-      rpc,
-      url,
-      signer,
+  try {
+    await step(
       [
         buildCreateCodeBufferInstruction({ ...accounts, nonce, capacity: bytecode.length }),
         ...Array.from({ length: grows }, () => buildGrowCodeBufferInstruction(accounts)),
       ],
       "creating the code buffer",
-    ),
-  );
-  // A write carries its chunk plus ~200 bytes of signature, header and accounts.
-  const CHUNK = 900;
-  for (let offset = 0; offset < bytecode.length; offset += CHUNK) {
-    sent.push(
-      await sendInstructions(
-        rpc,
-        url,
-        signer,
+    );
+  } catch (error) {
+    throw new CliError(`staging the program failed: ${(error as Error).message}`);
+  }
+  const sha256 = new Uint8Array(createHash("sha256").update(bytecode).digest());
+  try {
+    // A write carries its chunk plus ~200 bytes of signature, header and accounts.
+    const CHUNK = 900;
+    for (let offset = 0; offset < bytecode.length; offset += CHUNK) {
+      await step(
         [
           buildWriteCodeBufferInstruction({
             ...accounts,
@@ -618,15 +712,9 @@ async function stage(
           }),
         ],
         `writing bytes ${offset}… of the program`,
-      ),
-    );
-  }
-  const sha256 = new Uint8Array(createHash("sha256").update(bytecode).digest());
-  sent.push(
-    await sendInstructions(
-      rpc,
-      url,
-      signer,
+      );
+    }
+    await step(
       [
         buildFinalizeCodeBufferInstruction({
           ...accounts,
@@ -635,11 +723,13 @@ async function stage(
         }),
       ],
       "finalizing the code buffer",
-    ),
-  );
-  for (const step of sent) {
-    if (!step.ok)
-      throw new CliError(`staging the program failed in ${step.signature}: ${step.reason}`);
+    );
+  } catch (error) {
+    const closed = await closeBuffer(rpc, url, signer, { codeBuffer, code });
+    throw new CliError(
+      `staging the program failed: ${(error as Error).message}\n` +
+        (closed.open ?? `The code buffer ${codeBuffer} was closed again.`),
+    );
   }
 
   return { codeBuffer, code, sha256, sent };
@@ -697,53 +787,56 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   const prepared = await prepare(input, files, input.signer);
   const created = await ensurePot(input, prepared.rpc, prepared.pot);
   const size = await fits(prepared);
-  let staged: Awaited<ReturnType<typeof stage>> | undefined;
+  // The cook's rehearsal failing: `computeUnitLimit: "auto"` simulates first, and its failure
+  // carries the reason — read again, with the logs, to report it.
+  const wouldFail = async (error: unknown, staged?: Staged): Promise<never> => {
+    const logs = await rehearsalLogs(prepared, staged);
+    const closed =
+      staged === undefined
+        ? undefined
+        : await closeBuffer(prepared.rpc, input.rpcUrl, input.signer, staged);
+    throw new CliError(
+      `the cook would fail, so it was not sent: ${logs.reason ?? (error as Error).message}` +
+        (logs.lines.length === 0
+          ? ""
+          : `\nProgram logs:\n${logs.lines.map((l) => `  ${l}`).join("\n")}`) +
+        (closed === undefined
+          ? ""
+          : `\n${closed.open ?? `The code buffer ${staged!.codeBuffer} was closed again.`}`),
+    );
+  };
+  let staged: Staged | undefined;
   let transaction: Transaction;
-  try {
-    if (size.fits) {
+  if (size.fits) {
+    try {
       transaction = await prepared.client.cookTransaction(
         prepared.bytecode,
         prepared.manifest,
         prepared.accounts,
         { computeUnitLimit: "auto" },
       );
-    } else {
-      staged = await stage(prepared.rpc, input.rpcUrl, input.signer, prepared.bytecode);
+    } catch (error) {
+      return wouldFail(error);
+    }
+  } else {
+    staged = await stage(prepared.rpc, input.rpcUrl, input.signer, prepared.bytecode);
+    try {
       transaction = await prepared.client.stagedCookTransaction(
         staged.codeBuffer,
         prepared.manifest,
         prepared.accounts,
         { computeUnitLimit: "auto" },
       );
+    } catch (error) {
+      return wouldFail(error, staged);
     }
-  } catch (error) {
-    // `computeUnitLimit: "auto"` rehearses the cook first; its failure carries the reason.
-    const logs = await rehearsalLogs(prepared, staged);
-    throw new CliError(
-      `the cook would fail, so it was not sent: ${logs.reason ?? (error as Error).message}` +
-        (logs.lines.length === 0
-          ? ""
-          : `\nProgram logs:\n${logs.lines.map((l) => `  ${l}`).join("\n")}`),
-    );
   }
   const cook = await sendAndConfirm(prepared.rpc, input.rpcUrl, transaction);
+  // The cook has landed (or failed) by now: whatever happens to the buffer, it is reported.
   const closed =
     staged === undefined
       ? undefined
-      : await sendInstructions(
-          prepared.rpc,
-          input.rpcUrl,
-          input.signer,
-          [
-            buildCloseCodeBufferInstruction({
-              kitchen: kitchen(),
-              owner: input.owner,
-              codeBuffer: staged.codeBuffer,
-              code: staged.code,
-            }),
-          ],
-          "closing the code buffer",
-        );
+      : await closeBuffer(prepared.rpc, input.rpcUrl, input.signer, staged);
 
   return {
     text: [
@@ -755,8 +848,11 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
           ]),
       sentLine("cook", cook),
       ...(cook.ok ? [] : ["Program logs:", ...cook.logs.map((line) => `  ${line}`)]),
-      ...(closed === undefined ? [] : [sentLine("closed the code buffer in", closed)]),
+      ...(closed?.sent === undefined || closed.open !== undefined
+        ? []
+        : [sentLine("closed the code buffer in", closed.sent)]),
     ].join("\n"),
+    ...(closed?.open === undefined ? {} : { notes: [`warning: ${closed.open}`] }),
     json: {
       chain: "solana",
       owner: input.owner,
@@ -773,7 +869,8 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
             },
           }),
       cook: sentJson(cook),
-      ...(closed === undefined ? {} : { closeCodeBuffer: sentJson(closed) }),
+      ...(closed?.sent === undefined ? {} : { closeCodeBuffer: sentJson(closed.sent) }),
+      ...(closed?.open === undefined ? {} : { warning: closed.open }),
     },
     ...(cook.ok ? {} : { exitCode: 1 }),
   };
@@ -815,8 +912,9 @@ export interface SvmVerifyInput {
 /**
  * `sauce verify --chain solana <signature>`: the engine invocation a cook made, checked by the
  * SDK's `verifySvmSettleExecution` against the settle program recompiled for `minOut` and
- * `splCount`. A rejection exits 1: `NO_SETTLE` when the transaction invokes no released engine or
- * not with a settle's accounts, `NOT_GENUINE` with the SDK's reason otherwise.
+ * `splCount`. A rejection exits 1: `TX_FAILED` when the transaction failed, `NO_SETTLE` when it
+ * invokes no released engine or not with a settle's accounts, `NOT_GENUINE` with the SDK's reason
+ * otherwise.
  */
 export async function svmVerifyCommand(input: SvmVerifyInput): Promise<CommandOutput> {
   const rpc = createSolanaRpc(input.rpcUrl);
@@ -844,6 +942,14 @@ export async function svmVerifyCommand(input: SvmVerifyInput): Promise<CommandOu
     json: { signature: input.signature, chain: "solana", valid: false, code, message },
     exitCode: 1,
   });
+  // A transaction that failed settled nothing, whatever its instructions carry.
+  const failed = response.meta?.err ?? null;
+  if (failed !== null) {
+    return rejected(
+      "TX_FAILED",
+      `the transaction failed (${failureReason(failed, response.meta?.logMessages ?? [])}), so it settled nothing`,
+    );
+  }
   if (invocation === undefined) {
     return rejected(
       "NO_SETTLE",

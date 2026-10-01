@@ -41,10 +41,13 @@ import { bytesToHex, hexToBytes } from "viem";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { potSalt } from "../src/deployments/pot.js";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../src/deployments/index.js";
+import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import {
   buildSetExecutionFeeInstruction,
+  createSauceSvmClient,
   deriveProgramDataPda,
   derivePotPda,
+  getTransactionSize,
 } from "../src/svm/index.js";
 import { svmSettleSource } from "../src/svm/recipes/index.js";
 import {
@@ -128,26 +131,79 @@ interface Landed {
   >;
 }
 
+/** The Kitchen instruction a transaction makes, by its Anchor discriminator. */
+const KITCHEN_CALLS = {
+  cook: [147, 233, 205, 239, 200, 21, 190, 159],
+  cookFromAccount: [247, 166, 195, 248, 78, 176, 147, 84],
+  writeCodeBuffer: [205, 152, 182, 5, 148, 70, 20, 25],
+  closeCodeBuffer: [195, 203, 47, 242, 198, 177, 247, 6],
+} as const;
+type KitchenCall = keyof typeof KITCHEN_CALLS;
+
+function kitchenCall(transaction: Transaction): KitchenCall | undefined {
+  const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes);
+  if (!("instructions" in message)) return undefined;
+  for (const instruction of message.instructions) {
+    if (message.staticAccounts[instruction.programAddressIndex] !== KITCHEN) continue;
+    const head = [...(instruction.data ?? new Uint8Array()).subarray(0, 8)];
+    const found = (Object.keys(KITCHEN_CALLS) as KitchenCall[]).find((name) =>
+      KITCHEN_CALLS[name].every((byte, index) => head[index] === byte),
+    );
+    if (found !== undefined) return found;
+  }
+
+  return undefined;
+}
+
+/** What a test makes the cluster do instead of answering honestly. */
+interface Faults {
+  /** A simulation of this Kitchen call fails with this error, without running. */
+  simulate?: { call: KitchenCall; err: unknown };
+  /** A sent transaction making this Kitchen call fails with this error, without running. */
+  send?: { call: KitchenCall; err: unknown };
+  /** `getTransaction` answers null this many more times, as a lagging node does. */
+  nullReads?: number;
+  /** This method fails the way a broken transport does: with the URL in its message. */
+  throwOn?: string;
+}
+
 function shim(harness: EngineHarness): {
   install: () => void;
   restore: () => void;
   sent: string[];
+  faults: Faults;
 } {
   const original = globalThis.fetch;
   const landed = new Map<string, Landed>();
   const sent: string[] = [];
+  const faults: Faults = {};
   const decode = (wire: string): Transaction =>
     getTransactionDecoder().decode(new Uint8Array(getBase64Encoder().encode(wire)));
   const answer = (id: unknown, result: unknown): Response =>
     Response.json({ id, jsonrpc: "2.0", result });
   const context = { apiVersion: "2.0.0", slot: 1000 };
+  // A node refuses a transaction past the packet size, at simulation and at sending alike.
+  const tooLarge = (id: unknown, wire: string): Response | undefined => {
+    const size = getBase64Encoder().encode(wire).length;
 
-  const stub = async (_url: unknown, init: { body: string }): Promise<Response> => {
+    return size <= 1232
+      ? undefined
+      : Response.json({
+          id,
+          jsonrpc: "2.0",
+          error: { code: -32602, message: `transaction too large: ${size} bytes (max: 1232)` },
+        });
+  };
+
+  const stub = async (url: unknown, init: { body: string }): Promise<Response> => {
     const { id, method, params } = JSON.parse(init.body) as {
       id: unknown;
       method: string;
       params: unknown[];
     };
+    if (faults.throwOn === method) {
+      throw new Error(`request to ${String(url)} failed: connection reset`);
+    }
     switch (method) {
       case "getLatestBlockhash":
         return answer(id, {
@@ -172,9 +228,18 @@ function shim(harness: EngineHarness): {
         });
       }
       case "simulateTransaction": {
+        const refused = tooLarge(id, params[0] as string);
+        if (refused !== undefined) return refused;
+        const transaction = decode(params[0] as string);
+        if (faults.simulate !== undefined && kitchenCall(transaction) === faults.simulate.call) {
+          return answer(id, {
+            context,
+            value: { accounts: null, err: faults.simulate.err, logs: [], returnData: null },
+          });
+        }
         // As a node simulates by default: signatures unchecked.
         harness.svm.withSigverify(false);
-        const result = harness.svm.simulateTransaction(decode(params[0] as string));
+        const result = harness.svm.simulateTransaction(transaction);
         harness.svm.withSigverify(true);
         const failed = result instanceof FailedTransactionMetadata;
         const meta = result.meta();
@@ -193,6 +258,8 @@ function shim(harness: EngineHarness): {
         });
       }
       case "sendTransaction": {
+        const refused = tooLarge(id, params[0] as string);
+        if (refused !== undefined) return refused;
         const transaction = decode(params[0] as string);
         // Every signature the message needs is there and verifies: the CLI signed what it sent.
         for (const [signer, signature] of Object.entries(transaction.signatures)) {
@@ -204,11 +271,25 @@ function shim(harness: EngineHarness): {
             throw new Error(`sendTransaction: ${signer} did not sign the message`);
           }
         }
+        const signature = getBase58Decoder().decode(Object.values(transaction.signatures)[0]!);
+        if (faults.send !== undefined && kitchenCall(transaction) === faults.send.call) {
+          // Landed, and failed, without running.
+          landed.set(signature, {
+            err: faults.send.err,
+            logs: [],
+            units: 0n,
+            returnData: new Uint8Array(),
+            transaction,
+            inner: [],
+          });
+          sent.push(signature);
+
+          return answer(id, signature);
+        }
         const result = harness.svm.sendTransaction(transaction);
         harness.svm.expireBlockhash();
         const failed = result instanceof FailedTransactionMetadata;
         const meta = failed ? result.meta() : result;
-        const signature = getBase58Decoder().decode(Object.values(transaction.signatures)[0]!);
         landed.set(signature, {
           err: failed ? rpcError(result.err()) : null,
           logs: meta.logs(),
@@ -240,6 +321,11 @@ function shim(harness: EngineHarness): {
           }),
         });
       case "getTransaction": {
+        if ((faults.nullReads ?? 0) > 0) {
+          faults.nullReads! -= 1;
+
+          return answer(id, null);
+        }
         const tx = landed.get(params[0] as string);
         const encoding = (params[1] as { encoding?: string } | undefined)?.encoding;
         const message =
@@ -296,6 +382,7 @@ function shim(harness: EngineHarness): {
       globalThis.fetch = original;
     },
     sent,
+    faults,
   };
 }
 
@@ -365,6 +452,40 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     rpc?.restore();
     if (work !== undefined) rmSync(work, { recursive: true, force: true });
   });
+
+  afterEach(() => {
+    for (const fault of Object.keys(rpc?.faults ?? {}) as (keyof Faults)[]) {
+      delete rpc.faults[fault];
+    }
+  });
+
+  /** A program whose bytecode carries a `bytes`-byte constant, and checks its length is `length`. */
+  const blobProgram = (name: string, bytes: number, length = bytes): string => {
+    const path = join(work, name);
+    writeFileSync(
+      path,
+      [
+        "// @chain solana",
+        "function main() {",
+        `  const blob = hex\`${"ab".repeat(bytes)}\`;`,
+        `  require(blob.length == ${length});`,
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    return path;
+  };
+  /** `sauce <argv>` on the owner's "vault" Pot, the flags going before any trailing `--args`. */
+  const runVault = (...argv: string[]) => {
+    const at = argv.includes("--args") ? argv.indexOf("--args") : argv.length;
+
+    return sauce(
+      ...argv.slice(0, at),
+      ...["--salt", "vault", "--rpc-url", RPC_URL, "--keypair", owner.path],
+      ...argv.slice(at),
+    );
+  };
 
   /** Token accounts for a sweep from `pot`: a source it owns, holding `held`, and a destination. */
   const accountsFor = (pot: Address, held: bigint) => {
@@ -453,7 +574,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     );
     expect(failed.code).toBe(1);
     expect(failed.stdout).toMatch(
-      /^The cook fails: instruction \d failed with custom program error 1 \(0x1\)/,
+      /^The cook fails: program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA failed with custom program error 1 \(0x1\)/,
     );
     expect(failed.stdout).toMatch(/Program logs:\n {2}Program /);
     expect(failed.stdout).toMatch(/insufficient funds/i);
@@ -699,6 +820,119 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(other.code).toBe(1);
     expect(other.stdout).toMatch(/^rejected \((?:NO_SETTLE|NOT_GENUINE)\)/);
   }, 120_000);
+
+  it("reports a cook that failed on chain as failed, while the node lags; verify refuses it", async () => {
+    const pot = await potOf(hexToBytes(potSalt("vault")));
+    const { flags } = accountsFor(pot, 1_000n);
+    // The rehearsal passes; the transaction then fails where it lands, and the node is slow to
+    // serve it.
+    rpc.faults.send = { call: "cook", err: { InstructionError: [2, { Custom: 1 }] } };
+    rpc.faults.nullReads = 3;
+    const run = await runVault("run", sweep, "--define", mintDefine, ...flags, "--args", "1");
+    expect(run.code).toBe(1);
+    const failed = /^cook (\w+): failed, /m.exec(run.stdout);
+    expect(failed).not.toBeNull();
+    const verify = await sauce(
+      ...["verify", failed![1]!, "--chain", "solana", "--rpc-url", RPC_URL],
+      ...["--min-out", "0", "--spl-count", "1", "--json"],
+    );
+    expect(verify.code).toBe(1);
+    expect(JSON.parse(verify.stdout)).toMatchObject({ valid: false, code: "TX_FAILED" });
+  }, 60_000);
+
+  it("prints the cook it sent even when closing the code buffer afterwards fails", async () => {
+    rpc.faults.simulate = {
+      call: "closeCodeBuffer",
+      err: { InstructionError: [1, { Custom: 6001 }] },
+    };
+    const run = await runVault("run", blobProgram("close.sauce.ts", 1500), "--json");
+    expect(run.code).toBe(0);
+    const out = JSON.parse(run.stdout) as { cook: { status: string }; warning: string };
+    expect(out.cook.status).toBe("success");
+    const open = /^warning: the code buffer (\w+) is still open/m.exec(run.stderr);
+    expect(open).not.toBeNull();
+    expect(out.warning).toContain(open![1]!);
+    // It is still there, so the warning is true.
+    expect(harness.svm.getAccount(address(open![1]!)).exists).toBe(true);
+  }, 120_000);
+
+  it("reports a staging failure as one, and closes the code buffer again", async () => {
+    rpc.faults.simulate = {
+      call: "writeCodeBuffer",
+      err: { InstructionError: [1, { Custom: 6004 }] },
+    };
+    const run = await runVault("run", blobProgram("stage.sauce.ts", 1500));
+    expect(run.code).toBe(1);
+    expect(run.stderr).toMatch(
+      /staging the program failed: writing bytes 0… of the program would fail/,
+    );
+    const closed = /The code buffer (\w+) was closed again\./.exec(run.stderr);
+    expect(closed).not.toBeNull();
+    expect(harness.svm.getAccount(address(closed![1]!)).exists).toBe(false);
+  }, 120_000);
+
+  it("closes the code buffer of a staged cook whose rehearsal fails", async () => {
+    const run = await runVault("run", blobProgram("wrong.sauce.ts", 1500, 1));
+    expect(run.code).toBe(1);
+    expect(run.stderr).toMatch(/the cook would fail, so it was not sent/);
+    const closed = /The code buffer (\w+) was closed again\./.exec(run.stderr);
+    expect(closed).not.toBeNull();
+    expect(harness.svm.getAccount(address(closed![1]!)).exists).toBe(false);
+  }, 120_000);
+
+  it("measures a cook with the compute-limit instruction it is sent with", async () => {
+    // A program whose cook fits only WITHOUT that instruction: sent as one transaction, it would be
+    // refused for its size, so `run` has to stage it.
+    const client = await createSauceSvmClient({
+      rpcUrl: RPC_URL,
+      programId: address(v12SvmEngineProgramId()),
+      kitchen: KITCHEN,
+      payer: owner.signer,
+      potSalt: hexToBytes(potSalt("vault")),
+      maxExecutionFee: FEE,
+    });
+    const sizes = async (bytes: number): Promise<[number, number]> => {
+      const { bytecode } = compileSauceProgram(
+        "solana",
+        `function main() {\n  const blob = hex\`${"ab".repeat(bytes)}\`;\n  require(blob.length == ${bytes});\n}\n`,
+      );
+      const bare = await client.cookTransaction(bytecode, { accounts: [] }, {}, {});
+      const limited = await client.cookTransaction(
+        bytecode,
+        { accounts: [] },
+        {},
+        {
+          computeUnitLimit: 1_400_000,
+        },
+      );
+
+      return [getTransactionSize(bare), getTransactionSize(limited)];
+    };
+    let bytes = 600;
+    for (; ; bytes++) {
+      const [bare, limited] = await sizes(bytes);
+      if (limited > 1232) {
+        expect(bare).toBeLessThanOrEqual(1232);
+        break;
+      }
+    }
+    const out = json(await runVault("run", blobProgram("window.sauce.ts", bytes), "--json"));
+    expect(out).toMatchObject({ cook: { status: "success" }, staged: expect.any(Object) });
+  }, 120_000);
+
+  it("never prints the RPC URL, even in an error the Solana client raises", async () => {
+    const keyed = `${RPC_URL}?api-key=SECRETKEY123`;
+    rpc.faults.throwOn = "getLatestBlockhash";
+    const pot = await potOf(hexToBytes(potSalt("vault")));
+    const { flags } = accountsFor(pot, 10n);
+    const run = await sauce(
+      ...["simulate", sweep, "--define", mintDefine, "--owner", owner.signer.address],
+      ...["--salt", "vault", "--rpc-url", keyed, ...flags, "--args", "1"],
+    );
+    expect(run.code).toBe(1);
+    expect(run.stderr).toMatch(/connection reset/);
+    expect(run.stdout + run.stderr).not.toContain("SECRETKEY123");
+  }, 60_000);
 
   it("refuses EVM keys, --pot and --value on Solana, and a publish from it", async () => {
     const base = ["run", sweep, "--define", mintDefine, "--rpc-url", RPC_URL];
