@@ -1,0 +1,7 @@
+{
+  "name": "@sauce/context",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SauceScript execution-context names the SDK's extensions manifest gives a program with no import: `self`, the account the program runs as. Portable, so one neutral file serves both targets.",
+  "main": "context.js"
+}

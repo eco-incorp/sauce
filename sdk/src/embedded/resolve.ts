@@ -26,6 +26,7 @@ export const SDK_STD_ROOT = "/@eco-incorp/sauce/std";
 const STD_PACKAGES: Readonly<Record<string, string>> = {
   "@sauce/token": "token",
   "@sauce/router": "router",
+  "@sauce/context": "context",
 };
 
 /** The engine ABIs the SDK's generated programs import, by path under the SDK root. */
