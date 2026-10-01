@@ -16,7 +16,7 @@ import { encodeAbiParameters, getAddress, keccak256, parseAbi, zeroAddress } fro
 import type { Abi, Address, Hex, PublicClient } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
-import { addressOn, listContracts } from "../descriptors/query.js";
+import { addressOn, getDescriptor, listContracts } from "../descriptors/query.js";
 import { pascalOfSlug } from "../routes/builder.js";
 import { UsageError } from "./args.js";
 import { readAll, type ViewCall, type ViewResult } from "./chain.js";
@@ -35,6 +35,10 @@ export interface Venue {
   /** How a program names the contract: `UniswapV3.Factory`. */
   readonly contract: string;
   readonly address: Address;
+  /** The contract's registry ABI: a factory's `getPool`, or StateView's reads. */
+  readonly abi: Abi;
+  /** The registry's ABI for the venue's pools (`UniswapV3.Pool`), where it has one. */
+  readonly poolAbi: Abi;
 }
 
 /** The registry's price-limit venues, and which of each protocol's contracts finds its pools. */
@@ -63,6 +67,8 @@ export function venuesOn(chain: CanonicalChain): Venue[] {
               name: descriptor.protocolName,
               contract: `${pascalOfSlug(protocol)}.${descriptor.contract}`,
               address: getAddress(address),
+              abi: descriptor.abi,
+              poolAbi: getDescriptor(protocol, "Pool")?.abi ?? V3_POOL,
             },
           ]
         : [];
@@ -111,30 +117,26 @@ export function parseV4Key(raw: string, flag = "--v4-key"): V4Key {
   return { fee, tickSpacing };
 }
 
-const FACTORY = parseAbi([
-  "function getPool(address tokenA, address tokenB, uint24 fee) view returns (address)",
-  "function feeAmountTickSpacing(uint24 fee) view returns (int24)",
-]);
-const SLIPSTREAM_FACTORY = parseAbi([
-  "function getPool(address tokenA, address tokenB, int24 tickSpacing) view returns (address)",
-  "function tickSpacings() view returns (int24[])",
-]);
-/** The reads every V3-style pool shares. Their `slot0` structs differ after the tick (PancakeSwap's
- *  `feeProtocol` is wider, Slipstream's is gone), so only the first two words are decoded. */
-const POOL = parseAbi([
-  "function slot0() view returns (uint160 sqrtPriceX96, int24 tick)",
-  "function liquidity() view returns (uint128)",
-  "function fee() view returns (uint24)",
-  "function tickSpacing() view returns (int24)",
+/**
+ * What the registry's ABIs leave out, as fragments: a V3-style factory's tier lookup, Slipstream's
+ * list of tick spacings, and the tick reads a pool's depth needs. The rest — each factory's
+ * `getPool`, a pool's `slot0`, `liquidity`, `fee` and `tickSpacing`, StateView — is the
+ * registry's own ABI for the contract (`UniswapV3.Pool`, `AerodromeSlipstream.Pool`).
+ */
+const TIERS = parseAbi(["function feeAmountTickSpacing(uint24 fee) view returns (int24)"]);
+const SPACINGS = parseAbi(["function tickSpacings() view returns (int24[])"]);
+const TICKS = parseAbi([
   "function tickBitmap(int16 wordPosition) view returns (uint256)",
   // Every fork's tick struct starts with these two, whatever follows.
   "function ticks(int24 tick) view returns (uint128 liquidityGross, int128 liquidityNet)",
 ]);
-const STATE_VIEW = parseAbi([
-  "function getSlot0(bytes32 poolId) view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)",
-  "function getLiquidity(bytes32 poolId) view returns (uint128)",
-  "function getTickBitmap(bytes32 poolId, int16 tick) view returns (uint256)",
-  "function getTickLiquidity(bytes32 poolId, int24 tick) view returns (uint128 liquidityGross, int128 liquidityNet)",
+/** A V3-style pool with no registry ABI (PancakeSwap V3's): its `slot0` differs from Uniswap's
+ *  after the tick (a wider `feeProtocol`), so only the first two words are decoded. */
+const V3_POOL = parseAbi([
+  "function slot0() view returns (uint160 sqrtPriceX96, int24 tick)",
+  "function liquidity() view returns (uint128)",
+  "function fee() view returns (uint24)",
+  "function tickSpacing() view returns (int24)",
 ]);
 
 const call = (address: Address, abi: Abi, functionName: string, args?: readonly unknown[]) =>
@@ -458,11 +460,11 @@ export async function poolsCommand(input: PoolsInput): Promise<CommandOutput> {
     readAll(client, "the pools' factories", [
       ...v3.flatMap((venue) =>
         V3_FEES.flatMap((fee) => [
-          call(venue.address, FACTORY, "feeAmountTickSpacing", [fee]),
-          call(venue.address, FACTORY, "getPool", [first, second, fee]),
+          call(venue.address, TIERS, "feeAmountTickSpacing", [fee]),
+          call(venue.address, venue.abi, "getPool", [first, second, fee]),
         ]),
       ),
-      ...slipstream.map((venue) => call(venue.address, SLIPSTREAM_FACTORY, "tickSpacings")),
+      ...slipstream.map((venue) => call(venue.address, SPACINGS, "tickSpacings")),
     ]),
   ]);
   const [a, b] = tokens as [PriceToken, PriceToken];
@@ -506,7 +508,7 @@ export async function poolsCommand(input: PoolsInput): Promise<CommandOutput> {
     client,
     "Slipstream's pools",
     lookups.map(({ venue, spacing }) =>
-      call(venue.address, SLIPSTREAM_FACTORY, "getPool", [first, second, spacing]),
+      call(venue.address, venue.abi, "getPool", [first, second, spacing]),
     ),
   );
   lookups.forEach(({ venue }, index) => {
@@ -527,12 +529,14 @@ export async function poolsCommand(input: PoolsInput): Promise<CommandOutput> {
     (each, index) => found.findIndex((other) => other.pool === each.pool) === index,
   );
   const third = await readAll(client, "the pools", [
-    ...unique.flatMap(({ pool }) =>
-      (["slot0", "liquidity", "fee", "tickSpacing"] as const).map((read) => call(pool, POOL, read)),
+    ...unique.flatMap(({ venue, pool }) =>
+      (["slot0", "liquidity", "fee", "tickSpacing"] as const).map((read) =>
+        call(pool, venue.poolAbi, read),
+      ),
     ),
     ...v4.flatMap(({ venue, id }) => [
-      call(venue.address, STATE_VIEW, "getSlot0", [id]),
-      call(venue.address, STATE_VIEW, "getLiquidity", [id]),
+      call(venue.address, venue.abi, "getSlot0", [id]),
+      call(venue.address, venue.abi, "getLiquidity", [id]),
     ]),
   ]);
   const pools: Pool[] = [];
@@ -636,8 +640,8 @@ async function withTicks(
   });
   const bitmapOf = (pool: Pool, word: number) =>
     pool.key === undefined
-      ? call(pool.pool as Address, POOL, "tickBitmap", [word])
-      : call(pool.venue.address, STATE_VIEW, "getTickBitmap", [pool.pool, word]);
+      ? call(pool.pool as Address, TICKS, "tickBitmap", [word])
+      : call(pool.venue.address, pool.venue.abi, "getTickBitmap", [pool.pool, word]);
   const bitmaps = await readAll(
     client,
     "the pools' tick bitmaps",
@@ -661,8 +665,8 @@ async function withTicks(
   });
   const liquidityOf = (pool: Pool, tick: number) =>
     pool.key === undefined
-      ? call(pool.pool as Address, POOL, "ticks", [tick])
-      : call(pool.venue.address, STATE_VIEW, "getTickLiquidity", [pool.pool, tick]);
+      ? call(pool.pool as Address, TICKS, "ticks", [tick])
+      : call(pool.venue.address, pool.venue.abi, "getTickLiquidity", [pool.pool, tick]);
   const nets = await readAll(
     client,
     "the pools' ticks",

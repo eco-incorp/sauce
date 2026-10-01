@@ -27,6 +27,7 @@ import {
   MIN_SQRT_PRICE_X96,
   type PoolPriceTokens,
 } from "../price.js";
+import { ERC20ABI } from "../protocols/erc20/abis.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { UsageError } from "./args.js";
 import { readAll } from "./chain.js";
@@ -87,11 +88,6 @@ export async function resolvePriceTokens(
   return given.map((each) => (typeof each === "string" ? read[unknown.indexOf(each)]! : each));
 }
 
-const TOKEN = parseAbi([
-  "function decimals() view returns (uint8)",
-  "function symbol() view returns (string)",
-]);
-
 /** `addresses`' decimals and symbols, as each token answers them. */
 export async function tokensOnChain(
   client: PublicClient,
@@ -102,8 +98,8 @@ export async function tokensOnChain(
     client,
     "the tokens' decimals and symbols",
     addresses.flatMap((address) => [
-      { address, abi: TOKEN, functionName: "decimals" },
-      { address, abi: TOKEN, functionName: "symbol" },
+      { address, abi: ERC20ABI, functionName: "decimals" },
+      { address, abi: ERC20ABI, functionName: "symbol" },
     ]),
   );
   const registered = new Set(
