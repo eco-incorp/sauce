@@ -8,22 +8,18 @@ Leading lending and borrowing protocol on BNB Chain. Fork of Compound V2 with ad
 | --- | --- |
 | Category | Lending |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Venus` on bsc |
 | Chains | bsc |
 | Document | [venus.md](../venus.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here BNB Chain's comptroller):
+On BNB Chain, `Venus` is a namespace: its contracts need no import.
 
 ```sauce chain=bsc
-import VenusComptrollerABI from "./protocols/venus/VenusComptrollerABI.json";
-
-const COMPTROLLER = 0xfD36E2c2a6789Db23113685031d7F16329158384n;
-
 function main() {
-  const bound = VenusComptrollerABI.at(COMPTROLLER);
+  // BNB Chain's comptroller, `0xfD36E2c2a6789Db23113685031d7F16329158384`.
+  require(Venus.Comptroller != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [BNB Chain](../../../sauce-chains/references/bsc.md) | comptroller | `0xfD36E2c2a6789Db23113685031d7F16329158384` | `VenusComptrollerABI.at(0xfD36E2c2a6789Db23113685031d7F16329158384n)` |
-| [BNB Chain](../../../sauce-chains/references/bsc.md) | vBNB | `0xA07c5b74C9B40447a954e1466938b865b6BBea36` | `VBNBABI.at(0xA07c5b74C9B40447a954e1466938b865b6BBea36n)` |
+| [BNB Chain](../../../sauce-chains/references/bsc.md) | comptroller | `0xfD36E2c2a6789Db23113685031d7F16329158384` | `Venus.Comptroller` |
+| [BNB Chain](../../../sauce-chains/references/bsc.md) | vBNB | `0xA07c5b74C9B40447a954e1466938b865b6BBea36` | `Venus.VBNB` |
 
 ## ABI
 

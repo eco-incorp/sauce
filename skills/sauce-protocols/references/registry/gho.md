@@ -8,22 +8,18 @@ Aave-native decentralized stablecoin minted against Aave V3 collateral. Multi-co
 | --- | --- |
 | Category | CDPs and stablecoins |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Gho` on ethereum |
 | Chains | ethereum |
 | Document | [gho.md](../gho.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's gho):
+On Ethereum, `Gho` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import GhoTokenABI from "./protocols/gho/GhoTokenABI.json";
-
-const GHO = 0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2fn;
-
 function main() {
-  const bound = GhoTokenABI.at(GHO);
+  // Ethereum's gho, `0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f`.
+  require(Gho.Gho != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | gho | `0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f` | `GhoTokenABI.at(0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2fn)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | gho | `0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f` | `Gho.Gho` |
 
 ## ABI
 

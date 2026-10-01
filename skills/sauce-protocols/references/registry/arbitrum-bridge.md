@@ -8,22 +8,18 @@ Official Arbitrum L1-L2 gateway bridge. Routes tokens through the canonical Arbi
 | --- | --- |
 | Category | Bridges |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `ArbitrumBridge` on ethereum, arbitrum |
 | Chains | ethereum, arbitrum |
 | Document | [arbitrum-bridge.md](../arbitrum-bridge.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's l1GatewayRouter):
+On Ethereum, `ArbitrumBridge` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import ArbitrumL1GatewayRouterABI from "./protocols/arbitrum-bridge/ArbitrumL1GatewayRouterABI.json";
-
-const L1_GATEWAY_ROUTER = 0x72Ce9c846789fdB6fC1f34aC4AD25Dd9ef7031efn;
-
 function main() {
-  const bound = ArbitrumL1GatewayRouterABI.at(L1_GATEWAY_ROUTER);
+  // Ethereum's l1GatewayRouter, `0x72Ce9c846789fdB6fC1f34aC4AD25Dd9ef7031ef`.
+  require(ArbitrumBridge.L1GatewayRouter != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | l1GatewayRouter | `0x72Ce9c846789fdB6fC1f34aC4AD25Dd9ef7031ef` | `ArbitrumL1GatewayRouterABI.at(0x72Ce9c846789fdB6fC1f34aC4AD25Dd9ef7031efn)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | l2GatewayRouter | `0x5288c571Fd7aD117beA99bF60FE0846C4E84F933` | no registry ABI |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | l1GatewayRouter | `0x72Ce9c846789fdB6fC1f34aC4AD25Dd9ef7031ef` | `ArbitrumBridge.L1GatewayRouter` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | l2GatewayRouter | `0x5288c571Fd7aD117beA99bF60FE0846C4E84F933` | `ArbitrumBridge.L2GatewayRouter` |
 
 ## ABI
 

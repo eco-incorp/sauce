@@ -1,6 +1,6 @@
 ---
 name: sauce-protocols
-description: Every DeFi protocol a Sauce program can call, from the SDK's registry — an index by category with how to choose between them (a lending market versus another, a concentrated-liquidity pool versus a V2 pair or a stable pool, an aggregator, a bridge), a registry file per protocol (its deployments on every chain, how a program names each contract there, and its ABI functions), and a document per protocol (what it is for, its pitfalls for a program, a compiled example, its templates and notes). Covers every catalogued protocol as a registry namespace (deployed contracts with their methods, address-only contracts, interfaces called with .at(address)), using a protocol only on chains that have it with available(...), ABI imports for a contract the registry does not record, factories and pool lookups, and confirming that a recorded address has code. Use when a program must call a protocol (PancakeSwap V3, Aerodrome Slipstream, Curve, Balancer, Camelot, Lido, …), when the user asks which protocols or pools exist on a chain or which to use, needs a factory or router address, or wants a protocol's pitfalls.
+description: Every DeFi protocol a Sauce program can call, from the SDK's registry — an index by category with how to choose between them (a lending market versus another, a concentrated-liquidity pool versus a V2 pair or a stable pool, an aggregator, a bridge), a registry file per protocol (its deployments on every chain, how a program names each contract there, its ABI functions), and a document per protocol (what it is for, its pitfalls, a compiled example, its templates and notes). Covers every protocol as a registry namespace (deployed contracts, address-only contracts, interfaces called with .at(address)), available(...) for a chain that may lack one, ABI imports for unrecorded contracts, factories and pool lookups, and checking a recorded address has code. Use when a program must call a protocol (PancakeSwap V3, Aerodrome Slipstream, Curve, Balancer, Camelot, Lido, …), when the user asks which protocols or pools exist on a chain or which to use, needs a factory or router address, or wants a protocol's pitfalls.
 ---
 
 # Protocols
@@ -90,7 +90,7 @@ that lacks it.
   `import { PoolABI as IPool } from "./abis"` is served by the template's caller. In a program for a
   chain, use the namespace instead.
 - **Some factories are addresses only** (Algebra forks such as Camelot V3 and QuickSwap V3): the
-  registry has no verified ABI with their `poolByPair`, so discover the pool off chain and pass its
+  registry has no verified ABI with their pool lookup, so discover the pool off chain and pass its
   address as a `main` input.
 - **Solidity idioms in a document have SauceScript spellings**: `msg.sender` is `ctx.msgSender()`,
   `address(this)` is `ctx.self()`, and `type(uint256).max` is `~0n`

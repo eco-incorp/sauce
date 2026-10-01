@@ -8,22 +8,18 @@ Leveraged trading aggregator on Arbitrum. Routes trades across multiple perpetua
 | --- | --- |
 | Category | Perpetuals |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `MuxProtocol` on arbitrum |
 | Chains | arbitrum |
 | Document | [mux-protocol.md](../mux-protocol.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Arbitrum One's liquidityPool):
+On Arbitrum One, `MuxProtocol` is a namespace: its contracts need no import.
 
 ```sauce chain=arbitrum
-import LiquidityPoolABI from "./protocols/mux-protocol/LiquidityPoolABI.json";
-
-const LIQUIDITY_POOL = 0x3e0199792Ce69DC29A0a36146bFa68bd7C8D6633n;
-
 function main() {
-  const bound = LiquidityPoolABI.at(LIQUIDITY_POOL);
+  // Arbitrum One's liquidityPool, `0x3e0199792Ce69DC29A0a36146bFa68bd7C8D6633`.
+  require(MuxProtocol.LiquidityPool != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | liquidityPool | `0x3e0199792Ce69DC29A0a36146bFa68bd7C8D6633` | `LiquidityPoolABI.at(0x3e0199792Ce69DC29A0a36146bFa68bd7C8D6633n)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | orderBook | `0xa19fD5aB6C8DCffa2A295F78a5Bb4aC543AAF5e3` | `OrderBookABI.at(0xa19fD5aB6C8DCffa2A295F78a5Bb4aC543AAF5e3n)` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | liquidityPool | `0x3e0199792Ce69DC29A0a36146bFa68bd7C8D6633` | `MuxProtocol.LiquidityPool` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | orderBook | `0xa19fD5aB6C8DCffa2A295F78a5Bb4aC543AAF5e3` | `MuxProtocol.OrderBook` |
 
 ## ABI
 

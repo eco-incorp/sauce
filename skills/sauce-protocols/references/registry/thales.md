@@ -8,22 +8,18 @@ Positional markets protocol built on Synthetix offering binary options, speed ma
 | --- | --- |
 | Category | Options |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Thales` on optimism |
 | Chains | optimism |
 | Document | [thales.md](../thales.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Optimism's speedMarketsAMM):
+On Optimism, `Thales` is a namespace: its contracts need no import.
 
 ```sauce chain=optimism
-import SpeedMarketsAMMABI from "./protocols/thales/SpeedMarketsAMMABI.json";
-
-const SPEED_MARKETS_AMM = 0xE16B8a01490835EC1e76bAbbB3Cadd8921b32001n;
-
 function main() {
-  const bound = SpeedMarketsAMMABI.at(SPEED_MARKETS_AMM);
+  // Optimism's speedMarketsAMM, `0xE16B8a01490835EC1e76bAbbB3Cadd8921b32001`.
+  require(Thales.SpeedMarketsAMM != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Optimism](../../../sauce-chains/references/optimism.md) | speedMarketsAMM | `0xE16B8a01490835EC1e76bAbbB3Cadd8921b32001` | `SpeedMarketsAMMABI.at(0xE16B8a01490835EC1e76bAbbB3Cadd8921b32001n)` |
-| [Optimism](../../../sauce-chains/references/optimism.md) | thalesAMM | `0x278B5A44397c9D8E52743fEdec263c4760dc1A1A` | `ThalesAMMABI.at(0x278B5A44397c9D8E52743fEdec263c4760dc1A1An)` |
+| [Optimism](../../../sauce-chains/references/optimism.md) | speedMarketsAMM | `0xE16B8a01490835EC1e76bAbbB3Cadd8921b32001` | `Thales.SpeedMarketsAMM` |
+| [Optimism](../../../sauce-chains/references/optimism.md) | thalesAMM | `0x278B5A44397c9D8E52743fEdec263c4760dc1A1A` | `Thales.ThalesAMM` |
 
 ## ABI
 

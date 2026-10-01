@@ -8,22 +8,18 @@ Cross-chain liquidity router built on Axelar. Enables one-click cross-chain swap
 | --- | --- |
 | Category | Bridges |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Squid` on ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
 | Document | [squid.md](../squid.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's squidRouter):
+On Ethereum, `Squid` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import SquidRouterABI from "./protocols/squid/SquidRouterABI.json";
-
-const SQUID_ROUTER = 0xce16F69375520ab01377ce7B88f5BA8C48F8D666n;
-
 function main() {
-  const bound = SquidRouterABI.at(SQUID_ROUTER);
+  // Ethereum's squidRouter, `0xce16F69375520ab01377ce7B88f5BA8C48F8D666`.
+  require(Squid.SquidRouter != 0n);
 }
 ```
 
@@ -31,13 +27,13 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `SquidRouterABI.at(0xce16F69375520ab01377ce7B88f5BA8C48F8D666n)` |
-| [Optimism](../../../sauce-chains/references/optimism.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `SquidRouterABI.at(0xce16F69375520ab01377ce7B88f5BA8C48F8D666n)` |
-| [BNB Chain](../../../sauce-chains/references/bsc.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `SquidRouterABI.at(0xce16F69375520ab01377ce7B88f5BA8C48F8D666n)` |
-| [Polygon](../../../sauce-chains/references/polygon.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `SquidRouterABI.at(0xce16F69375520ab01377ce7B88f5BA8C48F8D666n)` |
-| [Base](../../../sauce-chains/references/base.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `SquidRouterABI.at(0xce16F69375520ab01377ce7B88f5BA8C48F8D666n)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `SquidRouterABI.at(0xce16F69375520ab01377ce7B88f5BA8C48F8D666n)` |
-| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `SquidRouterABI.at(0xce16F69375520ab01377ce7B88f5BA8C48F8D666n)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `Squid.SquidRouter` |
+| [Optimism](../../../sauce-chains/references/optimism.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `Squid.SquidRouter` |
+| [BNB Chain](../../../sauce-chains/references/bsc.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `Squid.SquidRouter` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `Squid.SquidRouter` |
+| [Base](../../../sauce-chains/references/base.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `Squid.SquidRouter` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `Squid.SquidRouter` |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `Squid.SquidRouter` |
 
 ## ABI
 

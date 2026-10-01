@@ -8,22 +8,18 @@ Leading lending protocol on zkSync Era. Aave V3 fork optimized for zero-knowledg
 | --- | --- |
 | Category | Lending |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Zerolend` on zksync |
 | Chains | zksync |
 | Document | [zerolend.md](../zerolend.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here zkSync Era's pool):
+On zkSync Era, `Zerolend` is a namespace: its contracts need no import.
 
 ```sauce chain=zksync
-import ZeroLendPoolABI from "./protocols/zerolend/ZeroLendPoolABI.json";
-
-const POOL = 0x4d9429246EA989C9CeE203B43F6d1C7D83e3B8F8n;
-
 function main() {
-  const bound = ZeroLendPoolABI.at(POOL);
+  // zkSync Era's pool, `0x4d9429246EA989C9CeE203B43F6d1C7D83e3B8F8`.
+  require(Zerolend.Pool != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [zkSync Era](../../../sauce-chains/references/zksync.md) | pool | `0x4d9429246EA989C9CeE203B43F6d1C7D83e3B8F8` | `ZeroLendPoolABI.at(0x4d9429246EA989C9CeE203B43F6d1C7D83e3B8F8n)` |
+| [zkSync Era](../../../sauce-chains/references/zksync.md) | pool | `0x4d9429246EA989C9CeE203B43F6d1C7D83e3B8F8` | `Zerolend.Pool` |
 
 ## ABI
 

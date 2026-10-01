@@ -7,23 +7,19 @@ Modular liquidity protocol powering perpetual futures and synthetic assets on Ba
 | Fact | Value |
 | --- | --- |
 | Category | Synthetics |
-| Family | none |
-| Namespace | none: import its ABI |
+| Family | `Synthetix`: `synthetix-v3` |
+| Namespace | `SynthetixV3` on base |
 | Chains | base |
 | Document | [synthetix-v3.md](../synthetix-v3.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Base's coreProxy):
+On Base, `SynthetixV3` is a namespace: its contracts need no import.
 
 ```sauce chain=base
-import CoreProxyABI from "./protocols/synthetix-v3/CoreProxyABI.json";
-
-const CORE_PROXY = 0x32C222A9A159782aFD7529c87FA34b96CA72C696n;
-
 function main() {
-  const bound = CoreProxyABI.at(CORE_PROXY);
+  // Base's coreProxy, `0x32C222A9A159782aFD7529c87FA34b96CA72C696`.
+  require(SynthetixV3.CoreProxy != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Base](../../../sauce-chains/references/base.md) | coreProxy | `0x32C222A9A159782aFD7529c87FA34b96CA72C696` | `CoreProxyABI.at(0x32C222A9A159782aFD7529c87FA34b96CA72C696n)` |
-| [Base](../../../sauce-chains/references/base.md) | perpsMarketProxy | `0x0A2AF931eFFd34b81ebcc57E3d3c9B1E1dE1C9Ce` | `PerpsMarketProxyABI.at(0x0A2AF931eFFd34b81ebcc57E3d3c9B1E1dE1C9Cen)` |
+| [Base](../../../sauce-chains/references/base.md) | coreProxy | `0x32C222A9A159782aFD7529c87FA34b96CA72C696` | `SynthetixV3.CoreProxy` |
+| [Base](../../../sauce-chains/references/base.md) | perpsMarketProxy | `0x0A2AF931eFFd34b81ebcc57E3d3c9B1E1dE1C9Ce` | `SynthetixV3.PerpsMarketProxy` |
 
 ## ABI
 

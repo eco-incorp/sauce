@@ -8,22 +8,18 @@ High-fidelity oracle network providing low-latency price feeds from institutiona
 | --- | --- |
 | Category | Oracles |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Pyth` on ethereum |
 | Chains | ethereum |
 | Document | [pyth.md](../pyth.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's oracle):
+On Ethereum, `Pyth` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import PythOracleABI from "./protocols/pyth/PythOracleABI.json";
-
-const ORACLE = 0x4305FB66699C3B2702D4d05CF36551390A4c69C6n;
-
 function main() {
-  const bound = PythOracleABI.at(ORACLE);
+  // Ethereum's oracle, `0x4305FB66699C3B2702D4d05CF36551390A4c69C6`.
+  require(Pyth.Oracle != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | oracle | `0x4305FB66699C3B2702D4d05CF36551390A4c69C6` | `PythOracleABI.at(0x4305FB66699C3B2702D4d05CF36551390A4c69C6n)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | oracle | `0x4305FB66699C3B2702D4d05CF36551390A4c69C6` | `Pyth.Oracle` |
 
 ## ABI
 

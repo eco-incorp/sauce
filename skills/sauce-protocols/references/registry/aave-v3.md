@@ -7,7 +7,7 @@ Non-custodial liquidity protocol for earning interest on deposits and borrowing 
 | Fact | Value |
 | --- | --- |
 | Category | Lending |
-| Family | `Aave`: `aave-v2`, `aave-v3` |
+| Family | `Aave`: `aave-v2`, `aave-v3`, `aave-v4` |
 | Namespace | `AaveV3` on ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll |
 | Chains | ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll |
 | Document | [aave-v3.md](../aave-v3.md): what it is for, how to choose it, its pitfalls |
@@ -28,23 +28,23 @@ function main() {
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
 | [Ethereum](../../../sauce-chains/references/ethereum.md) | pool | `0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2` | `AaveV3.Pool` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | poolAddressesProvider | `0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e` | no registry ABI |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | poolAddressesProvider | `0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e` | `AaveV3.PoolAddressesProvider` |
 | [Optimism](../../../sauce-chains/references/optimism.md) | pool | `0x794a61358D6845594F94dc1DB02A252b5b4814aD` | `AaveV3.Pool` |
-| [Optimism](../../../sauce-chains/references/optimism.md) | poolAddressesProvider | `0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb` | no registry ABI |
+| [Optimism](../../../sauce-chains/references/optimism.md) | poolAddressesProvider | `0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb` | `AaveV3.PoolAddressesProvider` |
 | [BNB Chain](../../../sauce-chains/references/bsc.md) | pool | `0x6807dc923806fE8Fd134338EABCA509979a7e0cB` | `AaveV3.Pool` |
 | [Gnosis](../../../sauce-chains/references/gnosis.md) | pool | `0xb50201558B00496A145fE76f7424749556E326D8` | `AaveV3.Pool` |
 | [Polygon](../../../sauce-chains/references/polygon.md) | pool | `0x794a61358D6845594F94dc1DB02A252b5b4814aD` | `AaveV3.Pool` |
-| [Polygon](../../../sauce-chains/references/polygon.md) | poolAddressesProvider | `0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb` | no registry ABI |
+| [Polygon](../../../sauce-chains/references/polygon.md) | poolAddressesProvider | `0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb` | `AaveV3.PoolAddressesProvider` |
 | [Monad](../../../sauce-chains/references/monad.md) | pool | `0x69a5F9AD4f96ebf0a0C792dD42a01cC5C0102fef` | `AaveV3.Pool` |
-| [Monad](../../../sauce-chains/references/monad.md) | poolAddressesProvider | `0x34793Fb9935F7bB5E5aE920fb963F39063E7A615` | no registry ABI |
+| [Monad](../../../sauce-chains/references/monad.md) | poolAddressesProvider | `0x34793Fb9935F7bB5E5aE920fb963F39063E7A615` | `AaveV3.PoolAddressesProvider` |
 | [Fantom](../../../sauce-chains/references/fantom.md) | pool | `0x794a61358D6845594F94dc1DB02A252b5b4814aD` | `AaveV3.Pool` |
 | [Metis](../../../sauce-chains/references/metis.md) | pool | `0x90df02551bB792286e8D4f13E0e357b4Bf1D6a57` | `AaveV3.Pool` |
 | [Base](../../../sauce-chains/references/base.md) | pool | `0xA238Dd80C259a72e81d7e4664a9801593F98d1c5` | `AaveV3.Pool` |
-| [Base](../../../sauce-chains/references/base.md) | poolAddressesProvider | `0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D` | no registry ABI |
+| [Base](../../../sauce-chains/references/base.md) | poolAddressesProvider | `0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D` | `AaveV3.PoolAddressesProvider` |
 | [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | pool | `0x794a61358D6845594F94dc1DB02A252b5b4814aD` | `AaveV3.Pool` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | poolAddressesProvider | `0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb` | no registry ABI |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | poolAddressesProvider | `0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb` | `AaveV3.PoolAddressesProvider` |
 | [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | pool | `0x794a61358D6845594F94dc1DB02A252b5b4814aD` | `AaveV3.Pool` |
-| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | poolAddressesProvider | `0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb` | no registry ABI |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | poolAddressesProvider | `0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb` | `AaveV3.PoolAddressesProvider` |
 | [Scroll](../../../sauce-chains/references/scroll.md) | pool | `0x11fCfe756c05AD438e312a7fd934381537D3cFfe` | `AaveV3.Pool` |
 
 ## ABI

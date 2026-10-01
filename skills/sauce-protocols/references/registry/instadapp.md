@@ -8,22 +8,18 @@ Flash loan aggregator that routes across Aave, Maker, Balancer and other sources
 | --- | --- |
 | Category | Infrastructure and standards |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Instadapp` on ethereum |
 | Chains | ethereum |
 | Document | [instadapp.md](../instadapp.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's flashloanAggregator):
+On Ethereum, `Instadapp` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import FlashAggregatorABI from "./protocols/instadapp/FlashAggregatorABI.json";
-
-const FLASHLOAN_AGGREGATOR = 0xE6054aE0Dba269560061D736e7510Ce64fCD517dn;
-
 function main() {
-  const bound = FlashAggregatorABI.at(FLASHLOAN_AGGREGATOR);
+  // Ethereum's flashloanAggregator, `0xE6054aE0Dba269560061D736e7510Ce64fCD517d`.
+  require(Instadapp.FlashloanAggregator != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | flashloanAggregator | `0xE6054aE0Dba269560061D736e7510Ce64fCD517d` | `FlashAggregatorABI.at(0xE6054aE0Dba269560061D736e7510Ce64fCD517dn)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | flashloanAggregator | `0xE6054aE0Dba269560061D736e7510Ce64fCD517d` | `Instadapp.FlashloanAggregator` |
 
 ## ABI
 

@@ -7,23 +7,19 @@ Concentrated-liquidity spot DEX on Arc and Robinhood Chain: a Uniswap V3 fork wh
 | Fact | Value |
 | --- | --- |
 | Category | DEX |
-| Family | none |
-| Namespace | none: import its ABI |
+| Family | `Synthra`: `synthra-v3` |
+| Namespace | `SynthraV3` on arc |
 | Chains | arc |
 | Document | [synthra-v3.md](../synthra-v3.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Arc's factory):
+On Arc, `SynthraV3` is a namespace: its contracts need no import.
 
 ```sauce chain=arc
-import SynthraV3FactoryABI from "./protocols/synthra-v3/SynthraV3FactoryABI.json";
-
-const FACTORY = 0x6307fc239C7964942c1BfFE51930E55606619c74n;
-
 function main() {
-  const bound = SynthraV3FactoryABI.at(FACTORY);
+  // Arc's factory, `0x6307fc239C7964942c1BfFE51930E55606619c74`.
+  require(SynthraV3.Factory != 0n);
 }
 ```
 
@@ -31,10 +27,10 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Arc](../../../sauce-chains/references/arc.md) | factory | `0x6307fc239C7964942c1BfFE51930E55606619c74` | `SynthraV3FactoryABI.at(0x6307fc239C7964942c1BfFE51930E55606619c74n)` |
-| [Arc](../../../sauce-chains/references/arc.md) | nonfungiblePositionManager | `0x2743b771659fD9CE13970d7367e7e84AF6a31049` | `SynthraV3NonfungiblePositionManagerABI.at(0x2743b771659fD9CE13970d7367e7e84AF6a31049n)` |
-| [Arc](../../../sauce-chains/references/arc.md) | quoterV2 | `0x9c179A7335B3fc841F59Aa6a62daf6d5c61b65D7` | `SynthraV3QuoterV2ABI.at(0x9c179A7335B3fc841F59Aa6a62daf6d5c61b65D7n)` |
-| [Arc](../../../sauce-chains/references/arc.md) | swapRouter02 | `0xa50eDe66a573eE5bB37E28AF5789B76aE5FEb828` | `SynthraV3SwapRouter02ABI.at(0xa50eDe66a573eE5bB37E28AF5789B76aE5FEb828n)` |
+| [Arc](../../../sauce-chains/references/arc.md) | factory | `0x6307fc239C7964942c1BfFE51930E55606619c74` | `SynthraV3.Factory` |
+| [Arc](../../../sauce-chains/references/arc.md) | nonfungiblePositionManager | `0x2743b771659fD9CE13970d7367e7e84AF6a31049` | `SynthraV3.NonfungiblePositionManager` |
+| [Arc](../../../sauce-chains/references/arc.md) | quoterV2 | `0x9c179A7335B3fc841F59Aa6a62daf6d5c61b65D7` | `SynthraV3.QuoterV2` |
+| [Arc](../../../sauce-chains/references/arc.md) | swapRouter02 | `0xa50eDe66a573eE5bB37E28AF5789B76aE5FEb828` | `SynthraV3.SwapRouter02` |
 
 ## ABI
 

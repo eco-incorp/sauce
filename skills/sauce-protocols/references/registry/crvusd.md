@@ -8,22 +8,18 @@ Curve Finance native stablecoin using LLAMMA (Lending-Liquidating AMM Algorithm)
 | --- | --- |
 | Category | CDPs and stablecoins |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Crvusd` on ethereum |
 | Chains | ethereum |
 | Document | [crvusd.md](../crvusd.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's crvusd):
+On Ethereum, `Crvusd` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import CrvUSDERC20ABI from "./protocols/crvusd/CrvUSDERC20ABI.json";
-
-const CRVUSD = 0xf939E0A03FB07F59A73314E73794Be0E57ac1b4En;
-
 function main() {
-  const bound = CrvUSDERC20ABI.at(CRVUSD);
+  // Ethereum's crvusd, `0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E`.
+  require(Crvusd.CrvUSD != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | crvusd | `0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E` | `CrvUSDERC20ABI.at(0xf939E0A03FB07F59A73314E73794Be0E57ac1b4En)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | crvusd | `0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E` | `Crvusd.CrvUSD` |
 
 ## ABI
 

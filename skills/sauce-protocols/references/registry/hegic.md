@@ -8,22 +8,18 @@ On-chain options trading protocol allowing users to buy call and put options on 
 | --- | --- |
 | Category | Options |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Hegic` on arbitrum |
 | Chains | arbitrum |
 | Document | [hegic.md](../hegic.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Arbitrum One's operationalTreasury):
+On Arbitrum One, `Hegic` is a namespace: its contracts need no import.
 
 ```sauce chain=arbitrum
-import HegicABI from "./protocols/hegic/HegicABI.json";
-
-const OPERATIONAL_TREASURY = 0xec096ea6eB9aa5ea689b0CF00882366E92377371n;
-
 function main() {
-  const bound = HegicABI.at(OPERATIONAL_TREASURY);
+  // Arbitrum One's hegic, `0x431402e8b9dE9aa016C743880e04E517074D8cEC`.
+  require(Hegic.Hegic != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | hegic | `0x431402e8b9dE9aa016C743880e04E517074D8cEC` | no registry ABI |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | operationalTreasury | `0xec096ea6eB9aa5ea689b0CF00882366E92377371` | `HegicABI.at(0xec096ea6eB9aa5ea689b0CF00882366E92377371n)` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | hegic | `0x431402e8b9dE9aa016C743880e04E517074D8cEC` | `Hegic.Hegic` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | operationalTreasury | `0xec096ea6eB9aa5ea689b0CF00882366E92377371` | `Hegic.OperationalTreasury` |
 
 ## ABI
 

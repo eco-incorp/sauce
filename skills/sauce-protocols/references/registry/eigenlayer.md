@@ -8,22 +8,18 @@ Restaking protocol that enables staked ETH to secure additional protocols. Depos
 | --- | --- |
 | Category | Restaking |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Eigenlayer` on ethereum |
 | Chains | ethereum |
 | Document | [eigenlayer.md](../eigenlayer.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's cbETHStrategy):
+On Ethereum, `Eigenlayer` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import StrategyABI from "./protocols/eigenlayer/StrategyABI.json";
-
-const CB_ETHSTRATEGY = 0x54945180dB7943c0ed0FEE7EdaB2Bd24620256bcn;
-
 function main() {
-  const bound = StrategyABI.at(CB_ETHSTRATEGY);
+  // Ethereum's cbETHStrategy, `0x54945180dB7943c0ed0FEE7EdaB2Bd24620256bc`.
+  require(Eigenlayer.CbETHStrategy != 0n);
 }
 ```
 
@@ -31,11 +27,11 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | cbETHStrategy | `0x54945180dB7943c0ed0FEE7EdaB2Bd24620256bc` | `StrategyABI.at(0x54945180dB7943c0ed0FEE7EdaB2Bd24620256bcn)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | delegationManager | `0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A` | `DelegationManagerABI.at(0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37An)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | rETHStrategy | `0x1BeE69b7dFFfA4E2d53C2a2Df135C388AD25dCD2` | `StrategyABI.at(0x1BeE69b7dFFfA4E2d53C2a2Df135C388AD25dCD2n)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | stETHStrategy | `0x93c4b944D05dfe6df7645A86cd2206016c51564D` | `StrategyABI.at(0x93c4b944D05dfe6df7645A86cd2206016c51564Dn)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | strategyManager | `0x858646372CC42E1A627fcE94aa7A7033e7CF075A` | `StrategyManagerABI.at(0x858646372CC42E1A627fcE94aa7A7033e7CF075An)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | cbETHStrategy | `0x54945180dB7943c0ed0FEE7EdaB2Bd24620256bc` | `Eigenlayer.CbETHStrategy` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | delegationManager | `0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A` | `Eigenlayer.DelegationManager` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | rETHStrategy | `0x1BeE69b7dFFfA4E2d53C2a2Df135C388AD25dCD2` | `Eigenlayer.RETHStrategy` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | stETHStrategy | `0x93c4b944D05dfe6df7645A86cd2206016c51564D` | `Eigenlayer.StETHStrategy` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | strategyManager | `0x858646372CC42E1A627fcE94aa7A7033e7CF075A` | `Eigenlayer.StrategyManager` |
 
 ## ABI
 

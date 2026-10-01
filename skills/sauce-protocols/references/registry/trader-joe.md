@@ -8,22 +8,18 @@ Liquidity Book DEX with variable-width bins for concentrated liquidity. Native t
 | --- | --- |
 | Category | DEX |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `TraderJoe` on bsc, arbitrum, avalanche |
 | Chains | bsc, arbitrum, avalanche |
 | Document | [trader-joe.md](../trader-joe.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here BNB Chain's lbRouter):
+On BNB Chain, `TraderJoe` is a namespace: its contracts need no import.
 
 ```sauce chain=bsc
-import LBRouterABI from "./protocols/trader-joe/LBRouterABI.json";
-
-const LB_ROUTER = 0xb4315e873dBcf96Ffd0acd8EA43f689D8c20fB30n;
-
 function main() {
-  const bound = LBRouterABI.at(LB_ROUTER);
+  // BNB Chain's lbRouter, `0xb4315e873dBcf96Ffd0acd8EA43f689D8c20fB30`.
+  require(TraderJoe.LBRouter != 0n);
 }
 ```
 
@@ -31,10 +27,10 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [BNB Chain](../../../sauce-chains/references/bsc.md) | lbRouter | `0xb4315e873dBcf96Ffd0acd8EA43f689D8c20fB30` | `LBRouterABI.at(0xb4315e873dBcf96Ffd0acd8EA43f689D8c20fB30n)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | lbRouter | `0x18556da13313f3532c54711497a8fedac273220e` | `LBRouterABI.at(0x18556da13313f3532c54711497a8fedac273220en)` |
-| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | lbFactory | `0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c` | `LBFactoryABI.at(0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0cn)` |
-| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | lbRouter | `0x18556DA13313f3532c54711497A8FedAC273220E` | `LBRouterABI.at(0x18556DA13313f3532c54711497A8FedAC273220En)` |
+| [BNB Chain](../../../sauce-chains/references/bsc.md) | lbRouter | `0xb4315e873dBcf96Ffd0acd8EA43f689D8c20fB30` | `TraderJoe.LBRouter` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | lbRouter | `0x18556da13313f3532c54711497a8fedac273220e` | `TraderJoe.LBRouter` |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | lbFactory | `0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c` | `TraderJoe.LBFactory` |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | lbRouter | `0x18556DA13313f3532c54711497A8FedAC273220E` | `TraderJoe.LBRouter` |
 
 ## ABI
 

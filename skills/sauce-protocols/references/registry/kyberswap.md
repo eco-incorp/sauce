@@ -8,22 +8,18 @@ Multi-chain DEX aggregator and concentrated liquidity protocol (Elastic). Featur
 | --- | --- |
 | Category | DEX |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Kyberswap` on ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
 | Document | [kyberswap.md](../kyberswap.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's elasticRouter):
+On Ethereum, `Kyberswap` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import KyberSwapElasticRouterABI from "./protocols/kyberswap/KyberSwapElasticRouterABI.json";
-
-const ELASTIC_ROUTER = 0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83n;
-
 function main() {
-  const bound = KyberSwapElasticRouterABI.at(ELASTIC_ROUTER);
+  // Ethereum's elasticFactory, `0xC7a590291e07B9fe9E64b86c58fD8fC764308C4A`.
+  require(Kyberswap.ElasticFactory != 0n);
 }
 ```
 
@@ -31,26 +27,26 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | elasticFactory | `0xC7a590291e07B9fe9E64b86c58fD8fC764308C4A` | no registry ABI |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | elasticRouter | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` | `KyberSwapElasticRouterABI.at(0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83n)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberSwapMetaAggregationRouterABI.at(0x6131B5fae19EA4f9D964eAc0408E4408b66337b5n)` |
-| [Optimism](../../../sauce-chains/references/optimism.md) | elasticFactory | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` | no registry ABI |
-| [Optimism](../../../sauce-chains/references/optimism.md) | elasticRouter | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` | `KyberSwapElasticRouterABI.at(0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83n)` |
-| [Optimism](../../../sauce-chains/references/optimism.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberSwapMetaAggregationRouterABI.at(0x6131B5fae19EA4f9D964eAc0408E4408b66337b5n)` |
-| [BNB Chain](../../../sauce-chains/references/bsc.md) | elasticFactory | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` | no registry ABI |
-| [BNB Chain](../../../sauce-chains/references/bsc.md) | elasticRouter | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` | `KyberSwapElasticRouterABI.at(0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83n)` |
-| [BNB Chain](../../../sauce-chains/references/bsc.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberSwapMetaAggregationRouterABI.at(0x6131B5fae19EA4f9D964eAc0408E4408b66337b5n)` |
-| [Polygon](../../../sauce-chains/references/polygon.md) | elasticFactory | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` | no registry ABI |
-| [Polygon](../../../sauce-chains/references/polygon.md) | elasticRouter | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` | `KyberSwapElasticRouterABI.at(0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83n)` |
-| [Polygon](../../../sauce-chains/references/polygon.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberSwapMetaAggregationRouterABI.at(0x6131B5fae19EA4f9D964eAc0408E4408b66337b5n)` |
-| [Arc](../../../sauce-chains/references/arc.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberSwapMetaAggregationRouterABI.at(0x6131B5fae19EA4f9D964eAc0408E4408b66337b5n)` |
-| [Base](../../../sauce-chains/references/base.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberSwapMetaAggregationRouterABI.at(0x6131B5fae19EA4f9D964eAc0408E4408b66337b5n)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | elasticFactory | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` | no registry ABI |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | elasticRouter | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` | `KyberSwapElasticRouterABI.at(0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83n)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberSwapMetaAggregationRouterABI.at(0x6131B5fae19EA4f9D964eAc0408E4408b66337b5n)` |
-| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | elasticFactory | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` | no registry ABI |
-| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | elasticRouter | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` | `KyberSwapElasticRouterABI.at(0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83n)` |
-| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberSwapMetaAggregationRouterABI.at(0x6131B5fae19EA4f9D964eAc0408E4408b66337b5n)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | elasticFactory | `0xC7a590291e07B9fe9E64b86c58fD8fC764308C4A` | `Kyberswap.ElasticFactory` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | elasticRouter | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` | `Kyberswap.ElasticRouter` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `Kyberswap.MetaAggregationRouterV2` |
+| [Optimism](../../../sauce-chains/references/optimism.md) | elasticFactory | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` | `Kyberswap.ElasticFactory` |
+| [Optimism](../../../sauce-chains/references/optimism.md) | elasticRouter | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` | `Kyberswap.ElasticRouter` |
+| [Optimism](../../../sauce-chains/references/optimism.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `Kyberswap.MetaAggregationRouterV2` |
+| [BNB Chain](../../../sauce-chains/references/bsc.md) | elasticFactory | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` | `Kyberswap.ElasticFactory` |
+| [BNB Chain](../../../sauce-chains/references/bsc.md) | elasticRouter | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` | `Kyberswap.ElasticRouter` |
+| [BNB Chain](../../../sauce-chains/references/bsc.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `Kyberswap.MetaAggregationRouterV2` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | elasticFactory | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` | `Kyberswap.ElasticFactory` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | elasticRouter | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` | `Kyberswap.ElasticRouter` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `Kyberswap.MetaAggregationRouterV2` |
+| [Arc](../../../sauce-chains/references/arc.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `Kyberswap.MetaAggregationRouterV2` |
+| [Base](../../../sauce-chains/references/base.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `Kyberswap.MetaAggregationRouterV2` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | elasticFactory | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` | `Kyberswap.ElasticFactory` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | elasticRouter | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` | `Kyberswap.ElasticRouter` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `Kyberswap.MetaAggregationRouterV2` |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | elasticFactory | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` | `Kyberswap.ElasticFactory` |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | elasticRouter | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` | `Kyberswap.ElasticRouter` |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `Kyberswap.MetaAggregationRouterV2` |
 
 ## ABI
 

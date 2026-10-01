@@ -8,22 +8,18 @@ DEX aggregation protocol powering swaps across the DeFi ecosystem. Exchange Prox
 | --- | --- |
 | Category | Aggregators |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Zerox` on ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
 | Document | [zerox.md](../zerox.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's exchangeProxy):
+On Ethereum, `Zerox` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import ExchangeProxyABI from "./protocols/zerox/ExchangeProxyABI.json";
-
-const EXCHANGE_PROXY = 0xDef1C0ded9bec7F1a1670819833240f027b25EfFn;
-
 function main() {
-  const bound = ExchangeProxyABI.at(EXCHANGE_PROXY);
+  // Ethereum's exchangeProxy, `0xDef1C0ded9bec7F1a1670819833240f027b25EfF`.
+  require(Zerox.ExchangeProxy != 0n);
 }
 ```
 
@@ -31,13 +27,13 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `ExchangeProxyABI.at(0xDef1C0ded9bec7F1a1670819833240f027b25EfFn)` |
-| [Optimism](../../../sauce-chains/references/optimism.md) | exchangeProxy | `0xDEF1ABE32c034e558Cdd535791643C58a13aCC10` | `ExchangeProxyABI.at(0xDEF1ABE32c034e558Cdd535791643C58a13aCC10n)` |
-| [BNB Chain](../../../sauce-chains/references/bsc.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `ExchangeProxyABI.at(0xDef1C0ded9bec7F1a1670819833240f027b25EfFn)` |
-| [Polygon](../../../sauce-chains/references/polygon.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `ExchangeProxyABI.at(0xDef1C0ded9bec7F1a1670819833240f027b25EfFn)` |
-| [Base](../../../sauce-chains/references/base.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `ExchangeProxyABI.at(0xDef1C0ded9bec7F1a1670819833240f027b25EfFn)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `ExchangeProxyABI.at(0xDef1C0ded9bec7F1a1670819833240f027b25EfFn)` |
-| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `ExchangeProxyABI.at(0xDef1C0ded9bec7F1a1670819833240f027b25EfFn)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
+| [Optimism](../../../sauce-chains/references/optimism.md) | exchangeProxy | `0xDEF1ABE32c034e558Cdd535791643C58a13aCC10` | `Zerox.ExchangeProxy` |
+| [BNB Chain](../../../sauce-chains/references/bsc.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
+| [Base](../../../sauce-chains/references/base.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
 
 ## ABI
 

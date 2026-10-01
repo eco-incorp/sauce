@@ -7,23 +7,19 @@ Modular lending platform built on the Ethereum Vault Connector (EVC). Supports p
 | Fact | Value |
 | --- | --- |
 | Category | Lending |
-| Family | none |
-| Namespace | none: import its ABI |
+| Family | `Euler`: `euler-v2` |
+| Namespace | `EulerV2` on ethereum |
 | Chains | ethereum |
 | Document | [euler-v2.md](../euler-v2.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's ethereumVaultConnector):
+On Ethereum, `EulerV2` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import EVCABI from "./protocols/euler-v2/EVCABI.json";
-
-const ETHEREUM_VAULT_CONNECTOR = 0x0C9a3dd6b8F28529d72d7f9cE918D493519EE383n;
-
 function main() {
-  const bound = EVCABI.at(ETHEREUM_VAULT_CONNECTOR);
+  // Ethereum's ethereumVaultConnector, `0x0C9a3dd6b8F28529d72d7f9cE918D493519EE383`.
+  require(EulerV2.EthereumVaultConnector != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | ethereumVaultConnector | `0x0C9a3dd6b8F28529d72d7f9cE918D493519EE383` | `EVCABI.at(0x0C9a3dd6b8F28529d72d7f9cE918D493519EE383n)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | ethereumVaultConnector | `0x0C9a3dd6b8F28529d72d7f9cE918D493519EE383` | `EulerV2.EthereumVaultConnector` |
 
 ## ABI
 

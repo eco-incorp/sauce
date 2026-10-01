@@ -8,22 +8,18 @@ Base-native DEX with UniV2-style constant product pools. Features yield farming,
 | --- | --- |
 | Category | DEX |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Baseswap` on base |
 | Chains | base |
 | Document | [baseswap.md](../baseswap.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Base's v2Router):
+On Base, `Baseswap` is a namespace: its contracts need no import.
 
 ```sauce chain=base
-import BaseSwapRouterABI from "./protocols/baseswap/BaseSwapRouterABI.json";
-
-const V2_ROUTER = 0x327Df1E6de05895d2ab08513aaDD9313Fe505d86n;
-
 function main() {
-  const bound = BaseSwapRouterABI.at(V2_ROUTER);
+  // Base's v2Router, `0x327Df1E6de05895d2ab08513aaDD9313Fe505d86`.
+  require(Baseswap.V2Router != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Base](../../../sauce-chains/references/base.md) | v2Router | `0x327Df1E6de05895d2ab08513aaDD9313Fe505d86` | `BaseSwapRouterABI.at(0x327Df1E6de05895d2ab08513aaDD9313Fe505d86n)` |
+| [Base](../../../sauce-chains/references/base.md) | v2Router | `0x327Df1E6de05895d2ab08513aaDD9313Fe505d86` | `Baseswap.V2Router` |
 
 ## ABI
 

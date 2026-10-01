@@ -8,22 +8,18 @@ Mode-native DEX with UniV2-style constant product pools. The primary trading ven
 | --- | --- |
 | Category | DEX |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Kim` on mode |
 | Chains | mode |
 | Document | [kim.md](../kim.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Mode's v2Router):
+On Mode, `Kim` is a namespace: its contracts need no import.
 
 ```sauce chain=mode
-import KimRouterABI from "./protocols/kim/KimRouterABI.json";
-
-const V2_ROUTER = 0x5D61c537393cf21893BE619E36fC94cd73C77DD3n;
-
 function main() {
-  const bound = KimRouterABI.at(V2_ROUTER);
+  // Mode's v2Router, `0x5D61c537393cf21893BE619E36fC94cd73C77DD3`.
+  require(Kim.V2Router != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Mode](../../../sauce-chains/references/mode.md) | v2Router | `0x5D61c537393cf21893BE619E36fC94cd73C77DD3` | `KimRouterABI.at(0x5D61c537393cf21893BE619E36fC94cd73C77DD3n)` |
+| [Mode](../../../sauce-chains/references/mode.md) | v2Router | `0x5D61c537393cf21893BE619E36fC94cd73C77DD3` | `Kim.V2Router` |
 
 ## ABI
 

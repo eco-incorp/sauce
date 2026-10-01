@@ -7,23 +7,19 @@ Decentralized perpetual exchange with multi-asset liquidity pool (GLP). Supports
 | Fact | Value |
 | --- | --- |
 | Category | Perpetuals |
-| Family | none |
-| Namespace | none: import its ABI |
+| Family | `Gmx`: `gmx-v1`, `gmx-v2` |
+| Namespace | `GmxV1` on arbitrum, avalanche |
 | Chains | arbitrum, avalanche |
 | Document | [gmx-v1.md](../gmx-v1.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Arbitrum One's positionRouter):
+On Arbitrum One, `GmxV1` is a namespace: its contracts need no import.
 
 ```sauce chain=arbitrum
-import PositionRouterABI from "./protocols/gmx-v1/PositionRouterABI.json";
-
-const POSITION_ROUTER = 0xb87a436B93fFE9D75c5cFA7bAcFff96430b09868n;
-
 function main() {
-  const bound = PositionRouterABI.at(POSITION_ROUTER);
+  // Arbitrum One's glp, `0x4277f8F2c384827B5273592FF7CeBd9f2C1ac258`.
+  require(GmxV1.Glp != 0n);
 }
 ```
 
@@ -31,12 +27,12 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | glp | `0x4277f8F2c384827B5273592FF7CeBd9f2C1ac258` | no registry ABI |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | positionRouter | `0xb87a436B93fFE9D75c5cFA7bAcFff96430b09868` | `PositionRouterABI.at(0xb87a436B93fFE9D75c5cFA7bAcFff96430b09868n)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | router | `0xaBBc5F99639c9B6bCb58544ddf04EFA6802F4064` | `RouterABI.at(0xaBBc5F99639c9B6bCb58544ddf04EFA6802F4064n)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | vault | `0x489ee077994B6658eAfA855C308275EAd8097C4A` | `VaultABI.at(0x489ee077994B6658eAfA855C308275EAd8097C4An)` |
-| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | router | `0x5F719c2F1095F7B9fc68a68e35B51194f4b6abe8` | `RouterABI.at(0x5F719c2F1095F7B9fc68a68e35B51194f4b6abe8n)` |
-| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | vault | `0x9ab2De34A33fB459b538c43f251eB825645e8595` | `VaultABI.at(0x9ab2De34A33fB459b538c43f251eB825645e8595n)` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | glp | `0x4277f8F2c384827B5273592FF7CeBd9f2C1ac258` | `GmxV1.Glp` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | positionRouter | `0xb87a436B93fFE9D75c5cFA7bAcFff96430b09868` | `GmxV1.PositionRouter` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | router | `0xaBBc5F99639c9B6bCb58544ddf04EFA6802F4064` | `GmxV1.Router` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | vault | `0x489ee077994B6658eAfA855C308275EAd8097C4A` | `GmxV1.Vault` |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | router | `0x5F719c2F1095F7B9fc68a68e35B51194f4b6abe8` | `GmxV1.Router` |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | vault | `0x9ab2De34A33fB459b538c43f251eB825645e8595` | `GmxV1.Vault` |
 
 ## ABI
 

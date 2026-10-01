@@ -18,8 +18,8 @@ On Ethereum, `MorphoBlue` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
 function main() {
-  // Ethereum's morpho, `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb`.
-  require(MorphoBlue.Morpho != 0n);
+  // Ethereum's bundler3, `0x6566194141eefa99Af43Bb5Aa71460Ca2Dc90245`.
+  require(MorphoBlue.Bundler3 != 0n);
 }
 ```
 
@@ -27,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | bundler3 | `0x6566194141eefa99Af43Bb5Aa71460Ca2Dc90245` | no registry ABI |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | bundler3 | `0x6566194141eefa99Af43Bb5Aa71460Ca2Dc90245` | `MorphoBlue.Bundler3` |
 | [Ethereum](../../../sauce-chains/references/ethereum.md) | morpho | `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` | `MorphoBlue.Morpho` |
 | [Monad](../../../sauce-chains/references/monad.md) | morpho | `0xD5D960E8C380B724a48AC59E2DfF1b2CB4a1eAee` | `MorphoBlue.Morpho` |
 | [Arc](../../../sauce-chains/references/arc.md) | morpho | `0x34CD04070dD72b14E241112F6d83812Df5Af7fCD` | `MorphoBlue.Morpho` |

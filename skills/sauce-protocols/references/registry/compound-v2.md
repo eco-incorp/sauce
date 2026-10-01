@@ -7,23 +7,19 @@ Legacy algorithmic money market protocol on Ethereum. Pioneered cToken model whe
 | Fact | Value |
 | --- | --- |
 | Category | Lending |
-| Family | none |
-| Namespace | none: import its ABI |
+| Family | `Compound`: `compound-v2`, `compound-v3` |
+| Namespace | `CompoundV2` on ethereum |
 | Chains | ethereum |
 | Document | [compound-v2.md](../compound-v2.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's cUSDC):
+On Ethereum, `CompoundV2` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import CErc20ABI from "./protocols/compound-v2/CErc20ABI.json";
-
-const C_USDC = 0x39AA39c021dfbaE8faC545936693aC917d5E7563n;
-
 function main() {
-  const bound = CErc20ABI.at(C_USDC);
+  // Ethereum's cETH, `0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5`.
+  require(CompoundV2.CETH != 0n);
 }
 ```
 
@@ -31,9 +27,9 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | cETH | `0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5` | no registry ABI |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | cUSDC | `0x39AA39c021dfbaE8faC545936693aC917d5E7563` | `CErc20ABI.at(0x39AA39c021dfbaE8faC545936693aC917d5E7563n)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | comptroller | `0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B` | `ComptrollerABI.at(0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3Bn)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | cETH | `0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5` | `CompoundV2.CETH` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | cUSDC | `0x39AA39c021dfbaE8faC545936693aC917d5E7563` | `CompoundV2.CUSDC` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | comptroller | `0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B` | `CompoundV2.Comptroller` |
 
 ## ABI
 

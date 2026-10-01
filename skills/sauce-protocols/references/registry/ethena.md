@@ -8,22 +8,18 @@ Synthetic dollar protocol providing USDe, a crypto-native dollar backed by delta
 | --- | --- |
 | Category | CDPs and stablecoins |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Ethena` on ethereum |
 | Chains | ethereum |
 | Document | [ethena.md](../ethena.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's susde):
+On Ethereum, `Ethena` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import StakedUSDeABI from "./protocols/ethena/StakedUSDeABI.json";
-
-const SUSDE = 0x9D39A5DE30e57443BfF2A8307A4256c8797A3497n;
-
 function main() {
-  const bound = StakedUSDeABI.at(SUSDE);
+  // Ethereum's susde, `0x9D39A5DE30e57443BfF2A8307A4256c8797A3497`.
+  require(Ethena.Susde != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | susde | `0x9D39A5DE30e57443BfF2A8307A4256c8797A3497` | `StakedUSDeABI.at(0x9D39A5DE30e57443BfF2A8307A4256c8797A3497n)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | usde | `0x4c9EDD5852cd905f086C759E8383e09bff1e68b3` | `USDeABI.at(0x4c9EDD5852cd905f086C759E8383e09bff1e68b3n)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | susde | `0x9D39A5DE30e57443BfF2A8307A4256c8797A3497` | `Ethena.Susde` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | usde | `0x4c9EDD5852cd905f086C759E8383e09bff1e68b3` | `Ethena.USDe` |
 
 ## ABI
 

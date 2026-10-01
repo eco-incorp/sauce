@@ -7,7 +7,7 @@ Legacy version of Aave lending protocol. Still holds significant TVL on Ethereum
 | Fact | Value |
 | --- | --- |
 | Category | Lending |
-| Family | `Aave`: `aave-v2`, `aave-v3` |
+| Family | `Aave`: `aave-v2`, `aave-v3`, `aave-v4` |
 | Namespace | `AaveV2` on ethereum, polygon, avalanche |
 | Chains | ethereum, polygon, avalanche |
 | Document | [aave-v2.md](../aave-v2.md): what it is for, how to choose it, its pitfalls |

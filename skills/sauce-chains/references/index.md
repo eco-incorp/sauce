@@ -13,7 +13,7 @@ tokens and every protocol recorded there with its addresses.
 | [BNB Chain](bsc.md) | `bsc` | 56 | EVM | yes | — | 0 | 29 |
 | [Gnosis](gnosis.md) | `gnosis` | 100 | EVM | no | — | 0 | 4 |
 | [Fuse](fuse.md) | `fuse` | 122 | EVM | no | — | 0 | 0 |
-| [Unichain](unichain.md) | `unichain` | 130 | EVM | yes | 10 | 0 | 2 |
+| [Unichain](unichain.md) | `unichain` | 130 | EVM | yes | 10 | 0 | 3 |
 | [Polygon](polygon.md) | `polygon` | 137 | EVM | yes | 7 | 3 | 40 |
 | [Monad](monad.md) | `monad` | 143 | EVM | no | 15 | 2 | 8 |
 | [Sonic](sonic.md) | `sonic` | 146 | EVM | yes | 13 | 0 | 2 |
@@ -38,13 +38,13 @@ tokens and every protocol recorded there with its addresses.
 | [Plasma](plasma.md) | `plasma` | 9745 | EVM | yes | — | 0 | 0 |
 | [Mode](mode.md) | `mode` | 34443 | EVM | no | — | 0 | 2 |
 | [Arbitrum One](arbitrum.md) | `arbitrum` | 42161 | EVM | yes | 3 | 2 | 59 |
-| [Celo](celo.md) | `celo` | 42220 | EVM | yes | — | 0 | 1 |
+| [Celo](celo.md) | `celo` | 42220 | EVM | yes | — | 0 | 2 |
 | [Avalanche C-Chain](avalanche.md) | `avalanche` | 43114 | EVM | no | 1 | 0 | 33 |
-| [Ink](ink.md) | `ink` | 57073 | EVM | yes | — | 0 | 0 |
+| [Ink](ink.md) | `ink` | 57073 | EVM | yes | — | 0 | 1 |
 | [Linea](linea.md) | `linea` | 59144 | EVM | no | 11 | 0 | 8 |
 | [Berachain](berachain.md) | `berachain` | 80094 | EVM | no | — | 0 | 0 |
 | [Blast](blast.md) | `blast` | 81457 | EVM | no | — | 0 | 5 |
 | [Scroll](scroll.md) | `scroll` | 534352 | EVM | no | — | 0 | 8 |
-| [Zora](zora.md) | `zora` | 7777777 | EVM | no | — | 0 | 1 |
+| [Zora](zora.md) | `zora` | 7777777 | EVM | no | — | 0 | 2 |
 | [Aurora](aurora.md) | `aurora` | 1313161554 | EVM | no | — | 0 | 0 |
 | [Solana](solana.md) | `solana` | 1399811149 | Solana (SVM) | yes | — | 3 | 0 |

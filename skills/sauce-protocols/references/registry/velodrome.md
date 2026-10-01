@@ -8,22 +8,18 @@ The central trading and liquidity marketplace on Optimism. Solidly-fork with ve(
 | --- | --- |
 | Category | DEX |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Velodrome` on optimism |
 | Chains | optimism |
 | Document | [velodrome.md](../velodrome.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Optimism's poolFactory):
+On Optimism, `Velodrome` is a namespace: its contracts need no import.
 
 ```sauce chain=optimism
-import VelodromePoolFactoryABI from "./protocols/velodrome/VelodromePoolFactoryABI.json";
-
-const POOL_FACTORY = 0xF1046053aa5682b4F9a81b5481394DA16BE5FF5an;
-
 function main() {
-  const bound = VelodromePoolFactoryABI.at(POOL_FACTORY);
+  // Optimism's poolFactory, `0xF1046053aa5682b4F9a81b5481394DA16BE5FF5a`.
+  require(Velodrome.PoolFactory != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Optimism](../../../sauce-chains/references/optimism.md) | poolFactory | `0xF1046053aa5682b4F9a81b5481394DA16BE5FF5a` | `VelodromePoolFactoryABI.at(0xF1046053aa5682b4F9a81b5481394DA16BE5FF5an)` |
-| [Optimism](../../../sauce-chains/references/optimism.md) | routerV2 | `0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858` | `VelodromeRouterABI.at(0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858n)` |
+| [Optimism](../../../sauce-chains/references/optimism.md) | poolFactory | `0xF1046053aa5682b4F9a81b5481394DA16BE5FF5a` | `Velodrome.PoolFactory` |
+| [Optimism](../../../sauce-chains/references/optimism.md) | routerV2 | `0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858` | `Velodrome.RouterV2` |
 
 ## ABI
 

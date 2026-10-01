@@ -8,22 +8,18 @@ BSC-native liquidity layer with ve(3,3) tokenomics. Solidly-fork supporting both
 | --- | --- |
 | Category | DEX |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Thena` on bsc |
 | Chains | bsc |
 | Document | [thena.md](../thena.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here BNB Chain's routerV2):
+On BNB Chain, `Thena` is a namespace: its contracts need no import.
 
 ```sauce chain=bsc
-import ThenaRouterABI from "./protocols/thena/ThenaRouterABI.json";
-
-const ROUTER_V2 = 0xd4ae6eCA985340Dd434D38F470aCCce4DC78D109n;
-
 function main() {
-  const bound = ThenaRouterABI.at(ROUTER_V2);
+  // BNB Chain's routerV2, `0xd4ae6eCA985340Dd434D38F470aCCce4DC78D109`.
+  require(Thena.RouterV2 != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [BNB Chain](../../../sauce-chains/references/bsc.md) | routerV2 | `0xd4ae6eCA985340Dd434D38F470aCCce4DC78D109` | `ThenaRouterABI.at(0xd4ae6eCA985340Dd434D38F470aCCce4DC78D109n)` |
+| [BNB Chain](../../../sauce-chains/references/bsc.md) | routerV2 | `0xd4ae6eCA985340Dd434D38F470aCCce4DC78D109` | `Thena.RouterV2` |
 
 ## ABI
 

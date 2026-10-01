@@ -8,22 +8,18 @@ Blast-native DEX with concentrated liquidity (V3) pools. Optimized for Blast's n
 | --- | --- |
 | Category | DEX |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Thruster` on blast |
 | Chains | blast |
 | Document | [thruster.md](../thruster.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Blast's v3SwapRouter):
+On Blast, `Thruster` is a namespace: its contracts need no import.
 
 ```sauce chain=blast
-import ThrusterV3SwapRouterABI from "./protocols/thruster/ThrusterV3SwapRouterABI.json";
-
-const V3_SWAP_ROUTER = 0x337827814155ECBf24D20231fCA4444F530c0555n;
-
 function main() {
-  const bound = ThrusterV3SwapRouterABI.at(V3_SWAP_ROUTER);
+  // Blast's v3SwapRouter, `0x337827814155ECBf24D20231fCA4444F530c0555`.
+  require(Thruster.V3SwapRouter != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Blast](../../../sauce-chains/references/blast.md) | v3SwapRouter | `0x337827814155ECBf24D20231fCA4444F530c0555` | `ThrusterV3SwapRouterABI.at(0x337827814155ECBf24D20231fCA4444F530c0555n)` |
+| [Blast](../../../sauce-chains/references/blast.md) | v3SwapRouter | `0x337827814155ECBf24D20231fCA4444F530c0555` | `Thruster.V3SwapRouter` |
 
 ## ABI
 

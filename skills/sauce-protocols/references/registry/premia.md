@@ -8,22 +8,18 @@ Decentralized options protocol with an AMM-based pricing model and concentrated 
 | --- | --- |
 | Category | Options |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Premia` on arbitrum |
 | Chains | arbitrum |
 | Document | [premia.md](../premia.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-The registry records no deployment: `DiamondABI` is an interface, bound to an address the
-program is given.
+On Arbitrum One, `Premia` is a namespace: its contracts need no import.
 
-```sauce chain=ethereum
-import DiamondABI from "./protocols/premia/DiamondABI.json";
-
-const TARGET = 0n; // the contract's address, as a define
-
+```sauce chain=arbitrum
 function main() {
-  const target = DiamondABI.at(TARGET);
+  // Arbitrum One's poolFactory, `0xAE4fB6622F25f397587F11638dA8CE88C27b5645`.
+  require(Premia.PoolFactory != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | poolFactory | `0xAE4fB6622F25f397587F11638dA8CE88C27b5645` | no registry ABI |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | poolFactory | `0xAE4fB6622F25f397587F11638dA8CE88C27b5645` | `Premia.PoolFactory` |
 
 ## ABI
 

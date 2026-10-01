@@ -8,22 +8,18 @@ Omnichain lending protocol on Arbitrum. Aave V2 fork with cross-chain lending ca
 | --- | --- |
 | Category | Lending |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Radiant` on arbitrum |
 | Chains | arbitrum |
 | Document | [radiant.md](../radiant.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Arbitrum One's lendingPool):
+On Arbitrum One, `Radiant` is a namespace: its contracts need no import.
 
 ```sauce chain=arbitrum
-import RadiantLendingPoolABI from "./protocols/radiant/RadiantLendingPoolABI.json";
-
-const LENDING_POOL = 0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1n;
-
 function main() {
-  const bound = RadiantLendingPoolABI.at(LENDING_POOL);
+  // Arbitrum One's lendingPool, `0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1`.
+  require(Radiant.LendingPool != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | lendingPool | `0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1` | `RadiantLendingPoolABI.at(0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1n)` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | lendingPool | `0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1` | `Radiant.LendingPool` |
 
 ## ABI
 

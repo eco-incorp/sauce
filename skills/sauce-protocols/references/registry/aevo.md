@@ -8,22 +8,18 @@ High-performance options and perpetuals exchange built on a custom OP Stack roll
 | --- | --- |
 | Category | Options |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Aevo` on ethereum |
 | Chains | ethereum |
 | Document | [aevo.md](../aevo.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's depositContract):
+On Ethereum, `Aevo` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import DepositContractABI from "./protocols/aevo/DepositContractABI.json";
-
-const DEPOSIT_CONTRACT = 0x4082C9647c098a6493Fb499EaE63b5ce3259C574n;
-
 function main() {
-  const bound = DepositContractABI.at(DEPOSIT_CONTRACT);
+  // Ethereum's depositContract, `0x4082C9647c098a6493Fb499EaE63b5ce3259C574`.
+  require(Aevo.DepositContract != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | depositContract | `0x4082C9647c098a6493Fb499EaE63b5ce3259C574` | `DepositContractABI.at(0x4082C9647c098a6493Fb499EaE63b5ce3259C574n)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | depositContract | `0x4082C9647c098a6493Fb499EaE63b5ce3259C574` | `Aevo.DepositContract` |
 
 ## ABI
 

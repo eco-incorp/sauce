@@ -8,22 +8,18 @@ DeFi options protocol known for Squeeth (squared ETH), a power perpetual that pr
 | --- | --- |
 | Category | Options |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Opyn` on ethereum |
 | Chains | ethereum |
 | Document | [opyn.md](../opyn.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's controller):
+On Ethereum, `Opyn` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import ControllerABI from "./protocols/opyn/ControllerABI.json";
-
-const CONTROLLER = 0x64187ae08781B09368e6253F9E94951243A493D5n;
-
 function main() {
-  const bound = ControllerABI.at(CONTROLLER);
+  // Ethereum's controller, `0x64187ae08781B09368e6253F9E94951243A493D5`.
+  require(Opyn.Controller != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | controller | `0x64187ae08781B09368e6253F9E94951243A493D5` | `ControllerABI.at(0x64187ae08781B09368e6253F9E94951243A493D5n)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | oSQTH | `0xf1B99e3E573A1a9C5E6B2Ce818b617F0E664E86B` | no registry ABI |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | controller | `0x64187ae08781B09368e6253F9E94951243A493D5` | `Opyn.Controller` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | oSQTH | `0xf1B99e3E573A1a9C5E6B2Ce818b617F0E664E86B` | `Opyn.OSQTH` |
 
 ## ABI
 

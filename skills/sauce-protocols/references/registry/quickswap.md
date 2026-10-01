@@ -8,22 +8,18 @@ The leading DEX on Polygon with V2 (constant product) and V3 (Algebra concentrat
 | --- | --- |
 | Category | DEX |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Quickswap` on polygon |
 | Chains | polygon |
 | Document | [quickswap.md](../quickswap.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Polygon's v2Router):
+On Polygon, `Quickswap` is a namespace: its contracts need no import.
 
 ```sauce chain=polygon
-import QuickSwapV2RouterABI from "./protocols/quickswap/QuickSwapV2RouterABI.json";
-
-const V2_ROUTER = 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ffn;
-
 function main() {
-  const bound = QuickSwapV2RouterABI.at(V2_ROUTER);
+  // Polygon's v2Factory, `0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32`.
+  require(Quickswap.V2Factory != 0n);
 }
 ```
 
@@ -31,10 +27,10 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Polygon](../../../sauce-chains/references/polygon.md) | v2Factory | `0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32` | no registry ABI |
-| [Polygon](../../../sauce-chains/references/polygon.md) | v2Router | `0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff` | `QuickSwapV2RouterABI.at(0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ffn)` |
-| [Polygon](../../../sauce-chains/references/polygon.md) | v3Factory | `0x411b0fAcC3489691f28ad58c47006AF5E3Ab3A28` | no registry ABI |
-| [Polygon](../../../sauce-chains/references/polygon.md) | v3SwapRouter | `0xf5b509bB0909a69B1c207E495f687a596C168e12` | `QuickSwapV3SwapRouterABI.at(0xf5b509bB0909a69B1c207E495f687a596C168e12n)` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | v2Factory | `0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32` | `Quickswap.V2Factory` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | v2Router | `0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff` | `Quickswap.V2Router` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | v3Factory | `0x411b0fAcC3489691f28ad58c47006AF5E3Ab3A28` | `Quickswap.V3Factory` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | v3SwapRouter | `0xf5b509bB0909a69B1c207E495f687a596C168e12` | `Quickswap.V3SwapRouter` |
 
 ## ABI
 

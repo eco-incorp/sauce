@@ -8,22 +8,18 @@ Lending protocol that lets users borrow MIM stablecoin against yield-bearing col
 | --- | --- |
 | Category | CDPs and stablecoins |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Abracadabra` on ethereum, arbitrum |
 | Chains | ethereum, arbitrum |
 | Document | [abracadabra.md](../abracadabra.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's degenBox):
+On Ethereum, `Abracadabra` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import DegenBoxABI from "./protocols/abracadabra/DegenBoxABI.json";
-
-const DEGEN_BOX = 0xd96f48665a1410C0cd669A88898ecA36B9Fc2ccen;
-
 function main() {
-  const bound = DegenBoxABI.at(DEGEN_BOX);
+  // Ethereum's degenBox, `0xd96f48665a1410C0cd669A88898ecA36B9Fc2cce`.
+  require(Abracadabra.DegenBox != 0n);
 }
 ```
 
@@ -31,10 +27,10 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | degenBox | `0xd96f48665a1410C0cd669A88898ecA36B9Fc2cce` | `DegenBoxABI.at(0xd96f48665a1410C0cd669A88898ecA36B9Fc2ccen)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | mim | `0x99D8a9C45b2ecA8864373A26D1459e3Dff1e17F3` | no registry ABI |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | degenBox | `0x7C8FeF8eA9b1fE46A7689bfb8149341C90431D38` | `DegenBoxABI.at(0x7C8FeF8eA9b1fE46A7689bfb8149341C90431D38n)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | mim | `0xFEa7a6a0B346362BF88A9e4A88416B77a57D6c2A` | no registry ABI |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | degenBox | `0xd96f48665a1410C0cd669A88898ecA36B9Fc2cce` | `Abracadabra.DegenBox` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | mim | `0x99D8a9C45b2ecA8864373A26D1459e3Dff1e17F3` | `Abracadabra.Mim` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | degenBox | `0x7C8FeF8eA9b1fE46A7689bfb8149341C90431D38` | `Abracadabra.DegenBox` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | mim | `0xFEa7a6a0B346362BF88A9e4A88416B77a57D6c2A` | `Abracadabra.Mim` |
 
 ## ABI
 

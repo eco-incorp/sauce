@@ -7,23 +7,19 @@ Generalized AMM with weighted pools, single Vault architecture, and flash loans.
 | Fact | Value |
 | --- | --- |
 | Category | DEX |
-| Family | none |
-| Namespace | none: import its ABI |
+| Family | `Balancer`: `balancer-v2` |
+| Namespace | `BalancerV2` on ethereum, optimism, bsc, gnosis, polygon, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, bsc, gnosis, polygon, base, arbitrum, avalanche |
 | Document | [balancer-v2.md](../balancer-v2.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's vault):
+On Ethereum, `BalancerV2` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import BalancerV2VaultABI from "./protocols/balancer-v2/BalancerV2VaultABI.json";
-
-const VAULT = 0xBA12222222228d8Ba445958a75a0704d566BF2C8n;
-
 function main() {
-  const bound = BalancerV2VaultABI.at(VAULT);
+  // Ethereum's vault, `0xBA12222222228d8Ba445958a75a0704d566BF2C8`.
+  require(BalancerV2.Vault != 0n);
 }
 ```
 
@@ -31,14 +27,14 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2VaultABI.at(0xBA12222222228d8Ba445958a75a0704d566BF2C8n)` |
-| [Optimism](../../../sauce-chains/references/optimism.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2VaultABI.at(0xBA12222222228d8Ba445958a75a0704d566BF2C8n)` |
-| [BNB Chain](../../../sauce-chains/references/bsc.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2VaultABI.at(0xBA12222222228d8Ba445958a75a0704d566BF2C8n)` |
-| [Gnosis](../../../sauce-chains/references/gnosis.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2VaultABI.at(0xBA12222222228d8Ba445958a75a0704d566BF2C8n)` |
-| [Polygon](../../../sauce-chains/references/polygon.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2VaultABI.at(0xBA12222222228d8Ba445958a75a0704d566BF2C8n)` |
-| [Base](../../../sauce-chains/references/base.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2VaultABI.at(0xBA12222222228d8Ba445958a75a0704d566BF2C8n)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2VaultABI.at(0xBA12222222228d8Ba445958a75a0704d566BF2C8n)` |
-| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2VaultABI.at(0xBA12222222228d8Ba445958a75a0704d566BF2C8n)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2.Vault` |
+| [Optimism](../../../sauce-chains/references/optimism.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2.Vault` |
+| [BNB Chain](../../../sauce-chains/references/bsc.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2.Vault` |
+| [Gnosis](../../../sauce-chains/references/gnosis.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2.Vault` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2.Vault` |
+| [Base](../../../sauce-chains/references/base.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2.Vault` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2.Vault` |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2.Vault` |
 
 ## ABI
 

@@ -8,22 +8,18 @@ Multi-chain DEX aggregator optimizing swap rates across decentralized exchanges.
 | --- | --- |
 | Category | Aggregators |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Paraswap` on ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
 | Document | [paraswap.md](../paraswap.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's augustusV5):
+On Ethereum, `Paraswap` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import AugustusV5ABI from "./protocols/paraswap/AugustusV5ABI.json";
-
-const AUGUSTUS_V5 = 0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57n;
-
 function main() {
-  const bound = AugustusV5ABI.at(AUGUSTUS_V5);
+  // Ethereum's augustusV5, `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57`.
+  require(Paraswap.AugustusV5 != 0n);
 }
 ```
 
@@ -31,20 +27,20 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `AugustusV5ABI.at(0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57n)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | no registry ABI |
-| [Optimism](../../../sauce-chains/references/optimism.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `AugustusV5ABI.at(0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57n)` |
-| [Optimism](../../../sauce-chains/references/optimism.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | no registry ABI |
-| [BNB Chain](../../../sauce-chains/references/bsc.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `AugustusV5ABI.at(0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57n)` |
-| [BNB Chain](../../../sauce-chains/references/bsc.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | no registry ABI |
-| [Polygon](../../../sauce-chains/references/polygon.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `AugustusV5ABI.at(0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57n)` |
-| [Polygon](../../../sauce-chains/references/polygon.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | no registry ABI |
-| [Base](../../../sauce-chains/references/base.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `AugustusV5ABI.at(0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57n)` |
-| [Base](../../../sauce-chains/references/base.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | no registry ABI |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `AugustusV5ABI.at(0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57n)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | no registry ABI |
-| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `AugustusV5ABI.at(0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57n)` |
-| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | no registry ABI |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
+| [Optimism](../../../sauce-chains/references/optimism.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5` |
+| [Optimism](../../../sauce-chains/references/optimism.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
+| [BNB Chain](../../../sauce-chains/references/bsc.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5` |
+| [BNB Chain](../../../sauce-chains/references/bsc.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
+| [Base](../../../sauce-chains/references/base.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5` |
+| [Base](../../../sauce-chains/references/base.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5` |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
 
 ## ABI
 

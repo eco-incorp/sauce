@@ -8,22 +8,18 @@ The leading DEX on zkSync Era with optimized gas efficiency. Supports classic co
 | --- | --- |
 | Category | DEX |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Syncswap` on zksync |
 | Chains | zksync |
 | Document | [syncswap.md](../syncswap.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here zkSync Era's router):
+On zkSync Era, `Syncswap` is a namespace: its contracts need no import.
 
 ```sauce chain=zksync
-import SyncSwapRouterABI from "./protocols/syncswap/SyncSwapRouterABI.json";
-
-const ROUTER = 0x2da10A1e27bF85cEdD8FFb1AbBe97e53391C0295n;
-
 function main() {
-  const bound = SyncSwapRouterABI.at(ROUTER);
+  // zkSync Era's router, `0x2da10A1e27bF85cEdD8FFb1AbBe97e53391C0295`.
+  require(Syncswap.Router != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [zkSync Era](../../../sauce-chains/references/zksync.md) | router | `0x2da10A1e27bF85cEdD8FFb1AbBe97e53391C0295` | `SyncSwapRouterABI.at(0x2da10A1e27bF85cEdD8FFb1AbBe97e53391C0295n)` |
+| [zkSync Era](../../../sauce-chains/references/zksync.md) | router | `0x2da10A1e27bF85cEdD8FFb1AbBe97e53391C0295` | `Syncswap.Router` |
 
 ## ABI
 

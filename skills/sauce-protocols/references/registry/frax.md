@@ -8,22 +8,18 @@ Fractional-algorithmic stablecoin protocol with FRAX stablecoin, sFRAX staking, 
 | --- | --- |
 | Category | CDPs and stablecoins |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Frax` on ethereum |
 | Chains | ethereum |
 | Document | [frax.md](../frax.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's frax):
+On Ethereum, `Frax` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import FraxERC20ABI from "./protocols/frax/FraxERC20ABI.json";
-
-const FRAX = 0x853d955aCEf822Db058eb8505911ED77F175b99en;
-
 function main() {
-  const bound = FraxERC20ABI.at(FRAX);
+  // Ethereum's frax, `0x853d955aCEf822Db058eb8505911ED77F175b99e`.
+  require(Frax.Frax != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | frax | `0x853d955aCEf822Db058eb8505911ED77F175b99e` | `FraxERC20ABI.at(0x853d955aCEf822Db058eb8505911ED77F175b99en)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | frax | `0x853d955aCEf822Db058eb8505911ED77F175b99e` | `Frax.Frax` |
 
 ## ABI
 

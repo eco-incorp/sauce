@@ -14,6 +14,21 @@
 | Sauce Router | `0x9201aF06536Cb4819cf1F08aE7063c5997D87459` |
 | Intents (eco-routes) | none recorded |
 
+## In a program
+
+Compiled with `--chain sei`, a program names Sei's tokens and contracts with no
+import; the same file compiled for another chain resolves each name there, or fails where the
+chain does not have it.
+
+```sauce chain=sei
+function main() {
+  // `CircleGateway.GatewayMinter` is Sei's gatewayMinter: `0x2222222d7164433c4C09B0b0D809a9b52C04C205`.
+  require(CircleGateway.GatewayMinter != 0n);
+  // The same contract, qualified by the chain's name, from a program on any chain.
+  require(Sei.CircleGateway.GatewayMinter == CircleGateway.GatewayMinter);
+}
+```
+
 ## Tokens
 
 The registry names no token on this chain: a program uses `Token(<address>)`.
@@ -26,5 +41,5 @@ address.
 
 | Protocol | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayMinter | `0x2222222d7164433c4C09B0b0D809a9b52C04C205` | `GatewayMinterABI.at(0x2222222d7164433c4C09B0b0D809a9b52C04C205n)` |
-| [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayWallet | `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE` | `GatewayWalletABI.at(0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eEn)` |
+| [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayMinter | `0x2222222d7164433c4C09B0b0D809a9b52C04C205` | `CircleGateway.GatewayMinter` |
+| [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayWallet | `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE` | `CircleGateway.GatewayWallet` |

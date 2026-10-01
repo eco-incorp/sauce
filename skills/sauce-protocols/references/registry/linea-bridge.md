@@ -8,22 +8,18 @@ Official Linea zkEVM bridge via L1MessageService. Deposits ETH and ERC-20 tokens
 | --- | --- |
 | Category | Bridges |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `LineaBridge` on ethereum, linea |
 | Chains | ethereum, linea |
 | Document | [linea-bridge.md](../linea-bridge.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's l1MessageService):
+On Ethereum, `LineaBridge` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import LineaL1MessageServiceABI from "./protocols/linea-bridge/LineaL1MessageServiceABI.json";
-
-const L1_MESSAGE_SERVICE = 0xd19d4B5d358258f05D7B411E21A1460D11B0876Fn;
-
 function main() {
-  const bound = LineaL1MessageServiceABI.at(L1_MESSAGE_SERVICE);
+  // Ethereum's l1MessageService, `0xd19d4B5d358258f05D7B411E21A1460D11B0876F`.
+  require(LineaBridge.L1MessageService != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | l1MessageService | `0xd19d4B5d358258f05D7B411E21A1460D11B0876F` | `LineaL1MessageServiceABI.at(0xd19d4B5d358258f05D7B411E21A1460D11B0876Fn)` |
-| [Linea](../../../sauce-chains/references/linea.md) | l2MessageService | `0x508Ca82Df566dCD1B0DE8296e70a96332cD644ec` | no registry ABI |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | l1MessageService | `0xd19d4B5d358258f05D7B411E21A1460D11B0876F` | `LineaBridge.L1MessageService` |
+| [Linea](../../../sauce-chains/references/linea.md) | l2MessageService | `0x508Ca82Df566dCD1B0DE8296e70a96332cD644ec` | `LineaBridge.L2MessageService` |
 
 ## ABI
 

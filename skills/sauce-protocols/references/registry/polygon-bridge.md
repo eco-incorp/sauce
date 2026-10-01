@@ -8,22 +8,18 @@ Official Polygon PoS bridge via RootChainManager. Supports ETH, ERC-20, ERC-721,
 | --- | --- |
 | Category | Bridges |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `PolygonBridge` on ethereum, polygon |
 | Chains | ethereum, polygon |
 | Document | [polygon-bridge.md](../polygon-bridge.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's rootChainManager):
+On Ethereum, `PolygonBridge` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import PolygonRootChainManagerABI from "./protocols/polygon-bridge/PolygonRootChainManagerABI.json";
-
-const ROOT_CHAIN_MANAGER = 0xA0c68C638235ee32657e8f720a23ceC1bFc77C77n;
-
 function main() {
-  const bound = PolygonRootChainManagerABI.at(ROOT_CHAIN_MANAGER);
+  // Ethereum's erc20Predicate, `0x40ec5B33f54e0E8A33A975908C5BA1c14e5BbbDf`.
+  require(PolygonBridge.Erc20Predicate != 0n);
 }
 ```
 
@@ -31,10 +27,10 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | erc20Predicate | `0x40ec5B33f54e0E8A33A975908C5BA1c14e5BbbDf` | no registry ABI |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | etherPredicate | `0x8484Ef722627bf18ca5Ae6BcF031c23E6e922B30` | no registry ABI |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | rootChainManager | `0xA0c68C638235ee32657e8f720a23ceC1bFc77C77` | `PolygonRootChainManagerABI.at(0xA0c68C638235ee32657e8f720a23ceC1bFc77C77n)` |
-| [Polygon](../../../sauce-chains/references/polygon.md) | childChainManager | `0xA6FA4fB5f76172d178d61B04b0ecd319C5d1C0aa` | no registry ABI |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | erc20Predicate | `0x40ec5B33f54e0E8A33A975908C5BA1c14e5BbbDf` | `PolygonBridge.Erc20Predicate` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | etherPredicate | `0x8484Ef722627bf18ca5Ae6BcF031c23E6e922B30` | `PolygonBridge.EtherPredicate` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | rootChainManager | `0xA0c68C638235ee32657e8f720a23ceC1bFc77C77` | `PolygonBridge.RootChainManager` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | childChainManager | `0xA6FA4fB5f76172d178d61B04b0ecd319C5d1C0aa` | `PolygonBridge.ChildChainManager` |
 
 ## ABI
 

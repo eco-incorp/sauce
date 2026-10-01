@@ -28,34 +28,34 @@ V2, DODO V2, Trader Joe LB and WOOFi through its unified `swap`. Choose by pool 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
 | [Aerodrome](aerodrome.md) ([registry](registry/aerodrome.md)) | — | `Aerodrome`: base | base |
-| [Aerodrome Slipstream](aerodrome-slipstream.md) ([registry](registry/aerodrome-slipstream.md)) | — | — | arc, base |
-| [Ambient](ambient.md) ([registry](registry/ambient.md)) | — | — | ethereum, scroll |
-| [Balancer V2](balancer-v2.md) ([registry](registry/balancer-v2.md)) | — | — | ethereum, optimism, bsc, gnosis, polygon, base, arbitrum, avalanche |
-| [BaseSwap](baseswap.md) ([registry](registry/baseswap.md)) | — | — | base |
-| [Camelot](camelot.md) ([registry](registry/camelot.md)) | — | — | arbitrum |
-| [Curve Finance](curve.md) ([registry](registry/curve.md)) | — | — | ethereum, optimism, gnosis, polygon, fantom, base, arbitrum, avalanche |
-| [DODO](dodo.md) ([registry](registry/dodo.md)) | — | — | ethereum, bsc |
-| [Fenix](fenix.md) ([registry](registry/fenix.md)) | — | — | blast |
-| [Kim](kim.md) ([registry](registry/kim.md)) | — | — | mode |
-| [KyberSwap](kyberswap.md) ([registry](registry/kyberswap.md)) | — | — | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
-| [Lynex](lynex.md) ([registry](registry/lynex.md)) | — | — | linea |
-| [Maverick](maverick.md) ([registry](registry/maverick.md)) | — | — | ethereum, base, arbitrum |
+| [Aerodrome Slipstream](aerodrome-slipstream.md) ([registry](registry/aerodrome-slipstream.md)) | — | `AerodromeSlipstream`: arc, base | arc, base |
+| [Ambient](ambient.md) ([registry](registry/ambient.md)) | — | `Ambient`: ethereum, scroll | ethereum, scroll |
+| [Balancer V2](balancer-v2.md) ([registry](registry/balancer-v2.md)) | `Balancer` | `BalancerV2`: ethereum, optimism, bsc, gnosis, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, gnosis, polygon, base, arbitrum, avalanche |
+| [BaseSwap](baseswap.md) ([registry](registry/baseswap.md)) | — | `Baseswap`: base | base |
+| [Camelot](camelot.md) ([registry](registry/camelot.md)) | — | `Camelot`: arbitrum | arbitrum |
+| [Curve Finance](curve.md) ([registry](registry/curve.md)) | — | `Curve`: ethereum, optimism, gnosis, polygon, fantom, base, arbitrum, avalanche | ethereum, optimism, gnosis, polygon, fantom, base, arbitrum, avalanche |
+| [DODO](dodo.md) ([registry](registry/dodo.md)) | — | `Dodo`: ethereum, bsc | ethereum, bsc |
+| [Fenix](fenix.md) ([registry](registry/fenix.md)) | — | `Fenix`: blast | blast |
+| [Kim](kim.md) ([registry](registry/kim.md)) | — | `Kim`: mode | mode |
+| [KyberSwap](kyberswap.md) ([registry](registry/kyberswap.md)) | — | `Kyberswap`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
+| [Lynex](lynex.md) ([registry](registry/lynex.md)) | — | `Lynex`: linea | linea |
+| [Maverick](maverick.md) ([registry](registry/maverick.md)) | — | `Maverick`: ethereum, base, arbitrum | ethereum, base, arbitrum |
 | [PancakeSwap V2](pancakeswap-v2.md) ([registry](registry/pancakeswap-v2.md)) | `Pancakeswap` | `PancakeswapV2`: ethereum, bsc, monad, opbnb, base, arbitrum, linea | ethereum, bsc, monad, opbnb, base, arbitrum, linea |
-| [PancakeSwap V3](pancakeswap-v3.md) ([registry](registry/pancakeswap-v3.md)) | — | — | ethereum, bsc, base, arbitrum, linea |
-| [QuickSwap](quickswap.md) ([registry](registry/quickswap.md)) | — | — | polygon |
-| [Ramses](ramses.md) ([registry](registry/ramses.md)) | — | — | arbitrum |
-| [SpookySwap](spookyswap.md) ([registry](registry/spookyswap.md)) | — | — | fantom |
+| [PancakeSwap V3](pancakeswap-v3.md) ([registry](registry/pancakeswap-v3.md)) | `Pancakeswap` | `PancakeswapV3`: ethereum, bsc, base, arbitrum, linea | ethereum, bsc, base, arbitrum, linea |
+| [QuickSwap](quickswap.md) ([registry](registry/quickswap.md)) | — | `Quickswap`: polygon | polygon |
+| [Ramses](ramses.md) ([registry](registry/ramses.md)) | — | `Ramses`: arbitrum | arbitrum |
+| [SpookySwap](spookyswap.md) ([registry](registry/spookyswap.md)) | — | `Spookyswap`: fantom | fantom |
 | [SushiSwap V2](sushiswap-v2.md) ([registry](registry/sushiswap-v2.md)) | `Sushiswap` | `SushiswapV2`: ethereum, optimism, bsc, polygon, fantom, arbitrum, avalanche | ethereum, optimism, bsc, polygon, fantom, arbitrum, avalanche |
-| [SyncSwap](syncswap.md) ([registry](registry/syncswap.md)) | — | — | zksync |
-| [Synthra V3](synthra-v3.md) ([registry](registry/synthra-v3.md)) | — | — | arc |
-| [Thena](thena.md) ([registry](registry/thena.md)) | — | — | bsc |
-| [Thruster](thruster.md) ([registry](registry/thruster.md)) | — | — | blast |
-| [Trader Joe](trader-joe.md) ([registry](registry/trader-joe.md)) | — | — | bsc, arbitrum, avalanche |
+| [SyncSwap](syncswap.md) ([registry](registry/syncswap.md)) | — | `Syncswap`: zksync | zksync |
+| [Synthra V3](synthra-v3.md) ([registry](registry/synthra-v3.md)) | `Synthra` | `SynthraV3`: arc | arc |
+| [Thena](thena.md) ([registry](registry/thena.md)) | — | `Thena`: bsc | bsc |
+| [Thruster](thruster.md) ([registry](registry/thruster.md)) | — | `Thruster`: blast | blast |
+| [Trader Joe](trader-joe.md) ([registry](registry/trader-joe.md)) | — | `TraderJoe`: bsc, arbitrum, avalanche | bsc, arbitrum, avalanche |
 | [Uniswap V2](uniswap-v2.md) ([registry](registry/uniswap-v2.md)) | `Uniswap` | `UniswapV2`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora |
 | [Uniswap V3](uniswap-v3.md) ([registry](registry/uniswap-v3.md)) | `Uniswap` | `UniswapV3`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche |
-| [Uniswap V4](uniswap-v4.md) ([registry](registry/uniswap-v4.md)) | `Uniswap` | `UniswapV4`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche, blast | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche, blast |
-| [UnitFlow V3](unitflow-v3.md) ([registry](registry/unitflow-v3.md)) | — | — | arc |
-| [Velodrome](velodrome.md) ([registry](registry/velodrome.md)) | — | — | optimism |
+| [Uniswap V4](uniswap-v4.md) ([registry](registry/uniswap-v4.md)) | `Uniswap` | `UniswapV4`: ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora | ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora |
+| [UnitFlow V3](unitflow-v3.md) ([registry](registry/unitflow-v3.md)) | `Unitflow` | `UnitflowV3`: arc | arc |
+| [Velodrome](velodrome.md) ([registry](registry/velodrome.md)) | — | `Velodrome`: optimism | optimism |
 
 ## Aggregators (6)
 
@@ -70,12 +70,12 @@ the route, use the pools directly (`sauce-swaps`).
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| [CoW Swap](cowswap.md) ([registry](registry/cowswap.md)) | — | — | ethereum, arbitrum |
-| [KyberSwap Aggregator](kyberswap-aggregator.md) ([registry](registry/kyberswap-aggregator.md)) | — | — | ethereum, optimism, bsc, polygon, fantom, zksync, arc, base, arbitrum, avalanche, linea, scroll |
+| [CoW Swap](cowswap.md) ([registry](registry/cowswap.md)) | — | `Cowswap`: ethereum, arbitrum | ethereum, arbitrum |
+| [KyberSwap Aggregator](kyberswap-aggregator.md) ([registry](registry/kyberswap-aggregator.md)) | — | `KyberswapAggregator`: ethereum, optimism, bsc, polygon, fantom, zksync, arc, base, arbitrum, avalanche, linea, scroll | ethereum, optimism, bsc, polygon, fantom, zksync, arc, base, arbitrum, avalanche, linea, scroll |
 | [1inch](oneinch.md) ([registry](registry/oneinch.md)) | — | `Oneinch`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
-| [OpenOcean](openocean.md) ([registry](registry/openocean.md)) | — | — | ethereum, optimism, bsc, polygon, fantom, arbitrum, avalanche |
-| [ParaSwap](paraswap.md) ([registry](registry/paraswap.md)) | — | — | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
-| [0x Protocol](zerox.md) ([registry](registry/zerox.md)) | — | — | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
+| [OpenOcean](openocean.md) ([registry](registry/openocean.md)) | — | `Openocean`: ethereum, optimism, bsc, polygon, fantom, arbitrum, avalanche | ethereum, optimism, bsc, polygon, fantom, arbitrum, avalanche |
+| [ParaSwap](paraswap.md) ([registry](registry/paraswap.md)) | — | `Paraswap`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
+| [0x Protocol](zerox.md) ([registry](registry/zerox.md)) | — | `Zerox`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
 
 ## Lending (17)
 
@@ -99,21 +99,21 @@ prices, and a position below its liquidation threshold can be liquidated by anyo
 | --- | --- | --- | --- |
 | [Aave V2](aave-v2.md) ([registry](registry/aave-v2.md)) | `Aave` | `AaveV2`: ethereum, polygon, avalanche | ethereum, polygon, avalanche |
 | [Aave V3](aave-v3.md) ([registry](registry/aave-v3.md)) | `Aave` | `AaveV3`: ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll | ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll |
-| [Aave V4](aave-v4.md) ([registry](registry/aave-v4.md)) | — | — | ethereum, arc, base, avalanche |
-| [Benqi](benqi.md) ([registry](registry/benqi.md)) | — | — | avalanche |
-| [Compound V2](compound-v2.md) ([registry](registry/compound-v2.md)) | — | — | ethereum |
+| [Aave V4](aave-v4.md) ([registry](registry/aave-v4.md)) | `Aave` | `AaveV4`: ethereum, arc, base, avalanche | ethereum, arc, base, avalanche |
+| [Benqi](benqi.md) ([registry](registry/benqi.md)) | — | `Benqi`: avalanche | avalanche |
+| [Compound V2](compound-v2.md) ([registry](registry/compound-v2.md)) | `Compound` | `CompoundV2`: ethereum | ethereum |
 | [Compound V3](compound-v3.md) ([registry](registry/compound-v3.md)) | `Compound` | `CompoundV3`: ethereum, optimism, polygon, base, arbitrum, scroll | ethereum, optimism, polygon, base, arbitrum, scroll |
-| [Euler V2](euler-v2.md) ([registry](registry/euler-v2.md)) | — | — | ethereum |
-| [Fluid](fluid.md) ([registry](registry/fluid.md)) | — | — | ethereum, arbitrum |
-| [LayerBank](layerbank.md) ([registry](registry/layerbank.md)) | — | — | scroll |
-| [Moonwell](moonwell.md) ([registry](registry/moonwell.md)) | — | — | base |
+| [Euler V2](euler-v2.md) ([registry](registry/euler-v2.md)) | `Euler` | `EulerV2`: ethereum | ethereum |
+| [Fluid](fluid.md) ([registry](registry/fluid.md)) | — | `Fluid`: ethereum, arbitrum | ethereum, arbitrum |
+| [LayerBank](layerbank.md) ([registry](registry/layerbank.md)) | — | `Layerbank`: scroll | scroll |
+| [Moonwell](moonwell.md) ([registry](registry/moonwell.md)) | — | `Moonwell`: base | base |
 | [Morpho Blue](morpho-blue.md) ([registry](registry/morpho-blue.md)) | — | `MorphoBlue`: ethereum, monad, arc, base | ethereum, monad, arc, base |
-| [Radiant](radiant.md) ([registry](registry/radiant.md)) | — | — | arbitrum |
-| [Seamless](seamless.md) ([registry](registry/seamless.md)) | — | — | base |
-| [Silo](silo.md) ([registry](registry/silo.md)) | — | — | ethereum, arbitrum |
-| [Spark](spark.md) ([registry](registry/spark.md)) | — | — | ethereum |
-| [Venus](venus.md) ([registry](registry/venus.md)) | — | — | bsc |
-| [ZeroLend](zerolend.md) ([registry](registry/zerolend.md)) | — | — | zksync |
+| [Radiant](radiant.md) ([registry](registry/radiant.md)) | — | `Radiant`: arbitrum | arbitrum |
+| [Seamless](seamless.md) ([registry](registry/seamless.md)) | — | `Seamless`: base | base |
+| [Silo](silo.md) ([registry](registry/silo.md)) | — | `Silo`: ethereum, arbitrum | ethereum, arbitrum |
+| [Spark](spark.md) ([registry](registry/spark.md)) | — | `Spark`: ethereum | ethereum |
+| [Venus](venus.md) ([registry](registry/venus.md)) | — | `Venus`: bsc | bsc |
+| [ZeroLend](zerolend.md) ([registry](registry/zerolend.md)) | — | `Zerolend`: zksync | zksync |
 
 ## CDPs and stablecoins (10)
 
@@ -126,16 +126,16 @@ rules. The stablecoin itself is an ordinary ERC-20 to transfer.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| [Abracadabra](abracadabra.md) ([registry](registry/abracadabra.md)) | — | — | ethereum, arbitrum |
-| [Alchemix](alchemix.md) ([registry](registry/alchemix.md)) | — | — | ethereum |
-| [crvUSD](crvusd.md) ([registry](registry/crvusd.md)) | — | — | ethereum |
-| [Ethena](ethena.md) ([registry](registry/ethena.md)) | — | — | ethereum |
-| [Frax Finance](frax.md) ([registry](registry/frax.md)) | — | — | ethereum |
-| [GHO](gho.md) ([registry](registry/gho.md)) | — | — | ethereum |
-| [Liquity V1](liquity-v1.md) ([registry](registry/liquity-v1.md)) | — | — | ethereum |
-| [Liquity V2](liquity-v2.md) ([registry](registry/liquity-v2.md)) | — | — | ethereum |
-| [Maker](maker.md) ([registry](registry/maker.md)) | — | — | ethereum |
-| [Reflexer](reflexer.md) ([registry](registry/reflexer.md)) | — | — | ethereum |
+| [Abracadabra](abracadabra.md) ([registry](registry/abracadabra.md)) | — | `Abracadabra`: ethereum, arbitrum | ethereum, arbitrum |
+| [Alchemix](alchemix.md) ([registry](registry/alchemix.md)) | — | `Alchemix`: ethereum | ethereum |
+| [crvUSD](crvusd.md) ([registry](registry/crvusd.md)) | — | `Crvusd`: ethereum | ethereum |
+| [Ethena](ethena.md) ([registry](registry/ethena.md)) | — | `Ethena`: ethereum | ethereum |
+| [Frax Finance](frax.md) ([registry](registry/frax.md)) | — | `Frax`: ethereum | ethereum |
+| [GHO](gho.md) ([registry](registry/gho.md)) | — | `Gho`: ethereum | ethereum |
+| [Liquity V1](liquity-v1.md) ([registry](registry/liquity-v1.md)) | `Liquity` | `LiquityV1`: ethereum | ethereum |
+| [Liquity V2](liquity-v2.md) ([registry](registry/liquity-v2.md)) | `Liquity` | `LiquityV2`: ethereum | ethereum |
+| [Maker](maker.md) ([registry](registry/maker.md)) | — | `Maker`: ethereum | ethereum |
+| [Reflexer](reflexer.md) ([registry](registry/reflexer.md)) | — | `Reflexer`: ethereum | ethereum |
 
 ## Bridges (18)
 
@@ -150,24 +150,24 @@ program on another chain, not only move a token, open a Sauce intent (`sauce-int
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| [Across](across.md) ([registry](registry/across.md)) | — | — | ethereum, optimism, polygon, zksync, arc, base, mode, arbitrum, linea, blast, scroll |
-| [Arbitrum Native Bridge](arbitrum-bridge.md) ([registry](registry/arbitrum-bridge.md)) | — | — | ethereum, arbitrum |
-| [Base Native Bridge](base-bridge.md) ([registry](registry/base-bridge.md)) | — | — | ethereum, base |
+| [Across](across.md) ([registry](registry/across.md)) | — | `Across`: ethereum, optimism, polygon, zksync, arc, base, mode, arbitrum, linea, blast, scroll | ethereum, optimism, polygon, zksync, arc, base, mode, arbitrum, linea, blast, scroll |
+| [Arbitrum Native Bridge](arbitrum-bridge.md) ([registry](registry/arbitrum-bridge.md)) | — | `ArbitrumBridge`: ethereum, arbitrum | ethereum, arbitrum |
+| [Base Native Bridge](base-bridge.md) ([registry](registry/base-bridge.md)) | — | `BaseBridge`: ethereum, base | ethereum, base |
 | [CCTP](cctp.md) ([registry](registry/cctp.md)) | — | `Cctp`: ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea | ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea |
-| [Celer Network](celer.md) ([registry](registry/celer.md)) | — | — | ethereum, optimism, bsc, polygon, arbitrum, avalanche |
-| [Connext (Everclear)](connext.md) ([registry](registry/connext.md)) | — | — | ethereum, optimism, base, arbitrum |
-| [deBridge](debridge.md) ([registry](registry/debridge.md)) | — | — | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
-| [Hop Protocol](hop.md) ([registry](registry/hop.md)) | — | — | ethereum, optimism, polygon, base, arbitrum |
-| [LI.FI](lifi.md) ([registry](registry/lifi.md)) | — | — | ethereum, optimism, bsc, gnosis, polygon, fantom, arc, base, arbitrum, avalanche |
-| [Linea Native Bridge](linea-bridge.md) ([registry](registry/linea-bridge.md)) | — | — | ethereum, linea |
-| [Optimism Native Bridge](optimism-bridge.md) ([registry](registry/optimism-bridge.md)) | — | — | ethereum, optimism |
-| [Polygon Native Bridge](polygon-bridge.md) ([registry](registry/polygon-bridge.md)) | — | — | ethereum, polygon |
-| [Scroll Native Bridge](scroll-bridge.md) ([registry](registry/scroll-bridge.md)) | — | — | ethereum, scroll |
-| [Socket](socket.md) ([registry](registry/socket.md)) | — | — | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
-| [Squid Router](squid.md) ([registry](registry/squid.md)) | — | — | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
-| [Stargate](stargate.md) ([registry](registry/stargate.md)) | — | — | ethereum, base, arbitrum |
-| [Synapse Protocol](synapse.md) ([registry](registry/synapse.md)) | — | — | ethereum, optimism, polygon, base, arbitrum, avalanche |
-| [zkSync Native Bridge](zksync-bridge.md) ([registry](registry/zksync-bridge.md)) | — | — | ethereum, zksync |
+| [Celer Network](celer.md) ([registry](registry/celer.md)) | — | `Celer`: ethereum, optimism, bsc, polygon, arbitrum, avalanche | ethereum, optimism, bsc, polygon, arbitrum, avalanche |
+| [Connext (Everclear)](connext.md) ([registry](registry/connext.md)) | — | `Connext`: ethereum, optimism, base, arbitrum | ethereum, optimism, base, arbitrum |
+| [deBridge](debridge.md) ([registry](registry/debridge.md)) | — | `Debridge`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
+| [Hop Protocol](hop.md) ([registry](registry/hop.md)) | — | `Hop`: ethereum, optimism, polygon, base, arbitrum | ethereum, optimism, polygon, base, arbitrum |
+| [LI.FI](lifi.md) ([registry](registry/lifi.md)) | — | `Lifi`: ethereum, optimism, bsc, gnosis, polygon, fantom, arc, base, arbitrum, avalanche | ethereum, optimism, bsc, gnosis, polygon, fantom, arc, base, arbitrum, avalanche |
+| [Linea Native Bridge](linea-bridge.md) ([registry](registry/linea-bridge.md)) | — | `LineaBridge`: ethereum, linea | ethereum, linea |
+| [Optimism Native Bridge](optimism-bridge.md) ([registry](registry/optimism-bridge.md)) | — | `OptimismBridge`: ethereum, optimism | ethereum, optimism |
+| [Polygon Native Bridge](polygon-bridge.md) ([registry](registry/polygon-bridge.md)) | — | `PolygonBridge`: ethereum, polygon | ethereum, polygon |
+| [Scroll Native Bridge](scroll-bridge.md) ([registry](registry/scroll-bridge.md)) | — | `ScrollBridge`: ethereum, scroll | ethereum, scroll |
+| [Socket](socket.md) ([registry](registry/socket.md)) | — | `Socket`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
+| [Squid Router](squid.md) ([registry](registry/squid.md)) | — | `Squid`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
+| [Stargate](stargate.md) ([registry](registry/stargate.md)) | — | `Stargate`: ethereum, base, arbitrum | ethereum, base, arbitrum |
+| [Synapse Protocol](synapse.md) ([registry](registry/synapse.md)) | — | `Synapse`: ethereum, optimism, polygon, base, arbitrum, avalanche | ethereum, optimism, polygon, base, arbitrum, avalanche |
+| [zkSync Native Bridge](zksync-bridge.md) ([registry](registry/zksync-bridge.md)) | — | `ZksyncBridge`: ethereum, zksync | ethereum, zksync |
 
 ## Cross-chain messaging (6)
 
@@ -179,12 +179,12 @@ messages, each with its own set of verifiers and a fee paid at send time in the 
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| [Axelar](axelar.md) ([registry](registry/axelar.md)) | — | — | ethereum, optimism, polygon, base, arbitrum, avalanche |
-| [Chainlink CCIP](chainlink-ccip.md) ([registry](registry/chainlink-ccip.md)) | — | — | ethereum, optimism, polygon, arc, base, arbitrum |
-| [Circle Gateway](circle-gateway.md) ([registry](registry/circle-gateway.md)) | — | — | ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche |
-| [Hyperlane](hyperlane.md) ([registry](registry/hyperlane.md)) | — | — | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
-| [LayerZero](layerzero.md) ([registry](registry/layerzero.md)) | — | — | ethereum, optimism, bsc, polygon, zksync, arc, base, arbitrum, avalanche, linea, scroll |
-| [Wormhole](wormhole.md) ([registry](registry/wormhole.md)) | — | — | ethereum, optimism, polygon, arc, base, arbitrum, avalanche |
+| [Axelar](axelar.md) ([registry](registry/axelar.md)) | — | `Axelar`: ethereum, optimism, polygon, base, arbitrum, avalanche | ethereum, optimism, polygon, base, arbitrum, avalanche |
+| [Chainlink CCIP](chainlink-ccip.md) ([registry](registry/chainlink-ccip.md)) | — | `ChainlinkCcip`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |
+| [Circle Gateway](circle-gateway.md) ([registry](registry/circle-gateway.md)) | — | `CircleGateway`: ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche | ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche |
+| [Hyperlane](hyperlane.md) ([registry](registry/hyperlane.md)) | — | `Hyperlane`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
+| [LayerZero](layerzero.md) ([registry](registry/layerzero.md)) | — | `Layerzero`: ethereum, optimism, bsc, polygon, zksync, arc, base, arbitrum, avalanche, linea, scroll | ethereum, optimism, bsc, polygon, zksync, arc, base, arbitrum, avalanche, linea, scroll |
+| [Wormhole](wormhole.md) ([registry](registry/wormhole.md)) | — | `Wormhole`: ethereum, optimism, polygon, arc, base, arbitrum, avalanche | ethereum, optimism, polygon, arc, base, arbitrum, avalanche |
 
 ## Liquid staking (7)
 
@@ -197,13 +197,13 @@ balance and grows in value. Withdrawals to ETH go through each protocol's queue.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| [Coinbase Wrapped Staked ETH](cbeth.md) ([registry](registry/cbeth.md)) | — | — | ethereum, base |
-| [Frax Ether](frax-ether.md) ([registry](registry/frax-ether.md)) | — | — | ethereum |
-| [Lido](lido.md) ([registry](registry/lido.md)) | — | — | ethereum, arbitrum |
-| [Mantle mETH](mantle-meth.md) ([registry](registry/mantle-meth.md)) | — | — | ethereum |
-| [Rocket Pool](rocket-pool.md) ([registry](registry/rocket-pool.md)) | — | — | ethereum |
-| [Stader](stader.md) ([registry](registry/stader.md)) | — | — | ethereum |
-| [Swell](swell.md) ([registry](registry/swell.md)) | — | — | ethereum |
+| [Coinbase Wrapped Staked ETH](cbeth.md) ([registry](registry/cbeth.md)) | — | `Cbeth`: ethereum, base | ethereum, base |
+| [Frax Ether](frax-ether.md) ([registry](registry/frax-ether.md)) | — | `FraxEther`: ethereum | ethereum |
+| [Lido](lido.md) ([registry](registry/lido.md)) | — | `Lido`: ethereum, arbitrum | ethereum, arbitrum |
+| [Mantle mETH](mantle-meth.md) ([registry](registry/mantle-meth.md)) | — | `MantleMeth`: ethereum | ethereum |
+| [Rocket Pool](rocket-pool.md) ([registry](registry/rocket-pool.md)) | — | `RocketPool`: ethereum | ethereum |
+| [Stader](stader.md) ([registry](registry/stader.md)) | — | `Stader`: ethereum | ethereum |
+| [Swell](swell.md) ([registry](registry/swell.md)) | — | `Swell`: ethereum | ethereum |
 
 ## Restaking (5)
 
@@ -215,11 +215,11 @@ underlying, and withdraws through a queue.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| [EigenLayer](eigenlayer.md) ([registry](registry/eigenlayer.md)) | — | — | ethereum |
-| [ether.fi](etherfi.md) ([registry](registry/etherfi.md)) | — | — | ethereum |
-| [Kelp DAO](kelp.md) ([registry](registry/kelp.md)) | — | — | ethereum |
-| [Puffer Finance](puffer.md) ([registry](registry/puffer.md)) | — | — | ethereum |
-| [Renzo](renzo.md) ([registry](registry/renzo.md)) | — | — | ethereum |
+| [EigenLayer](eigenlayer.md) ([registry](registry/eigenlayer.md)) | — | `Eigenlayer`: ethereum | ethereum |
+| [ether.fi](etherfi.md) ([registry](registry/etherfi.md)) | — | `Etherfi`: ethereum | ethereum |
+| [Kelp DAO](kelp.md) ([registry](registry/kelp.md)) | — | `Kelp`: ethereum | ethereum |
+| [Puffer Finance](puffer.md) ([registry](registry/puffer.md)) | — | `Puffer`: ethereum | ethereum |
+| [Renzo](renzo.md) ([registry](registry/renzo.md)) | — | `Renzo`: ethereum | ethereum |
 
 ## Staking (1)
 
@@ -229,7 +229,7 @@ Olympus stakes OHM into its staked forms.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| [Olympus DAO](olympus.md) ([registry](registry/olympus.md)) | — | — | ethereum |
+| [Olympus DAO](olympus.md) ([registry](registry/olympus.md)) | — | `Olympus`: ethereum | ethereum |
 
 ## Yield and vaults (9)
 
@@ -244,15 +244,15 @@ Olympus stakes OHM into its staked forms.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| [Arrakis Finance](arrakis.md) ([registry](registry/arrakis.md)) | — | — | ethereum |
-| [Beefy Finance](beefy.md) ([registry](registry/beefy.md)) | — | — | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
-| [Convex Finance](convex.md) ([registry](registry/convex.md)) | — | — | ethereum |
-| [Gamma Strategies](gamma.md) ([registry](registry/gamma.md)) | — | — | ethereum, polygon |
-| [Harvest Finance](harvest.md) ([registry](registry/harvest.md)) | — | — | ethereum |
+| [Arrakis Finance](arrakis.md) ([registry](registry/arrakis.md)) | — | `Arrakis`: ethereum | ethereum |
+| [Beefy Finance](beefy.md) ([registry](registry/beefy.md)) | — | `Beefy`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
+| [Convex Finance](convex.md) ([registry](registry/convex.md)) | — | `Convex`: ethereum | ethereum |
+| [Gamma Strategies](gamma.md) ([registry](registry/gamma.md)) | — | `Gamma`: ethereum, polygon | ethereum, polygon |
+| [Harvest Finance](harvest.md) ([registry](registry/harvest.md)) | — | `Harvest`: ethereum | ethereum |
 | [Pendle](pendle.md) ([registry](registry/pendle.md)) | — | `Pendle`: ethereum, monad, arbitrum | ethereum, monad, arbitrum |
-| [Sommelier](sommelier.md) ([registry](registry/sommelier.md)) | — | — | ethereum |
-| [Tokemak](tokemak.md) ([registry](registry/tokemak.md)) | — | — | ethereum |
-| [Yearn V3](yearn-v3.md) ([registry](registry/yearn-v3.md)) | — | — | ethereum |
+| [Sommelier](sommelier.md) ([registry](registry/sommelier.md)) | — | `Sommelier`: ethereum | ethereum |
+| [Tokemak](tokemak.md) ([registry](registry/tokemak.md)) | — | `Tokemak`: ethereum | ethereum |
+| [Yearn V3](yearn-v3.md) ([registry](registry/yearn-v3.md)) | `Yearn` | `YearnV3`: ethereum | ethereum |
 
 ## Perpetuals (7)
 
@@ -264,13 +264,13 @@ that fill in its own transaction, so it bounds the request (acceptable price, de
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| [Gains Network](gains-network.md) ([registry](registry/gains-network.md)) | — | — | polygon, arbitrum |
-| [GMX V1](gmx-v1.md) ([registry](registry/gmx-v1.md)) | — | — | arbitrum, avalanche |
-| [GMX V2](gmx-v2.md) ([registry](registry/gmx-v2.md)) | — | — | arbitrum |
-| [Level Finance](level-finance.md) ([registry](registry/level-finance.md)) | — | — | bsc, arbitrum |
-| [MUX Protocol](mux-protocol.md) ([registry](registry/mux-protocol.md)) | — | — | arbitrum |
-| [Perpetual Protocol](perpetual-protocol.md) ([registry](registry/perpetual-protocol.md)) | — | — | optimism |
-| [Vertex](vertex.md) ([registry](registry/vertex.md)) | — | — | arbitrum |
+| [Gains Network](gains-network.md) ([registry](registry/gains-network.md)) | — | `GainsNetwork`: polygon, arbitrum | polygon, arbitrum |
+| [GMX V1](gmx-v1.md) ([registry](registry/gmx-v1.md)) | `Gmx` | `GmxV1`: arbitrum, avalanche | arbitrum, avalanche |
+| [GMX V2](gmx-v2.md) ([registry](registry/gmx-v2.md)) | `Gmx` | `GmxV2`: arbitrum | arbitrum |
+| [Level Finance](level-finance.md) ([registry](registry/level-finance.md)) | — | `LevelFinance`: bsc, arbitrum | bsc, arbitrum |
+| [MUX Protocol](mux-protocol.md) ([registry](registry/mux-protocol.md)) | — | `MuxProtocol`: arbitrum | arbitrum |
+| [Perpetual Protocol](perpetual-protocol.md) ([registry](registry/perpetual-protocol.md)) | — | `PerpetualProtocol`: optimism | optimism |
+| [Vertex](vertex.md) ([registry](registry/vertex.md)) | — | `Vertex`: arbitrum | arbitrum |
 
 ## Synthetics (1)
 
@@ -281,7 +281,7 @@ per account.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| [Synthetix V3](synthetix-v3.md) ([registry](registry/synthetix-v3.md)) | — | — | base |
+| [Synthetix V3](synthetix-v3.md) ([registry](registry/synthetix-v3.md)) | `Synthetix` | `SynthetixV3`: base | base |
 
 ## Options (5)
 
@@ -292,11 +292,11 @@ buys, exercises or settles a position it holds.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| [Aevo](aevo.md) ([registry](registry/aevo.md)) | — | — | ethereum |
-| [Hegic](hegic.md) ([registry](registry/hegic.md)) | — | — | arbitrum |
-| [Opyn](opyn.md) ([registry](registry/opyn.md)) | — | — | ethereum |
-| [Premia](premia.md) ([registry](registry/premia.md)) | — | — | arbitrum |
-| [Thales](thales.md) ([registry](registry/thales.md)) | — | — | optimism |
+| [Aevo](aevo.md) ([registry](registry/aevo.md)) | — | `Aevo`: ethereum | ethereum |
+| [Hegic](hegic.md) ([registry](registry/hegic.md)) | — | `Hegic`: arbitrum | arbitrum |
+| [Opyn](opyn.md) ([registry](registry/opyn.md)) | — | `Opyn`: ethereum | ethereum |
+| [Premia](premia.md) ([registry](registry/premia.md)) | — | `Premia`: arbitrum | arbitrum |
+| [Thales](thales.md) ([registry](registry/thales.md)) | — | `Thales`: optimism | optimism |
 
 ## Oracles (2)
 
@@ -308,8 +308,8 @@ transaction (`updatePriceFeeds`, paying its fee as value) before it is read.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| [Chainlink](chainlink.md) ([registry](registry/chainlink.md)) | — | — | ethereum, arc |
-| [Pyth Network](pyth.md) ([registry](registry/pyth.md)) | — | — | ethereum |
+| [Chainlink](chainlink.md) ([registry](registry/chainlink.md)) | — | `Chainlink`: ethereum, arc | ethereum, arc |
+| [Pyth Network](pyth.md) ([registry](registry/pyth.md)) | — | `Pyth`: ethereum | ethereum |
 
 ## Payments and streaming (2)
 
@@ -320,8 +320,8 @@ per second, so tokens are wrapped into Super Tokens first.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| [Sablier](sablier.md) ([registry](registry/sablier.md)) | — | — | ethereum |
-| [Superfluid](superfluid.md) ([registry](registry/superfluid.md)) | — | — | ethereum, optimism, polygon, base, arbitrum |
+| [Sablier](sablier.md) ([registry](registry/sablier.md)) | — | `Sablier`: ethereum | ethereum |
+| [Superfluid](superfluid.md) ([registry](registry/superfluid.md)) | — | `Superfluid`: ethereum, optimism, polygon, base, arbitrum | ethereum, optimism, polygon, base, arbitrum |
 
 ## NFT marketplaces (1)
 
@@ -331,7 +331,7 @@ Seaport fills orders that makers signed off chain.
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| [Seaport](seaport.md) ([registry](registry/seaport.md)) | — | — | ethereum, optimism, polygon, arc, base, arbitrum |
+| [Seaport](seaport.md) ([registry](registry/seaport.md)) | — | `Seaport`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |
 
 ## Infrastructure and standards (9)
 
@@ -344,12 +344,12 @@ ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intent
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |
-| Eco Routes ([registry](registry/eco-routes.md)) | — | — | none recorded |
-| [ENS](ens.md) ([registry](registry/ens.md)) | — | — | ethereum |
+| Eco Routes ([registry](registry/eco-routes.md)) | — | `EcoRoutes`: ethereum, optimism, bsc, unichain, polygon, sonic, ronin, arc, base, plasma, arbitrum, celo, ink | none recorded |
+| [ENS](ens.md) ([registry](registry/ens.md)) | — | `Ens`: ethereum | ethereum |
 | [ERC20](erc20.md) ([registry](registry/erc20.md)) | — | — | none recorded |
 | [ERC-3156](erc3156.md) ([registry](registry/erc3156.md)) | — | — | none recorded |
 | [ERC-4626](erc4626.md) ([registry](registry/erc4626.md)) | — | — | none recorded |
-| [Gelato Network](gelato.md) ([registry](registry/gelato.md)) | — | — | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
-| [Instadapp](instadapp.md) ([registry](registry/instadapp.md)) | — | — | ethereum |
+| [Gelato Network](gelato.md) ([registry](registry/gelato.md)) | — | `Gelato`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
+| [Instadapp](instadapp.md) ([registry](registry/instadapp.md)) | — | `Instadapp`: ethereum | ethereum |
 | [Permit2](permit2.md) ([registry](registry/permit2.md)) | — | `Permit2`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche |
-| [Safe](safe.md) ([registry](registry/safe.md)) | — | — | ethereum, optimism, polygon, arc, base, arbitrum |
+| [Safe](safe.md) ([registry](registry/safe.md)) | — | `Safe`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |

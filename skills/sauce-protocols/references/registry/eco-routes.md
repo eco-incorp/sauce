@@ -8,17 +8,30 @@ Eco's cross-chain intent protocol. A Portal publishes an intent, escrows its rew
 | --- | --- |
 | Category | Infrastructure and standards |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `EcoRoutes` on ethereum, optimism, bsc, unichain, polygon, sonic, ronin, arc, base, plasma, arbitrum, celo, ink |
 | Chains | none recorded |
 | Document | none |
 
 ## In a program
 
+The registry records no deployment: `PortalABI` is an interface, bound to an address the
+program is given.
+
+```sauce chain=ethereum
+import PortalABI from "./protocols/eco-routes/PortalABI.json";
+
+const TARGET = 0n; // the contract's address, as a define
+
+function main() {
+  const target = PortalABI.at(TARGET);
+}
+```
+
 ## ABI
 
 ### `PortalABI`
 
-Not served for import: a program calls it by selector. Speaks for: Portal.
+`import PortalABI from "./protocols/eco-routes/PortalABI.json";` Speaks for: Portal.
 
 - `publish(uint64 destination, bytes route, (uint64 deadline, address creator, address prover, uint256 nativeAmount, (address token, uint256 amount)[] tokens) reward) returns (bytes32 intentHash, address vault)`
 - `publishAndFund(uint64 destination, bytes route, (uint64 deadline, address creator, address prover, uint256 nativeAmount, (address token, uint256 amount)[] tokens) reward, bool allowPartial) payable returns (bytes32 intentHash, address vault)`
@@ -33,6 +46,6 @@ Not served for import: a program calls it by selector. Speaks for: Portal.
 
 ### `ProverABI`
 
-Not served for import: a program calls it by selector. Speaks for: HyperProver, MetaProver, PolymerProver, LayerZeroProver.
+`import ProverABI from "./protocols/eco-routes/ProverABI.json";` Speaks for: HyperProver, MetaProver, PolymerProver, LayerZeroProver.
 
 - `provenIntents(bytes32 intentHash) view returns ((address claimant, uint64 destination))`

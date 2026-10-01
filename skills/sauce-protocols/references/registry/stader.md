@@ -8,22 +8,18 @@ Multi-chain liquid staking protocol. ETHx is Stader's liquid staking token for E
 | --- | --- |
 | Category | Liquid staking |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Stader` on ethereum |
 | Chains | ethereum |
 | Document | [stader.md](../stader.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's ETHx):
+On Ethereum, `Stader` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import ETHxABI from "./protocols/stader/ETHxABI.json";
-
-const ETHX = 0xA35b1B31Ce002FBF2058D22F30f95D405200A15bn;
-
 function main() {
-  const bound = ETHxABI.at(ETHX);
+  // Ethereum's ETHx, `0xA35b1B31Ce002FBF2058D22F30f95D405200A15b`.
+  require(Stader.ETHx != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | ETHx | `0xA35b1B31Ce002FBF2058D22F30f95D405200A15b` | `ETHxABI.at(0xA35b1B31Ce002FBF2058D22F30f95D405200A15bn)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | stakePoolManager | `0xcf5EA1b38380f6aF39068375516Daf40Ed70D299` | `StakePoolManagerABI.at(0xcf5EA1b38380f6aF39068375516Daf40Ed70D299n)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | ETHx | `0xA35b1B31Ce002FBF2058D22F30f95D405200A15b` | `Stader.ETHx` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | stakePoolManager | `0xcf5EA1b38380f6aF39068375516Daf40Ed70D299` | `Stader.StakePoolManager` |
 
 ## ABI
 

@@ -54,51 +54,51 @@ address.
 | --- | --- | --- | --- |
 | [Aave V2](../../sauce-protocols/references/registry/aave-v2.md) | lendingPool | `0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf` | `AaveV2.LendingPool` |
 | [Aave V3](../../sauce-protocols/references/registry/aave-v3.md) | pool | `0x794a61358D6845594F94dc1DB02A252b5b4814aD` | `AaveV3.Pool` |
-| [Aave V3](../../sauce-protocols/references/registry/aave-v3.md) | poolAddressesProvider | `0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb` | no registry ABI |
-| [Across](../../sauce-protocols/references/registry/across.md) | spokePool | `0x9295ee1d8C5b022Be115A2AD3c30C72E34e7F096` | `AcrossSpokePoolABI.at(0x9295ee1d8C5b022Be115A2AD3c30C72E34e7F096n)` |
-| [Axelar](../../sauce-protocols/references/registry/axelar.md) | gateway | `0x6f015F16De9fC8791b234eF68D486d2bF203FBA8` | `AxelarGatewayABI.at(0x6f015F16De9fC8791b234eF68D486d2bF203FBA8n)` |
-| [Axelar](../../sauce-protocols/references/registry/axelar.md) | its | `0xB5FB4BE02232B1bBA4dC8f81dc24C26980dE9e3C` | `AxelarITSABI.at(0xB5FB4BE02232B1bBA4dC8f81dc24C26980dE9e3Cn)` |
-| [Balancer V2](../../sauce-protocols/references/registry/balancer-v2.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2VaultABI.at(0xBA12222222228d8Ba445958a75a0704d566BF2C8n)` |
-| [Beefy Finance](../../sauce-protocols/references/registry/beefy.md) | BIFI | `0xFbdd194376de19a88F4A68671C339563c427310d` | no registry ABI |
+| [Aave V3](../../sauce-protocols/references/registry/aave-v3.md) | poolAddressesProvider | `0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb` | `AaveV3.PoolAddressesProvider` |
+| [Across](../../sauce-protocols/references/registry/across.md) | spokePool | `0x9295ee1d8C5b022Be115A2AD3c30C72E34e7F096` | `Across.SpokePool` |
+| [Axelar](../../sauce-protocols/references/registry/axelar.md) | gateway | `0x6f015F16De9fC8791b234eF68D486d2bF203FBA8` | `Axelar.Gateway` |
+| [Axelar](../../sauce-protocols/references/registry/axelar.md) | its | `0xB5FB4BE02232B1bBA4dC8f81dc24C26980dE9e3C` | `Axelar.ITS` |
+| [Balancer V2](../../sauce-protocols/references/registry/balancer-v2.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2.Vault` |
+| [Beefy Finance](../../sauce-protocols/references/registry/beefy.md) | BIFI | `0xFbdd194376de19a88F4A68671C339563c427310d` | `Beefy.BIFI` |
 | [CCTP](../../sauce-protocols/references/registry/cctp.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger` |
-| [Celer Network](../../sauce-protocols/references/registry/celer.md) | bridge | `0x88DCDC47D2f83a99CF0000FDF667A468bB958a78` | `CelerBridgeABI.at(0x88DCDC47D2f83a99CF0000FDF667A468bB958a78n)` |
-| [Chainlink CCIP](../../sauce-protocols/references/registry/chainlink-ccip.md) | router | `0x849c5ED5a80F5B408Dd4969b78c2C8fdf0565Bfe` | `CCIPRouterABI.at(0x849c5ED5a80F5B408Dd4969b78c2C8fdf0565Bfen)` |
-| [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayMinter | `0x2222222d7164433c4C09B0b0D809a9b52C04C205` | `GatewayMinterABI.at(0x2222222d7164433c4C09B0b0D809a9b52C04C205n)` |
-| [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayWallet | `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE` | `GatewayWalletABI.at(0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eEn)` |
-| [Compound V3](../../sauce-protocols/references/registry/compound-v3.md) | cUSDCv3 | `0xF25212E676D1F7F89Cd72fFEe66158f541246445` | `CompoundV3.CometUSDC` |
-| [Curve Finance](../../sauce-protocols/references/registry/curve.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `CurveAddressProviderABI.at(0x0000000022D53366457F9d5E68Ec105046FC4383n)` |
-| [deBridge](../../sauce-protocols/references/registry/debridge.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `DlnDestinationABI.at(0xE7351Fd770A37282b91D153Ee690B63579D6dd7fn)` |
-| [deBridge](../../sauce-protocols/references/registry/debridge.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `DlnSourceABI.at(0xeF4fB24aD0916217251F553c0596F8Edc630EB66n)` |
-| [Gains Network](../../sauce-protocols/references/registry/gains-network.md) | diamond | `0x209A9A01980377916851af2cA075C2b170452018` | `DiamondABI.at(0x209A9A01980377916851af2cA075C2b170452018n)` |
-| [Gamma Strategies](../../sauce-protocols/references/registry/gamma.md) | uniProxy | `0xA42d55074869491D60Ac05490376B74cF19B00e6` | `UniProxyABI.at(0xA42d55074869491D60Ac05490376B74cF19B00e6n)` |
-| [Gelato Network](../../sauce-protocols/references/registry/gelato.md) | automate | `0x2A6C106ae13B558BB9E2Ec64Bd2f1f7BEFF3A5E0` | `GelatoAutomateABI.at(0x2A6C106ae13B558BB9E2Ec64Bd2f1f7BEFF3A5E0n)` |
-| [Hop Protocol](../../sauce-protocols/references/registry/hop.md) | l2AmmWrapper | `0x76b22b8C1079A44F1211D867D68b1eda76a635A7` | `HopL2AmmWrapperABI.at(0x76b22b8C1079A44F1211D867D68b1eda76a635A7n)` |
-| [Hyperlane](../../sauce-protocols/references/registry/hyperlane.md) | mailbox | `0x5d934f4e2f797775e53561bB72aca21ba36B96BB` | `HyperlaneMailboxABI.at(0x5d934f4e2f797775e53561bB72aca21ba36B96BBn)` |
-| [KyberSwap](../../sauce-protocols/references/registry/kyberswap.md) | elasticFactory | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` | no registry ABI |
-| [KyberSwap](../../sauce-protocols/references/registry/kyberswap.md) | elasticRouter | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` | `KyberSwapElasticRouterABI.at(0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83n)` |
-| [KyberSwap](../../sauce-protocols/references/registry/kyberswap.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberSwapMetaAggregationRouterABI.at(0x6131B5fae19EA4f9D964eAc0408E4408b66337b5n)` |
-| [KyberSwap Aggregator](../../sauce-protocols/references/registry/kyberswap-aggregator.md) | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberSwapMetaAggregationRouterABI.at(0x6131B5fae19EA4f9D964eAc0408E4408b66337b5n)` |
-| [LayerZero](../../sauce-protocols/references/registry/layerzero.md) | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` | `LayerZeroEndpointV2ABI.at(0x1a44076050125825900e736c501f859c50fE728cn)` |
-| [LI.FI](../../sauce-protocols/references/registry/lifi.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `LiFiDiamondABI.at(0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaEn)` |
+| [Celer Network](../../sauce-protocols/references/registry/celer.md) | bridge | `0x88DCDC47D2f83a99CF0000FDF667A468bB958a78` | `Celer.Bridge` |
+| [Chainlink CCIP](../../sauce-protocols/references/registry/chainlink-ccip.md) | router | `0x849c5ED5a80F5B408Dd4969b78c2C8fdf0565Bfe` | `ChainlinkCcip.Router` |
+| [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayMinter | `0x2222222d7164433c4C09B0b0D809a9b52C04C205` | `CircleGateway.GatewayMinter` |
+| [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayWallet | `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE` | `CircleGateway.GatewayWallet` |
+| [Compound V3](../../sauce-protocols/references/registry/compound-v3.md) | cUSDCv3 | `0xF25212E676D1F7F89Cd72fFEe66158f541246445` | `CompoundV3.CUSDCv3` |
+| [Curve Finance](../../sauce-protocols/references/registry/curve.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `Curve.AddressProvider` |
+| [deBridge](../../sauce-protocols/references/registry/debridge.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `Debridge.DlnDestination` |
+| [deBridge](../../sauce-protocols/references/registry/debridge.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `Debridge.DlnSource` |
+| [Gains Network](../../sauce-protocols/references/registry/gains-network.md) | diamond | `0x209A9A01980377916851af2cA075C2b170452018` | `GainsNetwork.Diamond` |
+| [Gamma Strategies](../../sauce-protocols/references/registry/gamma.md) | uniProxy | `0xA42d55074869491D60Ac05490376B74cF19B00e6` | `Gamma.UniProxy` |
+| [Gelato Network](../../sauce-protocols/references/registry/gelato.md) | automate | `0x2A6C106ae13B558BB9E2Ec64Bd2f1f7BEFF3A5E0` | `Gelato.Automate` |
+| [Hop Protocol](../../sauce-protocols/references/registry/hop.md) | l2AmmWrapper | `0x76b22b8C1079A44F1211D867D68b1eda76a635A7` | `Hop.L2AmmWrapper` |
+| [Hyperlane](../../sauce-protocols/references/registry/hyperlane.md) | mailbox | `0x5d934f4e2f797775e53561bB72aca21ba36B96BB` | `Hyperlane.Mailbox` |
+| [KyberSwap](../../sauce-protocols/references/registry/kyberswap.md) | elasticFactory | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` | `Kyberswap.ElasticFactory` |
+| [KyberSwap](../../sauce-protocols/references/registry/kyberswap.md) | elasticRouter | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` | `Kyberswap.ElasticRouter` |
+| [KyberSwap](../../sauce-protocols/references/registry/kyberswap.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `Kyberswap.MetaAggregationRouterV2` |
+| [KyberSwap Aggregator](../../sauce-protocols/references/registry/kyberswap-aggregator.md) | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberswapAggregator.MetaAggregationRouter` |
+| [LayerZero](../../sauce-protocols/references/registry/layerzero.md) | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` | `Layerzero.EndpointV2` |
+| [LI.FI](../../sauce-protocols/references/registry/lifi.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond` |
 | [1inch](../../sauce-protocols/references/registry/oneinch.md) | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` | `Oneinch.AggregationRouterV6` |
-| [OpenOcean](../../sauce-protocols/references/registry/openocean.md) | exchangeV2 | `0x6352a56caadC4F1E25CD6c75970Fa768A3304e64` | `OpenOceanExchangeV2ABI.at(0x6352a56caadC4F1E25CD6c75970Fa768A3304e64n)` |
-| [ParaSwap](../../sauce-protocols/references/registry/paraswap.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `AugustusV5ABI.at(0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57n)` |
-| [ParaSwap](../../sauce-protocols/references/registry/paraswap.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | no registry ABI |
+| [OpenOcean](../../sauce-protocols/references/registry/openocean.md) | exchangeV2 | `0x6352a56caadC4F1E25CD6c75970Fa768A3304e64` | `Openocean.ExchangeV2` |
+| [ParaSwap](../../sauce-protocols/references/registry/paraswap.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5` |
+| [ParaSwap](../../sauce-protocols/references/registry/paraswap.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
 | [Permit2](../../sauce-protocols/references/registry/permit2.md) | permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` | `Permit2.Permit2` |
-| [Polygon Native Bridge](../../sauce-protocols/references/registry/polygon-bridge.md) | childChainManager | `0xA6FA4fB5f76172d178d61B04b0ecd319C5d1C0aa` | no registry ABI |
-| [QuickSwap](../../sauce-protocols/references/registry/quickswap.md) | v2Factory | `0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32` | no registry ABI |
-| [QuickSwap](../../sauce-protocols/references/registry/quickswap.md) | v2Router | `0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff` | `QuickSwapV2RouterABI.at(0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ffn)` |
-| [QuickSwap](../../sauce-protocols/references/registry/quickswap.md) | v3Factory | `0x411b0fAcC3489691f28ad58c47006AF5E3Ab3A28` | no registry ABI |
-| [QuickSwap](../../sauce-protocols/references/registry/quickswap.md) | v3SwapRouter | `0xf5b509bB0909a69B1c207E495f687a596C168e12` | `QuickSwapV3SwapRouterABI.at(0xf5b509bB0909a69B1c207E495f687a596C168e12n)` |
-| [Safe](../../sauce-protocols/references/registry/safe.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `SafeABI.at(0x3E5c63644E683549055b9Be8653de26E0B4CD36En)` |
-| [Seaport](../../sauce-protocols/references/registry/seaport.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `SeaportABI.at(0x0000000000000068F116a894984e2DB1123eB395n)` |
-| [Socket](../../sauce-protocols/references/registry/socket.md) | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` | `SocketGatewayABI.at(0x3a23F943181408EAC424116Af7b7790c94Cb97a5n)` |
-| [Squid Router](../../sauce-protocols/references/registry/squid.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `SquidRouterABI.at(0xce16F69375520ab01377ce7B88f5BA8C48F8D666n)` |
-| [Superfluid](../../sauce-protocols/references/registry/superfluid.md) | cfaForwarder | `0xcfA132E353cB4E398080B9700609bb008eceB125` | `CFAForwarderABI.at(0xcfA132E353cB4E398080B9700609bb008eceB125n)` |
-| [Superfluid](../../sauce-protocols/references/registry/superfluid.md) | host | `0x3E14dC1b13c488a8d5D310918780c983bD5982E7` | no registry ABI |
+| [Polygon Native Bridge](../../sauce-protocols/references/registry/polygon-bridge.md) | childChainManager | `0xA6FA4fB5f76172d178d61B04b0ecd319C5d1C0aa` | `PolygonBridge.ChildChainManager` |
+| [QuickSwap](../../sauce-protocols/references/registry/quickswap.md) | v2Factory | `0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32` | `Quickswap.V2Factory` |
+| [QuickSwap](../../sauce-protocols/references/registry/quickswap.md) | v2Router | `0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff` | `Quickswap.V2Router` |
+| [QuickSwap](../../sauce-protocols/references/registry/quickswap.md) | v3Factory | `0x411b0fAcC3489691f28ad58c47006AF5E3Ab3A28` | `Quickswap.V3Factory` |
+| [QuickSwap](../../sauce-protocols/references/registry/quickswap.md) | v3SwapRouter | `0xf5b509bB0909a69B1c207E495f687a596C168e12` | `Quickswap.V3SwapRouter` |
+| [Safe](../../sauce-protocols/references/registry/safe.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `Safe.SafeL2V130` |
+| [Seaport](../../sauce-protocols/references/registry/seaport.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `Seaport.SeaportV16` |
+| [Socket](../../sauce-protocols/references/registry/socket.md) | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` | `Socket.SocketGateway` |
+| [Squid Router](../../sauce-protocols/references/registry/squid.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `Squid.SquidRouter` |
+| [Superfluid](../../sauce-protocols/references/registry/superfluid.md) | cfaForwarder | `0xcfA132E353cB4E398080B9700609bb008eceB125` | `Superfluid.CFAForwarder` |
+| [Superfluid](../../sauce-protocols/references/registry/superfluid.md) | host | `0x3E14dC1b13c488a8d5D310918780c983bD5982E7` | `Superfluid.Host` |
 | [SushiSwap V2](../../sauce-protocols/references/registry/sushiswap-v2.md) | factory | `0xc35DADB65012eC5796536bD9864eD8773aBc74C4` | `SushiswapV2.Factory` |
 | [SushiSwap V2](../../sauce-protocols/references/registry/sushiswap-v2.md) | router | `0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506` | `SushiswapV2.Router` |
-| [Synapse Protocol](../../sauce-protocols/references/registry/synapse.md) | synapseBridge | `0x8F5BBB2BB8c2Ee94639E55d5F41de9b4839C1280` | `SynapseBridgeABI.at(0x8F5BBB2BB8c2Ee94639E55d5F41de9b4839C1280n)` |
+| [Synapse Protocol](../../sauce-protocols/references/registry/synapse.md) | synapseBridge | `0x8F5BBB2BB8c2Ee94639E55d5F41de9b4839C1280` | `Synapse.SynapseBridge` |
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | factory | `0x9e5A52f57b3038F1B8EeE45F28b3C1967e22799C` | `UniswapV2.Factory` |
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | router | `0xedf6066a2b290C185783862C7F4776A2C8077AD1` | `UniswapV2.Router` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | factory | `0x1F98431c8aD98523631AE4a59f267346ea31F984` | `UniswapV3.Factory` |
@@ -106,7 +106,8 @@ address.
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | swapRouter | `0xE592427A0AEce92De3Edee1F18E0157C05861564` | `UniswapV3.SwapRouter` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0x67366782805870060151383f4bbff9dab53e5cd6` | `UniswapV4.PoolManager` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | positionManager | `0x1ec2ebf4f37e7363fdfe3551602425af0b3ceef9` | `UniswapV4.PositionManager` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0x5ea1bd7974c8a611cbab0bdcafcb1d9cc9b3ba5a` | `UniswapV4.StateView` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | universalRouter | `0x1095692a6237d83c6a72f3f5efedb9a670c49223` | `UniswapV4.UniversalRouter` |
-| [Wormhole](../../sauce-protocols/references/registry/wormhole.md) | coreBridge | `0x7A4B5a56256163F07b2C80A7cA55aBE66c4ec4d7` | `WormholeCoreBridgeABI.at(0x7A4B5a56256163F07b2C80A7cA55aBE66c4ec4d7n)` |
-| [Wormhole](../../sauce-protocols/references/registry/wormhole.md) | tokenBridge | `0x5a58505a96D1dbf8dF91cB21B54419FC36e93fdE` | `WormholeTokenBridgeABI.at(0x5a58505a96D1dbf8dF91cB21B54419FC36e93fdEn)` |
-| [0x Protocol](../../sauce-protocols/references/registry/zerox.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `ExchangeProxyABI.at(0xDef1C0ded9bec7F1a1670819833240f027b25EfFn)` |
+| [Wormhole](../../sauce-protocols/references/registry/wormhole.md) | coreBridge | `0x7A4B5a56256163F07b2C80A7cA55aBE66c4ec4d7` | `Wormhole.CoreBridge` |
+| [Wormhole](../../sauce-protocols/references/registry/wormhole.md) | tokenBridge | `0x5a58505a96D1dbf8dF91cB21B54419FC36e93fdE` | `Wormhole.TokenBridge` |
+| [0x Protocol](../../sauce-protocols/references/registry/zerox.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |

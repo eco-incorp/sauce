@@ -7,23 +7,19 @@ Concentrated-liquidity AMM on Arc, forked from Uniswap V3 with native USDC in pl
 | Fact | Value |
 | --- | --- |
 | Category | DEX |
-| Family | none |
-| Namespace | none: import its ABI |
+| Family | `Unitflow`: `unitflow-v3` |
+| Namespace | `UnitflowV3` on arc |
 | Chains | arc |
 | Document | [unitflow-v3.md](../unitflow-v3.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Arc's factory):
+On Arc, `UnitflowV3` is a namespace: its contracts need no import.
 
 ```sauce chain=arc
-import UnitFlowV3FactoryABI from "./protocols/unitflow-v3/UnitFlowV3FactoryABI.json";
-
-const FACTORY = 0x5bfBCeb73d39F722B1cB83fD2F11736b28c1Be6dn;
-
 function main() {
-  const bound = UnitFlowV3FactoryABI.at(FACTORY);
+  // Arc's factory, `0x5bfBCeb73d39F722B1cB83fD2F11736b28c1Be6d`.
+  require(UnitflowV3.Factory != 0n);
 }
 ```
 
@@ -31,9 +27,9 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Arc](../../../sauce-chains/references/arc.md) | factory | `0x5bfBCeb73d39F722B1cB83fD2F11736b28c1Be6d` | `UnitFlowV3FactoryABI.at(0x5bfBCeb73d39F722B1cB83fD2F11736b28c1Be6dn)` |
-| [Arc](../../../sauce-chains/references/arc.md) | quoter | `0x5AF6E89F0960Ff375AF84d9911D8153ef6240E34` | `UnitFlowV3QuoterABI.at(0x5AF6E89F0960Ff375AF84d9911D8153ef6240E34n)` |
-| [Arc](../../../sauce-chains/references/arc.md) | router | `0x6fD8351b9596C1F0b2f2479BfA6A171cb3d0f410` | `UnitFlowV3RouterABI.at(0x6fD8351b9596C1F0b2f2479BfA6A171cb3d0f410n)` |
+| [Arc](../../../sauce-chains/references/arc.md) | factory | `0x5bfBCeb73d39F722B1cB83fD2F11736b28c1Be6d` | `UnitflowV3.Factory` |
+| [Arc](../../../sauce-chains/references/arc.md) | quoter | `0x5AF6E89F0960Ff375AF84d9911D8153ef6240E34` | `UnitflowV3.Quoter` |
+| [Arc](../../../sauce-chains/references/arc.md) | router | `0x6fD8351b9596C1F0b2f2479BfA6A171cb3d0f410` | `UnitflowV3.Router` |
 
 ## ABI
 

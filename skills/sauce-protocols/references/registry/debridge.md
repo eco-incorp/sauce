@@ -8,22 +8,18 @@ Cross-chain trading infrastructure with DLN (DeBridge Liquidity Network). Suppor
 | --- | --- |
 | Category | Bridges |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Debridge` on ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
 | Document | [debridge.md](../debridge.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's dlnDestination):
+On Ethereum, `Debridge` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import DlnDestinationABI from "./protocols/debridge/DlnDestinationABI.json";
-
-const DLN_DESTINATION = 0xE7351Fd770A37282b91D153Ee690B63579D6dd7fn;
-
 function main() {
-  const bound = DlnDestinationABI.at(DLN_DESTINATION);
+  // Ethereum's dlnDestination, `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f`.
+  require(Debridge.DlnDestination != 0n);
 }
 ```
 
@@ -31,22 +27,22 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `DlnDestinationABI.at(0xE7351Fd770A37282b91D153Ee690B63579D6dd7fn)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `DlnSourceABI.at(0xeF4fB24aD0916217251F553c0596F8Edc630EB66n)` |
-| [Optimism](../../../sauce-chains/references/optimism.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `DlnDestinationABI.at(0xE7351Fd770A37282b91D153Ee690B63579D6dd7fn)` |
-| [Optimism](../../../sauce-chains/references/optimism.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `DlnSourceABI.at(0xeF4fB24aD0916217251F553c0596F8Edc630EB66n)` |
-| [BNB Chain](../../../sauce-chains/references/bsc.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `DlnDestinationABI.at(0xE7351Fd770A37282b91D153Ee690B63579D6dd7fn)` |
-| [BNB Chain](../../../sauce-chains/references/bsc.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `DlnSourceABI.at(0xeF4fB24aD0916217251F553c0596F8Edc630EB66n)` |
-| [Polygon](../../../sauce-chains/references/polygon.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `DlnDestinationABI.at(0xE7351Fd770A37282b91D153Ee690B63579D6dd7fn)` |
-| [Polygon](../../../sauce-chains/references/polygon.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `DlnSourceABI.at(0xeF4fB24aD0916217251F553c0596F8Edc630EB66n)` |
-| [Arc](../../../sauce-chains/references/arc.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `DlnDestinationABI.at(0xE7351Fd770A37282b91D153Ee690B63579D6dd7fn)` |
-| [Arc](../../../sauce-chains/references/arc.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `DlnSourceABI.at(0xeF4fB24aD0916217251F553c0596F8Edc630EB66n)` |
-| [Base](../../../sauce-chains/references/base.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `DlnDestinationABI.at(0xE7351Fd770A37282b91D153Ee690B63579D6dd7fn)` |
-| [Base](../../../sauce-chains/references/base.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `DlnSourceABI.at(0xeF4fB24aD0916217251F553c0596F8Edc630EB66n)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `DlnDestinationABI.at(0xE7351Fd770A37282b91D153Ee690B63579D6dd7fn)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `DlnSourceABI.at(0xeF4fB24aD0916217251F553c0596F8Edc630EB66n)` |
-| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `DlnDestinationABI.at(0xE7351Fd770A37282b91D153Ee690B63579D6dd7fn)` |
-| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `DlnSourceABI.at(0xeF4fB24aD0916217251F553c0596F8Edc630EB66n)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `Debridge.DlnDestination` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `Debridge.DlnSource` |
+| [Optimism](../../../sauce-chains/references/optimism.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `Debridge.DlnDestination` |
+| [Optimism](../../../sauce-chains/references/optimism.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `Debridge.DlnSource` |
+| [BNB Chain](../../../sauce-chains/references/bsc.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `Debridge.DlnDestination` |
+| [BNB Chain](../../../sauce-chains/references/bsc.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `Debridge.DlnSource` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `Debridge.DlnDestination` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `Debridge.DlnSource` |
+| [Arc](../../../sauce-chains/references/arc.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `Debridge.DlnDestination` |
+| [Arc](../../../sauce-chains/references/arc.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `Debridge.DlnSource` |
+| [Base](../../../sauce-chains/references/base.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `Debridge.DlnDestination` |
+| [Base](../../../sauce-chains/references/base.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `Debridge.DlnSource` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `Debridge.DlnDestination` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `Debridge.DlnSource` |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `Debridge.DlnDestination` |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `Debridge.DlnSource` |
 
 ## ABI
 

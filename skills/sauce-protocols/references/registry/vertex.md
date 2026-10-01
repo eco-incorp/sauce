@@ -8,22 +8,18 @@ Vertically integrated DEX combining spot, perpetuals, and money markets with an 
 | --- | --- |
 | Category | Perpetuals |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Vertex` on arbitrum |
 | Chains | arbitrum |
 | Document | [vertex.md](../vertex.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Arbitrum One's clearinghouse):
+On Arbitrum One, `Vertex` is a namespace: its contracts need no import.
 
 ```sauce chain=arbitrum
-import ClearinghouseABI from "./protocols/vertex/ClearinghouseABI.json";
-
-const CLEARINGHOUSE = 0x773bb71b0108b060b76746422ee810bfec9a963dn;
-
 function main() {
-  const bound = ClearinghouseABI.at(CLEARINGHOUSE);
+  // Arbitrum One's clearinghouse, `0x773bb71b0108b060b76746422ee810bfec9a963d`.
+  require(Vertex.Clearinghouse != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | clearinghouse | `0x773bb71b0108b060b76746422ee810bfec9a963d` | `ClearinghouseABI.at(0x773bb71b0108b060b76746422ee810bfec9a963dn)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | endpoint | `0x73eab16c88b9f38d3f2661c9e5875ec0eeee2965` | `EndpointABI.at(0x73eab16c88b9f38d3f2661c9e5875ec0eeee2965n)` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | clearinghouse | `0x773bb71b0108b060b76746422ee810bfec9a963d` | `Vertex.Clearinghouse` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | endpoint | `0x73eab16c88b9f38d3f2661c9e5875ec0eeee2965` | `Vertex.Endpoint` |
 
 ## ABI
 

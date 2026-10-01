@@ -8,22 +8,18 @@ Aave V3 fork operated by MakerDAO/Sky ecosystem. Offers competitive rates on DAI
 | --- | --- |
 | Category | Lending |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Spark` on ethereum |
 | Chains | ethereum |
 | Document | [spark.md](../spark.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's pool):
+On Ethereum, `Spark` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import SparkPoolABI from "./protocols/spark/SparkPoolABI.json";
-
-const POOL = 0xC13e21B648A5Ee794902342038FF3aDAB66BE987n;
-
 function main() {
-  const bound = SparkPoolABI.at(POOL);
+  // Ethereum's pool, `0xC13e21B648A5Ee794902342038FF3aDAB66BE987`.
+  require(Spark.Pool != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | pool | `0xC13e21B648A5Ee794902342038FF3aDAB66BE987` | `SparkPoolABI.at(0xC13e21B648A5Ee794902342038FF3aDAB66BE987n)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | poolAddressesProvider | `0x02C3eA4e34C0cBd694D2adFa2c690EECbC1793eE` | no registry ABI |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | pool | `0xC13e21B648A5Ee794902342038FF3aDAB66BE987` | `Spark.Pool` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | poolAddressesProvider | `0x02C3eA4e34C0cBd694D2adFa2c690EECbC1793eE` | `Spark.PoolAddressesProvider` |
 
 ## ABI
 

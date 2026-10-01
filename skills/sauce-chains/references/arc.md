@@ -29,10 +29,10 @@ function main() {
   const held = EURC.balanceOf(ctx.self());
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(EURC).balanceOf(ctx.self()) == held);
-  // `Cctp.TokenMessenger` is Arc's tokenMessenger: `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d`.
-  require(Cctp.TokenMessenger != 0n);
+  // `AaveV4.CoreHub` is Arc's coreHub: `0x17288dfc86205301064577b98B02b81017e6F79C`.
+  require(AaveV4.CoreHub != 0n);
   // The same contract, qualified by the chain's name, from a program on any chain.
-  require(Arc.Cctp.TokenMessenger == Cctp.TokenMessenger);
+  require(Arc.AaveV4.CoreHub == AaveV4.CoreHub);
 }
 ```
 
@@ -53,34 +53,34 @@ address.
 
 | Protocol | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Aave V4](../../sauce-protocols/references/registry/aave-v4.md) | coreHub | `0x17288dfc86205301064577b98B02b81017e6F79C` | `AaveV4HubABI.at(0x17288dfc86205301064577b98B02b81017e6F79Cn)` |
-| [Aave V4](../../sauce-protocols/references/registry/aave-v4.md) | forexSpoke | `0x4164EBCAF74670aa74C8D4F59de6157c0780F1bB` | `AaveV4SpokeABI.at(0x4164EBCAF74670aa74C8D4F59de6157c0780F1bBn)` |
-| [Aave V4](../../sauce-protocols/references/registry/aave-v4.md) | mainSpoke | `0xB843bdC3a87A05E77E07Df9FE48928b3A34b134d` | `AaveV4SpokeABI.at(0xB843bdC3a87A05E77E07Df9FE48928b3A34b134dn)` |
-| [Across](../../sauce-protocols/references/registry/across.md) | spokePool | `0x9b4A302A548c7e313c2b74C461db7b84d3074A84` | `AcrossSpokePoolABI.at(0x9b4A302A548c7e313c2b74C461db7b84d3074A84n)` |
-| [Aerodrome Slipstream](../../sauce-protocols/references/registry/aerodrome-slipstream.md) | clFactory | `0xb89Df768aF2CFE637ceB352c587Fe8edAf491d03` | `SlipstreamCLFactoryABI.at(0xb89Df768aF2CFE637ceB352c587Fe8edAf491d03n)` |
-| [Aerodrome Slipstream](../../sauce-protocols/references/registry/aerodrome-slipstream.md) | metarouter | `0x7275FA44c67BbA8d921422e600B4ed396209c886` | `AeroMetarouterABI.at(0x7275FA44c67BbA8d921422e600B4ed396209c886n)` |
-| [Aerodrome Slipstream](../../sauce-protocols/references/registry/aerodrome-slipstream.md) | nonfungiblePositionManager | `0xc84bB45D43CD25D02b83B4C085eaA4e08da8f473` | `SlipstreamPositionManagerABI.at(0xc84bB45D43CD25D02b83B4C085eaA4e08da8f473n)` |
+| [Aave V4](../../sauce-protocols/references/registry/aave-v4.md) | coreHub | `0x17288dfc86205301064577b98B02b81017e6F79C` | `AaveV4.CoreHub` |
+| [Aave V4](../../sauce-protocols/references/registry/aave-v4.md) | forexSpoke | `0x4164EBCAF74670aa74C8D4F59de6157c0780F1bB` | `AaveV4.ForexSpoke` |
+| [Aave V4](../../sauce-protocols/references/registry/aave-v4.md) | mainSpoke | `0xB843bdC3a87A05E77E07Df9FE48928b3A34b134d` | `AaveV4.MainSpoke` |
+| [Across](../../sauce-protocols/references/registry/across.md) | spokePool | `0x9b4A302A548c7e313c2b74C461db7b84d3074A84` | `Across.SpokePool` |
+| [Aerodrome Slipstream](../../sauce-protocols/references/registry/aerodrome-slipstream.md) | clFactory | `0xb89Df768aF2CFE637ceB352c587Fe8edAf491d03` | `AerodromeSlipstream.CLFactory` |
+| [Aerodrome Slipstream](../../sauce-protocols/references/registry/aerodrome-slipstream.md) | metarouter | `0x7275FA44c67BbA8d921422e600B4ed396209c886` | `AerodromeSlipstream.Metarouter` |
+| [Aerodrome Slipstream](../../sauce-protocols/references/registry/aerodrome-slipstream.md) | nonfungiblePositionManager | `0xc84bB45D43CD25D02b83B4C085eaA4e08da8f473` | `AerodromeSlipstream.NonfungiblePositionManager` |
 | [CCTP](../../sauce-protocols/references/registry/cctp.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger` |
-| [Chainlink](../../sauce-protocols/references/registry/chainlink.md) | ethUsdFeed | `0x50FCDD99D6762D1C170DC6A9111db944AEE6D364` | `AggregatorV3ABI.at(0x50FCDD99D6762D1C170DC6A9111db944AEE6D364n)` |
-| [Chainlink CCIP](../../sauce-protocols/references/registry/chainlink-ccip.md) | router | `0xB79791184973589c38e114D43Eb8E4588C283A18` | `CCIPRouterABI.at(0xB79791184973589c38e114D43Eb8E4588C283A18n)` |
-| [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayMinter | `0x2222222d7164433c4C09B0b0D809a9b52C04C205` | `GatewayMinterABI.at(0x2222222d7164433c4C09B0b0D809a9b52C04C205n)` |
-| [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayWallet | `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE` | `GatewayWalletABI.at(0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eEn)` |
-| [deBridge](../../sauce-protocols/references/registry/debridge.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `DlnDestinationABI.at(0xE7351Fd770A37282b91D153Ee690B63579D6dd7fn)` |
-| [deBridge](../../sauce-protocols/references/registry/debridge.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `DlnSourceABI.at(0xeF4fB24aD0916217251F553c0596F8Edc630EB66n)` |
-| [Hyperlane](../../sauce-protocols/references/registry/hyperlane.md) | mailbox | `0x7f50C5776722630a0024fAE05fDe8b47571D7B39` | `HyperlaneMailboxABI.at(0x7f50C5776722630a0024fAE05fDe8b47571D7B39n)` |
-| [KyberSwap](../../sauce-protocols/references/registry/kyberswap.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberSwapMetaAggregationRouterABI.at(0x6131B5fae19EA4f9D964eAc0408E4408b66337b5n)` |
-| [KyberSwap Aggregator](../../sauce-protocols/references/registry/kyberswap-aggregator.md) | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberSwapMetaAggregationRouterABI.at(0x6131B5fae19EA4f9D964eAc0408E4408b66337b5n)` |
-| [LayerZero](../../sauce-protocols/references/registry/layerzero.md) | endpointV2 | `0x6F475642a6e85809B1c36Fa62763669b1b48DD5B` | `LayerZeroEndpointV2ABI.at(0x6F475642a6e85809B1c36Fa62763669b1b48DD5Bn)` |
-| [LI.FI](../../sauce-protocols/references/registry/lifi.md) | lifiDiamond | `0xA4072583658Fae592A3506A42431cb6316a8d40b` | `LiFiDiamondABI.at(0xA4072583658Fae592A3506A42431cb6316a8d40bn)` |
+| [Chainlink](../../sauce-protocols/references/registry/chainlink.md) | ethUsdFeed | `0x50FCDD99D6762D1C170DC6A9111db944AEE6D364` | `Chainlink.EthUsdFeed` |
+| [Chainlink CCIP](../../sauce-protocols/references/registry/chainlink-ccip.md) | router | `0xB79791184973589c38e114D43Eb8E4588C283A18` | `ChainlinkCcip.Router` |
+| [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayMinter | `0x2222222d7164433c4C09B0b0D809a9b52C04C205` | `CircleGateway.GatewayMinter` |
+| [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayWallet | `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE` | `CircleGateway.GatewayWallet` |
+| [deBridge](../../sauce-protocols/references/registry/debridge.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `Debridge.DlnDestination` |
+| [deBridge](../../sauce-protocols/references/registry/debridge.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `Debridge.DlnSource` |
+| [Hyperlane](../../sauce-protocols/references/registry/hyperlane.md) | mailbox | `0x7f50C5776722630a0024fAE05fDe8b47571D7B39` | `Hyperlane.Mailbox` |
+| [KyberSwap](../../sauce-protocols/references/registry/kyberswap.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `Kyberswap.MetaAggregationRouterV2` |
+| [KyberSwap Aggregator](../../sauce-protocols/references/registry/kyberswap-aggregator.md) | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberswapAggregator.MetaAggregationRouter` |
+| [LayerZero](../../sauce-protocols/references/registry/layerzero.md) | endpointV2 | `0x6F475642a6e85809B1c36Fa62763669b1b48DD5B` | `Layerzero.EndpointV2` |
+| [LI.FI](../../sauce-protocols/references/registry/lifi.md) | lifiDiamond | `0xA4072583658Fae592A3506A42431cb6316a8d40b` | `Lifi.LiFiDiamond` |
 | [Morpho Blue](../../sauce-protocols/references/registry/morpho-blue.md) | morpho | `0x34CD04070dD72b14E241112F6d83812Df5Af7fCD` | `MorphoBlue.Morpho` |
 | [Permit2](../../sauce-protocols/references/registry/permit2.md) | permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` | `Permit2.Permit2` |
-| [Safe](../../sauce-protocols/references/registry/safe.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `SafeABI.at(0x3E5c63644E683549055b9Be8653de26E0B4CD36En)` |
-| [Safe](../../sauce-protocols/references/registry/safe.md) | safeV141 | `0x41675C099F32341bf84BFc5382aF534df5C7461a` | `SafeABI.at(0x41675C099F32341bf84BFc5382aF534df5C7461an)` |
-| [Seaport](../../sauce-protocols/references/registry/seaport.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `SeaportABI.at(0x0000000000000068F116a894984e2DB1123eB395n)` |
-| [Synthra V3](../../sauce-protocols/references/registry/synthra-v3.md) | factory | `0x6307fc239C7964942c1BfFE51930E55606619c74` | `SynthraV3FactoryABI.at(0x6307fc239C7964942c1BfFE51930E55606619c74n)` |
-| [Synthra V3](../../sauce-protocols/references/registry/synthra-v3.md) | nonfungiblePositionManager | `0x2743b771659fD9CE13970d7367e7e84AF6a31049` | `SynthraV3NonfungiblePositionManagerABI.at(0x2743b771659fD9CE13970d7367e7e84AF6a31049n)` |
-| [Synthra V3](../../sauce-protocols/references/registry/synthra-v3.md) | quoterV2 | `0x9c179A7335B3fc841F59Aa6a62daf6d5c61b65D7` | `SynthraV3QuoterV2ABI.at(0x9c179A7335B3fc841F59Aa6a62daf6d5c61b65D7n)` |
-| [Synthra V3](../../sauce-protocols/references/registry/synthra-v3.md) | swapRouter02 | `0xa50eDe66a573eE5bB37E28AF5789B76aE5FEb828` | `SynthraV3SwapRouter02ABI.at(0xa50eDe66a573eE5bB37E28AF5789B76aE5FEb828n)` |
+| [Safe](../../sauce-protocols/references/registry/safe.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `Safe.SafeL2V130` |
+| [Safe](../../sauce-protocols/references/registry/safe.md) | safeV141 | `0x41675C099F32341bf84BFc5382aF534df5C7461a` | `Safe.SafeV141` |
+| [Seaport](../../sauce-protocols/references/registry/seaport.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `Seaport.SeaportV16` |
+| [Synthra V3](../../sauce-protocols/references/registry/synthra-v3.md) | factory | `0x6307fc239C7964942c1BfFE51930E55606619c74` | `SynthraV3.Factory` |
+| [Synthra V3](../../sauce-protocols/references/registry/synthra-v3.md) | nonfungiblePositionManager | `0x2743b771659fD9CE13970d7367e7e84AF6a31049` | `SynthraV3.NonfungiblePositionManager` |
+| [Synthra V3](../../sauce-protocols/references/registry/synthra-v3.md) | quoterV2 | `0x9c179A7335B3fc841F59Aa6a62daf6d5c61b65D7` | `SynthraV3.QuoterV2` |
+| [Synthra V3](../../sauce-protocols/references/registry/synthra-v3.md) | swapRouter02 | `0xa50eDe66a573eE5bB37E28AF5789B76aE5FEb828` | `SynthraV3.SwapRouter02` |
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | factory | `0x89e5DB8B5aA49aA85AC63f691524311AEB649eba` | `UniswapV2.Factory` |
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | router | `0x1f7d7550B1b028f7571E69A784071F0205FD2EfA` | `UniswapV2.Router` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | factory | `0xf0db7b58379503491d857dB50AC9ece64c653918` | `UniswapV3.Factory` |
@@ -89,8 +89,9 @@ address.
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | swapRouter02 | `0x53BF6B0684Ec7eF91e1387Da3D1a1769bC5A6F77` | `UniswapV3.SwapRouter02` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0x8366a39CC670B4001A1121B8F6A443A643e40951` | `UniswapV4.PoolManager` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | positionManager | `0x6049c9a0e26405C0985f9E3685C87d0aE917f82B` | `UniswapV4.PositionManager` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0xF3334192D15450CdD385c8B70e03f9A6bD9E673b` | `UniswapV4.StateView` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | universalRouter | `0x4fcA4a51Ab4F23A7447b3284fBd7D73289A89Fb1` | `UniswapV4.UniversalRouter` |
-| [UnitFlow V3](../../sauce-protocols/references/registry/unitflow-v3.md) | factory | `0x5bfBCeb73d39F722B1cB83fD2F11736b28c1Be6d` | `UnitFlowV3FactoryABI.at(0x5bfBCeb73d39F722B1cB83fD2F11736b28c1Be6dn)` |
-| [UnitFlow V3](../../sauce-protocols/references/registry/unitflow-v3.md) | quoter | `0x5AF6E89F0960Ff375AF84d9911D8153ef6240E34` | `UnitFlowV3QuoterABI.at(0x5AF6E89F0960Ff375AF84d9911D8153ef6240E34n)` |
-| [UnitFlow V3](../../sauce-protocols/references/registry/unitflow-v3.md) | router | `0x6fD8351b9596C1F0b2f2479BfA6A171cb3d0f410` | `UnitFlowV3RouterABI.at(0x6fD8351b9596C1F0b2f2479BfA6A171cb3d0f410n)` |
-| [Wormhole](../../sauce-protocols/references/registry/wormhole.md) | coreBridge | `0xC8aD24fC6063c41cB5C12a8e3851AafC3b3CF027` | `WormholeCoreBridgeABI.at(0xC8aD24fC6063c41cB5C12a8e3851AafC3b3CF027n)` |
+| [UnitFlow V3](../../sauce-protocols/references/registry/unitflow-v3.md) | factory | `0x5bfBCeb73d39F722B1cB83fD2F11736b28c1Be6d` | `UnitflowV3.Factory` |
+| [UnitFlow V3](../../sauce-protocols/references/registry/unitflow-v3.md) | quoter | `0x5AF6E89F0960Ff375AF84d9911D8153ef6240E34` | `UnitflowV3.Quoter` |
+| [UnitFlow V3](../../sauce-protocols/references/registry/unitflow-v3.md) | router | `0x6fD8351b9596C1F0b2f2479BfA6A171cb3d0f410` | `UnitflowV3.Router` |
+| [Wormhole](../../sauce-protocols/references/registry/wormhole.md) | coreBridge | `0xC8aD24fC6063c41cB5C12a8e3851AafC3b3CF027` | `Wormhole.CoreBridge` |

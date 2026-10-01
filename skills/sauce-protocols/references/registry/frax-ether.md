@@ -8,22 +8,18 @@ Frax Finance's liquid staking derivative. sfrxETH is the staking vault token tha
 | --- | --- |
 | Category | Liquid staking |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `FraxEther` on ethereum |
 | Chains | ethereum |
 | Document | [frax-ether.md](../frax-ether.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's frxETHMinter):
+On Ethereum, `FraxEther` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import FrxETHMinterABI from "./protocols/frax-ether/FrxETHMinterABI.json";
-
-const FRX_ETHMINTER = 0xbAFA44EFE7901E04E39Dad13167D089C559c1138n;
-
 function main() {
-  const bound = FrxETHMinterABI.at(FRX_ETHMINTER);
+  // Ethereum's frxETHMinter, `0xbAFA44EFE7901E04E39Dad13167D089C559c1138`.
+  require(FraxEther.FrxETHMinter != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | frxETHMinter | `0xbAFA44EFE7901E04E39Dad13167D089C559c1138` | `FrxETHMinterABI.at(0xbAFA44EFE7901E04E39Dad13167D089C559c1138n)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | sfrxETH | `0xac3E018457B222d93114458476f3E3416Abbe38F` | `SfrxETHABI.at(0xac3E018457B222d93114458476f3E3416Abbe38Fn)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | frxETHMinter | `0xbAFA44EFE7901E04E39Dad13167D089C559c1138` | `FraxEther.FrxETHMinter` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | sfrxETH | `0xac3E018457B222d93114458476f3E3416Abbe38F` | `FraxEther.SfrxETH` |
 
 ## ABI
 

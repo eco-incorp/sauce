@@ -8,22 +8,18 @@ Liquid restaking protocol that issues pufETH. Deposits are natively restaked via
 | --- | --- |
 | Category | Restaking |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Puffer` on ethereum |
 | Chains | ethereum |
 | Document | [puffer.md](../puffer.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's pufferVault):
+On Ethereum, `Puffer` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import PufferVaultABI from "./protocols/puffer/PufferVaultABI.json";
-
-const PUFFER_VAULT = 0xD9A442856C234a39a81a089C06451EBAa4306a72n;
-
 function main() {
-  const bound = PufferVaultABI.at(PUFFER_VAULT);
+  // Ethereum's pufETH, `0xD9A442856C234a39a81a089C06451EBAa4306a72`.
+  require(Puffer.PufETH != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | pufETH | `0xD9A442856C234a39a81a089C06451EBAa4306a72` | no registry ABI |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | pufferVault | `0xD9A442856C234a39a81a089C06451EBAa4306a72` | `PufferVaultABI.at(0xD9A442856C234a39a81a089C06451EBAa4306a72n)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | pufETH | `0xD9A442856C234a39a81a089C06451EBAa4306a72` | `Puffer.PufETH` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | pufferVault | `0xD9A442856C234a39a81a089C06451EBAa4306a72` | `Puffer.PufETH` |
 
 ## ABI
 

@@ -8,22 +8,18 @@ Aerodrome's concentrated-liquidity (Uniswap V3-style) pools, keyed by tick spaci
 | --- | --- |
 | Category | DEX |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `AerodromeSlipstream` on arc, base |
 | Chains | arc, base |
 | Document | [aerodrome-slipstream.md](../aerodrome-slipstream.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Arc's clFactory):
+On Arc, `AerodromeSlipstream` is a namespace: its contracts need no import.
 
 ```sauce chain=arc
-import SlipstreamCLFactoryABI from "./protocols/aerodrome-slipstream/SlipstreamCLFactoryABI.json";
-
-const CL_FACTORY = 0xb89Df768aF2CFE637ceB352c587Fe8edAf491d03n;
-
 function main() {
-  const bound = SlipstreamCLFactoryABI.at(CL_FACTORY);
+  // Arc's clFactory, `0xb89Df768aF2CFE637ceB352c587Fe8edAf491d03`.
+  require(AerodromeSlipstream.CLFactory != 0n);
 }
 ```
 
@@ -31,15 +27,15 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Arc](../../../sauce-chains/references/arc.md) | clFactory | `0xb89Df768aF2CFE637ceB352c587Fe8edAf491d03` | `SlipstreamCLFactoryABI.at(0xb89Df768aF2CFE637ceB352c587Fe8edAf491d03n)` |
-| [Arc](../../../sauce-chains/references/arc.md) | metarouter | `0x7275FA44c67BbA8d921422e600B4ed396209c886` | `AeroMetarouterABI.at(0x7275FA44c67BbA8d921422e600B4ed396209c886n)` |
-| [Arc](../../../sauce-chains/references/arc.md) | nonfungiblePositionManager | `0xc84bB45D43CD25D02b83B4C085eaA4e08da8f473` | `SlipstreamPositionManagerABI.at(0xc84bB45D43CD25D02b83B4C085eaA4e08da8f473n)` |
-| [Base](../../../sauce-chains/references/base.md) | clFactory | `0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A` | `SlipstreamCLFactoryABI.at(0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809An)` |
-| [Base](../../../sauce-chains/references/base.md) | clFactoryGaugeCaps | `0xaDe65c38CD4849aDBA595a4323a8C7DdfE89716a` | `SlipstreamCLFactoryABI.at(0xaDe65c38CD4849aDBA595a4323a8C7DdfE89716an)` |
-| [Base](../../../sauce-chains/references/base.md) | clFactoryGaugesV3 | `0xf8f2eB4940CFE7d13603DDDD87f123820Fc061Ef` | `SlipstreamCLFactoryABI.at(0xf8f2eB4940CFE7d13603DDDD87f123820Fc061Efn)` |
-| [Base](../../../sauce-chains/references/base.md) | nonfungiblePositionManager | `0x827922686190790b37229fd06084350E74485b72` | `SlipstreamPositionManagerABI.at(0x827922686190790b37229fd06084350E74485b72n)` |
-| [Base](../../../sauce-chains/references/base.md) | nonfungiblePositionManagerGaugeCaps | `0xa990C6a764b73BF43cee5Bb40339c3322FB9D55F` | `SlipstreamPositionManagerABI.at(0xa990C6a764b73BF43cee5Bb40339c3322FB9D55Fn)` |
-| [Base](../../../sauce-chains/references/base.md) | nonfungiblePositionManagerGaugesV3 | `0xe1f8cd9AC4e4A65F54f38a5CdAfCA44f6dD68b53` | `SlipstreamPositionManagerABI.at(0xe1f8cd9AC4e4A65F54f38a5CdAfCA44f6dD68b53n)` |
+| [Arc](../../../sauce-chains/references/arc.md) | clFactory | `0xb89Df768aF2CFE637ceB352c587Fe8edAf491d03` | `AerodromeSlipstream.CLFactory` |
+| [Arc](../../../sauce-chains/references/arc.md) | metarouter | `0x7275FA44c67BbA8d921422e600B4ed396209c886` | `AerodromeSlipstream.Metarouter` |
+| [Arc](../../../sauce-chains/references/arc.md) | nonfungiblePositionManager | `0xc84bB45D43CD25D02b83B4C085eaA4e08da8f473` | `AerodromeSlipstream.NonfungiblePositionManager` |
+| [Base](../../../sauce-chains/references/base.md) | clFactory | `0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A` | `AerodromeSlipstream.CLFactory` |
+| [Base](../../../sauce-chains/references/base.md) | clFactoryGaugeCaps | `0xaDe65c38CD4849aDBA595a4323a8C7DdfE89716a` | `AerodromeSlipstream.CLFactoryGaugeCaps` |
+| [Base](../../../sauce-chains/references/base.md) | clFactoryGaugesV3 | `0xf8f2eB4940CFE7d13603DDDD87f123820Fc061Ef` | `AerodromeSlipstream.CLFactoryGaugesV3` |
+| [Base](../../../sauce-chains/references/base.md) | nonfungiblePositionManager | `0x827922686190790b37229fd06084350E74485b72` | `AerodromeSlipstream.NonfungiblePositionManager` |
+| [Base](../../../sauce-chains/references/base.md) | nonfungiblePositionManagerGaugeCaps | `0xa990C6a764b73BF43cee5Bb40339c3322FB9D55F` | `AerodromeSlipstream.NonfungiblePositionManagerGaugeCaps` |
+| [Base](../../../sauce-chains/references/base.md) | nonfungiblePositionManagerGaugesV3 | `0xe1f8cd9AC4e4A65F54f38a5CdAfCA44f6dD68b53` | `AerodromeSlipstream.NonfungiblePositionManagerGaugesV3` |
 
 ## ABI
 

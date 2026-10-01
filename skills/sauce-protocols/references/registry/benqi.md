@@ -8,22 +8,18 @@ Leading lending and borrowing protocol on Avalanche. Compound V2 fork with addit
 | --- | --- |
 | Category | Lending |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Benqi` on avalanche |
 | Chains | avalanche |
 | Document | [benqi.md](../benqi.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Avalanche C-Chain's comptroller):
+On Avalanche C-Chain, `Benqi` is a namespace: its contracts need no import.
 
 ```sauce chain=avalanche
-import BenqiComptrollerABI from "./protocols/benqi/BenqiComptrollerABI.json";
-
-const COMPTROLLER = 0x486Af39519B4Dc9a7fCcd318217352830E8AD9b4n;
-
 function main() {
-  const bound = BenqiComptrollerABI.at(COMPTROLLER);
+  // Avalanche C-Chain's comptroller, `0x486Af39519B4Dc9a7fCcd318217352830E8AD9b4`.
+  require(Benqi.Comptroller != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | comptroller | `0x486Af39519B4Dc9a7fCcd318217352830E8AD9b4` | `BenqiComptrollerABI.at(0x486Af39519B4Dc9a7fCcd318217352830E8AD9b4n)` |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | comptroller | `0x486Af39519B4Dc9a7fCcd318217352830E8AD9b4` | `Benqi.Comptroller` |
 
 ## ABI
 

@@ -8,22 +8,18 @@ Mantle's liquid staking token for Ethereum. Stake ETH and receive mETH, which ac
 | --- | --- |
 | Category | Liquid staking |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `MantleMeth` on ethereum |
 | Chains | ethereum |
 | Document | [mantle-meth.md](../mantle-meth.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's mETH):
+On Ethereum, `MantleMeth` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import METHABI from "./protocols/mantle-meth/METHABI.json";
-
-const M_ETH = 0xd5F7838F5C461fefF7FE49ea5ebaF7728bB0ADfan;
-
 function main() {
-  const bound = METHABI.at(M_ETH);
+  // Ethereum's mETH, `0xd5F7838F5C461fefF7FE49ea5ebaF7728bB0ADfa`.
+  require(MantleMeth.METH != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | mETH | `0xd5F7838F5C461fefF7FE49ea5ebaF7728bB0ADfa` | `METHABI.at(0xd5F7838F5C461fefF7FE49ea5ebaF7728bB0ADfan)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | staking | `0xe3cBd06D7dadB3F4e6557bAb7EdD924CD1489E8f` | `METHStakingABI.at(0xe3cBd06D7dadB3F4e6557bAb7EdD924CD1489E8fn)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | mETH | `0xd5F7838F5C461fefF7FE49ea5ebaF7728bB0ADfa` | `MantleMeth.METH` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | staking | `0xe3cBd06D7dadB3F4e6557bAb7EdD924CD1489E8f` | `MantleMeth.Staking` |
 
 ## ABI
 

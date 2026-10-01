@@ -8,22 +8,18 @@ StableSwap AMM optimized for low-slippage swaps between pegged assets (stablecoi
 | --- | --- |
 | Category | DEX |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Curve` on ethereum, optimism, gnosis, polygon, fantom, base, arbitrum, avalanche |
 | Chains | ethereum, optimism, gnosis, polygon, fantom, base, arbitrum, avalanche |
 | Document | [curve.md](../curve.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's addressProvider):
+On Ethereum, `Curve` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import CurveAddressProviderABI from "./protocols/curve/CurveAddressProviderABI.json";
-
-const ADDRESS_PROVIDER = 0x0000000022D53366457F9d5E68Ec105046FC4383n;
-
 function main() {
-  const bound = CurveAddressProviderABI.at(ADDRESS_PROVIDER);
+  // Ethereum's addressProvider, `0x0000000022D53366457F9d5E68Ec105046FC4383`.
+  require(Curve.AddressProvider != 0n);
 }
 ```
 
@@ -31,18 +27,18 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `CurveAddressProviderABI.at(0x0000000022D53366457F9d5E68Ec105046FC4383n)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | crvToken | `0xD533a949740bb3306d119CC777fa900bA034cd52` | no registry ABI |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | routerNG | `0x16C6521Dff6baB339122a0FE25a9116693265353` | `CurveRouterNGABI.at(0x16C6521Dff6baB339122a0FE25a9116693265353n)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | threePool | `0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7` | `CurveThreePoolABI.at(0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7n)` |
-| [Optimism](../../../sauce-chains/references/optimism.md) | routerNG | `0x0DCDED3545D565bA3B19E683431381007245d983` | `CurveRouterNGABI.at(0x0DCDED3545D565bA3B19E683431381007245d983n)` |
-| [Gnosis](../../../sauce-chains/references/gnosis.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `CurveAddressProviderABI.at(0x0000000022D53366457F9d5E68Ec105046FC4383n)` |
-| [Polygon](../../../sauce-chains/references/polygon.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `CurveAddressProviderABI.at(0x0000000022D53366457F9d5E68Ec105046FC4383n)` |
-| [Fantom](../../../sauce-chains/references/fantom.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `CurveAddressProviderABI.at(0x0000000022D53366457F9d5E68Ec105046FC4383n)` |
-| [Base](../../../sauce-chains/references/base.md) | routerNG | `0x4f37A9d177470499A2dD084621020b023fcffc1F` | `CurveRouterNGABI.at(0x4f37A9d177470499A2dD084621020b023fcffc1Fn)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `CurveAddressProviderABI.at(0x0000000022D53366457F9d5E68Ec105046FC4383n)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | routerNG | `0x2191718CD32d02B8E60BAdFFeA33E4B5DD9A0A0D` | `CurveRouterNGABI.at(0x2191718CD32d02B8E60BAdFFeA33E4B5DD9A0A0Dn)` |
-| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `CurveAddressProviderABI.at(0x0000000022D53366457F9d5E68Ec105046FC4383n)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `Curve.AddressProvider` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | crvToken | `0xD533a949740bb3306d119CC777fa900bA034cd52` | `Curve.CrvToken` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | routerNG | `0x16C6521Dff6baB339122a0FE25a9116693265353` | `Curve.RouterNG` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | threePool | `0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7` | `Curve.ThreePool` |
+| [Optimism](../../../sauce-chains/references/optimism.md) | routerNG | `0x0DCDED3545D565bA3B19E683431381007245d983` | `Curve.RouterNG` |
+| [Gnosis](../../../sauce-chains/references/gnosis.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `Curve.AddressProvider` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `Curve.AddressProvider` |
+| [Fantom](../../../sauce-chains/references/fantom.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `Curve.AddressProvider` |
+| [Base](../../../sauce-chains/references/base.md) | routerNG | `0x4f37A9d177470499A2dD084621020b023fcffc1F` | `Curve.RouterNG` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `Curve.AddressProvider` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | routerNG | `0x2191718CD32d02B8E60BAdFFeA33E4B5DD9A0A0D` | `Curve.RouterNG` |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `Curve.AddressProvider` |
 
 ## ABI
 

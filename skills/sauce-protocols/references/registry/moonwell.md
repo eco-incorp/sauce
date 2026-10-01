@@ -8,22 +8,18 @@ Leading lending protocol on Base. Compound V2 fork with governance and safety mo
 | --- | --- |
 | Category | Lending |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Moonwell` on base |
 | Chains | base |
 | Document | [moonwell.md](../moonwell.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Base's comptroller):
+On Base, `Moonwell` is a namespace: its contracts need no import.
 
 ```sauce chain=base
-import MoonwellComptrollerABI from "./protocols/moonwell/MoonwellComptrollerABI.json";
-
-const COMPTROLLER = 0xfBb21d0380beE3312B33c4353c8936a0F13EF26Cn;
-
 function main() {
-  const bound = MoonwellComptrollerABI.at(COMPTROLLER);
+  // Base's comptroller, `0xfBb21d0380beE3312B33c4353c8936a0F13EF26C`.
+  require(Moonwell.Comptroller != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Base](../../../sauce-chains/references/base.md) | comptroller | `0xfBb21d0380beE3312B33c4353c8936a0F13EF26C` | `MoonwellComptrollerABI.at(0xfBb21d0380beE3312B33c4353c8936a0F13EF26Cn)` |
+| [Base](../../../sauce-chains/references/base.md) | comptroller | `0xfBb21d0380beE3312B33c4353c8936a0F13EF26C` | `Moonwell.Comptroller` |
 
 ## ABI
 

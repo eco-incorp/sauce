@@ -8,22 +8,18 @@ Token streaming protocol for continuous payments. Supports linear, cliff, and dy
 | --- | --- |
 | Category | Payments and streaming |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Sablier` on ethereum |
 | Chains | ethereum |
 | Document | [sablier.md](../sablier.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's lockupLinear):
+On Ethereum, `Sablier` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import LockupLinearABI from "./protocols/sablier/LockupLinearABI.json";
-
-const LOCKUP_LINEAR = 0xAFb979d9afAd1aD27C5eFf4E27226E3AB9e5dCC9n;
-
 function main() {
-  const bound = LockupLinearABI.at(LOCKUP_LINEAR);
+  // Ethereum's lockupLinear, `0xAFb979d9afAd1aD27C5eFf4E27226E3AB9e5dCC9`.
+  require(Sablier.LockupLinear != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | lockupLinear | `0xAFb979d9afAd1aD27C5eFf4E27226E3AB9e5dCC9` | `LockupLinearABI.at(0xAFb979d9afAd1aD27C5eFf4E27226E3AB9e5dCC9n)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | lockupLinear | `0xAFb979d9afAd1aD27C5eFf4E27226E3AB9e5dCC9` | `Sablier.LockupLinear` |
 
 ## ABI
 

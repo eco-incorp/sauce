@@ -7,23 +7,19 @@ Yield aggregator protocol. V3 vaults follow ERC-4626 standard for automated yiel
 | Fact | Value |
 | --- | --- |
 | Category | Yield and vaults |
-| Family | none |
-| Namespace | none: import its ABI |
+| Family | `Yearn`: `yearn-v3` |
+| Namespace | `YearnV3` on ethereum |
 | Chains | ethereum |
 | Document | [yearn-v3.md](../yearn-v3.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-The registry records no deployment: `YearnV3VaultABI` is an interface, bound to an address the
-program is given.
+On Ethereum, `YearnV3` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import YearnV3VaultABI from "./protocols/yearn-v3/YearnV3VaultABI.json";
-
-const TARGET = 0n; // the contract's address, as a define
-
 function main() {
-  const target = YearnV3VaultABI.at(TARGET);
+  // Ethereum's vaultFactory, `0x770D0d1Fb036483Ed4AbB6d53c1C89fb277D812F`.
+  require(YearnV3.VaultFactory != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | vaultFactory | `0x770D0d1Fb036483Ed4AbB6d53c1C89fb277D812F` | no registry ABI |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | vaultFactory | `0x770D0d1Fb036483Ed4AbB6d53c1C89fb277D812F` | `YearnV3.VaultFactory` |
 
 ## ABI
 

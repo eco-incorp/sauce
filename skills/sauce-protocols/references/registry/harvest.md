@@ -8,22 +8,18 @@ Yield farming protocol that automatically compounds rewards across DeFi strategi
 | --- | --- |
 | Category | Yield and vaults |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Harvest` on ethereum |
 | Chains | ethereum |
 | Document | [harvest.md](../harvest.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-The registry records no deployment: `VaultABI` is an interface, bound to an address the
-program is given.
+On Ethereum, `Harvest` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import VaultABI from "./protocols/harvest/VaultABI.json";
-
-const TARGET = 0n; // the contract's address, as a define
-
 function main() {
-  const target = VaultABI.at(TARGET);
+  // Ethereum's controller, `0x222412af183BCeAdEFd72e4Cb1b71f1889953b1C`.
+  require(Harvest.Controller != 0n);
 }
 ```
 
@@ -31,9 +27,9 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | controller | `0x222412af183BCeAdEFd72e4Cb1b71f1889953b1C` | no registry ABI |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | depositHelper | `0xF8ce90c2710713552fb564869694B2505Bfc0846` | no registry ABI |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | farm | `0xa0246c9032bC3A600820415aE600c6388619A14D` | no registry ABI |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | controller | `0x222412af183BCeAdEFd72e4Cb1b71f1889953b1C` | `Harvest.Controller` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | depositHelper | `0xF8ce90c2710713552fb564869694B2505Bfc0846` | `Harvest.DepositHelper` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | farm | `0xa0246c9032bC3A600820415aE600c6388619A14D` | `Harvest.Farm` |
 
 ## ABI
 

@@ -8,22 +8,18 @@ Automated liquidity management protocol for Uniswap V3. Provides vaults that act
 | --- | --- |
 | Category | Yield and vaults |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Arrakis` on ethereum |
 | Chains | ethereum |
 | Document | [arrakis.md](../arrakis.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's router):
+On Ethereum, `Arrakis` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import ArrakisRouterABI from "./protocols/arrakis/ArrakisRouterABI.json";
-
-const ROUTER = 0x6aC8Bab8B775a03b8B72B2940251432442f61B94n;
-
 function main() {
-  const bound = ArrakisRouterABI.at(ROUTER);
+  // Ethereum's factory, `0xEA1aFf9dbFfD1580F6b81A3ad3589E66652dB7D9`.
+  require(Arrakis.Factory != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | factory | `0xEA1aFf9dbFfD1580F6b81A3ad3589E66652dB7D9` | no registry ABI |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | router | `0x6aC8Bab8B775a03b8B72B2940251432442f61B94` | `ArrakisRouterABI.at(0x6aC8Bab8B775a03b8B72B2940251432442f61B94n)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | factory | `0xEA1aFf9dbFfD1580F6b81A3ad3589E66652dB7D9` | `Arrakis.Factory` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | router | `0x6aC8Bab8B775a03b8B72B2940251432442f61B94` | `Arrakis.Router` |
 
 ## ABI
 

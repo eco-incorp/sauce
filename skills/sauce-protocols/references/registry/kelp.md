@@ -8,22 +8,18 @@ Liquid restaking protocol built on EigenLayer. Deposit LSTs and receive rsETH, a
 | --- | --- |
 | Category | Restaking |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Kelp` on ethereum |
 | Chains | ethereum |
 | Document | [kelp.md](../kelp.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's lrtDepositPool):
+On Ethereum, `Kelp` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import LRTDepositPoolABI from "./protocols/kelp/LRTDepositPoolABI.json";
-
-const LRT_DEPOSIT_POOL = 0x036676389e48133B63a802f8635AD39E752D375Dn;
-
 function main() {
-  const bound = LRTDepositPoolABI.at(LRT_DEPOSIT_POOL);
+  // Ethereum's lrtDepositPool, `0x036676389e48133B63a802f8635AD39E752D375D`.
+  require(Kelp.LRTDepositPool != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | lrtDepositPool | `0x036676389e48133B63a802f8635AD39E752D375D` | `LRTDepositPoolABI.at(0x036676389e48133B63a802f8635AD39E752D375Dn)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | rsETH | `0xA1290d69c65A6Fe4DF752f95823fae25cB99e5A7` | `RsETHABI.at(0xA1290d69c65A6Fe4DF752f95823fae25cB99e5A7n)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | lrtDepositPool | `0x036676389e48133B63a802f8635AD39E752D375D` | `Kelp.LRTDepositPool` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | rsETH | `0xA1290d69c65A6Fe4DF752f95823fae25cB99e5A7` | `Kelp.RsETH` |
 
 ## ABI
 

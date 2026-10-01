@@ -8,22 +8,18 @@ OpenSea's decentralized NFT marketplace protocol supporting flexible order types
 | --- | --- |
 | Category | NFT marketplaces |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Seaport` on ethereum, optimism, polygon, arc, base, arbitrum |
 | Chains | ethereum, optimism, polygon, arc, base, arbitrum |
 | Document | [seaport.md](../seaport.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's seaportV16):
+On Ethereum, `Seaport` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import SeaportABI from "./protocols/seaport/SeaportABI.json";
-
-const SEAPORT_V16 = 0x0000000000000068F116a894984e2DB1123eB395n;
-
 function main() {
-  const bound = SeaportABI.at(SEAPORT_V16);
+  // Ethereum's seaportV16, `0x0000000000000068F116a894984e2DB1123eB395`.
+  require(Seaport.SeaportV16 != 0n);
 }
 ```
 
@@ -31,12 +27,12 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `SeaportABI.at(0x0000000000000068F116a894984e2DB1123eB395n)` |
-| [Optimism](../../../sauce-chains/references/optimism.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `SeaportABI.at(0x0000000000000068F116a894984e2DB1123eB395n)` |
-| [Polygon](../../../sauce-chains/references/polygon.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `SeaportABI.at(0x0000000000000068F116a894984e2DB1123eB395n)` |
-| [Arc](../../../sauce-chains/references/arc.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `SeaportABI.at(0x0000000000000068F116a894984e2DB1123eB395n)` |
-| [Base](../../../sauce-chains/references/base.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `SeaportABI.at(0x0000000000000068F116a894984e2DB1123eB395n)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `SeaportABI.at(0x0000000000000068F116a894984e2DB1123eB395n)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `Seaport.SeaportV16` |
+| [Optimism](../../../sauce-chains/references/optimism.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `Seaport.SeaportV16` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `Seaport.SeaportV16` |
+| [Arc](../../../sauce-chains/references/arc.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `Seaport.SeaportV16` |
+| [Base](../../../sauce-chains/references/base.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `Seaport.SeaportV16` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `Seaport.SeaportV16` |
 
 ## ABI
 

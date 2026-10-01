@@ -8,22 +8,18 @@ MEV-protected DEX aggregator using batch auctions and Coincidence of Wants (CoW)
 | --- | --- |
 | Category | Aggregators |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Cowswap` on ethereum, arbitrum |
 | Chains | ethereum, arbitrum |
 | Document | [cowswap.md](../cowswap.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's gpv2Settlement):
+On Ethereum, `Cowswap` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import GPv2SettlementABI from "./protocols/cowswap/GPv2SettlementABI.json";
-
-const GPV2_SETTLEMENT = 0x9008D19f58AAbD9eD0D60971565AA8510560ab41n;
-
 function main() {
-  const bound = GPv2SettlementABI.at(GPV2_SETTLEMENT);
+  // Ethereum's gpv2Settlement, `0x9008D19f58AAbD9eD0D60971565AA8510560ab41`.
+  require(Cowswap.GPv2Settlement != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | gpv2Settlement | `0x9008D19f58AAbD9eD0D60971565AA8510560ab41` | `GPv2SettlementABI.at(0x9008D19f58AAbD9eD0D60971565AA8510560ab41n)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | gpv2Settlement | `0x9008D19f58AAbD9eD0D60971565AA8510560ab41` | `GPv2SettlementABI.at(0x9008D19f58AAbD9eD0D60971565AA8510560ab41n)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | gpv2Settlement | `0x9008D19f58AAbD9eD0D60971565AA8510560ab41` | `Cowswap.GPv2Settlement` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | gpv2Settlement | `0x9008D19f58AAbD9eD0D60971565AA8510560ab41` | `Cowswap.GPv2Settlement` |
 
 ## ABI
 

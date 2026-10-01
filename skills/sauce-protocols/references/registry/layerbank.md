@@ -8,22 +8,18 @@ Leading lending protocol on Scroll. Compound V2 fork optimized for L2 rollups wi
 | --- | --- |
 | Category | Lending |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Layerbank` on scroll |
 | Chains | scroll |
 | Document | [layerbank.md](../layerbank.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Scroll's core):
+On Scroll, `Layerbank` is a namespace: its contracts need no import.
 
 ```sauce chain=scroll
-import LayerBankCoreABI from "./protocols/layerbank/LayerBankCoreABI.json";
-
-const CORE = 0xEC53c830f4444a8A56455c6836b5D2aA794289Aan;
-
 function main() {
-  const bound = LayerBankCoreABI.at(CORE);
+  // Scroll's core, `0xEC53c830f4444a8A56455c6836b5D2aA794289Aa`.
+  require(Layerbank.Core != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Scroll](../../../sauce-chains/references/scroll.md) | core | `0xEC53c830f4444a8A56455c6836b5D2aA794289Aa` | `LayerBankCoreABI.at(0xEC53c830f4444a8A56455c6836b5D2aA794289Aan)` |
+| [Scroll](../../../sauce-chains/references/scroll.md) | core | `0xEC53c830f4444a8A56455c6836b5D2aA794289Aa` | `Layerbank.Core` |
 
 ## ABI
 

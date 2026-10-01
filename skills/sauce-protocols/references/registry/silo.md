@@ -8,22 +8,18 @@ Permissionless lending protocol with isolated risk markets (Silos). Each Silo is
 | --- | --- |
 | Category | Lending |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Silo` on ethereum, arbitrum |
 | Chains | ethereum, arbitrum |
 | Document | [silo.md](../silo.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's siloRepository):
+On Ethereum, `Silo` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import SiloRepositoryABI from "./protocols/silo/SiloRepositoryABI.json";
-
-const SILO_REPOSITORY = 0xbACBBefda6fD1FbF5a2d6A79916F4B6124eD2D49n;
-
 function main() {
-  const bound = SiloRepositoryABI.at(SILO_REPOSITORY);
+  // Ethereum's siloRepository, `0xbACBBefda6fD1FbF5a2d6A79916F4B6124eD2D49`.
+  require(Silo.SiloRepository != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | siloRepository | `0xbACBBefda6fD1FbF5a2d6A79916F4B6124eD2D49` | `SiloRepositoryABI.at(0xbACBBefda6fD1FbF5a2d6A79916F4B6124eD2D49n)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | siloRepository | `0x8658047e48CC09161f4152c79155Dac1d710Ff0a` | `SiloRepositoryABI.at(0x8658047e48CC09161f4152c79155Dac1d710Ff0an)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | siloRepository | `0xbACBBefda6fD1FbF5a2d6A79916F4B6124eD2D49` | `Silo.SiloRepository` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | siloRepository | `0x8658047e48CC09161f4152c79155Dac1d710Ff0a` | `Silo.SiloRepository` |
 
 ## ABI
 

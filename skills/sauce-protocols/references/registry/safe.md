@@ -8,22 +8,18 @@ The most trusted multi-signature smart contract wallet, securing billions in dig
 | --- | --- |
 | Category | Infrastructure and standards |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Safe` on ethereum, optimism, polygon, arc, base, arbitrum |
 | Chains | ethereum, optimism, polygon, arc, base, arbitrum |
 | Document | [safe.md](../safe.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's safeL2V130):
+On Ethereum, `Safe` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import SafeABI from "./protocols/safe/SafeABI.json";
-
-const SAFE_L2_V130 = 0x3E5c63644E683549055b9Be8653de26E0B4CD36En;
-
 function main() {
-  const bound = SafeABI.at(SAFE_L2_V130);
+  // Ethereum's safeL2V130, `0x3E5c63644E683549055b9Be8653de26E0B4CD36E`.
+  require(Safe.SafeL2V130 != 0n);
 }
 ```
 
@@ -31,14 +27,14 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `SafeABI.at(0x3E5c63644E683549055b9Be8653de26E0B4CD36En)` |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | safeV141 | `0x41675C099F32341bf84BFc5382aF534df5C7461a` | `SafeABI.at(0x41675C099F32341bf84BFc5382aF534df5C7461an)` |
-| [Optimism](../../../sauce-chains/references/optimism.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `SafeABI.at(0x3E5c63644E683549055b9Be8653de26E0B4CD36En)` |
-| [Polygon](../../../sauce-chains/references/polygon.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `SafeABI.at(0x3E5c63644E683549055b9Be8653de26E0B4CD36En)` |
-| [Arc](../../../sauce-chains/references/arc.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `SafeABI.at(0x3E5c63644E683549055b9Be8653de26E0B4CD36En)` |
-| [Arc](../../../sauce-chains/references/arc.md) | safeV141 | `0x41675C099F32341bf84BFc5382aF534df5C7461a` | `SafeABI.at(0x41675C099F32341bf84BFc5382aF534df5C7461an)` |
-| [Base](../../../sauce-chains/references/base.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `SafeABI.at(0x3E5c63644E683549055b9Be8653de26E0B4CD36En)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `SafeABI.at(0x3E5c63644E683549055b9Be8653de26E0B4CD36En)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `Safe.SafeL2V130` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | safeV141 | `0x41675C099F32341bf84BFc5382aF534df5C7461a` | `Safe.SafeV141` |
+| [Optimism](../../../sauce-chains/references/optimism.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `Safe.SafeL2V130` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `Safe.SafeL2V130` |
+| [Arc](../../../sauce-chains/references/arc.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `Safe.SafeL2V130` |
+| [Arc](../../../sauce-chains/references/arc.md) | safeV141 | `0x41675C099F32341bf84BFc5382aF534df5C7461a` | `Safe.SafeV141` |
+| [Base](../../../sauce-chains/references/base.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `Safe.SafeL2V130` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `Safe.SafeL2V130` |
 
 ## ABI
 

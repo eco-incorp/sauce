@@ -8,22 +8,18 @@ Liquidity layer that unifies lending and DEX liquidity. Deposited assets simulta
 | --- | --- |
 | Category | Lending |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Fluid` on ethereum, arbitrum |
 | Chains | ethereum, arbitrum |
 | Document | [fluid.md](../fluid.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-The registry records no deployment: `FluidLendingABI` is an interface, bound to an address the
-program is given.
+On Ethereum, `Fluid` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import FluidLendingABI from "./protocols/fluid/FluidLendingABI.json";
-
-const TARGET = 0n; // the contract's address, as a define
-
 function main() {
-  const target = FluidLendingABI.at(TARGET);
+  // Ethereum's liquidity, `0x52Aa899454998Be5b000Ad077a46Bbe360F4e497`.
+  require(Fluid.Liquidity != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | liquidity | `0x52Aa899454998Be5b000Ad077a46Bbe360F4e497` | no registry ABI |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | liquidity | `0x52Aa899454998Be5b000Ad077a46Bbe360F4e497` | no registry ABI |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | liquidity | `0x52Aa899454998Be5b000Ad077a46Bbe360F4e497` | `Fluid.Liquidity` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | liquidity | `0x52Aa899454998Be5b000Ad077a46Bbe360F4e497` | `Fluid.Liquidity` |
 
 ## ABI
 

@@ -8,22 +8,18 @@ The largest DEX on Fantom with UniV2-style constant product pools. Features yiel
 | --- | --- |
 | Category | DEX |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Spookyswap` on fantom |
 | Chains | fantom |
 | Document | [spookyswap.md](../spookyswap.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Fantom's v2Router):
+On Fantom, `Spookyswap` is a namespace: its contracts need no import.
 
 ```sauce chain=fantom
-import SpookySwapRouterABI from "./protocols/spookyswap/SpookySwapRouterABI.json";
-
-const V2_ROUTER = 0xF491e7B69E4244ad4002BC14e878a34207E38c29n;
-
 function main() {
-  const bound = SpookySwapRouterABI.at(V2_ROUTER);
+  // Fantom's v2Router, `0xF491e7B69E4244ad4002BC14e878a34207E38c29`.
+  require(Spookyswap.V2Router != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Fantom](../../../sauce-chains/references/fantom.md) | v2Router | `0xF491e7B69E4244ad4002BC14e878a34207E38c29` | `SpookySwapRouterABI.at(0xF491e7B69E4244ad4002BC14e878a34207E38c29n)` |
+| [Fantom](../../../sauce-chains/references/fantom.md) | v2Router | `0xF491e7B69E4244ad4002BC14e878a34207E38c29` | `Spookyswap.V2Router` |
 
 ## ABI
 

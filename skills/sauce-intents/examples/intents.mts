@@ -168,8 +168,7 @@ check(!direct.calls.includes(" "), "and nothing else: no cook");
 check(direct.rewarded.join() === word(token("base", "USDC")), "the reward is Base's USDC");
 check(contracts.on("arbitrum").AaveV3.Pool.available, "Arbitrum has AaveV3.Pool");
 
-// ---- Inside a body, a decoded result is read by position: destructuring is refused there, though
-// it compiles at top level. When this changes, the skill's note goes with it.
+// ---- Inside a body, a decoded result is read by position or destructured, as anywhere else.
 const decodeIn = (statement: string) =>
   `Base(() => { const d = hex\`3850c7bd\`; ${statement} require(x != 0n); }, { tokens: [{ token: 0x4200000000000000000000000000000000000006n, amount: 1n }] }).reward({ tokens: [{ token: WETH, amount: 1n }] });`;
 const refused = (source: string) => {
@@ -185,10 +184,8 @@ check(
   "a body reads a decoded result by position",
 );
 check(
-  /Identifier 'x' has already been declared/.test(
-    refused(decodeIn('const [x] = abi.decode(evm.static(RECIPIENT, d), ["Uint256"]);')),
-  ),
-  "a body cannot destructure one",
+  refused(decodeIn('const [x] = abi.decode(evm.static(RECIPIENT, d), ["Uint256"]);')) === "",
+  "and destructures one, as anywhere else",
 );
 
 // ---- Rehearsing the swap-on-base body on a fork of Base: what the solver sends there.

@@ -8,22 +8,18 @@ Decentralized leveraged trading platform (gTrade) supporting crypto, forex, and 
 | --- | --- |
 | Category | Perpetuals |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `GainsNetwork` on polygon, arbitrum |
 | Chains | polygon, arbitrum |
 | Document | [gains-network.md](../gains-network.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Polygon's diamond):
+On Polygon, `GainsNetwork` is a namespace: its contracts need no import.
 
 ```sauce chain=polygon
-import DiamondABI from "./protocols/gains-network/DiamondABI.json";
-
-const DIAMOND = 0x209A9A01980377916851af2cA075C2b170452018n;
-
 function main() {
-  const bound = DiamondABI.at(DIAMOND);
+  // Polygon's diamond, `0x209A9A01980377916851af2cA075C2b170452018`.
+  require(GainsNetwork.Diamond != 0n);
 }
 ```
 
@@ -31,9 +27,9 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Polygon](../../../sauce-chains/references/polygon.md) | diamond | `0x209A9A01980377916851af2cA075C2b170452018` | `DiamondABI.at(0x209A9A01980377916851af2cA075C2b170452018n)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | diamond | `0xFF162c694eAA571f685030649814282eA457f169` | `DiamondABI.at(0xFF162c694eAA571f685030649814282eA457f169n)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | gns | `0x18c11FD286C5EC11c3b683Caa813B77f5163A122` | no registry ABI |
+| [Polygon](../../../sauce-chains/references/polygon.md) | diamond | `0x209A9A01980377916851af2cA075C2b170452018` | `GainsNetwork.Diamond` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | diamond | `0xFF162c694eAA571f685030649814282eA457f169` | `GainsNetwork.Diamond` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | gns | `0x18c11FD286C5EC11c3b683Caa813B77f5163A122` | `GainsNetwork.Gns` |
 
 ## ABI
 

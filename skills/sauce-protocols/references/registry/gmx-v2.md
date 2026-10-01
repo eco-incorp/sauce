@@ -7,23 +7,19 @@ Next generation of GMX perpetual exchange with isolated markets, improved risk m
 | Fact | Value |
 | --- | --- |
 | Category | Perpetuals |
-| Family | none |
-| Namespace | none: import its ABI |
+| Family | `Gmx`: `gmx-v1`, `gmx-v2` |
+| Namespace | `GmxV2` on arbitrum |
 | Chains | arbitrum |
 | Document | [gmx-v2.md](../gmx-v2.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Arbitrum One's exchangeRouter):
+On Arbitrum One, `GmxV2` is a namespace: its contracts need no import.
 
 ```sauce chain=arbitrum
-import ExchangeRouterABI from "./protocols/gmx-v2/ExchangeRouterABI.json";
-
-const EXCHANGE_ROUTER = 0x7dE39FF2e232A2203196788d37e234cF8F1b83f1n;
-
 function main() {
-  const bound = ExchangeRouterABI.at(EXCHANGE_ROUTER);
+  // Arbitrum One's dataStore, `0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8`.
+  require(GmxV2.DataStore != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | dataStore | `0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8` | no registry ABI |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | exchangeRouter | `0x7dE39FF2e232A2203196788d37e234cF8F1b83f1` | `ExchangeRouterABI.at(0x7dE39FF2e232A2203196788d37e234cF8F1b83f1n)` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | dataStore | `0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8` | `GmxV2.DataStore` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | exchangeRouter | `0x7dE39FF2e232A2203196788d37e234cF8F1b83f1` | `GmxV2.ExchangeRouter` |
 
 ## ABI
 

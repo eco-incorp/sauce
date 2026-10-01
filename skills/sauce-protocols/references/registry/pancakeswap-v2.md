@@ -7,7 +7,7 @@ The most popular DEX on BNB Chain using the constant product AMM model. Forked f
 | Fact | Value |
 | --- | --- |
 | Category | DEX |
-| Family | `Pancakeswap`: `pancakeswap-v2` |
+| Family | `Pancakeswap`: `pancakeswap-v2`, `pancakeswap-v3` |
 | Namespace | `PancakeswapV2` on ethereum, bsc, monad, opbnb, base, arbitrum, linea |
 | Chains | ethereum, bsc, monad, opbnb, base, arbitrum, linea |
 | Document | [pancakeswap-v2.md](../pancakeswap-v2.md): what it is for, how to choose it, its pitfalls |

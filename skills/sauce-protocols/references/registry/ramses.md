@@ -8,22 +8,18 @@ Arbitrum-native ve(3,3) DEX with concentrated liquidity. Features gauge voting, 
 | --- | --- |
 | Category | DEX |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Ramses` on arbitrum |
 | Chains | arbitrum |
 | Document | [ramses.md](../ramses.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Arbitrum One's router):
+On Arbitrum One, `Ramses` is a namespace: its contracts need no import.
 
 ```sauce chain=arbitrum
-import RamsesRouterABI from "./protocols/ramses/RamsesRouterABI.json";
-
-const ROUTER = 0xAAA87963EFeB6f7E0a2711F397663105Acb1805en;
-
 function main() {
-  const bound = RamsesRouterABI.at(ROUTER);
+  // Arbitrum One's router, `0xAAA87963EFeB6f7E0a2711F397663105Acb1805e`.
+  require(Ramses.Router != 0n);
 }
 ```
 
@@ -31,7 +27,7 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | router | `0xAAA87963EFeB6f7E0a2711F397663105Acb1805e` | `RamsesRouterABI.at(0xAAA87963EFeB6f7E0a2711F397663105Acb1805en)` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | router | `0xAAA87963EFeB6f7E0a2711F397663105Acb1805e` | `Ramses.Router` |
 
 ## ABI
 

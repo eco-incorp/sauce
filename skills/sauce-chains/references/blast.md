@@ -22,10 +22,10 @@ chain does not have it.
 
 ```sauce chain=blast
 function main() {
-  // `UniswapV2.Factory` is Blast's factory: `0x5C346464d33F90bABaf70dB6388507CC889C1070`.
-  require(UniswapV2.Factory != 0n);
+  // `Across.SpokePool` is Blast's spokePool: `0x2D509190Ed0172ba588407D4c2df918F955Cc6E1`.
+  require(Across.SpokePool != 0n);
   // The same contract, qualified by the chain's name, from a program on any chain.
-  require(Blast.UniswapV2.Factory == UniswapV2.Factory);
+  require(Blast.Across.SpokePool == Across.SpokePool);
 }
 ```
 
@@ -41,9 +41,10 @@ address.
 
 | Protocol | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Across](../../sauce-protocols/references/registry/across.md) | spokePool | `0x2D509190Ed0172ba588407D4c2df918F955Cc6E1` | `AcrossSpokePoolABI.at(0x2D509190Ed0172ba588407D4c2df918F955Cc6E1n)` |
-| [Fenix](../../sauce-protocols/references/registry/fenix.md) | router | `0xbD571125856975DBfC2E9b6d1DE496D614D7BAEE` | `FenixRouterABI.at(0xbD571125856975DBfC2E9b6d1DE496D614D7BAEEn)` |
-| [Thruster](../../sauce-protocols/references/registry/thruster.md) | v3SwapRouter | `0x337827814155ECBf24D20231fCA4444F530c0555` | `ThrusterV3SwapRouterABI.at(0x337827814155ECBf24D20231fCA4444F530c0555n)` |
+| [Across](../../sauce-protocols/references/registry/across.md) | spokePool | `0x2D509190Ed0172ba588407D4c2df918F955Cc6E1` | `Across.SpokePool` |
+| [Fenix](../../sauce-protocols/references/registry/fenix.md) | router | `0xbD571125856975DBfC2E9b6d1DE496D614D7BAEE` | `Fenix.Router` |
+| [Thruster](../../sauce-protocols/references/registry/thruster.md) | v3SwapRouter | `0x337827814155ECBf24D20231fCA4444F530c0555` | `Thruster.V3SwapRouter` |
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | factory | `0x5C346464d33F90bABaf70dB6388507CC889C1070` | `UniswapV2.Factory` |
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | router | `0xBB66Eb1c5e875933D44DAe661dbD80e5D9B03035` | `UniswapV2.Router` |
 | [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0x1631559198a9e474033433b2958dabc135ab6446` | `UniswapV4.PoolManager` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | stateView | `0x12a88ae16f46dce4e8b15368008ab3380885df30` | `UniswapV4.StateView` |

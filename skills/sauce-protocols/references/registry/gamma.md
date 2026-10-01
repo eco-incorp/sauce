@@ -8,22 +8,18 @@ Active concentrated liquidity management protocol. Manages Uniswap V3 and other 
 | --- | --- |
 | Category | Yield and vaults |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Gamma` on ethereum, polygon |
 | Chains | ethereum, polygon |
 | Document | [gamma.md](../gamma.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Ethereum's uniProxy):
+On Ethereum, `Gamma` is a namespace: its contracts need no import.
 
 ```sauce chain=ethereum
-import UniProxyLegacyABI from "./protocols/gamma/UniProxyLegacyABI.json";
-
-const UNI_PROXY = 0xf5bfa20f4a77933fee0c7bb7f39e7642a070d599n;
-
 function main() {
-  const bound = UniProxyLegacyABI.at(UNI_PROXY);
+  // Ethereum's uniProxy, `0xf5bfa20f4a77933fee0c7bb7f39e7642a070d599`.
+  require(Gamma.UniProxyLegacy != 0n);
 }
 ```
 
@@ -31,8 +27,8 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Ethereum](../../../sauce-chains/references/ethereum.md) | uniProxy | `0xf5bfa20f4a77933fee0c7bb7f39e7642a070d599` | `UniProxyLegacyABI.at(0xf5bfa20f4a77933fee0c7bb7f39e7642a070d599n)` |
-| [Polygon](../../../sauce-chains/references/polygon.md) | uniProxy | `0xA42d55074869491D60Ac05490376B74cF19B00e6` | `UniProxyABI.at(0xA42d55074869491D60Ac05490376B74cF19B00e6n)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | uniProxy | `0xf5bfa20f4a77933fee0c7bb7f39e7642a070d599` | `Gamma.UniProxyLegacy` |
+| [Polygon](../../../sauce-chains/references/polygon.md) | uniProxy | `0xA42d55074869491D60Ac05490376B74cF19B00e6` | `Gamma.UniProxy` |
 
 ## ABI
 

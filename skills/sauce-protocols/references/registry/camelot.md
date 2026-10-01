@@ -8,22 +8,18 @@ Native Arbitrum DEX with dual AMM (V2 constant product + V3 concentrated liquidi
 | --- | --- |
 | Category | DEX |
 | Family | none |
-| Namespace | none: import its ABI |
+| Namespace | `Camelot` on arbitrum |
 | Chains | arbitrum |
 | Document | [camelot.md](../camelot.md): what it is for, how to choose it, its pitfalls |
 
 ## In a program
 
-Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
-as a module constant a define can replace (here Arbitrum One's v2Router):
+On Arbitrum One, `Camelot` is a namespace: its contracts need no import.
 
 ```sauce chain=arbitrum
-import CamelotV2RouterABI from "./protocols/camelot/CamelotV2RouterABI.json";
-
-const V2_ROUTER = 0xc873fEcbd354f5A56E00E710B90EF4201db2448dn;
-
 function main() {
-  const bound = CamelotV2RouterABI.at(V2_ROUTER);
+  // Arbitrum One's v2Factory, `0x6EcCab422D763aC031210895C81787E87B43A652`.
+  require(Camelot.V2Factory != 0n);
 }
 ```
 
@@ -31,10 +27,10 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | v2Factory | `0x6EcCab422D763aC031210895C81787E87B43A652` | no registry ABI |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | v2Router | `0xc873fEcbd354f5A56E00E710B90EF4201db2448d` | `CamelotV2RouterABI.at(0xc873fEcbd354f5A56E00E710B90EF4201db2448dn)` |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | v3Factory | `0x1a3c9B1d2F0529D97f2afC5136Cc23e58f1FD35B` | no registry ABI |
-| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | v3SwapRouter | `0x1F721E2E82F6676FCE4eA07A5958cF098D339e18` | `CamelotV3SwapRouterABI.at(0x1F721E2E82F6676FCE4eA07A5958cF098D339e18n)` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | v2Factory | `0x6EcCab422D763aC031210895C81787E87B43A652` | `Camelot.V2Factory` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | v2Router | `0xc873fEcbd354f5A56E00E710B90EF4201db2448d` | `Camelot.V2Router` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | v3Factory | `0x1a3c9B1d2F0529D97f2afC5136Cc23e58f1FD35B` | `Camelot.V3Factory` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | v3SwapRouter | `0x1F721E2E82F6676FCE4eA07A5958cF098D339e18` | `Camelot.V3SwapRouter` |
 
 ## ABI
 
