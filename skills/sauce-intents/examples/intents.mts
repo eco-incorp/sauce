@@ -2,7 +2,9 @@
 // (`routes.compileSauceProgram` with the intent settings), and checks on which chain each name
 // resolves: the body and its delivery on the destination, the reward on the source. Each child's
 // Portal and prover come from the eco-routes registry; the deadline, the creator, the recipient and
-// each destination Kitchen's fee are the developer's. Offline: nothing is sent.
+// each destination Kitchen's fee are the developer's. Then builds what rehearsing the swap-on-base
+// body on a fork of Base sends: the shared Pot's deploy, and the Portal's fulfill with the Kitchen
+// fee as its value. Offline: nothing is sent.
 //
 //   node intents.mts --creator <address> --recipient <address> --arbitrum-fee <wei> --base-fee <wei>
 //
@@ -10,9 +12,29 @@
 // destinationExecutionFee(); it is compiled into the child's cook.
 import { readFileSync } from "node:fs";
 
-import { contracts, destinationExecutionFee, routes } from "@eco-incorp/sauce";
-import { ecoRoutesPortal, ecoRoutesProver } from "@eco-incorp/sauce/protocols/eco-routes";
-import { getAddress } from "viem";
+import {
+  contracts,
+  destinationExecutionFee,
+  destinationPot,
+  routes,
+  SAUCE_INTENT_POT_SALT,
+  v12GateKitchen,
+  v12PredictPot,
+} from "@eco-incorp/sauce";
+import {
+  ecoRoutesExecutor,
+  ecoRoutesPortal,
+  ecoRoutesProver,
+  PortalABI,
+} from "@eco-incorp/sauce/protocols/eco-routes";
+import {
+  decodeAbiParameters,
+  decodeFunctionData,
+  encodeFunctionData,
+  getAddress,
+  toFunctionSelector,
+  type Hex,
+} from "viem";
 
 function flag(name: string): string {
   const i = process.argv.indexOf(`--${name}`);
@@ -109,6 +131,25 @@ for (const [what, value] of [
   check(swapped.calls.includes(word(value)), `the child uses ${what}`);
 }
 check(swapped.rewarded.join() === word(token("arbitrum", "WETH")), "the reward is Arbitrum's WETH");
+// An intent file imports nothing, so the body reaches every contract without a namespace by
+// selector, with evm.static and evm.call. These are the selectors sauce-intents tabulates.
+for (const [signature, selector] of [
+  ["getPool(address,address,uint24)", "1698ee82"],
+  ["getPool(address,address,int24)", "28af8d0b"],
+  ["slot0()", "3850c7bd"],
+  ["liquidity()", "1a686502"],
+  ["fee()", "ddca3f43"],
+  ["extsload(bytes32)", "1e2eaeaf"],
+  ["swapV3(address,address,address,int256,uint160,address,address)", "a5e2989d"],
+  [
+    "swapV4(address,(address,address,uint24,int24,address),bool,int256,uint160,address,address)",
+    "7c9e9da3",
+  ],
+] as const) {
+  check(toFunctionSelector(signature) === `0x${selector}`, `${signature} is 0x${selector}`);
+}
+for (const selector of ["3850c7bd", "1a686502", "ddca3f43", "1e2eaeaf", "a5e2989d", "7c9e9da3"])
+  check(swap.includes(`hex\`${selector}\``), `the body uses 0x${selector}`);
 
 // ---- A token-only child is plain route calls for the destination's Executor: no Pot, no fee.
 const direct = intentOf(
@@ -136,6 +177,95 @@ check(
 );
 check(contracts.on("arbitrum").AaveV3.Pool.available, "Arbitrum has AaveV3.Pool");
 
+// ---- Inside a body, a decoded result is read by position: destructuring is refused there, though
+// it compiles at top level. When this changes, the skill's note goes with it.
+const decodeIn = (statement: string) =>
+  `Base(() => { const d = hex\`3850c7bd\`; ${statement} require(x != 0n); }, { tokens: [{ token: 0x4200000000000000000000000000000000000006n, amount: 1n }] }).reward({ tokens: [{ token: WETH, amount: 1n }] });`;
+const refused = (source: string) => {
+  try {
+    compileFor("arbitrum", source, { RECIPIENT: recipient }, fee.base);
+    return "";
+  } catch (error) {
+    return (error as Error).message;
+  }
+};
+check(
+  refused(decodeIn('const x = abi.decode(evm.static(RECIPIENT, d), ["Uint256"])[0n];')) === "",
+  "a body reads a decoded result by position",
+);
+check(
+  /Identifier 'x' has already been declared/.test(
+    refused(decodeIn('const [x] = abi.decode(evm.static(RECIPIENT, d), ["Uint256"]);')),
+  ),
+  "a body cannot destructure one",
+);
+
+// ---- Rehearsing the swap-on-base body on a fork of Base: what the solver sends there.
+const swapDefines = {
+  AMOUNT_IN: 10n ** 18n,
+  REWARD: 10n ** 18n + 10n ** 15n,
+  SQRT_PRICE_LIMIT_X96: 3068493539683605256287027n,
+  MIN_OUT: 0n,
+  MIN_AVG_PRICE: 1_500_000_000n,
+  RECIPIENT: recipient,
+  REFUND_TO: recipient,
+};
+const { intent } = compileFor("arbitrum", swap, swapDefines, fee.base).intents[0]!;
+// The Kitchen fee is the route's native amount: the solver pays it, in Base's native coin, as the
+// value of fulfill. Nothing in the reward pays it back.
+check(intent.route.nativeAmount === fee.base, "route.nativeAmount is Base's Kitchen fee");
+// 1. The shared Pot: the Executor's at salt zero. Anyone may deploy it; no solver can fill first.
+const executor = ecoRoutesExecutor("base");
+const pot = destinationPot("base");
+check(pot === v12PredictPot(executor, SAUCE_INTENT_POT_SALT), "the shared Pot is the Executor's");
+const deployPot = routes.sauceEvmDeployPotCall({
+  kitchen: v12GateKitchen(),
+  owner: executor,
+  salt: SAUCE_INTENT_POT_SALT,
+});
+check(
+  getAddress(`0x${deployPot.target.slice(-40)}`) === getAddress(v12GateKitchen()),
+  "the Pot's deploy is a call to the Kitchen",
+);
+// 2. The route's tokens: what the solver holds and approves to the Portal, which pulls them.
+check(
+  intent.route.tokens.length === 1 && intent.route.tokens[0]!.amount === 10n ** 18n,
+  "the route's tokens are the delivered WETH",
+);
+// 3. fulfill(intentHash, route, rewardHash, claimant), the hashes as the Portal computes them
+//    (its getIntentHash gives the same three).
+const { intentHash, rewardHash } = routes.hashIntent(intent);
+const [route] = decodeAbiParameters([routes.EVM_ROUTE_PARAM], routes.encodeRouteEvm(intent.route));
+const solver = creator; // offline, any address stands in for the solver's
+const claimant = `0x${"00".repeat(12)}${solver.slice(2)}` as Hex; // who the reward goes to
+const fulfill = {
+  to: ecoRoutesPortal("base"),
+  value: intent.route.nativeAmount,
+  data: encodeFunctionData({
+    abi: PortalABI,
+    functionName: "fulfill",
+    args: [intentHash, route, rewardHash, claimant],
+  }),
+};
+const decoded = decodeFunctionData({ abi: PortalABI, data: fulfill.data });
+check(decoded.functionName === "fulfill" && decoded.args[0] === intentHash, "fulfill's calldata");
+// The deadline and the fee are in the route, so either changes the intent and its hash: rebuild
+// every transaction (and any unsigned one printed earlier) after changing one.
+const rehashed = (deadlineShift: bigint, executionFee: bigint) =>
+  routes.hashIntent(
+    routes.compileSauceProgram("arbitrum", swap, {
+      defines: swapDefines,
+      intents: { deadline: deadline + deadlineShift, creator, executionFee },
+    }).intents[0]!.intent,
+  ).intentHash;
+check(rehashed(0n, fee.base) === intentHash, "the same inputs give the same intent");
+check(rehashed(1n, fee.base) !== intentHash, "a new deadline is a new intent");
+check(rehashed(0n, fee.base + 1n) !== intentHash, "a new Kitchen fee is a new intent");
+
+console.log(
+  `rehearsal on a fork of Base: deploy the Pot ${pot} if it has no code, approve the Portal for ` +
+    `the WETH, then fulfill ${intentHash.slice(0, 10)}… with value ${fulfill.value}`,
+);
 console.log(
   `cross-chain.sauce.ts on Base -> Arbitrum Portal ${ecoRoutesPortal("arbitrum")}, ` +
     `prover ${ecoRoutesProver("base", "arbitrum")}`,

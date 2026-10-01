@@ -58,7 +58,19 @@ npx sauce publish pay-on-arbitrum.sauce.ts --chain base --config sauce.config.js
 - **Publish it from your wallet** (`sauce publish`): the intent is built before anything runs, and
   your wallet approves the reward to the Portal and calls `publishAndFund`. There is no Pot and
   nothing is measured, so every amount must be a literal or a define, and the file may do nothing
-  but open intents. `--dry-run` rehearses both transactions and sends nothing.
+  but open intents; a file with a measured amount is refused, with `sauce run` named instead.
+  `--dry-run` rehearses both transactions against the wallet's real balances and sends nothing, so
+  it reverts unless the wallet already holds the reward.
+- **Print the transactions for any wallet**: `--format json` (or `cast`) with `--from <address>` and
+  no signer prints the approve and the `publishAndFund`, unsigned, for that wallet to send in order.
+  With no endpoint it plans each approve without reading the standing allowance; with one, it reads
+  it.
+
+```sh
+npx sauce publish pay-on-arbitrum.sauce.ts --chain base --from <address> --format json \
+  --define RECIPIENT=<address> --define AMOUNT=1000000 \
+  --intent-deadline <unix seconds> --intent-creator <address>
+```
 
 `sauce inspect <file> --chain <chain>` with the same defines and intent flags prints each intent
 the file opens: its destination, the route's calls and the reward, with every measured value named.
@@ -94,11 +106,44 @@ The body can be any program for the destination, such as a complete swap:
 [examples/swap-on-base.sauce.ts](examples/swap-on-base.sauce.ts) runs the distributed swap
 (`sauce-distributed-swap`) on Base for WETH a solver delivers there, and pays the solver in WETH on
 the source chain. The body is written inside the braces, uses the file's defines as values, and
-imports nothing: it calls contracts by namespace (`UniswapV3.Factory.getPool(...)`) or by selector,
-with `evm.static(address, data)` for a read and `evm.call(address, value, data)` for a write, `data`
-being the selector bytes `.concat(abi.encode(...))`. The swap Router is reached through the Pot
-itself, `evm.call(ctx.self(), 0n, ...)`. Every unsold input and every output leaves the destination
-Pot before the body ends.
+**imports nothing** (an intent file cannot import): it calls contracts by namespace
+(`UniswapV3.Factory.getPool(...)`) or by selector, with `evm.static(address, data)` for a read and
+`evm.call(address, value, data)` for a write, `data` being the selector bytes
+`.concat(abi.encode(...))`. The swap Router is reached through the Pot itself,
+`evm.call(ctx.self(), 0n, ...)`. Every unsold input and every output leaves the destination Pot
+before the body ends, and a refund the body makes lands on the destination chain.
+
+Inside a body, read a decoded result by position, `abi.decode(data, ["Address"])[0n]`: destructuring
+it, `const [pool] = …`, is refused there ("Identifier 'pool' has already been declared"), though it
+compiles anywhere else.
+
+A venue with no namespace on the destination, such as PancakeSwap V3 or Aerodrome Slipstream on
+Base, is therefore reached by selector, with its address as a define (the protocol's document in
+`sauce-protocols` has it). The selectors the distributed swap needs:
+
+| Call                                                                                                      | Selector                                 |
+| --------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| a V3-style factory's `getPool(address,address,uint24)` (Uniswap V3, PancakeSwap V3)                       | `0x1698ee82`                             |
+| a Slipstream factory's `getPool(address,address,int24)`                                                   | `0x28af8d0b`                             |
+| a pool's `slot0()`, `liquidity()`, `fee()`                                                                | `0x3850c7bd`, `0x1a686502`, `0xddca3f43` |
+| the V4 PoolManager's `extsload(bytes32)`                                                                  | `0x1e2eaeaf`                             |
+| the Router's `swapV3(address,address,address,int256,uint160,address,address)`                             | `0xa5e2989d`                             |
+| the Router's `swapV4(address,(address,address,uint24,int24,address),bool,int256,uint160,address,address)` | `0x7c9e9da3`                             |
+
+```sauce chain=arbitrum define=SLIPSTREAM_FACTORY,AMOUNT_IN,REFUND_TO
+Base(
+  () => {
+    const weth = 0x4200000000000000000000000000000000000006n; // Base WETH
+    const usdc = 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n; // Base USDC
+    const getPool = hex`28af8d0b`; // getPool(address,address,int24)
+    const call = getPool.concat(abi.encode(weth, usdc, 100n));
+    const pool = abi.decode(evm.static(SLIPSTREAM_FACTORY, call), ["Address"])[0n];
+    require(pool != 0n, "no WETH/USDC pool at tick spacing 100");
+    Token(weth).transfer(REFUND_TO, Token(weth).balanceOf(ctx.self()));
+  },
+  { tokens: [{ token: 0x4200000000000000000000000000000000000006n, amount: AMOUNT_IN }] }
+).reward({ tokens: [{ token: WETH, amount: AMOUNT_IN }] });
+```
 
 ## Cascades
 
@@ -134,8 +179,15 @@ which chains take intents. Three values are the developer's:
 - **`--intent-creator <address>`**: who may reclaim an unearned reward. Never a Pot.
 - **`--intent-execution-fee <wei>`** for a program body: the destination Kitchen's fee. It is
   mutable on chain and lives on the destination, so read it there just before sending
-  (`destinationExecutionFee()` builds the read); an increase before the fill makes the cook, and the
-  fulfilment, revert.
+  (`destinationExecutionFee()` builds the read, an `eth_call` of the Kitchen's `executionFee()`); an
+  increase before the fill makes the cook, and the fulfilment, revert.
+
+**What the solver pays.** The fee becomes the route's `nativeAmount`: the solver sends it, in the
+destination's native coin, as the value of `fulfill`, and pays the destination gas too. Nothing in
+the reward pays either back, so the margin (the reward minus what the solver delivers) must cover
+both; a body that reads and swaps on many pools costs a lot of gas, so measure it in a rehearsal
+(below). The deadline and the fee are part of the route, so changing either is a different intent
+with a different hash: rebuild every transaction, including any unsigned one printed earlier.
 
 Refused at compile time, never silently changed: a name that is neither a define nor a program
 variable, a missing deadline, creator or fee, a chain with no eco-routes deployment, a pair with no
@@ -144,10 +196,35 @@ prover deployed on both sides.
 ## The destination Pot
 
 A program body cooks on the destination Portal Executor's **shared Pot** (one per Executor, salt
-zero). The package derives its address and deploys nothing: **the Pot must exist before
-fulfilment**, and the solver deploys it. Anything left in it after the program, token or allowance,
-belongs to the next intent through that Portal: approve exactly what is spent and move every
-remainder out.
+zero), `destinationPot(chain)`. The package derives its address and deploys nothing: **the Pot must
+exist before fulfilment, and no solver can fill a program body until it does**. Deploying it is
+permissionless, and returns the existing Pot when there is one: send
+`routes.sauceEvmDeployPotCall({ kitchen: v12GateKitchen(), owner: ecoRoutesExecutor(chain), salt: SAUCE_INTENT_POT_SALT })`
+on the destination. Anything left in the Pot after the program, token or allowance, belongs to the
+next intent through that Portal: approve exactly what is spent and move every remainder out.
+
+## Rehearse the body before a solver does
+
+`sauce publish --dry-run` covers only the source side, the approve and `publishAndFund`; the body
+first runs when a solver fulfils it. Run it yourself on a fork of the destination first, as a solver
+would:
+
+1. Fork the destination (`anvil --fork-url <destination endpoint>`), and compile the file with the
+   same defines and intent flags (`routes.compileSauceProgram(source, file, { defines, intents })`);
+   its `intents[0].intent` is the intent.
+2. Check that `destinationPot(chain)` has code; if not, send the deploy call above.
+3. Deliver the route's tokens the way a solver does: hold `intent.route.tokens` in an account and
+   approve the destination Portal (`ecoRoutesPortal(chain)`) for each; `fulfill` pulls them.
+4. Hash the intent: `routes.hashIntent(intent)` gives `intentHash`, `routeHash` and `rewardHash`,
+   the same three as the Portal's `getIntentHash(destination, route, reward)`.
+5. From that account, call the Portal's
+   `fulfill(intentHash, route, rewardHash, claimant)` (`PortalABI` from
+   `@eco-incorp/sauce/protocols/eco-routes`; the route as the tuple
+   `decodeAbiParameters([routes.EVM_ROUTE_PARAM], routes.encodeRouteEvm(intent.route))`, the
+   claimant the solver's address as 32 bytes), with **value = `intent.route.nativeAmount`**. Less
+   value reverts; so does a missing Pot.
+6. Read the outcome on the fork: what the recipient got, what was refunded, the gas, and that the
+   Pot holds nothing.
 
 Solana destinations are not built this way (see `sauce-solana`). An application can also build an
 intent from TypeScript around a program it compiles itself:
@@ -162,4 +239,5 @@ intent from TypeScript around a program it compiles itself:
   wallet.
 - [examples/intents.mts](examples/intents.mts) compiles both, with the deadline, the creator, Base's
   and Arbitrum's fees and the recipient as developer inputs, and pins on which chain each name
-  resolves, the fee requirement and the token-only case.
+  resolves, the fee requirement, the token-only case, the selectors above, and the rehearsal's
+  transactions: the Pot's deploy and `fulfill` with the fee as its value.
