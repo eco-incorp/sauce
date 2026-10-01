@@ -1,7 +1,7 @@
 /**
  * The `sauce` command against a chain: what it prints, sent, lands. On local anvils running the
- * released gated stack (`evm/gated-engine.ts`, deployed from the pinned creation code), with the
- * released engine installed at the address the SDK records, so the CLI runs with no override.
+ * released gated stack (`cli-anvil.ts` over `evm/gated-engine.ts`, deployed from the pinned creation
+ * code), with the released engine at the address the SDK records, so the CLI runs with no override.
  *
  * Ethereum, the example the `sauce-run` skill ships (`pay.sauce.ts`):
  *   1. `sauce tx --rpc-url` before the Pot exists says so, and names the `sauce pot` to run;
@@ -22,33 +22,15 @@
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite (CLAUDE.md), and a hard
  * failure without it — or without `cast` — in CI.
  */
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { once } from "node:events";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  createPublicClient,
-  createTestClient,
-  createWalletClient,
-  encodeAbiParameters,
-  encodeFunctionData,
-  getAddress,
-  http,
-  numberToHex,
-  parseAbi,
-  type Address,
-  type Hex,
-  type PublicClient,
-  type TestClient,
-  type WalletClient,
-  zeroAddress,
-} from "viem";
+import { encodeAbiParameters, getAddress, type Address, type Hex, zeroAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
-import { requireChain, type CanonicalChain } from "../src/chains/canonical.js";
+import { requireChain } from "../src/chains/canonical.js";
 import { v12EngineAddress } from "../src/deployments/index.js";
 import { potSalt, SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
@@ -60,34 +42,37 @@ import {
 } from "../src/routes/portal.js";
 import * as sauceRoute from "../src/routes/sauce-route.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
-import { registryTokenAddress } from "../src/routes/token-registry.js";
 import { SETTLE_VECTORS, SETTLE_WIRE, settlePayload } from "../src/verify/index.js";
 import { v12Pot } from "../src/evm/engine.js";
+import {
+  CLI_FIXTURES,
+  deployPot,
+  describeEvm,
+  FEE,
+  fixture,
+  jsonOf,
+  OTHER_KEY,
+  OWNER,
+  OWNER_KEY,
+  potOwner,
+  registered,
+  sauce,
+  sauceWith,
+  startChain,
+  WORKER,
+  type LocalChain,
+} from "./cli-anvil.js";
 import * as gated from "./evm/gated-engine.js";
 
-const RUNTIME_HEX_PATH =
-  process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
-const describeEvm = RUNTIME_HEX_PATH ? describe : describe.skip;
-if (!RUNTIME_HEX_PATH && process.env.CI) {
-  throw new Error(
-    "SAUCE_V12_RUNTIME_CREATION_HEX is unset in CI. This suite must never skip there — see the " +
-      '"Fetch the v12 engines" step in .github/workflows/ci.yml.',
-  );
-}
 const HAS_CAST = spawnSync("cast", ["--version"], { stdio: "ignore" }).status === 0;
 if (!HAS_CAST && process.env.CI) {
   throw new Error("`cast` is not on PATH in CI: Foundry is installed there, so this is a failure.");
 }
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const FIXTURES = join(HERE, "std/token/fixtures");
-const fixture = (name: string): Hex =>
-  (JSON.parse(readFileSync(join(FIXTURES, `${name}.json`), "utf8")) as { creationCode: Hex })
-    .creationCode;
 /** The examples the `sauce-run` agent skill ships: executing them here keeps them from rotting. */
 const EXAMPLES = join(HERE, "../../skills/sauce-run/examples");
 const PAY = join(EXAMPLES, "pay.sauce.ts");
-const CLI_FIXTURES = join(HERE, "fixtures/cli");
 /** eco-routes' own Portal creation code, vendored (see routes-nest-dynamic.e2e.test.ts). */
 const PORTAL_CREATION = (
   JSON.parse(readFileSync(join(HERE, "evm/fixtures/Portal.json"), "utf8")) as { creationCode: Hex }
@@ -96,205 +81,15 @@ const PORTAL_CREATION = (
 const hasScopedRoutes = "compileScopedRoute" in sauceRoute;
 const SPLIT = join(EXAMPLES, "split.sauce.ts");
 
-/** Anvil's first two dev accounts: the Kitchen's owner, and the Pot's. Public keys, local only. */
-const DEPLOYER_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-const OWNER_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
-const DEPLOYER = privateKeyToAccount(DEPLOYER_KEY);
-const OWNER = privateKeyToAccount(OWNER_KEY);
-/** Anvil's fifth dev account, for a Pot of its own. */
-const OTHER_KEY = "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a";
-
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
 const SECOND_RECIPIENT: Address = "0x7777777777777777777777777777777777777777";
 const AMOUNT = 1_000_000n;
 const FUNDED = 10_000_000n;
-/** Non-zero, so the fee `--rpc-url` reads is one a cook provably pays. */
-const FEE = 1_234n;
 
-const WORKER = Number(process.env.JEST_WORKER_ID ?? "1") % 50;
-
-const erc20 = parseAbi([
-  "function mint(address to, uint256 amount)",
-  "function balanceOf(address account) view returns (uint256)",
-]);
 const USDT_CREATION = `${fixture("NoReturnERC20")}${encodeAbiParameters(
   [{ type: "string" }, { type: "string" }, { type: "uint8" }],
   ["Tether USD", "USDT", 6],
 ).slice(2)}` as Hex;
-
-interface Run {
-  readonly code: number;
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
-/** Runs the command in process with `overrides` on the real io — a scripted answer to a prompt. */
-async function sauceWith(overrides: Partial<CliIo>, ...argv: string[]): Promise<Run> {
-  let stdout = "";
-  let stderr = "";
-  const io: CliIo = {
-    ...nodeIo(),
-    ...overrides,
-    stdout: (text) => void (stdout += text),
-    stderr: (text) => void (stderr += text),
-  };
-
-  return { code: await runCli(argv, io), stdout, stderr };
-}
-
-const sauce = (...argv: string[]): Promise<Run> => sauceWith({}, ...argv);
-
-const jsonOf = (run: Run): Record<string, unknown> => {
-  if (run.code !== 0) throw new Error(`sauce exited ${run.code}: ${run.stderr}`);
-
-  return JSON.parse(run.stdout) as Record<string, unknown>;
-};
-
-/** One anvil standing in for `chain`, with the released gated stack on it. */
-interface LocalChain {
-  readonly chain: CanonicalChain;
-  readonly rpcUrl: string;
-  readonly publicClient: PublicClient;
-  readonly deployer: WalletClient;
-  readonly owner: WalletClient;
-  readonly testClient: TestClient;
-  /** Sends `data` to `to` from `from`, waits for it to succeed, and returns its hash. */
-  send(from: WalletClient, to: Address, data: Hex, value?: bigint): Promise<Hex>;
-  /** Deploys `creationCode` and moves its runtime to `at` (a registry token address), or leaves it. */
-  plant(creationCode: Hex, at?: Address): Promise<Address>;
-  mint(token: Address, to: Address, amount: bigint): Promise<void>;
-  balanceOf(token: Address, holder: Address): Promise<bigint>;
-  stop(): Promise<void>;
-}
-
-async function startChain(slug: string, port: number): Promise<LocalChain> {
-  const chain = requireChain(slug);
-  const rpcUrl = `http://127.0.0.1:${port}`;
-  const anvil: ChildProcess = spawn(
-    "anvil",
-    ["--port", String(port), "--chain-id", String(chain.id), "--silent"],
-    { stdio: "ignore" },
-  );
-  // `connection: close`: pooled keep-alive sockets would outlive the suite.
-  const transport = http(rpcUrl, { fetchOptions: { headers: { connection: "close" } } });
-  const publicClient = createPublicClient({ transport });
-  const testClient = createTestClient({ mode: "anvil", transport });
-  const deployer = createWalletClient({ account: DEPLOYER, transport });
-  const owner = createWalletClient({ account: OWNER, transport });
-  for (const deadline = Date.now() + 20_000; ;) {
-    try {
-      await publicClient.getChainId();
-      break;
-    } catch {
-      if (Date.now() > deadline) throw new Error(`anvil did not come up on ${rpcUrl}`);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-  }
-
-  const send = async (from: WalletClient, to: Address, data: Hex, value = 0n): Promise<Hex> => {
-    const hash = await from.sendTransaction({
-      account: from.account!,
-      chain: null,
-      to,
-      data,
-      value,
-    });
-    const { status } = await publicClient.waitForTransactionReceipt({ hash });
-    if (status !== "success") throw new Error(`a transaction to ${to} reverted`);
-
-    return hash;
-  };
-  const plant = async (creationCode: Hex, at?: Address): Promise<Address> => {
-    const hash = await deployer.sendTransaction({
-      account: DEPLOYER,
-      chain: null,
-      data: creationCode,
-    });
-    const { contractAddress } = await publicClient.waitForTransactionReceipt({ hash });
-    if (at === undefined) return contractAddress!;
-    const code = await publicClient.getCode({ address: contractAddress! });
-    await testClient.setCode({ address: at, bytecode: code! });
-
-    return at;
-  };
-
-  const creationCode = readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex;
-  const stack = await gated.startGatedEngine(
-    { publicClient, walletClient: deployer, testClient },
-    DEPLOYER.address,
-    creationCode,
-  );
-  // The CLI names the engine the SDK records. A harness that deploys it at that release address
-  // needs nothing more; one that deploys it elsewhere moves it there.
-  const released = getAddress(v12EngineAddress());
-  if (getAddress(stack.engine) !== released) {
-    const install = (gated as Record<string, unknown>).installEngineAt as
-      ((clients: object, from: Address, to: Address) => Promise<void>) | undefined;
-    if (install === undefined) throw new Error(`the harness put the engine at ${stack.engine}`);
-    await install({ publicClient, testClient }, stack.engine, released);
-  }
-  await send(
-    deployer,
-    gated.gateAnchors().kitchen,
-    encodeFunctionData({
-      abi: parseAbi(["function setExecutionFee(uint256)"]),
-      functionName: "setExecutionFee",
-      args: [FEE],
-    }),
-  );
-
-  return {
-    chain,
-    rpcUrl,
-    publicClient,
-    deployer,
-    owner,
-    testClient,
-    send,
-    plant,
-    mint: async (token, to, amount) => {
-      await send(
-        deployer,
-        token,
-        encodeFunctionData({ abi: erc20, functionName: "mint", args: [to, amount] }),
-      );
-    },
-    balanceOf: (token, holder) =>
-      publicClient.readContract({
-        address: token,
-        abi: erc20,
-        functionName: "balanceOf",
-        args: [holder],
-      }),
-    stop: async () => {
-      if (anvil.exitCode !== null) return;
-      const exited = once(anvil, "exit");
-      anvil.kill();
-      await exited;
-    },
-  };
-}
-
-/** The Pot's owner, as the Pot itself reports it. */
-const potOwner = (local: LocalChain, pot: Address): Promise<Address> =>
-  local.publicClient.readContract({
-    address: pot,
-    abi: parseAbi(["function owner() view returns (address)"]),
-    functionName: "owner",
-  });
-
-/** The registry's address for `symbol` on `chain`, as the program names it. */
-const registered = (chain: CanonicalChain, symbol: string): Address =>
-  getAddress(numberToHex(registryTokenAddress(chain, symbol)!, { size: 20 }));
-
-/** Deploys the owner's Pot with the transaction `sauce pot` prints, returning its address. */
-async function deployPot(local: LocalChain): Promise<Address> {
-  const out = jsonOf(await sauce("pot", "--owner", OWNER.address, "--chain", local.chain.slug));
-  // Anyone may send it: the deployer does, and the Pot is still the owner's.
-  await local.send(local.deployer, out.to as Address, out.data as Hex);
-
-  return out.pot as Address;
-}
 
 describeEvm("sauce, sent to a chain", () => {
   let ethereum: LocalChain;
