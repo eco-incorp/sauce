@@ -56,7 +56,8 @@ Run the project's own copy, `npx sauce <command> --help`, for every option.
    and `payload`, its size with `main`'s arguments given by `--args`. On Solana, `cook` says whether
    the cook fits one transaction. A failing compile points at the file's line and column, and its
    `hint:` lines name the flag or define to add.
-3. **Pot**: `npx sauce pot --chain base --owner <address>` prints the Pot's address, known before it
+3. **Pot**: `npx sauce pot --chain base --owner <address>` (or `--keystore <keystore>` for the
+   signer's own) prints the Pot's address, known before it
    exists, and its deploy transaction. With `--config sauce.config.json` it also says whether the
    chain has the released engine and Kitchen (and the Kitchen's fee) and whether the Pot is
    deployed.
@@ -82,7 +83,8 @@ Run the project's own copy, `npx sauce <command> --help`, for every option.
    `--json` gives the same for a program to read.
 6. **Run**:
    `npx sauce run pay.sauce.ts --chain ethereum --config sauce.config.json --keystore <keystore> --args <recipient> 1000000`
-   compiles, rehearses, signs, sends and waits, then prints the hash, status and gas used. A Pot not
+   compiles, rehearses, signs, sends and waits, then prints the hash, status and gas used, what the
+   cook cost (gas, any L1 data fee, the value) and the tokens it moved. A Pot not
    deployed yet is deployed first once the user agrees at the prompt. `--auto-approve` approves, in
    advance, everything a run sends before its cook (deploying the Pot, approving Permit2 or the Pot
    for `--fund`) and names each; with no terminal the run lists what it needs approved and sends

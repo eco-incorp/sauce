@@ -107,11 +107,22 @@ npx sauce run pay.sauce.ts --chain base --config sauce.config.json --keystore ~/
 ```
 
 `sauce run` compiles, rehearses the cook, signs it, sends it and waits for the receipt, then prints
-the hash, the status and the gas used:
+the hash, the status and the gas used, what the cook cost, and what it moved:
 
 ```text
 cook 0x5f…: success, gas used 184211, block 21004500
+cost 0.000187 ETH: gas 184211 at 1000000 wei = 0.000184 ETH, L1 data 0.0000018 ETH, value 0.000001 ETH (the Kitchen's fee and any native the program spends)
+Token transfers:
+  1 USDC: 0x8a… (the Pot) -> 0x66…
+Net balance changes:
+  0x8a… (the Pot): -1 USDC
+  0x66…: +1 USDC
 ```
+
+The cost is the gas at the price the receipt records, an OP-stack chain's L1 data fee where the
+receipt carries one, and the value the cook carried. What moved is read from the receipt's logs by
+the decoder `simulate` uses: token transfers, approvals and each address's net change. `--json`
+carries both under `cook.cost` and `cook.effects`.
 
 A cook that would revert is not sent: the run stops with the decoded reason — a Pot or Kitchen
 error by name, `Error(string)`, or `the program threw "…"` for a SauceScript `throw` — and exits 1.
@@ -167,6 +178,9 @@ nothing on chain changes. It needs neither a deployed Pot nor the tokens the pro
 npx sauce simulate pay.sauce.ts --chain base --owner 0xYou --config sauce.config.json \
   --assume-balance USDC:2 --assume-balance USDT:2 --define RECIPIENT=0x… --define AMOUNT=1000000
 ```
+
+The owner is `--owner`, or the owner's key: `--keystore` (or `--private-key`; on Solana,
+`--keypair`) names it, and signs nothing but the pulls `--fund` rehearses.
 
 - **A Pot that is not deployed** is deployed in the rehearsal first. Anyone may send a Pot's
   `Kitchen.deployPot(owner, salt)`, and the Pot is the owner's whoever sends it, so the rehearsal
@@ -329,6 +343,10 @@ account may deploy a Pot; it is its owner's either way. So `pot --deploy` takes 
 another owner's Pot, which the signer sends and pays for — how the Pot every intent to a chain
 cooks on, owned by that chain's Portal Executor, is deployed — and defaults the owner to the
 signer. On Solana the owner signs `create_pot`, so there the signer creates its own.
+
+With a signer and no `--owner`, `sauce pot` is the signer's own Pot: `sauce pot --chain base
+--keystore ~/.keys/me.json` prints your address and your Pot. A keystore that records its address
+(most wallets write one) is read with no password; one that does not is unlocked to learn it.
 
 Given an endpoint and no `--deploy`, `sauce pot` also reads the chain (or the Solana cluster) and
 adds what it found under `deployment`, and in a line on stderr: whether the released engine and
@@ -584,7 +602,9 @@ takes bytes back apart into what a SauceScript author wrote:
   decoded against its `main`;
 - a `Kitchen.deployPot` (the Pot it makes), a `Portal.publish` or `publishAndFund` (the route and
   the reward), an ERC-20 call, or bare program bytes;
-- a 32-byte hash with an endpoint: the transaction, fetched — its status, sender, value and call;
+- a 32-byte hash with an endpoint: the transaction, fetched — its status, sender, value and call,
+  what it cost (gas, an OP-stack chain's L1 data fee, the value), and the token transfers,
+  approvals and net balance changes its receipt's logs record;
 - a file: the program it compiles to, and its intents, with every value it measures at run time
   named (`reward: <amount> of 0x…`).
 
