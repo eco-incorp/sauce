@@ -94,12 +94,13 @@ npx sauce run distributed-swap.sauce.ts --chain base --config sauce.config.json 
 Each is one cook on the owner's Pot: `sauce tx` with the same flags and `--owner <address>` prints
 it unsigned, `{ chainId, to, data, value }`, for any signer to send instead.
 
-Each venue's discovery sits behind `if (available(<Namespace.Contract>))`, which is decided when the
-file is compiled for a chain: a chain without the venue compiles without that branch, so the
-program never names a contract the chain lacks and never calls an address with no code. A helper
-that uses a venue starts with the guard `if (!available(UniswapV4.PoolManager)) { return 0n; }`,
-which drops the rest of its body on such a chain. Written without `available(...)`, a venue is
-required: the program does not compile for a chain that lacks it.
+Each venue's discovery sits behind `if (<Namespace.Contract> != 0n)`: a venue the chain lacks is
+zero there, and the comparison is decided when the file is compiled for a chain, so a chain without
+the venue compiles without that branch, and the program never names a contract the chain lacks and
+never calls an address with no code. A helper that uses a venue starts with the guard
+`if (UniswapV4.PoolManager == 0n) { return 0n; }`, which drops the rest of its body on such a
+chain. Used without the comparison, a venue is required: the program does not compile for a chain
+that lacks it.
 
 ## Which venues it covers
 
@@ -440,7 +441,7 @@ in base units. Take each token's decimals from
 ## Adapting it
 
 - **Another chain**: pass its `--chain`; the venues it has are used, and the others left out.
-- **Another venue**: add its lookups behind `if (available(<Namespace.Contract>))` and grow the
+- **Another venue**: add its lookups behind `if (<Namespace.Contract> != 0n)` and grow the
   discovery array; `swapIntoV3` (`uniswapV3`) already drives every V3-style pool the Router
   services. For Algebra
   pools, read `globalState()` for the price.

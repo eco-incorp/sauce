@@ -110,7 +110,7 @@ const keyArgs = STANDARD_KEYS.map(({ fee, tickSpacing }) => ({
   tickSpacing: BigInt(tickSpacing),
 }));
 
-// Each chain's venues, as `available(...)` decides them: Base has all of them, Arbitrum no
+// Each chain's venues, as comparing each with zero decides them: Base has all of them, Arbitrum no
 // Slipstream, Optimism no PancakeSwap V3 either.
 const VENUES = {
   base: ["UniswapV3.Factory", "PancakeswapV3.Factory", "AerodromeSlipstream.CLFactory"],
@@ -126,18 +126,35 @@ const ALL = [
   "UniswapV4.StateView",
   "UniswapV4.PoolManager",
 ];
+// A `Token(address)` write is @sauce/token's SafeERC20 function: the same bytes as the call by hand.
+const tokenWrite = (body: string, imports = "") =>
+  Buffer.from(
+    routes.compileSauceProgram(
+      "base",
+      `${imports}function main(token: Address, to: Address, amount: Uint256) { ${body} }`,
+    ).bytecode,
+  );
+check(
+  tokenWrite("Token(token).transfer(to, amount);").equals(
+    tokenWrite("transfer(token, to, amount);", 'import { transfer } from "@sauce/token";\n'),
+  ),
+  "a Token(address) transfer is SafeERC20",
+);
+check(
+  source.includes("Token(tokenOut).transfer(recipient, bought);"),
+  "the payout is a SafeERC20 transfer",
+);
+check(
+  source.includes("Token(tokenIn).transfer(refundTo, remaining);"),
+  "the refund is a SafeERC20 transfer of what is left of amountIn, not the Pot's balance",
+);
+check(
+  source.includes('import { uniswapV3, uniswapV4 } from "@sauce/router";'),
+  "every swap is a @sauce/router call",
+);
 for (const [slug, expected] of Object.entries(VENUES)) {
   const chain = routes.chain(slug).chain;
   const program = routes.compileSauceProgram(slug, source);
-  check(/__sauce_transfer\(tokenOut,/.test(program.source), "the payout is a SafeERC20 transfer");
-  check(
-    /__sauce_transfer\(tokenIn, refundTo, remaining\)/.test(program.source),
-    "the refund is a SafeERC20 transfer of what is left of amountIn, not the Pot's balance",
-  );
-  check(
-    /import \{ uniswapV3, uniswapV4 \} from "@sauce\/router"/.test(program.source),
-    "every swap is a @sauce/router call",
-  );
   // The program carries the address of exactly the venues the chain has.
   const bytecode = bytesToHex(program.bytecode).toLowerCase();
   const on = contracts.on(slug) as unknown as Record<

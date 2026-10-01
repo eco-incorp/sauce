@@ -1,12 +1,12 @@
 // Compiles globals.sauce.ts the way `sauce compile` does (`routes.compileSauceProgram`, with the
-// chain's names), and pins how token writes lower: every spelling becomes a SafeERC20 function of
-// @sauce/token, reads stay typed calls, and a write returns nothing. The name tables live in
+// chain's names), and pins what token names compile to: every write, in every spelling, is a
+// SafeERC20 function of @sauce/token, a read its `balanceOf`, and a write returns nothing. The name tables live in
 // ../references/, generated from the registries.
 //
 //   node globals.mts
 import { readFileSync } from "node:fs";
 
-import { routes } from "@eco-incorp/sauce";
+import { requireChain, routes } from "@eco-incorp/sauce";
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`check failed: ${message}`);
@@ -18,16 +18,24 @@ for (const slug of ["ethereum", "optimism"]) {
   console.log(`globals.sauce.ts on ${slug}: ${program.bytecode.length} bytes`);
 }
 
-// Writes lower to @sauce/token in every spelling; reads stay typed IERC20 calls.
-const writes = routes.compileSauceProgram(
+// Token names compile to @sauce/token in every spelling: the program is byte for byte the one that
+// calls the library's functions with the token's address first.
+const ethereum = requireChain("ethereum");
+const addressOf = (symbol: string) =>
+  `0x${routes.registryTokenAddress(ethereum, symbol)!.toString(16).padStart(40, "0")}`;
+const named = routes.compileSauceProgram(
   "ethereum",
   "function main(to: Address, token: Address, amount: Uint256) { USDT.transfer(to, amount); USDT.approve(to, amount); const t = Token(token); t.transferFrom(to, ctx.self(), amount); require(USDC.balanceOf(ctx.self()) > 0n); }",
-).source;
-check(/__sauce_transfer\(USDT,/.test(writes), "USDT.transfer is SafeERC20");
-check(/__sauce_approve\(USDT,/.test(writes), "USDT.approve is forceApprove");
-check(/__sauce_transferFrom\(t,/.test(writes), "a bound Token's transferFrom is SafeERC20");
-check(/IERC20\.at\(USDC\)\.balanceOf\(/.test(writes), "reads are plain typed calls");
-check(!/IERC20\.at\([^)]*\)\.(transfer|approve|transferFrom)\(/.test(writes), "no raw writes");
+);
+const byHand = routes.compileSauceProgram(
+  "ethereum",
+  `import { approve, balanceOf, transfer, transferFrom } from "@sauce/token";
+function main(to: Address, token: Address, amount: Uint256) { transfer(${addressOf("USDT")}, to, amount); approve(${addressOf("USDT")}, to, amount); const t = token; transferFrom(t, to, ctx.self(), amount); require(balanceOf(${addressOf("USDC")}, ctx.self()) > 0n); }`,
+);
+check(
+  Buffer.from(named.bytecode).equals(Buffer.from(byHand.bytecode)),
+  "USDT.transfer, USDT.approve (forceApprove) and a bound Token's transferFrom are SafeERC20, and USDC.balanceOf the library's read",
+);
 
 const rejects = (slug: string, body: string) => {
   try {
@@ -75,37 +83,32 @@ check(
   ),
   "Cctp.depositForBurn calls Cctp.TokenMessenger",
 );
-// A namespace absent on the chain is a compile error, unless `available(...)` rules its branch out;
-// a name no chain has is an error either way.
+// A namespace absent on the chain is zero there: using it is a compile error, and comparing it with
+// zero rules its branch out. A name no chain has is an error either way.
 check(
-  rejects("linea", "function main() { require(UniswapV3.Factory != 0n); }"),
+  rejects("linea", "function main() { UniswapV3.Factory.getPool(ctx.self(), ctx.self(), 500n); }"),
   "absent namespace",
 );
 check(
   !rejects(
     "linea",
-    "function main() { if (available(UniswapV3.Factory)) { require(UniswapV3.Factory != 0n); } }",
+    "function main() { if (UniswapV3.Factory != 0n) { UniswapV3.Factory.getPool(ctx.self(), ctx.self(), 500n); } }",
   ),
-  "available() removes the branch where the chain lacks the contract",
+  "comparing with zero removes the branch where the chain lacks the contract",
 );
-// It takes a token symbol too: Base registers no USDT, so the guarded transfer is removed there.
+// A token symbol too: Base registers no USDT, so the guarded transfer is removed there.
 check(rejects("base", "function main() { USDT.transfer(ctx.self(), 1n); }"), "no USDT on Base");
 check(
-  !rejects("base", "function main() { if (available(USDT)) { USDT.transfer(ctx.self(), 1n); } }"),
-  "available(USDT) removes the branch on Base",
+  !rejects("base", "function main() { if (USDT != 0n) { USDT.transfer(ctx.self(), 1n); } }"),
+  "USDT != 0n removes the branch on Base",
 );
 check(
-  rejects("base", "function main() { if (available(UniswapV9.Factory)) { require(false); } }"),
-  "available() of a name no chain has is an error",
+  rejects("base", "function main() { if (UniswapV9.Factory != 0n) { require(false); } }"),
+  "a name no chain has is an error",
 );
 // The Pot's own balance of a symbol, and the chain's id.
 check(
   !rejects("base", "function main() { require(self.USDC >= 0n && chainId == 8453n); }"),
   "self.USDC and chainId",
 );
-console.log(
-  writes
-    .split("\n")
-    .filter((line) => line.includes("__sauce_"))
-    .join("\n"),
-);
+console.log(`token names: ${named.bytecode.length} bytes, as the @sauce/token calls by hand`);

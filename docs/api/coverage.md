@@ -30,8 +30,8 @@ and both surfaces.
 | Address only      | 55    | An address per chain with no verified ABI: usable as an address, no methods   |
 | Interface         | 23    | An ABI with no fixed address: called through `.at(address)`                   |
 
-A name existing does not mean the contract is deployed on your chain: `available(...)` in a program
-and `.available` in TypeScript answer that, and naming an absent contract fails at compile or call
+A name existing does not mean the contract is deployed on your chain: comparing it with zero in a
+program (`Name != 0n`) and `.available` in TypeScript answer that, and naming an absent contract fails at compile or call
 construction, listing the chains that have it.
 
 Family aliases are `Aave`, `Balancer`, `Compound`, `Euler`, `Gmx`, `Liquity`, `Pancakeswap`,
