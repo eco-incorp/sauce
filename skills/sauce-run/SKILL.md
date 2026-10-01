@@ -1,6 +1,6 @@
 ---
 name: sauce-run
-description: Compile a Sauce program file and run it on a chain with the sauce command — find the names a chain offers, deploy the Pot it runs as, fund it, rehearse the cook with no key, sign and send it, pass arguments to its main, print the unsigned transaction for a wallet, read a transaction back, or publish a file's cross-chain intents from a wallet. Use when asked to compile, simulate, run, execute, test, send or deploy a Sauce program (*.sauce.ts), pass arguments to its main, get its bytecode or unsigned transaction, fund or create a Pot, or check what a transaction did.
+description: Compile a Sauce program file (or a JSON actions document) and run it on a chain with the sauce command — find the names a chain offers, deploy the Pot it runs as, fund it, rehearse the cook with no key, sign and send it, pass arguments to its main, print the unsigned transaction for a wallet, read a transaction back, or publish a file's cross-chain intents from a wallet. Use when asked to compile, simulate, run, execute, test, send or deploy a Sauce program (*.sauce.ts), pass arguments to its main, get its bytecode or unsigned transaction, fund or create a Pot, or check what a transaction did.
 ---
 
 # Run a Sauce program
@@ -19,6 +19,7 @@ commands apply with differences in accounts, signing and fees: read `sauce-solan
 | ---------------- | --------------------------------------------------------------------------------- |
 | `sauce globals`  | The tokens, protocol contracts, chains and functions a program on a chain can use |
 | `sauce compile`  | Compiles a file for a chain; prints its bytecode, or with `--json` what it takes  |
+| `sauce actions`  | Lowers a JSON actions document for a chain; prints its SauceScript and bytecode   |
 | `sauce pot`      | Prints the owner's Pot address and its deploy transaction; deploys it             |
 | `sauce simulate` | Rehearses the cook from the Pot's owner, with no key: gas, or why it reverts      |
 | `sauce run`      | Compiles, rehearses, signs, sends and waits for the cook on the signer's Pot      |
@@ -142,6 +143,19 @@ Every value is checked against its declared type before anything is sent: `Addre
 [examples/pay.sauce.ts](examples/pay.sauce.ts) pays a recipient in USDC and USDT, on any chain that registers both.
 [examples/split.sauce.ts](examples/split.sauce.ts) takes its token, recipients and amount as
 arguments.
+
+## Actions documents
+
+An actions document is JSON: a list of protocol operations in place of a program (`sauce-actions`
+covers writing one). `npx sauce actions swap.json --chain base` lowers it for the chain and prints
+the SauceScript it becomes, `main`'s parameters and the bytecode; `--json` gives the same for a
+program to read. `compile`, `simulate`, `tx` and `run` take a document wherever they take a
+`.sauce.ts` file, with the same flags:
+
+- its `argument` actions are `main`'s parameters, passed with `--args` in the order they are
+  declared;
+- `--chain` defaults to the document's `chainId`, and a document without one needs it;
+- `--define` and `--defines` are refused: a document's values are its own fields.
 
 ## Intents and Solana
 
