@@ -37,6 +37,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { v12RouterGeneration } from "../../src/deployments/index.js";
 import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../../src/deployments/pot.js";
 import { potRouterUpdate, v12KitchenAbi, v12PotAbi } from "../../src/evm/engine.js";
+import { ecoRoutesExecutor } from "../../src/protocols/eco-routes/lookup.js";
 import { compileSauceRoute } from "../../src/routes/sauce-route.js";
 import { POT_SALT, startGatedEngine } from "./gated-engine.js";
 import { potFromReleasedBytecode } from "./pot-address.js";
@@ -165,7 +166,8 @@ describeEvm("the Pot's Router, and swaps a generation-3 Router pays", () => {
   });
 
   it("the live Kitchen predicts the Pots the SDK derives — the shared intent Pot included", async () => {
-    const executor = "0x645dADD5Bf354526b68A2befd9A305F7E03b91Ca";
+    // The registry Portal's Executor: the owner of the Pot every intent cooks on by default.
+    const executor = ecoRoutesExecutor("base");
     const predicted = await publicClient.readContract({
       abi: v12KitchenAbi,
       address: sauce.kitchen,
