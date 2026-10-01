@@ -68,6 +68,12 @@ import { mainReturnType } from "../routes/entry.js";
 import type { CookVia } from "../svm/client.js";
 import { svmCookSize } from "./solana.js";
 import type { Funding } from "./funding.js";
+import {
+  intentChains,
+  previewRefusal,
+  requireSupported,
+  type PreviewChainRefusal,
+} from "./support.js";
 
 /** The filesystem the commands read, injected so the tests can drive them without a process. */
 export interface CliFiles {
@@ -247,6 +253,20 @@ export function compileProgram(
           : ""),
     );
   }
+}
+
+/**
+ * Every chain a cook of `input` involves: its own, and each chain an intent it opens goes to, at
+ * any depth — what {@link requireSupported} is asked about before anything that publishes them. A
+ * fee the intents' cooks are not given yet is zero here: the chains do not depend on it.
+ */
+export function programChains(input: ProgramInput, files: CliFiles): CanonicalChain[] {
+  const probe = compileProgram(
+    { ...input, intents: { ...input.intents, executionFee: input.intents.executionFee ?? 0n } },
+    files,
+  );
+
+  return [input.chain, ...intentChains(probe.intents)];
 }
 
 /** The installed compiler's package name and version, read from its own manifest. */
@@ -575,6 +595,10 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
   if (input.value === undefined && input.rpcUrl === undefined)
     valueOf(undefined, undefined, input.chain);
   const cook = cookOf(input, files);
+  requireSupported("building the cook transaction", [
+    input.chain,
+    ...intentChains(cook.program.intents),
+  ]);
   const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, input.chain);
   const fee = client === undefined ? undefined : await kitchenFee(client, input.chain);
   const state = client === undefined ? undefined : await potState(client, cook.pot);
@@ -671,6 +695,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
     );
   }
   const cook = cookOf(input, files);
+  requireSupported("sending the cook", [input.chain, ...intentChains(cook.program.intents)]);
   const client = await connect(input.rpcUrl, input.chain);
   const state = await potState(client, cook.pot);
   const deployAction = `deploy Pot ${cook.pot}`;
@@ -787,24 +812,28 @@ export interface PotCommandInput extends SaltChoice {
   readonly owner: Address;
 }
 
-/** `sauce pot`: the Pot an owner and salt give, and the unsigned Kitchen call that deploys it. */
+/** What refuses the Pot's deployment on a preview chain: `sauce pot` predicts it there, and no more. */
+const POT_DEPLOYMENT = "building the Pot's deployment";
+
+/**
+ * `sauce pot`: the Pot an owner and salt give, and the unsigned Kitchen call that deploys it. On a
+ * preview chain only the prediction: the deployment is left out, and `refused` says why.
+ */
 export function potCommand(input: PotCommandInput): CommandOutput {
   if (input.chain.kind !== "evm") {
     throw new Error(`internal: ${input.chain.slug}'s Pot is predicted by solana.ts`);
   }
   const kitchen = kitchenAddress();
   const pot = v12PredictPot(input.owner, input.salt) as Address;
+  const predicted = { chainId: input.chain.id, pot, owner: input.owner, salt: input.salt, kitchen };
+  const refused: PreviewChainRefusal | undefined = previewRefusal(POT_DEPLOYMENT, [input.chain]);
+  if (refused !== undefined) {
+    const json = { ...predicted, refused };
+
+    return { text: JSON.stringify(json, null, 2), json, notes: [refused.message] };
+  }
   const call = sauceEvmDeployPotCall({ kitchen, owner: input.owner, salt: input.salt });
-  const json = {
-    chainId: input.chain.id,
-    pot,
-    owner: input.owner,
-    salt: input.salt,
-    kitchen,
-    to: kitchen,
-    data: call.data,
-    value: "0",
-  };
+  const json = { ...predicted, to: kitchen, data: call.data, value: "0" };
 
   return {
     text: JSON.stringify(json, null, 2),
@@ -880,8 +909,11 @@ export async function potStatusCommand(
   return {
     text: JSON.stringify(json, null, 2),
     json,
-    cast: predicted.cast!,
-    notes: [...deployment.notes, ...(state.deployed ? [] : (predicted.notes ?? []))],
+    ...(predicted.cast === undefined ? {} : { cast: predicted.cast }),
+    notes: [
+      ...deployment.notes,
+      ...(state.deployed && predicted.cast !== undefined ? [] : (predicted.notes ?? [])),
+    ],
   };
 }
 
@@ -889,6 +921,7 @@ export async function potStatusCommand(
 export async function potDeployCommand(
   input: PotCommandInput & ChainAccess & { readonly account: PrivateKeyAccount },
 ): Promise<CommandOutput> {
+  requireSupported("deploying a Pot", [input.chain]);
   const predicted = potCommand(input);
   const pot = predicted.json.pot as Address;
   const client = await connect(input.rpcUrl, input.chain);
