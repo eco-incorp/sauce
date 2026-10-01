@@ -220,6 +220,10 @@ npx sauce run distributed-swap.sauce.ts --chain base --config sauce.config.json 
 Each is one cook on the owner's Pot: `sauce tx` with the same `--args` and `--owner <address>`
 prints it unsigned, `{ chainId, to, data, value }`, for any signer to send instead.
 
+For the initial release the swap is sent only on Ethereum or Base: on a preview chain such as
+Arbitrum or Optimism it compiles and simulates, and `sauce tx` and `sauce run` refuse it with the
+chain-support request to post (`sauce-chains`).
+
 **Reading a rehearsal.** `sauce simulate` lists what the cook moved. Selling 1 WETH over two pools
 it shows, pool addresses as `<pool A>` and `<pool B>`:
 

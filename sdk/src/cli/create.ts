@@ -24,6 +24,7 @@ import {
 } from "viem";
 
 import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
+import { isSupportedChain } from "../chains/support.js";
 import { priceFromSqrtPriceX96 } from "../price.js";
 import { ecoRoutesDeployment, ecoRoutesProver } from "../protocols/eco-routes/lookup.js";
 import { deployments as uniswapV3 } from "../protocols/uniswap-v3/addresses.js";
@@ -35,6 +36,7 @@ import { connect, kitchenFee } from "./chain.js";
 import { nativeSymbol, tokenInfo } from "./effects.js";
 import { proverPlan } from "./lifecycle.js";
 import { askChoice, askText, missingFlags, type Ask } from "./prompt.js";
+import { requireSupported } from "./support.js";
 import { parseFundVia } from "./args.js";
 import type { IntentFundVia } from "../routes/portal.js";
 
@@ -88,6 +90,9 @@ export const portalChains = (): CanonicalChain[] =>
   CANONICAL_CHAINS.filter(
     (chain) => chain.kind === "evm" && ecoRoutesDeployment(chain)?.Portal !== undefined,
   );
+
+/** The chains creation offers: those with a Portal that the release supports (`support.ts`). */
+export const publishableChains = (): CanonicalChain[] => portalChains().filter(isSupportedChain);
 
 /** A token on `chain`: what the program names it by (a symbol, or its address), and its decimals. */
 interface Token {
@@ -355,7 +360,7 @@ function intentText(options: {
 /** Asks (or reads from flags) everything an intent needs, and writes it as a `.sauce.ts` file. */
 export async function createIntent(input: CreateInput): Promise<Created> {
   const missing: string[] = [];
-  const chains = portalChains();
+  const chains = publishableChains();
   const chainChoices = (exclude?: CanonicalChain) =>
     chains
       .filter((chain) => chain !== exclude)
@@ -373,6 +378,11 @@ export async function createIntent(input: CreateInput): Promise<Created> {
     (ask) => askChoice(ask, "Destination chain (where it is delivered):", chainChoices(source)),
   );
   const destination = destinationRaw === undefined ? undefined : parseChain(destinationRaw);
+  // Before anything is read from either chain: publishing goes only between supported ones.
+  requireSupported(
+    "publishing intents",
+    [source, destination].filter((chain) => chain !== undefined),
+  );
   for (const chain of [source, destination]) {
     if (chain !== undefined && !chains.includes(chain)) {
       throw new UsageError(

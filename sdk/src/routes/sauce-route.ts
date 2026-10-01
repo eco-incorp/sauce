@@ -270,7 +270,7 @@ function compileIntentChild(
         `\`@eco-incorp/sauce\`, or \`Kitchen.executionFee()\` at ${v12KitchenAddress()}.`,
     );
   }
-  const compiled = compileScopedRoute(
+  const compiled = compileLevel(
     destination,
     childSource,
     { pot, engine, value: intents.executionFee },
@@ -307,6 +307,7 @@ function compileIntentChild(
       value: intents.executionFee,
     },
     captureSentinels,
+    intents: compiled.intents,
   };
 }
 
@@ -343,7 +344,26 @@ export function compileScopedRoute(
   options: SauceCompileOptions,
   scope: RouteScope,
 ): CompiledSauceRoute {
-  const { chain, compiled, source } = compileForChain(destination, sauce, options, scope);
+  const { intents: _intents, ...route } = compileLevel(
+    destination,
+    sauce,
+    execution,
+    options,
+    scope,
+  );
+
+  return route;
+}
+
+/** {@link compileScopedRoute}, with the intents the program opens: what a nested level reports up. */
+function compileLevel(
+  destination: ChainRef,
+  sauce: string,
+  execution: SauceEvmExecutionInput | SauceSvmExecutionInput,
+  options: SauceCompileOptions,
+  scope: RouteScope,
+): CompiledSauceRoute & { readonly intents: readonly LoweredIntent[] } {
+  const { chain, compiled, source, intents } = compileForChain(destination, sauce, options, scope);
   const bytecodeHex = bytesToHex(compiled.bytecode[0]!);
 
   if (chain.kind === "svm") {
@@ -361,7 +381,7 @@ export function compileScopedRoute(
     // enforce one, but the STAGING caller issues that — a different transaction, by the party that
     // already controlled the bytes — so it is not a guarantee this call's consumer inherits.
     const call = buildSauceSvmCall(svmExecution);
-    return { calls: [call], compiled, source };
+    return { calls: [call], compiled, source, intents };
   }
 
   const evmExecution = execution as SauceEvmExecutionInput;
@@ -371,7 +391,7 @@ export function compileScopedRoute(
     program: bytecodeHex,
     value: evmExecution.value,
   });
-  return { calls: [call], compiled, source };
+  return { calls: [call], compiled, source, intents };
 }
 
 /** A standalone program, compiled for one chain: {@link compileSauceProgram}'s result. */
