@@ -577,7 +577,7 @@ describe("sauce_simulate", () => {
   });
 });
 
-describe("sauce_publish", () => {
+describe("sauce_intent_publish", () => {
   const args = {
     source: INTENT,
     defines: { RECIPIENT },
@@ -586,7 +586,7 @@ describe("sauce_publish", () => {
   };
 
   it("builds the unsigned approve and publishAndFund of a fixed intent", async () => {
-    const out = ok(await mcp.call("sauce_publish", args)) as {
+    const out = ok(await mcp.call("sauce_intent_publish", args)) as {
       chainId: number;
       intents: Array<{
         intentHash: string;
@@ -608,28 +608,28 @@ describe("sauce_publish", () => {
 
   it("needs a wallet and an endpoint for a dry run, and dryRun for assumed balances", async () => {
     assert.match(
-      failed(await mcp.call("sauce_publish", { ...args, dryRun: true })),
+      failed(await mcp.call("sauce_intent_publish", { ...args, dryRun: true })),
       /needs whose wallet/,
     );
     assert.match(
-      failed(await mcp.call("sauce_publish", { ...args, dryRun: true, from: OWNER })),
+      failed(await mcp.call("sauce_intent_publish", { ...args, dryRun: true, from: OWNER })),
       /A dry run needs an RPC endpoint for arbitrum/,
     );
     assert.match(
-      failed(await mcp.call("sauce_publish", { ...args, assumeBalance: ["USDC:1"] })),
+      failed(await mcp.call("sauce_intent_publish", { ...args, assumeBalance: ["USDC:1"] })),
       /goes with dryRun/,
     );
   });
 
   it("refuses a program that does more than open fixed intents", async () => {
     assert.match(
-      failed(await mcp.call("sauce_publish", { source: PAY, chain: "base" })),
+      failed(await mcp.call("sauce_intent_publish", { source: PAY, chain: "base" })),
       /opens no intent/,
     );
   });
 });
 
-describe("sauce_fill", () => {
+describe("sauce_intent_fill", () => {
   const intent = {
     source: [
       "Base(() => {",
@@ -646,7 +646,7 @@ describe("sauce_fill", () => {
   it("takes the destination's endpoint one way, a claimant of 20 or 32 bytes", async () => {
     assert.match(
       failed(
-        await mcp.call("sauce_fill", {
+        await mcp.call("sauce_intent_fill", {
           ...intent,
           rpcUrl: "http://127.0.0.1:9/",
           rpcUrls: { base: "http://127.0.0.1:9/" },
@@ -655,19 +655,22 @@ describe("sauce_fill", () => {
       /give rpcUrl \(one destination\) or rpcUrls \(by chain\), not both/,
     );
     assert.match(
-      failed(await mcp.call("sauce_fill", { ...intent, claimant: "0x1234" })),
+      failed(await mcp.call("sauce_intent_fill", { ...intent, claimant: "0x1234" })),
       /claimant: '0x1234' is neither an address \(20 bytes\) nor 32 bytes of hex/,
     );
     assert.match(
       failed(
-        await mcp.call("sauce_fill", { ...intent, rpcUrls: { nowhere: "http://127.0.0.1:9/" } }),
+        await mcp.call("sauce_intent_fill", {
+          ...intent,
+          rpcUrls: { nowhere: "http://127.0.0.1:9/" },
+        }),
       ),
       /nowhere/,
     );
   });
 
   it("names the destination it needs an endpoint for", async () => {
-    const message = failed(await mcp.call("sauce_fill", intent));
+    const message = failed(await mcp.call("sauce_intent_fill", intent));
     assert.match(message, /Rehearsing a fill needs an RPC endpoint for base \(chain id 8453\)/);
     assert.match(message, /Pass rpcUrl with the call/);
   });

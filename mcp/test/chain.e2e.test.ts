@@ -357,9 +357,9 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       from: NOBODY,
       dryRun: true,
     };
-    const short = ok(await mcp.call("sauce_publish", args));
+    const short = ok(await mcp.call("sauce_intent_publish", args));
     assert.equal(short.ok, false, "with nothing to fund the reward, publishAndFund reverts");
-    const out = ok(await mcp.call("sauce_publish", { ...args, assumeBalance: ["USDC:1"] }));
+    const out = ok(await mcp.call("sauce_intent_publish", { ...args, assumeBalance: ["USDC:1"] }));
     assert.equal(out.ok, true);
     assert.deepEqual(
       (out.transactions as Array<{ status: string }>).map((tx) => tx.status),
@@ -368,7 +368,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     assert.equal(await local.balanceOf(usdc, NOBODY), 0n);
     // The other side is the destination's, and its tool is named.
     const notes = (out.notes as string[]).join(" ");
-    assert.match(notes, /sauce_fill with the same inputs/);
+    assert.match(notes, /sauce_intent_fill with the same inputs/);
     assert.doesNotMatch(notes, /sauce fill|--/);
   });
 
@@ -388,7 +388,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     };
     const block = await base.publicClient.getBlockNumber();
     for (const reach of [{ rpcUrl: base.rpcUrl }, { rpcUrls: { base: base.rpcUrl } }]) {
-      const out = ok(await mcp.call("sauce_fill", { ...args, ...reach })) as {
+      const out = ok(await mcp.call("sauce_intent_fill", { ...args, ...reach })) as {
         ok: boolean;
         chain: string;
         intents: Fill[];
@@ -411,7 +411,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     assert.equal(await base.balanceOf(baseUsdc, RECIPIENT), 0n);
     // The server has no endpoint of its own for the destination.
     assert.match(
-      failed(await mcp.call("sauce_fill", args)),
+      failed(await mcp.call("sauce_intent_fill", args)),
       /Rehearsing a fill needs an RPC endpoint for base .* Pass rpcUrl with the call/,
     );
   });

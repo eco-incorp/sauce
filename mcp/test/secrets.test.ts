@@ -55,7 +55,7 @@ describe("a server with endpoints", () => {
       ["sauce_inspect", { hex: HASH, chain: "base" }],
       ["sauce_verify", { hex: HASH, chain: "base" }],
       [
-        "sauce_publish",
+        "sauce_intent_publish",
         {
           source:
             "Arbitrum(() => {\n  USDC.transfer(R, 5n);\n}).reward({ tokens: [{ token: USDC, amount: 7n }] });\n",

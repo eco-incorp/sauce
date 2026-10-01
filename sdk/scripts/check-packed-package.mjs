@@ -600,7 +600,7 @@ try {
     "sauce_tx",
     "sauce_pot",
     "sauce_simulate",
-    "sauce_publish",
+    "sauce_intent_publish",
     "sauce_skills",
     "sauce_skill",
   ]) {
