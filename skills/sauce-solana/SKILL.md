@@ -64,10 +64,16 @@ npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypai
 The SPL arm takes the mint first, then the accounts: `transfer(mint, tokenProgram, source, dest,
 authority, amount)`, `approve(mint, tokenProgram, source, delegate, authority, amount)`,
 `transferFrom` (the same instruction: SPL has one transfer for owners and delegates),
-`balanceOf(mint, account)`, `allowance(mint, account, spender)`, `totalSupply(mintAccount)`,
-`decimals(mintAccount)`. Every function requires the classic SPL Token program as the account owner
-and callee, checks the mint, and rejects amounts above `u64`; a Token-2022 account is refused. SPL
-tracks one delegate per account, so a second `approve` replaces the first.
+`balanceOf(mint, account)`, `allowance(mint, account, spender)`, `ownerOf(mint, account)`,
+`totalSupply(mintAccount)`, `decimals(mintAccount)`. Every function requires the classic SPL Token
+program as the account owner and callee, checks the mint, and rejects amounts above `u64`; a
+Token-2022 account is refused. SPL tracks one delegate per account, so a second `approve` replaces
+the first.
+
+A transfer's `authority` may be the source's owner or its delegate, so a transfer that succeeds does
+not show whose account `source` is. `ownerOf(mint, account)` reads the token account's owner (the
+wallet or PDA whose balance it is, not `account.owner`, the SPL Token program): before treating a
+balance as the Pot's, `require(ownerOf(USDC, source) == authority, "not the Pot's account")`.
 
 For Token-2022 and `TransferChecked`, generate the program from TypeScript with the token builder
 (`token.Token.transfer({ amount, svm: { ... } }).source("svm")`, top-level
