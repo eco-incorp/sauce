@@ -6,8 +6,9 @@
 // ONE SOURCE. Every name comes from `routes.sourceGlobals(chain)`, the function `sauce globals`
 // prints, which reads the registries and resolvers the compile reads. Nothing here derives a name of
 // its own: it only regroups that per-chain listing by name (a contract and the chains it is on) and
-// adds two facts the listing does not carry, each from the SDK — a native coin's ERC-20 twin
-// (`nativeErc20`) and whether a chain opens and receives intents (`ecoRoutesPortal`).
+// adds three facts the listing does not carry, each from the SDK — a native coin's ERC-20 twin
+// (`nativeErc20`), whether a chain opens and receives intents (`ecoRoutesPortal`), and the devnet
+// mints a Solana program passes as defines (`routes.SVM_TOKEN_REGISTRY`).
 //
 // It reads the BUILT SDK (`dist/`), so it runs after `tsc` in `build`, which rewrites the files.
 // The files are committed: CI rebuilds and fails when that changed them, and the skills checker
@@ -49,13 +50,18 @@ export function globalsIndex(sdk, ecoRoutes) {
               (token) => token.address.toLowerCase() === native.address.toLowerCase(),
             );
 
+      // Solana's are mints: the base58 address beside the 32-byte key a program holds.
+      const row = ({ symbol, address, decimals, mint }) => ({
+        symbol,
+        address,
+        decimals,
+        ...(mint === undefined ? {} : { mint }),
+      });
+
       return {
-        chain: { key: globals.chain.key, slug: chain.slug, id: chain.id },
-        tokens: globals.tokens.map(({ symbol, address, decimals }) => ({
-          symbol,
-          address,
-          decimals,
-        })),
+        chain: { key: globals.chain.key, slug: chain.slug, id: chain.id, kind: chain.kind },
+        tokens: globals.tokens.map(row),
+        ...(chain.kind === "svm" ? { devnet: routes.SVM_TOKEN_REGISTRY.devnet.map(row) } : {}),
         ...(native === undefined
           ? {}
           : {
@@ -153,10 +159,29 @@ export function renderGlobalsIndex(index) {
     "`Token(<address>)`.",
     "",
   ];
+  const tokenLine = (token) =>
+    token.mint === undefined
+      ? `- \`${token.symbol}\`: \`${token.address}\`, ${token.decimals} decimals`
+      : `- \`${token.symbol}\`: mint \`${token.mint}\`, key \`${token.address}\`, ${token.decimals} decimals`;
   for (const entry of index.tokens) {
     tokens.push(`## ${entry.chain.key} (\`${entry.chain.slug}\`, ${entry.chain.id})`, "");
-    for (const token of entry.tokens) {
-      tokens.push(`- \`${token.symbol}\`: \`${token.address}\`, ${token.decimals} decimals`);
+    if (entry.chain.kind === "svm") {
+      tokens.push(
+        "A symbol is the mint's 32-byte key, a value for the `@sauce/token` functions",
+        "(`balanceOf(USDC, account)`); the token accounts are `Account` parameters, and the token",
+        "methods (`USDC.transfer(...)`) are EVM-only.",
+        "",
+      );
+    }
+    for (const token of entry.tokens) tokens.push(tokenLine(token));
+    if (entry.devnet !== undefined) {
+      tokens.push(
+        "",
+        "On devnet, pass a mint that differs as a define, which wins over the symbol",
+        "(`--define USDC=<key>`):",
+        "",
+        ...entry.devnet.map(tokenLine),
+      );
     }
     if (entry.native !== undefined) {
       const { coin, coinDecimals, erc20, erc20Decimals } = entry.native;
