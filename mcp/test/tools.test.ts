@@ -164,10 +164,32 @@ describe("sauce_compile", () => {
       }),
     );
     assert.equal(out.chain, "solana");
+    assert.deepEqual(out.defines, { MINT });
     const manifest = out.manifest as { accounts: Array<{ name?: string; kind: string }> };
     assert.deepEqual(
       manifest.accounts.filter((entry) => entry.kind === "slot").map((entry) => entry.name),
       ["tokenProgram", "source", "destination", "authority"],
+    );
+  });
+
+  it("takes a Solana key define in base58, as the sauce command does", async () => {
+    const base58 = ok(
+      await mcp.call("sauce_compile", {
+        source: SVM_PAY,
+        chain: "solana",
+        defines: { MINT: SOLANA_OWNER },
+      }),
+    );
+    assert.match(base58.bytecode as string, /^0x[0-9a-f]+$/);
+    assert.match(
+      failed(
+        await mcp.call("sauce_compile", {
+          source: PAY,
+          chain: "base",
+          defines: { RECIPIENT: SOLANA_OWNER },
+        }),
+      ),
+      /is a Solana public key/,
     );
   });
 

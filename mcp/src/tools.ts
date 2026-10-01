@@ -126,8 +126,8 @@ const PROGRAM = {
     .optional()
     .describe(
       "Compile-time values the program reads by name: an address, an integer (decimal or 0x " +
-        "hex; a string past 2^53), true or false. A define replaces the program's module-level " +
-        "const of that name.",
+        "hex; a string past 2^53), true or false, and on Solana a base58 public key. A define " +
+        "replaces the program's module-level const of that name.",
     ),
   compactArgs: z
     .boolean()
@@ -249,7 +249,7 @@ function programOf(args: ProgramArgs, fallback?: CanonicalChain): Program {
     args.source,
     fallback,
   );
-  const defines = parseDefineMap(args.defines ?? {}, "defines");
+  const defines = parseDefineMap(args.defines ?? {}, "defines", chain.kind);
   definesReach(file, args.source, Object.keys(defines));
   const { intentDeadline, intentCreator, intentExecutionFee } = args;
 
@@ -340,13 +340,13 @@ function svmCook(args: CookArgs, program: Program, rpcUrl: string): SvmCookInput
   };
 }
 
-/** A define's value as JSON: an address-sized integer as its address, any other in decimal. */
+/** A define's value as JSON: an address-sized integer as its address, a wider one (a Solana key,
+ *  a hash) as 32 bytes of hex, any other in decimal. */
 function defineJson(value: DefineValue): string | boolean {
   if (typeof value === "boolean") return value;
+  if (value >= 1n << 160n) return numberToHex(value, { size: 32 });
 
-  return value >= 1n << 64n && value < 1n << 160n
-    ? getAddress(numberToHex(value, { size: 20 }))
-    : value.toString();
+  return value >= 1n << 64n ? getAddress(numberToHex(value, { size: 20 })) : value.toString();
 }
 
 const HEX = /^0x(?:[0-9a-fA-F]{2})*$/;
