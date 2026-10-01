@@ -13,8 +13,8 @@ import {
   registryTokenAddress,
   resolveTokenMap,
   svmTokenRows,
+  TOKEN_METHODS,
 } from "../src/routes/token-registry.js";
-import { REWRITABLE_METHODS } from "../src/routes/token-rewrite.js";
 import { NATIVE_MINT } from "../src/svm/prepends.js";
 import { USDC_MINT } from "../src/svm/venues/hylo/index.js";
 
@@ -31,11 +31,11 @@ describe("TOKEN_REGISTRY module-eval invariants", () => {
     }
   });
 
-  it("every row's symbol matches the ticker shape and none collides with a U4 rewritable method", () => {
+  it("every row's symbol matches the ticker shape and none collides with a token method", () => {
     for (const rows of Object.values(TOKEN_REGISTRY)) {
       for (const row of rows) {
         expect(row.symbol).toMatch(/^[A-Z][A-Z0-9]{1,10}$/);
-        for (const method of REWRITABLE_METHODS) {
+        for (const method of TOKEN_METHODS) {
           expect(row.symbol.toUpperCase()).not.toBe(method.toUpperCase());
         }
       }
