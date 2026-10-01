@@ -4,7 +4,7 @@
 // involved, so a token like USDT needs nothing special.
 //
 // `destination`, `route` and `reward` are the arguments of the Portal's `publish`, the same as
-// the first three of `publishAndFund` in what `sauce publish … --from <address> --format json`
+// the first three of `publishAndFund` in what `sauce intent publish … --from <address> --format json`
 // prints for an intent file; `portal` is the source chain's Portal (its file in sauce-chains).
 //
 //   sauce run fund-by-transfer.sauce.ts --chain <chain> --config sauce.config.json \

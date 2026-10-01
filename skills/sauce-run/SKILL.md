@@ -1,6 +1,6 @@
 ---
 name: sauce-run
-description: Compile a Sauce program file (or a JSON actions document) and run it on a chain with the sauce command — find the names a chain offers, deploy the Pot it runs as, fund it, rehearse the cook with no key, sign and send it, pass arguments to its main, print the unsigned transaction for a wallet, read a transaction back, or publish a file's cross-chain intents from a wallet. Use when asked to compile, simulate, run, execute, test, send or deploy a Sauce program (*.sauce.ts), pass arguments to its main, get its bytecode or unsigned transaction, fund or create a Pot, or check what a transaction did.
+description: Compile a Sauce program file (or a JSON actions document) and run it on a chain with the sauce command — find the names a chain offers, deploy the Pot it runs as, fund it, rehearse the cook with no key, sign and send it, pass arguments to its main, print the unsigned transaction for a wallet, read a transaction back, or publish a file's cross-chain intents from a wallet and fill, prove, claim, refund or cancel them. Use when asked to compile, simulate, run, execute, test, send or deploy a Sauce program (*.sauce.ts), pass arguments to its main, get its bytecode or unsigned transaction, fund or create a Pot, or check what a transaction did.
 ---
 
 # Run a Sauce program
@@ -24,8 +24,7 @@ commands apply with differences in accounts, signing and fees: read `sauce-solan
 | `sauce simulate` | Rehearses the cook from the Pot's owner, with no key: gas, or why it reverts      |
 | `sauce run`      | Compiles, rehearses, signs, sends and waits for the cook on the signer's Pot      |
 | `sauce tx`       | Prints the unsigned cook transaction, for any wallet to sign                      |
-| `sauce publish`  | Publishes a file's fixed intents from a wallet, with no Pot                       |
-| `sauce fill`     | Rehearses a solver filling a file's intents on their destination, with no key     |
+| `sauce intent`   | Publishes, fills, proves, claims, refunds and cancels intents (`sauce-intents`)   |
 | `sauce inspect`  | Reads a transaction, calldata or a file back as what the program does             |
 | `sauce verify`   | Checks that a payload, cook or transaction runs the audited settle program        |
 | `sauce price`    | Turns a price into a pool's `sqrtPriceX96`, a swap's limit and its average floor  |
@@ -36,8 +35,8 @@ commands apply with differences in accounts, signing and fees: read `sauce-solan
   `{ "rpcUrls": { "<chain id>": "<url>" } }`. Keep that file out of git; never commit a URL.
 - **Signer**: `--keystore <keystore>`, a JSON keystore; its password is asked for at the terminal,
   or read from `--password-file <file>`. `--private-key <hex>` also works but lands in shell
-  history. On Solana, `--keypair <keypair>`. The signer is the Pot's owner: `run`, `publish` and
-  `pot --deploy` act for it. On an EVM chain `pot --deploy --owner <address>` deploys another
+  history. On Solana, `--keypair <keypair>`. The signer is the Pot's owner: `run` and `pot --deploy` act
+  for it, and `sauce intent publish` publishes from it. On an EVM chain `pot --deploy --owner <address>` deploys another
   owner's Pot instead, the signer paying; the Pot is that owner's alone.
 - Pass each flag and each value as a word of its own, in any order: a shell variable holding
   several flags reaches the command as one word unless the shell splits it.
@@ -162,27 +161,28 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
 - **A file that opens intents** (`Arbitrum(() => { … }).reward({ … })`) also takes
   `--intent-deadline <unix seconds>`, `--intent-creator <address>` and, when an intent's body runs a
   program, `--intent-execution-fee <wei>`. `sauce run` opens them from the Pot, which is the way when
-  an amount is measured on chain; `sauce publish` opens fixed ones from a wallet with no Pot, and
-  `sauce publish <file> --chain <chain> --from <address> --format json` prints its unsigned approve
+  an amount is measured on chain; `sauce intent publish` opens fixed ones from a wallet with no Pot, and
+  `sauce intent publish <file> --chain <chain> --from <address> --format json` prints its unsigned approve
   and `publishAndFund` for any wallet to send. Both fund each reward by an approve and
-  `publishAndFund`. `sauce publish … --dry-run --assume-balance USDC:<amount>` rehearses it
+  `publishAndFund`. `sauce intent publish … --dry-run --assume-balance USDC:<amount>` rehearses it
   from a wallet that does not hold the reward yet.
-  `sauce fill <file> --chain <chain> --config sauce.config.json` rehearses each intent where its
+  `sauce intent fill <file> --chain <chain> --config sauce.config.json` rehearses each intent where its
   body runs: on its destination chain, as the solver who fills it, with no key and nothing sent.
   `publish --dry-run` covers only the source chain. `fill` prints what the body moved, what it left
   in the shared Pot, and why it reverts. `--config` must name the destination chain's endpoint.
   `sauce-intents` covers writing, publishing, funding (including a transfer into the intent's
-  vault) and rehearsing them.
+  vault), rehearsing them, and every later step (`sauce intent fill --send`, `prove`, `claim`,
+  `refund`, `cancel`, `status`, `import`).
 - **On Solana** (`--chain solana`) a program declares every account it touches, a cook signs with
   `--keypair`, and the Kitchen's fee is read from the cluster with no `--value`; `--fund` and
-  `sauce publish` are EVM only. A `simulate` that succeeds lists what the cook moved: each token
+  `sauce intent publish` are EVM only. A `simulate` that succeeds lists what the cook moved: each token
   account's balance change and each account's lamports, read from the accounts as the simulation
   leaves them. `sauce-solana` covers writing and running one.
 
 ## Rules
 
 - Never write an RPC URL or a key into a tracked file, a program or a command you commit.
-- Rehearse with `sauce simulate` (or `publish --dry-run`, and `sauce fill` for an intent's body)
+- Rehearse with `sauce simulate` (or `publish --dry-run`, and `sauce intent fill` for an intent's body)
   before the first real send.
 - Do not pass `--yes` or deploy a Pot without the user's go-ahead: deploying costs gas, and with
   `--fund` it also approves Permit2 (or the Pot) to move the user's tokens.

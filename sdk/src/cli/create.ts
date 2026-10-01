@@ -523,7 +523,7 @@ export async function createIntent(input: CreateInput): Promise<Created> {
       askText(
         ask,
         "Reward deadline: from when an unproven reward is refundable to you. Leave the solver time\n" +
-          "to prove after the fill deadline (a Hyperlane proof takes minutes): a unix second or\n" +
+          "to prove after the fill deadline, and its proof to arrive: a unix second or\n" +
           "+<n>[s|m|h|d] from now",
         { fallback: "+25h", check: (text) => checkWhen(text, input.now) },
       ),
