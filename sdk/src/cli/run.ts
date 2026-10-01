@@ -41,6 +41,7 @@ import { actionsCommand, actionsProgram, isActionsDocument, type ActionsInput } 
 import { chainServedBy, connect, endpointFor } from "./chain.js";
 import {
   compileCommand,
+  pastDeadline,
   priceLimitNotes,
   compileProgram,
   potCommand,
@@ -612,37 +613,7 @@ async function programOperand(args: ParsedArgs, io: CliIo): Promise<ProgramInput
 
   return isActionsDocument(operand.text)
     ? actionsProgram(actionsOperand(args, operand.file, operand.text))
-    : liveDeadline(await programInput(args, io, operand));
-}
-
-/** Why `--intent-deadline` has passed, or `undefined` while it is still ahead. */
-function pastDeadline(program: ProgramInput): string | undefined {
-  const deadline = program.intents.deadline;
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  if (deadline === undefined || deadline > now) return undefined;
-
-  return (
-    `--intent-deadline ${deadline} (${new Date(Number(deadline) * 1000).toISOString()}) has ` +
-    "passed: an intent can be filled only until its deadline"
-  );
-}
-
-/**
- * `program`, refused when its intents' deadline has passed: the commands that build an intent to
- * publish (compile, simulate, tx, run, publish) would build one no solver could ever fill. `fill`
- * rehearses one anyway, with a note, and `inspect` reads what was.
- */
-function liveDeadline(program: ProgramInput): ProgramInput {
-  const past = pastDeadline(program);
-  if (past !== undefined) {
-    const later = BigInt(Math.floor(Date.now() / 1000)) + 86_400n;
-    throw new UsageError(
-      `${past}, so this one never could be. Give a later Unix time in seconds, such as ${later} ` +
-        "(a day from now).",
-    );
-  }
-
-  return program;
+    : programInput(args, io, operand);
 }
 
 /** An actions document's input, from the flags a program command takes. */
@@ -1479,7 +1450,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "    --intent-deadline 2000000000 --intent-creator 0x…",
     ].join("\n"),
     run: async (args, io) => {
-      const program = liveDeadline(await programInput(args, io));
+      const program = await programInput(args, io);
       // An intent's price limit at a bound fills nothing on its destination: say so before sending.
       for (const note of priceLimitNotes(program, [], undefined))
         io.stderr(`${note}

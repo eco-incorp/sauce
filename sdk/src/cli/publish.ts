@@ -37,6 +37,7 @@ import { connect, revertReason, sendAndWait, type Sent, type TxRequest } from ".
 import {
   castSend,
   compileProgram,
+  refusePastDeadline,
   type CliFiles,
   type CommandOutput,
   type ProgramInput,
@@ -265,6 +266,7 @@ const stepJson = (step: Step): Record<string, string> => ({
 
 /** `sauce publish`: send, rehearse or print the Portal transactions of a file's fixed intents. */
 export async function publishCommand(input: PublishInput, files: CliFiles): Promise<CommandOutput> {
+  refusePastDeadline(input);
   const intents = fixedIntents(input, files);
   const portal = ecoRoutesPortal(input.chain);
   const from = input.account?.address ?? input.from;

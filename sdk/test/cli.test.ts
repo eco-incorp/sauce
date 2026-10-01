@@ -353,6 +353,39 @@ describe("sauce compile", () => {
     ]);
   });
 
+  it("refuses a past deadline in the commands themselves, which every front end calls", async () => {
+    const { compileCommand, cookOf, refusePastDeadline } = await import("../src/cli/commands.js");
+    const { publishCommand } = await import("../src/cli/publish.js");
+    // As the MCP tools build it: a ProgramInput by hand, no CLI argument handling.
+    const input = {
+      file: "pay.sauce.ts",
+      text: PAY,
+      chain: requireChain("base"),
+      defines: { RECIPIENT: BigInt(RECIPIENT), AMOUNT: 1000n },
+      compactArgs: false,
+      intents: { deadline: 1728432000n },
+    };
+    const past = /--intent-deadline 1728432000 \(2024-10-09T00:00:00\.000Z\) has passed/;
+    await expect(compileCommand(input, nodeIo())).rejects.toThrow(past);
+    expect(() =>
+      cookOf(
+        {
+          ...input,
+          target: { owner: getAddress(RECIPIENT), salt: `0x${"00".repeat(32)}` },
+        } as never,
+        nodeIo(),
+      ),
+    ).toThrow(past);
+    await expect(publishCommand({ ...input, dryRun: false } as never, nodeIo())).rejects.toThrow(
+      past,
+    );
+    // A deadline still ahead passes; one at the exact second does not.
+    expect(() => refusePastDeadline({ intents: { deadline: 2000000000n } })).not.toThrow();
+    expect(() => refusePastDeadline({ intents: { deadline: 1000n } }, 1_000_000)).toThrow(
+      /has passed/,
+    );
+  });
+
   it("names a price limit at or past the bounds a pool takes, where it fills nothing", async () => {
     const program = file(
       "limits.sauce.ts",

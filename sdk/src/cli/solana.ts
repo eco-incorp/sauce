@@ -80,6 +80,7 @@ import { CliError, UsageError, type SaltChoice } from "./args.js";
 import {
   compileProgram,
   payloadOf,
+  refusePastDeadline,
   unapproved,
   type Approver,
   type ArgsInput,
@@ -744,6 +745,7 @@ async function prepare(
   files: CliFiles,
   signer: TransactionSigner,
 ): Promise<Prepared> {
+  refusePastDeadline(input);
   const program = compileProgram(input, files);
   const bytecode = svmPayload(program, input.args);
   const manifest = program.manifest ?? { accounts: [] };

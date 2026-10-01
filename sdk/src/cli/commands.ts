@@ -118,6 +118,40 @@ export interface ProgramInput {
   readonly contracts?: SauceCompileOptions["contracts"];
 }
 
+/** Why `--intent-deadline` has passed, or `undefined` while it is still ahead. */
+export function pastDeadline(
+  program: Pick<ProgramInput, "intents">,
+  now: number = Date.now(),
+): string | undefined {
+  const deadline = program.intents.deadline;
+  if (deadline === undefined || deadline > BigInt(Math.floor(now / 1000))) return undefined;
+
+  return (
+    `--intent-deadline ${deadline} (${new Date(Number(deadline) * 1000).toISOString()}) has ` +
+    "passed: an intent can be filled only until its deadline"
+  );
+}
+
+/**
+ * Refuses a program whose intents' deadline has passed: the commands that build an intent to
+ * publish — `compileCommand`, `cookOf` (simulate, tx, run), the Solana cook, `publishCommand` —
+ * would build one no solver could ever fill. Here, in the commands both front ends call, so the
+ * CLI and the MCP tools refuse it alike. `fill` rehearses one anyway, with a note, and `inspect`
+ * reads what was.
+ */
+export function refusePastDeadline(
+  program: Pick<ProgramInput, "intents">,
+  now: number = Date.now(),
+): void {
+  const past = pastDeadline(program, now);
+  if (past === undefined) return;
+  const later = BigInt(Math.floor(now / 1000)) + 86_400n;
+  throw new UsageError(
+    `${past}, so this one never could be. Give a later Unix time in seconds, such as ${later} ` +
+      "(a day from now).",
+  );
+}
+
 /** An input file's text — the program, a defines file — or a precise reason it has none. */
 export function readInput(files: CliFiles, file: string): string {
   try {
@@ -247,6 +281,7 @@ export interface CompileInput extends ProgramInput {
  * the cook's transaction against the one-transaction limit.
  */
 export async function compileCommand(input: CompileInput, files: CliFiles): Promise<CommandOutput> {
+  refusePastDeadline(input);
   const collected = contractCollector();
   const program = compileProgram(input, files, collected.onContract);
   const bytecode = bytesToHex(program.bytecode);
@@ -468,6 +503,7 @@ export function cookOf(input: CookInput, files: CliFiles): Cook {
   if (input.chain.kind !== "evm") {
     throw new Error(`internal: ${input.chain.slug}'s cook is built by solana.ts`);
   }
+  refusePastDeadline(input);
   const target = input.target;
   const pot = "pot" in target ? target.pot : (v12PredictPot(target.owner, target.salt) as Address);
   const engine = getAddress(v12EngineAddress());
