@@ -73,14 +73,14 @@ A venue qualifies only if it takes a sqrt-price limit, since the limit is what m
 fill safe and bounded. The chains each namespace contract is deployed on are in
 [../sauce-globals/references/protocols.md](../sauce-globals/references/protocols.md).
 
-| Venue                                    | Router entry | Pool lookup                                                                                                                  | Namespace                                                                                        |
-| ---------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Uniswap V3                               | `swapV3`     | `getPool(a, b, fee)`, fees `100n`, `500n`, `3000n`, `10000n`                                                                 | `UniswapV3.Factory`                                                                              |
-| PancakeSwap V3                           | `swapV3`     | `getPool(a, b, fee)`, fees `100n`, `500n`, `2500n`, `10000n`                                                                 | `PancakeswapV3.Factory`                                                                          |
-| Aerodrome Slipstream                     | `swapV3`     | `getPool(a, b, tickSpacing)`, spacings `1n`, `50n`, `100n`, `200n`, `2000n`                                                  | `AerodromeSlipstream.CLFactory`, and on Base also `.CLFactoryGaugeCaps` and `.CLFactoryGaugesV3` |
-| Synthra V3, UnitFlow V3                  | `swapV3`     | `getPool(a, b, fee)`                                                                                                         | `SynthraV3.Factory`, `UnitflowV3.Factory`                                                        |
-| Algebra pools (Camelot V3, QuickSwap V3) | `swapV3`     | the registry has the factory's address but not Algebra's `poolByPair(a, b)`: pass the pool in as a `main` input              | `Camelot.V3Factory`, `Quickswap.V3Factory` (addresses only)                                      |
-| Uniswap V4                               | `swapV4`     | no factory: build the key `{ currency0, currency1, fee, tickSpacing, hooks }`, and read its price from `UniswapV4.StateView` | `UniswapV4.PoolManager` (the swap), `UniswapV4.StateView` (the price)                            |
+| Venue                                    | Swap        | Pool lookup                                                                                                                  | Namespace                                                                                        |
+| ---------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Uniswap V3                               | `uniswapV3` | `getPool(a, b, fee)`, fees `100n`, `500n`, `3000n`, `10000n`                                                                 | `UniswapV3.Factory`                                                                              |
+| PancakeSwap V3                           | `uniswapV3` | `getPool(a, b, fee)`, fees `100n`, `500n`, `2500n`, `10000n`                                                                 | `PancakeswapV3.Factory`                                                                          |
+| Aerodrome Slipstream                     | `uniswapV3` | `getPool(a, b, tickSpacing)`, spacings `1n`, `50n`, `100n`, `200n`, `2000n`                                                  | `AerodromeSlipstream.CLFactory`, and on Base also `.CLFactoryGaugeCaps` and `.CLFactoryGaugesV3` |
+| Synthra V3, UnitFlow V3                  | `uniswapV3` | `getPool(a, b, fee)`                                                                                                         | `SynthraV3.Factory`, `UnitflowV3.Factory`                                                        |
+| Algebra pools (Camelot V3, QuickSwap V3) | `uniswapV3` | the registry has the factory's address but not Algebra's `poolByPair(a, b)`: pass the pool in as a `main` input              | `Camelot.V3Factory`, `Quickswap.V3Factory` (addresses only)                                      |
+| Uniswap V4                               | `uniswapV4` | no factory: build the key `{ currency0, currency1, fee, tickSpacing, hooks }`, and read its price from `UniswapV4.StateView` | `UniswapV4.PoolManager` (the swap), `UniswapV4.StateView` (the price)                            |
 
 Leave out venues without a price limit (V2-style pairs, Curve, Balancer, DODO, Trader Joe LB,
 WOOFi): they fill in full at whatever price. Maverick V2 bounds by tick, not sqrt price.
@@ -108,7 +108,7 @@ WOOFi): they fill in full at whatever price. Maverick V2 bounds by tick, not sqr
 The core, for Uniswap V3 alone:
 
 ```sauce chain=base,arbitrum,optimism
-import { ISauceRouter } from "./artifacts/ISauceRouter.json";
+import { uniswapV3 } from "@sauce/router";
 
 function isBetter(price: Uint256, than: Uint256, tokenIn: Address, tokenOut: Address): bool {
   if (tokenIn < tokenOut) {
@@ -148,11 +148,10 @@ function main(tokenIn: Address, tokenOut: Address, sqrtPriceLimitX96: Uint256, r
       }
     }
   }
-  const router = ISauceRouter.at(self);
   for (let i = 0n; i < count; i++) {
     const remaining = Token(tokenIn).balanceOf(self);
     if (remaining > 0n) {
-      router.swapV3(pools[i], tokenIn, tokenOut, remaining, sqrtPriceLimitX96, self, self);
+      uniswapV3(pools[i], tokenIn, tokenOut, remaining, sqrtPriceLimitX96, 0n, self);
     }
   }
   Token(tokenOut).transfer(recipient, Token(tokenOut).balanceOf(self) - outBefore);
@@ -162,14 +161,17 @@ function main(tokenIn: Address, tokenOut: Address, sqrtPriceLimitX96: Uint256, r
 
 ## One swap per pool
 
-- `swapV3(pool, tokenIn, tokenOut, remaining, sqrtPriceLimitX96, self, self)`: a positive amount
-  is exact input.
-- `swapV4(UniswapV4.PoolManager, key, zeroForOne, -remaining, sqrtPriceLimitX96, self, self)`:
-  a negative amount is exact input.
-- `payer` and `recipient` are the Pot. Each helper returns the input the pool took (the Pot's input
-  balance before minus after), which is simpler than decoding the returned deltas, and `main`
-  subtracts it from what is still unsold. A ranked pool exists and is priced better than the limit,
-  so its swap is expected to succeed; a revert reverts the whole program.
+Each swap is a `@sauce/router` call (`sauce-swaps`), through the Pot's Router, which pays each pool
+only what it fills:
+
+- `uniswapV3(pool, tokenIn, tokenOut, remaining, sqrtPriceLimitX96, 0n, self)` for a V3-style pool;
+- `uniswapV4(UniswapV4.PoolManager, tokenIn, tokenOut, remaining, fee, tickSpacing, 0n,
+sqrtPriceLimitX96, 0n, self)` for a hookless V4 pool, its key built from the two tokens.
+
+The floor is `0n` on each swap and the output stays in the Pot (`self`): the settlement checks the
+fill as a whole. Each helper returns the input the pool took (the Pot's input balance before minus
+after), and `main` subtracts it from what is still unsold. A ranked pool exists and is priced better
+than the limit, so its swap is expected to succeed; a revert reverts the whole program.
 
 ## Settlement
 
@@ -196,7 +198,7 @@ function main(tokenIn: Address, tokenOut: Address, sqrtPriceLimitX96: Uint256, r
 
 - **Another chain**: pass its `--chain`; the venues it has are used, and the others left out.
 - **Another venue**: add its lookups behind `if (available(<Namespace.Contract>))`; `swapIntoV3`
-  already drives every V3-style pool the Router services. For Algebra pools, read `globalState()`
+  (`uniswapV3`) already drives every V3-style pool the Router services. For Algebra pools, read `globalState()`
   for the price.
 - **More V4 pools**: add their `(fee, tickSpacing)` keys; a hooked pool needs its `hooks` address
   (in the pool id and the key) and a hook you have reviewed.
