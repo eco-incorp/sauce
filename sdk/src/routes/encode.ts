@@ -166,22 +166,23 @@ function evmCall(c: Call) {
   return { target: denormalizeToEvm(c.target), data: c.data, value: c.value };
 }
 
+/** A `Route` as the EVM Portal's `Route` tuple ({@link EVM_ROUTE_PARAM}) takes it: the value
+ *  `encodeRouteEvm` encodes, and so the one `Portal.fulfill` must be given for its hash to match. */
+export function evmRouteTuple(route: Route) {
+  assertSalt32(route.salt);
+  return {
+    salt: route.salt,
+    deadline: route.deadline,
+    portal: denormalizeToEvm(route.portal),
+    nativeAmount: route.nativeAmount,
+    tokens: route.tokens.map(evmTokenAmount),
+    calls: route.calls.map(evmCall),
+  };
+}
+
 /** Encodes a `Route` for an EVM (or TVM) destination via the deployed Portal ABI shape. */
 export function encodeRouteEvm(route: Route): Hex {
-  assertSalt32(route.salt);
-  return encodeAbiParameters(
-    [EVM_ROUTE_PARAM],
-    [
-      {
-        salt: route.salt,
-        deadline: route.deadline,
-        portal: denormalizeToEvm(route.portal),
-        nativeAmount: route.nativeAmount,
-        tokens: route.tokens.map(evmTokenAmount),
-        calls: route.calls.map(evmCall),
-      },
-    ],
-  );
+  return encodeAbiParameters([EVM_ROUTE_PARAM], [evmRouteTuple(route)]);
 }
 
 /** Encodes a `Reward` for an EVM (or TVM) source via the deployed Portal ABI shape. */

@@ -451,6 +451,37 @@ Each request is `{ to, data, value }`. Send them from the intended funder on `bu
 
 Set `sourcePortal` while building, or pass `{ portal: sourcePortal }` to each helper. The destination `portal` is never silently reused as the submission target.
 
+## Rehearse the fill on the destination
+
+Publishing proves the reward is escrowed, not that the intent works. Its body runs on the
+destination, inside the solver's fill, so a swap that falls short of its minimum or a refund that
+fails shows up only there. A solver sends two things on the destination chain:
+
+- an approval of the destination Portal for each token the route delivers, which the Portal pulls
+  from the solver into its Executor;
+- `Portal.fulfill(intentHash, route, rewardHash, claimant)`, with `route.nativeAmount` as its value
+  — the Kitchen's fee for each cook in the route, plus any native the calls spend.
+
+`routes.fulfillApprovalTxs(built.intent)` and `routes.fulfillTx(built.intent, { claimant })` build
+them, for an EVM destination:
+
+```ts
+import { routes } from "@eco-incorp/sauce";
+
+export function solverTransactions(built: routes.BuiltIntent, claimant: routes.Hex) {
+  return [...routes.fulfillApprovalTxs(built.intent), routes.fulfillTx(built.intent, { claimant })];
+}
+```
+
+Rehearse them before publishing. A route that cooks needs the shared Pot deployed first, so a
+rehearsal on a chain where nobody has deployed it yet puts `Kitchen.deployPot(executor, 0)` ahead
+of the fill, in the same simulated block. From the command line,
+[`sauce fill`](cli.md#rehearsing-the-fill-sauce-fill) does all of it with no key: it builds the
+file's intents as `sauce publish` does, gives a solver the route's tokens by state override, runs
+the deployment, the approvals and the fulfill in one `eth_simulateV1` block on the destination, and
+prints what moved, what the shared Pot and the Executor were left holding, and the decoded reason
+when it reverts.
+
 ## Inspect hashes, vaults, and status
 
 `built.hash()` returns `intentHash`, `routeHash`, and `rewardHash`. `built.intent` or `.root()` returns the normalized intent. `.intents()` returns the root and descendants in preorder; it does not imply they execute atomically across chains.
