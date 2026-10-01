@@ -793,6 +793,38 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     expect(await arbitrum.balanceOf(usdc, OWNER.address)).toBe(REWARD);
   }, 60_000);
 
+  it("rehearses for a wallet that does not hold the reward yet, with --assume-balance", async () => {
+    const empty = getAddress("0x5a0ce0000000000000000000000000000000beef");
+    const dryRun = (...flags: string[]) =>
+      sauce(
+        ...["publish", intentFile, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
+        ...["--from", empty, "--dry-run", ...flags],
+      );
+    // Without it the funding reverts: the Portal's InsufficientFunds(intentHash), decoded by name
+    // once the registry's Portal ABI declares its errors, and as its raw data until then.
+    const short = await dryRun();
+    expect(short.code).toBe(1);
+    expect(short.stdout).toMatch(
+      /^publishAndFund: reverts: (InsufficientFunds\(0x[0-9a-f]{64}\)|revert data 0x07b90620[0-9a-f]{64})$/m,
+    );
+    const run = await dryRun("--assume-balance", "USDC:2", "--json");
+    expect(run.code).toBe(0);
+    expect(JSON.parse(run.stdout)).toMatchObject({
+      ok: true,
+      from: empty,
+      assumed: [{ holder: empty, token: usdc, symbol: "USDC", amount: "2000000" }],
+      transactions: [{ status: "success" }, { status: "success" }],
+    });
+    expect(await arbitrum.balanceOf(usdc, empty)).toBe(0n);
+    // A balance is assumed only for a rehearsal.
+    const sent = await sauce(
+      ...["publish", intentFile, ...DEFINES, "--rpc-url", arbitrum.rpcUrl],
+      ...["--private-key", OWNER_KEY, "--assume-balance", "USDC:2"],
+    );
+    expect(sent.code).toBe(2);
+    expect(sent.stderr).toContain("--assume-balance goes with --dry-run");
+  }, 60_000);
+
   it("publishes and funds the intent from the wallet: the Portal records it, funded", async () => {
     const run = await sauce(
       "publish",

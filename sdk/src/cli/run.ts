@@ -60,6 +60,7 @@ import {
   permit2On,
   planFunding,
   type FundMode,
+  type FundRequest,
 } from "./funding.js";
 import { globalsCommand } from "./globals.js";
 import { initProject } from "./init.js";
@@ -707,6 +708,22 @@ function fundingOf(
   };
 }
 
+/** `--assume-balance`, each named once. */
+function assumedBalances(args: ParsedArgs, chain: CanonicalChain): FundRequest[] {
+  const requests = repeatedFlag(args, "assume-balance").map((raw) =>
+    parseTokenAmount(raw, chain, "--assume-balance"),
+  );
+  const seen = new Set<string>();
+  for (const request of requests) {
+    if (seen.has(request.token ?? "native")) {
+      throw new UsageError(`--assume-balance names ${request.label} twice: give it once`);
+    }
+    seen.add(request.token ?? "native");
+  }
+
+  return requests;
+}
+
 // --- Solana ----------------------------------------------------------------------------------
 
 /** A Solana command's signer: `--keypair`, never an EVM key. */
@@ -958,14 +975,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         return svmSimulateCommand(svmCookInput(args, io, trailing, program), io);
       }
       const input = cookInput(args, io, trailing, undefined, program);
-      const assumed = assume.map((raw) => parseTokenAmount(raw, input.chain, "--assume-balance"));
-      const seen = new Set<string>();
-      for (const request of assumed) {
-        if (seen.has(request.token ?? "native")) {
-          throw new UsageError(`--assume-balance names ${request.label} twice: give it once`);
-        }
-        seen.add(request.token ?? "native");
-      }
+      const assumed = assumedBalances(args, input.chain);
       const rpcUrl = requiredEndpoint(args, io, input.chain);
       const account = funds && hasSigner(args) ? await signerOf(args, io) : undefined;
       const fund = fundingOf(args, io, input.chain, rpcUrl, false, account);
@@ -1081,6 +1091,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         type: "boolean",
         help: "Rehearse the transactions together (eth_simulateV1); send nothing",
       },
+      "assume-balance": {
+        type: "string",
+        multiple: true,
+        value: "<TOKEN:amount>",
+        help: "With --dry-run: give the wallet this balance, for the rehearsal only",
+      },
       format: {
         type: "string",
         value: "<json|cast>",
@@ -1097,6 +1113,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "the intent hashes and the transactions. A file whose intent uses a value measured on",
       "chain, or that does anything besides open its intents, is refused: use `sauce run` on a",
       "Pot.",
+      "",
+      "--dry-run rehearses the transactions together through eth_simulateV1 from the signer's",
+      "wallet, or --from's with no key, and sends nothing. --assume-balance TOKEN:amount gives",
+      "that wallet a balance for the rehearsal only, by state override (repeatable; the amount as",
+      "`sauce run --fund` takes it; ETH:<amount> for the native currency), so a wallet that does",
+      "not hold the reward yet can rehearse publishing it.",
       "",
       "Example:",
       "  sauce publish bridge.sauce.ts --chain arbitrum --rpc-url <url> --keystore ~/.keys/me.json \\",
@@ -1130,11 +1152,20 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           ? requiredEndpoint(args, io, program.chain)
           : endpoint(args, io, program.chain);
 
+      const assume = assumedBalances(args, program.chain);
+      if (assume.length > 0 && args.values["dry-run"] !== true) {
+        throw new UsageError(
+          "--assume-balance goes with --dry-run: it gives the wallet a balance for a rehearsal, " +
+            "and nothing to a transaction that is sent",
+        );
+      }
+
       return publishCommand(
         {
           ...program,
           ...(format === undefined ? {} : { format }),
           dryRun: args.values["dry-run"] === true,
+          ...(assume.length === 0 ? {} : { assume }),
           ...(rpcUrl === undefined ? {} : { rpcUrl }),
           ...(account === undefined ? {} : { account }),
           ...(from === undefined ? {} : { from: parseAddress("from", from) }),

@@ -8,6 +8,7 @@ import {
   concat,
   decodeFunctionData,
   encodeAbiParameters,
+  encodeErrorResult,
   getAddress,
   keccak256,
   pad,
@@ -23,6 +24,7 @@ import {
 
 import { requireChain } from "../src/chains/canonical.js";
 import { assumeTokenBalance, findBalanceSlot, mergeOverrides } from "../src/cli/assume.js";
+import { revertReason } from "../src/cli/chain.js";
 import { effectLines, effectsJson, effectsOf, type RawLog } from "../src/cli/effects.js";
 import { POT_ROUTER_SLOT } from "../src/cli/rehearse.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
@@ -171,6 +173,19 @@ describe("state overrides", () => {
     expect(POT_ROUTER_SLOT).toBe(
       "0x5dcf1afeb37fe4804d4db2aa42e07f76a76c328b0f50beb6b52ea4daec1f5f00",
     );
+  });
+});
+
+describe("a revert, by name", () => {
+  it("decodes ERC-20's standard errors (EIP-6093), which a token's balance shortfall reverts with", () => {
+    const data = encodeErrorResult({
+      abi: parseAbi([
+        "error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)",
+      ]),
+      errorName: "ERC20InsufficientBalance",
+      args: [HOLDER, 0n, 2_000_000n],
+    });
+    expect(revertReason({ data })).toBe(`ERC20InsufficientBalance(${HOLDER}, 0, 2000000)`);
   });
 });
 
