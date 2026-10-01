@@ -44,6 +44,7 @@ export {
   routeHash,
   EVM_ROUTE_PARAM,
   EVM_REWARD_PARAM,
+  evmRouteTuple,
   svmCallCodec,
   svmRewardCodec,
   svmRouteCodec,
@@ -144,6 +145,8 @@ export type {
 
 export {
   approvalTxs,
+  fulfillApprovalTxs,
+  fulfillTx,
   fundTx,
   intentHashCall,
   intentVaultAddressCall,
@@ -151,7 +154,7 @@ export {
   publishAndFundTx,
   publishTx,
 } from "./portal.js";
-export type { PortalReadCall, PortalTarget, PortalTx } from "./portal.js";
+export type { FulfillOptions, PortalReadCall, PortalTarget, PortalTx } from "./portal.js";
 
 export { assertNestingInvariants, assertStaticChild, nestedChildCalls } from "./nest.js";
 export type { AssertNestingInvariantsArgs, NestChild, NestedChildOptions } from "./nest.js";
