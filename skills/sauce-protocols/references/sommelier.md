@@ -4,7 +4,7 @@ ERC-4626 strategy vaults (Cellars) managed by off-chain strategists via Cosmos v
 
 ## Category
 
-yield | Chains: Ethereum
+yield | Chains and addresses: [registry/sommelier.md](registry/sommelier.md)
 
 ## Key Operations
 
@@ -12,19 +12,12 @@ yield | Chains: Ethereum
 - **withdraw**: Withdraw assets from Cellar
 - **redeem**: Redeem Cellar shares
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  deposit,
-  withdraw,
-  redeem,
-} from "@eco-incorp/sauce/protocols/sommelier";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Deposit into Sommelier Cellar
@@ -36,17 +29,11 @@ function main(cellarAddress: Address, assets: Uint256, receiver: Address): Uint2
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract     | Address                                      |
-| -------- | ------------ | -------------------------------------------- |
-| Ethereum | cellarRouter | `0x6b7f87279982d919Bbf85182DDeAB179B366d8f2` |
-
-## ABI Methods
-
-- `deposit(uint256,address)` - Deposit assets
-- `withdraw(uint256,address,address)` - Withdraw assets
-- `redeem(uint256,address,address)` - Redeem shares
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/sommelier.md](registry/sommelier.md).
 
 ## Notes
 

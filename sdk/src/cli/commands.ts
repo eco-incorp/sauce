@@ -107,6 +107,11 @@ export interface ProgramInput {
     readonly creator?: Address;
     readonly executionFee?: bigint;
   };
+  /**
+   * ABI bindings the program calls through without declaring them — an actions document's
+   * (`actions.ts`), whose generated source names `IErc20` and the like. Absent for a file.
+   */
+  readonly contracts?: SauceCompileOptions["contracts"];
 }
 
 /** An input file's text — the program, a defines file — or a precise reason it has none. */
@@ -160,6 +165,7 @@ function compileOptions(
     ...(input.compactArgs ? { compactArgs: true } : {}),
     // The intents the program opens compile with these options too, so this hears their contracts.
     ...(onContract === undefined ? {} : { accessors: { onContract } }),
+    ...(input.contracts === undefined ? {} : { contracts: input.contracts }),
     resolve: (path) => files.readModule(resolvePath(dir, path)),
   };
 }

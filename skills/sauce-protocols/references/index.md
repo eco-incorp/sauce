@@ -1,299 +1,355 @@
-# Sauce SDK Protocol Index
+<!-- Generated from the SDK's registries. Do not edit. -->
 
-Master reference for all protocols in the Sauce SDK. Use this to find the right protocol for any DeFi operation.
+# Protocol index
 
-## SDK Usage
+Every protocol the SDK registers, by category: how to choose between them, then each one with
+its family, whether a program names it as a namespace (and on which chains), and where it is
+deployed. Each protocol's registry file (`registry/<slug>.md`) has its addresses per chain, how a
+program names each contract, and its ABI functions; its document (`<slug>.md`) says what it is
+for and its pitfalls.
 
-```typescript
-// A protocol module: its info, its deployments, its ABIs and each SauceScript template by name
-import { protocolInfo, deployments, supply } from "@eco-incorp/sauce/protocols/aave-v3";
+## DEX (29)
 
-// The registry queries
-import {
-  getProtocol,
-  listProtocols,
-  getProtocolsByCategory,
-  getProtocolsByChain,
-} from "@eco-incorp/sauce";
+### Choosing between them
 
-const aave = getProtocol("aave-v3"); // Single protocol by slug
-const dexes = getProtocolsByCategory("dex"); // All DEXes
-const baseProt = getProtocolsByChain(8453); // All protocols on Base
-```
+Inside a Sauce program, swap through the Sauce Router wherever it services the pool
+(`sauce-swaps`): Uniswap V3 and its forks (PancakeSwap V3, Aerodrome Slipstream, Algebra pools,
+Synthra, UnitFlow) and Uniswap V4 through `swapV3`/`swapV4`, and V2-style pairs, Curve, Balancer
+V2, DODO V2, Trader Joe LB and WOOFi through its unified `swap`. Choose by pool type:
 
-Each protocol module (`@eco-incorp/sauce/protocols/<slug>`) exports `protocolInfo`, `deployments`, its ABIs (`…ABI`) and its SauceScript templates by name.
+- **Concentrated liquidity** (V3-style, V4): the deepest pools for liquid pairs, several fee tiers
+  per pair, and a price limit, so a fill can stop part way and return the rest.
+- **Constant-product pairs** (Uniswap V2 and its forks, Solidly-style volatile pools): one pool per
+  pair, no price limit; a fill is bounded only by the minimum output you check.
+- **Stable pools** (Curve, Solidly-style stable pools): built for assets meant to trade near 1:1,
+  with less price impact there than a constant-product pair.
+- **One trade across several pools** under one limit: `sauce-distributed-swap`.
 
----
+| Protocol | Family | Namespace | Chains |
+| --- | --- | --- | --- |
+| [Aerodrome](aerodrome.md) ([registry](registry/aerodrome.md)) | — | `Aerodrome`: base | base |
+| [Aerodrome Slipstream](aerodrome-slipstream.md) ([registry](registry/aerodrome-slipstream.md)) | — | `AerodromeSlipstream`: arc, base | arc, base |
+| [Ambient](ambient.md) ([registry](registry/ambient.md)) | — | `Ambient`: ethereum, scroll | ethereum, scroll |
+| [Balancer V2](balancer-v2.md) ([registry](registry/balancer-v2.md)) | `Balancer` | `BalancerV2`: ethereum, optimism, bsc, gnosis, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, gnosis, polygon, base, arbitrum, avalanche |
+| [BaseSwap](baseswap.md) ([registry](registry/baseswap.md)) | — | `Baseswap`: base | base |
+| [Camelot](camelot.md) ([registry](registry/camelot.md)) | — | `Camelot`: arbitrum | arbitrum |
+| [Curve Finance](curve.md) ([registry](registry/curve.md)) | — | `Curve`: ethereum, optimism, gnosis, polygon, fantom, base, arbitrum, avalanche | ethereum, optimism, gnosis, polygon, fantom, base, arbitrum, avalanche |
+| [DODO](dodo.md) ([registry](registry/dodo.md)) | — | `Dodo`: ethereum, bsc | ethereum, bsc |
+| [Fenix](fenix.md) ([registry](registry/fenix.md)) | — | `Fenix`: blast | blast |
+| [Kim](kim.md) ([registry](registry/kim.md)) | — | `Kim`: mode | mode |
+| [KyberSwap](kyberswap.md) ([registry](registry/kyberswap.md)) | — | `Kyberswap`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
+| [Lynex](lynex.md) ([registry](registry/lynex.md)) | — | `Lynex`: linea | linea |
+| [Maverick](maverick.md) ([registry](registry/maverick.md)) | — | `Maverick`: ethereum, base, arbitrum | ethereum, base, arbitrum |
+| [PancakeSwap V2](pancakeswap-v2.md) ([registry](registry/pancakeswap-v2.md)) | `Pancakeswap` | `PancakeswapV2`: ethereum, bsc, monad, opbnb, base, arbitrum, linea | ethereum, bsc, monad, opbnb, base, arbitrum, linea |
+| [PancakeSwap V3](pancakeswap-v3.md) ([registry](registry/pancakeswap-v3.md)) | `Pancakeswap` | `PancakeswapV3`: ethereum, bsc, base, arbitrum, linea | ethereum, bsc, base, arbitrum, linea |
+| [QuickSwap](quickswap.md) ([registry](registry/quickswap.md)) | — | `Quickswap`: polygon | polygon |
+| [Ramses](ramses.md) ([registry](registry/ramses.md)) | — | `Ramses`: arbitrum | arbitrum |
+| [SpookySwap](spookyswap.md) ([registry](registry/spookyswap.md)) | — | `Spookyswap`: fantom | fantom |
+| [SushiSwap V2](sushiswap-v2.md) ([registry](registry/sushiswap-v2.md)) | `Sushiswap` | `SushiswapV2`: ethereum, optimism, bsc, polygon, fantom, arbitrum, avalanche | ethereum, optimism, bsc, polygon, fantom, arbitrum, avalanche |
+| [SyncSwap](syncswap.md) ([registry](registry/syncswap.md)) | — | `Syncswap`: zksync | zksync |
+| [Synthra V3](synthra-v3.md) ([registry](registry/synthra-v3.md)) | `Synthra` | `SynthraV3`: arc | arc |
+| [Thena](thena.md) ([registry](registry/thena.md)) | — | `Thena`: bsc | bsc |
+| [Thruster](thruster.md) ([registry](registry/thruster.md)) | — | `Thruster`: blast | blast |
+| [Trader Joe](trader-joe.md) ([registry](registry/trader-joe.md)) | — | `TraderJoe`: bsc, arbitrum, avalanche | bsc, arbitrum, avalanche |
+| [Uniswap V2](uniswap-v2.md) ([registry](registry/uniswap-v2.md)) | `Uniswap` | `UniswapV2`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche, blast, zora |
+| [Uniswap V3](uniswap-v3.md) ([registry](registry/uniswap-v3.md)) | `Uniswap` | `UniswapV3`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, celo, avalanche |
+| [Uniswap V4](uniswap-v4.md) ([registry](registry/uniswap-v4.md)) | `Uniswap` | `UniswapV4`: ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora | ethereum, optimism, bsc, unichain, polygon, monad, arc, base, arbitrum, celo, avalanche, ink, blast, zora |
+| [UnitFlow V3](unitflow-v3.md) ([registry](registry/unitflow-v3.md)) | `Unitflow` | `UnitflowV3`: arc | arc |
+| [Velodrome](velodrome.md) ([registry](registry/velodrome.md)) | — | `Velodrome`: optimism | optimism |
 
-## Protocol Registry
+## Aggregators (6)
 
-### DEX (29 protocols)
+### Choosing between them
 
-| Slug                   | Name                 | Chains                                          | Key Operations                                                   |
-| ---------------------- | -------------------- | ----------------------------------------------- | ---------------------------------------------------------------- |
-| `uniswap-v2`           | Uniswap V2           | ETH, ARB, OP, BASE, BSC, AVAX, POLY, BLAST, ARC | swap, addLiquidity, removeLiquidity                              |
-| `uniswap-v3`           | Uniswap V3           | ETH, ARB, OP, BASE, BSC, AVAX, POLY, CELO, ARC  | swap (exactInputSingle), addLiquidity (mint), removeLiquidity    |
-| `uniswap-v4`           | Uniswap V4           | ETH, ARB, OP, BASE, BSC, AVAX, POLY, BLAST, ARC | swap (UniversalRouter), modifyLiquidities                        |
-| `sushiswap-v2`         | SushiSwap V2         | ETH, ARB, POLY, BSC, AVAX, FTM, OP              | swap, addLiquidity, removeLiquidity                              |
-| `curve`                | Curve Finance        | ETH, ARB, OP, BASE, POLY, AVAX, FTM, GNOSIS     | exchange (by index), add_liquidity, remove_liquidity             |
-| `balancer-v2`          | Balancer V2          | ETH, POLY, ARB, OP, GNOSIS, AVAX, BASE, BSC     | swap (Vault), joinPool, exitPool, flashLoan                      |
-| `pancakeswap-v2`       | PancakeSwap V2       | BSC, ETH, ARB, BASE, LINEA, opBNB               | swap, addLiquidity, removeLiquidity                              |
-| `pancakeswap-v3`       | PancakeSwap V3       | BSC, ETH, ARB, BASE, LINEA                      | swap (exactInputSingle)                                          |
-| `velodrome`            | Velodrome            | OP                                              | swap (stable/volatile routes), addLiquidity, removeLiquidity     |
-| `aerodrome`            | Aerodrome            | BASE                                            | swap (stable/volatile routes), addLiquidity, removeLiquidity     |
-| `camelot`              | Camelot              | ARB                                             | swapV2, swapV3 (exactInputSingle), addLiquidity, removeLiquidity |
-| `trader-joe`           | Trader Joe           | AVAX, ARB, BSC                                  | swap (Liquidity Book path)                                       |
-| `kyberswap`            | KyberSwap            | ETH, ARB, OP, POLY, BSC, AVAX, BASE, ARC        | swap (Elastic + Meta Aggregation)                                |
-| `quickswap`            | QuickSwap            | POLY                                            | swapV2, swapV3, addLiquidity, removeLiquidity                    |
-| `maverick`             | Maverick             | ETH, ARB, BASE                                  | swap (exactInputSingle with pool+tokenAIn)                       |
-| `ambient`              | Ambient              | ETH, SCROLL                                     | swap (CrocSwapDex)                                               |
-| `dodo`                 | DODO                 | ETH, BSC                                        | swap (dodoSwapV2TokenToToken)                                    |
-| `syncswap`             | SyncSwap             | zkSync                                          | swap (path-based with encoded data)                              |
-| `baseswap`             | BaseSwap             | BASE                                            | swap, addLiquidity, removeLiquidity                              |
-| `thruster`             | Thruster             | BLAST                                           | swap (exactInputSingle)                                          |
-| `spookyswap`           | SpookySwap           | FTM                                             | swap, addLiquidity, removeLiquidity                              |
-| `thena`                | Thena                | BSC                                             | swap (stable/volatile routes)                                    |
-| `ramses`               | Ramses               | ARB                                             | swap (stable/volatile routes)                                    |
-| `fenix`                | Fenix                | BLAST                                           | swap (stable/volatile routes)                                    |
-| `lynex`                | Lynex                | LINEA                                           | swap (stable/volatile routes)                                    |
-| `kim`                  | Kim                  | MODE                                            | swap (token path, Camelot-style router)                          |
-| `synthra-v3`           | Synthra V3           | ARC                                             | swap (SwapRouter02 exactInputSingle)                             |
-| `unitflow-v3`          | UnitFlow V3          | ARC                                             | swap (exactInputSingle with deadline)                            |
-| `aerodrome-slipstream` | Aerodrome Slipstream | BASE, ARC                                       | getPool (tick-spacing keyed CL pools)                            |
+An aggregator (1inch, ParaSwap, 0x, KyberSwap, OpenOcean) routes through many pools, but its
+calldata comes from an off-chain quote made for one sender, amount and moment. A program can
+take that calldata as a `main` input and pass it through, and must still check the output as a
+balance delta against a minimum. CoW Swap settles signed orders in off-chain batch auctions, so
+a program signs or cancels an order rather than swapping. When the program itself should choose
+the route, use the pools directly (`sauce-swaps`).
 
-### Lending (17 protocols)
+| Protocol | Family | Namespace | Chains |
+| --- | --- | --- | --- |
+| [CoW Swap](cowswap.md) ([registry](registry/cowswap.md)) | — | `Cowswap`: ethereum, arbitrum | ethereum, arbitrum |
+| [KyberSwap Aggregator](kyberswap-aggregator.md) ([registry](registry/kyberswap-aggregator.md)) | — | `KyberswapAggregator`: ethereum, optimism, bsc, polygon, fantom, zksync, arc, base, arbitrum, avalanche, linea, scroll | ethereum, optimism, bsc, polygon, fantom, zksync, arc, base, arbitrum, avalanche, linea, scroll |
+| [1inch](oneinch.md) ([registry](registry/oneinch.md)) | — | `Oneinch`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
+| [OpenOcean](openocean.md) ([registry](registry/openocean.md)) | — | `Openocean`: ethereum, optimism, bsc, polygon, fantom, arbitrum, avalanche | ethereum, optimism, bsc, polygon, fantom, arbitrum, avalanche |
+| [ParaSwap](paraswap.md) ([registry](registry/paraswap.md)) | — | `Paraswap`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
+| [0x Protocol](zerox.md) ([registry](registry/zerox.md)) | — | `Zerox`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
 
-| Slug          | Name        | Chains                                                          | Key Operations                                                 |
-| ------------- | ----------- | --------------------------------------------------------------- | -------------------------------------------------------------- |
-| `aave-v3`     | Aave V3     | ETH, POLY, ARB, OP, AVAX, BASE, BSC, SCROLL, FTM, GNOSIS, METIS | supply, withdraw, borrow, repay, flashLoanSimple               |
-| `aave-v2`     | Aave V2     | ETH, POLY, AVAX                                                 | deposit, withdraw, borrow, repay                               |
-| `aave-v4`     | Aave V4     | ETH, BASE, AVAX, ARC                                            | supply, withdraw, borrow, repay (Spoke, by reserve id)         |
-| `compound-v3` | Compound V3 | ETH, ARB, BASE, POLY, OP, SCROLL                                | supply, withdraw (Comet per base asset)                        |
-| `compound-v2` | Compound V2 | ETH                                                             | mint, redeemUnderlying, borrow, repayBorrow (cToken)           |
-| `morpho-blue` | Morpho Blue | ETH, BASE, ARC                                                  | supply, withdraw, borrow, repay, supplyCollateral              |
-| `spark`       | Spark       | ETH                                                             | supply, withdraw, borrow, repay (Aave V3 fork, MakerDAO)       |
-| `euler-v2`    | Euler V2    | ETH                                                             | deposit, withdraw, borrow, repay (ERC-4626 vaults + EVC)       |
-| `fluid`       | Fluid       | ETH, ARB                                                        | deposit, withdraw, borrow, repay (unified liquidity)           |
-| `radiant`     | Radiant     | ARB                                                             | deposit, withdraw, borrow, repay (Aave V2 fork)                |
-| `moonwell`    | Moonwell    | BASE                                                            | mint, redeemUnderlying, borrow, repayBorrow (Compound V2 fork) |
-| `benqi`       | Benqi       | AVAX                                                            | mint, redeemUnderlying, borrow, repayBorrow (Compound V2 fork) |
-| `venus`       | Venus       | BSC                                                             | mint, redeemUnderlying, borrow, repayBorrow (Compound V2 fork) |
-| `seamless`    | Seamless    | BASE                                                            | supply, withdraw, borrow, repay (Aave V3 fork + ILMs)          |
-| `silo`        | Silo        | ETH, ARB                                                        | deposit, withdraw, borrow, repay (isolated Silos)              |
-| `layerbank`   | LayerBank   | SCROLL                                                          | supply, redeemUnderlying, borrow, repayBorrow (via Core)       |
-| `zerolend`    | ZeroLend    | zkSync                                                          | supply, withdraw, borrow, repay (Aave V3 fork)                 |
+## Lending (17)
 
-### Bridges (23 protocols)
+### Choosing between them
 
-| Slug              | Name                | Type                          | Key Operations                              |
-| ----------------- | ------------------- | ----------------------------- | ------------------------------------------- |
-| `stargate`        | Stargate            | Omnichain bridge (LayerZero)  | swap (native asset bridging)                |
-| `across`          | Across              | Optimistic bridge (UMA)       | deposit (fast relayer fills)                |
-| `hop`             | Hop Protocol        | Rollup bridge                 | sendToL2, swapAndSend                       |
-| `synapse`         | Synapse             | Multi-chain bridge + DEX      | bridge, bridgeAndSwap                       |
-| `celer`           | Celer Network       | SGN bridge                    | send (cross-chain transfer)                 |
-| `connext`         | Connext (Everclear) | Intent-based bridge           | newIntent (cross-chain transfer)            |
-| `debridge`        | deBridge            | DLN bridge                    | send (cross-chain with market makers)       |
-| `lifi`            | LI.FI               | Bridge + DEX aggregator       | swapAndBridge                               |
-| `socket`          | Socket              | Bridge aggregator             | bridge (optimal route selection)            |
-| `squid`           | Squid Router        | Cross-chain router (Axelar)   | route (one-click cross-chain)               |
-| `layerzero`       | LayerZero           | Messaging protocol            | send (OFT, arbitrary messages)              |
-| `wormhole`        | Wormhole            | Messaging protocol            | transferTokens                              |
-| `axelar`          | Axelar              | Messaging protocol            | callContract, sendToken                     |
-| `chainlink-ccip`  | Chainlink CCIP      | Messaging protocol            | ccipSend                                    |
-| `hyperlane`       | Hyperlane           | Messaging protocol            | dispatch                                    |
-| `circle-gateway`  | Circle Gateway      | Chain-abstracted USDC balance | deposit, gatewayMint                        |
-| `arbitrum-bridge` | Arbitrum Bridge     | Native L2 bridge              | depositETH, deposit (7-day withdrawal)      |
-| `optimism-bridge` | Optimism Bridge     | Native L2 bridge              | depositETH, depositERC20 (7-day withdrawal) |
-| `base-bridge`     | Base Bridge         | Native L2 bridge              | depositETH, depositERC20 (7-day withdrawal) |
-| `polygon-bridge`  | Polygon Bridge      | Native bridge                 | depositEtherFor, depositFor                 |
-| `scroll-bridge`   | Scroll Bridge       | Native zkEVM bridge           | depositETH, depositERC20 (ZK finality)      |
-| `linea-bridge`    | Linea Bridge        | Native zkEVM bridge           | sendMessage (ZK finality)                   |
-| `zksync-bridge`   | zkSync Bridge       | Native zkEVM bridge           | requestL2Transaction (ZK finality)          |
+- **One pool, many reserves** (Aave V2 and V3 and their forks Spark, Radiant, Seamless, ZeroLend):
+  supply and borrow any listed reserve against all your collateral in that market.
+- **One base asset per market** (Compound V3, a Comet per base asset): you borrow only that
+  asset, against the market's listed collaterals.
+- **Isolated markets** (Morpho Blue, Silo): each market pairs one collateral with one loan asset
+  and its own oracle, so one market's risk does not reach another.
+- **A token per asset** (Compound V2 and its forks Moonwell, Benqi, Venus, LayerBank): supply
+  mints a cToken, and the market's comptroller decides borrowing power.
+- **Others**: Aave V4 addresses reserves by id on a spoke; Euler V2 is ERC-4626 vaults under one
+  controller; Fluid shares one liquidity layer.
 
-### Liquid Staking & Restaking (12 protocols)
+Supplying needs an approval to the market. Borrowing is bounded by collateral factors and oracle
+prices, and a position below its liquidation threshold can be liquidated by anyone.
 
-| Slug          | Name           | Category       | Token        | Key Operations                        |
-| ------------- | -------------- | -------------- | ------------ | ------------------------------------- |
-| `lido`        | Lido           | liquid-staking | stETH/wstETH | submit (stake ETH), wrap/unwrap       |
-| `rocket-pool` | Rocket Pool    | liquid-staking | rETH         | deposit (stake ETH)                   |
-| `cbeth`       | Coinbase cbETH | liquid-staking | cbETH        | wrap/unwrap                           |
-| `frax-ether`  | Frax Ether     | liquid-staking | sfrxETH      | deposit, withdraw                     |
-| `swell`       | Swell          | liquid-staking | swETH/rswETH | deposit                               |
-| `stader`      | Stader         | liquid-staking | ETHx         | deposit                               |
-| `mantle-meth` | Mantle mETH    | liquid-staking | mETH         | stake                                 |
-| `eigenlayer`  | EigenLayer     | restaking      | -            | depositIntoStrategy, queueWithdrawals |
-| `etherfi`     | ether.fi       | restaking      | eETH/weETH   | deposit, wrap                         |
-| `renzo`       | Renzo          | restaking      | ezETH        | deposit                               |
-| `kelp`        | Kelp DAO       | restaking      | rsETH        | depositAsset                          |
-| `puffer`      | Puffer Finance | restaking      | pufETH       | deposit                               |
+| Protocol | Family | Namespace | Chains |
+| --- | --- | --- | --- |
+| [Aave V2](aave-v2.md) ([registry](registry/aave-v2.md)) | `Aave` | `AaveV2`: ethereum, polygon, avalanche | ethereum, polygon, avalanche |
+| [Aave V3](aave-v3.md) ([registry](registry/aave-v3.md)) | `Aave` | `AaveV3`: ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll | ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll |
+| [Aave V4](aave-v4.md) ([registry](registry/aave-v4.md)) | `Aave` | `AaveV4`: ethereum, arc, base, avalanche | ethereum, arc, base, avalanche |
+| [Benqi](benqi.md) ([registry](registry/benqi.md)) | — | `Benqi`: avalanche | avalanche |
+| [Compound V2](compound-v2.md) ([registry](registry/compound-v2.md)) | `Compound` | `CompoundV2`: ethereum | ethereum |
+| [Compound V3](compound-v3.md) ([registry](registry/compound-v3.md)) | `Compound` | `CompoundV3`: ethereum, optimism, polygon, base, arbitrum, scroll | ethereum, optimism, polygon, base, arbitrum, scroll |
+| [Euler V2](euler-v2.md) ([registry](registry/euler-v2.md)) | `Euler` | `EulerV2`: ethereum | ethereum |
+| [Fluid](fluid.md) ([registry](registry/fluid.md)) | — | `Fluid`: ethereum, arbitrum | ethereum, arbitrum |
+| [LayerBank](layerbank.md) ([registry](registry/layerbank.md)) | — | `Layerbank`: scroll | scroll |
+| [Moonwell](moonwell.md) ([registry](registry/moonwell.md)) | — | `Moonwell`: base | base |
+| [Morpho Blue](morpho-blue.md) ([registry](registry/morpho-blue.md)) | — | `MorphoBlue`: ethereum, monad, arc, base | ethereum, monad, arc, base |
+| [Radiant](radiant.md) ([registry](registry/radiant.md)) | — | `Radiant`: arbitrum | arbitrum |
+| [Seamless](seamless.md) ([registry](registry/seamless.md)) | — | `Seamless`: base | base |
+| [Silo](silo.md) ([registry](registry/silo.md)) | — | `Silo`: ethereum, arbitrum | ethereum, arbitrum |
+| [Spark](spark.md) ([registry](registry/spark.md)) | — | `Spark`: ethereum | ethereum |
+| [Venus](venus.md) ([registry](registry/venus.md)) | — | `Venus`: bsc | bsc |
+| [ZeroLend](zerolend.md) ([registry](registry/zerolend.md)) | — | `Zerolend`: zksync | zksync |
 
-### Yield & Vaults (10 protocols)
+## CDPs and stablecoins (10)
 
-| Slug        | Name             | Chains                   | Key Operations                           |
-| ----------- | ---------------- | ------------------------ | ---------------------------------------- |
-| `pendle`    | Pendle           | ETH, ARB, OP, BSC        | swapExactTokenForPt, swapExactTokenForYt |
-| `convex`    | Convex Finance   | ETH                      | deposit, withdraw (Curve LP boosting)    |
-| `yearn-v3`  | Yearn V3         | ETH, ARB, BASE, POLY     | deposit, withdraw (ERC-4626 vaults)      |
-| `beefy`     | Beefy Finance    | Multi-chain              | deposit, withdraw (auto-compounding)     |
-| `arrakis`   | Arrakis Finance  | ETH, POLY, OP, ARB, BASE | deposit, withdraw (Uni V3 LP management) |
-| `gamma`     | Gamma Strategies | Multi-chain              | deposit, withdraw (concentrated LP)      |
-| `harvest`   | Harvest Finance  | ETH                      | deposit, withdraw (auto-compounding)     |
-| `sommelier` | Sommelier        | ETH                      | deposit, withdraw (ERC-4626 Cellars)     |
-| `olympus`   | Olympus DAO      | ETH                      | stake, unstake (OHM)                     |
-| `tokemak`   | Tokemak          | ETH                      | deposit, withdraw (Autopools)            |
+### Choosing between them
 
-### Derivatives (13 protocols)
+Mint a stablecoin against collateral (Maker and Sky's DAI and USDS, Liquity's LUSD and BOLD,
+crvUSD, GHO, RAI, MIM, Alchemix's self-repaying alUSD and alETH), or hold a yield-bearing
+wrapper of one (sDAI, Ethena's sUSDe). Each sets its own collateral ratio, rate and liquidation
+rules. The stablecoin itself is an ordinary ERC-20 to transfer.
 
-| Slug                 | Name               | Category   | Chains    | Key Operations                            |
-| -------------------- | ------------------ | ---------- | --------- | ----------------------------------------- |
-| `gmx-v1`             | GMX V1             | perpetuals | ARB, AVAX | swap, increasePosition, decreasePosition  |
-| `gmx-v2`             | GMX V2             | perpetuals | ARB       | createOrder (GM markets)                  |
-| `synthetix-v3`       | Synthetix V3       | synthetics | BASE, OP  | delegateCollateral, mintUsd               |
-| `gains-network`      | Gains Network      | perpetuals | ARB, POLY | openTrade, closeTrade (up to 1000x forex) |
-| `vertex`             | Vertex             | perpetuals | ARB       | placeOrder (spot+perps+money markets)     |
-| `level-finance`      | Level Finance      | perpetuals | BSC, ARB  | addLiquidity, openPosition                |
-| `perpetual-protocol` | Perpetual Protocol | perpetuals | OP        | openPosition (vAMM)                       |
-| `mux-protocol`       | MUX Protocol       | perpetuals | ARB       | openPosition (aggregated)                 |
-| `premia`             | Premia             | options    | ARB       | exercise, settle (v3 option pools)        |
-| `hegic`              | Hegic              | options    | ARB       | createHedge (ETH/BTC options)             |
-| `opyn`               | Opyn               | options    | ETH       | openVault (Squeeth power perps)           |
-| `thales`             | Thales             | options    | OP        | buyFromAMM (positional markets)           |
-| `aevo`               | Aevo               | options    | Aevo L2   | deposit (off-chain orderbook)             |
+| Protocol | Family | Namespace | Chains |
+| --- | --- | --- | --- |
+| [Abracadabra](abracadabra.md) ([registry](registry/abracadabra.md)) | — | `Abracadabra`: ethereum, arbitrum | ethereum, arbitrum |
+| [Alchemix](alchemix.md) ([registry](registry/alchemix.md)) | — | `Alchemix`: ethereum | ethereum |
+| [crvUSD](crvusd.md) ([registry](registry/crvusd.md)) | — | `Crvusd`: ethereum | ethereum |
+| [Ethena](ethena.md) ([registry](registry/ethena.md)) | — | `Ethena`: ethereum | ethereum |
+| [Frax Finance](frax.md) ([registry](registry/frax.md)) | — | `Frax`: ethereum | ethereum |
+| [GHO](gho.md) ([registry](registry/gho.md)) | — | `Gho`: ethereum | ethereum |
+| [Liquity V1](liquity-v1.md) ([registry](registry/liquity-v1.md)) | `Liquity` | `LiquityV1`: ethereum | ethereum |
+| [Liquity V2](liquity-v2.md) ([registry](registry/liquity-v2.md)) | `Liquity` | `LiquityV2`: ethereum | ethereum |
+| [Maker](maker.md) ([registry](registry/maker.md)) | — | `Maker`: ethereum | ethereum |
+| [Reflexer](reflexer.md) ([registry](registry/reflexer.md)) | — | `Reflexer`: ethereum | ethereum |
 
-### Aggregators (6 protocols)
+## Bridges (18)
 
-| Slug                   | Name          | Chains                              | Key Operations                       |
-| ---------------------- | ------------- | ----------------------------------- | ------------------------------------ |
-| `oneinch`              | 1inch         | ETH, ARB, OP, BASE, BSC, AVAX, POLY | swap (optimal routing), limitOrder   |
-| `paraswap`             | ParaSwap      | ETH, ARB, OP, BASE, BSC, AVAX, POLY | swap (multiSwap, megaSwap)           |
-| `zerox`                | 0x Protocol   | ETH, ARB, OP, BASE, BSC, AVAX, POLY | transformERC20                       |
-| `cowswap`              | CoW Swap      | ETH, GNOSIS, ARB                    | swap (batch auction, MEV protection) |
-| `openocean`            | OpenOcean     | Multi-chain                         | swap (cross-chain routing)           |
-| `kyberswap-aggregator` | KyberSwap Agg | Multi-chain                         | swap (meta aggregation)              |
+### Choosing between them
 
-### CDPs & Stablecoins (10 protocols)
+Each bridge has its own trust model and delay. Canonical rollup bridges (Arbitrum, Optimism,
+Base, Scroll, Linea, zkSync, Polygon) trust only the rollup but take days to withdraw to
+Ethereum; liquidity and intent bridges (Across, Stargate, Hop, Synapse, Celer, Connext, deBridge)
+settle in minutes and trust their relayers and pools; CCTP burns USDC and Circle mints it on the
+destination; LI.FI, Socket and Squid route across bridges from an off-chain quote. To continue a
+program on another chain, not only move a token, open a Sauce intent (`sauce-intents`).
 
-| Slug          | Name         | Stablecoin  | Key Operations                                 |
-| ------------- | ------------ | ----------- | ---------------------------------------------- |
-| `maker`       | Maker        | DAI/USDS    | open vault, draw DAI, deposit sDAI             |
-| `liquity-v1`  | Liquity V1   | LUSD        | openTrove, closeTrove (interest-free, 110% CR) |
-| `liquity-v2`  | Liquity V2   | BOLD        | openTrove (user-set rates, multi-collateral)   |
-| `ethena`      | Ethena       | USDe/sUSDe  | mint USDe, stake as sUSDe                      |
-| `gho`         | GHO          | GHO         | borrow GHO via Aave V3 collateral              |
-| `frax`        | Frax Finance | FRAX        | mint/redeem FRAX, stake sFRAX                  |
-| `crvusd`      | crvUSD       | crvUSD      | create_loan, repay (LLAMMA soft liquidations)  |
-| `reflexer`    | Reflexer     | RAI         | openSafe, generateDebt (non-pegged)            |
-| `abracadabra` | Abracadabra  | MIM         | borrow MIM via Cauldrons                       |
-| `alchemix`    | Alchemix     | alUSD/alETH | deposit, borrow (self-repaying loans)          |
+| Protocol | Family | Namespace | Chains |
+| --- | --- | --- | --- |
+| [Across](across.md) ([registry](registry/across.md)) | — | `Across`: ethereum, optimism, polygon, zksync, arc, base, mode, arbitrum, linea, blast, scroll | ethereum, optimism, polygon, zksync, arc, base, mode, arbitrum, linea, blast, scroll |
+| [Arbitrum Native Bridge](arbitrum-bridge.md) ([registry](registry/arbitrum-bridge.md)) | — | `ArbitrumBridge`: ethereum, arbitrum | ethereum, arbitrum |
+| [Base Native Bridge](base-bridge.md) ([registry](registry/base-bridge.md)) | — | `BaseBridge`: ethereum, base | ethereum, base |
+| [CCTP](cctp.md) ([registry](registry/cctp.md)) | — | `Cctp`: ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea | ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea |
+| [Celer Network](celer.md) ([registry](registry/celer.md)) | — | `Celer`: ethereum, optimism, bsc, polygon, arbitrum, avalanche | ethereum, optimism, bsc, polygon, arbitrum, avalanche |
+| [Connext (Everclear)](connext.md) ([registry](registry/connext.md)) | — | `Connext`: ethereum, optimism, base, arbitrum | ethereum, optimism, base, arbitrum |
+| [deBridge](debridge.md) ([registry](registry/debridge.md)) | — | `Debridge`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
+| [Hop Protocol](hop.md) ([registry](registry/hop.md)) | — | `Hop`: ethereum, optimism, polygon, base, arbitrum | ethereum, optimism, polygon, base, arbitrum |
+| [LI.FI](lifi.md) ([registry](registry/lifi.md)) | — | `Lifi`: ethereum, optimism, bsc, gnosis, polygon, fantom, arc, base, arbitrum, avalanche | ethereum, optimism, bsc, gnosis, polygon, fantom, arc, base, arbitrum, avalanche |
+| [Linea Native Bridge](linea-bridge.md) ([registry](registry/linea-bridge.md)) | — | `LineaBridge`: ethereum, linea | ethereum, linea |
+| [Optimism Native Bridge](optimism-bridge.md) ([registry](registry/optimism-bridge.md)) | — | `OptimismBridge`: ethereum, optimism | ethereum, optimism |
+| [Polygon Native Bridge](polygon-bridge.md) ([registry](registry/polygon-bridge.md)) | — | `PolygonBridge`: ethereum, polygon | ethereum, polygon |
+| [Scroll Native Bridge](scroll-bridge.md) ([registry](registry/scroll-bridge.md)) | — | `ScrollBridge`: ethereum, scroll | ethereum, scroll |
+| [Socket](socket.md) ([registry](registry/socket.md)) | — | `Socket`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
+| [Squid Router](squid.md) ([registry](registry/squid.md)) | — | `Squid`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
+| [Stargate](stargate.md) ([registry](registry/stargate.md)) | — | `Stargate`: ethereum, base, arbitrum | ethereum, base, arbitrum |
+| [Synapse Protocol](synapse.md) ([registry](registry/synapse.md)) | — | `Synapse`: ethereum, optimism, polygon, base, arbitrum, avalanche | ethereum, optimism, polygon, base, arbitrum, avalanche |
+| [zkSync Native Bridge](zksync-bridge.md) ([registry](registry/zksync-bridge.md)) | — | `ZksyncBridge`: ethereum, zksync | ethereum, zksync |
 
-### Oracles (2 protocols)
+## Cross-chain messaging (6)
 
-| Slug        | Name         | Key Operations                                          |
-| ----------- | ------------ | ------------------------------------------------------- |
-| `chainlink` | Chainlink    | latestRoundData (price feeds), requestRandomWords (VRF) |
-| `pyth`      | Pyth Network | updatePriceFeeds, getPrice (pull-based oracle)          |
+### Choosing between them
 
-### Standards (2 protocols)
+Messaging protocols (LayerZero, Wormhole, Axelar, Chainlink CCIP, Hyperlane) carry arbitrary
+messages, each with its own set of verifiers and a fee paid at send time in the native coin (an
+`evm.call` with value). Circle Gateway keeps one USDC balance spendable across chains.
 
-| Slug      | Name     | Category       | Key Operations                                                       |
-| --------- | -------- | -------------- | -------------------------------------------------------------------- |
-| `erc3156` | ERC-3156 | infrastructure | flashLoan, flashFee, maxFlashLoan (standard flash loan interface)    |
-| `erc4626` | ERC-4626 | yield          | deposit, mint, withdraw, redeem (standard tokenized vault interface) |
+| Protocol | Family | Namespace | Chains |
+| --- | --- | --- | --- |
+| [Axelar](axelar.md) ([registry](registry/axelar.md)) | — | `Axelar`: ethereum, optimism, polygon, base, arbitrum, avalanche | ethereum, optimism, polygon, base, arbitrum, avalanche |
+| [Chainlink CCIP](chainlink-ccip.md) ([registry](registry/chainlink-ccip.md)) | — | `ChainlinkCcip`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |
+| [Circle Gateway](circle-gateway.md) ([registry](registry/circle-gateway.md)) | — | `CircleGateway`: ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche | ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche |
+| [Hyperlane](hyperlane.md) ([registry](registry/hyperlane.md)) | — | `Hyperlane`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
+| [LayerZero](layerzero.md) ([registry](registry/layerzero.md)) | — | `Layerzero`: ethereum, optimism, bsc, polygon, zksync, arc, base, arbitrum, avalanche, linea, scroll | ethereum, optimism, bsc, polygon, zksync, arc, base, arbitrum, avalanche, linea, scroll |
+| [Wormhole](wormhole.md) ([registry](registry/wormhole.md)) | — | `Wormhole`: ethereum, optimism, polygon, arc, base, arbitrum, avalanche | ethereum, optimism, polygon, arc, base, arbitrum, avalanche |
 
-### Infrastructure (7 protocols)
+## Liquid staking (7)
 
-| Slug        | Name          | Key Operations                                                        |
-| ----------- | ------------- | --------------------------------------------------------------------- |
-| `erc20`     | ERC-20        | transfer, approve, transferFrom, balanceOf (standard token interface) |
-| `permit2`   | Permit2       | permit, transferFrom (universal token approvals)                      |
-| `safe`      | Safe (Gnosis) | execTransaction (multi-sig wallet)                                    |
-| `ens`       | ENS           | setAddr, resolve (name resolution)                                    |
-| `seaport`   | Seaport       | fulfillOrder (NFT marketplace)                                        |
-| `gelato`    | Gelato        | createTask (smart contract automation)                                |
-| `instadapp` | Instadapp     | flashLoan, getRoutes (flash loan aggregator)                          |
+### Choosing between them
 
-### Payments & Streaming (2 protocols)
+Staking ETH returns a liquid token of one of two kinds. A **rebasing** balance (stETH) changes
+on its own, so measure it as a delta at the moment you use it, and hold the wrapped form
+(wstETH) instead. An **exchange-rate** token (rETH, cbETH, sfrxETH, ETHx, swETH, mETH) keeps its
+balance and grows in value. Withdrawals to ETH go through each protocol's queue.
 
-| Slug         | Name       | Key Operations                                 |
-| ------------ | ---------- | ---------------------------------------------- |
-| `sablier`    | Sablier    | createWithDurations (token streaming, vesting) |
-| `superfluid` | Superfluid | createFlow (real-time per-second payments)     |
+| Protocol | Family | Namespace | Chains |
+| --- | --- | --- | --- |
+| [Coinbase Wrapped Staked ETH](cbeth.md) ([registry](registry/cbeth.md)) | — | `Cbeth`: ethereum, base | ethereum, base |
+| [Frax Ether](frax-ether.md) ([registry](registry/frax-ether.md)) | — | `FraxEther`: ethereum | ethereum |
+| [Lido](lido.md) ([registry](registry/lido.md)) | — | `Lido`: ethereum, arbitrum | ethereum, arbitrum |
+| [Mantle mETH](mantle-meth.md) ([registry](registry/mantle-meth.md)) | — | `MantleMeth`: ethereum | ethereum |
+| [Rocket Pool](rocket-pool.md) ([registry](registry/rocket-pool.md)) | — | `RocketPool`: ethereum | ethereum |
+| [Stader](stader.md) ([registry](registry/stader.md)) | — | `Stader`: ethereum | ethereum |
+| [Swell](swell.md) ([registry](registry/swell.md)) | — | `Swell`: ethereum | ethereum |
 
----
+## Restaking (5)
 
-## Quick Reference by Operation
+### Choosing between them
 
-### "I need to swap tokens"
+Restaking (EigenLayer, and the liquid restaking tokens of ether.fi, Renzo, Kelp and Puffer) adds
+the risk of slashing to staking for extra rewards. A liquid restaking token can trade below its
+underlying, and withdraws through a queue.
 
-1. **Single DEX**: Use the chain's dominant DEX (Uniswap V3 on ETH, Aerodrome on BASE, Velodrome on OP, Camelot on ARB)
-2. **Best price**: Use an aggregator (`oneinch`, `paraswap`, `cowswap`, `zerox`)
-3. **Stablecoin swap**: Use `curve` for lowest slippage between pegged assets
-4. **Cross-chain swap**: Use `lifi`, `squid`, or `socket` for bridge+swap in one tx
+| Protocol | Family | Namespace | Chains |
+| --- | --- | --- | --- |
+| [EigenLayer](eigenlayer.md) ([registry](registry/eigenlayer.md)) | — | `Eigenlayer`: ethereum | ethereum |
+| [ether.fi](etherfi.md) ([registry](registry/etherfi.md)) | — | `Etherfi`: ethereum | ethereum |
+| [Kelp DAO](kelp.md) ([registry](registry/kelp.md)) | — | `Kelp`: ethereum | ethereum |
+| [Puffer Finance](puffer.md) ([registry](registry/puffer.md)) | — | `Puffer`: ethereum | ethereum |
+| [Renzo](renzo.md) ([registry](registry/renzo.md)) | — | `Renzo`: ethereum | ethereum |
 
-### "I need to lend/borrow"
+## Staking (1)
 
-1. **Multi-chain**: `aave-v3` (most chains), `compound-v3` (major chains), `aave-v4` (hub-and-spoke: ETH, BASE, AVAX, ARC)
-2. **Ethereum-only**: `morpho-blue` (gas-efficient), `spark` (best DAI rates), `euler-v2` (modular)
-3. **Chain-specific**: `moonwell` (Base), `benqi` (Avalanche), `venus` (BSC), `zerolend` (zkSync)
-4. **Isolated risk**: `silo` (pair-based isolation), `morpho-blue` (market-level isolation)
+### Choosing between them
 
-### "I need to bridge tokens"
+Olympus stakes OHM into its staked forms.
 
-1. **Fast**: `across` (relayer-based, minutes), `stargate` (LayerZero, minutes)
-2. **Cheapest**: Native bridges (`arbitrum-bridge`, `optimism-bridge`, `base-bridge`) but 7-day withdrawals
-3. **Best route**: `lifi`, `socket`, or `squid` (bridge aggregators)
-4. **Arbitrary messages**: `layerzero`, `wormhole`, `axelar`, `chainlink-ccip`, `hyperlane`
-5. **USDC across chains**: `circle-gateway` (one USDC balance, minted on the destination by Circle attestation)
+| Protocol | Family | Namespace | Chains |
+| --- | --- | --- | --- |
+| [Olympus DAO](olympus.md) ([registry](registry/olympus.md)) | — | `Olympus`: ethereum | ethereum |
 
-### "I need to stake ETH"
+## Yield and vaults (9)
 
-1. **Liquid staking**: `lido` (stETH, largest), `rocket-pool` (rETH, decentralized), `cbeth` (Coinbase)
-2. **Restaking**: `eigenlayer` (restake LSTs), `etherfi` (eETH), `renzo` (ezETH), `kelp` (rsETH)
+### Choosing between them
 
-### "I need yield optimization"
+- **Vaults** (Yearn V3, Beefy, Sommelier, Tokemak, Harvest; ERC-4626 where they follow it) take
+  a deposit and return shares whose value grows: measure shares and assets as deltas.
+- **Yield split** (Pendle): PT is the principal, redeemable at a fixed expiry, YT the yield until
+  then.
+- **Managed liquidity** (Gamma, Arrakis) runs concentrated-liquidity positions for you.
+- **Boosted LP** (Convex) stakes Curve LP tokens for boosted rewards.
 
-1. **Yield trading**: `pendle` (split PT/YT, trade future yield)
-2. **Auto-compounding**: `beefy` (multi-chain), `yearn-v3` (ETH), `convex` (Curve LP)
-3. **LP management**: `arrakis`, `gamma` (automated Uni V3 positions)
+| Protocol | Family | Namespace | Chains |
+| --- | --- | --- | --- |
+| [Arrakis Finance](arrakis.md) ([registry](registry/arrakis.md)) | — | `Arrakis`: ethereum | ethereum |
+| [Beefy Finance](beefy.md) ([registry](registry/beefy.md)) | — | `Beefy`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
+| [Convex Finance](convex.md) ([registry](registry/convex.md)) | — | `Convex`: ethereum | ethereum |
+| [Gamma Strategies](gamma.md) ([registry](registry/gamma.md)) | — | `Gamma`: ethereum, polygon | ethereum, polygon |
+| [Harvest Finance](harvest.md) ([registry](registry/harvest.md)) | — | `Harvest`: ethereum | ethereum |
+| [Pendle](pendle.md) ([registry](registry/pendle.md)) | — | `Pendle`: ethereum, monad, arbitrum | ethereum, monad, arbitrum |
+| [Sommelier](sommelier.md) ([registry](registry/sommelier.md)) | — | `Sommelier`: ethereum | ethereum |
+| [Tokemak](tokemak.md) ([registry](registry/tokemak.md)) | — | `Tokemak`: ethereum | ethereum |
+| [Yearn V3](yearn-v3.md) ([registry](registry/yearn-v3.md)) | `Yearn` | `YearnV3`: ethereum | ethereum |
 
-### "I need to trade perpetuals/options"
+## Perpetuals (7)
 
-1. **Perps**: `gmx-v2` (ARB), `gains-network` (up to 1000x), `vertex` (orderbook)
-2. **Options**: `premia` (AMM), `aevo` (orderbook), `hegic` (simplified)
+### Choosing between them
 
-### "I need a stablecoin/CDP"
+Leveraged positions often execute in two steps: the program sends a request, and a keeper
+executes it later at a price it reads then (GMX's orders are this way). A program cannot see
+that fill in its own transaction, so it bounds the request (acceptable price, deadline) instead.
 
-1. **Overcollateralized**: `maker` (DAI), `liquity-v1` (LUSD, interest-free), `crvusd` (soft liquidations)
-2. **Synthetic dollar**: `ethena` (USDe, delta-neutral), `frax` (FRAX)
-3. **Self-repaying**: `alchemix` (alUSD/alETH)
+| Protocol | Family | Namespace | Chains |
+| --- | --- | --- | --- |
+| [Gains Network](gains-network.md) ([registry](registry/gains-network.md)) | — | `GainsNetwork`: polygon, arbitrum | polygon, arbitrum |
+| [GMX V1](gmx-v1.md) ([registry](registry/gmx-v1.md)) | `Gmx` | `GmxV1`: arbitrum, avalanche | arbitrum, avalanche |
+| [GMX V2](gmx-v2.md) ([registry](registry/gmx-v2.md)) | `Gmx` | `GmxV2`: arbitrum | arbitrum |
+| [Level Finance](level-finance.md) ([registry](registry/level-finance.md)) | — | `LevelFinance`: bsc, arbitrum | bsc, arbitrum |
+| [MUX Protocol](mux-protocol.md) ([registry](registry/mux-protocol.md)) | — | `MuxProtocol`: arbitrum | arbitrum |
+| [Perpetual Protocol](perpetual-protocol.md) ([registry](registry/perpetual-protocol.md)) | — | `PerpetualProtocol`: optimism | optimism |
+| [Vertex](vertex.md) ([registry](registry/vertex.md)) | — | `Vertex`: arbitrum | arbitrum |
 
----
+## Synthetics (1)
 
-## Chain Coverage
+### Choosing between them
 
-| Chain     | Chain ID | Top Protocols                                                                         |
-| --------- | -------- | ------------------------------------------------------------------------------------- |
-| Ethereum  | 1        | uniswap-v3, aave-v3, curve, balancer-v2, lido, maker, morpho-blue                     |
-| Arbitrum  | 42161    | uniswap-v3, aave-v3, gmx-v2, camelot, radiant, silo                                   |
-| Base      | 8453     | aerodrome, uniswap-v3, aave-v3, compound-v3, moonwell, seamless                       |
-| Optimism  | 10       | velodrome, uniswap-v3, aave-v3, synthetix-v3, thales                                  |
-| Polygon   | 137      | quickswap, aave-v3, uniswap-v3, compound-v3, balancer-v2                              |
-| BSC       | 56       | pancakeswap-v2, venus, thena, pancakeswap-v3, dodo                                    |
-| Avalanche | 43114    | trader-joe, aave-v3, benqi, curve, sushiswap-v2                                       |
-| Blast     | 81457    | thruster, fenix, uniswap-v4                                                           |
-| zkSync    | 324      | syncswap, zerolend                                                                    |
-| Scroll    | 534352   | ambient, layerbank, aave-v3                                                           |
-| Fantom    | 250      | spookyswap, sushiswap-v2, aave-v3                                                     |
-| Linea     | 59144    | lynex, pancakeswap-v3                                                                 |
-| Mode      | 34443    | kim                                                                                   |
-| Arc       | 5042     | uniswap-v3, uniswap-v4, aave-v4, morpho-blue, circle-gateway, synthra-v3, unitflow-v3 |
+Synthetix V3 takes collateral into an account and mints against it; positions and rewards are
+per account.
 
----
+| Protocol | Family | Namespace | Chains |
+| --- | --- | --- | --- |
+| [Synthetix V3](synthetix-v3.md) ([registry](registry/synthetix-v3.md)) | `Synthetix` | `SynthetixV3`: base | base |
 
-## Per-Protocol Skill Files
+## Options (5)
 
-Detailed skill files with SauceScript examples, contract addresses, and ABI signatures are at:
-`@eco-incorp/sauce/skills/{slug}.md` (or `sdk/src/skills/{slug}.md` in the repo)
+### Choosing between them
 
-Load the specific protocol file when you need full implementation details.
+Options protocols (Premia, Hegic, Opyn, Thales, Aevo) settle at expiry or exercise; a program
+buys, exercises or settles a position it holds.
+
+| Protocol | Family | Namespace | Chains |
+| --- | --- | --- | --- |
+| [Aevo](aevo.md) ([registry](registry/aevo.md)) | — | `Aevo`: ethereum | ethereum |
+| [Hegic](hegic.md) ([registry](registry/hegic.md)) | — | `Hegic`: arbitrum | arbitrum |
+| [Opyn](opyn.md) ([registry](registry/opyn.md)) | — | `Opyn`: ethereum | ethereum |
+| [Premia](premia.md) ([registry](registry/premia.md)) | — | `Premia`: arbitrum | arbitrum |
+| [Thales](thales.md) ([registry](registry/thales.md)) | — | `Thales`: optimism | optimism |
+
+## Oracles (2)
+
+### Choosing between them
+
+Chainlink feeds are read on chain (`latestRoundData`): check `updatedAt` against a staleness
+bound and scale by the feed's decimals. Pyth is pulled: the price is updated in the same
+transaction (`updatePriceFeeds`, paying its fee as value) before it is read.
+
+| Protocol | Family | Namespace | Chains |
+| --- | --- | --- | --- |
+| [Chainlink](chainlink.md) ([registry](registry/chainlink.md)) | — | `Chainlink`: ethereum, arc | ethereum, arc |
+| [Pyth Network](pyth.md) ([registry](registry/pyth.md)) | — | `Pyth`: ethereum | ethereum |
+
+## Payments and streaming (2)
+
+### Choosing between them
+
+Sablier locks tokens into a schedule a recipient withdraws from; Superfluid streams Super Tokens
+per second, so tokens are wrapped into Super Tokens first.
+
+| Protocol | Family | Namespace | Chains |
+| --- | --- | --- | --- |
+| [Sablier](sablier.md) ([registry](registry/sablier.md)) | — | `Sablier`: ethereum | ethereum |
+| [Superfluid](superfluid.md) ([registry](registry/superfluid.md)) | — | `Superfluid`: ethereum, optimism, polygon, base, arbitrum | ethereum, optimism, polygon, base, arbitrum |
+
+## NFT marketplaces (1)
+
+### Choosing between them
+
+Seaport fills orders that makers signed off chain.
+
+| Protocol | Family | Namespace | Chains |
+| --- | --- | --- | --- |
+| [Seaport](seaport.md) ([registry](registry/seaport.md)) | — | `Seaport`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |
+
+## Infrastructure and standards (9)
+
+### Choosing between them
+
+Standards and services a program calls directly: ERC-20 (Sauce's token writes are SafeERC20),
+ERC-4626 vaults, ERC-3156 flash loans, Permit2 (signed transfers and allowances), Safe accounts,
+ENS, Gelato automation, Instadapp flash-loan routing, and Eco Routes, the intents layer
+(`sauce-intents`).
+
+| Protocol | Family | Namespace | Chains |
+| --- | --- | --- | --- |
+| Eco Routes ([registry](registry/eco-routes.md)) | — | `EcoRoutes`: ethereum, optimism, unichain, polygon, monad, ronin, arc, base, plasma, arbitrum | none recorded |
+| [ENS](ens.md) ([registry](registry/ens.md)) | — | `Ens`: ethereum | ethereum |
+| [ERC20](erc20.md) ([registry](registry/erc20.md)) | — | — | none recorded |
+| [ERC-3156](erc3156.md) ([registry](registry/erc3156.md)) | — | — | none recorded |
+| [ERC-4626](erc4626.md) ([registry](registry/erc4626.md)) | — | — | none recorded |
+| [Gelato Network](gelato.md) ([registry](registry/gelato.md)) | — | `Gelato`: ethereum, optimism, bsc, polygon, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
+| [Instadapp](instadapp.md) ([registry](registry/instadapp.md)) | — | `Instadapp`: ethereum | ethereum |
+| [Permit2](permit2.md) ([registry](registry/permit2.md)) | — | `Permit2`: ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, monad, arc, base, arbitrum, avalanche |
+| [Safe](safe.md) ([registry](registry/safe.md)) | — | `Safe`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |

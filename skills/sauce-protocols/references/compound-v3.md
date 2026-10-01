@@ -2,11 +2,47 @@
 
 Single-asset lending protocol (Comet) with isolated markets per base asset. Each market has one borrowable asset and multiple collateral assets.
 
+## When to use it
+
+- Each market (a Comet) has one base asset you can supply for interest or borrow, and a list of
+  collateral assets you supply to borrow it. The namespace names each Comet by its base asset
+  (`CUSDCv3`, `CWETHv3`).
+- Choose it when you only need to borrow the base asset; for several borrowable assets against
+  shared collateral, Aave V3.
+
+## Pitfalls for a program
+
+- Approve the Comet before `supply`.
+- Supplying the base asset while you have a borrow repays the borrow first.
+- Withdrawing more base asset than you supplied **borrows** the rest, if your collateral allows:
+  check `balanceOf` and `borrowBalanceOf` before and after.
+- Collateral earns no interest, and each collateral asset has a supply cap.
+- `balanceOf` is the base supply with interest: it grows on its own.
+
+## In a Sauce program
+
+Supply the Pot's USDC to the USDC market and check it was credited:
+
+```sauce chain=base,arbitrum
+function main(amount: Uint256) {
+  const self = ctx.self();
+  const before = CompoundV3.CUSDCv3.balanceOf(self);
+  USDC.approve(CompoundV3.CUSDCv3, amount);
+  CompoundV3.CUSDCv3.supply(USDC, amount);
+  require(CompoundV3.CUSDCv3.balanceOf(self) > before, "supply not credited");
+}
+```
+
 ## Category
 
-lending | Chains: Ethereum (1), Arbitrum (42161), Base (8453), Polygon (137), Optimism (10), Scroll (534352)
+lending | Chains and addresses: [registry/compound-v3.md](registry/compound-v3.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### supply
 
@@ -74,31 +110,11 @@ function main(cometAddress: Address, to: Address, asset: Address, amount: Uint25
 
 - `to`: Address that receives the withdrawn tokens
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | cUSDCv3  | `0xc3d688B66703497DAA19211EEdff47f25384cdc3` |
-| Ethereum | cWETHv3  | `0xA17581A9E3356d9A858b789D68B4d866e593aE94` |
-| Ethereum | cUSDTv3  | `0x3Afdc9BCA9213A35503b077a6072F3D0d5AB0840` |
-| Arbitrum | cUSDCv3  | `0x9c4ec768c28520B50860ea7a15bd7213a9fF58bf` |
-| Arbitrum | cUSDTv3  | `0x6f7D514bbD4aFf3BcD1140B7344b32f063dEe486` |
-| Base     | cUSDCv3  | `0xb125E6687d4313864e53df431d5425969c15Eb2F` |
-| Base     | cWETHv3  | `0x46e6b214b524310239732D51387075E0e70970bf` |
-| Polygon  | cUSDCv3  | `0xF25212E676D1F7F89Cd72fFEe66158f541246445` |
-| Optimism | cUSDCv3  | `0x2e44e174f7D53F0212823acC11C01A11d58c5bCB` |
-| Scroll   | cUSDCv3  | `0xB2f97c1Bd3bf02f5e74d13f02E3e26F93D77CE44` |
-
-## ABI Reference
-
-### CometABI
-
-- `supply(address asset, uint256 amount)` - Supply base asset (earns interest) or collateral asset
-- `supplyTo(address dst, address asset, uint256 amount)` - Supply on behalf of another address
-- `withdraw(address asset, uint256 amount)` - Withdraw base or collateral. Excess withdrawal borrows automatically
-- `withdrawTo(address to, address asset, uint256 amount)` - Withdraw to specific recipient address
-- `balanceOf(address account) returns (uint256)` - Get base asset supply balance (view)
-- `borrowBalanceOf(address account) returns (uint256)` - Get outstanding borrow balance (view)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/compound-v3.md](registry/compound-v3.md).
 
 ## Notes
 

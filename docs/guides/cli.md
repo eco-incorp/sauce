@@ -11,6 +11,7 @@ through an endpoint you name on the command line.
 | Command          | What it does                                                                      |
 | ---------------- | --------------------------------------------------------------------------------- |
 | `sauce compile`  | Compile a program file; print its bytecode, or with `--json` what it takes        |
+| `sauce actions`  | Lower a JSON actions document for a chain; print the SauceScript and its bytecode |
 | `sauce simulate` | Rehearse the cook with no key, no deployed Pot and assumed balances: what it did  |
 | `sauce run`      | Compile, sign, send and wait for the cook on your Pot                             |
 | `sauce publish`  | Publish a file's fixed intents from your wallet, with no Pot                      |
@@ -149,7 +150,8 @@ approved and stops, until it is given `--auto-approve`.
 
 ### A program from stdin
 
-Any command that takes a program file takes `-` for one read from stdin:
+Any command that takes a program file takes `-` for one read from stdin, and so does every command
+that takes an [actions document](#an-actions-document-instead-of-a-program):
 
 ```sh
 cat pay.sauce.ts | npx sauce compile - --chain base --define RECIPIENT=0x… --define AMOUNT=1
@@ -532,6 +534,46 @@ and nothing else changes: whether a program compiles is the compiler's to say, n
 
 In a project `init` did not write, copy that `programs/tsconfig.json` beside your programs.
 
+## An actions document instead of a program
+
+An [actions document](actions.md) is JSON — `{ "version": 1, "actions": [ … ] }`, each action one
+protocol operation — that the SDK lowers to a SauceScript program. Its tokens are registry symbols
+(`"USDC"`) and its contracts namespace references (`"UniswapV3.Factory"`), or addresses, and a swap
+may name its pool by its factory's key; every name is the program's global of that name, so a
+document with no `chainId` compiles for any chain where its names exist.
+
+`sauce actions <file>` lowers one for a chain and prints the SauceScript, `main`'s parameters and the
+bytecode:
+
+```sh
+npx sauce actions swap.json --chain base
+npx sauce actions swap.json --chain ethereum --json
+```
+
+`--chain` defaults to the document's `chainId`; a document without one needs it, and one with a
+`chainId` compiles for that chain only. `--json` prints what `sauce compile --json` does, with the
+parsed `document`, the `source`, the ABI bindings it calls through (`contracts`) and the argument
+names (`parameters`). `--compact-args` compiles the arguments compact-v1. A name the chain lacks is
+refused with its path, the chain and the name:
+
+```text
+sauce actions: swap.json does not compile for avalanche:
+  actions[1].tokenIn: no token "USDC" on Avalanche C-Chain (chain 43114), which registers no token symbols — give its address there instead
+```
+
+`compile`, `tx`, `simulate` and `run` take an actions document wherever they take a program file,
+with the same flags: the document's `argument` actions are `main`'s parameters, given after
+`--args` in the order it declares them, and its cook runs on the Pot `--owner` or `--pot` names,
+funded with `--fund` if you like. `--define` and `--defines` are refused, because a document's values
+are its own fields.
+
+```sh
+npx sauce simulate swap.json --chain base --owner 0xYou --rpc-url <url> \
+  --assume-balance USDC:1000 --args 1000000000
+npx sauce run swap.json --chain base --config sauce.config.json --keystore ~/.keys/me.json \
+  --args 1000000000
+```
+
 ## Intents: `run` or `publish`
 
 A program can open an intent on another chain — `Base(() => { … }).reward({ … })`. The command
@@ -849,8 +891,9 @@ at the package root:
 | ------------------------ | --------------------------------------------------------------------------------------------- |
 | `sauce-overview`         | What Sauce is, the path from a file to a transaction, the rules, and which skill to load next |
 | `sauce-script`           | The language: program forms, inputs and defines, compile errors, and the builtins reference   |
-| `sauce-globals`          | The names a program uses with no import, with generated indexes of every token and contract   |
-| `sauce-protocols`        | Calling protocols, the registries, and a document per catalogued protocol                     |
+| `sauce-globals`          | The names a program uses with no import, with generated indexes of them                       |
+| `sauce-chains`           | Each chain, generated from the registries: tokens, every protocol with its addresses, intents |
+| `sauce-protocols`        | Every protocol by category: how to choose, its deployments, its pitfalls and how to call it   |
 | `sauce-swaps`            | Swapping through the Router: entry points, price limits, callbacks and the guard on every leg |
 | `sauce-distributed-swap` | One exact-input swap split across every price-limit venue on a chain                          |
 | `sauce-intents`          | Cross-chain intents written in Sauce: rewards, cascades, run or publish                       |

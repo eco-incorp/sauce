@@ -2,14 +2,17 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:eco-incorp:sauce:action-program:1",
   "title": "Sauce action program",
-  "description": "A sequence of protocol actions that compiles to one Sauce program executing on one chain. Amounts are base-10 strings. Beyond this schema, a program must satisfy: every address with mixed-case hex carries a valid EIP-55 checksum; every amount fits its declared width; a first action that takes an amount sets `amount`; an amountRef names a saveOutputAs set by an earlier action, and is not combined with `amount`; argument names are unique; and the value of every balanceOf/nativeBalance/argument action is read.",
+  "description": "A sequence of protocol actions that compiles to one Sauce program executing on one chain. Amounts are base-10 strings. A token is a registry symbol (\"USDC\") or an address, and a protocol contract a namespace reference (\"UniswapV3.Factory\") or an address; a name resolves on the chain the program is compiled for, so a document with no chainId compiles for any chain where its names exist. Beyond this schema, a program must satisfy: every address with mixed-case hex carries a valid EIP-55 checksum; every amount fits its declared width; a first action that takes an amount sets `amount`; an amountRef names a saveOutputAs set by an earlier action, and is not combined with `amount`; argument names are unique; the value of every balanceOf/nativeBalance/argument action is read; and every token symbol and namespace reference exists on the chain it is compiled for.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "chainId", "actions"],
+  "required": ["version", "actions"],
   "properties": {
     "$schema": { "type": "string", "description": "The schema this document declares; ignored." },
     "version": { "const": 1 },
-    "chainId": { "$ref": "#/$defs/chainId", "description": "The chain every action executes on." },
+    "chainId": {
+      "$ref": "#/$defs/chainId",
+      "description": "The chain the document is written for; compiling it for another is refused. Leave it out of a document that names its tokens and contracts: it then compiles for any chain where those names exist, the chain chosen when it is compiled."
+    },
     "actions": {
       "type": "array",
       "minItems": 1,
@@ -22,6 +25,40 @@
       "type": "string",
       "pattern": "^0x[0-9a-fA-F]{40}$",
       "description": "An address: 0x + 40 hex digits. A mixed-case address must carry a valid EIP-55 checksum."
+    },
+    "tokenSymbol": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9]{1,10}$",
+      "description": "A registry token symbol, as a Sauce program writes it: \"USDC\", \"WETH\". It resolves on the chain the program is compiled for; a chain that does not register it refuses the program, naming the chain and the symbol. `sauce globals --chain <chain> --tokens` lists them."
+    },
+    "contractName": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]*\\.[A-Za-z][A-Za-z0-9]*$",
+      "description": "A protocol contract by namespace, as a Sauce program writes it: \"UniswapV3.Factory\", \"BalancerV2.Vault\", \"UniswapV4.PoolManager\". It resolves on the chain the program is compiled for; a chain without it refuses the program. `sauce globals --chain <chain> --protocols` lists them."
+    },
+    "token": {
+      "description": "A token: a registry symbol, or an address.",
+      "oneOf": [{ "$ref": "#/$defs/tokenSymbol" }, { "$ref": "#/$defs/address" }]
+    },
+    "tokenOrNative": {
+      "description": "A token: a registry symbol, an address, or \"native\" for the native currency, which the venue keys as the zero address.",
+      "oneOf": [
+        { "$ref": "#/$defs/tokenSymbol" },
+        { "$ref": "#/$defs/address" },
+        { "const": "native" }
+      ]
+    },
+    "contract": {
+      "description": "A protocol contract: a namespace reference, or an address.",
+      "oneOf": [{ "$ref": "#/$defs/contractName" }, { "$ref": "#/$defs/address" }]
+    },
+    "tokenContract": {
+      "description": "A contract that is also a token (WETH, wstETH): a registry symbol, a namespace reference, or an address.",
+      "oneOf": [
+        { "$ref": "#/$defs/tokenSymbol" },
+        { "$ref": "#/$defs/contractName" },
+        { "$ref": "#/$defs/address" }
+      ]
     },
     "recipient": {
       "description": "An address, or \"self\" for the executing Pot.",
@@ -95,10 +132,10 @@
     },
     "action_uniswapV2Swap": {
       "title": "uniswapV2Swap",
-      "description": "Swaps through one Uniswap V2 pair (or a fork's), priced from its reserves and paid by a push. Calls @sauce/router uniswapV2: pair.getReserves, an ERC-20 transfer to the pair, pair.swap.",
+      "description": "Swaps through one Uniswap V2 pair (or a fork's), priced from its reserves and paid by a push. Calls @sauce/router uniswapV2: pair.getReserves, an ERC-20 transfer to the pair, pair.swap. Give exactly one of: pool; factory.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "pool", "tokenIn", "tokenOut", "amountOutMin", "recipient"],
+      "required": ["type", "tokenIn", "tokenOut", "amountOutMin", "recipient"],
       "properties": {
         "type": { "const": "uniswapV2Swap" },
         "amount": {
@@ -107,13 +144,17 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "pool": { "$ref": "#/$defs/address", "description": "the pair" },
-        "tokenIn": {
-          "$ref": "#/$defs/address",
-          "description": "the token sold, pushed to the pair"
+        "pool": {
+          "$ref": "#/$defs/contract",
+          "description": "the pair; or leave it out and give `factory`"
         },
+        "factory": {
+          "$ref": "#/$defs/contract",
+          "description": "instead of `pool`: a Uniswap V2-style factory (\"UniswapV2.Factory\"), whose getPair(tokenIn, tokenOut) is the pair; the program reads it from the factory on chain and reverts if there is none"
+        },
+        "tokenIn": { "$ref": "#/$defs/token", "description": "the token sold, pushed to the pair" },
         "tokenOut": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/token",
           "description": "the token bought; the direction is the pair's sort order"
         },
         "feePpm": {
@@ -140,14 +181,18 @@
           "$ref": "#/$defs/identifier",
           "description": "Save this action's output under a name later actions can reference."
         }
-      }
+      },
+      "oneOf": [
+        { "required": ["pool"], "properties": { "pool": true, "factory": false } },
+        { "required": ["factory"], "properties": { "pool": false, "factory": true } }
+      ]
     },
     "action_uniswapV3Swap": {
       "title": "uniswapV3Swap",
-      "description": "Swaps through one Uniswap V3 pool (or a fork's), through the Pot's Router, which answers its callback. Calls @sauce/router uniswapV3: Router.swapV3.",
+      "description": "Swaps through one Uniswap V3 pool (or a fork's), through the Pot's Router, which answers its callback. Calls @sauce/router uniswapV3: Router.swapV3. Give exactly one of: pool; factory + fee; factory + tickSpacing.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "pool", "tokenIn", "tokenOut", "amountOutMin", "recipient"],
+      "required": ["type", "tokenIn", "tokenOut", "amountOutMin", "recipient"],
       "properties": {
         "type": { "const": "uniswapV3Swap" },
         "amount": {
@@ -156,9 +201,28 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "pool": { "$ref": "#/$defs/address", "description": "the pool" },
-        "tokenIn": { "$ref": "#/$defs/address", "description": "the token sold" },
-        "tokenOut": { "$ref": "#/$defs/address", "description": "the token bought" },
+        "pool": {
+          "$ref": "#/$defs/contract",
+          "description": "the pool; or leave it out and give `factory` with `fee` or `tickSpacing`"
+        },
+        "factory": {
+          "$ref": "#/$defs/contract",
+          "description": "instead of `pool`: the factory whose getPool(tokenIn, tokenOut, key) is the pool — a Uniswap V3-style factory with `fee` (\"UniswapV3.Factory\", \"PancakeswapV3.Factory\"), or Aerodrome Slipstream's with `tickSpacing` (\"AerodromeSlipstream.CLFactory\"); the program reads it from the factory on chain and reverts if there is none"
+        },
+        "fee": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16777215,
+          "description": "with `factory`: the pool's fee tier, in hundredths of a bip (500 is 0.05%)"
+        },
+        "tickSpacing": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8388607,
+          "description": "with a Slipstream `factory`: the pool's tick spacing"
+        },
+        "tokenIn": { "$ref": "#/$defs/token", "description": "the token sold" },
+        "tokenOut": { "$ref": "#/$defs/token", "description": "the token bought" },
         "sqrtPriceLimitX96": {
           "type": "string",
           "pattern": "^(0|[1-9][0-9]*)$",
@@ -183,11 +247,25 @@
           "$ref": "#/$defs/identifier",
           "description": "Save this action's output under a name later actions can reference."
         }
-      }
+      },
+      "oneOf": [
+        {
+          "required": ["pool"],
+          "properties": { "pool": true, "factory": false, "fee": false, "tickSpacing": false }
+        },
+        {
+          "required": ["factory", "fee"],
+          "properties": { "pool": false, "factory": true, "fee": true, "tickSpacing": false }
+        },
+        {
+          "required": ["factory", "tickSpacing"],
+          "properties": { "pool": false, "factory": true, "fee": false, "tickSpacing": true }
+        }
+      ]
     },
     "action_uniswapV4Swap": {
       "title": "uniswapV4Swap",
-      "description": "Swaps through one Uniswap V4 pool, through the Pot's Router, which settles with the PoolManager. Calls @sauce/router uniswapV4: Router.swapV4.",
+      "description": "Swaps through one Uniswap V4 pool, named by its key, through the Pot's Router, which settles with the PoolManager. Calls @sauce/router uniswapV4: Router.swapV4.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -197,7 +275,6 @@
         "tokenOut",
         "fee",
         "tickSpacing",
-        "hooks",
         "amountOutMin",
         "recipient"
       ],
@@ -209,30 +286,33 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "poolManager": { "$ref": "#/$defs/address", "description": "the PoolManager" },
+        "poolManager": {
+          "$ref": "#/$defs/contract",
+          "description": "the PoolManager (\"UniswapV4.PoolManager\")"
+        },
         "tokenIn": {
-          "$ref": "#/$defs/address",
-          "description": "the token sold; the zero address is native ETH"
+          "$ref": "#/$defs/tokenOrNative",
+          "description": "the token sold; \"native\" is the native currency"
         },
         "tokenOut": {
-          "$ref": "#/$defs/address",
-          "description": "the token bought; the zero address is native ETH"
+          "$ref": "#/$defs/tokenOrNative",
+          "description": "the token bought; \"native\" is the native currency"
         },
         "fee": {
           "type": "integer",
           "minimum": 0,
           "maximum": 16777215,
-          "description": "the pool fee, in hundredths of a bip"
+          "description": "the pool key's fee, in hundredths of a bip"
         },
         "tickSpacing": {
           "type": "integer",
           "minimum": 1,
           "maximum": 32767,
-          "description": "the pool's tick spacing"
+          "description": "the pool key's tick spacing"
         },
         "hooks": {
-          "$ref": "#/$defs/address",
-          "description": "the pool's hooks contract, or the zero address"
+          "$ref": "#/$defs/contract",
+          "description": "the pool key's hooks contract; absent for a pool with none"
         },
         "sqrtPriceLimitX96": {
           "type": "string",
@@ -284,13 +364,13 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "pool": { "$ref": "#/$defs/address", "description": "the Curve pool" },
+        "pool": { "$ref": "#/$defs/contract", "description": "the Curve pool" },
         "tokenIn": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/token",
           "description": "the token sold, approved to the pool for exactly the amount"
         },
         "tokenOut": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/token",
           "description": "the token bought, whose balance delta is the output"
         },
         "i": {
@@ -343,13 +423,13 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "vault": { "$ref": "#/$defs/address", "description": "the Balancer V2 Vault" },
+        "vault": { "$ref": "#/$defs/contract", "description": "the Balancer V2 Vault" },
         "poolId": { "$ref": "#/$defs/bytes32", "description": "the pool id" },
         "tokenIn": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/token",
           "description": "the token sold, approved to the Vault for exactly the amount"
         },
-        "tokenOut": { "$ref": "#/$defs/address", "description": "the token bought" },
+        "tokenOut": { "$ref": "#/$defs/token", "description": "the token bought" },
         "amountOutMin": {
           "type": "string",
           "pattern": "^(0|[1-9][0-9]*)$",
@@ -393,17 +473,14 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "pool": { "$ref": "#/$defs/address", "description": "the pool" },
-        "tokenIn": {
-          "$ref": "#/$defs/address",
-          "description": "the token sold, pushed to the pool"
-        },
-        "tokenOut": { "$ref": "#/$defs/address", "description": "the token bought" },
+        "pool": { "$ref": "#/$defs/contract", "description": "the pool" },
+        "tokenIn": { "$ref": "#/$defs/token", "description": "the token sold, pushed to the pool" },
+        "tokenOut": { "$ref": "#/$defs/token", "description": "the token bought" },
         "baseToken": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/token",
           "description": "the pool's base token; tokenIn and tokenOut must be base and quote"
         },
-        "quoteToken": { "$ref": "#/$defs/address", "description": "the pool's quote token" },
+        "quoteToken": { "$ref": "#/$defs/token", "description": "the pool's quote token" },
         "amountOutMin": {
           "type": "string",
           "pattern": "^(0|[1-9][0-9]*)$",
@@ -426,19 +503,10 @@
     },
     "action_traderJoeLBSwap": {
       "title": "traderJoeLBSwap",
-      "description": "Swaps through one Trader Joe Liquidity Book pair, paid by a push. Calls @sauce/router traderJoeLB: an ERC-20 transfer to the pair, then pair.swap(swapForY, to).",
+      "description": "Swaps through one Trader Joe Liquidity Book pair, paid by a push. Calls @sauce/router traderJoeLB: an ERC-20 transfer to the pair, then pair.swap(swapForY, to). Give exactly one of: pool; factory + binStep. Give tokenX + tokenY together or not at all.",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "type",
-        "pool",
-        "tokenIn",
-        "tokenOut",
-        "tokenX",
-        "tokenY",
-        "amountOutMin",
-        "recipient"
-      ],
+      "required": ["type", "tokenIn", "tokenOut", "amountOutMin", "recipient"],
       "properties": {
         "type": { "const": "traderJoeLBSwap" },
         "amount": {
@@ -447,17 +515,27 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "pool": { "$ref": "#/$defs/address", "description": "the pair" },
-        "tokenIn": {
-          "$ref": "#/$defs/address",
-          "description": "the token sold, pushed to the pair"
+        "pool": {
+          "$ref": "#/$defs/contract",
+          "description": "the pair; or leave it out and give `factory` with `binStep`"
         },
-        "tokenOut": { "$ref": "#/$defs/address", "description": "the token bought" },
+        "factory": {
+          "$ref": "#/$defs/contract",
+          "description": "instead of `pool`: the LBFactory (\"TraderJoe.LBFactory\"), whose getLBPairInformation(tokenIn, tokenOut, binStep) names the pair; the program reads it from the factory on chain and reverts if there is none"
+        },
+        "binStep": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "with `factory`: the pair's bin step"
+        },
+        "tokenIn": { "$ref": "#/$defs/token", "description": "the token sold, pushed to the pair" },
+        "tokenOut": { "$ref": "#/$defs/token", "description": "the token bought" },
         "tokenX": {
-          "$ref": "#/$defs/address",
-          "description": "the pair's token X; tokenIn and tokenOut must be X and Y"
+          "$ref": "#/$defs/token",
+          "description": "the pair's token X; tokenIn and tokenOut must be X and Y. Leave tokenX and tokenY out to read them from the pair"
         },
-        "tokenY": { "$ref": "#/$defs/address", "description": "the pair's token Y" },
+        "tokenY": { "$ref": "#/$defs/token", "description": "the pair's token Y" },
         "amountOutMin": {
           "type": "string",
           "pattern": "^(0|[1-9][0-9]*)$",
@@ -476,7 +554,18 @@
           "$ref": "#/$defs/identifier",
           "description": "Save this action's output under a name later actions can reference."
         }
-      }
+      },
+      "oneOf": [
+        {
+          "required": ["pool"],
+          "properties": { "pool": true, "factory": false, "binStep": false }
+        },
+        {
+          "required": ["factory", "binStep"],
+          "properties": { "pool": false, "factory": true, "binStep": true }
+        }
+      ],
+      "dependentRequired": { "tokenX": ["tokenY"], "tokenY": ["tokenX"] }
     },
     "action_woofiSwap": {
       "title": "woofiSwap",
@@ -493,14 +582,11 @@
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
         "pool": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/contract",
           "description": "the WooPPV2 itself, not the WooRouterV2"
         },
-        "tokenIn": {
-          "$ref": "#/$defs/address",
-          "description": "the token sold, pushed to the pool"
-        },
-        "tokenOut": { "$ref": "#/$defs/address", "description": "the token bought" },
+        "tokenIn": { "$ref": "#/$defs/token", "description": "the token sold, pushed to the pool" },
+        "tokenOut": { "$ref": "#/$defs/token", "description": "the token bought" },
         "amountOutMin": {
           "type": "string",
           "pattern": "^(0|[1-9][0-9]*)$",
@@ -535,9 +621,9 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "pool": { "$ref": "#/$defs/address", "description": "the pool" },
-        "tokenIn": { "$ref": "#/$defs/address", "description": "the token sold" },
-        "tokenOut": { "$ref": "#/$defs/address", "description": "the token bought" },
+        "pool": { "$ref": "#/$defs/contract", "description": "the pool" },
+        "tokenIn": { "$ref": "#/$defs/token", "description": "the token sold" },
+        "tokenOut": { "$ref": "#/$defs/token", "description": "the token bought" },
         "amountOutMin": {
           "type": "string",
           "pattern": "^(0|[1-9][0-9]*)$",
@@ -572,13 +658,13 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "router": { "$ref": "#/$defs/address", "description": "the Curve RouterNG" },
+        "router": { "$ref": "#/$defs/contract", "description": "the Curve RouterNG" },
         "route": {
           "type": "array",
-          "items": { "$ref": "#/$defs/address" },
+          "items": { "$ref": "#/$defs/tokenContract" },
           "minItems": 1,
           "maxItems": 11,
-          "description": "the route; padded to 11 with zero addresses"
+          "description": "the route, tokens and pools alternating; padded to 11 with zero addresses"
         },
         "swapParams": {
           "type": "array",
@@ -600,7 +686,7 @@
         },
         "pools": {
           "type": "array",
-          "items": { "$ref": "#/$defs/address" },
+          "items": { "$ref": "#/$defs/contract" },
           "maxItems": 5,
           "description": "a zap pool where a hop needs one; padded to 5"
         },
@@ -632,7 +718,7 @@
       "required": ["type", "vault", "steps", "assets", "amountOutMin", "recipient", "deadline"],
       "properties": {
         "type": { "const": "balancerV2BatchSwap" },
-        "vault": { "$ref": "#/$defs/address", "description": "the Balancer V2 Vault" },
+        "vault": { "$ref": "#/$defs/contract", "description": "the Balancer V2 Vault" },
         "steps": {
           "type": "array",
           "items": {
@@ -666,9 +752,9 @@
         },
         "assets": {
           "type": "array",
-          "items": { "$ref": "#/$defs/address" },
+          "items": { "$ref": "#/$defs/tokenOrNative" },
           "minItems": 2,
-          "description": "every asset the steps index"
+          "description": "every asset the steps index; \"native\" is the native currency"
         },
         "amountOutMin": {
           "type": "string",
@@ -715,10 +801,10 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "router": { "$ref": "#/$defs/address", "description": "the Balancer V3 Router" },
-        "pool": { "$ref": "#/$defs/address", "description": "the pool" },
-        "tokenIn": { "$ref": "#/$defs/address", "description": "the token sold" },
-        "tokenOut": { "$ref": "#/$defs/address", "description": "the token bought" },
+        "router": { "$ref": "#/$defs/contract", "description": "the Balancer V3 Router" },
+        "pool": { "$ref": "#/$defs/contract", "description": "the pool" },
+        "tokenIn": { "$ref": "#/$defs/token", "description": "the token sold" },
+        "tokenOut": { "$ref": "#/$defs/token", "description": "the token bought" },
         "amountOutMin": {
           "type": "string",
           "pattern": "^(0|[1-9][0-9]*)$",
@@ -771,12 +857,12 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "dex": { "$ref": "#/$defs/address", "description": "the CrocSwapDex" },
+        "dex": { "$ref": "#/$defs/contract", "description": "the CrocSwapDex" },
         "base": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/tokenOrNative",
           "description": "the pool's base token (numerically lower)"
         },
-        "quote": { "$ref": "#/$defs/address", "description": "the pool's quote token" },
+        "quote": { "$ref": "#/$defs/token", "description": "the pool's quote token" },
         "poolIdx": {
           "type": "integer",
           "minimum": 0,
@@ -846,14 +932,14 @@
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
         "proxy": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/contract",
           "description": "the DODO proxy; approvals go to DODOApprove, not to it"
         },
-        "tokenIn": { "$ref": "#/$defs/address", "description": "the token sold" },
-        "tokenOut": { "$ref": "#/$defs/address", "description": "the token bought" },
+        "tokenIn": { "$ref": "#/$defs/token", "description": "the token sold" },
+        "tokenOut": { "$ref": "#/$defs/token", "description": "the token bought" },
         "pairs": {
           "type": "array",
-          "items": { "$ref": "#/$defs/address" },
+          "items": { "$ref": "#/$defs/contract" },
           "minItems": 1,
           "description": "the V1 pairs to route through"
         },
@@ -901,9 +987,9 @@
       ],
       "properties": {
         "type": { "const": "carbonSwap" },
-        "controller": { "$ref": "#/$defs/address", "description": "the CarbonController" },
-        "sourceToken": { "$ref": "#/$defs/address", "description": "the token sold" },
-        "targetToken": { "$ref": "#/$defs/address", "description": "the token bought" },
+        "controller": { "$ref": "#/$defs/contract", "description": "the CarbonController" },
+        "sourceToken": { "$ref": "#/$defs/token", "description": "the token sold" },
+        "targetToken": { "$ref": "#/$defs/token", "description": "the token bought" },
         "tradeActions": {
           "type": "array",
           "items": {
@@ -960,10 +1046,10 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "router": { "$ref": "#/$defs/address", "description": "the Fraxswap router" },
+        "router": { "$ref": "#/$defs/contract", "description": "the Fraxswap router" },
         "path": {
           "type": "array",
-          "items": { "$ref": "#/$defs/address" },
+          "items": { "$ref": "#/$defs/token" },
           "minItems": 2,
           "description": "the token path; the last token is the output"
         },
@@ -1007,7 +1093,7 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "pool": { "$ref": "#/$defs/address", "description": "the pool" },
+        "pool": { "$ref": "#/$defs/contract", "description": "the pool" },
         "swap0to1": { "type": "boolean", "description": "true sells token0" },
         "amountOutMin": {
           "type": "string",
@@ -1055,13 +1141,10 @@
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
         "spokePool": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/contract",
           "description": "the origin SpokePool; it pulls the token, so approve it first"
         },
-        "token": {
-          "$ref": "#/$defs/address",
-          "description": "the token bridged (input and output)"
-        },
+        "token": { "$ref": "#/$defs/token", "description": "the token bridged (input and output)" },
         "destChainId": {
           "type": "integer",
           "minimum": 1,
@@ -1122,7 +1205,7 @@
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
         "pool": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/contract",
           "description": "the StargatePool; it pulls the token, so approve it first"
         },
         "dstEid": {
@@ -1166,10 +1249,10 @@
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
         "tokenMessenger": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/contract",
           "description": "the CCTP V2 TokenMessenger; it pulls the token, so approve it first"
         },
-        "token": { "$ref": "#/$defs/address", "description": "the burned token (USDC)" },
+        "token": { "$ref": "#/$defs/token", "description": "the burned token (USDC)" },
         "destinationDomain": {
           "type": "integer",
           "minimum": 0,
@@ -1217,7 +1300,7 @@
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
         "router": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/contract",
           "description": "the warp route; it pulls the amount plus any fee it charges"
         },
         "destinationDomain": {
@@ -1254,7 +1337,7 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "weth": { "$ref": "#/$defs/address", "description": "the WETH contract" },
+        "weth": { "$ref": "#/$defs/tokenContract", "description": "the WETH contract (\"WETH\")" },
         "amountRef": {
           "$ref": "#/$defs/identifier",
           "description": "Spend the output an earlier action saved under this name."
@@ -1279,7 +1362,7 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "weth": { "$ref": "#/$defs/address", "description": "the WETH contract" },
+        "weth": { "$ref": "#/$defs/tokenContract", "description": "the WETH contract (\"WETH\")" },
         "amountRef": {
           "$ref": "#/$defs/identifier",
           "description": "Spend the output an earlier action saved under this name."
@@ -1305,7 +1388,7 @@
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
         "wstETH": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/tokenContract",
           "description": "the wstETH contract; it pulls the stETH, so approve it first"
         },
         "amountRef": {
@@ -1332,7 +1415,7 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "wstETH": { "$ref": "#/$defs/address", "description": "the wstETH contract" },
+        "wstETH": { "$ref": "#/$defs/tokenContract", "description": "the wstETH contract" },
         "amountRef": {
           "$ref": "#/$defs/identifier",
           "description": "Spend the output an earlier action saved under this name."
@@ -1357,7 +1440,7 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "stETH": { "$ref": "#/$defs/address", "description": "the stETH contract" },
+        "stETH": { "$ref": "#/$defs/tokenContract", "description": "the stETH contract" },
         "referral": {
           "$ref": "#/$defs/address",
           "description": "Lido's referral; default the zero address"
@@ -1387,7 +1470,7 @@
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
         "withdrawalQueue": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/contract",
           "description": "Lido's withdrawal queue; it pulls the stETH, so approve it first"
         },
         "owner": {
@@ -1419,11 +1502,11 @@
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
         "depositPool": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/contract",
           "description": "the live RocketDepositPool, which upgrades move; read it from RocketStorage"
         },
         "rETH": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/tokenContract",
           "description": "the rETH token, whose balance delta is the output"
         },
         "amountRef": {
@@ -1450,7 +1533,7 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "rETH": { "$ref": "#/$defs/address", "description": "the rETH token" },
+        "rETH": { "$ref": "#/$defs/tokenContract", "description": "the rETH token" },
         "amountRef": {
           "$ref": "#/$defs/identifier",
           "description": "Spend the output an earlier action saved under this name."
@@ -1475,9 +1558,12 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "liquidityPool": { "$ref": "#/$defs/address", "description": "the ether.fi LiquidityPool" },
+        "liquidityPool": {
+          "$ref": "#/$defs/contract",
+          "description": "the ether.fi LiquidityPool"
+        },
         "eETH": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/tokenContract",
           "description": "the eETH token, whose balance delta is the output"
         },
         "amountRef": {
@@ -1505,10 +1591,10 @@
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
         "pool": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/contract",
           "description": "the Aave V3 Pool; it pulls the token, so approve it first"
         },
-        "token": { "$ref": "#/$defs/address", "description": "the asset supplied" },
+        "token": { "$ref": "#/$defs/token", "description": "the asset supplied" },
         "onBehalfOf": {
           "$ref": "#/$defs/recipient",
           "description": "credited with the position; `\"self\"` is the Pot"
@@ -1543,8 +1629,8 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "pool": { "$ref": "#/$defs/address", "description": "the Aave V3 Pool" },
-        "token": { "$ref": "#/$defs/address", "description": "the asset withdrawn" },
+        "pool": { "$ref": "#/$defs/contract", "description": "the Aave V3 Pool" },
+        "token": { "$ref": "#/$defs/token", "description": "the asset withdrawn" },
         "recipient": {
           "$ref": "#/$defs/recipient",
           "description": "receives the asset; `\"self\"` is the Pot"
@@ -1573,8 +1659,8 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "pool": { "$ref": "#/$defs/address", "description": "the Aave V3 Pool" },
-        "token": { "$ref": "#/$defs/address", "description": "the asset borrowed" },
+        "pool": { "$ref": "#/$defs/contract", "description": "the Aave V3 Pool" },
+        "token": { "$ref": "#/$defs/token", "description": "the asset borrowed" },
         "onBehalfOf": {
           "$ref": "#/$defs/recipient",
           "description": "whose collateral backs the debt; `\"self\"` is the Pot"
@@ -1610,10 +1696,10 @@
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
         "pool": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/contract",
           "description": "the Aave V3 Pool; it pulls the token, so approve it first"
         },
-        "token": { "$ref": "#/$defs/address", "description": "the asset repaid" },
+        "token": { "$ref": "#/$defs/token", "description": "the asset repaid" },
         "onBehalfOf": {
           "$ref": "#/$defs/recipient",
           "description": "whose debt is repaid; `\"self\"` is the Pot"
@@ -1643,10 +1729,10 @@
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
         "comet": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/contract",
           "description": "the Comet market; it pulls the token, so approve it first"
         },
-        "token": { "$ref": "#/$defs/address", "description": "the asset supplied" },
+        "token": { "$ref": "#/$defs/token", "description": "the asset supplied" },
         "amountRef": {
           "$ref": "#/$defs/identifier",
           "description": "Spend the output an earlier action saved under this name."
@@ -1671,8 +1757,8 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "comet": { "$ref": "#/$defs/address", "description": "the Comet market" },
-        "token": { "$ref": "#/$defs/address", "description": "the asset withdrawn" },
+        "comet": { "$ref": "#/$defs/contract", "description": "the Comet market" },
+        "token": { "$ref": "#/$defs/token", "description": "the asset withdrawn" },
         "amountRef": {
           "$ref": "#/$defs/identifier",
           "description": "Spend the output an earlier action saved under this name."
@@ -1697,7 +1783,7 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "token": { "$ref": "#/$defs/address", "description": "the token" },
+        "token": { "$ref": "#/$defs/token", "description": "the token" },
         "recipient": {
           "$ref": "#/$defs/recipient",
           "description": "the receiver; `\"self\"` is the Pot"
@@ -1726,8 +1812,8 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "token": { "$ref": "#/$defs/address", "description": "the token" },
-        "spender": { "$ref": "#/$defs/address", "description": "the spender" },
+        "token": { "$ref": "#/$defs/token", "description": "the token" },
+        "spender": { "$ref": "#/$defs/contract", "description": "the spender" },
         "amountRef": {
           "$ref": "#/$defs/identifier",
           "description": "Spend the output an earlier action saved under this name."
@@ -1752,13 +1838,10 @@
           "maxLength": 78,
           "description": "The amount this action spends. Omit it (and amountRef) to spend the previous action's output."
         },
-        "permit2": {
-          "$ref": "#/$defs/address",
-          "description": "Permit2 (0x000000000022D473030F116dDEE9F6B43aC78BA3)"
-        },
-        "token": { "$ref": "#/$defs/address", "description": "the token" },
+        "permit2": { "$ref": "#/$defs/contract", "description": "Permit2 (\"Permit2.Permit2\")" },
+        "token": { "$ref": "#/$defs/token", "description": "the token" },
         "spender": {
-          "$ref": "#/$defs/address",
+          "$ref": "#/$defs/contract",
           "description": "the spender, such as Balancer V3's router"
         },
         "expiration": {
@@ -1785,7 +1868,7 @@
       "required": ["type", "token"],
       "properties": {
         "type": { "const": "balanceOf" },
-        "token": { "$ref": "#/$defs/address", "description": "the token" },
+        "token": { "$ref": "#/$defs/token", "description": "the token" },
         "saveOutputAs": {
           "$ref": "#/$defs/identifier",
           "description": "Save this action's output under a name later actions can reference."

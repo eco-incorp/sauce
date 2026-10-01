@@ -1,4 +1,4 @@
-# AMM Swap Interfaces on Ethereum Mainnet
+# AMM Swap Interfaces
 
 A contributor's reference to the Solidity swap interfaces of the AMMs the actions cover, including
 entry points no action calls yet. It is third-party documentation, **not** a description of what
@@ -34,6 +34,7 @@ this file's Uniswap V4 structs, for instance, were wrong for the deployed router
 9. [Fluid DEX (Instadapp)](#9-fluid-dex-instadapp)
    - [DEX T1 Pool Swaps](#fluid-dex-t1-pool-swaps)
 10. [Bridges, staking and Permit2](#10-bridges-staking-and-permit2)
+11. [Pools by key: the factory lookups](#11-pools-by-key-the-factory-lookups)
 
 ---
 
@@ -42,6 +43,10 @@ this file's Uniswap V4 structs, for instance, were wrong for the deployed router
 ### Uniswap V2 Router
 
 **Address:** `0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D`
+
+**Pool key.** `uniswapV2Swap` trades a pair directly, not through this router. Given `factory`
+instead of `pool`, the program reads the pair from the factory: `getPair(address tokenA, address
+tokenB) returns (address pair)`, either order, the zero address when there is none — [§11](#11-pools-by-key-the-factory-lookups).
 
 #### swapExactTokensForTokens
 
@@ -137,6 +142,11 @@ function swapExactTokensForETHSupportingFeeOnTransferTokens(
 
 ### Uniswap V3 SwapRouter
 
+**Pool key.** `uniswapV3Swap` trades a pool through the Pot's Router, not this one. Given `factory`
+and `fee` instead of `pool`, the program reads the pool from the factory: `getPool(address tokenA,
+address tokenB, uint24 fee) returns (address pool)`, either order, the zero address when there is
+none — [§11](#11-pools-by-key-the-factory-lookups). PancakeSwap V3's factory has the same function.
+
 **Verified (SwapRouter02)**, by execution while an action called it; no action does now
 (`uniswapV3Swap` swaps through `@sauce/router`'s `uniswapV3`, against the pool), so nothing re-checks
 it. **SwapRouter02** (`0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45` on Ethereum,
@@ -227,6 +237,9 @@ function exactOutput(ExactOutputParams calldata params)
 ### Uniswap V4 Universal Router
 
 **Address:** `0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af`
+
+**Pool key.** A V4 pool has no address to look up: it is its `PoolKey` (the two currencies in sort
+order, `fee`, `tickSpacing`, `hooks`), which `uniswapV4Swap` carries as its own fields.
 
 #### Top-Level Execute Function
 
@@ -364,6 +377,10 @@ inputs[0] = abi.encode(actions, params);
 
 ## 2. Curve Finance
 
+**No pool key.** Curve pools are not found by their tokens: several pools trade the same pair, and
+each has its own coin indices and index type (`int128` or `uint256`), which `curveSwap` states. The
+SDK registry carries no lookup keyed by the pair, so the action takes the pool's address.
+
 ### StableSwap Pools
 
 Classic pools for pegged assets (e.g., 3pool, stETH/ETH). Indices use `int128`.
@@ -497,6 +514,9 @@ function exchange(
 ---
 
 ## 3. Balancer
+
+**No pool key.** A Balancer V2 pool is named by its `poolId`, which the Vault takes itself, and a
+Balancer V3 pool by its address; neither is found by its tokens.
 
 ### Balancer V2 Vault
 
@@ -654,6 +674,9 @@ function swapExactOut(
 
 ## 4. Ambient (CrocSwap)
 
+**No lookup needed.** An Ambient pool is its key — `(base, quote, poolIdx)` inside the one
+CrocSwapDex — and `ambientSwap` carries it; there is no pool address.
+
 **CrocSwapDex Address:** `0xAaAaAAAaA24eEeb8d57D431224f73832bC34f688`
 **CrocSwapRouter Address:** `0x533E164ded63f4c55E83E1f409BDf2BaC5278035`
 
@@ -691,6 +714,9 @@ Parameters are identical to the `swap()` function above.
 ---
 
 ## 5. DODO
+
+**No pool key.** DODO V2's factories (DVM, DSP, DPP) map a token pair to a list of pools, so a pair
+names no single pool: `dodoV2Swap` takes the pool's address. DODO V1 pairs go through the proxy.
 
 **DODO V2 Proxy Address:** `0xa356867fDCEa8e71AEaF87805808803806231FdC`
 
@@ -759,6 +785,11 @@ both swap selectors, and `exactInputSingle` returns one word, the amount out; a 
 per hop, the pool's 20 bytes then one byte for `tokenAIn`). The address this file listed before,
 `0xbbF1EE38152E9D8E3470Dc47947eAa65DCA94913`, carries neither swap selector.
 
+**No pool key.** The V2 factory's `lookup(address tokenA, address tokenB, uint256 startIndex,
+uint256 endIndex) returns (address[] pools)`, the overload the SDK registry declares, lists every
+pool for a pair. The key that names one pool has five parameters (the two fees, tick spacing,
+lookback and kinds), so `maverickV2Swap` takes the pool's address.
+
 ### Pool-Level Swap
 
 ```solidity
@@ -805,6 +836,8 @@ function exactInputMultiHop(
 
 ## 7. Carbon (Bancor)
 
+**No pool key.** Carbon trades against strategies by id, which `carbonSwap` lists.
+
 **CarbonController Address:** `0xC537e898CD774e2dCBa3B14Ea6f34C93d5eA45e1`
 
 #### Structs
@@ -844,6 +877,8 @@ function tradeByTargetAmount(
 
 ## 8. Fraxswap
 
+**No pool key.** `fraxswapSwap` gives a token path to the router, which finds each pair itself.
+
 **FraxswapRouter V2 Address:** `0xC14d550632db8592D1243Edc8B95b0Ad06703867`
 
 Fraxswap uses a Uniswap V2-compatible router interface. The pairs internally support TWAMM (Time-Weighted Average Market Maker) long-term orders, but the router swap interface is identical to Uniswap V2.
@@ -879,6 +914,9 @@ Also supports fee-on-transfer variants (same as Uniswap V2).
 ---
 
 ## 9. Fluid DEX (Instadapp)
+
+**No pool key.** `fluidDexT1Swap` takes the pool's address; Fluid's factory numbers its pools rather
+than keying them by their tokens.
 
 Fluid DEX (formerly Instadapp Fluid) is a "DEX-on-lending" protocol where swap liquidity comes from both **Smart Collateral** (supplied assets) and **Smart Debt** (borrowed assets) on top of the Fluid Liquidity Layer. This architecture generates significantly more trading liquidity per dollar of TVL than traditional DEXes.
 
@@ -1124,3 +1162,40 @@ tokenOut, uint256 exactAmountIn, address sender, bytes userData)` answers only w
   the zero address, as in an `eth_call` from it.
 - **cbETH** (`0xBe9895146f7AF43049ca1c1AE358B0541Ea49704`) has no `deposit()`: cbETH is minted by
   Coinbase, not by depositing ETH, so there is no cbETH staking action.
+
+---
+
+## 11. Pools by key: the factory lookups
+
+`uniswapV2Swap`, `uniswapV3Swap` and `traderJoeLBSwap` may leave out `pool` and name the factory
+and the key it finds the pool under. The generated program calls the lookup while it runs and
+reverts before anything moves when it returns the zero address (`actions[i]: no pool under that
+key`). A factory given by name (`"UniswapV3.Factory"`) is called through the SDK registry's ABI for
+it; one given by address through the actions package's own binding of the same function.
+
+| Action            | Key                       | Lookup                                                                              | Returns                                                                         |
+| ----------------- | ------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `uniswapV2Swap`   | `factory`                 | `getPair(address tokenA, address tokenB)`                                           | `address pair`                                                                  |
+| `uniswapV3Swap`   | `factory` + `fee`         | `getPool(address tokenA, address tokenB, uint24 fee)`                               | `address pool`                                                                  |
+| `uniswapV3Swap`   | `factory` + `tickSpacing` | `getPool(address tokenA, address tokenB, int24 tickSpacing)` (Aerodrome Slipstream) | `address pool`                                                                  |
+| `traderJoeLBSwap` | `factory` + `binStep`     | `getLBPairInformation(address tokenA, address tokenB, uint256 binStep)` (LBFactory) | `(uint16 binStep, address LBPair, bool createdByOwner, bool ignoredForRouting)` |
+
+Each takes the two tokens in either order. A Liquidity Book pair's token X is the one it was created
+with, not the lower address, so when a `traderJoeLBSwap` by key leaves out `tokenX` and `tokenY`,
+the program reads them from the pair (`getTokenX()`, `getTokenY()`).
+
+**Verified by execution** on chain state captured at each chain's pinned block
+(`tests/names.mainnet.test.ts`), each against the same trade with the pool given by address:
+`getPool(…, uint24)` of Uniswap V3's factory (`0x1F98431c8aD98523631AE4a59f267346ea31F984` on
+Ethereum, `0x33128a8fC17869897dcE68Ed026d694621f6FDfD` on Base); `getPair` of Uniswap V2's factory
+(`0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f` on Ethereum, `0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6`
+on Base); `getPool(…, int24)` of Aerodrome Slipstream's CLFactory on Base
+(`0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A`), whose pool the Pot's Router swaps as it does a
+Uniswap V3 pool; and `getLBPairInformation` of Trader Joe's LBFactory on Avalanche
+(`0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c`), with `getTokenX`/`getTokenY` read from the pair.
+The other factories whose registry ABI declares the same lookup (PancakeSwap V2 and V3, SushiSwap
+V2, Synthra V3, UnitFlow V3) are not executed here.
+
+**Not used:** Aerodrome and Velodrome V2 (Solidly) factories have `getPool(address tokenA, address
+tokenB, bool stable)`, but a stable pool is not constant-product and a volatile pool's fee is set per
+pool by the factory, so the constant-product math `uniswapV2Swap` prices with is not sound for them.

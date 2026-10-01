@@ -4,20 +4,19 @@ Decentralised Ethereum liquid staking protocol. Stake ETH and receive rETH, a no
 
 ## Category
 
-liquid-staking | Chains: Ethereum
+liquid-staking | Chains and addresses: [registry/rocket-pool.md](registry/rocket-pool.md)
 
 ## Key Operations
 
 - **deposit**: Stake ETH and receive rETH
 - **burn**: Burn rETH to redeem ETH (subject to pool liquidity)
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import { protocolInfo, deployments, deposit, burn } from "@eco-incorp/sauce/protocols/rocket-pool";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Deposit ETH for rETH
@@ -37,26 +36,11 @@ function main(rethAddress: Address, amount: Uint256): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract          | Address                                      |
-| -------- | ----------------- | -------------------------------------------- |
-| Ethereum | rETH              | `0xae78736Cd615f374D3085123A210448E74Fc6393` |
-| Ethereum | rocketDepositPool | `0xDD3f50F8A6CafbE9b31a427582963f465E745AF8` |
-
-## ABI Methods
-
-### RocketDepositPoolABI
-
-- `deposit()` - Stake ETH (payable), receive rETH. Send ETH as msg.value
-
-### RETHABI
-
-- `getExchangeRate()` - Current rETH/ETH exchange rate (18 decimals)
-- `getRethValue(uint256)` - Convert ETH amount to rETH equivalent
-- `getEthValue(uint256)` - Convert rETH amount to ETH equivalent
-- `burn(uint256)` - Burn rETH to receive ETH. May fail if insufficient deposit pool liquidity
-- `balanceOf(address)` - Query rETH balance
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/rocket-pool.md](registry/rocket-pool.md).
 
 ## Notes
 

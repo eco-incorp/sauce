@@ -25,9 +25,15 @@ pnpm-lock.yaml
 # formatting the committed copy diverges it from what regeneration produces and fails that check.
 # The generator is the thing to change, not its output.
 **/*.generated.ts
-# The agent skills' index of globals, which `sdk/scripts/gen-skills-globals.mjs` writes on every
-# SDK build and CI holds to the committed copy byte for byte.
+# The agent skills' generated references, which `sdk/scripts/gen-skills-references.mjs` writes
+# from the SDK's registries on every SDK build and CI holds to the committed copies byte for byte.
 skills/sauce-globals/references/*.md
+skills/sauce-chains/references/*.md
+skills/sauce-protocols/references/index.md
+skills/sauce-protocols/references/registry/*.md
+# The actions skill's reference, which `sdk/scripts/gen-skills-actions.mjs` renders from the actions
+# JSON Schema on every SDK build, held to the committed copy the same way.
+skills/sauce-actions/references/*.md
 
 # Captured on-chain account dumps and forge build artifacts committed as fixtures — not authored
 # source. Refreshing them re-emits compact JSON, so formatting only guarantees churn next time.

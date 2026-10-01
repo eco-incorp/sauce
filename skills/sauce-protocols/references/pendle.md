@@ -1,10 +1,42 @@
 # Pendle
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Yield trading protocol that tokenizes future yield. Split yield-bearing assets into principal tokens (PT) and yield tokens (YT) for trading. PT = discounted principal (fixed yield), YT = future variable yield.
+
+## When to use it
+
+- Splits a yield-bearing asset into PT (the principal, redeemable for the underlying at the
+  market's expiry: a fixed yield) and YT (the yield until then), each traded in a market per
+  expiry.
+- Choose PT to lock a fixed yield to a date, YT to speculate on the yield.
+
+## Pitfalls for a program
+
+- Each market has an expiry: PT trades below the underlying before it, and redeems at it.
+- Router calls take approximation and routing structs that Pendle's own API usually builds:
+  take that calldata as `main`'s input, approve the input, forward it, and check the PT you
+  got as a delta.
+- PT and YT are separate tokens per market: name the right one.
+
+## In a Sauce program
+
+Buy PT with calldata from Pendle's API, checked by the PT received:
+
+```sauce chain=arbitrum,ethereum
+function main(tokenIn: Address, amountIn: Uint256, pt: Address, minPtOut: Uint256, call: bytes) {
+  const self = ctx.self();
+  const before = Token(pt).balanceOf(self);
+  Token(tokenIn).approve(Pendle.Router, amountIn);
+  evm.call(Pendle.Router, 0n, call);
+  const out = Token(pt).balanceOf(self) - before;
+  require(out >= minPtOut, "below minPtOut");
+}
+```
 
 ## Category
 
-yield | Chains: Ethereum, Arbitrum
+yield | Chains and addresses: [registry/pendle.md](registry/pendle.md)
 
 ## Key Operations
 
@@ -13,20 +45,12 @@ yield | Chains: Ethereum, Arbitrum
 - **addLiquiditySingleToken**: Add single-sided liquidity to a Pendle market
 - **removeLiquiditySingleToken**: Remove liquidity and receive single token
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  swapExactTokenForPt,
-  swapExactTokenForYt,
-  addLiquiditySingleToken,
-  removeLiquiditySingleToken,
-} from "@eco-incorp/sauce/protocols/pendle";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Buy PT (fixed yield)
@@ -120,29 +144,11 @@ function main(
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | router   | `0x888888888889758F76e7103c6CbF23ABbF58F946` |
-| Arbitrum | router   | `0x888888888889758F76e7103c6CbF23ABbF58F946` |
-
-## ABI Methods
-
-### PendleRouterABI
-
-- `swapExactTokenForPt(address,address,uint256,tuple,tuple,tuple)` - Buy PT. Complex params: receiver, market, minPtOut, ApproxParams, TokenInput, LimitOrderData
-- `swapExactTokenForYt(address,address,uint256,tuple,tuple,tuple)` - Buy YT. Same param structure as swapExactTokenForPt
-- `addLiquiditySingleToken(address,address,uint256,tuple,tuple,tuple)` - Add single-sided liquidity. Params: receiver, market, minLpOut, ApproxParams, TokenInput, LimitOrderData
-- `removeLiquiditySingleToken(address,address,uint256,tuple,tuple)` - Remove liquidity. Params: receiver, market, netLpToRemove, TokenOutput, LimitOrderData
-
-### Param Structs
-
-- **ApproxParams**: { guessMin, guessMax, guessOffchain, maxIteration, eps } - Binary search params for PT/YT amount
-- **TokenInput**: { tokenIn, netTokenIn, tokenMintSy, pendleSwap, swapData } - Input token config
-- **TokenOutput**: { tokenOut, minTokenOut, tokenRedeemSy, pendleSwap, swapData } - Output token config
-- **SwapData**: { swapType, extRouter, extCalldata, needScale } - External swap config (use zeros for direct)
-- **LimitOrderData**: { limitRouter, epsSkipMarket, normalFills, flashFills, optData } - Limit orders (use zeros/empty)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/pendle.md](registry/pendle.md).
 
 ## Notes
 
@@ -152,3 +158,8 @@ function main(
 - For limit orders: set limitRouter to zero address, empty arrays for fills
 - ApproxParams eps is typically 1e15 (0.1%), maxIteration typically 256
 - tokenMintSy = the token that the SY (standardized yield) wrapper accepts
+- **ApproxParams**: { guessMin, guessMax, guessOffchain, maxIteration, eps } - Binary search params for PT/YT amount
+- **TokenInput**: { tokenIn, netTokenIn, tokenMintSy, pendleSwap, swapData } - Input token config
+- **TokenOutput**: { tokenOut, minTokenOut, tokenRedeemSy, pendleSwap, swapData } - Output token config
+- **SwapData**: { swapType, extRouter, extCalldata, needScale } - External swap config (use zeros for direct)
+- **LimitOrderData**: { limitRouter, epsSkipMarket, normalFills, flashFills, optData } - Limit orders (use zeros/empty)

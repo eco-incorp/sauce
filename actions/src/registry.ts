@@ -30,7 +30,13 @@ export { Permit2ABI } from "../../sdk/dist/protocols/permit2/index.js";
 export { RETHABI, RocketDepositPoolABI } from "../../sdk/dist/protocols/rocket-pool/index.js";
 export { StargatePoolABI } from "../../sdk/dist/protocols/stargate/index.js";
 export { TokenMessengerABI } from "../../sdk/dist/protocols/cctp/index.js";
-export { UniswapV2RouterABI } from "../../sdk/dist/protocols/uniswap-v2/index.js";
+export {
+  UniswapV2FactoryABI,
+  UniswapV2RouterABI,
+} from "../../sdk/dist/protocols/uniswap-v2/index.js";
+export { UniswapV3FactoryABI } from "../../sdk/dist/protocols/uniswap-v3/index.js";
+export { SlipstreamCLFactoryABI } from "../../sdk/dist/protocols/aerodrome-slipstream/index.js";
+export { LBFactoryABI } from "../../sdk/dist/protocols/trader-joe/index.js";
 export {
   safeApproveStatements,
   safeTransferStatements,

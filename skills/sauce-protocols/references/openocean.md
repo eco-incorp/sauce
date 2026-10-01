@@ -1,22 +1,23 @@
 # OpenOcean
 
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+
 Cross-chain DEX aggregator providing optimal swap routing across multiple DEXes and chains.
 
 ## Category
 
-aggregator | Chains: Ethereum, Arbitrum, Optimism, BSC, Polygon, Avalanche, Fantom
+aggregator | Chains and addresses: [registry/openocean.md](registry/openocean.md)
 
 ## Key Operations
 
 - **swap**: Execute aggregated swap via OpenOcean Exchange
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import { protocolInfo, deployments, swap } from "@eco-incorp/sauce/protocols/openocean";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Swap via OpenOcean
@@ -54,29 +55,11 @@ function main(
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain     | Contract   | Address                                      |
-| --------- | ---------- | -------------------------------------------- |
-| Ethereum  | exchangeV2 | `0x6352a56caadC4F1E25CD6c75970Fa768A3304e64` |
-| Arbitrum  | exchangeV2 | `0x6352a56caadC4F1E25CD6c75970Fa768A3304e64` |
-| Optimism  | exchangeV2 | `0x6352a56caadC4F1E25CD6c75970Fa768A3304e64` |
-| BSC       | exchangeV2 | `0x6352a56caadC4F1E25CD6c75970Fa768A3304e64` |
-| Polygon   | exchangeV2 | `0x6352a56caadC4F1E25CD6c75970Fa768A3304e64` |
-| Avalanche | exchangeV2 | `0x6352a56caadC4F1E25CD6c75970Fa768A3304e64` |
-| Fantom    | exchangeV2 | `0x6352a56caadC4F1E25CD6c75970Fa768A3304e64` |
-
-## ABI Methods
-
-### OpenOceanExchangeV2ABI
-
-- `swap(address,tuple,tuple[])` - Execute aggregated swap. Payable. Params: caller (msg.sender or executor), desc (SwapDescription tuple), calls (CallDescription[]: `(uint256 target, uint256 gasLimit, uint256 value, bytes data)`). Returns returnAmount
-  - SwapDescription tuple: `{ srcToken, dstToken, srcReceiver, dstReceiver, amount, minReturnAmount, guaranteedAmount, flags, referrer, permit }`
-  - `srcReceiver` - address that receives srcToken from caller
-  - `dstReceiver` - address that receives output tokens
-  - `guaranteedAmount` - guaranteed minimum output (can differ from minReturnAmount)
-  - `flags` - swap behavior flags (0 for default)
-  - `permit` - EIP-2612 permit data (0x00 if pre-approved)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/openocean.md](registry/openocean.md).
 
 ## Notes
 

@@ -134,8 +134,9 @@ function tokenKey(token: string): string {
  * Asserts the six build-time invariants a static cascade must satisfy (design doc §15.4), all fail
  * closed:
  *
- *  1. EVM parent — `parentChain.kind === "evm"`. The Solana Portal PROGRAM is not in eco-routes on
- *     `main` (zero `.rs`); a child's OWN destination may still be `svm`.
+ *  1. EVM parent — `parentChain.kind === "evm"`. A child is published by EVM Portal calldata; the
+ *     Solana Portal is a separate program (`eco/eco-routes-svm`) whose instructions this does not
+ *     build. A child's OWN destination may still be `svm`.
  *  2. Source match — every child's `sourceChainId` equals the parent's destination chain id.
  *  3. Static child — `assertStaticChild` per child (the S6 seam). SKIPPED for a `via: "dynamic"`
  *     child, which is the case that seam was reserved for: its reward amounts are deliberately
@@ -168,7 +169,8 @@ export function assertNestingInvariants(args: AssertNestingInvariantsArgs): void
   if (parentChain.kind !== "evm") {
     throw new Error(
       `assertNestingInvariants: parent chain '${parentChain.slug}' is not EVM (kind='${parentChain.kind}') — ` +
-        `static nesting requires an EVM parent (no Solana Portal PROGRAM in eco-routes on \`main\`); ` +
+        `static nesting requires an EVM parent (children are published with EVM Portal calldata; the ` +
+        `Solana Portal, in eco/eco-routes-svm, is not built for here); ` +
         `a child's own DESTINATION may still be svm.`,
     );
   }

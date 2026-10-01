@@ -33,8 +33,8 @@ const OUT = resolve(here, "../src/protocols/eco-routes/addresses.generated.ts");
 const GENERATIONS = [
   {
     id: "v3",
-    version: "3.2.22",
-    sha256: "be8bf2ff1507aa146735ae837cb368b706f0dcfa3e72ec28d72b5919c031c6e1",
+    version: "3.2.24",
+    sha256: "fbb3ff79dbc75bb9783c77138960787e43e6b898be486accd6ae6cf8f6017153",
     summary: "single Portal, with Hyper/Meta/Polymer/LayerZero provers",
   },
   {
