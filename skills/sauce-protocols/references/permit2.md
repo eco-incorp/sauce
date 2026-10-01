@@ -2,27 +2,58 @@
 
 Universal token approval infrastructure by Uniswap. Provides a single approval contract for all DeFi protocols, improving security and UX.
 
+## When to use it
+
+- Uniswap's token-approval contract at one address on every chain it is on. A signature transfer
+  (`permitTransferFrom`) moves a user's tokens with a one-time signed permit; an allowance
+  transfer (`approve` with an expiry, then `transferFrom`) works like an expiring ERC-20
+  allowance.
+- `sauce run --fund` pulls with Permit2 by default: the owner signs, the Pot receives.
+
+## Pitfalls for a program
+
+- The user approves Permit2 itself once per token, by an ordinary ERC-20 `approve`.
+- A signed permit names the spender (the contract calling Permit2: the Pot), the amount, a
+  nonce and a deadline; nonces are unordered bits, each usable once.
+- Allowance amounts are `uint160` and expiries `uint48`.
+
+## In a Sauce program
+
+Pull a user's tokens into the Pot with their signed permit:
+
+```sauce chain=base,arbitrum
+function main(
+  owner: Address,
+  token: Address,
+  amount: Uint256,
+  nonce: Uint256,
+  deadline: Uint256,
+  signature: bytes
+) {
+  const self = ctx.self();
+  const permit = { permitted: { token: token, amount: amount }, nonce: nonce, deadline: deadline };
+  const details = { to: self, requestedAmount: amount };
+  const before = Token(token).balanceOf(self);
+  Permit2.Permit2.permitTransferFrom(permit, details, owner, signature);
+  require(Token(token).balanceOf(self) - before == amount, "the permit moved another amount");
+}
+```
+
 ## Category
 
-infrastructure | Chains: Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Avalanche, Arc
+infrastructure | Chains and addresses: [registry/permit2.md](registry/permit2.md)
 
 ## Key Operations
 
 - **approve**: Set token allowance for a spender via Permit2
 - **transferFrom**: Transfer tokens using a Permit2 allowance
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  approve,
-  transferFrom,
-} from "@eco-incorp/sauce/protocols/permit2";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Approve token via Permit2
@@ -54,19 +85,11 @@ function main(
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain        | Contract | Address                                      |
-| ------------ | -------- | -------------------------------------------- |
-| All 7 chains | permit2  | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
-
-## ABI Methods
-
-### Permit2ABI
-
-- `approve(address,address,uint160,uint48)` - Set token allowance. Params: token, spender, amount (uint160 max), expiration (uint48 unix timestamp). No return value
-- `transferFrom(address,address,uint160,address)` - Transfer using allowance. Params: from, to, amount (uint160), token. No return value
-- `lockdown(tuple[])` - Revoke all approvals for specified token/spender pairs. Params: approvals (array of {token, spender} tuples). Emergency function to revoke compromised approvals
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/permit2.md](registry/permit2.md).
 
 ## Notes
 

@@ -4,25 +4,19 @@ Web3 automation network for scheduling and executing smart contract functions an
 
 ## Category
 
-infrastructure | Chains: Ethereum, Arbitrum, Optimism, Polygon, BSC, Avalanche, Base
+infrastructure | Chains and addresses: [registry/gelato.md](registry/gelato.md)
 
 ## Key Operations
 
 - **createTask**: Create an automated task for scheduled execution
 - **cancelTask**: Cancel an existing automated task
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  createTask,
-  cancelTask,
-} from "@eco-incorp/sauce/protocols/gelato";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Create automated task
@@ -47,20 +41,11 @@ function main(automateAddress: Address, taskId: Uint256): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain        | Contract | Address                                      |
-| ------------ | -------- | -------------------------------------------- |
-| All 7 chains | automate | `0x2A6C106ae13B558BB9E2Ec64Bd2f1f7BEFF3A5E0` |
-
-## ABI Methods
-
-### GelatoAutomateABI
-
-- `createTask(address,bytes,tuple,address)` - Create automated task. Params: execAddress (contract to call), execDataOrSelector (function calldata or selector), moduleData (tuple: {modules uint8[], args bytes[]} - configures trigger conditions), feeToken (payment token, address(0) for ETH). Returns taskId
-  - Module types: 0=Resolver (custom check), 1=Time (interval), 2=Proxy, 3=SingleExec
-  - args[] contains encoded config for each module
-- `cancelTask(bytes32)` - Cancel a task. Params: taskId (returned from createTask)
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/gelato.md](registry/gelato.md).
 
 ## Notes
 
@@ -69,3 +54,5 @@ function main(automateAddress: Address, taskId: Uint256): Uint256 {
 - Gelato bots execute tasks when conditions are met, paid via prepaid balance or task fee
 - moduleData configures when the task should execute (time interval, resolver function, etc.)
 - feeToken: use address(0) for ETH, or an ERC-20 address for token payment
+- Module types: 0=Resolver (custom check), 1=Time (interval), 2=Proxy, 3=SingleExec
+- args[] contains encoded config for each module

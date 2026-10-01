@@ -34,12 +34,15 @@ function main(recipient: Address, floor: Uint256) {
 It names no chain. `sauce run <file> --chain base` compiles it for Base, where `USDC` is Base's
 USDC; `--chain arbitrum` gives the same file Arbitrum's. What changes per call, such as `recipient`
 and `floor`, is a parameter of `main`, passed with the transaction (`--args`), so one compiled
-program serves every call.
+program serves every call. That program is for an EVM chain: on Solana every account, a recipient
+included, is an `Account` parameter attached with `--account`, never an `Address` argument
+(`sauce-solana`).
 
-The executing contract, `ctx.self()`, is the **Pot**: it holds the tokens and makes the calls. A
-Pot belongs to one owner, its address follows from the owner (`sauce pot --owner <address>`), and
-only the owner can run a program on it. Token writes are SafeERC20 however they are spelled, so
-USDT works.
+On an EVM chain the executing contract, `ctx.self()`, is the **Pot**: it holds the tokens and
+makes the calls. A Pot belongs to one owner, its address follows from the owner
+(`sauce pot --owner <address>`), and only the owner can run a program on it. Token writes are
+SafeERC20 however they are spelled, so USDT works. On Solana the Pot is the Kitchen's account for
+the owner, which the program is given as an account; `ctx.self()` there is the program's id.
 
 Two references hold what a program can name. The language (types, operators, statements, and the
 `ctx`, `crypto`, `Math`, `abi`, `evm` and `svm` builtins) is
@@ -50,36 +53,47 @@ the developer; never invent one.
 
 ## From a file to a transaction
 
-With the program above saved as `payout.sauce.ts`:
+The `sauce` command comes with the package, which needs Node.js 24 or newer: install it in the
+project with `npm i -D -E @eco-incorp/sauce` and run it with `npx sauce`. With the program above
+saved as `payout.sauce.ts`:
 
 ```sh
 npx sauce globals --chain base                     # the names a program on Base can use
-npx sauce compile payout.sauce.ts --chain base     # check it compiles
-npx sauce pot --deploy --chain base --config sauce.config.json --keystore <keystore>
+npx sauce compile payout.sauce.ts --chain base     # check it compiles: the bytecode
 npx sauce simulate payout.sauce.ts --chain base --owner <address> --config sauce.config.json \
-  --args <recipient> 1000000
+  --assume-balance USDC:1 --args <recipient> 1000000
+npx sauce tx payout.sauce.ts --chain base --owner <address> --args <recipient> 1000000
 npx sauce run payout.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
   --args <recipient> 1000000
 ```
 
-`sauce-run` covers each command. Endpoints come from a config file the developer passes, never
+**Units differ by flag.** `--args` and defines take base units: `1000000` is 1 USDC (6
+decimals). `--assume-balance` and `--fund` take whole tokens: `USDC:1` is 1 USDC, and
+`USDC:1000000n`, ending in `n`, the same in base units.
+
+Compiling for a chain produces the program's bytecode; running it is one transaction to the
+owner's Pot, `cook(engine, program)` with `main`'s arguments appended to the program, paying the
+Kitchen's fee. `sauce tx` prints that transaction unsigned, `{ chainId, to, data, value }`, for
+any wallet or signer to send; `sauce run` signs and sends it itself, deploying the Pot first if it
+is not there. `sauce-run` covers each command. Endpoints come from a config file the developer passes, never
 from the program or the environment.
 
 ## Pick the next skill
 
-| Task                                                                                    | Skill                    |
-| --------------------------------------------------------------------------------------- | ------------------------ |
-| The language: the two program forms, `main(...)` inputs and defines, compile errors     | `sauce-script`           |
-| Names with no import: tokens, `Token(...)`, protocol namespaces, chains, `ctx`          | `sauce-globals`          |
-| Any protocol's contracts; factories, routers and pools; the per-protocol documents      | `sauce-protocols`        |
-| Any swap: `@sauce/router`, price limits, the Pot's Router, the guard every leg needs    | `sauce-swaps`            |
-| One swap split across every price-limit venue on a chain                                | `sauce-distributed-swap` |
-| Protocol operations as JSON data, not a program: actions documents                      | `sauce-actions`          |
-| Continuing on another chain: intents, cascades, rewards                                 | `sauce-intents`          |
-| Solana programs: accounts, SPL, the Kitchen                                             | `sauce-solana`           |
-| Compiling and running: the `sauce` commands, the Pot, funding, simulating, publishing   | `sauce-run`              |
-| Application code: compiling, arguments, cooks, actions and verification from TypeScript | `sauce-typescript`       |
-| An example to start from                                                                | `sauce-examples`         |
+| Task                                                                                      | Skill                    |
+| ----------------------------------------------------------------------------------------- | ------------------------ |
+| The language: the two program forms, `main(...)` inputs and defines, compile errors       | `sauce-script`           |
+| Names with no import: tokens, `Token(...)`, protocol namespaces, chains, `ctx`            | `sauce-globals`          |
+| What is on a chain: tokens, every protocol with its addresses, intents, the Sauce release | `sauce-chains`           |
+| Every protocol: how to choose one, its deployments, how a program calls it, its pitfalls  | `sauce-protocols`        |
+| Any swap: `@sauce/router`, price limits, the Pot's Router, the guard every leg needs      | `sauce-swaps`            |
+| One swap split across every price-limit venue on a chain                                  | `sauce-distributed-swap` |
+| Protocol operations as JSON data, not a program: actions documents                        | `sauce-actions`          |
+| Continuing on another chain: intents, cascades, rewards                                   | `sauce-intents`          |
+| Solana programs: accounts, SPL, the Kitchen                                               | `sauce-solana`           |
+| Compiling and running: the `sauce` commands, the Pot, funding, simulating, publishing     | `sauce-run`              |
+| Application code: compiling, arguments, cooks, actions and verification from TypeScript   | `sauce-typescript`       |
+| An example to start from                                                                  | `sauce-examples`         |
 
 ## Rules for every program
 
@@ -93,13 +107,6 @@ from the program or the environment.
 4. **An intent is an offer.** Never promise it will be filled.
 5. **No endpoints or keys in code.** The package ships no RPC URL and reads no environment
    variable: endpoints and signers are passed on the command line or from a config file.
-
-## Deeper material
-
-The package ships its manual: `node_modules/@eco-incorp/sauce/docs/README.md`, with
-`node_modules/@eco-incorp/sauce/docs/guides/cli.md` for every command and
-`node_modules/@eco-incorp/sauce/docs/concepts/architecture.md` for how the compiler, the package
-and the engine divide the work.
 
 ## Example
 

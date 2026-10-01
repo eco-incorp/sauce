@@ -4,9 +4,14 @@ Native lending and borrowing protocol on Base. Aave V3 fork with integrated leve
 
 ## Category
 
-lending | Chains: Base (8453)
+lending | Chains and addresses: [registry/seamless.md](registry/seamless.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### supply
 
@@ -85,21 +90,11 @@ function main(
 - `amount`: Use `type(uint256).max` to repay full debt
 - Requires ERC-20 approval to the Pool
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain | Contract              | Address                                      |
-| ----- | --------------------- | -------------------------------------------- |
-| Base  | pool                  | `0x8F44Fd754285aa6A2b8B9B97739B79746e0475a7` |
-| Base  | poolAddressesProvider | `0x0E02EB705be564c2bF0067928A8f8DD89a82B26E` |
-
-## ABI Reference
-
-### SeamlessPoolABI
-
-- `supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)` - Supply asset to earn interest
-- `withdraw(address asset, uint256 amount, address to) returns (uint256)` - Withdraw supplied asset
-- `borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf)` - Borrow against collateral
-- `repay(address asset, uint256 amount, uint256 interestRateMode, address onBehalfOf) returns (uint256)` - Repay debt
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/seamless.md](registry/seamless.md).
 
 ## Notes
 

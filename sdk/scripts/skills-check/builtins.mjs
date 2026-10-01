@@ -70,17 +70,61 @@ function cells(line) {
   parts.push(line.slice(last));
   return parts.slice(1, -1).map((c) => c.trim().replace(/\\\|/g, "|"));
 }
-// Table rows, with their header and section, and paragraphs or lists joined into one text.
+// An entry's labelled detail, `  - Example: …`, and the column of a table row it stands for.
+const LABELS = {
+  Types: "Types",
+  Example: "Example",
+  "On EVM": "EVM",
+  "On SVM": "SVM",
+  "Reverts when": "Reverts when",
+};
+// Table rows, with their header and section, and paragraphs or lists joined into one text. An
+// entry, a top-level list item with indented details beneath (`- \`form\` …` then `  - Example: …`),
+// is read as a row: the item's line is its "Form" (and its "Targets", where it names **Both**,
+// **EVM** or **SVM**), and each labelled detail the column its label names.
 function blocks(md) {
   const out = [];
   let section = "";
   let header = null;
   let para = [];
+  let entry = null;
   const flush = () => {
     if (para.length) out.push({ section, text: para.join(" ") });
     para = [];
   };
+  const close = () => {
+    if (entry === null) return;
+    const head = entry.head.join(" ");
+    if (entry.details.length === 0) para.push(head);
+    else {
+      const targets = /\*\*(?:Both|EVM|SVM)\*\*/.test(head) ? ["Targets"] : [];
+      const details = entry.details.map(({ label, text }) => ({ label, text: text.join(" ") }));
+      out.push({
+        section,
+        header: ["Form", ...targets, ...details.map((d) => d.label)],
+        row: [head, ...targets.map(() => head), ...details.map((d) => d.text)],
+        text: [head, ...details.map((d) => d.text)].join(" | "),
+      });
+    }
+    entry = null;
+  };
   for (const line of md.split("\n")) {
+    const detail = /^ {2}- (.*)$/.exec(line);
+    if (entry !== null && detail !== null) {
+      const labelled = /^([A-Z][A-Za-z ]*?): (.*)$/.exec(detail[1]);
+      const label = labelled !== null ? LABELS[labelled[1]] : undefined;
+      entry.details.push(
+        label !== undefined
+          ? { label, text: [labelled[2]] }
+          : { label: "Behaviour", text: [detail[1]] },
+      );
+      continue;
+    }
+    if (entry !== null && /^ {2,}\S/.test(line)) {
+      (entry.details.at(-1)?.text ?? entry.head).push(line.trim());
+      continue;
+    }
+    close();
     if (/^#{1,6} /.test(line)) {
       flush();
       section = line.replace(/^#+ /, "");
@@ -91,12 +135,16 @@ function blocks(md) {
       if (header === null) header = row;
       else if (!row.every((c) => /^:?-+:?$/.test(c)))
         out.push({ section, header, row, text: row.join(" | ") });
+    } else if (line.startsWith("- ")) {
+      header = null;
+      entry = { head: [line.slice(2).trim()], details: [] };
     } else {
       header = null;
       if (line.trim() === "" || /^-{3,}$/.test(line.trim())) flush();
       else para.push(line.trim());
     }
   }
+  close();
   flush();
   return out;
 }

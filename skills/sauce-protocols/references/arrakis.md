@@ -4,25 +4,19 @@ Automated liquidity management protocol for Uniswap V3. Provides vaults that act
 
 ## Category
 
-yield | Chains: Ethereum
+yield | Chains and addresses: [registry/arrakis.md](registry/arrakis.md)
 
 ## Key Operations
 
 - **addLiquidity**: Add liquidity to an Arrakis vault via router (tuple params)
 - **removeLiquidity**: Remove liquidity from vault via router (tuple params)
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  addLiquidity,
-  removeLiquidity,
-} from "@eco-incorp/sauce/protocols/arrakis";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Add liquidity - NOTE: uses tuple params via router
@@ -39,26 +33,11 @@ function main(
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | factory  | `0xEA1aFf9dbFfD1580F6b81A3ad3589E66652dB7D9` |
-| Ethereum | router   | `0x6aC8Bab8B775a03b8B72B2940251432442f61B94` |
-
-## ABI Methods
-
-### ArrakisRouterABI
-
-- `addLiquidity(tuple)` [payable] - Add liquidity. Tuple: (amount0Max, amount1Max, amount0Min, amount1Min, amountSharesMin, vault, receiver, gauge). Returns (amount0, amount1, sharesReceived)
-- `removeLiquidity(tuple)` - Remove liquidity. Tuple: (burnAmount, amount0Min, amount1Min, vault, receiver, gauge, receiveETH). Returns (amount0, amount1)
-
-### ArrakisVaultABI
-
-- `totalSupply()` - Total vault shares outstanding
-- `balanceOf(address)` - Query vault share balance
-- `token0()` - First token address
-- `token1()` - Second token address
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/arrakis.md](registry/arrakis.md).
 
 ## Notes
 

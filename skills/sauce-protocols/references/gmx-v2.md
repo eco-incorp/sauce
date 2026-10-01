@@ -4,7 +4,7 @@ Next generation of GMX perpetual exchange with isolated markets, improved risk m
 
 ## Category
 
-perpetuals | Chains: Arbitrum
+perpetuals | Chains and addresses: [registry/gmx-v2.md](registry/gmx-v2.md)
 
 ## Key Operations
 
@@ -12,19 +12,12 @@ perpetuals | Chains: Arbitrum
 - **sendTokens**: Send tokens via ExchangeRouter (used before creating orders)
 - **cancelOrder**: Cancel a pending order by key
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  createOrder,
-  sendTokens,
-  cancelOrder,
-} from "@eco-incorp/sauce/protocols/gmx-v2";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Create a market order
@@ -98,28 +91,11 @@ function main(exchangeRouterAddress: Address, orderKey: Uint256): Uint256 {
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract       | Address                                      |
-| -------- | -------------- | -------------------------------------------- |
-| Arbitrum | exchangeRouter | `0x7dE39FF2e232A2203196788d37e234cF8F1b83f1` |
-| Arbitrum | dataStore      | `0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8` |
-
-## ABI Methods
-
-### ExchangeRouterABI
-
-- `createOrder(tuple)` - Create order. Returns order key (bytes32). See CreateOrderParams struct below
-- `cancelOrder(bytes32)` - Cancel pending order by key
-- `sendTokens(address,address,uint256)` - Send tokens to vault. Must be called before createOrder
-
-### CreateOrderParams Struct
-
-- **addresses**: { receiver, cancellationReceiver, callbackContract, uiFeeReceiver, market, initialCollateralToken, swapPath[] }
-- **numbers**: { sizeDeltaUsd, initialCollateralDeltaAmount, triggerPrice, acceptablePrice, executionFee, callbackGasLimit, minOutputAmount, validFromTime }
-- **flags and extras**: orderType, decreasePositionSwapType, isLong, shouldUnwrapNativeToken, autoCancel, referralCode (bytes32), dataList (bytes32[])
-- **orderType**: 0=MarketSwap, 1=LimitSwap, 2=MarketIncrease, 3=LimitIncrease, 4=MarketDecrease, 5=LimitDecrease, 6=StopLossDecrease
-- **isLong**: true for long, false for short
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/gmx-v2.md](registry/gmx-v2.md).
 
 ## Notes
 
@@ -129,3 +105,8 @@ function main(exchangeRouterAddress: Address, orderKey: Uint256): Uint256 {
 - executionFee is paid in ETH (msg.value) to cover keeper gas costs
 - sizeDeltaUsd is in USD with 30 decimals (1 USD = 1e30)
 - Each market has its own address - query dataStore for market info
+- **addresses**: { receiver, cancellationReceiver, callbackContract, uiFeeReceiver, market, initialCollateralToken, swapPath[] }
+- **numbers**: { sizeDeltaUsd, initialCollateralDeltaAmount, triggerPrice, acceptablePrice, executionFee, callbackGasLimit, minOutputAmount, validFromTime }
+- **flags and extras**: orderType, decreasePositionSwapType, isLong, shouldUnwrapNativeToken, autoCancel, referralCode (bytes32), dataList (bytes32[])
+- **orderType**: 0=MarketSwap, 1=LimitSwap, 2=MarketIncrease, 3=LimitIncrease, 4=MarketDecrease, 5=LimitDecrease, 6=StopLossDecrease
+- **isLong**: true for long, false for short

@@ -2,11 +2,49 @@
 
 Minimal and gas-efficient lending primitive with permissionless market creation. Markets are defined by a unique (loanToken, collateralToken, oracle, IRM, LLTV) tuple.
 
+## When to use it
+
+- Isolated markets: each pairs one loan asset with one collateral, its own oracle, interest
+  rate model and liquidation LTV (`lltv`), named by those five `MarketParams`. One market's bad
+  debt does not reach another.
+- Choose it to lend or borrow in a specific pair with a specific oracle, or to build on a market
+  someone created; for shared liquidity across many assets, Aave V3.
+
+## Pitfalls for a program
+
+- A market exists only for exactly the `MarketParams` it was created with: pass all five.
+- Give exactly one of `assets` and `shares`, the other `0n`.
+- Vet the market's oracle: it alone decides liquidations there.
+- `supplyCollateral` earns nothing; only `supply` of the loan asset earns interest.
+- Approve Morpho for the amount; `data` is empty bytes unless you want its callback, which a
+  Sauce program cannot receive.
+
+## In a Sauce program
+
+Supply the loan asset to a market given as `main`'s input:
+
+```sauce chain=base,ethereum
+function main(
+  market: { loanToken: Address, collateralToken: Address, oracle: Address, irm: Address, lltv: Uint256 },
+  assets: Uint256
+) {
+  const self = ctx.self();
+  Token(market.loanToken).approve(MorphoBlue.Morpho, assets);
+  const empty = hex``;
+  MorphoBlue.Morpho.supply(market, assets, 0n, self, empty);
+}
+```
+
 ## Category
 
-lending | Chains: Ethereum (1), Base (8453), Arc (5042)
+lending | Chains and addresses: [registry/morpho-blue.md](registry/morpho-blue.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### supply
 
@@ -162,26 +200,11 @@ function main(
 
 - Requires ERC-20 approval of loanToken to the Morpho address
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract | Address                                      |
-| -------- | -------- | -------------------------------------------- |
-| Ethereum | morpho   | `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` |
-| Ethereum | bundler3 | `0x6566194141eefa99Af43Bb5Aa71460Ca2Dc90245` |
-| Base     | morpho   | `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` |
-
-## ABI Reference
-
-### MorphoABI
-
-- `supply(MarketParams marketParams, uint256 assets, uint256 shares, address onBehalf, bytes data) returns (uint256 assetsSupplied, uint256 sharesSupplied)` - Supply loan tokens (specify assets OR shares, set other to 0)
-- `withdraw(MarketParams marketParams, uint256 assets, uint256 shares, address onBehalf, address receiver) returns (uint256 assetsWithdrawn, uint256 sharesWithdrawn)` - Withdraw loan tokens
-- `borrow(MarketParams marketParams, uint256 assets, uint256 shares, address onBehalf, address receiver) returns (uint256 assetsBorrowed, uint256 sharesBorrowed)` - Borrow loan tokens
-- `repay(MarketParams marketParams, uint256 assets, uint256 shares, address onBehalf, bytes data) returns (uint256 assetsRepaid, uint256 sharesRepaid)` - Repay borrowed debt
-- `supplyCollateral(MarketParams marketParams, uint256 assets, address onBehalf, bytes data)` - Supply collateral tokens (required before borrowing)
-- `withdrawCollateral(MarketParams marketParams, uint256 assets, address onBehalf, address receiver)` - Withdraw collateral tokens
-
-MarketParams tuple: `(address loanToken, address collateralToken, address oracle, address irm, uint256 lltv)`
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/morpho-blue.md](registry/morpho-blue.md).
 
 ## Notes
 

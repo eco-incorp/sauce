@@ -4,9 +4,14 @@ Leading lending protocol on Base. Compound V2 fork with governance and safety mo
 
 ## Category
 
-lending | Chains: Base (8453)
+lending | Chains and addresses: [registry/moonwell.md](registry/moonwell.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ### supply
 
@@ -68,26 +73,11 @@ function main(mTokenAddress: Address, amount: Uint256): Uint256 {
 
 - Requires ERC-20 approval of underlying to the mToken
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain | Contract    | Address                                      |
-| ----- | ----------- | -------------------------------------------- |
-| Base  | comptroller | `0xfBb21d0380beE3312B33c4353c8936a0F13EF26C` |
-
-## ABI Reference
-
-### MTokenABI
-
-- `mint(uint256 mintAmount) returns (uint256)` - Supply underlying, receive mTokens
-- `redeem(uint256 redeemTokens) returns (uint256)` - Redeem mTokens for underlying
-- `redeemUnderlying(uint256 redeemAmount) returns (uint256)` - Redeem exact underlying amount
-- `borrow(uint256 borrowAmount) returns (uint256)` - Borrow underlying
-- `repayBorrow(uint256 repayAmount) returns (uint256)` - Repay borrow debt
-
-### MoonwellComptrollerABI
-
-- `enterMarkets(address[] mTokens) returns (uint256[])` - Enable mTokens as collateral
-- `exitMarket(address mToken) returns (uint256)` - Remove mToken from collateral
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/moonwell.md](registry/moonwell.md).
 
 ## Notes
 

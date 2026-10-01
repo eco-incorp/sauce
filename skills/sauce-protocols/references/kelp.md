@@ -4,19 +4,18 @@ Liquid restaking protocol built on EigenLayer. Deposit LSTs (stETH, ETHx, etc.) 
 
 ## Category
 
-restaking | Chains: Ethereum
+restaking | Chains and addresses: [registry/kelp.md](registry/kelp.md)
 
 ## Key Operations
 
 - **depositAsset**: Deposit LST to receive rsETH
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import { protocolInfo, deployments, depositAsset } from "@eco-incorp/sauce/protocols/kelp";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Deposit LST for rsETH
@@ -33,24 +32,11 @@ function main(
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract       | Address                                      |
-| -------- | -------------- | -------------------------------------------- |
-| Ethereum | rsETH          | `0xA1290d69c65A6Fe4DF752f95823fae25cB99e5A7` |
-| Ethereum | lrtDepositPool | `0x036676389e48133B63a802f8635AD39E752D375D` |
-
-## ABI Methods
-
-### LRTDepositPoolABI
-
-- `depositAsset(address,uint256,uint256,string)` - Deposit LST for rsETH. Params: asset address, deposit amount, minimum rsETH expected, referral string (pass empty "")
-- `getRsETHAmountToMint(address,uint256)` - Preview rsETH amount for a given LST deposit
-
-### RsETHABI
-
-- `balanceOf(address)` - Query rsETH balance
-- `approve(address,uint256)` - Approve rsETH spending
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/kelp.md](registry/kelp.md).
 
 ## Notes
 

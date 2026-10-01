@@ -4,9 +4,14 @@ Liquidity layer that unifies lending and DEX liquidity. Deposited assets simulta
 
 ## Category
 
-lending | Chains: Ethereum (1), Arbitrum (42161)
+lending | Chains and addresses: [registry/fluid.md](registry/fluid.md)
 
-## SauceScript Functions
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 The Liquidity layer (`liquidity` below) has no user-level deposit or borrow function: its only entry point, `operate`, is restricted to Fluid's own protocols. Users lend through **fTokens** (ERC-4626 vaults such as fUSDC) and borrow through **Vaults**.
 
@@ -82,25 +87,11 @@ function main(
 - `negativeDebtDelta`: the repayment as a negative `int256`, passed in two's complement (`2**256 - amount`)
 - Requires ERC-20 approval of the debt token to the Vault
 
-## Deployed Addresses
+## Deployments and ABI
 
-| Chain    | Contract  | Address                                      |
-| -------- | --------- | -------------------------------------------- |
-| Ethereum | liquidity | `0x52Aa899454998Be5b000Ad077a46Bbe360F4e497` |
-| Arbitrum | liquidity | `0x52Aa899454998Be5b000Ad077a46Bbe360F4e497` |
-
-## ABI Reference
-
-### FluidLendingABI (an fToken)
-
-- `deposit(uint256 assets, address receiver) returns (uint256 shares)` - ERC-4626 deposit
-- `withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)` - ERC-4626 withdraw
-- `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)` - ERC-4626 redeem
-- `asset() returns (address)` - The underlying token
-
-### FluidVaultABI (a Vault)
-
-- `operate(uint256 nftId, int256 newCol, int256 newDebt, address to) returns (uint256, int256, int256)` [payable] - Change a position's collateral and debt in one call; positive deltas deposit/borrow, negative ones withdraw/repay
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/fluid.md](registry/fluid.md).
 
 ## Notes
 

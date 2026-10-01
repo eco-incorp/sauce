@@ -4,25 +4,19 @@ Decentralized perpetual exchange with risk-tranched liquidity pools. Senior (low
 
 ## Category
 
-perpetuals | Chains: BSC, Arbitrum
+perpetuals | Chains and addresses: [registry/level-finance.md](registry/level-finance.md)
 
 ## Key Operations
 
 - **addLiquidity**: Add liquidity to a specific risk tranche
 - **removeLiquidity**: Remove liquidity from a tranche
 
-## SDK Usage
+## Typed templates for the raw compiler (not for `sauce compile`)
 
-```typescript
-import {
-  protocolInfo,
-  deployments,
-  addLiquidity,
-  removeLiquidity,
-} from "@eco-incorp/sauce/protocols/level-finance";
-```
-
-## SauceScript Examples
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
 
 ```typescript
 // Add liquidity to tranche
@@ -56,20 +50,11 @@ function main(
 }
 ```
 
-## Key Addresses
+## Deployments and ABI
 
-| Chain    | Contract      | Address                                      |
-| -------- | ------------- | -------------------------------------------- |
-| BSC      | liquidityPool | `0xA5aBFB56a78D2BD4689b25B8A77fd49Bb0675874` |
-| Arbitrum | liquidityPool | `0x32B7bF19cb8b95C27E644183837813d4b595dcc6` |
-
-## ABI Methods
-
-### LiquidityPoolABI
-
-- `addLiquidity(address,address,uint256,uint256,address)` - Add liquidity. Params: tranche address, token, amountIn, minLpAmount, to (receives the LP tokens)
-- `removeLiquidity(address,address,uint256,uint256,address)` - Remove liquidity. Params: tranche, tokenOut, lpAmount, minOut, to (receives tokenOut)
-- `swap(address,address,uint256,address,bytes)` - Swap tokens. Params: tokenIn, tokenOut, minOut, to, extradata
+The registry's addresses per chain, how a program names each contract there (a namespace, or
+an ABI import bound to the address), and the ABI functions are generated in
+[registry/level-finance.md](registry/level-finance.md).
 
 ## Notes
 
