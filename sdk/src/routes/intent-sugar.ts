@@ -816,17 +816,11 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       // token like USDT returns nothing, so the call goes out raw and the SafeERC20 check judges the
       // result. That helper also resets a standing allowance first -- which matters here more than
       // anywhere, because one Pot publishes every intent on this chain and the previous one's
-      // leftover allowance is exactly what USDT refuses to overwrite.
-      const approved = new Set<string>();
-      reward.tokens.forEach((t, i) => {
-        const token = addressHex(t.token);
-        if (approved.has(token)) return;
-        approved.add(token);
-        const amount =
-          "literal" in t.amount ? { literal: t.amount.literal } : { local: t.amount.capture };
-        statements.push(
-          ...safeApproveStatements(`${prefix}${i}`, `${BigInt(t.token)}n`, portalWord, amount),
-        );
+      // leftover allowance is exactly what USDT refuses to overwrite. A token listed twice is
+      // approved once, for the larger amount: `_fundToken` pulls each entry up to the vault's
+      // whole balance of that token, so the largest entry is the allowance it needs.
+      largestPerToken(`${prefix}a`, reward, statements).forEach(({ token, amount }, i) => {
+        statements.push(...safeApproveStatements(`${prefix}${i}`, `${token}n`, portalWord, amount));
       });
       // The native reward travels as the call's value: `_fundNative` pays the vault from
       // `msg.value`, and `Refund.excessNative` returns what it did not need.
@@ -910,6 +904,40 @@ function requireFundVia(defaults: Partial<IntentSugarDefaults>): IntentFundVia {
   return fundVia;
 }
 
+/**
+ * Each distinct reward token, in first-seen order, with the largest amount it is listed for: the
+ * balance `isIntentFunded` checks every entry of that token against, and so what a transfer into
+ * the vault — or an approval the Portal pulls under — must cover. A literal when every amount is
+ * known now; otherwise a local, computed by the statements this appends (named `<tag><i>m<k>`), the
+ * largest of the captured values and of the largest literal beside them.
+ */
+function largestPerToken(
+  tag: string,
+  reward: RewardSpec,
+  statements: string[],
+): { readonly token: bigint; readonly amount: { literal: bigint } | { local: string } }[] {
+  const byToken = new Map<bigint, Value[]>();
+  for (const t of reward.tokens) byToken.set(t.token, [...(byToken.get(t.token) ?? []), t.amount]);
+
+  return [...byToken].map(([token, amounts], i) => {
+    const largestLiteral = amounts.reduce<bigint | undefined>(
+      (max, a) => ("literal" in a && (max === undefined || a.literal > max) ? a.literal : max),
+      undefined,
+    );
+    const captured = [...new Set(amounts.flatMap((a) => ("capture" in a ? [a.capture] : [])))];
+    if (captured.length === 0) return { token, amount: { literal: largestLiteral! } };
+    const operands = [...captured, ...(largestLiteral === undefined ? [] : [`${largestLiteral}n`])];
+    let local = operands[0]!;
+    operands.slice(1).forEach((operand, k) => {
+      const next = `${tag}${i}m${k}`;
+      statements.push(`const ${next} = ${local} > ${operand} ? ${local} : ${operand};`);
+      local = next;
+    });
+
+    return { token, amount: { local } };
+  });
+}
+
 interface VaultFunding {
   readonly prefix: string;
   /** The intent as encoded, sentinels in place. */
@@ -956,41 +984,16 @@ function vaultFundingStatements(funding: VaultFunding): string[] {
     `const [${vault}] = abi.decode(evm.static(${portal}, ${prefix}vq), ["Address"]);`,
   ];
 
-  // Distinct tokens in first-seen order, each with every amount it is listed for.
-  const byToken = new Map<bigint, Value[]>();
-  for (const t of reward.tokens) byToken.set(t.token, [...(byToken.get(t.token) ?? []), t.amount]);
-  [...byToken].forEach(([token, amounts], i) => {
-    const literals = amounts.filter((a): a is { literal: bigint } => "literal" in a);
-    const largestLiteral = literals.reduce<bigint | undefined>(
-      (max, a) => (max === undefined || a.literal > max ? a.literal : max),
-      undefined,
-    );
-    const captured = [...new Set(amounts.flatMap((a) => ("capture" in a ? [a.capture] : [])))];
+  largestPerToken(`${prefix}f`, reward, statements).forEach(({ token, amount }, i) => {
     // A token listed only for nothing needs nothing in the vault.
-    if (captured.length === 0 && largestLiteral === 0n) return;
-    let amount: string;
-    if (captured.length === 0) {
-      amount = `${largestLiteral}n`;
-    } else {
-      // The largest of the values only known at run time, and of the literal floor beside them.
-      const operands = [
-        ...captured,
-        ...(largestLiteral === undefined ? [] : [`${largestLiteral}n`]),
-      ];
-      amount = operands[0]!;
-      operands.slice(1).forEach((operand, k) => {
-        const next = `${prefix}f${i}m${k}`;
-        statements.push(`const ${next} = ${amount} > ${operand} ? ${amount} : ${operand};`);
-        amount = next;
-      });
-    }
+    if ("literal" in amount && amount.literal === 0n) return;
     const transfer = safeTransferStatements(
       `${prefix}f${i}_`,
       `${token}n`,
       { local: vault },
-      captured.length === 0 ? { literal: largestLiteral! } : { local: amount },
+      amount,
     );
-    if (captured.length === 0) {
+    if ("literal" in amount) {
       statements.push(...transfer);
       return;
     }
@@ -998,7 +1001,7 @@ function vaultFundingStatements(funding: VaultFunding): string[] {
     // inside it, since checking a call that never happened would read a stale result.
     const firstCall = transfer.findIndex((line) => line.includes("evm.call("));
     statements.push(...transfer.slice(0, firstCall));
-    statements.push(`if (${amount} > 0n) { ${transfer.slice(firstCall).join(" ")} }`);
+    statements.push(`if (${amount.local} > 0n) { ${transfer.slice(firstCall).join(" ")} }`);
   });
 
   const native = reward.nativeAmount;

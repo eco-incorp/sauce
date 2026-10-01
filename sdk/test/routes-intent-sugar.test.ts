@@ -317,6 +317,28 @@ describe("what the lowering produces", () => {
     expect(result.source).not.toContain("i0_vault");
   });
 
+  it("opted into publishAndFund: approves a token listed twice once, for the larger amount", () => {
+    const result = rewriteIntentSugar(
+      program(`  Arbitrum(() => {
+    USDC.transfer(RECIPIENT, amount);
+  }).reward({ tokens: [{ token: USDC, amount: 3n }, { token: USDC, amount }] });`),
+      context({
+        defaults: { deadline: 4_000_000_000n, creator: CREATOR, fundVia: "publishAndFund" },
+      }),
+    );
+    const lines = result.source.split("\n").map((line) => line.trim());
+
+    // The Portal pulls each entry up to the vault's whole balance of the token, so the larger
+    // entry is the allowance it needs — the first one listed could be the smaller.
+    expect(lines).toContain("const i0_a0m0 = amount > 3n ? amount : 3n;");
+    const approves = lines.filter(
+      (line) =>
+        line.includes("evm.call(") && line.includes(".toBytesBe(32)") && line.includes("_0"),
+    );
+    expect(approves.some((line) => line.includes("i0_a0m0.toBytesBe(32)"))).toBe(true);
+    expect(lines.filter((line) => line.includes("dd62ed3e"))).toHaveLength(1);
+  });
+
   it("opted into publishAndFund: forwards a native reward as the call's value", () => {
     const result = rewriteIntentSugar(
       program(`  Arbitrum(() => {
