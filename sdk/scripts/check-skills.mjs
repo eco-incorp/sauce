@@ -374,11 +374,6 @@ const UNDECLARED_NAMES = {
     CallToEOA:
       "the eco-routes Executor's error for a call to an address with no code; the registry declares the Portal's errors, not the Executor's",
   },
-  "sauce-distributed-swap": {
-    globalState:
-      "an Algebra pool's price read, `globalState()`; the registry has no Algebra pool ABI",
-    poolByPair: "an Algebra factory's pool lookup; the registry has no Algebra factory ABI",
-  },
 };
 const undeclaredUsed = new Set(); // "<skill>/<name>"
 const allowed = (skill) => new Set(Object.keys(UNDECLARED_NAMES[skill.dir] ?? {}));
@@ -861,20 +856,34 @@ for (const skill of skills) {
       fail(where, "has no usage line: a `//   sauce <command> <this file> …` comment");
       continue;
     }
+    // The usage line takes the chain as `--chain <chain>` and runs on every chain the index names;
+    // a header may add an example on one of those chains, with real values, run on that chain.
+    const generic = [];
+    const examples = [];
     for (const given of usage) {
       if (!checkCommand(where, given)) continue;
       const argv = joinVerb(given);
       if (argv[1] !== basename(file))
         fail(where, `its usage line runs ${argv[1]}, not ${basename(file)}`);
       const chainAt = argv.indexOf("--chain");
-      if (chainAt < 0 || argv[chainAt + 1] !== "<chain>")
-        fail(where, "its usage line takes the chain as `--chain <chain>`: a program names none");
+      const chain = chainAt < 0 ? undefined : argv[chainAt + 1];
+      if (chain === "<chain>") generic.push(argv);
+      else if ((programChains.get(entry) ?? []).includes(chain)) examples.push([argv, chain]);
+      else
+        fail(
+          where,
+          `its usage line runs it on ${chain ?? "no chain"}: a program names none, so its usage ` +
+            "line takes the chain as `--chain <chain>`, and an example names a chain the index checks it on",
+        );
     }
+    if (usage.length > 0 && generic.length === 0)
+      fail(where, "has no usage line taking the chain as `--chain <chain>`");
     if (/^\s*\/\/\s*@(?:chain|target)\b/m.test(read(file)))
       fail(where, "names its chain in a header; a program takes it from --chain");
     for (const chain of programChains.get(entry) ?? []) {
-      for (const argv of usage) await runUsage(where, file, joinVerb(argv), chain);
+      for (const argv of generic) await runUsage(where, file, argv, chain);
     }
+    for (const [argv, chain] of examples) await runUsage(where, file, argv, chain);
   }
   for (const file of skill.documents) {
     const entry = `${skill.dir}/examples/${basename(file)}`;
