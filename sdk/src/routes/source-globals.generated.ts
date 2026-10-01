@@ -122,6 +122,15 @@ export interface AerodromeSlipstreamAeroMetarouterMethods {
   "execute"(arg0: (string | SauceBytes), arg1: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>), arg2: bigint): void;
 }
 
+export interface AerodromeSlipstreamPoolMethods {
+  "slot0"(): [bigint, bigint, bigint, bigint, bigint, boolean] & { "sqrtPriceX96": bigint; "tick": bigint; "observationIndex": bigint; "observationCardinality": bigint; "observationCardinalityNext": bigint; "unlocked": boolean };
+  "liquidity"(): bigint;
+  "fee"(): bigint;
+  "tickSpacing"(): bigint;
+  "token0"(): bigint;
+  "token1"(): bigint;
+}
+
 export interface AevoDepositContractMethods {
   "depositERC20"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: (string | SauceBytes)): void;
   "depositETH"(arg0: bigint, arg1: (string | SauceBytes)): void;
@@ -1212,6 +1221,15 @@ export interface UniswapV3SwapRouter02Methods {
   "exactOutput"(arg0: { "path": (string | SauceBytes); "recipient": bigint; "amountOut": bigint; "amountInMaximum": bigint }): bigint;
 }
 
+export interface UniswapV3PoolMethods {
+  "slot0"(): [bigint, bigint, bigint, bigint, bigint, bigint, boolean] & { "sqrtPriceX96": bigint; "tick": bigint; "observationIndex": bigint; "observationCardinality": bigint; "observationCardinalityNext": bigint; "feeProtocol": bigint; "unlocked": boolean };
+  "liquidity"(): bigint;
+  "fee"(): bigint;
+  "tickSpacing"(): bigint;
+  "token0"(): bigint;
+  "token1"(): bigint;
+}
+
 export interface UniswapV4PoolManagerMethods {
   "initialize"(arg0: { "currency0": bigint; "currency1": bigint; "fee": bigint; "tickSpacing": bigint; "hooks": bigint }, arg1: bigint): bigint;
   "swap"(arg0: { "currency0": bigint; "currency1": bigint; "fee": bigint; "tickSpacing": bigint; "hooks": bigint }, arg1: { "zeroForOne": boolean; "amountSpecified": bigint; "sqrtPriceLimitX96": bigint }, arg2: (string | SauceBytes)): bigint;
@@ -1395,6 +1413,7 @@ export interface AerodromeSlipstreamSource {
   readonly NonfungiblePositionManagerGaugeCaps: SauceContract<AerodromeSlipstreamSlipstreamPositionManagerMethods>;
   readonly NonfungiblePositionManagerGaugesV3: SauceContract<AerodromeSlipstreamSlipstreamPositionManagerMethods>;
   readonly Metarouter: SauceContract<AerodromeSlipstreamAeroMetarouterMethods>;
+  readonly Pool: SauceInterface<AerodromeSlipstreamPoolMethods>;
 }
 
 export interface AevoSource extends AevoDepositContractMethods {
@@ -1990,6 +2009,7 @@ export interface UniswapV3Source {
   readonly QuoterV2: SauceContract<UniswapV3QuoterV2Methods>;
   readonly SwapRouter: SauceContract<UniswapV3SwapRouterMethods>;
   readonly SwapRouter02: SauceContract<UniswapV3SwapRouter02Methods>;
+  readonly Pool: SauceInterface<UniswapV3PoolMethods>;
 }
 
 export interface UniswapV4Source {
@@ -2132,6 +2152,7 @@ export interface UniswapFamilySource {
   readonly QuoterV2: UniswapV3Source["QuoterV2"];
   readonly SwapRouter: UniswapV3Source["SwapRouter"];
   readonly SwapRouter02: UniswapV3Source["SwapRouter02"];
+  readonly Pool: UniswapV3Source["Pool"];
   readonly PoolManager: UniswapV4Source["PoolManager"];
   readonly PositionManager: UniswapV4Source["PositionManager"];
   readonly UniversalRouter: UniswapV4Source["UniversalRouter"];
