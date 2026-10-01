@@ -35,7 +35,8 @@ example program each, is `builtins.json`.
 
 - Accounts are `main` parameters with roles: `Account` in §1, account properties in §12, and the
   `svm` calls in §11, which only SVM has.
-- `ctx` (§6): `ctx.self()` is the engine's program id (it owns every Pot account),
+- `ctx` (§6): `ctx.self()` is the engine's program id (it owns every Pot account, and not only
+  Pot accounts),
   `ctx.msgSender()` the first signer among the accounts the engine receives, and
   `ctx.msgValue`, `gasLeft`, `codeSize`, `codeHash`, `isContract` and `isEOA` do not exist.
 - `log` takes no topics (§5).
@@ -270,7 +271,8 @@ Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a 
 - `ctx.self()` → number, **Both**
   - On EVM: the executing contract: the Pot, which holds the program's balances and allowances
   - On SVM: the engine's program id, which owns every Pot account: `pot.owner == ctx.self()`
-    holds for a Pot
+    holds for a Pot, and for any other account assigned to the engine, so it does not prove an
+    account is the Pot; re-deriving the Pot's address does
   - Example: `log(ctx.self().toBytesBe(32n));`
 - `ctx.chainId()` → number, **Both**
   - On EVM: the chain id
