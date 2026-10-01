@@ -301,10 +301,15 @@ to build first, but the suites that import `./artifacts/*.json` need `sync-engin
 run (see the Foundry gotcha above).
 
 **Every registry ABI is pinned against the deployed contract, offline.** `test/registry-abi.test.ts`
-checks each function of each `abis.ts` export against `test/fixtures/registry-abi/evidence.json`: the
+checks each function, event and custom error of each `abis.ts` export against
+`test/fixtures/registry-abi/evidence.json`: the
 deployed code must dispatch its selector (after resolving EIP-1167 clones, EIP-1967/beacon/legacy
 proxy slots, `implementation()` getters, and diamond or selector routers), and where a verified ABI
-exists, its outputs, mutability and struct field names must match. `targets.json` beside it is the
+exists, its outputs, mutability and struct field names must match. An event's topic and an
+error's selector must be carried by the deployed code (a PUSH32 before its LOG, a constant before
+its REVERT), an event's `indexed` flags must match the verified ABI, and each event's captured real
+log (`logs` in the fixture, where a deployment has emitted one) must decode, strictly, with the
+registry's own declaration. `targets.json` beside it is the
 hand-written half: which deployments evidence which export (`roles` from `addresses.ts`, narrowed
 by `chains` where one role's deployments run different releases, or representative `instances` for
 interface ABIs), `probes` (extra signatures to ask a selector router about), and every exception
@@ -375,7 +380,8 @@ import the package (`package.json`'s `main` names the neutral BASE the compiler 
 The per-arm signatures genuinely differ where the account models force it — SVM `totalSupply`/
 `decimals` take the mint as an `Account` while the EVM takes an `Address`, and the SVM writes take
 6 args to the EVM's 3–4. Verified in `sdk/test/std/token/`: `compile.test.ts` (both targets, all seven
-methods, the SVM account manifest, and the no-neutral-arm packaging invariant — always runs, no engine
+shared methods plus the SVM-only `ownerOf`, which reads a token account's owner and has no EVM arm,
+the SVM account manifest, and the no-neutral-arm packaging invariant — always runs, no engine
 needed) plus `svm.e2e.test.ts`/`evm.e2e.test.ts`, which EXECUTE the compiled bytecode against real SPL
 accounts and a real deployed ERC20 — see `SAUCE_RUST_ENGINE_SO`/`SAUCE_V12_RUNTIME_CREATION_HEX` above for why
 those two are gated. `src/std/token` **ships** two ways: embedded in
