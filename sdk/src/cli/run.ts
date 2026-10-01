@@ -3102,8 +3102,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     details: [
       "The Sauce MCP server. Its tools are this command's read-only half — sauce_compile,",
       "sauce_actions, sauce_tx, sauce_pot, sauce_simulate, sauce_intent_publish,",
-      "sauce_intent_fill, sauce_inspect, sauce_verify, sauce_globals, sauce_price and",
-      "sauce_chains — with the agent skills as tools (sauce_skills, sauce_skill, sauce_dev,",
+      "sauce_intent_fill, sauce_inspect, sauce_verify, sauce_globals, sauce_price, sauce_pools",
+      "and sauce_chains — with the agent skills as tools (sauce_skills, sauce_skill, sauce_dev,",
       "sauce_install_skills) and as resources, at sauce://skills/<path>. Nothing it does signs,",
       "and it takes no key: every transaction comes back unsigned, for the user's own wallet.",
       "",

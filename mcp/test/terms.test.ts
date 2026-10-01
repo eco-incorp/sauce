@@ -73,6 +73,11 @@ describe("toolTerms", () => {
       toolTerms("--intent-reward-deadline 1, --no-prove"),
       "intentRewardDeadline 1, prove: false",
     );
+    assert.equal(
+      toolTerms("run sauce pools --chain base --v4-key 50:1 first"),
+      "run sauce_pools first",
+    );
+    assert.equal(toolTerms("--v4-key 3000: not a key"), "v4Pools 3000: not a key");
     assert.equal(toolTerms("no flags, no commands"), "no flags, no commands");
   });
 });
