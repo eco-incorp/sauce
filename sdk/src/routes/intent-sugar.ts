@@ -49,7 +49,13 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { ERC20ABI } from "../protocols/erc20/abis.js";
 import { safeApproveStatements } from "../token/safe.js";
 import { walk, type AstNode } from "./ast-walk.js";
-import { childProgram, enclosingLocals, moduleScope, unreachedFunctions } from "./intent-body.js";
+import {
+  childProgram,
+  enclosingLocals,
+  literalValue,
+  moduleScope,
+  unreachedFunctions,
+} from "./intent-body.js";
 import { denormalizeToEvm } from "./encode.js";
 import { normalizeReward, normalizeRoute, toUniversalAddress } from "./normalize.js";
 import { publishAndFundTx } from "./portal.js";
@@ -194,12 +200,8 @@ interface Resolver {
 }
 
 function literalOf(node: AstNode): bigint | undefined {
-  if (node.type === "Literal") {
-    const value = (node as { value?: unknown }).value;
-    if (typeof value === "bigint") return value;
-    if (typeof value === "number" && Number.isSafeInteger(value)) return BigInt(value);
-    if (typeof value === "boolean") return value ? 1n : 0n;
-  }
+  const value = literalValue(node);
+  if (value !== undefined) return value;
   if (node.type === "UnaryExpression" && (node as { operator?: string }).operator === "-") {
     fail("a negative literal is not a valid address or amount");
   }
@@ -620,17 +622,28 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
     // `USDC` is the enclosing chain's. Crossing them names an address with no code where the call
     // runs: a reward token from the destination fails SafeERC20's code check on the approval and
     // reverts the whole fulfilment, and a body token from here is not a token over there.
-    const defines = context.definesFor(site.chain);
+    //
+    // A top-level `const` of a literal is known when the file is compiled, so it is a value here
+    // exactly as a define is, and the same on both chains: what the file wrote. A define of the same
+    // name takes precedence, as the compiler gives a define over a module `const`, and a local of
+    // the opening function shadows it.
+    const opening = enclosingLocals(program, scope, site.start);
+    const fixed = [...scope.declarations].flatMap(([name, d]) =>
+      d.literal === undefined || opening.has(name) ? [] : [[name, d.literal] as const],
+    );
+    const compileTime = (chain: CanonicalChain) =>
+      new Map([...fixed, ...context.definesFor(chain)]);
+    const defines = compileTime(site.chain);
     // What the enclosing program can read where the intent opens: its locals there, and the
     // file's module-level values. A reward, a delivery or a token-write argument naming one is
     // spliced in at run time.
     const readable = new Set([
-      ...enclosingLocals(program, scope, site.start),
+      ...opening,
       ...scope.imports.keys(),
       ...[...scope.declarations].filter(([, d]) => d.kind === "variable").map(([name]) => name),
     ]);
     const resolve = makeResolver(defines, readable);
-    const resolveFunding = makeResolver(context.definesFor(context.source), readable);
+    const resolveFunding = makeResolver(compileTime(context.source), readable);
 
     /**
      * What the solver delivers to the destination Executor so this intent can run.
