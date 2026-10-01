@@ -107,7 +107,7 @@ export type { LoweredIntent } from "./intent-sugar.js";
 export { predictVaultAddress, vaultInitCodeHash } from "./vault.js";
 export type { VaultConfig } from "./vault.js";
 
-export { isSauceClosure, sauceBodyToSource } from "./closure.js";
+export { closureSource, isSauceClosure } from "./closure.js";
 export { chainAmbient, chainDefines } from "./ambient.js";
 export type { AmbientDefinesOptions } from "./ambient.js";
 export { sourceGlobals } from "./source-globals.js";

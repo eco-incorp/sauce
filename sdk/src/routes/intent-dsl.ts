@@ -17,7 +17,7 @@
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { chainAmbient, chainDefines } from "./ambient.js";
-import { isSauceClosure, sauceBodyToSource, type SauceBody } from "./closure.js";
+import { closureSource, isSauceClosure, type SauceBody } from "./closure.js";
 import {
   encodeRewardEvm,
   encodeRewardSvm,
@@ -83,8 +83,8 @@ export type { AmountMeasurement, PlaceholderSpec };
 
 /**
  * A route body: a SauceScript file — a module declaring `function main`, or a script whose top-level
- * statements are the entry — or a closure (see `closure.ts#sauceBodyToSource`) whose
- * `Function.prototype.toString()` is extracted as SauceScript source. Closures capture nothing by
+ * statements are the entry — or a closure whose `Function.prototype.toString()` the compiler takes
+ * as the entry, verbatim (see `closure.ts`). Closures capture nothing by
  * construction — a free identifier must come from `IntentOptions.defines` (or chain-scoped ambient
  * defines) or the compile fails closed with "`X` is not a declared variable".
  */
@@ -521,7 +521,7 @@ export function openRoute(
   }
 
   const closure = isSauceClosure(sauce);
-  const sauceSource = closure ? sauceBodyToSource(sauce) : sauce;
+  const sauceSource = closure ? closureSource(sauce) : sauce;
 
   // Chain-scoped ambient defines (chainId, protocol/contract addresses, caller token symbols) sit
   // UNDERNEATH the caller's own IntentOptions.defines, which sits underneath the most-specific
@@ -547,6 +547,7 @@ export function openRoute(
   );
   const compileOptions: SauceCompileOptions = {
     ...options.compile,
+    ...(closure ? { entryKind: "closure" as const } : {}),
     // `Chain(() => ...).reward(...)` written INSIDE the program inherits this intent's own creator,
     // deadlines and eco-routes selection, so the common case needs no second set of options. An
     // explicit `compile.intents` field still wins.

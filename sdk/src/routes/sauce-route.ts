@@ -98,6 +98,12 @@ export interface SauceCompileOptions {
    * no safe defaults and are reported by name when missing.
    */
   intents?: Partial<IntentSugarDefaults> & EcoRoutesSelector;
+  /**
+   * How `sauce` is read: a SauceScript module (the default), or `"closure"` — one function
+   * expression, exactly as `Function.prototype.toString` prints a closure, compiled as the entry
+   * with its block as `main`'s body. `openRoute` sets it for a closure body.
+   */
+  entryKind?: "module" | "closure";
   /** Compile for compact-v1 entry arguments. Set by the intent lowering for a child program whose
    *  captured values arrive at run time; a caller wanting entry arguments generally uses the raw
    *  compiler. */
@@ -266,7 +272,8 @@ function compileIntentChild(
     destination,
     childSource,
     { pot, engine, value: intents.executionFee },
-    { ...options, compactArgs: captures.length > 0 },
+    // The child is a module the sugar built, whatever the enclosing program was written as.
+    { ...options, compactArgs: captures.length > 0, entryKind: undefined },
     scope,
   );
 
@@ -560,6 +567,7 @@ function compileNatively(
     contracts: options.contracts,
     ambient: options.ambient,
     compactArgs: options.compactArgs,
+    entryKind: options.entryKind,
     extensions: {
       chain,
       tokens: Object.keys(tokens).length > 0 ? tokens : undefined,
