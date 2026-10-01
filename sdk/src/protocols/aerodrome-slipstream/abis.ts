@@ -27,6 +27,61 @@ export const SlipstreamCLFactoryABI = [
   },
 ] as const;
 
+// CLPool — the reads a program makes on a pool it looked up through a CLFactory, from the verified
+// CLPool source. Its `slot0` has no `feeProtocol`, unlike Uniswap V3's, and its `fee` is set per
+// pool and can change, so a program reads it rather than assume the tick spacing's default.
+export const AerodromeSlipstreamPoolABI = [
+  {
+    name: "slot0",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      { name: "sqrtPriceX96", type: "uint160" },
+      { name: "tick", type: "int24" },
+      { name: "observationIndex", type: "uint16" },
+      { name: "observationCardinality", type: "uint16" },
+      { name: "observationCardinalityNext", type: "uint16" },
+      { name: "unlocked", type: "bool" },
+    ],
+  },
+  {
+    name: "liquidity",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint128" }],
+  },
+  {
+    name: "fee",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint24" }],
+  },
+  {
+    name: "tickSpacing",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "int24" }],
+  },
+  {
+    name: "token0",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "token1",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+] as const;
+
 // NonfungiblePositionManager — fragments from its verified source (Sourcify, Arc 0xc84bB45D…f473).
 export const SlipstreamPositionManagerABI = [
   {
