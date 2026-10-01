@@ -340,9 +340,9 @@ async function rehearseFill(
   if (cooks && !deployed) {
     notes.push(
       `warning: the shared intent Pot ${pot} is not deployed on ${chain.slug}. The rehearsal ` +
-        "deploys it first, as the first solver to fill an intent there must: any account may " +
-        `send it, and \`sauce pot --owner ${executor} --chain ${chain.slug}\` prints the ` +
-        "transaction.",
+        "deploys it first, as the first solver to fill an intent there must. Any account may " +
+        `deploy it: \`sauce pot --owner ${executor} --chain ${chain.slug}\` prints the ` +
+        "transaction, and with --deploy and a signer sends it.",
     );
   }
   if (cookTargets.length > 0) {

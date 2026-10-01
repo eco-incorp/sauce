@@ -483,7 +483,7 @@ every call from a solver:
 
 1. `Kitchen.deployPot(executor, 0)`, when the route cooks on the destination's shared intent Pot
    and it is not deployed yet. Any account may send it, and the Pot is the Executor's either way.
-   The command also warns, with the `sauce pot` line that prints the deployment.
+   The command also warns, with the `sauce pot` line that deploys it (`--deploy` and any signer).
 2. The solver's approval of the Portal for each token the route delivers. The Portal pulls them
    from the solver.
 3. `Portal.fulfill(intentHash, route, rewardHash, claimant)`, with the route's native amount — the
