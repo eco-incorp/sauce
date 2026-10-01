@@ -30,9 +30,9 @@
 //      typechecks, and every runner EXECUTES with the network disabled;
 //   7. every `@eco-incorp/sauce/...` subpath and `node_modules/@eco-incorp/sauce/...` path exists,
 //      and every identifier in inline code is one the package declares;
-//   8. the index of globals (sauce-globals/references) is what `gen-skills-globals.mjs` writes,
-//      everything it lists compiles on its chains, and every global a skill uses is listed; the
-//      protocol documents' index is what `gen-skills-protocol-index.mjs` writes from the registry;
+//   8. every generated reference (the globals index, the chains, the protocol index and registry
+//      files) is what `gen-skills-references.mjs` writes from the registries, everything the globals
+//      index lists compiles on its chains, and every global a skill uses is listed;
 //   9. the SauceScript reference (sauce-script/references) compiles every example it gives and is
 //      refused every form it rejects, with the messages it quotes.
 import { spawnSync } from "node:child_process";
@@ -52,8 +52,11 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 
-import { globalsIndex, renderGlobalsIndex } from "./gen-skills-globals.mjs";
-import { protocolIndex, renderProtocolIndex } from "./gen-skills-protocol-index.mjs";
+import {
+  GENERATED_DIRS,
+  renderSkillsReferences,
+  skillsReferences,
+} from "./gen-skills-references.mjs";
 import { checkBuiltins, checkBuiltinsJson } from "./skills-check/builtins.mjs";
 
 // ---- Arguments and resolution -------------------------------------------------------------------
@@ -252,16 +255,8 @@ function checkCommand(where, argv) {
 }
 
 // ---- Skills ---------------------------------------------------------------------------------------
-function parseSkill(dir) {
-  const path = join(SKILLS_DIR, dir, "SKILL.md");
-  const text = read(path);
-  const match = /^---\n([\s\S]*?)\n---\n/.exec(text);
-  const front = {};
-  for (const line of match?.[1].split("\n") ?? []) {
-    const kv = /^([a-z-]+):\s*(.*)$/.exec(line);
-    if (kv) front[kv[1]] = kv[2].trim();
-  }
-  // Fenced blocks with their info string and the SKILL.md line the body starts on.
+/** Fenced blocks with their info string, the file and the line the body starts on. */
+function fencedBlocks(text, file) {
   const blocks = [];
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i++) {
@@ -271,6 +266,7 @@ function parseSkill(dir) {
     let end = start;
     while (end < lines.length && !/^```\s*$/.test(lines[end])) end++;
     blocks.push({
+      file,
       lang: open[1],
       info: open[2].trim().split(/\s+/).filter(Boolean),
       body: lines.slice(start, end).join("\n"),
@@ -278,6 +274,22 @@ function parseSkill(dir) {
     });
     i = end;
   }
+  return blocks;
+}
+function parseSkill(dir) {
+  const path = join(SKILLS_DIR, dir, "SKILL.md");
+  const text = read(path);
+  const match = /^---\n([\s\S]*?)\n---\n/.exec(text);
+  const front = {};
+  for (const line of match?.[1].split("\n") ?? []) {
+    const kv = /^([a-z-]+):\s*(.*)$/.exec(line);
+    if (kv) front[kv[1]] = kv[2].trim();
+  }
+  const blocks = fencedBlocks(text, path);
+  // The ```sauce blocks of its references, compiled like its own.
+  const referenceBlocks = walk(join(SKILLS_DIR, dir, "references"), (f) => f.endsWith(".md"))
+    .sort()
+    .flatMap((file) => fencedBlocks(read(file), file).filter((b) => b.lang === "sauce"));
   const prose = text.replace(/^```[\s\S]*?^```\s*$/gm, "");
   const examplesDir = join(SKILLS_DIR, dir, "examples");
   const files = existsSync(examplesDir) ? readdirSync(examplesDir).sort() : [];
@@ -288,6 +300,7 @@ function parseSkill(dir) {
     front,
     hasFront: !!match,
     blocks,
+    referenceBlocks,
     prose,
     examples: files.map((f) => join(examplesDir, f)),
     runners: files.filter((f) => f.endsWith(".mts")).map((f) => join(examplesDir, f)),
@@ -321,6 +334,10 @@ const inlineCode = (skill) =>
 const UNDECLARED_NAMES = {
   "sauce-script": {
     arr: "the rejected `arr.push(x)`: JavaScript's push, which SauceScript has no form of",
+  },
+  "sauce-chains": {
+    getAccountInfo:
+      "Solana's JSON-RPC method that reads an account, a node's API, not the package's",
   },
   "sauce-solana": {
     getCreateAssociatedTokenIdempotentInstruction:
@@ -412,10 +429,12 @@ const PLACEHOLDERS = [
 ];
 const RPC_HOST =
   /(alchemy|infura|quiknode|quicknode|helius|ankr|llamarpc|drpc|blastapi|chainstack|publicnode|getblock|tenderly|solana\.com|rpc\.|\.rpc|-rpc)/i;
-const NOT_PORTABLE = [
-  [/\.\.\/\.\.\//, "a path that leaves the skills directory"],
-  [/(?:^|[\s`("'])(?:\/Users\/|\/home\/|~\/)/, "an absolute or home path"],
-];
+const NOT_PORTABLE = [[/(?:^|[\s`("'])(?:\/Users\/|\/home\/|~\/)/, "an absolute or home path"]];
+// Docs inside the installed package are not the skills': a skill carries every fact it needs in its
+// SKILL.md and references/, which install with it. Only the TypeScript skill points into the package.
+const PACKAGE_DOCS =
+  /node_modules\/@eco-incorp\/sauce\b|@eco-incorp\/sauce\/docs\b|(?<![\w./-])docs\/(?:guides|concepts|api|examples|README)/;
+const PACKAGE_SKILL = "sauce-typescript";
 
 // Every address the SDK records, so an address in a skill is one a reader can trace.
 const KNOWN_ADDRESSES = new Set();
@@ -437,11 +456,14 @@ const KNOWN_ADDRESSES = new Set();
   }
   collect(deploymentsApi.v12DeployedAddresses());
   for (const chain of sdk.CANONICAL_CHAINS) {
-    for (const lookup of ["ecoRoutesPortal"]) {
+    for (const lookup of ["ecoRoutesPortal", "ecoRoutesExecutor"]) {
       try {
         collect(ecoRoutes[lookup](chain.slug));
       } catch {}
     }
+    try {
+      collect(sdk.destinationPot(chain.slug));
+    } catch {}
     collect(sdk.routes.chainDefines(chain));
   }
 }
@@ -450,6 +472,16 @@ const KNOWN_ADDRESSES = new Set();
 // recorded-address rule hold for what this package writes itself, not for those documents.
 const PROTOCOL_DOCUMENTS = join(SKILLS_DIR, "sauce-protocols", "references");
 const handWritten = (file) => !file.startsWith(PROTOCOL_DOCUMENTS + "/");
+// The generated references record what the registries hold, a Portal included.
+const GENERATED = new Set(
+  [
+    "sauce-globals/references/tokens.md",
+    "sauce-globals/references/protocols.md",
+    "sauce-globals/references/chains.md",
+  ].map((name) => join(SKILLS_DIR, name)),
+);
+const isGenerated = (file) =>
+  GENERATED.has(file) || GENERATED_DIRS.some((sub) => file.startsWith(join(SKILLS_DIR, sub) + "/"));
 
 function wording(skill, file) {
   const text = read(file);
@@ -466,6 +498,20 @@ function wording(skill, file) {
         fail(where(i), "names a placeholder address; take it from the SDK or write <address>");
     for (const [pattern, what] of NOT_PORTABLE)
       if (pattern.test(line)) fail(where(i), `names ${what}`);
+    for (const m of line.matchAll(/(?:\.\.\/)+[\w@.-][\w@./-]*/g)) {
+      if (!resolve(dirname(file), m[0]).startsWith(SKILLS_DIR + "/"))
+        fail(where(i), `names ${m[0]}, a path that leaves the skills directory`);
+    }
+    for (const m of line.matchAll(/\]\(([^)\s#]+)(?:#[^)\s]*)?\)/g)) {
+      if (/^[a-z]+:/i.test(m[1])) continue;
+      if (!existsSync(resolve(dirname(file), m[1])))
+        fail(where(i), `links ${m[1]}, which does not exist`);
+    }
+    if (skill.dir !== PACKAGE_SKILL && PACKAGE_DOCS.test(line))
+      fail(
+        where(i),
+        `points into the package's docs; put the fact in the skill (only ${PACKAGE_SKILL} may)`,
+      );
     for (const m of line.matchAll(/https?:\/\/[^\s"'`)<>]+/g)) {
       if (RPC_HOST.test(new URL(m[0]).host))
         fail(where(i), `looks like an RPC endpoint (${m[0]}); endpoints come from the developer`);
@@ -473,7 +519,11 @@ function wording(skill, file) {
     if (!handWritten(file)) return;
     if (/multicall|magic header/i.test(line) && !/\b(never|not|don't|do not|isn't)\b/i.test(line))
       fail(where(i), "describes Sauce as a multicall or with a magic header");
-    if (skill.dir !== INTENTS_SKILL && /\b(?:Portal|portal|[Pp]rover)s?\b/.test(line))
+    if (
+      skill.dir !== INTENTS_SKILL &&
+      !isGenerated(file) &&
+      /\b(?:Portal|portal|[Pp]rover)s?\b/.test(line)
+    )
       fail(where(i), `names the Portal or a prover outside ${INTENTS_SKILL}`);
     for (const m of line.matchAll(/0x[0-9a-fA-F]{40}(?![0-9a-fA-F])/g)) {
       counts.addresses++;
@@ -743,8 +793,11 @@ const sauceSources = []; // { where, text } for the globals check below
 try {
   let n = 0;
   for (const skill of skills) {
-    for (const block of skill.blocks.filter((b) => b.lang === "sauce")) {
-      const where = `${rel(skill.path)}:${block.line}`;
+    for (const block of [
+      ...skill.blocks.filter((b) => b.lang === "sauce"),
+      ...skill.referenceBlocks,
+    ]) {
+      const where = `${rel(block.file)}:${block.line}`;
       const mustFail = block.info.includes("fails");
       if (mustFail) counts.sauceFails++;
       else counts.sauce++;
@@ -997,12 +1050,34 @@ for (const [dir, names] of Object.entries(UNDECLARED_NAMES)) {
 }
 
 // ---- 8. The index of globals: fresh, compilable, and covering every use ---------------------------------
-const GLOBALS = globalsIndex(sdk, ecoRoutes);
+const REFERENCES = await skillsReferences(
+  {
+    sdk,
+    ecoRoutes,
+    deployments: deploymentsApi,
+    cctp: await load(`${PKG}/protocols/cctp`),
+    compiler: compilerApi,
+    loadProtocol: (slug) => load(`${PKG}/protocols/${slug}`),
+  },
+  (slug) => existsSync(join(PROTOCOL_DOCUMENTS, `${slug}.md`)),
+);
+const GLOBALS = REFERENCES.globals;
 const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
-for (const [name, text] of Object.entries(renderGlobalsIndex(GLOBALS))) {
-  const path = join(REFERENCE, name);
-  if (!existsSync(path) || read(path) !== text)
-    fail(rel(path), "is stale: rebuild the SDK (`gen-skills-globals.mjs` writes it) and commit it");
+{
+  const files = renderSkillsReferences(REFERENCES);
+  for (const [name, text] of Object.entries(files)) {
+    const path = join(SKILLS_DIR, name);
+    if (!existsSync(path) || read(path) !== text)
+      fail(
+        rel(path),
+        "is stale: rebuild the SDK (`gen-skills-references.mjs` writes it) and commit it",
+      );
+  }
+  for (const sub of GENERATED_DIRS) {
+    for (const name of existsSync(join(SKILLS_DIR, sub)) ? readdirSync(join(SKILLS_DIR, sub)) : [])
+      if (name.endsWith(".md") && !(`${sub}/${name}` in files))
+        fail(rel(join(SKILLS_DIR, sub, name)), "is generated by nothing: rebuild the SDK");
+  }
 }
 {
   // Everything listed compiles on the chains it is listed for, by name and as its define.
@@ -1107,23 +1182,6 @@ for (const [name, text] of Object.entries(renderGlobalsIndex(GLOBALS))) {
   for (const { where, text, defines } of sauceSources) uses(where, text, true, defines);
   for (const skill of skills)
     for (const span of inlineCode(skill)) uses(rel(skill.path), span, false);
-}
-
-// ---- 8b. The protocol documents' index: what gen-skills-protocol-index.mjs writes from the registry ------
-{
-  const path = join(PROTOCOL_DOCUMENTS, "index.md");
-  const text = renderProtocolIndex(
-    await protocolIndex(
-      sdk,
-      (slug) => load(`${PKG}/protocols/${slug}`),
-      (slug) => existsSync(join(PROTOCOL_DOCUMENTS, `${slug}.md`)),
-    ),
-  );
-  if (!existsSync(path) || read(path) !== text)
-    fail(
-      rel(path),
-      "is stale: rebuild the SDK (`gen-skills-protocol-index.mjs` writes it) and commit it",
-    );
 }
 
 // ---- 9. The SauceScript reference: every example compiles, every rejection is refused ---------------------

@@ -99,8 +99,9 @@ requires it.
 ## Which venues qualify
 
 A venue qualifies only if it takes a sqrt-price limit, since the limit is what makes each partial
-fill safe and bounded. The chains each namespace contract is deployed on are in
-[../sauce-globals/references/protocols.md](../sauce-globals/references/protocols.md).
+fill safe and bounded. The chains each venue is deployed on, and its addresses there, are in its
+registry file in `sauce-protocols`, for example
+[../sauce-protocols/references/registry/aerodrome-slipstream.md](../sauce-protocols/references/registry/aerodrome-slipstream.md).
 
 | Venue                                    | Router entry | Pool lookup                                                                                                                            | Fee                                            | Address                                                                                                                                      |
 | ---------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |

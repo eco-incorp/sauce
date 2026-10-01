@@ -70,18 +70,19 @@ from the program or the environment.
 
 ## Pick the next skill
 
-| Task                                                                                     | Skill                    |
-| ---------------------------------------------------------------------------------------- | ------------------------ |
-| The language: the two program forms, `main(...)` inputs and defines, compile errors      | `sauce-script`           |
-| Names with no import: tokens, `Token(...)`, protocol namespaces, chains, `ctx`           | `sauce-globals`          |
-| A protocol without a namespace; factories, routers and pools; the per-protocol documents | `sauce-protocols`        |
-| Any swap: the Router's entry points, price limits, callbacks, the guard every leg needs  | `sauce-swaps`            |
-| One swap split across every price-limit venue on a chain                                 | `sauce-distributed-swap` |
-| Continuing on another chain: intents, cascades, rewards                                  | `sauce-intents`          |
-| Solana programs: accounts, SPL, the Kitchen                                              | `sauce-solana`           |
-| Compiling and running: the `sauce` commands, the Pot, funding, simulating, publishing    | `sauce-run`              |
-| Application code: compiling, arguments, cooks, actions and verification from TypeScript  | `sauce-typescript`       |
-| An example to start from                                                                 | `sauce-examples`         |
+| Task                                                                                      | Skill                    |
+| ----------------------------------------------------------------------------------------- | ------------------------ |
+| The language: the two program forms, `main(...)` inputs and defines, compile errors       | `sauce-script`           |
+| Names with no import: tokens, `Token(...)`, protocol namespaces, chains, `ctx`            | `sauce-globals`          |
+| What is on a chain: tokens, every protocol with its addresses, intents, the Sauce release | `sauce-chains`           |
+| Every protocol: how to choose one, its deployments, how a program calls it, its pitfalls  | `sauce-protocols`        |
+| Any swap: the Router's entry points, price limits, callbacks, the guard every leg needs   | `sauce-swaps`            |
+| One swap split across every price-limit venue on a chain                                  | `sauce-distributed-swap` |
+| Continuing on another chain: intents, cascades, rewards                                   | `sauce-intents`          |
+| Solana programs: accounts, SPL, the Kitchen                                               | `sauce-solana`           |
+| Compiling and running: the `sauce` commands, the Pot, funding, simulating, publishing     | `sauce-run`              |
+| Application code: compiling, arguments, cooks, actions and verification from TypeScript   | `sauce-typescript`       |
+| An example to start from                                                                  | `sauce-examples`         |
 
 ## Rules for every program
 
@@ -95,13 +96,6 @@ from the program or the environment.
 4. **An intent is an offer.** Never promise it will be filled.
 5. **No endpoints or keys in code.** The package ships no RPC URL and reads no environment
    variable: endpoints and signers are passed on the command line or from a config file.
-
-## Deeper material
-
-The package ships its manual: `node_modules/@eco-incorp/sauce/docs/README.md`, with
-`node_modules/@eco-incorp/sauce/docs/guides/cli.md` for every command and
-`node_modules/@eco-incorp/sauce/docs/concepts/architecture.md` for how the compiler, the package
-and the engine divide the work.
 
 ## Example
 

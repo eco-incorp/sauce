@@ -1,0 +1,55 @@
+<!-- Generated from the SDK's registries. Do not edit. -->
+
+# Beefy Finance (`beefy`)
+
+Multi-chain yield optimizer. Auto-compounds rewards from LP tokens and other yield sources across many chains.
+
+| Fact | Value |
+| --- | --- |
+| Category | Yield and vaults |
+| Family | none |
+| Namespace | none: import its ABI |
+| Chains | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
+| Document | [beefy.md](../beefy.md): what it is for, how to choose it, its pitfalls |
+
+## In a program
+
+The registry records no deployment: `BeefyVaultABI` is an interface, bound to an address the
+program is given.
+
+```sauce chain=ethereum
+import BeefyVaultABI from "./protocols/beefy/BeefyVaultABI.json";
+
+const TARGET = 0n; // the contract's address, as a define
+
+function main() {
+  const target = BeefyVaultABI.at(TARGET);
+}
+```
+
+## Deployments
+
+| Chain | Contract | Address | In a program |
+| --- | --- | --- | --- |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | BIFI | `0xB1F1ee126e9c96231Cc3d3fAD7C08b4cf873b1f1` | no registry ABI |
+| [Optimism](../../../sauce-chains/references/optimism.md) | BIFI | `0x4E720DD3Ac5CFe1e1fbDE4935f386Bb1C66F4642` | no registry ABI |
+| [BNB Chain](../../../sauce-chains/references/bsc.md) | BIFI | `0xCa3F508B8e4Dd382eE878A314789373D80A5190A` | no registry ABI |
+| [Polygon](../../../sauce-chains/references/polygon.md) | BIFI | `0xFbdd194376de19a88F4A68671C339563c427310d` | no registry ABI |
+| [Base](../../../sauce-chains/references/base.md) | BIFI | `0xc55E93C62874D8100dBd2DfE307EDc1036ad5434` | no registry ABI |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | BIFI | `0x99C409E5f62E4bd2AC142f17caFb6810B8F0BAAE` | no registry ABI |
+| [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | BIFI | `0xd6070ae98b8069de6B494332d1A1a81B6179D960` | no registry ABI |
+
+## ABI
+
+### `BeefyVaultABI`
+
+`import BeefyVaultABI from "./protocols/beefy/BeefyVaultABI.json";`
+
+- `deposit(uint256 _amount)`
+- `depositAll()`
+- `withdraw(uint256 _shares)`
+- `withdrawAll()`
+- `getPricePerFullShare() view returns (uint256)`
+- `balance() view returns (uint256)`
+- `balanceOf(address account) view returns (uint256)`
+- `want() view returns (address)`

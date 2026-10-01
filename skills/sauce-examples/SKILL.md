@@ -11,13 +11,13 @@ ones it is checked on. Each program's first comment lines say what it does and g
 command that runs it; runtime inputs are `main(...)` parameters passed with `--args`, and an intent
 file's values are defines (`sauce-script`).
 
-Before writing a program, look its names up in the generated indexes of globals:
-[../sauce-globals/references/tokens.md](../sauce-globals/references/tokens.md) (token symbols per
-chain, with addresses and decimals),
-[../sauce-globals/references/protocols.md](../sauce-globals/references/protocols.md) (namespace
-contracts and their chains) and
-[../sauce-globals/references/chains.md](../sauce-globals/references/chains.md) (chain names and
-ids), or run `npx sauce globals --chain <chain>`.
+Before writing a program, look its names up: the chain's file in `sauce-chains`
+([../sauce-chains/references/index.md](../sauce-chains/references/index.md)) lists its tokens and
+every protocol there with how a program names it, and the generated indexes of globals list the
+names alone ([../sauce-globals/references/tokens.md](../sauce-globals/references/tokens.md),
+[../sauce-globals/references/protocols.md](../sauce-globals/references/protocols.md),
+[../sauce-globals/references/chains.md](../sauce-globals/references/chains.md)); or run
+`npx sauce globals --chain <chain>`.
 
 ## SauceScript programs
 
@@ -25,6 +25,7 @@ ids), or run `npx sauce globals --chain <chain>`.
 | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
 | [`../sauce-run/examples/pay.sauce.ts`](../sauce-run/examples/pay.sauce.ts)                                                     | `ethereum`, `optimism`         | The smallest complete program: pay a recipient in USDC and USDT, SafeERC20 writes, both values `main` inputs                                                                                                                                                                                                                                            | `sauce-run`              |
 | [`../sauce-run/examples/split.sauce.ts`](../sauce-run/examples/split.sauce.ts)                                                 | `base`, `arbitrum`, `ethereum` | Array and bool arguments: pay several recipients any token, and the chain's USDC as well                                                                                                                                                                                                                                                                | `sauce-run`              |
+| [`../sauce-chains/examples/chains.sauce.ts`](../sauce-chains/examples/chains.sauce.ts)                                         | `base`, `arbitrum`, `ethereum` | One file for every chain: each name resolves on the chain it is compiled for, and the cook `sauce tx` prints for any signer                                                                                                                                                                                                                             | `sauce-chains`           |
 | [`../sauce-globals/examples/globals.sauce.ts`](../sauce-globals/examples/globals.sauce.ts)                                     | `ethereum`, `optimism`         | Every name available without an import: `USDT`/`USDC`, `Token(address)` bound once, `@sauce/token` functions, `AaveV3.Pool`, `ctx`                                                                                                                                                                                                                      | `sauce-globals`          |
 | [`../sauce-protocols/examples/protocols.sauce.ts`](../sauce-protocols/examples/protocols.sauce.ts)                             | `base`, `arbitrum`             | A protocol through its namespace (Aave V3) and one through an ABI import bound to a registry address passed as a define (a PancakeSwap V3 factory lookup)                                                                                                                                                                                               | `sauce-protocols`        |
 | [`../sauce-swaps/examples/swap-leg.sauce.ts`](../sauce-swaps/examples/swap-leg.sauce.ts)                                       | `base`, `arbitrum`             | One guarded Uniswap V3 leg: a price limit, the output measured as a delta, `minOut`, the unspent input returned                                                                                                                                                                                                                                         | `sauce-swaps`            |

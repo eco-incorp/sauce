@@ -30,8 +30,9 @@ The file is compiled for the **source** chain, the one that pays the reward (`--
 - **Inside the braces, and in the delivery argument**, the code runs on the destination. Protocol
   namespaces resolve there: `AaveV3.Pool` in an `Arbitrum(...)` body is Arbitrum's pool. A bare
   token symbol, `chainId` and a `Namespace_Contract` define resolve on the chain the file is
-  compiled for, so name each destination token by **its address on the destination**, from
-  [../sauce-globals/references/tokens.md](../sauce-globals/references/tokens.md):
+  compiled for, so name each destination token by **its address on the destination**, from the
+  destination's file in `sauce-chains`
+  ([../sauce-chains/references/arbitrum.md](../sauce-chains/references/arbitrum.md) for Arbitrum):
   `Token(0xaf88d065e77c8cc2239327c5edb3a432268e5831n)` is Arbitrum's USDC.
 
 ## Two ways to run the file
@@ -227,8 +228,7 @@ would:
    Pot holds nothing.
 
 Solana destinations are not built this way (see `sauce-solana`). An application can also build an
-intent from TypeScript around a program it compiles itself:
-`node_modules/@eco-incorp/sauce/docs/guides/intents.md`.
+intent from TypeScript around a program it compiles itself (`sauce-typescript`).
 
 ## Examples
 

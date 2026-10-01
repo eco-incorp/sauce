@@ -1,0 +1,49 @@
+<!-- Generated from the SDK's registries. Do not edit. -->
+
+# Blast
+
+| Fact | Value |
+| --- | --- |
+| Slug (`--chain`) | `blast` |
+| Chain id | 81457 |
+| Kind | EVM |
+| Name in a program | `Blast` |
+| Native coin | ETH (Ether), 18 decimals |
+| Sauce engine | `0x6785455AA479AA99D59357d7c9Fe14cba626F175` |
+| Sauce Kitchen | `0x19845b22989150E6B09dE55a661295Dd9188506b` |
+| Sauce Router | `0x9201aF06536Cb4819cf1F08aE7063c5997D87459` |
+| Intents (eco-routes) | none recorded |
+
+## In a program
+
+Compiled with `--chain blast`, a program names Blast's tokens and contracts with no
+import; the same file compiled for another chain resolves each name there, or fails where the
+chain does not have it.
+
+```sauce chain=blast
+function main() {
+  // `UniswapV2.Factory` is Blast's factory: `0x5C346464d33F90bABaf70dB6388507CC889C1070`.
+  require(UniswapV2.Factory != 0n);
+  // The same contract, qualified by the chain's name, from a program on any chain.
+  require(Blast.UniswapV2.Factory == UniswapV2.Factory);
+}
+```
+
+## Tokens
+
+The registry names no token on this chain: a program uses `Token(<address>)`.
+
+## Protocols
+
+Every protocol the registry records here, each contract with how a program names it: its
+namespace contract, or its ABI imported from `./protocols/<slug>/<Export>.json` and bound to the
+address.
+
+| Protocol | Contract | Address | In a program |
+| --- | --- | --- | --- |
+| [Across](../../sauce-protocols/references/registry/across.md) | spokePool | `0x2D509190Ed0172ba588407D4c2df918F955Cc6E1` | `AcrossSpokePoolABI.at(0x2D509190Ed0172ba588407D4c2df918F955Cc6E1n)` |
+| [Fenix](../../sauce-protocols/references/registry/fenix.md) | router | `0xbD571125856975DBfC2E9b6d1DE496D614D7BAEE` | `FenixRouterABI.at(0xbD571125856975DBfC2E9b6d1DE496D614D7BAEEn)` |
+| [Thruster](../../sauce-protocols/references/registry/thruster.md) | v3SwapRouter | `0x337827814155ECBf24D20231fCA4444F530c0555` | `ThrusterV3SwapRouterABI.at(0x337827814155ECBf24D20231fCA4444F530c0555n)` |
+| [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | factory | `0x5C346464d33F90bABaf70dB6388507CC889C1070` | `UniswapV2.Factory` |
+| [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | router | `0xBB66Eb1c5e875933D44DAe661dbD80e5D9B03035` | `UniswapV2.Router` |
+| [Uniswap V4](../../sauce-protocols/references/registry/uniswap-v4.md) | poolManager | `0x1631559198a9e474033433b2958dabc135ab6446` | `UniswapV4.PoolManager` |

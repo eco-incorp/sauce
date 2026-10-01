@@ -10,12 +10,17 @@ are program syntax, not JavaScript values. **Look names up before writing a prog
 `npx sauce globals --chain <chain>` lists one chain's, and these indexes list every chain's, from
 the same registries the compile reads:
 
-- [references/tokens.md](references/tokens.md): every token symbol per chain, with its address and
-  decimals, and the `@sauce/token` functions.
-- [references/protocols.md](references/protocols.md): every `Namespace.Contract`, the chains it is
-  deployed on, and the family aliases.
+- [references/tokens.md](references/tokens.md): every token symbol per chain, with its decimals,
+  and the `@sauce/token` functions.
+- [references/protocols.md](references/protocols.md): every `Namespace.Contract`, and the family
+  aliases.
 - [references/chains.md](references/chains.md): every chain name, its id, and whether it takes
   intents.
+
+These are the names. Where each is deployed and its address there are the full map: per chain in
+`sauce-chains` ([../sauce-chains/references/index.md](../sauce-chains/references/index.md)), and per
+protocol in `sauce-protocols`
+([../sauce-protocols/references/index.md](../sauce-protocols/references/index.md)).
 
 A name that is absent on the target chain (a token the chain does not register, a contract not
 deployed there) is a **compile error**, never a wrong address at run time.

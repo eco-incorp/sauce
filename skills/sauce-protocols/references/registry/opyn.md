@@ -1,0 +1,46 @@
+<!-- Generated from the SDK's registries. Do not edit. -->
+
+# Opyn (`opyn`)
+
+DeFi options protocol known for Squeeth (squared ETH), a power perpetual that provides leveraged ETH exposure without liquidations.
+
+| Fact | Value |
+| --- | --- |
+| Category | Options |
+| Family | none |
+| Namespace | none: import its ABI |
+| Chains | ethereum |
+| Document | [opyn.md](../opyn.md): what it is for, how to choose it, its pitfalls |
+
+## In a program
+
+Where it is not a namespace, a program imports the ABI and binds it to the recorded address,
+as a module constant a define can replace (here Ethereum's controller):
+
+```sauce chain=ethereum
+import ControllerABI from "./protocols/opyn/ControllerABI.json";
+
+const CONTROLLER = 0x64187ae08781B09368e6253F9E94951243A493D5n;
+
+function main() {
+  const bound = ControllerABI.at(CONTROLLER);
+}
+```
+
+## Deployments
+
+| Chain | Contract | Address | In a program |
+| --- | --- | --- | --- |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | controller | `0x64187ae08781B09368e6253F9E94951243A493D5` | `ControllerABI.at(0x64187ae08781B09368e6253F9E94951243A493D5n)` |
+| [Ethereum](../../../sauce-chains/references/ethereum.md) | oSQTH | `0xf1B99e3E573A1a9C5E6B2Ce818b617F0E664E86B` | no registry ABI |
+
+## ABI
+
+### `ControllerABI`
+
+`import ControllerABI from "./protocols/opyn/ControllerABI.json";` Speaks for: controller.
+
+- `mintPowerPerpAmount(uint256 _vaultId, uint256 _powerPerpAmount, uint256 _uniTokenId) payable returns (uint256, uint256)`
+- `burnPowerPerpAmount(uint256 _vaultId, uint256 _powerPerpAmount, uint256 _withdrawAmount) returns (uint256 wPowerPerpAmount)`
+- `deposit(uint256 _vaultId) payable`
+- `withdraw(uint256 _vaultId, uint256 _amount)`
