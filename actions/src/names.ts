@@ -16,6 +16,7 @@
 import { CANONICAL_CHAINS, type CanonicalChain } from "../../sdk/dist/chains/canonical.js";
 import { getChain, nativeErc20 } from "../../sdk/dist/chains/index.js";
 import { sourceGlobals } from "../../sdk/dist/routes/index.js";
+import { NAMESPACE_KEYS } from "../../sdk/dist/routes/accessor-index.js";
 
 import { ACTION_SPECS, type FieldKind } from "./spec.js";
 import type { ProgramIssue } from "./semantics.js";
@@ -88,23 +89,22 @@ export function chainNames(chain: CanonicalChain): ChainNames {
   return names;
 }
 
-/** Every EVM chain on which `namespace` has a contract, for a name the compiled chain lacks. */
+/**
+ * Every EVM chain on which `namespace` has a contract, for a name the compiled chain lacks. Only a
+ * refusal asks, and each chain's listing is built once (`chainNames`' cache), so a service that
+ * checks many documents pays for it at most once per chain.
+ */
 function chainsWith(namespace: string): CanonicalChain[] {
   return (CANONICAL_CHAINS as readonly CanonicalChain[]).filter(
     (chain) => chain.kind === "evm" && chainNames(chain).namespaces.has(namespace),
   );
 }
 
-/** Every namespace any EVM chain has, for a suggestion when a name matches none. */
-function allNamespaces(): string[] {
-  const all = new Set<string>();
-  for (const chain of CANONICAL_CHAINS as readonly CanonicalChain[]) {
-    if (chain.kind !== "evm") continue;
-    for (const ns of chainNames(chain).namespaces.keys()) all.add(ns);
-  }
-
-  return [...all].sort();
-}
+/**
+ * Every namespace the registry has on any chain, for a suggestion when a name matches none: the
+ * accessor index's own keys, so the suggestion builds no chain's listing.
+ */
+const allNamespaces = (): string[] => [...NAMESPACE_KEYS].sort();
 
 /** `Base (base, chain 8453)`. */
 export function chainLabel(chain: CanonicalChain): string {

@@ -281,6 +281,17 @@ class Lowering {
     return this.bind("bal", this.call("IErc20", token, "balanceOf", [SELF]));
   }
 
+  /**
+   * The Pot's balance of an asset a venue may pay in the native currency — `"native"` or the zero
+   * address, which Ambient and the Balancer V2 Vault key it as: its native balance, not an ERC-20
+   * read of the zero address, which has no code to answer.
+   */
+  assetBalance(asset: string): Expr {
+    const native = asset === NATIVE || (/^0x/i.test(asset) && BigInt(asset) === 0n);
+
+    return native ? this.nativeBalance() : this.selfBalance(addr(asset));
+  }
+
   /** The Pot's native balance, as a bound local. */
   nativeBalance(): Expr {
     return this.bind("nat", "ctx.selfBalance()");
@@ -830,7 +841,7 @@ function balancerV2BatchSwap(
   return balanceDelta(
     l,
     needsOutput,
-    () => l.selfBalance(addr(assetOut)),
+    () => l.assetBalance(assetOut),
     () =>
       l.exec("IBalancerV2Vault", addr(action.vault), "batchSwap", [
         ZERO, // GIVEN_IN
@@ -902,12 +913,12 @@ function ambientSwap(
   // inBaseQty, qty, tip, limitPrice, minOut, reserveFlags). It returns `bytes`, and settles to
   // msg.sender, so the output is the delta on the received side: the quote token when buying
   // (paying base), the base token otherwise.
-  const tokenOut = addr(action.isBuy ? action.quote : action.base);
+  const received = action.isBuy ? action.quote : action.base;
 
   return balanceDelta(
     l,
     needsOutput,
-    () => l.selfBalance(tokenOut),
+    () => l.assetBalance(received),
     () => {
       const cmd = l.bind(
         "cmd",

@@ -139,7 +139,8 @@ const ZERO_ADDR = "0x0000000000000000000000000000000000000000" as Address;
  * A token or contract field of an action `quoteCall` was given: an address, because `quoteAction`
  * and the split swap resolve every name on their chain first, and a quote is calldata built here.
  */
-const at = (value: string | undefined): Address => value as Address;
+const at = (value: string | undefined): Address =>
+  (value === "native" ? ZERO_ADDR : value) as Address;
 
 // ---------------------------------------------------------------------------
 // On-chain extraction — every helper yields a Fragment whose expr is a uint256
@@ -768,6 +769,14 @@ function quoteDodoV1(action: DodoV1SwapAction, amountIn: bigint): QuoteCall {
  * (`LBPair__OutOfLiquidity`) rather than fill it partly.
  */
 function quoteTraderJoeLB(action: TraderJoeLBSwapAction, amountIn: bigint): QuoteCall {
+  // The quote's direction is whether the input is the pair's X: the program reads X from the pair
+  // when the action leaves it out, and an eth_call built here cannot.
+  if (action.tokenX === undefined) {
+    throw new Error(
+      "quoting a traderJoeLBSwap needs its tokenX and tokenY — the pair's getTokenX() and " +
+        "getTokenY() — to know which way it trades; the swap reads them itself, the quote cannot",
+    );
+  }
   const swapForY = BigInt(at(action.tokenIn)) === BigInt(at(action.tokenX));
   const to = at(action.pool);
   const data = concatHex(
@@ -869,14 +878,14 @@ function quoteThroughRouter(
 ): QuoteCall {
   const v4 = action.type === "uniswapV4Swap";
   const [c0, c1] =
-    BigInt(action.tokenIn) < BigInt(action.tokenOut)
-      ? [action.tokenIn, action.tokenOut]
-      : [action.tokenOut, action.tokenIn];
+    BigInt(at(action.tokenIn)) < BigInt(at(action.tokenOut))
+      ? [at(action.tokenIn), at(action.tokenOut)]
+      : [at(action.tokenOut), at(action.tokenIn)];
   const encode = (amountSpecified: bigint): Hex =>
     callData(ROUTER_QUOTE, [
       {
         poolType: v4 ? 2 : 1,
-        pool: v4 ? action.poolManager : action.pool,
+        pool: at(v4 ? action.poolManager : action.pool),
         poolKey: v4
           ? {
               currency0: c0,
@@ -893,8 +902,8 @@ function quoteThroughRouter(
               hooks: ZERO_ADDR,
             },
         stateView: ZERO_ADDR,
-        tokenIn: action.tokenIn,
-        tokenOut: action.tokenOut,
+        tokenIn: at(action.tokenIn),
+        tokenOut: at(action.tokenOut),
         amountSpecified,
         sqrtPriceLimitX96: BigInt(action.sqrtPriceLimitX96 ?? 0),
       },
@@ -902,9 +911,9 @@ function quoteThroughRouter(
   const data = encode(v4 ? -amountIn : amountIn);
   // The amount's word, found rather than counted: a static struct, so it has a fixed offset.
   const probe = encode(AMOUNT_SENTINEL).slice(2);
-  const at = probe.indexOf(AMOUNT_SENTINEL.toString(16).padStart(64, "0"));
-  if (at < 0 || at % 2 !== 0) throw new Error("quote: the Router quote's amount word moved");
-  const offset = at / 2;
+  const word = probe.indexOf(AMOUNT_SENTINEL.toString(16).padStart(64, "0"));
+  if (word < 0 || word % 2 !== 0) throw new Error("quote: the Router quote's amount word moved");
+  const offset = word / 2;
   const dynamic = makeDynamic("call", router, data, offset, words(4), nthWord(1));
 
   return {

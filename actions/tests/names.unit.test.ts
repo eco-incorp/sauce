@@ -416,6 +416,43 @@ describe("names — refused on the chain that lacks them", () => {
   });
 });
 
+describe("names — native", () => {
+  it("measures a native output with the Pot's native balance, not an ERC-20 read of zero", () => {
+    const ambient = {
+      ...SAMPLES.ambientSwap,
+      base: "native",
+      isBuy: false,
+      saveOutputAs: "eth",
+    };
+    const batch = {
+      ...SAMPLES.balancerV2BatchSwap,
+      assets: [SAMPLES.balancerV2BatchSwap.assets[0], "native"],
+      saveOutputAs: "eth",
+    };
+    for (const action of [ambient, batch]) {
+      const { source } = compileProgram(
+        doc(action, { type: "wrapETH", amountRef: "eth", weth: "WETH" }),
+        { chain: "ethereum" },
+      );
+      assert.match(source, /ctx\.selfBalance\(\)/, action.type);
+      assert.doesNotMatch(source, /IErc20\.at\(0n\)/, action.type);
+    }
+  });
+
+  it("quotes a native leg at the zero address, with no chain to resolve it on", () => {
+    const router = "0x5000000000000000000000000000000000000005";
+    const v4 = { ...SAMPLES.uniswapV4Swap, tokenIn: "native" };
+    const zero = {
+      ...SAMPLES.uniswapV4Swap,
+      tokenIn: "0x0000000000000000000000000000000000000000",
+    };
+    assert.equal(
+      quoteAction(v4 as never, { router }).data,
+      quoteAction(zero as never, { router }).data,
+    );
+  });
+});
+
 describe("names — the chain a document compiles for", () => {
   it("needs a chain when the document names none", () => {
     assert.throws(() => compileProgram(NAMED), /has no `chainId`, so say which chain/);
@@ -460,6 +497,14 @@ describe("names — quotes", () => {
       quoteAction(addressed as never, { router }).data,
     );
     assert.throws(() => quoteAction(named, { router }), /pass `chain` to resolve it on/);
+  });
+
+  it("needs an LB pair's tokenX to quote it, which only the swap can read from the pair", () => {
+    const lb = { ...SAMPLES.traderJoeLBSwap, tokenX: undefined, tokenY: undefined };
+    assert.throws(
+      () => quoteAction(JSON.parse(JSON.stringify(lb))),
+      /quoting a traderJoeLBSwap needs its tokenX and tokenY/,
+    );
   });
 
   it("refuses a pool named by its key: a quote is an eth_call at the pool's address", () => {
