@@ -322,6 +322,10 @@ const UNDECLARED_NAMES = {
   "sauce-script": {
     arr: "the rejected `arr.push(x)`: JavaScript's push, which SauceScript has no form of",
   },
+  "sauce-solana": {
+    getCreateAssociatedTokenIdempotentInstruction:
+      "@solana-program/token's ATA creation, a dependency the package re-exports none of",
+  },
   "sauce-distributed-swap": {
     globalState:
       "an Algebra pool's price read, `globalState()`; the registry has no Algebra pool ABI",

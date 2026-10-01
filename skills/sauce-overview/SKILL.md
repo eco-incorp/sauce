@@ -34,12 +34,15 @@ function main(recipient: Address, floor: Uint256) {
 It names no chain. `sauce run <file> --chain base` compiles it for Base, where `USDC` is Base's
 USDC; `--chain arbitrum` gives the same file Arbitrum's. What changes per call, such as `recipient`
 and `floor`, is a parameter of `main`, passed with the transaction (`--args`), so one compiled
-program serves every call.
+program serves every call. That program is for an EVM chain: on Solana every account, a recipient
+included, is an `Account` parameter attached with `--account`, never an `Address` argument
+(`sauce-solana`).
 
-The executing contract, `ctx.self()`, is the **Pot**: it holds the tokens and makes the calls. A
-Pot belongs to one owner, its address follows from the owner (`sauce pot --owner <address>`), and
-only the owner can run a program on it. Token writes are SafeERC20 however they are spelled, so
-USDT works.
+On an EVM chain the executing contract, `ctx.self()`, is the **Pot**: it holds the tokens and
+makes the calls. A Pot belongs to one owner, its address follows from the owner
+(`sauce pot --owner <address>`), and only the owner can run a program on it. Token writes are
+SafeERC20 however they are spelled, so USDT works. On Solana the Pot is the Kitchen's account for
+the owner, which the program is given as an account; `ctx.self()` there is the program's id.
 
 Two references hold what a program can name. The language (types, operators, statements, and the
 `ctx`, `crypto`, `Math`, `abi`, `evm` and `svm` builtins) is

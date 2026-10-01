@@ -31,6 +31,18 @@ example program each, is `builtins.json`.
 14. [Not supported, and what to write instead](#14-not-supported-and-what-to-write-instead)
 15. [Limits](#15-limits)
 
+**On Solana (SVM), at a glance.** Entries marked **Both** work there too. What differs:
+
+- Accounts are `main` parameters with roles: `Account` in §1, account properties in §12, and the
+  `svm` calls in §11, which only SVM has.
+- `ctx` (§6): `ctx.self()` is the executing program's id, `ctx.msgSender()` the first signer, and
+  `ctx.msgValue`, `gasLeft`, `codeSize`, `codeHash`, `isContract` and `isEOA` do not exist.
+- `log` takes no topics (§5).
+- `abi`, `evm` and contract bindings with `.catch()` (§9, §10, §13) are EVM only: a call to another
+  program is `svm.call`.
+- Limits (§15): 64 KiB of working memory, and the program, its arguments and the cook together in
+  one 1,232-byte transaction unless the program is staged.
+
 ---
 
 ## 1. Types
@@ -422,16 +434,17 @@ The compiler rejects each of these. Most messages read "… is not supported", n
 
 ## 15. Limits
 
-| Limit                                                           | Value                            |
-| --------------------------------------------------------------- | -------------------------------- |
-| Parameters of a function other than `main`                      | 16                               |
-| `log` topics                                                    | 4 on EVM; none on SVM            |
-| `eval` arguments                                                | 16                               |
-| `abi.encode` values, record fields encoded, `abi.decode` fields | 255                              |
-| Elements in an array literal                                    | 65,535                           |
-| Bytes in a string or `hex` literal                              | 65,535                           |
-| `.catch()` block                                                | about 255 bytes of compiled code |
-| `crypto.findPDA` seeds                                          | 15 (checked when run)            |
-| Nested arrays in a `main` parameter                             | 4 levels                         |
-| One caller-supplied collection in `main`'s arguments            | 16 KiB                           |
-| Working memory on SVM                                           | 64 KiB per run                   |
+| Limit                                                           | Value                                            |
+| --------------------------------------------------------------- | ------------------------------------------------ |
+| Parameters of a function other than `main`                      | 16                                               |
+| `log` topics                                                    | 4 on EVM; none on SVM                            |
+| `eval` arguments                                                | 16                                               |
+| `abi.encode` values, record fields encoded, `abi.decode` fields | 255                                              |
+| Elements in an array literal                                    | 65,535                                           |
+| Bytes in a string or `hex` literal                              | 65,535                                           |
+| `.catch()` block                                                | about 255 bytes of compiled code                 |
+| `crypto.findPDA` seeds                                          | 15 (checked when run)                            |
+| Nested arrays in a `main` parameter                             | 4 levels                                         |
+| One caller-supplied collection in `main`'s arguments            | 16 KiB                                           |
+| Working memory on SVM                                           | 64 KiB per run                                   |
+| One Solana transaction: the program, its arguments and the cook | 1,232 bytes; `sauce run` stages a larger program |

@@ -14,7 +14,8 @@
 // allowed to write them, and only the owning program may. Without it a hand-assembled account with the
 // right bytes at the right offsets reads exactly like a genuine one.
 //
-// SPL token-account layout (`spl_token::state::Account`, `LEN` = 165): mint@0 (pubkey), amount@64
+// SPL token-account layout (`spl_token::state::Account`, `LEN` = 165): mint@0 (pubkey), owner@32
+// (pubkey: the authority that may spend it, not `account.owner`, the owning program), amount@64
 // (u64 LE), delegate COption tag@72 (u32 LE: 0 = None, 1 = Some), delegate@76 (pubkey),
 // delegated_amount@121 (u64 LE).
 // SPL mint layout (`spl_token::state::Mint`, `LEN` = 82): supply@36 (u64 LE), decimals@44 (u8), initialized@45 (bool).
