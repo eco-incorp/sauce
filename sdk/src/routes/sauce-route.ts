@@ -16,7 +16,7 @@
  */
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
 import type { AbiParameter, AccountManifest, ResolveModule, ResolvePackage } from "sauce-compiler";
-import { bytesToHex } from "viem";
+import { bytesToHex, getAddress } from "viem";
 
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
@@ -30,7 +30,11 @@ import {
   type TokenImports,
 } from "./token-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
-import { rewriteProtocolAccessors, type ProtocolRewriteOptions } from "./protocol-rewrite.js";
+import {
+  resolveContractReference,
+  rewriteProtocolAccessors,
+  type ProtocolRewriteOptions,
+} from "./protocol-rewrite.js";
 import { rewriteAvailability } from "./available.js";
 import { pascalOfSlug } from "./accessors.js";
 import { encodeCompactArguments } from "../compact-arguments.js";
@@ -689,7 +693,7 @@ function compileNatively(
       tokens[name] ??= `0x${value.toString(16)}`;
     else defines[name] = value;
   }
-  const { manifest, entryEncoding, entryParams, ...compiled } = compileWithRs({
+  const { manifest, entryEncoding, entryParams, contracts, ...compiled } = compileWithRs({
     source,
     target,
     resolve: options.resolve,
@@ -709,6 +713,17 @@ function compileNatively(
   });
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
+  }
+  // The manifest contracts the compile reports, told to `onContract` as the protocol rewrite told
+  // it the references it resolved: each as spelled, with the deployment it names.
+  const onContract = accessors.onContract;
+  for (const { path, address } of onContract === undefined ? [] : contracts) {
+    const [head, ...rest] = path.split(".");
+    const reference = resolveContractReference(head!, rest, chain, undefined, `'${path}'`, "");
+    onContract?.(path, {
+      ...reference,
+      address: getAddress(`0x${BigInt(address).toString(16).padStart(40, "0")}`),
+    });
   }
 
   return manifest === undefined

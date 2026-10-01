@@ -54,9 +54,10 @@ export interface ProtocolRewriteOptions {
    *  silently collide with (a same-name entry with a DIFFERENT ABI throws). */
   existingContracts?: Readonly<ContractsConfig>;
   /**
-   * Told each contract reference the rewrite resolved — a call (`UniswapV3.Factory.getPool(…)`) or a
-   * value (`Cctp.TokenMessenger`) — with the reference as written and what it resolved to: which
-   * chain's deployment, and its address. A compile passes `accessors` on to the intents a program
+   * Told each contract reference the compile resolved — a call (`UniswapV3.Factory.getPool(…)`) or
+   * a value (`Cctp.TokenMessenger`) — with the reference as written and what it resolved to: which
+   * chain's deployment, and its address. The rewrite tells it what it resolves; a native compile, the
+   * manifest contracts the compiler reports. A compile passes `accessors` on to the intents a program
    * opens, so it hears about each intent body's references too, resolved for its own chain.
    */
   onContract?: (reference: string, target: AccessorTarget) => void;

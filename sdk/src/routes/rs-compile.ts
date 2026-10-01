@@ -13,6 +13,7 @@ import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-ty
 import type {
   AbiParameter,
   AccountManifest,
+  CompileResult as RsArtifact,
   ResolveModule,
   ResolvePackage,
   SauceTarget as RsTarget,
@@ -130,6 +131,8 @@ export interface RsCompileResult extends CompileResult {
   entryEncoding: "abi-v1" | "compact-v1";
   /** `main`'s runtime parameters as an ABI signature — on Solana without its `Account` slots. */
   entryParams: AbiParameter[];
+  /** The extensions manifest's contracts the program uses, as spelled, at their addresses. */
+  contracts: RsArtifact["contracts"];
   manifest?: AccountManifest;
 }
 
@@ -167,6 +170,7 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
     entrySchema: result.entrySchema,
     entryEncoding: result.entryEncoding,
     entryParams: result.entryParams,
+    contracts: result.contracts,
   };
   if (result.manifest !== undefined) compiled.manifest = result.manifest;
 
