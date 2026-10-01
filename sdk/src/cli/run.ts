@@ -100,7 +100,12 @@ import { MCP_FLAGS, mcpCommand } from "./mcp.js";
 import { livePrice, parsePriceToken, priceCommand, pricedChain, priceGiven } from "./price.js";
 import { publishCommand } from "./publish.js";
 import { simulateCommand } from "./simulate.js";
-import { intentChains, previewChainsNote, requireSupported } from "./support.js";
+import {
+  intentChains,
+  previewChainsNote,
+  requireSupported,
+  supportedChainNames,
+} from "./support.js";
 import { parsePin, verifyCommand } from "./verify.js";
 import {
   loadKeypair,
@@ -1363,9 +1368,12 @@ const lines = (text: readonly string[]): CommandOutput => ({ text: text.join("\n
 /** The paragraph every command that builds or sends a transaction ends its details on. */
 const SUPPORTED_ONLY = (what: string): string[] => [
   "",
-  `${what} only on a supported chain: Ethereum, Base and Solana in this release. On any other`,
-  "(a preview chain) it is refused before anything is read or signed, with the supported",
-  "chains and the GitHub issue to ask for that chain with; compile and simulate work there.",
+  ...wrapped(
+    `${what} only on a supported chain: ${supportedChainNames()}, for the initial release. On ` +
+      "any other (a preview chain) it is refused before anything is read or signed, with the " +
+      "supported chains and the GitHub issue to ask for that chain with; compile and simulate " +
+      "work there.",
+  ),
 ];
 
 const INTENT_VERBS: Readonly<Record<string, Command>> = {
@@ -1442,10 +1450,10 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       ...SUPPORTED_ONLY("Publishes (or prints the transactions)"),
       "",
       "Examples:",
-      "  sauce intent publish bridge.sauce.ts --chain arbitrum --rpc-url <url> --keystore ~/.keys/me.json \\",
+      "  sauce intent publish bridge.sauce.ts --chain ethereum --rpc-url <url> --keystore ~/.keys/me.json \\",
       "    --intent-deadline 2000000000 --intent-creator 0x…",
       "  sauce intent publish --config sauce.config.json --keystore ~/.keys/me.json",
-      "  sauce intent publish --source arbitrum --destination base --token USDC --amount 1 \\",
+      "  sauce intent publish --source ethereum --destination base --token USDC --amount 1 \\",
       "    --recipient 0x… --reward-token USDC --reward 1.01 --prover HyperProver \\",
       "    --fill-deadline +1h --reward-deadline +1d --config sauce.config.json --keystore <path>",
     ].join("\n"),
@@ -1616,7 +1624,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       ...SUPPORTED_ONLY("--send sends a fill"),
       "",
       "Examples:",
-      "  sauce intent fill swap-on-base.sauce.ts --chain arbitrum --config sauce.config.json \\",
+      "  sauce intent fill swap-on-base.sauce.ts --chain ethereum --config sauce.config.json \\",
       "    --defines swap.defines.json --intent-deadline 2000000000 --intent-creator 0x… \\",
       "    --intent-execution-fee 1000000000000",
       "  sauce intent fill 0x<intent hash> --config sauce.config.json --send --keystore ~/.keys/me.json",
@@ -1782,7 +1790,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       ...SUPPORTED_ONLY("Claims (or prints the transaction)"),
       "",
       "Example:",
-      "  sauce intent claim 0x<intent hash> --chain arbitrum --config sauce.config.json \\",
+      "  sauce intent claim 0x<intent hash> --chain ethereum --config sauce.config.json \\",
       "    --keystore ~/.keys/me.json",
     ].join("\n"),
     run: async (args, io) => {
@@ -1810,7 +1818,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       ...SUPPORTED_ONLY("Refunds (or prints the transactions)"),
       "",
       "Example:",
-      "  sauce intent refund 0x<intent hash> --chain arbitrum --config sauce.config.json \\",
+      "  sauce intent refund 0x<intent hash> --chain ethereum --config sauce.config.json \\",
       "    --keystore ~/.keys/me.json",
     ].join("\n"),
     run: async (args, io) => {
@@ -1958,7 +1966,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "the store kept it.",
       "",
       "Example:",
-      "  sauce intent import 0x<tx hash> --chain arbitrum --config sauce.config.json",
+      "  sauce intent import 0x<tx hash> --chain ethereum --config sauce.config.json",
     ].join("\n"),
     run: async (args, io) => {
       const [hash, ...more] = args.positionals;
