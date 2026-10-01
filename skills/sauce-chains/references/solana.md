@@ -2,8 +2,13 @@
 
 # Solana
 
+**Supported.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana. On
+Solana a program compiles and simulates, and the `sauce` command and the MCP server build
+its transactions and send them.
+
 | Fact | Value |
 | --- | --- |
+| Support | supported: transactions are built and sent |
 | Slug (`--chain`) | `solana`; also `sol`, `mainnet-beta`, `solana-mainnet` |
 | Chain id | 1399811149 |
 | Kind | Solana (SVM) |

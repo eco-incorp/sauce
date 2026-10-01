@@ -13,6 +13,18 @@ you. Every address comes from the package (`/deployments`, the registries) or fr
 never invent one. The shipped manual starts at `node_modules/@eco-incorp/sauce/docs/README.md`; the
 subpath list is `node_modules/@eco-incorp/sauce/docs/api/README.md`.
 
+## Supported chains
+
+For the initial release, Sauce supports transactions on Ethereum, Base and Solana. Every other
+chain the registry knows is a preview chain: its programs compile and simulate, and the `sauce`
+command and the MCP server build and send no transaction there. Application code follows the same
+rule: build and send a cook, a Pot's deployment or an intent's transactions only for a supported
+chain, and treat a preview chain as compile and simulate only. To ask for a preview chain, find its
+request among the
+[existing chain-support requests](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support)
+and add the use case, or
+[open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml).
+
 ## Compile a program for a chain, and cook it
 
 `routes.compileSauceProgram(chain, source, options)` is what `sauce compile` runs: the chain's

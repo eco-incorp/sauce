@@ -5,6 +5,23 @@
 //
 //   sauce run swap-leg.sauce.ts --chain <chain> --config sauce.config.json --keystore <keystore> \
 //     --args <tokenIn> <tokenOut> <fee> <amountIn> <sqrtPriceLimitX96> <minOut> <recipient>
+//
+//   tokenIn: Address            the token sold
+//   tokenOut: Address           the token bought
+//   fee: Uint256                the pool's fee tier, in millionths: 500 is 0.05%
+//   amountIn: Uint256           how much `tokenIn` to sell, in its smallest units:
+//                               100000000000000000 is 0.1 WETH (18 decimals)
+//   sqrtPriceLimitX96: Uint256  the pool price past which nothing more is sold, as the pool
+//                               states it (`sauce price` turns "2500 USDC per WETH" into it)
+//   minOut: Uint256             the least `tokenOut` to accept, in its smallest units:
+//                               249000000 is 249 USDC (6 decimals)
+//   recipient: Address          who receives `tokenOut` and the unsold `tokenIn`
+//
+// On Base, 0.1 WETH sold for USDC on the 0.05% pool, no lower than 2,500 USDC per WETH:
+//
+//   sauce run swap-leg.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+//     --args 0x4200000000000000000000000000000000000006 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
+//     500 100000000000000000 3961408125713216879677197 249000000 <recipient>
 import { uniswapV3 } from "@sauce/router";
 
 function main(

@@ -233,4 +233,21 @@ describe("an actions document wherever a program goes", () => {
     const payload = compiled("ethereum").payload({ amount: 1_000_000n });
     assert.equal(tx.data, v12Pot.encodeCook(getAddress(v12EngineAddress()), bytesToHex(payload)));
   });
+
+  it("sauce tx refuses its cook on a preview chain, as any program's, and still compiles it", async () => {
+    const swap = file("swap.json", SWAP);
+    const refused = await sauce(
+      ...["tx", swap, "--chain", "optimism", "--owner", OWNER, "--value", "0"],
+      ...["--args", "1000000"],
+    );
+    assert.equal(refused.code, 1);
+    assert.equal(refused.stdout, "");
+    assert.match(
+      refused.stderr,
+      /^sauce tx: building the cook transaction is refused: it involves optimism \(Optimism, chain id 10\), a preview chain\./,
+    );
+    assert.match(refused.stderr, /issues\/new\?template=chain-support\.yml/);
+    const compiled = await sauce("compile", swap, "--chain", "optimism");
+    assert.equal(compiled.code, 0, compiled.stderr);
+  });
 });

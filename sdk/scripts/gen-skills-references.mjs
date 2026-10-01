@@ -4,7 +4,8 @@
 //
 //   skills/sauce-globals/references/{tokens,protocols,chains}.md   the NAMES a program uses with no
 //                                                                  import (no addresses)
-//   skills/sauce-chains/references/index.md, <chain>.md            per chain: ids, native coin, the
+//   skills/sauce-chains/references/index.md, <chain>.md            per chain: whether the release
+//                                                                  supports it, ids, native coin, the
 //                                                                  Sauce release, intents, tokens and
 //                                                                  every protocol with its addresses
 //   skills/sauce-protocols/references/index.md                     every protocol by category, with
@@ -15,7 +16,9 @@
 //
 // ONE SOURCE. Names come from `routes.sourceGlobals(chain)`, the function `sauce globals` prints;
 // protocols, their categories and deployments from `listProtocols()` and each `protocols/<slug>`
-// module; the Sauce release from `/deployments`; intents from the eco-routes registry. Which ABI
+// module; the Sauce release from `/deployments`; intents from the eco-routes registry; which chains
+// the `sauce` command supports, and how to request another, from the command's own
+// `cli/support.js` (the package exports none of it). Which ABI
 // export a deployment role speaks is the registry's own evidence map
 // (`test/fixtures/registry-abi/targets.json`, which `registry-abi.test.ts` holds to the deployed
 // code). The hand-written parts are the prose below: the category guidance and chain notes.
@@ -53,8 +56,9 @@ export const GENERATED_DIRS = ["sauce-chains/references", "sauce-protocols/refer
  * `protocols/eco-routes` module — passed in, so the skills checker can index the SDK it loaded
  * (an installed package, say) rather than this repository's build.
  */
-export function globalsIndex(sdk, ecoRoutes) {
+export function globalsIndex(sdk, ecoRoutes, support) {
   const { routes, CANONICAL_CHAINS, nativeErc20, getChain } = sdk;
+  const { chainSupport } = support;
   const chains = [...CANONICAL_CHAINS].sort((a, b) => a.id - b.id);
   const listed = chains.map((chain) => ({ chain, globals: routes.sourceGlobals(chain.slug) }));
 
@@ -140,7 +144,11 @@ export function globalsIndex(sdk, ecoRoutes) {
   };
   const chainNames = [...listed[0].globals.chains]
     .sort((a, b) => a.id - b.id)
-    .map((chain) => ({ ...chain, intents: intents(chain.slug) }));
+    .map((chain) => ({
+      ...chain,
+      intents: intents(chain.slug),
+      support: chainSupport(chain.slug),
+    }));
 
   // The zero-import functions per target, from the first chain of each kind.
   const functions = ["evm", "svm"].flatMap((kind) => {
@@ -225,16 +233,17 @@ const functionText = (f) => {
 
 /**
  * The data every generated file renders. `api` is `{ sdk, ecoRoutes, deployments, cctp, compiler,
- * loadProtocol(slug) }` — modules the caller loaded, so the checker can pass the installed
- * package's — and `documented(slug)` says whether the skill carries that protocol's document.
+ * support, loadProtocol(slug) }` — modules the caller loaded, so the checker can pass the installed
+ * package's; `support` is the `sauce` command's `cli/support.js` — and `documented(slug)` says
+ * whether the skill carries that protocol's document.
  */
 export async function skillsReferences(api, documented) {
-  const { sdk, ecoRoutes, deployments, cctp, compiler, loadProtocol } = api;
+  const { sdk, ecoRoutes, deployments, cctp, compiler, support, loadProtocol } = api;
   // An export a program can import: the compile serves `./protocols/<slug>/<Export>.json`.
   const served = (slug, name) =>
     compiler.resolveSdkModule(`./protocols/${slug}/${name}.json`) !== undefined;
   const targets = JSON.parse(readFileSync(TARGETS, "utf8")).protocols;
-  const globals = globalsIndex(sdk, ecoRoutes);
+  const globals = globalsIndex(sdk, ecoRoutes, support);
   const canonical = [...sdk.CANONICAL_CHAINS].sort((a, b) => a.id - b.id);
   const byId = new Map(canonical.map((chain) => [chain.id, chain]));
   const sourceGlobals = new Map(canonical.map((c) => [c.slug, sdk.routes.sourceGlobals(c.slug)]));
@@ -346,6 +355,8 @@ export async function skillsReferences(api, documented) {
       slug: chain.slug,
       name: chain.name,
       kind: chain.kind,
+      support: support.chainSupport(chain.slug),
+      request: support.chainSupportRequest(chain.slug),
       key: names.chain.key,
       aliases: chain.aliases ?? [],
       coin,
@@ -371,7 +382,17 @@ export async function skillsReferences(api, documented) {
     };
   });
 
-  return { globals, chains, protocols, familyMembers };
+  return {
+    globals,
+    chains,
+    protocols,
+    familyMembers,
+    support: {
+      supported: support.supportedChains().map((chain) => ({ slug: chain.slug, name: chain.name })),
+      newIssue: support.CHAIN_SUPPORT_NEW_ISSUE_URL,
+      issues: support.CHAIN_SUPPORT_ISSUES_URL,
+    },
+  };
 }
 
 // ---- Prose: how to choose within a category, and facts about one chain -------------------------
@@ -645,16 +666,19 @@ function renderGlobals(data) {
     "",
     "# Chain globals",
     "",
-    "A chain name opens an intent from inside a program (`Arbitrum(() => { ... }).reward({ ... })`) and",
+    "A chain name opens an intent from inside a program (`Ethereum(() => { ... }).reward({ ... })`) and",
     "qualifies a contract address (`Ethereum.UniswapV4.UniversalRouter`). An intent needs both chains",
-    "to take intents; each line says whether its chain does. Each chain's file in `sauce-chains` has",
-    "the rest.",
+    "to take intents; each line says whether its chain does. Each line also says whether the initial",
+    "release supports the chain: a program compiles and simulates on every chain, and its transactions",
+    "are built and sent only on a supported one; on a preview chain the `sauce` command and the MCP",
+    "server refuse them. Each chain's file in `sauce-chains` has the rest, and how to request a",
+    "preview chain.",
     "",
   ];
   for (const chain of globals.chains) {
     chains.push(
       `- \`${chain.key}\`: \`${chain.slug}\`, ${chain.id}, ${chain.kind.toUpperCase()}, ` +
-        (chain.intents ? "takes intents" : "no intents"),
+        `${chain.intents ? "takes intents" : "no intents"}, ${chain.support}`,
     );
   }
   chains.push("");
@@ -727,11 +751,41 @@ function chainExample(chain) {
   ];
 }
 
-function renderChain(chain) {
-  const lines = [HEADER, "", `# ${chain.name}`, ""];
+/** What a chain's support level means, said at the top of its file. */
+function supportLines(chain, supported) {
+  const names = andList(supported.map((c) => c.name));
+  if (chain.support === "supported") {
+    return [
+      `**Supported.** For the initial release, Sauce supports transactions on ${names}. On`,
+      `${chain.name} a program compiles and simulates, and the \`sauce\` command and the MCP server build`,
+      "its transactions and send them.",
+      "",
+    ];
+  }
+
+  return [
+    `**Preview chain.** For the initial release, Sauce supports transactions on ${names} only.`,
+    `On ${chain.name} a program compiles and simulates (\`sauce compile\`, \`sauce simulate\`, the dry`,
+    "runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,",
+    "`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are",
+    "refused, naming the supported chains and how to request this one.",
+    "",
+    `To request ${chain.name}, look for [its existing request](${chain.request.searchUrl}) and add your`,
+    `use case to it, or [open one](${chain.request.newIssueUrl}) with the chain-support issue form.`,
+    "",
+  ];
+}
+
+/** `["a", "b", "c"]` as "a, b and c". */
+const andList = (words) =>
+  words.length <= 1 ? (words[0] ?? "") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
+
+function renderChain(chain, supported) {
+  const lines = [HEADER, "", `# ${chain.name}`, "", ...supportLines(chain, supported)];
   lines.push(
     "| Fact | Value |",
     "| --- | --- |",
+    `| Support | ${chain.support === "supported" ? "supported: transactions are built and sent" : "preview: compile and simulate; no transaction is built or sent"} |`,
     `| Slug (\`--chain\`) | \`${chain.slug}\`${chain.aliases.length ? `; also ${chain.aliases.map(code).join(", ")}` : ""} |`,
     `| Chain id | ${chain.id} |`,
     `| Kind | ${kindName(chain.kind)} |`,
@@ -831,15 +885,23 @@ function renderChainIndex(data) {
     "",
     "# Chains",
     "",
-    "Every chain the SDK knows, with a file each: ids, native coin, the Sauce release, intents, its",
-    "tokens and every protocol recorded there with its addresses.",
+    "Every chain the SDK knows, with a file each: whether the initial release supports it, ids, native",
+    "coin, the Sauce release, intents, its tokens and every protocol recorded there with its addresses.",
     "",
-    "| Chain | Slug | Id | Kind | Intents | CCTP | Tokens | Protocols |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    `For the initial release, Sauce supports transactions on ${andList(data.support.supported.map((c) => c.name))}`,
+    `(${data.support.supported.map((c) => code(c.slug)).join(", ")}). Every other chain is a preview chain: a program`,
+    "compiles and simulates there, but the `sauce` command and the MCP server build and send no",
+    "transaction, and say so with the supported chains and how to request that chain. To request one,",
+    `look among the [existing requests](${data.support.issues}) and add your use case to the chain's,`,
+    `or [open one](${data.support.newIssue}) with the chain-support issue form; each preview chain's`,
+    "file links its own.",
+    "",
+    "| Chain | Slug | Id | Kind | Support | Intents | CCTP | Tokens | Protocols |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
   ];
   for (const chain of data.chains) {
     lines.push(
-      `| [${chain.name}](${chain.slug}.md) | \`${chain.slug}\` | ${chain.id} | ${kindName(chain.kind)} | ${chain.intents ? "yes" : "no"} | ${chain.cctp ?? "—"} | ${chain.tokens.length} | ${chain.protocols.length} |`,
+      `| [${chain.name}](${chain.slug}.md) | \`${chain.slug}\` | ${chain.id} | ${kindName(chain.kind)} | ${chain.support} | ${chain.intents ? "yes" : "no"} | ${chain.cctp ?? "—"} | ${chain.tokens.length} | ${chain.protocols.length} |`,
     );
   }
   lines.push("");
@@ -998,7 +1060,7 @@ export function renderSkillsReferences(data) {
     "sauce-protocols/references/index.md": renderProtocolIndex(data),
   };
   for (const chain of data.chains)
-    files[`sauce-chains/references/${chain.slug}.md`] = renderChain(chain);
+    files[`sauce-chains/references/${chain.slug}.md`] = renderChain(chain, data.support.supported);
   for (const p of data.protocols)
     files[`sauce-protocols/references/registry/${p.slug}.md`] = renderProtocolRegistry(p, data);
 
@@ -1015,6 +1077,8 @@ export async function loadApi(importFrom) {
     deployments: await importFrom("deployments/index.js"),
     cctp: await importFrom("protocols/cctp/index.js"),
     compiler: await importFrom("compiler.js"),
+    // The `sauce` command's chain support: the CLI's own module, not a package export.
+    support: await importFrom("cli/support.js"),
     loadProtocol: (slug) => importFrom(`protocols/${slug}/index.js`),
   };
 }
