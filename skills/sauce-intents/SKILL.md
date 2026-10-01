@@ -71,8 +71,8 @@ The file is compiled for the **source** chain, the one that pays the reward (`--
   chain, so its reward resolves there and its own body on its own destination.
 - **Name a token by a symbol, a literal or a define, never by a top-level `const`.** A top-level
   `const` holding a token's address, used in the reward or the delivery, counts as a value the file
-  computes, so the compile refuses it ("a reward token address must be known when the intent is
-  built"), and so does `sauce publish`. A `const` inside the braces is fine.
+  computes, so the compile refuses the intent, saying the token's address must be known when the
+  intent is built, and so does `sauce publish`. A `const` inside the braces is fine.
 - A literal address means that address everywhere, and so does a define whose name no chain uses
   (`RECIPIENT`). A define under a chain-scoped name (`USDC`, `chainId`, a protocol address) is a
   name on the source chain: it applies to the file's own statements and the reward, and a body on
