@@ -1,48 +1,31 @@
 // Compiles router-swap.sauce.ts — a program that swaps through @sauce/router, choosing its amounts
-// as it runs — into the call a Pot cooks, and into an Eco intent of its own.
+// as it runs — for Ethereum, and appends its floor as `main`'s argument: the program a Pot cooks.
 //
 // The SauceScript is its own file so it is the same text the router reference shows. Everything
-// here is offline: the Pot, the engine and the fee are fixtures, and nothing is sent.
+// here is offline: nothing is sent.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { Ethereum, routes } from "@eco-incorp/sauce";
+import { routes } from "@eco-incorp/sauce";
+import { bytesToHex, concatHex } from "viem";
 
-const program = readFileSync(
+const source = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "router-swap.sauce.ts"),
   "utf8",
 );
 
 // The SDK serves @sauce/router — and the @sauce/token and pool ABIs it imports — from memory, so
-// compiling needs no resolver option, and it resolves the registry's names for Ethereum. MIN_OUT is
-// the floor on the USDT the program keeps (6 decimals).
-export const defines = { MIN_OUT: 2_500n * 10n ** 6n };
-export const compiled = routes.compileSauceRoute(
-  "ethereum",
-  program,
-  {
-    pot: "0x2222222222222222222222222222222222222222",
-    engine: "0x3333333333333333333333333333333333333333",
-  },
-  { defines },
-);
-if (compiled.calls.length !== 1) throw new Error("Expected one cook");
+// compiling needs no resolver option, and it resolves the registry's names for Ethereum.
+export const program = routes.compileSauceProgram("ethereum", source);
 
-// The same program as an intent body: a solver runs it on Ethereum for a reward on Base. The
-// Portals, the prover, the Pot, the engine and what the solver sends come from the SDK; the fee is
-// a fixture, which destinationExecutionFee() reads for real.
-const executionFee = 1_000n;
-const built = Ethereum(program, {
-  execution: { value: executionFee },
-  deadline: 2_000_000_000n,
-  defines,
-}).reward({
-  source: "base",
-  creator: "0x4444444444444444444444444444444444444444",
-  deadline: 2_000_003_600n,
-  nativeAmount: executionFee,
-});
+// main(minOut): keep at least 2,500 USDT (6 decimals), encoded as `--args` encodes it and appended
+// to the bytecode. One compile serves every floor.
+export const minOut = 2_500n * 10n ** 6n;
+export const payload = concatHex([
+  bytesToHex(program.bytecode),
+  bytesToHex(routes.encodeEntryArguments(program, [minOut])),
+]);
 
-console.log(`@sauce/router swap: ${compiled.compiled.bytecode[0]!.length} bytes`);
-console.log(built.hash().intentHash);
+console.log(`@sauce/router swap: ${program.bytecode.length} bytes, plus its floor`);
+console.log(payload.slice(0, 18));

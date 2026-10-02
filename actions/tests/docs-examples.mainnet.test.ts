@@ -33,7 +33,7 @@ import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
 import { canonicalChains, routes } from "../../sdk/dist/index.js";
 import { POT_SALT } from "../../sdk/test/evm/gated-engine.js";
 import { legs, program, routeProgram, type Leg } from "../../docs/examples/router-route.js";
-import { compiled as swapCook, defines } from "../../docs/examples/router-swap.js";
+import { minOut as swapFloor, payload as swapPayload } from "../../docs/examples/router-swap.js";
 import { onBase, onOptimism } from "../../docs/examples/registry-names.js";
 import { OWNER_KEY, REPO_ROOT, skipReason, startAnvil, type Anvil } from "./anvil.js";
 import { balanceOf, setBalance, type BalanceSlot } from "./swap-venues.js";
@@ -314,39 +314,44 @@ describe("router-route and router-swap on Ethereum state", SUITE, () => {
     leg({ venue: 0n, pool: UNIV2_USDC_WETH, tokenIn: WETH, tokenOut: USDC }),
     leg({ venue: 3n, pool: CURVE_3POOL, tokenIn: USDC, tokenOut: USDT, i: 1n, j: 2n }),
   ];
-  /** router-swap.sauce.ts with its floor at `minOut`, compiled as router-swap.ts compiles it. */
-  const withFloor = (minOut: bigint): Uint8Array =>
-    routes.compileSauceRoute(
-      "ethereum",
-      readFileSync(resolve(REPO_ROOT, "docs/examples/router-swap.sauce.ts"), "utf8"),
-      { pot: env.pot, engine: env.engine },
-      { defines: { ...defines, MIN_OUT: minOut } },
-    ).compiled.bytecode[0]!;
+  const ROUTER_SWAP = resolve(REPO_ROOT, "docs/examples/router-swap.sauce.ts");
+  /** router-swap's usage line, run as written from the Pot's owner, with `floor` as its argument. */
+  const runSwap = (floor: bigint) =>
+    sauce(
+      usageLine(ROUTER_SWAP, "run").flatMap((word, i, words) => {
+        if (word === "router-swap.sauce.ts") return [ROUTER_SWAP];
+        if (word === "--config") return ["--rpc-url", env.rpc];
+        if (words[i - 1] === "--config") return [];
+        if (word === "--keystore") return ["--private-key"];
+        if (word === "<keystore>") return [OWNER_KEY];
+        if (word === "<minOut>") return [`${floor}`];
+        if (word === "--args") return ["--salt-hex", POT_SALT, "--json", "--args"];
+        return [word];
+      }),
+    );
 
-  it("router-swap.ts's cook sells every WETH the Pot holds on Uniswap V2 and keeps what the 3pool pays for the USDC", async () => {
+  it("router-swap.ts's program sells every WETH the Pot holds on Uniswap V2 and keeps what the 3pool pays for the USDC", async () => {
     const expected = await quoteRoute(swapLegs, ONE_ETH);
-    assert.ok(expected >= defines.MIN_OUT, `below the runner's MIN_OUT: ${expected}`);
+    assert.ok(expected >= swapFloor, `below the runner's floor: ${expected}`);
     // USDC the Pot held before is not the USDC that returns: it stays.
     const held = 5_000_000n;
     await fund(WETH, ONE_ETH);
     await fund(USDC, held);
-    assert.equal((await env.cook(swapCook.compiled.bytecode[0]!)).status, "success");
+    assert.equal((await env.cook(hexToBytes(swapPayload))).status, "success");
     assert.equal(await balanceOf(env, USDT, env.pot), expected);
     assert.equal(await balanceOf(env, WETH, env.pot), 0n, "every WETH was sold");
     assert.equal(await balanceOf(env, USDC, env.pot), held, "every USDC that returned was spent");
   });
 
-  it("a MIN_OUT one above what the 3pool pays reverts the whole cook; at exactly that, it runs", async () => {
+  it("router-swap's usage line: a floor one above what the 3pool pays reverts the whole transaction; at exactly that, it runs", async () => {
     const expected = await quoteRoute(swapLegs, ONE_ETH);
     await fund(WETH, ONE_ETH);
-    assert.equal((await env.cook(withFloor(expected + 1n))).status, "reverted");
+    const tooHigh = await runSwap(expected + 1n);
+    assert.notEqual(tooHigh.code, 0, "the cook reverted");
     assert.equal(await balanceOf(env, WETH, env.pot), ONE_ETH, "nothing moved");
-    assert.equal((await env.cook(withFloor(expected))).status, "success");
+    const exact = await runSwap(expected);
+    assert.equal(exact.code, 0, `${exact.stderr}\n${exact.stdout}`);
     assert.equal(await balanceOf(env, USDT, env.pot), expected);
-  });
-
-  it("the bytes router-swap.ts compiles do not depend on the Pot and engine it names", () => {
-    assert.deepEqual(swapCook.compiled.bytecode[0], withFloor(defines.MIN_OUT));
   });
 });
 

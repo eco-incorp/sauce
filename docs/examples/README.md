@@ -24,7 +24,7 @@ application calls them.
 | [compile-program.ts](compile-program.ts)                       | Direct compilation, a compact entry schema, and argument encoding and decoding                                                                 |
 | [action-program.ts](action-program.ts)                         | A chain-agnostic JSON action program — token symbols, a pool by key — compiled for two chains, with a runtime amount, and as an intent on Base |
 | [router-swap.sauce.ts](router-swap.sauce.ts)                   | Two swaps through `@sauce/router`, the second spending what the first returned — written in SauceScript                                        |
-| [router-swap.ts](router-swap.ts)                               | Compiling that program into a cook and an intent, with its floor as a define                                                                   |
+| [router-swap.ts](router-swap.ts)                               | Compiling that program for Ethereum and appending its floor as `main`'s argument                                                               |
 | [router-route.sauce.ts](router-route.sauce.ts)                 | One program for any route over four venues, picking each `@sauce/router` function while it runs                                                |
 | [router-route.ts](router-route.ts)                             | Compiling it once with the raw compiler and appending a route as its arguments                                                                 |
 | [evm-execution.ts](evm-execution.ts)                           | Reading a destination chain: Kitchen, Executor ownership, Pot prediction and deployment, execution fee                                         |
@@ -46,7 +46,7 @@ pnpm exec tsc example.ts --target ES2022 --module NodeNext --moduleResolution No
 node dist/example.js
 ```
 
-For `first-intent.ts`, `cross-chain-intent.ts`, `evm-execution.ts`, `pot-router.ts`, `router-route.ts` and `registry-names.ts`, also run `pnpm add viem`: they use Viem's encoding helpers and RPC interfaces.
+For `first-intent.ts`, `cross-chain-intent.ts`, `evm-execution.ts`, `pot-router.ts`, `router-route.ts`, `router-swap.ts` and `registry-names.ts`, also run `pnpm add viem`: they use Viem's encoding helpers and RPC interfaces.
 
 CI typechecks and runs each of them, and asserts the encoded output including a nonzero cook-fee
 budget. Each SauceScript program is also executed in CI, through the released engine. The RPC
