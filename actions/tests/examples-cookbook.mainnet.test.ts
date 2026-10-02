@@ -285,8 +285,9 @@ describe(
         const candidates = await pools();
         assert.ok(candidates.length > 0, "no SPCXon/USDC pool with liquidity at the pinned block");
         const cheapest = candidates.reduce((a, b) => (b.paid < a.paid ? b : a));
-        // A limit a little above the cheapest pool, so the budget meets it and the fill is partial.
-        const maxPrice = (cheapest.paid * 1005n) / 1000n;
+        // A cap 0.05% above what a share costs in the cheapest pool now: the pool fills only part
+        // of the budget before its price reaches the cap, and the rest goes back.
+        const maxPrice = (cheapest.paid * 10_005n) / 10_000n;
         await fund(ethereum, "USDC", ethereum.env.pot, BUDGET + OTHER);
         const limit = sqrtPriceAt(
           (maxPrice * BigInt(1_000_000 - cheapest.fee)) / 1_000_000n,
@@ -307,7 +308,7 @@ describe(
         assert.equal(BigInt(returned.shares), quoted, "the shares are what the quoter quotes");
         assert.equal(await balanceOf(ethereum.env, ETH.SPCXon, recipient), quoted);
         const spent = BigInt(returned.spent);
-        assert.ok(spent > 0n && spent <= BUDGET, `spent ${spent}`);
+        assert.ok(spent > 0n && spent < BUDGET, `a partial fill, not ${spent}`);
         assert.equal(await balanceOf(ethereum.env, ETH.USDC, refundTo), BUDGET - spent);
         assert.equal(await balanceOf(ethereum.env, ETH.USDC, ethereum.env.pot), OTHER);
         // No share cost more than maxPrice, the fee included.
