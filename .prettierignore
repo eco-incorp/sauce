@@ -34,6 +34,9 @@ skills/sauce-protocols/references/registry/*.md
 # The actions skill's reference, which `sdk/scripts/gen-skills-actions.mjs` renders from the actions
 # JSON Schema on every SDK build, held to the committed copy the same way.
 skills/sauce-actions/references/*.md
+# The manual's reference, which the same generator renders from the same registries (and from the
+# skills' hand-written files it carries), held to the committed copy the same way.
+docs/reference
 
 # Captured on-chain account dumps and forge build artifacts committed as fixtures — not authored
 # source. Refreshing them re-emits compact JSON, so formatting only guarantees churn next time.

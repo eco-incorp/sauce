@@ -100,17 +100,17 @@ jobs:
       - name: SDK — build
         run: pnpm --filter './sdk' build
 
-      # The build regenerates the agent skills' references from the SDK's registries
-      # (`gen-skills-references.mjs`: the globals index, the chains and the protocols). They are
-      # committed, so a registry change that did not commit the regenerated files leaves the tree
-      # dirty here.
-      - name: Agent skills — the committed generated indexes are current
+      # The build regenerates the agent skills' references and the manual's reference from the SDK's
+      # registries (`gen-skills-references.mjs`: the globals index, the chains, the protocols and
+      # the tokens, for each audience). They are committed, so a registry change that did not commit
+      # the regenerated files leaves the tree dirty here.
+      - name: Agent skills and the manual's reference — the committed generated files are current
         run: |
           set -euo pipefail
-          if [ -n "$(git status --porcelain -- skills)" ]; then
-            git status --porcelain -- skills
-            git diff -- skills
-            echo "::error::the SDK build changed skills/: rebuild the SDK and commit the regenerated skills/ files"
+          if [ -n "$(git status --porcelain -- skills docs/reference)" ]; then
+            git status --porcelain -- skills docs/reference
+            git diff -- skills docs/reference
+            echo "::error::the SDK build changed skills/ or docs/reference/: rebuild the SDK and commit the regenerated files"
             exit 1
           fi
 

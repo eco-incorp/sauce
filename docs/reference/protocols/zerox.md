@@ -1,0 +1,69 @@
+<!-- Generated from the SDK's registries. Do not edit. -->
+
+# 0x Protocol (`zerox`)
+
+> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned ([`@sauce/router`](../../api/router.md); several pools under one limit, the `sauce-distributed-swap` agent skill). The templates below call the protocol's own contracts.
+
+DEX aggregation protocol powering swaps across the DeFi ecosystem. Exchange Proxy provides a single entry point for token swaps across multiple sources.
+
+| Fact | Value |
+| --- | --- |
+| Category | Aggregators |
+| Family | none |
+| Namespace | `Zerox` on ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
+| Chains | ethereum, optimism, bsc, polygon, base, arbitrum, avalanche |
+
+## Key Operations
+
+- **transformERC20**: Execute a token swap via the Exchange Proxy transformer pipeline
+
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+
+```typescript
+// Note: 0x requires off-chain route computation via 0x API before on-chain execution.
+// The transformERC20 function uses transformations array populated from API response.
+```
+
+## Notes
+
+- Same Exchange Proxy address across all 7 chains
+- Uses transformer pipeline architecture - each swap is a sequence of transformations
+- Route computation happens via 0x API - transformations array comes from API response
+- Approve inputToken to exchangeProxy before swapping
+- 0x API provides the optimal route, slippage protection, and transformer calldata
+
+## Its names in a program
+
+On Ethereum, `Zerox` is a namespace: its contracts need no import.
+
+```ts
+function main() {
+  // Ethereum's exchangeProxy, `0xDef1C0ded9bec7F1a1670819833240f027b25EfF`.
+  require(Zerox.ExchangeProxy != 0n);
+}
+```
+
+## Deployments
+
+| Chain | Contract | Address | In a program |
+| --- | --- | --- | --- |
+| [Ethereum](../chains/ethereum.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
+| [Optimism](../chains/optimism.md) | exchangeProxy | `0xDEF1ABE32c034e558Cdd535791643C58a13aCC10` | `Zerox.ExchangeProxy` |
+| [BNB Chain](../chains/bsc.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
+| [Polygon](../chains/polygon.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
+| [Base](../chains/base.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
+| [Arbitrum One](../chains/arbitrum.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
+| [Avalanche C-Chain](../chains/avalanche.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
+
+## ABI
+
+### `ExchangeProxyABI`
+
+`import ExchangeProxyABI from "./protocols/zerox/ExchangeProxyABI.json";` Speaks for: exchangeProxy.
+
+- `transformERC20(address inputToken, address outputToken, uint256 inputTokenAmount, uint256 minOutputTokenAmount, (uint32 deploymentNonce, bytes data)[] transformations) payable returns (uint256 outputTokenAmount)`

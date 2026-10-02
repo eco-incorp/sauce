@@ -33,7 +33,7 @@ const manual = [
 ].map((path) => join(root, path));
 // The agent skills ship in the package, and link to their own supporting files.
 manual.push(...markdownFiles(join(root, "skills")));
-for (const directory of ["concepts", "guides", "api", "examples"]) {
+for (const directory of ["concepts", "guides", "api", "reference", "examples"]) {
   manual.push(...markdownFiles(join(root, "docs", directory)));
 }
 const failures = [];
