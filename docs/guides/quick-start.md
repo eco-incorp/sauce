@@ -56,7 +56,7 @@ does not guess it. The SDK sends nothing, and it does not price the reward.
 Ethereum and Base are two of the three chains the initial release supports, with Solana. Every
 other chain in the registry is a preview chain: the SDK builds for it at your own risk, and the
 `sauce` command and MCP server compile and simulate there but build no transaction
-([Supported chains](../README.md#supported-chains)).
+([Chains](../reference/chains.md)).
 
 ## The three things that trip people up
 
@@ -69,7 +69,7 @@ your bundler rewrites function bodies, use a string or a source file.
 destination chain. The package ships TypeScript declarations so a typed body checks, but there is no
 JavaScript object to import. `Base`, by contrast, _is_ a named export. The registered spelling of the
 router is `UniswapV4.UniversalRouter`, with `Uniswap.UniversalRouter` as an unambiguous family alias;
-`UniswapV3.UniversalRouter` does not exist. [Coverage](../api/coverage.md) lists what is registered.
+`UniswapV3.UniversalRouter` does not exist. [Protocols](../reference/protocols.md) lists what is registered.
 
 **The Pot is not yours alone.** For a Portal-driven intent the Pot's owner is the destination
 `Portal.executor()`, which every solver can drive. The SDK derives that Pot, so the example names

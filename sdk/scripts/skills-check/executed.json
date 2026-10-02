@@ -3,13 +3,34 @@
   "executed": {
     "sauce-chains/examples/holdings.sauce.ts": ["actions/tests/holdings.mainnet.test.ts"],
     "sauce-chains/examples/payout-solana.sauce.ts": ["sdk/test/cli-solana.e2e.test.ts"],
-    "sauce-cli/examples/pay.sauce.ts": [
-      "sdk/test/cli.e2e.test.ts",
-      "sdk/test/cli-simulate.e2e.test.ts"
-    ],
-    "sauce-cli/examples/split.sauce.ts": ["sdk/test/cli.e2e.test.ts"],
+    "sauce-cli/examples/buy.sauce.ts": ["sdk/test/cli-examples.e2e.test.ts"],
+    "sauce-cli/examples/payout.sauce.ts": ["sdk/test/cli-examples.e2e.test.ts"],
     "sauce-distributed-swap/examples/distributed-swap.sauce.ts": [
       "sdk/test/evm/distributed-swap.e2e.test.ts"
+    ],
+    "sauce-examples/examples/aave-health.sauce.ts": [
+      "actions/tests/examples-cookbook.mainnet.test.ts"
+    ],
+    "sauce-examples/examples/buy-stock.sauce.ts": [
+      "actions/tests/examples-cookbook.mainnet.test.ts"
+    ],
+    "sauce-examples/examples/dca.sauce.ts": ["actions/tests/examples-cookbook.mainnet.test.ts"],
+    "sauce-examples/examples/eth-prices.sauce.ts": [
+      "actions/tests/examples-cookbook.mainnet.test.ts"
+    ],
+    "sauce-examples/examples/pay-stock.sauce.ts": ["sdk/test/examples-cookbook-solana.e2e.test.ts"],
+    "sauce-examples/examples/payroll.sauce.ts": ["actions/tests/examples-cookbook.mainnet.test.ts"],
+    "sauce-examples/examples/rebalance.sauce.ts": [
+      "actions/tests/examples-cookbook.mainnet.test.ts"
+    ],
+    "sauce-examples/examples/repay-on-base.sauce.ts": [
+      "actions/tests/examples-cookbook.mainnet.test.ts"
+    ],
+    "sauce-examples/examples/stop-loss.sauce.ts": [
+      "actions/tests/examples-cookbook.mainnet.test.ts"
+    ],
+    "sauce-examples/examples/supply-idle.sauce.ts": [
+      "actions/tests/examples-cookbook.mainnet.test.ts"
     ],
     "sauce-intents/examples/fund-by-transfer.sauce.ts": ["sdk/test/cli-lifecycle.e2e.test.ts"],
     "sauce-intents/examples/swap-on-base.sauce.ts": ["sdk/test/evm/swap-on-base.e2e.test.ts"]

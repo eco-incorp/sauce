@@ -70,6 +70,9 @@ export type Rehearsal = Base &
         /** Gas the cook used (`eth_simulateV1`) or needs (`eth_estimateGas`); `undefined` when the
          *  endpoint could not say. */
         readonly gas?: bigint;
+        /** The same for `Kitchen.deployPot`, its own transaction, when the rehearsal deploys the
+         *  Pot first. */
+        readonly deployGas?: bigint;
         readonly gasKind: "used" | "estimated";
         /** The cook's logs (`eth_simulateV1` only). */
         readonly logs?: readonly RawLog[];
@@ -197,6 +200,7 @@ async function viaSimulateV1(client: PublicClient, input: RehearsalInput): Promi
     ok: true,
     returns: cook.data,
     gas: cook.gasUsed,
+    ...(input.deploy === undefined ? {} : { deployGas: results[0]!.gasUsed }),
     gasKind: "used",
     logs,
     // A cook that carries value moves it to the Pot, so a node that traces transfers reports at
@@ -321,6 +325,24 @@ async function viaEthCall(
       "eth_simulateV1 shows it",
   ];
   let gas: bigint | undefined;
+  // The deploy is its own transaction, estimated on the chain as it is, before the Pot exists.
+  let deployGas: bigint | undefined;
+  if (input.deploy !== undefined) {
+    try {
+      deployGas = await client.estimateGas({
+        account: input.owner,
+        to: input.kitchen,
+        data: sauceEvmDeployPotCall({
+          kitchen: input.kitchen,
+          owner: input.owner,
+          salt: input.deploy.salt,
+        }).data,
+        ...(input.overrides.length === 0 ? {} : { stateOverride: input.overrides }),
+      });
+    } catch (error) {
+      notes.push(`gas: the endpoint did not estimate the Pot's deploy (${shortReason(error)})`);
+    }
+  }
   try {
     const estimate = await client.estimateGas(request);
     // A node that drops estimateGas's overrides estimates a call to an address with no code.
@@ -341,6 +363,7 @@ async function viaEthCall(
     ok: true,
     returns,
     ...(gas === undefined ? {} : { gas }),
+    ...(deployGas === undefined ? {} : { deployGas }),
     gasKind: "estimated",
     traced: false,
   };
