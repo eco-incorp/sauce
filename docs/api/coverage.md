@@ -9,7 +9,7 @@ Each of the three can be true without the others.
 | Protocol catalog                 | 135 protocols with metadata, deployments, ABI fragments, and program templates | `listProtocols()`, `getProtocol(slug)`, `getProtocolsByChain(id)`      |
 | Contract descriptors             | 316 descriptors across 135 protocol namespaces                                 | `contracts.listDescriptors()`, `contracts.listContracts(slug)`         |
 | Compiled-source protocol globals | The same 135 protocol namespaces, plus 13 family aliases                       | TypeScript completion after importing `@eco-incorp/sauce`; names below |
-| Token symbols                    | 1796 symbols distributed across 7 EVM chains, 1789 of them tokenized stocks    | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
+| Token symbols                    | 1797 symbols distributed across 13 EVM chains, 1789 of them tokenized stocks   | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
 | Solana mints                     | 1803 mints on mainnet-beta, 1799 of them tokenized stocks                      | `routes.SVM_TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`         |
 | Canonical chain identities       | 41 chains: 40 EVM and Solana                                                   | `CANONICAL_CHAINS`, `requireChain(ref)`                                |
 | EVM chain metadata               | 34 records with native-currency and explorer information                       | `chains`, `getChain(id)`, `getAllChainIds()`                           |
@@ -57,15 +57,27 @@ is still accepted, and no shipped descriptor needs it.
 
 The exported `routes.TOKEN_REGISTRY` contains:
 
-| Chain    | ID    | Symbols                        |
-| -------- | ----- | ------------------------------ |
-| Ethereum | 1     | `USDC`, `USDT`, `WETH`         |
-| Optimism | 10    | `USDC`, `USDT`, `WETH`         |
-| Polygon  | 137   | `USDC`, `WETH`, `WPOL`         |
-| Monad    | 143   | `USDC`, `WMON`                 |
-| Arc      | 5042  | `USDC`, `EURC`, `USYC`, `WETH` |
-| Base     | 8453  | `USDC`, `WETH`                 |
-| Arbitrum | 42161 | `USDC`, `WETH`                 |
+| Chain     | ID    | Symbols                         |
+| --------- | ----- | ------------------------------- |
+| Ethereum  | 1     | `USDC`, `USDT`, `WETH`          |
+| Optimism  | 10    | `USDC`, `USDT`, `USDT0`, `WETH` |
+| Unichain  | 130   | `USDT0`                         |
+| Polygon   | 137   | `USDC`, `USDT0`, `WETH`, `WPOL` |
+| Monad     | 143   | `USDC`, `USDT0`, `WMON`         |
+| Sei       | 1329  | `USDT0`                         |
+| Mantle    | 5000  | `USDT0`                         |
+| Arc       | 5042  | `USDC`, `EURC`, `USYC`, `WETH`  |
+| Base      | 8453  | `USDC`, `WETH`                  |
+| Plasma    | 9745  | `USDT0`                         |
+| Arbitrum  | 42161 | `USDC`, `USDT0`, `WETH`         |
+| Ink       | 57073 | `USDT0`                         |
+| Berachain | 80094 | `USDT0`                         |
+
+`USDT0` is Tether's USDT0, registered on each chain here whose USDT0 token Tether's own deployment
+list names. Where Tether's USDT is USDT0 (Arbitrum and Polygon among them), the chain registers `USDT0`
+and no `USDT`: the contract's `symbol()` answers `USD₮0` or `USDT0`, not `USDT`. Optimism has both,
+two different contracts: the bridged `USDT` and Tether's `USDT0`. On Ethereum, USDT0 is an adapter
+around USDT itself, so the token there is `USDT`.
 
 On Arc, `USDC` is the ERC-20 face of the chain's native coin, and `WETH` is bridged ETH rather than
 a wrapped native. See [Arc: USDC is the native coin](#arc-usdc-is-the-native-coin).
