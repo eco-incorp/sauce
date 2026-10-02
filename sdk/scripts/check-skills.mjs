@@ -45,7 +45,7 @@
 //      raw) or, as ```sauce fails, does not; every ```json chain=a,b block is an actions document
 //      `sauce actions` lowers on those chains (```json fails chain=a: refused there); every ```ts
 //      block and every runner (`*.mts`) typechecks, and every runner EXECUTES with the network
-//      disabled;
+//      disabled, importing nothing but the package, viem and Node's modules (`RUNNER_PACKAGES`);
 //   7. every `@eco-incorp/sauce/...` subpath and `node_modules/@eco-incorp/sauce/...` path exists,
 //      and every identifier in inline code is one the package declares;
 //   8. every generated reference (the globals index, the chains, the protocol index and registry
@@ -1345,8 +1345,26 @@ try {
 }
 
 // ---- 6c. Execute every runner, offline ------------------------------------------------------------------
+// What a runner may import besides the package and Node's modules: viem, the package's TypeScript API
+// is typed in it. A package manager that installs a package's own dependencies beside it rather than
+// at a project's root (pnpm) resolves nothing else from the project the skills are installed in.
+const RUNNER_PACKAGES = new Set(["viem"]);
 for (const file of runners) {
   counts.runners++;
+  for (const { fileName: specifier } of ts.preProcessFile(read(file), true, true).importedFiles) {
+    const bare = !specifier.startsWith(".") && !specifier.startsWith("node:");
+    if (
+      bare &&
+      specifier !== PKG &&
+      !specifier.startsWith(`${PKG}/`) &&
+      !RUNNER_PACKAGES.has(specifier)
+    )
+      fail(
+        rel(file),
+        `imports ${specifier}; a runner imports ${PKG} and its subpaths, ` +
+          `${[...RUNNER_PACKAGES].join(", ")} and node:* only`,
+      );
+  }
   for (const m of read(file).matchAll(/(?:from|import\()\s*"([^"]+)"|new URL\("([^"]+)"/g)) {
     const specifier = m[1] ?? m[2];
     // Its examples, its references, and its own SKILL.md, whose values a runner may pin.

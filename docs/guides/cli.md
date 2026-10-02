@@ -281,16 +281,17 @@ the deployment and the cook, state carried from one to the next, with the cook's
 it reads first (the Pot, the Kitchen's fee, the balances it assumes) and the rehearsal itself run on
 one block: the latest when the command starts, or the one `--block <number | latest | safe |
 finalized>` names, so a limit computed from a quote can be rehearsed on the state the quote saw. The
-`Rehearsed with …` line, and `block` in `--json`, say which. On success it prints the gas used and
-what the program returned — read as the type `main` declares, where it declares one (`main returns
+`Rehearsed with …` line, and `block` in `--json`, say which. On success it prints each
+transaction's gas — the Pot's deployment and the cook, when it deploys the Pot first (`transactions`
+in `--json`, where `gas` is the cook's) — and what the program returned — read as the type `main` declares, where it declares one (`main returns
 Address: 0xd0b5…`, an array as its elements, a record as its fields; `returnType` and `returned`
 in `--json`) — then what the cook did:
 
 ```text
-The cook succeeds from 0xYou: gas used 128999, returns 0x
+The cook succeeds from 0xYou: gas used 128999 for the cook, after the Pot's deploy (1. below), returns 0x
 Rehearsed with eth_simulateV1 on the state of block 36120411; nothing was signed or sent:
-  1. Kitchen.deployPot(0xYou, 0x00…00): Pot 0x8a… is not deployed on base yet. Any account may send this; the Pot is the owner's either way.
-  2. the cook, from the owner 0xYou
+  1. Kitchen.deployPot(0xYou, 0x00…00), gas used 160415: Pot 0x8a… is not deployed on base yet. Any account may send this; the Pot is the owner's either way.
+  2. the cook, from the owner 0xYou, gas used 128999
 Assumed for this rehearsal only, by state override:
   the Pot holds 2 USDC: --assume-balance (its balance word 0x1d39…: Solidity mapping at slot 9)
   the owner holds 0.00000374478538635 ETH: the cook's value; it holds 0, and a real cook needs the value and gas
@@ -1069,6 +1070,7 @@ sauce price --chain base 2700 USDC per WETH                   # the price, in wo
 sauce price --chain base WETH USDC 2700                       # the same: <base> <quote> <price>
 sauce price --chain base 2700 USDC per WETH --offline         # without the pool's price now
 sauce price --chain base WETH USDC --sqrt-price-x96 4116816085950893928074568
+sauce price --chain base SPCXc USDC --pool 0x0bf58fe0FAc935Ac69595c19B12Ba0d75E3F8c0E
 ```
 
 Its first line says what the price means both ways round — `2700 USDC per WETH on base: 1 WETH =
@@ -1080,11 +1082,21 @@ saying so, with the command that reads it the right way, when it looks written b
 turns a price, in quote tokens per base token, into the numbers a swap program takes, for the pair's
 order on the chain (token0 is the lower address): the `sqrtPriceX96` a Uniswap V3 or V4 pool (or a
 fork) trades at, which is also the swap's `sqrtPriceLimitX96` — a floor when selling token0, a
-ceiling when selling token1 — and, for selling the base token and for buying it, the `minAvgPrice` a
-program compares a fill against, `out * 1e18 >= minAvgPrice * spent`, rounded up so the check never
-passes a worse average. A token is a symbol the chain registers, or `0x…:<decimals>`, or the
-address alone: its decimals and symbol are read from the token (`readFromChain` in
-`--json`). `--sqrt-price-x96` reads a pool's price back. The conversion is the package's
+ceiling when selling token1 — and, for selling the base token and for buying it, the price both ways
+round, each labelled with its units (`units` in `--json`):
+
+- `maxPrice` and `maxAvgPrice`: the paid token's base units per bought base unit, times 1e18 — the
+  price times 10^(18 + paid decimals − bought decimals), rounded down — which the distributed swap
+  takes as its `maxPrice` and `maxAvgPrice`, as `sauce pools` prints a pool's. Buying WETH with USDC
+  at 2700 that is `2700000000`.
+- `minAvgPrice`: the other way round, bought base units per paid base unit, times 1e18, rounded up,
+  for a single swap's check `out * 1e18 >= minAvgPrice * spent`. It is never a `maxAvgPrice`.
+
+Either check passes no worse an average than the price. A token is a symbol the chain registers, or
+`0x…:<decimals>`, or the address alone: its decimals and symbol are read from the token (`readFromChain` in `--json`). `--sqrt-price-x96` reads a pool's price back, and `--pool
+<address>` reads it from that pool of the pair now (`pool` in `--json`): a Uniswap V3, PancakeSwap
+V3 or Aerodrome Slipstream pool, named by its venue where the registry's factory made it. The
+conversion is the package's
 `sqrtPriceX96FromPrice` and `priceFromSqrtPriceX96`, which a TypeScript program imports from the
 root; with `--offline`, nothing reaches a network.
 
@@ -1095,6 +1107,7 @@ sauce pools --chain base USDC WETH
 sauce pools --chain base USDC SPCXc   # a tokenized stock
 sauce pools --chain base USDC 0x<token> --json
 sauce pools --chain base WETH USDC --v4-key 50:1
+sauce pools --chain base USDC SPCXc --block 36120411   # at one block
 ```
 
 lists every pool of a pair at the price-limit venues the registry records on the chain, read now:
@@ -1105,8 +1118,10 @@ and `10000:200`, and any `--v4-key <fee>:<tickSpacing>`. A token is a symbol the
 a tokenized stock's included (`SPCXc`, in any case), or an address the registry does not know, whose
 decimals and symbol are read from the token (or given, `0x…:8`). It reads
 everything in five rounds, each a few `eth_call`s carrying up to 32 reads apiece (Multicall3's
-`aggregate3`, sent deployless, so it needs nothing deployed). It reads on every chain, preview
-chains included.
+`aggregate3`, sent deployless, so it needs nothing deployed), all at one block: `--block <number |
+latest | safe | finalized>`, or the latest when it starts. It names that block (`block` in
+`--json`), so `sauce simulate --block` can rehearse a swap on the prices its `maxPrice` came from.
+It reads on every chain, preview chains included.
 
 Pools with liquidity at their price come first, **deepest first, by that liquidity** (`sortedBy`
 in `--json`), which is in the same units at every venue for one pair. For each:
@@ -1132,7 +1147,7 @@ tick spacings each Slipstream factory enables, and the V4 keys tried, with any v
 be read. A pool that answers wrongly is left out with a note on stderr.
 
 ```text
-USDC/SPCXc on base: 3 pools with liquidity, deepest first (by liquidity at the pool's price)
+USDC/SPCXc on base at block 36120411: 3 pools with liquidity, deepest first (by liquidity at the pool's price)
   token0  USDC   0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913  6 decimals
   token1  SPCXc  0xb2000000000000000000007b9fcbd005511aCBd5  8 decimals
 

@@ -4,7 +4,10 @@
  * the tools are the command's functions, and a tool that drifted from its command would show here.
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, relative } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 import { decodeFunctionData, getAddress, type Hex } from "viem";
@@ -20,8 +23,12 @@ import {
 } from "../../sdk/dist/verify/index.js";
 import { INTENT_TOOL_NAMES } from "../src/intents.js";
 import { SKILL_TOOL_NAMES } from "../src/skilltools.js";
-import { TOOL_NAMES } from "../src/tools.js";
+import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
+import { FLAG_INPUTS, flagInputLines } from "../src/terms.js";
+import { simulateSummary, TOOL_NAMES } from "../src/tools.js";
 import { connect, failed, ok, type Connected } from "./harness.js";
+
+const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const RECIPIENT = "0x6666666666666666666666666666666666666666";
@@ -96,6 +103,63 @@ describe("the tool list", () => {
     assert.match(instructions, /`npm i -g @eco-incorp\/sauce` installs it/);
     assert.match(instructions, /`npx -y @eco-incorp\/sauce <command>` runs it with no install/);
     assert.doesNotMatch(instructions, /npx sauce/);
+  });
+});
+
+describe("the sauce command's flags as the tools' inputs", () => {
+  /** Every `sauce` command's --help, together: the flags the command takes. */
+  async function commandHelp(): Promise<string> {
+    const commands = [
+      ["compile"],
+      ["actions"],
+      ["simulate"],
+      ["run"],
+      ["tx"],
+      ["pot"],
+      ["globals"],
+      ["price"],
+      ["pools"],
+      ["inspect"],
+      ["verify"],
+      ...["publish", "fill", "status", "import", "prove", "claim", "refund", "cancel"].map(
+        (verb) => ["intent", verb],
+      ),
+    ];
+    let help = "";
+    for (const command of commands) {
+      const io = { ...nodeIo(), stdout: (text: string) => void (help += text), stderr: () => {} };
+      await runCli([...command, "--help"], io);
+    }
+
+    return help;
+  }
+
+  it("maps each flag to an input a tool takes, and each flag is one the command takes", async () => {
+    const { tools } = await mcp.client.listTools();
+    const inputs = new Set(tools.flatMap((tool) => Object.keys(tool.inputSchema.properties ?? {})));
+    const help = await commandHelp();
+    for (const { flags, input } of FLAG_INPUTS) {
+      // `prove: false` is the input prove.
+      assert.ok(inputs.has(input.split(":")[0]!), `no tool takes ${input}`);
+      for (const flag of flags) {
+        assert.match(help, new RegExp(`--${flag}\\b`), `no sauce command takes --${flag}`);
+      }
+    }
+  });
+
+  it("says it in the server's instructions and in the MCP guide, one table", () => {
+    const instructions = mcp.client.getInstructions() ?? "";
+    for (const line of flagInputLines()) assert.ok(instructions.includes(line), line);
+    assert.match(instructions, /`sauce <command>` is the tool sauce_<command>/);
+    const guide = readFileSync(new URL("../../docs/guides/mcp.md", import.meta.url), "utf8");
+    const section = guide.slice(guide.indexOf("### The command's flags as inputs"));
+    const rows = [...section.matchAll(/^\| (`--[^|]+?) +\| `([^`]+)` +\|$/gm)].map(
+      ([, flags, input]) => ({
+        flags: flags!.split(", ").map((flag) => flag.replace(/^`--|`$/g, "")),
+        input,
+      }),
+    );
+    assert.deepEqual(rows, FLAG_INPUTS);
   });
 });
 
@@ -241,12 +305,21 @@ describe("sauce_globals", () => {
 });
 
 describe("sauce_price", () => {
-  it("turns a price into the pool's sqrtPriceX96 and both directions' floors, and back", async () => {
+  it("turns a price into the pool's sqrtPriceX96 and both directions' limits, and back", async () => {
+    type Side = { maxPrice: string; maxAvgPrice: string; minAvgPrice: string };
     const out = ok(
       await mcp.call("sauce_price", { chain: "base", base: "WETH", quote: "USDC", price: "2700" }),
-    ) as { sqrtPriceX96: string; sell: { minAvgPrice: string }; buy: { minAvgPrice: string } };
+    ) as { sqrtPriceX96: string; sell: Side; buy: Side; units: Record<string, string> };
     assert.match(out.sqrtPriceX96, /^\d+$/);
-    assert.ok(BigInt(out.sell.minAvgPrice) > 0n && BigInt(out.buy.minAvgPrice) > 0n);
+    // Buying WETH with USDC: the distributed swap's maxPrice and maxAvgPrice, USDC units paid per
+    // WETH unit times 1e18 (2700 x 10^(18 + 6 - 18)); minAvgPrice the other way round.
+    assert.equal(out.buy.maxPrice, "2700000000");
+    assert.equal(out.buy.maxAvgPrice, "2700000000");
+    assert.equal(out.buy.minAvgPrice, ((10n ** 36n + 2699999999n) / 2700000000n).toString());
+    assert.equal(out.sell.minAvgPrice, "2700000000");
+    assert.equal(out.sell.maxPrice, (10n ** 36n / 2700000000n).toString());
+    assert.match(out.units.maxAvgPrice!, /distributed swap's maxAvgPrice/);
+    assert.match(out.units.minAvgPrice!, /never a maxPrice or maxAvgPrice/);
     const back = ok(
       await mcp.call("sauce_price", {
         chain: "base",
@@ -259,7 +332,13 @@ describe("sauce_price", () => {
   });
 
   it("puts each direction's limit slippageBps from the price, its floor paying the fee", async () => {
-    type Side = { price: string; sqrtPriceLimitX96: string; minAvgPrice: string };
+    type Side = {
+      price: string;
+      sqrtPriceLimitX96: string;
+      maxPrice: string;
+      maxAvgPrice: string;
+      minAvgPrice: string;
+    };
     const pair = { chain: "base", base: "WETH", quote: "USDC" };
     const out = ok(
       await mcp.call("sauce_price", { ...pair, price: "2700", slippageBps: 50, feePpm: 3000 }),
@@ -277,8 +356,12 @@ describe("sauce_price", () => {
     // 2700 * 0.995 * 0.997.
     assert.equal(out.limits.sell.minAvgPrice, (await at("2678.4405")).sell.minAvgPrice);
     // 2700 * 1.005 / 0.997, to the 24 places the tool computes it to.
-    const worst = (await at("2721.664994984954864593781344")).buy.minAvgPrice;
-    assert.equal(out.limits.buy.minAvgPrice, worst);
+    const worst = await at("2721.664994984954864593781344");
+    assert.equal(out.limits.buy.minAvgPrice, worst.buy.minAvgPrice);
+    // The distributed swap's maxPrice is that same worst price, fee included, as input per output.
+    assert.equal(out.limits.buy.maxPrice, worst.buy.maxPrice);
+    assert.equal(out.limits.buy.maxAvgPrice, worst.buy.maxPrice);
+    assert.equal(out.limits.sell.maxPrice, (await at("2678.4405")).sell.maxPrice);
     const feeless = ok(
       await mcp.call("sauce_price", { ...pair, price: "2700", slippageBps: 50 }),
     ) as { limits: { feePpm: number; sell: Side } };
@@ -621,6 +704,105 @@ describe("sauce_compile", () => {
     );
   });
 
+  it("says its source's sha256, and with omitBytecode leaves the bytecode out", async () => {
+    const full = ok(await mcp.call("sauce_compile", { source: PAY, chain: "base" }));
+    assert.equal(full.sourceSha256, sha256(PAY));
+    const lean = ok(
+      await mcp.call("sauce_compile", { source: PAY, chain: "base", omitBytecode: true }),
+    );
+    assert.equal(lean.bytecode, undefined);
+    const { bytecode: _bytecode, ...rest } = full;
+    assert.deepEqual(lean, rest);
+    assert.ok(JSON.stringify(lean).length < JSON.stringify(full).length);
+  });
+
+  it("reads a program by path only over stdio, its imports beside it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "sauce-mcp-path-"));
+    try {
+      mkdirSync(join(dir, "lib"));
+      const program = [
+        'import { double } from "./lib/math.sauce.ts";',
+        "function main(recipient: Address, amount: Uint256) {",
+        "  USDC.transfer(recipient, double(amount));",
+        "}",
+        "",
+      ].join("\n");
+      const math = "export function double(x: Uint256): Uint256 {\n  return x * 2n;\n}\n";
+      writeFileSync(join(dir, "pay.sauce.ts"), program);
+      writeFileSync(join(dir, "lib/math.sauce.ts"), math);
+      // Relative to the directory the server runs in, as an agent beside it names it.
+      const path = relative(process.cwd(), join(dir, "pay.sauce.ts"));
+      const local = await connect(undefined, undefined, undefined, true);
+      try {
+        const { tools } = await local.client.listTools();
+        const compile = tools.find((tool) => tool.name === "sauce_compile")!;
+        assert.ok("path" in (compile.inputSchema.properties ?? {}));
+        assert.ok(!(compile.inputSchema.required ?? []).includes("source"));
+        const byPath = ok(await local.call("sauce_compile", { path, chain: "base" }));
+        const bySource = ok(
+          await mcp.call("sauce_compile", {
+            source: program,
+            chain: "base",
+            modules: { "lib/math.sauce.ts": math },
+          }),
+        );
+        assert.equal(byPath.bytecode, bySource.bytecode);
+        assert.equal(byPath.sourceSha256, sha256(program));
+        assert.equal(byPath.sourceSha256, bySource.sourceSha256);
+        // The cook from the same file, tied to it the same way.
+        const tx = ok(
+          await local.call("sauce_tx", {
+            path,
+            chain: "base",
+            owner: OWNER,
+            value: 0,
+            args: [RECIPIENT, "1"],
+          }),
+        );
+        assert.equal(tx.sourceSha256, sha256(program));
+        // A rehearsal reads the file before it needs an endpoint.
+        assert.match(
+          failed(
+            await local.call("sauce_simulate", {
+              path: `${path}.missing`,
+              chain: "base",
+              owner: OWNER,
+            }),
+          ),
+          /path .*\.missing: no such file \(read relative to /,
+        );
+        assert.match(
+          failed(await local.call("sauce_compile", { path, source: program, chain: "base" })),
+          /give source or path, not both/,
+        );
+        assert.match(
+          failed(
+            await local.call("sauce_compile", { path, chain: "base", modules: { "a.ts": "" } }),
+          ),
+          /give neither file nor modules/,
+        );
+        assert.match(
+          failed(await local.call("sauce_compile", { chain: "base" })),
+          /missing source: the program's text, or path: its file/,
+        );
+        assert.match(local.client.getInstructions() ?? "", /given by path/);
+      } finally {
+        await local.close();
+      }
+      // A server not over stdio reads no file: path is no input of its tools.
+      const { tools } = await mcp.client.listTools();
+      for (const name of ["sauce_compile", "sauce_simulate", "sauce_tx"]) {
+        const tool = tools.find((each) => each.name === name)!;
+        assert.ok(!("path" in (tool.inputSchema.properties ?? {})), name);
+        assert.ok((tool.inputSchema.required ?? []).includes("source"), name);
+      }
+      assert.match(failed(await mcp.call("sauce_compile", { path, chain: "base" })), /path/);
+      assert.doesNotMatch(mcp.client.getInstructions() ?? "", /given by path/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("bounds its input: an oversized program or an unknown field is refused", async () => {
     const huge = "x".repeat(256 * 1024 + 1);
     assert.equal((await mcp.call("sauce_compile", { source: huge, chain: "base" })).isError, true);
@@ -860,6 +1042,49 @@ describe("sauce_pot", () => {
 });
 
 describe("sauce_simulate", () => {
+  it("summarizes a result to what decides a trade", () => {
+    const full = {
+      ok: true,
+      chain: "base",
+      block: "7",
+      from: OWNER,
+      path: "eth_simulateV1",
+      assumed: [{ slot: "0x01" }],
+      gas: "5",
+      gasKind: "used",
+      transactions: [{ step: "cook", gas: "5" }],
+      returns: "0x2a",
+      returnType: "Uint256",
+      returned: "42",
+      transfers: [],
+      approvals: [],
+      nativeTransfers: null,
+      balanceChanges: [],
+      otherLogs: [{ data: "0x" }],
+    };
+    assert.deepEqual(simulateSummary(full), {
+      ok: true,
+      chain: "base",
+      block: "7",
+      returnType: "Uint256",
+      returned: "42",
+      gas: "5",
+      gasKind: "used",
+      transactions: [{ step: "cook", gas: "5" }],
+      transfers: [],
+      nativeTransfers: null,
+      balanceChanges: [],
+    });
+    // The raw return data stays only where main declares nothing to decode it as.
+    const { returnType: _type, returned: _returned, ...untyped } = full;
+    assert.equal(simulateSummary(untyped).returns, "0x2a");
+    assert.deepEqual(simulateSummary({ ok: false, stage: "cook", reason: "no", from: OWNER }), {
+      ok: false,
+      stage: "cook",
+      reason: "no",
+    });
+  });
+
   it("needs an endpoint, and says so plainly", async () => {
     const message = failed(
       await mcp.call("sauce_simulate", {

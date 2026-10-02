@@ -1,13 +1,15 @@
 /**
- * `sauce price`: a human price for a pair as the numbers a swap program takes — the pool's
- * `sqrtPriceX96` for that pair on the chain, which is also the swap's price limit, and the
- * average-price floor a program compares a fill against (`out * 1e18 >= minAvgPrice * spent`), for
- * selling the base token and for buying it.
+ * `sauce price`: a human price for a pair as the numbers a swap program takes, for selling the base
+ * token and for buying it — the pool's `sqrtPriceX96` for that pair on the chain, which is also the
+ * swap's price limit; the distributed swap's `maxPrice` and `maxAvgPrice` (input paid per output
+ * bought, times 1e18); and the average-price floor a single swap compares a fill against, output
+ * received per input paid (`out * 1e18 >= minAvgPrice * spent`), which runs the other way round.
  *
  * The conversion is the SDK's own (`price.ts`); this adds only the chain's token order and decimals,
  * from the registry `sauce globals` lists. With an endpoint it also reads the pair's live price from
  * its deepest Uniswap V3 pool, and warns when the price given is far from it — a price written the
- * wrong way round is off by its own square, a millionfold for WETH/USDC.
+ * wrong way round is off by its own square, a millionfold for WETH/USDC. Or the price is a V3-style
+ * pool's own, read now (`pools.ts#readPoolAt`).
  */
 import {
   getAddress,
@@ -32,6 +34,7 @@ import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { UsageError } from "./args.js";
 import { readAll } from "./chain.js";
 import type { CommandOutput } from "./commands.js";
+import type { PoolAt } from "./pools.js";
 
 /** One side of the pair. */
 export interface PriceToken {
@@ -176,6 +179,8 @@ export interface PriceInput {
   readonly price: { readonly decimal: string } | { readonly sqrtPriceX96: bigint };
   /** The pair's live price, when an endpoint read it (`livePrice`). */
   readonly live?: LivePrice;
+  /** The pool the price was read from (`--pool`): its `sqrtPriceX96` is `price`'s. */
+  readonly pool?: PoolAt;
 }
 
 /** A pair's price as its deepest Uniswap V3 pool on the chain has it now. */
@@ -277,12 +282,40 @@ const ceilDiv = (numerator: bigint, denominator: bigint): bigint =>
 
 const SCALE = 10n ** 18n;
 
-/** `sauce price`: the price as a pool's `sqrtPriceX96`, and both directions' limit and floor. */
+/** What each direction's numbers are, as `--json` says it. */
+export const PRICE_UNITS = {
+  sqrtPriceLimitX96:
+    "the pool's sqrtPriceX96 at the price: token1 per token0 in base units, its square root, " +
+    "times 2^96. A swap's limit: a floor selling token0, a ceiling selling token1",
+  maxPrice:
+    "tokenIn base units paid per tokenOut base unit bought, times 1e18: the price in whole " +
+    "tokens times 10^(18 + tokenIn decimals - tokenOut decimals), rounded down. The distributed " +
+    "swap's maxPrice (payToken is tokenIn, buyToken tokenOut), as sauce pools prints it",
+  maxAvgPrice:
+    "the same number as the distributed swap's maxAvgPrice, an average cap: spent * 1e18 <= " +
+    "maxAvgPrice * bought",
+  minAvgPrice:
+    "the other way round: tokenOut base units received per tokenIn base unit paid, times 1e18, " +
+    "rounded up. An average floor, out * 1e18 >= minAvgPrice * spent; never a maxPrice or " +
+    "maxAvgPrice",
+} as const;
+
+/** `sauce price`: the price as a pool's `sqrtPriceX96`, and both directions' limits. */
 export function priceCommand(input: PriceInput): CommandOutput {
   const { base, quote } = input;
   const chain = pricedChain(input.chain);
   if (base.address === quote.address) {
     throw new UsageError(`a price is between two tokens: ${base.symbol} is both`);
+  }
+  const pool = input.pool;
+  if (pool !== undefined) {
+    const pair = [base.address, quote.address].map((token) => token.toLowerCase()).sort();
+    if (pool.token0.toLowerCase() !== pair[0] || pool.token1.toLowerCase() !== pair[1]) {
+      throw new UsageError(
+        `the pool ${pool.pool} trades ${pool.token0} and ${pool.token1}, not ${base.symbol} ` +
+          `and ${quote.symbol}`,
+      );
+    }
   }
   const baseIsToken0 = BigInt(base.address) < BigInt(quote.address);
   const tokens: PoolPriceTokens = {
@@ -314,11 +347,24 @@ export function priceCommand(input: PriceInput): CommandOutput {
         ? [sqrtPriceX96 * sqrtPriceX96, 1n << 192n]
         : [1n << 192n, sqrtPriceX96 * sqrtPriceX96]
       : rational(price, quote.decimals, base.decimals);
-  // Output units per input unit, times 1e18, rounded up: a fill the check passes is never at a worse
-  // average than the price.
+  // Each direction both ways round, times 1e18: input paid per output bought, rounded down (the
+  // distributed swap's maxPrice and maxAvgPrice), and output per input, rounded up (minAvgPrice).
+  // Either way a fill its check passes is never at a worse average than the price.
   const directions = [
-    { name: "sell", tokenIn: base, tokenOut: quote, minAvgPrice: ceilDiv(num * SCALE, den) },
-    { name: "buy", tokenIn: quote, tokenOut: base, minAvgPrice: ceilDiv(den * SCALE, num) },
+    {
+      name: "sell",
+      tokenIn: base,
+      tokenOut: quote,
+      maxPrice: (den * SCALE) / num,
+      minAvgPrice: ceilDiv(num * SCALE, den),
+    },
+    {
+      name: "buy",
+      tokenIn: quote,
+      tokenOut: base,
+      maxPrice: (num * SCALE) / den,
+      minAvgPrice: ceilDiv(den * SCALE, num),
+    },
   ].map((side) => {
     const zeroForOne = BigInt(side.tokenIn.address) < BigInt(side.tokenOut.address);
 
@@ -379,6 +425,15 @@ export function priceCommand(input: PriceInput): CommandOutput {
     };
   };
   const live = input.live === undefined ? undefined : liveReport(input.live);
+  const poolLine =
+    pool === undefined
+      ? []
+      : [
+          `Pool: ${pool.venue === undefined ? "a V3-style pool" : `${pool.venue.name}`} ` +
+            `${pool.pool}${pool.venue === undefined ? "" : ` (${pool.venue.contract})`}, fee ` +
+            `${pool.fee / 10_000}%, tick spacing ${pool.tickSpacing}, liquidity ` +
+            `${pool.liquidity}, tick ${pool.tick}: its price now`,
+        ];
 
   return {
     text: [
@@ -386,6 +441,7 @@ export function priceCommand(input: PriceInput): CommandOutput {
       row(token0, "token0"),
       row(token1, "token1"),
       `sqrtPriceX96  ${sqrtPriceX96}`,
+      ...poolLine,
       ...(live === undefined ? [] : [live.line]),
       "",
       ...directions.flatMap((side) => [
@@ -393,11 +449,25 @@ export function priceCommand(input: PriceInput): CommandOutput {
           `(${side.tokenIn.symbol} in, ${side.tokenOut.symbol} out):`,
         `  sqrtPriceLimitX96  ${sqrtPriceX96}  a ${side.limit}: selling ` +
           `${side.zeroForOne ? "token0 lowers" : "token1 raises"} the price`,
-        `  minAvgPrice        ${side.minAvgPrice}  ${side.tokenOut.symbol} units per ` +
-          `${side.tokenIn.symbol} unit, times 1e18: out * 1e18 >= minAvgPrice * spent`,
+        `  maxPrice           ${side.maxPrice}  ${side.tokenIn.symbol} units paid per ` +
+          `${side.tokenOut.symbol} unit bought, times 1e18: the distributed swap's maxPrice`,
+        `  maxAvgPrice        ${side.maxPrice}  the same, as its maxAvgPrice: ` +
+          "spent * 1e18 <= maxAvgPrice * bought",
+        `  minAvgPrice        ${side.minAvgPrice}  the other way round, ${side.tokenOut.symbol} ` +
+          `units received per ${side.tokenIn.symbol} unit, times 1e18: a floor for out * 1e18 ` +
+          ">= minAvgPrice * spent, never a maxAvgPrice",
       ]),
     ].join("\n"),
-    ...(live?.warning === undefined ? {} : { notes: [live.warning] }),
+    ...(live?.warning === undefined && pool?.unrecognized === undefined
+      ? {}
+      : {
+          notes: [
+            ...(live?.warning === undefined ? [] : [live.warning]),
+            ...(pool?.unrecognized === undefined
+              ? []
+              : [`The pool's venue is not named: ${pool.unrecognized}`]),
+          ],
+        }),
     json: {
       chain: chain.slug,
       price,
@@ -408,9 +478,27 @@ export function priceCommand(input: PriceInput): CommandOutput {
       token0: token0.symbol,
       token1: token1.symbol,
       sqrtPriceX96: sqrtPriceX96.toString(),
+      ...(pool === undefined
+        ? {}
+        : {
+            pool: {
+              address: pool.pool,
+              venue: pool.venue?.name ?? null,
+              contract: pool.venue?.contract ?? null,
+              ...(pool.factory === undefined ? {} : { factory: pool.factory }),
+              ...(pool.unrecognized === undefined ? {} : { unrecognized: pool.unrecognized }),
+              sqrtPriceX96: pool.sqrtPriceX96.toString(),
+              tick: pool.tick,
+              liquidity: pool.liquidity.toString(),
+              feePpm: pool.fee,
+              tickSpacing: pool.tickSpacing,
+              readFrom: chain.slug,
+            },
+          }),
       ...(live === undefined
         ? {}
         : { live: live.json, ...(live.warning === undefined ? {} : { warning: live.warning }) }),
+      units: PRICE_UNITS,
       ...Object.fromEntries(
         directions.map((side) => [
           side.name,
@@ -420,6 +508,8 @@ export function priceCommand(input: PriceInput): CommandOutput {
             zeroForOne: side.zeroForOne,
             sqrtPriceLimitX96: sqrtPriceX96.toString(),
             limit: side.limit,
+            maxPrice: side.maxPrice.toString(),
+            maxAvgPrice: side.maxPrice.toString(),
             minAvgPrice: side.minAvgPrice.toString(),
           },
         ]),
