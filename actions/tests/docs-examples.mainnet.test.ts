@@ -320,12 +320,14 @@ describe("router-route and router-swap on Ethereum state", SUITE, () => {
     sauce(
       usageLine(ROUTER_SWAP, "run").flatMap((word, i, words) => {
         if (word === "router-swap.sauce.ts") return [ROUTER_SWAP];
-        if (word === "--config") return ["--rpc-url", env.rpc];
-        if (words[i - 1] === "--config") return [];
+        // The replay is the endpoint, whichever the line names or leaves to the defaults.
+        if (word === "--config" || words[i - 1] === "--config") return [];
         if (word === "--keystore") return ["--private-key"];
         if (word === "<keystore>") return [OWNER_KEY];
         if (word === "<minOut>") return [`${floor}`];
-        if (word === "--args") return ["--salt-hex", POT_SALT, "--json", "--args"];
+        if (word === "--args") {
+          return ["--rpc-url", env.rpc, "--salt-hex", POT_SALT, "--json", "--args"];
+        }
         return [word];
       }),
     );
@@ -482,8 +484,8 @@ describe("venue-where-deployed and cross-chain-intent on Base state", SUITE, () 
     sauce(
       usageLine(CROSS_CHAIN, "run").flatMap((word, i, words) => {
         if (word === "cross-chain-intent.sauce.ts") return [CROSS_CHAIN];
-        if (word === "--config") return ["--rpc-url", env.rpc];
-        if (words[i - 1] === "--config") return [];
+        // The replay is the endpoint, whichever the line names or leaves to the defaults.
+        if (word === "--config" || words[i - 1] === "--config") return [];
         if (word === "<keystore>") return [OWNER_KEY];
         if (word === "--keystore") return ["--private-key"];
         if (word === "<unix seconds>" || word === "<unix") return ["2000000000"];
@@ -491,7 +493,9 @@ describe("venue-where-deployed and cross-chain-intent on Base state", SUITE, () 
         if (word === "<address>") return [env.account.address];
         if (word === "<recipient>") return [RECIPIENT];
         if (word === "<minAmount>") return [`${minAmount}`];
-        if (word === "--args") return ["--salt-hex", POT_SALT, "--json", "--args"];
+        if (word === "--args") {
+          return ["--rpc-url", env.rpc, "--salt-hex", POT_SALT, "--json", "--args"];
+        }
         return [word];
       }),
     );
