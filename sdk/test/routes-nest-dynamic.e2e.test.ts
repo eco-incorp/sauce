@@ -2120,6 +2120,108 @@ describeEvm("route nesting, executed", () => {
       expect(status).toBe("success");
       expect(publishedIn(logs)[0]!.rewardTokens[0]!.amount).toBe(held);
     }, 300_000);
+
+    describe("`.catch(...)` handles an intent's body on the destination", () => {
+      // The body runs in a frame of its own; when it reverts everything it did is undone, the
+      // handler runs in its place, and the fill still succeeds.
+      const FALLBACK = "0x0000000000000000000000000000000000000fa1" as Address;
+      const handled = (body: string) => `function main() {
+  const amount = Token(TOKEN).balanceOf(ctx.self());
+  Base.Portal.send({ token: TOKEN, amount })
+    .receive({ token: TOKEN, amount })
+    .then(() => {
+      Token(TOKEN).transfer(RECIPIENT, 1n);
+      ${body}
+    })
+    .catch(() => {
+      const here = Token(TOKEN).balanceOf(ctx.self());
+      Token(TOKEN).transfer(FALLBACK, here);
+    });
+}`;
+
+      for (const [name, body, toRecipient, toFallback] of [
+        [
+          "a reverting body is undone, and the handler forwards the delivery",
+          'require(false, "no");',
+          0n,
+          SEEDED,
+        ],
+        ["a body that succeeds keeps what it did, and the handler does not run", "", 1n, 0n],
+      ] as const) {
+        it(
+          name,
+          async () => {
+            const token = await deploy(MOCK_ERC20.creationCode);
+            const recipient = await balanceOf(token, FINAL_RECIPIENT);
+            const compiled = compileSauceRoute(
+              "base",
+              handled(body),
+              { pot: executorPot, engine: sauce.engine },
+              {
+                defines: {
+                  TOKEN: BigInt(token),
+                  RECIPIENT: BigInt(FINAL_RECIPIENT),
+                  FALLBACK: BigInt(FALLBACK),
+                },
+                intents: {
+                  deadline: 4_000_000_000n,
+                  creator: CREATOR,
+                  prover: PROVER,
+                  sourcePortal: portal,
+                  destinationPortal: portal,
+                  pot: executorPot,
+                  engine: sauce.engine,
+                  executionFee: 0n,
+                  salt: `0x${(toFallback === 0n ? "c6" : "c5").repeat(32)}` as Hex,
+                },
+              },
+            );
+
+            // ---- publish it from the Pot, then fill it from the bytes the chain published ---------
+            const parent = await fulfil([
+              {
+                target: token,
+                data: encodeFunctionData({
+                  abi: erc20Abi,
+                  functionName: "mint",
+                  args: [executorPot, SEEDED],
+                }),
+                value: 0n,
+              },
+              {
+                target: denormalizeToEvm(toUniversalAddress(compiled.calls[0]!.target)),
+                data: compiled.calls[0]!.data,
+                value: 0n,
+              },
+            ]);
+            expect(parent.status).toBe("success");
+            const [published] = publishedIn(parent.logs);
+            const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], published!.route) as unknown as [
+              EvmRoute,
+            ];
+            await mintTo(token, DEPLOYER.address, SEEDED);
+            const approve = await walletClient.sendTransaction({
+              account: DEPLOYER,
+              chain: null,
+              to: token,
+              data: encodeFunctionData({
+                abi: erc20ApproveAbi,
+                functionName: "approve",
+                args: [portal, SEEDED],
+              }),
+              gas: GAS_LIMIT,
+            });
+            await publicClient.waitForTransactionReceipt({ hash: approve });
+
+            const fill = await fulfilRoute(route, rewardOf(published!).rewardHash);
+            expect(fill.status).toBe("success");
+            expect((await balanceOf(token, FINAL_RECIPIENT)) - recipient).toBe(toRecipient);
+            expect(await balanceOf(token, FALLBACK)).toBe(toFallback);
+          },
+          300_000,
+        );
+      }
+    });
   });
 
   describe("the destination Pot is derived, not asked for", () => {

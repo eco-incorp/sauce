@@ -111,7 +111,14 @@ interface SauceSending {
 /** An intent with its reward and delivery: the body is what it needs. */
 interface SauceReceiving {
   /** What runs on the destination: a program of its own, or token transfers the route makes. */
-  then(body: () => void): void;
+  then(body: () => void): SauceOpened;
+}
+
+/** An intent with its body. */
+interface SauceOpened {
+  /** What runs on the destination in the body's place when the body reverts: everything the body
+   *  did is undone, and the fill still succeeds. EVM destinations only. */
+  catch(handler: () => void): void;
 }
 
 /** Context reads: who called, where, when. */

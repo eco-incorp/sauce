@@ -192,7 +192,13 @@ export function intentHost(level: IntentLevel): {
       ending: { refused: NEEDS_A_DELIVERY },
     },
     Receiving: { methods: { then }, ending: { refused: NEEDS_A_BODY } },
-    Opened: { ending: { calls: publish, site: true } },
+    // `.catch(() => { … })` handles the body: the compiler builds it as one program,
+    // `try { <body> } catch { <handler> }`, which runs on the destination.
+    Opened: {
+      methods: { catch: { params: [{ kind: "handler" }], returns: "Caught" } },
+      ending: { calls: publish, site: true },
+    },
+    Caught: { ending: { calls: publish, site: true } },
   };
   const byId = new Map([...level.chains.values()].map((chain) => [BigInt(chain.id), chain]));
 
@@ -220,7 +226,9 @@ export function intentHost(level: IntentLevel): {
       : level.programOn(destinationOf(site.receiver, `\`${site.callee}\``));
 
   const bind = (site: CallSite): BoundArgument[] => {
-    if (site.callee !== "Opened") return fail(`'${site.callee}' is not an intent's publication`);
+    if (site.callee !== "Opened" && site.callee !== "Caught") {
+      return fail(`'${site.callee}' is not an intent's publication`);
+    }
 
     return bindIntent(level, destinationOf(site.receiver, "the intent"), fundVia, site);
   };
