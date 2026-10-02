@@ -572,8 +572,9 @@ where the intent opens and spliced like any capture. `intent-sugar.ts` lowers it
 old call form, `Chain(() => { body }, { tokens: delivery }).reward({ tokens: reward })`, which means
 exactly the same, until the compiler opens intents itself (#61); document only the Portal form. On the
 host, every chain export's `Portal` (`intent-dsl.ts#chainPortal`) takes each step's options beside it
-(`send(items, rewardOptions)`, `receive(items, routeOptions)`) and `.then(body)` returns the
-`BuiltIntent` of `Chain(body, { ...routeOptions, tokens }).reward({ ...rewardOptions, tokens })`. Its
+(`send(items, rewardOptions)`, `receive(items, routeOptions)`), `.nest(child, options)` may follow
+`receive`, and `.then(body)` returns the `BuiltIntent` of
+`Chain(body, { ...routeOptions, tokens }).nest(...).reward({ ...rewardOptions, tokens })`. Its
 `then` is the intent's, not a promise's, so it refuses being awaited.
 
 **Chain-scoped names are resolved per level.** In an intent a program opens (`intent-sugar.ts`) the

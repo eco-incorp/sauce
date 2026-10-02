@@ -1093,6 +1093,8 @@ export interface PortalSent {
  * returning it from an async function, calls `then(resolve, reject)`, which is refused.
  */
 export interface PortalReceived {
+  /** Attaches a child intent built in TypeScript, before the body: `PendingSauceRoute.nest`. */
+  nest(childOrThunk: NestChildOrThunk, options?: NestOptions): PortalReceived;
   /** The body that runs on the destination, compiled for it: the built intent. */
   then(body: SauceBody): BuiltIntent;
 }
@@ -1104,9 +1106,9 @@ const isNative = (value: unknown): boolean =>
   typeof value === "function" && Function.prototype.toString.call(value).includes("[native code]");
 
 /**
- * The Portal of `chain`: `send(...).receive(...).then(body)` is `openRoute(chain, body, { ...
- * receiveOptions, tokens: delivery }).reward({ ...sendOptions, tokens: reward })`, so it builds the
- * same intent, byte for byte.
+ * The Portal of `chain`: `send(...).receive(...).nest(...).then(body)` is `openRoute(chain, body, {
+ * ...receiveOptions, tokens: delivery }).nest(...).reward({ ...sendOptions, tokens: reward })`, so
+ * it builds the same intent, byte for byte.
  */
 export function chainPortal(chain: ChainRef): ChainPortal {
   const destination = requireChain(chain);
@@ -1114,25 +1116,35 @@ export function chainPortal(chain: ChainRef): ChainPortal {
 
   return {
     send: (reward, sendOptions) => ({
-      receive: (delivery, receiveOptions) => ({
-        // Not `then(body)`: a promise's resolution calls it with two native functions, and that
-        // call has to be told apart from the intent's own.
-        then(...args: unknown[]): BuiltIntent {
-          const [body] = args;
-          if (args.length !== 1 || isNative(body)) {
-            throw new TypeError(
-              `${name} is not a promise: \`.then(...)\` takes the intent's body, ` +
-                "`.then(() => { … })`, and returns the intent. It was called as a promise's " +
-                "`then` — by `await`, or by returning it from an async function — which would " +
-                "build nothing. Call `.then(() => { … })` and use the intent it returns.",
+      receive: (delivery, receiveOptions) => {
+        const received = (
+          nested: readonly (readonly [NestChildOrThunk, NestOptions | undefined])[],
+        ): PortalReceived => ({
+          nest: (childOrThunk, options) => received([...nested, [childOrThunk, options]]),
+          // Not `then(body)`: a promise's resolution calls it with two native functions, and that
+          // call has to be told apart from the intent's own.
+          then(...args: unknown[]): BuiltIntent {
+            const [body] = args;
+            if (args.length !== 1 || isNative(body)) {
+              throw new TypeError(
+                `${name} is not a promise: \`.then(...)\` takes the intent's body, ` +
+                  "`.then(() => { … })`, and returns the intent. It was called as a promise's " +
+                  "`then` — by `await`, or by returning it from an async function — which would " +
+                  "build nothing. Call `.then(() => { … })` and use the intent it returns.",
+              );
+            }
+            const pending = nested.reduce(
+              (route, [childOrThunk, options]) => route.nest(childOrThunk, options),
+              openRoute(destination, body as SauceBody, {
+                ...receiveOptions,
+                tokens: listOf(delivery),
+              }),
             );
-          }
-          return openRoute(destination, body as SauceBody, {
-            ...receiveOptions,
-            tokens: listOf(delivery),
-          }).reward({ ...sendOptions, tokens: listOf(reward) });
-        },
-      }),
+            return pending.reward({ ...sendOptions, tokens: listOf(reward) });
+          },
+        });
+        return received([]);
+      },
     }),
   };
 }
