@@ -1591,8 +1591,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "signs. With an endpoint it also says `deployed` (null without one) — when true, do not " +
         "send the deployment — and reads what the cook will need: on an EVM chain the Kitchen's " +
         "fee (the least a cook's value can be) and the Pot's balance of the native currency and " +
-        "of every token the chain registers; on Solana the Pot's associated token account for " +
-        "each registered mint, whether it exists, and its balance. On a preview chain the Pot " +
+        "of every token the chain registers but its tokenized stocks; on Solana the Pot's " +
+        "associated token account for each registered mint but the tokenized stocks, whether it " +
+        "exists, and its balance. On a preview chain the Pot " +
         "is predicted and read, and the deployment is left out: `refused` says why, and how to " +
         `request the chain. ${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: {

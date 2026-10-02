@@ -33,7 +33,7 @@ import {
   parseSalt,
   UsageError,
 } from "../src/cli/args.js";
-import { awaitPot, caughtUp } from "../src/cli/chain.js";
+import { awaitPot, caughtUp, registeredBalances } from "../src/cli/chain.js";
 import {
   chooseTerminal,
   confirmOn,
@@ -2220,6 +2220,27 @@ describe("waiting for a deployed Pot", () => {
     await expect(awaitPot(client, POT, 7n, { tries: 3, delayMs: 1 })).rejects.toThrow(
       /deployed in block 7, but the endpoint still shows no code there/,
     );
+  });
+
+  it("reads a Pot's registered balances but not its chain's tokenized stocks, one read each", async () => {
+    const read: string[] = [];
+    const client = {
+      getBalance: async () => 7n,
+      readContract: async ({ address }: { address: string }) => {
+        read.push(getAddress(address));
+        return 5n;
+      },
+    } as unknown as PublicClient;
+    const ethereum = requireChain("ethereum");
+    const rows = routes.TOKEN_REGISTRY[ethereum.id]!;
+    const plain = rows.filter((row) => row.stock === undefined);
+    // Ethereum has over a thousand stock tokens: none of them is read.
+    expect(rows.length - plain.length).toBeGreaterThan(1000);
+    const held = await registeredBalances(client, ethereum, POT);
+    expect(read).toHaveLength(plain.length);
+    expect(held.tokens.map((token) => token.symbol)).toEqual(plain.map((row) => row.symbol));
+    expect(held.native).toBe(7n);
+    expect(held.tokens.find((token) => token.symbol === "USDC")).toMatchObject({ balance: 5n });
   });
 
   it("waits for the endpoint to reach a transaction's block, and gives up quietly", async () => {
