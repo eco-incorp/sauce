@@ -282,12 +282,13 @@ export function sourceGlobals(chain: ChainRef): SourceGlobals {
         }),
       ),
       ...svmTokenRows(resolved).map(
-        ({ symbol, address, decimals, mint, tokenProgram }): SourceToken => ({
+        ({ symbol, address, decimals, mint, tokenProgram, stock }): SourceToken => ({
           symbol,
           address,
           decimals,
           mint,
           tokenProgram,
+          ...(stock === undefined ? {} : { stock }),
         }),
       ),
     ].sort((a, b) => (a.symbol < b.symbol ? -1 : a.symbol > b.symbol ? 1 : 0)),

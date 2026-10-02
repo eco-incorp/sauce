@@ -554,10 +554,10 @@ async function sendInstructions(
 /**
  * A value that names an account by its token: `pot:<token>` or `owner:<token>`, that one's
  * associated token account for the mint; `mint:<token>`, the mint itself; `program:<token>`, the
- * token program that owns the mint. The token is a registered symbol (`USDC`) or a mint's base58
- * address.
+ * token program that owns the mint. The token is a registered symbol (`USDC`, or a stock's, which
+ * can carry a "_": `NVDA_US`) or a mint's base58 address.
  */
-const TOKEN_NAMED = /^(pot|owner|mint|program):([A-Za-z0-9]+)$/;
+const TOKEN_NAMED = /^(pot|owner|mint|program):([A-Za-z0-9_]+)$/;
 
 /** `--account name=<pubkey | pot | owner | pot:<token> | owner:<token> | mint:<token> | program:<token>>`, parsed. */
 export function parseAccounts(raws: readonly string[]): Record<string, string> {
@@ -655,12 +655,19 @@ export async function resolveTokenAccounts(
           "for the owner's), or cook through the Kitchen",
       );
     }
-    const row = rows.find((candidate) => candidate.symbol === token);
+    // Without regard to case: a stock's symbol is its issuer's ticker (`TSLAx`), not uppercase.
+    const row = rows.find((candidate) => candidate.symbol.toUpperCase() === token.toUpperCase());
     if (row === undefined && !isAddress(token)) {
+      // The cluster's other mints by name, its tokenized stocks by count: there are over a thousand.
+      const listed = rows.filter((candidate) => candidate.stock === undefined);
+      const stocks = rows.length - listed.length;
       throw new UsageError(
         `--account ${name}=${value}: ${token} is not a mint ${chain.slug} registers ` +
-          `(${rows.map((candidate) => candidate.symbol).join(", ") || "none"}): give the mint's ` +
-          `base58 address, ${whose}:<mint>`,
+          `(${listed.map((candidate) => candidate.symbol).join(", ") || "none"}` +
+          (stocks > 0
+            ? `, and ${stocks} stock tokens: sauce globals --chain ${chain.slug} --stocks`
+            : "") +
+          `): give the mint's base58 address, ${whose}:<mint>`,
       );
     }
     const mint = address(row?.mint ?? token);
@@ -774,8 +781,9 @@ export interface SvmPotTokenAccount {
 }
 
 /**
- * The Pot's associated token account for every mint the chain's cluster registers — each under the
- * token program its row records — whether it exists, and its balance.
+ * The Pot's associated token account for every mint the chain's cluster registers but its tokenized
+ * stocks — each under the token program its row records — whether it exists, and its balance. The
+ * stocks are over a thousand mints, two reads each: a stock's account is `pot:<symbol>`.
  */
 export async function svmPotTokenAccounts(
   target: SvmTarget,
@@ -786,25 +794,27 @@ export async function svmPotTokenAccounts(
   const rpc = createSolanaRpc(rpcUrl);
 
   return Promise.all(
-    svmTokenRows(chain).map(async (row) => {
-      const mint = address(row.mint);
-      const account = await svmTokenAccount({ mint, tokenProgram: row.tokenProgram }, pot);
-      const base = {
-        symbol: row.symbol,
-        mint: row.mint,
-        decimals: row.decimals,
-        tokenProgram: row.tokenProgram,
-        account,
-      };
-      if (!(await exists(rpc, rpcUrl, account, `the Pot's ${row.symbol} account`))) {
-        return { ...base, exists: false, balance: null };
-      }
-      const { value } = await ask(rpcUrl, `the Pot's ${row.symbol} balance`, () =>
-        rpc.getTokenAccountBalance(account).send(),
-      );
+    svmTokenRows(chain)
+      .filter((row) => row.stock === undefined)
+      .map(async (row) => {
+        const mint = address(row.mint);
+        const account = await svmTokenAccount({ mint, tokenProgram: row.tokenProgram }, pot);
+        const base = {
+          symbol: row.symbol,
+          mint: row.mint,
+          decimals: row.decimals,
+          tokenProgram: row.tokenProgram,
+          account,
+        };
+        if (!(await exists(rpc, rpcUrl, account, `the Pot's ${row.symbol} account`))) {
+          return { ...base, exists: false, balance: null };
+        }
+        const { value } = await ask(rpcUrl, `the Pot's ${row.symbol} balance`, () =>
+          rpc.getTokenAccountBalance(account).send(),
+        );
 
-      return { ...base, exists: true, balance: value.amount };
-    }),
+        return { ...base, exists: true, balance: value.amount };
+      }),
   );
 }
 

@@ -7,7 +7,8 @@
  * says so plainly where the SDK rewrote the line itself.
  */
 import type { CanonicalChain } from "../chains/canonical.js";
-import { TOKEN_REGISTRY } from "../routes/token-registry.js";
+import { chainById } from "../chains/canonical.js";
+import { svmTokenRows, TOKEN_REGISTRY } from "../routes/token-registry.js";
 
 /** The entry name `rs-compile.ts` compiles every route program under. */
 const ENTRY = "main.js";
@@ -248,6 +249,30 @@ function unregisteredTokens(text: string, chain: CanonicalChain): string[] {
   });
 }
 
+/**
+ * On Solana a token is a value (`balanceOf(TSLAx, account)`), so a symbol the cluster does not
+ * register fails as an undeclared name. Name the cause: a stock's symbol written in another case,
+ * or a token only an EVM chain registers.
+ */
+function unregisteredMints(message: string, chain: CanonicalChain): string[] {
+  const name = /`([A-Za-z_$][\w$]*)` is not a declared variable/.exec(message)?.[1];
+  if (chain.kind !== "svm" || name === undefined) return [];
+  const cased = svmTokenRows(chain).find((row) => row.symbol.toUpperCase() === name.toUpperCase());
+  if (cased !== undefined) {
+    return [`${name} is ${cased.symbol} on ${chain.slug}: a token's symbol is case-sensitive`];
+  }
+  const elsewhere = Object.entries(TOKEN_REGISTRY)
+    .filter(([, rows]) => rows.some((row) => row.symbol === name))
+    .map(([id]) => chainById(Number(id))?.slug ?? id);
+
+  return elsewhere.length === 0
+    ? []
+    : [
+        `${name} is a token on ${elsewhere.join(" and ")}, not ${chain.slug}: ` +
+          `sauce globals --chain ${chain.slug} --search <text> finds the mints it has`,
+      ];
+}
+
 function withHints(message: string, text: string, chain: CanonicalChain): string {
   const hints = [
     ...HINTS.flatMap(([pattern, hint]) => {
@@ -256,6 +281,7 @@ function withHints(message: string, text: string, chain: CanonicalChain): string
       return match === null ? [] : [hint(match)];
     }),
     ...unregisteredTokens(text, chain),
+    ...unregisteredMints(message, chain),
   ];
 
   return [message, ...hints.map((hint) => `hint: ${hint}`)].join("\n");
