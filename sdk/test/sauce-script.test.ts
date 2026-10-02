@@ -186,7 +186,9 @@ describe("SauceScript in an editor", () => {
       reference.intrinsics.flatMap(({ name, example }, index) =>
         Object.entries(example).map(([target, text]) => [
           join(work, `builtin-${index}-${target}.sauce.ts`),
-          `// ${name} (${target})\n${text}\n`,
+          // `ERC20` is the reference's name for an ERC-20 ABI a program imports, as its checker
+          // binds it (`skills-check/builtins.mjs`).
+          `// ${name} (${target})\n${/\bERC20\b/.test(text) ? 'import ERC20 from "./artifacts/IERC20.json";\n' : ""}${text}\n`,
         ]),
       ),
     );

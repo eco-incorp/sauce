@@ -51,8 +51,9 @@ sdk/test/fixtures/registry-abi/evidence.json
 # Captured token-registry evidence (scripts/capture-token-registry.mjs), one token per line, the same
 # way.
 sdk/test/fixtures/token-registry/evidence.json
-# Programs an agent wrote, copied byte for byte from the project it wrote them in: the SauceScript
-# declarations are proved on them as they were written.
+# Programs an agent wrote, copied from the project it wrote them in: the SauceScript declarations
+# are proved on them as they were written (the intent since given main's parameters, as every input
+# now is).
 sdk/test/fixtures/sauce-script
 
 # GENERATOR OUTPUT that happens to be SauceScript. Both of these are emitted by TypeScript in
