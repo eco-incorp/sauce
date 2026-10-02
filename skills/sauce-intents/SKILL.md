@@ -1,20 +1,29 @@
 ---
 name: sauce-intents
-description: Cross-chain intents written in Sauce — a file that opens the intent, Base(() => { ... }).reward({ ... }) in main, its inputs main's parameters passed with --args; how an intent is published, funded, discovered, filled, proven, claimed, cancelled and refunded (a sauce intent command each) (the intent hash, the per-intent vault, IntentPublished and IntentFunded, isIntentFunded); every way to publish and fund it (sauce intent publish from a wallet, sauce run from a Pot, a transfer into the vault then publish, cascade children, quoted intents); amounts measured on chain; token-only bodies versus program bodies; the delivery; on which chain each name resolves; the shared destination Pot and the Kitchen fee the solver pays; rehearsing both sides; and the deadline and creator every intent needs. Use when a program should continue on another chain, forward a swap or bridge output, build a cascade, pay a solver, or when the user mentions intents, rewards, vaults, solvers, Portals, provers, Executors or Pots.
+description: Cross-chain intents written in Sauce — a file opening it with Base.Portal.send(…).receive(…).then(() => { … }) in main, its inputs main's parameters passed with --args; how an intent is published, funded, discovered, filled, proven, claimed, cancelled and refunded (a sauce intent command each) (the intent hash, the per-intent vault, IntentPublished and IntentFunded, isIntentFunded); every way to publish and fund it (sauce intent publish from a wallet, sauce run from a Pot, a transfer into the vault then publish, cascade children, quoted intents); amounts measured on chain; token-only bodies versus program bodies; the delivery; on which chain each name resolves; the shared destination Pot and the Kitchen fee the solver pays; rehearsing both sides; and the deadline and creator every intent needs. Use when a program should continue on another chain, forward a swap or bridge output, build a cascade, pay a solver, or when the user mentions intents, rewards, vaults, solvers, Portals, provers, Executors or Pots.
 ---
 
 # Cross-chain intents in Sauce
 
 An intent is an **offer**: run this on the destination chain, and the reward escrowed on this chain
-is yours. An intent file is a program like any other: the chain name called as a function opens the
-intent, and every value the file does not compute is one of `main`'s typed parameters, passed with
-`--args` (`sauce-script`).
+is yours. An intent file is a program like any other: the destination's `Portal` opens the intent,
+naming its three parts in order, and every value the file does not compute is one of `main`'s typed
+parameters, passed with `--args` (`sauce-script`):
+
+- `.send(...)`: the **reward**, what this program pays the solver, escrowed on the chain it runs on;
+- `.receive(...)`: the **delivery**, what the solver brings to the destination for the body;
+- `.then(() => { ... })`: the **body**, the code that runs on the destination with it.
+
+Each of `send` and `receive` takes one `{ token, amount }` or an array of them. All three are
+required, in that order: an intent that stops early does not compile.
 
 ```sauce chain=base
 function main(recipient: Address, amount: Uint256) {
-  Ethereum(() => {
-    USDC.transfer(recipient, amount); // Ethereum's USDC: the body runs there
-  }).reward({ tokens: [{ token: USDC, amount }] }); // the source chain's USDC
+  Ethereum.Portal.send({ token: USDC, amount }) // the source chain's USDC: it pays the reward
+    .receive({ token: USDC, amount }) // Ethereum's USDC: the solver delivers it there
+    .then(() => {
+      USDC.transfer(recipient, amount); // Ethereum's USDC: the body runs there
+    });
 }
 ```
 
@@ -158,11 +167,11 @@ The Portal's functions, events and errors, with selectors and topics, are in
 
 The file is compiled for the **source** chain, the one that pays the reward (`--chain`).
 
-- **In `.reward(...)`**, names are the source chain's, which funds and escrows the reward: `USDC`
+- **In `.send(...)`**, names are the source chain's, which funds and escrows the reward: `USDC`
   there is the source chain's USDC. A reward token must be known when the file is compiled: a
   symbol, or a token's address on the source chain as a literal, a top-level `const` of a literal,
   or, published from a wallet, one of `main`'s arguments. Its amount may be a measured value.
-- **Inside the braces, and in the delivery argument**, the code runs on the destination, and every
+- **In `.receive(...)`, and inside the braces of `.then(...)`**, the code runs on the destination, and every
   name a chain supplies resolves there: in an `Ethereum(...)` body, `USDC` is Ethereum's USDC,
   `AaveV3.Pool` is Ethereum's pool, and `chainId` and a `Namespace_Contract` name are Ethereum's.
   The tokens a destination has are listed in
@@ -172,8 +181,8 @@ The file is compiled for the **source** chain, the one that pays the reward (`--
 - **The rule repeats at every depth.** An intent opened inside a body is funded on that body's
   chain, so its reward resolves there and its own body on its own destination.
 - **Name a token by a symbol, a literal or a top-level `const` of a literal.** Any other
-  top-level `const` holding a token's address (`const TOKEN = USDC;`), used in the reward or the
-  delivery, counts as a value the program computes, so the compile refuses the intent, saying the
+  top-level `const` holding a token's address (`const TOKEN = USDC;`), used in `.send(...)` or
+  `.receive(...)`, counts as a value the program computes, so the compile refuses the intent, saying the
   token's address must be known when the intent is built, and so does `sauce intent publish`. A
   `const` inside the braces is fine.
 - A literal address means that address everywhere, and so does one of `main`'s arguments.
@@ -229,7 +238,8 @@ steps: in the same transaction as everything else, the Pot reads the intent's va
 sends a native reward, and calls `publish`, so nothing is published unless the whole cook succeeds,
 and a token whose transfer returns `false` reverts it. Values measured while it runs can flow into the intent: in
 `const amount = USDC.balanceOf(ctx.self())`, `amount` does not exist until the program runs, and
-using it inside the braces, in the delivery or in the reward is enough. The package encodes the
+using it in `.send(...)`, in `.receive(...)` or inside the braces is enough, and so is integer
+arithmetic of it there (`amount * 99n / 100n`), which the Pot computes as the intent opens. The package encodes the
 intent with a slot for it, and the program writes the measured value in before it publishes. Any
 one-word value can be carried this way.
 
@@ -240,7 +250,8 @@ npx sauce run cross-chain.sauce.ts --chain base --keystore <keystore> \
 ```
 
 **(c) An intent built elsewhere, from a Pot.** (a) and (b) fund by transfer and publish every intent
-a file opens, so an intent you write with `Chain(() => …).reward(…)` needs nothing more. This file
+a file opens, so an intent you write with `Chain.Portal.send(…).receive(…).then(…)` needs nothing
+more. This file
 is only for an intent you did not write: a route and a reward another tool encoded, published from a
 Pot. [examples/fund-by-transfer.sauce.ts](examples/fund-by-transfer.sauce.ts) takes them as
 `publish`'s three arguments and does in one cook what (b) does: it reads the vault with
@@ -263,8 +274,6 @@ npx sauce run fund-by-transfer.sauce.ts --chain base \
 - **What the CLI emits**: `sauce intent publish` and `sauce run` fund every intent this way by default, as
   (a) and (b) describe; `--intent-fund-via publishAndFund` gives the approve and `publishAndFund`
   instead.
-- A native reward (`reward.nativeAmount`) is native coin sent to the vault the same way, by
-  `sauce intent publish` and `sauce run` alike; the example funds tokens only and refuses a native reward.
 
 **Quoted intents.** A solver that quoted an intent marks its quote funded when it sees
 `IntentFunded`, which only `publishAndFund` and `fund` emit. For an intent built from a solver's
@@ -280,27 +289,28 @@ named.
 
 ## Two kinds of body
 
-| The body is…                                                                                          | Lowers to                                                    | Needs                                                                  | Token writes                                                                              |
-| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| only `transfer`/`approve` calls on a symbol or `Token(address)`, with literal or captured arguments   | plain calls the destination Portal's Executor makes          | nothing more: no Pot, no Kitchen fee                                   | USDT works and `approve` is reset to zero first, but a `false` return is **not** detected |
-| anything else: a local, a balance read, a condition, a protocol call, `transferFrom`, a nested intent | a program compiled for the destination and cooked on its Pot | the destination's Kitchen fee, and the delivery as the second argument | SafeERC20: a `false` return reverts the fulfilment                                        |
+| The body is…                                                                                          | Lowers to                                                    | Needs                                | Token writes                                                                              |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------ | ----------------------------------------------------------------------------------------- |
+| only `transfer`/`approve` calls on a symbol or `Token(address)`, with literal or captured arguments   | plain calls the destination Portal's Executor makes          | nothing more: no Pot, no Kitchen fee | USDT works and `approve` is reset to zero first, but a `false` return is **not** detected |
+| anything else: a local, a balance read, a condition, a protocol call, `transferFrom`, a nested intent | a program compiled for the destination and cooked on its Pot | the destination's Kitchen fee        | SafeERC20: a `false` return reverts the fulfilment                                        |
 
 The Executor checks only that each call did not revert, so a token-only body's transfer that
 returns `false` fills the intent with nothing moved; a call with data to an address with no code
-reverts `CallToEOA`. A program body must say what the solver delivers, because a balance read
-inside it reads what is there, not what must be brought:
+reverts `CallToEOA`. What the solver delivers is always named, in `.receive(...)`. For a token-only
+body it is what the transfers move. For a program body it is what the program needs, which the
+package moves from the Executor into the Pot before the program runs; a balance read inside the
+body reads what is there, not what must be brought:
 
 ```sauce chain=base
 function main(beneficiary: Address) {
   const amount = USDC.balanceOf(ctx.self());
   const delivered = amount - (amount * 10n) / 10000n;
-  Ethereum(
-    () => {
+  Ethereum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount: delivered })
+    .then(() => {
       USDC.approve(AaveV3.Pool, delivered);
       AaveV3.Pool.supply(USDC, delivered, beneficiary, 0n);
-    },
-    { tokens: [{ token: USDC, amount: delivered }] },
-  ).reward({ tokens: [{ token: USDC, amount }] });
+    });
 }
 ```
 
@@ -338,8 +348,9 @@ function main(
   recipient: Address,
   refundTo: Address,
 ) {
-  Base(
-    () => {
+  Base.Portal.send({ token: WETH, amount: reward }) // the source chain's WETH
+    .receive({ token: WETH, amount: amountIn }) // Base's WETH, which the solver delivers
+    .then(() => {
       const pool = UniswapV3.Factory.getPool(WETH, USDC, 500n); // Base's 0.05% tier
       require(pool != 0n, "no WETH/USDC pool at 0.05%");
       // Pays the recipient the USDC, and reverts the whole fulfilment below minOut.
@@ -348,9 +359,7 @@ function main(
       if (unsold > 0n) {
         WETH.transfer(refundTo, unsold);
       }
-    },
-    { tokens: [{ token: WETH, amount: amountIn }] }, // Base's WETH, which the solver delivers
-  ).reward({ tokens: [{ token: WETH, amount: reward }] }); // the source chain's WETH
+    });
 }
 ```
 
@@ -372,15 +381,16 @@ execution and carried into the level below; no amount past the first exists when
 ```sauce chain=base
 function main(recipient: Address) {
   const amount = USDC.balanceOf(ctx.self());
-  Ethereum(
-    () => {
+  Ethereum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount })
+    .then(() => {
       const arrived = USDC.balanceOf(ctx.self()); // Ethereum's USDC
-      Base(() => {
-        USDC.transfer(recipient, arrived); // Base's USDC
-      }).reward({ tokens: [{ token: USDC, amount: arrived }] }); // Ethereum's: it funds this level
-    },
-    { tokens: [{ token: USDC, amount }] },
-  ).reward({ tokens: [{ token: USDC, amount }] });
+      Base.Portal.send({ token: USDC, amount: arrived }) // Ethereum's: it funds this level
+        .receive({ token: USDC, amount: arrived }) // Base's
+        .then(() => {
+          USDC.transfer(recipient, arrived); // Base's USDC
+        });
+    });
 }
 ```
 
@@ -392,7 +402,7 @@ is published like any other intent and any solver can discover it. Keep every le
 chain, as here (Base, Ethereum, then Base again): the command checks the first level's chains only.
 
 Every level takes the same `--intent-deadline`, `--intent-reward-deadline`, `--intent-creator` and
-`--intent-execution-fee`; a `.reward(...)` in a program sets only `tokens` and `nativeAmount`. So a
+`--intent-execution-fee`; `.send(...)` in a program sets only the reward's tokens. So a
 later level has whatever time the earlier ones leave before that one deadline, the creator reclaims
 each level's unearned reward on the chain that escrowed it, and one fee pays the cook of every body
 that is a program, whatever chain it runs on (`--intent-execution-fee auto` refuses when those

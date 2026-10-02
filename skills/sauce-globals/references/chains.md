@@ -2,7 +2,8 @@
 
 # Chain globals
 
-A chain name opens an intent from inside a program (`Ethereum(() => { ... }).reward({ ... })`) and
+A chain name opens an intent from inside a program
+(`Ethereum.Portal.send({ token, amount }).receive({ token, amount }).then(() => { ... })`), and
 qualifies a contract address (`Ethereum.UniswapV4.UniversalRouter`). An intent needs both chains
 to take intents; each line says whether its chain does. Each line also says whether the initial
 release supports the chain: a program compiles and simulates on every chain, and its transactions

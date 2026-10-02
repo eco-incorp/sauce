@@ -167,12 +167,12 @@ check(
 );
 
 // ---- A token-only child is plain route calls for the destination's Executor: no Pot, no fee.
-// Inside the body, and in the delivery, a token symbol is the destination's: `USDC` here is
-// Ethereum's, while the one in `.reward(...)` is Base's, which the program escrows.
+// Inside the body, and in `.receive(...)`, a token symbol is the destination's: `USDC` there is
+// Ethereum's, while the one in `.send(...)` is Base's, which the program escrows.
 const direct = intentOf(
   compileFor(
     "base",
-    "function main(to: Address, amount: Uint256) { Ethereum(() => { USDC.transfer(to, amount); }).reward({ tokens: [{ token: USDC, amount }] }); }",
+    "function main(to: Address, amount: Uint256) { Ethereum.Portal.send({ token: USDC, amount }).receive({ token: USDC, amount }).then(() => { USDC.transfer(to, amount); }); }",
     [recipient, 1_000_000n],
   ),
 );
@@ -183,7 +183,7 @@ check(contracts.on("ethereum").AaveV3.Pool.available, "Ethereum has AaveV3.Pool"
 
 // ---- Inside a body, a decoded result is read by position or destructured, as anywhere else.
 const decodeIn = (statement: string) =>
-  `function main(pool: Address) { Base(() => { const d = hex\`3850c7bd\`; ${statement} require(x != 0n); }, { tokens: [{ token: 0x4200000000000000000000000000000000000006n, amount: 1n }] }).reward({ tokens: [{ token: WETH, amount: 1n }] }); }`;
+  `function main(pool: Address) { Base.Portal.send({ token: WETH, amount: 1n }).receive({ token: 0x4200000000000000000000000000000000000006n, amount: 1n }).then(() => { const d = hex\`3850c7bd\`; ${statement} require(x != 0n); }); }`;
 const refused = (source: string) => {
   try {
     compileFor("ethereum", source, [recipient], fee.base);

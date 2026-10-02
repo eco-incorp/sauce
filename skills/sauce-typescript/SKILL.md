@@ -167,8 +167,9 @@ a recorded address, not proof of live code on the chain.
   own computation. `routes.publishTx`, `routes.publishAndFundTx`, `routes.approvalTxs` and
   `routes.isIntentFundedCall` build the single calls (`{ to, data }`, with `decode` for a read).
 - **Nested intents** are written in the program: a body that opens the next intent with
-  `Chain(() => { ... }).reward({ ... })` (`sauce-intents`, Cascades). In a typed closure,
-  `Base(() => { ... Ethereum(() => { ... }).reward({ ... }) }, options)`, the inner chain is the
+  `Ethereum.Portal.send(...).receive(...).then(() => { ... })` (`sauce-intents`, Cascades). In a typed
+  closure, `Base.Portal.send(reward, rewardOptions).receive(delivery, routeOptions).then(() => {
+... Ethereum.Portal.send(...).receive(...).then(() => { ... }) })`, the inner chain is the
   imported export, which typechecks there. `routes.compileSauceProgram`
   lists the intents a program opens in `.intents`, and `routes.intentSourceTxs` publishes a fixed
   one from a wallet. The lower-level builder, `routes.openRoute(chain, body, options).nest(child,

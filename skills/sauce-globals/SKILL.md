@@ -182,7 +182,8 @@ function main(tokenA: Address, tokenB: Address) {
 ## Chains, context, imports
 
 - **Chain names** (`Base`, `Ethereum`, … in [references/chains.md](references/chains.md)) open an
-  intent from inside a program: `Ethereum(() => { ... }).reward({ ... })`. Every chain's names
+  intent from inside a program:
+  `Ethereum.Portal.send({ token, amount }).receive({ token, amount }).then(() => { ... })`. Every chain's names
   compile; for the initial release its transactions are built and sent only on Ethereum, Base and
   Solana, and [references/chains.md](references/chains.md) marks every other chain a preview chain
   (`sauce-chains` says how to request one).

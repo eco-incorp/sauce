@@ -6,8 +6,8 @@
 // on Base. The solver earns `reward` of WETH. Nothing is measured on chain, so it can also be
 // published from a wallet (sauce intent publish, with the same --args).
 //
-// `--chain` is the source chain: `WETH` in `.reward(...)` is its WETH. Inside the braces, and in
-// the delivery argument after them, the body runs on Base: `WETH`, `USDC`, `UniswapV3.Factory`,
+// `--chain` is the source chain: `WETH` in `.send(...)` is its WETH. In `.receive(...)`, and inside
+// the braces of `.then(...)`, the body runs on Base: `WETH`, `USDC`, `UniswapV3.Factory`,
 // `UniswapV3.Pool`, `UniswapV4.StateView` and `UniswapV4.PoolManager` there are Base's.
 //
 //   sauce run swap-on-base.sauce.ts --chain <chain> \
@@ -58,8 +58,9 @@ function main(
   recipient: Address,
   refundTo: Address,
 ) {
-  Base(
-    () => {
+  Base.Portal.send({ token: WETH, amount: reward })
+    .receive({ token: WETH, amount: amountIn })
+    .then(() => {
       require(sqrtPriceLimitX96 != 0n &&
         recipient != 0n &&
         refundTo != 0n, "give sqrtPriceLimitX96, recipient and refundTo");
@@ -136,7 +137,5 @@ function main(
       if (unsold > 0n) {
         WETH.transfer(refundTo, unsold);
       }
-    },
-    { tokens: [{ token: WETH, amount: amountIn }] },
-  ).reward({ tokens: [{ token: WETH, amount: reward }] });
+    });
 }

@@ -306,7 +306,7 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
 
 ## Intents and Solana
 
-- **A file that opens intents** (`Ethereum(() => { … }).reward({ … })`) also takes
+- **A file that opens intents** (`Ethereum.Portal.send(…).receive(…).then(() => { … })`) also takes
   `--intent-deadline <unix seconds>`, `--intent-creator <address>` and, when an intent's body runs a
   program, `--intent-execution-fee <wei>` (`auto` reads it from the destination). `compile` and
   `sauce intent publish` warn while the Pot such an intent cooks on
