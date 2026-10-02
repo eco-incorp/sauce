@@ -33,7 +33,7 @@
 //      are `main`'s parameters by name, `<name>` each, in order; a line per parameter
 //      (`//   name: Type  meaning and units`); and an example line on a supported chain with real
 //      values. The program compiles through the `sauce` command on each chain its index row names,
-//      run exactly as its usage line says (defines, intent flags, `main`'s arguments), and on its
+//      run exactly as its usage line says (intent flags, `main`'s arguments), and on its
 //      example's chain as the example says, offline; every actions document (`.json`) names no
 //      chain and lowers through `sauce actions` on each chain its row names; and the cook either
 //      builds through `sauce tx`, on a chain the release supports (`chainSupport`), or — on a
@@ -58,7 +58,9 @@
 //      `skills-check/executed.json`, or listed there as compile-only with the reason;
 //  12. every example program writes what the registry names by its name: no recorded address as
 //      a literal, no hand-built selector of a function a binding declares (LOW_LEVEL_CALLS); and
-//      takes its inputs as `main` parameters, never an undeclared define (INPUT_EXCEPTIONS).
+//      takes its inputs as `main` parameters, never an undeclared define (INPUT_EXCEPTIONS);
+//  13. no skill file names `--define` or `--defines`, the command's low-level flags, or compiles a
+//      ```sauce fence with `define=`.
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -84,6 +86,7 @@ import {
 } from "./gen-skills-references.mjs";
 import { checkBuiltins, checkBuiltinsJson } from "./skills-check/builtins.mjs";
 import {
+  defineFlagProblems,
   executedExamplesProblems,
   inputProblems,
   namedProgramProblems,
@@ -972,7 +975,7 @@ async function runUsage(where, file, argv, chain, header = false) {
       // and the fee changes only the cook's value, so the run takes 0.
       kept.push(flag, "0");
       i++;
-    } else if (flag === "--define" || /^--intent-/.test(flag) || flag === "--defines") {
+    } else if (/^--intent-/.test(flag)) {
       kept.push(flag, fill(value));
       i++;
     } else if (flag === "--account") {
@@ -1181,8 +1184,7 @@ try {
       const option = (key) =>
         block.info.find((i) => i.startsWith(`${key}=`))?.slice(key.length + 1);
       const chains = option("chain")?.split(",");
-      const defines = option("define")?.split(",") ?? [];
-      sauceSources.push({ where, text: block.body, defines });
+      sauceSources.push({ where, text: block.body });
       const errors = [];
       if (chains !== undefined) {
         const file = join(SCRATCH, `block-${n++}.sauce.ts`);
@@ -1191,8 +1193,7 @@ try {
           ? ["--intent-deadline", DEADLINE, "--intent-creator", DEV, "--intent-execution-fee", "0"]
           : [];
         for (const chain of chains) {
-          const flags = [...defines.flatMap((d) => ["--define", `${d}=${DEV}`]), ...intents];
-          const compiled = await compileJson(file, chain, flags);
+          const compiled = await compileJson(file, chain, intents);
           if (compiled.error !== undefined) errors.push(`${chain}: ${compiled.error}`);
         }
       } else {
@@ -1232,10 +1233,7 @@ try {
       if (!mustFail) for (const error of errors) fail(where, `does not lower: ${error}`);
     }
     for (const file of skill.programs) {
-      const text = read(file);
-      // The names its usage line defines are values, not tokens.
-      const defines = [...text.matchAll(/--define\s+([A-Za-z_]\w*)=/g)].map((m) => m[1]);
-      sauceSources.push({ where: rel(file), text, defines });
+      sauceSources.push({ where: rel(file), text: read(file) });
     }
   }
 } finally {
@@ -1565,7 +1563,7 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
   const PORTAL_GLOBALS = new Set(["EcoRoutes.Portal"]);
   const portalGlobalsUsed = new Set();
   const inIntentsSkill = (where) => where.split(/[\\/]/).includes(INTENTS_SKILL);
-  const uses = (where, text, strict, defines = []) => {
+  const uses = (where, text, strict) => {
     const imported = new Set(
       [...text.matchAll(/import\s+(?:\{([^}]*)\}|([A-Za-z_$][\w$]*))\s+from/g)].flatMap((m) =>
         m[1]
@@ -1597,10 +1595,7 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
       if (!contracts.has(name) && !aliases.has(name) && !interfaces.has(name))
         fail(where, `uses the global ${name}, which the index does not list`);
     }
-    const declared = new Set([
-      ...[...text.matchAll(/\bconst\s+([A-Z][A-Z0-9_]*)\b/g)].map((m) => m[1]),
-      ...defines,
-    ]);
+    const declared = new Set([...text.matchAll(/\bconst\s+([A-Z][A-Z0-9_]*)\b/g)].map((m) => m[1]));
     for (const m of [
       ...text.matchAll(
         /(?<![\w.])([A-Z][A-Z0-9]{2,})\.(?:transfer|transferFrom|approve|balanceOf)\(/g,
@@ -1615,7 +1610,7 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
         fail(where, `uses the token ${m[1]}, which the index does not list`);
     }
   };
-  for (const { where, text, defines } of sauceSources) uses(where, text, true, defines);
+  for (const { where, text } of sauceSources) uses(where, text, true);
   for (const skill of skills)
     for (const span of inlineCode(skill)) uses(rel(skill.path), span, false);
   for (const name of PORTAL_GLOBALS) {
@@ -1732,6 +1727,13 @@ const INPUT_EXCEPTIONS = {};
         fail(`check-skills.mjs ${list}`, `names ${program}, which is not an example program`);
     }
   }
+}
+
+// ---- 13. No skill teaches a define -------------------------------------------------------------------------
+// `--define` and `--defines` are the command's low-level flags; a value an agent supplies is a `main`
+// argument (`docs/scripts/example-programs.mjs`, shared with `docs:check`).
+for (const file of walk(SKILLS_DIR, (path) => /\.(?:md|ts|mts|json)$/.test(path))) {
+  failures.push(...defineFlagProblems({ where: rel(file), text: read(file) }));
 }
 
 // ---- Report ----------------------------------------------------------------------------------------------

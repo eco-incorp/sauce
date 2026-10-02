@@ -13,6 +13,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
+  defineFlagProblems,
   executedExamplesProblems,
   inputProblems,
   namedProgramProblems,
@@ -77,6 +78,24 @@ for (const file of manual) {
 }
 if (failures.length) throw new Error(`Broken manual links:\n${failures.join("\n")}`);
 console.log(`Manual links: ${manual.length} files checked`);
+// No page teaches a define: `--define` and `--defines` are the command's low-level flags, and a value
+// a reader supplies is a `main` argument (`example-programs.mjs`). The manual and its examples; the
+// skills are skills:check's.
+{
+  const taught = [
+    join(root, "README.md"),
+    join(root, "docs/README.md"),
+    ...["concepts", "guides", "api", "examples"].flatMap((directory) =>
+      markdownFiles(join(root, "docs", directory)),
+    ),
+    ...readdirSync(join(root, "docs/examples"))
+      .filter((name) => name.endsWith(".ts"))
+      .map((name) => join(root, "docs/examples", name)),
+  ].flatMap((file) =>
+    defineFlagProblems({ where: file.slice(root.length + 1), text: readFileSync(file, "utf8") }),
+  );
+  if (taught.length) throw new Error(`Low-level flags taught:\n${taught.join("\n")}`);
+}
 
 const examples = join(root, "docs/examples");
 // `.sauce.ts` files are SauceScript, not TypeScript: they are compiled by the Sauce compiler from
