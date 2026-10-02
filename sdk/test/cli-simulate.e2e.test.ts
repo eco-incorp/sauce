@@ -18,14 +18,14 @@ import { createServer, type Server } from "node:http";
 import { once } from "node:events";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { encodeAbiParameters, getAddress, pad, type Address, type Hex } from "viem";
 
 import { kitchenAddress } from "../src/cli/commands.js";
 import { POT_ROUTER_SLOT, probePot } from "../src/cli/rehearse.js";
 import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
 import {
+  CLI_FIXTURES,
   describeEvm,
   FEE,
   fixture,
@@ -37,8 +37,7 @@ import {
   type LocalChain,
 } from "./cli-anvil.js";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const PAY = join(HERE, "../../skills/sauce-cli/examples/pay.sauce.ts");
+const PAY = join(CLI_FIXTURES, "pay.sauce.ts");
 /** An owner nobody holds the key of, with nothing: no Pot, no native currency, no tokens. */
 const OWNER: Address = "0x5a0Ce0000000000000000000000000000000Beef";
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
