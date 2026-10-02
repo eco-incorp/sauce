@@ -1614,7 +1614,7 @@ if (skillsFlag < 0) {
 const LOW_LEVEL_CALLS = {};
 // The intent files intent-defaults converts to `main` parameters (`sauce intent publish --args`);
 // that PR removes these, which fail once nothing reads them.
-const BY_INTENT_DEFAULTS = "converted by intent-defaults' publish --args PR";
+const BY_INTENT_DEFAULTS = "converted by intent-defaults' intent publish --args PR";
 const INPUT_EXCEPTIONS = {
   "sauce-intents/examples/cross-chain.sauce.ts": { BENEFICIARY: BY_INTENT_DEFAULTS },
   "sauce-intents/examples/swap-on-base.sauce.ts": Object.fromEntries(

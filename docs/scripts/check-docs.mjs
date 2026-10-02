@@ -106,7 +106,7 @@ console.log(`SauceScript examples: ${sauceExamples.length} quoted verbatim in th
 // The intent files intent-defaults converts to `main` parameters, with `sauce intent publish
 // --args`, and executes in an eco-routes suite. Each entry fails once its example no longer needs
 // it, which is when that PR removes it.
-const BY_INTENT_DEFAULTS = "converted and executed by intent-defaults' publish --args PR";
+const BY_INTENT_DEFAULTS = "converted and executed by intent-defaults' intent publish --args PR";
 const EXECUTION_EXCEPTIONS = {
   "nested-intent.sauce.ts": BY_INTENT_DEFAULTS,
   "nested-swap.sauce.ts": BY_INTENT_DEFAULTS,
