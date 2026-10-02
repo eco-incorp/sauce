@@ -98,8 +98,8 @@ export interface SauceCompileOptions {
    */
   ambient?: string[];
   /**
-   * Settings for `Chain(() => { ... }).reward({ ... })` written inside the program — creating an
-   * intent from a program, rather than compiling a program into one. Everything the SDK can look up
+   * Settings for `Chain.Portal.send(...).receive(...).then(() => { ... })` written inside the
+   * program — creating an intent from a program, rather than compiling a program into one. Everything the SDK can look up
    * it looks up; these are the fields it cannot, plus overrides. See `intent-sugar.ts`.
    *
    * Omitted entirely, the sugar still lowers if the source uses it — `deadline` and `creator` have
@@ -136,8 +136,8 @@ export interface CompiledSauceRoute {
   readonly source: string;
 }
 
-/** Accessor name -> chain, for every canonical chain. `Base(() => ...)` in a program opens an
- *  intent for exactly the chains `import { Base }` gives a caller, so the two cannot diverge. */
+/** Accessor name -> chain, for every canonical chain. `Base.Portal` in a program opens an intent
+ *  for exactly the chains `import { Base }` gives a caller, so the two cannot diverge. */
 let chainAccessorCache: ReadonlyMap<string, (typeof CANONICAL_CHAINS)[number]> | undefined;
 export function chainAccessorNames(): ReadonlyMap<string, (typeof CANONICAL_CHAINS)[number]> {
   chainAccessorCache ??= new Map(
@@ -420,8 +420,8 @@ export interface CompiledSauceProgram {
   /** The SVM account manifest: the accounts to attach, in order. Absent on the EVM. */
   readonly manifest?: AccountManifest;
   /**
-   * The intents the program itself publishes (`Arbitrum(() => { ... }).reward({ ... })`), in source
-   * order, each as the lowering encoded it. One with no `captures` is fixed now: its hash, and the
+   * The intents the program itself publishes (`Arbitrum.Portal.send(...).receive(...).then(...)`),
+   * in source order, each as the lowering encoded it. One with no `captures` is fixed now: its hash, and the
    * Portal transactions that publish it, can be built without running the program. One that
    * captures a local of the program holds a sentinel where the value will be, which only exists
    * once the program runs.
@@ -449,8 +449,8 @@ export interface SauceProgramOptions extends SauceCompileOptions {
  * It gets everything `openRoute` gives a route body except the intent around it: the chain's
  * ambient bundle (`chainId`, protocol addresses and token symbols as compile-time values scoped to
  * this chain, and the `@sauce/token` functions with no import), the token and protocol syntax, and
- * intents the program itself opens (`Arbitrum(() => { ... }).reward({ ... })`, which take their deadline and
- * creator from `options.intents`). So one source compiles, unchanged, for any chain whose names it
+ * intents the program itself opens (`Arbitrum.Portal.send(...).receive(...).then(...)`, which take
+ * their deadline and creator from `options.intents`). So one source compiles, unchanged, for any chain whose names it
  * uses. `main` may declare typed runtime parameters; `entryParams` reports them and
  * `encodeEntryArguments` encodes values for them. Or `options.args` binds them into the program as
  * it compiles, as `sauce intent publish --args` does: then the intents it opens are fixed, and a

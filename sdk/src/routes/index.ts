@@ -147,18 +147,24 @@ export type {
 } from "./token-registry.js";
 export { STOCK_ISSUERS, stockSymbol } from "./stock-tokens.js";
 export type { StockIssuer } from "./stock-tokens.js";
-export { openRoute } from "./intent-dsl.js";
+export { chainPortal, openRoute } from "./intent-dsl.js";
 export { destinationPot } from "./intent-pot.js";
 export type {
   BuiltIntent,
+  ChainPortal,
   IntentEvmExecution,
   IntentOptions,
   NestChildOrThunk,
   NestOptions,
   PendingSauceRoute,
+  PortalReceived,
+  PortalReceiveOptions,
+  PortalSendOptions,
+  PortalSent,
   RewardArg,
   SauceBody,
   SauceRewardSpec,
+  TokenAmounts,
 } from "./intent-dsl.js";
 
 export {

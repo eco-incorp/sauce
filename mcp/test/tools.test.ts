@@ -59,6 +59,17 @@ const INTENT = [
   "",
 ].join("\n");
 
+/** INTENT, written `Base.Portal.send(reward).receive(delivery).then(body)`. */
+const PORTAL_INTENT = [
+  "// @chain ethereum",
+  "Base.Portal.send({ token: USDC, amount: 7n })",
+  "  .receive({ token: USDC, amount: 5n })",
+  "  .then(() => {",
+  "    USDC.transfer(RECIPIENT, 5n);",
+  "  });",
+  "",
+].join("\n");
+
 let mcp: Connected;
 before(async () => {
   mcp = await connect();
@@ -907,6 +918,15 @@ describe("sauce_intent_publish", () => {
     );
     assert.ok(out.notes.some((note) => /Send them in order/.test(note)));
     assert.ok(out.notes.some((note) => /The transfers come first/.test(note)));
+  });
+
+  it("takes the Portal form: the call form's program, intent and transactions", async () => {
+    const portal = { ...args, source: PORTAL_INTENT };
+    const compiled = ok(await mcp.call("sauce_compile", portal));
+    assert.equal(compiled.bytecode, ok(await mcp.call("sauce_compile", args)).bytecode);
+    const out = ok(await mcp.call("sauce_intent_publish", portal)) as Published;
+    assert.deepEqual(out, ok(await mcp.call("sauce_intent_publish", args)));
+    assert.equal(out.intents[0]!.destination, "base");
   });
 
   it("builds the approve and publishAndFund instead with intentFundVia publishAndFund", async () => {
