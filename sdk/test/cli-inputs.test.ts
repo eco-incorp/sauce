@@ -270,6 +270,15 @@ describe("bindMainArguments: main's arguments, bound into the intents a wallet p
       const viaArgs = await publish(withParams, "--args", "1000000", "1010000", RECIPIENT, "true");
       expect(viaArgs).toHaveLength(1);
       expect(viaArgs).toEqual(await publish(literal));
+      // The low-level spelling still works: each value a define named as the parameter.
+      const defined = join(work, "defined.sauce.ts");
+      writeFileSync(defined, BRIDGE.replace(/main\([^)]*\)/, "main()"));
+      const viaDefines = await publish(
+        defined,
+        ...["--define", "amount=1000000", "--define", "reward=1010000"],
+        ...["--define", `recipient=${RECIPIENT}`],
+      );
+      expect(viaDefines).toEqual(viaArgs);
     } finally {
       rmSync(work, { recursive: true, force: true });
     }

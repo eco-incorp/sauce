@@ -128,7 +128,7 @@ export function bindMainArguments(input: ProgramInput, args: ArgsInput | undefin
     if (params.length === 0) return input;
     throw new UsageError(
       `${shape} takes ${params.length} argument${params.length === 1 ? "" : "s"}: pass them ` +
-        "after --args, in order (or as --args-json), and the intents are built with them",
+        "after --args, in order, or as --args-json; the intents are built with them",
     );
   }
   if (params.length === 0) {
