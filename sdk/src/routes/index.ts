@@ -156,15 +156,25 @@ export type {
   NestChildOrThunk,
   NestOptions,
   PendingSauceRoute,
+  PortalAddress,
+  PortalChain,
+  PortalDelivery,
   PortalReceived,
-  PortalReceiveOptions,
-  PortalSendOptions,
+  PortalReceiveSteps,
+  PortalReward,
+  PortalSendSteps,
   PortalSent,
+  PortalTokenAmount,
   RewardArg,
   SauceBody,
   SauceRewardSpec,
-  TokenAmounts,
 } from "./intent-dsl.js";
+export {
+  DEFAULT_FILL_WINDOW,
+  DEFAULT_REFUND_WINDOW,
+  REWARD_MODIFIERS,
+  ROUTE_MODIFIERS,
+} from "./intent-portal.js";
 
 export {
   approvalTxs,
