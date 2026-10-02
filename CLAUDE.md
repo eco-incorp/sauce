@@ -947,7 +947,7 @@ them, `references/`.
   written there by hand is removed: hand-written reference pages belong in `docs/api/`), committed,
   prettier-ignored, and held like the skills' references: CI fails when the build changed it, and
   `docs:check` when it is stale. `docs:check` also holds the manual's shape: no link or path from the
-  README or `docs/` into `skills/`; every page an entry (`- [Page](path): …`) of `docs/README.md`
+  README or `docs/` into `skills/`; every page a list entry of `docs/README.md` (its link, then one line)
   exactly once (the per-chain and per-protocol pages are reached from their indexes); no page other
   than an index with more than 3 links per 100 words; and `docs/guides/skills.md`'s table naming
   exactly the skills on disk. A fact an agent needs goes in a skill (or the generator), and the
