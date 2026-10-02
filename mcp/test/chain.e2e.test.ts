@@ -250,7 +250,8 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     assert.equal(out.transactions[1]!.gas, out.gas);
     assert.ok(BigInt(out.transactions[0]!.gas) > 21_000n);
     assert.equal(out.sourceSha256, sha256(PAY));
-    const block = (await local.publicClient.getBlockNumber()).toString();
+    // The latest block, past viem's cache of it: an older one may predate the released stack.
+    const block = (await local.publicClient.getBlockNumber({ cacheTime: 0 })).toString();
     const at = ok(
       await mcp.call("sauce_simulate", {
         ...pay,
