@@ -625,7 +625,10 @@ export interface RegisteredBalance {
   readonly balance: bigint | null;
 }
 
-/** `holder`'s native balance, and its balance of every token `chain` registers by symbol. */
+/**
+ * `holder`'s native balance, and its balance of every token `chain` registers by symbol but its
+ * tokenized stocks: Ethereum has over a thousand, one `balanceOf` each.
+ */
 export async function registeredBalances(
   client: PublicClient,
   chain: CanonicalChain,
@@ -633,19 +636,21 @@ export async function registeredBalances(
 ): Promise<{ readonly native: bigint; readonly tokens: readonly RegisteredBalance[] }> {
   const native = await request("the native balance", () => client.getBalance({ address: holder }));
   const tokens = await Promise.all(
-    (TOKEN_REGISTRY[chain.id] ?? []).map(async (row) => {
-      const token = getAddress(row.address);
-      const balance = await client
-        .readContract({
-          address: token,
-          abi: BALANCE_OF,
-          functionName: "balanceOf",
-          args: [holder],
-        })
-        .catch(() => null);
+    (TOKEN_REGISTRY[chain.id] ?? [])
+      .filter((row) => row.stock === undefined)
+      .map(async (row) => {
+        const token = getAddress(row.address);
+        const balance = await client
+          .readContract({
+            address: token,
+            abi: BALANCE_OF,
+            functionName: "balanceOf",
+            args: [holder],
+          })
+          .catch(() => null);
 
-      return { symbol: row.symbol, address: token, decimals: row.decimals, balance };
-    }),
+        return { symbol: row.symbol, address: token, decimals: row.decimals, balance };
+      }),
   );
 
   return { native, tokens };
