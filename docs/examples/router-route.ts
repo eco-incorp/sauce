@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { Ethereum } from "@eco-incorp/sauce";
 import { compile, resolveSdkModule, resolveSdkPackage } from "@eco-incorp/sauce/compiler";
 import { concatHex, encodeAbiParameters, toHex, type Address, type Hex } from "viem";
 
@@ -56,9 +57,11 @@ export function routeProgram(legs: readonly Leg[], amountIn: bigint, minOut: big
   return concatHex([toHex(bytecode), args]);
 }
 
-const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
-const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
-const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+// The tokens and the 3pool are the registry's; the V3 pool is a pool, which the registry does not
+// list (its factory finds it on chain).
+const [WETH, USDC, USDT] = [Ethereum.WETH.address, Ethereum.USDC.address, Ethereum.USDT.address];
+const threePool = Ethereum.Curve.ThreePool.address;
+if (threePool === undefined) throw new Error("Expected Curve's 3pool on Ethereum");
 const none = { i: 0n, j: 0n, poolId: 0n };
 
 // 1 WETH to USDC in Uniswap V3's 0.05% pool, then USDC to USDT in Curve's 3pool, where USDC is
@@ -73,7 +76,7 @@ export const legs: readonly Leg[] = [
   },
   {
     venue: 3n,
-    pool: "0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7",
+    pool: threePool,
     tokenIn: USDC,
     tokenOut: USDT,
     i: 1n,

@@ -15,8 +15,14 @@ const program = readFileSync(
 );
 
 // The SDK serves @sauce/router — and the @sauce/token and pool ABIs it imports — from memory, so
-// compiling needs no resolver option. MIN_OUT is the floor on the crvUSD the program keeps.
-export const defines = { MIN_OUT: 2_500n * 10n ** 18n };
+// compiling needs no resolver option, and resolves WETH, USDC and UniswapV2.Factory for Base. The
+// defines are what the registry does not record — crvUSD and Curve's 4pool on Base — and MIN_OUT,
+// the floor on the crvUSD the program keeps.
+export const defines = {
+  CRVUSD: 0x417ac0e078398c154edfadd9ef675d30be60af93n,
+  CURVE_4POOL: 0xf6c5f01c7f3148891ad0e19df78743d31e390d1fn,
+  MIN_OUT: 2_500n * 10n ** 18n,
+};
 export const compiled = routes.compileSauceRoute(
   "base",
   program,

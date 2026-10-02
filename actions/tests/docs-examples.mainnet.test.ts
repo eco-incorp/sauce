@@ -421,7 +421,7 @@ describe("router-swap and venue-where-deployed on Base state", SUITE, () => {
       "base",
       SOURCE,
       { pot: env.pot, engine: env.engine },
-      { defines: { MIN_OUT: minOut } },
+      { defines: { ...defines, MIN_OUT: minOut } },
     ).compiled.bytecode[0]!;
 
   it("router-swap.ts's cook sells every WETH the Pot holds and keeps what the 4pool pays for the USDC", async () => {
