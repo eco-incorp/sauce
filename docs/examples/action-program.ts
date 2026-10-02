@@ -41,7 +41,7 @@ try {
 const onBase = compileProgram(program, { chain: "base" });
 const onEthereum = compileProgram(program, { chain: "ethereum" });
 if (onBase.source !== onEthereum.source) throw new Error("Expected one source for both chains");
-if (onBase.source.indexOf("UniswapV3.Factory.getPool(USDC, WETH, 500n)") < 0) {
+if (onBase.source.indexOf("UniswapV3.Factory.getPool(USDC, WETH, 500)") < 0) {
   throw new Error("Expected the pool to be read from the factory while the program runs");
 }
 const same = onBase.bytecode.every((byte, i) => byte === onEthereum.bytecode[i]);
