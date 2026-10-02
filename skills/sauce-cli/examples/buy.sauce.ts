@@ -1,4 +1,4 @@
-#!/usr/bin/env -S npx -y @eco-incorp/sauce simulate
+#!/usr/bin/env -S sauce simulate
 // Buys `token` with up to `budget` of the Pot's USDC on the chain's Uniswap V3 pools: on the one with
 // the most liquidity among those whose price has not reached `sqrtPriceLimitX96`, and never past that
 // price. Reverts unless at least `minOut` reaches `recipient`, who also gets back what the limit

@@ -248,7 +248,7 @@ loop.
 
 ## The token and its pools
 
-**The token by its name.** `npx sauce globals --chain base` lists every token a program on Base can
+**The token by its name.** `sauce globals --chain base` lists every token a program on Base can
 name, tokenized stocks included, each with its address and decimals: SPCXc is Coinbase's
 tokenized SpaceX, `0xb2000000000000000000007b9fcbd005511aCBd5`, 8 decimals. The same lists are in
 [../sauce-globals/references/tokens.md](../sauce-globals/references/tokens.md) and
@@ -373,19 +373,19 @@ signing. Buying SPCXc with 1,000 USDC at most 150 each, all of it or nothing (pr
 the reference from `sauce pools` when you run it):
 
 ```sh
-npx sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
+sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
   --assume-balance USDC:1000 \
   --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0xb2000000000000000000007b9fcbd005511aCBd5 \
   1000000000 1500000000000000000 666666667 0 <recipient> <refundTo>
-npx sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
+sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
   --assume-balance USDC:1000 \
   --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0xb2000000000000000000007b9fcbd005511aCBd5 \
   1000000000 1500000000000000000 1000000000 0 <recipient> <refundTo>
-npx sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
+sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
   --assume-balance USDC:1000 \
   --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0xb2000000000000000000007b9fcbd005511aCBd5 \
   1000000000 1500000000000000000 666666667 1400000000000000000 <recipient> <refundTo>
-npx sauce run distributed-swap.sauce.ts --chain base --keystore <keystore> \
+sauce run distributed-swap.sauce.ts --chain base --keystore <keystore> \
   --fund USDC:1000 --fund-mode permit \
   --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0xb2000000000000000000007b9fcbd005511aCBd5 \
   1000000000 1500000000000000000 666666667 1492500000000000000 <recipient> <refundTo>

@@ -29,7 +29,7 @@ every protocol there with how a program names it, and the generated indexes of g
 names alone ([../sauce-globals/references/tokens.md](../sauce-globals/references/tokens.md),
 [../sauce-globals/references/protocols.md](../sauce-globals/references/protocols.md),
 [../sauce-globals/references/chains.md](../sauce-globals/references/chains.md)); or run
-`npx sauce globals --chain <chain>`.
+`sauce globals --chain <chain>`.
 
 ## SauceScript programs
 
@@ -80,8 +80,8 @@ A program runs with the command in its first comment lines, from a project with
 `@eco-incorp/sauce` installed:
 
 ```sh
-npx sauce compile ../sauce-cli/examples/payout.sauce.ts --chain base
-npx sauce tx ../sauce-cli/examples/payout.sauce.ts --chain base --owner <address> --value 0 \
+sauce compile ../sauce-cli/examples/payout.sauce.ts --chain base
+sauce tx ../sauce-cli/examples/payout.sauce.ts --chain base --owner <address> --value 0 \
   --args '[{"to":"<payee>","bps":10000}]'
 ```
 
