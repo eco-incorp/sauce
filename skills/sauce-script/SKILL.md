@@ -387,6 +387,18 @@ and bound each loop by its input. The real figure is the rehearsal's:
 Leave headroom when the chain can move between the rehearsal and the send; a swap that crosses more
 ticks spends more.
 
+## In an editor
+
+An editor checks a `.sauce.ts` file as TypeScript, which knows none of SauceScript's names: with
+no project for them, it marks `Token`, `USDC`, `ctx` and every other global as unknown.
+`sauce init <dir> --tsconfig` writes `<dir>/tsconfig.json`, which types every `.sauce.ts` under
+`<dir>` as SauceScript: its types and builtins, each chain's tokens and namespaces, and the ABIs a
+program imports. Keep programs in such a directory (`sauce init` makes `programs/` one); the
+installed skills' examples are typed by the same file beside them. The types come from the package,
+so the project must have it installed, and an editor running the project's own TypeScript also
+drops what TypeScript reports on valid SauceScript (a `bigint` index, `1` beside `1n`, an
+undeclared define). The compile, not the editor, decides whether a program is valid.
+
 ## Reading a compile error
 
 Compile errors fail the command; there is no warning channel. `sauce compile` points at the file's
