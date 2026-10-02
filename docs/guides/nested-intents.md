@@ -220,8 +220,8 @@ program takes only `tokens` and `nativeAmount`.
   deadline after it with room for each level's proof.
 - **One creator.** It reclaims an unearned reward of every level, each on the chain that escrowed it,
   so it must be an address its owner controls on each of them.
-- **One execution fee** pays the cook of every program body the file opens, whatever its depth. Here
-  only the outer body is a program, so it is Base's Kitchen fee. `--intent-execution-fee auto` reads
+- **One execution fee** pays the cook of every program body the file opens, whatever its depth. In
+  the two-level file only the outer body is a program, so it is Base's Kitchen fee. `--intent-execution-fee auto` reads
   each such destination's Kitchen and refuses when they differ. An outer intent built with
   `Base(body, options)` pays its own body's fee as `execution.value`, apart from the one in
   `compile.intents`.
@@ -234,36 +234,50 @@ Levels that need different deadlines, creators or fees cannot be written this wa
 
 ## Three levels
 
-The braces nest as deep as you write them. This program is the body of an intent to Base, like the
-outer braces above ([cross-chain-cascade.ts](../examples/cross-chain-cascade.ts) builds that intent
-with `Base(program, options)`). It opens the next level on Ethereum, whose body opens the last, back
-on Base, with the amount it measured on arrival:
+The braces nest as deep as you write them. This file opens an intent to Base whose body opens the
+next level on Ethereum, whose body opens the last, back on Base, each with the amount it measured
+on arrival. It is published like the file above, from a wallet on Ethereum, `main`'s arguments
+fixed into it ([cross-chain-cascade.ts](../examples/cross-chain-cascade.ts) compiles it):
 
 ```js
 // Three hops, written as three intents opening one another: Base, then Ethereum, then Base again.
+// All of it is SauceScript, opened on Ethereum and published from a wallet:
+//   sauce intent publish cross-chain-cascade.sauce.ts --chain ethereum --config sauce.config.json \
+//     --intent-deadline … --intent-creator … --intent-execution-fee auto \
+//     --args <recipient> <delivered> <reward>
 //
-// No amount below the first exists when this is signed. `amount` is measured here, on Base.
-// `arrived` is measured on Ethereum while that hop is being fulfilled, by the program the middle
-// braces compiled to, and it is the reward of the third hop. Each level's numbers are filled in by
-// the level above it, at that level's own execution time.
+//   recipient: Address  who is paid on Base, at the end
+//   delivered: Uint256  the USDC a solver delivers to Base for the first hop, in base units
+//   reward: Uint256     the USDC on Ethereum that pays that solver
 //
-// The middle body is more than token writes, so it compiles to a program and runs on Ethereum's
-// Pot; its second argument names what a solver must deliver for it to have something to measure.
+// Only the first hop's amounts exist when this is signed. `amount` is measured on Base, while the
+// first hop is being fulfilled. `arrived` is measured on Ethereum while the second is, by the
+// program the middle braces compiled to, and it is the reward of the third. Each level's numbers
+// are filled in by the level above it, at that level's own execution time.
+//
+// The first two bodies are more than token writes, so each compiles to a program and runs on its
+// chain's Pot; the second argument of each names what a solver must deliver for it to have
+// something to measure.
 //
 // Every `USDC` is the USDC of the chain where that part runs. Each body's is its destination's. Each
-// reward is escrowed by the program offering it, so the Ethereum hop's reward is Base's USDC and the
-// last hop's is Ethereum's.
-function main() {
-  const amount = USDC.balanceOf(ctx.self());
-  Ethereum(
+// reward is escrowed by the program offering it: the first hop's in Ethereum's USDC, the second's in
+// Base's and the third's in Ethereum's.
+function main(recipient: Address, delivered: Uint256, reward: Uint256) {
+  Base(
     () => {
-      const arrived = USDC.balanceOf(ctx.self());
-      Base(() => {
-        USDC.transfer(RECIPIENT, arrived);
-      }).reward({ tokens: [{ token: USDC, amount: arrived }] });
+      const amount = USDC.balanceOf(ctx.self());
+      Ethereum(
+        () => {
+          const arrived = USDC.balanceOf(ctx.self());
+          Base(() => {
+            USDC.transfer(recipient, arrived);
+          }).reward({ tokens: [{ token: USDC, amount: arrived }] });
+        },
+        { tokens: [{ token: USDC, amount }] },
+      ).reward({ tokens: [{ token: USDC, amount }] });
     },
-    { tokens: [{ token: USDC, amount }] },
-  ).reward({ tokens: [{ token: USDC, amount }] });
+    { tokens: [{ token: USDC, amount: delivered }] },
+  ).reward({ tokens: [{ token: USDC, amount: reward }] });
 }
 ```
 
@@ -272,11 +286,15 @@ measured on Ethereum, while that level is being fulfilled, by the program the mi
 to, and it is the reward of the third. Each level's numbers are filled in by the level above it, at
 that level's own execution time.
 
-The middle body measures and opens an intent, so it is a program too, cooked on Ethereum's Pot. Its
-second argument names what the solver of that level delivers, so the program has something to
-measure, and that level's route moves it into the Pot first. Each level is funded on the chain whose
-program offers it: the second level's reward in Base's USDC, the third's in Ethereum's, out of what
-the second level's solver delivered there.
+The first two bodies measure and open an intent, so each is a program, cooked on its chain's Pot.
+The second argument of each names what the solver of that level delivers, so the program has
+something to measure, and that level's route moves it into the Pot first. Each level is funded on
+the chain whose program offers it: the second level's reward in Base's USDC, the third's in
+Ethereum's, out of what the second level's solver delivered there.
+
+One execution fee pays both cooks, Base's Kitchen's and Ethereum's: `--intent-execution-fee auto`
+reads both and refuses while they charge differently, and the
+[TypeScript builder](#the-typescript-builder-nest) takes a fee per level.
 
 Nesting is recursive rather than special-cased: the middle body is compiled by re-entering the same
 pipeline, so the same lowering runs inside it at any depth. [Create an intent from inside a

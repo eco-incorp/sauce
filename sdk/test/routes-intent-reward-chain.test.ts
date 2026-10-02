@@ -33,6 +33,8 @@ import { EVM_ROUTE_PARAM } from "../src/routes/encode.js";
 import type { IntentOptions } from "../src/routes/intent-dsl.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 
+import { CASCADE_BODY } from "./fixtures/routes/bodies.js";
+
 // ESM jest exposes `jest` on `import.meta`, and every module that compiles must be imported AFTER
 // the mock is registered, so those imports are dynamic.
 const { jest } = import.meta as unknown as {
@@ -68,7 +70,6 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const example = (name: string) =>
   readFileSync(join(HERE, "../../docs/examples", `${name}.sauce.ts`), "utf8");
 const README_EXAMPLE = example("cross-chain-intent");
-const CASCADE_EXAMPLE = example("cross-chain-cascade");
 /**
  * The cascade over three DIFFERENT chains. The docs example keeps to the chains the release
  * supports, so it alternates Base and Ethereum, and there a level that resolved a name on its
@@ -87,7 +88,7 @@ const THREE_CHAIN_CASCADE = `function main() {
   ).reward({ tokens: [{ token: USDC, amount }] });
 }`;
 const CASCADES = [
-  ["the docs cascade: Base, Ethereum, then Base", CASCADE_EXAMPLE, ["base", "ethereum", "base"]],
+  ["a cascade body: Base, Ethereum, then Base", CASCADE_BODY, ["base", "ethereum", "base"]],
   ["a cascade over three chains", THREE_CHAIN_CASCADE, ["base", "arbitrum", "optimism"]],
 ] as const;
 
@@ -339,7 +340,7 @@ describe.each(PATHS)("through %s", (_name, build) => {
 describe("every path lowers every level to the same source", () => {
   it.each([
     ["the README example", README_EXAMPLE],
-    ["the docs cascade", CASCADE_EXAMPLE],
+    ["a cascade body", CASCADE_BODY],
     ["the cascade over three chains", THREE_CHAIN_CASCADE],
   ])("%s", (_name, program) => {
     const sources = PATHS.map(([, build]) =>

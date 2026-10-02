@@ -15,7 +15,7 @@ application calls them.
 | [nested-intent.sauce.ts](nested-intent.sauce.ts)               | An intent from Ethereum to Base whose body opens the next intent, back to Ethereum, from what it measured — written in SauceScript             |
 | [nested-intent.ts](nested-intent.ts)                           | Compiling it for Ethereum and building the wallet transactions that publish it                                                                 |
 | [cross-chain-cascade.sauce.ts](cross-chain-cascade.sauce.ts)   | Three levels, Base, Ethereum and Base again, each amount measured on arrival — written in SauceScript                                          |
-| [cross-chain-cascade.ts](cross-chain-cascade.ts)               | Compiling that cascade as the body of an Ethereum to Base intent                                                                               |
+| [cross-chain-cascade.ts](cross-chain-cascade.ts)               | Compiling that cascade for Ethereum, where a wallet publishes its first hop                                                                    |
 | [protocol-approval.ts](protocol-approval.ts)                   | A typed `Base(() => ...)` body calling `USDC.approve(Uniswap.UniversalRouter, ...)`                                                            |
 | [venue-where-deployed.sauce.ts](venue-where-deployed.sauce.ts) | One program for every chain, using PancakeSwap V3 only where `available(...)` finds it — written in SauceScript                                |
 | [registry-names.ts](registry-names.ts)                         | That program compiled for two chains, and the same registry names from TypeScript: `Base.USDC`, a typed call, `.read(client)`                  |
