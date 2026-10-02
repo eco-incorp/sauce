@@ -212,10 +212,10 @@ describe("the emitted program", () => {
     // reset, the write, and a check on each write. See `token/safe.ts`.
     const approveText = statements.join("\n");
     expect(approveText).toContain("const d0_0self = ctx.self();");
-    expect(approveText).toContain("if (d0_0cur > 0n) {");
+    expect(approveText).toContain("if (d0_0cur > 0) {");
     expect(approveText).toMatch(/const d0_0ap0 = hex`095ea7b3[0-9a-f]+`;/);
     expect(approveText).toContain(
-      `const d0_0ar = evm.call(${usdc}n, 0n, d0_0ap0.concat(d0_in.toBytesBe(32)));`,
+      `const d0_0ar = evm.call(${usdc}n, 0, d0_0ap0.concat(d0_in.toBytesBe(32)));`,
     );
     expect(statements.at(-1)).toBe(`evm.call(${portal}n, 0n, d0_data);`);
 
@@ -374,7 +374,7 @@ describe("fail-closed", () => {
         args: [PARENT_PORTAL, 11n],
       }).slice(2)}\`;`,
     );
-    expect(approveText).toContain(`const d0_0ar = evm.call(${BigInt(USDC)}n, 0n, d0_0ap0);`);
+    expect(approveText).toContain(`const d0_0ar = evm.call(${BigInt(USDC)}n, 0, d0_0ap0);`);
   });
 
   it("dynamicChildProgram rejects an empty entry list", () => {
