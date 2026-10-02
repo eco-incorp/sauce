@@ -973,7 +973,10 @@ them, `references/`.
   names it); and `sauce-protocols/references/index.md` (every protocol by category, with the
   hand-written "Choosing between them" prose that lives in the generator) plus
   `sauce-protocols/references/registry/<slug>.md` (deployments per chain, namespace or ABI-import
-  spelling, ABI functions). A deployment role's ABI export comes from the registry's own evidence
+  spelling, ABI functions); and `sauce-intents/references/defaults.md`, the one table of what each
+  intent modifier is when left out, from the SDK's own windows (`DEFAULT_FILL_WINDOW`,
+  `DEFAULT_REFUND_WINDOW`), which the manual renders too as `docs/reference/intent-defaults.md`.
+  A deployment role's ABI export comes from the registry's own evidence
   map, `test/fixtures/registry-abi/targets.json`, offered only where the compile serves the export
   as `./protocols/<slug>/<Export>.json`. The files are committed and prettier-ignored, and each
   carries compiled examples; CI fails when the build changed `skills/`, and `skills:check` fails a
@@ -1053,7 +1056,8 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   instructions file (the skills reach every agent); no engine internals (opcodes, mnemonics, stack
   effects, bytecode bytes); no placeholder or unrecorded address (every `0x` address must be one the
   SDK records; developer inputs are `<placeholders>`); the Portal and provers only in
-  `sauce-intents`; no RPC endpoint; Sauce never described as a multicall; no pointer into the
+  `sauce-intents`, but for the intent syntax every skill may write (`Base.Portal.send(...)`,
+  `Chain.Portal`, `<Chain>.Portal`: `check-skills.mjs#CHAIN_PORTAL`); no RPC endpoint; Sauce never described as a multicall; no pointer into the
   package's docs (`node_modules/@eco-incorp/sauce/...`, `docs/guides/...`) outside
   `sauce-typescript`, because a skill carries every fact it needs in its `SKILL.md` and
   `references/` (an agent may have only the skills, served by the MCP server). The protocol

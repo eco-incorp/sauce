@@ -724,7 +724,7 @@ describeEvm("an intent created inside a program, across chains with different to
     // which a wallet publishes on Ethereum, and the levels below it open as each runs.
     const delivered = 2_000_000n;
     const [first] = compileSauceProgram("ethereum", example("cross-chain-cascade"), {
-      args: [RECIPIENT, delivered, 2_010_000n],
+      args: [RECIPIENT, delivered, 2_010_000n, CREATOR],
       intents: intents(),
     }).intents;
     expect(first!.captures).toEqual([]);

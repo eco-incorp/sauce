@@ -8,8 +8,9 @@
 //
 // `--chain` is the source chain: `WETH` in `.send(...)` is its WETH. In `.receive(...)` and inside
 // the body, the code runs on Base: `WETH`, `USDC`, `UniswapV3.Factory`, `UniswapV3.Pool`,
-// `UniswapV4.StateView` and `UniswapV4.PoolManager` there are Base's. The deadlines, the creator
-// and Base's Kitchen fee take their defaults.
+// `UniswapV4.StateView` and `UniswapV4.PoolManager` there are Base's. `refundTo` is the intent's
+// creator too, where its reward goes back if no solver fills it; the deadlines, the salt and Base's
+// Kitchen fee take their defaults.
 //
 //   sauce run swap-on-base.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <amountIn> <reward> <sqrtPriceLimitX96> <minOut> <minAvgPrice> <recipient> <refundTo>
@@ -25,7 +26,8 @@
 //   minAvgPrice: Uint256         the least USDC per WETH sold, as USDC units per WETH unit times
 //                                1e18: 2490000000 is 2,490 USDC per WETH
 //   recipient: Address           who receives the USDC on Base
-//   refundTo: Address            who receives the unsold WETH on Base
+//   refundTo: Address            who receives the unsold WETH on Base, and reclaims the reward on
+//                                the source chain if no solver earns it
 //
 // From Ethereum, selling 1 WETH on Base no lower than 2,500 USDC per WETH, for 1.002 WETH:
 //
@@ -55,6 +57,7 @@ function main(
   refundTo: Address,
 ) {
   Base.Portal.send({ token: WETH, amount: reward })
+    .creator(refundTo)
     .receive({ token: WETH, amount: amountIn })
     .then(() => {
       require(sqrtPriceLimitX96 != 0 &&

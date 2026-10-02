@@ -707,21 +707,23 @@ sauce run swap.json --chain base --keystore ~/.keys/me.json \
 ## Intents: `sauce run` or `sauce intent`
 
 A program can open an intent on another chain —
-`Base.Portal.send(…).receive(…).then(() => { … })`. The command supplies what the file leaves out
-([Intent defaults](../reference/intent-defaults.md)): the deadlines count from when it builds the
-intents, the fill five minutes later and the reward's seven days after that; the creator is the
-wallet that publishes them, or the owner of the Pot that cooks them; and, for an intent whose body
+`Base.Portal.send(…).creator(refundTo).receive(…).then(() => { … })`. Every intent a program opens
+names its creator, the refund address, with `.creator(...)`: the Pot it runs on may be shared, so
+nothing defaults it. The one exception is a top-level intent `sauce intent publish` publishes from a
+wallet, whose creator is that wallet (or `--intent-creator <address>`) when it names none. The
+command supplies the rest the file leaves out ([Intent defaults](../reference/intent-defaults.md)):
+the deadlines count from when it builds the intents, the fill five minutes later and the reward's
+seven days after that; the salt is random, picked once per run; and, for an intent whose body
 compiles to a program of its own, the fee is read from the destination Kitchen, a separate read for
 each destination, which the command reports. A modifier in the file sets any of them for its
 intent. A flag sets one for every intent that does not set its own: `--intent-deadline <unix
-seconds>`, `--intent-reward-deadline <unix seconds>`, `--intent-creator <address>`,
+seconds>`, `--intent-reward-deadline <unix seconds>`, `--intent-salt <bytes32>`,
 `--intent-prover <address>` (instead of the prover the registry records for the pair), and
-`--intent-execution-fee <wei>` (`auto`, the default, reads it). `compile`, which has no wallet,
-needs `--intent-creator` or `.creator(...)`, and `--offline` reads no fee. The command refuses a
-deadline at or before now, which no solver could ever fill (`sauce intent fill` still rehearses one,
-with a note, to show the Portal's refusal). A deadline left to its default counts from each run, so
-two runs build two intents: give `--intent-deadline` to rehearse, inspect and publish the same
-one.
+`--intent-execution-fee <wei>` (`auto`, the default, reads it; `--offline` reads nothing). The
+command refuses a deadline at or before now, which no solver could ever fill (`sauce intent fill`
+still rehearses one, with a note, to show the Portal's refusal). Each run builds new intents, its
+deadlines counted from then and its salt fresh: give `--intent-deadline` and `--intent-salt` to
+rehearse, inspect and publish the same one.
 
 Every intent whose body runs a program cooks on one Pot on its destination: the one owned by the
 destination Portal's Executor with salt zero, which every intent through that Portal shares. No

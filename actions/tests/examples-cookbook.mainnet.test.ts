@@ -891,9 +891,9 @@ describe(
         const opened = await sauce([
           ...["run", example("repay-on-base"), "--chain", "ethereum", "--config", config],
           ...["--private-key", OWNER_KEY, "--salt-hex", POT_SALT, "--json"],
-          ...["--intent-deadline", deadline, "--intent-creator", PEOPLE[0]!],
-          ...["--intent-execution-fee", "auto"],
-          ...["--args", borrower.address, String(SOLVER_BPS)],
+          ...["--intent-deadline", deadline, "--intent-execution-fee", "auto"],
+          // Each intent names `refundTo` its creator: an intent a program opens has no default.
+          ...["--args", borrower.address, String(SOLVER_BPS), PEOPLE[0]!],
         ]);
         assert.equal(opened.code, 0, `${opened.stderr}\n${opened.stdout}`);
         const cookTx = (JSON.parse(opened.stdout) as { cook: { hash: Hex } }).cook.hash;

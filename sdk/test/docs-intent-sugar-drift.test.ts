@@ -56,7 +56,8 @@ const context = (overrides: Record<string, unknown> = {}) =>
       ]),
     portalOf: (chain: typeof BASE) => ecoRoutesPortal(chain),
     proverFor: (from: typeof BASE, to: typeof BASE) => ecoRoutesProver(from, to),
-    defaults: { deadline: 4_000_000_000n, creator: CREATOR },
+    // A top-level intent's creator, as a wallet publishing it: each refusal below is reached past it.
+    defaults: { deadline: 4_000_000_000n, publisher: CREATOR },
     compileChild: () => {
       throw new Error("no child program expected in these cases");
     },
@@ -109,7 +110,7 @@ const REFUSALS: readonly {
   {
     documented: "an empty `.send([])`",
     trigger: () => rewriteIntentSugar(wrap("USDC.transfer(RECIPIENT, amount);", "[]"), context()),
-    message: /`\.send\(\[\]\)` pays nothing/,
+    message: /`\.send\(\.\.\.\)` with nothing in it pays nothing/,
   },
   {
     documented: "one used as a value",
@@ -160,17 +161,20 @@ const REFUSALS: readonly {
   {
     documented: "A missing creator",
     trigger: () =>
-      rewriteIntentSugar(wrap("USDC.transfer(RECIPIENT, amount);"), context({ defaults: {} })),
-    message: /the reward needs a creator/,
+      rewriteIntentSugar(
+        wrap("USDC.transfer(RECIPIENT, amount);"),
+        context({ defaults: { creator: CREATOR } }),
+      ),
+    message: /needs `\.creator\(<address>\)`.*may be shared/,
   },
   {
-    documented: "a missing fee for a program body",
+    documented: "missing fee for a program body",
     trigger: () =>
       compileSauceRoute(
         "base",
         wrap("const held = USDC.balanceOf(ctx.self());\n    USDC.transfer(RECIPIENT, held);"),
         { pot: CREATOR, engine: CREATOR },
-        { defines: { RECIPIENT: 1n }, intents: { creator: CREATOR } },
+        { defines: { RECIPIENT: 1n }, intents: { publisher: CREATOR } },
       ),
     message: /its cook must pay that chain's Kitchen fee/,
   },
@@ -349,7 +353,7 @@ describe("the guide's account of which chain a name resolves on is the lowering'
           { pot: CREATOR, engine: CREATOR },
           {
             defines: { USDC: chosen, RECIPIENT: 1n },
-            intents: { deadline: 4_000_000_000n, creator: CREATOR },
+            intents: { deadline: 4_000_000_000n, publisher: CREATOR },
           },
         ).source.toLowerCase();
         return source.includes(`evm.call(${chosen}n`) && source.includes(arbitrumUsdc);
@@ -404,7 +408,7 @@ describe("the guide's account of the destination Pot is the builder's", () => {
       { pot: PORTAL, engine: PORTAL },
       {
         defines: { RECIPIENT: 0x9999999999999999999999999999999999999999n },
-        intents: { deadline: 4_000_000_000n, creator: CREATOR, executionFee: 0n },
+        intents: { deadline: 4_000_000_000n, publisher: CREATOR, executionFee: 0n },
       },
     ).source.toLowerCase();
 

@@ -22,13 +22,14 @@ const recipient = "0x6666666666666666666666666666666666666666";
 // Fixtures: each Kitchen's fee, for the two bodies that are programs.
 const fees: Record<string, bigint> = { base: 1_000n, ethereum: 2_000n };
 
+const refundTo = "0x4444444444444444444444444444444444444444"; // each hop's creator
+
 const compiled = routes.compileSauceProgram("ethereum", source, {
-  args: [recipient, 1_000_000n, 1_010_000n],
+  args: [recipient, 1_000_000n, 1_010_000n, refundTo],
   intents: {
     // When the first hop opens, which its default deadlines count from: `sauce` uses the moment it
     // builds it. Each later hop opens when the body above it runs.
     openedAt: 2_000_000_000n,
-    creator: "0x4444444444444444444444444444444444444444",
     executionFee: (destination) => fees[destination.slug],
   },
 });

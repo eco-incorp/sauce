@@ -90,10 +90,12 @@ export async function cookTransactions(
 - A Pot swaps through the Router its Kitchen handed it when it was minted. `potRouterUpdate(client,
 pot)` from `/evm/engine` reads both, and returns the `setRouter` call for the Pot's owner to send
   when the Kitchen has a newer one.
-- A program that opens an intent also needs `options.intents.creator` and, for a body that is a
-  program, `executionFee` (one fee, or a function of the destination), unless the program gives
-  `.creator(...)` and `.fee(...)`; `openedAt` (Unix seconds) makes its default deadlines count from
-  then rather than from when the program runs (`sauce-intents`).
+- A program that opens an intent names its creator with `.creator(...)`, always: no option
+  defaults it, but `options.intents.publisher`, the wallet that publishes a top-level intent
+  itself. For a body that is a program it also needs `options.intents.executionFee` (one fee, or a
+  function of the destination) unless it gives `.fee(...)`. `openedAt` (Unix seconds) makes its
+  default deadlines count from then rather than from when the program runs, and `salt` fixes the
+  salt, random otherwise (`sauce-intents`).
 
 ## The raw compiler
 

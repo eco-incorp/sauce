@@ -54,15 +54,15 @@ and within the route's, modifiers come in any order, each at most once; `.then(.
 | Step or modifier                   | Sets                                                                           | When you omit it                                                              |
 | ---------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
 | `Base.Portal`                      | Destination chain, where the body runs                                         | Required                                                                      |
-| `.send(items)`                     | The reward: `{ token, amount }` items, and native coin as `{ native: amount }` | Required; `[]` offers nothing                                                 |
+| `.send(...items)`                  | The reward: `{ token, amount }` items, and native coin as `{ native: amount }` | Required; in TypeScript, `.send()` offers nothing                             |
 | `.source(chain)`, after `.send`    | Chain where the reward is escrowed and the intent published                    | Required in TypeScript; in a program, the chain it runs on                    |
-| `.creator(address)`, after `.send` | Who may reclaim an unearned reward                                             | Required in TypeScript; see [the creator](#where-each-value-comes-from)       |
+| `.creator(address)`, after `.send` | The refund address: who may reclaim an unearned reward                         | Required; see [the creator](#where-each-value-comes-from)                     |
 | `.deadline(t)`, after `.send`      | From when an unproven reward may be refunded                                   | The fill deadline plus seven days                                             |
 | `.prover(address)`, after `.send`  | The source chain's prover, which accepts the proof of the fill                 | The registry's prover for the pair                                            |
-| `.receive(items)`                  | Destination tokens the solver delivers to the Portal's Executor                | Required; `[]` delivers nothing                                               |
+| `.receive(...items)`               | Destination tokens the solver delivers to the Portal's Executor                | Required; `.receive()` names none                                             |
 | `.fee(wei)`, after `.receive`      | The destination Kitchen's fee the body's cook pays                             | Required in TypeScript; see [the fee](#where-each-value-comes-from)           |
 | `.deadline(t)`, after `.receive`   | The last second the intent may be filled                                       | Five minutes after it is built                                                |
-| `.salt(s)`, after `.receive`       | The route's salt                                                               | Zero                                                                          |
+| `.salt(s)`, after `.receive`       | The route's salt                                                               | 32 random bytes, picked when it is built                                      |
 | `.nest(child, options)`            | A child intent the route funds (TypeScript)                                    | None: [the TypeScript builder](nested-intents.md#the-typescript-builder-nest) |
 | `.then(body)`                      | The body: a closure or a source string                                         | Required                                                                      |
 
@@ -194,9 +194,10 @@ Everything above builds an intent in TypeScript, before anything runs. A program
 _while_ it is running, which is what you want when the amount is the output of the step before it:
 
 ```js
-function main(recipient: Address) {
+function main(recipient: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
   Arbitrum.Portal.send({ token: USDC, amount })
+    .creator(refundTo)
     .receive({ token: USDC, amount })
     .then(() => {
       USDC.transfer(recipient, amount);
@@ -256,9 +257,10 @@ write, such as `const held = USDC.balanceOf(ctx.self());`. A program's token wri
 fulfilment. A program needs the destination's Kitchen fee and a deployed Pot, as the table says.
 
 ```js
-function main(recipient: Address) {
+function main(recipient: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
   Arbitrum.Portal.send({ token: USDC, amount })
+    .creator(refundTo)
     .receive({ token: USDC, amount })
     .then(() => {
       const here = USDC.balanceOf(ctx.self());
@@ -307,9 +309,10 @@ function fee(amount: Uint256): Uint256 {
   return amount / 100;
 }
 
-function main(recipient: Address) {
+function main(recipient: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
   Arbitrum.Portal.send({ token: USDC, amount })
+    .creator(refundTo)
     .receive({ token: USDC, amount })
     .then(() => {
       const [held] = abi.decode(abi.encode(balanceOf(USDC, ctx.self())), ["Uint256"]);
@@ -379,8 +382,8 @@ therefore leaves nothing behind, and a measurement below its floor cannot strand
 | Destination        | The chain you named                                                                      |
 | Source             | The chain the program runs on                                                            |
 | Deadlines          | `.deadline(t)`, else the [defaults](../reference/intent-defaults.md), from when it opens |
-| Salt               | `.salt(s)`, else zero                                                                    |
-| Creator            | `.creator(address)`, else the compile's. See below                                       |
+| Salt               | `.salt(s)`, else 32 random bytes                                                         |
+| Creator            | `.creator(address)`, required. See below                                                 |
 | Execution fee      | `.fee(wei)`, else the compile's, for a program body. See below                           |
 
 An intent **opens** when the program opening it runs, so a default deadline is `ctx.timestamp()`
@@ -389,12 +392,18 @@ the first level's from then instead, which makes the intent fixed when it is bui
 command sets it to the moment it builds the intents. An intent a body opens, one level down, opens
 when that body runs.
 
-The **creator** is the address that may reclaim the reward if nobody earns it. The executing Pot is
-the obvious default and the wrong one: it is owned by the Portal's Executor, which every solver can
-drive, so a refund landing there is a refund anyone can take. Give `.creator(address)`, or
-`compile.intents.creator` for every intent that gives none; an intent a body opens without its own
-takes the creator of the intent above. The `sauce` command defaults it to the wallet that publishes
-or the owner of the Pot that cooks; with neither, the compile refuses the intent.
+The **creator** is the refund address: who may reclaim the reward if nobody earns it. The
+executing Pot is the obvious default and the wrong one: it is owned by the Portal's Executor, which
+every solver can drive, so a refund landing there is a refund anyone can take, and a Pot an owner
+runs may be shared too. So every intent a program opens, at any depth, gives `.creator(address)`,
+usually from one of `main`'s parameters (`.creator(refundTo)`), and nothing is taken from the
+level above or the Pot. The one exception is a top-level intent a wallet publishes itself, which
+Eco's Portal app makes that wallet's: `compile.intents.publisher` names it, and
+`sauce intent publish` sets it to the wallet that publishes.
+
+The **salt** makes two otherwise identical intents two hashes. Left out, it is 32 random bytes
+picked when the intent is built; `compile.intents.salt` fixes it for every intent that gives none,
+and the `sauce` command picks one per run (`--intent-salt` to choose it).
 
 The **execution fee** is the one value that cannot be derived. It is mutable on-chain, and it lives
 on the destination, which the source chain cannot read while it executes. Read it at build time and
@@ -443,7 +452,7 @@ that does not set it with a modifier:
 | ---------------------------- | -------------------------------------------------------------------- |
 | `deadline`, `rewardDeadline` | The route and reward deadlines                                       |
 | `openedAt`                   | When the first level opens, which its default deadlines count from   |
-| `creator`, `prover`          | The reward's creator and prover                                      |
+| `publisher`, `prover`        | A top-level intent's creator when a wallet publishes it; the prover  |
 | `sourcePortal`               | Where the intent is published                                        |
 | `destinationPortal`          | The Portal recorded in the child's route                             |
 | `pot`, `engine`              | Where a program body cooks, and on what; a named Pot is not deployed |
@@ -476,11 +485,12 @@ Each of these is a compile error naming the construct, never a silently differen
 
 - An identifier that is neither a compile-time value nor a variable of the enclosing program.
 - A `<Chain>.Portal` that does not open an intent: one used as a value, with steps out of order, a
-  modifier given twice or after the wrong step, or no `.then(() => { ... })`.
+  modifier given twice or after the wrong step, no `.receive(...)`, or no `.then(() => { ... })`.
 - A `.send(...)` or `.receive(...)` item that is not an object written in place, a token entry
   missing `token` or `amount`, a `{ native }` item in `.receive(...)`, or an empty `.send([])`.
-- A missing creator, or a missing fee for a program body, that nothing supplies; a `.fee(...)` the
-  program computes.
+- A missing creator: an intent a program opens names its own, and only `publisher` stands in for a
+  top-level one. A missing fee for a program body that nothing supplies; a `.fee(...)` the program
+  computes.
 - A chain with no eco-routes deployment, or a pair with no prover deployed on both sides.
 - A program body that calls the function opening it.
 - A program body using a module variable that a local of the opening function shadows.

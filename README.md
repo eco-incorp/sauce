@@ -68,24 +68,27 @@ an intent carrying it onward.
 // reward this program escrows, what a solver delivers on Ethereum, and what runs there. `amount` is
 // an ordinary variable of this program and `recipient` one of its parameters, and using them in the
 // intent is enough: the SDK splices their run-time values into the encoded intent, and fills in the
-// Portal, the prover, the vault and the encoding. The deadlines and the creator (the Pot's owner)
-// take their defaults.
+// Portal, the prover, the vault and the encoding. The intent names its creator, `refundTo`, where
+// its reward goes back if no solver fills it: a program's intent has no default creator. The
+// deadlines and the salt take their defaults.
 //
 // `USDC` is a registered symbol. In `.receive(...)` and the body it means Ethereum's USDC, because
 // that is the chain they run on. In `.send(...)` it means the USDC of the chain this program runs
 // on, which escrows the reward.
 //
 //   sauce run cross-chain-intent.sauce.ts --chain base --keystore <keystore> \
-//     --args <recipient> <minAmount>
+//     --args <recipient> <minAmount> <refundTo>
 //
 //   recipient: Address   who the intent pays on Ethereum
 //   minAmount: Uint256   the least USDC worth forwarding, in its smallest units (6 decimals):
 //                        below it the whole transaction reverts and nothing is published
-function main(recipient: Address, minAmount: Uint256) {
+//   refundTo: Address    who reclaims the reward if no solver earns it
+function main(recipient: Address, minAmount: Uint256, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
   require(amount >= minAmount, "nothing to forward");
 
   Ethereum.Portal.send({ token: USDC, amount })
+    .creator(refundTo)
     .receive({ token: USDC, amount })
     .then(() => {
       USDC.transfer(recipient, amount);
@@ -110,14 +113,15 @@ a second transaction you build yourself after reading what the first produced.
 
 `USDC` is a registered token symbol, and in `.receive(...)` and the body it means **Ethereum's**
 USDC, because that is where those run. In `.send(...)` it means the USDC of the chain the program
-runs on — Base, in the line above — because the program escrows the reward there. `recipient` and
-`minAmount` are `main`'s parameters: they arrive with the transaction (`--args`), so one compiled
-program serves every call.
+runs on — Base, in the line above — because the program escrows the reward there. `recipient`,
+`minAmount` and `refundTo` are `main`'s parameters: they arrive with the transaction (`--args`), so
+one compiled program serves every call.
 
-Everything else has a default: the deadlines count from when the intent opens, the creator who may
-reclaim the reward if nobody earns it is the Pot's owner, and Ethereum's Kitchen fee, which a body
-that is a program pays, is read from Ethereum. Each has a modifier to set it
-([Intent defaults](docs/reference/intent-defaults.md)). The intent is an offer; a solver still
+`.creator(refundTo)` is the refund address: who reclaims the reward if nobody earns it. A program
+names it for every intent it opens, since the Pot it runs on may be shared. Everything else has a
+default: the deadlines count from when the intent opens, the salt is random, and Ethereum's
+Kitchen fee, which a body that is a program pays, is read from Ethereum. Each has a modifier to set
+it ([Intent defaults](docs/reference/intent-defaults.md)). The intent is an offer; a solver still
 decides to fill it. [docs/examples/cross-chain-intent.ts](docs/examples/cross-chain-intent.ts)
 builds the same transaction from TypeScript, and runs on every release;
 [nested intents](docs/guides/nested-intents.md) opens one intent inside another's body, and covers

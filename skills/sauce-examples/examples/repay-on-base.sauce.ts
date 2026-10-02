@@ -8,8 +8,9 @@
 // what is owed, and what is left is offered to a solver who pays it, less `solverBps`, to
 // `borrower` on Ethereum. That change exists only once the Base step has run, so the Base step
 // measures it and opens the second intent itself; with none left there is no second intent.
-// `borrower` and `solverBps` are this program's parameters, and using them inside the braces is
-// enough: their values go into each intent.
+// `borrower`, `solverBps` and `refundTo` are this program's parameters, and using them inside the
+// braces is enough: their values go into each intent. Each intent names `refundTo` its creator,
+// where its reward goes back if no solver fills it.
 //
 // `USDC` and `AaveV3.Pool` in the braces are Base's; in each `.send(...)`, the chain's that pays
 // it: Ethereum's for the first, Base's for the second. The variable debt token is read from the
@@ -17,21 +18,23 @@
 // declare.
 //
 //   sauce run repay-on-base.sauce.ts --chain <chain> --keystore <keystore> \
-//     --args <borrower> <solverBps>
+//     --args <borrower> <solverBps> <refundTo>
 //
 //   borrower: Address    whose USDC debt on Base is repaid, and who is paid the change on Ethereum
 //   solverBps: Uint256   what each solver keeps of what it carries, in hundredths of a percent:
 //                        10 is 0.1%
+//   refundTo: Address    who reclaims an unearned reward, on Ethereum for the first intent and on
+//                        Base for the second
 //
-// Each intent takes its defaults: filled within five minutes of opening, refundable seven days
-// after, created by the wallet that runs the cook, its body's cook paying the Kitchen fee read from
-// Base. From Ethereum, a solver keeping 0.1% of each hop:
+// Each intent takes the other defaults: filled within five minutes of opening, refundable seven
+// days after, a random salt, its body's cook paying the Kitchen fee read from Base. From Ethereum,
+// a solver keeping 0.1% of each hop:
 //
 //   sauce run repay-on-base.sauce.ts --chain ethereum --keystore <keystore> \
-//     --args <borrower> 10
+//     --args <borrower> 10 <refundTo>
 import AaveV3Reads from "./AaveV3Reads.json";
 
-function main(borrower: Address, solverBps: Uint256) {
+function main(borrower: Address, solverBps: Uint256, refundTo: Address) {
   require(borrower != 0, "borrower is the zero address");
   require(solverBps < 10000, "solverBps is 100% or more");
   const amount = USDC.balanceOf(ctx.self());
@@ -39,6 +42,7 @@ function main(borrower: Address, solverBps: Uint256) {
   const delivered = amount - (amount * solverBps) / 10000;
 
   Base.Portal.send({ token: USDC, amount }) // Ethereum's
+    .creator(refundTo)
     .receive({ token: USDC, amount: delivered }) // Base's USDC, which the solver delivers
     .then(() => {
       // The shared intent Pot holds nothing of anyone's between intents: all of it is this one's.
@@ -54,6 +58,7 @@ function main(borrower: Address, solverBps: Uint256) {
       if (change > 0) {
         const paid = change - (change * solverBps) / 10000;
         Ethereum.Portal.send({ token: USDC, amount: change }) // Base's: it funds this level
+          .creator(refundTo)
           .receive({ token: USDC, amount: paid }) // Ethereum's
           .then(() => {
             USDC.transfer(borrower, paid); // Ethereum's USDC

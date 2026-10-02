@@ -263,8 +263,8 @@ pools by their factory's key, so one document serves every chain that has its na
 ### `sauce-intents`
 
 Work continued on another chain: an intent file (`Base.Portal.send(...).receive(...).then(...)`
-in `main`, its inputs `main`'s parameters, its deadlines, creator and fee defaulted or set by
-modifiers), its life (fund, publish, fill, prove, claim, refund
+in `main`, its inputs `main`'s parameters, the creator named, the deadlines, salt and fee defaulted
+or set by modifiers), its life (fund, publish, fill, prove, claim, refund
 or cancel, a `sauce intent` command each), every way to publish and fund one, token-only bodies
 and program bodies, cascades, on which chain each name resolves, and rehearsing both sides.
 
