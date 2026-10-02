@@ -175,6 +175,20 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
       returns: "0x",
     });
     expect(BigInt(out.gas as string)).toBeGreaterThan(21_000n);
+    // Two transactions, each with its own gas: the Pot's deployment, then the cook, whose gas is
+    // `gas`.
+    expect(out.transactions).toEqual([
+      {
+        step: "deployPot",
+        from: OWNER,
+        to: kitchenAddress(),
+        gas: expect.any(String),
+        gasKind: "used",
+      },
+      { step: "cook", from: OWNER, to: pot, gas: out.gas, gasKind: "used" },
+    ]);
+    const [deployed] = out.transactions as Array<{ gas: string }>;
+    expect(BigInt(deployed!.gas)).toBeGreaterThan(21_000n);
     // The balances it assumed, with where each token keeps them: OpenZeppelin's ERC-20 at slot 0,
     // the USDT-shaped fixture after its name, symbol, decimals and totalSupply.
     expect(out.assumed).toEqual([
@@ -263,16 +277,25 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
     expect(run.stderr).toBe("");
     expect(run.code).toBe(0);
     const lines = run.stdout.split("\n");
+    // The gas the headline gives is the cook's, and each transaction says its own.
     expect(lines[0]).toMatch(
-      new RegExp(`^The cook succeeds from ${OWNER}: gas used \\d+, returns 0x$`),
+      new RegExp(
+        `^The cook succeeds from ${OWNER}: gas used (\\d+) for the cook, after the Pot's deploy ` +
+          "\\(1\\. below\\), returns 0x$",
+      ),
     );
+    const cookGas = /gas used (\d+) for the cook/.exec(lines[0]!)![1];
     expect(run.stdout).toMatch(
       /^Rehearsed with eth_simulateV1 on the state of block \d+; nothing was signed or sent:$/m,
     );
-    expect(run.stdout).toContain(
-      `  1. Kitchen.deployPot(${OWNER}, 0x${"00".repeat(32)}): Pot ${pot} is not deployed on ethereum yet.`,
+    expect(run.stdout).toMatch(
+      new RegExp(
+        `^ {2}1\\. Kitchen\\.deployPot\\(${OWNER}, 0x${"00".repeat(32)}\\), gas used \\d+: ` +
+          `Pot ${pot} is not deployed on ethereum yet\\.`,
+        "m",
+      ),
     );
-    expect(run.stdout).toContain(`  2. the cook, from the owner ${OWNER}`);
+    expect(run.stdout).toContain(`  2. the cook, from the owner ${OWNER}, gas used ${cookGas}\n`);
     expect(run.stdout).toContain("  the Pot holds 2 USDC: --assume-balance");
     expect(run.stdout).toContain(`  1.5 USDC: ${pot} (the Pot) -> ${RECIPIENT}`);
     expect(run.stdout).toContain(`  ${pot} (the Pot): -1.5 USDC, -1.5 USDT`);
@@ -372,6 +395,11 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
       returns: "0x",
     });
     expect(BigInt(out.gas as string)).toBeGreaterThan(50_000n);
+    // The deploy estimated as its own transaction, on the chain before the Pot exists.
+    expect(out.transactions).toEqual([
+      expect.objectContaining({ step: "deployPot", gas: expect.any(String), gasKind: "estimated" }),
+      expect.objectContaining({ step: "cook", gas: out.gas, gasKind: "estimated" }),
+    ]);
     expect(out.transfers).toBeUndefined();
     expect(run.stderr).toContain("eth_call returns no logs");
 

@@ -14,6 +14,7 @@ import { CHAIN_SUPPORT_NEW_ISSUE_URL, supportedChainNames } from "./sdk.js";
 import { registerPrompts } from "./prompts.js";
 import { registerResources, SKILLS_INDEX, WRITE_IT_YOURSELF } from "./resources.js";
 import { registerSkillTools } from "./skilltools.js";
+import { COMMAND_TOOLS, flagInputLines } from "./terms.js";
 import { registerIntentTools } from "./intents.js";
 import { registerTools, type WalletContext } from "./tools.js";
 import { registerWalletTools } from "./wallets.js";
@@ -32,7 +33,7 @@ export function packageInfo(): { readonly name: string; readonly version: string
 }
 
 /** What the server tells a client about itself when it connects. */
-export function instructions(endpoints: Endpoints, wallets?: WalletContext): string {
+export function instructions(endpoints: Endpoints, wallets?: WalletContext, local = false): string {
   const { name } = packageInfo();
 
   return [
@@ -54,14 +55,28 @@ export function instructions(endpoints: Endpoints, wallets?: WalletContext): str
     "   A fixed sequence of protocol operations can be an actions document in JSON instead:",
     "   sauce_actions (the sauce-actions skill says how).",
     "2. sauce_compile until it compiles; entryParams is what main takes, as args.",
+    ...(local
+      ? [
+          "   Over stdio a program file on this machine is given by path (relative to the",
+          "   server's directory) instead of source; sourceSha256 ties each result to its text.",
+        ]
+      : []),
     "3. sauce_pools for a pair's pools, their prices and depth, before a swap; sauce_price for",
-    "   a swap's price limits (with pool, from the pool now).",
+    "   a swap's price limits (with pool, from the pool now). The distributed swap's maxPrice",
+    "   and maxAvgPrice are input paid per output bought: sauce_pools' sides[].maxPrice, or",
+    "   sauce_price's buy.maxPrice. minAvgPrice runs the other way round and is never a",
+    "   maxAvgPrice. Rehearse at the block sauce_pools read.",
     "4. sauce_pot for the owner's Pot: its address, its unsigned deployment, whether it exists,",
     "   the Kitchen's fee and what the Pot holds.",
     "5. sauce_simulate: the cook rehearsed (any owner will do; nothing is signed).",
     "6. sauce_tx for the unsigned cook, for the owner to sign. An intent fixed when it is built",
     "   publishes from a wallet instead: sauce_intent_publish, and sauce_intent_fill with dryRun",
     "   rehearses a solver filling it on its destination.",
+    "",
+    "FROM THE sauce COMMAND TO THE TOOLS. A skill or a note may name a command line:",
+    ...COMMAND_TOOLS,
+    "Each flag is the input:",
+    ...flagInputLines(),
     "",
     "An intent's life after it is published: sauce_intent_status says where it stands and what",
     "can happen next (`can`); sauce_intent_fill (with the solver as from), sauce_intent_prove,",
@@ -119,6 +134,9 @@ export interface SauceServerOptions {
   readonly endpoints: Endpoints;
   /** Over HTTP: the guard every caller's rpcUrl is reached through. */
   readonly guard?: RpcGuard;
+  /** Over stdio: the caller is the server's own user, so a program may be named by `path`, read
+   *  from disk. Never given with `guard` (HTTP). */
+  readonly local?: boolean;
   /** Over stdio with `--wallets`: the wallets it signs with. Never given with `guard` (HTTP). */
   readonly wallets?: WalletContext;
   /** The skills directory; the package's own by default. */
@@ -130,16 +148,20 @@ export function createSauceServer(options: SauceServerOptions): McpServer {
   if (options.wallets !== undefined && options.guard !== undefined) {
     throw new Error("internal: wallets are served over stdio only, and the guard is HTTP's");
   }
+  if (options.local === true && options.guard !== undefined) {
+    throw new Error("internal: a server reads files over stdio only, and the guard is HTTP's");
+  }
   const server = new McpServer(
     { name: "sauce", title: `Sauce (${name})`, version },
     {
       capabilities: { tools: {}, resources: {}, prompts: {} },
-      instructions: instructions(options.endpoints, options.wallets),
+      instructions: instructions(options.endpoints, options.wallets, options.local === true),
     },
   );
   const tools = {
     endpoints: options.endpoints,
     ...(options.guard === undefined ? {} : { guard: options.guard }),
+    ...(options.local === true ? { local: true } : {}),
     ...(options.wallets === undefined ? {} : { wallets: options.wallets }),
   };
   registerTools(server, tools);
