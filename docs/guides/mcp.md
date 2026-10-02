@@ -8,10 +8,122 @@ as tools and resources. The server compiles programs and action documents and li
 names. It builds unsigned transactions: the cook, the Pot's deployment, an intent's publish
 transactions and each step of its life after. It also rehearses a cook and takes calls apart.
 
-For the initial release it builds transactions only on **Ethereum**, **Base** and **Solana**. Every
-other chain is a [preview chain](#supported-and-preview-chains): an agent can compile, simulate and
-rehearse any protocol on it, and the tools that would return a transaction there return `refused`
-instead, with how to request the chain.
+## Quick start
+
+You don't run the server yourself. Your coding agent starts it on your machine, from its MCP
+configuration, whenever it needs it. The command it runs is `npx -y @eco-incorp/sauce mcp`, which
+needs Node.js 24 or newer and nothing installed: npx fetches the package. Add that command to your
+agent once.
+
+### Claude Code
+
+```sh
+claude mcp add sauce -- npx -y @eco-incorp/sauce mcp
+```
+
+This adds it for you, in the current project (stored in `~/.claude.json`). Add `--scope user`
+before `sauce` for every project. `--scope project` writes `.mcp.json` in the project root instead,
+to share through version control; Claude Code asks each person to approve a project's server.
+
+### OpenAI Codex
+
+```sh
+codex mcp add sauce -- npx -y @eco-incorp/sauce mcp
+```
+
+This adds it to `~/.codex/config.toml`, for every project. A project Codex trusts can carry the
+same entry in its own `.codex/config.toml`:
+
+```toml
+[mcp_servers.sauce]
+command = "npx"
+args = ["-y", "@eco-incorp/sauce", "mcp"]
+```
+
+### Gemini CLI
+
+```sh
+gemini mcp add sauce npx -- -y @eco-incorp/sauce mcp
+```
+
+The `--` hands `-y` to npx rather than to `gemini`. This writes the project's
+`.gemini/settings.json`; `--scope user` after `add` writes `~/.gemini/settings.json`, for every
+folder. With its Trusted Folders setting on, Gemini CLI ignores an untrusted folder's settings.
+
+### Claude Desktop
+
+Open Settings, then Developer, then Edit Config. That opens `claude_desktop_config.json`:
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+Add the server under `mcpServers`, keeping any others there, then quit Claude Desktop and start it
+again:
+
+```json
+{
+  "mcpServers": {
+    "sauce": { "command": "npx", "args": ["-y", "@eco-incorp/sauce", "mcp"] }
+  }
+}
+```
+
+### Cursor
+
+The same `mcpServers` entry, in `.cursor/mcp.json` in the project or `~/.cursor/mcp.json` for every
+project.
+
+### VS Code (GitHub Copilot)
+
+```sh
+code --add-mcp "{\"name\":\"sauce\",\"command\":\"npx\",\"args\":[\"-y\",\"@eco-incorp/sauce\",\"mcp\"]}"
+```
+
+This adds it to your user profile. For one workspace, put it in `.vscode/mcp.json`, under
+`servers`:
+
+```json
+{
+  "servers": {
+    "sauce": { "type": "stdio", "command": "npx", "args": ["-y", "@eco-incorp/sauce", "mcp"] }
+  }
+}
+```
+
+### Every project file at once
+
+```sh
+npx -y @eco-incorp/sauce mcp setup
+```
+
+This writes the project file of each agent above that reads one (`.mcp.json`, `.codex/config.toml`,
+`.cursor/mcp.json`, `.vscode/mcp.json` and `.gemini/settings.json`), launching the version that
+wrote it. In a project that depends on the package, `npx sauce mcp setup` does the same with the
+project's version. [Project files](#project-files) has the details.
+
+### Check it worked
+
+- **Claude Code:** `claude mcp list` lists `sauce` as connected; inside a session, `/mcp`. A project
+  server stays pending until you approve it in a session.
+- **OpenAI Codex:** `codex mcp list`; in a session, `/mcp`.
+- **Gemini CLI:** `gemini mcp list` lists `sauce` as connected; in a session, `/mcp`.
+- **Claude Desktop:** the "+" button in the message box, then Connectors, lists `sauce`.
+- **VS Code:** the MCP: List Servers command shows its status.
+- **Any agent:** ask it to list the `sauce_` tools. It names `sauce_compile`, `sauce_globals`,
+  `sauce_tx` and the rest.
+
+### No endpoint needed to start
+
+Compiling, a chain's names, prices, the Pot's address and an EVM cook given its `value` need no RPC
+endpoint. Rehearsing a cook, building a Solana one and reading a chain take one: pass `rpcUrl` with
+the call, or start the server with endpoints of its own ([Endpoints](#endpoints)).
+
+## Chains and signing
+
+For the initial release the server builds transactions only on **Ethereum**, **Base** and
+**Solana**. Every other chain is a [preview chain](#supported-and-preview-chains): an agent can
+compile, simulate and rehearse any protocol on it, and the tools that would return a transaction
+there return `refused` instead, with how to request the chain.
 
 **The local stdio server signs only with wallets in its wallet directory, unlocked by the password
 source it was started with; the HTTP server never signs.** Neither ever asks for a key or a
@@ -20,14 +132,12 @@ wallet the user holds. That lets the server run anywhere: on the agent's machine
 a host of your own over Streamable HTTP. Transactions it does not send are signed and sent by local
 means: a wallet, `cast send`, or `sauce run` with the user's own keystore.
 
-## Run it
-
-One command, through npx. Node.js 24 or newer:
+## The command
 
 ```sh
 npx -y @eco-incorp/sauce mcp                                   # stdio: what an agent launches
 npx -y @eco-incorp/sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD   # stdio, signing
-npx -y @eco-incorp/sauce mcp --http 3000 --config rpc.json     # self-hosted, Streamable HTTP
+npx -y @eco-incorp/sauce mcp --http 3000                       # self-hosted, Streamable HTTP
 ```
 
 In a project that depends on the package, `npx sauce mcp` runs the project's own version, and
@@ -77,7 +187,7 @@ What works with no endpoint at all:
 What needs one: `sauce_simulate`, a publish dry run, anything given a transaction hash, a Solana cook
 (its blockhash and fee), and reading the Kitchen's fee or whether a Pot exists.
 
-## Add it to a coding agent
+## Project files
 
 `sauce mcp setup` writes the project configuration each agent documents. The server it configures
 is launched as `npx -y @eco-incorp/sauce@<this version> mcp`:
@@ -111,34 +221,9 @@ Each agent asks before it runs a server a project names:
 - VS Code applies Workspace Trust.
 - Gemini CLI, with its Trusted Folders setting on, ignores an untrusted folder's settings.
 
-Or add it by hand, with each agent's own command, per its documentation:
-
-```sh
-claude mcp add --scope project sauce -- npx -y @eco-incorp/sauce mcp
-codex mcp add sauce -- npx -y @eco-incorp/sauce mcp
-copilot mcp add sauce -- npx -y @eco-incorp/sauce mcp
-```
-
-`codex mcp add` and `copilot mcp add` (the Copilot CLI) write the user's configuration, not the
-project's. Cursor has no add command, so write `.cursor/mcp.json`. The entry, for a stdio server:
-
-```json
-{
-  "mcpServers": {
-    "sauce": { "type": "stdio", "command": "npx", "args": ["-y", "@eco-incorp/sauce", "mcp"] }
-  }
-}
-```
-
-```toml
-[mcp_servers.sauce]
-command = "npx"
-args = ["-y", "@eco-incorp/sauce", "mcp"]
-```
-
-VS Code's `.vscode/mcp.json` has the same entry under `servers`. Gemini CLI's
-`.gemini/settings.json` has it under `mcpServers`, without `type`. An agent can also ask the
-server itself: `sauce_install_skills` returns these for the agent it names.
+The GitHub Copilot CLI adds the server to its user configuration with
+`copilot mcp add sauce -- npx -y @eco-incorp/sauce mcp`. An agent can also ask the server itself:
+`sauce_install_skills` returns the commands and the entry for the agent it names.
 
 ### A remote server
 

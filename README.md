@@ -22,6 +22,17 @@ The package also installs the [`sauce` command](docs/guides/cli.md). Run it as `
 project that depends on the package, and as `npx -y @eco-incorp/sauce` anywhere else: without the
 package installed, `npx sauce` fetches and runs npm's unrelated `sauce` package instead.
 
+A coding agent uses Sauce through its MCP server, which the agent starts on your machine. Add it
+once:
+
+```sh
+claude mcp add sauce -- npx -y @eco-incorp/sauce mcp    # Claude Code
+codex mcp add sauce -- npx -y @eco-incorp/sauce mcp     # OpenAI Codex
+```
+
+[The MCP server's quick start](docs/guides/mcp.md#quick-start) covers Gemini CLI, Claude Desktop,
+Cursor and VS Code, and how to check that it worked.
+
 [Documentation](docs/README.md) · [Quick start](docs/guides/quick-start.md) ·
 [Examples](docs/examples/README.md) · [API reference](docs/api/README.md)
 

@@ -137,6 +137,13 @@ describe("sauce mcp, before the server loads", () => {
     expect(help.code).toBe(0);
     expect(help.stdout).toMatch(/npx -y @eco-incorp\/sauce mcp --http 3000 --config/);
     expect(help.stdout).toMatch(/--wallets \[<dir>\] +Over stdio: sign with the wallets/);
+    // How each agent adds it, in `sauce mcp --help` and `sauce mcp setup --help` alike.
+    for (const text of [help.stdout, (await sauce("mcp", "setup", "--help")).stdout]) {
+      expect(text).toContain("claude mcp add sauce -- npx -y @eco-incorp/sauce mcp");
+      expect(text).toContain("codex mcp add sauce -- npx -y @eco-incorp/sauce mcp");
+      expect(text).toContain("gemini mcp add sauce npx -- -y @eco-incorp/sauce mcp");
+      expect(text).toContain("npx -y @eco-incorp/sauce mcp setup ");
+    }
     for (const [argv, message] of [
       [["mcp", "--agent", "claude"], /--agent goes with sauce mcp setup/],
       [["mcp", "setup", "--http", "0"], /--http is for serving, not setup/],
