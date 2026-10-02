@@ -242,7 +242,7 @@ A source action whose value nothing reads is an error.
 
 ## Turn a program into an intent
 
-`programIntent(program, options)` opens the program as the route of an Eco intent on `options.chain`, or on the program's `chainId` when it has one. It is `Base(body, options)` with the program as the body; its ABI bindings are merged into `options.compile.contracts`, and a caller binding of the same name with a different ABI is an error. The program's names resolve on the route's chain.
+`programIntent(program, options)` opens the program as the route of an Eco intent on `options.chain`, or on the program's `chainId` when it has one. It is `routes.openRoute(chain, body, options)` with the program as the body, a pending route awaiting `.reward(...)`; its ABI bindings are merged into `options.compile.contracts`, and a caller binding of the same name with a different ABI is an error. The program's names resolve on the route's chain.
 
 ```ts
 import { programIntent, type ActionProgram } from "@eco-incorp/sauce/actions";

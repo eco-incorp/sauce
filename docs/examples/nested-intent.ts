@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { Base, destinationPot, Ethereum, routes, token } from "@eco-incorp/sauce";
+import { Base, Ethereum, routes } from "@eco-incorp/sauce";
 import { toHex } from "viem";
 
 const usdcOn = (chain: typeof Base.chain) => {
@@ -25,38 +25,32 @@ const REWARD = 1_010_000n;
 const executionFee = 1_000n; // Fixture: Base's Kitchen fee, read with destinationExecutionFee().
 const creator = "0x4444444444444444444444444444444444444444";
 
-const built = Base(
-  () => {
+// When the intent opens, and its salt: the `sauce` command takes them from the clock and at random,
+// and fixtures here, so the closure and the file below build the same intent.
+const openedAt = 2_000_000_000n;
+const salt = `0x${"5a".repeat(32)}` as const;
+
+const built = Base.Portal.send({ token: usdcOn(Ethereum.chain), amount: REWARD })
+  .source("ethereum")
+  .creator(creator)
+  .receive({ token: baseUsdc, amount: AMOUNT })
+  .fee(executionFee)
+  .deadline(openedAt + routes.DEFAULT_FILL_WINDOW)
+  .salt(salt)
+  .then(() => {
     // Runs on Base, in the fill of this intent: what the solver delivered, measured there.
     const amount = USDC.balanceOf(ctx.self());
     const payout = amount - amount / 1000n;
-    // Opened, funded in Base's USDC and published on Base, in that same fill.
-    Ethereum(() => {
-      USDC.transfer(RECIPIENT, payout);
-    }).reward({ tokens: [{ token: USDC, amount }] });
-  },
-  {
-    execution: { value: executionFee },
-    deadline: 2_000_000_000n,
-    rewardDeadline: 2_000_003_600n,
-    // Every intent the body opens takes the deadlines and the creator.
-    creator,
-    defines: { RECIPIENT },
-    // What the solver brings to Base. It arrives at the Executor; the body measures the Pot.
-    tokens: [{ token: baseUsdc, amount: AMOUNT }],
-    precalls: [
-      token.Token.transfer({
-        token: baseUsdc,
-        to: destinationPot(Base.chain),
-        amount: AMOUNT,
-      }).toCall(),
-    ],
-  },
-).reward({
-  source: Ethereum.chain,
-  deadline: 2_000_003_600n,
-  tokens: [{ token: usdcOn(Ethereum.chain), amount: REWARD }],
-});
+    // Opened, funded in Base's USDC and published on Base, in that same fill: its deadlines count
+    // from then. Every intent a program opens names its creator.
+    Ethereum.Portal.send({ token: USDC, amount })
+      .creator(0x4444444444444444444444444444444444444444n)
+      .receive({ token: USDC, amount: payout })
+      .salt(0x5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5an)
+      .then(() => {
+        USDC.transfer(0x6666666666666666666666666666666666666666n, payout);
+      });
+  });
 console.log("Ethereum → Base → Ethereum:", built.hash().intentHash);
 
 // The file form, compiled for Ethereum where it opens its intent, with main's arguments fixed into
@@ -64,14 +58,9 @@ console.log("Ethereum → Base → Ethereum:", built.hash().intentHash);
 const source = (name: string) =>
   readFileSync(join(dirname(fileURLToPath(import.meta.url)), name), "utf8");
 const recipient = toHex(RECIPIENT, { size: 20 });
-const intents = {
-  deadline: 2_000_000_000n,
-  rewardDeadline: 2_000_003_600n,
-  creator,
-  executionFee,
-} as const;
+const intents = { openedAt, salt, executionFee } as const;
 const [opened] = routes.compileSauceProgram("ethereum", source("nested-intent.sauce.ts"), {
-  args: [recipient, AMOUNT, REWARD],
+  args: [recipient, AMOUNT, REWARD, creator],
   intents,
 }).intents;
 if (
@@ -86,7 +75,7 @@ console.log(`Published by ${transactions.length} transactions on Ethereum`);
 
 // The swap variant, `minOut` the least WETH the swap on Base may buy.
 const [swap] = routes.compileSauceProgram("ethereum", source("nested-swap.sauce.ts"), {
-  args: [recipient, AMOUNT, REWARD, 1n],
+  args: [recipient, AMOUNT, REWARD, 1n, creator],
   intents,
 }).intents;
 if (swap === undefined || swap.captures.length > 0 || swap.intent.route.calls.length !== 2) {

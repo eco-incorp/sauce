@@ -440,9 +440,16 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
 
 ## Intents and Solana
 
-- **A file that opens intents** (`Ethereum(() => { … }).reward({ … })`) also takes
-  `--intent-deadline <unix seconds>`, `--intent-creator <address>` and, when an intent's body runs a
-  program, `--intent-execution-fee <wei>` (`auto` reads it from the destination). `compile` and
+- **A file that opens intents** (`Ethereum.Portal.send(…).creator(refundTo).receive(…).then(() => { … })`)
+  names each intent's creator, the refund address, with `.creator(...)`: an intent a program opens
+  has no default creator, since the Pot it runs on may be shared. Only a top-level intent
+  `sauce intent publish` publishes from a wallet takes that wallet (or `--intent-creator <address>`)
+  when it names none. The rest default, and the file may set each with a modifier
+  (`sauce-intents`): the deadlines from when the command builds the intents, a random salt picked
+  once per run, and the Kitchen fee a body's cook pays, read from the destination.
+  `--intent-deadline <unix seconds>`, `--intent-salt <bytes32>`, `--intent-execution-fee <wei>` and
+  the other `--intent-*` flags set one for every intent that does not set its own; `--offline`
+  reads no fee, so give `--intent-execution-fee`. `compile` and
   `sauce intent publish` warn while the Pot such an intent cooks on
   is not deployed on its destination: no solver can fill it until then, and the warning names the
   `sauce pot --deploy` that deploys it. `sauce run` opens them from the Pot, which is the way when
