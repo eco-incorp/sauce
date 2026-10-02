@@ -47,13 +47,13 @@ function trade(
   let price = 0n;
   let fee = 0n;
   if (slipstream) {
-    liquidity = AerodromeSlipstream.Pool.at(pool).liquidity();
-    price = AerodromeSlipstream.Pool.at(pool).slot0().sqrtPriceX96;
-    fee = AerodromeSlipstream.Pool.at(pool).fee();
+    liquidity = AerodromeSlipstream.Pool(pool).liquidity();
+    price = AerodromeSlipstream.Pool(pool).slot0().sqrtPriceX96;
+    fee = AerodromeSlipstream.Pool(pool).fee();
   } else {
-    liquidity = UniswapV3.Pool.at(pool).liquidity();
-    price = UniswapV3.Pool.at(pool).slot0().sqrtPriceX96;
-    fee = UniswapV3.Pool.at(pool).fee();
+    liquidity = UniswapV3.Pool(pool).liquidity();
+    price = UniswapV3.Pool(pool).slot0().sqrtPriceX96;
+    fee = UniswapV3.Pool(pool).fee();
   }
   // The pool's own limit: the caller's moved by √(1 − fee), so that its last unit, fee paid,
   // costs exactly maxPrice. Paying token0 pushes the price down, token1 pushes it up.

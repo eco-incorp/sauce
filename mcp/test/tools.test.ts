@@ -4,6 +4,7 @@
  * the tools are the command's functions, and a tool that drifted from its command would show here.
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { after, before, describe, it } from "node:test";
 
 import { decodeFunctionData, getAddress, type Hex } from "viem";
@@ -323,6 +324,39 @@ describe("sauce_pools", () => {
 });
 
 describe("sauce_compile", () => {
+  it("compiles a program with its own ABI beside it, given in modules", async () => {
+    // The sauce-script skill's example: the factory and the pool namespaces, `observe` through
+    // the program's own ./IOracle.json.
+    const examples = new URL("../../skills/sauce-script/examples/", import.meta.url);
+    const source = readFileSync(new URL("twap.sauce.ts", examples), "utf8");
+    const abi = readFileSync(new URL("IOracle.json", examples), "utf8");
+    const out = ok(
+      await mcp.call("sauce_compile", { source, chain: "base", modules: { "IOracle.json": abi } }),
+    );
+    assert.match(out.bytecode as string, /^0x[0-9a-f]+$/);
+    assert.deepEqual(
+      (out.entryParams as Array<{ name: string }>).map((param) => param.name),
+      ["tokenA", "tokenB", "fee", "window"],
+    );
+    // Without the module, the import has nothing to resolve to.
+    assert.match(
+      failed(await mcp.call("sauce_compile", { source, chain: "base" })),
+      /IOracle\.json/,
+    );
+  });
+
+  it("compiles a program file that starts with a #! line as the file without it", async () => {
+    const program = "function main(to: Address) {\n  USDC.transfer(to, 1n);\n}\n";
+    const plain = ok(await mcp.call("sauce_compile", { source: program, chain: "base" }));
+    const shebang = ok(
+      await mcp.call("sauce_compile", {
+        source: `#!/usr/bin/env -S npx -y @eco-incorp/sauce simulate\n${program}`,
+        chain: "base",
+      }),
+    );
+    assert.equal(shebang.bytecode, plain.bytecode);
+  });
+
   it("compiles for the chain: bytecode, size, main's parameters, defines, compiler, engine", async () => {
     const out = ok(
       await mcp.call("sauce_compile", {

@@ -310,9 +310,9 @@ margin. Make it worth filling.
 The body can be any program for the destination. It is written inside the braces and uses the
 file's defines as values. It may also use what the file declares: its imports (an ABI, a library)
 and its helper functions, each compiled into the body's program for the destination. It calls
-contracts by namespace (`UniswapV3.Factory.getPool(...)`), through an imported binding, or by
-selector, with `evm.static(address, data)` for a read and `evm.call(address, value, data)` for a
-write, `data` being the selector bytes `.concat(abi.encode(...))`. A swap is a `@sauce/router`
+contracts as any program does (`sauce-script`): by namespace (`UniswapV3.Factory.getPool(...)`),
+through a registry ABI import, or through an ABI of the file's own imported at its top. A swap is a
+`@sauce/router`
 call (`sauce-swaps`), imported at the top of the file. Every unsold input and every output leaves the destination Pot
 before the body ends, and a refund the body makes lands on the destination chain. The body runs on
 the shared intent Pot, which holds nothing of anyone's between intents, so it may return a token's
@@ -346,16 +346,12 @@ Base(
 `REWARD` must exceed what the solver delivers, `AMOUNT_IN`, by what filling costs it (below). To buy
 WETH instead, swap `USDC` for `WETH` and deliver USDC: USDC is token1 on Base, so the limit is then
 a ceiling, the `buy` block of `sauce price`.
-[examples/swap-on-base.sauce.ts](examples/swap-on-base.sauce.ts) is the same with the distributed
-swap (`sauce-distributed-swap`) as the body: every Uniswap V3 and V4 pool with liquidity, best taker
-price first, each up to its own fee-adjusted limit. It swaps through `@sauce/router` and reads each
-pool's own state by selector, which needs no import:
-
-| Call                                                                                | Selector                                 |
-| ----------------------------------------------------------------------------------- | ---------------------------------------- |
-| a V3-style factory's `getPool(address,address,uint24)` (Uniswap V3, PancakeSwap V3) | `0x1698ee82`                             |
-| a Slipstream factory's `getPool(address,address,int24)`                             | `0x28af8d0b`                             |
-| a pool's `slot0()`, `liquidity()`, `fee()`                                          | `0x3850c7bd`, `0x1a686502`, `0xddca3f43` |
+[examples/swap-on-base.sauce.ts](examples/swap-on-base.sauce.ts) is the same with a distributed
+swap as the body (`sauce-distributed-swap`): one pass over every Uniswap V3 and hookless V4 pool of
+the pair, each offered the WETH still unsold up to its own fee-adjusted limit, and skipped when it
+has no liquidity or is past that limit. It swaps through `@sauce/router`, finds each V3 pool with
+`UniswapV3.Factory.getPool` and reads it as `UniswapV3.Pool(pool)`, and reads the V4 pools from
+`UniswapV4.StateView`.
 
 ## Cascades
 
@@ -505,5 +501,5 @@ intent from TypeScript around a program it compiles itself (`sauce-typescript`).
   transfer into its vault and publishes it, in one cook on a Pot.
 - [examples/intents.mts](examples/intents.mts) compiles the intent files, with the deadline, the
   creator, Base's and Ethereum's fees and the recipient as developer inputs, and pins on which chain
-  each name resolves, the fee requirement, the token-only case, the selectors above, and the
+  each name resolves, the fee requirement, the token-only case, the pool ABI's selectors, and the
   rehearsal's transactions: the Pot's deploy and `fulfill` with the fee as its value.

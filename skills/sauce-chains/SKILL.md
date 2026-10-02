@@ -102,7 +102,7 @@ function main(fee: Uint256): Address {
 3. The transaction is a cook on your Pot: `to` the Pot, `data` the Pot's `cook(engine, program)`
    with `main`'s arguments appended to the program, `value` the Kitchen's fee (plus any native the
    program spends). `sauce tx <file> --chain <slug> --owner <address> --args …` prints it as
-   unsigned JSON, `{ chainId, to, data, value }`, for any wallet or signer to send; `sauce-run`
+   unsigned JSON, `{ chainId, to, data, value }`, for any wallet or signer to send; `sauce-cli`
    covers the command that signs and sends it too. On a preview chain `sauce tx` is refused: stop
    at compiling and simulating, and offer the user the chain-support request the refusal links.
 

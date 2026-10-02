@@ -49,6 +49,7 @@ export {
   fundingFor,
   potTarget,
   programChain,
+  withoutShebang,
 } from "../../sdk/dist/cli/inputs.js";
 export { inspectCommand, inspectFile } from "../../sdk/dist/cli/inspect.js";
 export type {

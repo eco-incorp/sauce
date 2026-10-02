@@ -424,7 +424,7 @@ describe("sauce simulate --assume-balance, offline", () => {
 
     return { code: await runCli(argv, io), stderr };
   }
-  const PAY = new URL("../../skills/sauce-run/examples/pay.sauce.ts", import.meta.url).pathname;
+  const PAY = new URL("../../skills/sauce-cli/examples/pay.sauce.ts", import.meta.url).pathname;
 
   it.each([
     [["--assume-balance", "USDC"], "--assume-balance: expected <TOKEN|address>:<amount>"],

@@ -582,6 +582,19 @@ sauce compile: pay.sauce.ts does not compile for base
 hint: if RECIPIENT is a value you supply, pass --define RECIPIENT=<value>
 ```
 
+### A program file as a command
+
+A program file may start with a `#!` line that runs it through `sauce simulate`:
+
+```sh
+#!/usr/bin/env -S npx -y @eco-incorp/sauce simulate
+```
+
+After `chmod +x pay.sauce.ts`, `./pay.sauce.ts --chain base --config sauce.config.json --owner
+<address> --args <recipient> 1000000` rehearses the cook, exactly as `sauce simulate pay.sauce.ts`
+with those flags does. Running the file never spends: sending it is still `sauce run`. The command
+blanks the line before compiling, so the program and its error positions are the file's own.
+
 ### In an editor
 
 A program file is checked by an editor as TypeScript, which does not know SauceScript's names.
@@ -602,7 +615,37 @@ TypeScript (in VS Code, "TypeScript: Select TypeScript Version", then "Use Works
 `init` adds `typescript` to `devDependencies` for it. Without the plugin, those diagnostics show
 and nothing else changes: whether a program compiles is the compiler's to say, not the editor's.
 
-In a project `init` did not write, copy that `programs/tsconfig.json` beside your programs.
+In a project `init` did not write, or for programs in another directory,
+`npx sauce init <dir> --tsconfig` writes the same project as `<dir>/tsconfig.json` and nothing else
+(it never replaces a different file without `--force`). An editor takes a file's nearest
+`tsconfig.json`, so every `*.sauce.ts` under `<dir>` is typed as SauceScript. Where the project's
+own `tsconfig.json` also covers those files, add `"exclude": ["**/*.sauce.ts"]` to it, so its
+TypeScript leaves them to their own project. The file it writes is this, `<package>` being
+`@eco-incorp/sauce`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "moduleDetection": "force",
+    "types": ["@eco-incorp/sauce/sauce-script"],
+    "strict": true,
+    "noImplicitAny": false,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": false,
+    "skipLibCheck": true,
+    "plugins": [{ "name": "@eco-incorp/sauce/sdk/dist/sauce-script/ts-plugin.cjs" }]
+  },
+  "include": ["**/*.sauce.ts"]
+}
+```
+
+A contract ABI beside a program is typed by its default import, `import IOracle from "./IOracle.json"`,
+as a contract whose methods the editor does not check; the compile checks them against the ABI.
 
 ## An actions document instead of a program
 
@@ -1333,7 +1376,7 @@ at the package root:
 | `sauce-distributed-swap` | One exact-input swap spread over several price-limited pools: a limit order                   |
 | `sauce-intents`          | Cross-chain intents written in Sauce: rewards, cascades, run or publish                       |
 | `sauce-solana`           | Programs for Solana: accounts, the SPL token functions, the Kitchen                           |
-| `sauce-run`              | Everything on this page: compiling, funding, simulating, running and publishing               |
+| `sauce-cli`              | Everything on this page: compiling, funding, simulating, running and publishing               |
 | `sauce-typescript`       | The same from application code: compiling, arguments, cooks, actions and verification         |
 | `sauce-examples`         | An index of every example program and runner, with the chains each is checked on              |
 

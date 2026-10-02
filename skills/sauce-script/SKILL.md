@@ -133,7 +133,7 @@ function main(recipients: Address[], amount: Uint256) {
 
 `main`'s parameters are taken in declaration order, ABI-encoded by default, and appended to the
 program's bytecode: that is the payload a cook runs. `--args` and `--args-json` of `sauce run`,
-`simulate` and `tx` encode them (`sauce-run`); `sauce-typescript` covers encoding them from
+`simulate` and `tx` encode them (`sauce-cli`); `sauce-typescript` covers encoding them from
 TypeScript. A program compiles for every chain the SDK knows; for the initial release its cook is
 built and sent only on Ethereum, Base and Solana, and on every other chain (a preview chain) it is
 compiled and simulated (`sauce-chains`).
@@ -180,6 +180,49 @@ removed:
   "must be initialized with a literal". A `const` array there is a lookup table, read only at a
   literal index (`FEES[0]`), never looped over. Declare arrays and computed values inside a function.
 
+## Calling a contract
+
+Call a contract by name, in this order of preference:
+
+1. **A namespace**, for a contract the chain's registry records: `UniswapV3.Factory.getPool(...)`,
+   `AaveV3.Pool.supply(...)`, typed by the registry's ABI, its address the chain's. An interface, a
+   registry ABI with no address of its own, is called with the address it is at: a pool the
+   factory returned is `UniswapV3.Pool(pool)`, as in `UniswapV3.Pool(pool).slot0()`, and any
+   ERC-4626 vault `Erc4626.Vault(vault)`. A contract that has its own address takes `.at(address)`
+   to call another deployment of the same ABI: `AaveV3.Pool.at(address)`. The chain's file in
+   `sauce-chains`, or `sauce globals --chain <chain> --protocol <namespace>`, lists each
+   namespace's contracts, interfaces and methods.
+2. **A registry ABI import**, where the chain has no namespace for it: each protocol's registry
+   page in `sauce-protocols` gives the import line, such as
+   `import VaultABI from "./protocols/erc4626/VaultABI.json"`, and the binding takes the address
+   with `.at`: `VaultABI.at(vault).convertToAssets(shares)`.
+3. **The program's own ABI**, for a contract no registry knows, or a function its registry ABI
+   does not declare: a JSON ABI file beside the program, holding only the functions the program
+   calls, with the deployed contract's types from its verified source, imported by relative path
+   as the file's default export: `import IOracle from "./IOracle.json"`, then
+   `IOracle.at(pool).observe(...)`. The `sauce` command reads it from beside the file; through the
+   MCP server, pass it in `modules` with the program (`{ "IOracle.json": "<its JSON>" }`).
+   [examples/twap.sauce.ts](examples/twap.sauce.ts) finds a pool through `UniswapV3.Factory` and
+   reads its price history through [examples/IOracle.json](examples/IOracle.json), which declares
+   the one function the registry's pool ABI lacks, `observe`.
+
+Never call through `evm.static` (or `evm.call`) with a hex selector where one of these is
+possible: the typed call encodes the arguments, decodes the result and names its fields. Take only
+what you need from a result: `const [sqrtPriceX96] = UniswapV3.Pool(pool).slot0();` and
+`UniswapV3.Pool(pool).slot0().sqrtPriceX96` both read the first field alone.
+
+```sauce chain=base,ethereum
+function main(vault: Address, shares: Uint256): Uint256 {
+  // A contract the chain's registry records: its factory, by name.
+  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500n);
+  require(pool != 0n, "no WETH/USDC 0.05% pool");
+  // Interfaces, called with the address they are at: the pool it returned, and a vault.
+  const [sqrtPriceX96] = UniswapV3.Pool(pool).slot0();
+  require(sqrtPriceX96 > 0n, "the pool is not initialized");
+  return Erc4626.Vault(vault).convertToAssets(shares);
+}
+```
+
 ## Functions
 
 - **Call what exists directly.** Typed bindings, namespaces and library functions are called as
@@ -189,6 +232,22 @@ removed:
   real logic used more than once.
 - Helpers are top-level `function` declarations, annotated on the signature. They may call each
   other and recurse; `main` is never called.
+- **A helper that returns a value returns it on every path**: an `if` with a `return` and no
+  `else`, or a loop that may end without one, fails the compile with "does not return on every
+  path". End the helper with a `return`.
+
+```sauce fails chain=base
+function larger(a: Uint256, b: Uint256): Uint256 {
+  if (a > b) {
+    return a;
+  }
+}
+
+function main(a: Uint256, b: Uint256): Uint256 {
+  return larger(a, b);
+}
+```
+
 - **Arrays and records are passed by reference**: a helper that writes `xs[i] = v` changes the
   caller's array, so a helper can fill an array it is given. Numbers, bools and bytes are copies.
 - **A comparison is a `bool`, but a function with no return annotation returns a number**, even

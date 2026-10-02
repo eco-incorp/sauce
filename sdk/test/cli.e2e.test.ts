@@ -3,7 +3,7 @@
  * released gated stack (`cli-anvil.ts` over `evm/gated-engine.ts`, deployed from the pinned creation
  * code), with the released engine at the address the SDK records, so the CLI runs with no override.
  *
- * Ethereum, the example the `sauce-run` skill ships (`pay.sauce.ts`):
+ * Ethereum, the example the `sauce-cli` skill ships (`pay.sauce.ts`):
  *   1. `sauce tx --rpc-url` before the Pot exists says so, and names the `sauce pot` to run;
  *   2. `sauce pot` prints the Kitchen.deployPot transaction — sent, it lands the Pot it predicted;
  *   3. the Pot is funded with a standard ERC-20 and a USDT-shaped one (no return values), planted
@@ -85,8 +85,8 @@ if (!HAS_CAST && process.env.CI) {
 }
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-/** The examples the `sauce-run` agent skill ships: executing them here keeps them from rotting. */
-const EXAMPLES = join(HERE, "../../skills/sauce-run/examples");
+/** The examples the `sauce-cli` agent skill ships: executing them here keeps them from rotting. */
+const EXAMPLES = join(HERE, "../../skills/sauce-cli/examples");
 const PAY = join(EXAMPLES, "pay.sauce.ts");
 /** eco-routes' own Portal creation code, vendored (see routes-nest-dynamic.e2e.test.ts). */
 const PORTAL_CREATION = (

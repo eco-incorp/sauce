@@ -6,7 +6,7 @@ description: The TypeScript side of Sauce (@eco-incorp/sauce) — compiling a .s
 # Sauce from TypeScript
 
 Write the program in SauceScript first (`sauce-script`, `sauce-globals`), and run it with the
-`sauce` command (`sauce-run`). Reach for TypeScript when an application builds the transactions
+`sauce` command (`sauce-cli`). Reach for TypeScript when an application builds the transactions
 itself: every command is a thin layer over the functions below. The package embeds no RPC endpoint
 and reads no environment variable: anything that touches a chain takes a client or an `rpcUrl` from
 you. Every address comes from the package (`/deployments`, the registries) or from the developer;

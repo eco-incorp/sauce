@@ -44,7 +44,7 @@ const ACTIONS_SCHEMA_FILE = fileURLToPath(
 /** One shipped file, as a resource. */
 export interface SkillFile {
   readonly uri: string;
-  /** `/`-separated, from `skills/`: `sauce-run/SKILL.md`. */
+  /** `/`-separated, from `skills/`: `sauce-cli/SKILL.md`. */
   readonly path: string;
   readonly skill: string;
   readonly mimeType: string;

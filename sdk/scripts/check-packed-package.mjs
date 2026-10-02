@@ -355,7 +355,7 @@ try {
     `npx ${name} runs the package's sauce bin`,
   );
   // The skill's `pay.sauce.ts` names no chain and takes `main(recipient, amount)` at run time.
-  const example = join(installedRoot, "skills/sauce-run/examples/pay.sauce.ts");
+  const example = join(installedRoot, "skills/sauce-cli/examples/pay.sauce.ts");
   const recipient = "0x6666666666666666666666666666666666666666";
   const owner = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
   const chain = ["--chain", "ethereum"];
@@ -450,7 +450,7 @@ try {
       `skills/${file} ships verbatim`,
     );
   }
-  for (const skill of ["sauce-overview", "sauce-run", "sauce-protocols", "sauce-examples"]) {
+  for (const skill of ["sauce-overview", "sauce-cli", "sauce-protocols", "sauce-examples"]) {
     assert.ok(shippedSkills.includes(`${skill}/SKILL.md`), `the package ships the ${skill} skill`);
   }
   // The per-protocol documents the /skills export serves are the sauce-protocols skill's files.
