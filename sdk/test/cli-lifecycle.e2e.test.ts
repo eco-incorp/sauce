@@ -47,6 +47,7 @@ import {
   ecoRoutesPortal,
   ecoRoutesProver,
 } from "../src/protocols/eco-routes/lookup.js";
+import { Base, Ethereum } from "../src/routes/chain-exports.generated.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
@@ -413,6 +414,41 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
       ),
     );
     const outer = (published.intents as Array<{ intentHash: Hex }>)[0]!.intentHash;
+
+    // The guide's closure is the same intent: what the file's braces say, built in TypeScript.
+    const PAYEE = BigInt(RECIPIENT);
+    const closure = Base(
+      () => {
+        const amount = USDC.balanceOf(ctx.self());
+        const payout = amount - amount / 1000n;
+        Ethereum(() => {
+          USDC.transfer(PAYEE, payout);
+        }).reward({ tokens: [{ token: USDC, amount }] });
+      },
+      {
+        execution: { value: FEE },
+        deadline: start + 3600n,
+        rewardDeadline: start + 7200n,
+        creator: OWNER.address,
+        defines: { PAYEE },
+        tokens: [{ token: baseUsdc, amount: AMOUNT }],
+        precalls: [
+          {
+            target: baseUsdc,
+            data: encodeFunctionData({
+              abi: TRANSFER,
+              functionName: "transfer",
+              args: [pot, AMOUNT],
+            }),
+          },
+        ],
+      },
+    ).reward({
+      source: "ethereum",
+      deadline: start + 7200n,
+      tokens: [{ token: ethereumUsdc, amount: REWARD }],
+    });
+    expect(closure.hash().intentHash).toBe(outer);
 
     // ---- Base: a solver fills it; the body measures what arrived and publishes the inner one ---
     await base.mint(baseUsdc, SOLVER.address, AMOUNT);

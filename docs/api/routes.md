@@ -122,7 +122,8 @@ After the fill, the same module builds the rest of an intent's life, each as a r
 ## Nested intents
 
 A nested intent is written in the program: `Chain(() => { ... }).reward({ ... })` in a body opens
-an intent when that body runs, at any depth — see [nested intents](../guides/nested-intents.md) and
+an intent when that body runs, at any depth. In a typed closure the chain is the imported export,
+which carries that SauceScript call (`SauceIntentChain`) ahead of its host signature — see [nested intents](../guides/nested-intents.md) and
 [create an intent](../guides/intents.md#create-an-intent-from-inside-a-program).
 `SauceCompileOptions.intents` carries what that lowering cannot look up (a deadline, a creator, the
 fee of a program body's cook) and what overrides it: `sourcePortal`, `destinationPortal`, `prover`,

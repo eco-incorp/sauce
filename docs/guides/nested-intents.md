@@ -15,8 +15,62 @@ the MCP server check the chains of the first level only, so keep every level on 
 
 ## Write the next intent inside the body
 
-This file is the whole thing, all of it SauceScript. It is opened on Ethereum and pays its reward
-there; its body runs on Base and opens the next intent, back to Ethereum:
+In TypeScript, the outer intent is a closure, and the inner one is written inside it:
+
+```ts
+import { Base, destinationPot, Ethereum, routes, token } from "@eco-incorp/sauce";
+import { toHex } from "viem";
+
+const usdc = (chain: typeof Base.chain) =>
+  toHex(routes.registryTokenAddress(chain, "USDC")!, { size: 20 });
+const BASE_USDC = usdc(Base.chain);
+const RECIPIENT = 0x6666666666666666666666666666666666666666n;
+const AMOUNT = 1_000_000n;
+const executionFee = 1_000n; // Base's Kitchen fee: read it with destinationExecutionFee().
+
+const built = Base(
+  () => {
+    // Runs on Base, in the fill of this intent: what the solver delivered, measured there.
+    const amount = USDC.balanceOf(ctx.self());
+    const payout = amount - amount / 1000n;
+    // Opened, funded in Base's USDC and published on Base, in that same fill.
+    Ethereum(() => {
+      USDC.transfer(RECIPIENT, payout);
+    }).reward({ tokens: [{ token: USDC, amount }] });
+  },
+  {
+    execution: { value: executionFee },
+    deadline: 2_000_000_000n,
+    rewardDeadline: 2_000_003_600n,
+    creator: "0x4444444444444444444444444444444444444444", // every level's
+    defines: { RECIPIENT },
+    // What the solver brings to Base. It arrives at the Executor; the body measures the Pot.
+    tokens: [{ token: BASE_USDC, amount: AMOUNT }],
+    precalls: [
+      token.Token.transfer({
+        token: BASE_USDC,
+        to: destinationPot(Base.chain),
+        amount: AMOUNT,
+      }).toCall(),
+    ],
+  },
+).reward({
+  source: Ethereum.chain,
+  deadline: 2_000_003_600n,
+  tokens: [{ token: usdc(Ethereum.chain), amount: 1_010_000n }],
+});
+```
+
+Import every chain the closure names: each chain export carries the call that opens an intent, so
+`Ethereum(() => { … })` inside the closure typechecks, beside the token symbols and builtins a
+closure already has. The closure is never run: its text is compiled, so `RECIPIENT` reaches it as a
+define, and a bundler that renames imports breaks it
+([callbacks are compiled source](intents.md#callbacks-are-compiled-source)). `built.sourceTxs()` is
+the wallet's funding and publication on Ethereum.
+
+The same intent can be a file, all of it SauceScript, and the CLI opens it on the chain that pays
+the outer reward. Here the delivery is the second argument, and the lowering adds the transfer into
+the Pot itself:
 
 ```js
 // An intent from Ethereum to Base whose body opens an intent of its own, from Base back to
@@ -44,8 +98,6 @@ Base(
 ).reward({ tokens: [{ token: USDC, amount: REWARD }] });
 ```
 
-Open it like any intent file, on the chain that pays the outer reward:
-
 ```sh
 sauce intent publish nested-intent.sauce.ts --chain ethereum \
   --define AMOUNT=1000000 --define REWARD=1010000 --define RECIPIENT=<recipient> \
@@ -54,17 +106,10 @@ sauce intent publish nested-intent.sauce.ts --chain ethereum \
 ```
 
 `auto` reads the fee from Base's Kitchen, through the endpoint `--config` gives for Base: the outer
-body is a program, and its cook pays it.
-
-From TypeScript, compile the same file for that chain with `routes.compileSauceProgram("ethereum",
-source, { defines, intents })`: the intent it opens is in `.intents`, and
-`routes.intentSourceTxs(intent, { portal })` is the wallet's funding and publication, which is what
-`sauce intent publish` sends. [nested-intent.ts](../examples/nested-intent.ts) does it for this file
-and the swap below. An outer intent you build with `Base(body, options).reward(...)` takes the same
-body as source text, the text inside the outer braces, and opens the inner intent the same way;
-there the delivery is `options.tokens` with a `precalls` transfer into the Pot, as in
-[the Executor-to-Pot example](intents.md#build-a-base-usdc-transfer-intent). A typed closure cannot
-open one yet: TypeScript has no declaration for `Ethereum` inside it.
+body is a program, and its cook pays it. With the same values the two are the same intent, byte for
+byte: [nested-intent.ts](../examples/nested-intent.ts) builds both and checks it. From TypeScript,
+`routes.compileSauceProgram("ethereum", source, { defines, intents }).intents` holds the intent the
+file opens, and `routes.intentSourceTxs(intent, { portal })` publishes it from a wallet.
 
 Nothing names a Portal, a prover, a Pot or an encoding: each level's are looked up for its own
 chains. What you supply is what only you know: the deadlines, the creator, the amounts, and the fee
