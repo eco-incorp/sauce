@@ -57,11 +57,13 @@ export type {
   McpSetupOptions,
   McpWallets,
 } from "../../sdk/dist/cli/mcp.js";
+export { MAX_V4_KEYS, parseV4Key, poolsCommand } from "../../sdk/dist/cli/pools.js";
 export {
-  parsePriceToken,
   priceCommand,
   pricedChain,
   priceGiven,
+  resolvePriceTokens,
+  tokenGiven,
 } from "../../sdk/dist/cli/price.js";
 export {
   defineLabels,

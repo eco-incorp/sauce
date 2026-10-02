@@ -35,7 +35,7 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
   // An intent's commands are its tools under sauce_intent_, spelt either way the command line has.
   [command("sauce (?:intent )?(publish|fill)"), "sauce_intent_$1"],
   [command("sauce intent (status|import|prove|claim|refund|cancel)"), "sauce_intent_$1"],
-  [command("sauce (globals|compile|simulate|tx|pot|inspect|verify|price)"), "sauce_$1"],
+  [command("sauce (globals|compile|simulate|tx|pot|inspect|verify|price|pools)"), "sauce_$1"],
   // The lifecycle core's refusal for a chain it has no endpoint of: the call can give one.
   [
     /needs ([\w-]+)'s endpoint \(chain id (\d+)\)/g,
@@ -80,6 +80,7 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
   [/--stocks\b/g, "stocks"],
   [/--search\b/g, "search"],
   [/--sqrt-price-x96\b/g, "sqrtPriceX96"],
+  [/--v4-key\b/g, "v4Pools"],
 ];
 
 /** `text` in the tools' words. */

@@ -46,14 +46,16 @@ import {
   parseChain,
   parseDefineMap,
   parseLamports,
+  MAX_V4_KEYS,
   parsePin,
-  parsePriceToken,
   parsePubkey,
   parseSalt,
   plannedTransactions,
   parseUnixSeconds,
+  parseV4Key,
   parseVia,
   parseWei,
+  poolsCommand,
   potCommand,
   potState,
   potTarget,
@@ -67,6 +69,8 @@ import {
   publishCommand,
   registeredBalances,
   requireSupported,
+  resolvePriceTokens,
+  tokenGiven,
   simulateCommand,
   svmPotCommand,
   svmPotExists,
@@ -828,6 +832,7 @@ export const TOOL_NAMES = [
   "sauce_chains",
   "sauce_globals",
   "sauce_price",
+  "sauce_pools",
   "sauce_compile",
   "sauce_actions",
   "sauce_tx",
@@ -1098,13 +1103,17 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           .max(64)
           .describe(
             "The token the price is per one of: a symbol the chain registers (WETH, or a " +
-              "tokenized stock's such as SPCXc, in any case), or <0x address>:<decimals>.",
+              "tokenized stock's such as SPCXc, in any case), or <0x address>:<decimals>, or with " +
+              "an endpoint a 0x address alone (its decimals read from the token).",
           ),
         quote: z
           .string()
           .min(1)
           .max(64)
-          .describe("The token the price is in: a symbol (USDC), or <0x address>:<decimals>."),
+          .describe(
+            "The token the price is in: a symbol (USDC), or <0x address>:<decimals>, or with an " +
+              "endpoint a 0x address alone.",
+          ),
         price: z
           .string()
           .max(80)
@@ -1155,19 +1164,26 @@ export function registerTools(server: McpServer, context: ToolContext): void {
     },
     async (args, reach) => {
       const chain = pricedChain(parseChain(String(args.chain), "chain"));
-      const base = parsePriceToken(args.base, chain);
-      const quote = parsePriceToken(args.quote, chain);
       const given = [args.price, args.sqrtPriceX96, args.pool].filter((each) => each !== undefined);
       if (given.length !== 1) {
         throw new UsageError("give one of price, sqrtPriceX96, or pool (with an endpoint)");
       }
+      // A pool is read now, and an address with no decimals given has them read from the token;
+      // otherwise the call reaches no chain.
+      const reads =
+        args.pool !== undefined ||
+        [args.base, args.quote].some((raw) => typeof tokenGiven(raw, chain) === "string");
+      const rpcUrl = reads ? await reach.endpoint(chain, args.rpcUrl) : undefined;
+      const client = rpcUrl === undefined ? undefined : await connect(rpcUrl, chain);
+      const tokens = await resolvePriceTokens([args.base, args.quote], chain, client);
+      const [base, quote] = [tokens[0]!, tokens[1]!];
       let pool: Record<string, unknown> | undefined;
       let sqrtPriceX96 = args.sqrtPriceX96;
       let feePpm = args.feePpm;
       if (args.pool !== undefined) {
         const address = parseAddress("pool", args.pool);
-        const rpcUrl = await reach.require(chain, args.rpcUrl, "Reading a pool");
-        const read = await readPool(await connect(rpcUrl, chain), address);
+        if (client === undefined) await reach.require(chain, args.rpcUrl, "Reading a pool");
+        const read = await readPool(client!, address);
         const pair = [base.address, quote.address].map((token) => token.toLowerCase()).sort();
         if (read.token0.toLowerCase() !== pair[0] || read.token1.toLowerCase() !== pair[1]) {
           throw new UsageError(
@@ -1224,6 +1240,99 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       }
 
       return { json, notes: now.notes };
+    },
+  );
+
+  tool(
+    "sauce_pools",
+    {
+      title: "List a pair's price-limit pools on a chain",
+      description:
+        "Every pool of a pair on an EVM chain at the price-limit venues the registry records " +
+        "there — Uniswap V3 and PancakeSwap V3 at each fee tier their factory enables, Aerodrome " +
+        "Slipstream at each tick spacing of each CLFactory, hookless Uniswap V4 pools at the " +
+        "keys 100:1, 500:10, 3000:60 and 10000:200 and any in v4Pools — read now through an " +
+        "endpoint. Use it before a distributed or limit swap, to know which pools exist, how " +
+        "deep each is and what each charges. `pools` holds those with liquidity, deepest " +
+        "first (by liquidity at the pool's price): each pool's venue, the contract a program " +
+        "finds it through (UniswapV3.Factory), its address (a V4 pool's poolId and key), fee " +
+        "in millionths read from the pool (a V4 pool's LP fee and protocolFee), tickSpacing, " +
+        "liquidity, tick and sqrtPriceX96, and two `sides`, paying tokenA for tokenB then the " +
+        "reverse: `mid` and `taker` (pay tokens per buy token, before and with the fee), " +
+        "`maxPrice` (the taker price as the distributed swap's maxPrice argument: pay base " +
+        "units per buy base unit times 1e18) and `depth1Pct` (pay tokens, fee included, that " +
+        "move the price 1% against the taker, through its ticks). `empty` lists the pools with " +
+        "no liquidity at their price, which a swap skips; `checked`, what was looked at.",
+      input: {
+        chain: chainRef,
+        tokenA: z
+          .string()
+          .min(1)
+          .max(64)
+          .describe(
+            "One token of the pair, paid in the first side: a symbol the chain registers " +
+              "(USDC, or a tokenized stock's such as SPCXc, in any case), or a 0x address (its " +
+              "decimals and symbol read from the token), or <0x address>:<decimals>.",
+          ),
+        tokenB: z.string().min(1).max(64).describe("The other token, written the same ways."),
+        v4Pools: z
+          .array(z.string().min(3).max(16))
+          .max(MAX_V4_KEYS)
+          .optional()
+          .describe(
+            "More hookless Uniswap V4 pools to try, each by its key's <fee>:<tickSpacing>, the " +
+              "fee in millionths: 50:1.",
+          ),
+        rpcUrl: RPC_URL,
+      },
+      output: {
+        chain: z.string(),
+        tokens: z.array(
+          z.looseObject({ symbol: z.string(), address: z.string(), decimals: z.number() }),
+        ),
+        sortedBy: z.string(),
+        pools: z.array(
+          z.looseObject({
+            venue: z.string(),
+            contract: z.string(),
+            fee: z.number(),
+            tickSpacing: z.number(),
+            liquidity: z.string(),
+            sqrtPriceX96: z.string(),
+            sides: z.array(
+              z.looseObject({
+                pay: z.string(),
+                buy: z.string(),
+                mid: z.string(),
+                taker: z.string(),
+                maxPrice: z.string(),
+              }),
+            ),
+          }),
+        ),
+        empty: z.array(z.looseObject({ venue: z.string(), why: z.string() })),
+        checked: z.array(z.looseObject({ venue: z.string(), contract: z.string() })),
+      },
+      annotations: READS_CHAIN,
+    },
+    async (args, reach) => {
+      const chain = parseChain(String(args.chain), "chain");
+      if (chain.kind !== "evm") {
+        throw new UsageError(
+          `sauce_pools lists Uniswap V3- and V4-style pools, on an EVM chain; ${chain.slug} has none`,
+        );
+      }
+      const v4Keys = (args.v4Pools ?? []).map((raw) => parseV4Key(raw, "v4Pools"));
+      const rpcUrl = await reach.require(chain, args.rpcUrl, "Listing a pair's pools");
+
+      return fromCommand(
+        await poolsCommand({
+          chain,
+          client: await connect(rpcUrl, chain),
+          tokens: [args.tokenA, args.tokenB],
+          v4Keys,
+        }),
+      );
     },
   );
 

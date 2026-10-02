@@ -171,6 +171,7 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_chains`         | —                      | Every chain: slug, id, name, kind, aliases, `support` (`supported` or `preview`) and whether the server has its own endpoint for it; `supported`, the supported slugs; `requestChain`, the chain-support request form                                                                                      |
 | `sauce_globals`        | `sauce globals`        | The chain's token symbols, protocol namespaces and contracts (with `protocol`, its methods), chain names, defines and `@sauce/token` functions; `stocks` and `search` for its tokenized stocks, 200 tokens a page (`offset`)                                                                               |
 | `sauce_price`          | `sauce price`          | A pair's price as the pool's `sqrtPriceX96` (also the swap's limit) and each direction's `minAvgPrice`; from `price`, `sqrtPriceX96` or a `pool` read now; with `slippageBps`, the `limits`                                                                                                                |
+| `sauce_pools`          | `sauce pools`          | Every price-limit pool of a pair on the chain, deepest first: venue, contract, address or V4 key, fee, liquidity, `sqrtPriceX96`, and each direction's price before and with the fee, the distributed swap's `maxPrice` and the depth to a 1% move; `empty`, the pools with no liquidity                   |
 | `sauce_compile`        | `sauce compile`        | `bytecode`, `size`, `entryParams`, `entryEncoding`, `entrySchema`, each define it reads and where it came from, the `contracts` it calls, `compiler`, `engine`, on Solana the `manifest`; with `args` the `payload`, and with `rpcUrls` each intent's Pot checked                                          |
 | `sauce_actions`        | `sauce actions`        | An actions document (JSON) compiled for a chain: `sauce_compile`'s report with the generated `source`, its `parameters` and bindings, and, given a Pot, the unsigned cook `transaction` (on a preview chain, `refused` instead)                                                                            |
 | `sauce_tx`             | `sauce tx`             | EVM `{ chainId, to, data, value }`, the cook on the Pot, with `from` (who signs) and the `kitchenFee` read; Solana `{ chain, via, feePayer, pot, fee, maxExecutionFee, transaction }`, base64 and signed by no one                                                                                         |
@@ -197,10 +198,10 @@ Ethereum, Base and Solana ([Supported chains](../README.md#supported-chains)). E
 preview chain. `sauce_chains` gives each chain's `support`, `"supported"` or `"preview"`.
 
 On a preview chain these work as they do everywhere: `sauce_compile`, `sauce_actions`' report,
-`sauce_simulate`, `sauce_globals`, `sauce_price`, `sauce_inspect`, `sauce_verify`, the dry runs
-(`sauce_intent_publish` and `sauce_intent_fill` with `dryRun`), `sauce_pot`'s prediction and reads,
-`sauce_intent_status` and `sauce_intent_import`. So an agent can prototype any protocol on any
-chain.
+`sauce_simulate`, `sauce_globals`, `sauce_price`, `sauce_pools`, `sauce_inspect`, `sauce_verify`,
+the dry runs (`sauce_intent_publish` and `sauce_intent_fill` with `dryRun`), `sauce_pot`'s
+prediction and reads, `sauce_intent_status` and `sauce_intent_import`. So an agent can prototype
+any protocol on any chain.
 
 These are refused there, before any endpoint is reached:
 
@@ -311,7 +312,16 @@ for each registered mint, whether it exists, and its balance. `balances: false` 
 `sauce_price` takes the price one of three ways: `price` (a decimal), `sqrtPriceX96`, or `pool`, a
 Uniswap V3-style pool of the pair read through an endpoint (its `slot0` price, liquidity and fee).
 With `slippageBps`, `limits` gives each direction's `sqrtPriceLimitX96` that far from the price,
-and a `minAvgPrice` that also pays the pool's fee (`feePpm`, or the pool's own).
+and a `minAvgPrice` that also pays the pool's fee (`feePpm`, or the pool's own). A token the chain
+does not register is `<address>:<decimals>`, or with an endpoint the address alone: its decimals
+are read from the token.
+
+`sauce_pools` takes `chain`, `tokenA` and `tokenB` (each a registered symbol or an address, whose
+decimals and symbol are then read from the token), `v4Pools` (more hookless Uniswap V4 keys to
+try, each `"<fee>:<tickSpacing>"`), and `rpcUrl`; it needs an endpoint. It returns what
+[`sauce pools --json`](cli.md#sauce-pools) prints: `pools`, the ones with liquidity, deepest first,
+each with two `sides` (paying `tokenA` for `tokenB`, then the reverse); `empty`; and `checked`,
+the tiers, tick spacings and keys each venue was asked for.
 
 `sauce_intent_publish` takes `from` (the wallet that funds the reward), `dryRun`, `assumeBalance`,
 `rpcUrl`, and the program inputs, `intentFundVia` among them. The program inputs also take the

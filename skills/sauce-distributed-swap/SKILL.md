@@ -10,6 +10,9 @@ until its own price reaches that price, and the budget it does not take stays in
 next pool. The price does the splitting: the program never computes an amount per pool and never
 sorts.
 
+To see a pair's pools before a swap (each venue's pools, fees, prices both ways and depth), run
+`sauce pools --chain <chain> <tokenA> <tokenB> --config sauce.config.json`.
+
 ## The rules
 
 A correct distributed swap, whatever its tokens, chain or venues:
