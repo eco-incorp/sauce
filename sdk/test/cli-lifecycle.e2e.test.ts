@@ -5,7 +5,8 @@
  * creator's side, refunded after the reward's deadline, or cancelled on Base after the route's
  * deadline, the cancellation proven and refunded before the reward's. And the same life for an
  * intent built in TypeScript (`Base(body, options).reward(...)`) with nothing the SDK records
- * passed: no Portal, prover, Pot, engine or native amount.
+ * passed: no Portal, prover, Pot, engine or native amount; and for the nested-intents guide's
+ * example, whose body opens the next intent on Base when it runs.
  *
  * REAL: the released gated stack on both chains (`cli-anvil.ts`), eco-routes' own Portal and
  * HyperProver at the addresses the SDK records (`eco-routes-anvil.ts`: v2.12.0, built from source
@@ -23,6 +24,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   createWalletClient,
   encodeAbiParameters,
@@ -379,6 +381,104 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
       withdrawTx(built.intent, { portal: ecoRoutesPortal("ethereum") }),
     ]);
     expect(await ethereum.balanceOf(ethereumUsdc, SOLVER.address)).toBe(before + REWARD);
+  }, 240_000);
+
+  it("the nested-intents guide's file: published on Ethereum, its body opens the next on Base", async () => {
+    // docs/examples/nested-intent.sauce.ts, as written: all SauceScript, opened on Ethereum.
+    const nested = fileURLToPath(
+      new URL("../../docs/examples/nested-intent.sauce.ts", import.meta.url),
+    );
+    const store = mkdtempSync(join(work, "store-"));
+    const send = ["--send", "--private-key", SOLVER_KEY, "--auto-approve", "--json"];
+    const pot = destinationPot("base");
+    const deploy = sauceEvmDeployPotCall({
+      owner: ecoRoutesExecutorOf(ecoRoutesPortal("base")),
+      salt: SAUCE_INTENT_POT_SALT,
+    });
+    await base.send(base.deployer, deploy.to, deploy.data);
+    expect(await base.balanceOf(baseUsdc, pot)).toBe(0n);
+
+    // ---- Ethereum: the creator publishes the outer intent from a wallet -----------------------
+    await ethereum.mint(ethereumUsdc, OWNER.address, REWARD);
+    const start = [await now(base), await now(ethereum)].reduce((a, b) => (a > b ? a : b));
+    const published = jsonOf(
+      await sauce(
+        ...["intent", "publish", nested, "--chain", "ethereum"],
+        ...["--define", `AMOUNT=${AMOUNT}`, "--define", `REWARD=${REWARD}`],
+        ...["--define", `RECIPIENT=${RECIPIENT}`, "--intent-creator", OWNER.address],
+        ...["--intent-deadline", String(start + 3600n)],
+        ...["--intent-reward-deadline", String(start + 7200n)],
+        ...["--intent-execution-fee", String(FEE)],
+        ...["--rpc-url", ethereum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
+      ),
+    );
+    const outer = (published.intents as Array<{ intentHash: Hex }>)[0]!.intentHash;
+
+    // ---- Base: a solver fills it; the body measures what arrived and publishes the inner one ---
+    await base.mint(baseUsdc, SOLVER.address, AMOUNT);
+    const filled = jsonOf(await lifecycle("fill", outer, store, ...send));
+    const fulfil = (
+      filled.intents as Array<{ transactions: Array<{ kind: string; hash: Hex }> }>
+    )[0]!.transactions.find((tx) => tx.kind === "fulfill")!.hash;
+    expect(await base.balanceOf(baseUsdc, pot)).toBe(0n);
+    const imported = jsonOf(
+      await sauce(
+        ...["intent", "import", fulfil, "--chain", "base"],
+        ...["--config", config, "--store", store, "--json"],
+      ),
+    );
+    const [inner] = imported.intents as Array<{
+      record: {
+        intentHash: Hex;
+        destination: { chainId: number };
+        route: { deadline: string };
+        reward: {
+          deadline: string;
+          creator: string;
+          prover: string;
+          tokens: Array<{ token: string; amount: string }>;
+        };
+      };
+    }>;
+    // The whole delivery became its reward, in Base's USDC, escrowed on Base. Its deadlines and
+    // creator are the file's, as every level's are; its prover is the registry's for Base to
+    // Ethereum, which is Base's own HyperProver.
+    expect(inner!.record.destination.chainId).toBe(1);
+    expect(inner!.record.route.deadline).toBe(String(start + 3600n));
+    expect(inner!.record.reward.deadline).toBe(String(start + 7200n));
+    expect(getAddress(inner!.record.reward.creator)).toBe(OWNER.address);
+    expect(getAddress(inner!.record.reward.prover)).toBe(
+      getAddress(ecoRoutesProver("base", "ethereum")),
+    );
+    expect(inner!.record.reward.tokens.map((t) => [getAddress(t.token), BigInt(t.amount)])).toEqual(
+      [[baseUsdc, AMOUNT]],
+    );
+    const status = jsonOf(await lifecycle("status", inner!.record.intentHash, store, "--json"));
+    expect((status.intents as Array<{ status: { state: string } }>)[0]!.status.state).toBe(
+      "funded",
+    );
+
+    // ---- Ethereum: a solver fills the inner one, in Ethereum's USDC, less the tenth of a percent
+    const payout = AMOUNT - AMOUNT / 1000n;
+    await ethereum.mint(ethereumUsdc, SOLVER.address, payout);
+    const paid = await ethereum.balanceOf(ethereumUsdc, RECIPIENT);
+    const innerFill = jsonOf(await lifecycle("fill", inner!.record.intentHash, store, ...send));
+    expect(await ethereum.balanceOf(ethereumUsdc, RECIPIENT)).toBe(paid + payout);
+
+    // ---- Its proof reaches Base's HyperProver, the prover the lowering chose for that level ----
+    const innerFulfil = (
+      innerFill.intents as Array<{ transactions: Array<{ kind: string; hash: Hex }> }>
+    )[0]!.transactions.find((tx) => tx.kind === "fulfill")!.hash;
+    expect(await relay(ethereum, ethereumMailbox, innerFulfil, base, baseMailbox)).toBe(1);
+    const before = await base.balanceOf(baseUsdc, SOLVER.address);
+    const claimed = await lifecycle(
+      "claim",
+      inner!.record.intentHash,
+      store,
+      ...["--private-key", SOLVER_KEY, "--json"],
+    );
+    expect(claimed.code).toBe(0);
+    expect(await base.balanceOf(baseUsdc, SOLVER.address)).toBe(before + AMOUNT);
   }, 240_000);
 
   it("publishes through publishAndFund with --intent-fund-via, recorded Funded", async () => {

@@ -10,10 +10,11 @@
  * Ethereum (1) — each running the real eco-routes Portal and the released engine behind a
  * Kitchen-minted Pot, and each holding a mock ERC-20 at ITS OWN registry USDC address and nowhere
  * else. The programs are the docs examples verbatim, compiled with the SDK's real registry: the
- * README's (Base to Arbitrum), and the nested-intents guide's on the chains the release supports
- * (Base to Ethereum, and the cascade Base, Ethereum, Base). The cascade also runs over three
- * different chains, where a level resolving a name on its grandparent's chain would show. An intent
- * published on one anvil is fulfilled on the next from the bytes that anvil's Portal logged.
+ * README's (Base to Arbitrum), and the nested-intents guide's cascade on the chains the release
+ * supports (Base, Ethereum, then Base again). The cascade also runs over three different chains,
+ * where a level resolving a name on its grandparent's chain would show. An intent published on one
+ * anvil is fulfilled on the next from the bytes that anvil's Portal logged. The guide's two-level
+ * file is opened from a wallet, which `cli-lifecycle.e2e.test.ts` runs through `sauce intent`.
  *
  * WHY `routes-nest-dynamic.e2e.test.ts` MISSED THIS. It runs ONE anvil, as Base, and named every
  * token through a define or — in its README test, until this suite was written — a
@@ -564,37 +565,6 @@ describeEvm("an intent created inside a program, across chains with different to
       expect(child.route.tokens.map((t) => [lower(t.token), t.amount])).toEqual([
         [lower(arbitrum.usdc), held],
       ]);
-    }, 300_000);
-
-    it("the nested-intents guide: an intent to Base whose body opens one on to Ethereum", async () => {
-      const { route, rewardHash } = build(example("nested-intent"));
-      await base.mint(base.usdc, base.pot, SEEDED);
-      const held = await base.balanceOf(base.usdc, base.pot);
-
-      // ---- Base: the body measures what arrived, pays the inner reward into its vault there, in
-      // Base's USDC, and publishes it — all in this one fulfilment.
-      const onBase = await base.fulfil(route, rewardHash);
-      expect(onBase.status).toBe("success");
-      expect(onBase.published).toHaveLength(1);
-      const [published] = onBase.published;
-      expect(published!.destination).toBe(1n);
-      expect(published!.rewardTokens.map((t) => [lower(t.token), t.amount])).toEqual([
-        [lower(base.usdc), held],
-      ]);
-      expect(await base.isFunded(published!)).toBe(true);
-      expect(await base.balanceOf(base.usdc, base.pot)).toBe(0n);
-
-      // ---- Ethereum: a solver fills it, delivering Ethereum's USDC less the tenth of a percent --
-      const inner = fulfilmentOf(published!);
-      const payout = held - held / 1000n;
-      expect(inner.route.tokens.map((t) => [lower(t.token), t.amount])).toEqual([
-        [lower(ethereum.usdc), payout],
-      ]);
-      const paid = await ethereum.balanceOf(ethereum.usdc, RECIPIENT);
-      await ethereum.provide(inner.route);
-      const onEthereum = await ethereum.fulfil(inner.route, inner.rewardHash);
-      expect(onEthereum.status).toBe("success");
-      expect(await ethereum.balanceOf(ethereum.usdc, RECIPIENT)).toBe(paid + payout);
     }, 300_000);
 
     it("the guide's cascade: Base, Ethereum, then Base again, each hop funded where it runs", async () => {
