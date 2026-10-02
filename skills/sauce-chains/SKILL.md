@@ -43,7 +43,7 @@ Compiled for each chain, the same names are different contracts:
 | `chainId`           | `1`                                          | `8453`                                       |
 
 `bCSPX` is Backed's tokenized S&P 500 fund, one of the chains' tokenized stocks. The pool the
-factory returns is another contract on each chain too, and so is every balance.
+factory returns differs per chain too, and every balance is read on the chain the cook runs on.
 
 The names a chain scopes, all resolved when the file is compiled:
 
