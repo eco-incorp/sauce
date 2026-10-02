@@ -262,9 +262,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
 
   describe("buy.sauce.ts", () => {
     it("compiles for Base: main's arguments, its return type, USDC and the factory it names", async () => {
-      expect(readFileSync(BUY, "utf8").split("\n")[0]).toBe(
-        "#!/usr/bin/env -S sauce simulate",
-      );
+      expect(readFileSync(BUY, "utf8").split("\n")[0]).toBe("#!/usr/bin/env -S sauce simulate");
       const out = jsonOf(await sauce("compile", BUY, "--chain", "base", "--json"));
       expect(out.entryParams).toEqual([
         { name: "token", type: "Address" },
