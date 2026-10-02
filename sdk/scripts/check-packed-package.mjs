@@ -354,12 +354,20 @@ try {
     `${name} ${installedManifest.version}\n`,
     `npx ${name} runs the package's sauce bin`,
   );
-  // The skill's `pay.sauce.ts` names no chain and takes `main(recipient, amount)` at run time.
-  const example = join(installedRoot, "skills/sauce-cli/examples/pay.sauce.ts");
+  // The skill's `buy.sauce.ts` names no chain, starts with a `#!` line, imports `@sauce/router`
+  // and takes `main(token, budget, sqrtPriceLimitX96, minOut, recipient)` at run time.
+  const example = join(installedRoot, "skills/sauce-cli/examples/buy.sauce.ts");
   const recipient = "0x6666666666666666666666666666666666666666";
   const owner = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
-  const chain = ["--chain", "ethereum"];
-  const args = ["--args", recipient, "1000000"];
+  const chain = ["--chain", "base"];
+  const args = [
+    "--args",
+    "0x4200000000000000000000000000000000000006",
+    "100000000",
+    "4116816085950893928074568",
+    "37000000000000000",
+    recipient,
+  ];
   const bytecode = sauce("compile", example, ...chain).trim();
   assert.match(bytecode, /^0x[0-9a-f]+$/, "sauce compile prints the program as hex");
   const compiled = JSON.parse(sauce("compile", example, ...chain, "--json"));
@@ -367,18 +375,15 @@ try {
     readFileSync(join(work, "node_modules/sauce-compiler/package.json"), "utf8"),
   );
   assert.equal(compiled.bytecode, bytecode);
-  assert.equal(compiled.chain, "ethereum", "--chain chose the chain");
+  assert.equal(compiled.chain, "base", "--chain chose the chain");
   assert.deepEqual(
-    compiled.entryParams,
-    [
-      { name: "recipient", type: "Address" },
-      { name: "amount", type: "Uint256" },
-    ],
+    compiled.entryParams.map((param) => param.name),
+    ["token", "budget", "sqrtPriceLimitX96", "minOut", "recipient"],
     "main's parameters, as --args takes them",
   );
   assert.equal(compiled.compiler.version, installedCompiler.version);
   assert.equal(compiled.engine.release, "v12-evm");
-  const pot = JSON.parse(sauce("pot", "--owner", owner, "--chain", "ethereum"));
+  const pot = JSON.parse(sauce("pot", "--owner", owner, "--chain", "base"));
   assert.equal(pot.to, pot.kitchen, "sauce pot prints the Kitchen.deployPot transaction");
   const tx = JSON.parse(sauce("tx", example, ...chain, "--owner", owner, "--value", "0", ...args));
   assert.deepEqual(Object.keys(tx), ["chainId", "to", "data", "value"], "sauce tx prints the tx");

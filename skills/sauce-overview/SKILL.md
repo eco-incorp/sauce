@@ -155,7 +155,7 @@ server (`npx -y @eco-incorp/sauce mcp`); `sauce-cli` maps each command to its to
 
 ## Example
 
-[../sauce-cli/examples/pay.sauce.ts](../sauce-cli/examples/pay.sauce.ts) pays a recipient in USDC
-and USDT, and
+[../sauce-cli/examples/buy.sauce.ts](../sauce-cli/examples/buy.sauce.ts) buys a token with the
+Pot's USDC under a price limit and returns what it did, and
 [../sauce-distributed-swap/examples/distributed-swap.sauce.ts](../sauce-distributed-swap/examples/distributed-swap.sauce.ts)
 is a complete swap. `sauce-examples` lists every example in every skill.

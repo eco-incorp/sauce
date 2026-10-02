@@ -456,13 +456,13 @@ describe("the commands", () => {
 
     // An install that predates a file the package ships now is outdated.
     const record = JSON.parse(read(`.agents/skills/${INSTALL_RECORD}`));
-    delete record.files["sauce-cli/examples/split.sauce.ts"];
+    delete record.files["sauce-cli/examples/payout.sauce.ts"];
     write(`.agents/skills/${INSTALL_RECORD}`, JSON.stringify(record));
-    rmSync(join(project, ".agents/skills/sauce-cli/examples/split.sauce.ts"));
+    rmSync(join(project, ".agents/skills/sauce-cli/examples/payout.sauce.ts"));
     const outdated = await sauce("skills", "status", ...dir());
     expect(outdated.code).toBe(1);
     expect(outdated.stdout).toContain(
-      `add       ${join(".agents", "skills", "sauce-cli", "examples", "split.sauce.ts")}`,
+      `add       ${join(".agents", "skills", "sauce-cli", "examples", "payout.sauce.ts")}`,
     );
     const update = await sauce("skills", "update", ...dir());
     expect(update.code).toBe(0);
