@@ -858,6 +858,29 @@ function site(
   };
 }
 
+/** The parameter a body's program takes the creator of the intent it is the body of in. */
+const HANDED_CREATOR = "__sauce_creator";
+
+/**
+ * Where `.creator(...)` would go — the end of `.send(...)` — in each intent `body` opens that gives
+ * no creator of its own, in source order. Only the intents the body opens itself: those deeper down
+ * inherit from the one they are the body of.
+ */
+function openedWithoutCreator(body: readonly AstNode[]): number[] {
+  const opened: { readonly start: number; readonly end: number; readonly at?: number }[] = [];
+  walk(body, (node) => {
+    if (opened.some((o) => node.start >= o.start && node.end <= o.end)) return;
+    const intent = portalIntent(node);
+    if (intent === undefined) return;
+    opened.push({
+      start: node.start,
+      end: node.end,
+      ...(intent.reward.has("creator") ? {} : { at: intent.steps[0]!.node.end }),
+    });
+  });
+  return opened.flatMap((o) => (o.at === undefined ? [] : [o.at])).sort((a, b) => a - b);
+}
+
 function collectSites(program: AstNode, context: IntentSugarContext): SugarSite[] {
   // A `Chain.Portal` that does not open an intent is refused before anything is lowered: read as
   // anything else, it would compile as a contract address or fail on a name no chain has.
@@ -1072,16 +1095,35 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       // by the parent at a fixed offset -- which is the property `scalarWidth` exists for. Left
       // unannotated: the compiler reads an unannotated parameter as a number, which a spliced
       // 32-byte word is.
+      //
+      // A creator the program computes reaches the intents the body opens the same way: each one
+      // that names no creator of its own is given this one, handed down as one more argument.
+      const bodyStart = site.bodyStart + 1;
+      const handDown =
+        creatorValue !== undefined && "capture" in creatorValue
+          ? openedWithoutCreator(site.body)
+          : [];
+      let bodyText = source.slice(bodyStart, site.bodyEnd - 1);
+      for (const at of handDown.reverse()) {
+        const offset = at - bodyStart;
+        bodyText = `${bodyText.slice(0, offset)}.creator(${HANDED_CREATOR})${bodyText.slice(offset)}`;
+      }
       const childModule = childProgram(
         source,
         program,
         scope,
         site,
         site.body,
-        source.slice(site.bodyStart + 1, site.bodyEnd - 1),
+        bodyText,
         new Set(defines.keys()),
+        handDown.length > 0 ? [HANDED_CREATOR] : [],
       );
-      const captured = childModule.captures;
+      const captured = [
+        ...childModule.captures,
+        ...(handDown.length > 0 && creatorValue !== undefined && "capture" in creatorValue
+          ? [creatorValue.capture]
+          : []),
+      ];
       for (const name of childModule.carriedFunctions) carriedFunctions.add(name);
       const child = context.compileChild(
         site.chain,
