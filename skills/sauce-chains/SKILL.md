@@ -1,6 +1,6 @@
 ---
 name: sauce-chains
-description: How a Sauce program's names resolve per chain, and each chain's facts from the SDK's registries. One file compiled for Ethereum and for Base gets each chain's own USDC, WETH, tokenized stocks, protocol contracts (UniswapV3.Factory) and chainId; a name the chain lacks is refused at compile; Base.UniswapV3.Factory is Base's address from any chain, while tokens are never qualified. Writing for an EVM chain versus Solana (Account parameters, token accounts, SPL Token transfer and Token-2022 transferChecked for stock mints, --account). Which chains take transactions (Ethereum, Base, Solana; the rest are preview chains) and how to request one. Per chain, its id, slug, native coin, Sauce engine and Kitchen, intents, CCTP domain, tokens and every protocol with its address. Use when the user asks what is on a chain, needs an address, picks a chain, writes one program for several chains or for Solana, a name fails to compile on one chain, or a transaction is refused on a preview chain.
+description: How a Sauce program's names resolve per chain, and each chain's facts from the SDK's registries. One file compiled for Ethereum and for Base gets each chain's own USDC, WETH, tokenized stocks, protocol contracts (UniswapV3.Factory) and chainId; a name the chain lacks is refused at compile; Base.UniswapV3.Factory is only Base's address, to pass across chains and never to call, and tokens are never qualified. Writing for an EVM chain versus Solana (Account parameters, token accounts, SPL Token transfer and Token-2022 transferChecked for stock mints, --account). Which chains take transactions (Ethereum, Base, Solana; the rest are preview chains) and how to request one. Per chain, its id, slug, native coin, Sauce engine and Kitchen, intents, CCTP domain, tokens and every protocol with its address. Use when the user asks what is on a chain, needs an address, picks a chain, writes one program for several chains or for Solana, a name fails to compile on one chain, or a transaction is refused on a preview chain.
 ---
 
 # Chains
@@ -95,12 +95,17 @@ the address as a define.
 
 ## Another chain's names
 
-- **A contract qualified by a chain's name** is that chain's address, in a program compiled for any
-  chain: `Base.UniswapV3.Factory` in a file for Ethereum is Base's factory. It is a value. Calling
-  it calls that address on the chain the program runs on, where it is another contract or none, so
-  use it as data: an address handed to a bridge or to a contract that acts on the other chain.
+**A contract qualified by a chain's name is only that chain's address.** In a program compiled for
+Ethereum, `Base.UniswapV3.Factory` is the address Base's factory has on Base: a value, nothing
+more. The program still runs on Ethereum, so calling it (`Base.UniswapV3.Factory.getPool(…)`)
+calls that address on Ethereum, where it is some other contract or none, and the compile does not
+stop it. Use a qualified name to pass an address across chains: as an argument of a bridge message,
+or inside an intent whose body runs on another chain and must name a contract back on this one.
+Never call one.
 
 ```sauce chain=ethereum
+// Base's factory, as an address to hand to something that acts on Base. Not a contract to call
+// from here: on Ethereum, nothing at this address is Base's factory.
 function main(): Address {
   return Base.UniswapV3.Factory;
 }
@@ -253,6 +258,8 @@ function main(recipient: Address, amount: Uint256) {
   file compiles for every chain and is wrong on the others.
 - **The same symbol can have other decimals, or another address, per chain.** Take amounts from the
   compiled-for chain's Tokens table.
+- **A qualified contract is an address, not a call there.** `Base.UniswapV3.Factory` called from a
+  program running on Ethereum calls Ethereum, at Base's address.
 - **Token methods are EVM only.** On Solana, `USDC.transfer(...)` does not exist: the `@sauce/token`
   functions take the mint first and the accounts after it.
 

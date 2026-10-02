@@ -2,8 +2,8 @@
 // sauce-chains skill to what that resolves: each name in the skill's table is, on each chain, the
 // address the compile resolves, the one the chain's reference file records and the one the
 // compiled program carries, and `chainId` is the chain's id. A name the chain lacks is refused with
-// the words the skill quotes; a chain-qualified contract is that chain's address, and a
-// chain-qualified token is refused. Then payout-solana.sauce.ts: its accounts in order with their
+// the words the skill quotes; a chain-qualified contract is that chain's address, called or not,
+// and a chain-qualified token is refused. Then payout-solana.sauce.ts: its accounts in order with their
 // roles, its arguments, USDC an SPL Token mint and TSLAx a Token-2022 mint whose decimals the program
 // passes. Offline: nothing is sent.
 //
@@ -124,6 +124,17 @@ check(
   qualified.contracts.get("Base.UniswapV3.Factory")?.address === factoryOnBase,
   "Base.UniswapV3.Factory is Base's factory in a program for Ethereum",
 );
+// Called, it is still that address: a program for Ethereum calls Base's address on Ethereum.
+const called = compile(
+  "ethereum",
+  "function main(): Address { return Base.UniswapV3.Factory.getPool(USDC, WETH, 500n); }",
+);
+check(
+  called.contracts.get("Base.UniswapV3.Factory")?.address === factoryOnBase &&
+    called.hex.includes(factoryOnBase.slice(2).toLowerCase()),
+  "a call on Base.UniswapV3.Factory, compiled for Ethereum, goes to Base's address",
+);
+check(skill.includes("calls that address on Ethereum"), "the skill says where the call goes");
 // A token is never qualified: the symbol is the chain's own, or an address.
 quoted(
   refusal("ethereum", "function main(): Address { return Base.USDC; }"),
