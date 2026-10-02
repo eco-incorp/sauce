@@ -24,9 +24,26 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 | Sauce Router | `0x9201aF06536Cb4819cf1F08aE7063c5997D87459` |
 | Intents (eco-routes) | none recorded |
 
+## In a program
+
+Compiled with `--chain mantle`, a program names Mantle's tokens and contracts with no
+import; the same file compiled for another chain resolves each name there, or fails where the
+chain does not have it.
+
+```sauce chain=mantle
+function main() {
+  // `USDT0` is Mantle's USDT0: `0x779Ded0c9e1022225f8E0630b35a9b54bE713736`.
+  const held = USDT0.balanceOf(ctx.self());
+  // `Token(address)` is any other ERC-20, and works for a symbol's address too.
+  require(Token(USDT0).balanceOf(ctx.self()) == held);
+}
+```
+
 ## Tokens
 
-The registry names no token on this chain: a program uses `Token(<address>)`.
+| Symbol | Address | Decimals |
+| --- | --- | --- |
+| `USDT0` | `0x779Ded0c9e1022225f8E0630b35a9b54bE713736` | 6 |
 
 ## Protocols
 

@@ -1,7 +1,8 @@
 /**
  * Every EVM row of the token registry, checked against the chain: code at its address, a
- * `symbol()` that is the row's symbol (a stock's with "." as "_", `stockSymbol`) and a
- * `decimals()` that is the row's decimals. And every Solana mint the registry has on mainnet-beta:
+ * `symbol()` that is the row's symbol (a stock's with "." as "_", `stockSymbol`; exactly the
+ * row's `onchainSymbol` where it declares one, Tether's "USD₮0") and a `decimals()` that is the
+ * row's decimals. And every Solana mint the registry has on mainnet-beta:
  * owned by the row's token program, initialized, with the row's decimals, its metadata symbol the
  * row's, and nothing that would make a checked transfer of it refused.
  *
@@ -16,6 +17,7 @@ import { fileURLToPath } from "node:url";
 
 import { STOCK_ISSUERS, stockSymbol } from "../src/routes/stock-tokens.js";
 import { STOCK_TOKENS } from "../src/routes/stock-tokens.generated.js";
+import type { TokenRegistryRow } from "../src/routes/token-registry.js";
 import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../src/routes/token-registry.js";
 import { TOKEN_2022_PROGRAM_ID } from "../src/svm/token-program.js";
 
@@ -66,6 +68,16 @@ const MINTS = (
 )?.tokens;
 const MAINNET = SVM_TOKEN_REGISTRY["mainnet-beta"];
 
+/**
+ * The `symbol()` the chain answered, as `row` is held to it, beside what the row claims: exactly
+ * its `onchainSymbol` where it declares one, a stock's with "." as "_", and any other row's own
+ * symbol, so no row holds a ticker its contract does not answer.
+ */
+function symbols(row: TokenRegistryRow, answered: string | null): [string | null, string] {
+  if (row.onchainSymbol !== undefined) return [answered, row.onchainSymbol];
+  return [row.stock === undefined ? answered : stockSymbol(answered ?? ""), row.symbol];
+}
+
 const rows = Object.entries(TOKEN_REGISTRY).flatMap(([chainId, list]) =>
   list.map((row) => ({ chainId, row })),
 );
@@ -89,11 +101,41 @@ describe("token registry evidence", () => {
       }
       expect(evidence.code).toBeGreaterThan(0);
       expect(evidence.decimals).toBe(row.decimals);
-      expect(row.stock === undefined ? evidence.symbol : stockSymbol(evidence.symbol ?? "")).toBe(
-        row.symbol,
-      );
+      const [answered, claimed] = symbols(row, evidence.symbol);
+      expect(answered).toBe(claimed);
     },
   );
+
+  describe("a row whose contract's symbol() is no identifier", () => {
+    // Arbitrum's USDT0, whose contract answers "USD₮0".
+    const usdt0 = TOKEN_REGISTRY[42161]!.find((row) => row.symbol === "USDT0")!;
+    const { onchainSymbol: _, ...plain } = usdt0;
+    const held = (row: TokenRegistryRow, answered: string) => {
+      const [actual, claimed] = symbols(row, answered);
+      return actual === claimed;
+    };
+
+    it("declares the string, and is held to exactly that", () => {
+      expect(usdt0.onchainSymbol).toBe("USD₮0");
+      expect(held(usdt0, "USD₮0")).toBe(true);
+      expect(held(usdt0, "USDT0")).toBe(false);
+      expect(held(usdt0, "USDT")).toBe(false);
+    });
+
+    it("without it, is held to its symbol, so no row claims a ticker its contract does not answer", () => {
+      expect(held(plain, "USDT0")).toBe(true);
+      expect(held(plain, "USD₮0")).toBe(false);
+      expect(held({ ...plain, symbol: "USDT" }, "USD₮0")).toBe(false);
+      expect(held({ ...plain, symbol: "USDT" }, "USDT0")).toBe(false);
+    });
+
+    it("is Tether's USDT0 and nothing else", () => {
+      const declared = rows.filter(({ row }) => row.onchainSymbol !== undefined);
+      expect(declared.length).toBeGreaterThan(0);
+      for (const { row } of declared)
+        expect([row.symbol, row.onchainSymbol]).toEqual(["USDT0", "USD₮0"]);
+    });
+  });
 
   it("holds no evidence for a token no row has", () => {
     for (const [chainId, { tokens }] of Object.entries(EVIDENCE.chains)) {

@@ -211,6 +211,19 @@ describe("sauce globals", () => {
     );
   });
 
+  it("lists Tether's token where it is USDT0 as USDT0, the symbol a program there writes", async () => {
+    const run = await sauce("globals", "--chain", "arbitrum", "--tokens");
+    expect(run.code).toBe(0);
+    expect(run.stdout).toMatch(
+      /^ {2}USDT0 {2}0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9 {2}6 decimals$/m,
+    );
+    expect(run.stdout).not.toMatch(/^ {2}USDT /m);
+    const defines = json(await sauce("globals", "--chain", "polygon", "--json")).defines;
+    expect((defines as Record<string, unknown>).USDT0).toBe(
+      "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
+    );
+  });
+
   it("counts a chain's stock tokens, lists them with --stocks and finds one with --search", async () => {
     const all = await sauce("globals", "--chain", "base", "--tokens");
     expect(all.stdout).toMatch(
