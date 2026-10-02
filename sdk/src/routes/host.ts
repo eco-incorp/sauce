@@ -256,6 +256,13 @@ export function chainHost(chain: CanonicalChain, options: ChainHostOptions = {})
       if (head === "chainId" || head === "CHAIN_ID") {
         return { kind: "constant", value: String(chain.id) };
       }
+      // The presence check a program once called; a name a chain lacks is now zero there.
+      if (head === "available") {
+        return absent(
+          "Uint256",
+          "`available(X)` is removed: compare the name with zero, `X != 0n`",
+        );
+      }
       const symbol = tokenDeclaration(head, chain);
       if (symbol !== undefined) return symbol;
       const key = protocolAddressKeys().get(head);

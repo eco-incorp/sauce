@@ -83,8 +83,8 @@ check(
   ),
   "Cctp.depositForBurn calls Cctp.TokenMessenger",
 );
-// A namespace absent on the chain is a compile error, unless `available(...)` rules its branch out;
-// a name no chain has is an error either way.
+// A namespace absent on the chain is zero there: using it is a compile error, and comparing it with
+// zero rules its branch out. A name no chain has is an error either way.
 check(
   rejects("linea", "function main() { UniswapV3.Factory.getPool(ctx.self(), ctx.self(), 500n); }"),
   "absent namespace",
@@ -92,19 +92,19 @@ check(
 check(
   !rejects(
     "linea",
-    "function main() { if (available(UniswapV3.Factory)) { UniswapV3.Factory.getPool(ctx.self(), ctx.self(), 500n); } }",
+    "function main() { if (UniswapV3.Factory != 0n) { UniswapV3.Factory.getPool(ctx.self(), ctx.self(), 500n); } }",
   ),
-  "available() removes the branch where the chain lacks the contract",
+  "comparing with zero removes the branch where the chain lacks the contract",
 );
-// It takes a token symbol too: Base registers no USDT, so the guarded transfer is removed there.
+// A token symbol too: Base registers no USDT, so the guarded transfer is removed there.
 check(rejects("base", "function main() { USDT.transfer(ctx.self(), 1n); }"), "no USDT on Base");
 check(
-  !rejects("base", "function main() { if (available(USDT)) { USDT.transfer(ctx.self(), 1n); } }"),
-  "available(USDT) removes the branch on Base",
+  !rejects("base", "function main() { if (USDT != 0n) { USDT.transfer(ctx.self(), 1n); } }"),
+  "USDT != 0n removes the branch on Base",
 );
 check(
-  rejects("base", "function main() { if (available(UniswapV9.Factory)) { require(false); } }"),
-  "available() of a name no chain has is an error",
+  rejects("base", "function main() { if (UniswapV9.Factory != 0n) { require(false); } }"),
+  "a name no chain has is an error",
 );
 // The Pot's own balance of a symbol, and the chain's id.
 check(

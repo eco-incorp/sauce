@@ -1,6 +1,6 @@
 ---
 name: sauce-globals
-description: The names a Sauce program uses without any import, and how they resolve on the chain it is compiled for — token symbols (USDC, USDT, WETH, …) and tokenized stocks (SPCXc, TSLAon, TSLAx, …), Token(address) and a bound const t = Token(x), the token methods .transfer/.approve/.transferFrom/.balanceOf with SafeERC20 behaviour and USDT, the @sauce/token functions, protocol namespaces (UniswapV3.Factory, UniswapV4.StateView, AaveV3.Pool, …) and family aliases, available(...) for a venue a chain may lack, the Namespace_Contract compile-time defines, chain names, chainId and ctx.*. Links generated indexes of every token, protocol contract and chain, the same lists sauce globals prints. Use when writing any Sauce program that moves tokens, calls a protocol or names a chain, when checking whether a name exists on a chain, or when a name does not resolve ("is not a declared variable", "ambiguous", "is not deployed").
+description: The names a Sauce program uses without any import, and how they resolve on the chain it is compiled for — token symbols (USDC, USDT, WETH, …) and tokenized stocks (SPCXc, TSLAon, TSLAx, …), Token(address) and a bound const t = Token(x), the token methods .transfer/.approve/.transferFrom/.balanceOf with SafeERC20 behaviour and USDT, the @sauce/token functions, protocol namespaces (UniswapV3.Factory, UniswapV4.StateView, AaveV3.Pool, …) and family aliases, comparing with zero for a venue a chain may lack, the Namespace_Contract compile-time defines, chain names, chainId and ctx.*. Links generated indexes of every token, protocol contract and chain, the same lists sauce globals prints. Use when writing any Sauce program that moves tokens, calls a protocol or names a chain, when checking whether a name exists on a chain, or when a name does not resolve ("is not a declared variable", "ambiguous", "is not deployed").
 ---
 
 # Globals in a Sauce program
@@ -124,17 +124,18 @@ function main(recipient: Address, amount: Uint256) {
   its factory returned (`.at(pool)` is the same).
   [references/protocols.md](references/protocols.md) lists every interface.
 
-**A venue a chain may not have** is asked with `available(<name>)`, decided when the program is
-compiled for a chain: `if (available(UniswapV3.Factory)) { ... }` keeps its branch where the chain
-has the contract, and removes it, names and all, where it does not. It takes a contract or a token
-symbol (`available(USDT)`); it folds `if`/`else`, `?:`, `&&`, `||` and `!`; and a guard
-`if (!available(X)) { return 0n; }` drops the rest of its function. A name no chain has is an
-error rather than `false`, so a typo cannot quietly drop a branch. `Namespace.Contract` without it
-is for a contract the program requires: on a chain without it, the program does not compile.
+**A venue a chain may not have** is zero on that chain, and a program compares it with zero: the
+comparison is decided when the program is compiled for a chain, so
+`if (UniswapV3.Factory != 0n) { ... }` keeps its branch where the chain has the contract, and leaves
+it out, names and all, where it does not. A contract and a token symbol (`USDT != 0n`) both compare
+this way; it folds `if`/`else`, `?:`, `&&`, `||` and `!`; and a guard
+`if (UniswapV3.Factory == 0n) { return 0n; }` drops the rest of its function. Any other use of an
+absent name is a compile error saying the chain does not have it, and a name no chain has is an
+unknown name rather than zero, so a typo cannot quietly drop a branch.
 
 ```sauce chain=base,linea
 function main(tokenA: Address, tokenB: Address) {
-  if (available(UniswapV3.Factory)) {
+  if (UniswapV3.Factory != 0n) {
     const pool = UniswapV3.Factory.getPool(tokenA, tokenB, 500n);
     require(pool != 0n, "no 0.05% pool");
   }
@@ -172,4 +173,4 @@ There is no read for the transaction origin.
 
 [examples/globals.sauce.ts](examples/globals.sauce.ts) uses each kind of name;
 [examples/globals.mts](examples/globals.mts) compiles it and pins the SafeERC20 lowering, the
-`IERC20` import rule, the family-alias rules and `available(...)`.
+`IERC20` import rule, the family-alias rules and the comparison with zero.

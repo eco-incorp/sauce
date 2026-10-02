@@ -18,7 +18,8 @@
 //   2. every file reads the same for every agent and every release: no version numbers or release
 //      talk, no agent's name or install path, no engine internals (opcodes, mnemonics, stack
 //      effects, bytecode bytes), no placeholder or unrecorded address, no Portal or prover outside
-//      the intents skill, no RPC endpoint, no description of Sauce as a multicall, and nothing that
+//      the intents skill, no RPC endpoint, no description of Sauce as a multicall, no call to
+//      `available(...)` (a name a chain lacks is zero there: `X != 0n`), and nothing that
 //      tells the reader to copy, adapt or start from an example (the agent writes each program
 //      itself: COPY_FRAMING), no skill named in code (`sauce-<name>`) that the package does not
 //      ship; and every protocol document with a swap template opens with the one
@@ -590,6 +591,12 @@ function wording(skill, file) {
         fail(where(i), "names a placeholder address; take it from the SDK or write <address>");
     for (const [pattern, what] of NOT_PORTABLE)
       if (pattern.test(line)) fail(where(i), `names ${what}`);
+    // `available(X)` is not SauceScript: a program compares a name its chain may lack with zero.
+    if (/\bavailable\(/.test(line))
+      fail(
+        where(i),
+        "calls `available(...)`, which is removed; compare the name with zero, `X != 0n`",
+      );
     // A skill named in code is one the package ships: a renamed or removed skill fails here.
     for (const m of line.matchAll(/`(sauce-[a-z0-9-]+)`/g))
       if (!SKILL_NAMES.has(m[1]))

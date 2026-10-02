@@ -23,7 +23,6 @@ import { bytesToHex } from "viem";
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
-import { availableAsComparison } from "./available.js";
 import { compileWithRs, toRsDefines, type RsCompileResult } from "./rs-compile.js";
 import { chainHost, isChainScalar, withHost, type ChainHost } from "./host.js";
 import { registryTokenSymbols, resolveTokenMap } from "./token-registry.js";
@@ -482,8 +481,7 @@ function compileForChain(
   }
 
   // The source is the program, as written: a module with a `main`, or a script whose top-level
-  // statements are the entry. The compiler reads it as it is but for one spelling: `available(X)`,
-  // which it is given as the comparison `0n != X` it decides, character for character in place.
+  // statements are the entry. Nothing here reads or rewrites it.
   const source = sauce;
   const tokens = resolveTokenMap(chain, options.tokens);
   const lowered: LoweredIntent[] = [];
@@ -491,7 +489,7 @@ function compileForChain(
   let rs: RsCompileResult;
   try {
     rs = compileWithRs({
-      source: availableAsComparison(source, chain, tokens, entryKind),
+      source,
       target,
       entryKind,
       resolve: options.resolve,

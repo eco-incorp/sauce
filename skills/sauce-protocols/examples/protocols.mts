@@ -28,8 +28,8 @@ const onBase = getProtocolsByChain(8453);
 check(getProtocol("pancakeswap-v3")?.slug === "pancakeswap-v3", "catalog lookup by slug");
 check(contracts.on("base").AaveV3.Pool.available, "AaveV3.Pool is a namespace on Base");
 
-// protocols.sauce.ts names PancakeSwap V3's factory by namespace, behind `available(...)`: the
-// program carries the factory where the chain has one, and compiles without it elsewhere.
+// protocols.sauce.ts names PancakeSwap V3's factory by namespace, behind `!= 0n`: the program
+// carries the factory where the chain has one, and compiles without it elsewhere.
 const source = readFileSync(new URL("./protocols.sauce.ts", import.meta.url), "utf8");
 const sizes: string[] = [];
 for (const [slug, hasPancake] of [

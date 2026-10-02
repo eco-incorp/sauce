@@ -98,21 +98,21 @@ something about it. [Coverage](../api/coverage.md) has the totals, and
 
 ## Use a venue only where the chain has it
 
-`available(<name>)` asks, when the program is compiled, whether the chain it is compiled for has a
-contract or a token. A branch it rules out is removed before any name in it is resolved, so one
-program can name a venue some of its chains lack:
+A contract or token the chain a program is compiled for does not have is zero there, and comparing
+it with zero is decided when the program is compiled. A branch that comparison rules out is never
+compiled, so nothing in it is resolved, and one program can name a venue some of its chains lack:
 
 ```js
 // One program for every chain: the USDC/WETH 0.05% pool from PancakeSwap V3 where the chain has it,
 // from Uniswap V3 where it does not, and nothing where it has neither.
 //
-// `available(...)` is decided when the program is compiled, for the chain it is compiled for, and
-// the branches it rules out are removed before anything in them is resolved.
+// A contract the chain lacks is zero there, and comparing it with zero is decided when the program
+// is compiled, for the chain it is compiled for: a branch it rules out is never compiled.
 function main() {
   let pool = 0n;
-  if (available(PancakeswapV3.Factory)) {
+  if (PancakeswapV3.Factory != 0n) {
     pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
-  } else if (available(UniswapV3.Factory)) {
+  } else if (UniswapV3.Factory != 0n) {
     pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);
   }
   return pool;
@@ -123,17 +123,18 @@ Compiled for Base this calls PancakeSwap V3's factory; compiled for Optimism, wh
 PancakeSwap V3, it compiles to the Uniswap V3 lookup alone. [registry-names.ts](../examples/registry-names.ts)
 compiles it for both.
 
-- It takes a contract — `UniswapV3.Factory`, `Uniswap.UniversalRouter`, or one on a named chain,
-  `Arbitrum.UniswapV3.Factory` — or a token symbol, `USDT`. A token is available where the chain's
-  token map has it, which includes the `tokens` you pass.
-- It folds `if`/`else`, `?:`, `&&`, `||` and `!`. A guard that returns,
-  `if (!available(X)) return 0n;`, removes the rest of its block where `X` is absent.
-- Anywhere else it is the literal `true` or `false`. A branch that depends on it only through a
-  runtime value (`const has = available(X); if (has) ...`) is live code, and every name in it must
+- Any registry name compares this way: a contract — `UniswapV3.Factory`, `Uniswap.UniversalRouter`,
+  or one on a named chain, `Arbitrum.UniswapV3.Factory` — or a token symbol, `USDT`. A token is
+  there where the chain's token map has it, which includes the `tokens` you pass.
+- `==`, `!=`, `===` and `!==` are the only uses of an absent name; any other use is a compile error
+  saying the chain does not have it. The comparison folds `if`/`else`, `?:`, `&&`, `||` and `!`, and
+  a guard that returns, `if (UniswapV3.Factory == 0n) return 0n;`, drops the rest of its block where
+  the contract is absent.
+- A branch that depends on it only through a runtime value
+  (`const has = UniswapV3.Factory != 0n; if (has) ...`) is live code, and every name in it must
   still resolve.
-- A name the registry does not know on any chain is an error, not `false`, as are an ambiguous
-  family name and an interface, so a typo cannot quietly drop a branch. A program that declares its
-  own `available` keeps it.
+- A name the registry does not know on any chain is the compiler's unknown name, not zero, so a typo
+  cannot quietly drop a branch. A program that declares the name owns it.
 - Inside an intent to another chain, `Arbitrum(() => { ... })`, it is decided for that chain.
 
 In TypeScript, the same question is a contract's `.available`, and whether the chain export has the
@@ -248,7 +249,7 @@ Two different mechanisms share the look of a bare name, and the difference is wh
 
 Chain accessors such as `Base` and `Solana`, the `chain(ref)` front door, and the host `Token` builder are **named exports**: `import { Base, Solana, Token } from "@eco-incorp/sauce"`. They are ordinary JavaScript values, and importing the package installs nothing on `globalThis`.
 
-Bare route names such as `USDC`, `Uniswap` and `available` are **route syntax**, resolved by the compiler against the destination chain. The package supplies TypeScript declarations for them so a typed callback checks, but there is no host JavaScript `USDC` or `Uniswap` object to import or execute. The host spelling of the same registry entry is on the chain export: `Base.USDC`, `Base.Uniswap`.
+Bare route names such as `USDC` and `Uniswap` are **route syntax**, resolved by the compiler against the destination chain. The package supplies TypeScript declarations for them so a typed callback checks, but there is no host JavaScript `USDC` or `Uniswap` object to import or execute. The host spelling of the same registry entry is on the chain export: `Base.USDC`, `Base.Uniswap`.
 
 A host that wants the chain names as runtime globals anyway can opt in with `installRouteGlobals()`, which defines them on `globalThis` (or any target you pass) and never overwrites a name already there. It installs values only; declare the names yourself.
 

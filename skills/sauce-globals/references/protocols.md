@@ -4,8 +4,8 @@
 
 A program names a contract as `Namespace.Contract`: its address where a value is expected, a
 bound contract where a method is called. Naming one that is not deployed on the program's chain
-is a compile error, unless `available(Namespace.Contract)` rules its branch out where the chain
-lacks it. Each contract is also the compile-time define `Namespace_Contract`. A
+is a compile error, unless comparing it with zero (`Namespace.Contract != 0n`) rules its branch
+out where the chain lacks it. Each contract is also the compile-time value `Namespace_Contract`. A
 namespace's default contract (marked) is also called as `Namespace.method(...)`. The chains each
 is deployed on, with its address there, are in the protocol's registry file in `sauce-protocols`
 and in each chain's file in `sauce-chains`.

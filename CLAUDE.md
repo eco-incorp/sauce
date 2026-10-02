@@ -362,10 +362,8 @@ to build first, but the suites that import `./artifacts/*.json` need `sync-engin
 run (see the Foundry gotcha above).
 
 **The compiler is given the program as written, and the SDK's names through its host.** Nothing
-rewrites a program's text, with one exception: `available(X)` (`routes/available.ts`) reaches the
-compiler as `(0n !=   X)`, written over `available(` in place, character for character, so every
-position a diagnostic reports is the author's; the compiler decides the comparison (below). That
-pass, the CLI, `routes/entry.ts` and `src/sauce-script/` read SauceScript with `src/routes/parse.ts`: acorn extended by
+rewrites a program's text, so every position a diagnostic reports is the author's. The CLI,
+`routes/entry.ts` and `src/sauce-script/` read SauceScript with `src/routes/parse.ts`: acorn extended by
 `@sveltejs/acorn-typescript`, both pinned exactly (the plugin extends acorn's parser class), and
 `ast-walk.ts#walk` steps over annotations and type-only declarations. Do not add a second parser,
 and do not reintroduce a source rewrite: what a name means is the host's to declare.
@@ -382,8 +380,8 @@ on an EVM chain `intent-host.ts#intentHost`, the intents a program may open. The
 `declare` about each name the program reads and does not bind, once per compile; a program binding
 a name always wins. **A name some chain has and this one lacks is declared as the zero of its type,
 `unusable` with the chain's message**: any use is that message at the use, except an equality
-comparison, which the compiler decides while it compiles — so `if (X != 0n)`, and `available(X)`,
-leave the branch they rule out uncompiled, names and all (a decided `if`, `?:`, `&&`, `||`, and
+comparison, which the compiler decides while it compiles — so `if (X != 0n)` leaves the branch it
+rules out uncompiled, names and all (a decided `if`, `?:`, `&&`, `||`, and
 the rest of a function after a decided guard that returns). A name no chain has is not declared:
 the compiler's own unknown-name error. An interface is called at an address the program gives it,
 `UniswapV3.Pool(pool).fee()`, exactly `UniswapV3.Pool.at(pool).fee()` — the compiler's own form for a
