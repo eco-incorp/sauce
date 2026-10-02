@@ -755,7 +755,9 @@ an intent the file opens resolves its body on its own chain) — and no encoder 
 (`cookTransaction`). It is Node-only and deliberately in no `exports` entry and no barrel
 (`cli.test.ts` fails if a barrel exports it), reads no environment but the variable `--password-env`
 names, reaches a network only through `--rpc-url`, a `--config` file's entry for the chain, or
-else the built-in public endpoints (none with `--offline`), and signs only with
+else the built-in public endpoints (none with `--offline`) — and `sauce update`, its one other
+network access, the npm registry, read only when that command runs (no background or automatic
+update check; `no-embedded-rpc.test.ts` holds the registry to `update.ts`) — and signs only with
 `--wallet`, `--keystore`, `--private-key` or `--keypair`, scrubbing any key or password it was given
 from everything it prints. **The public endpoints are the one exception to "the package ships no
 RPC URL"** (the user's call: nobody should need a config to run the CLI or the MCP server). They
