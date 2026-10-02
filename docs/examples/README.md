@@ -44,6 +44,7 @@ node dist/example.js
 For `first-intent.ts`, `evm-execution.ts`, `pot-router.ts`, `router-route.ts` and `registry-names.ts`, also run `pnpm add viem`: they use Viem's address formatter and RPC interfaces.
 
 CI typechecks and runs each of them, and asserts the encoded output including a nonzero cook-fee
-budget. The RPC helpers are not live-chain integration tests — they are the shape of the reads you make.
+budget. Each SauceScript program is also executed in CI, through the released engine. The RPC
+helpers are not live-chain integration tests — they are the shape of the reads you make.
 
 For actual EVM execution, read the destination Kitchen's `executionFee()` and use it instead of the fixture fee. The intent examples name no Pot or engine: the SDK derives both. The derived Pot is the shared one the solver deploys for each Portal, and it must exist before a route runs on it. To check that it does, or to use a Pot of your own, call `prepareDestinationPot` from `evm-execution.ts` with a destination client, Portal, and salt (zero for the shared Pot). If it returns `ready: false`, send its deployment request with your signer, wait for a successful receipt, and call it again. Pass a Pot of your own as `execution.pot`. Supply valid deadlines, source funding, and solver fulfillment. Read [intents](../guides/intents.md) for atomic asset handling and fee budgets, and [Solana](../guides/solana.md) for the separate supported execution paths.
