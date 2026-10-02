@@ -26,9 +26,26 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 | Intent Executor | `0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082` |
 | Shared intent Pot | `0xDd330394620fBFF4D0AdcfA33B0D7b3622Db15B0`: the Kitchen's `deployPot(<Executor>, 0x0)` creates it, from any account |
 
+## In a program
+
+Compiled with `--chain plasma`, a program names Plasma's tokens and contracts with no
+import; the same file compiled for another chain resolves each name there, or fails where the
+chain does not have it.
+
+```sauce chain=plasma
+function main() {
+  // `USDT0` is Plasma's USDT0: `0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb`.
+  const held = USDT0.balanceOf(ctx.self());
+  // `Token(address)` is any other ERC-20, and works for a symbol's address too.
+  require(Token(USDT0).balanceOf(ctx.self()) == held);
+}
+```
+
 ## Tokens
 
-The registry names no token on this chain: a program uses `Token(<address>)`.
+| Symbol | Address | Decimals |
+| --- | --- | --- |
+| `USDT0` | `0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb` | 6 |
 
 ## Protocols
 

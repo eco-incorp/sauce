@@ -9,7 +9,11 @@ import { requireChain } from "../src/chains/canonical.js";
 // Through the public `routes` barrel: a caller of `rewriteTokenMembers` needs `tokenImportLines`
 // beside it to compile the result.
 import { rewriteTokenMembers, tokenImportLines } from "../src/routes/index.js";
-import { resolveTokenMap, SVM_TOKEN_REGISTRY } from "../src/routes/token-registry.js";
+import {
+  registryTokenAddress,
+  resolveTokenMap,
+  SVM_TOKEN_REGISTRY,
+} from "../src/routes/token-registry.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
 
@@ -208,6 +212,45 @@ describe("THE DECISIVE STEP (b): registry default -- a bare USDC.transfer with N
     expect(() =>
       compileSauceRoute("ronin", `USDC.transfer(${TO}, 5n);`, { pot: POT, engine: ENGINE }),
     ).toThrow("`USDC` is not a token or protocol on ronin");
+  });
+});
+
+// --- USDT0: Tether's migrated USDT, by its registry symbol -------------------------------------
+
+describe("USDT0: Tether's token on the chains whose USDT is USDT0", () => {
+  const IMPORT = 'import { IERC20 } from "./artifacts/IERC20.json";';
+  const READ = `${IMPORT}\nfunction main(): Uint256 { return IERC20.at(USDT0).balanceOf(${TO}); }`;
+  const route = (chain: string, source: string) =>
+    compileSauceRoute(chain, source, { pot: POT, engine: ENGINE });
+
+  it.each(["arbitrum", "polygon"])(
+    "on %s, USDT0.transfer is @sauce/token's SafeERC20 transfer of the registry's USDT0",
+    (slug) => {
+      const usdt0 = registryTokenAddress(requireChain(slug), "USDT0")!;
+      const literal = route(
+        slug,
+        `import { transfer } from "@sauce/token";\nfunction main() { transfer(0x${usdt0.toString(16)}n, ${TO}, 5n); }`,
+      );
+      const compiled = route(slug, `USDT0.transfer(${TO}, 5n);`);
+      expect(compiled.source).toContain(`__sauce_transfer(USDT0, ${TO}, 5n)`);
+      expect(Array.from(compiled.compiled.bytecode[0]!)).toEqual(
+        Array.from(literal.compiled.bytecode[0]!),
+      );
+    },
+  );
+
+  it.each(["arbitrum", "polygon"])("on %s, IERC20.at(USDT0) reads the token", (slug) => {
+    expect(route(slug, READ).compiled.bytecode[0]!.length).toBeGreaterThan(0);
+  });
+
+  it("is refused by name on a chain that has none, and USDT where the token is USDT0", () => {
+    expect(() => route("base", `USDT0.transfer(${TO}, 5n);`)).toThrow(
+      "`USDT0` is not a token or protocol on base.",
+    );
+    expect(() => route("base", READ)).toThrow("`USDT0` is not a declared variable");
+    expect(() => route("arbitrum", `USDT.transfer(${TO}, 5n);`)).toThrow(
+      "`USDT` is not a token or protocol on arbitrum. Did you mean `USDC` or `USDT0`?",
+    );
   });
 });
 
