@@ -21,8 +21,10 @@
 //      the intents skill, no RPC endpoint, no description of Sauce as a multicall, and nothing that
 //      tells the reader to copy, adapt or start from an example (the agent writes each program
 //      itself: COPY_FRAMING), no skill named in code (`sauce-<name>`) that the package does not
-//      ship; and every protocol document with a swap template opens with the one
-//      pointer to `sauce-swaps`;
+//      ship; the command is written `sauce …`, `sauce-cli` says in one paragraph how to get it
+//      and why never a bare `npx sauce`, and no other line in the skills writes a bare
+//      `npx sauce`; and every protocol document with a swap template opens with the one pointer
+//      to `sauce-swaps`;
 //   3. the `sauce-examples` index lists every example file on disk and nothing else, each example
 //      is referenced by its own skill, and every program and actions document names the chains it
 //      is checked on there, one of them at least a chain the release supports; a contract's ABI
@@ -51,7 +53,12 @@
 //   9. the SauceScript reference (sauce-script/references) compiles every example it gives and is
 //      refused every form it rejects, with the messages it quotes;
 //  10. the actions reference (sauce-actions/references) is what `gen-skills-actions.mjs` renders
-//      from the actions JSON Schema the package ships.
+//      from the actions JSON Schema the package ships;
+//  11. every example program is either executed by a suite CI runs, named in
+//      `skills-check/executed.json`, or listed there as compile-only with the reason;
+//  12. every example program writes what the registry names by its name: no recorded address as
+//      a literal, no hand-built selector of a function a binding declares (LOW_LEVEL_CALLS); and
+//      takes its inputs as `main` parameters, never an undeclared define (INPUT_EXCEPTIONS).
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -76,6 +83,12 @@ import {
   skillsReferences,
 } from "./gen-skills-references.mjs";
 import { checkBuiltins, checkBuiltinsJson } from "./skills-check/builtins.mjs";
+import {
+  executedExamplesProblems,
+  inputProblems,
+  namedProgramProblems,
+  registryNames,
+} from "../../docs/scripts/example-programs.mjs";
 
 // ---- Arguments and resolution -------------------------------------------------------------------
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -226,6 +239,11 @@ const COMMANDS = new Map();
   }
   if (COMMANDS.size === 0) fail("sauce --help", "lists no command");
 }
+// What the command takes with no command, `sauce --version` and `sauce --help`, as it answers them.
+const TOP_FLAGS = new Set();
+for (const flag of ["--version", "--help"]) {
+  if ((await sauce([flag])).code === 0) TOP_FLAGS.add(flag);
+}
 
 /** `text` split into shell words: whitespace-separated, with '…', "…" and a `<placeholder>` of
  *  several words kept whole. */
@@ -239,6 +257,12 @@ function shellWords(text) {
   return words;
 }
 
+/** npx and its options before the command: a line is parsed as a command whether it is written
+ *  `sauce …`, `npx sauce …` or `npx -y @eco-incorp/sauce …` (2a fails a bare `npx sauce`). */
+const NPX = String.raw`npx\s+(?:(?:--no\s+--|-y|--yes)\s+)?`;
+/** A command line: `sauce …`, `npx sauce …` or `npx -y @eco-incorp/sauce …`. */
+const INVOCATION = new RegExp(String.raw`^(?:(?:${NPX})?sauce|${NPX}@eco-incorp\/sauce)\s`);
+
 /** Every `sauce …` invocation in `lines` (shell or comment text), continuations joined. */
 function commandLines(lines) {
   const joined = [];
@@ -246,14 +270,15 @@ function commandLines(lines) {
   for (const raw of lines) {
     const line = raw.replace(/^\s*\/\/\s?/, "").replace(/\s+#.*$/, "");
     const text = current === null ? line.trim() : `${current} ${line.trim()}`;
-    if (current === null && !/^(?:npx\s+(?:--no\s+--\s+)?)?sauce\s/.test(text)) continue;
+    if (current === null && !INVOCATION.test(text)) continue;
     if (text.endsWith("\\")) {
       current = text.slice(0, -1).trim();
       continue;
     }
     current = null;
-    joined.push(text.replace(/^npx\s+(?:--no\s+--\s+)?/, ""));
+    joined.push(text.replace(new RegExp(`^${NPX}`), ""));
   }
+  // The first word is the command, `sauce` or the package.
   return joined.map((line) => shellWords(line).slice(1));
 }
 
@@ -271,6 +296,7 @@ function checkCommand(where, given) {
   // `sauce <command> --help` stands for any command.
   if (/^<[^>]+>$/.test(name ?? "")) return true;
   counts.commands++;
+  if (rest.length === 0 && TOP_FLAGS.has(name)) return true;
   const flags = COMMANDS.get(name);
   if (flags === undefined) {
     fail(where, `\`sauce ${argv.join(" ")}\`: '${name}' is not a sauce command`);
@@ -655,6 +681,67 @@ for (const [dir, why] of Object.entries(COPY_FRAMING_EXEMPT)) {
       `exempts ${dir} (${why}), which no longer needs it: remove the exemption`,
     );
 }
+
+// ---- 2a. The command is `sauce`, and one place says how to get it ---------------------------------
+// A skill writes the command as `sauce …`. `sauce-cli` says how to get it, in one paragraph: the
+// global install, else `npx -y @eco-incorp/sauce`, and never a bare `npx sauce` outside a project
+// that depends on the package, where npx fetches and runs npm's unrelated package named `sauce`.
+// That paragraph is the one place a bare `npx sauce` may appear: anywhere else in the skills, a
+// command line or prose, it fails.
+const INSTALL_SKILL = "sauce-cli";
+const BARE_NPX = /\bnpx sauce\b/;
+const GLOBAL_INSTALL = /\bnpm i -g @eco-incorp\/sauce\b/;
+const ANYWHERE_NPX = /\bnpx -y @eco-incorp\/sauce\b/;
+/** `file`'s prose paragraphs, outside fenced blocks and headings: first and last line, and the
+ *  text joined into one line. */
+function proseParagraphs(file) {
+  const paragraphs = [];
+  let paragraph = null;
+  let fenced = false;
+  for (const [i, line] of read(file).split("\n").entries()) {
+    if (/^\s*```/.test(line)) {
+      fenced = !fenced;
+      paragraph = null;
+    } else if (fenced || /^#{1,6}\s/.test(line) || line.trim() === "") paragraph = null;
+    else if (paragraph === null)
+      paragraphs.push((paragraph = { start: i, end: i, text: line.trim() }));
+    else {
+      paragraph.end = i;
+      paragraph.text += ` ${line.trim()}`;
+    }
+  }
+  return paragraphs;
+}
+const howToGetIt = [];
+for (const skill of skills) {
+  for (const file of walk(join(SKILLS_DIR, skill.dir), (f) => f.endsWith(".md"))) {
+    const explained =
+      skill.dir === INSTALL_SKILL && file === skill.path
+        ? proseParagraphs(file).filter(
+            (p) =>
+              GLOBAL_INSTALL.test(p.text) && ANYWHERE_NPX.test(p.text) && BARE_NPX.test(p.text),
+          )
+        : [];
+    howToGetIt.push(...explained);
+    read(file)
+      .split("\n")
+      .forEach((line, i) => {
+        if (BARE_NPX.test(line) && !explained.some((p) => p.start <= i && i <= p.end))
+          fail(
+            `${rel(file)}:${i + 1}`,
+            "writes a bare `npx sauce`: write the command as `sauce …`, which " +
+              `${INSTALL_SKILL} says how to get (outside a project that depends on the package, ` +
+              "`npx sauce` runs npm's unrelated `sauce` package)",
+          );
+      });
+  }
+}
+if (howToGetIt.length !== 1)
+  fail(
+    `${INSTALL_SKILL}/SKILL.md`,
+    `says how to get the command in ${howToGetIt.length} paragraphs, not one that names ` +
+      "`npm i -g @eco-incorp/sauce`, `npx -y @eco-incorp/sauce` and why never a bare `npx sauce`",
+  );
 
 // ---- 2b. A protocol document with a swap template leads a Sauce program to the Router --------------
 // One line, the same in every such document: a protocol's own router template is for a pool the
@@ -1324,7 +1411,7 @@ for (const skill of skills) {
   const allow = allowed(skill);
   for (const span of inlineCode(skill)) {
     // A command line's words are file names and flags, checked against `--help` (5), not exports.
-    if (/^(?:npx )?sauce\s/.test(span)) continue;
+    if (INVOCATION.test(span)) continue;
     for (const m of span.matchAll(
       /\b(routes|token|deposit|contracts|svmVenues)\.([A-Za-z_$][\w$]*)/g,
     )) {
@@ -1573,6 +1660,80 @@ else {
     );
 }
 
+// ---- 11. Which example programs a suite executes ----------------------------------------------------------
+// Compiling a program is not running it: `skills-check/executed.json` names the suites that execute
+// each one on an engine, or says why none does yet. The suites are this repository's, so a check of
+// another skills directory (`--skills`) skips it.
+const examplePrograms = walk(SKILLS_DIR, (file) => file.endsWith(".sauce.ts"))
+  .map((file) => relative(SKILLS_DIR, file))
+  .filter((file) => /^[^/]+\/examples\/[^/]+$/.test(file));
+let executedExamples = 0;
+if (skillsFlag < 0) {
+  const manifest = join(HERE, "skills-check", "executed.json");
+  for (const problem of executedExamplesProblems({
+    repository: REPOSITORY,
+    examplesRoot: SKILLS_DIR,
+    examples: examplePrograms,
+    manifest,
+  })) {
+    fail(rel(manifest), problem);
+  }
+  executedExamples = Object.keys(JSON.parse(read(manifest)).executed).length;
+}
+
+// ---- 12. Example programs write what the registry names by its name, and show their inputs ---------------
+// No address the registry records as a literal, and no hand-built selector of a function a binding
+// declares (`docs/scripts/example-programs.mjs`). A deliberately low-level call is listed here:
+// example -> selector -> why. And every value a program reads has a visible source: an input is a
+// `main` parameter; an exception is INPUT_EXCEPTIONS's, example -> name -> why. An entry nothing
+// needs any more fails.
+const LOW_LEVEL_CALLS = {};
+const INPUT_EXCEPTIONS = {};
+{
+  const names = registryNames(
+    sdk,
+    await Promise.all(
+      sdk.listProtocolSlugs().map(async (slug) => [slug, await load(`${PKG}/protocols/${slug}`)]),
+    ),
+    JSON.parse(read(join(SKILLS_DIR, "sauce-script", "references", "builtins.json"))),
+  );
+  for (const program of examplePrograms) {
+    const where = rel(join(SKILLS_DIR, program));
+    const source = read(join(SKILLS_DIR, program));
+    const lowLevel = LOW_LEVEL_CALLS[program] ?? {};
+    const allowed = INPUT_EXCEPTIONS[program] ?? {};
+    const usedCalls = new Set();
+    const usedInputs = new Set();
+    failures.push(
+      ...namedProgramProblems({ where, source, names, lowLevel, used: usedCalls }),
+      ...inputProblems({ where, source, ts, names, allowed, used: usedInputs }),
+    );
+    for (const selector of Object.keys(lowLevel)) {
+      if (!usedCalls.has(selector))
+        fail(
+          "check-skills.mjs LOW_LEVEL_CALLS",
+          `allows ${selector} in ${program}, which no longer builds it: remove the entry`,
+        );
+    }
+    for (const input of Object.keys(allowed)) {
+      if (!usedInputs.has(input))
+        fail(
+          "check-skills.mjs INPUT_EXCEPTIONS",
+          `allows ${input} in ${program}, which no longer reads it: remove the entry`,
+        );
+    }
+  }
+  for (const [list, entries] of [
+    ["LOW_LEVEL_CALLS", LOW_LEVEL_CALLS],
+    ["INPUT_EXCEPTIONS", INPUT_EXCEPTIONS],
+  ]) {
+    for (const program of Object.keys(entries)) {
+      if (!examplePrograms.includes(program))
+        fail(`check-skills.mjs ${list}`, `names ${program}, which is not an example program`);
+    }
+  }
+}
+
 // ---- Report ----------------------------------------------------------------------------------------------
 const summary =
   `${counts.skills} skills, ${counts.files} files read; ${counts.programRuns} program runs through sauce ` +
@@ -1581,7 +1742,8 @@ const summary =
   `${counts.sauceFails} refused as documented; ${counts.ts} ts blocks typechecked; ${counts.runners} runners ` +
   `executed offline; ${counts.indexed} indexed globals compiled on their chains; ${builtinExamples} ` +
   `reference examples compiled and ${builtinRejections} rejections refused; ${counts.subpaths} subpaths, ` +
-  `${counts.identifiers} inline identifiers and ${counts.addresses} addresses checked; against ` +
+  `${counts.identifiers} inline identifiers and ${counts.addresses} addresses checked; ` +
+  `${executedExamples} example programs executed by a suite; against ` +
   `${PKG}@${sdkPkg.version}`;
 if (failures.length > 0) {
   console.error(

@@ -92,6 +92,7 @@ import { scaleAmount, WAD } from "../src/routes/template.js";
 import type { Intent } from "../src/routes/types.js";
 import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 import { predictIntentVault } from "../src/routes/portal.js";
+import { BODY_TO_ARBITRUM } from "./fixtures/routes/bodies.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -1178,20 +1179,16 @@ describeEvm("route nesting, executed", () => {
     }, 120_000);
   });
 
-  describe("the README's example, as published", () => {
-    // `docs/examples/cross-chain-intent.sauce.ts` is compiled on every `docs:check` run and quoted
-    // verbatim by the README. What only an engine can settle is whether the Portal accepts what its
-    // lowering builds -- and whether the amount the program measured is the amount the published
-    // intent carries, which is the claim the README makes.
-    const README_EXAMPLE = readFileSync(
-      join(HERE, "../../docs/examples/cross-chain-intent.sauce.ts"),
-      "utf8",
-    );
+  describe("a body that opens an intent, as published", () => {
+    // A body that forwards what it measured to Arbitrum (the README's example before it took `main`
+    // arguments, which a body cannot; the README's own runs in `docs-examples.mainnet`). What only
+    // an engine can settle is whether the Portal accepts what its lowering builds -- and whether the
+    // amount the program measured is the amount the published intent carries.
     const SEEDED = 12_345_678n;
     const DELIVER_TO = "0x00000000000000000000000000000000000000a5" as Address;
 
     it("publishes an intent carrying the balance it measured", async () => {
-      // The example says `USDC`, and it is compiled with the SDK's own registry: Base's USDC for
+      // The body says `USDC`, and it is compiled with the SDK's own registry: Base's USDC for
       // the program and its reward, Arbitrum's for the body. The mock goes at Base's registry
       // address, and nothing is at Arbitrum's, as on Base itself. This test used to give `USDC` one
       // address on every chain with a `tokens` override, which is how a reward resolved against the
@@ -1208,7 +1205,7 @@ describeEvm("route nesting, executed", () => {
       expect(await publicClient.getCode({ address: arbitrumUsdc })).toBeUndefined();
       const compiled = compileSauceRoute(
         "base",
-        README_EXAMPLE,
+        BODY_TO_ARBITRUM,
         { pot: executorPot, engine: sauce.engine },
         {
           defines: { RECIPIENT: BigInt(DELIVER_TO), MIN_AMOUNT: 1n },
@@ -1223,8 +1220,8 @@ describeEvm("route nesting, executed", () => {
           },
         },
       );
-      // Nothing in the example mentions the Portal, a selector or an approval.
-      expect(README_EXAMPLE).not.toMatch(/publishAndFund|evm\.call|hex`/);
+      // Nothing in the body mentions the Portal, a selector or an approval.
+      expect(BODY_TO_ARBITRUM).not.toMatch(/publishAndFund|evm\.call|hex`/);
 
       const { status, logs } = await fulfil([
         {
@@ -1246,7 +1243,7 @@ describeEvm("route nesting, executed", () => {
 
       const published = publishedIn(logs);
       expect(published).toHaveLength(1);
-      expect(published[0]!.destination).toBe(42_161n); // Arbitrum, as the example names
+      expect(published[0]!.destination).toBe(42_161n); // Arbitrum, as the body names
       // Escrowed here, so in this chain's USDC; delivered there, in that chain's.
       expect(published[0]!.rewardTokens.map((t) => [t.token.toLowerCase(), t.amount])).toEqual([
         [token.toLowerCase(), SEEDED],
@@ -1267,7 +1264,7 @@ describeEvm("route nesting, executed", () => {
       const marker = "0x0000000000000000000000000000000000000f01" as Address;
       const compiled = compileSauceRoute(
         "base",
-        README_EXAMPLE,
+        BODY_TO_ARBITRUM,
         { pot: executorPot, engine: sauce.engine },
         {
           tokens: { USDC: token },

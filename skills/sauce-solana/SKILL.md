@@ -32,8 +32,8 @@ function main(
 ```
 
 ```sh
-npx sauce compile solana.sauce.ts --chain solana --json
-npx sauce run solana.sauce.ts --chain solana --keypair <keypair> \
+sauce compile solana.sauce.ts --chain solana --json
+sauce run solana.sauce.ts --chain solana --keypair <keypair> \
   --account tokenProgram=<SPL Token program> --account source=<the Pot's token account> \
   --account destination=<token account> --account authority=pot --args <mint> 400
 ```
@@ -95,7 +95,7 @@ function main(pot: Account<Signer>, wallet: Account<Signer>, kitchen: Address, s
 ```
 
 ```sh
-npx sauce run pot.sauce.ts --chain solana --keypair <keypair> \
+sauce run pot.sauce.ts --chain solana --keypair <keypair> \
   --account pot=pot --account wallet=owner --args SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot 0
 ```
 
@@ -261,7 +261,7 @@ cluster. A token account's address derives from its owner, its mint and the mint
 the Pot's PYUSD account is not where an SPL Token derivation puts it:
 
 ```sh
-npx sauce run token-2022.sauce.ts --chain solana --keypair <keypair> \
+sauce run token-2022.sauce.ts --chain solana --keypair <keypair> \
   --account tokenProgram=program:PYUSD --account source=pot:PYUSD --account mint=mint:PYUSD \
   --account destination=<token account> --account pot=pot --args 400
 ```
@@ -272,8 +272,8 @@ Solana is one of the three chains the initial release supports, with Ethereum an
 Pots and intent steps are built and sent there.
 
 - **The Pot** is the Kitchen's address for the owner and salt.
-  `npx sauce pot --chain solana --owner <pubkey>` prints it;
-  `npx sauce pot --deploy --chain solana --keypair <keypair>` creates it.
+  `sauce pot --chain solana --owner <pubkey>` prints it;
+  `sauce pot --deploy --chain solana --keypair <keypair>` creates it.
   A cook names its Pot by `--owner` (and `--salt`), never `--pot`.
 - **The cook** pays the execution fee in lamports, read from the cluster and printed as `fee`, so
   there is no `--value`; `--max-execution-fee <lamports>` refuses a cook whose fee is above it.
@@ -292,7 +292,7 @@ Pots and intent steps are built and sent there.
   calls a program that calls others. Both pay the same fee into the Kitchen's treasury:
 
 ```sh
-npx sauce run solana.sauce.ts --chain solana --keypair <keypair> \
+sauce run solana.sauce.ts --chain solana --keypair <keypair> \
   --via engine --account tokenProgram=<SPL Token program> \
   --account source=<the signer's token account> --account destination=<token account> \
   --account authority=owner --args <mint> 400

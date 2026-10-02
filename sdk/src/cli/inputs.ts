@@ -40,8 +40,8 @@ import {
 /**
  * A program's text with a leading `#!` line blanked: each of its characters a space, so every
  * offset and line number after it — the compiler's diagnostics, a `// @chain` header — is the
- * file's own. A program file may start with one to run as a command (`#!/usr/bin/env -S npx -y
- * @eco-incorp/sauce simulate`); the compiler accepts it only as the very first bytes, and the SDK
+ * file's own. A program file may start with one to run as a command (`#!/usr/bin/env -S sauce
+ * simulate`); the compiler accepts it only as the very first bytes, and the SDK
  * puts imports above the program, so it is blanked before the compile sees it.
  */
 export function withoutShebang(text: string): string {

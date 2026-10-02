@@ -9,9 +9,10 @@
  * So: one anvil per chain, with its real chain id — Base (8453), Arbitrum (42161), Optimism (10),
  * Ethereum (1) — each running the real eco-routes Portal and the released engine behind a
  * Kitchen-minted Pot, and each holding a mock ERC-20 at ITS OWN registry USDC address and nowhere
- * else. The programs are the docs examples verbatim, compiled with the SDK's real registry: the
- * README's (Base to Arbitrum), and the nested-intents guide's cascade on the chains the release
- * supports (Base, Ethereum, then Base again). The cascade also runs over three different chains,
+ * else. The programs are compiled with the SDK's real registry: a body that forwards what it measured
+ * to Arbitrum (`fixtures/routes/bodies.ts`'s `BODY_TO_ARBITRUM`, the README's example before it
+ * took `main` arguments, which a body cannot), and the nested-intents guide's cascade, verbatim, on
+ * the chains the release supports (Base, Ethereum, then Base again). The cascade also runs over three different chains,
  * where a level resolving a name on its grandparent's chain would show. An intent published on one
  * anvil is fulfilled on the next from the bytes that anvil's Portal logged. The guide's two-level
  * file is opened from a wallet, which `cli-lifecycle.e2e.test.ts` runs through `sauce intent`.
@@ -69,7 +70,7 @@ import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-rout
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 import type { Intent } from "../src/routes/types.js";
 import { gateAnchors, startGatedEngine, type GatedEngine } from "./evm/gated-engine.js";
-import { CASCADE_BODY } from "./fixtures/routes/bodies.js";
+import { BODY_TO_ARBITRUM, CASCADE_BODY } from "./fixtures/routes/bodies.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -533,8 +534,8 @@ describeEvm("an intent created inside a program, across chains with different to
   ] as const;
 
   describe.each(BUILDS)("built with %s", (_name, build) => {
-    it("the README example: funded on Base in Base's USDC, fulfilled on Arbitrum in Arbitrum's", async () => {
-      const { route, rewardHash } = build(example("cross-chain-intent"));
+    it("a body that opens an intent: funded on Base in Base's USDC, fulfilled on Arbitrum in Arbitrum's", async () => {
+      const { route, rewardHash } = build(BODY_TO_ARBITRUM);
       // What the Pot holds when the program measures it; an earlier test's reverted fulfilment can
       // leave its own mint behind.
       await base.mint(base.usdc, base.pot, SEEDED);
