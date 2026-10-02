@@ -110,7 +110,7 @@ const keyArgs = STANDARD_KEYS.map(({ fee, tickSpacing }) => ({
   tickSpacing: BigInt(tickSpacing),
 }));
 
-// Each chain's venues, as comparing each with zero decides them: Base has all of them, Arbitrum no
+// Each chain's venues, as `available(...)` decides them: Base has all of them, Arbitrum no
 // Slipstream, Optimism no PancakeSwap V3 either.
 const VENUES = {
   base: ["UniswapV3.Factory", "PancakeswapV3.Factory", "AerodromeSlipstream.CLFactory"],

@@ -94,10 +94,10 @@ address on the chain the program is compiled for, a method call is an ABI call t
 another chain's address, without moving execution there. A protocol with a single deployed
 contract also takes its methods directly (`Cctp.depositForBurn(...)`).
 
-A contract or token symbol the chain the program is compiled for does not have is zero there, and
-`Name != 0n` is decided at compile time: a branch it rules out is never compiled; see
+`available(<contract or token symbol>)` is a compile-time `boolean`: whether the chain the program
+is compiled for has it. A branch it rules out is removed before anything in it resolves; see
 [use a venue only where the chain has it](../guides/protocols-and-tokens.md#use-a-venue-only-where-the-chain-has-it).
 
-The declarations a typed closure checks against, for every namespace and token, ship
+The declarations a typed closure checks against, for every namespace, token and `available`, ship
 in the package root's types. The ERC-20 syntax for tokens is in the
 [guide](../guides/protocols-and-tokens.md#token-methods-and-balances).

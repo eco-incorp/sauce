@@ -13,7 +13,7 @@
 //      return what happened. Anything else the Pot holds stays there.
 //
 // It names no chain: `--chain` picks one, and each venue is used where that chain has it
-// (`... != 0n`), so one file compiles for every chain.
+// (`available(...)`), so one file compiles for every chain.
 //
 //   sauce run distributed-swap.sauce.ts --chain <chain> --config sauce.config.json \
 //     --keystore <keystore> --args <tokenIn> <tokenOut> <amountIn> <sqrtPriceLimitX96> <minOut> \
@@ -121,7 +121,7 @@ function swapIntoV4(
   amount: Uint256,
   limit: Uint256,
 ): Uint256 {
-  if (UniswapV4.PoolManager == 0n) {
+  if (!available(UniswapV4.PoolManager)) {
     return 0n;
   }
   const self = ctx.self();
@@ -168,32 +168,32 @@ function main(
   //    each of its three factories. The tiers are the ones Base's factories enable.
   let found = new Array(38); // 7 + 4 + 3 * 9
   let m = 0n;
-  if (UniswapV3.Factory != 0n) {
+  if (available(UniswapV3.Factory)) {
     for (const fee of [100n, 200n, 300n, 400n, 500n, 3000n, 10000n]) {
       found[m] = UniswapV3.Factory.getPool(tokenIn, tokenOut, fee);
       m++;
     }
   }
-  if (PancakeswapV3.Factory != 0n) {
+  if (available(PancakeswapV3.Factory)) {
     for (const fee of [100n, 500n, 2500n, 10000n]) {
       found[m] = PancakeswapV3.Factory.getPool(tokenIn, tokenOut, fee);
       m++;
     }
   }
   const tickSpacings = [1n, 10n, 50n, 80n, 100n, 150n, 200n, 500n, 2000n];
-  if (AerodromeSlipstream.CLFactory != 0n) {
+  if (available(AerodromeSlipstream.CLFactory)) {
     for (const tickSpacing of tickSpacings) {
       found[m] = AerodromeSlipstream.CLFactory.getPool(tokenIn, tokenOut, tickSpacing);
       m++;
     }
   }
-  if (AerodromeSlipstream.CLFactoryGaugeCaps != 0n) {
+  if (available(AerodromeSlipstream.CLFactoryGaugeCaps)) {
     for (const tickSpacing of tickSpacings) {
       found[m] = AerodromeSlipstream.CLFactoryGaugeCaps.getPool(tokenIn, tokenOut, tickSpacing);
       m++;
     }
   }
-  if (AerodromeSlipstream.CLFactoryGaugesV3 != 0n) {
+  if (available(AerodromeSlipstream.CLFactoryGaugesV3)) {
     for (const tickSpacing of tickSpacings) {
       found[m] = AerodromeSlipstream.CLFactoryGaugesV3.getPool(tokenIn, tokenOut, tickSpacing);
       m++;
@@ -226,7 +226,7 @@ function main(
       }
     }
   }
-  if (UniswapV4.StateView != 0n) {
+  if (available(UniswapV4.StateView)) {
     for (const key of v4Keys) {
       const id = v4PoolId(key.fee, key.tickSpacing, tokenIn, tokenOut);
       if (UniswapV4.StateView.getLiquidity(id) != 0n) {

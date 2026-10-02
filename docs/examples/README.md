@@ -13,7 +13,7 @@ application calls them.
 | [cross-chain-intent.sauce.ts](cross-chain-intent.sauce.ts)     | A program that measures a balance and publishes a new intent carrying it — written in SauceScript                                              |
 | [cross-chain-intent.ts](cross-chain-intent.ts)                 | Compiling that program with `defines` and attaching it to a route                                                                              |
 | [protocol-approval.ts](protocol-approval.ts)                   | A typed `Base(() => ...)` body calling `USDC.approve(Uniswap.UniversalRouter, ...)`                                                            |
-| [venue-where-deployed.sauce.ts](venue-where-deployed.sauce.ts) | One program for every chain, using PancakeSwap V3 only where the chain has it — written in SauceScript                                         |
+| [venue-where-deployed.sauce.ts](venue-where-deployed.sauce.ts) | One program for every chain, using PancakeSwap V3 only where `available(...)` finds it — written in SauceScript                                |
 | [registry-names.ts](registry-names.ts)                         | That program compiled for two chains, and the same registry names from TypeScript: `Base.USDC`, a typed call, `.read(client)`                  |
 | [first-intent.ts](first-intent.ts)                             | Both sides of a transfer intent: Ethereum reward, Base delivery, Executor-to-Pot funding, source transaction requests                          |
 | [compile-program.ts](compile-program.ts)                       | Direct compilation, a compact entry schema, and argument encoding and decoding                                                                 |
