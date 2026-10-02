@@ -38,7 +38,8 @@ import type { PrivateKeyAccount } from "viem/accounts";
 
 import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm, hashIntent } from "../routes/encode.js";
-import { isTypeDeclaration } from "../routes/ast-walk.js";
+import { isTypeDeclaration, type AstNode } from "../routes/ast-walk.js";
+import { portalIntent } from "../routes/intent-portal.js";
 import type { LoweredIntent } from "../routes/intent-sugar.js";
 import {
   approvalTxs,
@@ -86,6 +87,7 @@ interface Node {
 
 const isIntentSite = (node: Node): boolean => {
   const call = node.type === "ExpressionStatement" ? (node.expression as Node) : undefined;
+  if (call !== undefined && portalIntent(call as unknown as AstNode) !== undefined) return true;
   const callee = call?.type === "CallExpression" ? (call.callee as Node) : undefined;
   const property = callee?.type === "MemberExpression" ? (callee.property as Node) : undefined;
   const opened = callee?.object as Node | undefined;

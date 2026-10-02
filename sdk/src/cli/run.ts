@@ -2714,7 +2714,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         ([verb, command]) => `  ${verb.padEnd(8)}  ${command.summary}`,
       ),
       "",
-      "An intent is a file that opens one (`Base(() => { … }).reward({ … })`), named with the",
+      "An intent is a file that opens one (`Base.Portal.send(…).receive(…).then(…)`), named with the",
       "flags it is built with, or its hash once the store keeps it: `publish`, `fill` and",
       "`import` store every intent they touch (--store, default ~/.sauce/intents), and every verb",
       "takes the hash. With no verb, at a terminal: a list of the stored intents, read live with",
