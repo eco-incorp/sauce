@@ -94,19 +94,15 @@ with both chains' endpoints. Every intent the commands publish, fill or import g
 store in your home directory (`--store <dir>` names another), so later steps name it by hash; where it
 stands is read from the chains each time.
 
-`npx sauce` runs the command in a project that depends on `@eco-incorp/sauce`; anywhere else, run
-`npx -y @eco-incorp/sauce` in its place, because without the package `npx sauce` fetches and runs
-npm's unrelated `sauce` package.
-
 ```sh
-npx sauce intent publish --config sauce.config.json --keystore <keystore>
-npx sauce intent status <intent-hash> --config sauce.config.json
-npx sauce intent fill <intent-hash> --config sauce.config.json --send --keystore <keystore>
-npx sauce intent prove <intent-hash> --config sauce.config.json --keystore <keystore>
-npx sauce intent claim <intent-hash> --chain <source> --config sauce.config.json --keystore <keystore>
-npx sauce intent refund <intent-hash> --chain <source> --config sauce.config.json --keystore <keystore>
-npx sauce intent cancel <intent-hash> --config sauce.config.json --keystore <keystore>
-npx sauce intent import <tx-hash> --chain <source> --config sauce.config.json
+sauce intent publish --config sauce.config.json --keystore <keystore>
+sauce intent status <intent-hash> --config sauce.config.json
+sauce intent fill <intent-hash> --config sauce.config.json --send --keystore <keystore>
+sauce intent prove <intent-hash> --config sauce.config.json --keystore <keystore>
+sauce intent claim <intent-hash> --chain <source> --config sauce.config.json --keystore <keystore>
+sauce intent refund <intent-hash> --chain <source> --config sauce.config.json --keystore <keystore>
+sauce intent cancel <intent-hash> --config sauce.config.json --keystore <keystore>
+sauce intent import <tx-hash> --chain <source> --config sauce.config.json
 ```
 
 - `publish` with no file asks, at a terminal, for the chains, the token and amount delivered and
@@ -139,10 +135,10 @@ cancelled on Solana, through its Portal program, and claimed or refunded on its 
 The config gives Solana's endpoint under its chain id, `1399811149`.
 
 ```sh
-npx sauce intent import <tx-hash> --chain <source> --config sauce.config.json
-npx sauce intent fill <intent-hash> --config sauce.config.json --solver <solana-key> --claimant <address>
-npx sauce intent fill <intent-hash> --config sauce.config.json --claimant <address> --send --keypair <keypair>
-npx sauce intent cancel <intent-hash> --config sauce.config.json --keypair <keypair>
+sauce intent import <tx-hash> --chain <source> --config sauce.config.json
+sauce intent fill <intent-hash> --config sauce.config.json --solver <solana-key> --claimant <address>
+sauce intent fill <intent-hash> --config sauce.config.json --claimant <address> --send --keypair <keypair>
+sauce intent cancel <intent-hash> --config sauce.config.json --keypair <keypair>
 ```
 
 - `--claimant` is required: the address on the source chain the reward pays. A Solana key is not
@@ -212,10 +208,10 @@ in the vault: top it up and run it again, or `refund` after the deadline. A seco
 the vault funded only publishes.
 
 ```sh
-npx sauce intent publish pay-on-ethereum.sauce.ts --chain base --config sauce.config.json \
+sauce intent publish pay-on-ethereum.sauce.ts --chain base --config sauce.config.json \
   --from <address> --dry-run --assume-balance USDC:1 --define RECIPIENT=<address> \
   --define AMOUNT=1000000 --intent-deadline <unix seconds> --intent-creator <address>
-npx sauce intent publish pay-on-ethereum.sauce.ts --chain base --from <address> --format json \
+sauce intent publish pay-on-ethereum.sauce.ts --chain base --from <address> --format json \
   --define RECIPIENT=<address> --define AMOUNT=1000000 \
   --intent-deadline <unix seconds> --intent-creator <address>
 ```
@@ -241,7 +237,7 @@ intent with a slot for it, and the program writes the measured value in before i
 one-word value can be carried this way.
 
 ```sh
-npx sauce run cross-chain.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+sauce run cross-chain.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
   --define BENEFICIARY=<address> --intent-deadline <unix seconds> --intent-creator <address> \
   --intent-execution-fee <wei>
 ```
@@ -257,7 +253,7 @@ arguments of the `publish` that `sauce intent publish … --from <address> --for
 with its signature (in [references/portal.md](references/portal.md)).
 
 ```sh
-npx sauce run fund-by-transfer.sauce.ts --chain base --config sauce.config.json \
+sauce run fund-by-transfer.sauce.ts --chain base --config sauce.config.json \
   --keystore <keystore> --args <portal> <destination> <route> <reward>
 ```
 
@@ -416,7 +412,7 @@ prover deployed on both sides.
 - **The shared Pot.** A program body cooks on the destination Portal Executor's **shared Pot** (its
   owner is the Executor, its salt zero); the destination's file in `sauce-chains` gives the Pot and
   the Executor. **The Pot must exist before any fill**: until it does, every fulfilment of a program
-  body reverts (`CallToEOA`). `npx sauce pot --chain <destination> --owner <Executor>` prints its
+  body reverts (`CallToEOA`). `sauce pot --chain <destination> --owner <Executor>` prints its
   address and deploy transaction; with `--deploy --config sauce.config.json --keystore <keystore>`
   any signer deploys it (the Pot is the Executor's either way), and an existing one is reported, not
   redeployed; `sauce intent fill` says whether it is deployed on the destination, and deploys it in its
@@ -440,7 +436,7 @@ prover deployed on both sides.
   and flags, before publishing; it signs nothing and sends nothing:
 
 ```sh
-npx sauce intent fill swap-on-base.sauce.ts --chain <chain> --config sauce.config.json \
+sauce intent fill swap-on-base.sauce.ts --chain <chain> --config sauce.config.json \
   --defines <defines.json> --intent-deadline <unix seconds> --intent-creator <address> \
   --intent-execution-fee <Base Kitchen fee in wei>
 ```
@@ -466,7 +462,7 @@ and rehearse again before `sauce intent publish` or `sauce run`. With `--send` a
   executes the same calls, shows what moves, and gives the gas:
 
 ```sh
-npx sauce simulate one-pool-body.sauce.ts --chain base --owner <address> \
+sauce simulate one-pool-body.sauce.ts --chain base --owner <address> \
   --config sauce.config.json --assume-balance WETH:0.001 --define AMOUNT_IN=1000000000000000 \
   --define SQRT_PRICE_LIMIT_X96=<sqrtPriceX96> --define MIN_OUT=<amount> \
   --define RECIPIENT=<address> --define REFUND_TO=<address>

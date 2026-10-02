@@ -7,7 +7,7 @@ description: The names a Sauce program uses without any import, and how they res
 
 A program compiled for a chain resolves these names against **that chain**, with no import. They
 are program syntax, not JavaScript values. **Look names up before writing a program**:
-`npx sauce globals --chain <chain>` lists one chain's, and these indexes list every chain's, from
+`sauce globals --chain <chain>` lists one chain's, and these indexes list every chain's, from
 the same registries the compile reads:
 
 - [references/tokens.md](references/tokens.md): every token symbol per chain, with its decimals,
@@ -18,10 +18,6 @@ the same registries the compile reads:
   aliases.
 - [references/chains.md](references/chains.md): every chain name, its id, and whether it takes
   intents.
-
-`npx sauce` runs the command in a project that depends on `@eco-incorp/sauce`; anywhere else, run
-`npx -y @eco-incorp/sauce` in its place, because without the package `npx sauce` fetches and runs
-npm's unrelated `sauce` package.
 
 These are the names. Where each is deployed and its address there are the full map: per chain in
 `sauce-chains` ([../sauce-chains/references/index.md](../sauce-chains/references/index.md)), and per
@@ -92,7 +88,7 @@ The symbol is the issuer's own ticker for the token, in its case: symbols are ca
 `NVDA.US` is `NVDA_US`. PreStocks' symbol is the company's name, `SPACEX`. One company has one token
 per issuer: SpaceX is `SPCXx` and `SPCXon` on Ethereum, `SPCXc` on Base, and `SPCXx`, `SPCXon`,
 `SPCX_US` and `SPACEX` on Solana. Find one by the company's name or ticker with
-`npx sauce globals --chain base --search spacex`, list a chain's with `--stocks`, or read
+`sauce globals --chain base --search spacex`, list a chain's with `--stocks`, or read
 [references/stocks.md](references/stocks.md).
 
 Buying and selling one on a DEX needs no account with its issuer, and any contract can hold it,

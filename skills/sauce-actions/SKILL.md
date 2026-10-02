@@ -63,14 +63,10 @@ resolves on the chain the document is compiled for:
 
 | Field takes         | Write                                   | Lists them                                       |
 | ------------------- | --------------------------------------- | ------------------------------------------------ |
-| a token             | its registry symbol: `"USDC"`, `"WETH"` | `npx sauce globals --chain <chain> --tokens`     |
-| a contract          | `"Namespace.Contract"`: `"AaveV3.Pool"` | `npx sauce globals --chain <chain> --protocols`  |
+| a token             | its registry symbol: `"USDC"`, `"WETH"` | `sauce globals --chain <chain> --tokens`     |
+| a contract          | `"Namespace.Contract"`: `"AaveV3.Pool"` | `sauce globals --chain <chain> --protocols`  |
 | the native currency | `"native"`, where the venue trades it   | `uniswapV4Swap`, `ambientSwap`, a Balancer batch |
 | any of these        | an address, `0x` and 40 hex digits      | always accepted                                  |
-
-`npx sauce` runs the command in a project that depends on `@eco-incorp/sauce`; anywhere else, run
-`npx -y @eco-incorp/sauce` in its place, because without the package `npx sauce` fetches and runs
-npm's unrelated `sauce` package.
 
 Symbols are upper case. A chain that does not register a name refuses the document when it
 compiles, naming the field, the chain and the name:
@@ -138,18 +134,18 @@ the bytecode; `--json` adds the document as parsed, the chain, and what `sauce c
 reports. Read the source to check what the document does before it runs.
 
 ```sh
-npx sauce actions swap.json --chain base
-npx sauce actions swap.json --chain base --json
+sauce actions swap.json --chain base
+sauce actions swap.json --chain base --json
 ```
 
 `compile`, `simulate`, `tx` and `run` take the document wherever they take a `.sauce.ts` file, with
 the same flags (`sauce-cli` covers the Pot, endpoints, signers and funding):
 
 ```sh
-npx sauce simulate swap.json --chain base --owner <address> --rpc-url <url> \
+sauce simulate swap.json --chain base --owner <address> --rpc-url <url> \
   --assume-balance USDC:1000 --args 1000000000
-npx sauce tx swap.json --chain base --owner <address> --value 0 --args 1000000000
-npx sauce run swap.json --chain base --rpc-url <url> --keystore <keystore> --args 1000000000
+sauce tx swap.json --chain base --owner <address> --value 0 --args 1000000000
+sauce run swap.json --chain base --rpc-url <url> --keystore <keystore> --args 1000000000
 ```
 
 - `tx` and `run` build and send the cook on a chain the initial release supports: Ethereum or

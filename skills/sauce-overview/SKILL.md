@@ -93,19 +93,17 @@ the developer; never invent one.
 
 ## From a file to a transaction
 
-The `sauce` command comes with the package, which needs Node.js 24 or newer: install it in the
-project with `npm i -D -E @eco-incorp/sauce` and run it there with `npx sauce`. Anywhere the
-package is not installed, run `npx -y @eco-incorp/sauce` in its place: there a bare `npx sauce`
-fetches and runs npm's unrelated `sauce` package. With the program above saved as
-`payout.sauce.ts`:
+The `sauce` command comes with the package, which needs Node.js 24 or newer: install it once with
+`npm i -g @eco-incorp/sauce`, or run `npx -y @eco-incorp/sauce` in its place (`sauce-cli`). With
+the program above saved as `payout.sauce.ts`:
 
 ```sh
-npx sauce globals --chain base                     # the names a program on Base can use
-npx sauce compile payout.sauce.ts --chain base     # check it compiles: the bytecode
-npx sauce simulate payout.sauce.ts --chain base --owner <address> --config sauce.config.json \
+sauce globals --chain base                     # the names a program on Base can use
+sauce compile payout.sauce.ts --chain base     # check it compiles: the bytecode
+sauce simulate payout.sauce.ts --chain base --owner <address> --config sauce.config.json \
   --assume-balance USDC:1 --args <recipient> 1000000
-npx sauce tx payout.sauce.ts --chain base --owner <address> --args <recipient> 1000000
-npx sauce run payout.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+sauce tx payout.sauce.ts --chain base --owner <address> --args <recipient> 1000000
+sauce run payout.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
   --args <recipient> 1000000
 ```
 
@@ -120,7 +118,7 @@ any wallet or signer to send; `sauce run` signs and sends it itself, deploying t
 is not there. Both work on a supported chain only; on a preview chain, compile and simulate.
 `sauce-cli` covers each command. Endpoints come from a config file the developer passes, never
 from the program or the environment. Without the CLI, the same steps are tools of the Sauce MCP
-server (`npx -y @eco-incorp/sauce mcp`); `sauce-cli` maps each command to its tool.
+server (`sauce mcp`); `sauce-cli` maps each command to its tool.
 
 ## Pick the next skill
 

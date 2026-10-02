@@ -57,13 +57,9 @@ With that program in `pools.sauce.ts`, a run on Base passes nothing but the fee 
 `500` is the 0.05% tier):
 
 ```sh
-npx sauce run pools.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+sauce run pools.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
   --args 500
 ```
-
-`npx sauce` runs the command in a project that depends on `@eco-incorp/sauce`; anywhere else, run
-`npx -y @eco-incorp/sauce` in its place, because without the package `npx sauce` fetches and runs
-npm's unrelated `sauce` package.
 
 Written without `available(...)`, a member is required: the program does not compile for a chain
 that lacks it.

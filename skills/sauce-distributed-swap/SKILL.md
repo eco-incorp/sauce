@@ -194,7 +194,7 @@ Base. For another chain, write the loops for the venues that chain has: Ethereum
 
 ## The token and its pools
 
-**The token by its name.** `npx sauce globals --chain base` lists every token a program on Base can
+**The token by its name.** `sauce globals --chain base` lists every token a program on Base can
 name, tokenized stocks included, each with its address and decimals: SPCXc is Coinbase's
 tokenized SpaceX, `0xb2000000000000000000007b9fcbd005511aCBd5`, 8 decimals. The same lists are in
 [../sauce-globals/references/tokens.md](../sauce-globals/references/tokens.md) and
@@ -202,10 +202,6 @@ tokenized SpaceX, `0xb2000000000000000000007b9fcbd005511aCBd5`, 8 decimals. The 
 registry does not name comes from the user or its issuer, never from a search summary, and is
 checked on chain before use: its `name()`, `symbol()` and `decimals()`. Decimals decide
 `maxPrice`.
-
-`npx sauce` runs the command in a project that depends on `@eco-incorp/sauce`; anywhere else, run
-`npx -y @eco-incorp/sauce` in its place, because without the package `npx sauce` fetches and runs
-npm's unrelated `sauce` package.
 
 **The venues that hold the pair.** On Base, the price-limited venues are Aerodrome Slipstream's
 three CL factories (`AerodromeSlipstream.CLFactory`, `.CLFactoryGaugeCaps`, `.CLFactoryGaugesV3`),
@@ -297,19 +293,19 @@ reverts `average too high`. That shows both checks work. Buying SPCXc with 1,000
 each, with the price near 148.8 on 2026-10-01:
 
 ```sh
-npx sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
+sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
   --config sauce.config.json --assume-balance USDC:1000 \
   --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0xb2000000000000000000007b9fcbd005511aCBd5 \
   1000000000 1500000000000000000 660000000 1495000000000000000 <recipient> <refundTo>
-npx sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
+sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
   --config sauce.config.json --assume-balance USDC:1000 \
   --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0xb2000000000000000000007b9fcbd005511aCBd5 \
   1000000000 1500000000000000000 1000000000 1495000000000000000 <recipient> <refundTo>
-npx sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
+sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
   --config sauce.config.json --assume-balance USDC:1000 \
   --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0xb2000000000000000000007b9fcbd005511aCBd5 \
   1000000000 1500000000000000000 660000000 1400000000000000000 <recipient> <refundTo>
-npx sauce run distributed-swap.sauce.ts --chain base --config sauce.config.json \
+sauce run distributed-swap.sauce.ts --chain base --config sauce.config.json \
   --keystore <keystore> --fund USDC:1000 --fund-mode permit \
   --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0xb2000000000000000000007b9fcbd005511aCBd5 \
   1000000000 1500000000000000000 660000000 1495000000000000000 <recipient> <refundTo>
