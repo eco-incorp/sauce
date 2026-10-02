@@ -53,7 +53,12 @@
 //   9. the SauceScript reference (sauce-script/references) compiles every example it gives and is
 //      refused every form it rejects, with the messages it quotes;
 //  10. the actions reference (sauce-actions/references) is what `gen-skills-actions.mjs` renders
-//      from the actions JSON Schema the package ships.
+//      from the actions JSON Schema the package ships;
+//  11. every example program is either executed by a suite CI runs, named in
+//      `skills-check/executed.json`, or listed there as compile-only with the reason;
+//  12. every example program writes what the registry names by its name: no recorded address as
+//      a literal, no hand-built selector of a function a binding declares (LOW_LEVEL_CALLS); and
+//      takes its inputs as `main` parameters, never an undeclared define (INPUT_EXCEPTIONS).
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -78,6 +83,12 @@ import {
   skillsReferences,
 } from "./gen-skills-references.mjs";
 import { checkBuiltins, checkBuiltinsJson } from "./skills-check/builtins.mjs";
+import {
+  executedExamplesProblems,
+  inputProblems,
+  namedProgramProblems,
+  registryNames,
+} from "../../docs/scripts/example-programs.mjs";
 
 // ---- Arguments and resolution -------------------------------------------------------------------
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1650,6 +1661,96 @@ else {
     );
 }
 
+// ---- 11. Which example programs a suite executes ----------------------------------------------------------
+// Compiling a program is not running it: `skills-check/executed.json` names the suites that execute
+// each one on an engine, or says why none does yet. The suites are this repository's, so a check of
+// another skills directory (`--skills`) skips it.
+const examplePrograms = walk(SKILLS_DIR, (file) => file.endsWith(".sauce.ts"))
+  .map((file) => relative(SKILLS_DIR, file))
+  .filter((file) => /^[^/]+\/examples\/[^/]+$/.test(file));
+let executedExamples = 0;
+if (skillsFlag < 0) {
+  const manifest = join(HERE, "skills-check", "executed.json");
+  for (const problem of executedExamplesProblems({
+    repository: REPOSITORY,
+    examplesRoot: SKILLS_DIR,
+    examples: examplePrograms,
+    manifest,
+  })) {
+    fail(rel(manifest), problem);
+  }
+  executedExamples = Object.keys(JSON.parse(read(manifest)).executed).length;
+}
+
+// ---- 12. Example programs write what the registry names by its name, and show their inputs ---------------
+// No address the registry records as a literal, and no hand-built selector of a function a binding
+// declares (`docs/scripts/example-programs.mjs`). A deliberately low-level call is listed here:
+// example -> selector -> why. And every value a program reads has a visible source: an input is a
+// `main` parameter; an exception is INPUT_EXCEPTIONS's, example -> name -> why. An entry nothing
+// needs any more fails.
+const LOW_LEVEL_CALLS = {};
+// The intent files intent-defaults converts to `main` parameters (`sauce intent publish --args`);
+// that PR removes these, which fail once nothing reads them.
+const BY_INTENT_DEFAULTS = "converted by intent-defaults' intent publish --args PR";
+const INPUT_EXCEPTIONS = {
+  "sauce-intents/examples/cross-chain.sauce.ts": { BENEFICIARY: BY_INTENT_DEFAULTS },
+  "sauce-intents/examples/swap-on-base.sauce.ts": Object.fromEntries(
+    [
+      "AMOUNT_IN",
+      "REWARD",
+      "SQRT_PRICE_LIMIT_X96",
+      "MIN_OUT",
+      "MIN_AVG_PRICE",
+      "RECIPIENT",
+      "REFUND_TO",
+    ].map((name) => [name, BY_INTENT_DEFAULTS]),
+  ),
+};
+{
+  const names = registryNames(
+    sdk,
+    await Promise.all(
+      sdk.listProtocolSlugs().map(async (slug) => [slug, await load(`${PKG}/protocols/${slug}`)]),
+    ),
+    JSON.parse(read(join(SKILLS_DIR, "sauce-script", "references", "builtins.json"))),
+  );
+  for (const program of examplePrograms) {
+    const where = rel(join(SKILLS_DIR, program));
+    const source = read(join(SKILLS_DIR, program));
+    const lowLevel = LOW_LEVEL_CALLS[program] ?? {};
+    const allowed = INPUT_EXCEPTIONS[program] ?? {};
+    const usedCalls = new Set();
+    const usedInputs = new Set();
+    failures.push(
+      ...namedProgramProblems({ where, source, names, lowLevel, used: usedCalls }),
+      ...inputProblems({ where, source, ts, names, allowed, used: usedInputs }),
+    );
+    for (const selector of Object.keys(lowLevel)) {
+      if (!usedCalls.has(selector))
+        fail(
+          "check-skills.mjs LOW_LEVEL_CALLS",
+          `allows ${selector} in ${program}, which no longer builds it: remove the entry`,
+        );
+    }
+    for (const input of Object.keys(allowed)) {
+      if (!usedInputs.has(input))
+        fail(
+          "check-skills.mjs INPUT_EXCEPTIONS",
+          `allows ${input} in ${program}, which no longer reads it: remove the entry`,
+        );
+    }
+  }
+  for (const [list, entries] of [
+    ["LOW_LEVEL_CALLS", LOW_LEVEL_CALLS],
+    ["INPUT_EXCEPTIONS", INPUT_EXCEPTIONS],
+  ]) {
+    for (const program of Object.keys(entries)) {
+      if (!examplePrograms.includes(program))
+        fail(`check-skills.mjs ${list}`, `names ${program}, which is not an example program`);
+    }
+  }
+}
+
 // ---- Report ----------------------------------------------------------------------------------------------
 const summary =
   `${counts.skills} skills, ${counts.files} files read; ${counts.programRuns} program runs through sauce ` +
@@ -1658,7 +1759,8 @@ const summary =
   `${counts.sauceFails} refused as documented; ${counts.ts} ts blocks typechecked; ${counts.runners} runners ` +
   `executed offline; ${counts.indexed} indexed globals compiled on their chains; ${builtinExamples} ` +
   `reference examples compiled and ${builtinRejections} rejections refused; ${counts.subpaths} subpaths, ` +
-  `${counts.identifiers} inline identifiers and ${counts.addresses} addresses checked; against ` +
+  `${counts.identifiers} inline identifiers and ${counts.addresses} addresses checked; ` +
+  `${executedExamples} example programs executed by a suite; against ` +
   `${PKG}@${sdkPkg.version}`;
 if (failures.length > 0) {
   console.error(
