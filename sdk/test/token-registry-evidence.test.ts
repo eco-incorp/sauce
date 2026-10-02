@@ -36,6 +36,8 @@ interface MintEvidence {
   readonly symbol?: string | null;
   /** Whether any of it is minted: its supply is above zero. */
   readonly minted?: boolean;
+  /** Whether it charges a transfer fee: a TransferFee schedule above zero. */
+  readonly transferFee?: boolean;
   /** Why a checked transfer of it is refused (`resolveSvmToken`), `null` where it is no mint. */
   readonly refusals?: readonly string[] | null;
 }
@@ -131,6 +133,10 @@ describe("token registry evidence", () => {
       expect(evidence.refusals).toEqual([]);
       // Backpack lists mints it has not opened: each copied one has been minted.
       if (row.stock?.issuer === "backpack") expect(evidence.minted).toBe(true);
+      // A fee is its issuer's, as `STOCK_ISSUERS` records it: the references say which charge one.
+      expect(evidence.transferFee).toBe(
+        row.stock !== undefined && STOCK_ISSUERS[row.stock.issuer].transferFee === true,
+      );
     },
   );
 

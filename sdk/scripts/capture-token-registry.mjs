@@ -9,8 +9,9 @@
 // `0xef`), `symbol()` and `decimals()`. For every mint `SVM_TOKEN_REGISTRY` registers on
 // mainnet-beta, under Solana's chain id (1399811149), it records the mint as the cluster finalized
 // it: the program that owns it, whether it is initialized, its decimals, its metadata symbol (a
-// Token-2022 mint's own TokenMetadata, else its Metaplex metadata), whether any of it is minted, and
-// why a checked transfer of it would be refused (`resolveSvmToken`'s `transferRefusals`: a transfer
+// Token-2022 mint's own TokenMetadata, else its Metaplex metadata), whether any of it is minted,
+// whether it charges a transfer fee (a TransferFee schedule above zero), and why a checked transfer
+// of it would be refused (`resolveSvmToken`'s `transferRefusals`: a transfer
 // hook that names a program, a paused mint, ...), each read with `getMultipleAccounts`, 300 accounts
 // a request. `--chains` recaptures only those chains and keeps every other chain's evidence as it
 // is. Nothing else reads the network: the test is offline and only ever reads what this writes.
@@ -259,9 +260,15 @@ async function captureSolana(rows) {
           : null;
     }
     let refusals = null;
+    let transferFee = false;
     try {
       const resolved = await resolveSvmToken(async () => account, address(row.mint));
       refusals = [...resolved.transferRefusals];
+      const fee = resolved.extensions.transferFee;
+      transferFee =
+        fee !== undefined &&
+        (fee.olderTransferFee.transferFeeBasisPoints > 0 ||
+          fee.newerTransferFee.transferFeeBasisPoints > 0);
     } catch {
       // Not an initialized mint of either program: `initialized` and `program` say which.
     }
@@ -275,6 +282,7 @@ async function captureSolana(rows) {
       decimals: account.data[44],
       symbol,
       minted: supply > 0n,
+      transferFee,
       refusals,
     };
   }

@@ -65,9 +65,14 @@
 /** An issuer whose list `stock-tokens.generated.ts` copies. */
 export type StockIssuer = "backed" | "ondo" | "coinbase" | "mtpelerin" | "backpack" | "prestocks";
 
-/** Each issuer's name and the published list its rows are copied from. */
+/** Each issuer's name, the published list its rows are copied from, and whether its Solana mints
+ *  charge a transfer fee (Token-2022's TransferFee, withheld from what the recipient gets), which
+ *  the evidence holds every mint to. */
 export const STOCK_ISSUERS: Readonly<
-  Record<StockIssuer, { readonly name: string; readonly source: string }>
+  Record<
+    StockIssuer,
+    { readonly name: string; readonly source: string; readonly transferFee?: true }
+  >
 > = {
   // Backed's public API, documented at docs.xstocks.fi. Its list, per network (`?network=Solana`),
   // holds the xStocks; each asset, the bTokens among them, is also at `/<symbol>`.
@@ -84,7 +89,7 @@ export const STOCK_ISSUERS: Readonly<
   // its Solana mint.
   backpack: { name: "Backpack Securities", source: "https://api.backpack.exchange/api/v1/assets" },
   // PreStocks' product page: each company's token, with its Solana mint.
-  prestocks: { name: "PreStocks", source: "https://prestocks.com/products" },
+  prestocks: { name: "PreStocks", source: "https://prestocks.com/products", transferFee: true },
 };
 
 /** `[symbol, address, name, ticker]`: the registry symbol, the address (EIP-55 on an EVM chain, the
