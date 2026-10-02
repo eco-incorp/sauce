@@ -27,8 +27,10 @@ import {
   MIN_SQRT_PRICE_X96,
   type PoolPriceTokens,
 } from "../price.js";
+import { ERC20ABI } from "../protocols/erc20/abis.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { UsageError } from "./args.js";
+import { readAll } from "./chain.js";
 import type { CommandOutput } from "./commands.js";
 
 /** One side of the pair. */
@@ -37,6 +39,9 @@ export interface PriceToken {
   readonly symbol: string;
   readonly address: Address;
   readonly decimals: number;
+  /** The symbol and decimals are the token contract's own, read from the chain: not a registry
+   *  token, so the symbol is only what the contract calls itself. */
+  readonly readFromChain?: true;
 }
 
 /** Refuses a chain with no V3- or V4-style pools to price. */
@@ -53,6 +58,75 @@ export function pricedChain(chain: CanonicalChain): CanonicalChain {
 
 /** `<symbol>`, `<address>` (a registered one) or `<address>:<decimals>`, on `chain`. */
 export function parsePriceToken(raw: string, chain: CanonicalChain): PriceToken {
+  const token = tokenGiven(raw, chain);
+  if (typeof token === "string") {
+    throw new UsageError(
+      `${token} is not a token ${chain.slug} registers, so its decimals are not known: give them ` +
+        `as ${token}:<decimals>, or an endpoint (--rpc-url or --config) to read them from the token`,
+    );
+  }
+
+  return token;
+}
+
+/**
+ * The tokens `raw` names, on `chain`: as {@link parsePriceToken} reads them, and an address the
+ * chain registers no decimals for read from the token itself through `client` — its `decimals()`
+ * and `symbol()`, in one request. Without a client such an address is refused as before.
+ */
+export async function resolvePriceTokens(
+  raw: readonly string[],
+  chain: CanonicalChain,
+  client: PublicClient | undefined,
+): Promise<PriceToken[]> {
+  const given = raw.map((each) =>
+    client === undefined ? parsePriceToken(each, chain) : tokenGiven(each, chain),
+  );
+  const unknown = given.filter((each): each is Address => typeof each === "string");
+  const read = client === undefined ? [] : await tokensOnChain(client, chain, unknown);
+
+  return given.map((each) => (typeof each === "string" ? read[unknown.indexOf(each)]! : each));
+}
+
+/** `addresses`' decimals and symbols, as each token answers them. */
+export async function tokensOnChain(
+  client: PublicClient,
+  chain: CanonicalChain,
+  addresses: readonly Address[],
+): Promise<PriceToken[]> {
+  const answers = await readAll(
+    client,
+    "the tokens' decimals and symbols",
+    addresses.flatMap((address) => [
+      { address, abi: ERC20ABI, functionName: "decimals" },
+      { address, abi: ERC20ABI, functionName: "symbol" },
+    ]),
+  );
+  const registered = new Set(
+    (TOKEN_REGISTRY[chain.id] ?? []).map((row) => row.symbol.toUpperCase()),
+  );
+
+  return addresses.map((address, index) => {
+    const [decimals, symbol] = [answers[2 * index]!, answers[2 * index + 1]!];
+    if (!decimals.ok) {
+      throw new UsageError(
+        `${address} answers no decimals() on ${chain.slug} (${decimals.error}): is it a token ` +
+          `there? Give its decimals as ${address}:<decimals> to price it anyway`,
+      );
+    }
+    const named = symbol.ok && typeof symbol.value === "string" ? symbol.value.trim() : "";
+    // A token calling itself by a registry symbol it is not is shown by its address: its own name
+    // would read as the registry's token.
+    const usable =
+      /^[\w.\-+$]{1,20}$/.test(named) && !registered.has(named.toUpperCase()) ? named : address;
+
+    return { symbol: usable, address, decimals: Number(decimals.value), readFromChain: true };
+  });
+}
+
+/** A token as written: its registry row (or an address with its decimals), or an address the
+ *  chain registers no decimals for, which only the token can say. */
+export function tokenGiven(raw: string, chain: CanonicalChain): PriceToken | Address {
   const rows = TOKEN_REGISTRY[pricedChain(chain).id] ?? [];
   const [given, decimalsText, ...rest] = raw.split(":");
   if (rest.length > 0 || given === undefined || given === "") {
@@ -73,12 +147,7 @@ export function parsePriceToken(raw: string, chain: CanonicalChain): PriceToken 
       throw new UsageError(`${raw}: ${row.symbol} has ${row.decimals} decimals, not ${decimals}`);
     }
     const known = decimals ?? row?.decimals;
-    if (known === undefined) {
-      throw new UsageError(
-        `${given} is not a token ${chain.slug} registers, so its decimals are not known: give them ` +
-          `as ${given}:<decimals>`,
-      );
-    }
+    if (known === undefined) return address;
 
     return { symbol: row?.symbol ?? address, address, decimals: known };
   }
@@ -87,7 +156,7 @@ export function parsePriceToken(raw: string, chain: CanonicalChain): PriceToken 
   if (row === undefined) {
     throw new UsageError(
       `${given} is not a token ${chain.slug} registers (sauce globals --chain ${chain.slug} ` +
-        "--tokens lists them): give its address with :<decimals>",
+        "--tokens lists them): give its address",
     );
   }
   if (decimals !== undefined && decimals !== row.decimals) {

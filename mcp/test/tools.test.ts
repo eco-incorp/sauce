@@ -268,6 +268,58 @@ describe("sauce_price", () => {
       /solana has none/,
     );
   });
+
+  it("reads an unregistered address's decimals only through an endpoint, and says so", async () => {
+    const message = failed(
+      await mcp.call("sauce_price", {
+        chain: "base",
+        base: `0x${"12".repeat(20)}`,
+        quote: "USDC",
+        price: "1",
+      }),
+    );
+    assert.match(message, /its decimals are not known: give them as 0x[0-9a-fA-F]{40}:<decimals>/);
+    assert.match(message, /or an endpoint \(rpcUrl or --config\) to read them from the token/);
+  });
+});
+
+describe("sauce_pools", () => {
+  it("lists a pair's pools only through an endpoint, and says so without one", async () => {
+    const message = failed(
+      await mcp.call("sauce_pools", { chain: "base", tokenA: "USDC", tokenB: "WETH" }),
+    );
+    assert.match(message, /Listing a pair's pools needs an RPC endpoint for base/);
+    assert.match(message, /Pass rpcUrl with the call/);
+  });
+
+  it("refuses a chain with no such pools, and a V4 key it cannot read, before any endpoint", async () => {
+    assert.match(
+      failed(await mcp.call("sauce_pools", { chain: "solana", tokenA: "USDC", tokenB: "SOL" })),
+      /sauce_pools lists Uniswap V3- and V4-style pools, on an EVM chain; solana has none/,
+    );
+    assert.match(
+      failed(
+        await mcp.call("sauce_pools", {
+          chain: "base",
+          tokenA: "USDC",
+          tokenB: "WETH",
+          v4Pools: ["3000"],
+        }),
+      ),
+      /v4Pools 3000: a hookless V4 pool's key is <fee>:<tickSpacing>/,
+    );
+    assert.equal(
+      (
+        await mcp.call("sauce_pools", {
+          chain: "base",
+          tokenA: "USDC",
+          tokenB: "WETH",
+          v4Pools: Array.from({ length: 33 }, () => "1:1"),
+        })
+      ).isError,
+      true,
+    );
+  });
 });
 
 describe("sauce_compile", () => {

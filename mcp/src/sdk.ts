@@ -52,11 +52,13 @@ export {
 } from "../../sdk/dist/cli/inputs.js";
 export { inspectCommand, inspectFile } from "../../sdk/dist/cli/inspect.js";
 export type { McpEntry, McpServeOptions, McpSetupOptions } from "../../sdk/dist/cli/mcp.js";
+export { MAX_V4_KEYS, parseV4Key, poolsCommand } from "../../sdk/dist/cli/pools.js";
 export {
-  parsePriceToken,
   priceCommand,
   pricedChain,
   priceGiven,
+  resolvePriceTokens,
+  tokenGiven,
 } from "../../sdk/dist/cli/price.js";
 export {
   defineLabels,

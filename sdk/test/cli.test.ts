@@ -2423,6 +2423,7 @@ describe("the CLI stays out of the browser-facing surface", () => {
       await import("../src/cli/verify.js"),
       await import("../src/cli/solana.js"),
       await import("../src/cli/price.js"),
+      await import("../src/cli/pools.js"),
       await import("../src/cli/report.js"),
       await import("../src/cli/intents.js"),
       await import("../src/cli/receipt.js"),

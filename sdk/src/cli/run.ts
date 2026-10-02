@@ -97,7 +97,8 @@ import {
   type Endpoints,
 } from "./intents.js";
 import { MCP_FLAGS, mcpCommand } from "./mcp.js";
-import { livePrice, parsePriceToken, priceCommand, pricedChain, priceGiven } from "./price.js";
+import { livePrice, priceCommand, pricedChain, priceGiven, resolvePriceTokens } from "./price.js";
+import { parseV4Key, poolsCommand } from "./pools.js";
 import { publishCommand } from "./publish.js";
 import { simulateCommand } from "./simulate.js";
 import {
@@ -2681,7 +2682,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "`2700 USDC per WETH` says it in words: 2,700 USDC for one WETH. The same price is",
       "`WETH USDC 2700`: <base> <quote> <price>, the price how many <quote> tokens one <base> is",
       "worth. A token is a symbol the chain registers (sauce globals --tokens), or an address with",
-      "its decimals (0x…:18). The first line says what the price means, both ways round",
+      "its decimals (0x…:18); with an endpoint, an address alone, its decimals read from the",
+      "token. The first line says what the price means, both ways round",
       "(1 WETH = 2700 USDC, 1 USDC = 0.00037… WETH). Then the pool's sqrtPriceX96 at that price,",
       "for the pair's order on the chain (token0 is the lower address), and for each direction:",
       "  sqrtPriceLimitX96  the same number as a swap's limit: a floor when selling token0, a",
@@ -2716,17 +2718,14 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}`);
       const given = priceGiven(price, sqrt);
 
-      const pair = { base: parsePriceToken(base, chain), quote: parsePriceToken(quote, chain) };
       const reach =
         stringFlag(args, "rpc-url") !== undefined || stringFlag(args, "config") !== undefined;
-      const live = reach
-        ? await livePrice(
-            await connect(requiredEndpoint(args, io, chain), chain),
-            chain,
-            pair.base,
-            pair.quote,
-          )
-        : undefined;
+      const client = reach ? await connect(requiredEndpoint(args, io, chain), chain) : undefined;
+      // A token the chain registers no decimals for has them read from it, with an endpoint.
+      const [baseToken, quoteToken] = await resolvePriceTokens([base, quote], chain, client);
+      const pair = { base: baseToken!, quote: quoteToken! };
+      const live =
+        client === undefined ? undefined : await livePrice(client, chain, pair.base, pair.quote);
       const output = priceCommand({
         chain,
         ...pair,
@@ -2744,6 +2743,71 @@ const COMMANDS: Readonly<Record<string, Command>> = {
             ],
           }
         : output;
+    },
+  },
+  pools: {
+    usage:
+      "sauce pools --chain <slug|id> <token> <token> [--v4-key <fee:spacing>]… (--rpc-url <url> | --config <file>) [--json]",
+    summary: "List a pair's price-limit pools on a chain, deepest first, with their prices",
+    flags: {
+      chain: { type: "string", value: "<slug|id>", help: "The chain the pools are on" },
+      "v4-key": {
+        type: "string",
+        multiple: true,
+        value: "<fee:spacing>",
+        help: "Also try this hookless Uniswap V4 pool key (3000:60)",
+      },
+      ...ENDPOINT,
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Every pool of the pair at the price-limit venues the registry records on the chain:",
+      "Uniswap V3 and PancakeSwap V3 at each fee tier their factory enables, Aerodrome Slipstream",
+      "at each tick spacing of each of its CLFactories, and hookless Uniswap V4 pools at the keys",
+      "100:1, 500:10, 3000:60 and 10000:200, and any --v4-key. A token is a symbol the chain",
+      "registers (sauce globals --tokens), or an address: its decimals and symbol are read from",
+      "the token (or give them, 0x…:8).",
+      "",
+      "Pools with liquidity come first, deepest first: by the liquidity at each pool's price,",
+      "which is in the same units at every venue for one pair. For each: the venue and the",
+      "contract a program finds it through, its address (a V4 pool's id and key), its fee read",
+      "from the pool (a V4 pool's LP fee and protocol fee, from StateView), tick spacing,",
+      "liquidity, tick and sqrtPriceX96, and both ways round: what one token costs in the other",
+      "before and with the fee, the distributed swap's maxPrice at that price (pay base units per",
+      "buy base unit times 1e18: the price times 10^(18 + pay decimals - buy decimals)), and about",
+      "how much of the paid token, fee included, moves the price 1% against the taker, walked",
+      "through the pool's ticks. Pools with no liquidity at their price are listed after them, as",
+      "skipped. Then what was looked at.",
+      "",
+      "It reads the chain in five requests, each one eth_call for every read in it, and needs an",
+      "endpoint: --rpc-url, or --config with the chain's entry.",
+      "",
+      "Examples:",
+      "  sauce pools --chain base USDC WETH --config sauce.config.json",
+      "  sauce pools --chain base USDC 0x… --rpc-url <url> --json",
+      "  sauce pools --chain base WETH USDC --v4-key 50:1 --config sauce.config.json",
+    ].join("\n"),
+    run: async (args, io) => {
+      const chain = parseChain(requiredFlag(args, "chain", "<slug|id>"));
+      const [first, second, ...rest] = args.positionals;
+      if (first === undefined || second === undefined) {
+        throw new UsageError("missing the pair: <token> <token>, as USDC WETH");
+      }
+      if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}`);
+      if (chain.kind !== "evm") {
+        throw new UsageError(
+          `sauce pools lists Uniswap V3- and V4-style pools, on an EVM chain; ${chain.slug} has none`,
+        );
+      }
+      const v4Keys = repeatedFlag(args, "v4-key").map((raw) => parseV4Key(raw));
+
+      return poolsCommand({
+        chain,
+        client: await connect(requiredEndpoint(args, io, chain), chain),
+        tokens: [first, second],
+        v4Keys,
+      });
     },
   },
   inspect: {
@@ -3055,8 +3119,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     details: [
       "The Sauce MCP server. Its tools are this command's read-only half — sauce_compile,",
       "sauce_actions, sauce_tx, sauce_pot, sauce_simulate, sauce_intent_publish,",
-      "sauce_intent_fill, sauce_inspect, sauce_verify, sauce_globals, sauce_price and",
-      "sauce_chains — with the agent skills as tools (sauce_skills, sauce_skill, sauce_dev,",
+      "sauce_intent_fill, sauce_inspect, sauce_verify, sauce_globals, sauce_price, sauce_pools",
+      "and sauce_chains — with the agent skills as tools (sauce_skills, sauce_skill, sauce_dev,",
       "sauce_install_skills) and as resources, at sauce://skills/<path>. Nothing it does signs,",
       "and it takes no key: every transaction comes back unsigned, for the user's own wallet.",
       "",
