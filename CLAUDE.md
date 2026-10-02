@@ -959,7 +959,8 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   instructions file (the skills reach every agent); no engine internals (opcodes, mnemonics, stack
   effects, bytecode bytes); no placeholder or unrecorded address (every `0x` address must be one the
   SDK records; developer inputs are `<placeholders>`); the Portal and provers only in
-  `sauce-intents`; no RPC endpoint; Sauce never described as a multicall; no pointer into the
+  `sauce-intents`, but for the intent syntax `<Chain>.Portal.send(...)`, which every skill may
+  write; no RPC endpoint; Sauce never described as a multicall; no pointer into the
   package's docs (`node_modules/@eco-incorp/sauce/...`, `docs/guides/...`) outside
   `sauce-typescript`, because a skill carries every fact it needs in its `SKILL.md` and
   `references/`. The protocol documents are third-party facts and are exempt from the address,
