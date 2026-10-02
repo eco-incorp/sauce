@@ -389,9 +389,12 @@ the compiler's own unknown-name error. An interface is called at an address the 
 `UniswapV3.Pool(pool).fee()`, exactly `UniswapV3.Pool.at(pool).fee()` — the compiler's own form for a
 contract with no address; a deployed contract's name called with an address is refused, naming `.at`.
 `splitChainDefines` moves a caller's define named like a chain-scoped name into the chain's host
-(`tokens`, `values`), declared for that chain alone: a token must keep its `Token` type, and a
-nested-scope argument (an intent's delivery) is evaluated where the enclosing program's defines
-would otherwise bind first.
+(`tokens`, `values`), declared for that chain alone, because a define binds before the host is
+asked: a `USDC` define would shadow the host's `Token`-typed `USDC`, and an intent's delivery, a
+nested-scope argument, is evaluated in the enclosing program's frame, where its `USDC` or `chainId`
+define would bind first (`routes-chain-defines.test.ts` pins both halves). An intent's body needs
+none of it — the compiler resolves it in its own program, recorded or compiled — so keep it for
+those two frames, not as a body workaround.
 
 **Every registry ABI is pinned against the deployed contract, offline.** `test/registry-abi.test.ts`
 checks each function, event and custom error of each `abis.ts` export against

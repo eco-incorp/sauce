@@ -258,6 +258,18 @@ function routeHost(
  * symbol, `chainId`, a protocol contract's address key — is the caller choosing that chain's value
  * for it, so it goes to the chain's host (`tokens`, `values`), which declares it for this chain
  * alone; a body on another chain names its own. The rest are the caller's own compile-time values.
+ *
+ * WHY NOT LEAVE THEM DEFINES. A define binds a name before the compiler asks the host about it, so
+ * it would win over the host's declaration wherever the program reads the name:
+ *  - a `USDC` define would be a plain number in place of the host's `Token`-typed `USDC`, and
+ *    `USDC.transfer(...)` would stop compiling, in the program it was given for;
+ *  - an intent's delivery (`Chain(() => …, { tokens: [{ token: USDC, … }] })`) is a `scope: "nested"`
+ *    argument, evaluated in the enclosing program's frame with the destination's names — where the
+ *    enclosing program's `USDC` or `chainId` define would bind first, and the delivery would name
+ *    the enclosing chain's value on the destination.
+ * An intent's body needs none of this: the compiler resolves it in its own program, compiled or
+ * recorded, with the defines `levelOn` gives it. Both halves still serve the frames above, so the
+ * split stays whole.
  */
 function splitChainDefines(
   defines: SauceCompileOptions["defines"],
