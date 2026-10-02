@@ -121,11 +121,24 @@ const poolLimit = (limit: bigint, fee: bigint, paysToken0: boolean) => {
 const chain = routes.chain("base").chain;
 const program = routes.compileSauceProgram("base", source);
 check(
-  /import \{ uniswapV3 \} from "@sauce\/router"/.test(program.source),
+  source.includes('import { uniswapV3 } from "@sauce/router";'),
   "every swap is a @sauce/router call",
 );
+// A `Token(address)` write is @sauce/token's SafeERC20 function: the same bytes as the call by hand.
+const tokenWrite = (body: string, imports = "") =>
+  Buffer.from(
+    routes.compileSauceProgram(
+      "base",
+      `${imports}function main(token: Address, to: Address, amount: Uint256) { ${body} }`,
+    ).bytecode,
+  );
 check(
-  /__sauce_transfer\(pay, refundTo, unspent\)/.test(program.source),
+  tokenWrite("const pay = Token(token); pay.transfer(to, amount);").equals(
+    tokenWrite(
+      "const pay = token; transfer(pay, to, amount);",
+      'import { transfer } from "@sauce/token";\n',
+    ),
+  ) && source.includes("pay.transfer(refundTo, unspent);"),
   "the refund is a SafeERC20 transfer of what is left of the budget",
 );
 // On a chain without Slipstream's factory, naming it is the compile error the skill quotes.

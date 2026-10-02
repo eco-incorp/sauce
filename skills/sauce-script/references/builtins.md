@@ -171,7 +171,7 @@ Accounts compare only with `==` and `!=`: "accounts compare for identity only �
 - A function other than `main` has a fixed budget for its parameters and the values its body keeps live at
   once: about sixteen. Seventeen parameters still compile when the body reads each one once. Past the
   budget — sixteen parameters with a local held beside them, or seventeen with the first one read again — the
-  compile fails with "`f` does not fit …". Pass a record or an array instead of a long list of numbers. `main`'s
+  compile fails with "f keeps too many values in use at once …". Pass a record or an array instead of a long list of numbers. `main`'s
   parameters are the program's arguments and are not limited this way.
 - **Arrays and records are passed by reference.** A helper that writes `xs[i] = v` or `r.amount = v` changes
   the caller's array or record, so a helper can fill an array it is given. Numbers, bools and bytes are passed
@@ -404,8 +404,8 @@ work on SVM; they are decoded separately.
 - `abi.encode(v1, …, vN)`
   - Types: 1 to 255 values of any type except accounts; returns bytes
   - Standard Solidity ABI encoding of the values as one argument list. A single record argument is
-    encoded as its fields. "abi.encode requires at least one value to encode"; "abi.encode has 256
-    arguments, beyond the 255 …"
+    encoded as its fields. "abi.encode requires at least one value to encode"; "abi.encode takes at most
+    255 arguments, got N"
   - Example: `return abi.encode(total, recipient);`
 - `abi.decode(data, ["Shape", …])`
   - Types: `data`: bytes. The shapes must be written in place as an array of strings. Returns a
@@ -454,8 +454,7 @@ equivalent.
   - Example: `evm.tstore(KEY, 1n);`
 
 - Storage belongs to the executing contract, the Pot.
-- An unknown name gives "`evm.create` is not an evm builtin; `evm` is a reserved namespace root".
-- SauceScript cannot deploy contracts.
+- An unknown name gives "`evm.nope` is not an evm builtin; `evm` is a reserved namespace root".
 
 ## 11. `svm` (SVM)
 
@@ -487,8 +486,8 @@ On EVM every function here gives "`svm.<name>` is not available on the evm targe
   - Example: `const extra = svm.remainingAccount(0n);`
 - `const rest = svm.remainingAccounts()`: `() → Account[]`
   - Every account attached after the declared ones. **Only as a `let`/`const` initializer, and only
-    inside `main`:** "`svm.remainingAccounts()` can only initialize a `let`/`const` — … Bind it
-    first (`const rest = svm.remainingAccounts();`), then use the binding".
+    inside `main`:** "svm.remainingAccounts() can only initialize a let/const — bind it first
+    (const rest = svm.remainingAccounts();), then use the binding".
   - Example: `const rest = svm.remainingAccounts(); svm.call(router, rest, data);`
 
 An unknown name gives "`svm.rent` is not an svm builtin; `svm` is a reserved namespace root".
@@ -618,7 +617,7 @@ Rules and errors:
 - The value form needs exactly `return <constant>;`:
   - "a captured `.catch()` requires exactly `return <constant scalar>;` in its handler";
   - "the `.catch()` fallback must be a constant scalar that fits the declared ABI result width".
-- A long block can be too large ("a `.catch()` handler is N bytes, beyond the 255 …"). Move the work into a
+- A long block can be too large ("a .catch() handler compiles to N bytes, over the 255-byte limit …"). Move the work into a
   function and call it.
 - On anything other than an external EVM call, the compiler rejects it ("a `.catch()` on something other than an
   external contract call …"). On SVM: "`.catch()` is not available on the svm target".

@@ -494,14 +494,7 @@ function compileForChain(
     // A token or protocol name the chain does not have, reported as one rather than as the call
     // the compiler could not lower — from the compiler's own located diagnostics.
     throw (
-      unknownGlobalError(
-        source,
-        "main.js",
-        chain,
-        level.declined,
-        tokens.keys(),
-        error,
-      ) ?? error
+      unknownGlobalError(source, "main.js", chain, level.declined, tokens.keys(), error) ?? error
     );
   }
   const { manifest, entryEncoding, entryParams, ...compiled } = rs;
