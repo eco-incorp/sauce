@@ -410,7 +410,18 @@ try {
   assert.notEqual(lowered[0].bytecode, lowered[1].bytecode, "each chain's own addresses");
   assert.match(lowered[0].source, /UniswapV3\.Factory\.getPool\(USDC, WETH, 500n\)/);
   const actionsTx = JSON.parse(
-    sauce("tx", document, ...chain, "--owner", owner, "--value", "0", "--args", "1000000"),
+    sauce(
+      "tx",
+      document,
+      "--chain",
+      "ethereum",
+      "--owner",
+      owner,
+      "--value",
+      "0",
+      "--args",
+      "1000000",
+    ),
   );
   assert.ok(
     actionsTx.data.includes(lowered[0].bytecode.slice(2)),
