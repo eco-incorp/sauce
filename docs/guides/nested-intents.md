@@ -61,9 +61,12 @@ const built = Base(
 });
 ```
 
-Import every chain the closure names: each chain export carries the call that opens an intent, so
-`Ethereum(() => { … })` inside the closure typechecks, beside the token symbols and builtins a
-closure already has. The closure is never run: its text is compiled, so `RECIPIENT` reaches it as a
+The chain names inside the closure come from the same imports as the host calls:
+`import { Base, Ethereum }` serves both. Each chain export carries, besides its host signature, the
+SauceScript call that opens an intent, so `Ethereum(() => { … })` inside the closure typechecks
+beside the token symbols and builtins a closure already has, and gives a SauceScript intent, not a
+host one. Nothing is declared globally: a chain the closure names without importing it is an error.
+The closure is never run: its text is compiled, so `RECIPIENT` reaches it as a
 define, and a bundler that renames imports breaks it
 ([callbacks are compiled source](intents.md#callbacks-are-compiled-source)). `built.sourceTxs()` is
 the wallet's funding and publication on Ethereum.
