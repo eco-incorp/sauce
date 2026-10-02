@@ -675,8 +675,9 @@ async function programInput(
   operand: string | ProgramText = fileOperand(args),
   fallback?: CanonicalChain,
   gate?: Gate,
-  /** For a wallet's intents: `main`'s arguments, bound into them (`bindMainArguments`). */
-  bind?: { readonly args?: ArgsInput },
+  /** For a wallet's intents: `main`'s arguments, bound into them (`bindMainArguments`), after
+   *  `before` has refused what no arguments could fix. */
+  bind?: { readonly args?: ArgsInput; readonly before?: (input: ProgramInput) => void },
 ): Promise<ProgramInput> {
   const { file, text, stdin } = programText(io, operand);
   const sourceDir = stringFlag(args, "source-dir");
@@ -725,6 +726,7 @@ async function programInput(
       ...(fundVia === undefined ? {} : { fundVia: parseFundVia(fundVia) }),
     },
   };
+  bind?.before?.(given);
   const input = bind === undefined ? given : bindMainArguments(given, bind.args);
   if (fee !== "auto") return input;
   const executionFee = await autoExecutionFee(input, io, endpointsOf(args, io, chain), gate);
@@ -1648,22 +1650,19 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         args.values["dry-run"] === true && format === undefined
           ? undefined
           : { action: "publishing intents", by: "all" };
-      const program = await programInput(
-        args,
-        io,
-        undefined,
-        undefined,
-        gate,
-        argsInput(args, io, trailing),
-      );
-      if (program.chain.kind === "svm") {
-        throw new UsageError(
-          "sauce intent publish sends a source chain's Portal transactions from an EVM wallet. " +
-            "Publishing from Solana is not supported: the SDK has no Kitchen-built path for an " +
-            "intent that Solana's Portal runs (docs/guides/solana.md). Open the intent from an " +
-            "EVM chain; its destination may be Solana.",
-        );
-      }
+      const program = await programInput(args, io, undefined, undefined, gate, {
+        ...argsInput(args, io, trailing),
+        // Before main's arguments: no argument makes a Solana file publishable.
+        before: ({ chain }) => {
+          if (chain.kind !== "svm") return;
+          throw new UsageError(
+            "sauce intent publish sends a source chain's Portal transactions from an EVM wallet. " +
+              "Publishing from Solana is not supported: the SDK has no Kitchen-built path for an " +
+              "intent that Solana's Portal runs (docs/guides/solana.md). Open the intent from an " +
+              "EVM chain; its destination may be Solana.",
+          );
+        },
+      });
       if (format !== undefined && format !== "json" && format !== "cast") {
         throw new UsageError(`--format: '${format}' is not json or cast`);
       }
