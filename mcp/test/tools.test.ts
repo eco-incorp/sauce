@@ -1118,6 +1118,8 @@ describe("sauce_intent_publish", () => {
     args: [RECIPIENT],
     intentDeadline: 2_000_000_000,
     intentCreator: CREATOR,
+    // One salt for every call, so two calls build one intent: each picks a random one otherwise.
+    intentSalt: `0x${"00".repeat(32)}`,
   };
 
   type Published = {
@@ -1154,8 +1156,11 @@ describe("sauce_intent_publish", () => {
     // The call form given the reward deadline the Portal form defaults to: seven days past the
     // route's.
     const call = { ...args, intentRewardDeadline: args.intentDeadline + 604_800 };
-    const compiled = ok(await mcp.call("sauce_compile", portal));
+    // A program a Pot runs names its intent's creator; a wallet publishing one is its creator.
+    const named = PORTAL_INTENT.replace(".receive(", `.creator(${CREATOR})\n  .receive(`);
+    const compiled = ok(await mcp.call("sauce_compile", { ...portal, source: named }));
     assert.equal(compiled.bytecode, ok(await mcp.call("sauce_compile", call)).bytecode);
+    assert.match(failed(await mcp.call("sauce_compile", portal)), /needs `\.creator\(<address>\)`/);
     const out = ok(await mcp.call("sauce_intent_publish", portal)) as Published;
     assert.deepEqual(out, ok(await mcp.call("sauce_intent_publish", call)));
     assert.equal(out.intents[0]!.destination, "base");

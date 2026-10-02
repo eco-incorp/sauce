@@ -322,6 +322,7 @@ server's instructions also list:
 | `--intent-fund-via`        | `intentFundVia`        |
 | `--intent-reward-deadline` | `intentRewardDeadline` |
 | `--intent-prover`          | `intentProver`         |
+| `--intent-salt`            | `intentSalt`           |
 | `--no-prove`               | `prove: false`         |
 | `--max-execution-fee`      | `maxExecutionFee`      |
 | `--via`                    | `via`                  |

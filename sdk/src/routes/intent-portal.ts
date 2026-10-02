@@ -21,13 +21,15 @@
  * ({@link portalChainProblem}) rather than read as something else.
  */
 import { walk, type AstNode } from "./ast-walk.js";
+import {
+  INTENT_STAGES,
+  REWARD_MODIFIERS,
+  ROUTE_MODIFIERS,
+  type RewardModifier,
+  type RouteModifier,
+} from "./intent-syntax.js";
 
-/** What follows `send(...)`: the reward's creator, its deadline (from when an unproven reward may
- *  be refunded), and the prover that accepts the proof of the fill. */
-export const REWARD_MODIFIERS = ["creator", "deadline", "prover"] as const;
-/** What follows `receive(...)`: the route's deadline (the last second it may be filled), its salt,
- *  and the destination Kitchen's fee its program's cook pays. */
-export const ROUTE_MODIFIERS = ["deadline", "salt", "fee"] as const;
+export { REWARD_MODIFIERS, ROUTE_MODIFIERS, type RewardModifier, type RouteModifier };
 
 /**
  * How long an intent may be filled for, by default: Eco's solver quotes a route deadline five
@@ -42,8 +44,18 @@ export const DEFAULT_FILL_WINDOW = 300n;
  */
 export const DEFAULT_REFUND_WINDOW = 604_800n;
 
-export type RewardModifier = (typeof REWARD_MODIFIERS)[number];
-export type RouteModifier = (typeof ROUTE_MODIFIERS)[number];
+/**
+ * A route salt for an intent that names none: 32 random bytes, picked when it is built, as Eco's
+ * Portal app picks one for every intent. A fixed default would make two otherwise identical intents
+ * one hash, which only the first publication could use. The `sauce` command picks one per command
+ * and hands it to every compile it makes, so what it rehearses is what it publishes.
+ */
+export function randomSalt(): `0x${string}` {
+  const bytes = new Uint8Array(32);
+  globalThis.crypto.getRandomValues(bytes);
+
+  return `0x${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
 
 /** One call of the chain: its method and its arguments, as written. */
 export interface PortalStep {
@@ -175,19 +187,11 @@ function stepsProblem(
   }
   const receiveAt = methods.indexOf("receive");
   const thenAt = methods.indexOf("then");
-  if (receiveAt < 0) {
-    return (
-      `\`${chainName}.Portal.send(...)\` stops before \`.receive(...)\`. An intent names what ` +
-      `the solver delivers on ${slug}, \`.receive({ token, amount })\`, then the body that runs ` +
-      `there with it, \`.then(() => { … })\`: ${form}.`
-    );
-  }
-  if (thenAt < 0) {
-    return (
-      `\`${chainName}.Portal.send(...).receive(...)\` has no body. Finish it with ` +
-      `\`.then(() => { … })\`: the code that runs on ${slug} with what was received.`
-    );
-  }
+  // Where the chain stops, in the table's words.
+  const unfinished = (stage: "Sent" | "Received", written: string): string =>
+    `\`${chainName}.Portal.${written}\` ${INTENT_STAGES[stage].unfinished.replace("{destination}", slug)}`;
+  if (receiveAt < 0) return `${unfinished("Sent", "send(...)")}: ${form}.`;
+  if (thenAt < 0) return `${unfinished("Received", "send(...).receive(...)")}.`;
   if (thenAt !== methods.length - 1) {
     return `\`.then(...)\` ends the intent: nothing follows it (\`.${methods[thenAt + 1]}(...)\` does).`;
   }

@@ -58,6 +58,7 @@ import { CliError, UsageError } from "./args.js";
 import { assumeTokenBalance, mergeOverrides } from "./assume.js";
 import { connect, revertReason, sendAndWait, type Sent } from "./chain.js";
 import {
+  asPublished,
   compileProgram,
   kitchenAddress,
   type CliFiles,
@@ -203,7 +204,8 @@ export function fillTargets(input: ProgramInput, files: CliFiles): readonly Fill
         "the eco-routes Portal this SDK publishes through is EVM only",
     );
   }
-  const intents = compileProgram(input, files).intents;
+  // Built as `sauce intent publish` builds them, `--intent-creator` standing in for its wallet.
+  const intents = compileProgram(asPublished(input), files).intents;
   if (intents.length === 0) {
     throw new UsageError(`${input.file} opens no intent: there is nothing for a solver to fill`);
   }

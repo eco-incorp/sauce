@@ -441,19 +441,20 @@ const THREE_CHAIN_CASCADE = `function main() {
 /**
  * The same three chains, written `Chain.Portal.send(reward).receive(delivery).then(body)`, with each
  * delivery an amount computed where the intent opens (`amount * 99n / 100n`): spliced in at run
- * time on Base, and again on Arbitrum by the program the outer body compiles to. The outer creator
- * is a value only the run knows too (the Base Pot, which a real intent would not name), and the
- * Optimism intent, which names none, is handed it.
+ * time on Base, and again on Arbitrum by the program the outer body compiles to. Each level names
+ * its own creator, one a run-time value: nothing comes from the level above or the options.
  */
+const PORTAL_CREATOR = "0x4444444444444444444444444444444444444444";
 const PORTAL_CASCADE = `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  const owner = ctx.self();
+  const refundTo = ${PORTAL_CREATOR};
   Arbitrum.Portal.send({ token: USDC, amount })
-    .creator(owner)
+    .creator(refundTo)
     .receive({ token: USDC, amount: amount * 99n / 100n })
     .then(() => {
       const arrived = USDC.balanceOf(ctx.self());
       Optimism.Portal.send([{ token: USDC, amount: arrived }])
+        .creator(${PORTAL_CREATOR})
         .receive([{ token: USDC, amount: arrived * 99n / 100n }])
         .then(() => {
           USDC.transfer(RECIPIENT, arrived * 99n / 100n);
@@ -683,7 +684,7 @@ describeEvm("an intent created inside a program, across chains with different to
       expect(toArbitrum!.rewardTokens.map((t) => [lower(t.token), t.amount])).toEqual([
         [lower(base.usdc), held],
       ]);
-      expect(lower(toArbitrum!.creator)).toBe(lower(base.pot));
+      expect(lower(toArbitrum!.creator)).toBe(PORTAL_CREATOR);
       const second = fulfilmentOf(toArbitrum!);
       expect(second.route.tokens.map((t) => [lower(t.token), t.amount])).toEqual([
         [lower(arbitrum.usdc), delivered],
@@ -698,9 +699,8 @@ describeEvm("an intent created inside a program, across chains with different to
       expect(toOptimism!.rewardTokens.map((t) => [lower(t.token), t.amount])).toEqual([
         [lower(arbitrum.usdc), delivered],
       ]);
-      // The creator above, handed down, not the compile's.
-      expect(lower(toOptimism!.creator)).toBe(lower(base.pot));
-      expect(lower(toOptimism!.creator)).not.toBe(lower(CREATOR));
+      // Its own, not the compile's `creator`, which an intent written this way never takes.
+      expect(lower(toOptimism!.creator)).toBe(PORTAL_CREATOR);
       expect(await arbitrum.isFunded(toOptimism!)).toBe(true);
       expect(await arbitrum.balanceOf(arbitrum.usdc, arbitrum.pot)).toBe(0n);
 

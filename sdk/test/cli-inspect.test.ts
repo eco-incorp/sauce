@@ -50,7 +50,10 @@ const OWNER: Address = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
 const CREATOR: Address = "0x3333333333333333333333333333333333333333";
 const ENGINE = getAddress(v12EngineAddress());
-const INTENT_FLAGS = ["--intent-deadline", "2000000000", "--intent-creator", CREATOR];
+const INTENT_FLAGS = [
+  ...["--intent-deadline", "2000000000", "--intent-creator", CREATOR],
+  ...["--intent-salt", `0x${"00".repeat(32)}`],
+];
 
 interface Run {
   readonly code: number;

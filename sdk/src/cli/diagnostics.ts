@@ -205,6 +205,12 @@ function locate(
 const HINTS: ReadonlyArray<readonly [RegExp, (match: RegExpExecArray) => string]> = [
   [/needs a `deadline`/, () => "pass --intent-deadline <unix seconds>"],
   [/needs a `creator`/, () => "pass --intent-creator <address>"],
+  [
+    /needs `\.creator\(<address>\)`/,
+    () =>
+      "write `.creator(<address>)` in the file; only an intent `sauce intent publish` publishes " +
+      "from a wallet takes that wallet (or --intent-creator <address>) instead",
+  ],
   [/`intents\.executionFee`/, () => "pass --intent-execution-fee <wei>"],
   [
     /`([A-Za-z_$][\w$]*)` is not a declared variable/,

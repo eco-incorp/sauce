@@ -949,6 +949,8 @@ describe("sauce compile", () => {
       "2000000000",
       "--intent-creator",
       CREATOR,
+      "--intent-salt",
+      `0x${"00".repeat(32)}`,
     );
     expect(built.code).toBe(0);
     const viaOpenRoute = openRoute("base", body, {
@@ -1399,6 +1401,9 @@ describe("sauce intent publish, offline", () => {
     "2000000000",
     "--intent-creator",
     CREATOR,
+    // The salt the SDK compiles with when none is given; the command picks a random one per run.
+    "--intent-salt",
+    `0x${"00".repeat(32)}`,
   ];
 
   it("prints each fixed intent's hash and unsigned Portal transactions", async () => {

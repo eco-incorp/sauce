@@ -1,7 +1,7 @@
 /**
  * `Chain.Portal.send(...)[modifiers].receive(...)[modifiers].then(...)` typechecks where it is
- * written: inside a typed closure, three levels deep, with one `{ token, amount }` or an array; and
- * on the host, where it builds the intent. A step left out or taken out of order, and a modifier
+ * written: inside a typed closure, three levels deep, with items as arguments, one list of them or
+ * none; and on the host, where it builds the intent. A step left out or taken out of order, and a modifier
  * repeated or after the wrong step, is a type error — each step's type drops the modifiers already
  * given — as is a host intent awaited; one that stops before its body is a statement TypeScript
  * accepts, and is refused when it compiles.
@@ -17,19 +17,20 @@ import ts from "typescript";
 const SDK = resolve(process.cwd());
 const ROOT = JSON.stringify(resolve(SDK, "src/index.ts"));
 
-/** Three levels, opened inside a host closure: one item, an array, arithmetic, a measured value,
- *  modifiers in any order. */
+/** Three levels, opened inside a host closure: items as arguments, a list, none, arithmetic, a
+ *  measured value, modifiers in any order. */
 const NESTED = `
 import { Arbitrum, Base, Ethereum, Optimism } from ${ROOT};
 
-const built = Base.Portal.send({ token: Ethereum.USDC.address, amount: 1_010_000n })
+const built = Base.Portal.send({ token: Ethereum.USDC.address, amount: 1_010_000n }, { native: 1n })
   .source(Ethereum)
   .creator("0x4444444444444444444444444444444444444444")
-  .receive([])
+  .receive()
   .fee(1_000n)
   .then(() => {
     const amount = USDC.balanceOf(ctx.self());
     Arbitrum.Portal.send([{ token: USDC, amount }])
+      .creator(0x4444444444444444444444444444444444444444n)
       .deadline(ctx.timestamp() + 604_800n)
       .prover(0x5555555555555555555555555555555555555555n)
       .receive([{ token: USDC, amount: (amount * 99n) / 100n }])
@@ -38,8 +39,9 @@ const built = Base.Portal.send({ token: Ethereum.USDC.address, amount: 1_010_000
       .then(() => {
         const arrived = USDC.balanceOf(ctx.self());
         USDC.transfer(0x6666666666666666666666666666666666666666n, arrived / 2n);
-        Optimism.Portal.send({ token: USDC, amount: arrived / 2n })
-          .receive({ token: USDT, amount: arrived / 2n })
+        Optimism.Portal.send({ token: USDC, amount: arrived / 2n }, { native: 1n })
+          .creator(0x4444444444444444444444444444444444444444n)
+          .receive({ token: USDT, amount: arrived / 4n }, { token: USDC, amount: arrived / 4n })
           .fee(7n)
           .then(() => {
             USDT.transfer(0x6666666666666666666666666666666666666666n, arrived / 2n);
@@ -131,7 +133,7 @@ describe("Chain.Portal.send(...).receive(...).then(...)", () => {
     program = undefined;
   });
 
-  it("typechecks in a strict closure, three levels deep, with an item or an array", () => {
+  it("typechecks in a strict closure, three levels deep, with items as arguments or a list", () => {
     expect(messages("NESTED")).toEqual([]);
   });
 

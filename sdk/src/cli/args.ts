@@ -242,6 +242,15 @@ export function parseLamports(flag: string, raw: string): bigint {
  * A Pot's salt: `--salt <label>`, hashed by the SDK's `potSalt`, or `--salt-hex <bytes32>`, exactly
  * 32 bytes — never both. Neither is the zero salt, the one Pot an owner has by default.
  */
+/** `--intent-salt`: an intent route's salt, exactly 32 bytes of hex. */
+export function parseIntentSalt(hex: string): Hex {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(hex)) {
+    throw new UsageError(`--intent-salt: '${hex}' is not exactly 32 bytes of 0x-prefixed hex`);
+  }
+
+  return hex.toLowerCase() as Hex;
+}
+
 export function parseSalt(label: string | undefined, hex: string | undefined): SaltChoice {
   if (label !== undefined && hex !== undefined) {
     throw new UsageError(

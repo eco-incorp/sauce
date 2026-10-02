@@ -123,14 +123,15 @@ const PORTAL_INTENT = [
 ].join("\n");
 
 /** A program a Pot runs on Ethereum: it opens an intent to Base for all the USDC it holds, of which
- *  the solver delivers 99% there, computed as the intent opens. */
+ *  the solver delivers 99% there, computed as the intent opens, refunded to `refundTo` unfilled. */
 const PORTAL_PROGRAM = [
-  "function main(recipient: Address) {",
+  "function main(recipient: Address, refundTo: Address) {",
   "  const amount = USDC.balanceOf(ctx.self());",
-  "  Base.Portal.send([{ token: USDC, amount }])",
-  "    .receive([{ token: USDC, amount: amount * 99n / 100n }])",
+  "  Base.Portal.send({ token: USDC, amount })",
+  "    .creator(refundTo)",
+  "    .receive({ token: USDC, amount: amount * 99 / 100 })",
   "    .then(() => {",
-  "      USDC.transfer(recipient, amount * 99n / 100n);",
+  "      USDC.transfer(recipient, amount * 99 / 100);",
   "    });",
   "}",
   "",
@@ -147,11 +148,12 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
   let ethereumMailbox: Address;
   let baseMailbox: Address;
 
-  /** The flags every intent here is built with, its deadlines given, and main's arguments. */
+  /** The flags every intent here is built with, its deadlines and salt given, so each command
+   *  builds the same intent, and main's arguments. */
   const intentFlags = (route: bigint, reward: bigint): string[] => [
     ...["--chain", "ethereum"],
     ...["--intent-deadline", String(route), "--intent-reward-deadline", String(reward)],
-    ...["--intent-creator", OWNER.address],
+    ...["--intent-creator", OWNER.address, "--intent-salt", `0x${"5a".repeat(32)}`],
     ...["--args", RECIPIENT, String(AMOUNT), String(REWARD)],
   ];
   const now = async (local: LocalChain): Promise<bigint> =>
@@ -440,7 +442,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
         ...["intent", "publish", nested, "--chain", "ethereum"],
         ...["--intent-creator", OWNER.address, "--intent-deadline", String(start + 3600n)],
         ...["--intent-reward-deadline", String(start + 7200n)],
-        ...["--intent-execution-fee", String(FEE)],
+        ...["--intent-execution-fee", String(FEE), "--intent-salt", `0x${"00".repeat(32)}`],
         ...["--rpc-url", ethereum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
         ...["--args", RECIPIENT, String(AMOUNT), String(REWARD)],
       ),
@@ -623,13 +625,27 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     const held = (await ethereum.balanceOf(ethereumUsdc, pot)) + REWARD;
     await ethereum.mint(ethereumUsdc, pot, REWARD);
 
-    // No deadline and no creator: the intent opens now, for the wallet that runs the cook.
+    // An intent a program opens names its creator: the Pot may be shared, so nothing defaults
+    // it, the signer and --intent-creator included.
+    const unnamed = join(work, "portal-program-unnamed.sauce.ts");
+    writeFileSync(unnamed, PORTAL_PROGRAM.replace("    .creator(refundTo)\n", ""));
+    const refused = await sauce(
+      ...["run", unnamed, "--chain", "ethereum", "--rpc-url", ethereum.rpcUrl],
+      ...["--intent-execution-fee", String(FEE), "--intent-creator", OWNER.address],
+      ...["--private-key", OWNER_KEY, "--auto-approve", "--json"],
+      ...["--args", RECIPIENT, OWNER.address],
+    );
+    expect(refused.code).not.toBe(0);
+    expect(refused.stderr).toMatch(/needs `\.creator\(<address>\)`.*may be shared/);
+
+    // No deadline: the intent opens now. Its creator is `refundTo`, from main's arguments.
     const before = BigInt(Math.floor(Date.now() / 1000));
     const run = jsonOf(
       await sauce(
         ...["run", program, "--chain", "ethereum", "--rpc-url", ethereum.rpcUrl],
         ...["--intent-execution-fee", String(FEE)],
-        ...["--private-key", OWNER_KEY, "--auto-approve", "--json", "--args", RECIPIENT],
+        ...["--private-key", OWNER_KEY, "--auto-approve", "--json"],
+        ...["--args", RECIPIENT, SOLVER.address],
       ),
     );
     const after = BigInt(Math.floor(Date.now() / 1000));
@@ -651,8 +667,8 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
       [baseUsdc, (held * 99n) / 100n],
     ]);
     expect(await ethereum.balanceOf(ethereumUsdc, pot)).toBe(0n);
-    // Eco's defaults: filled within five minutes, refundable seven days after that, by the signer.
-    expect(getAddress(published!.args.creator)).toBe(OWNER.address);
+    // Eco's defaults: filled within five minutes, refundable seven days after that, to `refundTo`.
+    expect(getAddress(published!.args.creator)).toBe(SOLVER.address);
     expect(route.deadline >= before + 300n && route.deadline <= after + 300n).toBe(true);
     expect(published!.args.rewardDeadline).toBe(route.deadline + 604_800n);
   }, 240_000);

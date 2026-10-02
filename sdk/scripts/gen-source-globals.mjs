@@ -61,6 +61,65 @@ function fail(message) {
 const { CANONICAL_CHAINS } = load("src/chains/canonical.ts");
 const { listProtocols } = load("src/protocols/index.ts");
 const { TOKEN_REGISTRY, SVM_TOKEN_REGISTRY } = load("src/routes/token-registry.ts");
+const { INTENT_STAGES } = load("src/routes/intent-syntax.ts");
+
+/**
+ * The intent's stages as declarations, from the one table (`src/routes/intent-syntax.ts`) the
+ * lowering and a compiler host read too. A stage with modifiers is a generic `…Steps<Used>`
+ * interface and an `Omit` of the modifiers used so far, so each is given at most once; a step to the
+ * next stage returns that stage afresh.
+ */
+function renderIntentStages() {
+  const typeOf = (stage, used) => {
+    const { ts, methods } = INTENT_STAGES[stage];
+    if (ts === "void") return "void";
+    const modifiers = Object.values(methods).some((m) => m.option !== undefined);
+    return modifiers && used !== undefined ? `${ts}<${used}>` : ts;
+  };
+  const doc = (text, indent) => {
+    const words = text.split(" ");
+    const lines = [];
+    let line = "";
+    for (const word of words) {
+      if (`${indent} * ${line} ${word}`.length > 100 && line !== "") {
+        lines.push(line);
+        line = word;
+      } else line = line === "" ? word : `${line} ${word}`;
+    }
+    lines.push(line);
+    return lines.length === 1 && `${indent}/** ${lines[0]} */`.length <= 100
+      ? `${indent}/** ${lines[0]} */`
+      : [`${indent}/**`, ...lines.map((l) => `${indent} * ${l}`), `${indent} */`].join("\n");
+  };
+  const params = (method) =>
+    method.params
+      .map((p) => (p.rest ? `...${p.name}: readonly (${p.ts})[]` : `${p.name}: ${p.ts}`))
+      .join(", ");
+  const out = [];
+  for (const [stage, spec] of Object.entries(INTENT_STAGES)) {
+    if (spec.ts === "void") continue;
+    const modifiers = Object.values(spec.methods).some((m) => m.option !== undefined);
+    const name = modifiers ? `${spec.ts}Steps<Used extends string>` : spec.ts;
+    out.push(doc(spec.doc, ""));
+    out.push(`export interface ${name} {`);
+    for (const [method, m] of Object.entries(spec.methods)) {
+      out.push(doc(m.doc, "  "));
+      const returns =
+        m.returns === stage ? typeOf(stage, `Used | "${method}"`) : typeOf(m.returns, undefined);
+      out.push(`  ${method}(${params(m)}): ${returns};`);
+    }
+    out.push("}");
+    if (modifiers) {
+      out.push("");
+      out.push(doc(`${spec.ts} with the modifiers in \`Used\` given already.`, ""));
+      out.push(
+        `export type ${spec.ts}<Used extends string = never> = Omit<${spec.ts}Steps<Used>, Used>;`,
+      );
+    }
+    out.push("");
+  }
+  return out.join("\n").trimEnd();
+}
 const targets = JSON.parse(
   readFileSync(resolve(sdk, "test/fixtures/registry-abi/targets.json"), "utf8"),
 ).protocols;
@@ -487,63 +546,7 @@ export interface SauceIntentNative {
   readonly native: bigint | number;
 }
 
-/** What \`.send(...)\` pays: one item, or an array of them. */
-export type SauceIntentReward =
-  | SauceIntentTokenAmount
-  | SauceIntentNative
-  | readonly (SauceIntentTokenAmount | SauceIntentNative)[];
-
-/** What \`.receive(...)\` names: one \`{ token, amount }\`, or an array of them. */
-export type SauceIntentTokens = SauceIntentTokenAmount | readonly SauceIntentTokenAmount[];
-
-/**
- * A chain's Portal in compiled source, opening an intent whose body runs on that chain:
- * \`Base.Portal.send({ token, amount }).receive({ token, amount }).then(() => { ... })\`. After
- * \`send\` come the reward's modifiers, after \`receive\` the route's, each at most once and in any
- * order; each left out has its default.
- */
-export interface SaucePortal {
-  /** The reward: what the program pays the solver, escrowed on the chain the program runs on. */
-  send(reward: SauceIntentReward): SauceIntentSent;
-}
-
-/** The reward's steps after \`send(...)\`. */
-export interface SauceIntentSendSteps<Used extends string> {
-  /** Who may reclaim an unearned reward. Defaults to the wallet that publishes the intent, and a
-   *  nested intent's to the one above it. */
-  creator(address: bigint): SauceIntentSent<Used | "creator">;
-  /** From when an unproven reward may be refunded, Unix seconds. Defaults to seven days past the
-   *  route's deadline. */
-  deadline(seconds: bigint | number): SauceIntentSent<Used | "deadline">;
-  /** The source chain's prover. Defaults to the registry's for the pair. */
-  prover(address: bigint): SauceIntentSent<Used | "prover">;
-  /** What the solver delivers on the destination, for the body to run with. */
-  receive(delivery: SauceIntentTokens): SauceIntentReceived;
-}
-
-/** An intent with its reward: the reward's modifiers not given yet, then \`receive\`. */
-export type SauceIntentSent<Used extends string = never> = Omit<SauceIntentSendSteps<Used>, Used>;
-
-/** The route's steps after \`receive(...)\`. */
-export interface SauceIntentReceiveSteps<Used extends string> {
-  /** The last second the intent may be filled, Unix seconds. Defaults to five minutes past when
-   *  it opens. */
-  deadline(seconds: bigint | number): SauceIntentReceived<Used | "deadline">;
-  /** The route's salt. Defaults to zero. */
-  salt(salt: bigint | number): SauceIntentReceived<Used | "salt">;
-  /** The destination Kitchen's fee the body's cook pays, in wei, for a body that is a program.
-   *  Defaults to what the compile is given for that destination. */
-  fee(wei: bigint | number): SauceIntentReceived<Used | "fee">;
-  /** The body: runs on the destination with what was received. It is never invoked here: it is
-   *  compiled for that chain. Returns nothing. */
-  then(body: () => void): void;
-}
-
-/** An intent waiting for its body: the route's modifiers not given yet, then \`then\`. */
-export type SauceIntentReceived<Used extends string = never> = Omit<
-  SauceIntentReceiveSteps<Used>,
-  Used
->;
+${renderIntentStages()}
 
 /** What the solver of an intent a program opens brings to its destination. */
 export interface SauceDelivery {

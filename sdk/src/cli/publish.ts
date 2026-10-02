@@ -146,10 +146,11 @@ function fixedIntents(input: PublishInput, files: CliFiles): readonly LoweredInt
         "EVM chain: the eco-routes Portal this SDK addresses is EVM only.",
     );
   }
-  // The wallet that publishes them is their creator, unless the flags name one.
-  const creator = input.intents.creator ?? input.account?.address ?? input.from;
+  // The wallet that publishes them is the creator of each that names none, unless the flags name
+  // another.
+  const publisher = input.intents.creator ?? input.account?.address ?? input.from;
   const program = compileProgram(
-    creator === undefined ? input : { ...input, intents: { ...input.intents, creator } },
+    publisher === undefined ? input : { ...input, intents: { ...input.intents, publisher } },
     files,
   );
   if (program.intents.length === 0) {
