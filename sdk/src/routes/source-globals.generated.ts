@@ -42,6 +42,39 @@ export interface SauceInterface<Methods> extends SauceBinding<Methods> {
  *  `.at(address)` to call another deployment of the same ABI. */
 export type SauceContract<Methods> = bigint & Methods & SauceBinding<Methods>;
 
+/** A token and an amount in an intent a program opens: a token symbol (`USDC`) or an address. */
+export interface SauceIntentTokenAmount {
+  readonly token: bigint;
+  readonly amount: bigint;
+}
+
+/** What the solver of an intent a program opens brings to its destination. */
+export interface SauceIntentDelivery {
+  readonly tokens: readonly SauceIntentTokenAmount[];
+}
+
+/** What `.reward(...)` offers in compiled source. The deadlines, the creator and the prover are the
+ *  program's options, shared by every intent it opens. */
+export interface SauceIntentReward {
+  readonly tokens?: readonly SauceIntentTokenAmount[];
+  readonly nativeAmount?: bigint;
+}
+
+/** An intent opened in compiled source, waiting for its reward. */
+export interface SauceIntent {
+  reward(reward: SauceIntentReward): void;
+}
+
+/**
+ * A chain in compiled source, opening an intent whose body runs there:
+ * `Ethereum(() => { ... }, { tokens }).reward({ tokens })`. Each package chain export carries it
+ * (`chain-exports.generated.ts`), so the chain a closure names inside `Base(() => { ... })` is the
+ * one it imports. The body is never invoked: it is compiled for that chain.
+ */
+export interface SauceIntentChain {
+  (body: () => void, delivery?: SauceIntentDelivery): SauceIntent;
+}
+
 export interface AaveV2LendingPoolMethods {
   "deposit"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
   "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
