@@ -24,7 +24,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
-import { sauceScriptTsconfig } from "../src/cli/init.js";
+import { sauceScriptTsconfig } from "../src/cli/skills.js";
 import { sauceScriptDeclarations } from "../src/sauce-script/declarations.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
