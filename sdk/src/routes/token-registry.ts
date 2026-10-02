@@ -22,6 +22,9 @@
  *     contract's OWN `symbol()` string-equals "USDT" (see the note below), plus the wrapped native
  *     under whatever `symbol()` actually returns where it isn't WETH (polygon's WPOL).
  *
+ *   USDT0: Tether's USDT0, on each canonical chain Tether's own USDT0 deployment list names a
+ *     token on (see `TOKEN_ROWS`), under `USDT0` and never under `USDT`.
+ *
  *   STOCKS (`stock-tokens.ts`): tokenized stocks on ethereum, base and solana, each issuer's list
  *     copied from the issuer and held to the chain by `test/token-registry-evidence.test.ts`. A
  *     stock row carries `stock` (its issuer, name and ticker), and its symbol is the issuer's
@@ -42,18 +45,17 @@
  * and moves both with its checked writes, and the program is the `tokenProgram` account a write
  * takes and the one a token account's address derives under.
  *
- * PROVENANCE GATE: a row lands only if (a) already pinned in-repo (`verify/vectors.ts`), or (b)
- * confirmed by a real RPC probe (via the paid Alchemy key in gitignored `sdk/.env`) checking
- * `getCode !== "0x"`, `symbol()` string-equals the row's `symbol`, and `decimals()` equals the
- * row's `decimals`. The probe itself is a one-time, network-dependent script -- never part of the
- * jest gate -- so this committed table stays static and the suite stays offline.
+ * PROVENANCE GATE: a row lands only if the chain has code at its address, a `symbol()` that
+ * string-equals the row's `symbol` and a `decimals()` equal to the row's `decimals`, as the evidence
+ * `scripts/capture-token-registry.mjs` captures records and `test/token-registry-evidence.test.ts`
+ * checks, offline. The ONE exception is a row that declares `onchainSymbol`: the exact string its
+ * contract's `symbol()` returns where that is no identifier, which the evidence holds it to instead.
  *
  * THE symbol() CHECK IS LOAD-BEARING: it is what stops a bridged/renamed variant from landing under
- * a plain ticker key. Confirmed live during this cut's own probe: Arbitrum's and Polygon's
- * Tether-migrated USDT deployments return `symbol() == "USD₮0"` / `"USDT0"`, NOT `"USDT"` -- so
- * neither is registered under `USDT` here (a caller wanting that specific token still can, via
- * `tokenDefines`, which always overrides this registry per-key). Base's USDT was not independently
- * verified in this cut and is therefore also NOT claimed.
+ * a plain ticker key. Tether's migrated USDT on Arbitrum and Polygon, among others, returns
+ * `symbol() == "USD₮0"` / `"USDT0"`, NOT `"USDT"` -- so it is registered as `USDT0`, never as
+ * `USDT`, and a program writes `USDT0` on those chains. Base's USDT was not independently verified
+ * and is NOT claimed.
  */
 import { address as solanaAddress, getAddressEncoder } from "@solana/kit";
 import type { Address as SolanaAddress } from "@solana/kit";
@@ -88,6 +90,9 @@ export interface TokenRegistryRow {
   /** The ticker `symbol()` itself returns on-chain -- uppercase, e.g. "USDC", "WPOL"; a stock's is
    *  its issuer's ticker, with a "." as "_" ("TSLAx", "bTSLA", "BRK_Bx"). */
   readonly symbol: string;
+  /** The exact string the contract's `symbol()` returns, declared only where it is not `symbol`
+   *  because it is no identifier (Tether's "USD₮0"): the evidence holds the contract to this. */
+  readonly onchainSymbol?: string;
   /** EIP-55 checksummed 20-byte address. */
   readonly address: `0x${string}`;
   /** Verification metadata only -- NOT consumed by the rewrite (no decimals-aware amount sugar). */
@@ -106,8 +111,16 @@ export interface StockToken {
   readonly ticker: string;
 }
 
-/** Keyed by canonical EVM chain id (`CanonicalChain.id`): the rows below, then each chain's stock
- *  tokens. */
+/**
+ * Keyed by canonical EVM chain id (`CanonicalChain.id`): the rows below, then each chain's stock
+ * tokens.
+ *
+ * Every `USDT0` row is the "Token" contract Tether's USDT0 deployment list names on that chain
+ * (https://docs.usdt0.to/technical-documentation/deployments, read 2026-10-02), on each canonical
+ * chain the list names one on: Optimism, Unichain, Polygon, Monad, Sei, Mantle, Plasma, Arbitrum,
+ * Ink and Berachain. None on Ethereum, where USDT0 is an adapter that locks USDT itself. Where the
+ * chain also has a `USDT` (Optimism's bridged one), the two are different contracts.
+ */
 const TOKEN_ROWS: Readonly<Record<number, readonly TokenRegistryRow[]>> = {
   // ethereum (1) -- probe-verified 2026-08-11 (getCode + symbol() + decimals(), via sdk/.env's ETH_RPC_URL).
   1: [
@@ -145,15 +158,31 @@ const TOKEN_ROWS: Readonly<Record<number, readonly TokenRegistryRow[]>> = {
       source: "probe:optimism@2026-08-11",
     },
     {
+      symbol: "USDT0",
+      onchainSymbol: "USD₮0",
+      address: "0x01bFF41798a0BcF287b996046Ca68b395DbC1071",
+      decimals: 6,
+      source: "probe:optimism@2026-10-02; usdt0:deployments",
+    },
+    {
       symbol: "WETH",
       address: "0x4200000000000000000000000000000000000006",
       decimals: 18,
       source: "probe:optimism@2026-08-11",
     },
   ],
-  // polygon (137) -- probe-verified 2026-08-11. USDT deliberately excluded: the deployed contract's
-  // own symbol() returns "USDT0" (Tether-migrated), not "USDT" -- fails the provenance gate's
-  // symbol() check, so it does not land under the plain USDT key.
+  // unichain (130)
+  130: [
+    {
+      symbol: "USDT0",
+      onchainSymbol: "USD₮0",
+      address: "0x9151434b16b9763660705744891fA906F660EcC5",
+      decimals: 6,
+      source: "probe:unichain@2026-10-02; usdt0:deployments",
+    },
+  ],
+  // polygon (137) -- probe-verified 2026-08-11. Tether's USDT here is USDT0: its own symbol()
+  // returns "USDT0", not "USDT", so it is registered as USDT0 and never under the plain USDT key.
   137: [
     {
       symbol: "USDC",
@@ -166,6 +195,12 @@ const TOKEN_ROWS: Readonly<Record<number, readonly TokenRegistryRow[]>> = {
       address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
       decimals: 18,
       source: "probe:polygon@2026-08-11",
+    },
+    {
+      symbol: "USDT0",
+      address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
+      decimals: 6,
+      source: "probe:polygon@2026-10-02; usdt0:deployments",
     },
     {
       symbol: "WPOL",
@@ -184,10 +219,35 @@ const TOKEN_ROWS: Readonly<Record<number, readonly TokenRegistryRow[]>> = {
       source: "probe:monad@2026-08-31",
     },
     {
+      symbol: "USDT0",
+      address: "0xe7cd86e13AC4309349F30B3435a9d337750fC82D",
+      decimals: 6,
+      source: "probe:monad@2026-10-02; usdt0:deployments",
+    },
+    {
       symbol: "WMON",
       address: "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
       decimals: 18,
       source: "probe:monad@2026-08-31",
+    },
+  ],
+  // sei (1329)
+  1329: [
+    {
+      symbol: "USDT0",
+      onchainSymbol: "USD₮0",
+      address: "0x9151434b16b9763660705744891fA906F660EcC5",
+      decimals: 6,
+      source: "probe:sei@2026-10-02; usdt0:deployments",
+    },
+  ],
+  // mantle (5000)
+  5000: [
+    {
+      symbol: "USDT0",
+      address: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+      decimals: 6,
+      source: "probe:mantle@2026-10-02; usdt0:deployments",
     },
   ],
   // arc (5042) -- probe-verified 2026-09-28 at block 23287436 (getCode + symbol() + decimals(),
@@ -241,8 +301,17 @@ const TOKEN_ROWS: Readonly<Record<number, readonly TokenRegistryRow[]>> = {
       source: "sdk:verify/vectors.ts",
     },
   ],
-  // arbitrum (42161) -- probe-verified 2026-08-11. USDT deliberately excluded: symbol() returns
-  // "USD₮0" (Tether-migrated), not "USDT" -- same provenance-gate rejection as polygon above.
+  // plasma (9745)
+  9745: [
+    {
+      symbol: "USDT0",
+      address: "0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb",
+      decimals: 6,
+      source: "probe:plasma@2026-10-02; usdt0:deployments",
+    },
+  ],
+  // arbitrum (42161) -- probe-verified 2026-08-11. Tether's USDT here is USDT0, whose symbol()
+  // returns "USD₮0": registered as USDT0, never under the plain USDT key, as on polygon.
   42161: [
     {
       symbol: "USDC",
@@ -255,6 +324,33 @@ const TOKEN_ROWS: Readonly<Record<number, readonly TokenRegistryRow[]>> = {
       address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
       decimals: 18,
       source: "probe:arbitrum@2026-08-11",
+    },
+    {
+      symbol: "USDT0",
+      onchainSymbol: "USD₮0",
+      address: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+      decimals: 6,
+      source: "probe:arbitrum@2026-10-02; usdt0:deployments",
+    },
+  ],
+  // ink (57073)
+  57073: [
+    {
+      symbol: "USDT0",
+      onchainSymbol: "USD₮0",
+      address: "0x0200C29006150606B650577BBE7B6248F58470c1",
+      decimals: 6,
+      source: "probe:ink@2026-10-02; usdt0:deployments",
+    },
+  ],
+  // berachain (80094)
+  80094: [
+    {
+      symbol: "USDT0",
+      onchainSymbol: "USD₮0",
+      address: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+      decimals: 6,
+      source: "probe:berachain@2026-10-02; usdt0:deployments",
     },
   ],
 };
@@ -462,6 +558,10 @@ for (const [idStr, rows] of Object.entries(TOKEN_REGISTRY)) {
     const shape = row.stock === undefined ? SYMBOL_RE : STOCK_SYMBOL_RE;
     if (!shape.test(row.symbol)) {
       throw new Error(`token-registry: chain ${id} row '${row.symbol}' does not match ${shape}`);
+    }
+    // Declared only where `symbol()` is not the row's symbol: anywhere else the plain rule holds.
+    if (row.onchainSymbol === row.symbol) {
+      throw new Error(`token-registry: chain ${id} row '${row.symbol}' declares its own symbol`);
     }
     for (const method of REWRITABLE_METHODS) {
       if (row.symbol.toUpperCase() === method.toUpperCase()) {
