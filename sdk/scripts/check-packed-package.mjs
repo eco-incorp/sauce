@@ -10,6 +10,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -422,6 +423,61 @@ try {
   console.log(
     `Clean package install: the sauce bin compiles the shipped example (${compiled.size} bytes) ` +
       `and builds its Pot and cook transactions`,
+  );
+
+  // `sauce update` tells a copy's install from its real path. This one is a project's own (the
+  // consumer's node_modules): it prints the project's command and installs nothing. The same
+  // tarball installed globally by npm, under a prefix of its own, is npm's global install there.
+  // Both read the registry's latest; neither installs anything (--check for the global one).
+  const projectUpdate = JSON.parse(sauce("update", "--json"));
+  assert.deepEqual(
+    [projectUpdate.installation.kind, projectUpdate.installation.manager],
+    ["project", "npm"],
+    "sauce update knows a project's own copy",
+  );
+  assert.equal(realpathSync(projectUpdate.installation.project), realpathSync(work));
+  assert.match(projectUpdate.command, /^npm install --save-exact @eco-incorp\/sauce@latest$/);
+  const prefix = mkdtempSync(join(tmpdir(), "sauce-global-"));
+  try {
+    execFileSync(
+      "npm",
+      [
+        "install",
+        "--global",
+        "--prefix",
+        prefix,
+        "--prefer-offline",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        join(work, filename),
+      ],
+      { cwd: work, stdio: ["ignore", "ignore", "inherit"] },
+    );
+    const globalUpdate = JSON.parse(
+      execFileSync(join(prefix, "bin", "sauce"), ["update", "--check", "--json"], {
+        cwd: prefix,
+        encoding: "utf8",
+        env: smokeEnv,
+      }),
+    );
+    assert.deepEqual(
+      [globalUpdate.installation.kind, globalUpdate.installation.manager, globalUpdate.updated],
+      ["global", "npm", false],
+      "sauce update knows npm's global install",
+    );
+    assert.equal(globalUpdate.installation.prefix, realpathSync(prefix));
+    assert.equal(globalUpdate.current, installedManifest.version);
+    assert.match(
+      globalUpdate.command,
+      new RegExp(`^npm install --global --prefix \\S+ @eco-incorp/sauce@${globalUpdate.target}$`),
+    );
+  } finally {
+    rmSync(prefix, { recursive: true, force: true });
+  }
+  console.log(
+    "Clean package install: sauce update knows the project's own copy and npm's global install, " +
+      "and installs nothing to say so",
   );
 
   // `sauce actions` loads the actions package from beside the SDK's build, by a path relative to

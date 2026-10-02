@@ -7,6 +7,9 @@ artifacts
 **/artifacts
 dev-tools/cache
 
+# Agents' git worktrees: whole checkouts of this repository, formatted in their own right.
+.claude/worktrees
+
 # Preserve the license text verbatim from eco-incorp/v12.
 /LICENSE.md
 

@@ -13,7 +13,8 @@ tool and no configuration: it reads no environment variable but the one `--passw
 and reads a chain through a built-in public endpoint unless given one of its own.
 
 **Getting the command.** Install it once with `npm i -g @eco-incorp/sauce` (Node.js 24 or newer);
-`sauce --version` checks it, and `npm i -g @eco-incorp/sauce@latest` upgrades it. Without an
+`sauce --version` checks it, and `sauce update` upgrades it the way it was installed
+(`sauce update --check` only reports the latest). Without an
 install, run `npx -y @eco-incorp/sauce <command>` in its place. Never run a bare `npx sauce`
 outside a project that depends on the package: npx then fetches and runs npm's unrelated `sauce`
 package.

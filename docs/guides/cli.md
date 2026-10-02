@@ -25,6 +25,7 @@ reads a chain through a built-in public endpoint unless you give it
 | `sauce verify`   | Check that a payload, cook, intent or transaction runs the audited settle program |
 | `sauce init`     | Scaffold a project that uses this package                                         |
 | `sauce skills`   | Install, update or check this package's agent skills in a project                 |
+| `sauce update`   | Update this `sauce` command to the latest release, the way it was installed       |
 
 Every command takes `--help`. A mistyped invocation exits 2. A program that does not compile, a
 cook that reverts, a rejected settle, an outdated skills install and a transaction on a
@@ -38,8 +39,15 @@ npm i -g @eco-incorp/sauce
 sauce --version
 ```
 
-Node.js 24 or newer. `npm i -g @eco-incorp/sauce@latest` upgrades it. Every command in this guide
-is written as `sauce …`, the global install.
+Node.js 24 or newer. Every command in this guide is written as `sauce …`, the global install.
+
+`sauce update` upgrades it to the latest release (or `--version <version>`), the way it was
+installed: a global install by npm, pnpm, yarn or bun is installed again by that manager, and skills
+installed in the current directory are then updated by the new `sauce`. A project's own copy is
+the project's to update, so `sauce update` prints the command its package manager takes and changes
+nothing; a copy in npx's cache prints the `npx -y` command. `sauce update --check` says which
+version is installed and which is the latest, and installs nothing. It reads the npm registry, and
+only then: `sauce` never checks for updates by itself.
 
 Two other ways run the same command:
 
