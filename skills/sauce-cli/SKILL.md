@@ -307,20 +307,22 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
 
 ## Intents and Solana
 
-- **A file that opens intents** (`Ethereum.Portal.send({ … }).then(() => { … })`) also takes
-  `--intent-deadline <unix seconds>`, `--intent-creator <address>` and, when an intent's body runs a
-  program, `--intent-execution-fee <wei>` (`auto` reads it from the destination through
-  `--config`). With `--config`, `compile` and `sauce intent publish` warn while the Pot such an intent cooks on
-  is not deployed on its destination: no solver can fill it until then, and the warning names the
-  `sauce pot --deploy` that deploys it. `sauce run` opens them from the Pot, which is the way when
-  an amount is measured on chain; `sauce intent publish` opens fixed ones from a wallet with no Pot, and
+- **A file that opens intents** (`Ethereum.Portal.send({ … }).receive().then(() => { … })`) also
+  takes `--intent-deadline <unix seconds>`, `--intent-creator <address>` and, when an intent's body
+  runs a program, `--intent-execution-fee <wei>` (`auto` reads it from the destination through
+  `--config`). With `--config`, `compile` and `sauce intent publish` warn while the Pot such an
+  intent cooks on is not deployed on its destination: no solver can fill it until then, and the
+  warning names the `sauce pot --deploy` that deploys it. `sauce run` opens them from the Pot, which
+  is the way when an amount is measured on chain; `sauce intent publish` opens fixed ones from a
+  wallet with no Pot, and
   `sauce intent publish <file> --chain <chain> --from <address> --format json` prints its unsigned
   transfers and `publish` for any wallet to send, in that order. Both fund each reward by a transfer
   into the intent's vault, then `publish`: no approval. `--intent-fund-via publishAndFund` switches
-  either to an approve and `publishAndFund`. `sauce intent publish … --dry-run --assume-balance
-USDC:<amount>` rehearses it from a wallet that does not hold the reward yet.
-  `sauce intent fill <file> --chain <chain> --config sauce.config.json` rehearses each intent where its
-  body runs: on its destination chain, as the solver who fills it, with no key and nothing sent.
+  either to an approve and `publishAndFund`.
+  `sauce intent publish … --dry-run --assume-balance USDC:<amount>` rehearses it from a wallet that
+  does not hold the reward yet.
+  `sauce intent fill <file> --chain <chain> --config sauce.config.json` rehearses each intent where
+  its body runs: on its destination chain, as the solver who fills it, with no key and nothing sent.
   `publish --dry-run` covers only the source chain. `fill` prints what the body moved, what it left
   in the shared Pot, and why it reverts. `--config` must name the destination chain's endpoint.
   `sauce-intents` covers writing, publishing, funding (including a transfer into the intent's

@@ -17,8 +17,10 @@ function main() {
     .receive({ token: USDC, amount })
     .then(() => {
       const swapped = USDC.balanceOf(ctx.self());
-      Optimism.Portal.send({ token: USDC, amount: swapped }).then(() => {
-        USDC.transfer(RECIPIENT, swapped);
-      });
+      Optimism.Portal.send({ token: USDC, amount: swapped })
+        .receive()
+        .then(() => {
+          USDC.transfer(RECIPIENT, swapped);
+        });
     });
 }

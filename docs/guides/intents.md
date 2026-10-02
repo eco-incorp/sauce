@@ -177,21 +177,25 @@ _while_ it is running, which is what you want when the amount is the output of t
 ```js
 function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum.Portal.send({ token: USDC, amount }).then(() => {
-    USDC.transfer(RECIPIENT, amount);
-  });
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .receive()
+    .then(() => {
+      USDC.transfer(RECIPIENT, amount);
+    });
 }
 ```
 
 The destination chain's `Portal` opens the intent. `send` names the reward, which this chain
-escrows; `receive`, when there is one, names what the solver delivers on the destination; and `then`
-holds what runs there. `send` and `receive` each take a token amount, `{ token, amount }`, or a list
-of them, and the reward may also pay the native coin, `{ native: amount }`, or tokens and the native
-coin together, `{ tokens: [...], native: amount }`. An intent always ends with `.then(...)`: one
-that stops before it does not compile. No Portal address, prover, selector, encoding or approval
-appears, because none of them is a decision you are making. The closest TypeScript form
-is a [dynamic nest](nested-intents.md#create-the-child-on-chain-from-a-measured-amount), where you
-build a placeholder child, name the measurement and count each placeholder's occurrences yourself.
+escrows; `receive` names what the solver delivers on the destination; and `then` holds what runs
+there. `send` and `receive` each take any number of items, each an argument of its own: a token
+amount, `{ token, amount }`, or a list of them. The reward may also pay the native coin,
+`{ native: amount }`: `.send({ token: USDC, amount }, { native: fee })`. `.receive()` names nothing
+— for a body of token transfers, what they move is the delivery. An intent always has both and ends
+with `.then(...)`: one that stops before it does not compile. No Portal address, prover, selector,
+encoding or approval appears, because none of them is a decision you are making. The closest
+TypeScript form is a [dynamic
+nest](nested-intents.md#create-the-child-on-chain-from-a-measured-amount), where you build a
+placeholder child, name the measurement and count each placeholder's occurrences yourself.
 
 ### The braces are a Sauce program
 

@@ -14,7 +14,7 @@ it does not use a magic header.
 
 On top of the runtime sit **intents**: an offer of work on another chain, with a reward escrowed on
 this one, written from the destination chain's name:
-`Ethereum.Portal.send({ ... }).then(() => { ... })`. A solver decides whether to fill it
+`Ethereum.Portal.send({ ... }).receive().then(() => { ... })`. A solver decides whether to fill it
 (`sauce-intents`).
 
 ## You write the program

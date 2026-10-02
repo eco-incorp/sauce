@@ -59,7 +59,7 @@ Read the current Kitchen fee and supply `executionFee` for every transfer child.
 
 The default vault resolution calls the Portal from the generated program. Alternatively, pass `vault` after verifying it with `child.vaultCall()`, or pass `vaultConfig` for an offline prediction: `routes.ecoRoutesVaultConfig(portal)` is the configuration of an eco-routes Portal, the one `child.predictVault()` uses. Explicit `vault` takes precedence over `vaultConfig`.
 
-Transfer funding does not emit a child `IntentPublished` event. Share the built child with your solver or intent-distribution system; an indexer relying only on publication events cannot discover it from such an event. That is the one difference from an intent a program opens with `<Chain>.Portal.send(…).then(…)`, which is also funded by transfer to its vault by default but is then published, in the same transaction — see [intents](intents.md#how-the-reward-is-funded).
+Transfer funding does not emit a child `IntentPublished` event. Share the built child with your solver or intent-distribution system; an indexer relying only on publication events cannot discover it from such an event. That is the one difference from an intent a program opens with `<Chain>.Portal.send(…).receive().then(…)`, which is also funded by transfer to its vault by default but is then published, in the same transaction — see [intents](intents.md#how-the-reward-is-funded).
 
 ## Opt in to publication and Portal funding
 
@@ -145,9 +145,11 @@ function main() {
     .receive({ token: USDC, amount })
     .then(() => {
       const swapped = USDC.balanceOf(ctx.self());
-      Optimism.Portal.send({ token: USDC, amount: swapped }).then(() => {
-        USDC.transfer(RECIPIENT, swapped);
-      });
+      Optimism.Portal.send({ token: USDC, amount: swapped })
+        .receive()
+        .then(() => {
+          USDC.transfer(RECIPIENT, swapped);
+        });
     });
 }
 ```

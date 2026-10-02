@@ -159,7 +159,7 @@ check(
 const direct = intentOf(
   compileFor(
     "base",
-    "Ethereum.Portal.send({ token: USDC, amount: AMOUNT }).then(() => { USDC.transfer(RECIPIENT, AMOUNT); });",
+    "Ethereum.Portal.send({ token: USDC, amount: AMOUNT }).receive().then(() => { USDC.transfer(RECIPIENT, AMOUNT); });",
     { RECIPIENT: recipient, AMOUNT: 1_000_000n },
   ),
 );

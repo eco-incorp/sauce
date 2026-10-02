@@ -689,16 +689,16 @@ npx sauce run swap.json --chain base --config sauce.config.json --keystore ~/.ke
 
 ## Intents: `sauce run` or `sauce intent`
 
-A program can open an intent on another chain — `Base.Portal.send({ … }).then(() => { … })`. The
-command needs what the SDK cannot look up: `--intent-deadline <unix seconds>` and `--intent-creator
-<address>`, and, when the intent's body compiles to a program of its own,
-`--intent-execution-fee <wei>`, the destination Kitchen's fee. It names whichever is missing, and
-refuses a deadline at or before now, which no solver could ever fill (`sauce intent fill` still
-rehearses one, with a note, to show the Portal's refusal). `--intent-reward-deadline <unix seconds>`
-sets when an unproven reward becomes refundable (the fill deadline by default), and
-`--intent-prover <address>` overrides the prover the registry records for the pair.
-`--intent-execution-fee auto` reads that fee from each destination's Kitchen, through `--config`
-(an `rpcUrls` entry for the destination's chain id), and says what it read.
+A program can open an intent on another chain —
+`Base.Portal.send({ … }).receive().then(() => { … })`. The command needs what the SDK cannot look
+up: `--intent-deadline <unix seconds>` and `--intent-creator <address>`, and, when the intent's body
+compiles to a program of its own, `--intent-execution-fee <wei>`, the destination Kitchen's fee. It
+names whichever is missing, and refuses a deadline at or before now, which no solver could ever fill
+(`sauce intent fill` still rehearses one, with a note, to show the Portal's refusal).
+`--intent-reward-deadline <unix seconds>` sets when an unproven reward becomes refundable (the fill
+deadline by default), and `--intent-prover <address>` overrides the prover the registry records for
+the pair. `--intent-execution-fee auto` reads that fee from each destination's Kitchen, through
+`--config` (an `rpcUrls` entry for the destination's chain id), and says what it read.
 
 Every intent whose body runs a program cooks on one Pot on its destination: the one owned by the
 destination Portal's Executor with salt zero, which every intent through that Portal shares. No

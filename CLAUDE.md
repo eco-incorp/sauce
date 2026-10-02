@@ -588,16 +588,17 @@ The **`Token(addr)` cast** and the **`<Sym>.transfer(...)` symbol syntax** are h
 `@sauce/token` function of the same name with the token first — byte for byte the program that
 imports and calls it — and a READ (`balanceOf`, `holder.USDC`) the library's `balanceOf`. So a write
 has ONE implementation however it is spelled, and it is the library's SafeERC20 one; a write returns
-nothing, so its result cannot be read. The `Token` type is EVM-only: on Solana a symbol is the mint's
-key, a plain word for the `@sauce/token` SVM functions, whose writes need accounts a symbol does not
-carry. A token-only INTENT body (`Base.Portal.send(…).then(() => { USDC.transfer(...) })`, every statement a recordable
+nothing, so its result cannot be read. The `Token` type is EVM-only: on Solana a symbol is the
+mint's key, a plain word for the `@sauce/token` SVM functions, whose writes need accounts a symbol
+does not carry. A token-only INTENT body
+(`Base.Portal.send(…).receive().then(() => { USDC.transfer(...) })`, every statement a recordable
 `transfer`/`approve` on constants and captures) is RECORDED, not compiled: the compiler records it
 in the body's own program — its names and defines that chain's — after checking it as a compiled
 body, and `bind` turns the calls into plain `route.calls` the Portal's Executor runs raw, so they
 get the Executor's checks (revert, code) and not SafeERC20's. USDT is supported there: no-return
-transfers work, and every approve is emitted as `approve(spender, 0)` then `approve(spender,
-amount)` (one Executor serves every intent, so a standing allowance is realistic). A
-`false`-returning token is caught only at delivery (the Portal's `safeTransferFrom`); the
+transfers work, and every approve is emitted as `approve(spender, 0)` then
+`approve(spender, amount)` (one Executor serves every intent, so a standing allowance is realistic).
+A `false`-returning token is caught only at delivery (the Portal's `safeTransferFrom`); the
 Executor's own `false` transfer or approve fulfils with nothing moved.
 `routes-nest-dynamic.e2e.test.ts` runs all of that through a real Portal and Executor and PINS the
 gap. Any non-token statement makes the body a program, whose writes are SafeERC20 — that is the

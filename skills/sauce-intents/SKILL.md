@@ -1,6 +1,6 @@
 ---
 name: sauce-intents
-description: Cross-chain intents written in Sauce — a file that is the intent, Base.Portal.send({ ... }).then(() => { ... }) as top-level statements, no main, and its values as defines; how an intent is published, funded, discovered, filled, proven, claimed, cancelled and refunded (a sauce intent command each) (the intent hash, the per-intent vault, IntentPublished and IntentFunded, isIntentFunded); every way to publish and fund it (sauce intent publish from a wallet, sauce run from a Pot, a transfer into the vault then publish, cascade children, quoted intents); amounts measured on chain; token-only bodies versus program bodies; the delivery; on which chain each name resolves; the shared destination Pot and the Kitchen fee the solver pays; rehearsing both sides; and the deadline and creator every intent needs. Use when a program should continue on another chain, forward a swap or bridge output, build a cascade, pay a solver, or when the user mentions intents, rewards, vaults, solvers, Portals, provers, Executors or Pots.
+description: Cross-chain intents written in Sauce — a file that is the intent, Base.Portal.send({ ... }).receive().then(() => { ... }) as top-level statements, no main, and its values as defines; how an intent is published, funded, discovered, filled, proven, claimed, cancelled and refunded (the intent hash, the per-intent vault, IntentPublished and IntentFunded, isIntentFunded); every way to publish and fund it (sauce intent publish from a wallet, sauce run from a Pot, a transfer into the vault then publish, cascade children, quoted intents); amounts measured on chain; token-only bodies versus program bodies; the delivery; on which chain each name resolves; the shared destination Pot and the Kitchen fee the solver pays; rehearsing both sides; and the deadline and creator every intent needs. Use when a program should continue on another chain, forward a swap or bridge output, build a cascade, pay a solver, or when the user mentions intents, rewards, vaults, solvers, Portals, provers, Executors or Pots.
 ---
 
 # Cross-chain intents in Sauce
@@ -13,15 +13,17 @@ undeclared in the file and set with `--define NAME=VALUE` (`sauce-script`).
 
 ```sauce chain=base define=RECIPIENT,AMOUNT
 Ethereum.Portal.send({ token: USDC, amount: AMOUNT }) // the reward: the source chain's USDC
+  .receive() // a body of transfers needs nothing named: what they move is delivered
   .then(() => {
     USDC.transfer(RECIPIENT, AMOUNT); // Ethereum's USDC: the body runs there
   });
 ```
 
-`send` and `receive` each take a token amount, `{ token, amount }`, or a list of them; the reward
-may also pay the native coin, `{ native: amount }`, or tokens and the native coin together,
-`{ tokens: [...], native: amount }`. An intent always ends with `.then(...)`: one that stops before
-it does not compile.
+`send` and `receive` each take any number of items, each an argument of its own: a token amount,
+`{ token, amount }`, or a list of them. The reward may also pay the native coin,
+`{ native: amount }`: `.send({ token: USDC, amount }, { native: fee })`. An intent always names
+both, `.receive()` naming nothing, and ends with `.then(...)`: one that stops before either does
+not compile.
 
 Nothing about the fill is guaranteed: a solver decides whether the reward is worth it, and the
 package prices nothing. Say an intent is _offered_, never that it _will execute_.
@@ -369,7 +371,7 @@ Ethereum.Portal.send({ token: USDC, amount })
   .receive({ token: USDC, amount })
   .then(() => {
     const arrived = USDC.balanceOf(ctx.self()); // Ethereum's USDC
-    Base.Portal.send({ token: USDC, amount: arrived }) // Ethereum's: it funds this level
+    Base.Portal.send({ token: USDC, amount: arrived }).receive() // Ethereum's: it funds this level
       .then(() => {
         USDC.transfer(RECIPIENT, arrived); // Base's USDC
       });
