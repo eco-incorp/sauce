@@ -660,9 +660,11 @@ for (const [dir, why] of Object.entries(COPY_FRAMING_EXEMPT)) {
 // One line, the same in every such document: a protocol's own router template is for a pool the
 // Sauce Router does not service, and a zero price limit there leaves the minimum output alone.
 const SWAP_POINTER =
-  "> **In a Sauce program**, swap with `@sauce/router`, one function per venue with a minimum " +
-  "output, and a price limit where the pool takes one (`sauce-swaps`; several pools under one " +
-  "limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.";
+  "> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, " +
+  "`uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra " +
+  "pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit " +
+  "(`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below " +
+  "call the protocol's own contracts.";
 const swapDocuments = [];
 const protocolList = sdk.listProtocols();
 const protocolModules = await Promise.all(
