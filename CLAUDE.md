@@ -564,18 +564,35 @@ protocol addresses, token symbols) vs ambient **MODULES** (this — whole librar
 
 **An intent opened in a program** is
 `Chain.Portal.send(reward).receive(delivery).then(() => { body })`: the reward the program pays,
-escrowed on the chain it runs on; what the solver delivers on `Chain`; the body that runs there. Each step takes one `{ token, amount }` or an array, written in
-place, and all three are required in that order (`intent-portal.ts#portalChainProblem` refuses
-anything else by name). An amount may be integer arithmetic (`amount * 99n / 100n`) of literals,
-defines and the program's variables: folded when every operand is known, else computed into a local
-where the intent opens and spliced like any capture. `intent-sugar.ts` lowers it, and still reads the
-old call form, `Chain(() => { body }, { tokens: delivery }).reward({ tokens: reward })`, which means
-exactly the same, until the compiler opens intents itself (#61); document only the Portal form. On the
-host, every chain export's `Portal` (`intent-dsl.ts#chainPortal`) takes each step's options beside it
-(`send(items, rewardOptions)`, `receive(items, routeOptions)`), `.nest(child, options)` may follow
-`receive`, and `.then(body)` returns the `BuiltIntent` of
-`Chain(body, { ...routeOptions, tokens }).nest(...).reward({ ...rewardOptions, tokens })`. Its
-`then` is the intent's, not a promise's, so it refuses being awaited.
+escrowed on the chain it runs on; what the solver delivers on `Chain`; the body that runs there.
+`send` and `receive` take one item or an array, written in place: `{ token, amount }`, and in the
+reward `{ native: amount }`. Modifiers may follow `send` — `.creator()`, `.deadline()` (the
+reward's), `.prover()` — and `receive` — `.deadline()` (the fill's), `.salt()`, `.fee()` (the
+destination Kitchen's fee its cook pays) — each at most once, in any order within its stage;
+`intent-portal.ts#portalChainProblem` refuses anything else by name. Each left out has its default,
+Eco's Portal app's where it has one (`intent-portal.ts#DEFAULT_FILL_WINDOW`, 300 s, and
+`#DEFAULT_REFUND_WINDOW`, the seven days Eco's solver requires past the fill deadline): the fill
+deadline counts from when the intent opens — `intents.openedAt`, which the CLI and MCP set to now
+once per command, else `ctx.timestamp()` as the program runs, which is how every nested level opens
+— the creator is the compile's (`sauce` defaults it to the wallet that publishes or cooks; a
+nested level inherits a literal `.creator()` from the level above), the prover the registry's, the
+salt zero (not Eco's random one: a file must compile to the same intent each time), and the fee
+`intents.executionFee`, one for every destination or a function of it (`sauce` reads each
+destination's Kitchen when no `--intent-execution-fee` is given). The creator and, for a program
+body, the fee are refused when neither is given: the executing Pot is no safe creator. An amount, a
+deadline or a creator may be a value the program computes (`amount * 99 / 100`,
+`ctx.timestamp() + 3600`): folded when every operand is known, else computed into a local where the
+intent opens and spliced like any capture (a deadline into its own eight-byte sentinel); a fee is
+known when the intent is built. `intent-sugar.ts` lowers it, and still reads the old call form,
+`Chain(() => { body }, { tokens: delivery }).reward({ tokens: reward })`, with its old rules (a
+deadline required, the reward's defaulting to the route's), until the compiler opens intents itself
+(#61); document only the Portal form. On the host, every chain export's `Portal`
+(`intent-dsl.ts#chainPortal`) takes the same modifiers plus `.source(chain)` on the reward and
+`.nest(child, options)` on the route, and `.then(body)` returns the `BuiltIntent` of
+`Chain(body, { deadline, execution: { value: fee }, tokens, precalls }).nest(...).reward({ source,
+creator, deadline, prover, tokens, nativeAmount })`, its `precalls` moving the delivery into the
+Pot; there the source, the creator and the fee are required (it runs on no chain and reads none).
+Its `then` is the intent's, not a promise's, so it refuses being awaited.
 
 **Chain-scoped names are resolved per level.** In an intent a program opens (`intent-sugar.ts`) the
 body and the delivery resolve on the destination and the reward on the enclosing chain, which
