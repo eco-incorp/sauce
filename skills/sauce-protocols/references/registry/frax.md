@@ -19,7 +19,7 @@ On Ethereum, `Frax` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's frax, `0x853d955aCEf822Db058eb8505911ED77F175b99e`.
-  require(Frax.Frax != 0n);
+  require(Frax.Frax != 0);
 }
 ```
 

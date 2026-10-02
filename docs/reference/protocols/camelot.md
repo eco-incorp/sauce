@@ -25,7 +25,7 @@ Native Arbitrum DEX with dual AMM: V2 constant product pools (with native fee-on
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### swapV2
 
@@ -166,7 +166,7 @@ On Arbitrum One, `Camelot` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Arbitrum One's v2Factory, `0x6EcCab422D763aC031210895C81787E87B43A652`.
-  require(Camelot.V2Factory != 0n);
+  require(Camelot.V2Factory != 0);
 }
 ```
 

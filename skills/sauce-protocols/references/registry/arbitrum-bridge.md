@@ -19,7 +19,7 @@ On Ethereum, `ArbitrumBridge` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's l1GatewayRouter, `0x72Ce9c846789fdB6fC1f34aC4AD25Dd9ef7031ef`.
-  require(ArbitrumBridge.L1GatewayRouter != 0n);
+  require(ArbitrumBridge.L1GatewayRouter != 0);
 }
 ```
 

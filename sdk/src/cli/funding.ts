@@ -72,9 +72,8 @@ const NATIVE = /^(eth|native)$/i;
 /**
  * `<TOKEN|address>:<amount>`, as `--fund` and `--assume-balance` take it (`flag` names which, for
  * the error). The amount is in whole units — `USDC:1.5` is 1.5 USDC, by the registry's decimals (or
- * the token's own, for an address) — or, ending in `n`, in base units, as a SauceScript integer is
- * written: `USDC:1500000n`. `ETH:<amount>` (or `native:`) is the chain's native currency, 18
- * decimals.
+ * the token's own, for an address) — or, ending in `n`, in base units: `USDC:1500000n`.
+ * `ETH:<amount>` (or `native:`) is the chain's native currency, 18 decimals.
  */
 export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: string): FundRequest {
   // Solana registers mints by symbol too, but nothing here can pull one: say so, not "unknown".

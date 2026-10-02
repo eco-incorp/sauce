@@ -19,7 +19,7 @@ On Ethereum, `Lifi` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's lifiDiamond, `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE`.
-  require(Lifi.LiFiDiamond != 0n);
+  require(Lifi.LiFiDiamond != 0);
 }
 ```
 

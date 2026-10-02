@@ -19,7 +19,7 @@ On Arbitrum One, `GmxV1` is a namespace: its contracts need no import.
 ```sauce chain=arbitrum
 function main() {
   // Arbitrum One's glp, `0x4277f8F2c384827B5273592FF7CeBd9f2C1ac258`.
-  require(GmxV1.Glp != 0n);
+  require(GmxV1.Glp != 0);
 }
 ```
 

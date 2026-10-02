@@ -16,7 +16,7 @@ hooks)`. A pool can attach a hook contract that runs around swaps and liquidity 
 
 - Exact input is a **negative** `amountSpecified` (`-amount`), the reverse of V3's pool.
   `uniswapV4` takes a positive `amountIn` and passes `-amountIn` itself.
-- A hook can change a pool's behaviour and fee: use hookless keys (`hooks: 0n`) unless you have
+- A hook can change a pool's behaviour and fee: use hookless keys (`hooks: 0`) unless you have
   reviewed the hook.
 - A protocol fee can apply on top of the LP fee; both are in the pool's state
   (`sauce-distributed-swap` reads them).
@@ -34,16 +34,16 @@ import { uniswapV4 } from "@sauce/router";
 function main(amountIn: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256, recipient: Address) {
   const self = ctx.self();
   const before = WETH.balanceOf(self);
-  uniswapV4(UniswapV4.PoolManager, WETH, USDC, amountIn, 500n, 10n, 0n, sqrtPriceLimitX96, minOut, recipient);
+  uniswapV4(UniswapV4.PoolManager, WETH, USDC, amountIn, 500, 10, 0, sqrtPriceLimitX96, minOut, recipient);
   const unspent = amountIn - (before - WETH.balanceOf(self));
-  if (unspent > 0n) {
+  if (unspent > 0) {
     WETH.transfer(recipient, unspent);
   }
 }
 ```
 
-`uniswapV4` builds the key from the two tokens in sort order with the fee (`500n`), tick spacing
-(`10n`) and hooks (`0n`, none), pays `recipient` and reverts below `minOut`. The WETH the pool did
+`uniswapV4` builds the key from the two tokens in sort order with the fee (`500`), tick spacing
+(`10`) and hooks (`0`, none), pays `recipient` and reverts below `minOut`. The WETH the pool did
 not take before the price limit goes back to `recipient` too.
 
 ## Category
@@ -61,7 +61,7 @@ dex | Chains and addresses: [registry/uniswap-v4.md](registry/uniswap-v4.md)
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### swap
 

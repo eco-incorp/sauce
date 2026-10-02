@@ -22,7 +22,7 @@ up the USDC/WETH pool on the chain's Uniswap V3 factory and reads what the Pot h
 function main(fee: Uint256): { pool: Address; usdc: Uint256; weth: Uint256; bcspx: Uint256 } {
   const pot = ctx.self();
   const pool = UniswapV3.Factory.getPool(USDC, WETH, fee);
-  require(pool != 0n, "no USDC/WETH pool at that fee on this chain");
+  require(pool != 0, "no USDC/WETH pool at that fee on this chain");
   return {
     pool: pool,
     usdc: USDC.balanceOf(pot),
@@ -150,7 +150,7 @@ function main(
   require(balanceOf(USDC, potUsdc) >= cash, "not enough USDC");
   transfer(USDC, usdcProgram, potUsdc, toUsdc, pot, cash);
   const before = balanceOf(TSLAx, toTslax);
-  transferChecked(TSLAx, tslaxProgram, potTslax, tslaxMint, toTslax, pot, shares, 8n);
+  transferChecked(TSLAx, tslaxProgram, potTslax, tslaxMint, toTslax, pot, shares, 8);
   return balanceOf(TSLAx, toTslax) - before;
 }
 ```

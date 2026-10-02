@@ -183,7 +183,7 @@ check(contracts.on("ethereum").AaveV3.Pool.available, "Ethereum has AaveV3.Pool"
 
 // ---- Inside a body, a decoded result is read by position or destructured, as anywhere else.
 const decodeIn = (statement: string) =>
-  `function main(pool: Address) { Base(() => { const d = hex\`3850c7bd\`; ${statement} require(x != 0n); }, { tokens: [{ token: 0x4200000000000000000000000000000000000006n, amount: 1n }] }).reward({ tokens: [{ token: WETH, amount: 1n }] }); }`;
+  `function main(pool: Address) { Base(() => { const d = hex\`3850c7bd\`; ${statement} require(x != 0); }, { tokens: [{ token: 0x4200000000000000000000000000000000000006, amount: 1 }] }).reward({ tokens: [{ token: WETH, amount: 1 }] }); }`;
 const refused = (source: string) => {
   try {
     compileFor("ethereum", source, [recipient], fee.base);
@@ -193,7 +193,7 @@ const refused = (source: string) => {
   }
 };
 check(
-  refused(decodeIn('const x = abi.decode(evm.static(pool, d), ["Uint256"])[0n];')) === "",
+  refused(decodeIn('const x = abi.decode(evm.static(pool, d), ["Uint256"])[0];')) === "",
   "a body reads a decoded result by position",
 );
 check(

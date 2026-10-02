@@ -22,7 +22,7 @@ The largest liquid staking protocol for Ethereum. Stake ETH and receive stETH, a
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Stake ETH for stETH
@@ -62,7 +62,7 @@ On Ethereum, `Lido` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's stETH, `0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84`.
-  require(Lido.StETH != 0n);
+  require(Lido.StETH != 0);
 }
 ```
 

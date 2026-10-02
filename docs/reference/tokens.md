@@ -215,7 +215,7 @@ function main(
   amount: Uint256,
 ): Uint256 {
   const before = balanceOf(SPACEX, destination);
-  transferChecked(SPACEX, tokenProgram, source, mint, destination, pot, amount, 9n);
+  transferChecked(SPACEX, tokenProgram, source, mint, destination, pot, amount, 9);
   return balanceOf(SPACEX, destination) - before;
 }
 ```

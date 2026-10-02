@@ -19,7 +19,7 @@ On zkSync Era, `Zerolend` is a namespace: its contracts need no import.
 ```sauce chain=zksync
 function main() {
   // zkSync Era's pool, `0x4d9429246EA989C9CeE203B43F6d1C7D83e3B8F8`.
-  require(Zerolend.Pool != 0n);
+  require(Zerolend.Pool != 0);
 }
 ```
 

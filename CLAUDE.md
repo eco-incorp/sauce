@@ -755,7 +755,9 @@ an intent the file opens resolves its body on its own chain) — and no encoder 
 (`cookTransaction`). It is Node-only and deliberately in no `exports` entry and no barrel
 (`cli.test.ts` fails if a barrel exports it), reads no environment but the variable `--password-env`
 names, reaches a network only through `--rpc-url`, a `--config` file's entry for the chain, or
-else the built-in public endpoints (none with `--offline`), and signs only with
+else the built-in public endpoints (none with `--offline`) — and `sauce update`, its one other
+network access, the npm registry, read only when that command runs (no background or automatic
+update check; `no-embedded-rpc.test.ts` holds the registry to `update.ts`) — and signs only with
 `--wallet`, `--keystore`, `--private-key` or `--keypair`, scrubbing any key or password it was given
 from everything it prints. **The public endpoints are the one exception to "the package ships no
 RPC URL"** (the user's call: nobody should need a config to run the CLI or the MCP server). They
@@ -1013,6 +1015,20 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   `references/` (an agent may have only the skills, served by the MCP server). The protocol
   documents are third-party facts and are exempt from the address, Portal and multicall rules only; the generated references are exempt from the Portal rule (a
   chain's file records its eco-routes deployment).
+- **Plain integers, enforced.** SauceScript a reader sees writes `3000`, never `3000n`: the
+  compiler reads a literal from its text as a 256-bit integer, so both are the same program
+  (`sdk/test/integer-literals.test.ts`, both targets), and agents copy whichever they are shown.
+  `docs/scripts/integer-literals.mjs` is the rule; `skills:check` applies it to the example
+  programs, ` ```sauce ` blocks, references (generated ones included), `builtins.json`'s programs
+  and the protocol documents' ` ```typescript ` templates, and `docs:check` to
+  `docs/examples/*.sauce.ts`, the manual's ` ```js ` fences and every fence of a page generated
+  from the skills (`docs/reference/`, which renders SauceScript as ` ```ts `). TypeScript host
+  code (runners, ` ```ts ` blocks, a closure in a `.ts` file) keeps the `n`: there tsc types the
+  literal. An exception is a checker's `INTEGER_EXCEPTIONS`, with its reason. The SDK folds an
+  intent's literals itself (`intent-body.ts#literalValue`), from the literal's text, so a plain
+  one past 2^53 is exact there too. A quoted compiler message keeps its words
+  (``write `i += 1n` ``), and `sauce actions` still prints its lowering with `n` (its tests pin
+  that source text).
 - **Execution-agnostic.** Not every agent has the SDK installed: some have only the `sauce` CLI, or a
   remote compiler, and sign by local means. Every skill but `sauce-cli` (the CLI) and
   `sauce-typescript` (the SDK) teaches the program, what compiling for a chain produces (bytecode,

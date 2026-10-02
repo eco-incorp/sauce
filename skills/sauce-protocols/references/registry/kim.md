@@ -19,7 +19,7 @@ On Mode, `Kim` is a namespace: its contracts need no import.
 ```sauce chain=mode
 function main() {
   // Mode's v2Router, `0x5D61c537393cf21893BE619E36fC94cd73C77DD3`.
-  require(Kim.V2Router != 0n);
+  require(Kim.V2Router != 0);
 }
 ```
 

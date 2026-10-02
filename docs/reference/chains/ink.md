@@ -38,7 +38,7 @@ function main() {
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(USDT0).balanceOf(ctx.self()) == held);
   // `UniswapV4.PoolManager` is Ink's poolManager: `0x360e68faccca8ca495c1b759fd9eee466db9fb32`.
-  require(UniswapV4.PoolManager != 0n);
+  require(UniswapV4.PoolManager != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Ink.UniswapV4.PoolManager == UniswapV4.PoolManager);
 }

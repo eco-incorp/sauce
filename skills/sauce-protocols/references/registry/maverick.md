@@ -19,7 +19,7 @@ On Ethereum, `Maverick` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's v2Factory, `0x0A7e848Aca42d879EF06507Fca0E7b33A0a63c1e`.
-  require(Maverick.V2Factory != 0n);
+  require(Maverick.V2Factory != 0);
 }
 ```
 

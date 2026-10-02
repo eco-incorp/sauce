@@ -19,7 +19,7 @@ On Polygon, `GainsNetwork` is a namespace: its contracts need no import.
 ```sauce chain=polygon
 function main() {
   // Polygon's diamond, `0x209A9A01980377916851af2cA075C2b170452018`.
-  require(GainsNetwork.Diamond != 0n);
+  require(GainsNetwork.Diamond != 0);
 }
 ```
 

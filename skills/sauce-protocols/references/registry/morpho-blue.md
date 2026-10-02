@@ -19,7 +19,7 @@ On Ethereum, `MorphoBlue` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's bundler3, `0x6566194141eefa99Af43Bb5Aa71460Ca2Dc90245`.
-  require(MorphoBlue.Bundler3 != 0n);
+  require(MorphoBlue.Bundler3 != 0);
 }
 ```
 

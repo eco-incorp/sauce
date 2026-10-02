@@ -4,12 +4,12 @@
 // `available(...)` is decided when the program is compiled, for the chain it is compiled for, and
 // the branches it rules out are removed before anything in them is resolved.
 function main() {
-  if (!available(USDC) || !available(WETH)) return 0n;
-  let pool = 0n;
+  if (!available(USDC) || !available(WETH)) return 0;
+  let pool = 0;
   if (available(PancakeswapV3.Factory)) {
-    pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
+    pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500);
   } else if (available(UniswapV3.Factory)) {
-    pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);
+    pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
   }
   return pool;
 }

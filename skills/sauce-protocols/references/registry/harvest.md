@@ -19,7 +19,7 @@ On Ethereum, `Harvest` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's controller, `0x222412af183BCeAdEFd72e4Cb1b71f1889953b1C`.
-  require(Harvest.Controller != 0n);
+  require(Harvest.Controller != 0);
 }
 ```
 

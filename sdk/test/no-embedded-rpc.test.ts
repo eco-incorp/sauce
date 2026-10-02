@@ -25,6 +25,9 @@
  * domains, `${…}` hosts computed at runtime, and URLs on the explicitly non-RPC fields — protocol
  * `website`/`github` and block explorers. A URL that is none of the above but not RPC-shaped (an ABI
  * source, a package registry) is simply not matched.
+ *
+ * The npm registry is the `sauce` command's one other network access, and only `sauce update`
+ * (`sdk/src/cli/update.ts`) reaches it, only when it runs: shipped code names it nowhere else.
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -245,6 +248,14 @@ describe("the SDK ships no RPC endpoints", () => {
     );
     expect(deliberate).toHaveLength(1);
     expect(found.filter((finding) => !deliberate.includes(finding))).toEqual([]);
+  });
+
+  it("shipped code names the npm registry only where sauce update reads it", () => {
+    const shipped = scanned(SHIPPED_ROOTS);
+    const naming = [...shipped]
+      .filter(([, text]) => /registry\.npmjs\.org/.test(text))
+      .map(([file]) => file);
+    expect(naming).toEqual(["sdk/src/cli/update.ts"]);
   });
 
   it("the RPC config example holds placeholders only", () => {

@@ -19,7 +19,7 @@ On Ethereum, `Synapse` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's cctpRouter, `0x12715a66773BD9C54534a01aBF01d05F6B4Bd35E`.
-  require(Synapse.CctpRouter != 0n);
+  require(Synapse.CctpRouter != 0);
 }
 ```
 

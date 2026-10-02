@@ -19,7 +19,7 @@ On Optimism, `PerpetualProtocol` is a namespace: its contracts need no import.
 ```sauce chain=optimism
 function main() {
   // Optimism's clearingHouse, `0x82ac2CE43e33683c58BE4cDc40975E73aA50f459`.
-  require(PerpetualProtocol.ClearingHouse != 0n);
+  require(PerpetualProtocol.ClearingHouse != 0);
 }
 ```
 

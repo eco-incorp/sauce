@@ -19,7 +19,7 @@ On Base, `Seamless` is a namespace: its contracts need no import.
 ```sauce chain=base
 function main() {
   // Base's pool, `0x8F44Fd754285aa6A2b8B9B97739B79746e0475a7`.
-  require(Seamless.Pool != 0n);
+  require(Seamless.Pool != 0);
 }
 ```
 

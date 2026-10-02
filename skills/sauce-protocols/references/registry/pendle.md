@@ -19,7 +19,7 @@ On Ethereum, `Pendle` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's router, `0x888888888889758F76e7103c6CbF23ABbF58F946`.
-  require(Pendle.Router != 0n);
+  require(Pendle.Router != 0);
 }
 ```
 

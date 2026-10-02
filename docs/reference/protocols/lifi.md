@@ -16,7 +16,7 @@ Multi-chain bridge and DEX aggregator via LiFiDiamond proxy. Routes through opti
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### bridge
 
@@ -97,7 +97,7 @@ On Ethereum, `Lifi` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's lifiDiamond, `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE`.
-  require(Lifi.LiFiDiamond != 0n);
+  require(Lifi.LiFiDiamond != 0);
 }
 ```
 

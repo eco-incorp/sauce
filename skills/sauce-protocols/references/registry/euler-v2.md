@@ -19,7 +19,7 @@ On Ethereum, `EulerV2` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's ethereumVaultConnector, `0x0C9a3dd6b8F28529d72d7f9cE918D493519EE383`.
-  require(EulerV2.EthereumVaultConnector != 0n);
+  require(EulerV2.EthereumVaultConnector != 0);
 }
 ```
 

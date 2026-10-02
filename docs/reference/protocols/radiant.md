@@ -16,7 +16,7 @@ Omnichain lending protocol on Arbitrum. Aave V2 fork with cross-chain lending ca
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### deposit
 
@@ -116,7 +116,7 @@ On Arbitrum One, `Radiant` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Arbitrum One's lendingPool, `0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1`.
-  require(Radiant.LendingPool != 0n);
+  require(Radiant.LendingPool != 0);
 }
 ```
 

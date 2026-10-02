@@ -19,7 +19,7 @@ dex | Chains and addresses: [registry/curve.md](registry/curve.md)
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### swap
 
@@ -95,4 +95,4 @@ an ABI import bound to the address), and the ABI functions are generated in
 - For Router NG swaps, approve tokens to the Router NG contract
 - The StableSwap-NG pool interface (plain and meta pools). Classic pools such as 3pool have their own shape: see `CurveThreePoolABI` below.
 - 3pool (`threePool` in the addresses), a classic StableSwap pool. Its liquidity arrays are fixed-size, and its state-changing functions return nothing: read amounts as balance changes.
-- From a Pot program, `@sauce/router` swaps at the pool directly: `curve(pool, tokenIn, tokenOut, amountIn, i, j, uint256Indices, minOut, recipient)`, with `uint256Indices` `false` for StableSwap and NG pools (`int128` indices) and `true` for CryptoSwap, approves the pool for exactly `amountIn` and calls the 4-argument `exchange` with `minOut` as `min_dy`, without decoding a return (3pool-era pools have none); the allowance ends at zero, and it returns the Pot's balance change, forwarded when the recipient is not the Pot. `tryCurve` catches a failed `exchange`, resets the approval and returns `0n`. The `curveSwap` action is the same call. The Sauce Router's own Curve handler cannot trade a pool whose `exchange` returns nothing, nor a uint256-index pool
+- From a Pot program, `@sauce/router` swaps at the pool directly: `curve(pool, tokenIn, tokenOut, amountIn, i, j, uint256Indices, minOut, recipient)`, with `uint256Indices` `false` for StableSwap and NG pools (`int128` indices) and `true` for CryptoSwap, approves the pool for exactly `amountIn` and calls the 4-argument `exchange` with `minOut` as `min_dy`, without decoding a return (3pool-era pools have none); the allowance ends at zero, and it returns the Pot's balance change, forwarded when the recipient is not the Pot. `tryCurve` catches a failed `exchange`, resets the approval and returns `0`. The `curveSwap` action is the same call. The Sauce Router's own Curve handler cannot trade a pool whose `exchange` returns nothing, nor a uint256-index pool

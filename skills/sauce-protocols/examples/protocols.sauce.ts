@@ -17,11 +17,11 @@
 function main(beneficiary: Address, amount: Uint256) {
   // 1. Supply `amount` of the Pot's USDC to Aave V3 for `beneficiary`, approving exactly that.
   USDC.approve(AaveV3.Pool, amount);
-  AaveV3.Pool.supply(USDC, amount, beneficiary, 0n);
+  AaveV3.Pool.supply(USDC, amount, beneficiary, 0);
 
   // 2. Look a pool up through PancakeSwap V3's factory, where the chain has one.
   if (available(PancakeswapV3.Factory)) {
-    const pool = PancakeswapV3.Factory.getPool(WETH, USDC, 500n);
-    require(pool != 0n, "no PancakeSwap V3 WETH/USDC 0.05% pool");
+    const pool = PancakeswapV3.Factory.getPool(WETH, USDC, 500);
+    require(pool != 0, "no PancakeSwap V3 WETH/USDC 0.05% pool");
   }
 }

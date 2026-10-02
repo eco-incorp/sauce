@@ -19,7 +19,7 @@ On Ethereum, `AaveV3` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's pool, `0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2`.
-  require(AaveV3.Pool != 0n);
+  require(AaveV3.Pool != 0);
 }
 ```
 

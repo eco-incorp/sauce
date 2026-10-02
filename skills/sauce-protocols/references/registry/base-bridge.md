@@ -19,7 +19,7 @@ On Ethereum, `BaseBridge` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's l1StandardBridge, `0x3154Cf16ccdb4C6d922629664174b904d80F2C35`.
-  require(BaseBridge.L1StandardBridge != 0n);
+  require(BaseBridge.L1StandardBridge != 0);
 }
 ```
 

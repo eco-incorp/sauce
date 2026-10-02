@@ -78,7 +78,7 @@ for (const venue of ["UniswapV3", "AerodromeSlipstream"])
 for (const read of ["getLiquidity(pool)", "getSlot0(pool)"])
   check(code.includes(`UniswapV4.StateView.${read}`), `the program reads V4's ${read}`);
 check(code.match(/^function /gm)?.length === 2, "the program has trade and main, nothing else");
-const venues = [...code.matchAll(/trade\((\d)n, /g)].map((m) => m[1]);
+const venues = [...code.matchAll(/trade\((\d), /g)].map((m) => m[1]);
 check(venues.join() === "1,0,2", "the loops hand trade Slipstream (1), Uniswap V3 (0), V4 (2)");
 for (const [venue, name] of [
   ["0", "Uniswap V3"],
@@ -105,12 +105,10 @@ const V4_KEYS: [bigint, bigint][] = [
   [3000n, 60n],
   [10000n, 200n],
 ];
-const list = (xs: bigint[]) => `[${xs.map((x) => `${x}n`).join(", ")}]`;
+const list = (xs: bigint[]) => `[${xs.join(", ")}]`;
 check(code.includes(`for (const spacing of ${list(SPACINGS)})`), "the program walks nine spacings");
 check(code.includes(`for (const fee of ${list(TIERS)})`), "and Base's seven tiers");
-const keys = [...code.matchAll(/\{ fee: (\d+)n, spacing: (\d+)n \}/g)].map(
-  (m) => `${m[1]}:${m[2]}`,
-);
+const keys = [...code.matchAll(/\{ fee: (\d+), spacing: (\d+) \}/g)].map((m) => `${m[1]}:${m[2]}`);
 check(
   keys.join() === V4_KEYS.map(([fee, spacing]) => `${fee}:${spacing}`).join(),
   "and V4's four standard keys",
@@ -283,7 +281,7 @@ const v4Fee = (protocolFee: bigint, lpFee: bigint) =>
 check(v4Fee(1000n, 500n) === 1500n, "0.05% with a 0.1% protocol fee is 0.15%");
 check(prose.includes("at 0.05% with a 0.1% protocol fee, its fee is 0.15%"), "the skill says so");
 check(
-  code.includes("fee = protocolFee + lpFee - (protocolFee * lpFee) / 1000000n;"),
+  code.includes("fee = protocolFee + lpFee - (protocolFee * lpFee) / 1000000;"),
   "the program composes it so",
 );
 

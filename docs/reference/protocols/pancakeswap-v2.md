@@ -22,7 +22,7 @@ The most popular DEX on BNB Chain using the constant product AMM model (x*y=k). 
 - As Uniswap V2: `amountOutMin` is the only bound; through the Router, approve exactly
   `amountIn` and pass a deadline.
 - The 0.25% fee differs from Uniswap V2's 0.3%: quote with this protocol's Router
-  (`getAmountsOut`), not Uniswap's formula, and give `uniswapV2` the pair's fee, `2500n` ppm.
+  (`getAmountsOut`), not Uniswap's formula, and give `uniswapV2` the pair's fee, `2500` ppm.
 
 ## In a Sauce program
 
@@ -33,12 +33,12 @@ import { uniswapV2 } from "@sauce/router";
 
 function main(amountIn: Uint256, minOut: Uint256, recipient: Address) {
   const pair = PancakeswapV2.Factory.getPair(USDC, WETH);
-  require(pair != 0n, "no USDC/WETH pair");
-  uniswapV2(pair, USDC, WETH, amountIn, 2500n, minOut, recipient);
+  require(pair != 0, "no USDC/WETH pair");
+  uniswapV2(pair, USDC, WETH, amountIn, 2500, minOut, recipient);
 }
 ```
 
-`uniswapV2` prices the output from the pair's reserves with its 0.25% fee (`2500n` ppm), pushes
+`uniswapV2` prices the output from the pair's reserves with its 0.25% fee (`2500` ppm), pushes
 `amountIn` to the pair, pays `recipient` and reverts below `minOut`. The pair takes the whole input
 or the program reverts, so no input is left to return.
 
@@ -53,7 +53,7 @@ or the program reverts, so no input is left to return.
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### swap
 
@@ -148,7 +148,7 @@ function main(
 - Arbitrum, Base, Linea, and opBNB share the same Factory and Router addresses
 - LP tokens can be staked in MasterChef for CAKE rewards
 - PancakeSwap is the default choice for BSC trading; use PancakeSwap V3 for concentrated liquidity
-- From a Pot program, `@sauce/router` trades a PancakeSwap V2 pair directly, with no router and no approval: `uniswapV2(pair, tokenIn, tokenOut, amountIn, 2500n, minOut, recipient)` — 2500 ppm is PancakeSwap V2's 0.25% fee — reads the pair's `getReserves`, prices the output in the program with the pair's fee in parts per million, transfers the input to the pair and calls `pair.swap` with empty `data`, returning the amount out. The direction is the sort order of `tokenIn` and `tokenOut` (`token0` is the lower address), so there is no argument to get wrong. The swap consumes its whole input or reverts; there is no refund path. `tryUniswapV2` takes the same arguments and returns `0n`, moving nothing, when the pair cannot fill the whole input at the floor. The `uniswapV2Swap` action is the same call
+- From a Pot program, `@sauce/router` trades a PancakeSwap V2 pair directly, with no router and no approval: `uniswapV2(pair, tokenIn, tokenOut, amountIn, 2500, minOut, recipient)` — 2500 ppm is PancakeSwap V2's 0.25% fee — reads the pair's `getReserves`, prices the output in the program with the pair's fee in parts per million, transfers the input to the pair and calls `pair.swap` with empty `data`, returning the amount out. The direction is the sort order of `tokenIn` and `tokenOut` (`token0` is the lower address), so there is no argument to get wrong. The swap consumes its whole input or reverts; there is no refund path. `tryUniswapV2` takes the same arguments and returns `0`, moving nothing, when the pair cannot fill the whole input at the floor. The `uniswapV2Swap` action is the same call
 
 ## Its names in a program
 
@@ -157,7 +157,7 @@ On Ethereum, `PancakeswapV2` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's factory, `0x1097053Fd2ea711dad45caCcc45EfF7548fCB362`.
-  require(PancakeswapV2.Factory != 0n);
+  require(PancakeswapV2.Factory != 0);
 }
 ```
 

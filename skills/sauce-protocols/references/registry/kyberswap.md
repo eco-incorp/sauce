@@ -19,7 +19,7 @@ On Ethereum, `Kyberswap` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's elasticFactory, `0xC7a590291e07B9fe9E64b86c58fD8fC764308C4A`.
-  require(Kyberswap.ElasticFactory != 0n);
+  require(Kyberswap.ElasticFactory != 0);
 }
 ```
 

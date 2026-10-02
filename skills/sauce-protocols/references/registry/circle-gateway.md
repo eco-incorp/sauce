@@ -19,7 +19,7 @@ On Ethereum, `CircleGateway` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's gatewayMinter, `0x2222222d7164433c4C09B0b0D809a9b52C04C205`.
-  require(CircleGateway.GatewayMinter != 0n);
+  require(CircleGateway.GatewayMinter != 0);
 }
 ```
 

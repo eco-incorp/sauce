@@ -19,7 +19,7 @@ On Ethereum, `CompoundV3` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's cUSDCv3, `0xc3d688B66703497DAA19211EEdff47f25384cdc3`.
-  require(CompoundV3.CUSDCv3 != 0n);
+  require(CompoundV3.CUSDCv3 != 0);
 }
 ```
 

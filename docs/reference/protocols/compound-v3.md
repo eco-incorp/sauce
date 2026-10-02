@@ -47,7 +47,7 @@ function main(amount: Uint256) {
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### supply
 
@@ -132,7 +132,7 @@ On Ethereum, `CompoundV3` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's cUSDCv3, `0xc3d688B66703497DAA19211EEdff47f25384cdc3`.
-  require(CompoundV3.CUSDCv3 != 0n);
+  require(CompoundV3.CUSDCv3 != 0);
 }
 ```
 

@@ -19,7 +19,7 @@ On Arbitrum One, `Vertex` is a namespace: its contracts need no import.
 ```sauce chain=arbitrum
 function main() {
   // Arbitrum One's clearinghouse, `0x773bb71b0108b060b76746422ee810bfec9a963d`.
-  require(Vertex.Clearinghouse != 0n);
+  require(Vertex.Clearinghouse != 0);
 }
 ```
 

@@ -899,7 +899,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(run.stderr).toContain("Filling, rehearsed on base (as a solver will):");
     expect(run.stderr).toMatch(/the solver's costs on base: ~250000 gas/);
     expect(readFileSync(out, "utf8")).toContain(
-      `USDC.transfer(${RECIPIENT.toLowerCase()}n, 1250000n);`,
+      `USDC.transfer(${RECIPIENT.toLowerCase()}, 1250000);`,
     );
     const published = JSON.parse(run.stdout) as { intents: Array<{ intentHash: Hex }> };
     const hash = published.intents[0]!.intentHash;

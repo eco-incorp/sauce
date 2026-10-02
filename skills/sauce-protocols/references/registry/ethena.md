@@ -19,7 +19,7 @@ On Ethereum, `Ethena` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's susde, `0x9D39A5DE30e57443BfF2A8307A4256c8797A3497`.
-  require(Ethena.Susde != 0n);
+  require(Ethena.Susde != 0);
 }
 ```
 

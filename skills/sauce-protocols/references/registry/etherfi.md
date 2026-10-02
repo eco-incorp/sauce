@@ -19,7 +19,7 @@ On Ethereum, `Etherfi` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's eETH, `0x35fA164735182de50811E8e2E824cFb9B6118ac2`.
-  require(Etherfi.EETH != 0n);
+  require(Etherfi.EETH != 0);
 }
 ```
 

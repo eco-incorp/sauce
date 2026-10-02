@@ -42,11 +42,11 @@ import { uniswapV3, uniswapV4 } from "@sauce/router";
 // pays, fee included, never passes the caller's. Selling token0 pushes the price down: then the
 // limit is a floor, and higher is better.
 function ownLimit(limit: Uint256, fee: Uint256, sellsToken0: bool): Uint256 {
-  const root = Math.sqrt((1000000n - fee) * 10n ** 30n); // sqrt(1 - fee), times 1e18
+  const root = Math.sqrt((1000000 - fee) * 10 ** 30); // sqrt(1 - fee), times 1e18
   if (sellsToken0) {
-    return Math.mulDiv(limit, 10n ** 18n, root);
+    return Math.mulDiv(limit, 10 ** 18, root);
   }
-  return Math.mulDiv(limit, root, 10n ** 18n);
+  return Math.mulDiv(limit, root, 10 ** 18);
 }
 
 function main(
@@ -60,9 +60,9 @@ function main(
 ) {
   Base(
     () => {
-      require(sqrtPriceLimitX96 != 0n &&
-        recipient != 0n &&
-        refundTo != 0n, "give sqrtPriceLimitX96, recipient and refundTo");
+      require(sqrtPriceLimitX96 != 0 &&
+        recipient != 0 &&
+        refundTo != 0, "give sqrtPriceLimitX96, recipient and refundTo");
       const self = ctx.self();
       const sellsToken0 = WETH < USDC;
       const wethBefore = WETH.balanceOf(self);
@@ -72,15 +72,15 @@ function main(
       // skipped when it is missing, has no liquidity, or is already past that limit. A pool fills
       // what it can and leaves the rest for the next.
       // Uniswap V3, by fee tier, each pool read through the `UniswapV3.Pool` namespace.
-      for (const tier of [100n, 500n, 3000n, 10000n]) {
+      for (const tier of [100, 500, 3000, 10000]) {
         const pool = UniswapV3.Factory.getPool(WETH, USDC, tier);
-        if (pool != 0n) {
-          if (UniswapV3.Pool(pool).liquidity() > 0n) {
+        if (pool != 0) {
+          if (UniswapV3.Pool(pool).liquidity() > 0) {
             const limit = ownLimit(sqrtPriceLimitX96, UniswapV3.Pool(pool).fee(), sellsToken0);
             const price = UniswapV3.Pool(pool).slot0().sqrtPriceX96;
             const unsold = WETH.balanceOf(self);
-            if (unsold > 0n && (sellsToken0 ? price > limit : price < limit)) {
-              uniswapV3(pool, WETH, USDC, unsold, limit, 0n, self);
+            if (unsold > 0 && (sellsToken0 ? price > limit : price < limit)) {
+              uniswapV3(pool, WETH, USDC, unsold, limit, 0, self);
             }
           }
         }
@@ -90,23 +90,23 @@ function main(
       // and the LP fee from the rest.
       const currency0 = sellsToken0 ? WETH : USDC;
       const currency1 = sellsToken0 ? USDC : WETH;
-      const v4Fees = [100n, 500n, 3000n, 10000n];
-      const v4TickSpacings = [1n, 10n, 60n, 200n];
-      for (let k = 0n; k < 4n; k++) {
+      const v4Fees = [100, 500, 3000, 10000];
+      const v4TickSpacings = [1, 10, 60, 200];
+      for (let k = 0; k < 4; k++) {
         const id = crypto.keccak256(
-          abi.encode(currency0, currency1, v4Fees[k], v4TickSpacings[k], 0n),
+          abi.encode(currency0, currency1, v4Fees[k], v4TickSpacings[k], 0),
         );
-        if (UniswapV4.StateView.getLiquidity(id) > 0n) {
+        if (UniswapV4.StateView.getLiquidity(id) > 0) {
           const slot0 = UniswapV4.StateView.getSlot0(id);
-          let protocolFee = slot0.protocolFee & 0xfffn;
+          let protocolFee = slot0.protocolFee & 0xfff;
           if (!sellsToken0) {
-            protocolFee = (slot0.protocolFee >> 12n) & 0xfffn;
+            protocolFee = (slot0.protocolFee >> 12) & 0xfff;
           }
-          const fee = protocolFee + slot0.lpFee - (protocolFee * slot0.lpFee) / 1000000n;
+          const fee = protocolFee + slot0.lpFee - (protocolFee * slot0.lpFee) / 1000000;
           const limit = ownLimit(sqrtPriceLimitX96, fee, sellsToken0);
           const unsold = WETH.balanceOf(self);
           if (
-            unsold > 0n &&
+            unsold > 0 &&
             (sellsToken0 ? slot0.sqrtPriceX96 > limit : slot0.sqrtPriceX96 < limit)
           ) {
             uniswapV4(
@@ -116,9 +116,9 @@ function main(
               unsold,
               v4Fees[k],
               v4TickSpacings[k],
-              0n,
+              0,
               limit,
-              0n,
+              0,
               self,
             );
           }
@@ -131,9 +131,9 @@ function main(
       const spent = wethBefore - unsold;
       const out = USDC.balanceOf(self) - usdcBefore;
       require(out >= minOut, "output below minOut");
-      require(out * 10n ** 18n >= minAvgPrice * spent, "average price below minAvgPrice");
+      require(out * 10 ** 18 >= minAvgPrice * spent, "average price below minAvgPrice");
       USDC.transfer(recipient, out);
-      if (unsold > 0n) {
+      if (unsold > 0) {
         WETH.transfer(refundTo, unsold);
       }
     },

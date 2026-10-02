@@ -293,11 +293,11 @@ inside it reads what is there, not what must be brought:
 ```sauce chain=base
 function main(beneficiary: Address) {
   const amount = USDC.balanceOf(ctx.self());
-  const delivered = amount - (amount * 10n) / 10000n;
+  const delivered = amount - (amount * 10) / 10000;
   Ethereum(
     () => {
       USDC.approve(AaveV3.Pool, delivered);
-      AaveV3.Pool.supply(USDC, delivered, beneficiary, 0n);
+      AaveV3.Pool.supply(USDC, delivered, beneficiary, 0);
     },
     { tokens: [{ token: USDC, amount: delivered }] },
   ).reward({ tokens: [{ token: USDC, amount }] });
@@ -340,12 +340,12 @@ function main(
 ) {
   Base(
     () => {
-      const pool = UniswapV3.Factory.getPool(WETH, USDC, 500n); // Base's 0.05% tier
-      require(pool != 0n, "no WETH/USDC pool at 0.05%");
+      const pool = UniswapV3.Factory.getPool(WETH, USDC, 500); // Base's 0.05% tier
+      require(pool != 0, "no WETH/USDC pool at 0.05%");
       // Pays the recipient the USDC, and reverts the whole fulfilment below minOut.
       uniswapV3(pool, WETH, USDC, amountIn, sqrtPriceLimitX96, minOut, recipient);
       const unsold = WETH.balanceOf(ctx.self()); // the shared Pot: return all of it
-      if (unsold > 0n) {
+      if (unsold > 0) {
         WETH.transfer(refundTo, unsold);
       }
     },

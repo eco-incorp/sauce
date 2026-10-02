@@ -19,7 +19,7 @@ On Ethereum, `Pyth` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's oracle, `0x4305FB66699C3B2702D4d05CF36551390A4c69C6`.
-  require(Pyth.Oracle != 0n);
+  require(Pyth.Oracle != 0);
 }
 ```
 

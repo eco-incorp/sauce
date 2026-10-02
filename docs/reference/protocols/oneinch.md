@@ -35,10 +35,10 @@ function main(amountIn: Uint256, minOut: Uint256, call: bytes, recipient: Addres
   const self = ctx.self();
   const before = WETH.balanceOf(self);
   USDC.approve(Oneinch.AggregationRouterV6, amountIn);
-  evm.call(Oneinch.AggregationRouterV6, 0n, call);
+  evm.call(Oneinch.AggregationRouterV6, 0, call);
   const out = WETH.balanceOf(self) - before;
   require(out >= minOut, "below minOut");
-  USDC.approve(Oneinch.AggregationRouterV6, 0n);
+  USDC.approve(Oneinch.AggregationRouterV6, 0);
   WETH.transfer(recipient, out);
 }
 ```
@@ -53,7 +53,7 @@ function main(amountIn: Uint256, minOut: Uint256, call: bytes, recipient: Addres
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Unoswap (single-source swap)
@@ -86,7 +86,7 @@ On Ethereum, `Oneinch` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's aggregationRouterV6, `0x111111125421cA6dc452d289314280a0f8842A65`.
-  require(Oneinch.AggregationRouterV6 != 0n);
+  require(Oneinch.AggregationRouterV6 != 0);
 }
 ```
 

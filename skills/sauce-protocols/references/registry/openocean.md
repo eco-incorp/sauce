@@ -19,7 +19,7 @@ On Ethereum, `Openocean` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's exchangeV2, `0x6352a56caadC4F1E25CD6c75970Fa768A3304e64`.
-  require(Openocean.ExchangeV2 != 0n);
+  require(Openocean.ExchangeV2 != 0);
 }
 ```
 

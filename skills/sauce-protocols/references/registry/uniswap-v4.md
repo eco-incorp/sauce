@@ -19,7 +19,7 @@ On Ethereum, `UniswapV4` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's poolManager, `0x000000000004444c5dc75cB358380D2e3dE08A90`.
-  require(UniswapV4.PoolManager != 0n);
+  require(UniswapV4.PoolManager != 0);
 }
 ```
 

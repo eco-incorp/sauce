@@ -19,7 +19,7 @@ On Ethereum, `Paraswap` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's augustusV5, `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57`.
-  require(Paraswap.AugustusV5 != 0n);
+  require(Paraswap.AugustusV5 != 0);
 }
 ```
 

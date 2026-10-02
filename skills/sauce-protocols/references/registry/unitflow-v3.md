@@ -19,7 +19,7 @@ On Arc, `UnitflowV3` is a namespace: its contracts need no import.
 ```sauce chain=arc
 function main() {
   // Arc's factory, `0x5bfBCeb73d39F722B1cB83fD2F11736b28c1Be6d`.
-  require(UnitflowV3.Factory != 0n);
+  require(UnitflowV3.Factory != 0);
 }
 ```
 

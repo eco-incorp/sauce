@@ -19,7 +19,7 @@ On Ethereum, `Cowswap` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's gpv2Settlement, `0x9008D19f58AAbD9eD0D60971565AA8510560ab41`.
-  require(Cowswap.GPv2Settlement != 0n);
+  require(Cowswap.GPv2Settlement != 0);
 }
 ```
 
