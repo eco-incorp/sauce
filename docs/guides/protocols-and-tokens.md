@@ -63,12 +63,13 @@ are the contracts the registry evidences against the deployed code, one per cont
 | ------------------- | ---------------------------------------------- | ------------------------------------ | ----------------------------------------------------- |
 | A deployed contract | `PancakeswapV3.Factory`, `UniswapV4.StateView` | its address; `.method(...)` calls it | `.address`, `.available`, `.method(...)` builds calls |
 | An address only     | `AaveV3.PoolAddressesProvider`, `Maker.Dai`    | its address                          | `.address`, `.available`; no methods                  |
-| An interface        | `Erc4626.Vault`, `Curve.StableSwap`            | `.at(address).method(...)`           | `.at(address).method(...)`                            |
+| An interface        | `Erc4626.Vault`, `Curve.StableSwap`            | `(address).method(...)`              | `.at(address).method(...)`                            |
 
 A deployed contract's ABI also reaches another deployment of it with `.at(address)`:
 `UniswapV3.Factory.at(factory).getPool(...)`. An address-only contract is one the registry has an
 address for and no verified ABI. An interface is an ABI the registry has no fixed address for —
-a vault, a pool, a token — so the program or host names the deployment.
+a vault, a pool, a token — so the program or host names the deployment. A program calls it with
+the address, `UniswapV3.Pool(pool).liquidity()`, or binds it with `.at(pool)`, which is the same.
 
 ### Names
 

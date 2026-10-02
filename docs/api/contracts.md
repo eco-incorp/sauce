@@ -12,7 +12,7 @@ program and in TypeScript. This page lists both surfaces; the
 | A deployed contract        | `UniswapV3.QuoterV2`                            | `Base.UniswapV3.QuoterV2`                            |
 | Its method                 | `UniswapV3.QuoterV2.quoteExactInputSingle(...)` | `Base.UniswapV3.QuoterV2.quoteExactInputSingle(...)` |
 | The ABI at another address | `UniswapV3.Factory.at(address).getPool(...)`    | `Base.UniswapV3.Factory.at(address).getPool(...)`    |
-| An interface               | `Erc4626.Vault.at(vault).deposit(...)`          | `Base.Erc4626.Vault.at(vault).deposit(...)`          |
+| An interface               | `Erc4626.Vault(vault).deposit(...)`             | `Base.Erc4626.Vault.at(vault).deposit(...)`          |
 | A family alias             | `Uniswap.UniversalRouter`                       | `Base.Uniswap.UniversalRouter`                       |
 | Another chain's address    | `Arbitrum.UniswapV3.Factory`                    | `Arbitrum.UniswapV3.Factory`                         |
 | Whether the chain has it   | `available(UniswapV3.Factory)`                  | `Base.UniswapV3.Factory.available`                   |
@@ -90,7 +90,9 @@ chain id once — and refuses one on another chain. viem's actions are imported 
 
 In a program, a namespace member is a Sauce scalar: a deployed or address-only contract is its
 address on the chain the program is compiled for, a method call is an ABI call there, and
-`.at(address).method(...)` calls the same ABI at `address`. `<Chain>.<Namespace>.<Contract>` reads
+`.at(address).method(...)` calls the same ABI at `address`. An interface, which has no address of its
+own, is called with one: `Erc4626.Vault(vault).deposit(...)` (`.at(vault)` too). A deployed
+contract's name is never called with an address. `<Chain>.<Namespace>.<Contract>` reads
 another chain's address, without moving execution there. A protocol with a single deployed
 contract also takes its methods directly (`Cctp.depositForBurn(...)`).
 
