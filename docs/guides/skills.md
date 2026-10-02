@@ -37,19 +37,20 @@ generated reference is held to the registries.
 
 ## Install them in a project
 
-`sauce skills install` copies the skills of the package installed in the project to where coding
-agents read them. Run it in a project that depends on the package, so that `npx sauce` is that
-package's command:
+`sauce skills install` copies the skills of the `sauce` command that runs it to where coding agents
+read them, in the project it runs in (`--dir <project>` names another):
 
 ```sh
-npm install @eco-incorp/sauce
-npx sauce skills install                          # .claude/skills and .agents/skills
-npx sauce skills install --agent codex            # only the directory Codex reads
-npx sauce skills install --agent all,agents-md    # and the AGENTS.md index
+npm i -g @eco-incorp/sauce
+sauce skills install                          # .claude/skills and .agents/skills
+sauce skills install --agent codex            # only the directory Codex reads
+sauce skills install --agent all,agents-md    # and the AGENTS.md index
 ```
 
-`npx -y @eco-incorp/sauce init my-app` scaffolds a new project and installs them in it. Each agent
-reads skills from these directories, per its vendor's documentation:
+In a project that pins the package, `npx sauce skills install` installs that version's skills, and a
+global `sauce skills status` there reports skills installed from another version than its own
+([Install](cli.md#install)). `sauce init my-app` scaffolds a new project and installs them in it.
+Each agent reads skills from these directories, per its vendor's documentation:
 
 | Agent          | Reads project skills from                                         | Documentation                                                                                                                 |
 | -------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -81,8 +82,8 @@ holding `@./AGENTS.md` ([GEMINI.md imports](https://geminicli.com/docs/cli/gemin
 ## Keep them current
 
 ```sh
-npx sauce skills status                           # exit 1 while any target is outdated
-npx sauce skills update                           # after upgrading the package
+sauce skills status                           # exit 1 while any target is outdated
+sauce skills update                           # after upgrading the package
 ```
 
 - **`install`** is the first install. It never overwrites. Run again, it says the skills are up to
@@ -96,24 +97,19 @@ npx sauce skills update                           # after upgrading the package
 - **`status`** reports each target as up to date, outdated or modified, listing the files, and
   exits 1 while any is outdated: put it in CI to notice an upgrade the skills have not followed.
 
-Each skills directory records what it was given in `.sauce-skills.json` — the package, its version,
-and the sha256 of each file as written — and the `AGENTS.md` block records the same in its opening
-marker. That record is how a package upgrade (a file still as installed) is told apart from an edit
+Beside the skills, each directory gets `tsconfig.json`, which types their example programs in an
+editor ([In an editor](cli.md#in-an-editor)); it is installed, recorded, updated and reported like a
+skill file. Each skills directory records what it was given in `.sauce-skills.json` — the package,
+its version, and the sha256 of each file as written — and the `AGENTS.md` block records the same in
+its opening marker. That record is how a package upgrade (a file still as installed) is told apart from an edit
 (a file that is not). Skills of your own in the same directories are never touched.
 
 ## Without installing them: the MCP server
 
 An agent connected to the [MCP server](mcp.md) reads the same skills from it, at the server's
-version, with nothing installed in the project:
-
-- as tools, because many clients call tools but never read resources: `sauce_skills` lists them,
-  `sauce_skill` returns a `SKILL.md` or one of its files (or only the part a task needs), and
-  `sauce_install_skills` gives the commands that install them locally for one agent;
-- as resources: `sauce://skills/index` lists every skill and its files, and
-  `sauce://skills/<skill>/SKILL.md` is a skill, with its `references/…` and `examples/…` beside it.
-
-[Skills, documents and prompts](mcp.md#skills-documents-and-prompts) has the rest, and the prompts
-that start from a skill.
+version, with nothing installed in the project: as tools, because many clients call tools but never
+read resources, and as resources. [Skills, documents and prompts](mcp.md#skills-documents-and-prompts)
+lists both, and the prompts that start from a skill.
 
 ## From TypeScript
 

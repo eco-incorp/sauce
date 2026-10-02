@@ -62,7 +62,7 @@ npm install
 `sauce init` writes a `package.json` that pins `@eco-incorp/sauce` to exactly the version that ran
 it, an `AGENTS.md` with the project's instructions for coding agents, a `.gitignore` that keeps
 local configuration out of git, `sauce.config.example.json`, and `programs/tsconfig.json`
-([In an editor](#in-an-editor)), and then installs the agent skills ([Agent skills](#agent-skills)). `init` refuses to overwrite a file that already has other content,
+([In an editor](#in-an-editor)), and then installs the agent skills ([Agent skills](skills.md)). `init` refuses to overwrite a file that already has other content,
 and lists it, unless you pass `--force`. It runs no package manager unless you pass `--install`.
 
 ## Endpoints and signers
@@ -123,7 +123,8 @@ removes any secret it was given, error messages included.
 
 For the initial release, the command builds and sends transactions on three chains: **Ethereum**,
 **Base** and **Solana**. Every other chain it knows is a **preview chain**, where it compiles,
-rehearses and reads but builds no transaction ([Supported chains](../README.md#supported-chains)).
+rehearses and reads but builds no transaction. [Chains](../reference/chains.md) has the policy:
+which chains a cook, a publish and each step after it are held to, and every chain's support.
 
 | On a preview chain                                                                                                                  | Does                                                                           |
 | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -133,13 +134,8 @@ rehearses and reads but builds no transaction ([Supported chains](../README.md#s
 | `tx`, `run`, `pot --deploy`, `pot --format cast`                                                                                    | Refused                                                                        |
 | `intent publish`, also with `--format`; `intent fill --send`; `intent prove`, `claim`, `refund`, `cancel`                           | Refused                                                                        |
 
-The refusal comes before the command reaches an endpoint or reads a key. A cook or a publish is
-refused when any chain it involves is a preview chain: the program's own, and the destination of
-every intent it opens (a cascade's later levels, opened inside an intent's body, are not checked:
-keep them on supported chains). A step after publishing is refused by the chain its
-transaction is sent on — a fill, a proof or a cancellation by the intent's destination, a claim or
-a refund by its source. The command exits 1 and says why, which chains are supported, and how to ask
-for the one it refused:
+The refusal comes before the command reaches an endpoint or reads a key. The command exits 1 and
+says why, which chains are supported, and how to ask for the one it refused:
 
 ```text
 sauce tx: building the cook transaction is refused: it involves optimism (Optimism, chain id 10), a preview chain. For the initial release, the sauce command and its MCP server build and send transactions only on Ethereum, Base and Solana. On a preview chain a program still compiles, and simulate and dry runs rehearse it.
@@ -148,16 +144,13 @@ To ask for Optimism: add your use case to its request if there is one (https://g
 
 The first link searches the chain-support requests already filed for that chain; the second opens
 a new one from the issue form, its title (`Chain support: <name> (<id>)`), chain and chain id
-filled in. The form also asks what you want to run there, the protocols and tokens it needs, the
-volume you expect and from when, and, optionally, how to reach you. If a request for the chain
-exists, add your use case to it as a comment instead of opening another.
+filled in.
 
 `sauce pot` on a preview chain prints the Pot's address, owner, salt and Kitchen with no `to`,
 `data` or `value`, and adds `refused` to its JSON — the same refusal as an object: `code`
 (`"preview-chain"`), `action`, `message`, `supportedChains` and `previewChains`, each with its
 `request`. `sauce --help` and the `--help` of every refused command say the same. There is no flag
-that lifts the refusal. The TypeScript SDK is not gated: its builders still build transactions for
-every registry chain, at your own risk.
+that lifts the refusal.
 
 ## The flow on an EVM chain
 
@@ -1396,85 +1389,16 @@ holds to the [supported chains](#supported-and-preview-chains).
 
 ## Agent skills
 
-The package ships agent skills: directories in the [Agent Skills](https://agentskills.io/specification)
-format, a `SKILL.md` and the examples and references it links, that teach a coding agent to write
-Sauce programs and run them with this package. They live in [`skills/`](../../skills/sauce-overview/SKILL.md)
-at the package root:
-
-| Skill                    | What it teaches                                                                               |
-| ------------------------ | --------------------------------------------------------------------------------------------- |
-| `sauce-overview`         | What Sauce is, the path from a file to a transaction, the rules, and which skill to load next |
-| `sauce-script`           | The language: program forms, inputs and defines, compile errors, and the builtins reference   |
-| `sauce-globals`          | The names a program uses with no import, with generated indexes of them                       |
-| `sauce-chains`           | Each chain, generated from the registries: tokens, every protocol with its addresses, intents |
-| `sauce-protocols`        | Every protocol by category: how to choose, its deployments, its pitfalls and how to call it   |
-| `sauce-swaps`            | Swapping through the Router: entry points, price limits, callbacks and the guard on every leg |
-| `sauce-distributed-swap` | One exact-input swap spread over several price-limited pools: a limit order                   |
-| `sauce-intents`          | Cross-chain intents written in Sauce: rewards, cascades, run or publish                       |
-| `sauce-solana`           | Programs for Solana: accounts, the SPL token functions, the Kitchen                           |
-| `sauce-cli`              | Everything on this page: compiling, funding, simulating, running and publishing               |
-| `sauce-typescript`       | The same from application code: compiling, arguments, cooks, actions and verification         |
-| `sauce-examples`         | An index of every example program and runner, with the chains each is checked on              |
-
-Every program in them is compiled through this command on the chains it names, and every command
-line they show is held to its flags, before the package is published. The per-protocol documents in
-`sauce-protocols` are the files the [`/skills` export](../api/README.md#protocol-resources) returns.
-
-They are written once and installed where coding agents read them. Each agent reads skills from
-these directories, per its vendor's documentation:
-
-| Agent          | Reads project skills from                                         | Documentation                                                                                                                 |
-| -------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Claude Code    | `.claude/skills/`, and nothing under `.agents/`                   | [Skills](https://code.claude.com/docs/en/skills), [memory](https://code.claude.com/docs/en/memory)                            |
-| OpenAI Codex   | `.agents/skills/`, from the working directory up to the repo root | [Build skills](https://learn.chatgpt.com/docs/build-skills)                                                                   |
-| Cursor         | `.agents/skills/`, `.cursor/skills/`, and `.claude/skills/` too   | [Skills](https://cursor.com/docs/skills)                                                                                      |
-| GitHub Copilot | `.github/skills/`, `.claude/skills/` or `.agents/skills/`         | [Add skills](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/add-skills) |
-| Gemini CLI     | `.gemini/skills/`, or its `.agents/skills/` alias (which wins)    | [Skills](https://geminicli.com/docs/cli/skills/)                                                                              |
-
-So two directories reach all five natively: `.claude/skills/` for Claude Code and `.agents/skills/`
-for the other four. Those two are what `sauce skills install` writes by default, and what
-`--agent all` means. `--agent claude`, `codex`, `cursor`, `copilot` or `gemini` alone writes only
-the directory that agent reads. Cursor and Copilot also read `.claude/skills/`, so they see the
-same skill, with the same files, in both.
-
-`--agent agents-md` is opt-in, for a tool that reads [`AGENTS.md`](https://agents.md/) but no
-skills directory: it writes `.agents/skills/` and an index of the skills into `AGENTS.md`, a block
-between `<!-- sauce-skills:begin … -->` and `<!-- sauce-skills:end -->` markers listing each skill
-and its `SKILL.md`. The command owns that block and nothing else in the file. Every packaged skill
-follows the [Agent Skills specification](https://agentskills.io/specification): a `name` that is
-its directory's, lowercase letters, digits and hyphens, at most 64 characters, and a `description`
-of at most 1024.
-
-`sauce init` writes the project's instructions to `AGENTS.md`, which Codex, Cursor, Copilot and
-Gemini CLI read, and the one-line pointers to it that the other two document: `CLAUDE.md` holding
-`@AGENTS.md` (Claude Code reads `AGENTS.md` only when there is no `CLAUDE.md`) and `GEMINI.md`
-holding `@./AGENTS.md` ([GEMINI.md imports](https://geminicli.com/docs/cli/gemini-md)).
+`sauce skills` puts the package's agent skills where coding agents read them, brings them to the
+package after an upgrade, and checks them:
 
 ```sh
 sauce skills install                          # .claude/skills and .agents/skills
 sauce skills install --agent codex            # only the directory Codex reads
-sauce skills install --agent all,agents-md    # and the AGENTS.md index
 sauce skills status                           # exit 1 while any target is outdated
 sauce skills update                           # after upgrading the package
 ```
 
-- **`install`** is the first install. It never overwrites. Run again, it says the skills are up to
-  date, or, after a package upgrade, that they are outdated — installed from one version, the
-  package has another — and to run `sauce skills update`. A file already there that it did not
-  write is left alone.
-- **`update`** brings each installed target to the package: it adds new skill files, replaces
-  changed ones and removes retired ones. A file edited since it was installed is kept, with a short
-  diff of what differs, unless you pass `--force`. It prints, per target,
-  `added N, updated N, removed N, kept N modified`. In `AGENTS.md` it rewrites only its own block.
-- **`status`** reports each target as up to date, outdated or modified, listing the files, and
-  exits 1 while any is outdated: put it in CI to notice an upgrade the skills have not followed.
-
-Beside the skills, each directory gets `tsconfig.json`, which types their example programs in an
-editor ([In an editor](#in-an-editor)); it is installed, recorded, updated and reported like a skill
-file. Each skills directory records what it was given in `.sauce-skills.json` — the package, its version,
-and the sha256 of each file as written — and the `AGENTS.md` block records the same in its opening
-marker. That record is how a package upgrade (a file still as installed) is told apart from an edit
-(a file that is not). Skills of your own in the same directories are never touched.
-
-The per-protocol documents the `/skills` export returns are not a second set: they are the
-`sauce-protocols` skill's `references/`, installed with it.
+[Agent skills](skills.md) has what each skill teaches, the directory each agent reads, the
+`AGENTS.md` index, how an edited file is kept through an update, and the MCP server's way of
+serving them with nothing installed.

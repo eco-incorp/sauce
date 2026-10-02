@@ -30,7 +30,7 @@ The SDK builds an intent between any two registry chains. For the initial releas
 transactions on Ethereum, Base and Solana, and the [`sauce` command](cli.md) and the
 [MCP server](mcp.md) publish an intent only when its source and every destination it opens, nested
 ones included, are among them; each step after publishing is refused on a preview chain by the
-chain it is sent on ([Supported chains](../README.md#supported-chains)). Several examples below
+chain it is sent on ([Chains](../reference/chains.md)). Several examples below
 name Arbitrum or Optimism, which are preview chains: the SDK builds them as shown, and submitting
 one is at your own risk.
 
@@ -462,7 +462,7 @@ A callback is read with `Function.prototype.toString()`, parsed, and compiled as
 
 Use literals for self-contained callbacks, or source strings plus `defines` for application inputs, as above. Defines accept scalar `bigint`, `number`, or `boolean` values; use `bigint` for addresses and token quantities. `compile.defines` overrides `options.defines`, which overrides chain defaults. Local declarations in the program take precedence over ambient names.
 
-A chain the callback opens an intent on, `Ethereum(() => { … }).reward({ … })`, is the imported chain export, which carries that call as well as the host one; import it as you import `Base` ([nested intents](nested-intents.md)). The package declares SauceScript's builtins for TypeScript — `ctx`, `crypto.keccak256`, `hex`, `Math.mulDiv`, `require(condition, message)`, `abi`, `evm`, `svm`, `.toBytesBe(...)` and the rest of the [reference](../../skills/sauce-script/references/builtins.md) — as it declares token symbols and protocols, so a typed callback that uses them typechecks. The declarations install nothing at run time, and a builtin's comment says which targets have it: TypeScript does not know which chain the callback compiles for.
+A chain the callback opens an intent on, `Ethereum(() => { … }).reward({ … })`, is the imported chain export, which carries that call as well as the host one; import it as you import `Base` ([nested intents](nested-intents.md)). The package declares SauceScript's builtins for TypeScript — `ctx`, `crypto.keccak256`, `hex`, `Math.mulDiv`, `require(condition, message)`, `abi`, `evm`, `svm`, `.toBytesBe(...)` and the rest of the [reference](../reference/saucescript.md) — as it declares token symbols and protocols, so a typed callback that uses them typechecks. The declarations install nothing at run time, and a builtin's comment says which targets have it: TypeScript does not know which chain the callback compiles for.
 
 Callbacks must be synchronous and take no parameters. Bound/native functions, generators, and async functions are rejected. If a bundler transforms function source, ship an explicit SauceScript string or source asset. A TypeScript type declaration does not create a captured value.
 
