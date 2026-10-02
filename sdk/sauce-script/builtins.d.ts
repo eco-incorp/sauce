@@ -79,21 +79,15 @@ interface SauceBinding {
   readonly [method: string]: (...args: any[]) => any;
 }
 
-/** An intent's route: what the solver delivers to the destination for the body to run on. */
-interface SauceDelivery {
-  readonly tokens?: ReadonlyArray<{ readonly token: SauceInt; readonly amount: SauceInt }>;
-}
+/** An intent's route: what the solver delivers to the destination for the body to run on. The one
+ *  definition is the generated namespace types', which a typed closure in a host file uses too. */
+type SauceDelivery = import("../routes/source-globals.generated.js").SauceDelivery;
 
 /** An intent's reward, paid on the chain that opens it. */
-interface SauceReward {
-  readonly tokens?: ReadonlyArray<{ readonly token: SauceInt; readonly amount: SauceInt }>;
-  readonly nativeAmount?: SauceInt;
-}
+type SauceReward = import("../routes/source-globals.generated.js").SauceReward;
 
 /** An intent opened in a program: `Base(() => { … }).reward({ … })`. */
-interface SauceIntent {
-  reward(reward: SauceReward): void;
-}
+type SauceIntent = import("../routes/source-globals.generated.js").SauceIntent;
 
 /** Context reads: who called, where, when. */
 declare const ctx: {
