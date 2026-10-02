@@ -1,5 +1,5 @@
 /**
- * The manual's "What is refused" list, pinned to what the lowering actually refuses.
+ * The manual's "What is refused" list, pinned to what the lowering of the Portal form refuses.
  *
  * This exists because it already went wrong: the docs kept describing refusals — a method other
  * than `transfer`, an intent inside an intent — for three commits after the lowering had stopped
@@ -9,6 +9,12 @@
  * Each row below is one documented refusal: a phrase the guide must contain, and a program that
  * must trigger it. Widening what the lowering accepts fails here until the sentence goes; adding a
  * refusal without documenting it fails here too.
+ *
+ * The guide describes the Portal form ahead of the compiler. While PENDING_INTENT_SYNTAX lists its
+ * claims (`docs/scripts/pending-intent-syntax.json`), the sentences are held to the guide as ever,
+ * and each check of the lowering a Portal-form program makes is a probe instead: it fails as STALE
+ * the moment the lowering does what the guide says, so the change that lands the syntax lists
+ * nothing here and holds every row again.
  */
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -31,11 +37,25 @@ import { destinationPot } from "../src/routes/intent-pot.js";
 import { rewriteIntentSugar } from "../src/routes/intent-sugar.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
+import { pendingIntentClaim, staleIntentSyntax } from "./pending-intent-syntax.js";
 
 const GUIDE = readFileSync(
   resolve(dirname(fileURLToPath(import.meta.url)), "../../docs/guides/intents.md"),
   "utf8",
 );
+/** Whether the guide's claims about the lowering wait for the Portal syntax. */
+const PENDING = pendingIntentClaim("docs/guides/intents.md");
+
+/** `check` of a claim the pending syntax keeps from holding: it must not hold yet. */
+function stillPending(what: string, holds: () => boolean): void {
+  let held: boolean;
+  try {
+    held = holds();
+  } catch {
+    held = false;
+  }
+  if (held) throw new Error(staleIntentSyntax(`docs/guides/intents.md's claim "${what}"`));
+}
 
 const BASE = requireChain("base");
 const ARBITRUM = requireChain("arbitrum");
@@ -56,15 +76,21 @@ const context = (overrides: Record<string, unknown> = {}) =>
       ]),
     portalOf: (chain: typeof BASE) => ecoRoutesPortal(chain),
     proverFor: (from: typeof BASE, to: typeof BASE) => ecoRoutesProver(from, to),
-    defaults: { deadline: 4_000_000_000n, creator: CREATOR },
+    // A top-level intent's creator, as a wallet publishing it: each refusal below is reached past it.
+    defaults: { deadline: 4_000_000_000n, publisher: CREATOR },
     compileChild: () => {
       throw new Error("no child program expected in these cases");
     },
     ...overrides,
   }) as never;
 
-const wrap = (body: string, reward = "{ tokens: [{ token: USDC, amount }] }", chain = "Arbitrum") =>
-  `function main() {\n  const amount = 5n;\n  ${chain}(() => {\n    ${body}\n  }).reward(${reward});\n}`;
+const wrap = (
+  body: string,
+  reward = "{ token: USDC, amount }",
+  chain = "Arbitrum",
+  steps = ".receive({ token: USDC, amount })",
+) =>
+  `function main() {\n  const amount = 5;\n  ${chain}.Portal.send(${reward})${steps}.then(() => {\n    ${body}\n  });\n}`;
 
 /** Documented sentence -> the program that must produce it. */
 const REFUSALS: readonly {
@@ -80,26 +106,111 @@ const REFUSALS: readonly {
   {
     documented: "a token entry missing `token` or `amount`",
     trigger: () =>
+      rewriteIntentSugar(wrap("USDC.transfer(RECIPIENT, amount);", "{ token: USDC }"), context()),
+    message: /each entry of `\.send\(\.\.\.\)` needs both `token` and `amount`/,
+  },
+  {
+    documented: "item that is not an object written in place",
+    trigger: () =>
       rewriteIntentSugar(
-        wrap("USDC.transfer(RECIPIENT, amount);", "{ tokens: [{ token: USDC }] }"),
+        `function main() {\n  const amount = 5;\n  const items = [{ token: USDC, amount }];\n  Arbitrum.Portal.send(items).receive({ token: USDC, amount }).then(() => {\n    USDC.transfer(RECIPIENT, amount);\n  });\n}`,
         context(),
       ),
-    message: /needs both `token` and `amount`/,
+    message: /`\.send\(\.\.\.\)` takes the reward written out in place/,
   },
   {
-    documented: "A missing `deadline`",
+    documented: "a `{ native }` item in `.receive(...)`",
     trigger: () =>
-      rewriteIntentSugar(wrap("USDC.transfer(RECIPIENT, amount);"), context({ defaults: {} })),
-    message: /needs a `deadline`/,
+      rewriteIntentSugar(
+        wrap("USDC.transfer(RECIPIENT, amount);", undefined, "Arbitrum", ".receive({ native: 1 })"),
+        context(),
+      ),
+    message: /`\.receive\(\.\.\.\)` names the tokens the solver delivers/,
   },
   {
-    documented: "a missing `creator`",
+    documented: "an empty `.send([])`",
+    trigger: () => rewriteIntentSugar(wrap("USDC.transfer(RECIPIENT, amount);", "[]"), context()),
+    message: /`\.send\(\.\.\.\)` with nothing in it pays nothing/,
+  },
+  {
+    documented: "one used as a value",
+    trigger: () =>
+      rewriteIntentSugar(
+        `function main() {\n  const opened = Arbitrum.Portal.send({ token: USDC, amount: 1 }).receive({ token: USDC, amount: 1 }).then(() => {\n    USDC.transfer(RECIPIENT, 1);\n  });\n}`,
+        context(),
+      ),
+    message: /is a statement of its own/,
+  },
+  {
+    documented: "with steps out of order",
+    trigger: () =>
+      rewriteIntentSugar(
+        wrap(
+          "USDC.transfer(RECIPIENT, amount);",
+          undefined,
+          "Arbitrum",
+          ".salt(1).receive({ token: USDC, amount })",
+        ),
+        context(),
+      ),
+    message: /`\.salt\(\.\.\.\)` is not set after `\.send\(\.\.\.\)`/,
+  },
+  {
+    documented: "a modifier given twice or after the wrong step",
+    trigger: () =>
+      rewriteIntentSugar(
+        wrap(
+          "USDC.transfer(RECIPIENT, amount);",
+          undefined,
+          "Arbitrum",
+          ".receive({ token: USDC, amount }).deadline(1).deadline(2)",
+        ),
+        context(),
+      ),
+    message: /`\.deadline\(\.\.\.\)` is given twice after `\.receive\(\.\.\.\)`/,
+  },
+  {
+    documented: "or no `.then(() => { ... })`",
+    trigger: () =>
+      rewriteIntentSugar(
+        `function main() {\n  Arbitrum.Portal.send({ token: USDC, amount: 1 }).receive({ token: USDC, amount: 1 });\n}`,
+        context(),
+      ),
+    message: /has no body\. Finish it with `\.then/,
+  },
+  {
+    documented: "A missing creator",
     trigger: () =>
       rewriteIntentSugar(
         wrap("USDC.transfer(RECIPIENT, amount);"),
-        context({ defaults: { deadline: 1n } }),
+        context({ defaults: { creator: CREATOR } }),
       ),
-    message: /needs a `creator`/,
+    message: /needs `\.creator\(<address>\)`.*may be shared/,
+  },
+  {
+    documented: "missing fee for a program body",
+    trigger: () =>
+      compileSauceRoute(
+        "base",
+        wrap("const held = USDC.balanceOf(ctx.self());\n    USDC.transfer(RECIPIENT, held);"),
+        { pot: CREATOR, engine: CREATOR },
+        { defines: { RECIPIENT: 1n }, intents: { publisher: CREATOR } },
+      ),
+    message: /its cook must pay that chain's Kitchen fee/,
+  },
+  {
+    documented: "a `.fee(...)` the program computes",
+    trigger: () =>
+      rewriteIntentSugar(
+        wrap(
+          "USDC.transfer(RECIPIENT, amount);",
+          undefined,
+          "Arbitrum",
+          ".receive({ token: USDC, amount }).fee(amount)",
+        ),
+        context(),
+      ),
+    message: /`\.fee\(\.\.\.\)` is the destination Kitchen's fee, which the intent is built with/,
   },
   {
     documented: "A chain with no eco-routes deployment",
@@ -112,12 +223,12 @@ const REFUSALS: readonly {
     trigger: () =>
       rewriteIntentSugar(
         `function payout(amount) {
-  Arbitrum(() => {
-    if (amount > 0n) { payout(amount); }
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  Arbitrum.Portal.send({ token: USDC, amount }).receive({ token: USDC, amount }).then(() => {
+    if (amount > 0) { payout(amount); }
+  });
 }
 function main() {
-  payout(5n);
+  payout(5);
 }`,
         context(),
       ),
@@ -128,15 +239,15 @@ function main() {
       "A program body using a module variable that a local of the opening function shadows",
     trigger: () =>
       rewriteIntentSugar(
-        `let total = 0n;
+        `let total = 0;
 function half() {
-  return total / 2n;
+  return total / 2;
 }
 function main() {
-  const total = 5n;
-  Arbitrum(() => {
-    if (half() > 0n) { USDC.transfer(RECIPIENT, total); }
-  }).reward({ tokens: [{ token: USDC, amount: total }] });
+  const total = 5;
+  Arbitrum.Portal.send({ token: USDC, amount: total }).receive({ token: USDC, amount: total }).then(() => {
+    if (half() > 0) { USDC.transfer(RECIPIENT, total); }
+  });
 }`,
         context(),
       ),
@@ -148,13 +259,26 @@ describe("the guide's refusal list is the lowering's", () => {
   it.each(REFUSALS.map((r) => [r.documented, r] as const))(
     "the guide documents %s",
     (_name, refusal) => {
-      expect(GUIDE).toContain(refusal.documented);
+      expect(GUIDE.replace(/\s+/g, " ")).toContain(refusal.documented);
     },
   );
 
   it.each(REFUSALS.map((r) => [r.documented, r] as const))(
-    "and the lowering still refuses it: %s",
-    (_name, refusal) => {
+    PENDING
+      ? "and the lowering will refuse it, once it reads the Portal form: %s"
+      : "and the lowering still refuses it: %s",
+    (name, refusal) => {
+      if (PENDING) {
+        stillPending(name, () => {
+          try {
+            refusal.trigger();
+          } catch (error) {
+            return refusal.message.test(String((error as Error).message));
+          }
+          return false;
+        });
+        return;
+      }
       expect(refusal.trigger).toThrow(refusal.message);
     },
   );
@@ -167,6 +291,8 @@ describe("the guide's refusal list is the lowering's", () => {
       "there is no child program",
       "An intent opened inside another intent",
       "A statement that is not a call",
+      // Deadlines have defaults since the Portal form.
+      "A missing `deadline`",
     ]) {
       expect(GUIDE).not.toContain(lifted);
     }
@@ -208,10 +334,12 @@ describe("the guide's account of which chain a name resolves on is the lowering'
   const lowered = () =>
     rewriteIntentSugar(
       `function main() {
-  const amount = 5n;
-  Arbitrum(() => {
-    USDC.transfer(RECIPIENT, amount);
-  }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount }] });
+  const amount = 5;
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount })
+    .then(() => {
+      USDC.transfer(RECIPIENT, amount);
+    });
 }`,
       context({
         definesFor: (chain: typeof BASE) =>
@@ -226,16 +354,16 @@ describe("the guide's account of which chain a name resolves on is the lowering'
 
   const CLAIMS: readonly { readonly documented: string; readonly holds: () => boolean }[] = [
     {
-      documented: "| The braces | Arbitrum, the destination | Arbitrum's |",
+      documented: "| The body, `.then(() => { ... })` | Arbitrum, the destination | Arbitrum's |",
       holds: () => lowered().route.calls[0]!.target === onChain(ARBITRUM.slug),
     },
     {
-      documented:
-        "| The second argument, what is delivered | Arbitrum, the destination | Arbitrum's |",
+      documented: "| `.receive(...)`, what is delivered | Arbitrum, the destination | Arbitrum's |",
       holds: () => lowered().route.tokens[0]!.token === onChain(ARBITRUM.slug),
     },
     {
-      documented: "| `.reward(...)` | The chain the program runs on | That chain's |",
+      documented:
+        "| `.send(...)` and every modifier | The chain the program runs on | That chain's |",
       holds: () => lowered().reward.tokens[0]!.token === onChain(BASE.slug),
     },
     {
@@ -248,15 +376,17 @@ describe("the guide's account of which chain a name resolves on is the lowering'
         const source = compileSauceRoute(
           "base",
           `function main() {
-  const amount = 5n;
-  Arbitrum(() => {
-    USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  const amount = 5;
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount })
+    .then(() => {
+      USDC.transfer(RECIPIENT, amount);
+    });
 }`,
           { pot: CREATOR, engine: CREATOR },
           {
             defines: { USDC: chosen, RECIPIENT: 1n },
-            intents: { deadline: 4_000_000_000n, creator: CREATOR },
+            intents: { deadline: 4_000_000_000n, publisher: CREATOR },
           },
         ).source.toLowerCase();
         return source.includes(`evm.call(${chosen}n`) && source.includes(arbitrumUsdc);
@@ -268,7 +398,8 @@ describe("the guide's account of which chain a name resolves on is the lowering'
     expect(guide).toContain(claim.documented);
   });
 
-  it.each(CLAIMS.map((c) => [c.documented, c] as const))("and it holds: %s", (_name, claim) => {
+  it.each(CLAIMS.map((c) => [c.documented, c] as const))("and it holds: %s", (name, claim) => {
+    if (PENDING) return stillPending(name, claim.holds);
     expect(claim.holds()).toBe(true);
   });
 
@@ -302,18 +433,26 @@ describe("the guide's account of the destination Pot is the builder's", () => {
       "base",
       `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum(() => {
-    if (amount > 0n) { USDC.transfer(RECIPIENT, amount); }
-  }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount }] });
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount })
+    .then(() => {
+      if (amount > 0) { USDC.transfer(RECIPIENT, amount); }
+    });
 }`,
       { pot: PORTAL, engine: PORTAL },
       {
         defines: { RECIPIENT: 0x9999999999999999999999999999999999999999n },
-        intents: { deadline: 4_000_000_000n, creator: CREATOR, executionFee: 0n },
+        intents: { deadline: 4_000_000_000n, publisher: CREATOR, executionFee: 0n },
       },
     ).source.toLowerCase();
 
-  const CLAIMS: readonly { readonly documented: string; readonly holds: () => boolean }[] = [
+  // `portal`: the claim is checked on a program in the Portal form, which the pending syntax keeps
+  // from compiling.
+  const CLAIMS: readonly {
+    readonly documented: string;
+    readonly holds: () => boolean;
+    readonly portal?: true;
+  }[] = [
     {
       // The TypeScript builder: the cook, and nothing that deploys.
       documented: "**The destination Pot must exist before the intent is fulfilled.**",
@@ -329,6 +468,7 @@ describe("the guide's account of the destination Pot is the builder's", () => {
       // The native syntax: the child's encoded route carries no deployment either.
       documented: "and the lowering deploys nothing",
       holds: () => !programChild().includes(deploySelector),
+      portal: true,
     },
     {
       // The owner is the RECORDED Portal's Executor.
@@ -353,10 +493,11 @@ describe("the guide's account of the destination Pot is the builder's", () => {
   ];
 
   it.each(CLAIMS.map((c) => [c.documented, c] as const))("the guide says %s", (_name, claim) => {
-    expect(GUIDE).toContain(claim.documented);
+    expect(GUIDE.replace(/\s+/g, " ")).toContain(claim.documented);
   });
 
-  it.each(CLAIMS.map((c) => [c.documented, c] as const))("and it holds: %s", (_name, claim) => {
+  it.each(CLAIMS.map((c) => [c.documented, c] as const))("and it holds: %s", (name, claim) => {
+    if (PENDING && claim.portal) return stillPending(name, claim.holds);
     expect(claim.holds()).toBe(true);
   });
 

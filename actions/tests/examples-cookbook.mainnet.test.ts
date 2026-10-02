@@ -15,7 +15,7 @@
  */
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -35,6 +35,7 @@ import { ecoRoutesExecutor } from "../../sdk/dist/protocols/eco-routes/index.js"
 import type { LocalChain } from "../../sdk/test/cli-anvil.js";
 import { plantPortal } from "../../sdk/test/eco-routes-anvil.js";
 import { POT_SALT } from "../../sdk/test/evm/gated-engine.js";
+import { pendingIntentSyntax, stillPending } from "../../sdk/test/pending-intent-syntax.js";
 import { OWNER_KEY, REPO_ROOT, skipReason, startAnvil, type Anvil } from "./anvil.js";
 import type { ChainName } from "./mainnet.js";
 import { balanceOf, setBalance } from "./swap-venues.js";
@@ -871,7 +872,23 @@ describe(
         return sent!.transactions.find((tx) => tx.kind === "fulfill")!.hash;
       }
 
-      it("repays the debt on Base from Ethereum's USDC, and the change reaches Ethereum", async () => {
+      // The file is written in the Portal intent syntax, ahead of the compiler: while
+      // PENDING_INTENT_SYNTAX lists it, it is not run (`test` skips it), and the probe fails as
+      // STALE once it compiles.
+      const REPAY = "skills/sauce-examples/examples/repay-on-base.sauce.ts";
+      const repayPending = pendingIntentSyntax(REPAY);
+      if (repayPending)
+        it(`${REPAY} waits for the Portal syntax`, () =>
+          stillPending(REPAY, () =>
+            routes.compileSauceProgram("ethereum", readFileSync(example("repay-on-base"), "utf8"), {
+              resolve: (path: string) =>
+                path === "./AaveV3Reads.json"
+                  ? readFileSync(join(EXAMPLES, "AaveV3Reads.json"))
+                  : undefined,
+            }),
+          ));
+      const test = repayPending ? it.skip : it;
+      test("repays the debt on Base from Ethereum's USDC, and the change reaches Ethereum", async () => {
         const config = join(work, "sauce.config.json");
         writeFileSync(
           config,
@@ -891,9 +908,9 @@ describe(
         const opened = await sauce([
           ...["run", example("repay-on-base"), "--chain", "ethereum", "--config", config],
           ...["--private-key", OWNER_KEY, "--salt-hex", POT_SALT, "--json"],
-          ...["--intent-deadline", deadline, "--intent-creator", PEOPLE[0]!],
-          ...["--intent-execution-fee", "auto"],
-          ...["--args", borrower.address, String(SOLVER_BPS)],
+          ...["--intent-deadline", deadline, "--intent-execution-fee", "auto"],
+          // Each intent names `refundTo` its creator: an intent a program opens has no default.
+          ...["--args", borrower.address, String(SOLVER_BPS), PEOPLE[0]!],
         ]);
         assert.equal(opened.code, 0, `${opened.stderr}\n${opened.stdout}`);
         const cookTx = (JSON.parse(opened.stdout) as { cook: { hash: Hex } }).cook.hash;

@@ -27,6 +27,7 @@ import ts from "typescript";
 
 import { sauceScriptTsconfig } from "../src/cli/skills.js";
 import { sauceScriptDeclarations } from "../src/sauce-script/declarations.js";
+import { pendingIntentSyntax, staleIntentSyntax } from "./pending-intent-syntax.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SDK = join(HERE, "..");
@@ -131,6 +132,11 @@ const report = (languageService: ts.LanguageService, file: string): string[] =>
     return `${file.slice(ROOT.length + 1)}${where} TS${diagnostic.code} ${ts.flattenDiagnosticMessageText(diagnostic.messageText, " ")}`;
   });
 
+/** A program as PENDING_INTENT_SYNTAX names it, relative to the repository. */
+const relativeOf = (file: string): string => file.slice(ROOT.length + 1);
+/** Whether it is written in the Portal intent syntax the declarations lack yet. */
+const pending = (file: string): boolean => pendingIntentSyntax(relativeOf(file));
+
 const textOf = (paths: readonly string[]): Record<string, string> =>
   Object.fromEntries(paths.map((path) => [path, readFileSync(path, "utf8")]));
 
@@ -145,13 +151,22 @@ describe("SauceScript in an editor", () => {
   it("checks every program in the repository, the agent's three among them, with no error", () => {
     expect(CORPUS.length).toBeGreaterThanOrEqual(14);
     const checked = service(textOf(CORPUS));
-    expect(CORPUS.flatMap((file) => report(checked, file))).toEqual([]);
+    expect(
+      CORPUS.filter((file) => !pending(file)).flatMap((file) => report(checked, file)),
+    ).toEqual([]);
     expect(checked.getProgram()!.getGlobalDiagnostics()).toEqual([]);
+    // A program written in the Portal intent syntax, ahead of its declarations: it shows the
+    // error until they land, and fails as STALE once it types.
+    for (const file of CORPUS.filter(pending)) {
+      if (report(checked, file).length === 0) throw new Error(staleIntentSyntax(relativeOf(file)));
+    }
   });
 
   it("needs the plugin only for what no declaration can say, and it removes nothing else", () => {
     const bare = service(textOf(CORPUS), false);
-    const left = CORPUS.flatMap((file) => bare.getSemanticDiagnostics(file));
+    const left = CORPUS.filter((file) => !pending(file)).flatMap((file) =>
+      bare.getSemanticDiagnostics(file),
+    );
     expect(left.length).toBeGreaterThan(0);
     // Each is a bigint index or a number beside a bigint — and the plugin says so of every one.
     for (const diagnostic of left) {

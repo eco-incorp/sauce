@@ -17,7 +17,11 @@ import {
   executedExamplesProblems,
   inputProblems,
   namedProgramProblems,
+  pendingBlock,
+  pendingFile,
   registryNames,
+  staleIntentSyntax,
+  unmetPendingProblems,
 } from "./example-programs.mjs";
 import { bigintLiteralProblems } from "./integer-literals.mjs";
 
@@ -344,55 +348,100 @@ const INTEGER_EXCEPTIONS = {};
   );
 }
 // Keep examples under the package so Node resolves its public self-reference exports.
+// An example or README snippet written in the Portal intent syntax, ahead of the compiler, is named
+// in PENDING_INTENT_SYNTAX (`example-programs.mjs`): it is typechecked and run apart from the rest,
+// and fails as STALE once it typechecks and runs.
 const temporary = mkdtempSync(join(root, ".sauce-doc-examples-"));
 const input = join(temporary, "src");
 const output = join(temporary, "dist");
+const tsc = (files) => [
+  createRequire(join(root, "package.json")).resolve("typescript/bin/tsc"),
+  "--target",
+  "ES2022",
+  "--module",
+  "NodeNext",
+  "--moduleResolution",
+  "NodeNext",
+  "--strict",
+  "--skipLibCheck",
+  "--rootDir",
+  input,
+  "--outDir",
+  output,
+  ...files.map((name) => join(input, name)),
+];
 try {
   mkdirSync(input);
+  const pending = [];
   for (const source of sources) {
     writeFileSync(join(input, source), readFileSync(join(examples, source)));
+    if (pendingFile(`docs/examples/${source}`)) pending.push(source);
   }
   const readmeExamples = [
     ...readFileSync(join(root, "README.md"), "utf8").matchAll(/```ts\n([^]*?)```/g),
   ];
   if (!readmeExamples.length) throw new Error("README is missing its TypeScript example");
+  const metReadme = new Set();
   for (const [index, example] of readmeExamples.entries()) {
     const source = `readme-${index + 1}.ts`;
     writeFileSync(join(input, source), example[1]);
     sources.push(source);
+    const line = pendingBlock("README.md", example[1]);
+    if (line !== undefined) {
+      pending.push(source);
+      metReadme.add(`README.md\n${line}`);
+    }
   }
-  execFileSync(
-    process.execPath,
-    [
-      createRequire(join(root, "package.json")).resolve("typescript/bin/tsc"),
-      "--target",
-      "ES2022",
-      "--module",
-      "NodeNext",
-      "--moduleResolution",
-      "NodeNext",
-      "--strict",
-      "--skipLibCheck",
-      "--rootDir",
-      input,
-      "--outDir",
-      output,
-      ...sources.map((name) => join(input, name)),
-    ],
-    { cwd: root, stdio: "inherit" },
-  );
+  const ready = sources.filter((name) => !pending.includes(name));
+  execFileSync(process.execPath, tsc(ready), { cwd: root, stdio: "inherit" });
   // A `.ts` example reads its SauceScript sibling by a path relative to itself, exactly as it would
   // in an installed package, so the sibling has to sit beside the COMPILED file too.
   for (const name of sauceExamples) {
     writeFileSync(join(output, name), readFileSync(join(examples, name)));
   }
-  for (const source of sources) {
+  for (const source of ready) {
     execFileSync(process.execPath, [join(output, source.replace(/\.ts$/, ".js"))], {
       cwd: root,
       stdio: "inherit",
     });
   }
-  console.log(`Executable examples: ${sources.length} typechecked and passed`);
+  // The pending ones: each is held to failing, typechecked or run.
+  const stale = [];
+  if (pending.length > 0) {
+    let typed = "";
+    try {
+      execFileSync(process.execPath, tsc(pending), { cwd: root, encoding: "utf8", stdio: "pipe" });
+    } catch (error) {
+      typed = `${error.stdout ?? ""}`;
+    }
+    for (const source of pending) {
+      if (typed.includes(`${source}(`)) continue;
+      let ran = true;
+      try {
+        execFileSync(process.execPath, [join(output, source.replace(/\.ts$/, ".js"))], {
+          cwd: root,
+          stdio: "pipe",
+        });
+      } catch {
+        ran = false;
+      }
+      if (ran)
+        stale.push(
+          staleIntentSyntax(
+            source.startsWith("readme-") ? `README.md's ${source}` : `docs/examples/${source}`,
+          ),
+        );
+    }
+  }
+  if (packageArgument < 0) {
+    stale.push(...unmetPendingProblems(repository, "README.md", metReadme));
+    stale.push(...unmetPendingProblems(repository, "docs/", new Set()));
+  }
+  if (stale.length) throw new Error(`The pending intent syntax:\n${stale.join("\n")}`);
+  console.log(
+    `Executable examples: ${ready.length} typechecked and passed, ${pending.length} pending the ` +
+      "intent syntax (PENDING_INTENT_SYNTAX)",
+  );
 } finally {
   rmSync(temporary, { recursive: true, force: true });
 }
@@ -404,11 +453,14 @@ if (packageArgument < 0) {
   const { checkRepositoryEditor } = await import(
     new URL("../../sdk/scripts/check-editor.mjs", import.meta.url)
   );
-  const programs = await checkRepositoryEditor({
+  const { programs, pending } = await checkRepositoryEditor({
     root: repository,
     tsserverPath: createRequire(join(repository, "package.json")).resolve(
       "typescript/lib/tsserver.js",
     ),
   });
-  console.log(`SauceScript in an editor: ${programs} programs typed, with no error`);
+  console.log(
+    `SauceScript in an editor: ${programs} programs typed, with no error but in the ${pending} ` +
+      "pending the intent syntax (PENDING_INTENT_SYNTAX)",
+  );
 }

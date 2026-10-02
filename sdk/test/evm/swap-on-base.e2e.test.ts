@@ -70,6 +70,7 @@ import { PortalABI } from "../../src/protocols/eco-routes/abis.js";
 import { EVM_ROUTE_PARAM, encodeRouteEvm, hashIntent } from "../../src/routes/encode.js";
 import { compileSauceProgram } from "../../src/routes/sauce-route.js";
 import { gateAnchors, startGatedEngine } from "./gated-engine.js";
+import { pendingIntentSyntax, stillPending } from "../pending-intent-syntax.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -418,7 +419,36 @@ const expectWithin = (fill: Fill, atLimit = false) => {
   if (atLimit) expect(last * 100_000n).toBeLessThanOrEqual(floor * 1_000_000n * 100_001n);
 };
 
-describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pools", () => {
+// Both files are written in the Portal intent syntax, ahead of the compiler: while
+// PENDING_INTENT_SYNTAX lists them, nothing below runs them, and each fails as STALE once it
+// compiles.
+const SKILL_FILE = "skills/sauce-intents/examples/swap-on-base.sauce.ts";
+const GUIDE_FILE = "docs/examples/nested-swap.sauce.ts";
+const pending = pendingIntentSyntax(SKILL_FILE) || pendingIntentSyntax(GUIDE_FILE);
+if (pending)
+  describe("the Portal intent syntax these files are written in", () => {
+    const intents = { deadline: DEADLINE, creator: CREATOR, executionFee: 0n };
+    if (pendingIntentSyntax(SKILL_FILE))
+      it(`${SKILL_FILE} waits for it`, () =>
+        stillPending(SKILL_FILE, () =>
+          compileSauceProgram("ethereum", PROGRAM, {
+            args: [10n ** 18n, 10n ** 18n + 10n ** 15n, LIMIT, 1n, 0n, RECIPIENT, REFUND_TO],
+            intents,
+          }),
+        ));
+    if (pendingIntentSyntax(GUIDE_FILE))
+      it(`${GUIDE_FILE} waits for it`, () =>
+        stillPending(GUIDE_FILE, () =>
+          compileSauceProgram(
+            "ethereum",
+            readFileSync(join(HERE, "../../../docs/examples/nested-swap.sauce.ts"), "utf8"),
+            { args: [RECIPIENT, 10n ** 9n, 10n ** 9n + 10n ** 6n, 1n, CREATOR], intents },
+          ),
+        ));
+  });
+
+const describeSwap = pending ? describe.skip : describeEvm;
+describeSwap("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pools", () => {
   let snapshot: Hex;
 
   beforeAll(async () => {
@@ -658,7 +688,7 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     const source = readFileSync(join(HERE, "../../../docs/examples/nested-swap.sauce.ts"), "utf8");
     const delivered = 1_000n * 10n ** 6n; // 1,000 USDC
     const [outer] = compileSauceProgram("ethereum", source, {
-      args: [RECIPIENT, delivered, delivered + 10n ** 6n, 1n],
+      args: [RECIPIENT, delivered, delivered + 10n ** 6n, 1n, CREATOR],
       intents: {
         deadline: DEADLINE,
         creator: CREATOR,

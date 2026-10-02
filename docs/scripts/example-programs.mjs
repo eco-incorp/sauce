@@ -35,10 +35,69 @@
 // `--define` or `--defines`, which the `sauce` command keeps as low-level flags its `--help` lists
 // apart, and no ```sauce fence compiles with `define=`. A value a reader supplies is a `main`
 // argument, there as everywhere.
+//
+// PENDING INTENT SYNTAX. The manual and the skills describe the Portal form of an intent,
+// `Chain.Portal.send(...).receive(...).then(() => { ... })`, ahead of the compiler that lowers it.
+// Each example, runner, fenced block and documented claim written in it is named in
+// PENDING_INTENT_SYNTAX below, and that exempts it from being compiled, typechecked and executed —
+// from nothing else: the wording, link, plain-integer, free-name and no-define rules hold it as
+// they hold everything. Every entry is still tried, and fails as STALE the moment it compiles (or
+// typechecks and runs, or holds), and an entry that names nothing fails too: the change that lands
+// the syntax empties the list. There is no other exemption for it.
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 
 import { toFunctionSelector } from "viem";
+
+/**
+ * What the Portal intent syntax keeps from compiling, until the compiler host API lands, as one
+ * list: `pending-intent-syntax.json` beside this module, a data file so that the suites that execute
+ * these files read the same list (a jest suite cannot import this module). `files` are example
+ * programs, runners and TypeScript examples, relative to the repository; `blocks` the fenced blocks
+ * the checkers compile or typecheck, page -> one line each block contains; `claims` the sentences a
+ * suite holds to the lowering, page -> what the suite checks.
+ */
+export const PENDING_INTENT_SYNTAX = JSON.parse(
+  readFileSync(new URL("./pending-intent-syntax.json", import.meta.url), "utf8"),
+);
+
+/** Whether `file` (relative to the repository) is written in the pending syntax. */
+export const pendingFile = (file) => PENDING_INTENT_SYNTAX.files.includes(file);
+
+/** The line of `page`'s pending list that `body`, a fenced block of it, contains, or `undefined`. */
+export const pendingBlock = (page, body) =>
+  (PENDING_INTENT_SYNTAX.blocks[page] ?? []).find((line) => body.includes(line));
+
+/** Whether `page`'s claims about the lowering wait for the pending syntax. */
+export const pendingClaim = (page) => Object.hasOwn(PENDING_INTENT_SYNTAX.claims, page);
+
+/** The failure of a pending entry that compiles now. */
+export const staleIntentSyntax = (what) =>
+  `${what} is listed in PENDING_INTENT_SYNTAX (docs/scripts/pending-intent-syntax.json) but ` +
+  `compiles now: remove its entry, and run what it skipped (${PENDING_INTENT_SYNTAX.why})`;
+
+/**
+ * The problems with the pending list's entries under `prefix` (`docs/`, `README.md`, `skills/`)
+ * that a checker met none of: a file that does not exist, a block line no block of its page
+ * contains. `metBlocks` holds `page\nline` for each block line the checker matched.
+ */
+export function unmetPendingProblems(repository, prefix, metBlocks) {
+  const problems = [];
+  for (const file of PENDING_INTENT_SYNTAX.files) {
+    if (file.startsWith(prefix) && !existsSync(join(repository, file)))
+      problems.push(`PENDING_INTENT_SYNTAX names ${file}, which does not exist`);
+  }
+  for (const [page, lines] of Object.entries(PENDING_INTENT_SYNTAX.blocks)) {
+    if (!page.startsWith(prefix)) continue;
+    for (const line of lines) {
+      if (!metBlocks.has(`${page}\n${line}`))
+        problems.push(
+          `PENDING_INTENT_SYNTAX names a block of ${page} containing "${line}": none does`,
+        );
+    }
+  }
+  return problems;
+}
 
 const ACTIONS_CI_SCRIPTS = ["test:unit", "test:mainnet"];
 

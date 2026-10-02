@@ -70,6 +70,7 @@ import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-rout
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 import type { Intent } from "../src/routes/types.js";
 import { gateAnchors, startGatedEngine, type GatedEngine } from "./evm/gated-engine.js";
+import { pendingIntentSyntax, stillPending } from "./pending-intent-syntax.js";
 import { BODY_TO_ARBITRUM, CASCADE_BODY } from "./fixtures/routes/bodies.js";
 
 const RUNTIME_HEX_PATH =
@@ -645,13 +646,27 @@ describeEvm("an intent created inside a program, across chains with different to
     }, 300_000);
   });
 
-  it("the guide's cascade file, published on Ethereum: Base, Ethereum, then Base again", async () => {
+  // The guide's cascade is written in the Portal intent syntax, ahead of the compiler: while
+  // PENDING_INTENT_SYNTAX lists it, it is not run (`test` skips it), and the probe fails as STALE
+  // once it compiles.
+  const CASCADE = "docs/examples/cross-chain-cascade.sauce.ts";
+  const cascadePending = pendingIntentSyntax(CASCADE);
+  if (cascadePending)
+    it(`${CASCADE} waits for the Portal syntax`, () =>
+      stillPending(CASCADE, () =>
+        compileSauceProgram("ethereum", example("cross-chain-cascade"), {
+          args: [RECIPIENT, 2_000_000n, 2_010_000n, CREATOR],
+          intents: intents(),
+        }),
+      ));
+  const test = cascadePending ? it.skip : it;
+  test("the guide's cascade file, published on Ethereum: Base, Ethereum, then Base again", async () => {
     // docs/examples/cross-chain-cascade.sauce.ts as written, its main arguments fixed into the
     // intents as `sauce intent publish --args` fixes them: the first hop is the file's own intent,
     // which a wallet publishes on Ethereum, and the levels below it open as each runs.
     const delivered = 2_000_000n;
     const [first] = compileSauceProgram("ethereum", example("cross-chain-cascade"), {
-      args: [RECIPIENT, delivered, 2_010_000n],
+      args: [RECIPIENT, delivered, 2_010_000n, CREATOR],
       intents: intents(),
     }).intents;
     expect(first!.captures).toEqual([]);

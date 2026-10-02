@@ -32,6 +32,7 @@ import {
 import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
 import { canonicalChains, routes } from "../../sdk/dist/index.js";
 import { POT_SALT } from "../../sdk/test/evm/gated-engine.js";
+import { pendingIntentSyntax, stillPending } from "../../sdk/test/pending-intent-syntax.js";
 import { legs, program, routeProgram, type Leg } from "../../docs/examples/router-route.js";
 import { minOut as swapFloor, payload as swapPayload } from "../../docs/examples/router-swap.js";
 import { onBase, onOptimism } from "../../docs/examples/registry-names.js";
@@ -493,6 +494,7 @@ describe("venue-where-deployed and cross-chain-intent on Base state", SUITE, () 
         if (word === "<address>") return [env.account.address];
         if (word === "<recipient>") return [RECIPIENT];
         if (word === "<minAmount>") return [`${minAmount}`];
+        if (word === "<refundTo>") return [env.account.address];
         if (word === "--args") {
           return ["--rpc-url", env.rpc, "--salt-hex", POT_SALT, "--json", "--args"];
         }
@@ -500,7 +502,19 @@ describe("venue-where-deployed and cross-chain-intent on Base state", SUITE, () 
       }),
     );
 
-  it("cross-chain-intent's usage line publishes an intent paying `recipient` on Ethereum exactly what the Pot held", async () => {
+  // The file is written in the Portal intent syntax, ahead of the compiler: while
+  // PENDING_INTENT_SYNTAX lists it, it is not run (`test` skips it), and the probe fails as STALE
+  // once it compiles.
+  const PENDING_FILE = "docs/examples/cross-chain-intent.sauce.ts";
+  const pending = pendingIntentSyntax(PENDING_FILE);
+  if (pending)
+    it(`${PENDING_FILE} waits for the Portal syntax`, () =>
+      stillPending(PENDING_FILE, () =>
+        routes.compileSauceProgram("base", readFileSync(CROSS_CHAIN, "utf8")),
+      ));
+  const test = pending ? it.skip : it;
+
+  test("cross-chain-intent's usage line publishes an intent paying `recipient` on Ethereum exactly what the Pot held", async () => {
     await setBalance(env, USDC, { slot: 9n }, env.pot, HELD);
     const ran = await run(1_000_000n);
     assert.equal(ran.code, 0, `${ran.stderr}\n${ran.stdout}`);
@@ -535,7 +549,7 @@ describe("venue-where-deployed and cross-chain-intent on Base state", SUITE, () 
     );
   });
 
-  it("below `minAmount` the whole transaction reverts and nothing is published", async () => {
+  test("below `minAmount` the whole transaction reverts and nothing is published", async () => {
     await setBalance(env, USDC, { slot: 9n }, env.pot, HELD);
     const ran = await run(HELD + 1n);
     assert.notEqual(ran.code, 0, "the cook reverted");

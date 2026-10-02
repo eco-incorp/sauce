@@ -49,7 +49,7 @@ import {
   ecoRoutesPortal,
   ecoRoutesProver,
 } from "../src/protocols/eco-routes/lookup.js";
-import { Base, Ethereum } from "../src/routes/chain-exports.generated.js";
+import { Base } from "../src/routes/chain-exports.generated.js";
 import { encodeRouteEvm } from "../src/routes/encode.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
@@ -65,6 +65,7 @@ import {
   type PortalTx,
 } from "../src/routes/portal.js";
 import { sauceEvmDeployPotCall } from "../src/routes/sauce-calls.js";
+import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import {
   describeEvm,
   FEE,
@@ -86,6 +87,7 @@ import {
   PORTAL_FIXTURES,
   relay,
 } from "./eco-routes-anvil.js";
+import { pendingIntentSyntax, stillPending } from "./pending-intent-syntax.js";
 
 /** Anvil's fourth dev account: the solver. A public key, local only. */
 const SOLVER_KEY = "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6";
@@ -389,7 +391,28 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(await ethereum.balanceOf(ethereumUsdc, SOLVER.address)).toBe(before + REWARD);
   }, 240_000);
 
-  it("the nested-intents guide's file: published on Ethereum, its body opens the next on Base", async () => {
+  // The guide's file is written in the Portal intent syntax, ahead of the compiler: while
+  // PENDING_INTENT_SYNTAX lists it, it is not run (`test` skips it), and the probe fails as STALE
+  // once it compiles.
+  const NESTED = "docs/examples/nested-intent.sauce.ts";
+  const nestedPending = pendingIntentSyntax(NESTED);
+  if (nestedPending)
+    it(`${NESTED} waits for the Portal syntax`, () =>
+      stillPending(NESTED, () =>
+        compileSauceProgram(
+          "ethereum",
+          readFileSync(
+            new URL("../../docs/examples/nested-intent.sauce.ts", import.meta.url),
+            "utf8",
+          ),
+          {
+            args: [RECIPIENT, AMOUNT, REWARD, OWNER.address],
+            intents: { deadline: 4_000_000_000n, creator: OWNER.address, executionFee: FEE },
+          },
+        ),
+      ));
+  const test = nestedPending ? it.skip : it;
+  test("the nested-intents guide's file: published on Ethereum, its body opens the next on Base", async () => {
     // docs/examples/nested-intent.sauce.ts, as written: all SauceScript, opened on Ethereum, its
     // main's arguments given with --args as the guide gives them.
     const nested = fileURLToPath(
@@ -413,46 +436,39 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
         ...["intent", "publish", nested, "--chain", "ethereum"],
         ...["--intent-creator", OWNER.address, "--intent-deadline", String(start + 3600n)],
         ...["--intent-reward-deadline", String(start + 7200n)],
-        ...["--intent-execution-fee", String(FEE)],
+        ...["--intent-execution-fee", String(FEE), "--intent-salt", `0x${"00".repeat(32)}`],
         ...["--rpc-url", ethereum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
-        ...["--args", RECIPIENT, String(AMOUNT), String(REWARD)],
+        ...["--args", RECIPIENT, String(AMOUNT), String(REWARD), OWNER.address],
       ),
     );
     const outer = (published.intents as Array<{ intentHash: Hex }>)[0]!.intentHash;
 
-    // The guide's closure is the same intent: what the file's braces say, built in TypeScript.
-    const PAYEE = BigInt(RECIPIENT);
-    const closure = Base(
-      () => {
-        const amount = USDC.balanceOf(ctx.self());
-        const payout = amount - amount / 1000n;
-        Ethereum(() => {
-          USDC.transfer(PAYEE, payout);
-        }).reward({ tokens: [{ token: USDC, amount }] });
-      },
-      {
-        execution: { value: FEE },
-        deadline: start + 3600n,
-        rewardDeadline: start + 7200n,
-        creator: OWNER.address,
-        defines: { PAYEE },
-        tokens: [{ token: baseUsdc, amount: AMOUNT }],
-        precalls: [
-          {
-            target: baseUsdc,
-            data: encodeFunctionData({
-              abi: TRANSFER,
-              functionName: "transfer",
-              args: [pot, AMOUNT],
-            }),
-          },
-        ],
-      },
-    ).reward({
-      source: "ethereum",
-      deadline: start + 7200n,
-      tokens: [{ token: ethereumUsdc, amount: REWARD }],
+    // The same intent in TypeScript, in the Portal form: what the file's body says, its values,
+    // deadlines and salt written in, every level's deadlines and salt the flags' (a flag sets every
+    // level's).
+    const closure = Base.Portal.send({ token: ethereumUsdc, amount: REWARD })
+      .source("ethereum")
+      .creator(OWNER.address)
+      .deadline(start + 7200n)
+      .receive({ token: baseUsdc, amount: AMOUNT })
+      .fee(FEE)
+      .deadline(start + 3600n)
+      .salt(0n)
+      .then(
+        `function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  const payout = amount - amount / 1000;
+  Ethereum.Portal.send({ token: USDC, amount })
+    .creator(${OWNER.address})
+    .deadline(${start + 7200n})
+    .receive({ token: USDC, amount: payout })
+    .deadline(${start + 3600n})
+    .salt(0)
+    .then(() => {
+      USDC.transfer(${RECIPIENT}, payout);
     });
+}`,
+      );
     expect(closure.hash().intentHash).toBe(outer);
 
     // ---- Base: a solver fills it; the body measures what arrived and publishes the inner one ---
@@ -481,9 +497,9 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
         };
       };
     }>;
-    // The whole delivery became its reward, in Base's USDC, escrowed on Base. Its deadlines and
-    // creator are the file's, as every level's are; its prover is the registry's for Base to
-    // Ethereum, which is Base's own HyperProver.
+    // The whole delivery became its reward, in Base's USDC, escrowed on Base. Its deadlines are the
+    // flags', as every level's are, and its creator the `refundTo` it names; its prover is the
+    // registry's for Base to Ethereum, which is Base's own HyperProver.
     expect(inner!.record.destination.chainId).toBe(1);
     expect(inner!.record.route.deadline).toBe(String(start + 3600n));
     expect(inner!.record.reward.deadline).toBe(String(start + 7200n));

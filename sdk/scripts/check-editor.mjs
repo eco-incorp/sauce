@@ -19,11 +19,17 @@
 // `check-packed-package.mjs` runs the first against the installed tarball, `pnpm docs:check` the
 // second; `node check-editor.mjs <project> <tsserver.js> <program.sauce.ts>…` runs the first on its
 // own.
+//
+// A program written in the Portal intent syntax, ahead of the compiler, is named in
+// PENDING_INTENT_SYNTAX (`docs/scripts/example-programs.mjs`): it still has to belong to its
+// project, but is not held to showing no error, and fails as STALE once it shows none.
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
-import { basename, join, relative } from "node:path";
+import { basename, join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
+
+import { pendingFile, staleIntentSyntax } from "../../docs/scripts/example-programs.mjs";
 
 /** A tsserver session: `request(command, args)` resolves with the response's body. */
 function tsserver(path, cwd) {
@@ -93,6 +99,24 @@ const programsUnder = (dir) =>
     .map((entry) => join(entry.parentPath, entry.name))
     .sort();
 
+/**
+ * The path PENDING_INTENT_SYNTAX would name `file` by, when it names it: a program of this checkout
+ * by its path under `root`, a skill's where an install put it by its path under `skills/`.
+ */
+function pendingProgram(file, root) {
+  const installed = file.match(/[/\\]\.(?:claude|agents)[/\\]skills[/\\](.+)$/);
+  const path = (installed ? `skills/${installed[1]}` : relative(root, file)).split(sep).join("/");
+
+  return pendingFile(path) ? path : undefined;
+}
+
+/** Asserts that `file` shows no error, or, when it is pending the intent syntax, that it shows one. */
+async function assertClean(server, file, shownAs, pending) {
+  const shown = await diagnostics(server, file);
+  if (pending === undefined) assert.deepEqual(shown, [], `${shownAs} shows no error`);
+  else if (shown.length === 0) throw new Error(staleIntentSyntax(pending));
+}
+
 /** Asserts that each of `files` is in the project of `config` and shows no error. */
 async function assertTyped(server, files, config, root) {
   for (const file of files) {
@@ -102,7 +126,7 @@ async function assertTyped(server, files, config, root) {
       config,
       `${relative(root, file)} belongs to ${relative(root, config)}`,
     );
-    assert.deepEqual(await diagnostics(server, file), [], `${relative(root, file)} shows no error`);
+    await assertClean(server, file, relative(root, file), pendingProgram(file, root));
   }
 }
 
@@ -140,8 +164,8 @@ export async function checkEditor({ project, tsserverPath, programs }) {
         `${basename(file)} belongs to programs/tsconfig.json`,
       );
     }
-    for (const file of files) {
-      assert.deepEqual(await diagnostics(server, file), [], `${basename(file)} shows no error`);
+    for (const [index, file] of files.entries()) {
+      await assertClean(server, file, basename(file), pendingProgram(programs[index], project));
     }
     assertMistakeShows(await diagnostics(server, mistake));
     // The skills where the init installed them, typed by the tsconfig.json written beside them.
@@ -166,7 +190,7 @@ export async function checkEditor({ project, tsserverPath, programs }) {
  * tsconfig.json's project, with no error. A program reopened as a bigint index beside a number
  * still shows none — the plugin loaded — and reopened as a misspelled builtin shows it. A
  * skill's runner, a docs example's TypeScript and the SDK's own source each keep their project.
- * Returns how many programs it checked.
+ * Returns how many programs it checked, and how many of them are pending the intent syntax.
  */
 export async function checkRepositoryEditor({ root, tsserverPath }) {
   const tracked = (pattern) =>
@@ -209,7 +233,10 @@ export async function checkRepositoryEditor({ root, tsserverPath }) {
     server.close();
   }
 
-  return programs.length;
+  return {
+    programs: programs.length,
+    pending: programs.filter((file) => pendingProgram(file, root) !== undefined).length,
+  };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {

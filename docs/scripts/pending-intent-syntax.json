@@ -1,0 +1,32 @@
+{
+  "$comment": "PENDING_INTENT_SYNTAX: what the Portal intent syntax keeps from compiling until the compiler host API lands. docs/scripts/example-programs.mjs reads it for docs:check and skills:check, and the suites that execute these files read it too (sdk/test/pending-intent-syntax.ts). Each entry is exempt from being compiled, typechecked and executed, and from nothing else; each fails as STALE once it compiles, and the change that lands the syntax deletes this file.",
+  "why": "the Portal syntax compiles once the compiler host API lands (v12 #549–#553, SDK #61)",
+  "files": [
+    "docs/examples/cross-chain-cascade.sauce.ts",
+    "docs/examples/cross-chain-cascade.ts",
+    "docs/examples/cross-chain-intent.sauce.ts",
+    "docs/examples/cross-chain-intent.ts",
+    "docs/examples/first-intent.ts",
+    "docs/examples/nested-intent.sauce.ts",
+    "docs/examples/nested-intent.ts",
+    "docs/examples/nested-swap.sauce.ts",
+    "docs/examples/protocol-approval.ts",
+    "skills/sauce-examples/examples/repay-on-base.sauce.ts",
+    "skills/sauce-intents/examples/cross-chain.sauce.ts",
+    "skills/sauce-intents/examples/intents.mts",
+    "skills/sauce-intents/examples/swap-on-base.sauce.ts"
+  ],
+  "blocks": {
+    "README.md": ["const built = Base.Portal.send([])"],
+    "skills/sauce-intents/SKILL.md": [
+      ".creator(refundTo) // the refund address: an unfilled intent's reward goes back there",
+      ".deadline(ctx.timestamp() + 1800) // filled within half an hour, or never",
+      "function main(beneficiary: Address, refundTo: Address) {",
+      "const pool = UniswapV3.Factory.getPool(WETH, USDC, 500); // Base's 0.05% tier",
+      ".creator(refundTo) // every level names its own"
+    ]
+  },
+  "claims": {
+    "docs/guides/intents.md": "its refusal list, the chain each part's names resolve on, and the derived Pot, held to the lowering by sdk/test/docs-intent-sugar-drift.test.ts"
+  }
+}

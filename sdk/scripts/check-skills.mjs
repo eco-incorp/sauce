@@ -95,7 +95,11 @@ import {
   executedExamplesProblems,
   inputProblems,
   namedProgramProblems,
+  pendingBlock,
+  pendingFile,
   registryNames,
+  staleIntentSyntax,
+  unmetPendingProblems,
 } from "../../docs/scripts/example-programs.mjs";
 import { bigintLiteralProblems } from "../../docs/scripts/integer-literals.mjs";
 
@@ -117,6 +121,10 @@ const PKG = "@eco-incorp/sauce";
 const failures = [];
 const fail = (where, message) => failures.push(`${where}: ${message}`);
 const rel = (path) => relative(process.cwd(), path) || ".";
+/** A skill file as `PENDING_INTENT_SYNTAX` names it, wherever the skills are read from. */
+const skillPath = (path) => join("skills", relative(SKILLS_DIR, path));
+/** The pending blocks met, `page\nline`: each entry must name one. */
+const metPending = new Set();
 const read = (path) => readFileSync(path, "utf8");
 const stripAnsi = (text) => stripVTControlCharacters(String(text));
 // The compiler's diagnostics are drawn as a tree; keep the lines that say something.
@@ -1043,6 +1051,11 @@ async function runUsage(where, file, argv, chain, header = false) {
     if (!kept.includes("--intent-execution-fee")) kept.push("--intent-execution-fee", "0");
   }
   const compiled = await compileJson(file, chain, kept);
+  // Written in the intent syntax the compiler does not lower yet: it is tried, and nothing more.
+  if (pendingFile(skillPath(file))) {
+    if (compiled.error === undefined) fail(where, staleIntentSyntax(`${where} on ${chain}`));
+    return;
+  }
   if (compiled.error !== undefined) {
     fail(where, `does not compile for ${chain}: ${compiled.error}`);
     return;
@@ -1267,6 +1280,12 @@ try {
           errors.push(diagnostic(error.message));
         }
       }
+      const pending = pendingBlock(skillPath(block.file), block.body);
+      if (pending !== undefined) {
+        metPending.add(`${skillPath(block.file)}\n${pending}`);
+        if (errors.length === 0) fail(where, staleIntentSyntax(`the block at ${where}`));
+        continue;
+      }
       if (mustFail && errors.length === 0)
         fail(where, "```sauce fails block compiled, but the skill says it is refused");
       if (!mustFail) for (const error of errors) fail(where, `does not compile: ${error}`);
@@ -1320,6 +1339,9 @@ function diagnose(program, mapLocation) {
       fail("typescript", message);
       continue;
     }
+    // A runner written in the pending intent syntax: run below, where it fails as STALE once it
+    // passes.
+    if (pendingFile(skillPath(d.file.fileName))) continue;
     const { line, character } = d.file.getLineAndCharacterOfPosition(d.start ?? 0);
     fail(mapLocation(d.file.fileName, line, character), `TS${d.code} ${message}`);
   }
@@ -1399,6 +1421,10 @@ for (const file of runners) {
     ["--import", join(HERE, "skills-check", "offline-guard.mjs"), file, ...inputs],
     { encoding: "utf8", timeout: 180_000, cwd: dirname(file) },
   );
+  if (pendingFile(skillPath(file))) {
+    if (run.status === 0) fail(rel(file), staleIntentSyntax(rel(file)));
+    continue;
+  }
   if (run.status !== 0) {
     const lines = `${run.stderr ?? ""}${run.stdout ?? ""}`.trim().split("\n");
     const at = lines.findIndex((line) => /\b\w*Error\b|check failed/.test(line));
@@ -1869,6 +1895,12 @@ const INTEGER_EXCEPTIONS = {};
 for (const file of walk(SKILLS_DIR, (path) => /\.(?:md|ts|mts|json)$/.test(path))) {
   failures.push(...defineFlagProblems({ where: rel(file), text: read(file) }));
 }
+
+// ---- 15. The pending intent syntax ---------------------------------------------------------------------
+// Each skill entry of PENDING_INTENT_SYNTAX names something this check met: a file that exists, a
+// block line one of its page's blocks contains (`docs/scripts/example-programs.mjs`).
+for (const problem of unmetPendingProblems(REPOSITORY, "skills/", metPending))
+  fail("skills", problem);
 
 // ---- Report ----------------------------------------------------------------------------------------------
 const summary =
