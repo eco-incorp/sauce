@@ -38,6 +38,7 @@ export const PUBLIC_RPCS: Readonly<Record<number, readonly PublicRpc[]>> = {
   1: [
     { url: "https://ethereum-rpc.publicnode.com", simulateV1: true },
     { url: "https://eth.drpc.org", simulateV1: true },
+    { url: "https://ethereum.public.blockpi.network/v1/rpc/public", simulateV1: true },
   ],
   // Optimism
   10: [
