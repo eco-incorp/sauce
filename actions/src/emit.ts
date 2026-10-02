@@ -14,7 +14,10 @@
  *      it, and two actions of the same kind in one program need two distinct names — hence
  *      [`Emitter`].
  *
- * `++`/`--` and nested functions are also rejected, so generated loops write `i = i + 1n`.
+ * `++`/`--` and nested functions are also rejected, so generated loops write `i = i + 1`.
+ *
+ * An integer is written plainly (`1000`, an address as its hex), as SauceScript writes it: the
+ * compiler reads `1000` and `1000n` as the same integer, and `sauce actions` prints this source.
  */
 import { bytesToHex } from "viem";
 
@@ -60,7 +63,7 @@ export function slotVar(ref: string): string {
 }
 
 export function formatBigint(value: bigint): Expr {
-  return `${value.toString()}n`;
+  return value.toString();
 }
 
 /** A `hex` literal. Bind it before calling anything on it — see this module's header. */

@@ -1027,8 +1027,13 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   literal. An exception is a checker's `INTEGER_EXCEPTIONS`, with its reason. The SDK folds an
   intent's literals itself (`intent-body.ts#literalValue`), from the literal's text, so a plain
   one past 2^53 is exact there too. A quoted compiler message keeps its words
-  (``write `i += 1n` ``), and `sauce actions` still prints its lowering with `n` (its tests pin
-  that source text).
+  (``write `i += 1n` ``). What the SDK writes for a reader is plain too: the intent file that
+  `sauce intent publish` writes, and the lowering `sauce actions` prints (with `token/safe`'s
+  checked writes, which the settle recipe quotes). The command's token amounts (`--fund`,
+  `--assume-balance`, a wallet policy, MCP `fund`/`assumeBalance`) are the other way round from a
+  program: whole tokens (`USDC:1.5`), a bare integer included, and base units only with a trailing
+  `n` (`USDC:1500000n`). A bare integer at or above 10^decimals (`USDC:1500000`) is said to be 1.5
+  million in a note, which names the `n` spelling (`funding.ts#baseUnits`, `policy.ts#amountOf`).
 - **Execution-agnostic.** Not every agent has the SDK installed: some have only the `sauce` CLI, or a
   remote compiler, and sign by local means. Every skill but `sauce-cli` (the CLI) and
   `sauce-typescript` (the SDK) teaches the program, what compiling for a chain produces (bytecode,

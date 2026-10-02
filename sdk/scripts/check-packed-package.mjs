@@ -489,7 +489,7 @@ try {
   );
   assert.equal(lowered[0].source, lowered[1].source, "one source for every chain");
   assert.notEqual(lowered[0].bytecode, lowered[1].bytecode, "each chain's own addresses");
-  assert.match(lowered[0].source, /UniswapV3\.Factory\.getPool\(USDC, WETH, 500n\)/);
+  assert.match(lowered[0].source, /UniswapV3\.Factory\.getPool\(USDC, WETH, 500\)/);
   const actionsTx = JSON.parse(
     sauce(
       "tx",

@@ -106,8 +106,8 @@ function main(tokens: Address[], minOut: Uint256, recipient: Address): Uint256 {
     const bal: Uint256 = t.balanceOf(ctx.self());
     if (bal > 0) {
       const sweep_tr0 = hex`a9059cbb`;
-      const sweep_tr = evm.call(tokens[i], 0n, sweep_tr0.concat(recipient.toBytesBe(32)).concat(bal.toBytesBe(32)));
-      if (sweep_tr.length == 0) { require(ctx.codeSize(tokens[i]) > 0); } else { const [sweep_trok] = abi.decode(sweep_tr, ["Uint256"]); require(sweep_trok == 1n); }
+      const sweep_tr = evm.call(tokens[i], 0, sweep_tr0.concat(recipient.toBytesBe(32)).concat(bal.toBytesBe(32)));
+      if (sweep_tr.length == 0) { require(ctx.codeSize(tokens[i]) > 0); } else { const [sweep_trok] = abi.decode(sweep_tr, ["Uint256"]); require(sweep_trok == 1); }
     }
   }
   return floorBal;

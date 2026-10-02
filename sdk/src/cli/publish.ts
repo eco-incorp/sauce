@@ -364,12 +364,19 @@ async function walletBalances(
   client: PublicClient,
   input: PublishInput,
   wallet: Address,
-): Promise<{ overrides: StateOverride; lines: string[]; json: Record<string, string>[] }> {
+): Promise<{
+  overrides: StateOverride;
+  lines: string[];
+  json: Record<string, string>[];
+  notes: string[];
+}> {
   const overrides: StateOverride[number][] = [];
   const lines: string[] = [];
   const json: Record<string, string>[] = [];
+  const notes: string[] = [];
   for (const request of input.assume ?? []) {
-    const amount = await baseUnits(client, request);
+    const { amount, note } = await baseUnits(client, request);
+    if (note !== undefined) notes.push(note);
     if (request.token === undefined) {
       overrides.push({ address: wallet, balance: amount });
       lines.push(`  ${wallet} holds ${formatUnits(amount, 18)} ${nativeSymbol(input.chain)}`);
@@ -399,6 +406,7 @@ async function walletBalances(
     lines:
       lines.length === 0 ? [] : ["Assumed for this rehearsal only, by state override:", ...lines],
     json,
+    notes,
   };
 }
 
@@ -583,6 +591,7 @@ async function publishIntents(input: PublishInput, files: CliFiles): Promise<Com
         }),
       },
       notes: [
+        ...assumed.notes,
         `This rehearses publishing on ${input.chain.slug} only. What the intent does runs on ` +
           `${[...new Set(plans.map((plan) => plan.intent.destination.slug))].join(" and ")}, when ` +
           "a solver fills it: `sauce intent fill` with the same file and flags, and the destination's " +

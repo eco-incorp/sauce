@@ -219,12 +219,12 @@ function splitChain(ref: ChainRef): CanonicalChain {
  * explicit revert, so callers can't accidentally route an invalid index to the last candidate.
  */
 function outOfRangeGuard(N: number): Stmt[] {
-  return [`if (idx >= ${N}n) { revert(); }`];
+  return [`if (idx >= ${N}) { revert(); }`];
 }
 
 /** `if (idx == 0) return …; … return <last>;` — every path returns. */
 function returnDispatch(N: number, branch: (i: number) => Stmt): Stmt[] {
-  const early = Array.from({ length: N - 1 }, (_, i) => `if (idx == ${i}n) { ${branch(i)} }`);
+  const early = Array.from({ length: N - 1 }, (_, i) => `if (idx == ${i}) { ${branch(i)} }`);
 
   return [...early, branch(N - 1)];
 }
@@ -235,7 +235,7 @@ function blockDispatch(N: number, branch: (i: number) => readonly Stmt[]): Stmt[
 
   const lines: Stmt[] = [];
   for (let i = 0; i < N - 1; i++) {
-    lines.push(`${i === 0 ? "" : "} else "}if (idx == ${i}n) {`);
+    lines.push(`${i === 0 ? "" : "} else "}if (idx == ${i}) {`);
     lines.push(indent(branch(i)));
   }
   lines.push("} else {");
@@ -262,7 +262,7 @@ function mainFn(
   //   used[i]  at key i
   //   total[i] at key N + i
   //   marg[i]  at key 2N + i
-  const key = (base: number, idx: Expr): Expr => (base === 0 ? idx : `${base}n + ${idx}`);
+  const key = (base: number, idx: Expr): Expr => (base === 0 ? idx : `${base} + ${idx}`);
   const used = (idx: Expr): Expr => `evm.tload(${key(0, idx)})`;
   const total = (idx: Expr): Expr => `evm.tload(${key(N, idx)})`;
   const marg = (idx: Expr): Expr => `evm.tload(${key(2 * N, idx)})`;
@@ -278,19 +278,19 @@ function mainFn(
 
   // Init loop: marg[i] = quote_any(i, bucket).
   body.push(
-    `for (let i = 0n; i < ${N}n; i = i + 1n) {`,
+    `for (let i = 0; i < ${N}; i = i + 1) {`,
     `  evm.tstore(${key(2 * N, "i")}, quote_any(i, ${bucketExpr}));`,
     "}",
   );
 
   // Greedy loop.
   body.push(
-    "let bestMarg = 0n;",
-    "let bestIdx = 0n;",
-    `for (let iter = 0n; iter < ${n}n; iter = iter + 1n) {`,
-    "  bestMarg = 0n;",
-    "  bestIdx = 0n;",
-    `  for (let j = 0n; j < ${N}n; j = j + 1n) {`,
+    "let bestMarg = 0;",
+    "let bestIdx = 0;",
+    `for (let iter = 0; iter < ${n}; iter = iter + 1) {`,
+    "  bestMarg = 0;",
+    "  bestIdx = 0;",
+    `  for (let j = 0; j < ${N}; j = j + 1) {`,
     `    if (${marg("j")} > bestMarg) {`,
     `      bestMarg = ${marg("j")};`,
     "      bestIdx = j;",
@@ -298,26 +298,26 @@ function mainFn(
     "  }",
     // Allocate only when some venue actually pays. With every marginal at zero the argmax leaves
     // bestIdx at 0, so the old code walked used[0] up to n and sent the WHOLE trade to candidate 0.
-    "  if (bestMarg > 0n) {",
-    `    evm.tstore(${key(0, "bestIdx")}, ${used("bestIdx")} + 1n);`,
+    "  if (bestMarg > 0) {",
+    `    evm.tstore(${key(0, "bestIdx")}, ${used("bestIdx")} + 1);`,
     `    evm.tstore(${key(N, "bestIdx")}, ${total("bestIdx")} + ${marg("bestIdx")});`,
     // The next marginal, CLAMPED. `-` is checked on both engines (compiler/README.md's ledger: the
     // EVM's Math.huff checks add/sub/mul natively), so a quote that comes back below the running
     // total does not wrap — it REVERTS, killing the whole route. Quotes are not guaranteed monotone
     // across sizes: fee tiers are discontinuous, curves are not concave, and an oracle-backed
     // quoter can move between two calls in the same transaction.
-    `    let nextQuote = quote_any(bestIdx, (${used("bestIdx")} + 1n) * ${bucketExpr});`,
+    `    let nextQuote = quote_any(bestIdx, (${used("bestIdx")} + 1) * ${bucketExpr});`,
     `    let running = ${total("bestIdx")};`,
-    `    evm.tstore(${key(2 * N, "bestIdx")}, nextQuote > running ? nextQuote - running : 0n);`,
+    `    evm.tstore(${key(2 * N, "bestIdx")}, nextQuote > running ? nextQuote - running : 0);`,
     "  }",
     "}",
   );
 
   // Execute loop: dispatch the swap for every candidate with used > 0, summing what each returns.
   body.push(
-    "let totalOut = 0n;",
-    `for (let k = 0n; k < ${N}n; k = k + 1n) {`,
-    `  if (${used("k")} > 0n) {`,
+    "let totalOut = 0;",
+    `for (let k = 0; k < ${N}; k = k + 1) {`,
+    `  if (${used("k")} > 0) {`,
     `    totalOut = totalOut + swap_any(k, ${used("k")} * ${bucketExpr});`,
     "  }",
     "}",

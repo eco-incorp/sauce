@@ -83,7 +83,7 @@ describe("sauce actions", () => {
     const run = await sauce("actions", file("swap.json", SWAP), "--chain", "base");
     assert.equal(run.code, 0, run.stderr);
     assert.match(run.stdout, /^\/\/ .*swap\.json, lowered for base \(chain 8453\)\n/);
-    assert.match(run.stdout, /const pool\d+ = UniswapV3\.Factory\.getPool\(USDC, WETH, 500n\);/);
+    assert.match(run.stdout, /const pool\d+ = UniswapV3\.Factory\.getPool\(USDC, WETH, 500\);/);
     assert.match(run.stdout, /\/\/ main\(a_amount: Uint256\): pass the arguments in this order/);
     const program = compiled("base");
     assert.ok(
@@ -188,7 +188,7 @@ describe("sauce actions", () => {
   });
 
   it("is for actions documents: a SauceScript file, or defines, are refused", async () => {
-    const script = await sauce("actions", file("pay.sauce.ts", "USDC.transfer(R, 1n);\n"));
+    const script = await sauce("actions", file("pay.sauce.ts", "USDC.transfer(R, 1);\n"));
     assert.equal(script.code, 2);
     assert.match(
       script.stderr,
