@@ -355,6 +355,8 @@ try {
     `npx ${name} runs the package's sauce bin`,
   );
   // The skill's `pay.sauce.ts` names no chain and takes `main(recipient, amount)` at run time.
+  // `--offline`: the bin reads a chain through its built-in public endpoints otherwise, and this
+  // check reaches no network.
   const example = join(installedRoot, "skills/sauce-cli/examples/pay.sauce.ts");
   const recipient = "0x6666666666666666666666666666666666666666";
   const owner = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
@@ -378,15 +380,29 @@ try {
   );
   assert.equal(compiled.compiler.version, installedCompiler.version);
   assert.equal(compiled.engine.release, "v12-evm");
-  const pot = JSON.parse(sauce("pot", "--owner", owner, "--chain", "ethereum"));
+  const pot = JSON.parse(sauce("pot", "--owner", owner, "--chain", "ethereum", "--offline"));
   assert.equal(pot.to, pot.kitchen, "sauce pot prints the Kitchen.deployPot transaction");
-  const tx = JSON.parse(sauce("tx", example, ...chain, "--owner", owner, "--value", "0", ...args));
+  const tx = JSON.parse(
+    sauce("tx", example, ...chain, "--owner", owner, "--value", "0", "--offline", ...args),
+  );
   assert.deepEqual(Object.keys(tx), ["chainId", "to", "data", "value"], "sauce tx prints the tx");
   assert.equal(tx.to, pot.pot, "sauce tx cooks on the Pot sauce pot predicts");
   assert.ok(tx.data.includes(bytecode.slice(2)), "the cook carries the compiled program");
   assert.ok(tx.data.includes(recipient.slice(2)), "and main's arguments after it");
   assert.equal(
-    sauce("tx", example, ...chain, "--owner", owner, "--value", "0", "--format", "cast", ...args),
+    sauce(
+      "tx",
+      example,
+      ...chain,
+      "--owner",
+      owner,
+      "--value",
+      "0",
+      "--offline",
+      "--format",
+      "cast",
+      ...args,
+    ),
     `cast send ${tx.to} ${tx.data} --value 0 --rpc-url <RPC_URL> --private-key <PRIVATE_KEY>\n`,
   );
   console.log(
@@ -405,7 +421,18 @@ try {
   assert.notEqual(lowered[0].bytecode, lowered[1].bytecode, "each chain's own addresses");
   assert.match(lowered[0].source, /UniswapV3\.Factory\.getPool\(USDC, WETH, 500n\)/);
   const actionsTx = JSON.parse(
-    sauce("tx", document, ...chain, "--owner", owner, "--value", "0", "--args", "1000000"),
+    sauce(
+      "tx",
+      document,
+      ...chain,
+      "--owner",
+      owner,
+      "--value",
+      "0",
+      "--offline",
+      "--args",
+      "1000000",
+    ),
   );
   assert.ok(
     actionsTx.data.includes(lowered[0].bytecode.slice(2)),
@@ -562,9 +589,9 @@ try {
     "the check leaves the installed skills as they were",
   );
 
-  // `sauce mcp`, from the install, the way the guide launches it — `npx @eco-incorp/sauce mcp`,
-  // here with `--no` so nothing is fetched — over both transports: the tools, a compile, and every
-  // shipped skill file as a resource. Nothing here reaches a chain.
+  // `sauce mcp`, from the install, the way `sauce mcp setup` launches it — `npx @eco-incorp/sauce
+  // mcp`, here with `--no` so nothing is fetched — over both transports: the tools, a compile, and
+  // every shipped skill file as a resource. Nothing here reaches a chain.
   const mcpLaunch = ["--no", "--", name, "mcp"];
   const mcpProgram =
     "function main(recipient: Address, amount: Uint256) {\n  USDC.transfer(recipient, amount);\n}\n";

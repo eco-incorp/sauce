@@ -98,7 +98,7 @@ price, or the pool reverts `SPL`. A limit of `0n` means none, which leaves `minO
 bound: set a real limit.
 
 **Convert a price with `sauce price`**, which reads no network:
-`npx sauce price --chain base WETH USDC 2686.5`. The price is **quote per base**: the first token
+`sauce price --chain base WETH USDC 2686.5`. The price is **quote per base**: the first token
 is the one priced, the second what it is priced in, so this is 2,686.5 USDC per WETH. Swapped,
 `USDC WETH 2686.5` would mean 2,686.5 WETH per USDC, a limit nowhere near any pool. It prints the
 pair's order on the chain (on Base WETH is token0, the lower address, and USDC token1) and two
@@ -181,9 +181,9 @@ The library checks `minOut`; what is left is the input a price limit left unspen
 Rehearse it, then run it, with the input in the Pot (or pulled in with `--fund`):
 
 ```sh
-npx sauce simulate swap-leg.sauce.ts --chain base --owner <address> --config sauce.config.json \
+sauce simulate swap-leg.sauce.ts --chain base --owner <address> \
   --args <tokenIn> <tokenOut> 500 <amountIn> <sqrtPriceLimitX96> <minOut> <recipient>
-npx sauce run swap-leg.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+sauce run swap-leg.sauce.ts --chain base --keystore <keystore> \
   --fund WETH:0.5 --args <tokenIn> <tokenOut> 500 <amountIn> <sqrtPriceLimitX96> <minOut> <recipient>
 ```
 

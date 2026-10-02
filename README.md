@@ -18,6 +18,27 @@ npm install @eco-incorp/sauce
 Node.js **24 or newer**, or a browser — [one `await ready()`](docs/api/compiler.md#in-a-browser) and the
 same code compiles the same bytes.
 
+For the [`sauce` command](docs/guides/cli.md), install the package once globally:
+
+```sh
+npm i -g @eco-incorp/sauce
+sauce --version
+```
+
+`npm i -g @eco-incorp/sauce@latest` upgrades it, and [Install](docs/guides/cli.md#install) has the
+other ways to run it.
+
+A coding agent uses Sauce through its MCP server, `sauce mcp`, which the agent starts on your
+machine. Add it once:
+
+```sh
+claude mcp add sauce -- sauce mcp    # Claude Code
+codex mcp add sauce -- sauce mcp     # OpenAI Codex
+```
+
+[The MCP server's quick start](docs/guides/mcp.md#quick-start) covers Gemini CLI, Claude Desktop,
+Cursor and VS Code, and how to check that it worked.
+
 [Documentation](docs/README.md) · [Quick start](docs/guides/quick-start.md) ·
 [Examples](docs/examples/README.md) · [API reference](docs/api/README.md)
 
@@ -146,10 +167,10 @@ command and the server read the password from the source they are told about, so
 command-line argument or a tool input, and it never reaches the model's context:
 
 ```sh
-npx sauce wallet new agent --password-env SAUCE_WALLET_PASSWORD
-npx sauce run pay.sauce.ts --chain base --config sauce.config.json \
+sauce wallet new agent --password-env SAUCE_WALLET_PASSWORD
+sauce run pay.sauce.ts --chain base \
   --wallet agent --password-env SAUCE_WALLET_PASSWORD --args <recipient> 1000000
-npx -y @eco-incorp/sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD
+sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD
 ```
 
 An EVM wallet is a standard keystore that `cast wallet` and geth read too. A policy file beside a
