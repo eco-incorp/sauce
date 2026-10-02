@@ -69,7 +69,7 @@ Send the resulting calldata to the Pot from its owner, with the Kitchen's execut
 
 ### From the command line: `sauce actions`
 
-The [`sauce` command](cli.md) takes an actions document as it takes a program file. Run it as `npx sauce` in a project that depends on `@eco-incorp/sauce`, and as `npx -y @eco-incorp/sauce` anywhere else: without the package installed, `npx sauce` fetches npm's unrelated `sauce` package ([Install](cli.md#install)). `sauce actions <file>` prints the SauceScript the document lowers to on a chain, `main`'s parameters, and the bytecode:
+The [`sauce` command](cli.md) takes an actions document as it takes a program file. `sauce actions <file>` prints the SauceScript the document lowers to on a chain, `main`'s parameters, and the bytecode:
 
 ```text
 $ sauce actions swap.json --chain base
@@ -90,7 +90,7 @@ function main(a_amount: Uint256): void {
 `--chain` takes a slug or a chain id and defaults to the document's `chainId`; `--json` prints the report `sauce compile --json` does — `bytecode`, `size`, `entryParams`, the paired compiler and engine — with the parsed `document`, the `source`, the ABI bindings it calls through (`bindings`), beside the protocol contracts it calls (`contracts`, as `sauce compile --json` reports them) and the argument names (`parameters`); `--compact-args` compiles the arguments compact-v1. `sauce compile`, `sauce tx`, `sauce simulate` and `sauce run` take the same document wherever they take a `.sauce.ts` file, with the same flags: its `argument` actions are `main`'s parameters, passed with `--args`, and its cook runs on the Pot `--owner` or `--pot` names, funded by `--fund` if you like. `--define` is refused: a document's values are its own fields.
 
 ```sh
-npx sauce simulate swap.json --chain base --owner <owner> --rpc-url <url> \
+sauce simulate swap.json --chain base --owner <owner> --rpc-url <url> \
   --assume-balance USDC:1000 --args 1000000000
 ```
 

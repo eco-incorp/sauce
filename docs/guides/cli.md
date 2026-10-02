@@ -2,12 +2,11 @@
 
 [Documentation](../README.md) · [Compiling programs](compiling.md) · [Create an intent](intents.md)
 
-`@eco-incorp/sauce` installs a `sauce` command: `npx sauce` in a project that depends on the
-package, `npx -y @eco-incorp/sauce` anywhere else ([Install](#install)). It compiles a program file
-exactly as the SDK compiles a route body, deploys the Pot the program runs on, rehearses the cook,
-signs it, sends it and waits for it — on an EVM chain or on Solana — and takes transactions and
-programs back apart afterwards. It needs no other tool. It reads no environment variables and
-reaches a network only through an endpoint you name on the command line.
+`@eco-incorp/sauce` installs a `sauce` command. It compiles a program file exactly as the SDK
+compiles a route body, deploys the Pot the program runs on, rehearses the cook, signs it, sends it
+and waits for it — on an EVM chain or on Solana — and takes transactions and programs back apart
+afterwards. It needs no other tool. It reads no environment variables and reaches a network only
+through an endpoint you name on the command line.
 
 | Command          | What it does                                                                      |
 | ---------------- | --------------------------------------------------------------------------------- |
@@ -34,19 +33,27 @@ built and sent on Ethereum, Base and Solana only.
 ## Install
 
 ```sh
-npm install @eco-incorp/sauce
-npx sauce --help
+npm i -g @eco-incorp/sauce
+sauce --version
 ```
 
-Node.js 24 or newer. `npx sauce` runs the project's own copy of the command, as the examples in
-this guide do. Anywhere the package is not installed, run `npx -y @eco-incorp/sauce` in its place:
-there npx resolves a bare `npx sauce` on the registry, and fetches and runs npm's unrelated `sauce`
-package instead.
+Node.js 24 or newer. `npm i -g @eco-incorp/sauce@latest` upgrades it. Every command in this guide
+is written as `sauce …`, the global install.
 
-To start a new project instead, let the command scaffold it:
+Two other ways run the same command:
+
+- **A project's pinned copy.** In a project that depends on the package (one `sauce init` wrote, or
+  `npm i -D -E @eco-incorp/sauce`), `npx sauce <command>` runs the version its `package.json` pins.
+  A global `sauce` there runs the global version, and `sauce skills status` reports skills installed
+  from another version than the command's.
+- **No install.** `npx -y @eco-incorp/sauce <command>` fetches the package and runs it. Never run
+  a bare `npx sauce` outside a project that depends on the package: npx then fetches and runs npm's
+  unrelated `sauce` package instead.
+
+To start a new project, let the command scaffold it:
 
 ```sh
-npx -y @eco-incorp/sauce init my-app
+sauce init my-app
 cd my-app
 npm install
 ```
@@ -148,24 +155,24 @@ execution fee as its value.
 
 ```sh
 # 1. The names a program on Base can use: tokens, protocol contracts, functions.
-npx sauce globals --chain base
+sauce globals --chain base
 
 # 2. Check that the program compiles.
-npx sauce compile pay.sauce.ts --chain base --define RECIPIENT=0x… --define AMOUNT=1000000
+sauce compile pay.sauce.ts --chain base --define RECIPIENT=0x… --define AMOUNT=1000000
 
 # 3. Deploy your Pot (once). Its address is known before it exists.
-npx sauce pot --deploy --chain base --config sauce.config.json --keystore ~/.keys/me.json
+sauce pot --deploy --chain base --config sauce.config.json --keystore ~/.keys/me.json
 
 # 4. Fund the Pot with what the program spends: send its address the tokens, from any wallet —
 #    or let `sauce run --fund` pull them in with the cook (see "Funding a run" below).
 
 # 5. Rehearse the cook from the Pot's owner: no key, nothing sent. It can come first: a Pot not
 #    deployed yet is deployed in the rehearsal, and --assume-balance gives it what it spends.
-npx sauce simulate pay.sauce.ts --chain base --owner 0xYou --config sauce.config.json \
+sauce simulate pay.sauce.ts --chain base --owner 0xYou --config sauce.config.json \
   --assume-balance USDC:1 --assume-balance USDT:1 --define RECIPIENT=0x… --define AMOUNT=1000000
 
 # 6. Run it.
-npx sauce run pay.sauce.ts --chain base --config sauce.config.json --keystore ~/.keys/me.json \
+sauce run pay.sauce.ts --chain base --config sauce.config.json --keystore ~/.keys/me.json \
   --define RECIPIENT=0x… --define AMOUNT=1000000
 ```
 
@@ -214,8 +221,8 @@ Any command that takes a program file takes `-` for one read from stdin, and so 
 that takes an [actions document](#an-actions-document-instead-of-a-program):
 
 ```sh
-cat pay.sauce.ts | npx sauce compile - --chain base --define RECIPIENT=0x… --define AMOUNT=1
-npx sauce inspect - --chain base < cook.hex
+cat pay.sauce.ts | sauce compile - --chain base --define RECIPIENT=0x… --define AMOUNT=1
+sauce inspect - --chain base < cook.hex
 ```
 
 Stdin is read only when the file is `-`, never because a file is missing: a command whose stdin is
@@ -239,7 +246,7 @@ on a stdin that is spent.
 nothing on chain changes. It needs neither a deployed Pot nor the tokens the program spends:
 
 ```sh
-npx sauce simulate pay.sauce.ts --chain base --owner 0xYou --config sauce.config.json \
+sauce simulate pay.sauce.ts --chain base --owner 0xYou --config sauce.config.json \
   --assume-balance USDC:2 --assume-balance USDT:2 --define RECIPIENT=0x… --define AMOUNT=1000000
 ```
 
@@ -327,7 +334,7 @@ A program spends what its Pot holds. Instead of sending the Pot tokens first, `s
 them from your wallet in the same transaction as the cook:
 
 ```sh
-npx sauce run pay.sauce.ts --chain base --config sauce.config.json --keystore ~/.keys/me.json \
+sauce run pay.sauce.ts --chain base --config sauce.config.json --keystore ~/.keys/me.json \
   --fund USDC:1.5 --sweep --define RECIPIENT=0x… --define AMOUNT=1000000
 ```
 
@@ -408,7 +415,7 @@ is `keccak256` of the label's UTF-8 bytes (the SDK's `potSalt(label)`), or give 
 with `--salt-hex 0x…`. Use the same salt in every command for that Pot.
 
 ```sh
-npx sauce pot --chain base --owner 0xYou --salt treasury
+sauce pot --chain base --owner 0xYou --salt treasury
 ```
 
 prints the Pot's address — CREATE2 from the Kitchen over the owner and salt — and the unsigned
@@ -431,7 +438,7 @@ Kitchen are there, the Kitchen's execution fee, and whether the Pot is deployed 
 code, which would succeed and deploy nothing.
 
 ```sh
-npx sauce pot --chain base --owner 0xYou --config sauce.config.json
+sauce pot --chain base --owner 0xYou --config sauce.config.json
 ```
 
 `run` and `publish` act for the signer, so the owner is the signer: `--owner` may only restate it,
@@ -441,7 +448,7 @@ take `--owner` (or, for `simulate` and `tx`, `--pot <address>`, of a deployed Po
 ### For a wallet: `sauce tx`
 
 ```sh
-npx sauce tx pay.sauce.ts --chain base --owner 0xYou --value 1000
+sauce tx pay.sauce.ts --chain base --owner 0xYou --value 1000
 ```
 
 prints the cook unsigned, for any wallet to sign from the owner:
@@ -560,7 +567,7 @@ them is still a flag, and `--` before an argument that starts with `--` keeps it
 JSON array with `--args-json '[…]'` (or a file):
 
 ```sh
-npx sauce run split.sauce.ts --chain base --config sauce.config.json --keystore ~/.keys/me.json \
+sauce run split.sauce.ts --chain base --config sauce.config.json --keystore ~/.keys/me.json \
   --args 0xToken '["0xA…","0xB…"]' 1000000 true
 ```
 
@@ -593,7 +600,7 @@ hint: if RECIPIENT is a value you supply, pass --define RECIPIENT=<value>
 A program file may start with a `#!` line that runs it through `sauce simulate`:
 
 ```sh
-#!/usr/bin/env -S npx -y @eco-incorp/sauce simulate
+#!/usr/bin/env -S sauce simulate
 ```
 
 After `chmod +x pay.sauce.ts`, `./pay.sauce.ts --chain base --config sauce.config.json --owner
@@ -622,7 +629,7 @@ TypeScript (in VS Code, "TypeScript: Select TypeScript Version", then "Use Works
 and nothing else changes: whether a program compiles is the compiler's to say, not the editor's.
 
 In a project `init` did not write, or for programs in another directory,
-`npx sauce init <dir> --tsconfig` writes the same project as `<dir>/tsconfig.json` and nothing else
+`sauce init <dir> --tsconfig` writes the same project as `<dir>/tsconfig.json` and nothing else
 (it never replaces a different file without `--force`). An editor takes a file's nearest
 `tsconfig.json`, so every `*.sauce.ts` under `<dir>` is typed as SauceScript. Where the project's
 own `tsconfig.json` also covers those files, add `"exclude": ["**/*.sauce.ts"]` to it, so its
@@ -665,8 +672,8 @@ document with no `chainId` compiles for any chain where its names exist.
 bytecode:
 
 ```sh
-npx sauce actions swap.json --chain base
-npx sauce actions swap.json --chain ethereum --json
+sauce actions swap.json --chain base
+sauce actions swap.json --chain ethereum --json
 ```
 
 `--chain` defaults to the document's `chainId`; a document without one needs it, and one with a
@@ -687,9 +694,9 @@ funded with `--fund` if you like. `--define` and `--defines` are refused, becaus
 are its own fields.
 
 ```sh
-npx sauce simulate swap.json --chain base --owner 0xYou --rpc-url <url> \
+sauce simulate swap.json --chain base --owner 0xYou --rpc-url <url> \
   --assume-balance USDC:1000 --args 1000000000
-npx sauce run swap.json --chain base --config sauce.config.json --keystore ~/.keys/me.json \
+sauce run swap.json --chain base --config sauce.config.json --keystore ~/.keys/me.json \
   --args 1000000000
 ```
 
@@ -725,7 +732,7 @@ There are two ways to get such a file's intents onto the chain:
   result.
 
   ```sh
-  npx sauce intent publish bridge.sauce.ts --chain ethereum --config sauce.config.json \
+  sauce intent publish bridge.sauce.ts --chain ethereum --config sauce.config.json \
     --keystore ~/.keys/me.json --intent-deadline 2000000000 --intent-creator 0xYou
   ```
 
@@ -796,7 +803,7 @@ default, or `publishAndFund`). At a terminal it asks for each; every question ha
 also runs with none:
 
 ```sh
-npx sauce intent publish --source ethereum --destination base --token USDC --amount 1 \
+sauce intent publish --source ethereum --destination base --token USDC --amount 1 \
   --recipient 0xYou --reward-token USDC --reward 1.01 --prover HyperProver \
   --fill-deadline +1h --reward-deadline +1d --config sauce.config.json --keystore ~/.keys/me.json
 ```
@@ -825,7 +832,7 @@ nothing. It takes the file and the flags `publish` does (or the intent's hash), 
 destination's endpoint:
 
 ```sh
-npx sauce intent fill swap.sauce.ts --chain ethereum --config sauce.config.json \
+sauce intent fill swap.sauce.ts --chain ethereum --config sauce.config.json \
   --defines swap.defines.json --intent-deadline 2000000000 --intent-creator 0xYou \
   --intent-execution-fee 3744785386350 --no-prove
 ```
@@ -905,7 +912,7 @@ A rehearsal sends nothing, so it runs on a preview chain too. With `--send` and 
 signer is the solver, and the fill is sent — to a supported destination only:
 
 ```sh
-npx sauce intent fill 0x<intent hash> --config sauce.config.json --send --keystore ~/.keys/me.json
+sauce intent fill 0x<intent hash> --config sauce.config.json --send --keystore ~/.keys/me.json
 ```
 
 It is rehearsed first exactly as above, but with nothing assumed: on the signer's own balances, so
@@ -921,10 +928,10 @@ travels as (the Hyperlane explorer finds it by that id). The intent and the fill
 ### After the fill: `prove`, `claim`, `refund`, `cancel`
 
 ```sh
-npx sauce intent prove 0x<intent hash> --config sauce.config.json --keystore ~/.keys/me.json
-npx sauce intent claim 0x<intent hash> --chain ethereum --config sauce.config.json --keystore ~/.keys/me.json
-npx sauce intent refund 0x<intent hash> --chain ethereum --config sauce.config.json --keystore ~/.keys/me.json
-npx sauce intent cancel 0x<intent hash> --config sauce.config.json --keystore ~/.keys/me.json
+sauce intent prove 0x<intent hash> --config sauce.config.json --keystore ~/.keys/me.json
+sauce intent claim 0x<intent hash> --chain ethereum --config sauce.config.json --keystore ~/.keys/me.json
+sauce intent refund 0x<intent hash> --chain ethereum --config sauce.config.json --keystore ~/.keys/me.json
+sauce intent cancel 0x<intent hash> --config sauce.config.json --keystore ~/.keys/me.json
 ```
 
 - **`prove`** sends `Portal.prove(prover, sourceDomain, [intentHash…], data)` on the destination,
@@ -963,11 +970,11 @@ deposit) is filled, proven and cancelled through Solana's Portal program, and cl
 its source like any other. Store it from the transaction that published it, then:
 
 ```sh
-npx sauce intent import 0x<tx hash> --chain base --config sauce.config.json
-npx sauce intent fill 0x<intent hash> --config sauce.config.json --solver <solana key> --claimant 0xYou
-npx sauce intent fill 0x<intent hash> --config sauce.config.json --claimant 0xYou \
+sauce intent import 0x<tx hash> --chain base --config sauce.config.json
+sauce intent fill 0x<intent hash> --config sauce.config.json --solver <solana key> --claimant 0xYou
+sauce intent fill 0x<intent hash> --config sauce.config.json --claimant 0xYou \
   --send --keypair ~/.config/solana/id.json
-npx sauce intent claim 0x<intent hash> --config sauce.config.json --keystore ~/.keys/me.json
+sauce intent claim 0x<intent hash> --config sauce.config.json --keystore ~/.keys/me.json
 ```
 
 - The config names Solana's endpoint under its chain id, `1399811149`, beside the source's.
@@ -1013,12 +1020,12 @@ or cancel, with the same approvals; with a signer, they send. With no terminal i
 ### `sauce globals`
 
 ```sh
-npx sauce globals --chain base                       # everything
-npx sauce globals --chain base --tokens              # token symbols only
-npx sauce globals --chain base --protocols           # protocol namespaces only
-npx sauce globals --chain base --protocol UniswapV3  # one namespace, with its methods
-npx sauce globals --chain base --stocks              # the chain's tokenized stocks
-npx sauce globals --chain base --search spacex       # tokens by symbol, company name or ticker
+sauce globals --chain base                       # everything
+sauce globals --chain base --tokens              # token symbols only
+sauce globals --chain base --protocols           # protocol namespaces only
+sauce globals --chain base --protocol UniswapV3  # one namespace, with its methods
+sauce globals --chain base --stocks              # the chain's tokenized stocks
+sauce globals --chain base --search spacex       # tokens by symbol, company name or ticker
 ```
 
 lists every name a program compiled for the chain may use without declaring it: the token symbols
@@ -1046,10 +1053,10 @@ and the 32-byte key a program holds; `--stocks` leaves out devnet's mints, which
 ### `sauce price`
 
 ```sh
-npx sauce price --chain base 2700 USDC per WETH                   # the price, in words
-npx sauce price --chain base WETH USDC 2700                       # the same: <base> <quote> <price>
-npx sauce price --chain base 2700 USDC per WETH --config sauce.config.json   # and the pool's now
-npx sauce price --chain base WETH USDC --sqrt-price-x96 4116816085950893928074568
+sauce price --chain base 2700 USDC per WETH                   # the price, in words
+sauce price --chain base WETH USDC 2700                       # the same: <base> <quote> <price>
+sauce price --chain base 2700 USDC per WETH --config sauce.config.json   # and the pool's now
+sauce price --chain base WETH USDC --sqrt-price-x96 4116816085950893928074568
 ```
 
 Its first line says what the price means both ways round — `2700 USDC per WETH on base: 1 WETH =
@@ -1072,10 +1079,10 @@ root; without an endpoint, nothing reaches a network.
 ### `sauce pools`
 
 ```sh
-npx sauce pools --chain base USDC WETH --config sauce.config.json
-npx sauce pools --chain base USDC SPCXc --config sauce.config.json   # a tokenized stock
-npx sauce pools --chain base USDC 0x<token> --config sauce.config.json --json
-npx sauce pools --chain base WETH USDC --v4-key 50:1 --config sauce.config.json
+sauce pools --chain base USDC WETH --config sauce.config.json
+sauce pools --chain base USDC SPCXc --config sauce.config.json   # a tokenized stock
+sauce pools --chain base USDC 0x<token> --config sauce.config.json --json
+sauce pools --chain base WETH USDC --v4-key 50:1 --config sauce.config.json
 ```
 
 lists every pool of a pair at the price-limit venues the registry records on the chain, read now:
@@ -1131,9 +1138,9 @@ USDC/SPCXc on base: 3 pools with liquidity, deepest first (by liquidity at the p
 ### `sauce inspect`
 
 ```sh
-npx sauce inspect 0x<calldata> --chain base --source split.sauce.ts
-npx sauce inspect 0x<tx hash> --config sauce.config.json --chain arbitrum
-npx sauce inspect bridge.sauce.ts --intent-deadline 2000000000 --intent-creator 0xYou
+sauce inspect 0x<calldata> --chain base --source split.sauce.ts
+sauce inspect 0x<tx hash> --config sauce.config.json --chain arbitrum
+sauce inspect bridge.sauce.ts --intent-deadline 2000000000 --intent-creator 0xYou
 ```
 
 takes bytes back apart into what a SauceScript author wrote:
@@ -1160,8 +1167,8 @@ programs are reported by what they are and what they open.
 ### `sauce verify`
 
 ```sh
-npx sauce verify 0x<settle payload>
-npx sauce verify 0x<tx hash> --config sauce.config.json --chain base --pin 0x…:435
+sauce verify 0x<settle payload>
+sauce verify 0x<tx hash> --config sauce.config.json --chain base --pin 0x…:435
 ```
 
 checks that a settle payload, a `Pot.cook`, a `Portal.publish[AndFund]` (its route's calls) or a
@@ -1207,7 +1214,7 @@ function main(
 ```
 
 ```sh
-npx sauce run sweep.sauce.ts --config sauce.config.json --keypair ~/.config/solana/id.json \
+sauce run sweep.sauce.ts --config sauce.config.json --keypair ~/.config/solana/id.json \
   --define MINT=0x<mint, as 32 bytes of hex> \
   --account tokenProgram=TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA \
   --account source=<the Pot's token account> --account dest=<token account> \
@@ -1266,7 +1273,7 @@ transaction }`, for the owner's wallet to sign; its blockhash expires in about a
 The fee is the same either way, read from the Kitchen's config and paid into it.
 
 ```sh
-npx sauce run sweep.sauce.ts --config sauce.config.json --keypair ~/.config/solana/id.json \
+sauce run sweep.sauce.ts --config sauce.config.json --keypair ~/.config/solana/id.json \
   --via engine --max-execution-fee 10000 --define MINT=0x<mint, as 32 bytes of hex> \
   --account tokenProgram=TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA \
   --account source=<your token account> --account dest=<token account> \
@@ -1297,10 +1304,10 @@ An agent with no wallet can make one, and keep it. `sauce wallet` keeps keys in 
 `.env` or its secret store, and names by source. The password is never an argument:
 
 ```sh
-npx sauce wallet new agent --password-env SAUCE_WALLET_PASSWORD             # an EVM wallet
-npx sauce wallet new agent-sol --solana --password-env SAUCE_WALLET_PASSWORD
-npx sauce wallet list                                                       # no password needed
-npx sauce wallet address agent
+sauce wallet new agent --password-env SAUCE_WALLET_PASSWORD             # an EVM wallet
+sauce wallet new agent-sol --solana --password-env SAUCE_WALLET_PASSWORD
+sauce wallet list                                                       # no password needed
+sauce wallet address agent
 ```
 
 | Verb      | Does                                                                                                                                                                                                      |
@@ -1322,7 +1329,7 @@ Every command that signs takes `--wallet <name>` with the same password source: 
 with an EVM wallet on an EVM chain and a Solana wallet on Solana:
 
 ```sh
-npx sauce run pay.sauce.ts --chain base --config sauce.config.json \
+sauce run pay.sauce.ts --chain base --config sauce.config.json \
   --wallet agent --password-env SAUCE_WALLET_PASSWORD --args <recipient> 1000000
 ```
 
@@ -1425,11 +1432,11 @@ Gemini CLI read, and the one-line pointers to it that the other two document: `C
 holding `@./AGENTS.md` ([GEMINI.md imports](https://geminicli.com/docs/cli/gemini-md)).
 
 ```sh
-npx sauce skills install                          # .claude/skills and .agents/skills
-npx sauce skills install --agent codex            # only the directory Codex reads
-npx sauce skills install --agent all,agents-md    # and the AGENTS.md index
-npx sauce skills status                           # exit 1 while any target is outdated
-npx sauce skills update                           # after upgrading the package
+sauce skills install                          # .claude/skills and .agents/skills
+sauce skills install --agent codex            # only the directory Codex reads
+sauce skills install --agent all,agents-md    # and the AGENTS.md index
+sauce skills status                           # exit 1 while any target is outdated
+sauce skills update                           # after upgrading the package
 ```
 
 - **`install`** is the first install. It never overwrites. Run again, it says the skills are up to

@@ -10,15 +10,20 @@ transactions and each step of its life after. It also rehearses a cook and takes
 
 ## Quick start
 
-You don't run the server yourself. Your coding agent starts it on your machine, from its MCP
-configuration, whenever it needs it. The command it runs is `npx -y @eco-incorp/sauce mcp`, which
-needs Node.js 24 or newer and nothing installed: npx fetches the package. Add that command to your
-agent once.
+You don't run the server yourself. Your coding agent starts it on your machine, as `sauce mcp`,
+from its MCP configuration, whenever it needs it. Install the command once (Node.js 24 or newer):
+
+```sh
+npm i -g @eco-incorp/sauce
+sauce --version
+```
+
+`npm i -g @eco-incorp/sauce@latest` upgrades it. Then add the server to your agent.
 
 ### Claude Code
 
 ```sh
-claude mcp add sauce -- npx -y @eco-incorp/sauce mcp
+claude mcp add sauce -- sauce mcp
 ```
 
 This adds it for you, in the current project (stored in `~/.claude.json`). Add `--scope user`
@@ -28,7 +33,7 @@ to share through version control; Claude Code asks each person to approve a proj
 ### OpenAI Codex
 
 ```sh
-codex mcp add sauce -- npx -y @eco-incorp/sauce mcp
+codex mcp add sauce -- sauce mcp
 ```
 
 This adds it to `~/.codex/config.toml`, for every project. A project Codex trusts can carry the
@@ -36,19 +41,19 @@ same entry in its own `.codex/config.toml`:
 
 ```toml
 [mcp_servers.sauce]
-command = "npx"
-args = ["-y", "@eco-incorp/sauce", "mcp"]
+command = "sauce"
+args = ["mcp"]
 ```
 
 ### Gemini CLI
 
 ```sh
-gemini mcp add sauce npx -- -y @eco-incorp/sauce mcp
+gemini mcp add sauce sauce mcp
 ```
 
-The `--` hands `-y` to npx rather than to `gemini`. This writes the project's
-`.gemini/settings.json`; `--scope user` after `add` writes `~/.gemini/settings.json`, for every
-folder. With its Trusted Folders setting on, Gemini CLI ignores an untrusted folder's settings.
+This writes the project's `.gemini/settings.json`; `--scope user` after `add` writes
+`~/.gemini/settings.json`, for every folder. With its Trusted Folders setting on, Gemini CLI ignores
+an untrusted folder's settings.
 
 ### Claude Desktop
 
@@ -63,7 +68,7 @@ again:
 ```json
 {
   "mcpServers": {
-    "sauce": { "command": "npx", "args": ["-y", "@eco-incorp/sauce", "mcp"] }
+    "sauce": { "command": "sauce", "args": ["mcp"] }
   }
 }
 ```
@@ -76,7 +81,7 @@ project.
 ### VS Code (GitHub Copilot)
 
 ```sh
-code --add-mcp "{\"name\":\"sauce\",\"command\":\"npx\",\"args\":[\"-y\",\"@eco-incorp/sauce\",\"mcp\"]}"
+code --add-mcp "{\"name\":\"sauce\",\"command\":\"sauce\",\"args\":[\"mcp\"]}"
 ```
 
 This adds it to your user profile. For one workspace, put it in `.vscode/mcp.json`, under
@@ -85,7 +90,7 @@ This adds it to your user profile. For one workspace, put it in `.vscode/mcp.jso
 ```json
 {
   "servers": {
-    "sauce": { "type": "stdio", "command": "npx", "args": ["-y", "@eco-incorp/sauce", "mcp"] }
+    "sauce": { "type": "stdio", "command": "sauce", "args": ["mcp"] }
   }
 }
 ```
@@ -93,13 +98,13 @@ This adds it to your user profile. For one workspace, put it in `.vscode/mcp.jso
 ### Every project file at once
 
 ```sh
-npx -y @eco-incorp/sauce mcp setup
+sauce mcp setup
 ```
 
 This writes the project file of each agent above that reads one (`.mcp.json`, `.codex/config.toml`,
-`.cursor/mcp.json`, `.vscode/mcp.json` and `.gemini/settings.json`), launching the version that
-wrote it. In a project that depends on the package, `npx sauce mcp setup` does the same with the
-project's version. [Project files](#project-files) has the details.
+`.cursor/mcp.json`, `.vscode/mcp.json` and `.gemini/settings.json`), pinned to the version that
+wrote it, so the files work on any machine that clones the project
+([Project files](#project-files)).
 
 ### Check it worked
 
@@ -111,6 +116,11 @@ project's version. [Project files](#project-files) has the details.
 - **VS Code:** the MCP: List Servers command shows its status.
 - **Any agent:** ask it to list the `sauce_` tools. It names `sauce_compile`, `sauce_globals`,
   `sauce_tx` and the rest.
+
+**If a desktop client cannot start it.** A desktop or GUI client may not see your shell's `PATH`,
+so it may not find a `sauce` installed under nvm or another version manager. Give it the absolute
+path `which sauce` prints as the command, or let it run the package with no install: command `npx`,
+args `["-y", "@eco-incorp/sauce", "mcp"]`.
 
 ### No endpoint needed to start
 
@@ -135,15 +145,12 @@ means: a wallet, `cast send`, or `sauce run` with the user's own keystore.
 ## The command
 
 ```sh
-npx -y @eco-incorp/sauce mcp                                   # stdio: what an agent launches
-npx -y @eco-incorp/sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD   # stdio, signing
-npx -y @eco-incorp/sauce mcp --http 3000                       # self-hosted, Streamable HTTP
+sauce mcp                                                  # stdio: what an agent launches
+sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD   # stdio, signing
+sauce mcp --http 3000                                      # self-hosted, Streamable HTTP
 ```
 
-In a project that depends on the package, `npx sauce mcp` runs the project's own version, and
-`npx sauce mcp --help` lists every flag. Anywhere else keep the package's full name: without the
-package installed, npx resolves a bare `npx sauce` on the registry, and fetches and runs npm's
-unrelated `sauce` package instead. The server is loaded only when `sauce mcp` runs, so no other
+`sauce mcp --help` lists every flag. The server is loaded only when `sauce mcp` runs, so no other
 command pays for it.
 
 Over stdio the server writes nothing but the protocol to stdout. A message larger than `--max-body`
@@ -173,7 +180,7 @@ entry, a `<…>` placeholder or a URL that is not http(s) stops it there. `sauce
 chains have a server endpoint.
 
 **A server someone else runs sees every `rpcUrl` you pass it.** Pass only keys you are willing to
-share with its operator. Otherwise run the server yourself with `npx -y @eco-incorp/sauce mcp`,
+share with its operator. Otherwise run the server yourself with `sauce mcp`,
 where your URL never leaves your machine.
 
 What works with no endpoint at all:
@@ -190,12 +197,14 @@ What needs one: `sauce_simulate`, a publish dry run, anything given a transactio
 ## Project files
 
 `sauce mcp setup` writes the project configuration each agent documents. The server it configures
-is launched as `npx -y @eco-incorp/sauce@<this version> mcp`:
+is launched as `npx -y @eco-incorp/sauce@<this version> mcp`, not as `sauce mcp`: a project file is
+shared, so it names no command a machine has to have installed, and it runs the version whose skills
+the project installed.
 
 ```sh
-npx -y @eco-incorp/sauce mcp setup                         # every agent below
-npx -y @eco-incorp/sauce mcp setup --agent claude,cursor   # only these
-npx -y @eco-incorp/sauce mcp setup --config rpc.json       # launch it with --config
+sauce mcp setup                         # every agent below
+sauce mcp setup --agent claude,cursor   # only these
+sauce mcp setup --config rpc.json       # launch it with --config
 ```
 
 | Agent                    | File                    | Under                 | Documentation                                                                     |
@@ -222,7 +231,7 @@ Each agent asks before it runs a server a project names:
 - Gemini CLI, with its Trusted Folders setting on, ignores an untrusted folder's settings.
 
 The GitHub Copilot CLI adds the server to its user configuration with
-`copilot mcp add sauce -- npx -y @eco-incorp/sauce mcp`. An agent can also ask the server itself:
+`copilot mcp add sauce -- sauce mcp`. An agent can also ask the server itself:
 `sauce_install_skills` returns the commands and the entry for the agent it names.
 
 ### A remote server
@@ -509,15 +518,8 @@ it to the server in the entry's `env` block, by reference, never by value:
   "mcpServers": {
     "sauce": {
       "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "@eco-incorp/sauce",
-        "mcp",
-        "--wallets",
-        "--password-env",
-        "SAUCE_WALLET_PASSWORD"
-      ],
+      "command": "sauce",
+      "args": ["mcp", "--wallets", "--password-env", "SAUCE_WALLET_PASSWORD"],
       "env": { "SAUCE_WALLET_PASSWORD": "${SAUCE_WALLET_PASSWORD}" }
     }
   }
@@ -581,7 +583,7 @@ tools, with the skill they start from embedded:
 ## Self-hosting
 
 ```sh
-npx -y @eco-incorp/sauce mcp --http 3000 --config rpc.json
+sauce mcp --http 3000 --config rpc.json
 ```
 
 This serves Streamable HTTP at `http://127.0.0.1:3000/mcp`. The server is stateless: every POST
@@ -602,7 +604,7 @@ A GET or DELETE is refused (405).
   quota.
 
 ```sh
-npx -y @eco-incorp/sauce mcp --http 3000 --host 0.0.0.0 --allowed-host mcp.example.com \
+sauce mcp --http 3000 --host 0.0.0.0 --allowed-host mcp.example.com \
   --config rpc.json
 ```
 
