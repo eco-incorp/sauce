@@ -33,7 +33,7 @@ chain does not have it.
 ```sauce chain=zksync
 function main() {
   // `Across.SpokePool` is zkSync Era's spokePool: `0xE0B015E54d54fc84a6cB9B666099c46adE9335FF`.
-  require(Across.SpokePool != 0n);
+  require(Across.SpokePool != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Zksync.Across.SpokePool == Across.SpokePool);
 }

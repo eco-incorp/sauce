@@ -32,11 +32,11 @@ is not part of the file.)
 
 ```sauce chain=base,arbitrum
 // A compile-time choice: a module constant, which a define of the same name replaces.
-const FEE_BPS = 30n;
+const FEE_BPS = 30;
 
 // A helper. It returns a value on every path.
 function afterFee(amount: Uint256, bps: Uint256): Uint256 {
-  return amount - (amount * bps) / 10000n;
+  return amount - (amount * bps) / 10000;
 }
 
 // Runtime inputs: main's parameters, passed with the transaction.
@@ -62,7 +62,7 @@ it, rehearsed with `sauce simulate`, prints the answer and sends nothing.
 ```sauce chain=base,arbitrum
 // The Uniswap V3 WETH/USDC pool at the 0.05% tier (500 millionths), or 0 where there is none.
 function main(): Address {
-  return UniswapV3.Factory.getPool(WETH, USDC, 500n);
+  return UniswapV3.Factory.getPool(WETH, USDC, 500);
 }
 ```
 
@@ -73,10 +73,10 @@ the file, and `--define RECIPIENT=<address> --define FLOOR=1000000` sets it.
 ```sauce chain=base,arbitrum define=RECIPIENT,FLOOR
 // A helper takes what it needs as parameters.
 function afterFee(amount: Uint256): Uint256 {
-  return amount - amount / 1000n;
+  return amount - amount / 1000;
 }
 
-require(RECIPIENT != 0n, "set RECIPIENT");
+require(RECIPIENT != 0, "set RECIPIENT");
 const held = USDC.balanceOf(ctx.self());
 require(held >= FLOOR, "below floor");
 USDC.transfer(RECIPIENT, afterFee(held));
@@ -146,7 +146,7 @@ for a chain is the language of [references/builtins.md](references/builtins.md),
 removed:
 
 - Annotations go wherever the language takes them: `function half(x: Uint256): Uint256`, and a
-  local's `let total: Uint256 = 0n;`. A parameter with no annotation is a `Uint256`, and a local
+  local's `let total: Uint256 = 0;`. A parameter with no annotation is a `Uint256`, and a local
   without one takes its type from its initializer.
 - A record is an `interface` or an inline object type, `orders: Order[]` or
   `orders: { amount: Uint256, to: Address }[]` (`;` between the fields works too, as a formatter
@@ -155,19 +155,19 @@ removed:
 
 ## Values
 
-- Integers are 256-bit and checked: no floats (`1.5` is rejected), and a constant expression that
-  overflows or underflows (`0n - 1n`, `2n ** 256n - 1n`) is a compile error. Write the maximum as
-  `~0n`, and a negative (two's-complement) amount as **`-x`**, which never fails; `~x + 1n` reverts
-  when `x` is `0`.
+- Integers are 256-bit, written plainly (`3000`, `10 ** 18`), and checked: no floats (`1.5` is
+  rejected), and a constant expression that overflows or underflows (`0 - 1`, `2 ** 256 - 1`) is
+  a compile error. Write the maximum as `~0`, and a negative (two's-complement) amount as
+  **`-x`**, which never fails; `~x + 1` reverts when `x` is `0`.
 - Amounts are in the token's smallest units; nothing scales decimals for you.
 - Addresses are numbers: a `main` parameter, a global such as `USDC`, or a literal taken from the
-  registry, written with an `n` (`0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n`); never an invented
+  registry, written as its hex (`0x833589fcd6edb6e08f4c7c32d4f71b54bda02913`); never an invented
   one.
 - `bytes`: `` hex`a9059cbb` ``, `"text"`, `.concat`, `.slice(a, b)`, `.length`, `b[i]`,
-  `x.toBytesBe(32n)`, `x.toBytesLe(8n)`, `abi.encode`/`abi.decode` (EVM). Bind a literal before
+  `x.toBytesBe(32)`, `x.toBytesLe(8)`, `abi.encode`/`abi.decode` (EVM). Bind a literal before
   calling a method on it: ``const selector = hex`a9059cbb`; selector.concat(data)``. `hex` is the
   only template form: every untagged template literal is rejected, with or without `${}`.
-- Arrays and records: `[a, b]`, `new Array(n)`, `xs[i] = v`, `xs.length`, `{ amount: 1n }`.
+- Arrays and records: `[a, b]`, `new Array(n)`, `xs[i] = v`, `xs.length`, `{ amount: 1 }`.
   Destructuring, `const [a, b] = …`, needs an initializer that produces a record (a multi-output
   call, `abi.decode`); an array is indexed instead.
 - `Account` parameters, with roles such as `Account<Writable>`, are `main`'s alone. On Solana they
@@ -176,7 +176,7 @@ removed:
 - A module-level `let` is scratch, reset on every run. Persistent state is `evm.sstore`/`evm.sload`
   (or `svm.sstore`/`svm.sload`).
 - **At module level, only scalar literals.** A `let` there starts as a number, address or boolean
-  literal; anything else (`[1n, 2n]`, `new Array(n)`, `-1n`, `1n << 160n`, a call) is refused with
+  literal; anything else (`[1, 2]`, `new Array(n)`, `-1`, `1 << 160`, a call) is refused with
   "must be initialized with a literal". A `const` array there is a lookup table, read only at a
   literal index (`FEES[0]`), never looped over. Declare arrays and computed values inside a function.
 
@@ -214,11 +214,11 @@ what you need from a result: `const [sqrtPriceX96] = UniswapV3.Pool(pool).slot0(
 ```sauce chain=base,ethereum
 function main(vault: Address, shares: Uint256): Uint256 {
   // A contract the chain's registry records: its factory, by name.
-  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500n);
-  require(pool != 0n, "no WETH/USDC 0.05% pool");
+  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
+  require(pool != 0, "no WETH/USDC 0.05% pool");
   // Interfaces, called with the address they are at: the pool it returned, and a vault.
   const [sqrtPriceX96] = UniswapV3.Pool(pool).slot0();
-  require(sqrtPriceX96 > 0n, "the pool is not initialized");
+  require(sqrtPriceX96 > 0, "the pool is not initialized");
   return Erc4626.Vault(vault).convertToAssets(shares);
 }
 ```
@@ -265,7 +265,7 @@ function isBetter(price: Uint256, than: Uint256, sellsToken0: bool): bool {
 
 // Fills `best` in place: an array goes to a helper by reference.
 function keepBest(best: Uint256[], price: Uint256, sellsToken0: bool): void {
-  if (best[0] == 0n || isBetter(price, best[0], sellsToken0)) {
+  if (best[0] == 0 || isBetter(price, best[0], sellsToken0)) {
     best[0] = price;
   }
 }
@@ -299,10 +299,10 @@ The full list, with what each rejection says, is section 14 of
 ```sauce fails
 function main(x: Uint256): Uint256 {
   switch (x) {
-    case 1n:
-      return 1n;
+    case 1:
+      return 1;
   }
-  return 0n;
+  return 0;
 }
 ```
 
@@ -341,20 +341,20 @@ that way.
 
 `.catch()` catches a call that reverts, not a call to an address with no code. That call succeeds
 and returns nothing, and decoding nothing reverts the cook, `.catch()` or not. When an address may
-have no code, check `ctx.codeSize(address) > 0n` first:
+have no code, check `ctx.codeSize(address) > 0` first:
 
 ```sauce chain=base,arbitrum
 // One word from a read that may fail, or 0: an address with no code, or a read that reverts.
 function readWord(target: Address, query: bytes): Uint256 {
-  if (ctx.codeSize(target) == 0n) {
-    return 0n;
+  if (ctx.codeSize(target) == 0) {
+    return 0;
   }
   let readable = true;
   evm.static(target, query).catch(() => {
     readable = false;
   });
   if (!readable) {
-    return 0n;
+    return 0;
   }
   return abi.decode(evm.static(target, query), ["Uint256"])[0];
 }
@@ -396,8 +396,8 @@ no project for them, it marks `Token`, `USDC`, `ctx` and every other global as u
 program imports. Keep programs in such a directory (`sauce init` makes `programs/` one); the
 installed skills' examples are typed by the same file beside them. The types come from the package,
 so the project must have it installed, and an editor running the project's own TypeScript also
-drops what TypeScript reports on valid SauceScript (a `bigint` index, `1` beside `1n`, an
-undeclared define). The compile, not the editor, decides whether a program is valid.
+drops what TypeScript reports on valid SauceScript (a `bigint` index, a plain integer beside a
+`Uint256`, an undeclared define). The compile, not the editor, decides whether a program is valid.
 
 ## Reading a compile error
 

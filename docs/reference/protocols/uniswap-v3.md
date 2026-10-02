@@ -15,8 +15,8 @@ Concentrated liquidity AMM allowing LPs to allocate capital within custom price 
 
 ## When to use it
 
-- Concentrated-liquidity pools in fee tiers of 0.01%, 0.05%, 0.3% and 1% (`100n`, `500n`,
-  `3000n`, `10000n`): usually the deepest pools for liquid pairs.
+- Concentrated-liquidity pools in fee tiers of 0.01%, 0.05%, 0.3% and 1% (`100`, `500`,
+  `3000`, `10000`): usually the deepest pools for liquid pairs.
 - A Sauce program swaps a pool with `@sauce/router`'s `uniswapV3`, with a price limit; the
   Factory finds the pool, the position manager manages liquidity positions.
 
@@ -39,13 +39,13 @@ import { uniswapV3 } from "@sauce/router";
 
 function main(amountIn: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256, recipient: Address) {
   const self = ctx.self();
-  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500n);
-  require(pool != 0n, "no WETH/USDC pool at 0.05%");
-  require(UniswapV3.Pool(pool).liquidity() > 0n, "the pool has no liquidity");
+  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
+  require(pool != 0, "no WETH/USDC pool at 0.05%");
+  require(UniswapV3.Pool(pool).liquidity() > 0, "the pool has no liquidity");
   const before = WETH.balanceOf(self);
   uniswapV3(pool, WETH, USDC, amountIn, sqrtPriceLimitX96, minOut, recipient);
   const unspent = amountIn - (before - WETH.balanceOf(self));
-  if (unspent > 0n) {
+  if (unspent > 0) {
     WETH.transfer(recipient, unspent);
   }
 }
@@ -66,7 +66,7 @@ the Pot's whole WETH balance.
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### swap
 
@@ -196,7 +196,7 @@ On Ethereum, `UniswapV3` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's factory, `0x1F98431c8aD98523631AE4a59f267346ea31F984`.
-  require(UniswapV3.Factory != 0n);
+  require(UniswapV3.Factory != 0);
 }
 ```
 

@@ -19,7 +19,7 @@ On Ethereum, `MantleMeth` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's mETH, `0xd5F7838F5C461fefF7FE49ea5ebaF7728bB0ADfa`.
-  require(MantleMeth.METH != 0n);
+  require(MantleMeth.METH != 0);
 }
 ```
 

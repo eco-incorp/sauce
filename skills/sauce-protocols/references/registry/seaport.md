@@ -19,7 +19,7 @@ On Ethereum, `Seaport` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's seaportV16, `0x0000000000000068F116a894984e2DB1123eB395`.
-  require(Seaport.SeaportV16 != 0n);
+  require(Seaport.SeaportV16 != 0);
 }
 ```
 

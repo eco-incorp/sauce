@@ -40,7 +40,7 @@ function main() {
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(USDC).balanceOf(ctx.self()) == held);
   // `AaveV3.Pool` is Monad's pool: `0x69a5F9AD4f96ebf0a0C792dD42a01cC5C0102fef`.
-  require(AaveV3.Pool != 0n);
+  require(AaveV3.Pool != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Monad.AaveV3.Pool == AaveV3.Pool);
 }

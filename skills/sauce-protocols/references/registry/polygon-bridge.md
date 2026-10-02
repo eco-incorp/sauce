@@ -19,7 +19,7 @@ On Ethereum, `PolygonBridge` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's erc20Predicate, `0x40ec5B33f54e0E8A33A975908C5BA1c14e5BbbDf`.
-  require(PolygonBridge.Erc20Predicate != 0n);
+  require(PolygonBridge.Erc20Predicate != 0);
 }
 ```
 

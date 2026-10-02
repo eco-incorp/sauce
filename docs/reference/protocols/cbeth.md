@@ -21,7 +21,7 @@ Coinbase's liquid staking token for Ethereum. cbETH represents staked ETH plus a
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Transfer cbETH
@@ -53,7 +53,7 @@ On Ethereum, `Cbeth` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's cbETH, `0xBe9895146f7AF43049ca1c1AE358B0541Ea49704`.
-  require(Cbeth.CbETH != 0n);
+  require(Cbeth.CbETH != 0);
 }
 ```
 

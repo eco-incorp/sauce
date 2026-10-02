@@ -20,7 +20,7 @@ High-fidelity oracle network providing low-latency price feeds from institutiona
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Get price by feed ID
@@ -50,7 +50,7 @@ On Ethereum, `Pyth` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's oracle, `0x4305FB66699C3B2702D4d05CF36551390A4c69C6`.
-  require(Pyth.Oracle != 0n);
+  require(Pyth.Oracle != 0);
 }
 ```
 

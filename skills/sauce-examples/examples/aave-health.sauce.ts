@@ -45,20 +45,11 @@ function main(
   const oracle = AaveV3Reads.at(AaveV3.PoolAddressesProvider).getPriceOracle();
   const usdcPrice = AaveV3Reads.at(oracle).getAssetPrice(USDC); // base currency per USDC
   const owedValue = Math.mulDiv(owed, usdcPrice, 1000000);
-  let other: Uint256 = 0;
-  if (account.totalDebtBase > owedValue) {
-    other = account.totalDebtBase - owedValue;
-  }
-  let keep: Uint256 = 0;
-  if (debtAtTarget > other) {
-    keep = Math.mulDiv(debtAtTarget - other, 1000000, usdcPrice);
-  }
+  const other = account.totalDebtBase > owedValue ? account.totalDebtBase - owedValue : 0;
+  const keep = debtAtTarget > other ? Math.mulDiv(debtAtTarget - other, 1000000, usdcPrice) : 0;
   // One unit more than the difference, for Aave's rounding of the debt it burns; no more than the
   // Pot owes, nor more than it holds.
-  let repay: Uint256 = 0;
-  if (owed > keep) {
-    repay = owed - keep + 1;
-  }
+  let repay = owed > keep ? owed - keep + 1 : 0;
   if (repay > owed) {
     repay = owed;
   }

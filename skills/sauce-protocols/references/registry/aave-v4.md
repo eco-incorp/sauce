@@ -19,7 +19,7 @@ On Ethereum, `AaveV4` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's bluechipSpoke, `0x973a023A77420ba610f06b3858aD991Df6d85A08`.
-  require(AaveV4.BluechipSpoke != 0n);
+  require(AaveV4.BluechipSpoke != 0);
 }
 ```
 

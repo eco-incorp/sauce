@@ -243,7 +243,7 @@ function main() {
   Arbitrum(
     () => {
       const here = USDC.balanceOf(ctx.self());
-      if (here > 0n) {
+      if (here > 0) {
         USDC.transfer(RECIPIENT, here);
       }
     },

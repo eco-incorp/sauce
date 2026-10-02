@@ -16,7 +16,7 @@ Token bridge for rollups using bonders for fast withdrawals. Supports ETH, USDC,
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### bridgeFromL1
 
@@ -70,7 +70,7 @@ On Ethereum, `Hop` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's l1EthBridge, `0xb8901acb165ed027e32754e0ffe830802919727f`.
-  require(Hop.L1EthBridge != 0n);
+  require(Hop.L1EthBridge != 0);
 }
 ```
 

@@ -19,7 +19,7 @@ On Ethereum, `Celer` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's bridge, `0x5427FEFA711Eff984124bFBB1AB6fbf5E3DA1820`.
-  require(Celer.Bridge != 0n);
+  require(Celer.Bridge != 0);
 }
 ```
 

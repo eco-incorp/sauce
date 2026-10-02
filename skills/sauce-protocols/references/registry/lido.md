@@ -19,7 +19,7 @@ On Ethereum, `Lido` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's stETH, `0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84`.
-  require(Lido.StETH != 0n);
+  require(Lido.StETH != 0);
 }
 ```
 

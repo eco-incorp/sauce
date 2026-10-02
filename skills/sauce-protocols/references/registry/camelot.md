@@ -19,7 +19,7 @@ On Arbitrum One, `Camelot` is a namespace: its contracts need no import.
 ```sauce chain=arbitrum
 function main() {
   // Arbitrum One's v2Factory, `0x6EcCab422D763aC031210895C81787E87B43A652`.
-  require(Camelot.V2Factory != 0n);
+  require(Camelot.V2Factory != 0);
 }
 ```
 

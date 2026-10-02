@@ -19,7 +19,7 @@ On BNB Chain, `Venus` is a namespace: its contracts need no import.
 ```sauce chain=bsc
 function main() {
   // BNB Chain's comptroller, `0xfD36E2c2a6789Db23113685031d7F16329158384`.
-  require(Venus.Comptroller != 0n);
+  require(Venus.Comptroller != 0);
 }
 ```
 

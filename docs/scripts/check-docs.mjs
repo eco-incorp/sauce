@@ -18,6 +18,7 @@ import {
   namedProgramProblems,
   registryNames,
 } from "./example-programs.mjs";
+import { bigintLiteralProblems } from "./integer-literals.mjs";
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const packageArgument = process.argv.indexOf("--package-root");
@@ -283,6 +284,57 @@ if (packageArgument < 0) {
   if (problems.length) throw new Error(`SauceScript examples:\n${problems.join("\n")}`);
   console.log(
     `SauceScript examples: ${sauceExamples.length} name what the registry records, and show their inputs`,
+  );
+}
+// SauceScript writes its integers plainly, `3000` and never `3000n` (`integer-literals.mjs`): the
+// `.sauce.ts` examples and the manual's SauceScript fences, ```js (and ```sauce), and every fence of
+// a page generated from the skills, which renders their SauceScript as ```ts. TypeScript — the `.ts`
+// examples and a written page's ```ts fences, closures included — keeps the `n` tsc needs. An
+// exception is INTEGER_EXCEPTIONS's: file -> literal as written -> why; one nothing needs fails.
+const INTEGER_EXCEPTIONS = {};
+{
+  const ts = createRequire(join(root, "package.json"))("typescript");
+  const used = new Map();
+  const problems = [];
+  const hold = (where, source, line) => {
+    if (!used.has(where)) used.set(where, new Set());
+    const allowed = INTEGER_EXCEPTIONS[where] ?? {};
+    problems.push(
+      ...bigintLiteralProblems({ where, source, ts, line, allowed, used: used.get(where) }),
+    );
+  };
+  for (const name of sauceExamples) {
+    hold(`docs/examples/${name}`, readFileSync(join(examples, name), "utf8"), 1);
+  }
+  let fences = 0;
+  for (const path of manual) {
+    const file = relative(root, path);
+    if (file !== "README.md" && !file.startsWith("docs/")) continue;
+    const text = readFileSync(path, "utf8");
+    const generated = text.startsWith("<!-- Generated");
+    const lines = text.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const open = /^\s*(```+)(\S*)/.exec(lines[i]);
+      if (!open) continue;
+      let end = i + 1;
+      while (end < lines.length && !lines[end].trimStart().startsWith(open[1])) end++;
+      if (["js", "sauce"].includes(open[2]) || (generated && /^(ts|typescript)$/.test(open[2]))) {
+        fences++;
+        hold(file, lines.slice(i + 1, end).join("\n"), i + 2);
+      }
+      i = end;
+    }
+  }
+  for (const [file, literals] of Object.entries(INTEGER_EXCEPTIONS)) {
+    for (const literal of Object.keys(literals)) {
+      if (!used.get(file)?.has(literal)) {
+        problems.push(`check-docs.mjs INTEGER_EXCEPTIONS: ${file} no longer writes ${literal}`);
+      }
+    }
+  }
+  if (problems.length) throw new Error(`SauceScript integers:\n${problems.join("\n")}`);
+  console.log(
+    `SauceScript integers: ${sauceExamples.length} examples and ${fences} fences write them plainly`,
   );
 }
 // Keep examples under the package so Node resolves its public self-reference exports.

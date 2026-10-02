@@ -34,7 +34,7 @@ chain does not have it.
 ```ts
 function main() {
   // `UniswapV3.Factory` is Celo's factory: `0xAfE208a311B21f13EF87E33A90049fC17A7acDEc`.
-  require(UniswapV3.Factory != 0n);
+  require(UniswapV3.Factory != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Celo.UniswapV3.Factory == UniswapV3.Factory);
 }

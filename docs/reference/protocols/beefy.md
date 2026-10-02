@@ -23,7 +23,7 @@ Multi-chain yield optimizer. Auto-compounds rewards from LP tokens and other yie
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Deposit into Beefy vault
@@ -74,7 +74,7 @@ On Ethereum, `Beefy` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's BIFI, `0xB1F1ee126e9c96231Cc3d3fAD7C08b4cf873b1f1`.
-  require(Beefy.BIFI != 0n);
+  require(Beefy.BIFI != 0);
 }
 ```
 

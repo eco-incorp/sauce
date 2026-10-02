@@ -19,7 +19,7 @@ On Ethereum, `Swell` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's rswETH, `0xFAe103DC9cf190eD75350761e95403b7b8aFa6c0`.
-  require(Swell.RswETH != 0n);
+  require(Swell.RswETH != 0);
 }
 ```
 

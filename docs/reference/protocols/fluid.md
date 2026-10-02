@@ -16,7 +16,7 @@ Liquidity layer that unifies lending and DEX liquidity. Deposited assets simulta
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 The Liquidity layer (`liquidity` below) has no user-level deposit or borrow function: its only entry point, `operate`, is restricted to Fluid's own protocols. Users lend through **fTokens** (ERC-4626 vaults such as fUSDC) and borrow through **Vaults**.
 
@@ -108,7 +108,7 @@ On Ethereum, `Fluid` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's liquidity, `0x52Aa899454998Be5b000Ad077a46Bbe360F4e497`.
-  require(Fluid.Liquidity != 0n);
+  require(Fluid.Liquidity != 0);
 }
 ```
 

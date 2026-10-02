@@ -37,7 +37,7 @@ function main(tokenIn: Address, amountIn: Uint256, pt: Address, minPtOut: Uint25
   const self = ctx.self();
   const before = Token(pt).balanceOf(self);
   Token(tokenIn).approve(Pendle.Router, amountIn);
-  evm.call(Pendle.Router, 0n, call);
+  evm.call(Pendle.Router, 0, call);
   const out = Token(pt).balanceOf(self) - before;
   require(out >= minPtOut, "below minPtOut");
 }
@@ -55,7 +55,7 @@ function main(tokenIn: Address, amountIn: Uint256, pt: Address, minPtOut: Uint25
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Buy PT (fixed yield)
@@ -170,7 +170,7 @@ On Ethereum, `Pendle` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's router, `0x888888888889758F76e7103c6CbF23ABbF58F946`.
-  require(Pendle.Router != 0n);
+  require(Pendle.Router != 0);
 }
 ```
 

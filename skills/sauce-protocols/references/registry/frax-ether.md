@@ -19,7 +19,7 @@ On Ethereum, `FraxEther` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's frxETHMinter, `0xbAFA44EFE7901E04E39Dad13167D089C559c1138`.
-  require(FraxEther.FrxETHMinter != 0n);
+  require(FraxEther.FrxETHMinter != 0);
 }
 ```
 

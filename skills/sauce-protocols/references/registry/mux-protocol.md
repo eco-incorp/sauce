@@ -19,7 +19,7 @@ On Arbitrum One, `MuxProtocol` is a namespace: its contracts need no import.
 ```sauce chain=arbitrum
 function main() {
   // Arbitrum One's liquidityPool, `0x3e0199792Ce69DC29A0a36146bFa68bd7C8D6633`.
-  require(MuxProtocol.LiquidityPool != 0n);
+  require(MuxProtocol.LiquidityPool != 0);
 }
 ```
 

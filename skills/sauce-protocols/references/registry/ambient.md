@@ -19,7 +19,7 @@ On Ethereum, `Ambient` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's crocSwapDex, `0xAaAaAAAaA24eEeb8d57D431224f73832bC34f688`.
-  require(Ambient.CrocSwapDex != 0n);
+  require(Ambient.CrocSwapDex != 0);
 }
 ```
 

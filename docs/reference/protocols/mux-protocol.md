@@ -23,7 +23,7 @@ Leveraged trading aggregator on Arbitrum. Routes trades across multiple perpetua
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 Liquidity moves through OrderBook orders that MUX brokers fill; the LiquidityPool's own add/remove functions are callable only by the OrderBook.
 
@@ -60,7 +60,7 @@ On Arbitrum One, `MuxProtocol` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Arbitrum One's liquidityPool, `0x3e0199792Ce69DC29A0a36146bFa68bd7C8D6633`.
-  require(MuxProtocol.LiquidityPool != 0n);
+  require(MuxProtocol.LiquidityPool != 0);
 }
 ```
 

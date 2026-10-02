@@ -19,7 +19,7 @@ On Base, `Aerodrome` is a namespace: its contracts need no import.
 ```sauce chain=base
 function main() {
   // Base's poolFactory, `0x420DD381b31aEf6683db6B902084cB0FFECe40Da`.
-  require(Aerodrome.PoolFactory != 0n);
+  require(Aerodrome.PoolFactory != 0);
 }
 ```
 

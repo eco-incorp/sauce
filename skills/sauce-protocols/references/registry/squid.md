@@ -19,7 +19,7 @@ On Ethereum, `Squid` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's squidRouter, `0xce16F69375520ab01377ce7B88f5BA8C48F8D666`.
-  require(Squid.SquidRouter != 0n);
+  require(Squid.SquidRouter != 0);
 }
 ```
 

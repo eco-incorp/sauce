@@ -22,7 +22,7 @@ Token streaming protocol for continuous payments. Supports linear, cliff, and dy
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Withdraw from stream
@@ -63,7 +63,7 @@ On Ethereum, `Sablier` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's lockupLinear, `0xAFb979d9afAd1aD27C5eFf4E27226E3AB9e5dCC9`.
-  require(Sablier.LockupLinear != 0n);
+  require(Sablier.LockupLinear != 0);
 }
 ```
 

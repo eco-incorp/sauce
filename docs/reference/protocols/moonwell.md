@@ -16,7 +16,7 @@ Leading lending protocol on Base. Compound V2 fork with governance and safety mo
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### supply
 
@@ -92,7 +92,7 @@ On Base, `Moonwell` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Base's comptroller, `0xfBb21d0380beE3312B33c4353c8936a0F13EF26C`.
-  require(Moonwell.Comptroller != 0n);
+  require(Moonwell.Comptroller != 0);
 }
 ```
 

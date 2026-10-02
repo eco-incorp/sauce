@@ -21,7 +21,7 @@ Decentralized reserve currency protocol. OHM staking and bonding mechanism with 
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Stake OHM
@@ -44,7 +44,7 @@ On Ethereum, `Olympus` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's ohm, `0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5`.
-  require(Olympus.Ohm != 0n);
+  require(Olympus.Ohm != 0);
 }
 ```
 

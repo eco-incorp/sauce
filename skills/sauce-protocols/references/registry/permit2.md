@@ -19,7 +19,7 @@ On Ethereum, `Permit2` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's permit2, `0x000000000022D473030F116dDEE9F6B43aC78BA3`.
-  require(Permit2.Permit2 != 0n);
+  require(Permit2.Permit2 != 0);
 }
 ```
 

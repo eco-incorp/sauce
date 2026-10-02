@@ -184,7 +184,7 @@ async function tokenOn(
     ...(read?.symbol === undefined ? {} : { symbol: read.symbol }),
     address,
     decimals,
-    spelled: `Token(${address.toLowerCase()}n)`,
+    spelled: `Token(${address.toLowerCase()})`,
   };
 }
 
@@ -358,8 +358,8 @@ function intentText(options: {
   return [
     ...options.header.map((line) => `// ${line}`),
     `${accessor}(() => {`,
-    `  ${options.delivered.spelled}.transfer(${options.recipient.toLowerCase()}n, ${options.amount}n);`,
-    `}).reward({ tokens: [{ token: ${options.rewardToken.spelled === options.rewardToken.symbol ? options.rewardToken.symbol : options.rewardToken.address.toLowerCase() + "n"}, amount: ${options.reward}n }] });`,
+    `  ${options.delivered.spelled}.transfer(${options.recipient.toLowerCase()}, ${options.amount});`,
+    `}).reward({ tokens: [{ token: ${options.rewardToken.spelled === options.rewardToken.symbol ? options.rewardToken.symbol : options.rewardToken.address.toLowerCase()}, amount: ${options.reward} }] });`,
     "",
   ].join("\n");
 }

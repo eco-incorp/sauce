@@ -36,11 +36,11 @@ function main(
   const usdcIsToken0 = USDC < token;
 
   // The pool with the most liquidity at its price, of the four fee tiers', that can still trade.
-  let pool = 0n;
-  let deepest = 0n;
-  for (const fee of [100n, 500n, 3000n, 10000n]) {
+  let pool = 0;
+  let deepest = 0;
+  for (const fee of [100, 500, 3000, 10000]) {
     const candidate = UniswapV3.Factory.getPool(USDC, token, fee);
-    if (candidate != 0n) {
+    if (candidate != 0) {
       const price = UniswapV3.Pool(candidate).slot0().sqrtPriceX96;
       const liquidity = UniswapV3.Pool(candidate).liquidity();
       const room = usdcIsToken0 ? price > sqrtPriceLimitX96 : price < sqrtPriceLimitX96;
@@ -50,11 +50,11 @@ function main(
       }
     }
   }
-  require(pool != 0n, "no pool of USDC and this token has liquidity short of the limit");
+  require(pool != 0, "no pool of USDC and this token has liquidity short of the limit");
   const before = USDC.balanceOf(self);
   require(before >= budget, "the budget is not in the Pot");
 
-  const bought = uniswapV3(pool, USDC, token, budget, sqrtPriceLimitX96, 0n, recipient);
+  const bought = uniswapV3(pool, USDC, token, budget, sqrtPriceLimitX96, 0, recipient);
   require(bought >= minOut, "bought less than minOut");
 
   // What the pool took, measured; the rest of the budget goes to the recipient too.

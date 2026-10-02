@@ -72,8 +72,8 @@ describe("making an intent: sauce intent publish with no file", () => {
     expect(created.deadline).toBe(NOW + 3600n);
     expect(created.rewardDeadline).toBe(NOW + 86_400n);
     const text = readFileSync(out, "utf8");
-    expect(text).toContain(`USDC.transfer(${RECIPIENT.toLowerCase()}n, 1500000n);`);
-    expect(text).toContain("reward({ tokens: [{ token: USDC, amount: 1600000n }] })");
+    expect(text).toContain(`USDC.transfer(${RECIPIENT.toLowerCase()}, 1500000);`);
+    expect(text).toContain("reward({ tokens: [{ token: USDC, amount: 1600000 }] })");
     expect(text).toContain(`sauce intent publish ${out} --chain ethereum`);
     expect(text).toContain("--intent-fund-via publishAndFund");
     // With no endpoint the solver's costs are not estimated, and it says so.
@@ -146,7 +146,7 @@ describe("making an intent: sauce intent publish with no file", () => {
     expect(created.rewardDeadline).toBe(NOW + 25n * 3600n);
     expect(asked.some((question) => /^Funding: how the reward reaches/.test(question))).toBe(true);
     expect(created.fundVia).toBe("transfer");
-    expect(readFileSync(out, "utf8")).toContain(`USDC.transfer(${ME.toLowerCase()}n, 2000000n);`);
+    expect(readFileSync(out, "utf8")).toContain(`USDC.transfer(${ME.toLowerCase()}, 2000000);`);
     expect(readFileSync(out, "utf8")).not.toContain("--intent-fund-via");
   });
 

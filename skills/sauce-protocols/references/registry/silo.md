@@ -19,7 +19,7 @@ On Ethereum, `Silo` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's siloRepository, `0xbACBBefda6fD1FbF5a2d6A79916F4B6124eD2D49`.
-  require(Silo.SiloRepository != 0n);
+  require(Silo.SiloRepository != 0);
 }
 ```
 

@@ -22,7 +22,7 @@ Liquidity routing protocol with Autopilot Autopools that automatically deploy an
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Deposit into Tokemak Autopool
@@ -45,7 +45,7 @@ On Ethereum, `Tokemak` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's autopoolRegistry, `0x7E5828a3A6Ae75426d739E798140513A2E2964E4`.
-  require(Tokemak.AutopoolRegistry != 0n);
+  require(Tokemak.AutopoolRegistry != 0);
 }
 ```
 

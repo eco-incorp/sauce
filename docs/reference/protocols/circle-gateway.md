@@ -16,7 +16,7 @@ Circle's chain-abstracted USDC balance. Deposit USDC into the GatewayWallet on o
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### deposit
 
@@ -77,7 +77,7 @@ On Ethereum, `CircleGateway` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's gatewayMinter, `0x2222222d7164433c4C09B0b0D809a9b52C04C205`.
-  require(CircleGateway.GatewayMinter != 0n);
+  require(CircleGateway.GatewayMinter != 0);
 }
 ```
 

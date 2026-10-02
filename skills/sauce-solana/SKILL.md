@@ -15,7 +15,7 @@ they take: `balanceOf(USDC, account)`. `sauce globals --chain solana` lists the 
 which are Token-2022 mints.
 
 ```sauce chain=solana define=MINT
-const MINT = 0n; // the SPL mint's 32-byte key: a define replaces it
+const MINT = 0; // the SPL mint's 32-byte key: a define replaces it
 
 function main(
   tokenProgram: Account,
@@ -24,7 +24,7 @@ function main(
   authority: Account<Signer>,
   amount: Uint256
 ): Uint256 {
-  require(MINT != 0n, "set MINT");
+  require(MINT != 0, "set MINT");
   const before = balanceOf(MINT, destination);
   transfer(MINT, tokenProgram, source, destination, authority, amount);
   const after = balanceOf(MINT, destination);
@@ -57,7 +57,7 @@ sauce run solana.sauce.ts --chain solana --keypair <keypair> \
 - `svm.sload(account, offset, length)` reads bytes; `.toLe()`/`.toBe()` make a number.
   `svm.call(program, [accounts...], data)` is a CPI to an attached program account.
 - Scalar parameters are runtime arguments (`--args`); `Account` parameters are not encoded. A
-  32-byte key chosen per compile, such as a mint, is a module constant (`const MINT = 0n;`) that
+  32-byte key chosen per compile, such as a mint, is a module constant (`const MINT = 0;`) that
   `--define MINT=<key>` replaces, the key in base58 or as 32-byte hex. A define also overrides a
   registered symbol, which is how a devnet program names devnet's USDC; a module `const USDC = …`
   does not, since the symbol is itself a define and a define wins. A key that changes per call is
@@ -92,11 +92,11 @@ that address is the Pot. Take the owner as a signer slot of its own (`--account 
 account's key to a local before calling a method on it.
 
 ```sauce chain=solana define=KITCHEN
-const SALT = 0n; // the Pot's salt, zero by default
+const SALT = 0; // the Pot's salt, zero by default
 
 function main(pot: Account<Signer>, wallet: Account<Signer>) {
   const owner = wallet.address;
-  const [expected] = crypto.findPDA(KITCHEN, ["pot", owner.toBytesBe(32n), SALT.toBytesBe(32n)]);
+  const [expected] = crypto.findPDA(KITCHEN, ["pot", owner.toBytesBe(32), SALT.toBytesBe(32)]);
   require(pot.address == expected, "pot is not the wallet's Pot");
 }
 ```
@@ -116,14 +116,14 @@ An SPL token account is 165 bytes, and `acct.owner` is the program that owns it 
 program, or Token-2022), not whose balance it is. A Token-2022 account has the same first 165 bytes,
 then its extensions:
 
-| Bytes   | Field                              | Read                               |
-| ------- | ---------------------------------- | ---------------------------------- |
-| 0–32    | mint                               | `svm.sload(acct, 0n, 32n).toBe()`  |
-| 32–64   | owner: whose balance it is         | `ownerOf(mint, acct)`              |
-| 64–72   | amount (u64, little-endian)        | `svm.sload(acct, 64n, 8n).toLe()`  |
-| 72–76   | delegate tag (u32: 0 none, 1 some) | `svm.sload(acct, 72n, 4n).toLe()`  |
-| 76–108  | delegate                           | `svm.sload(acct, 76n, 32n).toBe()` |
-| 121–129 | delegated amount (u64)             | `svm.sload(acct, 121n, 8n).toLe()` |
+| Bytes   | Field                              | Read                             |
+| ------- | ---------------------------------- | -------------------------------- |
+| 0–32    | mint                               | `svm.sload(acct, 0, 32).toBe()`  |
+| 32–64   | owner: whose balance it is         | `ownerOf(mint, acct)`            |
+| 64–72   | amount (u64, little-endian)        | `svm.sload(acct, 64, 8).toLe()`  |
+| 72–76   | delegate tag (u32: 0 none, 1 some) | `svm.sload(acct, 72, 4).toLe()`  |
+| 76–108  | delegate                           | `svm.sload(acct, 76, 32).toBe()` |
+| 121–129 | delegated amount (u64)             | `svm.sload(acct, 121, 8).toLe()` |
 
 **Check the owner before calling a balance the Pot's**: a transfer with the Pot as `authority` also
 succeeds from an account where the Pot is only a delegate, up to the delegated amount.
@@ -142,11 +142,11 @@ account of its own, so a program reading it takes that account as a parameter an
 is:
 
 ```sauce chain=solana define=KITCHEN
-const SALT = 0n; // the Pot's salt, zero by default
+const SALT = 0; // the Pot's salt, zero by default
 
 function main(pot: Account<Signer>, wallet: Account<Signer>, potUsdc: Account): Uint256 {
   const owner = wallet.address;
-  const [expected] = crypto.findPDA(KITCHEN, ["pot", owner.toBytesBe(32n), SALT.toBytesBe(32n)]);
+  const [expected] = crypto.findPDA(KITCHEN, ["pot", owner.toBytesBe(32), SALT.toBytesBe(32)]);
   require(pot.address == expected, "pot is not the wallet's Pot");
   require(ownerOf(USDC, potUsdc) == pot.address, "not the Pot's USDC account");
   return balanceOf(USDC, potUsdc);
@@ -249,7 +249,7 @@ function main(
 ): Uint256 {
   require(ownerOf(PYUSD, source) == pot.address, "not the Pot's account");
   const before = balanceOf(PYUSD, destination);
-  transferChecked(PYUSD, tokenProgram, source, mint, destination, pot, amount, 6n);
+  transferChecked(PYUSD, tokenProgram, source, mint, destination, pot, amount, 6);
   return balanceOf(PYUSD, destination) - before;
 }
 ```

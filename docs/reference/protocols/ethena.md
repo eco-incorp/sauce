@@ -23,7 +23,7 @@ Synthetic dollar protocol providing USDe, a crypto-native dollar backed by delta
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Stake USDe for sUSDe
@@ -64,7 +64,7 @@ On Ethereum, `Ethena` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's susde, `0x9D39A5DE30e57443BfF2A8307A4256c8797A3497`.
-  require(Ethena.Susde != 0n);
+  require(Ethena.Susde != 0);
 }
 ```
 

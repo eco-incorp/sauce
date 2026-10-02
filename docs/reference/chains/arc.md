@@ -42,7 +42,7 @@ Arc pays gas in USDC, and has one USDC balance at two decimal scales: the native
   reads as 0. Compare a native amount with a token amount only after converting one to the
   other's scale.
 - Every native amount has 18 decimals: an execution fee, a cook's value, the `nativeAmount` of a
-  route or a reward. `1_000_000n` of native value is 10^-12 USDC, not 1 USDC.
+  route or a reward. `1_000_000` of native value is 10^-12 USDC, not 1 USDC.
 - The minimum base fee is 20 gwei, and a transaction whose `maxFeePerGas` is below it is dropped
   silently: no error, and no receipt.
 - There is no canonical wrapped native, and nothing needs wrapping. `WETH` is bridged ETH, with no
@@ -68,7 +68,7 @@ function main() {
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(EURC).balanceOf(ctx.self()) == held);
   // `AaveV4.CoreHub` is Arc's coreHub: `0x17288dfc86205301064577b98B02b81017e6F79C`.
-  require(AaveV4.CoreHub != 0n);
+  require(AaveV4.CoreHub != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Arc.AaveV4.CoreHub == AaveV4.CoreHub);
 }

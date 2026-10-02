@@ -20,7 +20,7 @@ program is given.
 ```sauce chain=ethereum
 import PortalABI from "./protocols/eco-routes/PortalABI.json";
 
-const TARGET = 0n; // the contract's address, as a define
+const TARGET = 0; // the contract's address, as a define
 
 function main() {
   const target = PortalABI.at(TARGET);

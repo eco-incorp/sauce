@@ -19,7 +19,7 @@ On Polygon, `Quickswap` is a namespace: its contracts need no import.
 ```sauce chain=polygon
 function main() {
   // Polygon's v2Factory, `0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32`.
-  require(Quickswap.V2Factory != 0n);
+  require(Quickswap.V2Factory != 0);
 }
 ```
 

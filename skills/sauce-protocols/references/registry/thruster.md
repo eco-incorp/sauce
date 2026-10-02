@@ -19,7 +19,7 @@ On Blast, `Thruster` is a namespace: its contracts need no import.
 ```sauce chain=blast
 function main() {
   // Blast's v3SwapRouter, `0x337827814155ECBf24D20231fCA4444F530c0555`.
-  require(Thruster.V3SwapRouter != 0n);
+  require(Thruster.V3SwapRouter != 0);
 }
 ```
 

@@ -19,7 +19,7 @@ On Ethereum, `Gho` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's gho, `0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f`.
-  require(Gho.Gho != 0n);
+  require(Gho.Gho != 0);
 }
 ```
 

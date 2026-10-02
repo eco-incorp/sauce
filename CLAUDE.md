@@ -1012,6 +1012,20 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   `references/` (an agent may have only the skills, served by the MCP server). The protocol
   documents are third-party facts and are exempt from the address, Portal and multicall rules only; the generated references are exempt from the Portal rule (a
   chain's file records its eco-routes deployment).
+- **Plain integers, enforced.** SauceScript a reader sees writes `3000`, never `3000n`: the
+  compiler reads a literal from its text as a 256-bit integer, so both are the same program
+  (`sdk/test/integer-literals.test.ts`, both targets), and agents copy whichever they are shown.
+  `docs/scripts/integer-literals.mjs` is the rule; `skills:check` applies it to the example
+  programs, ` ```sauce ` blocks, references (generated ones included), `builtins.json`'s programs
+  and the protocol documents' ` ```typescript ` templates, and `docs:check` to
+  `docs/examples/*.sauce.ts`, the manual's ` ```js ` fences and every fence of a page generated
+  from the skills (`docs/reference/`, which renders SauceScript as ` ```ts `). TypeScript host
+  code (runners, ` ```ts ` blocks, a closure in a `.ts` file) keeps the `n`: there tsc types the
+  literal. An exception is a checker's `INTEGER_EXCEPTIONS`, with its reason. The SDK folds an
+  intent's literals itself (`intent-body.ts#literalValue`), from the literal's text, so a plain
+  one past 2^53 is exact there too. A quoted compiler message keeps its words
+  (``write `i += 1n` ``), and `sauce actions` still prints its lowering with `n` (its tests pin
+  that source text).
 - **Execution-agnostic.** Not every agent has the SDK installed: some have only the `sauce` CLI, or a
   remote compiler, and sign by local means. Every skill but `sauce-cli` (the CLI) and
   `sauce-typescript` (the SDK) teaches the program, what compiling for a chain produces (bytecode,

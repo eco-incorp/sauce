@@ -22,7 +22,7 @@ Blast-native DEX with concentrated liquidity (V3-style) pools. Optimized for Bla
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### swap
 
@@ -76,7 +76,7 @@ On Blast, `Thruster` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Blast's v3SwapRouter, `0x337827814155ECBf24D20231fCA4444F530c0555`.
-  require(Thruster.V3SwapRouter != 0n);
+  require(Thruster.V3SwapRouter != 0);
 }
 ```
 

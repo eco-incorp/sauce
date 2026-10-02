@@ -13,7 +13,7 @@ Minimal and gas-efficient lending primitive with permissionless market creation.
 ## Pitfalls for a program
 
 - A market exists only for exactly the `MarketParams` it was created with: pass all five.
-- Give exactly one of `assets` and `shares`, the other `0n`.
+- Give exactly one of `assets` and `shares`, the other `0`.
 - Vet the market's oracle: it alone decides liquidations there.
 - `supplyCollateral` earns nothing; only `supply` of the loan asset earns interest.
 - Approve Morpho for the amount; `data` is empty bytes unless you want its callback, which a
@@ -31,7 +31,7 @@ function main(
   const self = ctx.self();
   Token(market.loanToken).approve(MorphoBlue.Morpho, assets);
   const empty = hex``;
-  MorphoBlue.Morpho.supply(market, assets, 0n, self, empty);
+  MorphoBlue.Morpho.supply(market, assets, 0, self, empty);
 }
 ```
 
@@ -44,7 +44,7 @@ lending | Chains and addresses: [registry/morpho-blue.md](registry/morpho-blue.m
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### supply
 

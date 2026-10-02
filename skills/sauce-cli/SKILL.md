@@ -391,9 +391,8 @@ against its declared type before anything is sent: `Address`, `Uint256`, `bool`,
   `--define NAME=VALUE` replaces (`--defines values.json` gives several). A file of top-level
   statements with no `main`, such as an intent file, leaves the name undeclared and takes it from
   the define. In a `--defines` file, give an address or any value past 2^53 as a JSON string, hex
-  or decimal: a JSON number loses precision. An address in a program is a hex integer with an `n`,
-  as Base's USDC is `0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n`; on the command line it is plain
-  hex.
+  or decimal: a JSON number loses precision. An address in a program, as on the command line, is
+  its hex: Base's USDC is `0x833589fcd6edb6e08f4c7c32d4f71b54bda02913`.
 - In a project `sauce init` wrote, put programs in `programs/`: its `tsconfig.json` types them as
   SauceScript, so an editor's TypeScript errors there are real ones (with the project's own
   TypeScript running the editor). For programs anywhere else, `sauce init <dir> --tsconfig`

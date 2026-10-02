@@ -19,7 +19,7 @@ On Scroll, `Layerbank` is a namespace: its contracts need no import.
 ```sauce chain=scroll
 function main() {
   // Scroll's core, `0xEC53c830f4444a8A56455c6836b5D2aA794289Aa`.
-  require(Layerbank.Core != 0n);
+  require(Layerbank.Core != 0);
 }
 ```
 
