@@ -985,11 +985,12 @@ const headerProblems = (where, file, problems) => {
   else for (const problem of problems) fail(where, problem);
 };
 
-/** The leading comment block of a program: its header. */
+/** The leading comment block of a program: its header, after the `#!` line it may start with. */
 const headerOf = (file) => {
   const lines = read(file).split("\n");
-  const end = lines.findIndex((line) => !line.startsWith("//"));
-  return lines.slice(0, end < 0 ? lines.length : end);
+  const from = lines[0]?.startsWith("#!") ? 1 : 0;
+  const end = lines.findIndex((line, index) => index >= from && !line.startsWith("//"));
+  return lines.slice(from, end < 0 ? lines.length : end);
 };
 
 /**
