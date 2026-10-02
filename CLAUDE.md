@@ -932,9 +932,11 @@ them, `references/`.
   first) runs in CI after `docs:check`, and the packed check reruns it (`--skills <dir>`) on the
   copy `sauce skills install` writes into a project from the tarball — a project, because Node does
   not strip TypeScript from a runner under `node_modules`. It holds: the frontmatter to the spec; the `sauce-examples` index
-  to the example files on disk, both ways; every program compiled through the `sauce` bin
-  (in-process `runCli`) on each chain its index row names, running the `//   sauce …` usage line in
-  its header offline (`compile`, then `tx` with `main`'s arguments sampled from its declared types);
+  to the example files on disk, both ways; the `sauce-overview` skill map (one
+  ``### `sauce-<name>` `` entry each under "The skill map") to the skill directories, both ways,
+  so a new or renamed skill fails until the map says what it holds and when to load it; every
+  program compiled through the `sauce` bin (in-process `runCli`) on each chain its index row
+  names, running the `//   sauce …` usage line in its header offline (`compile`, then `tx` with `main`'s arguments sampled from its declared types);
   every actions document (`.json`, no `chainId`) lowered through `sauce actions` on each chain its
   row names, its cook built by `tx`, and ` ```json chain=a,b ` blocks lowered (` ```json fails `
   refused);
