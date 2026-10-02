@@ -35,6 +35,10 @@ chain does not have it.
 
 ```sauce chain=unichain
 function main() {
+  // `USDT0` is Unichain's USDT0: `0x9151434b16b9763660705744891fA906F660EcC5`.
+  const held = USDT0.balanceOf(ctx.self());
+  // `Token(address)` is any other ERC-20, and works for a symbol's address too.
+  require(Token(USDT0).balanceOf(ctx.self()) == held);
   // `Cctp.TokenMessenger` is Unichain's tokenMessenger: `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d`.
   require(Cctp.TokenMessenger != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
@@ -44,7 +48,9 @@ function main() {
 
 ## Tokens
 
-The registry names no token on this chain: a program uses `Token(<address>)`.
+| Symbol | Address | Decimals |
+| --- | --- | --- |
+| `USDT0` | `0x9151434b16b9763660705744891fA906F660EcC5` | 6 |
 
 ## Protocols
 

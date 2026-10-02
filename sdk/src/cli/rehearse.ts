@@ -4,8 +4,9 @@
  * yet, with its deployment rehearsed first. Two routes, in order:
  *
  *   1. `eth_simulateV1`: one simulated block holding `Kitchen.deployPot(owner, salt)` (when the Pot
- *      is missing; anyone may send it) and then the cook from the owner, state carried from one call
- *      to the next. It returns the cook's logs, and with `traceTransfers` its native transfers.
+ *      is missing; anyone may send it), then the approvals and transfers `sauce run` would send
+ *      first (`before`), then the cook from the owner, state carried from one call to the next. It
+ *      returns the cook's logs, and with `traceTransfers` its native transfers.
  *   2. `eth_call`, where the endpoint does not serve `eth_simulateV1`. A missing Pot is put in place
  *      first, as the deployment would leave it: an `eth_call` CREATION runs a probe whose
  *      constructor calls the real `Kitchen.deployPot` and returns the Pot that made — its address,
@@ -15,7 +16,7 @@
  *      real cook sends, on the state a real deployment leaves. The engine's gate re-derives the
  *      Pot's address from its Kitchen, owner and salt, all genuine. No code is put at the owner, so
  *      `msg.sender` and `tx.origin` are the owner's own. A logs-free route: it reports the result and
- *      the gas, not what the cook moved.
+ *      the gas, not what the cook moved, and it cannot run `before`'s transactions ahead of the cook.
  */
 import {
   concat,
@@ -50,6 +51,10 @@ export interface RehearsalInput {
   readonly kitchen: Address;
   /** The Pot's salt, when it is not deployed: the rehearsal deploys it first. */
   readonly deploy?: { readonly salt: Hex };
+  /** Transactions the owner sends after the deployment and before the cook, each its own: the
+   *  ERC-20 approvals and transfers `sauce run --fund` sends first. Each must answer as SafeERC20
+   *  accepts, nothing or `true`. */
+  readonly before?: ReadonlyArray<{ readonly what: string; readonly tx: TxRequest }>;
   readonly cook: TxRequest;
   /** Applied before anything runs. One entry per address (`mergeOverrides`). */
   readonly overrides: StateOverride;
@@ -73,13 +78,21 @@ export type Rehearsal = Base &
         /** The same for `Kitchen.deployPot`, its own transaction, when the rehearsal deploys the
          *  Pot first. */
         readonly deployGas?: bigint;
+        /** The same for each of `before`'s transactions, in order; empty where they did not run. */
+        readonly beforeGas: readonly bigint[];
         readonly gasKind: "used" | "estimated";
         /** The cook's logs (`eth_simulateV1` only). */
         readonly logs?: readonly RawLog[];
         /** Whether the node reported native transfers among them. */
         readonly traced: boolean;
       }
-    | { readonly ok: false; readonly stage: "deploy" | "cook"; readonly reason: string }
+    | {
+        readonly ok: false;
+        readonly stage: "deploy" | "before" | "cook";
+        /** Which of `before`'s transactions failed, when one did. */
+        readonly what?: string;
+        readonly reason: string;
+      }
   );
 
 /** The Pot's one storage word, its Router: ERC-7201 `sauce.storage.Pot` (`Pot.sol`). */
@@ -163,10 +176,15 @@ async function viaSimulateV1(client: PublicClient, input: RehearsalInput): Promi
             }).data,
           },
         ];
+  const before = input.before ?? [];
   const [block] = await client.simulateBlocks({
     blocks: [
       {
-        calls: [...deploy, { account: input.owner, ...input.cook }],
+        calls: [
+          ...deploy,
+          ...before.map((each) => ({ account: input.owner, ...each.tx })),
+          { account: input.owner, ...input.cook },
+        ],
         ...(input.overrides.length === 0 ? {} : { stateOverrides: input.overrides }),
       },
     ],
@@ -183,7 +201,29 @@ async function viaSimulateV1(client: PublicClient, input: RehearsalInput): Promi
       reason: failedWith(results[0]?.data),
     };
   }
-  const cook = results[deploy.length];
+  for (const [index, each] of before.entries()) {
+    const result = results[deploy.length + index];
+    if (result?.status !== "success") {
+      return {
+        ...base,
+        ok: false,
+        stage: "before",
+        what: each.what,
+        reason: failedWith(result?.data),
+      };
+    }
+    // SafeERC20 on the client's side: nothing, or a word equal to 1.
+    if (result.data !== "0x" && BigInt(result.data.slice(0, 66)) !== 1n) {
+      return {
+        ...base,
+        ok: false,
+        stage: "before",
+        what: each.what,
+        reason: "the token answered false: it refuses it",
+      };
+    }
+  }
+  const cook = results[deploy.length + before.length];
   if (cook === undefined)
     throw new CliError("the endpoint's eth_simulateV1 answered no result for the cook");
   if (cook.status !== "success") {
@@ -201,6 +241,7 @@ async function viaSimulateV1(client: PublicClient, input: RehearsalInput): Promi
     returns: cook.data,
     gas: cook.gasUsed,
     ...(input.deploy === undefined ? {} : { deployGas: results[0]!.gasUsed }),
+    beforeGas: before.map((_, index) => results[deploy.length + index]!.gasUsed),
     gasKind: "used",
     logs,
     // A cook that carries value moves it to the Pot, so a node that traces transfers reports at
@@ -301,11 +342,20 @@ async function viaEthCall(
   fallback: string | undefined,
 ): Promise<Rehearsal> {
   const base = { path: "eth_call" as const, ...(fallback === undefined ? {} : { fallback }) };
+  // One call cannot carry state to the next: what `sauce run` sends first is not run here.
+  const unrun = (input.before ?? []).map((each) => each.what);
+  const skipped =
+    unrun.length === 0
+      ? []
+      : [
+          `the endpoint does not serve eth_simulateV1, so what sauce run sends before the cook ` +
+            `(${unrun.join("; ")}) is not rehearsed: the cook runs without it`,
+        ];
   let overrides = input.overrides;
   if (input.deploy !== undefined) {
     const placed = await placePot(client, { ...input, deploy: input.deploy });
     if ("reason" in placed) {
-      return { ...base, notes: [], ok: false, stage: "deploy", reason: placed.reason };
+      return { ...base, notes: skipped, ok: false, stage: "deploy", reason: placed.reason };
     }
     overrides = mergeOverrides([...overrides, placed]);
   }
@@ -318,9 +368,10 @@ async function viaEthCall(
   try {
     returns = (await client.call(request)).data ?? "0x";
   } catch (error) {
-    return { ...base, notes: [], ok: false, stage: "cook", reason: revertReason(error) };
+    return { ...base, notes: skipped, ok: false, stage: "cook", reason: revertReason(error) };
   }
   const notes = [
+    ...skipped,
     "eth_call returns no logs, so what the cook moved is not shown: an endpoint that serves " +
       "eth_simulateV1 shows it",
   ];
@@ -363,6 +414,7 @@ async function viaEthCall(
     ok: true,
     returns,
     ...(gas === undefined ? {} : { gas }),
+    beforeGas: [],
     ...(deployGas === undefined ? {} : { deployGas }),
     gasKind: "estimated",
     traced: false,

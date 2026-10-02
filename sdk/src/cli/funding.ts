@@ -47,7 +47,7 @@ import { parseSauce } from "../routes/parse.js";
 import { blankLiterals } from "../routes/rs-compile.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { CliError, UsageError } from "./args.js";
-import { sendAndWait, type Sent } from "./chain.js";
+import { sendAndWait, type Sent, type TxRequest } from "./chain.js";
 import type { Approver } from "./commands.js";
 
 export const FUND_MODES = ["permit2", "permit", "allowance", "transfer"] as const;
@@ -171,6 +171,14 @@ export interface FundingInput {
   readonly approver: Approver;
 }
 
+/** A transaction `sauce run` sends from the owner before the cook, unsent: what a rehearsal runs
+ *  first, in the cook's block. */
+export interface BeforeCook {
+  /** For a person, as `needs` says it: `approve Permit2 for USDC`. */
+  readonly what: string;
+  readonly tx: TxRequest;
+}
+
 export interface Funding {
   /** The program, wrapped: the pulls, the file's own `main`, the sweep. */
   readonly wrap: (text: string) => string;
@@ -182,6 +190,11 @@ export interface Funding {
   readonly notes: readonly string[];
   /** Planned without sending: each approval a run would ask for first (`approve Permit2 for USDC`). */
   readonly needs?: readonly string[];
+  /**
+   * Planned without sending, with the owner's key: the approvals and transfers `run` would send
+   * before the cook, in order, an approval as `forceApprove` sends it. `simulate` runs them first.
+   */
+  readonly beforeCook?: readonly BeforeCook[];
   /** Whether the owner's key signed the pulls (a Permit2 transfer, a permit). */
   readonly signed?: boolean;
   /**
@@ -310,6 +323,29 @@ async function forceApprove(
 const encodeApprove = (spender: Address, amount: bigint): Hex =>
   encodeFunctionData({ abi: ERC20, functionName: "approve", args: [spender, amount] });
 
+/** The approvals {@link forceApprove} would send, unsent: a standing allowance reset to zero
+ *  first, then `amount`. */
+function approvalsBefore(
+  funded: Funded,
+  spender: Address,
+  amount: bigint,
+  current: bigint,
+  what: string,
+): BeforeCook[] {
+  const approve = (value: bigint): TxRequest => ({
+    to: funded.token,
+    data: encodeApprove(spender, value),
+    value: 0n,
+  });
+
+  return [
+    ...(current > 0n
+      ? [{ what: `reset ${funded.request.label}'s allowance to ${spender}`, tx: approve(0n) }]
+      : []),
+    { what, tx: approve(amount) },
+  ];
+}
+
 /** SafeERC20 on the client's side: empty returndata or a word equal to 1; `false` is refused. */
 function refuseFalse(label: string, method: string, data: Hex | undefined): void {
   if (data === undefined || data === "0x") return;
@@ -394,6 +430,7 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
   const { tokens, native } = await amounts(input);
   const notes: string[] = [];
   const needs: string[] = [];
+  const beforeCook: BeforeCook[] = [];
   const sent: Array<{ what: string; sent: Sent }> = [];
   const pulls: string[] = [];
   const imports = new Set<string>();
@@ -466,10 +503,13 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
       );
       if (allowed < funded.amount) {
         if (!input.send) {
-          needs.push(`approve Permit2 for ${funded.request.label}`);
+          const what = `approve Permit2 for ${funded.request.label}`;
+          needs.push(what);
+          beforeCook.push(...approvalsBefore(funded, permit2, maxUint256, allowed, what));
           notes.push(
-            `${funded.request.label}: Permit2 (${permit2}) may not move your tokens yet; sauce run ` +
-              "would ask to approve it",
+            `${funded.request.label}: Permit2 (${permit2}) may not move your tokens yet: sauce run ` +
+              "asks to approve it first (--auto-approve approves it), and the rehearsal runs that " +
+              "approval before the cook",
           );
         } else {
           await agreed(
@@ -563,9 +603,13 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
       );
       if (allowed < funded.amount) {
         if (!input.send) {
-          needs.push(`approve the Pot for ${funded.amount} ${funded.request.label}`);
+          const what = `approve the Pot for ${funded.amount} ${funded.request.label}`;
+          needs.push(what);
+          beforeCook.push(...approvalsBefore(funded, input.pot, funded.amount, allowed, what));
           notes.push(
-            `${funded.request.label}: the Pot may not pull it yet; sauce run would ask to approve it`,
+            `${funded.request.label}: the Pot may not pull it yet: sauce run asks to approve it ` +
+              "first (--auto-approve approves it), and the rehearsal runs that approval before the " +
+              "cook",
           );
         } else {
           await agreed(
@@ -596,15 +640,22 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
     }
   } else {
     for (const funded of tokens) {
-      if (!input.send) {
-        notes.push(`${funded.request.label}: sauce run would transfer it to the Pot first`);
-        continue;
-      }
       const data = encodeFunctionData({
         abi: ERC20,
         functionName: "transfer",
         args: [input.pot, funded.amount],
       });
+      if (!input.send) {
+        beforeCook.push({
+          what: `transfer ${funded.amount} ${funded.request.label} to the Pot`,
+          tx: { to: funded.token, data, value: 0n },
+        });
+        notes.push(
+          `${funded.request.label}: sauce run transfers it to the Pot first, and the rehearsal ` +
+            "runs that transfer before the cook",
+        );
+        continue;
+      }
       const answer = await read(`a rehearsal of ${funded.request.label}.transfer`, () =>
         input.client.call({ account: owner, to: funded.token, data }),
       );
@@ -635,6 +686,7 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
     sent,
     notes,
     needs,
+    ...(beforeCook.length === 0 ? {} : { beforeCook }),
     signed: tokens.length > 0 && (input.mode === "permit2" || input.mode === "permit"),
   };
 }

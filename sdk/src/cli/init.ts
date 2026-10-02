@@ -1,5 +1,6 @@
 /**
- * `sauce init`: a project that needs nothing but this package — a manifest pinning it, agent
+ * `sauce init`: a project that needs nothing but this package — a manifest pinning it (and viem,
+ * the vocabulary of its TypeScript API, at the exact version installed beside it), agent
  * instructions every coding agent reads, a `.gitignore` for the local config that holds
  * endpoints, a placeholder example of that config, a `programs/` directory whose tsconfig.json
  * gives an editor SauceScript's names (`sauceScriptTsconfig`), and the agent skills (`skills.ts`).
@@ -14,6 +15,7 @@
  * other content is listed and the whole scaffold refused, before anything is written.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { basename, dirname, join, resolve } from "node:path";
 
 import { CliError } from "./args.js";
@@ -38,6 +40,24 @@ function packageNameOf(dir: string): string {
   return name === "" ? "sauce-project" : name;
 }
 
+/**
+ * The version of viem this package resolves, as its own `package.json` says: the one installed
+ * beside it, whatever range the package declares. `undefined` where it cannot be read.
+ */
+export function installedViem(): string | undefined {
+  try {
+    const manifest = createRequire(import.meta.url).resolve("viem/package.json");
+
+    return (JSON.parse(readFileSync(manifest, "utf8")) as { version?: string }).version;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The Node.js typings a project `sauce init` writes takes: the runners the skills install are
+ *  Node programs, for the Node.js the manifest's `engines` names. */
+const NODE_TYPES = "^24.0.0";
+
 /** Where `sauce init` puts the project's SauceScript programs: the directory its tsconfig covers. */
 export const PROGRAMS_DIR = "programs";
 
@@ -53,10 +73,19 @@ export function scaffold(
     private: true,
     type: "module",
     engines: { node: ">=24" },
-    // Exactly the version that scaffolded it: the skills installed beside it describe this one.
-    dependencies: { [source.packageName]: source.version },
-    // The TypeScript an editor runs for the programs' plugin: the project's own.
-    devDependencies: { typescript: source.typescript ?? "^5.7.0" },
+    // Exactly the version that scaffolded it: the skills installed beside it describe this one. And
+    // viem, which its TypeScript API is typed in, as installed beside it: a TypeScript project
+    // using the package depends on both, so a package manager that hoists nothing resolves both.
+    dependencies: {
+      [source.packageName]: source.version,
+      ...(source.viem === undefined ? {} : { viem: source.viem }),
+    },
+    // The TypeScript an editor runs for the programs' plugin: the project's own; and Node's
+    // typings, for the skills' runners.
+    devDependencies: {
+      typescript: source.typescript ?? "^5.7.0",
+      "@types/node": NODE_TYPES,
+    },
   };
 
   return {

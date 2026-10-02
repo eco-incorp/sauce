@@ -234,8 +234,8 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
      the block a sent cook failed in.
    - **`--fund USDC:100`** in place of `--assume-balance` rehearses `sauce run --fund`: with no
      key, the Pot is credited what the pull would bring; with the owner's key (`--wallet`), the
-     pull itself is signed and rehearsed, once the approval the first run asks for is in place
-     (until then the rehearsal names it).
+     pull itself is signed and rehearsed, and an approval the first run asks for runs before the
+     cook in the same block, listed as a transaction of its own to send first.
    - **`--json`** gives the same for a program to read: `returned` is the record, `transfers` each
      transfer.
 
@@ -272,7 +272,9 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    **Units**: `--fund` and `--assume-balance` take whole tokens (`USDC:10` is 10 USDC), or base
    units ending in `n` (`USDC:10000000n`, the same 10 USDC), and a token the chain does not register
    as `<address>:<amount>`, in its own decimals. `--args` and defines always take base units
-   (`10000000` is 10 USDC). `simulate --fund` with the owner's key rehearses it.
+   (`10000000` is 10 USDC). `simulate --fund` with the owner's key rehearses it: the pulls
+   signed, and before the cook, in the same block, each approval or transfer `sauce run` would
+   send first, each listed as a transaction of its own with its gas.
 
 6. **Run**, from the Pot's owner:
 

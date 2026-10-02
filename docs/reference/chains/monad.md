@@ -52,6 +52,7 @@ function main() {
 | Symbol | Address | Decimals |
 | --- | --- | --- |
 | `USDC` | `0x754704Bc059F8C67012fEd69BC8A327a5aafb603` | 6 |
+| `USDT0` | `0xe7cd86e13AC4309349F30B3435a9d337750fC82D` | 6 |
 | `WMON` | `0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A` | 18 |
 
 ## Protocols
