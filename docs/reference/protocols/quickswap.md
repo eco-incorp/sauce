@@ -2,7 +2,7 @@
 
 # QuickSwap (`quickswap`)
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([`@sauce/router`](../../api/router.md); several pools under one limit, the `sauce-distributed-swap` agent skill). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, the `sauce-distributed-swap` agent skill). The templates below call the protocol's own contracts.
 
 The leading DEX on Polygon with V2 (constant product, x*y=k) and V3 (Algebra-based concentrated liquidity with dynamic fees) pools. Low-fee trading powered by Polygon's infrastructure.
 
@@ -77,7 +77,7 @@ function main(
 ```
 
 - No `fee` parameter: QuickSwap V3 uses Algebra protocol with dynamic fees (not fixed fee tiers)
-- `limitSqrtPrice`: `0` in this template, no price limit, so `amountOutMin` is the only bound. QuickSwap V3 is an Algebra pool, which `@sauce/router`'s `uniswapV3` drives with a real limit through the Pot's Router ([`@sauce/router`](../../api/router.md))
+- `limitSqrtPrice`: `0` in this template, no price limit, so `amountOutMin` is the only bound. QuickSwap V3 is an Algebra pool, which `@sauce/router`'s `uniswapV3` drives with a real limit through the Pot's Router ([the `@sauce/router` reference](../../api/router.md))
 
 ### addLiquidity
 

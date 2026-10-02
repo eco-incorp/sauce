@@ -11,7 +11,7 @@ them, its addresses per chain, how a program names each contract, and its ABI fu
 
 ### Choosing between them
 
-Inside a Sauce program, swap with `@sauce/router`'s function for the venue ([`@sauce/router`](../api/router.md)), every
+Inside a Sauce program, swap with `@sauce/router`'s function for the venue ([the `@sauce/router` reference](../api/router.md)), every
 argument a run-time value, each returning what the recipient received and reverting below its
 `minOut`. `uniswapV2` (Uniswap V2 and its forks' pairs), `curve`, `balancerV2`, `dodoV2`,
 `traderJoeLB` and `woofi` pay the pool first and call it directly; `uniswapV3` (Uniswap V3 and its
@@ -69,7 +69,7 @@ calldata comes from an off-chain quote made for one sender, amount and moment. A
 take that calldata as a `main` input and pass it through, and must still check the output as a
 balance delta against a minimum. CoW Swap settles signed orders in off-chain batch auctions, so
 a program signs or cancels an order rather than swapping. When the program itself should choose
-the route, use the pools directly ([`@sauce/router`](../api/router.md)).
+the route, use the pools directly ([the `@sauce/router` reference](../api/router.md)).
 
 | Protocol | Family | Namespace | Chains |
 | --- | --- | --- | --- |

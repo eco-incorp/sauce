@@ -671,7 +671,7 @@ const DOCS_FOR_SKILL = {
   "sauce-globals": ["tokens", "reference/tokens.md"],
   "sauce-chains": ["chains", "reference/chains.md"],
   "sauce-protocols": ["protocols", "reference/protocols.md"],
-  "sauce-swaps": ["`@sauce/router`", "api/router.md"],
+  "sauce-swaps": ["the `@sauce/router` reference", "api/router.md"],
   "sauce-intents": ["intents", "guides/intents.md"],
   "sauce-solana": ["Solana", "guides/solana.md"],
   "sauce-cli": ["the sauce command", "guides/cli.md"],

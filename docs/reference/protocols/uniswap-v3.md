@@ -2,7 +2,7 @@
 
 # Uniswap V3 (`uniswap-v3`)
 
-> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([`@sauce/router`](../../api/router.md); several pools under one limit, the `sauce-distributed-swap` agent skill). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, the `sauce-distributed-swap` agent skill). The templates below call the protocol's own contracts.
 
 Concentrated liquidity AMM allowing LPs to allocate capital within custom price ranges for higher capital efficiency. Supports multiple fee tiers per pair and NFT-based liquidity positions.
 
@@ -27,7 +27,7 @@ Concentrated liquidity AMM allowing LPs to allocate capital within custom price 
   `pool.swap` yourself.
 - Each fee tier is a separate pool, with its own price and depth.
 - The price limit bounds the pool's price, not the price paid: the fee comes on top
-  ([`@sauce/router`](../../api/router.md)).
+  ([the `@sauce/router` reference](../../api/router.md)).
 - Uniswap's own SwapRouter takes a `deadline` in its params; SwapRouter02 does not.
 
 ## In a Sauce program
@@ -102,7 +102,7 @@ function main(
 - `amountIn`: Exact amount of input token (in wei)
 - `amountOutMin`: Minimum output for slippage protection
 - `recipient`: Address to receive output tokens
-- `sqrtPriceLimitX96`: `0` in this template, no price limit, so `amountOutMin` is the only bound. With `@sauce/router`'s `uniswapV3`, set a real limit ([`@sauce/router`](../../api/router.md))
+- `sqrtPriceLimitX96`: `0` in this template, no price limit, so `amountOutMin` is the only bound. With `@sauce/router`'s `uniswapV3`, set a real limit ([the `@sauce/router` reference](../../api/router.md))
 
 ### addLiquidity (mint position)
 
