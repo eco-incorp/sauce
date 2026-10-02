@@ -7,7 +7,7 @@
 // `publish` that `sauce intent publish … --from <address> --format json` prints for an intent file (which
 // already funds that way); `portal` is the source chain's Portal (its file in sauce-chains).
 //
-//   sauce run fund-by-transfer.sauce.ts --chain <chain> --config sauce.config.json \
+//   sauce run fund-by-transfer.sauce.ts --chain <chain> \
 //     --keystore <keystore> --args <portal> <destination> <route> <reward>
 //
 //   portal: Address       the source chain's Portal
@@ -22,7 +22,7 @@
 //
 // On Base, for an intent to Ethereum:
 //
-//   sauce run fund-by-transfer.sauce.ts --chain base --config sauce.config.json \
+//   sauce run fund-by-transfer.sauce.ts --chain base \
 //     --keystore <keystore> --args 0xEC000769A73b70e16f361a442292500b3BCf4A85 1 <route> <reward>
 function main(
   portal: Address,

@@ -2,7 +2,7 @@
 // of `payToken` on `buyToken`, never paying more than `maxPrice` for any unit, fees included.
 // Returns abi.encode(spent, bought, unspent).
 //
-//   sauce run distributed-swap.sauce.ts --chain <chain> --config sauce.config.json \
+//   sauce run distributed-swap.sauce.ts --chain <chain> \
 //     --keystore <keystore> --fund <payToken>:<budget> \
 //     --args <payToken> <buyToken> <budget> <maxPrice> <minTokens> <maxAvgPrice> \
 //     <recipient> <refundTo>
@@ -21,7 +21,7 @@
 //
 //   Buying SPCXc (8 decimals) on Base with up to 1,000 USDC, at most 150 USDC each, at least 6.6
 //   SPCXc in all and an average of at most 149.5:
-//   sauce run distributed-swap.sauce.ts --chain base --config sauce.config.json \
+//   sauce run distributed-swap.sauce.ts --chain base \
 //     --keystore <keystore> --fund USDC:1000 \
 //     --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0xb2000000000000000000007b9fcbd005511aCBd5 \
 //     1000000000 1500000000000000000 660000000 1495000000000000000 <recipient> <refundTo>

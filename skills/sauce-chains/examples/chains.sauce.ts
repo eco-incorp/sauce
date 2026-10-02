@@ -13,7 +13,7 @@
 //
 // On Base, 1 USDC, once a 0.05% USDC/WETH pool is there (the endpoint reads the Kitchen's fee):
 //
-//   sauce tx chains.sauce.ts --chain base --owner <address> --config sauce.config.json \
+//   sauce tx chains.sauce.ts --chain base --owner <address> \
 //     --args <recipient> 1000000 500
 function main(recipient: Address, amount: Uint256, fee: Uint256) {
   // `chainId` is the id of the chain the file was compiled for; ctx.chainId() is where it runs.

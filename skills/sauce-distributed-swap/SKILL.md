@@ -11,7 +11,7 @@ next pool. The price does the splitting: the program never computes an amount pe
 sorts.
 
 To see a pair's pools before a swap (each venue's pools, fees, prices both ways and depth), run
-`sauce pools --chain <chain> <tokenA> <tokenB> --config sauce.config.json`.
+`sauce pools --chain <chain> <tokenA> <tokenB>`.
 
 ## The rules
 
@@ -294,18 +294,18 @@ each, with the price near 148.8 on 2026-10-01:
 
 ```sh
 npx sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
-  --config sauce.config.json --assume-balance USDC:1000 \
+  --assume-balance USDC:1000 \
   --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0xb2000000000000000000007b9fcbd005511aCBd5 \
   1000000000 1500000000000000000 660000000 1495000000000000000 <recipient> <refundTo>
 npx sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
-  --config sauce.config.json --assume-balance USDC:1000 \
+  --assume-balance USDC:1000 \
   --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0xb2000000000000000000007b9fcbd005511aCBd5 \
   1000000000 1500000000000000000 1000000000 1495000000000000000 <recipient> <refundTo>
 npx sauce simulate distributed-swap.sauce.ts --chain base --owner <address> \
-  --config sauce.config.json --assume-balance USDC:1000 \
+  --assume-balance USDC:1000 \
   --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0xb2000000000000000000007b9fcbd005511aCBd5 \
   1000000000 1500000000000000000 660000000 1400000000000000000 <recipient> <refundTo>
-npx sauce run distributed-swap.sauce.ts --chain base --config sauce.config.json \
+npx sauce run distributed-swap.sauce.ts --chain base \
   --keystore <keystore> --fund USDC:1000 --fund-mode permit \
   --args 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 0xb2000000000000000000007b9fcbd005511aCBd5 \
   1000000000 1500000000000000000 660000000 1495000000000000000 <recipient> <refundTo>
