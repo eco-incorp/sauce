@@ -21,8 +21,10 @@
 //      the intents skill, no RPC endpoint, no description of Sauce as a multicall, and nothing that
 //      tells the reader to copy, adapt or start from an example (the agent writes each program
 //      itself: COPY_FRAMING), no skill named in code (`sauce-<name>`) that the package does not
-//      ship; and every protocol document with a swap template opens with the one
-//      pointer to `sauce-swaps`;
+//      ship; every document that writes `npx sauce` says, beside its first one, that it runs
+//      this package's command only where the project depends on it, and that
+//      `npx -y @eco-incorp/sauce` runs it anywhere; and every protocol document with a swap
+//      template opens with the one pointer to `sauce-swaps`;
 //   3. the `sauce-examples` index lists every example file on disk and nothing else, each example
 //      is referenced by its own skill, and every program and actions document names the chains it
 //      is checked on there, one of them at least a chain the release supports; a contract's ABI
@@ -239,6 +241,12 @@ function shellWords(text) {
   return words;
 }
 
+/** npx and its options before the command, in either spelling a skill writes: `npx sauce`, in a
+ *  project that depends on the package, and `npx -y @eco-incorp/sauce`, anywhere. */
+const NPX = String.raw`npx\s+(?:(?:--no\s+--|-y|--yes)\s+)?`;
+/** A command line: `sauce …`, `npx sauce …` or `npx -y @eco-incorp/sauce …`. */
+const INVOCATION = new RegExp(String.raw`^(?:(?:${NPX})?sauce|${NPX}@eco-incorp\/sauce)\s`);
+
 /** Every `sauce …` invocation in `lines` (shell or comment text), continuations joined. */
 function commandLines(lines) {
   const joined = [];
@@ -246,14 +254,15 @@ function commandLines(lines) {
   for (const raw of lines) {
     const line = raw.replace(/^\s*\/\/\s?/, "").replace(/\s+#.*$/, "");
     const text = current === null ? line.trim() : `${current} ${line.trim()}`;
-    if (current === null && !/^(?:npx\s+(?:--no\s+--\s+)?)?sauce\s/.test(text)) continue;
+    if (current === null && !INVOCATION.test(text)) continue;
     if (text.endsWith("\\")) {
       current = text.slice(0, -1).trim();
       continue;
     }
     current = null;
-    joined.push(text.replace(/^npx\s+(?:--no\s+--\s+)?/, ""));
+    joined.push(text.replace(new RegExp(`^${NPX}`), ""));
   }
+  // The first word is the command, `sauce` or the package.
   return joined.map((line) => shellWords(line).slice(1));
 }
 
@@ -654,6 +663,49 @@ for (const [dir, why] of Object.entries(COPY_FRAMING_EXEMPT)) {
       `check-skills.mjs COPY_FRAMING_EXEMPT`,
       `exempts ${dir} (${why}), which no longer needs it: remove the exemption`,
     );
+}
+
+// ---- 2a. `npx sauce` says where it runs ------------------------------------------------------------
+// `npx sauce` runs this package's command only in a project that depends on the package: anywhere
+// else npx fetches npm's unrelated package named `sauce` and runs that. So a document that writes
+// `npx sauce` says so in one paragraph that names both spellings, `npx sauce` and
+// `npx -y @eco-incorp/sauce` (this package's command anywhere), in the section of its first
+// `npx sauce` or before it, where a reader of that section alone still meets it.
+const BARE_NPX = /\bnpx sauce\b/;
+const ANYWHERE_NPX = /\bnpx -y @eco-incorp\/sauce\b/;
+function saysWhereNpxRuns(file) {
+  const lines = read(file).split("\n");
+  const first = lines.findIndex((line) => BARE_NPX.test(line));
+  if (first < 0) return;
+  // The prose paragraphs, each joined into one line, and where the first one's section ends.
+  const paragraphs = [];
+  let paragraph = null;
+  let fenced = false;
+  let end = lines.length;
+  for (const [i, line] of lines.entries()) {
+    if (/^\s*```/.test(line)) {
+      fenced = !fenced;
+      paragraph = null;
+    } else if (fenced) continue;
+    else if (/^#{1,6}\s/.test(line)) {
+      if (i > first && end === lines.length) end = i;
+      paragraph = null;
+    } else if (line.trim() === "") paragraph = null;
+    else if (paragraph === null) paragraphs.push((paragraph = { start: i, text: line.trim() }));
+    else paragraph.text += ` ${line.trim()}`;
+  }
+  if (!paragraphs.some((p) => p.start < end && BARE_NPX.test(p.text) && ANYWHERE_NPX.test(p.text)))
+    fail(
+      `${rel(file)}:${first + 1}`,
+      "runs `npx sauce` without saying it needs the package: say, in this section or before it, " +
+        "that `npx sauce` runs the command in a project that depends on @eco-incorp/sauce and " +
+        "`npx -y @eco-incorp/sauce` anywhere else (without the package, npx fetches npm's " +
+        "unrelated `sauce` package)",
+    );
+}
+for (const skill of skills) {
+  for (const file of walk(join(SKILLS_DIR, skill.dir), (f) => f.endsWith(".md")))
+    saysWhereNpxRuns(file);
 }
 
 // ---- 2b. A protocol document with a swap template leads a Sauce program to the Router --------------
@@ -1324,7 +1376,7 @@ for (const skill of skills) {
   const allow = allowed(skill);
   for (const span of inlineCode(skill)) {
     // A command line's words are file names and flags, checked against `--help` (5), not exports.
-    if (/^(?:npx )?sauce\s/.test(span)) continue;
+    if (INVOCATION.test(span)) continue;
     for (const m of span.matchAll(
       /\b(routes|token|deposit|contracts|svmVenues)\.([A-Za-z_$][\w$]*)/g,
     )) {

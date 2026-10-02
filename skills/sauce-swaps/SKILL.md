@@ -110,6 +110,10 @@ blocks:
 Each block also gives `minAvgPrice` for that direction. Take the limit from the block of the
 direction you trade.
 
+`npx sauce` runs the command in a project that depends on `@eco-incorp/sauce`; anywhere else, run
+`npx -y @eco-incorp/sauce` in its place, because without the package `npx sauce` fetches and runs
+npm's unrelated `sauce` package.
+
 **Put the limit near the current price, on the far side of it.** A limit far beyond the price, such
 as the bound itself, is no limit at all: the pool fills down (or up) to it at any price. One on the
 wrong side fills nothing: a single swap reverts `SPL`, and a distributed swap skips every pool and

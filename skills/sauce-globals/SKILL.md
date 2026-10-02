@@ -19,6 +19,10 @@ the same registries the compile reads:
 - [references/chains.md](references/chains.md): every chain name, its id, and whether it takes
   intents.
 
+`npx sauce` runs the command in a project that depends on `@eco-incorp/sauce`; anywhere else, run
+`npx -y @eco-incorp/sauce` in its place, because without the package `npx sauce` fetches and runs
+npm's unrelated `sauce` package.
+
 These are the names. Where each is deployed and its address there are the full map: per chain in
 `sauce-chains` ([../sauce-chains/references/index.md](../sauce-chains/references/index.md)), and per
 protocol in `sauce-protocols`

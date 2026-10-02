@@ -94,6 +94,10 @@ with both chains' endpoints. Every intent the commands publish, fill or import g
 store in your home directory (`--store <dir>` names another), so later steps name it by hash; where it
 stands is read from the chains each time.
 
+`npx sauce` runs the command in a project that depends on `@eco-incorp/sauce`; anywhere else, run
+`npx -y @eco-incorp/sauce` in its place, because without the package `npx sauce` fetches and runs
+npm's unrelated `sauce` package.
+
 ```sh
 npx sauce intent publish --config sauce.config.json --keystore <keystore>
 npx sauce intent status <intent-hash> --config sauce.config.json

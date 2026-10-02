@@ -12,8 +12,14 @@ compiles the file, deploys the Pot, rehearses the cook, signs it and sends it. I
 tool, reads no environment variable but the one `--password-env` names, and reaches a network only
 through `--rpc-url` or `--config`.
 
-Run the project's own copy, `npx sauce <command> --help`, for every option. On Solana the same
-commands apply with differences in accounts, signing and fees: read `sauce-solana` alongside.
+**Run it as the package's command.** The `sauce` command comes with `@eco-incorp/sauce`. In a
+project that depends on the package (`npm i -D -E @eco-incorp/sauce`), run `npx sauce <command>`,
+the project's own copy, as the examples below do. Anywhere else, run
+`npx -y @eco-incorp/sauce <command>`. Never run `npx sauce` where the package is not installed:
+npx then fetches and runs npm's unrelated `sauce` package, not this one.
+
+`npx sauce <command> --help` lists every option. On Solana the same commands apply with
+differences in accounts, signing and fees: read `sauce-solana` alongside.
 
 | Command          | Does                                                                              |
 | ---------------- | --------------------------------------------------------------------------------- |

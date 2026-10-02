@@ -41,6 +41,10 @@ npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypai
   --account authority=pot --args 400
 ```
 
+`npx sauce` runs the command in a project that depends on `@eco-incorp/sauce`; anywhere else, run
+`npx -y @eco-incorp/sauce` in its place, because without the package `npx sauce` fetches and runs
+npm's unrelated `sauce` package.
+
 ## Accounts
 
 - `Account` is read-only; `Account<Writable>` and `Account<Signer>` declare the role the

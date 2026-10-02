@@ -94,8 +94,10 @@ the developer; never invent one.
 ## From a file to a transaction
 
 The `sauce` command comes with the package, which needs Node.js 24 or newer: install it in the
-project with `npm i -D -E @eco-incorp/sauce` and run it with `npx sauce`. With the program above
-saved as `payout.sauce.ts`:
+project with `npm i -D -E @eco-incorp/sauce` and run it there with `npx sauce`. Anywhere the
+package is not installed, run `npx -y @eco-incorp/sauce` in its place: there a bare `npx sauce`
+fetches and runs npm's unrelated `sauce` package. With the program above saved as
+`payout.sauce.ts`:
 
 ```sh
 npx sauce globals --chain base                     # the names a program on Base can use

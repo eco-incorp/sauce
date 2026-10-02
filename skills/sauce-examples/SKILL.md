@@ -31,6 +31,10 @@ names alone ([../sauce-globals/references/tokens.md](../sauce-globals/references
 [../sauce-globals/references/chains.md](../sauce-globals/references/chains.md)); or run
 `npx sauce globals --chain <chain>`.
 
+`npx sauce` runs the command in a project that depends on `@eco-incorp/sauce`; anywhere else, run
+`npx -y @eco-incorp/sauce` in its place, because without the package `npx sauce` fetches and runs
+npm's unrelated `sauce` package.
+
 ## SauceScript programs
 
 | Program                                                                                                                        | Chains                                             | Demonstrates                                                                                                                                                                                                                                                                                                                                                     | Skill                    |

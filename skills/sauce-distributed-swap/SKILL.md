@@ -203,6 +203,10 @@ registry does not name comes from the user or its issuer, never from a search su
 checked on chain before use: its `name()`, `symbol()` and `decimals()`. Decimals decide
 `maxPrice`.
 
+`npx sauce` runs the command in a project that depends on `@eco-incorp/sauce`; anywhere else, run
+`npx -y @eco-incorp/sauce` in its place, because without the package `npx sauce` fetches and runs
+npm's unrelated `sauce` package.
+
 **The venues that hold the pair.** On Base, the price-limited venues are Aerodrome Slipstream's
 three CL factories (`AerodromeSlipstream.CLFactory`, `.CLFactoryGaugeCaps`, `.CLFactoryGaugesV3`),
 Uniswap V3, PancakeSwap V3 and Uniswap V4. Look the pair up before writing the loops: a one-line

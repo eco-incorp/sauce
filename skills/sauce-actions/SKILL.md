@@ -68,6 +68,10 @@ resolves on the chain the document is compiled for:
 | the native currency | `"native"`, where the venue trades it   | `uniswapV4Swap`, `ambientSwap`, a Balancer batch |
 | any of these        | an address, `0x` and 40 hex digits      | always accepted                                  |
 
+`npx sauce` runs the command in a project that depends on `@eco-incorp/sauce`; anywhere else, run
+`npx -y @eco-incorp/sauce` in its place, because without the package `npx sauce` fetches and runs
+npm's unrelated `sauce` package.
+
 Symbols are upper case. A chain that does not register a name refuses the document when it
 compiles, naming the field, the chain and the name:
 

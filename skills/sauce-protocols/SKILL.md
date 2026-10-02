@@ -61,6 +61,10 @@ npx sauce run pools.sauce.ts --chain base --config sauce.config.json --keystore 
   --args 500
 ```
 
+`npx sauce` runs the command in a project that depends on `@eco-incorp/sauce`; anywhere else, run
+`npx -y @eco-incorp/sauce` in its place, because without the package `npx sauce` fetches and runs
+npm's unrelated `sauce` package.
+
 Written without `available(...)`, a member is required: the program does not compile for a chain
 that lacks it.
 
