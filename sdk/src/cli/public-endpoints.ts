@@ -58,9 +58,9 @@ const passesOn = (status: number): boolean =>
   status === 401 || status === 403 || status === 429 || status >= 500;
 
 /** The JSON-RPC methods a request body calls: one, or a batch's. */
-function methodsOf(body: Uint8Array): string[] {
+function methodsOf(body: string): string[] {
   try {
-    const parsed = JSON.parse(new TextDecoder().decode(body)) as unknown;
+    const parsed = JSON.parse(body) as unknown;
 
     return (Array.isArray(parsed) ? parsed : [parsed]).flatMap((call) => {
       const method = (call as { method?: unknown } | null)?.method;
@@ -79,7 +79,7 @@ function methodsOf(body: Uint8Array): string[] {
  */
 async function relay(
   route: Route,
-  body: Uint8Array,
+  body: string,
   send: typeof fetch,
   timeoutMs: number,
 ): Promise<Reply> {
@@ -120,19 +120,17 @@ async function relay(
     passed ?? {
       status: 502,
       type: "text/plain",
-      body: new TextEncoder().encode(
-        `no public endpoint for ${route.chain.slug} could be reached`,
-      ),
+      body: new TextEncoder().encode(`no public endpoint for ${route.chain.slug} could be reached`),
     }
   );
 }
 
-/** Reads `req`'s whole body. */
-function bodyOf(req: IncomingMessage): Promise<Uint8Array> {
+/** Reads `req`'s whole body: JSON-RPC, text. */
+function bodyOf(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     req.on("data", (chunk: Buffer) => chunks.push(chunk));
-    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     req.on("error", reject);
   });
 }
@@ -200,7 +198,8 @@ export function publicEndpoints(options: PublicEndpointsOptions = {}): PublicEnd
     url: (chain) => {
       const list = rpcs[chain.id];
       if (list === undefined || list.length === 0) return undefined;
-      if (port === undefined) throw new Error("internal: a public endpoint asked for before ready()");
+      if (port === undefined)
+        throw new Error("internal: a public endpoint asked for before ready()");
       if (!routes.has(String(chain.id))) {
         routes.set(String(chain.id), { chain, rpcs: list, current: 0 });
       }
