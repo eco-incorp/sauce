@@ -107,10 +107,10 @@ jobs:
       - name: Agent skills and the manual's reference — the committed generated files are current
         run: |
           set -euo pipefail
-          if [ -n "$(git status --porcelain -- skills docs/reference)" ]; then
-            git status --porcelain -- skills docs/reference
-            git diff -- skills docs/reference
-            echo "::error::the SDK build changed skills/ or docs/reference/: rebuild the SDK and commit the regenerated files"
+          if [ -n "$(git status --porcelain -- skills docs/reference docs/guides/distributed-swap.md)" ]; then
+            git status --porcelain -- skills docs/reference docs/guides/distributed-swap.md
+            git diff -- skills docs/reference docs/guides/distributed-swap.md
+            echo "::error::the SDK build changed skills/ or the manual's generated pages: rebuild the SDK and commit the regenerated files"
             exit 1
           fi
 

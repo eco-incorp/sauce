@@ -26,6 +26,8 @@
 //   tokens.md                                                      every chain's tokens and stocks
 //   saucescript.md                                                 the SauceScript reference, the
 //                                                                  `sauce-script` skill's file verbatim
+//   ../guides/distributed-swap.md                                  the `sauce-distributed-swap` skill,
+//                                                                  rendered as a guide
 //
 // The two audiences differ only in their links and in how they name what the other has: a skill
 // names another skill (`sauce-swaps`), and a manual page links the page that covers it. The manual
@@ -74,6 +76,9 @@ export const GENERATED_DIRS = ["sauce-chains/references", "sauce-protocols/refer
 /** The same under the manual's reference, which is generated whole: a page written there by hand
  *  would be removed, so a hand-written reference page belongs in `docs/api/`. */
 export const DOCS_GENERATED_DIRS = [".", "chains", "protocols"];
+/** The one generated page outside `docs/reference/`: the distributed swap, a guide rendered from
+ *  its skill, by path relative to `docs/reference/`. */
+export const DISTRIBUTED_SWAP_GUIDE = "../guides/distributed-swap.md";
 
 // ---- The names a program uses: sauce globals ----------------------------------------------------
 
@@ -721,8 +726,24 @@ const DOCS_SITE = {
   noun: "page",
   /** What a reader of the manual also needs about the release's chains. */
   chainIndexNotes: [
+    "On a preview chain the `sauce` command and the MCP server still rehearse and read:",
+    "`sauce simulate`, `sauce intent publish --dry-run`, `sauce intent fill` without `--send`, and",
+    "every read. What they refuse there, before any endpoint is reached or any key is read, is",
+    "building or sending a transaction; [the command's](../guides/cli.md#supported-and-preview-chains)",
+    "and [the server's](../guides/mcp.md#supported-and-preview-chains) lists name each one. An intent",
+    "publishes only when its source and every destination it opens are supported; the later levels",
+    "of a cascade (an intent opened inside another's body) are not checked, so keep every level on a",
+    "supported chain. Each step after publishing is refused by the chain it is sent on: a fill, a",
+    "proof or a cancellation by the destination, a claim or a refund by the source. Every refusal",
+    "names the supported chains, and the MCP server's `sauce_chains` gives each chain's support.",
+    "",
     "The TypeScript SDK is not gated: its builders take every chain below and build its",
     "transactions, and an integrator who submits one on a preview chain does so at their own risk.",
+    "",
+    "A chain-support request gives the chain and its id, what you want to run there, the protocols",
+    "and tokens it needs, the volume you expect and from when, and optionally how to reach you. Where",
+    "a request for the chain exists, add your use case to it as a comment instead of opening another.",
+    "A refusal links both, prefilled for the chain it refused.",
     "",
   ],
 };
@@ -1656,6 +1677,52 @@ function renderTokens(data, globalsSkill) {
   return lines.join("\n");
 }
 
+/**
+ * A skill's SKILL.md as a guide in the manual, at `from` (relative to `docs/reference/`): its
+ * frontmatter dropped, the code block that is its example's code shown as the whole example file
+ * (header and all, which the page refers to), each link replaced as `links` says (`[label, href]`,
+ * or `[label]` for no link: a file the manual does not ship), and its skill names linked.
+ */
+function renderSkillGuide(source, skill, example, links, from) {
+  const body = skill.replace(/^---\n[^]*?\n---\n+/, "");
+  const lines = [];
+  let block;
+  for (const line of body.split("\n")) {
+    if (block === undefined && line.startsWith("```")) {
+      block = [line];
+      continue;
+    }
+    if (block !== undefined) {
+      if (!line.startsWith("```")) {
+        block.push(line);
+        continue;
+      }
+      const code = block.slice(1).join("\n");
+      // The example's code, which the skill quotes without its header: the file as it ships.
+      const whole = code.length > 0 && example.trimEnd().endsWith(code);
+      lines.push(block[0], ...(whole ? example.trimEnd().split("\n") : block.slice(1)), line);
+      block = undefined;
+      continue;
+    }
+    lines.push(
+      line.replace(/\[([^\]]*)\]\(([^)\s]+)\)/g, (whole, _label, target) => {
+        if (/^[a-z]+:/i.test(target) || target.startsWith("#")) return whole;
+        if (links[target] === undefined)
+          throw new Error(`the skill links ${target}, which ${from} has no page for`);
+        const [label, to] = links[target];
+
+        return to === undefined ? label : `[${label}](${to})`;
+      }),
+    );
+  }
+
+  return [renderedFrom(source), "", ...docsProse(lines, from)].join("\n");
+}
+
+/** The note a page rendered from a skill opens with: its source, so an edit goes there. */
+const renderedFrom = (file) =>
+  `<!-- Generated from ${relative(join(SDK, ".."), file)} for the manual. Edit that file, not this one. -->`;
+
 /** The note a copied file opens with: where it is copied from, so an edit goes there. */
 const copiedFrom = (file) =>
   `<!-- Generated: a copy of ${relative(join(SDK, ".."), file)}. Edit that file, not this one. -->`;
@@ -1673,6 +1740,22 @@ export function renderDocsReference(data, skillFiles) {
     "tokens.md": renderTokens(data, skillFiles.globals),
     // Byte for byte below its note: its anchors are the skill's, and it links nothing outside itself.
     "saucescript.md": `${copiedFrom(BUILTINS)}\n\n${skillFiles.builtins}`,
+    // A how-to rather than a reference, so it sits among the guides; this generator owns it.
+    [DISTRIBUTED_SWAP_GUIDE]: renderSkillGuide(
+      join(SKILLS_DIR, "sauce-distributed-swap", "SKILL.md"),
+      skillFiles.distributedSwap,
+      skillFiles.distributedSwapExample,
+      {
+        "examples/distributed-swap.sauce.ts": ["`distributed-swap.sauce.ts`"],
+        "examples/distributed-swap.mts": ["`distributed-swap.mts`"],
+        "../sauce-globals/references/tokens.md": ["tokens", "../reference/tokens.md"],
+        "../sauce-globals/references/stocks.md": [
+          "tokenized stocks",
+          "../reference/tokens.md#tokenized-stocks",
+        ],
+      },
+      DISTRIBUTED_SWAP_GUIDE,
+    ),
   };
   for (const chain of data.chains) {
     files[site.chain(chain.slug)] = renderChain(chain, data.support.supported, site);
@@ -1721,6 +1804,8 @@ function skillFiles(dir, data) {
     ),
     globals: read("sauce-globals", "SKILL.md"),
     builtins: read(relative(SKILLS_DIR, BUILTINS)),
+    distributedSwap: read("sauce-distributed-swap", "SKILL.md"),
+    distributedSwapExample: read("sauce-distributed-swap", "examples", "distributed-swap.sauce.ts"),
   };
 }
 

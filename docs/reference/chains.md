@@ -13,8 +13,24 @@ look among the [existing requests](https://github.com/eco-incorp/sauce/issues?q=
 or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml) with the chain-support issue form; each preview chain's
 page links its own.
 
+On a preview chain the `sauce` command and the MCP server still rehearse and read:
+`sauce simulate`, `sauce intent publish --dry-run`, `sauce intent fill` without `--send`, and
+every read. What they refuse there, before any endpoint is reached or any key is read, is
+building or sending a transaction; [the command's](../guides/cli.md#supported-and-preview-chains)
+and [the server's](../guides/mcp.md#supported-and-preview-chains) lists name each one. An intent
+publishes only when its source and every destination it opens are supported; the later levels
+of a cascade (an intent opened inside another's body) are not checked, so keep every level on a
+supported chain. Each step after publishing is refused by the chain it is sent on: a fill, a
+proof or a cancellation by the destination, a claim or a refund by the source. Every refusal
+names the supported chains, and the MCP server's `sauce_chains` gives each chain's support.
+
 The TypeScript SDK is not gated: its builders take every chain below and build its
 transactions, and an integrator who submits one on a preview chain does so at their own risk.
+
+A chain-support request gives the chain and its id, what you want to run there, the protocols
+and tokens it needs, the volume you expect and from when, and optionally how to reach you. Where
+a request for the chain exists, add your use case to it as a comment instead of opening another.
+A refusal links both, prefilled for the chain it refused.
 
 | Chain | Slug | Id | Kind | Support | Intents | CCTP | Tokens | Protocols |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
