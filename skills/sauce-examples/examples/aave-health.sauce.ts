@@ -38,18 +38,22 @@ function main(
     1000000000000000000n,
     target * 10000n,
   );
-  const excess = account.totalDebtBase - debtAtTarget;
-  // In USDC base units at Aave's price for USDC, rounded up so the target is reached.
-  const oracle = AaveV3Reads.at(AaveV3.PoolAddressesProvider).getPriceOracle();
-  let repay = Math.mulDiv(excess, 1000000n, AaveV3Reads.at(oracle).getAssetPrice(USDC)) + 1n;
-
-  // No more than the Pot owes in USDC, nor more than it holds.
+  // The Pot's USDC debt, in USDC base units, and its worth at Aave's price for USDC. Debt in other
+  // tokens stays; the USDC debt to keep is what is left of debtAtTarget beside it.
   const debtToken = AaveV3Reads.at(AaveV3.Pool).getReserveVariableDebtToken(USDC);
   const owed = Token(debtToken).balanceOf(self);
-  const held = USDC.balanceOf(self);
+  const oracle = AaveV3Reads.at(AaveV3.PoolAddressesProvider).getPriceOracle();
+  const usdcPrice = AaveV3Reads.at(oracle).getAssetPrice(USDC); // base currency per USDC
+  const owedValue = Math.mulDiv(owed, usdcPrice, 1000000n);
+  const other = account.totalDebtBase > owedValue ? account.totalDebtBase - owedValue : 0n;
+  const keep = debtAtTarget > other ? Math.mulDiv(debtAtTarget - other, 1000000n, usdcPrice) : 0n;
+  // One unit more than the difference, for Aave's rounding of the debt it burns; no more than the
+  // Pot owes, nor more than it holds.
+  let repay = owed > keep ? owed - keep + 1n : 0n;
   if (repay > owed) {
     repay = owed;
   }
+  const held = USDC.balanceOf(self);
   if (repay > held) {
     repay = held;
   }

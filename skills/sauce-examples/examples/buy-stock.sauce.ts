@@ -24,15 +24,6 @@ import { uniswapV3 } from "@sauce/router";
 
 const ONE_SHARE = 1000000000000000000n; // SPCXon has 18 decimals
 
-// What one whole share costs, in USDC base units, at a pool's sqrt price (token1 per token0, times
-// 2^96). The lower address of the pair is the pool's token0.
-function sharePrice(sqrtPriceX96: Uint256): Uint256 {
-  const ratio = Math.mulDiv(sqrtPriceX96, sqrtPriceX96, 1n << 96n); // token1 per token0, × 2^96
-  return USDC < SPCXon
-    ? Math.mulDiv(ONE_SHARE, 1n << 96n, ratio)
-    : Math.mulDiv(ratio, ONE_SHARE, 1n << 96n);
-}
-
 function main(
   budget: Uint256,
   maxPrice: Uint256,
@@ -54,8 +45,14 @@ function main(
     if (candidate == 0n || UniswapV3.Pool(candidate).liquidity() == 0n) {
       continue;
     }
-    // The price a buyer pays there: the pool's price with its fee on top.
-    const price = sharePrice(UniswapV3.Pool(candidate).slot0().sqrtPriceX96);
+    // What a share costs there in USDC base units, from the pool's sqrt price (token1 per token0,
+    // times 2^96; the lower address of the pair is token0), and with the pool's fee on top.
+    const sqrtPriceX96 = UniswapV3.Pool(candidate).slot0().sqrtPriceX96;
+    const ratio = Math.mulDiv(sqrtPriceX96, sqrtPriceX96, 1n << 96n);
+    const price =
+      USDC < SPCXon
+        ? Math.mulDiv(ONE_SHARE, 1n << 96n, ratio)
+        : Math.mulDiv(ratio, ONE_SHARE, 1n << 96n);
     const paid = Math.mulDiv(price, 1000000n, 1000000n - tier);
     if (pool == 0n || paid < cheapest) {
       pool = candidate;
