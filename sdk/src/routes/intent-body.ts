@@ -49,6 +49,10 @@ export function literalValue(node: unknown): bigint | undefined {
   if ((node as AstNode | null | undefined)?.type !== "Literal") return undefined;
   const value = (node as { value?: unknown }).value;
   if (typeof value === "bigint") return value;
+  // A plain integer, `1000000000000000000` as much as `1`: read from its text, which a JavaScript
+  // number past 2^53 no longer holds exactly.
+  const raw = String((node as { raw?: unknown }).raw ?? "").replace(/_/g, "");
+  if (typeof value === "number" && /^(?:0[xX][0-9a-fA-F]+|[0-9]+)$/.test(raw)) return BigInt(raw);
   if (typeof value === "number" && Number.isSafeInteger(value)) return BigInt(value);
   if (typeof value === "boolean") return value ? 1n : 0n;
   return undefined;
