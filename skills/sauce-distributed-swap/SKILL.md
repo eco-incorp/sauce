@@ -286,7 +286,7 @@ whole budget buys at least `budget × 1e18 ÷ maxPrice`:
 ## Running it
 
 The budget must be in the Pot before the program runs: send it there from any wallet, or let
-`sauce run --fund` pull it from the signer in the same cook (`sauce-run`). **Rehearse three times
+`sauce run --fund` pull it from the signer in the same cook (`sauce-cli`). **Rehearse three times
 before sending**, with no key and nothing sent: the trade as meant, one with `minTokens` above what
 fills, which reverts `bought below minTokens`, and one with `maxAvgPrice` below the average, which
 reverts `average too high`. That shows both checks work. Buying SPCXc with 1,000 USDC at most 150
