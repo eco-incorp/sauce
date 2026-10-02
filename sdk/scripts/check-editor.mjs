@@ -163,8 +163,8 @@ export async function checkEditor({ project, tsserverPath, programs }) {
 
 /**
  * This repository's checkout as an editor opens it: every `*.sauce.ts` git tracks, in the root
- * tsconfig.json's project, with no error. A program reopened as a bigint index and an undeclared
- * define still shows none — the plugin loaded — and reopened as a misspelled builtin shows it. A
+ * tsconfig.json's project, with no error. A program reopened as a bigint index beside a number
+ * still shows none — the plugin loaded — and reopened as a misspelled builtin shows it. A
  * skill's runner, a docs example's TypeScript and the SDK's own source each keep their project.
  * Returns how many programs it checked.
  */
@@ -197,11 +197,11 @@ export async function checkRepositoryEditor({ root, tsserverPath }) {
       server.notify("close", { file: probe });
       server.notify("open", { file: probe, fileContent });
     };
-    reopen("function main(xs: Uint256[], i: Uint256) {\n  require(xs[i] == AMOUNT);\n}\n");
+    reopen("function main(xs: Uint256[], i: Uint256) {\n  require(xs[i] == 1);\n}\n");
     assert.deepEqual(
       await diagnostics(server, probe),
       [],
-      "the plugin is loaded: a bigint index and an undeclared define show no error",
+      "the plugin is loaded: a bigint index beside a number shows no error",
     );
     reopen(MISTAKE);
     assertMistakeShows(await diagnostics(server, probe));

@@ -6,17 +6,15 @@
 //   - A number and a bigint together: `x == 0`, `n + 1`, `f(500)` where a bigint is declared
 //     (TS2365, TS2367, TS2322, TS2345). In SauceScript `1` and `1n` are the same integer, and an
 //     account compares as its address (`program == 0x06dd…`).
-//   - An undeclared UPPER_CASE name (TS2304, TS2552): a define, which the compile is given
-//     (`--define AMOUNT=5`) and the editor is not. A misspelled one still fails the compile.
 //
 // Everything else TypeScript reports stays: a misspelled builtin, a wrong argument count, a method a
-// contract does not have. Only `*.sauce.ts` files are filtered; any other file in the project is
+// contract does not have, and a name the program never declares, whatever its case: a program's
+// inputs are `main`'s parameters, so an undeclared name is a mistake the compile also refuses. Only `*.sauce.ts` files are filtered; any other file in the project is
 // left as TypeScript reports it. `sauce init` names this plugin in the program directory's
 // tsconfig.json; tsserver loads it from the project's own `node_modules`, so an editor has to run
 // the workspace's TypeScript for it to load (the declarations need nothing of the kind).
 "use strict";
 
-const DEFINE = /^[A-Z][A-Z0-9_]*$/;
 /** A TypeScript type that is a SauceScript integer: `bigint`, `number`, a literal of either, or an
  *  `Account` (`Account<Writable, Signer>`), which compares as its address. */
 const INT = String.raw`(?:bigint|number|-?\d+n?|SauceInt|Account(?:<[\w, ]*>)?)`;
@@ -43,15 +41,9 @@ const PATTERNS = {
  * `flattenDiagnosticMessageText`.
  */
 function isFalsePositive(diagnostic, flatten) {
-  const text = flatten(diagnostic.messageText, "\n");
-  if (diagnostic.code === 2304 || diagnostic.code === 2552) {
-    const name = /^Cannot find name '([^']+)'/.exec(text);
-
-    return name !== null && DEFINE.test(name[1]);
-  }
   const pattern = PATTERNS[diagnostic.code];
 
-  return pattern !== undefined && pattern.test(text);
+  return pattern !== undefined && pattern.test(flatten(diagnostic.messageText, "\n"));
 }
 
 const isProgram = (fileName) => /\.sauce\.ts$/.test(fileName);
