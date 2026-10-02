@@ -35,9 +35,9 @@ describe("routes: callable alias === .route", () => {
     expect(viaCall.intent).toEqual(viaRoute.intent);
   });
 
-  it("typeof chainAccessors.Base === 'function' and its own keys are exactly ['chain','route']", () => {
+  it("typeof chainAccessors.Base === 'function' and its own keys are exactly ['Portal','chain','route']", () => {
     expect(typeof chainAccessors.Base).toBe("function");
-    expect(Object.keys(chainAccessors.Base).sort()).toEqual(["chain", "route"]);
+    expect(Object.keys(chainAccessors.Base).sort()).toEqual(["Portal", "chain", "route"]);
   });
 
   it("chain('eth')/chain(8453)/chain('BNB Chain') resolve and are callable", () => {

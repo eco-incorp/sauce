@@ -80,8 +80,8 @@ describe("chain accessors: one named export per canonical chain", () => {
   });
 
   it("composing never mutates the underlying chainAccessors entry", () => {
-    expect(Object.keys(chainAccessors.Base).sort()).toEqual(["chain", "route"]);
-    expect(Object.keys(chainAccessors.Solana).sort()).toEqual(["chain", "route"]);
+    expect(Object.keys(chainAccessors.Base).sort()).toEqual(["Portal", "chain", "route"]);
+    expect(Object.keys(chainAccessors.Solana).sort()).toEqual(["Portal", "chain", "route"]);
   });
 
   it("an svm chain ALSO carries the venue tree; an EVM chain provably does not", () => {

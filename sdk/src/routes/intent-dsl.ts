@@ -1060,3 +1060,79 @@ export function openRoute(
   };
   return pending;
 }
+
+/** One token amount, or a list of them: what `send` and `receive` name. */
+export type TokenAmounts = TokenAmountInput | readonly TokenAmountInput[];
+
+/** `send`'s options: the reward's own fields beside its tokens — the chain it is escrowed on, who
+ *  may reclaim it, its deadline, the prover, a native amount. */
+export type PortalSendOptions = Omit<SauceRewardSpec, "tokens">;
+
+/** `receive`'s options: the route's, beside what the solver delivers — its deadline (required),
+ *  the execution, the defines, any precalls. Each reward field here is a fallback for `send`'s. */
+export type PortalReceiveOptions = Omit<IntentOptions, "tokens">;
+
+/**
+ * A chain's Portal, opening an intent whose body runs on that chain:
+ * `Base.Portal.send(reward, rewardOptions).receive(delivery, routeOptions).then(() => { … })`.
+ * Every step is required, in that order.
+ */
+export interface ChainPortal {
+  /** The reward the creator pays, escrowed on the source chain. */
+  send(reward: TokenAmounts, options?: PortalSendOptions): PortalSent;
+}
+
+/** An intent with its reward, waiting for what the solver delivers. */
+export interface PortalSent {
+  /** What the solver delivers on the destination, for the body to run with. */
+  receive(delivery: TokenAmounts, options: PortalReceiveOptions): PortalReceived;
+}
+
+/**
+ * An intent waiting for its body. Its `then` is the intent's, not a promise's: `await` on this, or
+ * returning it from an async function, calls `then(resolve, reject)`, which is refused.
+ */
+export interface PortalReceived {
+  /** The body that runs on the destination, compiled for it: the built intent. */
+  then(body: SauceBody): BuiltIntent;
+}
+
+const listOf = (amounts: TokenAmounts): readonly TokenAmountInput[] =>
+  Array.isArray(amounts) ? amounts : [amounts as TokenAmountInput];
+
+const isNative = (value: unknown): boolean =>
+  typeof value === "function" && Function.prototype.toString.call(value).includes("[native code]");
+
+/**
+ * The Portal of `chain`: `send(...).receive(...).then(body)` is `openRoute(chain, body, { ...
+ * receiveOptions, tokens: delivery }).reward({ ...sendOptions, tokens: reward })`, so it builds the
+ * same intent, byte for byte.
+ */
+export function chainPortal(chain: ChainRef): ChainPortal {
+  const destination = requireChain(chain);
+  const name = `${destination.slug}.Portal.send(...).receive(...)`;
+
+  return {
+    send: (reward, sendOptions) => ({
+      receive: (delivery, receiveOptions) => ({
+        // Not `then(body)`: a promise's resolution calls it with two native functions, and that
+        // call has to be told apart from the intent's own.
+        then(...args: unknown[]): BuiltIntent {
+          const [body] = args;
+          if (args.length !== 1 || isNative(body)) {
+            throw new TypeError(
+              `${name} is not a promise: \`.then(...)\` takes the intent's body, ` +
+                "`.then(() => { … })`, and returns the intent. It was called as a promise's " +
+                "`then` — by `await`, or by returning it from an async function — which would " +
+                "build nothing. Call `.then(() => { … })` and use the intent it returns.",
+            );
+          }
+          return openRoute(destination, body as SauceBody, {
+            ...receiveOptions,
+            tokens: listOf(delivery),
+          }).reward({ ...sendOptions, tokens: listOf(reward) });
+        },
+      }),
+    }),
+  };
+}

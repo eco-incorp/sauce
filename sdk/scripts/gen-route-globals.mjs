@@ -138,13 +138,13 @@ function render(chains, tokensByChain) {
 // \`@sauce/token\`'s SafeERC20 function, a read to \`IERC20.at(x)\`) and is never invoked
 // by the host.
 //
-// Every chain export carries \`SauceIntentChain\` the same way: the SauceScript call that opens an
-// intent, \`Ethereum(() => { ... }, { tokens }).reward({ tokens })\`, so a closure that opens one
-// inside \`Base(() => { ... })\` typechecks with the chain imported. It is the FIRST signature,
-// because a closure's \`Ethereum(() => { ... })\` would otherwise resolve to the host one and its
-// \`.reward({ token: USDC })\` would not typecheck. A host call still resolves to the host signature:
-// a string body, or any options, fails the SauceScript one (its delivery requires \`tokens\` of
-// bigints), and \`Parameters\`/\`ReturnType\` read the last signature, the host's.
+// Every chain export carries \`SauceIntentChain\` the same way: the SauceScript that opens an intent,
+// \`Ethereum.Portal.send({ token, amount }).receive({ token, amount }).then(() => { ... })\`, so a
+// closure that opens one inside \`Base(() => { ... })\` typechecks with the chain imported. It comes
+// FIRST, so each step's SauceScript signature is the first overload: a closure's
+// \`.send({ token: USDC, amount })\` names a token by a SauceScript value, which the host's does not
+// take. A host call still resolves to the host signature: its tokens are addresses, and
+// \`.receive(...)\` takes the route's options, which the SauceScript step does not.
 import type { ChainGlobals } from "./builder.js";
 import type { ChainContracts } from "../descriptors/accessors.js";
 import type { SvmVenueAccessors } from "../svm/accessors.js";
@@ -154,8 +154,8 @@ import { composedChainGlobal } from "./composed.js";
 import type { SauceIntentChain } from "./source-globals.generated.js";
 import type { RegistryToken } from "./token-registry.js";
 
-/** What every chain accessor is: the SauceScript intent call a closure makes, then the eco-routes
- *  DSL for that chain (callable, plus \`.chain\`/\`.route\`), intersected with the
+/** What every chain accessor is: the SauceScript intent a closure opens, then the eco-routes
+ *  DSL for that chain (callable, plus \`.chain\`/\`.route\`/\`.Portal\`), intersected with the
  *  chain-independent native contract tree. Naming the chain through \`ChainGlobals\` is the
  *  structural cross-check above. */
 type Composed<N extends keyof ChainGlobals> = SauceIntentChain & ChainGlobals[N] & ChainContracts;
