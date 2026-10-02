@@ -4,10 +4,11 @@
  * `Base(() => { ... Ethereum(() => { ... }).reward({ ... }) })` is TypeScript the host compiles before
  * the SDK reads the closure's text, so the inner `Ethereum(...)` has to mean something to `tsc`. It
  * means the imported chain export, which carries the SauceScript call that opens an intent
- * (`SauceIntentChain`, from `source-globals.generated.ts`) ahead of its host signature — as the
- * imported `Token` carries `Token(addr)`. Nothing is declared globally: a chain named in a closure
- * is imported like any other use of it (`routes-chain-exports-types.test.ts` pins that a bare one is
- * an error), and the host calls keep resolving to the host signature.
+ * (`SauceIntentChain`, from `source-globals.generated.ts`, the same one a `.sauce.ts` file's chains
+ * extend) ahead of its host signature — as the imported `Token` carries `Token(addr)`. Nothing is
+ * declared globally: a chain named in a closure comes from the same import as the host calls
+ * (`routes-chain-exports-types.test.ts` pins that a bare one is an error), and the host calls keep
+ * resolving to the host signature, `Parameters` and `ReturnType` included.
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -45,9 +46,29 @@ const built = Base(
 export const hash: string = built.hash().intentHash;
 `;
 
+/** A closure that reads a value with a registry binding and nests on it. */
+const MEASURED = `
+import { Base, Ethereum } from ${ROOT};
+
+Base(
+  () => {
+    const got: bigint = Erc20.ERC20(USDC).balanceOf(ctx.self());
+    Ethereum(() => {
+      USDC.transfer(0x1n, got);
+    }).reward({ tokens: [{ token: USDC, amount: got }] });
+  },
+  { deadline: 1n },
+);
+`;
+
 /** Every host form still resolves to the host signature, and its types are the host's. */
 const HOST = `
 import { Base, Ethereum, type routes } from ${ROOT};
+
+type Equal<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+const hostParameters: Equal<Parameters<typeof Base>, Parameters<routes.ChainRoute>> = true;
+const hostReturn: Equal<ReturnType<typeof Base>, routes.PendingSauceRoute> = true;
 
 const options: routes.IntentOptions = { deadline: 1n };
 const fromSource: routes.PendingSauceRoute = Base("function main() { return 1n; }", options);
@@ -62,12 +83,14 @@ const nested = Base(() => {}, options)
 const viaRoute: routes.PendingSauceRoute = Base.route(() => {}, options);
 const parameter: Parameters<typeof Base>[1] = options;
 const returned: ReturnType<typeof Base> = fromClosure;
-export const all = [fromSource, withTokens, nested, viaRoute, parameter, returned];
+export const all = [fromSource, withTokens, nested, viaRoute, parameter, returned, hostParameters, hostReturn];
 `;
 
-/** What the SauceScript call refuses, as the lowering does. */
+/** What the SauceScript call refuses, as the lowering does; and its result is no host value. */
 const WRONG = `
-import { Ethereum } from ${ROOT};
+import { Ethereum, type routes } from ${ROOT};
+
+const pending: routes.PendingSauceRoute = Ethereum(() => {});
 
 Ethereum(() => {}).reward({ tokens: [{ token: USDC, amount: 1n }], deadline: 1n });
 Ethereum(() => {}).reward({ tokens: [{ token: USDC }] });
@@ -87,7 +110,7 @@ Base(
 );
 `;
 
-const PROBES = { NESTED, HOST, WRONG, NOT_IMPORTED } as const;
+const PROBES = { NESTED, MEASURED, HOST, WRONG, NOT_IMPORTED } as const;
 type Probe = keyof typeof PROBES;
 
 const dir = mkdtempSync(join(tmpdir(), "sauce-intent-closure-types-"));
@@ -127,12 +150,18 @@ describe("a typed closure opening a nested intent", () => {
     expect(messages("NESTED")).toEqual([]);
   });
 
-  it("leaves every host call on the host signature", () => {
+  it("typechecks a value read in the closure as the nested intent's amount", () => {
+    expect(messages("MEASURED")).toEqual([]);
+  });
+
+  it("leaves every host call on the host signature, its Parameters and its ReturnType", () => {
     expect(messages("HOST")).toEqual([]);
   });
 
-  it("refuses what the lowering refuses: a deadline, an entry with no amount, an empty delivery, a result", () => {
-    expect(diagnostics("WRONG")).toHaveLength(4);
+  it("refuses what the lowering refuses, and a SauceScript intent used as a host one", () => {
+    // A deadline in the reward, an entry with no amount, an empty delivery, a result used, and the
+    // closure's call taken for a host route.
+    expect(diagnostics("WRONG")).toHaveLength(5);
   });
 
   it("needs the chain imported: nothing is declared globally", () => {
