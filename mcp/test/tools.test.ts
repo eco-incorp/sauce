@@ -924,11 +924,34 @@ describe("sauce_intent_publish", () => {
 
   it("takes the Portal form: the call form's program, intent and transactions", async () => {
     const portal = { ...args, source: PORTAL_INTENT };
+    // The call form given the reward deadline the Portal form defaults to: seven days past the
+    // route's.
+    const call = { ...args, intentRewardDeadline: args.intentDeadline + 604_800 };
     const compiled = ok(await mcp.call("sauce_compile", portal));
-    assert.equal(compiled.bytecode, ok(await mcp.call("sauce_compile", args)).bytecode);
+    assert.equal(compiled.bytecode, ok(await mcp.call("sauce_compile", call)).bytecode);
     const out = ok(await mcp.call("sauce_intent_publish", portal)) as Published;
-    assert.deepEqual(out, ok(await mcp.call("sauce_intent_publish", args)));
+    assert.deepEqual(out, ok(await mcp.call("sauce_intent_publish", call)));
     assert.equal(out.intents[0]!.destination, "base");
+  });
+
+  it("defaults the Portal form's deadlines from now, and its creator to the wallet", async () => {
+    const before = Math.floor(Date.now() / 1000);
+    const out = ok(
+      await mcp.call("sauce_intent_publish", {
+        source: PORTAL_INTENT,
+        defines: { RECIPIENT },
+        from: OWNER,
+      }),
+    ) as Published & {
+      intents: Array<{
+        record: { route: { deadline: string }; reward: { deadline: string; creator: string } };
+      }>;
+    };
+    const after = Math.floor(Date.now() / 1000);
+    const { route, reward } = out.intents[0]!.record;
+    assert.ok(Number(route.deadline) >= before + 300 && Number(route.deadline) <= after + 300);
+    assert.equal(BigInt(reward.deadline), BigInt(route.deadline) + 604_800n);
+    assert.equal(reward.creator.toLowerCase(), OWNER.toLowerCase());
   });
 
   it("builds the approve and publishAndFund instead with intentFundVia publishAndFund", async () => {
