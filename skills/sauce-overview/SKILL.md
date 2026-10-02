@@ -36,7 +36,8 @@ command that runs it, with `--chain <chain>` and `--args` naming every `main` pa
 its units, in smallest units (`5000000000` is 5,000 USDC, which has 6 decimals; an array or a
 record is passed as JSON); and one concrete invocation on a supported chain with real values,
 addresses taken from the registry and the developer's own inputs left as `<placeholders>`. An
-intent file lists its defines the same way. `sauce-script` shows one.
+intent file is written the same way: its inputs are `main` parameters too. `sauce-script` shows
+one.
 
 ## Supported chains
 
@@ -107,7 +108,7 @@ npx sauce run payout.sauce.ts --chain base --config sauce.config.json --keystore
   --args <recipient> 1000000
 ```
 
-**Units differ by flag.** `--args` and defines take base units: `1000000` is 1 USDC (6
+**Units differ by flag.** `--args` takes base units: `1000000` is 1 USDC (6
 decimals). `--assume-balance` and `--fund` take whole tokens: `USDC:1` is 1 USDC, and
 `USDC:1000000n`, ending in `n`, the same in base units.
 
@@ -122,20 +123,20 @@ server (`npx -y @eco-incorp/sauce mcp`); `sauce-cli` maps each command to its to
 
 ## Pick the next skill
 
-| Task                                                                                     | Skill                    |
-| ---------------------------------------------------------------------------------------- | ------------------------ |
-| The language: the two program forms, `main(...)` inputs and defines, compile errors      | `sauce-script`           |
-| Names with no import: tokens, `Token(...)`, protocol namespaces, chains, `ctx`           | `sauce-globals`          |
-| What is on a chain: support, tokens, every protocol with its addresses, intents          | `sauce-chains`           |
-| Every protocol: how to choose one, its deployments, how a program calls it, its pitfalls | `sauce-protocols`        |
-| Any swap: `@sauce/router`, price limits, the Pot's Router, the guard every leg needs     | `sauce-swaps`            |
-| One swap spread over several price-limited pools: a limit order                          | `sauce-distributed-swap` |
-| Protocol operations as JSON data, not a program: actions documents                       | `sauce-actions`          |
-| Continuing on another chain: intents, cascades, rewards                                  | `sauce-intents`          |
-| Solana programs: accounts, SPL, the Kitchen                                              | `sauce-solana`           |
-| Compiling and running: the `sauce` commands, the Pot, funding, simulating, publishing    | `sauce-cli`              |
-| Application code: compiling, arguments, cooks, actions and verification from TypeScript  | `sauce-typescript`       |
-| Complete programs, each showing an idiom                                                 | `sauce-examples`         |
+| Task                                                                                      | Skill                    |
+| ----------------------------------------------------------------------------------------- | ------------------------ |
+| The language: the two program forms, `main(...)` inputs, module constants, compile errors | `sauce-script`           |
+| Names with no import: tokens, `Token(...)`, protocol namespaces, chains, `ctx`            | `sauce-globals`          |
+| What is on a chain: support, tokens, every protocol with its addresses, intents           | `sauce-chains`           |
+| Every protocol: how to choose one, its deployments, how a program calls it, its pitfalls  | `sauce-protocols`        |
+| Any swap: `@sauce/router`, price limits, the Pot's Router, the guard every leg needs      | `sauce-swaps`            |
+| One swap spread over several price-limited pools: a limit order                           | `sauce-distributed-swap` |
+| Protocol operations as JSON data, not a program: actions documents                        | `sauce-actions`          |
+| Continuing on another chain: intents, cascades, rewards                                   | `sauce-intents`          |
+| Solana programs: accounts, SPL, the Kitchen                                               | `sauce-solana`           |
+| Compiling and running: the `sauce` commands, the Pot, funding, simulating, publishing     | `sauce-cli`              |
+| Application code: compiling, arguments, cooks, actions and verification from TypeScript   | `sauce-typescript`       |
+| Complete programs, each showing an idiom                                                  | `sauce-examples`         |
 
 ## Rules for every program
 

@@ -1,6 +1,6 @@
 ---
 name: sauce-script
-description: Writing SauceScript programs (.sauce.ts files) — the checked TypeScript subset Sauce compiles to on-chain bytecode, with a complete reference of its types, operators, statements and builtins (ctx, crypto, Math, abi, evm, svm, value methods, account properties, contract bindings, limits). Covers the two program forms (function main(...) with runtime arguments, and a file of top-level statements whose values are defines, the form for intent files), what compiling a file for a chain adds (its names and token syntax, the source otherwise as written), module constants as overridable defaults, helper functions, what syntax compiles and what to write instead, require/throw and atomic failure, catching a failed external call, and reading compile errors. Use when writing or editing any Sauce program, when a Sauce compile fails ("unsupported construct", "is not a declared variable", "expected a number, found a bool", "Unexpected token"), or when asked what SauceScript can or cannot express.
+description: Writing SauceScript programs (.sauce.ts files) — the checked TypeScript subset Sauce compiles to on-chain bytecode, with a complete reference of its types, operators, statements and builtins (ctx, crypto, Math, abi, evm, svm, value methods, account properties, contract bindings, limits). Covers the two program forms (function main(...), whose parameters are every input a program takes, intent files included, and a file of top-level statements for a program with no inputs), what compiling a file for a chain adds (its names and token syntax, the source otherwise as written), module constants, helper functions, what syntax compiles and what to write instead, require/throw and atomic failure, catching a failed external call, and reading compile errors. Use when writing or editing any Sauce program, when a Sauce compile fails ("unsupported construct", "is not a declared variable", "expected a number, found a bool", "Unexpected token"), or when asked what SauceScript can or cannot express.
 ---
 
 # Writing SauceScript
@@ -21,17 +21,17 @@ for a program to read. The names a chain supplies (`USDC`, `Token(...)`, `Uniswa
 A program lives in a `.sauce.ts` file and is compiled **for a chain** (`--chain`), which decides
 what every registry name means. A file takes one of two forms:
 
-| Form                   | Values                                                                                               | Use it for                                                                                    |
-| ---------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| **`function main(…)`** | `main`'s parameters, passed at run time (`--args`); module constants for choices made per compile    | reusable programs: one bytecode serves every input, such as a swap's tokens, amount and limit |
-| **Top-level script**   | names the file leaves undeclared, each set by a define (`--define NAME=VALUE`); no runtime arguments | intent files (`sauce-intents`), which are only statements, and one-off programs               |
+| Form                   | Inputs                                                   | Use it for                                                                                                                  |
+| ---------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **`function main(…)`** | `main`'s parameters, passed with `--args`                | every program that takes an input: one bytecode serves every value, such as a swap's tokens, amount and limit; intent files |
+| **Top-level script**   | none: each value is written in the file or read on chain | a program with no inputs                                                                                                    |
 
-A program with runtime inputs declares `main`, and may declare helper functions and import ABIs.
+A program with inputs declares `main`, and may declare helper functions and import ABIs.
 (The `chain=…` after an example's opening fence here only says which chains it is checked on; it
 is not part of the file.)
 
 ```sauce chain=base,arbitrum
-// A compile-time choice: a module constant, which a define of the same name replaces.
+// A fixed value of the program: a module constant, folded into the bytecode.
 const FEE_BPS = 30n;
 
 // A helper. It returns a value on every path.
@@ -67,24 +67,26 @@ function main(): Address {
 ```
 
 A top-level script runs its statements in order, after its imports, and may declare helper
-functions beside them. Every value it does not compute is a define: the name stays undeclared in
-the file, and `--define RECIPIENT=<address> --define FLOOR=1000000` sets it.
+functions beside them. It takes no inputs: every value it uses is written in the file, read on
+chain or a name the chain supplies. A value that changes from one run to the next is a parameter
+of `main`.
 
-```sauce chain=base,arbitrum define=RECIPIENT,FLOOR
+```sauce chain=base,arbitrum
 // A helper takes what it needs as parameters.
 function afterFee(amount: Uint256): Uint256 {
   return amount - amount / 1000n;
 }
 
-require(RECIPIENT != 0n, "set RECIPIENT");
+// Supplies the USDC this Pot holds, less 0.1%, to Aave V3 for the Pot itself.
 const held = USDC.balanceOf(ctx.self());
-require(held >= FLOOR, "below floor");
-USDC.transfer(RECIPIENT, afterFee(held));
+require(held >= 1000000n, "below 1 USDC");
+const supplied = afterFee(held);
+USDC.approve(AaveV3.Pool, supplied);
+AaveV3.Pool.supply(USDC, supplied, ctx.self(), 0n);
 ```
 
-A `const` at the top of a script is the script's own local: a helper cannot read it (pass it in),
-a define of the same name does not reach it, and the `sauce` command refuses such a define rather
-than ignore it. Declare `main` to share a module constant with helpers, or to return a value.
+A `const` at the top of a script is the script's own local: a helper cannot read it (pass it in).
+Declare `main` to take inputs, to share a module constant with helpers, or to return a value.
 
 ## The file's header
 
@@ -99,7 +101,9 @@ Every program starts with a comment that says how to run it, in this order:
 4. one concrete run on a supported chain with real values: addresses taken from the registry
    (`sauce globals --chain <chain> --tokens`), the developer's own inputs left as `<placeholders>`.
 
-An intent file, which has no `main`, lists its defines and its `--intent-…` flags the same way.
+An intent file is written the same way: its `main` parameters, then its `--intent-…` flags.
+`sauce intent publish <file> --args …` takes the same arguments as `sauce run` and fixes them into
+the intents it publishes (`sauce-intents`).
 
 ```sauce chain=base
 // Pays each of `recipients` `amount` of the chain's USDC, from the Pot.
@@ -122,14 +126,14 @@ function main(recipients: Address[], amount: Uint256) {
 }
 ```
 
-## Runtime inputs and compile-time values
+## Inputs and fixed values
 
-| Value                                                                    | Write it as                                                                  | Arrives                                                            |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Anything the caller chooses per run: tokens, amounts, recipients, limits | a **`main(...)` parameter**                                                  | with the transaction (`--args`); one program serves every value    |
-| A choice made per compile: which venues exist on the chain, a fixed fee  | a **module constant** beside `main`, which a **define** of its name replaces | folded into the bytecode; a different value is a different program |
-| A value of a script, or of an intent file                                | an **undeclared name**, set by a define                                      | folded into the bytecode                                           |
-| A value the chain supplies                                               | a global (`sauce-globals`)                                                   | resolved when compiling for that chain                             |
+| Value                                                                    | Write it as                              | Arrives                                                                   |
+| ------------------------------------------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------- |
+| Anything the caller chooses per run: tokens, amounts, recipients, limits | a **`main(...)` parameter**              | with the transaction (`--args`); one program serves every value           |
+| The inputs of intents published from a wallet                            | **`main(...)` parameters**, the same way | fixed into the intents by `sauce intent publish --args` (`sauce-intents`) |
+| A value the program fixes: a fee, a pool's tier                          | a **module constant** beside `main`      | folded into the bytecode                                                  |
+| A value the chain supplies                                               | a global (`sauce-globals`)               | resolved when compiling for that chain                                    |
 
 `main`'s parameters are taken in declaration order, ABI-encoded by default, and appended to the
 program's bytecode: that is the payload a cook runs. `--args` and `--args-json` of `sauce run`,
@@ -396,14 +400,15 @@ no project for them, it marks `Token`, `USDC`, `ctx` and every other global as u
 program imports. Keep programs in such a directory (`sauce init` makes `programs/` one); the
 installed skills' examples are typed by the same file beside them. The types come from the package,
 so the project must have it installed, and an editor running the project's own TypeScript also
-drops what TypeScript reports on valid SauceScript (a `bigint` index, `1` beside `1n`, an
-undeclared define). The compile, not the editor, decides whether a program is valid.
+drops what TypeScript reports on valid SauceScript (a `bigint` index, `1` beside `1n`). The
+compile, not the editor, decides whether a program is valid.
 
 ## Reading a compile error
 
 Compile errors fail the command; there is no warning channel. `sauce compile` points at the file's
-line and column, including on a line the package rewrote, and a `hint:` line names the flag or
-define to add. `X is not a declared variable` usually means a missing define or `main` parameter.
+line and column, including on a line the package rewrote, and a `hint:` line names what to add.
+`X is not a declared variable` usually means a typo, a name the chain does not have
+(`sauce-globals`), or a value the program should take as a `main` parameter.
 `Unexpected token` is a syntax error at the line and column it names.
 `a function argument: expected a number, found a bool` at a call usually means the called
 function's parameter has no annotation, so it is a number: annotate it, `first: bool`. For any

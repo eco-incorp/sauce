@@ -1,6 +1,5 @@
-// SauceScript's boundary, checked against the compiler the SDK ships: what compiles, what a
-// define changes, what the compiler refuses, what differs per target, and what compiling for a
-// chain adds.
+// SauceScript's boundary, checked against the compiler the SDK ships: what compiles, what the
+// compiler refuses, what differs per target, and what compiling for a chain adds.
 //
 //   node saucescript.mts
 import { stripVTControlCharacters } from "node:util";
@@ -12,13 +11,12 @@ function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`check failed: ${message}`);
 }
 
-function build(source: string, target: "evm" | "svm" = "evm", defines: [string, string][] = []) {
+function build(source: string, target: "evm" | "svm" = "evm") {
   const bytes = new TextEncoder().encode(source);
   return compile({
     target,
     entry: "main.ts",
     resolve: (p) => (p === "main.ts" ? bytes : undefined),
-    defines,
   });
 }
 
@@ -32,7 +30,7 @@ function rejects(source: string, target: "evm" | "svm" = "evm"): string {
   throw new Error(`expected the compiler to reject:\n${source}`);
 }
 
-// A guarded program: module const, a define-overridable floor, a loop, a helper, `require` and `throw`.
+// A guarded program: a module const, a loop, a helper, `require` and `throw`.
 // Either failure reverts the WHOLE surrounding transaction; nothing before it survives.
 const guarded = `
 const FLOOR = 1n;
@@ -56,10 +54,7 @@ function main(amounts: Uint256[], deadline: Uint256): Uint256 {
 `;
 
 const a: CompileResult = build(guarded);
-const b = build(guarded, "evm", [["FLOOR", "1000000"]]);
 check(a.entryEncoding === "abi-v1", "entry arguments default to ABI-v1");
-// A define is folded into the bytecode: a different value is a different program (and hash).
-check(Buffer.compare(a.bytecode, b.bytecode) !== 0, "a define changes the bytecode");
 
 // Outside the subset. Each one is a compile error, never a silently different program.
 check(
@@ -161,7 +156,5 @@ check(
   "a helper cannot read a script's const",
 );
 
-console.log(
-  `guarded program: ${a.bytecode.length} bytes (FLOOR=1) vs ${b.bytecode.length} (FLOOR=1e6)`,
-);
+console.log(`guarded program: ${a.bytecode.length} bytes`);
 console.log(`svm manifest: ${JSON.stringify(svm.manifest?.accounts)}`);

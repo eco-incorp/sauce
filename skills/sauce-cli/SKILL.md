@@ -147,11 +147,11 @@ sends. Suggest small balances and a policy to the user.
    address; its decimals are read from the token.
 2. **Compile**, to check the program: `npx sauce compile pay.sauce.ts --chain ethereum`. It prints the
    bytecode; `--json` adds the size, `main`'s parameters, the compiler and the engine it pairs with,
-   and what the compile applied: `defines` (each define the file reads, its value, whether the user
-   or the chain set it, and the chain it applied on), `contracts` (each protocol contract it calls,
+   and what the compile applied: `defines` (each name the chain supplied to the file, such as a
+   token, with its value and the chain it applied on), `contracts` (each protocol contract it calls,
    resolved on its chain), and `payload`, its size with `main`'s arguments given by `--args`. On
    Solana, `cook` says whether the cook fits one transaction. A failing compile points at the
-   file's line and column, and its `hint:` lines name the flag or define to add. Every command
+   file's line and column, and its `hint:` lines name what to add. Every command
    takes the chain as `--chain <slug or id>`. A file may name its own chain instead, in a
    `// @chain base` line among the `//` comment lines it starts with (and `// @target svm` alone
    picks Solana); `--chain` overrides it. Leave the line out of a file meant for more than one
@@ -178,7 +178,7 @@ sends. Suggest small balances and a policy to the user.
 
    **Units**: `--fund` and `--assume-balance` take whole tokens (`USDC:10` is 10 USDC), or base
    units ending in `n` (`USDC:10000000n`, the same 10 USDC), and a token the chain does not register
-   as `<address>:<amount>`, in its own decimals. `--args` and defines always take base units
+   as `<address>:<amount>`, in its own decimals. `--args` always takes base units
    (`10000000` is 10 USDC). `simulate --fund` with the owner's key rehearses it.
 
 5. **Rehearse**:
@@ -248,11 +248,8 @@ Every value is checked against its declared type before anything is sent: `Addre
   (`transfer(token, to, amount)`, `approve`, `balanceOf`). `sauce-globals` explains them.
 - `USDC.transfer(...)`, `USDC.approve(...)` and `Token(address).transfer(...)` are SafeERC20 writes,
   so USDT works. A token the chain does not register is `Token(address)`.
-- Runtime values are `main`'s parameters. A compile-time choice is a module-level `const` that
-  `--define NAME=VALUE` replaces (`--defines values.json` gives several). A file of top-level
-  statements with no `main`, such as an intent file, leaves the name undeclared and takes it from
-  the define. In a `--defines` file, give an address or any value past 2^53 as a JSON string, hex
-  or decimal: a JSON number loses precision. An address in a program is a hex integer with an `n`,
+- Every input is a parameter of `main`, an intent file's included, and a value the program fixes
+  is a module-level `const`. An address in a program is a hex integer with an `n`,
   as Base's USDC is `0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n`; on the command line it is plain
   hex.
 - In a project `sauce init` wrote, put programs in `programs/`: its `tsconfig.json` types them as
@@ -302,8 +299,7 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
 
 - its `argument` actions are `main`'s parameters, passed with `--args` in the order they are
   declared;
-- `--chain` defaults to the document's `chainId`, and a document without one needs it;
-- `--define` and `--defines` are refused: a document's values are its own fields.
+- `--chain` defaults to the document's `chainId`, and a document without one needs it.
 
 ## Intents and Solana
 
@@ -313,13 +309,14 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
   `--config`). With `--config`, `compile` and `sauce intent publish` warn while the Pot such an intent cooks on
   is not deployed on its destination: no solver can fill it until then, and the warning names the
   `sauce pot --deploy` that deploys it. `sauce run` opens them from the Pot, which is the way when
-  an amount is measured on chain; `sauce intent publish` opens fixed ones from a wallet with no Pot, and
-  `sauce intent publish <file> --chain <chain> --from <address> --format json` prints its unsigned
+  an amount is measured on chain. `sauce intent publish` opens them from a wallet with no Pot: it
+  takes `main`'s arguments with `--args`, as `sauce run` does, and fixes them into the intents, and
+  `sauce intent publish <file> --chain <chain> --from <address> --args <arguments> --format json` prints its unsigned
   transfers and `publish` for any wallet to send, in that order. Both fund each reward by a transfer
   into the intent's vault, then `publish`: no approval. `--intent-fund-via publishAndFund` switches
   either to an approve and `publishAndFund`. `sauce intent publish … --dry-run --assume-balance
 USDC:<amount>` rehearses it from a wallet that does not hold the reward yet.
-  `sauce intent fill <file> --chain <chain> --config sauce.config.json` rehearses each intent where its
+  `sauce intent fill <file> --chain <chain> --config sauce.config.json --args <arguments>` rehearses each intent where its
   body runs: on its destination chain, as the solver who fills it, with no key and nothing sent.
   `publish --dry-run` covers only the source chain. `fill` prints what the body moved, what it left
   in the shared Pot, and why it reverts. `--config` must name the destination chain's endpoint.

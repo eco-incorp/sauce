@@ -28,8 +28,9 @@ and add the use case, or
 ## Compile a program for a chain, and cook it
 
 `routes.compileSauceProgram(chain, source, options)` is what `sauce compile` runs: the chain's
-names, its defines and `@sauce/token`, with `options.defines` for the program's own compile-time
-values and `options.intents` for the intents it opens. The result carries `main`'s declared
+names and `@sauce/token`, with `options.intents` for the intents it opens, and `options.args` to fix
+`main`'s arguments into the program, as `sauce intent publish --args` does for intents published
+from a wallet. Without `args`, the result carries `main`'s declared
 parameters (`entryParams`); `routes.encodeEntryArguments` encodes values for them as `--args` does,
 and program plus arguments is the `program` of the owner's `Pot.cook(engine, program)`.
 
