@@ -19,7 +19,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { initProject, sauceScriptTsconfig } from "../src/cli/init.js";
+import { initProject } from "../src/cli/init.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import {
   DEFAULT_AGENTS,
@@ -27,6 +27,7 @@ import {
   installTarget,
   PACKAGED_SKILLS,
   parseAgents,
+  sauceScriptTsconfig,
   statusOf,
   targetsFor,
   updateTarget,
@@ -122,8 +123,13 @@ describe("where each agent's skills go", () => {
           "alpha/SKILL.md": expect.stringMatching(/^[0-9a-f]{64}$/),
           "alpha/examples/one.sauce.ts": expect.stringMatching(/^[0-9a-f]{64}$/),
           "beta/SKILL.md": expect.stringMatching(/^[0-9a-f]{64}$/),
+          "tsconfig.json": expect.stringMatching(/^[0-9a-f]{64}$/),
         },
       });
+      // Beside them, the TypeScript project that types their programs for an editor.
+      expect(JSON.parse(read(`${dir}/tsconfig.json`))).toEqual(
+        sauceScriptTsconfig("@eco-incorp/sauce"),
+      );
     }
     const index = read("AGENTS.md");
     expect(index).toMatch(
@@ -261,6 +267,7 @@ describe("install, update and status over a package upgrade", () => {
       [join(".claude", "skills", "alpha", "examples", "one.sauce.ts"), "current"],
       [join(".claude", "skills", "beta", "SKILL.md"), "remove"],
       [join(".claude", "skills", "gamma", "SKILL.md"), "add"],
+      [join(".claude", "skills", "tsconfig.json"), "current"],
     ]);
 
     const report = updateTarget(project, upgraded, target!, false);
@@ -305,6 +312,33 @@ describe("install, update and status over a package upgrade", () => {
     updateTarget(project, upgraded, target!, true);
     expect(read(".claude/skills/alpha/SKILL.md")).toMatch(/alpha v2/);
     expect(statusOf(project, upgraded, target!).state).toBe("up to date");
+  });
+
+  it("adds the programs' tsconfig.json to an install from before it, and keeps one edited here", () => {
+    const source = packageAt("1.0.0");
+    const [target] = targetsFor(["claude"]);
+    installTarget(project, source, target!);
+    // An install that predates it: no file, and none in the record.
+    const record = JSON.parse(read(`.claude/skills/${INSTALL_RECORD}`));
+    delete record.files["tsconfig.json"];
+    write(`.claude/skills/${INSTALL_RECORD}`, JSON.stringify(record));
+    rmSync(join(project, ".claude/skills/tsconfig.json"));
+    const before = statusOf(project, source, target!);
+    expect(before.state).toBe("outdated");
+    expect(
+      before.files.filter((file) => file.change !== "current").map((file) => file.change),
+    ).toEqual(["add"]);
+    updateTarget(project, source, target!, false);
+    expect(JSON.parse(read(".claude/skills/tsconfig.json"))).toEqual(
+      sauceScriptTsconfig("@eco-incorp/sauce"),
+    );
+    expect(statusOf(project, source, target!).state).toBe("up to date");
+
+    // A project that merged options of its own into it keeps them.
+    write(".claude/skills/tsconfig.json", '{ "extends": "../../tsconfig.base.json" }\n');
+    expect(statusOf(project, source, target!).state).toBe("modified");
+    updateTarget(project, { ...source, version: "1.1.0" }, target!, false);
+    expect(read(".claude/skills/tsconfig.json")).toContain("tsconfig.base.json");
   });
 
   it("refuses a record that names a file outside the skills directory, even with --force", () => {

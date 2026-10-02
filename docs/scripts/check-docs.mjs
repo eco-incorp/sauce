@@ -235,3 +235,19 @@ try {
 } finally {
   rmSync(temporary, { recursive: true, force: true });
 }
+
+// Every SauceScript program in the repository as an editor in a checkout shows it: typed by the
+// root tsconfig.json, with the plugin loaded beside the workspace's TypeScript, and no error. The
+// installed package's run skips it: the packed check holds a consumer's project the same way.
+if (packageArgument < 0) {
+  const { checkRepositoryEditor } = await import(
+    new URL("../../sdk/scripts/check-editor.mjs", import.meta.url)
+  );
+  const programs = await checkRepositoryEditor({
+    root: repository,
+    tsserverPath: createRequire(join(repository, "package.json")).resolve(
+      "typescript/lib/tsserver.js",
+    ),
+  });
+  console.log(`SauceScript in an editor: ${programs} programs typed, with no error`);
+}
