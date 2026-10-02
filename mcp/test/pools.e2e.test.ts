@@ -75,7 +75,7 @@ describe("sauce_pools and sauce_price against a chain", { skip: !ANVIL }, () => 
     });
     assert.deepEqual(out, JSON.parse(JSON.stringify(command.json)));
     // The block every read was at: the latest, or the one given.
-    assert.equal(BigInt(out.block), await chain.publicClient.getBlockNumber());
+    assert.equal(out.block, String(await chain.publicClient.getBlockNumber({ cacheTime: 0 })));
     await chain.testClient.mine({ blocks: 2 });
     const pinned = ok(
       await mcp.call("sauce_pools", { ...args, block: Number(out.block), rpcUrl: chain.rpcUrl }),

@@ -342,20 +342,8 @@ describeAnvil("sauce pools, against a local Base", () => {
     expect(none.code).toBe(2);
     expect(none.stderr).toMatch(/answers no decimals\(\) on base .*: is it a token there\?/);
   });
-});
 
-describeAnvil("sauce pools --block and sauce price --pool, against a local Base", () => {
-  let chain: PoolsChain;
-
-  beforeAll(async () => {
-    chain = await startPoolsChain(await freePort());
-  }, 180_000);
-
-  afterAll(async () => {
-    await chain?.stop();
-  });
-
-  const poolOf = (name: string) => chain.pools.get(name)!.address;
+  // Last: these move a pool's price in later blocks, and put it back.
   const pools = async (...flags: string[]) => {
     const run = await sauce(
       ...["pools", "--chain", "base", "USDC", "SPCXc", "--rpc-url", chain.rpcUrl, "--json"],
@@ -372,7 +360,8 @@ describeAnvil("sauce pools --block and sauce price --pool, against a local Base"
     const pool = poolOf("v3:500");
     const before = await pools();
     const at = BigInt(before.block);
-    expect(at).toBe(await chain.publicClient.getBlockNumber());
+    // The latest block when it ran (read now, past viem's cache of the block number).
+    expect(before.block).toBe(String(await chain.publicClient.getBlockNumber({ cacheTime: 0 })));
     // The pool's price moves in a later block: its sqrtPriceX96 is the low 160 bits of slot 0.
     await chain.testClient.mine({ blocks: 1 });
     const word = BigInt((await chain.publicClient.getStorageAt({ address: pool, slot: "0x0" }))!);
@@ -392,7 +381,7 @@ describeAnvil("sauce pools --block and sauce price --pool, against a local Base"
       expect(pinned.block).toBe(at.toString());
       expect(sqrtOf(pinned, pool)).toBe(sqrtOf(before, pool));
       const latest = await pools();
-      expect(BigInt(latest.block)).toBeGreaterThan(at);
+      expect(BigInt(latest.block) > at).toBe(true);
       expect(sqrtOf(latest, pool)).toBe(moved.toString());
       // A tag names its block too.
       expect((await pools("--block", "latest")).block).toBe(latest.block);
