@@ -449,37 +449,39 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
 
     // The guide's closure is the same intent: what the file's braces say, built in TypeScript.
     const PAYEE = BigInt(RECIPIENT);
-    const closure = Base(
-      () => {
+    const closure = Base.Portal.send(
+      { token: ethereumUsdc, amount: REWARD },
+      { source: "ethereum", deadline: start + 7200n },
+    )
+      .receive(
+        { token: baseUsdc, amount: AMOUNT },
+        {
+          execution: { value: FEE },
+          deadline: start + 3600n,
+          rewardDeadline: start + 7200n,
+          creator: OWNER.address,
+          defines: { PAYEE },
+          precalls: [
+            {
+              target: baseUsdc,
+              data: encodeFunctionData({
+                abi: TRANSFER,
+                functionName: "transfer",
+                args: [pot, AMOUNT],
+              }),
+            },
+          ],
+        },
+      )
+      .then(() => {
         const amount = USDC.balanceOf(ctx.self());
         const payout = amount - amount / 1000n;
-        Ethereum(() => {
-          USDC.transfer(PAYEE, payout);
-        }).reward({ tokens: [{ token: USDC, amount }] });
-      },
-      {
-        execution: { value: FEE },
-        deadline: start + 3600n,
-        rewardDeadline: start + 7200n,
-        creator: OWNER.address,
-        defines: { PAYEE },
-        tokens: [{ token: baseUsdc, amount: AMOUNT }],
-        precalls: [
-          {
-            target: baseUsdc,
-            data: encodeFunctionData({
-              abi: TRANSFER,
-              functionName: "transfer",
-              args: [pot, AMOUNT],
-            }),
-          },
-        ],
-      },
-    ).reward({
-      source: "ethereum",
-      deadline: start + 7200n,
-      tokens: [{ token: ethereumUsdc, amount: REWARD }],
-    });
+        Ethereum.Portal.send({ token: USDC, amount })
+          .receive({ token: USDC, amount: payout })
+          .then(() => {
+            USDC.transfer(PAYEE, payout);
+          });
+      });
     expect(closure.hash().intentHash).toBe(outer);
 
     // ---- Base: a solver fills it; the body measures what arrived and publishes the inner one ---
