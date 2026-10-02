@@ -176,6 +176,22 @@ describe("SauceScript in an editor", () => {
     expect(report(service(files), file)).toEqual([]);
   });
 
+  it("takes plain integers wherever a bigint goes, and a bigint where TypeScript inferred a number", () => {
+    const file = join(work, "plain.sauce.ts");
+    const files = {
+      [file]:
+        "function half(x: number): Uint256 { return x / 2; }\n" +
+        "function main(a: Uint256): Uint256 {\n  let pool = 0;\n  pool = a;\n" +
+        "  return half(a) + pool;\n}\n",
+    };
+    expect(
+      service(files, false)
+        .getSemanticDiagnostics(file)
+        .map((d) => d.code),
+    ).toEqual([2322, 2322, 2365, 2345]);
+    expect(report(service(files), file)).toEqual([]);
+  });
+
   it("checks every builtin's example in the SauceScript reference with no error", () => {
     const reference = JSON.parse(
       readFileSync(join(ROOT, "skills/sauce-script/references/builtins.json"), "utf8"),
