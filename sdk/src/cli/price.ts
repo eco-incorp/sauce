@@ -82,7 +82,8 @@ export function parsePriceToken(raw: string, chain: CanonicalChain): PriceToken 
 
     return { symbol: row?.symbol ?? address, address, decimals: known };
   }
-  const row = rows.find((entry) => entry.symbol === given.toUpperCase());
+  // Without regard to case: a stock's symbol is its issuer's ticker (`TSLAx`), not uppercase.
+  const row = rows.find((entry) => entry.symbol.toUpperCase() === given.toUpperCase());
   if (row === undefined) {
     throw new UsageError(
       `${given} is not a token ${chain.slug} registers (sauce globals --chain ${chain.slug} ` +

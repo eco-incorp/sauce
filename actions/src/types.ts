@@ -9,7 +9,8 @@
  *   output; set `amountRef` to spend the output an earlier action saved with `saveOutputAs`.
  * - `amountOutMin` is the least output a venue may return before it reverts.
  * - `recipient` receives an action's output when nothing chains it; `"self"` is the executing Pot.
- * - A token is a registry symbol (`"USDC"`) or an address, and a protocol contract a namespace
+ * - A token is a registry symbol (`"USDC"`, or a tokenized stock's, its issuer's ticker:
+ *   `"SPCXc"`) or an address, and a protocol contract a namespace
  *   reference (`"UniswapV3.Factory"`) or an address. A document that names everything, and has no
  *   `chainId`, compiles for any chain where its names exist.
  */

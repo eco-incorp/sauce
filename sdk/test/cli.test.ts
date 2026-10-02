@@ -812,8 +812,25 @@ describe("sauce compile", () => {
     );
     expect(run.code).toBe(1);
     expect(run.stderr).toMatch(
-      /hint: USDT is not a registered token on base \(it has USDC, WETH\)/,
+      /hint: USDT is not a registered token on base \(it has USDC, WETH, 67 stock tokens\)/,
     );
+  });
+
+  it("names a stock token's symbol in its issuer's case", async () => {
+    const program = file(
+      "stock.sauce.ts",
+      "function main() {\n  require(SPCXC.balanceOf(ctx.self()) >= 0n);\n}\n",
+    );
+    const run = await sauce("compile", program, "--chain", "base");
+    expect(run.code).toBe(1);
+    expect(run.stderr).toContain(
+      "hint: SPCXC is SPCXc on base: a token's symbol is case-sensitive",
+    );
+    const fixed = file(
+      "stock-fixed.sauce.ts",
+      "function main() {\n  require(SPCXc.balanceOf(ctx.self()) >= 0n);\n}\n",
+    );
+    expect((await sauce("compile", fixed, "--chain", "base")).code).toBe(0);
   });
 
   it("needs no fee for --intent-execution-fee auto when no intent runs a program", async () => {
@@ -2179,6 +2196,23 @@ describe("sauce price", () => {
     // Said in words, the same price: `2700 USDC per WETH`.
     const worded = await sauce("price", "--chain", "base", "2700", "USDC", "per", "WETH");
     expect(worded.stdout).toBe(text.stdout);
+  });
+
+  it("prices a stock token by its registry decimals, its symbol in any case", async () => {
+    const out = json(await sauce("price", "--chain", "base", "spcxc", "USDC", "148.7", "--json"));
+    // USDC sorts below Coinbase's 0xb2… address: SPCXc is token1, with 8 decimals.
+    const sqrt = root.sqrtPriceX96FromPrice("148.7", {
+      baseDecimals: 8,
+      quoteDecimals: 6,
+      baseIsToken0: false,
+    });
+    expect(out).toMatchObject({
+      means: "148.7 USDC per SPCXc",
+      base: { symbol: "SPCXc", address: "0xb2000000000000000000007b9fcbd005511aCBd5", decimals: 8 },
+      token0: "USDC",
+      token1: "SPCXc",
+      sqrtPriceX96: sqrt.toString(),
+    });
   });
 
   /**
