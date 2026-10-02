@@ -518,6 +518,8 @@ describe("sauce init", () => {
     expect(readFileSync(join(dir, "GEMINI.md"), "utf8")).toBe("@./AGENTS.md\n");
     const agentsMd = readFileSync(join(dir, "AGENTS.md"), "utf8");
     expect(agentsMd).toMatch(/^# AGENTS\.md\n/);
+    // `npx sauce` is this package's command only once it is installed: the way to run it anywhere.
+    expect(agentsMd).toContain(`run \`npx -y ${MANIFEST.name}\` there instead`);
     expect(agentsMd).toContain("<!-- sauce-skills:begin ");
     for (const skills of [".claude/skills", ".agents/skills"]) {
       expect(existsSync(join(dir, skills, "sauce-cli", "SKILL.md"))).toBe(true);

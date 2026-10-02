@@ -18,6 +18,10 @@ npm install @eco-incorp/sauce
 Node.js **24 or newer**, or a browser — [one `await ready()`](docs/api/compiler.md#in-a-browser) and the
 same code compiles the same bytes.
 
+The package also installs the [`sauce` command](docs/guides/cli.md). Run it as `npx sauce` in a
+project that depends on the package, and as `npx -y @eco-incorp/sauce` anywhere else: without the
+package installed, `npx sauce` fetches and runs npm's unrelated `sauce` package instead.
+
 [Documentation](docs/README.md) · [Quick start](docs/guides/quick-start.md) ·
 [Examples](docs/examples/README.md) · [API reference](docs/api/README.md)
 

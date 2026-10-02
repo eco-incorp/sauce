@@ -2,11 +2,12 @@
 
 [Documentation](../README.md) · [Compiling programs](compiling.md) · [Create an intent](intents.md)
 
-`@eco-incorp/sauce` installs a `sauce` command. It compiles a program file exactly as the SDK
-compiles a route body, deploys the Pot the program runs on, rehearses the cook, signs it, sends it
-and waits for it — on an EVM chain or on Solana — and takes transactions and programs back apart
-afterwards. It needs no other tool. It reads no environment variables and reaches a network only
-through an endpoint you name on the command line.
+`@eco-incorp/sauce` installs a `sauce` command: `npx sauce` in a project that depends on the
+package, `npx -y @eco-incorp/sauce` anywhere else ([Install](#install)). It compiles a program file
+exactly as the SDK compiles a route body, deploys the Pot the program runs on, rehearses the cook,
+signs it, sends it and waits for it — on an EVM chain or on Solana — and takes transactions and
+programs back apart afterwards. It needs no other tool. It reads no environment variables and
+reaches a network only through an endpoint you name on the command line.
 
 | Command          | What it does                                                                      |
 | ---------------- | --------------------------------------------------------------------------------- |
@@ -37,10 +38,15 @@ npm install @eco-incorp/sauce
 npx sauce --help
 ```
 
-Node.js 24 or newer. To start a new project instead, let the command scaffold it:
+Node.js 24 or newer. `npx sauce` runs the project's own copy of the command, as the examples in
+this guide do. Anywhere the package is not installed, run `npx -y @eco-incorp/sauce` in its place:
+there npx resolves a bare `npx sauce` on the registry, and fetches and runs npm's unrelated `sauce`
+package instead.
+
+To start a new project instead, let the command scaffold it:
 
 ```sh
-npx @eco-incorp/sauce init my-app
+npx -y @eco-incorp/sauce init my-app
 cd my-app
 npm install
 ```

@@ -69,7 +69,7 @@ Send the resulting calldata to the Pot from its owner, with the Kitchen's execut
 
 ### From the command line: `sauce actions`
 
-The [`sauce` command](cli.md) takes an actions document as it takes a program file. `sauce actions <file>` prints the SauceScript the document lowers to on a chain, `main`'s parameters, and the bytecode:
+The [`sauce` command](cli.md) takes an actions document as it takes a program file. Run it as `npx sauce` in a project that depends on `@eco-incorp/sauce`, and as `npx -y @eco-incorp/sauce` anywhere else: without the package installed, `npx sauce` fetches npm's unrelated `sauce` package ([Install](cli.md#install)). `sauce actions <file>` prints the SauceScript the document lowers to on a chain, `main`'s parameters, and the bytecode:
 
 ```text
 $ sauce actions swap.json --chain base

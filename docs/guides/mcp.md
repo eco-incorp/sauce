@@ -30,9 +30,11 @@ npx -y @eco-incorp/sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD   # 
 npx -y @eco-incorp/sauce mcp --http 3000 --config rpc.json     # self-hosted, Streamable HTTP
 ```
 
-In a project that depends on the package, `npx sauce mcp` runs the project's own version.
-`npx sauce mcp --help` lists every flag. The server is loaded only when `sauce mcp` runs, so no
-other command pays for it.
+In a project that depends on the package, `npx sauce mcp` runs the project's own version, and
+`npx sauce mcp --help` lists every flag. Anywhere else keep the package's full name: without the
+package installed, npx resolves a bare `npx sauce` on the registry, and fetches and runs npm's
+unrelated `sauce` package instead. The server is loaded only when `sauce mcp` runs, so no other
+command pays for it.
 
 Over stdio the server writes nothing but the protocol to stdout. A message larger than `--max-body`
 (2 MiB by default) closes the connection.
@@ -81,9 +83,9 @@ What needs one: `sauce_simulate`, a publish dry run, anything given a transactio
 is launched as `npx -y @eco-incorp/sauce@<this version> mcp`:
 
 ```sh
-npx sauce mcp setup                                # every agent below
-npx sauce mcp setup --agent claude,cursor          # only these
-npx sauce mcp setup --config rpc.json              # launch it with --config
+npx -y @eco-incorp/sauce mcp setup                         # every agent below
+npx -y @eco-incorp/sauce mcp setup --agent claude,cursor   # only these
+npx -y @eco-incorp/sauce mcp setup --config rpc.json       # launch it with --config
 ```
 
 | Agent                    | File                    | Under                 | Documentation                                                                     |
