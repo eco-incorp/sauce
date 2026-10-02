@@ -126,8 +126,8 @@ wallet's file is a standard keystore, so `--keystore` reads it too. `sauce walle
 shows a key only at a terminal, after the user types the wallet's name: never run it for the user.
 
 **A policy limits a wallet.** `<name>.policy.json` beside it, written by the user, sets what it may
-send. Every field is optional, and amounts are strings of whole tokens (`"100"` is 100 USDC; a
-base-unit amount is refused):
+send. Every field is optional, and amounts are strings in whole tokens (`"100"` is 100 USDC), as
+`--fund` takes them:
 
 ```json
 {
@@ -270,12 +270,12 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    - `allowance` approves the Pot for the amount (asking first), and the cook pulls it.
    - `transfer` sends the tokens to the Pot in a transaction of its own before the cook.
 
-   **Units**: `--fund` and `--assume-balance` take whole tokens only: `USDC:10` is 10 USDC, never
-   10 base units, and `USDC:10000000` is ten million USDC (the command says so when an amount
-   reads like base units). A base-unit amount such as `USDC:10000000n` is refused, with the whole
-   tokens to write instead. A program, `--args` and defines are the other way round: a plain
-   integer in base units (`10000000` is 10 USDC). A token the chain does not register is
-   `<address>:<amount>`, in its own decimals. `simulate --fund` with the owner's key rehearses it: the pulls
+   **Units**: `--fund` and `--assume-balance` take whole tokens: `USDC:10` is 10 USDC, never 10
+   base units, and `USDC:10000000` is ten million USDC (the command says so when a bare integer
+   reads like base units). For base units, end the amount in `n`, as a JavaScript bigint is
+   written: `USDC:10000000n` is the same 10 USDC. A program, `--args` and defines are the other
+   way round: a plain integer in base units (`10000000` is 10 USDC). A token the chain does not
+   register is `<address>:<amount>`, in its own decimals. `simulate --fund` with the owner's key rehearses it: the pulls
    signed, and before the cook, in the same block, each approval or transfer `sauce run` would
    send first, each listed as a transaction of its own with its gas.
 

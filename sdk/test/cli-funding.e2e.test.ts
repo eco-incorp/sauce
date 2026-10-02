@@ -22,7 +22,6 @@ import {
   createWalletClient,
   encodeAbiParameters,
   encodeFunctionData,
-  formatUnits,
   getAddress,
   http,
   keccak256,
@@ -241,7 +240,7 @@ describeEvm(
       }, 60_000);
 
       it("needs no approval the next time: one transaction, the cook", async () => {
-        const done = await run(["--fund", "USDC:1"], [usdc, RECIPIENT, "1000000"], unasked);
+        const done = await run(["--fund", "USDC:1000000n"], [usdc, RECIPIENT, "1000000"], unasked);
         expect(notes(done)).toBe("");
         expect(done.code).toBe(0);
         // The cook, alone: then what it cost and moved.
@@ -291,7 +290,7 @@ describeEvm(
                 owner,
                 pot: at,
                 mode: "permit2",
-                requests: [parseFund(`USDC:${formatUnits(amount, 6)}`, local.chain)],
+                requests: [parseFund(`USDC:${amount}n`, local.chain)],
                 sweep: false,
                 account: OWNER,
                 nonce,
@@ -330,9 +329,7 @@ describeEvm(
       it("picks a fresh nonce for every run", async () => {
         const before = await balance(usdc, RECIPIENT);
         for (let i = 0; i < 2; i++) {
-          expect(
-            (await run(["--fund", "USDC:0.000001"], [usdc, RECIPIENT, "1"], unasked)).code,
-          ).toBe(0);
+          expect((await run(["--fund", "USDC:1n"], [usdc, RECIPIENT, "1"], unasked)).code).toBe(0);
         }
         expect(await balance(usdc, RECIPIENT)).toBe(before + 2n);
       }, 60_000);
@@ -578,7 +575,7 @@ describeEvm(
             "--private-key",
             OWNER_KEY,
             "--fund",
-            "ETH:0.000000000000001",
+            "ETH:1000n",
             "--sweep",
             "--json",
             "--args",

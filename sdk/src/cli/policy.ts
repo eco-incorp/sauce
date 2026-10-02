@@ -3,8 +3,8 @@
  * the ledger of what it sent, `<name>.ledger.jsonl`. With no policy file a wallet sends anything
  * its signer could, and every result says no limits are set.
  *
- * A policy (every field optional, every amount a string of whole tokens, `"1.5"`, as `--fund` takes
- * them; a base-unit `"1500000n"` is refused):
+ * A policy (every field optional, every amount a string — whole tokens, `"1.5"`, or base units
+ * ending in `n`, `"1500000n"`, as `--fund` takes them):
  *
  *     {
  *       "chains": ["base", "ethereum"],
@@ -82,7 +82,7 @@ import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../routes/token-registry.js"
 import { derivePotPda } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import type { TxRequest } from "./chain.js";
-import { nativeSymbol, tokenInfo } from "./effects.js";
+import { nativeSymbol, tokenInfo, wordsOf } from "./effects.js";
 import { requireSupported } from "./support.js";
 import { accountsNow, movedBy, writableAccounts } from "./svm-effects.js";
 import type { WalletInfo } from "./wallets.js";
@@ -93,8 +93,8 @@ type Rpc = ReturnType<typeof createSolanaRpc>;
 // The policy file
 // ---------------------------------------------------------------------------------------------
 
-/** An amount as a policy writes it: whole tokens, `"1.5"`. */
-type Amount = { readonly units: string };
+/** An amount as a policy writes it: whole tokens (`"1.5"`), or base units (`"1500000n"`). */
+type Amount = { readonly units: string } | { readonly base: bigint };
 
 interface Limit {
   readonly perTransaction?: Amount;
@@ -124,7 +124,7 @@ export class PolicyRefusal extends CliError {
   }
 }
 
-const AMOUNT = /^\d+(?:\.\d+)?$/;
+const AMOUNT = /^(?:\d+(?:\.\d+)?|\d+n)$/;
 
 /**
  * The decimals a policy's token key has wherever the registry records it — a symbol or an address,
@@ -148,41 +148,31 @@ function keyDecimals(key: string | undefined): number | undefined {
   return decimals.size === 1 ? [...decimals][0] : undefined;
 }
 
-/** A limit's amount: whole tokens. `notes` gets what a limit that reads like base units says. */
+/**
+ * A limit's amount: whole tokens (`"1.5"`), or base units with a trailing `n` (`"1500000n"`).
+ * `notes` gets what a bare integer of whole tokens that reads like base units says: at or above
+ * 10^decimals, where the registry gives the token's decimals.
+ */
 function amountOf(raw: unknown, where: string, key: string | undefined, notes: string[]): Amount {
-  const base = typeof raw === "string" ? /^(\d+)n$/.exec(raw) : null;
-  const decimals = keyDecimals(key);
-  if (base !== null) {
-    const whole = decimals === undefined ? undefined : formatUnits(BigInt(base[1]!), decimals);
-    throw new UsageError(
-      whole === undefined
-        ? `${where}: "${raw}" is in base units, which a policy does not take: write the amount ` +
-            'in whole tokens, as "1.5"'
-        : `${where}: "${raw}" is ${whole} ${key}: write "${whole}" (a policy's amounts are ` +
-            "whole tokens, never base units)",
-    );
-  }
   if (typeof raw !== "string" || !AMOUNT.test(raw)) {
-    throw new UsageError(`${where} is not an amount: a string of whole tokens, as "1.5"`);
-  }
-  const whole = BigInt(raw.split(".")[0]!);
-  if (decimals !== undefined && decimals > 0 && whole >= 10n ** BigInt(decimals)) {
-    notes.push(
-      `${where}: "${raw}" is ${wordsOf(raw)} ${key}; base units are not taken here ` +
-        `("${raw}" base units would be "${formatUnits(whole, decimals)}")`,
+    throw new UsageError(
+      `${where} is not an amount: a string of whole tokens ("1.5") or of base units ending in n ` +
+        '("1500000n")',
     );
+  }
+  if (raw.endsWith("n")) return { base: BigInt(raw.slice(0, -1)) };
+  const decimals = keyDecimals(key);
+  if (
+    !raw.includes(".") &&
+    decimals !== undefined &&
+    decimals > 0 &&
+    BigInt(raw) >= 10n ** BigInt(decimals)
+  ) {
+    notes.push(`${where}: "${raw}" is ${wordsOf(raw)} ${key}; for base units write "${raw}n"`);
   }
 
   return { units: raw };
 }
-
-/** A whole-token amount in words: `1500000` is "1.5 million". */
-export const wordsOf = (whole: string): string =>
-  new Intl.NumberFormat("en-US", {
-    notation: "compact",
-    compactDisplay: "long",
-    maximumSignificantDigits: 6,
-  }).format(Number(whole));
 
 function limitOf(raw: unknown, where: string, key: string | undefined, notes: string[]): Limit {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
@@ -313,7 +303,8 @@ const SCALE = 36;
 const scaled = (amount: bigint, decimals: number): bigint =>
   amount * 10n ** BigInt(SCALE - Math.min(decimals, SCALE));
 
-const limitScaled = (limit: Amount): bigint => parseUnits(limit.units, SCALE);
+const limitScaled = (limit: Amount, decimals: number): bigint =>
+  "base" in limit ? scaled(limit.base, decimals) : parseUnits(limit.units, SCALE);
 
 /** `value` at {@link SCALE}, as whole units for a person. */
 const whole = (value: bigint): string => formatUnits(value, SCALE);
@@ -823,7 +814,7 @@ function spendOf(
     const value = scaled(amount, unit.decimals!);
     const text = (at: bigint) => `${whole(at)} ${unit.symbol ?? unit.token}`;
     if (limit.perTransaction !== undefined) {
-      const cap = limitScaled(limit.perTransaction);
+      const cap = limitScaled(limit.perTransaction, unit.decimals!);
       if (value > cap) {
         refuse(
           `${limitName}.perTransaction`,
@@ -832,7 +823,7 @@ function spendOf(
       }
     }
     if (limit.perDay !== undefined) {
-      const cap = limitScaled(limit.perDay);
+      const cap = limitScaled(limit.perDay, unit.decimals!);
       const before = totals.get(limitName) ?? 0n;
       if (before + value > cap) {
         refuse(
@@ -861,10 +852,12 @@ function spendOf(
       if (approval.spender.toLowerCase() === permit2 || approval.decimals === undefined) continue;
       const value = scaled(approval.amount, approval.decimals);
       const caps = [
-        limit.perTransaction === undefined ? undefined : limitScaled(limit.perTransaction),
+        limit.perTransaction === undefined
+          ? undefined
+          : limitScaled(limit.perTransaction, approval.decimals),
         limit.perDay === undefined
           ? undefined
-          : limitScaled(limit.perDay) - (totals.get(`tokens.${key}`) ?? 0n),
+          : limitScaled(limit.perDay, approval.decimals) - (totals.get(`tokens.${key}`) ?? 0n),
       ].filter((cap): cap is bigint => cap !== undefined);
       const cap = caps.length === 0 ? undefined : caps.reduce((a, b) => (a < b ? a : b));
       if (cap !== undefined && value > cap) {

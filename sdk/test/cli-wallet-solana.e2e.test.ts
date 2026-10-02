@@ -165,7 +165,7 @@ describeSvm("sauce run --wallet on Solana, through the released Kitchen", () => 
     // The fee alone is above a native limit of 1000 lamports.
     writeFileSync(
       join(wallets, "sol.policy.json"),
-      JSON.stringify({ native: { perTransaction: "0.000001" } }),
+      JSON.stringify({ native: { perTransaction: "1000n" } }),
       { mode: 0o600 },
     );
     const sentNow = shim.sent.length;

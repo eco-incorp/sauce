@@ -507,10 +507,7 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
     await untouched();
   }, 120_000);
 
-  it("takes --assume-balance in whole tokens only, and says on stderr when one reads like base units", async () => {
-    const refused = await pay(local.rpcUrl, "--assume-balance", "USDC:2000000n");
-    expect(refused.code).toBe(2);
-    expect(refused.stderr).toContain("--assume-balance: USDC:2000000n is 2 USDC: write USDC:2");
+  it("says on stderr when a bare integer of whole tokens reads like base units", async () => {
     // Two million whole USDC may be meant: rehearsed, and the note says what it is.
     const large = await pay(
       local.rpcUrl,
@@ -518,9 +515,15 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
     );
     expect(large.code).toBe(0);
     expect(large.stderr).toContain(
-      "--assume-balance USDC:2000000: that is 2 million USDC; base units are not taken here " +
-        "(2000000 base units would be USDC:2)",
+      "--assume-balance USDC:2000000: that is 2 million USDC; for base units write 2000000n",
     );
+    // The same base units, written as such: nothing to say.
+    const exact = await pay(
+      local.rpcUrl,
+      ...["--assume-balance", "USDC:2000000n", "--assume-balance", "USDT:2"],
+    );
+    expect(exact.code).toBe(0);
+    expect(exact.stderr).not.toContain("for base units write");
   }, 120_000);
 
   it("refuses to assume a balance a token does not store", async () => {

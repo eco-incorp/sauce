@@ -31,7 +31,7 @@ describe("--fund <TOKEN|address>:<amount>", () => {
       token: BASE_USDC,
       label: "USDC",
       decimals: 6,
-      amount: "1.5",
+      amount: { units: "1.5" },
       flag: "--fund",
     });
     // The symbol in any case, as the program names it.
@@ -47,33 +47,34 @@ describe("--fund <TOKEN|address>:<amount>", () => {
     }
   });
 
-  // A program's integers are base units, and these amounts are not: a base-unit amount is refused,
-  // with the whole tokens it is.
-  it.each([
-    ["USDC:1500000n", "--fund: USDC:1500000n is 1.5 USDC: write USDC:1.5"],
-    ["ETH:10000000000000000n", "--fund: ETH:10000000000000000n is 0.01 ETH: write ETH:0.01"],
-    ["SPCXc:150000000n", "--fund: SPCXc:150000000n is 1.5 SPCXc: write SPCXc:1.5"],
-    [`${TOKEN}:1500000n`, "is in base units, which are not taken here: write the amount in whole"],
-  ])("refuses a base-unit amount, %s, saying what to write", (raw, message) => {
-    expect(() => parseFund(raw, base)).toThrow(UsageError);
-    expect(() => parseFund(raw, base)).toThrow(message);
+  it("reads base units from an amount ending in n, as a JavaScript bigint is written", () => {
+    expect(parseFund("USDC:1500000n", base).amount).toEqual({ base: 1_500_000n });
+    expect(parseFund(`${TOKEN}:1500000n`, base).amount).toEqual({ base: 1_500_000n });
   });
 
-  it("is exact in whole tokens through the token's decimals, and says when they read like base units", async () => {
+  it("is exact in whole tokens through the token's decimals, and base units as given", async () => {
     const at = async (raw: string) => baseUnits(undefined as never, parseFund(raw, base));
     expect(await at("USDC:1.5")).toEqual({ amount: 1_500_000n });
     expect(await at("ETH:0.000000000000000001")).toEqual({ amount: 1n });
-    expect(await at("USDC:999999.999999")).toEqual({ amount: 999_999_999_999n });
-    // At or above 10^decimals whole tokens: said, not refused — it may be meant.
+    expect(await at("USDC:1500000n")).toEqual({ amount: 1_500_000n });
+  });
+
+  // A program's integers are base units, so a bare integer of whole tokens that reads like them is
+  // said — not refused: it may be meant.
+  it("says when a bare integer of whole tokens reads like base units, at 10^decimals and up", async () => {
+    const at = async (raw: string) => baseUnits(undefined as never, parseFund(raw, base));
     expect(await at("USDC:1500000")).toEqual({
       amount: 1_500_000_000_000n,
-      note:
-        "--fund USDC:1500000: that is 1.5 million USDC; base units are not taken here " +
-        "(1500000 base units would be USDC:1.5)",
+      note: "--fund USDC:1500000: that is 1.5 million USDC; for base units write 1500000n",
     });
-    const assumed = assumedBalances(["USDC:1000000"], base)[0]!;
-    expect((await baseUnits(undefined as never, assumed)).note).toMatch(
-      /^--assume-balance USDC:1000000: that is 1 million USDC; base units are not taken here/,
+    expect((await at("USDC:1000000")).note).toBeDefined();
+    // Below 10^decimals, with a decimal point, or in base units: nothing to say.
+    for (const raw of ["USDC:999999", "USDC:1500000.5", "USDC:1500000n", "ETH:2", "SPCXc:150"]) {
+      expect((await at(raw)).note).toBeUndefined();
+    }
+    const assumed = assumedBalances(["USDC:2000000"], base)[0]!;
+    expect((await baseUnits(undefined as never, assumed)).note).toBe(
+      "--assume-balance USDC:2000000: that is 2 million USDC; for base units write 2000000n",
     );
   });
 
@@ -84,7 +85,7 @@ describe("--fund <TOKEN|address>:<amount>", () => {
   });
 
   it("names the chain's native currency ETH or native, with 18 decimals and no token", () => {
-    for (const raw of ["ETH:0.01", "native:0.01", "eth:1"]) {
+    for (const raw of ["ETH:0.01", "native:0.01", "eth:10000000000000000n"]) {
       const fund = parseFund(raw, base);
       expect(fund.token).toBeUndefined();
       expect(fund.decimals).toBe(18);

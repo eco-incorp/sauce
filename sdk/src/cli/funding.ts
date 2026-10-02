@@ -31,7 +31,6 @@ import {
   maxUint256,
   parseAbi,
   parseSignature,
-  formatUnits,
   parseUnits,
   type Address,
   type Hex,
@@ -49,6 +48,7 @@ import { blankLiterals } from "../routes/rs-compile.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { CliError, UsageError } from "./args.js";
 import { sendAndWait, type Sent, type TxRequest } from "./chain.js";
+import { wordsOf } from "./effects.js";
 import type { Approver } from "./commands.js";
 
 export const FUND_MODES = ["permit2", "permit", "allowance", "transfer"] as const;
@@ -64,8 +64,8 @@ export interface FundRequest {
   readonly label: string;
   /** Registry decimals for a symbol; `undefined` for an address, read from the token. */
   readonly decimals?: number;
-  /** The amount in whole tokens, as written: `1.5`. */
-  readonly amount: string;
+  /** The amount: in whole tokens as written (`1.5`), or in base units (`1500000n`). */
+  readonly amount: { readonly units: string } | { readonly base: bigint };
   /** The flag it was given with, for what is said about it. */
   readonly flag: string;
 }
@@ -74,10 +74,10 @@ const NATIVE = /^(eth|native)$/i;
 
 /**
  * `<TOKEN|address>:<amount>`, as `--fund` and `--assume-balance` take it (`flag` names which, for
- * the error). The amount is in whole tokens, and only whole tokens: `USDC:1.5` is 1.5 USDC, exact
- * through the registry's decimals (or the token's own, for an address). A program's integers are
- * base units, so a base-unit amount here (`USDC:1500000n`) is refused, with what to write instead.
- * `ETH:<amount>` (or `native:`) is the chain's native currency, 18 decimals.
+ * the error). The amount is in whole tokens — `USDC:1.5` is 1.5 USDC, exact through the registry's
+ * decimals (or the token's own, for an address) — or, with a trailing `n` as a JavaScript bigint
+ * has, a raw integer in base units: `USDC:1500000n`. `ETH:<amount>` (or `native:`) is the chain's
+ * native currency, 18 decimals.
  */
 export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: string): FundRequest {
   // Solana registers mints by symbol too, but nothing here can pull one: say so, not "unknown".
@@ -91,30 +91,25 @@ export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: strin
   const amount = raw.slice(at + 1).trim();
   if (at <= 0 || amount === "") {
     throw new UsageError(
-      `${flag}: expected <TOKEN|address>:<amount>, the amount in whole tokens, as USDC:1.5; ` +
-        `got '${raw}'`,
+      `${flag}: expected <TOKEN|address>:<amount>, as USDC:1.5 (whole tokens) or USDC:1500000n ` +
+        `(base units); got '${raw}'`,
     );
   }
-  const request = tokenRequest(raw, what, chain, flag, amount);
   const base = /^(\d+)n$/.exec(amount);
-  if (base !== null) {
-    const whole =
-      request.decimals === undefined ? undefined : formatUnits(BigInt(base[1]!), request.decimals);
+  if (base === null && !/^\d+(\.\d+)?$/.test(amount)) {
     throw new UsageError(
-      whole === undefined
-        ? `${flag}: ${raw} is in base units, which are not taken here: write the amount in whole ` +
-            "tokens (the token's decimals() say how many base units make one)"
-        : `${flag}: ${raw} is ${whole} ${request.label}: write ${what}:${whole} (amounts here are ` +
-            "whole tokens, never base units)",
-    );
-  }
-  if (!/^\d+(\.\d+)?$/.test(amount)) {
-    throw new UsageError(
-      `${flag} ${raw}: '${amount}' is not an amount in whole tokens, as 1.5 or 100`,
+      `${flag} ${raw}: '${amount}' is not an amount — whole tokens (1.5) or base units ending in n ` +
+        "(1500000n)",
     );
   }
 
-  return request;
+  return tokenRequest(
+    raw,
+    what,
+    chain,
+    flag,
+    base === null ? { units: amount } : { base: BigInt(base[1]!) },
+  );
 }
 
 /** The token `what` names on `chain`, with `amount` as given. */
@@ -123,7 +118,7 @@ function tokenRequest(
   what: string,
   chain: CanonicalChain,
   flag: string,
-  amount: string,
+  amount: FundRequest["amount"],
 ): FundRequest {
   if (NATIVE.test(what)) return { raw, label: what.toUpperCase(), decimals: 18, amount, flag };
   if (isAddress(what, { strict: false })) {
@@ -245,14 +240,16 @@ const read = async <T>(what: string, call: () => Promise<T>): Promise<T> => {
 
 /**
  * A request's amount in base units, a token's decimals read from it when not registered, and a note
- * when the amount reads like base units: whole tokens at or above 10^decimals (`USDC:1500000`, 1.5
- * million USDC), which a program's habit of base units makes easy to write by mistake. A note, not a
- * refusal: it may be meant.
+ * when a bare integer of whole tokens reads like base units: at or above 10^decimals (`USDC:1500000`,
+ * 1.5 million USDC), which a program's habit of base units makes easy to write by mistake. A note,
+ * not a refusal: it may be meant, and base units have their own spelling (`1500000n`).
  */
 export async function baseUnits(
   client: PublicClient,
   request: FundRequest,
 ): Promise<{ readonly amount: bigint; readonly note?: string }> {
+  if ("base" in request.amount) return { amount: request.amount.base };
+  const units = request.amount.units;
   const decimals =
     request.decimals ??
     Number(
@@ -260,22 +257,16 @@ export async function baseUnits(
         client.readContract({ address: request.token!, abi: ERC20, functionName: "decimals" }),
       ),
     );
-  const amount = parseUnits(request.amount, decimals);
-  const whole = BigInt(request.amount.split(".")[0]!);
-  if (decimals === 0 || whole < 10n ** BigInt(decimals)) return { amount };
-  const words = new Intl.NumberFormat("en-US", {
-    notation: "compact",
-    compactDisplay: "long",
-    maximumSignificantDigits: 6,
-  }).format(Number(request.amount));
-
-  const what = request.raw.slice(0, request.raw.lastIndexOf(":"));
+  const amount = parseUnits(units, decimals);
+  if (units.includes(".") || decimals === 0 || BigInt(units) < 10n ** BigInt(decimals)) {
+    return { amount };
+  }
 
   return {
     amount,
     note:
-      `${request.flag} ${request.raw}: that is ${words} ${request.label}; base units are not ` +
-      `taken here (${request.amount} base units would be ${what}:${formatUnits(whole, decimals)})`,
+      `${request.flag} ${request.raw}: that is ${wordsOf(units)} ${request.label}; for base ` +
+      `units write ${units}n`,
   };
 }
 

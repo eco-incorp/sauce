@@ -466,9 +466,9 @@ A cook (`sauce_tx`, `sauce_simulate`, `sauce_actions`) adds these inputs:
 - `fund`, `fundMode` and `sweep`, which rehearse [`sauce run --fund`](cli.md#funding-a-run---fund).
   The Pot is credited what the pulls would bring.
 
-A token amount is in whole tokens only: `USDC:1.5` is 1.5 USDC, exact through the token's
-decimals, and `USDC:1500000` is 1.5 million USDC, which the result's `notes` point out. A base-unit
-amount such as `USDC:1500000n` is refused, with the whole tokens to write instead.
+A token amount is in whole tokens: `USDC:1.5` is 1.5 USDC, exact through the token's decimals, and
+`USDC:1500000` is 1.5 million USDC, which the result's `notes` point out. For base units, end it in
+`n`, as a JavaScript bigint is written: `USDC:1500000n` is 1.5 USDC.
 
 `sauce_pot` reads what a cook needs: on an EVM chain the Kitchen's fee (the least
 a cook's `value` can be) and the Pot's balance of the native currency and of each token the chain

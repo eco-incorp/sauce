@@ -137,7 +137,7 @@ describe("the policy file", () => {
       JSON.stringify({
         chains: ["base", 1],
         to: [RECIPIENT],
-        native: { perTransaction: "0.01", perDay: "0.001" },
+        native: { perTransaction: "0.01", perDay: "1000000000000000n" },
         tokens: { usdc: { perDay: "5" }, [OTHER_TOKEN]: { perTransaction: "1" } },
       }),
       "p.json",
@@ -147,27 +147,31 @@ describe("the policy file", () => {
     expect(policy.notes).toEqual([]);
   });
 
-  it("takes whole tokens only: a base-unit amount is refused, saying what to write", () => {
-    const read = (fields: unknown) => () => parsePolicy(JSON.stringify(fields), "p.json");
-    expect(read({ tokens: { USDC: { perDay: "1500000n" } } })).toThrow(
-      'p.json: tokens.USDC.perDay: "1500000n" is 1.5 USDC: write "1.5" (a policy\'s amounts are ' +
-        "whole tokens, never base units)",
+  it("takes whole tokens, and base units ending in n", () => {
+    const policy = parsePolicy(
+      JSON.stringify({ tokens: { USDC: { perTransaction: "1.5", perDay: "1500000n" } } }),
+      "p.json",
     );
-    // The native coin has 18 decimals on an EVM chain and 9 on Solana: nothing to convert by.
-    expect(read({ native: { perTransaction: "1000n" } })).toThrow(
-      'p.json: native.perTransaction: "1000n" is in base units, which a policy does not take',
-    );
+    expect(policy.tokens.get("USDC")).toEqual({
+      perTransaction: { units: "1.5" },
+      perDay: { base: 1_500_000n },
+    });
+    expect(policy.notes).toEqual([]);
   });
 
-  it("says when a limit reads like base units: a note, not a refusal", () => {
+  it("says when a bare integer of whole tokens reads like base units: a note, not a refusal", () => {
     const policy = parsePolicy(
-      JSON.stringify({ tokens: { USDC: { perTransaction: "1500000", perDay: "5" } } }),
+      JSON.stringify({
+        tokens: { USDC: { perTransaction: "1500000", perDay: "999999" } },
+        // The native coin has 18 decimals on an EVM chain and 9 on Solana: nothing to judge by.
+        native: { perDay: "1000000000000" },
+      }),
       "p.json",
     );
     expect(policy.tokens.get("USDC")?.perTransaction).toEqual({ units: "1500000" });
     expect(policy.notes).toEqual([
-      'p.json: tokens.USDC.perTransaction: "1500000" is 1.5 million USDC; base units are not ' +
-        'taken here ("1500000" base units would be "1.5")',
+      'p.json: tokens.USDC.perTransaction: "1500000" is 1.5 million USDC; for base units write ' +
+        '"1500000n"',
     ]);
   });
 

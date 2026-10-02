@@ -1029,10 +1029,10 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   (``write `i += 1n` ``). What the SDK writes for a reader is plain too: the intent file that
   `sauce intent publish` writes, and the lowering `sauce actions` prints (with `token/safe`'s
   checked writes, which the settle recipe quotes). The command's token amounts (`--fund`,
-  `--assume-balance`, a wallet policy, MCP `fund`/`assumeBalance`) are whole tokens only, the other
-  way round from a program: `USDC:1.5` is 1.5 USDC, a base-unit `USDC:1500000n` is refused with the
-  whole tokens to write, and `USDC:1500000` (at or above 10^decimals) is said to be 1.5 million in
-  a note (`funding.ts#baseUnits`, `policy.ts#amountOf`).
+  `--assume-balance`, a wallet policy, MCP `fund`/`assumeBalance`) are the other way round from a
+  program: whole tokens (`USDC:1.5`), a bare integer included, and base units only with a trailing
+  `n` (`USDC:1500000n`). A bare integer at or above 10^decimals (`USDC:1500000`) is said to be 1.5
+  million in a note, which names the `n` spelling (`funding.ts#baseUnits`, `policy.ts#amountOf`).
 - **Execution-agnostic.** Not every agent has the SDK installed: some have only the `sauce` CLI, or a
   remote compiler, and sign by local means. Every skill but `sauce-cli` (the CLI) and
   `sauce-typescript` (the SDK) teaches the program, what compiling for a chain produces (bytecode,

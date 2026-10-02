@@ -8,7 +8,7 @@
 // both targets); the `n` is TypeScript's, and a reader copies what it is shown. So a program here
 // writes none. TypeScript host code is exempt — a runner, a ```ts fence, a closure in a `.ts` file —
 // because there `tsc` types the literal, and a `bigint` beside a `number` is its error. Comments are
-// not code, and are not read.
+// not code: a usage line's `--fund USDC:1500000n` is the command's amount in base units.
 //
 // An exception is the owning checker's: file -> literal as written -> why, and one nothing needs
 // fails.
