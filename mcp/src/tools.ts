@@ -993,8 +993,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "symbols with their addresses and decimals, protocol namespaces with each contract's " +
         "address (with `protocol`, also its methods), the chain names that open intents, the " +
         "defines, and the @sauce/token functions. With no filter, everything but the chain's " +
-        "tokenized stocks (Ethereum has over a thousand; Base's include Coinbase's, such as " +
-        "SPCXc for SpaceX), which a program names like any token: `stocks` lists them and " +
+        "tokenized stocks (Ethereum and Solana have over a thousand each; Base's include " +
+        "Coinbase's, such as SPCXc for SpaceX; Solana's are Token-2022 mints, such as TSLAx), " +
+        "which a program names like any token: `stocks` lists them and " +
         "`search` finds one by symbol, company name or ticker, each with its issuer, the " +
         "underlying's ticker and the issuer's list it was copied from. Tokens come " +
         `${TOKEN_PAGE} at a time: \`offset\` pages on. Reads nothing.`,
