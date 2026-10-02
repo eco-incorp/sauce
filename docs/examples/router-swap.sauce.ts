@@ -5,8 +5,7 @@ import { balanceOf } from "@sauce/token";
 // Curve's 3pool, and keep it. The tokens, the factory and the pool are the registry's names; the
 // amounts are only known when this runs.
 //
-//   sauce run router-swap.sauce.ts --chain ethereum --config sauce.config.json \
-//     --keystore <keystore> --args <minOut>
+//   sauce run router-swap.sauce.ts --chain ethereum --keystore <keystore> --args <minOut>
 //
 //   minOut: Uint256   the least USDT to keep, in its smallest units (6 decimals): below it the
 //                     whole transaction reverts

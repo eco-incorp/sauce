@@ -56,9 +56,8 @@ an intent carrying it onward.
 // chain those calls run on. In `.reward(...)` it means the USDC of the chain this program runs on,
 // which escrows the reward.
 //
-//   sauce run cross-chain-intent.sauce.ts --chain base --config sauce.config.json \
-//     --keystore <keystore> --intent-deadline <unix seconds> --intent-creator <address> \
-//     --args <recipient> <minAmount>
+//   sauce run cross-chain-intent.sauce.ts --chain base --keystore <keystore> \
+//     --intent-deadline <unix seconds> --intent-creator <address> --args <recipient> <minAmount>
 //
 //   recipient: Address   who the intent pays on Ethereum
 //   minAmount: Uint256   the least USDC worth forwarding, in its smallest units (6 decimals):
