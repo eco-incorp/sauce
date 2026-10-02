@@ -3,7 +3,7 @@
 // is compiled for, with no import, and `available(...)` uses a contract only where that chain has
 // it, so the file compiles for chains without PancakeSwap V3 too.
 //
-//   sauce run protocols.sauce.ts --chain <chain> --config sauce.config.json --keystore <keystore> \
+//   sauce run protocols.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <beneficiary> <amount>
 //
 //   beneficiary: Address  who the Aave V3 position is supplied for
@@ -12,7 +12,7 @@
 //
 // On Base, 5,000 USDC supplied for the beneficiary:
 //
-//   sauce run protocols.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+//   sauce run protocols.sauce.ts --chain base --keystore <keystore> \
 //     --args <beneficiary> 5000000000
 function main(beneficiary: Address, amount: Uint256) {
   // 1. Supply `amount` of the Pot's USDC to Aave V3 for `beneficiary`, approving exactly that.

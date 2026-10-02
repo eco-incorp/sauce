@@ -1,6 +1,7 @@
 /**
  * The endpoints one tool call reaches: the `rpcUrl` the call carries, else the server's own from
- * `--config`, else a plain refusal — and everything the call returns scrubbed of both.
+ * `--config`, else a built-in public endpoint, else a plain refusal — and everything the call
+ * returns scrubbed of the first two. A public endpoint is no secret; the result says it was used.
  *
  * A caller's URL usually embeds the caller's API key, so it is treated as a secret for exactly as
  * long as the call that carries it: never returned, never logged, and removed from every message
@@ -22,6 +23,8 @@ export interface Reach {
   require(chain: CanonicalChain, given: string | undefined, what: string): Promise<string>;
   /** `text` with the call's URLs, and the server's secrets, taken out. */
   scrub(text: string): string;
+  /** What the call should say of the chains it read through a built-in public endpoint. */
+  publicNotes(): string[];
   /** Closes the routes the call opened through the guard. */
   release(): void;
 }
@@ -62,6 +65,7 @@ const escape = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\
 export function callReach(endpoints: Endpoints, guard: RpcGuard | undefined): Reach {
   const secrets = new Set<string>();
   const routes: Routed[] = [];
+  const publicChains = new Map<number, CanonicalChain>();
   const remember = (text: string) => {
     for (const form of forms(text)) secrets.add(form);
   };
@@ -70,7 +74,14 @@ export function callReach(endpoints: Endpoints, guard: RpcGuard | undefined): Re
     chain: CanonicalChain,
     given: string | undefined,
   ): Promise<string | undefined> => {
-    if (given === undefined) return endpoints.endpoint(chain);
+    if (given === undefined) {
+      const own = endpoints.endpoint(chain);
+      if (own !== undefined) return own;
+      const url = endpoints.public?.url(chain);
+      if (url !== undefined) publicChains.set(chain.id, chain);
+
+      return url;
+    }
     // Before anything can fail and quote it.
     remember(given);
     if (guard !== undefined) {
@@ -108,6 +119,12 @@ export function callReach(endpoints: Endpoints, guard: RpcGuard | undefined): Re
 
       return out;
     },
+    publicNotes: () =>
+      [...publicChains.values()].map(
+        (chain) =>
+          `${chain.slug} was read through a built-in public endpoint, which can be slow or ` +
+          "rate-limited: pass rpcUrl with the call for an endpoint of your own.",
+      ),
     release: () => {
       for (const routed of routes.splice(0)) routed.release();
     },

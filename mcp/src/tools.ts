@@ -4,8 +4,9 @@
  * none takes a key: a transaction comes back unsigned, for a wallet the caller holds.
  *
  * A tool that reads a chain uses the call's own `rpcUrl`, else the server's endpoint for that chain
- * from `--config`, else says plainly that it has none (`reach.ts`). Every result and every error is
- * scrubbed of both, so no endpoint URL — which usually carries a provider key — leaves the server.
+ * from `--config`, else a built-in public endpoint, saying so in its notes, else says plainly that
+ * it has none (`reach.ts`). Every result and every error is scrubbed of the first two, so no
+ * endpoint URL — which usually carries a provider key — leaves the server.
  *
  * A tool that returns a transaction builds it only on a chain the release supports: on a preview
  * chain it is refused by the command's own gate (`sdk/src/cli/support.ts`), before any endpoint is
@@ -133,10 +134,11 @@ const RPC_URL = z
   .max(2048)
   .optional()
   .describe(
-    "An RPC endpoint for the chain, used for this call only; it takes precedence over the " +
-      "server's own endpoint for the chain. It is never returned or logged. A server someone " +
-      "else runs sees it, so pass only a key you would share with them, or run the server " +
-      "yourself. A server served over HTTP reaches only public https endpoints.",
+    "Optional: an RPC endpoint of your own for the chain, used for this call only. Without " +
+      "it, the server's own endpoint for the chain, else a built-in public one, which can be " +
+      "slow or rate-limited. It is never returned or logged. A server someone else runs sees " +
+      "it, so pass only a key you would share with them, or run the server yourself. A server " +
+      "served over HTTP reaches only public https endpoints.",
   );
 
 /** A block to read at: a number (a JSON number, or decimal or 0x-hex text) or a tag. */
@@ -1010,7 +1012,7 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
       async (args: unknown) => {
         const reach = callReach(endpoints, guard);
         try {
-          const output = await run(args as never, reach);
+          const output = withPublicNotes(await run(args as never, reach), reach);
 
           return result(
             sendable && (args as { dryRun?: unknown }).dryRun !== true
@@ -1020,10 +1022,12 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
           );
         } catch (error) {
           if (error instanceof PreviewChainError) return refusedResult(error.refusal, reach.scrub);
+          // A public endpoint's failure (a rate limit) is the one an endpoint of your own fixes.
+          const said = reach.publicNotes();
 
           return {
             isError: true,
-            content: [{ type: "text", text: errorText(error, reach.scrub) }],
+            content: [{ type: "text", text: [errorText(error, reach.scrub), ...said].join("\n") }],
           };
         } finally {
           reach.release();
@@ -1031,6 +1035,13 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
       },
     );
   };
+}
+
+/** `output` with what the call says of the chains it read through a built-in public endpoint. */
+function withPublicNotes(output: ToolOutput, reach: Reach): ToolOutput {
+  const said = reach.publicNotes();
+
+  return said.length === 0 ? output : { ...output, notes: [...(output.notes ?? []), ...said] };
 }
 
 /** `output` with a note on sending it from a wallet, when it carries transactions to send. */
@@ -1069,8 +1080,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         `and \`endpoint\`. \`support\` is "supported" for ${supportedChainNames()}, where this ` +
         'release builds transactions, and "preview" for every other chain: programs compile ' +
         "and simulate there, but the tools that build a transaction refuse it (`refused` says " +
-        "how to request the chain). `endpoint` is whether this server has its own RPC endpoint " +
-        "for the chain; a tool that reads a chain without one needs the call's rpcUrl. Reads " +
+        "how to request the chain). `endpoint` is where this server reads the chain without the " +
+        'call\'s rpcUrl: "config", its operator\'s endpoint; "public", a built-in public one, ' +
+        'which can be slow or rate-limited; "none", only through the call\'s rpcUrl. Reads ' +
         "nothing.",
       input: {},
       output: {
@@ -1080,7 +1092,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
             id: z.number(),
             kind: z.enum(["evm", "svm"]),
             support: z.enum(["supported", "preview"]),
-            endpoint: z.boolean(),
+            endpoint: z.enum(["config", "public", "none"]),
           }),
         ),
         supported: z.array(z.string()),
@@ -1097,7 +1109,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           kind: chain.kind,
           aliases: chain.aliases,
           support: chainSupport(chain),
-          endpoint: endpoints.chainIds.includes(chain.id),
+          endpoint: endpoints.chainIds.includes(chain.id)
+            ? "config"
+            : endpoints.public?.chainIds.includes(chain.id) === true
+              ? "public"
+              : "none",
         })),
         supported: CANONICAL_CHAINS.filter((chain) => chainSupport(chain) === "supported").map(
           (chain) => chain.slug,

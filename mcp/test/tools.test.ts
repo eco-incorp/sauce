@@ -162,11 +162,11 @@ describe("the sauce command's flags as the tools' inputs", () => {
 describe("sauce_chains", () => {
   it("lists every chain, and none with an endpoint on a server without a config", async () => {
     const { chains } = ok(await mcp.call("sauce_chains")) as {
-      chains: Array<{ slug: string; id: number; kind: string; endpoint: boolean }>;
+      chains: Array<{ slug: string; id: number; kind: string; endpoint: string }>;
     };
     assert.ok(chains.some((chain) => chain.slug === "base" && chain.id === 8453));
     assert.ok(chains.some((chain) => chain.kind === "svm"));
-    assert.ok(chains.every((chain) => chain.endpoint === false));
+    assert.ok(chains.every((chain) => chain.endpoint === "none"));
   });
 });
 

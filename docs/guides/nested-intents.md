@@ -80,7 +80,6 @@ the Pot itself:
 // Ethereum. All of it is SauceScript, opened on Ethereum:
 //   sauce intent publish nested-intent.sauce.ts --chain ethereum --define AMOUNT=… --define REWARD=…
 //     --define RECIPIENT=… --intent-deadline … --intent-creator … --intent-execution-fee auto
-//     --config sauce.config.json
 //
 // The outer body runs on Base, in the fulfilment of the outer intent, so `amount` is measured there:
 // what the solver delivered to the Pot. The inner intent carries it on to Ethereum, less a tenth of
@@ -105,10 +104,10 @@ Base(
 sauce intent publish nested-intent.sauce.ts --chain ethereum \
   --define AMOUNT=1000000 --define REWARD=1010000 --define RECIPIENT=<recipient> \
   --intent-deadline <unix seconds> --intent-creator <your address> \
-  --intent-execution-fee auto --config sauce.config.json
+  --intent-execution-fee auto
 ```
 
-`auto` reads the fee from Base's Kitchen, through the endpoint `--config` gives for Base: the outer
+`auto` reads the fee from Base's Kitchen: the outer
 body is a program, and its cook pays it. With the same values the two are the same intent, byte for
 byte: [nested-intent.ts](../examples/nested-intent.ts) builds both and checks it. From TypeScript,
 `routes.compileSauceProgram("ethereum", source, { defines, intents }).intents` holds the intent the
