@@ -44,12 +44,18 @@ interface Declaration {
   readonly literal?: bigint;
 }
 
-/** The value a literal folds to — an integer, a bigint or a boolean — or `undefined`. */
+/** The value a literal folds to — an integer, a bigint or a boolean — or `undefined`. An integer
+ *  is read from its text, as the compiler reads it: the parser's `number` for
+ *  `1000000000000000000` or an address is a rounded float. */
 export function literalValue(node: unknown): bigint | undefined {
   if ((node as AstNode | null | undefined)?.type !== "Literal") return undefined;
-  const value = (node as { value?: unknown }).value;
+  const { value, raw } = node as { value?: unknown; raw?: string };
   if (typeof value === "bigint") return value;
-  if (typeof value === "number" && Number.isSafeInteger(value)) return BigInt(value);
+  if (typeof value === "number") {
+    const digits = raw?.replaceAll("_", "") ?? "";
+    if (/^(?:\d+|0[xX][0-9a-fA-F]+)$/.test(digits)) return BigInt(digits);
+    if (Number.isSafeInteger(value)) return BigInt(value);
+  }
   if (typeof value === "boolean") return value ? 1n : 0n;
   return undefined;
 }
