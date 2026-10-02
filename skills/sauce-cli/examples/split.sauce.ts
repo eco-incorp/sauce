@@ -6,7 +6,7 @@
 // amount)` is the zero-import @sauce/token function, and `USDC.transfer(...)` the same SafeERC20
 // write on the chain's USDC.
 //
-//   sauce run split.sauce.ts --chain <chain> --config sauce.config.json --keystore <keystore> \
+//   sauce run split.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <token> <recipients> <amount> <alsoUsdc>
 //
 //   token: Address         the ERC-20 to pay
@@ -17,7 +17,7 @@
 //
 // On Base, 0.001 WETH to each of two recipients:
 //
-//   sauce run split.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+//   sauce run split.sauce.ts --chain base --keystore <keystore> \
 //     --args 0x4200000000000000000000000000000000000006 '["<recipient>","<recipient>"]' \
 //     1000000000000000 false
 function main(token: Address, recipients: Address[], amount: Uint256, alsoUsdc: bool) {

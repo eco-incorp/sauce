@@ -1,6 +1,6 @@
 // Three hops, written as three intents opening one another: Base, then Ethereum, then Base again.
 // All of it is SauceScript, opened on Ethereum and published from a wallet:
-//   sauce intent publish cross-chain-cascade.sauce.ts --chain ethereum --config sauce.config.json \
+//   sauce intent publish cross-chain-cascade.sauce.ts --chain ethereum \
 //     --intent-deadline … --intent-creator … --intent-execution-fee auto \
 //     --args <recipient> <delivered> <reward>
 //

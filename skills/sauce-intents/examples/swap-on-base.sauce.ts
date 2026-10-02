@@ -10,7 +10,7 @@
 // the delivery argument after them, the body runs on Base: `WETH`, `USDC`, `UniswapV3.Factory`,
 // `UniswapV3.Pool`, `UniswapV4.StateView` and `UniswapV4.PoolManager` there are Base's.
 //
-//   sauce run swap-on-base.sauce.ts --chain <chain> --config sauce.config.json \
+//   sauce run swap-on-base.sauce.ts --chain <chain> \
 //     --keystore <keystore> --intent-deadline <unix seconds> --intent-creator <address> \
 //     --intent-execution-fee <Base Kitchen fee in wei> --args <amountIn> <reward> \
 //     <sqrtPriceLimitX96> <minOut> <minAvgPrice> <recipient> <refundTo>
@@ -27,12 +27,12 @@
 //                                1e18: 2490000000 is 2,490 USDC per WETH
 //   recipient: Address           who receives the USDC on Base
 //   refundTo: Address            who receives the unsold WETH on Base
-//   --intent-execution-fee: wei  Base's Kitchen fee for the body's cook; `auto` reads it through
-//                                --config
+//   --intent-execution-fee: wei  Base's Kitchen fee for the body's cook; `auto` reads it from
+//                                Base
 //
 // From Ethereum, selling 1 WETH on Base no lower than 2,500 USDC per WETH, for 1.002 WETH:
 //
-//   sauce run swap-on-base.sauce.ts --chain ethereum --config sauce.config.json \
+//   sauce run swap-on-base.sauce.ts --chain ethereum \
 //     --keystore <keystore> --intent-deadline <unix seconds> --intent-creator <address> \
 //     --intent-execution-fee auto --args 1000000000000000000 1002000000000000000 \
 //     3961408125713216879677197 2490000000 2490000000 <recipient> <refundTo>

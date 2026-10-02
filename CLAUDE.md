@@ -734,9 +734,21 @@ an intent the file opens resolves its body on its own chain) — and no encoder 
 `validateSettleProgram`/`verifySvmSettleExecution`, and Solana cooks `createSauceSvmClient`
 (`cookTransaction`). It is Node-only and deliberately in no `exports` entry and no barrel
 (`cli.test.ts` fails if a barrel exports it), reads no environment but the variable `--password-env`
-names, reaches a network only through `--rpc-url` or a `--config` file, and signs only with
+names, reaches a network only through `--rpc-url`, a `--config` file's entry for the chain, or
+else the built-in public endpoints (none with `--offline`), and signs only with
 `--wallet`, `--keystore`, `--private-key` or `--keypair`, scrubbing any key or password it was given
-from everything it prints. `run --fund` (`funding.ts`)
+from everything it prints. **The public endpoints are the one exception to "the package ships no
+RPC URL"** (the user's call: nobody should need a config to run the CLI or the MCP server). They
+live in exactly one module, `sdk/src/cli/public-rpcs.ts` (1–3 keyless endpoints per canonical chain,
+each flagged for `eth_simulateV1`, with the date they were checked), and nothing outside
+`sdk/src/cli/` may import it; `no-embedded-rpc.test.ts` allows that file alone and fails an import
+from anywhere else or an export that reaches `cli/`, so it never reaches a browser.
+`public-endpoints.ts` hands each chain to the command's clients as one loopback URL (like the MCP
+guard's forwarder) that falls back through the list on a network error, a timeout, 401, 403, 429 or
+5xx, keeps to the endpoint that answered, and sends `eth_simulateV1` only where it runs. The
+executable (`main.ts`) creates it and puts it on `CliIo.publicRpcs`; an in-process `runCli` without
+it (every test, the skills checker) reads no chain it is not given, so CI stays offline.
+`sdk/scripts/check-public-rpcs.mjs` re-verifies the list live, by hand, never in CI. `run --fund` (`funding.ts`)
 wraps the file's source before that compile — a new `main` with the same signature that pulls
 through `@sauce/token` (`permitTransferFrom`, `permit`, `transferFrom`), calls the original
 renamed, and sweeps; in a script, the pulls after its imports and the sweeps after its last
@@ -780,7 +792,8 @@ No tool takes a key or a password under any name (`tools.test.ts` and `wallets.t
 input that looks like one), and the server reads no environment. It signs only over stdio, started
 with `--wallets [dir]` and a password source (`mcp/src/wallets.ts`, see "Agent wallets"); without
 them, and always over HTTP, it never signs. A tool reads a chain through the call's own `rpcUrl`, else the
-`--config` endpoint, else refuses (`reach.ts`); a caller's URL is a secret for that call only, and
+`--config` endpoint, else the public endpoints `sauce mcp` hands it (`Endpoints.public`, saying so in
+the result's notes), else refuses (`reach.ts`); a caller's URL is a secret for that call only, and
 the server's are registered with `signer.ts#secret` at start — all scrubbed from every result,
 error and log (`secrets.test.ts`). Over HTTP a caller's URL goes only through `guard.ts`: https,
 no private/ULA/link-local/CGNAT/metadata address, checked again at each connection (rebinding),

@@ -6,7 +6,7 @@
 // a public key, passed in base58. The @sauce/token SVM arm checks each account's owner and mint
 // before it reads or writes, and requires `tokenProgram` to be the SPL Token program.
 //
-//   sauce run solana.sauce.ts --chain <chain> --config sauce.config.json --keypair <keypair> \
+//   sauce run solana.sauce.ts --chain <chain> --keypair <keypair> \
 //     --account tokenProgram=<SPL Token program> --account source=<the Pot's token account> \
 //     --account destination=<token account> --account authority=pot --args <mint> <amount>
 //
@@ -20,7 +20,7 @@
 //
 // On Solana, 1 USDC from the Pot's USDC account:
 //
-//   sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypair <keypair> \
+//   sauce run solana.sauce.ts --chain solana --keypair <keypair> \
 //     --account tokenProgram=TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA \
 //     --account source=pot:EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v \
 //     --account destination=<token account> --account authority=pot \

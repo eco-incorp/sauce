@@ -79,7 +79,7 @@ lowering adds the transfer into the Pot itself:
 ```js
 // An intent from Ethereum to Base whose body opens an intent of its own, from Base back to
 // Ethereum. All of it is SauceScript, opened on Ethereum and published from a wallet:
-//   sauce intent publish nested-intent.sauce.ts --chain ethereum --config sauce.config.json \
+//   sauce intent publish nested-intent.sauce.ts --chain ethereum \
 //     --intent-deadline … --intent-creator … --intent-execution-fee auto \
 //     --args <recipient> <delivered> <reward>
 //
@@ -109,12 +109,12 @@ function main(recipient: Address, delivered: Uint256, reward: Uint256) {
 ```
 
 ```sh
-sauce intent publish nested-intent.sauce.ts --chain ethereum --config sauce.config.json \
+sauce intent publish nested-intent.sauce.ts --chain ethereum \
   --intent-deadline <unix seconds> --intent-creator <your address> \
   --intent-execution-fee auto --args <recipient> 1000000 1010000
 ```
 
-`auto` reads the fee from Base's Kitchen, through the endpoint `--config` gives for Base: the outer
+`auto` reads the fee from Base's Kitchen: the outer
 body is a program, and its cook pays it. With the same values the two are the same intent, byte for
 byte: [nested-intent.ts](../examples/nested-intent.ts) builds both and checks it. From TypeScript,
 `routes.compileSauceProgram("ethereum", source, { args, intents }).intents` holds the intent the
@@ -246,7 +246,7 @@ fixed into it ([cross-chain-cascade.ts](../examples/cross-chain-cascade.ts) comp
 ```js
 // Three hops, written as three intents opening one another: Base, then Ethereum, then Base again.
 // All of it is SauceScript, opened on Ethereum and published from a wallet:
-//   sauce intent publish cross-chain-cascade.sauce.ts --chain ethereum --config sauce.config.json \
+//   sauce intent publish cross-chain-cascade.sauce.ts --chain ethereum \
 //     --intent-deadline … --intent-creator … --intent-execution-fee auto \
 //     --args <recipient> <delivered> <reward>
 //

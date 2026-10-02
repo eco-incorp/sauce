@@ -1,6 +1,6 @@
 // An intent from Ethereum to Base whose body opens an intent of its own, from Base back to
 // Ethereum. All of it is SauceScript, opened on Ethereum and published from a wallet:
-//   sauce intent publish nested-intent.sauce.ts --chain ethereum --config sauce.config.json \
+//   sauce intent publish nested-intent.sauce.ts --chain ethereum \
 //     --intent-deadline … --intent-creator … --intent-execution-fee auto \
 //     --args <recipient> <delivered> <reward>
 //

@@ -251,7 +251,7 @@ export async function svmFillCommand(
     json.push(entry);
     notes.push(
       `Once the proof arrives on ${record.source.chain}, claim the reward: ` +
-        `\`sauce intent claim ${record.intentHash} --config <file> --keystore <path>\``,
+        `\`sauce intent claim ${record.intentHash} --keystore <path>\``,
     );
   }
 

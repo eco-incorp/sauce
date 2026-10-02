@@ -108,7 +108,7 @@ the intents it publishes (`sauce-intents`).
 ```sauce chain=base
 // Pays each of `recipients` `amount` of the chain's USDC, from the Pot.
 //
-//   sauce run payout.sauce.ts --chain <chain> --config sauce.config.json --keystore <keystore> \
+//   sauce run payout.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <recipients> <amount>
 //
 //   recipients: Address[]  who is paid, a JSON array: '["<recipient>","<recipient>"]'
@@ -117,7 +117,7 @@ the intents it publishes (`sauce-intents`).
 //
 // On Base, 5 USDC to each of two recipients:
 //
-//   sauce run payout.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+//   sauce run payout.sauce.ts --chain base --keystore <keystore> \
 //     --args '["<recipient>","<recipient>"]' 5000000
 function main(recipients: Address[], amount: Uint256) {
   for (const to of recipients) {
