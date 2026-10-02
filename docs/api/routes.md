@@ -40,16 +40,17 @@ Chain references accept canonical slugs, names/aliases supported by the registry
 | `portal`                                        | Destination Portal. Defaults to the eco-routes deployment for that chain         |
 | `ecoRoutes`                                     | Which eco-routes deployment to address: `generation` and `environment`           |
 | `salt`                                          | Route salt; defaults to 32 zero bytes                                            |
-| `tokens`, `nativeAmount`                        | Solver-delivered destination assets                                              |
+| `tokens`                                        | Solver-delivered destination tokens                                              |
+| `nativeAmount`                                  | Native the solver sends with the fill. Defaults to the sum of the calls' values  |
 | `precalls`                                      | Calls before the compiled program and nested calls                               |
 | `tokenDefines`                                  | Token-symbol address overrides                                                   |
 | `defines`, `compile`                            | Program specialization and compile options                                       |
 | `sourcePortal`                                  | Source Portal for submission/read requests. Defaults like `portal`               |
-| `source`, `creator`, `prover`, `rewardDeadline` | Fallback fields for `.reward(...)`                                               |
+| `source`, `creator`, `prover`, `rewardDeadline` | Fallback fields for `.reward(...)`; `prover` defaults as the reward's does       |
 
-On an EVM destination the Pot and engine are derived when omitted: the Pot owned by the `executor()` of the Portal the route records, under salt zero (`SAUCE_INTENT_POT_SALT`) — the one Pot per Portal the solver deploys — and the released engine. The route does not deploy it: the Pot must exist before fulfilment, and the solver deploys it. A Pot you name must equally exist and be owned by that Executor. `destinationPot(chain, { portal?, ecoRoutes? })` returns the derived address. Set `execution.value` to the current Kitchen fee plus any native assets the program spends, and budget `nativeAmount` for all route call values; with no `value`, the cook sends zero and works only with a fee-free Kitchen. See [the destination Pot](../guides/intents.md#the-destination-pot).
+On an EVM destination the Pot and engine are derived when omitted: the Pot owned by the `executor()` of the Portal the route records, under salt zero (`SAUCE_INTENT_POT_SALT`) — the one Pot per Portal the solver deploys — and the released engine. The route does not deploy it: the Pot must exist before fulfilment, and the solver deploys it. A Pot you name must equally exist and be owned by that Executor. `destinationPot(chain, { portal?, ecoRoutes? })` returns the derived address. Set `execution.value` to the current Kitchen fee plus any native assets the program spends; with no `value`, the cook sends zero and works only with a fee-free Kitchen. `nativeAmount` defaults to the sum of the route's call values — each cook's `value`, each precall's, each nested child's — less a `fundedByBody` child's native reward: what the Executor pays out, so the solver sends exactly that. One you set is used as given. See [the destination Pot](../guides/intents.md#the-destination-pot).
 
-`.reward(...)` accepts an object, a native amount as `bigint`, or an array of `{ token, amount }`. Object fields override option fallbacks. `source`, `creator`, and `prover` must resolve from one of those places. Reward deadline resolution is `reward.deadline`, then `options.rewardDeadline`, then `options.deadline`. Native and token amounts default to zero/empty where omitted.
+`.reward(...)` accepts an object, a native amount as `bigint`, or an array of `{ token, amount }`. Object fields override option fallbacks. `source` and `creator` must resolve from one of those places. `prover` defaults to `ecoRoutesProver(source, destination, options.ecoRoutes)`, the registry's prover for the pair — the one an intent opened inside a program and `sauce intent publish` record — and a pair the registry has none for must name one. Reward deadline resolution is `reward.deadline`, then `options.rewardDeadline`, then `options.deadline`. Native and token amounts default to zero/empty where omitted.
 
 The compiler needs no source reward to compile a destination program. Use `compileSauceRoute` when you only need destination calls.
 
@@ -118,28 +119,107 @@ The destination side is a solver's, and two helpers build it from `built.intent`
 
 After the fill, the same module builds the rest of an intent's life, each as a request you send: `fulfillAndProveTx(intent, { claimant, prover, sourceDomain, data, fee })` (the fill and its proof in one, `route.nativeAmount + fee` as its value) and `proveTx(intents, { prover, sourceDomain, data, fee })` on the destination, with `hyperlaneProverData({ sourceProver })` the Hyperlane prover's `data` and `proverFeeCall(...)` its fee; `withdrawTx`, `batchWithdrawTx` and `refundTx` on the source, taking `{ portal }`; `cancelTx` and `cancelAndProveTx` on a destination Portal that has `cancel`, after the route's deadline. The reads that decide them are `rewardStatusCall` (one of `REWARD_STATUSES`), `fulfillmentCall` (what the destination recorded: a claimant, `CANCELLED_CLAIMANT_BYTES32`, or zero), `provenIntentCall` (the source prover's claimant and destination) and `proofTypeCall`. `intentFromPublished(log, sourceChainId)` rebuilds an intent from its `IntentPublished` log, checking its hash. [After the fill](../guides/intents.md#after-the-fill-prove-claim-refund-cancel) explains when each applies.
 
-## Composition and lower-level encoding
+## Nested intents
 
-Call `.nest(childOrThunk, options?)` before `.reward(...)`. The fluent default is transfer funding after the parent program. [Nested intents](../guides/nested-intents.md) explains funding modes, deadlines, account custody, and execution ordering.
+A nested intent is written in the program: `Chain(() => { ... }).reward({ ... })` in a body opens
+an intent when that body runs, at any depth. In a typed closure the chain is the imported export,
+which carries that SauceScript call (`SauceIntentChain`) ahead of its host signature — see [nested intents](../guides/nested-intents.md) and
+[create an intent](../guides/intents.md#create-an-intent-from-inside-a-program).
+`SauceCompileOptions.intents` carries what that lowering cannot look up (a deadline, a creator, the
+fee of a program body's cook) and what overrides it: `sourcePortal`, `destinationPortal`, `prover`,
+`salt`, `fundVia`, `allowPartial`, and the eco-routes `generation`/`environment`. They apply to every
+intent the program opens, at every depth. Through `Base(...)` the deadlines, the creator, `fundVia`
+and the eco-routes selection are inherited from the enclosing intent.
 
-For callers building their own calls, `assembleIntent(source, destination, route, reward)` normalizes an intent without compiling a program. `encodeRoute`, `encodeReward`, `hashIntent`, and their explicit EVM/SVM variants expose encoding and hashing. `toUniversalAddress` normalizes addresses for the cross-chain intent model, while `denormalizeToEvm` converts an EVM-shaped universal address back to its 20-byte form.
+`compileSauceProgram(chain, source, options).intents` lists the intents a program opens, each as
+the lowering encoded it (`LoweredIntent`): one with no `captures` is fixed when it is built, so
+`intentSourceTxs(intent, { portal })` publishes it from a wallet, as `sauce intent publish` does.
 
-The low-level `nestedChildCalls` helper builds approval/publication calls with explicit Portal and `allowPartial` settings. The fluent `.nest()` default is `"transfer"`; pass the current `executionFee` for its additional cook.
+## Nesting in TypeScript
+
+`.nest(childOrThunk, options?)`, called before `.reward(...)`, attaches an intent built in
+TypeScript to a route built in TypeScript: the lower level under the program form, for per-level
+options, for [action programs](../guides/actions.md#fund-a-child-from-a-measured-amount), and for a
+child that is never published. The thunk form, `(on) => Chain(...).reward({ ...reward, source: on })`,
+receives the parent's destination as the child's source; an already built child is checked to have
+it. Each mode below is the `via` option.
+
+### Transfer funding (the default)
+
+`via: "transfer"`, after the parent program by default: one more Sauce program, cooked on the
+parent's Pot, reads the Pot's balance and transfers each child reward asset to the child's vault.
+The child is not published: no `IntentPublished` is emitted, so share it with your solver yourself.
+
+| Option                 | Default          | Effect                                                                                                        |
+| ---------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------- |
+| `clamp`                | `true`           | Transfer at most the declared child reward amount                                                             |
+| `requireCap`           | `false`          | If enabled, revert the parent fulfillment when the Pot cannot cover the cap                                   |
+| `native`               | `"balance"`      | Include the native leg; `"skip"` omits it                                                                     |
+| `fundNativeFromRoute`  | `false`          | Forward the child's declared native reward from route value into the transfer `cook`                          |
+| `executionFee`         | `0n`             | The Kitchen fee for the transfer cook                                                                         |
+| `position`             | `"after"`        | Run after the parent body; `"before"` runs before it                                                          |
+| `vault`, `vaultConfig` | the runtime read | A vault verified with `child.vaultCall()`, or `routes.ecoRoutesVaultConfig(portal)` for an offline prediction |
+
+With `requireCap: false` a short Pot balance can leave the child underfunded while the parent
+succeeds. Children merged into one position share one cook, so they must give the same Pot, engine
+and fee; `"before"` and `"after"` cooks each pay.
+
+### Publication funding
+
+`via: "publishAndFund"` splices the Executor's ERC-20 approvals and `Portal.publishAndFund` into the
+parent route: no cook and no fee. The child's reward assets must be in the Executor when those calls
+run. The builder checks the parent route's declared assets cover the child rewards, unless
+`fundedByBody: true` says the parent program supplies them. `allowPartial` defaults to `false`.
+
+### Dynamic children
 
 `via: "dynamic"` creates the child **during** the parent's execution, from an amount measured on
-chain. `AMOUNT_IN_PLACEHOLDER` and `AMOUNT_OUT_PLACEHOLDER` mark the amounts to splice;
-`renderDynamicChild(child, options, amountIn)` reproduces the resulting calldata off-chain, and
-`dynamicChildTemplate` / `dynamicChildStatements` / `dynamicChildProgram` expose the segments,
-statements and merged program the builder generates. Underneath are `splitByPlaceholders`,
-`renderTemplate` and `emitTemplate` — byte-templating primitives that work against any encoding whose
-fields sit at fixed offsets, not only intents.
+chain, as an intent opened in the program does by capturing a variable. Build the child with
+`AMOUNT_IN_PLACEHOLDER` and `AMOUNT_OUT_PLACEHOLDER` where the amounts belong, and name the
+measurement:
 
-A program can also create an intent itself, with `Chain(() => { ... }).reward({ ... })` written in
-its body — see [create an intent](../guides/intents.md#create-an-intent-from-inside-a-program).
-`SauceCompileOptions.intents` carries what that lowering cannot look up (a deadline, a creator) and
-what overrides it: `sourcePortal`, `destinationPortal`, `prover`, `salt`, `allowPartial`, and the
-eco-routes `generation`/`environment`. Through `Base(...)` those are inherited from the enclosing
-intent, so the common case sets none of them.
+| Option         | Default                     | Effect                                                                                   |
+| -------------- | --------------------------- | ---------------------------------------------------------------------------------------- |
+| `measure`      | required                    | `erc20Balance`, `nativeBalance`, or a caller-supplied SauceScript expression             |
+| `scale`        | `10n ** 18n`                | `amountOut = ceil(amountIn * scale / WAD)`; carries decimals conversion and margin       |
+| `minAmountIn`  | `1n`                        | Revert the parent fulfillment below this floor; `0n` removes the check                   |
+| `placeholders` | both 32-byte sentinels      | Which sentinels to cut at, with per-slot `scale`, `width`, `littleEndian`, `occurrences` |
+| `approve`      | `"auto"`                    | Emit the Pot's reward-token approvals; `"none"` leaves them to you                       |
+| `value`        | `child.reward.nativeAmount` | Native forwarded to `publishAndFund`                                                     |
+| `allowPartial` | `false`                     | Passed through to `publishAndFund`                                                       |
+| `executionFee` | `0n`                        | The cook's total value: Kitchen fee plus any native the child forwards                   |
+
+The child's `publishAndFund` calldata is encoded once, cut at every placeholder, and emitted as
+literal byte runs in an extra cook, which reads the balance, derives the amounts, approves the
+Portal and calls it. Declare `occurrences` for every placeholder. Every guard it emits reverts the
+parent's whole fulfilment. The child's real hash exists only once the parent runs: read it from
+`IntentPublished`, or rebuild it off-chain with `renderDynamicChild(child, options, amountIn)`. A
+child bound for Solana takes `AMOUNT_IN_PLACEHOLDER_U64`/`AMOUNT_OUT_PLACEHOLDER_U64` with
+`width: 8, littleEndian: true` for its Borsh route amounts. `dynamicChildTemplate`,
+`dynamicChildStatements` and `dynamicChildProgram` expose the segments, statements and program the
+builder generates; underneath are `splitByPlaceholders`, `renderTemplate` and `emitTemplate`, which
+work against any encoding whose fields sit at fixed offsets.
+
+A dynamic child is an ordinary built intent, so it can carry a dynamic nest of its own. Splitting a
+payload cuts the sentinels out, so a parent's split finds only its own child's slots, never a
+grandchild's. Growth is linear: about 1,500 bytes of `cook` calldata at depth 1 and 1,950 per level
+after it on the SDK's fixture. A `hex` segment carries a `u16` length, so the deepest cascade that
+compiled there is 34 levels, and one more fails naming the limit.
+
+### Ordering and constraints
+
+The route's calls run in this order: the parent's `precalls`, children positioned `"before"`, the
+parent's compiled program, children positioned `"after"`. Within a position, publication calls come
+first, then the merged transfer cook, then the merged dynamic cook; children of one mode run in
+`.nest()` order. The builder requires an EVM parent destination, a child whose source is the
+parent's destination, and child deadlines no earlier than the parent route's. Identical direct
+children are refused: give them distinct salts. `.intents()` lists the root and its descendants in
+preorder, and `.children` the direct children; the root's funding helpers fund only the root.
+`nestedChildCalls` builds the publication calls with explicit Portal and `allowPartial` settings.
+
+## Lower-level encoding
+
+For callers building their own calls, `assembleIntent(source, destination, route, reward)` normalizes an intent without compiling a program. `encodeRoute`, `encodeReward`, `hashIntent`, and their explicit EVM/SVM variants expose encoding and hashing. `toUniversalAddress` normalizes addresses for the cross-chain intent model, while `denormalizeToEvm` converts an EVM-shaped universal address back to its 20-byte form.
 
 Where eco-routes is deployed is a registry: `ecoRoutesPortal(chain)`, `ecoRoutesProver(source,
 destination)`, `ecoRoutesDeployment(chain)` and `ecoRoutesGenerations()` from
