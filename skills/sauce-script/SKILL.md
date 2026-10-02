@@ -104,7 +104,7 @@ An intent file, which has no `main`, lists its defines and its `--intent-…` fl
 ```sauce chain=base
 // Pays each of `recipients` `amount` of the chain's USDC, from the Pot.
 //
-//   sauce run payout.sauce.ts --chain <chain> --config sauce.config.json --keystore <keystore> \
+//   sauce run payout.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <recipients> <amount>
 //
 //   recipients: Address[]  who is paid, a JSON array: '["<recipient>","<recipient>"]'
@@ -113,7 +113,7 @@ An intent file, which has no `main`, lists its defines and its `--intent-…` fl
 //
 // On Base, 5 USDC to each of two recipients:
 //
-//   sauce run payout.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+//   sauce run payout.sauce.ts --chain base --keystore <keystore> \
 //     --args '["<recipient>","<recipient>"]' 5000000
 function main(recipients: Address[], amount: Uint256) {
   for (const to of recipients) {
@@ -386,6 +386,18 @@ and bound each loop by its input. The real figure is the rehearsal's:
 `sauce simulate` prints it, and `sauce run` and most signers set the gas limit from an estimate.
 Leave headroom when the chain can move between the rehearsal and the send; a swap that crosses more
 ticks spends more.
+
+## In an editor
+
+An editor checks a `.sauce.ts` file as TypeScript, which knows none of SauceScript's names: with
+no project for them, it marks `Token`, `USDC`, `ctx` and every other global as unknown.
+`sauce init <dir> --tsconfig` writes `<dir>/tsconfig.json`, which types every `.sauce.ts` under
+`<dir>` as SauceScript: its types and builtins, each chain's tokens and namespaces, and the ABIs a
+program imports. Keep programs in such a directory (`sauce init` makes `programs/` one); the
+installed skills' examples are typed by the same file beside them. The types come from the package,
+so the project must have it installed, and an editor running the project's own TypeScript also
+drops what TypeScript reports on valid SauceScript (a `bigint` index, `1` beside `1n`, an
+undeclared define). The compile, not the editor, decides whether a program is valid.
 
 ## Reading a compile error
 

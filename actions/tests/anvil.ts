@@ -157,6 +157,18 @@ export async function startAnvil(options: { mainnet?: string; chain?: ChainName 
     return publicClient.waitForTransactionReceipt({ hash });
   };
 
+  /** Runs `program` as an `eth_call` of the Pot's `cook` from its owner: the bytes `main` returned. */
+  const returned = async (program: Uint8Array): Promise<Hex> => {
+    const { data } = await publicClient.call({
+      account,
+      to: pot,
+      data: cookData(bytesToHex(program)),
+      gas: 30_000_000n,
+    });
+
+    return data ?? "0x";
+  };
+
   /** Sends a prepared call (a route's `{ target, data, value }`) from the Pot's owner. */
   const send = async (call: {
     to: Address;
@@ -179,6 +191,7 @@ export async function startAnvil(options: { mainnet?: string; chain?: ChainName 
     router,
     pot,
     cook,
+    returned,
     send,
     stop: stopNode,
   };

@@ -1,0 +1,28 @@
+// The repository's SauceScript programs (`*.sauce.ts`: the skills' and the docs' examples, the
+// recipes, the test fixtures) as an editor opens them: the project `sauce init` writes into a
+// consumer's `programs/` (`sauceScriptTsconfig` in sdk/src/cli/skills.ts), with the declarations
+// and the plugin taken from this tree's build rather than an installed package. Nothing builds or
+// typechecks from it; each workspace has its own tsconfig.json, and sdk's excludes these files, so
+// an editor goes on up to this one for them. `pnpm docs:check` holds every program to it.
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "moduleDetection": "force",
+    // The package's `./sauce-script` types, built by `pnpm build`.
+    "types": ["./sdk/dist/sauce-script"],
+    "strict": true,
+    "noImplicitAny": false,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": false,
+    "skipLibCheck": true,
+    // Resolved beside the workspace's TypeScript, where pnpm links the SDK workspace: an editor
+    // loads it when it runs that TypeScript ("Use Workspace Version" in VS Code).
+    "plugins": [{ "name": "@eco-incorp/sauce-source/dist/sauce-script/ts-plugin.cjs" }]
+  },
+  "include": ["**/*.sauce.ts"],
+  "exclude": ["**/node_modules", "**/dist"]
+}

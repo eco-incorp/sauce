@@ -609,7 +609,7 @@ export async function createIntent(input: CreateInput): Promise<Created> {
       `${recipient!} on ${destination!.slug}, for ${formatUnits(reward!, rewardToken!.decimals)} ` +
       `${rewardToken!.symbol ?? rewardToken!.address} on ${source!.slug}.`,
     "Written by `sauce intent publish`. Publish it again with the same deadlines and prover:",
-    `  sauce intent publish ${out} --chain ${source!.slug} --config <file> --keystore <path> \\`,
+    `  sauce intent publish ${out} --chain ${source!.slug} --keystore <path> \\`,
     `    --intent-deadline ${deadline} --intent-reward-deadline ${rewardDeadline} \\`,
     `    --intent-prover ${prover}${input.signer === undefined ? "" : ` --intent-creator ${input.signer}`}` +
       (fundVia === "transfer" ? "" : ` --intent-fund-via ${fundVia}`),

@@ -1,16 +1,18 @@
-// Opens an intent funded by transfer: the reward goes straight into the intent's vault, the
-// address the source Portal derives from the intent itself, and then the intent is published. One
-// cook on the Pot, so the vault can't be wrong and nothing is published unfunded. No approval is
-// involved, so a token like USDT needs nothing special.
+// Publishes an intent built elsewhere, funded from this Pot by a transfer into its vault: the route
+// and the reward are inputs, as another tool encodes them. An intent written in SauceScript, with
+// the chain syntax, does not need this file: the program that opens it already funds it by
+// transfer and publishes it.
 //
-// `destination`, `route` and `reward` are the arguments of the Portal's `publish`, the same
-// `publish` that `sauce intent publish … --from <address> --format json` prints for an intent file (which
-// already funds that way); `portal` is the source chain's Portal (its file in sauce-chains).
+// One cook: the Pot reads the intent's vault from the source chain's Portal (`EcoRoutes.Portal`, the
+// registry's), transfers each reward token there, and publishes, so the vault can't be wrong and
+// nothing is published unfunded. No approval is involved, so a token like USDT needs nothing
+// special. `destination`, `route` and `reward` are the arguments of the Portal's `publish`, the
+// same `publish` that `sauce intent publish … --from <address> --format json` prints for an intent
+// file (which already funds that way).
 //
-//   sauce run fund-by-transfer.sauce.ts --chain <chain> --config sauce.config.json \
-//     --keystore <keystore> --args <portal> <destination> <route> <reward>
+//   sauce run fund-by-transfer.sauce.ts --chain <chain> \
+//     --keystore <keystore> --args <destination> <route> <reward>
 //
-//   portal: Address       the source chain's Portal
 //   destination: Uint256  the destination's chain id: 1 is Ethereum
 //   route: bytes          the encoded route, 0x hex, as the publish transaction carries it
 //   reward: { deadline: Uint256; creator: Address; prover: Address; nativeAmount: Uint256;
@@ -20,12 +22,11 @@
 //                         "nativeAmount": 0, "tokens": [{"token": "<token>", "amount": 1010000}]}
 //                         is 1.01 of a 6-decimal token such as USDC
 //
-// On Base, for an intent to Ethereum:
+// Returns the intent's hash and its vault, as `publish` does. On Base, for an intent to Ethereum:
 //
-//   sauce run fund-by-transfer.sauce.ts --chain base --config sauce.config.json \
-//     --keystore <keystore> --args 0xEC000769A73b70e16f361a442292500b3BCf4A85 1 <route> <reward>
+//   sauce run fund-by-transfer.sauce.ts --chain base \
+//     --keystore <keystore> --args 1 <route> <reward>
 function main(
-  portal: Address,
   destination: Uint256,
   route: bytes,
   reward: {
@@ -35,20 +36,14 @@ function main(
     nativeAmount: Uint256;
     tokens: { token: Address; amount: Uint256 }[];
   },
-): bytes {
+): { intentHash: Uint256; vault: Address } {
   // A native reward is sent to the vault with the cook's value; this program funds tokens only.
   require(reward.nativeAmount == 0n, "a native reward is not funded here");
-  const intent = abi.encode(destination, route, reward);
-
-  // intentVaultAddress(uint64,bytes,(uint64,address,address,uint256,(address,uint256)[]))
-  const vaultOf = hex`0742ebe4`;
-  const vault = abi.decode(evm.static(portal, vaultOf.concat(intent)), ["Address"])[0];
+  const vault = EcoRoutes.Portal.intentVaultAddress(destination, route, reward);
   for (const t of reward.tokens) {
     Token(t.token).transfer(vault, t.amount);
   }
-
-  // publish(uint64,bytes,(uint64,address,address,uint256,(address,uint256)[])): returns
-  // (intentHash, vault).
-  const publish = hex`645c890c`;
-  return evm.call(portal, 0n, publish.concat(intent));
+  const [intentHash, published] = EcoRoutes.Portal.publish(destination, route, reward);
+  require(published == vault, "the Portal published to another vault");
+  return { intentHash, vault };
 }
