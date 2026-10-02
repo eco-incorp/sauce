@@ -112,13 +112,13 @@ describe("action programs — chaining is part of the document", () => {
 
   it("implicit chaining and named outputs compile to locals", () => {
     const { source } = compileProgram(program);
-    assert.match(source, /let t_out0 = 1000000000000000000n;/);
+    assert.match(source, /let t_out0 = 1000000000000000000;/);
     assert.match(source, /let t_out1 = t_out0;/);
     // The approve spends the wrap's output and the transfer the saved swap output, each spliced into
     // an ERC-20 call checked like SafeERC20.
     assert.match(source, /hex`095ea7b3[0-9a-f]*68b3465833fb72a70ecdf485e0e4c7bd8665fc45`;/);
     assert.match(source, /\.concat\(t_out0\.toBytesBe\(32\)\)/);
-    assert.match(source, /= uniswapV3\([^;]*, t_out1, 0n, 1n, ctx\.self\(\)\);/);
+    assert.match(source, /= uniswapV3\([^;]*, t_out1, 0, 1, ctx\.self\(\)\);/);
     assert.match(source, /let v_usdc = amt\d+;/);
     assert.match(source, /hex`a9059cbb[0-9a-f]*3000000000000000000000000000000000000001`;/);
     assert.match(source, /\.concat\(v_usdc\.toBytesBe\(32\)\)/);

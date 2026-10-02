@@ -238,7 +238,7 @@ export async function sendPlan(
   const failed = sent.find((entry) => entry.status !== "success");
   const landed = sent.filter((entry) => entry.hash !== "").length;
   const notes = [
-    ...(guard.policy === undefined ? [noPolicyNote(wallet.info)] : []),
+    ...(guard.policy === undefined ? [noPolicyNote(wallet.info)] : guard.policy.notes),
     ...(failed === undefined
       ? []
       : [

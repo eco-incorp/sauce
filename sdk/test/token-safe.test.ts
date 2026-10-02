@@ -30,7 +30,7 @@ const addr = (value: bigint): Hex => `0x${value.toString(16).padStart(40, "0")}`
  *  check now follows the call, so this can no longer just take the final line. */
 function callOf(statements: readonly string[]): { target: string; data: string } {
   for (const line of [...statements].reverse()) {
-    const match = /evm\.call\(([^,]+), 0n, (.+)\);$/.exec(line);
+    const match = /evm\.call\(([^,]+), 0, (.+)\);$/.exec(line);
     if (match !== null) return { target: match[1]!, data: match[2]! };
   }
   throw new Error(`no evm.call in: ${statements.join(" | ")}`);
@@ -155,7 +155,7 @@ describe("every emitted write carries the SafeERC20 check", () => {
     // a 1 and accepts it. `test/std/token/evm.e2e.test.ts` runs both cases beside OpenZeppelin.
     expect(check).toBe(
       "if (s_tr.length == 0) { require(ctx.codeSize(1n) > 0); } " +
-        'else { const [s_trok] = abi.decode(s_tr, ["Uint256"]); require(s_trok == 1n); }',
+        'else { const [s_trok] = abi.decode(s_tr, ["Uint256"]); require(s_trok == 1); }',
     );
   });
 
@@ -168,7 +168,7 @@ describe("every emitted write carries the SafeERC20 check", () => {
     expect(text).toContain("evm.static(1n,");
     // Decoded as a word, like the typed `allowance` read `@sauce/token` makes.
     expect(text).toContain('const [a_cur] = abi.decode(a_qr, ["Uint256"]);');
-    expect(text).toContain("if (a_cur > 0n) {");
+    expect(text).toContain("if (a_cur > 0) {");
     // Reset, then set: two writes, each with its own check.
     expect(text.match(/require\(ctx\.codeSize/g)).toHaveLength(2);
   });

@@ -115,6 +115,7 @@ export async function unlockWallet(
   const password = await readPassword(source, io, { what: `wallet ${name}` });
   const { unlocked, guard } = await openWallet(store, name, password);
   if (guard.policy === undefined) io.stderr(`note: ${noPolicyNote(unlocked.info)}\n`);
+  for (const note of guard.policy?.notes ?? []) io.stderr(`note: ${note}\n`);
 
   return unlocked;
 }

@@ -43,7 +43,7 @@ function hasSelector(bytecode: Uint8Array, sig: string): boolean {
 
 /** An address as the SauceScript literal the emitted source carries. */
 function literal(addr: string): string {
-  return `0x${addr.slice(2).toLowerCase()}n`;
+  return `0x${addr.slice(2).toLowerCase()}`;
 }
 
 const POOL_KEY = "(address,address,uint24,int24,address)";
@@ -216,10 +216,10 @@ describe("lowering — every action type", () => {
 
 describe("lowering — native value", () => {
   const attaches: Partial<Record<ActionType, RegExp>> = {
-    wrapETH: /1000n/,
-    lidoStake: /1000n/,
-    rocketPoolStake: /1000n/,
-    etherFiStake: /1000n/,
+    wrapETH: /1000/,
+    lidoStake: /1000/,
+    rocketPoolStake: /1000/,
+    etherFiStake: /1000/,
     // The fee each bridge quoted on-chain, just before the send.
     stargateBridge: /lzfee\d+/,
     hyperlaneBridge: /igp\d+/,
@@ -235,11 +235,11 @@ describe("lowering — native value", () => {
   it("the bridges quote their fee with a static call before paying it", () => {
     assert.match(
       source([SAMPLES.stargateBridge]),
-      /const lz\d+ = IStargatePool\.at\(0x2000000000000000000000000000000000000001n\)\.quoteSend\(\{ dstEid: 30110n, to: 0x0{24}3000000000000000000000000000000000000001n, amountLD: 1000n, minAmountLD: 990n,/,
+      /const lz\d+ = IStargatePool\.at\(0x2000000000000000000000000000000000000001\)\.quoteSend\(\{ dstEid: 30110, to: 0x0{24}3000000000000000000000000000000000000001, amountLD: 1000, minAmountLD: 990,/,
     );
     assert.match(
       source([SAMPLES.hyperlaneBridge]),
-      /const igp\d+ = IWarpRoute\.at\(0x2000000000000000000000000000000000000001n\)\.quoteGasPayment\(10n\);/,
+      /const igp\d+ = IWarpRoute\.at\(0x2000000000000000000000000000000000000001\)\.quoteGasPayment\(10\);/,
     );
   });
 
@@ -249,10 +249,10 @@ describe("lowering — native value", () => {
       const text = source(sampleList(type));
       assert.doesNotMatch(
         text,
-        /evm\.call\((0x[0-9a-f]+|[0-9]+)n, (?!0n)[^,]+, /,
+        /evm\.call\((0x[0-9a-f]+|[0-9]+), (?!0,)[^,]+, /,
         `${type}\n${text}`,
       );
-      for (const [, , data] of text.matchAll(/evm\.call\((0x[0-9a-f]+|[0-9]+)n, 0n, (\w+)/g)) {
+      for (const [, , data] of text.matchAll(/evm\.call\((0x[0-9a-f]+|[0-9]+), 0, (\w+)/g)) {
         assert.match(text, new RegExp(`const ${data} = hex\`(a9059cbb|095ea7b3)`), text);
       }
     }
@@ -281,7 +281,7 @@ describe("lowering — outputs follow the spec", () => {
     if (group === "source") continue;
     it(`${type}: ${output === "realized" ? "a realized amount" : "its own amount"}`, () => {
       const value = stored(type);
-      if (output === "passThrough") assert.equal(value, "1000n");
+      if (output === "passThrough") assert.equal(value, "1000");
       else assert.match(value, /^(amt|delta)\d+$|^swap\d+out$/);
     });
   }
@@ -304,24 +304,24 @@ describe("lowering — outputs follow the spec", () => {
 
 describe("lowering — bridges", () => {
   it("a remote recipient is a 32-byte word: an address left-padded, an account as written", () => {
-    assert.match(source([SAMPLES.cctpBridge]), new RegExp(`0x${"ab".repeat(32)}n`));
+    assert.match(source([SAMPLES.cctpBridge]), new RegExp(`0x${"ab".repeat(32)}`));
     assert.match(
       source([SAMPLES.hyperlaneBridge]),
-      /0x0{24}3000000000000000000000000000000000000001n/,
+      /0x0{24}3000000000000000000000000000000000000001/,
     );
   });
 
   it("Across delivers the amount less the relayer fee, and refunds the Pot", () => {
     const text = source([SAMPLES.acrossBridge]);
-    assert.match(text, /const out\d+ = 1000n - 10n;/);
-    assert.match(text, /depositV3\(ctx\.self\(\), 0x3000000000000000000000000000000000000001n,/);
+    assert.match(text, /const out\d+ = 1000 - 10;/);
+    assert.match(text, /depositV3\(ctx\.self\(\), 0x3000000000000000000000000000000000000001,/);
     const free = source([{ ...SAMPLES.acrossBridge, relayerFee: "0" }]);
     assert.doesNotMatch(free, /const out\d+/);
   });
 
   it("CCTP defaults to a free, finalized transfer", () => {
     const { maxFee: _, minFinalityThreshold: __, ...bare } = SAMPLES.cctpBridge;
-    assert.match(source([bare]), /, 0n, 0n, 2000n\);/);
+    assert.match(source([bare]), /, 0, 0, 2000\);/);
   });
 });
 
@@ -333,7 +333,7 @@ describe("lowering — sources", () => {
     ]);
     assert.match(
       text,
-      /const bal0 = IErc20\.at\(0x1000000000000000000000000000000000000001n\)\.balanceOf\(ctx\.self\(\)\);/,
+      /const bal0 = IErc20\.at\(0x1000000000000000000000000000000000000001\)\.balanceOf\(ctx\.self\(\)\);/,
     );
     assert.match(text, /let t_out0 = bal0;/);
     assert.match(text, /hex`a9059cbb[0-9a-f]*3000000000000000000000000000000000000001`;/);
@@ -343,7 +343,7 @@ describe("lowering — sources", () => {
   it("nativeBalance reads ctx.selfBalance()", () => {
     const text = source([{ type: "nativeBalance" }, { type: "wrapETH", weth: TARGET }]);
     assert.match(text, /const nat0 = ctx\.selfBalance\(\);/);
-    assert.match(text, /evm\.call\(0x2000000000000000000000000000000000000001n, t_out0, sel\d+\);/);
+    assert.match(text, /evm\.call\(0x2000000000000000000000000000000000000001, t_out0, sel\d+\);/);
   });
 
   it("argument becomes a typed `main` parameter, in declaration order", () => {
@@ -379,7 +379,7 @@ describe("lowering — chaining", () => {
     assert.doesNotMatch(text, /let t_out0/);
     assert.match(text, /const amt\d+ = uniswapV3\(.*, ctx\.self\(\)\);/);
     assert.match(text, /let t_out1 = amt\d+;/);
-    assert.match(text, /uniswapV3\(0x[0-9a-f]+n, 0x[0-9a-f]+n, 0x[0-9a-f]+n, t_out1, /);
+    assert.match(text, /uniswapV3\(0x[0-9a-f]+, 0x[0-9a-f]+, 0x[0-9a-f]+, t_out1, /);
   });
 
   it("saveOutputAs binds a local, and amountRef reads it", () => {

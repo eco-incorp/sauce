@@ -44,7 +44,7 @@ describe("Token: EVM source emission", () => {
     });
 
     expect(src).toContain(`hex\`${expected.slice(2)}\``);
-    expect(src).toContain(`evm.call(${BigInt(TOKEN).toString()}n, 0n,`);
+    expect(src).toContain(`evm.call(${BigInt(TOKEN).toString()}n, 0,`);
     expect(src).toContain(`require(ctx.codeSize(${BigInt(TOKEN).toString()}n) > 0)`);
     expect(src).not.toContain(".transfer(");
   });
@@ -62,7 +62,7 @@ describe("Token: EVM source emission", () => {
     // `approve` -- the rule USDT enforces.
     expect(src).toContain("ctx.self()");
     expect(src).toContain("evm.static(");
-    expect(src).toMatch(/if \(\w+cur > 0n\) \{/);
+    expect(src).toMatch(/if \(\w+cur > 0\) \{/);
     expect(src).not.toContain(".approve(");
   });
 

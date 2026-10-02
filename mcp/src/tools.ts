@@ -383,8 +383,10 @@ const TOKEN_AMOUNTS = z
   .optional()
   .describe(
     "Each <TOKEN|address>:<amount>: a symbol the chain registers or a 0x token address, and " +
-      "the amount in whole units (USDC:1.5) or in base units ending in n (USDC:1500000n); " +
-      "ETH:<amount> is the chain's native currency.",
+      "the amount in whole tokens (USDC:1.5 is 1.5 USDC, exact through the token's decimals; " +
+      "USDC:1500000 is 1.5 million USDC, which notes point out), or in base units with a " +
+      "trailing n as a bigint is written (USDC:1500000n is 1.5 USDC); ETH:<amount> is the " +
+      "chain's native currency.",
   );
 
 /** How many rehearsals one `sauce_simulate` call may hold. */
@@ -1914,8 +1916,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         ...COOK,
         assumeBalance: TOKEN_AMOUNTS.describe(
           "EVM only: balances the Pot holds for this rehearsal only, by state override. Each " +
-            "<TOKEN|address>:<amount>, the amount in whole units (USDC:2) or base units ending " +
-            "in n (USDC:2000000n); ETH:<amount> for the native currency.",
+            "<TOKEN|address>:<amount>, the amount in whole tokens (USDC:2 is 2 USDC), or base " +
+            "units ending in n (USDC:2000000n); ETH:<amount> for the native currency.",
         ),
         fund: TOKEN_AMOUNTS.describe(
           "EVM only: tokens the cook would pull from the owner into the Pot before the program " +
@@ -2111,7 +2113,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           ),
         assumeBalance: TOKEN_AMOUNTS.describe(
           "With dryRun: balances `from` holds for the rehearsal only, by state override. Each " +
-            "<TOKEN|address>:<amount>, whole units or base units ending in n.",
+            "<TOKEN|address>:<amount>, the amount in whole tokens (USDC:2 is 2 USDC), or base " +
+            "units ending in n (USDC:2000000n).",
         ),
         rpcUrl: RPC_URL,
       },

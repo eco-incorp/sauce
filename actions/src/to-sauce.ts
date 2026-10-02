@@ -112,12 +112,12 @@ const AAVE_VARIABLE_RATE = 2n;
 /** CCTP V2's `minFinalityThreshold` for a standard (finalized) transfer. */
 const CCTP_FINALIZED = 2000;
 
-const ZERO = "0n";
+const ZERO = "0";
 const SELF = "ctx.self()";
 
 /** An integer field, as the decimal literal the emitted source carries. */
 function word(value: string | number | bigint): Expr {
-  return `${BigInt(value).toString()}n`;
+  return BigInt(value).toString();
 }
 
 /**
@@ -129,9 +129,9 @@ function word(value: string | number | bigint): Expr {
  */
 function addr(value: string | bigint): Expr {
   if (typeof value === "string" && isName(value)) return value;
-  if (value === NATIVE) return "0n";
+  if (value === NATIVE) return "0";
 
-  return `0x${BigInt(value).toString(16).padStart(40, "0")}n`;
+  return `0x${BigInt(value).toString(16).padStart(40, "0")}`;
 }
 
 /** A recipient field: an address, or the Pot for `"self"`. */
@@ -141,7 +141,7 @@ function recipient(value: Recipient): Expr {
 
 /** A bytes32 field (a pool id). */
 function b32(value: string): Expr {
-  return `0x${BigInt(value).toString(16).padStart(64, "0")}n`;
+  return `0x${BigInt(value).toString(16).padStart(64, "0")}`;
 }
 
 /** A recipient on another chain, as the 32-byte word bridges take: an address is left-padded. */
@@ -236,7 +236,7 @@ class Lowering {
 
   /** A word `token/safe` can splice: a literal, or a local (an expression is bound to one). */
   private wordArg(expr: Expr): WordArg {
-    const literal = /^(0x[0-9a-f]+|[0-9]+)n$/.exec(expr);
+    const literal = /^(0x[0-9a-f]+|[0-9]+)$/.exec(expr);
     if (literal) return { literal: BigInt(literal[1]!) };
     if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(expr)) return { local: expr };
 
@@ -329,7 +329,7 @@ function keyedPool<B extends BindingName>(
     : l.call(binding, addr(factory), method, args);
   let pool = l.bind("pool", lookup);
   if (field !== undefined) pool = l.bind("pool", `${pool}.${field}`);
-  l.stmts.push(`require(${pool} != 0n, "${l.where}: no pool under that key");`);
+  l.stmts.push(`require(${pool} != 0, "${l.where}: no pool under that key");`);
 
   return pool;
 }
@@ -935,7 +935,7 @@ function ambientSwap(
           word(action.reserveFlags),
         ]),
       );
-      l.exec("ICrocSwapDex", addr(action.dex), "userCmd", ["1n", cmd]);
+      l.exec("ICrocSwapDex", addr(action.dex), "userCmd", ["1", cmd]);
     },
     amountIn,
   );

@@ -144,6 +144,35 @@ describe("the policy file", () => {
     );
     expect(policy.chains?.map((chain) => chain.slug)).toEqual(["base", "ethereum"]);
     expect([...policy.tokens.keys()]).toEqual(["USDC", OTHER_TOKEN.toLowerCase()]);
+    expect(policy.notes).toEqual([]);
+  });
+
+  it("takes whole tokens, and base units ending in n", () => {
+    const policy = parsePolicy(
+      JSON.stringify({ tokens: { USDC: { perTransaction: "1.5", perDay: "1500000n" } } }),
+      "p.json",
+    );
+    expect(policy.tokens.get("USDC")).toEqual({
+      perTransaction: { units: "1.5" },
+      perDay: { base: 1_500_000n },
+    });
+    expect(policy.notes).toEqual([]);
+  });
+
+  it("says when a bare integer of whole tokens reads like base units: a note, not a refusal", () => {
+    const policy = parsePolicy(
+      JSON.stringify({
+        tokens: { USDC: { perTransaction: "1500000", perDay: "999999" } },
+        // The native coin has 18 decimals on an EVM chain and 9 on Solana: nothing to judge by.
+        native: { perDay: "1000000000000" },
+      }),
+      "p.json",
+    );
+    expect(policy.tokens.get("USDC")?.perTransaction).toEqual({ units: "1500000" });
+    expect(policy.notes).toEqual([
+      'p.json: tokens.USDC.perTransaction: "1500000" is 1.5 million USDC; for base units write ' +
+        '"1500000n"',
+    ]);
   });
 
   it("is refused when others may write it, and absent is no policy", () => {
