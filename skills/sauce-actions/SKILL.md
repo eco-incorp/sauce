@@ -63,8 +63,8 @@ resolves on the chain the document is compiled for:
 
 | Field takes         | Write                                   | Lists them                                       |
 | ------------------- | --------------------------------------- | ------------------------------------------------ |
-| a token             | its registry symbol: `"USDC"`, `"WETH"` | `sauce globals --chain <chain> --tokens`     |
-| a contract          | `"Namespace.Contract"`: `"AaveV3.Pool"` | `sauce globals --chain <chain> --protocols`  |
+| a token             | its registry symbol: `"USDC"`, `"WETH"` | `sauce globals --chain <chain> --tokens`         |
+| a contract          | `"Namespace.Contract"`: `"AaveV3.Pool"` | `sauce globals --chain <chain> --protocols`      |
 | the native currency | `"native"`, where the venue trades it   | `uniswapV4Swap`, `ambientSwap`, a Balancer batch |
 | any of these        | an address, `0x` and 40 hex digits      | always accepted                                  |
 
