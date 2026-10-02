@@ -274,9 +274,11 @@ describe("on the host", () => {
   const pending = () => Base.Portal.send(paid, reward).receive(delivered, options);
 
   it("refuses to be awaited: its then is the intent's", async () => {
+    // TypeScript refuses the `await` itself (`routes-intent-portal-types.test.ts`); JavaScript, or
+    // TypeScript told otherwise, reaches the `then`.
     await expect(
       (async () => {
-        await pending();
+        await (pending() as unknown);
       })(),
     ).rejects.toThrow(/is not a promise: `\.then\(\.\.\.\)` takes the intent's body/);
     await expect(Promise.resolve(pending())).rejects.toThrow(/by `await`/);

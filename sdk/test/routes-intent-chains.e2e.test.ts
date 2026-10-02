@@ -1,7 +1,8 @@
 /**
  * An intent written inside a program, EXECUTED on chains whose tokens live at DIFFERENT addresses.
  *
- * `Chain(() => { ... }).reward({ ... })` names tokens on two chains at once: the body's run on the
+ * `Chain.Portal.send(...).receive(...).then(() => { ... })`, like the call form
+ * `Chain(() => { ... }).reward({ ... })`, names tokens on two chains at once: the body's run on the
  * destination, and the reward's are escrowed — paid into the vault — on the chain the program runs on. The
  * only way to show that a lowering named the right chain's token is to give each chain a different
  * one, and to have every other chain's address be empty there, as it is on a real chain.
@@ -434,6 +435,25 @@ const THREE_CHAIN_CASCADE = `function main() {
   ).reward({ tokens: [{ token: USDC, amount }] });
 }`;
 
+/**
+ * The same three chains, written `Chain.Portal.send(reward).receive(delivery).then(body)`, with each
+ * delivery an amount computed where the intent opens (`amount * 99n / 100n`): spliced in at run
+ * time on Base, and again on Arbitrum by the program the outer body compiles to.
+ */
+const PORTAL_CASCADE = `function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount: amount * 99n / 100n })
+    .then(() => {
+      const arrived = USDC.balanceOf(ctx.self());
+      Optimism.Portal.send([{ token: USDC, amount: arrived }])
+        .receive([{ token: USDC, amount: arrived * 99n / 100n }])
+        .then(() => {
+          USDC.transfer(RECIPIENT, arrived * 99n / 100n);
+        });
+    });
+}`;
+
 describeEvm("an intent created inside a program, across chains with different tokens", () => {
   beforeAll(async () => {
     const creationCode = readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex;
@@ -639,6 +659,51 @@ describeEvm("an intent created inside a program, across chains with different to
       const onOptimism = await optimism.fulfil(third.route, third.rewardHash);
       expect(onOptimism.status).toBe("success");
       expect(await optimism.balanceOf(optimism.usdc, RECIPIENT)).toBe(paid + held);
+    }, 300_000);
+
+    it("the Portal form over three chains, each delivery computed where its intent opens", async () => {
+      const { route, rewardHash } = build(PORTAL_CASCADE);
+      await base.mint(base.usdc, base.pot, SEEDED);
+      const held = await base.balanceOf(base.usdc, base.pot);
+      const delivered = (held * 99n) / 100n;
+      const delivered2 = (delivered * 99n) / 100n;
+
+      // ---- hop 1, on Base: the reward is all it holds, in Base's USDC; the delivery 99% of it ----
+      const onBase = await base.fulfil(route, rewardHash);
+      expect(onBase.status).toBe("success");
+      const [toArbitrum] = onBase.published;
+      expect(toArbitrum!.destination).toBe(42_161n);
+      expect(toArbitrum!.rewardTokens.map((t) => [lower(t.token), t.amount])).toEqual([
+        [lower(base.usdc), held],
+      ]);
+      const second = fulfilmentOf(toArbitrum!);
+      expect(second.route.tokens.map((t) => [lower(t.token), t.amount])).toEqual([
+        [lower(arbitrum.usdc), delivered],
+      ]);
+
+      // ---- hop 2, on Arbitrum: what arrived funds the Optimism intent, in Arbitrum's USDC -------
+      await arbitrum.provide(second.route);
+      const onArbitrum = await arbitrum.fulfil(second.route, second.rewardHash);
+      expect(onArbitrum.status).toBe("success");
+      const [toOptimism] = onArbitrum.published;
+      expect(toOptimism!.destination).toBe(10n);
+      expect(toOptimism!.rewardTokens.map((t) => [lower(t.token), t.amount])).toEqual([
+        [lower(arbitrum.usdc), delivered],
+      ]);
+      expect(await arbitrum.isFunded(toOptimism!)).toBe(true);
+      expect(await arbitrum.balanceOf(arbitrum.usdc, arbitrum.pot)).toBe(0n);
+
+      // ---- hop 3, on Optimism: the body pays out what was delivered, in Optimism's USDC ---------
+      const third = fulfilmentOf(toOptimism!);
+      expect(third.route.tokens.map((t) => [lower(t.token), t.amount])).toEqual([
+        [lower(optimism.usdc), delivered2],
+      ]);
+      const paid = await optimism.balanceOf(optimism.usdc, RECIPIENT);
+      await optimism.provide(third.route);
+      const onOptimism = await optimism.fulfil(third.route, third.rewardHash);
+      expect(onOptimism.status).toBe("success");
+      expect(await optimism.balanceOf(optimism.usdc, RECIPIENT)).toBe(paid + delivered2);
+      expect(await optimism.balanceOf(optimism.usdc, optimism.pot)).toBe(0n);
     }, 300_000);
   });
 
