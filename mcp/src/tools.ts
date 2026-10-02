@@ -1221,8 +1221,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           .max(64)
           .describe(
             "One token of the pair, paid in the first side: a symbol the chain registers " +
-              "(USDC), or a 0x address (its decimals and symbol read from the token), or " +
-              "<0x address>:<decimals>.",
+              "(USDC, or a tokenized stock's such as SPCXc, in any case), or a 0x address (its " +
+              "decimals and symbol read from the token), or <0x address>:<decimals>.",
           ),
         tokenB: z.string().min(1).max(64).describe("The other token, written the same ways."),
         v4Pools: z
