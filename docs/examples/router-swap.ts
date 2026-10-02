@@ -16,8 +16,8 @@ const program = readFileSync(
 
 // The SDK serves @sauce/router — and the @sauce/token and pool ABIs it imports — from memory, so
 // compiling needs no resolver option. MIN_OUT is the floor on the crvUSD the program keeps.
-const defines = { MIN_OUT: 2_500n * 10n ** 18n };
-const compiled = routes.compileSauceRoute(
+export const defines = { MIN_OUT: 2_500n * 10n ** 18n };
+export const compiled = routes.compileSauceRoute(
   "base",
   program,
   {
