@@ -33,12 +33,22 @@ describe("stock tokens in a program", () => {
       ].join("\n"),
     );
     expect(program.bytecode.length).toBeGreaterThan(0);
-    // A write is the library's SafeERC20 one, as for any registry token.
-    expect(program.source).toMatch(
-      /import \{ transfer as __sauce_transfer\b.*\} from "@sauce\/token"/,
+    // A write is the library's SafeERC20 one, as for any registry token: the same bytes as the
+    // library's functions called with the token's address.
+    const byHand = compileSauceProgram(
+      "base",
+      [
+        'import { approve, balanceOf, transfer } from "@sauce/token";',
+        "function main(amount: Uint256): Uint256 {",
+        `  require(${SPCXC}n == ${SPCXC}n);`,
+        `  require(balanceOf(${SPCXC}n, ctx.self()) >= 0n);`,
+        `  transfer(${SPCXC}n, ${RECIPIENT}n, amount);`,
+        `  approve(${SPCXC}n, ctx.self(), amount);`,
+        `  return balanceOf(${SPCXC}n, ctx.self());`,
+        "}",
+      ].join("\n"),
     );
-    expect(program.source).toContain("__sauce_transfer(SPCXc,");
-    expect(program.source).toContain("__sauce_approve(SPCXc,");
+    expect(Buffer.from(program.bytecode)).toEqual(Buffer.from(byHand.bytecode));
   });
 
   it("compile on Ethereum by the issuer's ticker: an Ondo token, a renamed xStock, a bToken", () => {
@@ -53,11 +63,12 @@ describe("stock tokens in a program", () => {
   });
 
   it("are refused, by name, on a chain without them", () => {
+    // Used there, a stock token is the chain's refusal; compared with zero, it is zero there.
     expect(() =>
-      compileSauceProgram("ethereum", "function main() {\n  require(SPCXc != 0n);\n}"),
+      compileSauceProgram("ethereum", "function main() {\n  SPCXc.transfer(ctx.self(), 1n);\n}"),
     ).toThrow(/SPCXc/);
     expect(() =>
-      compileSauceProgram("base", "function main() {\n  require(TSLAon != 0n);\n}"),
+      compileSauceProgram("base", "function main() {\n  TSLAon.transfer(ctx.self(), 1n);\n}"),
     ).toThrow(/TSLAon/);
   });
 });

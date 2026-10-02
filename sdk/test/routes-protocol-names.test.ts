@@ -247,10 +247,10 @@ describe("a name the registry refuses, and the names it leaves alone", () => {
     );
   });
 
-  it("an interface is called through .at(address)", () => {
+  it("an interface is called at an address, given in a call or with .at(address)", () => {
     expect(() =>
       bytesOf("base", "function main() { Erc4626.Vault.deposit(1n, ctx.self()); }"),
-    ).toThrow(/Erc4626\.Vault\.at\(address\)/);
+    ).toThrow(/Erc4626\.Vault\(address\)\.method\(…\)` or `Erc4626\.Vault\.at\(address\)/);
   });
 
   it("a method the ABI does not have", () => {
@@ -320,6 +320,79 @@ describe("every registry protocol, every contract kind", () => {
         "erc4626",
         "Vault",
         "function main(): Uint256 { return IErc4626_Vault.at(0x1234n).deposit(1n, ctx.self()); }",
+      ),
+    );
+  });
+
+  it("an interface called with an address is its .at(address), byte for byte", () => {
+    expect(
+      bytesOf(
+        "base",
+        "function main(pool: Address): Uint256 { return UniswapV3.Pool(pool).liquidity(); }",
+      ),
+    ).toEqual(
+      bytesOf(
+        "base",
+        "function main(pool: Address): Uint256 { return UniswapV3.Pool.at(pool).liquidity(); }",
+      ),
+    );
+  });
+
+  it("takes a chain qualifier, a family alias, a nonpayable method and one output", () => {
+    expect(
+      bytesOf(
+        "base",
+        "function main(): Uint256 { return Base.Erc4626.Vault(0x1234n).deposit(1n, ctx.self()); }",
+      ),
+    ).toEqual(
+      bytesOf(
+        "base",
+        "function main(): Uint256 { return Erc4626.Vault.at(0x1234n).deposit(1n, ctx.self()); }",
+      ),
+    );
+    expect(
+      bytesOf("base", "function main(): Uint256 { return Uniswap.Pool(0x1234n).fee(); }"),
+    ).toEqual(
+      bytesOf("base", "function main(): Uint256 { return UniswapV3.Pool.at(0x1234n).fee(); }"),
+    );
+    expect(
+      bytesOf(
+        "base",
+        "function main(pool: Address): Uint256 { return AerodromeSlipstream.Pool(pool).slot0().sqrtPriceX96; }",
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("needs a method in the same expression, and one address", () => {
+    expect(() => bytesOf("base", "function main() { const v = UniswapV3.Pool(1n); }")).toThrow(
+      /`UniswapV3\.Pool\(…\)` binds a contract to an address, which is not a value/,
+    );
+    expect(() => bytesOf("base", "function main() { UniswapV3.Pool(1n, 2n).fee(); }")).toThrow(
+      /`UniswapV3\.Pool` takes one argument, the contract's address/,
+    );
+  });
+
+  it("a deployed contract's name is never called with an address: .at binds another deployment", () => {
+    expect(() =>
+      bytesOf(
+        "base",
+        "function main(): Uint256 { return UniswapV3.Factory(0x1234n).getPool(1n, 2n, 500n); }",
+      ),
+    ).toThrow(
+      /`UniswapV3\.Factory\(…\)` calls a deployed contract's name: .*`UniswapV3\.Factory\.at\(address\)\.method\(…\)`/,
+    );
+  });
+
+  it("a program's own function named like an interface is its own", () => {
+    expect(
+      bytesOf(
+        "base",
+        "function Pool(a: Uint256): Uint256 { return a; }\nfunction main(): Uint256 { return Pool(1n); }",
+      ),
+    ).toEqual(
+      bytesOf(
+        "base",
+        "function own(a: Uint256): Uint256 { return a; }\nfunction main(): Uint256 { return own(1n); }",
       ),
     );
   });

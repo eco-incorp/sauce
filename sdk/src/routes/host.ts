@@ -13,7 +13,8 @@
  *  - `chainId`/`CHAIN_ID` and each protocol contract's address key (`UniswapV3_Factory`);
  *  - every protocol contract, by the names the registry gives it: `UniswapV3.Factory`, a family's
  *    `Uniswap.UniversalRouter`, a protocol's one contract as `Protocol`, an interface as a contract
- *    with no address (`Erc4626.Vault.at(vault)`), and any of them on another chain as
+ *    with no address — which the compiler binds to the one a call gives it, `Erc4626.Vault(vault)`
+ *    exactly as `Erc4626.Vault.at(vault)` — and any of them on another chain as
  *    `Arbitrum.UniswapV3.Factory`.
  *
  * A name some chain has and this one lacks is declared too: as the zero of its type, `unusable`
