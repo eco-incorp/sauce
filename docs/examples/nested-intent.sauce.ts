@@ -1,7 +1,6 @@
 // An intent from Ethereum to Base whose body opens an intent of its own, from Base back to
 // Ethereum. All of it is SauceScript, opened on Ethereum and published from a wallet:
-//   sauce intent publish nested-intent.sauce.ts --chain ethereum \
-//     --intent-deadline … --intent-creator … --intent-execution-fee auto \
+//   sauce intent publish nested-intent.sauce.ts --chain ethereum --keystore <keystore> \
 //     --args <recipient> <delivered> <reward>
 //
 //   recipient: Address  who is paid on Ethereum, at the end
@@ -16,14 +15,15 @@
 // Every `USDC` is the USDC of the chain where its part runs: the outer reward's is Ethereum's; the
 // outer body's, its delivery's and the inner reward's are Base's; the inner body's is Ethereum's.
 function main(recipient: Address, delivered: Uint256, reward: Uint256) {
-  Base(
-    () => {
+  Base.Portal.send({ token: USDC, amount: reward })
+    .receive({ token: USDC, amount: delivered })
+    .then(() => {
       const amount = USDC.balanceOf(ctx.self());
       const payout = amount - amount / 1000;
-      Ethereum(() => {
-        USDC.transfer(recipient, payout);
-      }).reward({ tokens: [{ token: USDC, amount }] });
-    },
-    { tokens: [{ token: USDC, amount: delivered }] },
-  ).reward({ tokens: [{ token: USDC, amount: reward }] });
+      Ethereum.Portal.send({ token: USDC, amount })
+        .receive({ token: USDC, amount: payout })
+        .then(() => {
+          USDC.transfer(recipient, payout);
+        });
+    });
 }

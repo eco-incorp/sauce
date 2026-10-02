@@ -17,10 +17,10 @@ application calls them.
 | [nested-intent.ts](nested-intent.ts)                           | Compiling both for Ethereum and building the wallet transactions that publish them                                                             |
 | [cross-chain-cascade.sauce.ts](cross-chain-cascade.sauce.ts)   | Three levels, Base, Ethereum and Base again, each amount measured on arrival — written in SauceScript                                          |
 | [cross-chain-cascade.ts](cross-chain-cascade.ts)               | Compiling that cascade for Ethereum, where a wallet publishes its first hop                                                                    |
-| [protocol-approval.ts](protocol-approval.ts)                   | A typed `Base(() => ...)` body calling `USDC.approve(Uniswap.UniversalRouter, ...)`                                                            |
+| [protocol-approval.ts](protocol-approval.ts)                   | A typed `Base.Portal…then(() => ...)` body calling `USDC.approve(Uniswap.UniversalRouter, ...)`                                                |
 | [venue-where-deployed.sauce.ts](venue-where-deployed.sauce.ts) | One program for every chain, using PancakeSwap V3 only where `available(...)` finds it — written in SauceScript                                |
 | [registry-names.ts](registry-names.ts)                         | That program compiled for two chains, and the same registry names from TypeScript: `Base.USDC`, a typed call, `.read(client)`                  |
-| [first-intent.ts](first-intent.ts)                             | Both sides of a transfer intent: Ethereum reward, Base delivery, Executor-to-Pot funding, source transaction requests                          |
+| [first-intent.ts](first-intent.ts)                             | Both sides of a transfer intent in the Portal form: Ethereum reward, Base delivery, source transaction requests                                |
 | [compile-program.ts](compile-program.ts)                       | Direct compilation, a compact entry schema, and argument encoding and decoding                                                                 |
 | [action-program.ts](action-program.ts)                         | A chain-agnostic JSON action program — token symbols, a pool by key — compiled for two chains, with a runtime amount, and as an intent on Base |
 | [router-swap.sauce.ts](router-swap.sauce.ts)                   | Two swaps through `@sauce/router`, the second spending what the first returned — written in SauceScript                                        |

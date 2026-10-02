@@ -698,16 +698,22 @@ sauce run swap.json --chain base --keystore ~/.keys/me.json \
 
 ## Intents: `sauce run` or `sauce intent`
 
-A program can open an intent on another chain — `Base(() => { … }).reward({ … })`. The command
-needs what the SDK cannot look up: `--intent-deadline <unix seconds>` and `--intent-creator
-<address>`, and, when the intent's body compiles to a program of its own,
-`--intent-execution-fee <wei>`, the destination Kitchen's fee. It names whichever is missing, and
-refuses a deadline at or before now, which no solver could ever fill (`sauce intent fill` still
-rehearses one, with a note, to show the Portal's refusal). `--intent-reward-deadline <unix seconds>`
-sets when an unproven reward becomes refundable (the fill deadline by default), and
-`--intent-prover <address>` overrides the prover the registry records for the pair.
-`--intent-execution-fee auto` reads that fee from each destination's Kitchen, and says what it
-read.
+A program can open an intent on another chain —
+`Base.Portal.send(…).receive(…).then(() => { … })`. The command supplies what the file leaves out
+([Intent defaults](../reference/intent-defaults.md)): the deadlines count from when it builds the
+intents, the fill five minutes later and the reward's seven days after that; the creator is the
+wallet that publishes them, or the owner of the Pot that cooks them; and, for an intent whose body
+compiles to a program of its own, the fee is read from the destination Kitchen, a separate read for
+each destination, which the command reports. A modifier in the file sets any of them for its
+intent. A flag sets one for every intent that does not set its own: `--intent-deadline <unix
+seconds>`, `--intent-reward-deadline <unix seconds>`, `--intent-creator <address>`,
+`--intent-prover <address>` (instead of the prover the registry records for the pair), and
+`--intent-execution-fee <wei>` (`auto`, the default, reads it). `compile`, which has no wallet,
+needs `--intent-creator` or `.creator(...)`, and `--offline` reads no fee. The command refuses a
+deadline at or before now, which no solver could ever fill (`sauce intent fill` still rehearses one,
+with a note, to show the Portal's refusal). A deadline left to its default counts from each run, so
+two runs build two intents: give `--intent-deadline` to rehearse, inspect and publish the same
+one.
 
 Every intent whose body runs a program cooks on one Pot on its destination: the one owned by the
 destination Portal's Executor with salt zero, which every intent through that Portal shares. No
@@ -729,8 +735,7 @@ There are two ways to get such a file's intents onto the chain:
 
   ```sh
   sauce intent publish bridge.sauce.ts --chain ethereum \
-    --keystore ~/.keys/me.json --intent-deadline 2000000000 --intent-creator 0xYou \
-    --args 0xRecipient 1000000
+    --keystore ~/.keys/me.json --args 0xRecipient 1000000
   ```
 
   The file's `main` arguments go after `--args`, as for `sauce run`: the command fixes each into
@@ -832,8 +837,7 @@ destination's endpoint:
 
 ```sh
 sauce intent fill swap.sauce.ts --chain ethereum \
-  --intent-deadline 2000000000 --intent-creator 0xYou --intent-execution-fee 3744785386350 \
-  --no-prove --args-json swap.args.json
+  --intent-deadline 2000000000 --no-prove --args-json swap.args.json
 ```
 
 For each intent the file opens it runs one `eth_simulateV1` block on the intent's destination,

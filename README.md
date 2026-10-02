@@ -64,17 +64,19 @@ an intent carrying it onward.
 // it is whatever the swap, bridge or transfer just before it produced — which is the reason to
 // build the intent here rather than off-chain.
 //
-// `Ethereum(() => { ... }).reward({ ... })` is the whole of it. `amount` is an ordinary variable of
-// this program and `recipient` one of its parameters, and using them inside the intent is enough:
-// the SDK splices their run-time values into the encoded intent, and fills in the Portal, the
-// prover, the vault and the encoding.
+// `Ethereum.Portal.send(reward).receive(delivery).then(() => { ... })` is the whole of it: the
+// reward this program escrows, what a solver delivers on Ethereum, and what runs there. `amount` is
+// an ordinary variable of this program and `recipient` one of its parameters, and using them in the
+// intent is enough: the SDK splices their run-time values into the encoded intent, and fills in the
+// Portal, the prover, the vault and the encoding. The deadlines and the creator (the Pot's owner)
+// take their defaults.
 //
-// `USDC` is a registered symbol, and inside the braces it means Ethereum's USDC, because that is the
-// chain those calls run on. In `.reward(...)` it means the USDC of the chain this program runs on,
-// which escrows the reward.
+// `USDC` is a registered symbol. In `.receive(...)` and the body it means Ethereum's USDC, because
+// that is the chain they run on. In `.send(...)` it means the USDC of the chain this program runs
+// on, which escrows the reward.
 //
 //   sauce run cross-chain-intent.sauce.ts --chain base --keystore <keystore> \
-//     --intent-deadline <unix seconds> --intent-creator <address> --args <recipient> <minAmount>
+//     --args <recipient> <minAmount>
 //
 //   recipient: Address   who the intent pays on Ethereum
 //   minAmount: Uint256   the least USDC worth forwarding, in its smallest units (6 decimals):
@@ -83,9 +85,11 @@ function main(recipient: Address, minAmount: Uint256) {
   const amount = USDC.balanceOf(ctx.self());
   require(amount >= minAmount, "nothing to forward");
 
-  Ethereum(() => {
-    USDC.transfer(recipient, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  Ethereum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount })
+    .then(() => {
+      USDC.transfer(recipient, amount);
+    });
 }
 ```
 
@@ -104,14 +108,16 @@ Without Sauce, this step is either a contract you write and deploy (read the bal
 intent around the amount, ask the Portal for its vault, pay the reward into it, call `publish`) or
 a second transaction you build yourself after reading what the first produced.
 
-`USDC` is a registered token symbol, and inside the braces it means **Ethereum's** USDC, because
-that is where those calls run. In `.reward(...)` it means the USDC of the chain the program runs
-on — Base, in the line above — because the program escrows the reward there. `recipient` and
+`USDC` is a registered token symbol, and in `.receive(...)` and the body it means **Ethereum's**
+USDC, because that is where those run. In `.send(...)` it means the USDC of the chain the program
+runs on — Base, in the line above — because the program escrows the reward there. `recipient` and
 `minAmount` are `main`'s parameters: they arrive with the transaction (`--args`), so one compiled
 program serves every call.
 
-What the SDK cannot know you give once, for every intent the program opens: a deadline, and the
-creator who may reclaim the reward if nobody earns it. The intent is an offer; a solver still
+Everything else has a default: the deadlines count from when the intent opens, the creator who may
+reclaim the reward if nobody earns it is the Pot's owner, and Ethereum's Kitchen fee, which a body
+that is a program pays, is read from Ethereum. Each has a modifier to set it
+([Intent defaults](docs/reference/intent-defaults.md)). The intent is an offer; a solver still
 decides to fill it. [docs/examples/cross-chain-intent.ts](docs/examples/cross-chain-intent.ts)
 builds the same transaction from TypeScript, and runs on every release;
 [nested intents](docs/guides/nested-intents.md) opens one intent inside another's body, and covers
@@ -128,33 +134,31 @@ import { Base } from "@eco-incorp/sauce";
 
 const executionFee = 1_000n; // Fixture: read Base's Kitchen fee with destinationExecutionFee().
 
-const built = Base(
-  () => {
+const built = Base.Portal.send([])
+  .source("ethereum")
+  .creator("0x4444444444444444444444444444444444444444")
+  .receive([])
+  .fee(executionFee)
+  .then(() => {
     USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
-  },
-  { execution: { value: executionFee }, deadline: 2_000_000_000n },
-).reward({
-  source: "ethereum",
-  creator: "0x4444444444444444444444444444444444444444",
-  deadline: 2_000_003_600n,
-});
+  });
 
 console.log(built.hash().intentHash);
 ```
 
 What the snippet leaves out, the SDK fills in from what it records: the eco-routes Portal on both
 chains, the prover for the pair, the destination Pot and engine, and the native amount the solver
-sends, which is the cook's fee. The options take any of them as an override. What stays yours are
-the deadlines, the creator, the reward and the fee, which is on-chain state the destination's
-Kitchen sets: `destinationExecutionFee()` builds the read.
+sends, which is the cook's fee, and the deadlines, counted from now. A modifier sets a deadline, the
+prover or the salt instead. What stays yours are the creator, the reward and the fee, which is
+on-chain state the destination's Kitchen sets: `destinationExecutionFee()` builds the read.
 
 Two kinds of name meet in that snippet. `Base` is a **named export**, one per chain; importing the
 package puts nothing on `globalThis`. `USDC` and `Uniswap` are **program syntax**: the SDK resolves
 them to Base's addresses and binds the ABI, so there is no address to look up and no JavaScript
 object to import. The callback is read as source text and never invoked, so it captures nothing;
-application values reach it through `defines`.
+an application value is written into it as a literal, or into a body written as a source string.
 
-`.reward(...)` completes the intent and returns its hashes, bytecode and the Portal transaction
+`.then(...)` completes the intent and returns its hashes, bytecode and the Portal transaction
 requests your application submits. [Quick start](docs/guides/quick-start.md) walks through it, and
 [protocols and tokens](docs/guides/protocols-and-tokens.md) covers the names available.
 
