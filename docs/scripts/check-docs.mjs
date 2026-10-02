@@ -14,6 +14,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   executedExamplesProblems,
+  inputProblems,
   namedProgramProblems,
   registryNames,
 } from "./example-programs.mjs";
@@ -118,6 +119,10 @@ if (packageArgument < 0) {
 }
 // What the registry names, a program writes by its name: no recorded address as a literal, no
 // selector of a function a binding declares built by hand. None of these examples is low-level.
+// And every value a program reads has a visible source: a `main` parameter, or, in an intent file
+// with no `main`, a `--define` its header shows (`example-programs.mjs`). An exception is
+// INPUT_EXCEPTIONS's: example -> name -> why, and one nothing needs fails.
+const INPUT_EXCEPTIONS = {};
 {
   const sdk = await import(pathToFileURL(join(root, "sdk/dist/index.js")).href);
   const protocols = await Promise.all(
@@ -128,16 +133,33 @@ if (packageArgument < 0) {
         await import(pathToFileURL(join(root, "sdk/dist/protocols", slug, "index.js")).href),
       ]),
   );
-  const names = registryNames(sdk, protocols);
-  const problems = sauceExamples.flatMap((name) =>
-    namedProgramProblems({
-      where: `docs/examples/${name}`,
-      source: readFileSync(join(examples, name), "utf8"),
-      names,
-    }),
+  const builtins = JSON.parse(
+    readFileSync(join(root, "skills/sauce-script/references/builtins.json"), "utf8"),
   );
-  if (problems.length) throw new Error(`SauceScript examples not by name:\n${problems.join("\n")}`);
-  console.log(`SauceScript examples: ${sauceExamples.length} name what the registry records`);
+  const ts = createRequire(join(root, "package.json"))("typescript");
+  const names = registryNames(sdk, protocols, builtins);
+  const problems = sauceExamples.flatMap((name) => {
+    const where = `docs/examples/${name}`;
+    const source = readFileSync(join(examples, name), "utf8");
+    const allowed = INPUT_EXCEPTIONS[name] ?? {};
+    const used = new Set();
+    return [
+      ...namedProgramProblems({ where, source, names }),
+      ...inputProblems({ where, source, ts, names, allowed, used }),
+      ...Object.keys(allowed)
+        .filter((input) => !used.has(input))
+        .map((input) => `check-docs.mjs INPUT_EXCEPTIONS: ${where} no longer reads ${input}`),
+    ];
+  });
+  for (const name of Object.keys(INPUT_EXCEPTIONS)) {
+    if (!sauceExamples.includes(name)) {
+      problems.push(`check-docs.mjs INPUT_EXCEPTIONS: ${name} is not an example`);
+    }
+  }
+  if (problems.length) throw new Error(`SauceScript examples:\n${problems.join("\n")}`);
+  console.log(
+    `SauceScript examples: ${sauceExamples.length} name what the registry records, and show their inputs`,
+  );
 }
 // Keep examples under the package so Node resolves its public self-reference exports.
 const temporary = mkdtempSync(join(root, ".sauce-doc-examples-"));

@@ -23,6 +23,15 @@
 // (`routes.sourceGlobals`, what `sauce globals` prints), so there is no second list. Comments are
 // not code: a usage line may show an address. A deliberately low-level call is allowed per example
 // and selector, with its reason, by the checker that owns the example.
+//
+// INPUTS IN THE OPEN. A reader must see where every value a program reads comes from. A name the
+// program uses without declaring it must be the registry's (a token, a namespace, a chain, a chain
+// define, an ambient module's function), the language's (a builtin, or the SDK's `available`,
+// `Token` and `self`), an import, or a local or parameter. In a program with a `main`, nothing else:
+// an input is a `main` parameter, given with `--args`, never an undeclared define. A top-level
+// intent file has no `main`, so a define is its only input channel, and each UPPER_CASE one it
+// reads must be given as `--define NAME=…` in its own header. An exception is the owning checker's,
+// per example and name, with its reason.
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 
@@ -103,18 +112,32 @@ export function executedExamplesProblems({
 }
 
 /**
- * What the registry names: each recorded address, lower case, to the names a program writes it by,
- * and each function selector a binding declares to the bindings that call it. `sdk` is the
- * package's root module and `protocols` its protocol modules, `[slug, module]`: a namespace binding
- * is named first, and a function only a registry ABI declares by that ABI.
+ * What the registry and the language name: each recorded address, lower case, to the names a
+ * program writes it by; each function selector a binding declares to the bindings that call it; and
+ * every name a program may use without declaring it. `sdk` is the package's root module,
+ * `protocols` its protocol modules (`[slug, module]`: a namespace binding is named first, and a
+ * function only a registry ABI declares by that ABI), and `builtins` the SauceScript reference's
+ * `builtins.json`, whose documented intrinsics give the language's own names.
  */
-export function registryNames(sdk, protocols) {
+export function registryNames(sdk, protocols, builtins) {
   const addresses = new Map();
   const selectors = new Map();
+  // The SDK's own source-level names: `available(...)`, the `Token(...)` wrapper, and bare `self`.
+  const globals = new Set(["available", "Token", "self"]);
   const add = (map, key, name) => map.set(key, (map.get(key) ?? new Set()).add(name));
   for (const chain of sdk.CANONICAL_CHAINS) {
+    const sourceGlobals = sdk.routes.sourceGlobals(chain.slug);
+    for (const token of sourceGlobals.tokens) globals.add(token.symbol);
+    for (const namespace of [...sourceGlobals.protocols, ...sourceGlobals.interfaces]) {
+      globals.add(namespace.namespace);
+    }
+    for (const other of sourceGlobals.chains) globals.add(other.key);
+    for (const name of Object.keys(sourceGlobals.defines)) globals.add(name);
+    for (const module of sourceGlobals.modules) {
+      for (const signature of module.functions) globals.add(signature.split("(")[0]);
+    }
     if (chain.kind !== "evm") continue;
-    const { tokens, protocols: namespaces, interfaces } = sdk.routes.sourceGlobals(chain.slug);
+    const { tokens, protocols: namespaces, interfaces } = sourceGlobals;
     for (const token of tokens) add(addresses, token.address.toLowerCase(), token.symbol);
     for (const namespace of namespaces) {
       for (const contract of namespace.contracts) {
@@ -150,7 +173,15 @@ export function registryNames(sdk, protocols) {
       }
     }
   }
-  return { addresses, selectors };
+  // A builtin's root name — `ctx` of `ctx.self`, `hex` of a hex literal, `Array` of `new Array` —
+  // where its own example program uses it as a name (so `Contract.at`'s placeholder is not one).
+  for (const builtin of builtins.intrinsics) {
+    const root = /^(?:new )?([A-Za-z_]\w*)/.exec(builtin.name)?.[1];
+    if (root === undefined) continue;
+    const programs = Object.values(builtin.example ?? {}).join("\n");
+    if (new RegExp(`(?<![\\w.])${root}\\b`).test(programs)) globals.add(root);
+  }
+  return { addresses, selectors, globals };
 }
 
 const shown = (names) => {
@@ -186,6 +217,78 @@ export function namedProgramProblems({ where, source, names, lowLevel = {}, used
       `${where}: builds the call ${selector} by hand, which is ${shown(bindings)}: call it through ` +
         "that binding",
     );
+  }
+  return problems;
+}
+
+/** Every name `source` reads but never declares, by the TypeScript parser `ts`. */
+function freeNames(ts, source) {
+  const file = ts.createSourceFile("main.ts", source, ts.ScriptTarget.Latest, true);
+  const declared = new Set();
+  const read = new Set();
+  const declares = (node) =>
+    ts.isVariableDeclaration(node) ||
+    ts.isParameter(node) ||
+    ts.isFunctionDeclaration(node) ||
+    ts.isBindingElement(node) ||
+    ts.isInterfaceDeclaration(node) ||
+    ts.isTypeAliasDeclaration(node) ||
+    ts.isImportSpecifier(node) ||
+    ts.isNamespaceImport(node) ||
+    ts.isImportClause(node);
+  const visit = (node) => {
+    // A type names nothing a program reads at run time.
+    if (ts.isTypeNode(node)) return;
+    if (declares(node) && node.name && ts.isIdentifier(node.name)) declared.add(node.name.text);
+    if (ts.isIdentifier(node)) {
+      const parent = node.parent;
+      const named =
+        (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+        (ts.isPropertyAssignment(parent) && parent.name === node) ||
+        ts.isImportSpecifier(parent) ||
+        ((declares(parent) || ts.isPropertySignature(parent)) && parent.name === node);
+      if (!named) read.add(node.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return [...read].filter((name) => !declared.has(name));
+}
+
+/**
+ * The problems with one example program's inputs (see the header): each name `source` reads that
+ * nothing declares and the registry and the language do not name, unless `allowed`, a map of name
+ * to reason, allows it. `used` collects the allowed names met, so the caller can fail an allowance
+ * nothing needs any more.
+ */
+export function inputProblems({ where, source, ts, names, allowed = {}, used = new Set() }) {
+  const hasMain = /^(?:export\s+)?function\s+main\s*\(/m.test(source);
+  const header = source
+    .split("\n")
+    .filter((line) => line.startsWith("//"))
+    .join("\n");
+  const problems = [];
+  for (const name of freeNames(ts, source)) {
+    if (names.globals.has(name)) continue;
+    if (Object.hasOwn(allowed, name)) {
+      used.add(name);
+      continue;
+    }
+    if (hasMain) {
+      problems.push(
+        `${where}: reads ${name}, which it never declares and the registry does not name: an input ` +
+          "is a `main` parameter, given with --args",
+      );
+    } else if (!/^[A-Z][A-Z0-9_]*$/.test(name)) {
+      problems.push(
+        `${where}: reads ${name}, which it never declares and the registry does not name`,
+      );
+    } else if (!new RegExp(`--define ${name}=`).test(header)) {
+      problems.push(
+        `${where}: reads the define ${name}, which its header never gives: show it as ` +
+          `\`--define ${name}=<…>\` in the usage line`,
+      );
+    }
   }
   return problems;
 }

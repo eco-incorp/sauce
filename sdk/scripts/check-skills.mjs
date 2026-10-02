@@ -55,7 +55,9 @@
 //  11. every example program is either executed by a suite CI runs, named in
 //      `skills-check/executed.json`, or listed there as compile-only with the reason;
 //  12. every example program writes what the registry names by its name: no recorded address as
-//      a literal, no hand-built selector of a function a binding declares (LOW_LEVEL_CALLS).
+//      a literal, no hand-built selector of a function a binding declares (LOW_LEVEL_CALLS); and
+//      shows its inputs: a `main` parameter, or in an intent file a `--define` its header gives
+//      (INPUT_EXCEPTIONS).
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -82,6 +84,7 @@ import {
 import { checkBuiltins, checkBuiltinsJson } from "./skills-check/builtins.mjs";
 import {
   executedExamplesProblems,
+  inputProblems,
   namedProgramProblems,
   registryNames,
 } from "../../docs/scripts/example-programs.mjs";
@@ -1603,41 +1606,56 @@ if (skillsFlag < 0) {
   executedExamples = Object.keys(JSON.parse(read(manifest)).executed).length;
 }
 
-// ---- 12. Example programs write what the registry names by its name --------------------------------------
+// ---- 12. Example programs write what the registry names by its name, and show their inputs ---------------
 // No address the registry records as a literal, and no hand-built selector of a function a binding
 // declares (`docs/scripts/example-programs.mjs`). A deliberately low-level call is listed here:
-// example -> selector -> why. An entry nothing needs any more fails.
+// example -> selector -> why. And every value a program reads has a visible source: a `main`
+// parameter, or, in an intent file with no `main`, a `--define` its header shows; an exception is
+// INPUT_EXCEPTIONS's, example -> name -> why. An entry nothing needs any more fails.
 const LOW_LEVEL_CALLS = {};
+const INPUT_EXCEPTIONS = {};
 {
   const names = registryNames(
     sdk,
     await Promise.all(
       sdk.listProtocolSlugs().map(async (slug) => [slug, await load(`${PKG}/protocols/${slug}`)]),
     ),
+    JSON.parse(read(join(SKILLS_DIR, "sauce-script", "references", "builtins.json"))),
   );
   for (const program of examplePrograms) {
+    const where = rel(join(SKILLS_DIR, program));
+    const source = read(join(SKILLS_DIR, program));
     const lowLevel = LOW_LEVEL_CALLS[program] ?? {};
-    const used = new Set();
-    for (const problem of namedProgramProblems({
-      where: rel(join(SKILLS_DIR, program)),
-      source: read(join(SKILLS_DIR, program)),
-      names,
-      lowLevel,
-      used,
-    })) {
-      failures.push(problem);
-    }
+    const allowed = INPUT_EXCEPTIONS[program] ?? {};
+    const usedCalls = new Set();
+    const usedInputs = new Set();
+    failures.push(
+      ...namedProgramProblems({ where, source, names, lowLevel, used: usedCalls }),
+      ...inputProblems({ where, source, ts, names, allowed, used: usedInputs }),
+    );
     for (const selector of Object.keys(lowLevel)) {
-      if (!used.has(selector))
+      if (!usedCalls.has(selector))
         fail(
           "check-skills.mjs LOW_LEVEL_CALLS",
           `allows ${selector} in ${program}, which no longer builds it: remove the entry`,
         );
     }
+    for (const input of Object.keys(allowed)) {
+      if (!usedInputs.has(input))
+        fail(
+          "check-skills.mjs INPUT_EXCEPTIONS",
+          `allows ${input} in ${program}, which no longer reads it: remove the entry`,
+        );
+    }
   }
-  for (const program of Object.keys(LOW_LEVEL_CALLS)) {
-    if (!examplePrograms.includes(program))
-      fail("check-skills.mjs LOW_LEVEL_CALLS", `names ${program}, which is not an example program`);
+  for (const [list, entries] of [
+    ["LOW_LEVEL_CALLS", LOW_LEVEL_CALLS],
+    ["INPUT_EXCEPTIONS", INPUT_EXCEPTIONS],
+  ]) {
+    for (const program of Object.keys(entries)) {
+      if (!examplePrograms.includes(program))
+        fail(`check-skills.mjs ${list}`, `names ${program}, which is not an example program`);
+    }
   }
 }
 
