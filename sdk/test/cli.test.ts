@@ -832,7 +832,7 @@ describe("sauce compile", () => {
     expect(run.stderr).toContain("2 | USDC.transfer(RECIPIENT, AMOUNT);");
     expect(run.stderr).toMatch(/\|\s{15}\^{9}/);
     expect(run.stderr).toContain(
-      "hint: if RECIPIENT is a value you supply, pass --define RECIPIENT=<value>",
+      "hint: if RECIPIENT is a value you supply, make it a parameter of main (`RECIPIENT: Uint256`, or `Address`) and pass it with --args",
     );
     expect(run.stderr).not.toContain("main.js");
   });
@@ -1470,7 +1470,7 @@ describe("sauce intent publish, offline", () => {
     );
   });
 
-  it("refuses a file with no intent, or with runtime arguments, before any network", async () => {
+  it("refuses a file with no intent, or with main's arguments not given, before any network", async () => {
     const none = await sauce(
       "intent",
       "publish",
@@ -1497,7 +1497,7 @@ describe("sauce intent publish, offline", () => {
     );
     expect(typed.code).toBe(2);
     expect(typed.stderr).toMatch(
-      /takes arguments at run time \(main\(recipient\)\), which only a run has/,
+      /main\(recipient: Address\) takes 1 argument: pass them after --args, in order/,
     );
   });
 
@@ -1559,7 +1559,8 @@ describe("sauce intent publish, offline", () => {
       expect(measured.stderr).toBe(
         "sauce intent publish: the intent to base uses `amount`, which the program measures or computes " +
           "while it runs, so it cannot be built from a wallet: use `sauce run` on a Pot, or make " +
-          "it a literal, a define or a top-level `const` of a literal\n",
+          "it a literal, one of main's arguments (given with --args) or a top-level `const` of a " +
+          "literal\n",
       );
       const computed = await refused(
         `// @chain ethereum\nconst AMOUNT = 1000n * 1000n;\n${body("AMOUNT")}\n`,
