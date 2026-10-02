@@ -2198,6 +2198,23 @@ describe("sauce price", () => {
     expect(worded.stdout).toBe(text.stdout);
   });
 
+  it("prices a stock token by its registry decimals, its symbol in any case", async () => {
+    const out = json(await sauce("price", "--chain", "base", "spcxc", "USDC", "148.7", "--json"));
+    // USDC sorts below Coinbase's 0xb2… address: SPCXc is token1, with 8 decimals.
+    const sqrt = root.sqrtPriceX96FromPrice("148.7", {
+      baseDecimals: 8,
+      quoteDecimals: 6,
+      baseIsToken0: false,
+    });
+    expect(out).toMatchObject({
+      means: "148.7 USDC per SPCXc",
+      base: { symbol: "SPCXc", address: "0xb2000000000000000000007b9fcbd005511aCBd5", decimals: 8 },
+      token0: "USDC",
+      token1: "SPCXc",
+      sqrtPriceX96: sqrt.toString(),
+    });
+  });
+
   /**
    * A Base endpoint whose Uniswap V3 factory has a WETH/USDC pool at each tier `pools` names, each
    * with its liquidity and price (USDC per WETH); `getPool` answers zero at every other tier.

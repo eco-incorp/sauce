@@ -1,6 +1,6 @@
 /**
- * Tokenized stocks, by chain: Backed's xStocks and Ondo Global Markets' tokens on Ethereum,
- * Coinbase's tokenized stocks on Base, and Backed's older bTokens on both. `token-registry.ts`
+ * Tokenized stocks, by chain: Backed's xStocks, Ondo Global Markets' tokens and Mt Pelerin's own
+ * shares (MPS) on Ethereum, Coinbase's tokenized stocks on Base, and Backed's older bTokens on both. `token-registry.ts`
  * merges their rows (`stock-tokens.generated.ts`) into `TOKEN_REGISTRY`, so a program names each
  * one by its symbol with no import, as it names `USDC`: `SPCXc.balanceOf(ctx.self())`.
  *
@@ -21,7 +21,8 @@
  * WHAT A POT CAN DO WITH THEM. Any contract can hold, receive and send every token here: no issuer
  * gates a holder by allowlist or KYC, which applies only to minting and redeeming with the issuer.
  * Each can pause transfers and refuse a sanctioned or blocked address: Backed by a Chainalysis
- * sanctions list, Ondo by its compliance contract, Coinbase by a B20 policy. That is read from
+ * sanctions list, Ondo by its compliance contract, Coinbase by a B20 policy, Mt Pelerin by the
+ * freeze and lock rules its token checks (its holding company's locked shares). That is read from
  * each kind's verified implementation (Coinbase's from the B20 specification), and was checked by
  * `eth_call` transfers from a holder to an arbitrary contract. Two kinds behave unlike a plain
  * ERC-20:
@@ -39,12 +40,14 @@
  * LEFT OUT, each for a reason: every Solana stock mint (xStocks, Ondo, Backpack, PreStocks,
  * Superstate) is a Token-2022 mint, which the SVM token arm does not take (`SVM_TOKEN_ENTRIES`);
  * Superstate's Opening Bell shares on Ethereum can be held only by an allowlisted address; Dinari
- * lists its dShares nowhere by address; Backed's bond and bill bTokens and Ondo's portfolio tokens
- * and USDon are not stocks.
+ * lists its dShares nowhere by address; Aktionariat publishes no list of its companies' tokens and
+ * keeps them mostly on Optimism; MSX lists its tokens only through its app, for contracts with no
+ * verified source; Backed's bond and bill bTokens and Ondo's portfolio tokens and USDon are not
+ * stocks.
  */
 
 /** An issuer whose list `stock-tokens.generated.ts` copies. */
-export type StockIssuer = "backed" | "ondo" | "coinbase";
+export type StockIssuer = "backed" | "ondo" | "coinbase" | "mtpelerin";
 
 /** Each issuer's name and the published list its rows are copied from. */
 export const STOCK_ISSUERS: Readonly<
@@ -58,6 +61,8 @@ export const STOCK_ISSUERS: Readonly<
   // Coinbase's tokenized-stocks API, documented with the B20 standard at
   // docs.base.org/specifications/b20/tokenized-stocks-on-base.
   coinbase: { name: "Coinbase", source: "https://api.coinbase.com/v1/tokenized-stocks" },
+  // Mt Pelerin's shareholder page, which gives the address of its own shares' token, MPS.
+  mtpelerin: { name: "Mt Pelerin", source: "https://www.mtpelerin.com/shareholders" },
 };
 
 /** `[symbol, address, name, ticker]`: the registry symbol, the EIP-55 address, the token's name

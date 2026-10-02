@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:eco-incorp:sauce:action-program:1",
   "title": "Sauce action program",
-  "description": "A sequence of protocol actions that compiles to one Sauce program executing on one chain. Amounts are base-10 strings. A token is a registry symbol (\"USDC\") or an address, and a protocol contract a namespace reference (\"UniswapV3.Factory\") or an address; a name resolves on the chain the program is compiled for, so a document with no chainId compiles for any chain where its names exist. Beyond this schema, a program must satisfy: every address with mixed-case hex carries a valid EIP-55 checksum; every amount fits its declared width; a first action that takes an amount sets `amount`; an amountRef names a saveOutputAs set by an earlier action, and is not combined with `amount`; argument names are unique; the value of every balanceOf/nativeBalance/argument action is read; and every token symbol and namespace reference exists on the chain it is compiled for.",
+  "description": "A sequence of protocol actions that compiles to one Sauce program executing on one chain. Amounts are base-10 strings. A token is a registry symbol (\"USDC\", or a tokenized stock's, its issuer's ticker: \"SPCXc\") or an address, and a protocol contract a namespace reference (\"UniswapV3.Factory\") or an address; a name resolves on the chain the program is compiled for, so a document with no chainId compiles for any chain where its names exist. Beyond this schema, a program must satisfy: every address with mixed-case hex carries a valid EIP-55 checksum; every amount fits its declared width; a first action that takes an amount sets `amount`; an amountRef names a saveOutputAs set by an earlier action, and is not combined with `amount`; argument names are unique; the value of every balanceOf/nativeBalance/argument action is read; and every token symbol and namespace reference exists on the chain it is compiled for.",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "actions"],
@@ -28,8 +28,8 @@
     },
     "tokenSymbol": {
       "type": "string",
-      "pattern": "^[A-Z][A-Z0-9]{1,10}$",
-      "description": "A registry token symbol, as a Sauce program writes it: \"USDC\", \"WETH\". It resolves on the chain the program is compiled for; a chain that does not register it refuses the program, naming the chain and the symbol. `sauce globals --chain <chain> --tokens` lists them."
+      "pattern": "^(?=[^A-Z]*[A-Z])[A-Za-z][A-Za-z0-9_]{1,15}$",
+      "description": "A registry token symbol, as a Sauce program writes it: \"USDC\", \"WETH\", or a tokenized stock's, which is its issuer's ticker (\"SPCXc\", \"TSLAon\", \"bTSLA\"). It resolves on the chain the program is compiled for; a chain that does not register it refuses the program, naming the chain and the symbol. `sauce globals --chain <chain> --tokens` lists them, and `--stocks` the chain's stock tokens."
     },
     "contractName": {
       "type": "string",

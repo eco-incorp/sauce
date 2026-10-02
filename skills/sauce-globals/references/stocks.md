@@ -9,8 +9,11 @@ units (its decimals). The symbol is the issuer's own ticker for the token, with 
 
 Any contract can hold, receive and send them, a program's Pot included; an issuer can pause its
 token or refuse a sanctioned address. Backed's (its xStocks, and bTokens such as `bTSLA`)
-rebase: a balance can change between transactions, never within one. Coinbase's are B20
-tokens, built into the Base node: they run on Base, and not in a local copy of the chain.
+rebase: a balance can change between transactions, never within one, and a transfer can credit
+one unit less than sent, so paying one into a pool that checks what it received can fail (buying
+one is unaffected). Coinbase's are B20 tokens, built into the Base node: they run on Base, and
+not in a local copy of the chain. The rest is in the skill's
+[Tokenized stocks](../SKILL.md#tokenized-stocks).
 
 ## Ethereum (`ethereum`, [addresses](../../sauce-chains/references/ethereum-stocks.md))
 
@@ -1018,6 +1021,7 @@ tokens, built into the Base node: they run on Base, and not in a local copy of t
 | `MOSx` | The Mosaic xStock | MOS | Backed | 18 |
 | `MOx` | Altria xStock | MO | Backed | 18 |
 | `MPCx` | Marathon Petroleum xStock | MPC | Backed | 18 |
+| `MPS` | Mt Pelerin Shares | MPS | Mt Pelerin | 0 |
 | `MPWRx` | Monolithic Power Systems xStock | MPWR | Backed | 18 |
 | `MPon` | MP Materials (Ondo Tokenized) | MP | Ondo Global Markets | 18 |
 | `MPx` | MP Materials xStock | MP | Backed | 18 |
@@ -1383,7 +1387,6 @@ tokens, built into the Base node: they run on Base, and not in a local copy of t
 | `SHLx` | Siemens Healthineers xStock | XETR:SHLD | Backed | 18 |
 | `SHOPon` | Shopify (Ondo Tokenized) | SHOP | Ondo Global Markets | 18 |
 | `SHOPx` | Shopify xStock | SHOP | Backed | 18 |
-| `SHVon` | iShares 0-1 Year Treasury Bond (Ondo Tokenized) | SHV | Ondo Global Markets | 18 |
 | `SHWx` | Sherwin-Williams xStock | SHW | Backed | 18 |
 | `SHYon` | iShares 1-3 Year Treasury Bond ETF (Ondo Tokenized) | SHY | Ondo Global Markets | 18 |
 | `SIEx` | Siemens xStock | SIED | Backed | 18 |

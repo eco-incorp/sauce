@@ -20,7 +20,7 @@ import {
   type FieldKind,
   type Fields,
 } from "./spec.js";
-import { CONTRACT_NAME_RE, NATIVE, TOKEN_SYMBOL_RE } from "./names.js";
+import { CONTRACT_NAME_RE, NATIVE, STOCK_SYMBOL_RE } from "./names.js";
 import { actionKeys, PROGRAM_VERSION } from "./program.js";
 
 export type JsonSchema = { readonly [key: string]: unknown };
@@ -39,11 +39,13 @@ const DEFS = {
   },
   tokenSymbol: {
     type: "string",
-    pattern: TOKEN_SYMBOL_RE.source,
+    pattern: STOCK_SYMBOL_RE.source,
     description:
-      'A registry token symbol, as a Sauce program writes it: "USDC", "WETH". It resolves on the ' +
+      'A registry token symbol, as a Sauce program writes it: "USDC", "WETH", or a tokenized ' +
+      'stock\'s, which is its issuer\'s ticker ("SPCXc", "TSLAon", "bTSLA"). It resolves on the ' +
       "chain the program is compiled for; a chain that does not register it refuses the program, " +
-      "naming the chain and the symbol. `sauce globals --chain <chain> --tokens` lists them.",
+      "naming the chain and the symbol. `sauce globals --chain <chain> --tokens` lists them, and " +
+      "`--stocks` the chain's stock tokens.",
   },
   contractName: {
     type: "string",
@@ -252,7 +254,8 @@ export function programSchema(): JsonSchema {
     title: "Sauce action program",
     description:
       "A sequence of protocol actions that compiles to one Sauce program executing on one chain. " +
-      'Amounts are base-10 strings. A token is a registry symbol ("USDC") or an address, and a ' +
+      'Amounts are base-10 strings. A token is a registry symbol ("USDC", or a tokenized ' +
+      "stock's, its issuer's ticker: \"SPCXc\") or an address, and a " +
       'protocol contract a namespace reference ("UniswapV3.Factory") or an address; a name ' +
       "resolves on the chain the program is compiled for, so a document with no chainId compiles " +
       "for any chain where its names exist. Beyond this schema, a program must satisfy: every " +
