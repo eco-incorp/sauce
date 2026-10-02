@@ -96,6 +96,7 @@ import { globalsCommand } from "./globals.js";
 import { initProject, installedViem, writeSauceScriptTsconfig } from "./init.js";
 import {
   assumedBalances,
+  bindMainArguments,
   definesReach,
   fundingFor,
   potTarget,
@@ -376,12 +377,14 @@ const PROGRAM: FlagSpecs = {
     type: "string",
     multiple: true,
     value: "NAME=VALUE",
-    help: "A value the program reads by name: integer, 0x hex, true, false; base58 on Solana",
+    help: "A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana",
+    lowLevel: true,
   },
   defines: {
     type: "string",
     value: "<file.json>",
-    help: "Defines from a JSON object of NAME to value; --define wins",
+    help: "Compile-time values from a JSON object of NAME to value; --define wins",
+    lowLevel: true,
   },
   "intent-deadline": {
     type: "string",
@@ -718,6 +721,9 @@ async function programInput(
   operand: string | ProgramText = fileOperand(args),
   fallback?: CanonicalChain,
   gate?: Gate,
+  /** For a wallet's intents: `main`'s arguments, bound into them (`bindMainArguments`), after
+   *  `before` has refused what no arguments could fix. */
+  bind?: { readonly args?: ArgsInput; readonly before?: (input: ProgramInput) => void },
 ): Promise<ProgramInput> {
   const { file, text, stdin } = programText(io, operand);
   const sourceDir = stringFlag(args, "source-dir");
@@ -743,7 +749,7 @@ async function programInput(
     definesFile === undefined ? undefined : readInput(io, definesFile),
     chain.kind,
   );
-  const input: ProgramInput = {
+  const given: ProgramInput = {
     file,
     text,
     ...(addresses.length === 0 ? {} : { addressDefines: addresses }),
@@ -771,6 +777,8 @@ async function programInput(
       ...(fundVia === undefined ? {} : { fundVia: parseFundVia(fundVia) }),
     },
   };
+  bind?.before?.(given);
+  const input = bind === undefined ? given : bindMainArguments(given, bind.args);
   if (fee !== undefined && fee !== "auto") return input;
   const executionFee = await autoExecutionFee(
     input,
@@ -1621,12 +1629,14 @@ const SUPPORTED_ONLY = (what: string): string[] => [
 const INTENT_VERBS: Readonly<Record<string, Command>> = {
   publish: {
     usage: [
-      "sauce intent publish <file | -> --chain <source> (--keystore <path> | --private-key <hex>) [options]",
+      "sauce intent publish <file | -> --chain <source> (--keystore <path> | --private-key <hex>) [options] [--args <value>…]",
       "sauce intent publish [--source <chain>] [--destination <chain>] [--token <token>] [--amount <n>] …",
     ],
     summary: "Publish a file's fixed intents from a wallet (or make one, step by step)",
+    trailing: "args",
     flags: {
       ...PROGRAM,
+      "args-json": COOK["args-json"]!,
       ...ENDPOINT,
       ...SIGNER,
       ...CREATE,
@@ -1654,11 +1664,12 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       store: LIFECYCLE.store!,
       ...JSON_FLAG,
       ...HELP,
+      ...ARGS,
     },
     details: [
-      "For a file whose intents are fixed when it is built — every amount a literal, a define or a",
-      "top-level `const` of a literal — builds each intent off-chain (the SDK's own lowering) and",
-      "sends the source chain's transactions from the signer's wallet: each reward token",
+      "For a file whose intents are fixed when it is built — every amount a literal, one of main's",
+      "arguments or a top-level `const` of a literal — builds each intent off-chain (the SDK's own",
+      "lowering) and sends the source chain's transactions from the signer's wallet: each reward token",
       "transferred to the intent's vault (and the native amount sent to it), then Portal.publish.",
       "No approval is asked for. The vault is the SDK's offline derivation, which the Portal's own",
       "intentVaultAddress must agree with or nothing is sent; only what the vault does not hold",
@@ -1666,6 +1677,10 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "Prints the intent hashes and the transactions. A file whose intent uses a value the program",
       "measures or computes while it runs, or that does anything besides open its intents, is",
       "refused: use `sauce run` on a Pot.",
+      "",
+      "main's arguments (--args, in order, or --args-json) are the values the intents are built",
+      "with: a wallet publishes what it knows before anything runs, so each is bound into the",
+      "intents as it is. Each is one word: an integer, an address or a bool.",
       "",
       "--intent-fund-via publishAndFund funds it through the Portal instead: each reward token",
       "approved to the Portal (reset to zero first when a smaller allowance stands, as SafeERC20",
@@ -1693,13 +1708,13 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "",
       "Examples:",
       "  sauce intent publish bridge.sauce.ts --chain ethereum --keystore ~/.keys/me.json \\",
-      "    --intent-deadline 2000000000 --intent-creator 0x…",
+      "    --intent-deadline 2000000000 --intent-creator 0x… --args 1000000 0x…",
       "  sauce intent publish --keystore ~/.keys/me.json",
       "  sauce intent publish --source ethereum --destination base --token USDC --amount 1 \\",
       "    --recipient 0x… --reward-token USDC --reward 1.01 --prover HyperProver \\",
       "    --fill-deadline +1h --reward-deadline +1d --keystore <path>",
     ].join("\n"),
-    run: async (args, io) => {
+    run: async (args, io, trailing) => {
       if (args.positionals.length === 0) return createAndPublish(args, io);
       const created = Object.keys(CREATE).find((flag) => args.values[flag] !== undefined);
       if (created !== undefined) {
@@ -1711,15 +1726,19 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         args.values["dry-run"] === true && format === undefined
           ? undefined
           : { action: "publishing intents", by: "all" };
-      const program = await programInput(args, io, undefined, undefined, gate);
-      if (program.chain.kind === "svm") {
-        throw new UsageError(
-          "sauce intent publish sends a source chain's Portal transactions from an EVM wallet. " +
-            "Publishing from Solana is not supported: the SDK has no Kitchen-built path for an " +
-            "intent that Solana's Portal runs (docs/guides/solana.md). Open the intent from an " +
-            "EVM chain; its destination may be Solana.",
-        );
-      }
+      const program = await programInput(args, io, undefined, undefined, gate, {
+        ...argsInput(args, io, trailing),
+        // Before main's arguments: no argument makes a Solana file publishable.
+        before: ({ chain }) => {
+          if (chain.kind !== "svm") return;
+          throw new UsageError(
+            "sauce intent publish sends a source chain's Portal transactions from an EVM wallet. " +
+              "Publishing from Solana is not supported: the SDK has no Kitchen-built path for an " +
+              "intent that Solana's Portal runs (docs/guides/solana.md). Open the intent from an " +
+              "EVM chain; its destination may be Solana.",
+          );
+        },
+      });
       if (format !== undefined && format !== "json" && format !== "cast") {
         throw new UsageError(`--format: '${format}' is not json or cast`);
       }
@@ -1776,14 +1795,16 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
   },
   fill: {
     usage: [
-      "sauce intent fill <file | -> --chain <source> [options]",
+      "sauce intent fill <file | -> --chain <source> [options] [--args <value>…]",
       "sauce intent fill <intent-hash> [options]",
       "sauce intent fill <file | intent-hash> … --send (--keystore <path> | --private-key <hex>) [--auto-approve]",
       "sauce intent fill <intent-hash> --claimant <address> --send --keypair <path>   (to Solana)",
     ],
     summary: "Fill a file's (or a stored) intents on their destination: rehearsed, or --send",
+    trailing: "args",
     flags: {
       ...PROGRAM,
+      "args-json": COOK["args-json"]!,
       "rpc-url": {
         type: "string",
         value: "<url>",
@@ -1819,6 +1840,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       store: LIFECYCLE.store!,
       ...JSON_FLAG,
       ...HELP,
+      ...ARGS,
     },
     details: [
       "Builds each intent the file opens, as `sauce intent publish` does (or takes the intent the store",
@@ -1866,11 +1888,11 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "",
       "Examples:",
       "  sauce intent fill swap-on-base.sauce.ts --chain ethereum \\",
-      "    --defines swap.defines.json --intent-deadline 2000000000 --intent-creator 0x… \\",
-      "    --intent-execution-fee 1000000000000",
+      "    --intent-deadline 2000000000 --intent-creator 0x… --intent-execution-fee 1000000000000 \\",
+      "    --args <amountIn> <reward> <sqrtPriceLimitX96> <minOut> <recipient> <refundTo>",
       "  sauce intent fill 0x<intent hash> --send --keystore ~/.keys/me.json",
     ].join("\n"),
-    run: async (args, io) => {
+    run: async (args, io, trailing) => {
       const store = storeOf(args, io);
       const rpcUrl = stringFlag(args, "rpc-url");
       const solver = stringFlag(args, "solver");
@@ -1901,6 +1923,11 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         ? { action: "sending a fill", by: "destinations" }
         : undefined;
       if (operands.length > 0 && operands.every(isIntentHash)) {
+        if (argsInput(args, io, trailing).args !== undefined) {
+          throw new UsageError(
+            "--args gives a file's main its arguments; a stored intent is built already",
+          );
+        }
         targets = operands.flatMap((hash) =>
           storedTargets(store, hash as `0x${string}`).map(({ record }) => ({
             intent: intentOf(record),
@@ -1911,7 +1938,14 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         );
         from = operands.length === 1 ? operands[0]! : "the intents named";
       } else {
-        const program = await programInput(args, io, undefined, undefined, gate);
+        const program = await programInput(
+          args,
+          io,
+          undefined,
+          undefined,
+          gate,
+          argsInput(args, io, trailing),
+        );
         // A deadline that has passed is rehearsed anyway, so the Portal's own refusal shows.
         const past = pastDeadline(program);
         if (past !== undefined) io.stderr(`${past}: the rehearsal shows the Portal refusing it\n`);
@@ -2389,8 +2423,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "document compiles too (`sauce actions`).",
       "",
       "--json also says what the compile applied and how large the result is:",
-      "  defines    each define the file reads, its value, and where it came from: user (--define,",
-      "             --defines) or chain (a token symbol, a protocol contract, the chain id)",
+      "  defines    each name the chain gave the file (a token symbol, a protocol contract, the",
+      "             chain id) and each low-level --define it read, with its value and source",
       "  contracts  each protocol contract it calls or reads (UniswapV3.Factory), resolved on its",
       "             chain: an intent body's on the intent's own",
       "  size       the program's bytes; payload: the program with main's arguments (--args)",
@@ -2401,10 +2435,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "             one the destination Portal's Executor owns, salt 0) and, read from that",
       "             chain, whether it is deployed; a missing one is warned",
       "             about, since no solver can fill the intent until it is",
-      "A define the file never reads is named on stderr: it changes nothing.",
+      "A --define the file never reads is named on stderr: it changes nothing.",
       "",
       "Examples:",
-      "  sauce compile pay.sauce.ts --chain base --define RECIPIENT=0x…",
+      "  sauce compile pay.sauce.ts --chain base",
       "  sauce compile split.sauce.ts --chain base --json --args 0x… 1000000",
     ].join("\n"),
     trailing: "args",
@@ -3248,10 +3282,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   inspect: {
     usage:
-      "sauce inspect <hex | tx-hash | file | -> [--chain <slug|id>] [--source <file | ->] [options]",
+      "sauce inspect <hex | tx-hash | file | -> [--chain <slug|id>] [--source <file | ->] [options] [--args <value>…]",
     summary: "Take a cook, a Portal or Kitchen call, a program or a file apart",
+    trailing: "args",
     flags: {
       ...PROGRAM,
+      "args-json": COOK["args-json"]!,
       source: {
         type: "string",
         value: "<file>",
@@ -3260,6 +3296,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       ...ENDPOINT,
       ...JSON_FLAG,
       ...HELP,
+      ...ARGS,
     },
     details: [
       "Reads what a SauceScript author wrote back out of bytes: a Pot.cook (its engine, its",
@@ -3268,15 +3305,17 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "A 32-byte hash with --chain (or --rpc-url) is a transaction, fetched first.",
       "With --source, a cook's program is checked against that file's and the arguments after it",
       "are decoded against its main. A file operand is compiled and its intents listed, with",
-      "each value it measures at run time named. No opcode listing: programs are reported by",
+      "each value it measures at run time named; with --args, main's arguments are bound into",
+      "them, as `sauce intent publish` binds them. No opcode listing: programs are reported by",
       "size, hash and what they open.",
       "",
       "Examples:",
       "  sauce inspect 0x… --chain base --source split.sauce.ts",
       "  sauce inspect 0x<tx hash> --chain base",
-      "  sauce inspect bridge.sauce.ts --chain arbitrum --intent-deadline 2000000000 --intent-creator 0x…",
+      "  sauce inspect bridge.sauce.ts --chain arbitrum --intent-deadline 2000000000 --intent-creator 0x… \\",
+      "    --args 1000000 0x…",
     ].join("\n"),
-    run: async (args, io) => {
+    run: async (args, io, trailing) => {
       const [operand, ...extra] = args.positionals;
       // `-`: stdin carries the hex, the hash or the program — whichever it reads as.
       const piped = operand === "-" ? io.readStdin().trim() : undefined;
@@ -3288,13 +3327,22 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         if (stringFlag(args, "source") !== undefined) {
           throw new UsageError("--source goes with hex: a file operand is its own source");
         }
+        const given = argsInput(args, io, trailing);
         const input = await programInput(
           args,
           io,
           piped === undefined ? fileOperand(args) : { file: STDIN, text: piped, stdin: true },
+          undefined,
+          undefined,
+          given.args === undefined ? undefined : given,
         );
 
         return inspectFile(input.file, compileProgram(asPublished(input), io));
+      }
+      if (argsInput(args, io, trailing).args !== undefined) {
+        throw new UsageError(
+          "--args gives a file's main its arguments; a cook's are decoded from its bytes",
+        );
       }
       const hex =
         piped === undefined
@@ -3703,9 +3751,14 @@ function render(command: Command, output: CommandOutput, args: ParsedArgs): stri
     : output.text;
 }
 
-/** The flags of `command` that `only` names (`undefined`: those every chain takes). */
-const flagsFor = (command: Command, only?: "evm" | "svm"): FlagSpecs =>
-  Object.fromEntries(Object.entries(command.flags).filter(([, spec]) => spec.only === only));
+/** The flags of `command` that `only` names (`undefined`: those every chain takes), the low-level
+ *  ones apart. */
+const flagsFor = (command: Command, only?: "evm" | "svm" | "low-level"): FlagSpecs =>
+  Object.fromEntries(
+    Object.entries(command.flags).filter(([, spec]) =>
+      only === "low-level" ? spec.lowLevel === true : spec.only === only && spec.lowLevel !== true,
+    ),
+  );
 
 function commandHelp(command: Command): string {
   const usage = typeof command.usage === "string" ? [command.usage] : command.usage;
@@ -3714,6 +3767,7 @@ function commandHelp(command: Command): string {
       ["Options:", undefined],
       ["EVM chains only:", "evm"],
       ["Solana only:", "svm"],
+      ["Low-level (a program's inputs are main's parameters, given with --args):", "low-level"],
     ] as const
   ).flatMap(([heading, only]) => {
     const flags = flagsFor(command, only);

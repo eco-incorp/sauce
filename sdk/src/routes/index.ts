@@ -97,6 +97,7 @@ export type {
   CompiledSauceProgram,
   CompiledSauceRoute,
   SauceCompileOptions,
+  SauceProgramOptions,
   SauceEvmExecutionInput,
   SauceSvmExecutionInput,
 } from "./sauce-route.js";

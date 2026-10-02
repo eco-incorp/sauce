@@ -49,6 +49,7 @@ export { globalsCommand } from "../../sdk/dist/cli/globals.js";
 export { randomSalt } from "../../sdk/dist/routes/intent-portal.js";
 export {
   assumedBalances,
+  bindMainArguments,
   definesReach,
   fundingFor,
   potTarget,

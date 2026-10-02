@@ -153,7 +153,6 @@ sauce run swap.json --chain base --keystore <keystore> --args 1000000000
   document lowers, compiles and simulates, and `tx` and `run` are refused, naming the supported
   chains and the chain-support request for that chain (`sauce-chains` says how to post it).
 - `--args` gives the `argument` actions, in the order the document declares them.
-- `--define` does not apply: a document's values are its own fields.
 - A document is refused with every problem at once, each on a line of its own with its path, such
   as a pool key without its fee:
 

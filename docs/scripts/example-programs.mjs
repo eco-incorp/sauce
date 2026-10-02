@@ -30,6 +30,11 @@
 // `Token` and `self`), an import, or a local or parameter — nothing else. An input is a `main`
 // parameter, given with `--args`; a compile-time define is the SDK's own mechanism, never a user's
 // input. An exception is the owning checker's, per example and name, with its reason.
+//
+// NO DEFINES TAUGHT. Beyond the programs, every shipped page, skill file and example: none names
+// `--define` or `--defines`, which the `sauce` command keeps as low-level flags its `--help` lists
+// apart, and no ```sauce fence compiles with `define=`. A value a reader supplies is a `main`
+// argument, there as everywhere.
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 
@@ -283,5 +288,28 @@ export function inputProblems({ where, source, ts, names, allowed = {}, used = n
         "is a `main` parameter, given with --args",
     );
   }
+  return problems;
+}
+
+/**
+ * The problems with one shipped text, a page, a skill file or an example (`where` names it): each
+ * line that names `--define` or `--defines`, or opens a ```sauce fence with `define=`.
+ */
+export function defineFlagProblems({ where, text }) {
+  const problems = [];
+  text.split("\n").forEach((line, index) => {
+    const flag = /(?<![\w-])--defines?(?![\w-])/.exec(line)?.[0];
+    if (flag !== undefined) {
+      problems.push(
+        `${where}:${index + 1}: names ${flag}, a low-level flag: a value the reader supplies is a ` +
+          "`main` parameter, given with --args",
+      );
+    } else if (/^\s*```sauce\b.*\bdefine=/.test(line)) {
+      problems.push(
+        `${where}:${index + 1}: compiles a fence with define=: take the value as a \`main\` ` +
+          "parameter instead",
+      );
+    }
+  });
   return problems;
 }

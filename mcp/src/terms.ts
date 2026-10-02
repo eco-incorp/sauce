@@ -18,6 +18,8 @@ export interface FlagInput {
   /** Without their `--`; the first is the one a person writes. */
   readonly flags: readonly string[];
   readonly input: string;
+  /** A low-level flag (`--define`): rewritten in messages, never listed for an agent to use. */
+  readonly lowLevel?: true;
 }
 
 /**
@@ -49,7 +51,7 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["max-execution-fee"], input: "maxExecutionFee" },
   { flags: ["via"], input: "via" },
   { flags: ["compact-args"], input: "compactArgs" },
-  { flags: ["define", "defines"], input: "defines" },
+  { flags: ["define", "defines"], input: "defines", lowLevel: true },
   { flags: ["chain"], input: "chain" },
   { flags: ["target"], input: "target" },
   { flags: ["rpc-url"], input: "rpcUrl" },
@@ -77,11 +79,14 @@ export const COMMAND_TOOLS = [
   "is the command's --json; a tool that reads several chains takes `rpcUrls`, one per chain.",
 ] as const;
 
-/** {@link FLAG_INPUTS} as lines of `--flag → input`, for the server's instructions. */
+/** {@link FLAG_INPUTS} but the low-level ones: the table the instructions and the guide print. */
+export const LISTED_FLAG_INPUTS = FLAG_INPUTS.filter((entry) => entry.lowLevel !== true);
+
+/** {@link LISTED_FLAG_INPUTS} as lines of `--flag → input`, for the server's instructions. */
 export function flagInputLines(width = 96): string[] {
   const lines: string[] = [];
   let line = "";
-  for (const { flags, input } of FLAG_INPUTS) {
+  for (const { flags, input } of LISTED_FLAG_INPUTS) {
     const entry = `${flags.map((flag) => `--${flag}`).join("/")} → ${input}`;
     if (line !== "" && line.length + 2 + entry.length > width) {
       lines.push(line);

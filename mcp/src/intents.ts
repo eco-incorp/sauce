@@ -42,13 +42,14 @@ import {
 } from "./sdk.js";
 import { noEndpoint } from "./config.js";
 import {
+  boundProgram,
   CLAIMANT,
   chainRef,
   endpointsByChain,
   fromCommand,
+  INTENT_ARGS,
   LIMITS,
   PROGRAM,
-  programOf,
   READS_CHAIN,
   refusable,
   RPC_URLS,
@@ -490,6 +491,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
             "Or the SauceScript program that opens the intents, as sauce_intent_publish takes " +
               "it: every intent it opens, fixed when it is built.",
           ),
+        args: INTENT_ARGS,
         chain: chainRef
           .optional()
           .describe(
@@ -558,7 +560,7 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
       const gate: Gate | undefined =
         args.dryRun === true ? undefined : { action: "building a fill", side: "destination" };
       if (args.source !== undefined) {
-        const program = programOf(args as ProgramArgs);
+        const program = boundProgram(args as ProgramArgs & { readonly args?: readonly unknown[] });
         past = pastDeadline(program.input);
         const targets = fillTargets(program.input, program.files);
         records = targets.map((target) =>

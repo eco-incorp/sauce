@@ -214,7 +214,9 @@ const HINTS: ReadonlyArray<readonly [RegExp, (match: RegExpExecArray) => string]
   [/`intents\.executionFee`/, () => "pass --intent-execution-fee <wei>"],
   [
     /`([A-Za-z_$][\w$]*)` is not a declared variable/,
-    (match) => `if ${match[1]} is a value you supply, pass --define ${match[1]}=<value>`,
+    (match) =>
+      `if ${match[1]} is a value you supply, make it a parameter of main ` +
+      `(\`${match[1]}: Uint256\`, or \`Address\`) and pass it with --args`,
   ],
 ];
 
@@ -250,7 +252,8 @@ function unregisteredTokens(text: string, chain: CanonicalChain): string[] {
 
     return (
       `${symbol} is not a registered token on ${chain.slug} (it has ${has.join(", ") || "none"}): ` +
-      `write Token(${symbol}_ADDRESS).transfer(…) and pass --define ${symbol}_ADDRESS=0x…`
+      "take its address as a parameter of main (`token: Address`, passed with --args) and write " +
+      "Token(token).transfer(…)"
     );
   });
 }

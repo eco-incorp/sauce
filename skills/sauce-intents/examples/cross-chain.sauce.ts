@@ -1,7 +1,6 @@
 // Forwards the USDC this Pot holds to Ethereum, where a solver supplies it to Aave V3 for
-// BENEFICIARY. The amount is only known when this runs, so the file runs on the owner's Pot (sauce
-// run) and opens the intent as it goes. The whole file is the program: top-level statements, no
-// main, and BENEFICIARY a define.
+// `beneficiary`. The amount is only known when this runs, so the file runs on the owner's Pot
+// (sauce run) and opens the intent as it goes.
 //
 // `--chain` is the source chain, which funds the reward: `USDC` in `.reward(...)` is its USDC.
 // Inside the braces, and in the delivery argument after them, the code runs on Ethereum: `USDC` and
@@ -9,10 +8,10 @@
 // solver's margin.
 //
 //   sauce run cross-chain.sauce.ts --chain <chain> \
-//     --keystore <keystore> --define BENEFICIARY=<address> --intent-deadline <unix seconds> \
-//     --intent-creator <address> --intent-execution-fee <Ethereum Kitchen fee in wei>
+//     --keystore <keystore> --intent-deadline <unix seconds> --intent-creator <address> \
+//     --intent-execution-fee <Ethereum Kitchen fee in wei> --args <beneficiary>
 //
-//   BENEFICIARY: Address               who the Aave V3 position on Ethereum is supplied for
+//   beneficiary: Address               who the Aave V3 position on Ethereum is supplied for
 //   --intent-deadline: unix seconds    the last second a solver may fill it
 //   --intent-creator: Address          who may reclaim the reward if no solver earns it
 //   --intent-execution-fee: wei        Ethereum's Kitchen fee for the body's cook; `auto` reads it
@@ -21,17 +20,19 @@
 // From Base, with the fee read from Ethereum:
 //
 //   sauce run cross-chain.sauce.ts --chain base \
-//     --keystore <keystore> --define BENEFICIARY=<address> --intent-deadline <unix seconds> \
-//     --intent-creator <address> --intent-execution-fee auto
-require(BENEFICIARY != 0, "set BENEFICIARY");
-const amount = USDC.balanceOf(ctx.self());
-require(amount > 0, "nothing to forward");
-const delivered = amount - (amount * 10) / 10000; // the solver keeps 0.1%
+//     --keystore <keystore> --intent-deadline <unix seconds> --intent-creator <address> \
+//     --intent-execution-fee auto --args <beneficiary>
+function main(beneficiary: Address) {
+  require(beneficiary != 0, "give the beneficiary");
+  const amount = USDC.balanceOf(ctx.self());
+  require(amount > 0, "nothing to forward");
+  const delivered = amount - (amount * 10) / 10000; // the solver keeps 0.1%
 
-Ethereum(
-  () => {
-    USDC.approve(AaveV3.Pool, delivered);
-    AaveV3.Pool.supply(USDC, delivered, BENEFICIARY, 0);
-  },
-  { tokens: [{ token: USDC, amount: delivered }] },
-).reward({ tokens: [{ token: USDC, amount }] });
+  Ethereum(
+    () => {
+      USDC.approve(AaveV3.Pool, delivered);
+      AaveV3.Pool.supply(USDC, delivered, beneficiary, 0);
+    },
+    { tokens: [{ token: USDC, amount: delivered }] },
+  ).reward({ tokens: [{ token: USDC, amount }] });
+}

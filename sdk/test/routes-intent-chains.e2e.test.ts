@@ -11,7 +11,7 @@
  * Ethereum (1) — each running the real eco-routes Portal and the released engine behind a
  * Kitchen-minted Pot, and each holding a mock ERC-20 at ITS OWN registry USDC address and nowhere
  * else. The programs are compiled with the SDK's real registry: a body that forwards what it measured
- * to Arbitrum (`fixtures/routes/body-forwards-to-arbitrum.sauce.ts`, the README's example before it
+ * to Arbitrum (`fixtures/routes/bodies.ts`'s `BODY_TO_ARBITRUM`, the README's example before it
  * took `main` arguments, which a body cannot), and the nested-intents guide's cascade, verbatim, on
  * the chains the release supports (Base, Ethereum, then Base again). The cascade also runs over three different chains,
  * where a level resolving a name on its grandparent's chain would show. An intent published on one
@@ -62,14 +62,16 @@ import {
   EVM_ROUTE_PARAM,
   denormalizeToEvm,
   encodeRouteEvm,
+  hashIntent,
 } from "../src/routes/encode.js";
 import { chainDefines } from "../src/routes/ambient.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
-import { compileSauceRoute } from "../src/routes/sauce-route.js";
+import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 import type { Intent } from "../src/routes/types.js";
 import { gateAnchors, startGatedEngine, type GatedEngine } from "./evm/gated-engine.js";
+import { BODY_TO_ARBITRUM, CASCADE_BODY } from "./fixtures/routes/bodies.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -89,10 +91,6 @@ const PORTAL_FIXTURE = fixture("evm/fixtures/Portal.json");
 const MOCK_ERC20 = fixture("std/token/fixtures/MockERC20.json");
 const example = (name: string) =>
   readFileSync(join(HERE, "../../docs/examples", `${name}.sauce.ts`), "utf8");
-const BODY_TO_ARBITRUM = readFileSync(
-  join(HERE, "fixtures/routes/body-forwards-to-arbitrum.sauce.ts"),
-  "utf8",
-);
 
 const DEPLOYER = privateKeyToAccount(
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
@@ -597,8 +595,8 @@ describeEvm("an intent created inside a program, across chains with different to
       ]);
     }, 300_000);
 
-    it("the guide's cascade: Base, Ethereum, then Base again, each hop funded where it runs", async () => {
-      const { route, rewardHash } = build(example("cross-chain-cascade"));
+    it("a cascade body: Base, Ethereum, then Base again, each hop funded where it runs", async () => {
+      const { route, rewardHash } = build(CASCADE_BODY);
       await base.mint(base.usdc, base.pot, SEEDED);
       const held = await base.balanceOf(base.usdc, base.pot);
 
@@ -719,6 +717,55 @@ describeEvm("an intent created inside a program, across chains with different to
       expect(await optimism.balanceOf(optimism.usdc, optimism.pot)).toBe(0n);
     }, 300_000);
   });
+
+  it("the guide's cascade file, published on Ethereum: Base, Ethereum, then Base again", async () => {
+    // docs/examples/cross-chain-cascade.sauce.ts as written, its main arguments fixed into the
+    // intents as `sauce intent publish --args` fixes them: the first hop is the file's own intent,
+    // which a wallet publishes on Ethereum, and the levels below it open as each runs.
+    const delivered = 2_000_000n;
+    const [first] = compileSauceProgram("ethereum", example("cross-chain-cascade"), {
+      args: [RECIPIENT, delivered, 2_010_000n],
+      intents: intents(),
+    }).intents;
+    expect(first!.captures).toEqual([]);
+    const route = evmRoute(first!.intent);
+    expect(route.tokens.map((t) => [lower(t.token), t.amount])).toEqual([
+      [lower(base.usdc), delivered],
+    ]);
+
+    // ---- hop 1, on Base: the solver delivers; the program measures the Pot and opens hop 2 -----
+    // An earlier test's reverted fulfilment can leave its own mint in the Pot; the body measures it.
+    const held = (await base.balanceOf(base.usdc, base.pot)) + delivered;
+    await base.provide(route);
+    const onBase = await base.fulfil(route, hashIntent(first!.intent).rewardHash);
+    expect(onBase.status).toBe("success");
+    const [toEthereum] = onBase.published;
+    expect(toEthereum!.destination).toBe(1n);
+    expect(toEthereum!.rewardTokens.map((t) => [lower(t.token), t.amount])).toEqual([
+      [lower(base.usdc), held],
+    ]);
+    expect(await base.balanceOf(base.usdc, base.pot)).toBe(0n);
+
+    // ---- hop 2, on Ethereum: what arrived opens hop 3, funded in Ethereum's USDC ---------------
+    const second = fulfilmentOf(toEthereum!);
+    await ethereum.provide(second.route);
+    const onEthereum = await ethereum.fulfil(second.route, second.rewardHash);
+    expect(onEthereum.status).toBe("success");
+    const [backToBase] = onEthereum.published;
+    expect(backToBase!.destination).toBe(8453n);
+    expect(backToBase!.rewardTokens.map((t) => [lower(t.token), t.amount])).toEqual([
+      [lower(ethereum.usdc), held],
+    ]);
+    expect(await ethereum.isFunded(backToBase!)).toBe(true);
+
+    // ---- hop 3, on Base: the body pays the recipient its main argument names -----------------
+    const third = fulfilmentOf(backToBase!);
+    const paid = await base.balanceOf(base.usdc, RECIPIENT);
+    await base.provide(third.route);
+    const onBaseAgain = await base.fulfil(third.route, third.rewardHash);
+    expect(onBaseAgain.status).toBe("success");
+    expect(await base.balanceOf(base.usdc, RECIPIENT)).toBe(paid + held);
+  }, 300_000);
 
   it("a body that calls the file's typed helpers and an import runs on Arbitrum", async () => {
     // The body compiles as a program of its own: it carries `fee`, the typed array helper `sum`
