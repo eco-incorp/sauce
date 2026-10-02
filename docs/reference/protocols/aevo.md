@@ -20,7 +20,7 @@ High-performance options and perpetuals exchange built on a custom OP Stack roll
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Deposit ERC-20 into Aevo
@@ -54,7 +54,7 @@ On Ethereum, `Aevo` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's depositContract, `0x4082C9647c098a6493Fb499EaE63b5ce3259C574`.
-  require(Aevo.DepositContract != 0n);
+  require(Aevo.DepositContract != 0);
 }
 ```
 

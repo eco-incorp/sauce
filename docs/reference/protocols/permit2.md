@@ -58,7 +58,7 @@ function main(
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Approve token via Permit2
@@ -106,7 +106,7 @@ On Ethereum, `Permit2` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's permit2, `0x000000000022D473030F116dDEE9F6B43aC78BA3`.
-  require(Permit2.Permit2 != 0n);
+  require(Permit2.Permit2 != 0);
 }
 ```
 

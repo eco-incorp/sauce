@@ -16,7 +16,7 @@ Cross-chain liquidity router built on Axelar. Enables one-click cross-chain swap
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### bridge
 
@@ -74,7 +74,7 @@ On Ethereum, `Squid` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's squidRouter, `0xce16F69375520ab01377ce7B88f5BA8C48F8D666`.
-  require(Squid.SquidRouter != 0n);
+  require(Squid.SquidRouter != 0);
 }
 ```
 

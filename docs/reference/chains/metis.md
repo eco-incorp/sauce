@@ -34,7 +34,7 @@ chain does not have it.
 ```ts
 function main() {
   // `AaveV3.Pool` is Metis's pool: `0x90df02551bB792286e8D4f13E0e357b4Bf1D6a57`.
-  require(AaveV3.Pool != 0n);
+  require(AaveV3.Pool != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Metis.AaveV3.Pool == AaveV3.Pool);
 }

@@ -34,7 +34,7 @@ chain does not have it.
 ```ts
 function main() {
   // `AaveV3.Pool` is Scroll's pool: `0x11fCfe756c05AD438e312a7fd934381537D3cFfe`.
-  require(AaveV3.Pool != 0n);
+  require(AaveV3.Pool != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Scroll.AaveV3.Pool == AaveV3.Pool);
 }

@@ -22,7 +22,7 @@ Decentralized options protocol with an AMM-based pricing model and concentrated 
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 Premia v3 has one pool contract per market (base, quote, strike, maturity, call/put), deployed by the PoolFactory; its `PoolDeployed` event names each pool. `exercise` and `settle` act on the caller's own position in that pool.
 
@@ -56,7 +56,7 @@ On Arbitrum One, `Premia` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Arbitrum One's poolFactory, `0xAE4fB6622F25f397587F11638dA8CE88C27b5645`.
-  require(Premia.PoolFactory != 0n);
+  require(Premia.PoolFactory != 0);
 }
 ```
 

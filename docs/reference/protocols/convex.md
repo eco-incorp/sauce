@@ -22,7 +22,7 @@ Yield optimizer for Curve Finance LP tokens. Deposit Curve LP tokens to earn boo
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Deposit Curve LP into Convex (auto-stake in reward pool)
@@ -65,7 +65,7 @@ On Ethereum, `Convex` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's booster, `0xF403C135812408BFbE8713b5A23a04b3D48AAE31`.
-  require(Convex.Booster != 0n);
+  require(Convex.Booster != 0);
 }
 ```
 

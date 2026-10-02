@@ -21,7 +21,7 @@ Flash loan aggregator that routes across Aave, Maker, Balancer and other sources
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Get available flash loan routes
@@ -48,7 +48,7 @@ On Ethereum, `Instadapp` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's flashloanAggregator, `0xE6054aE0Dba269560061D736e7510Ce64fCD517d`.
-  require(Instadapp.FlashloanAggregator != 0n);
+  require(Instadapp.FlashloanAggregator != 0);
 }
 ```
 

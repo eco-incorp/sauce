@@ -16,7 +16,7 @@ Official Arbitrum L1-L2 gateway bridge. Routes tokens through the canonical Arbi
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### depositToL2
 
@@ -66,7 +66,7 @@ On Ethereum, `ArbitrumBridge` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's l1GatewayRouter, `0x72Ce9c846789fdB6fC1f34aC4AD25Dd9ef7031ef`.
-  require(ArbitrumBridge.L1GatewayRouter != 0n);
+  require(ArbitrumBridge.L1GatewayRouter != 0);
 }
 ```
 

@@ -16,7 +16,7 @@ Leading lending protocol on zkSync Era. Aave V3 fork optimized for zero-knowledg
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### supply
 
@@ -109,7 +109,7 @@ On zkSync Era, `Zerolend` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // zkSync Era's pool, `0x4d9429246EA989C9CeE203B43F6d1C7D83e3B8F8`.
-  require(Zerolend.Pool != 0n);
+  require(Zerolend.Pool != 0);
 }
 ```
 

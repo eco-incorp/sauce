@@ -34,7 +34,7 @@ chain does not have it.
 ```ts
 function main() {
   // `UniswapV2.Factory` is Zora's factory: `0x0F797dC7efaEA995bB916f268D919d0a1950eE3C`.
-  require(UniswapV2.Factory != 0n);
+  require(UniswapV2.Factory != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Zora.UniswapV2.Factory == UniswapV2.Factory);
 }

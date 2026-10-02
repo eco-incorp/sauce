@@ -22,7 +22,7 @@ The leading DEX on zkSync Era with optimized gas efficiency for the ZK rollup en
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### swap
 
@@ -80,7 +80,7 @@ On zkSync Era, `Syncswap` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // zkSync Era's router, `0x2da10A1e27bF85cEdD8FFb1AbBe97e53391C0295`.
-  require(Syncswap.Router != 0n);
+  require(Syncswap.Router != 0);
 }
 ```
 

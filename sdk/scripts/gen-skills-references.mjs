@@ -593,7 +593,7 @@ const CHAIN_NOTES = {
     "  reads as 0. Compare a native amount with a token amount only after converting one to the",
     "  other's scale.",
     "- Every native amount has 18 decimals: an execution fee, a cook's value, the `nativeAmount` of a",
-    "  route or a reward. `1_000_000n` of native value is 10^-12 USDC, not 1 USDC.",
+    "  route or a reward. `1_000_000` of native value is 10^-12 USDC, not 1 USDC.",
     "- The minimum base fee is 20 gwei, and a transaction whose `maxFeePerGas` is below it is dropped",
     "  silently: no error, and no receipt.",
     "- There is no canonical wrapped native, and nothing needs wrapping. `WETH` is bridged ETH, with no",
