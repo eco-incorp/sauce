@@ -37,6 +37,7 @@ import { Permit2ABI } from "../protocols/permit2/abis.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { UsageError } from "./args.js";
 import { CliError } from "./args.js";
+import { guardOf } from "./policy.js";
 
 /** A transaction to send or simulate. */
 export interface TxRequest {
@@ -496,7 +497,9 @@ export interface Sent {
 
 /**
  * Signs `tx` as `account`, sends it through `url`, and waits for its receipt. It is simulated
- * first, so a transaction that would revert is refused with its reason and never sent.
+ * first, so a transaction that would revert is refused with its reason and never sent. From a
+ * wallet (`--wallet`), it is held to the wallet's policy too (`policy.ts`), and what it spends is
+ * reserved in the wallet's ledger before it is sent.
  */
 export async function sendAndWait(
   client: PublicClient,
@@ -506,16 +509,20 @@ export async function sendAndWait(
 ): Promise<Sent> {
   const rehearsal = await simulate(client, account.address, tx);
   if (!rehearsal.ok) throw new CliError(`not sent — it would revert: ${rehearsal.reason}`);
+  const reservation = await guardOf(account.address)?.evm(client, tx);
   const wallet = createWalletClient({ account, transport: http(url) });
   let hash: Hex;
   try {
     hash = await wallet.sendTransaction({ chain: null, ...tx, gas: (rehearsal.gas * 12n) / 10n });
   } catch (error) {
+    reservation?.released("sending failed");
     throw new CliError(`sending failed: ${reasonOf(error)}`);
   }
   const receipt = await request(`the receipt of ${hash}`, () =>
     client.waitForTransactionReceipt({ hash }),
   );
+  if (receipt.status === "success") reservation?.sent(hash);
+  else reservation?.released(`${hash} reverted`);
   const sent = {
     hash,
     status: receipt.status,

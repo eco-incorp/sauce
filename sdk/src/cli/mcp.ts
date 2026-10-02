@@ -10,8 +10,11 @@
  * pays for the MCP SDK; and it is reached through the interface below, which the workspace's own
  * entry module is checked against when it compiles (`mcp/src/entry.ts`), so neither side can drift.
  *
- * Like every command here it reads no environment: the chains it reads are `--config`'s, and it
- * holds no key — every transaction it builds comes back unsigned.
+ * The chains it reads are `--config`'s. Over stdio, `--wallets [dir]` with a password source (as
+ * `sauce wallet` takes one, never a prompt: stdin is the protocol's) lets it sign, with the wallets
+ * of that directory alone: the password is read here, once, before the server starts, and never
+ * reaches a tool's input or result. Without `--wallets`, and always over HTTP, it holds no key and
+ * every transaction it builds comes back unsigned.
  */
 import {
   CliError,
@@ -22,6 +25,9 @@ import {
   type ParsedArgs,
 } from "./args.js";
 import type { CommandOutput } from "./commands.js";
+import { describeSource, passwordSource, readPassword, type PasswordIo } from "./password.js";
+import { PASSWORD, WALLETS } from "./wallet-commands.js";
+import { defaultWalletsDir } from "./wallets.js";
 
 /** How `sauce mcp` serves, as given on the command line; the server checks each value. */
 export interface McpServeOptions {
@@ -37,6 +43,17 @@ export interface McpServeOptions {
   readonly allowPrivateRpc: boolean;
   /** Where the server says what it is doing: stderr, never stdout, which stdio's protocol owns. */
   readonly log: (text: string) => void;
+  /** `--wallets`, over stdio only: the wallets its tools create, list and send from. */
+  readonly wallets?: McpWallets;
+}
+
+/** The wallet directory `sauce mcp --wallets` serves, and the password its wallets open with. */
+export interface McpWallets {
+  readonly dir: string;
+  /** Read once, from the source the server was started with; a registered secret. */
+  readonly password: string;
+  /** That source, as the instructions name it: `--password-env SAUCE_WALLET_PASSWORD`. */
+  readonly source: string;
 }
 
 /** `sauce mcp setup`, as given. */
@@ -86,6 +103,11 @@ export const MCP_FLAGS: FlagSpecs = {
     type: "boolean",
     help: "With --http: let a caller's rpcUrl be http: or a private address (a private deployment)",
   },
+  wallets: {
+    ...WALLETS.wallets!,
+    help: "Over stdio: sign with the wallets in this directory (default ~/.sauce/wallets)",
+  },
+  ...PASSWORD,
   agent: {
     type: "string",
     multiple: true,
@@ -117,13 +139,24 @@ async function loadMcp(): Promise<McpEntry> {
   return module.mcpEntry;
 }
 
-const SERVE_ONLY = ["http", "host", "allowed-host", "max-body", "allow-private-rpc"] as const;
+const SERVE_ONLY = [
+  "http",
+  "host",
+  "allowed-host",
+  "max-body",
+  "allow-private-rpc",
+  "wallets",
+  "password-env",
+  "password-file",
+  "password-command",
+] as const;
+const PASSWORDS = ["password-env", "password-file", "password-command"] as const;
 const SETUP_ONLY = ["agent", "dir", "force"] as const;
 
 /** `sauce mcp [setup]`. Prints nothing on stdout while it serves: stdio's protocol owns it. */
 export async function mcpCommand(
   args: ParsedArgs,
-  io: { readonly stderr: (text: string) => void },
+  io: { readonly stderr: (text: string) => void } & PasswordIo,
 ): Promise<CommandOutput | undefined> {
   const [sub, ...rest] = args.positionals;
   if (rest.length > 0 || (sub !== undefined && sub !== "setup")) {
@@ -149,6 +182,7 @@ export async function mcpCommand(
   const http = stringFlag(args, "http");
   const host = stringFlag(args, "host");
   const maxBody = stringFlag(args, "max-body");
+  const wallets = await walletsOf(args, io, http !== undefined);
   await (
     await loadMcp()
   ).serve({
@@ -159,7 +193,47 @@ export async function mcpCommand(
     ...(maxBody === undefined ? {} : { maxBody }),
     allowPrivateRpc: args.values["allow-private-rpc"] === true,
     log: io.stderr,
+    ...(wallets === undefined ? {} : { wallets }),
   });
 
   return undefined;
+}
+
+/**
+ * `--wallets` and its password source, the password read now — before anything is served — so a
+ * source that does not work stops the server at start. Over HTTP there are no wallets: the HTTP
+ * server never signs.
+ */
+async function walletsOf(
+  args: ParsedArgs,
+  io: PasswordIo,
+  http: boolean,
+): Promise<McpWallets | undefined> {
+  const dir = stringFlag(args, "wallets");
+  const given = PASSWORDS.find((flag) => args.values[flag] !== undefined);
+  if (dir === undefined) {
+    if (given !== undefined) throw new UsageError(`--${given} goes with --wallets`);
+
+    return undefined;
+  }
+  if (http) {
+    throw new UsageError(
+      "--wallets is for stdio: the HTTP server never signs, and serves no wallet tools",
+    );
+  }
+  const source = passwordSource({
+    env: stringFlag(args, "password-env"),
+    file: stringFlag(args, "password-file"),
+    command: stringFlag(args, "password-command"),
+  });
+  if (source.from === "prompt") {
+    throw new UsageError(
+      "--wallets needs its password source, --password-env <NAME>, --password-file <path> or " +
+        "--password-command <command>: over stdio there is no terminal to ask on (stdin carries " +
+        "the protocol)",
+    );
+  }
+  const password = await readPassword(source, io, { what: "the wallets" });
+
+  return { dir: dir || defaultWalletsDir(), password, source: describeSource(source) };
 }
