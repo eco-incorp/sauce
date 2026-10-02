@@ -29,6 +29,7 @@
 //      is referenced by its own skill, and every program and actions document names the chains it
 //      is checked on there, one of them at least a chain the release supports; a contract's ABI
 //      (`.json`, a JSON array) is a module a program beside it imports, not an example of its own;
+//      and the `sauce-overview` skill map has one entry for every skill directory and no other;
 //   4. every program's header says how to run it: a usage line (`--chain <chain>`) whose `--args`
 //      are `main`'s parameters by name, `<name>` each, in order; a line per parameter
 //      (`//   name: Type  meaning and units`); and an example line on a supported chain with real
@@ -44,7 +45,7 @@
 //      raw) or, as ```sauce fails, does not; every ```json chain=a,b block is an actions document
 //      `sauce actions` lowers on those chains (```json fails chain=a: refused there); every ```ts
 //      block and every runner (`*.mts`) typechecks, and every runner EXECUTES with the network
-//      disabled;
+//      disabled, importing nothing but the package, viem and Node's modules (`RUNNER_PACKAGES`);
 //   7. every `@eco-incorp/sauce/...` subpath and `node_modules/@eco-incorp/sauce/...` path exists,
 //      and every identifier in inline code is one the package declares;
 //   8. every generated reference (the globals index, the chains, the protocol index and registry
@@ -750,9 +751,11 @@ if (howToGetIt.length !== 1)
 // One line, the same in every such document: a protocol's own router template is for a pool the
 // Sauce Router does not service, and a zero price limit there leaves the minimum output alone.
 const SWAP_POINTER =
-  "> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a " +
-  "price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools " +
-  "under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.";
+  "> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, " +
+  "`uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra " +
+  "pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit " +
+  "(`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below " +
+  "call the protocol's own contracts.";
 const swapDocuments = [];
 const protocolList = sdk.listProtocols();
 const protocolModules = await Promise.all(
@@ -865,6 +868,39 @@ if (index !== undefined) {
     if (!allExamples.has(entry)) fail(rel(index.path), `lists ${entry}, which does not exist`);
 }
 
+// ---- 3b. The overview's map of the skills ----------------------------------------------------------
+// The overview maps every skill, one `### \`sauce-<name>\`` entry each under one heading, saying what
+// it holds and when to load it: a skill added, renamed or removed fails here until the map says so.
+const OVERVIEW_SKILL = "sauce-overview";
+const SKILL_MAP = "## The skill map";
+const overview = skills.find((s) => s.dir === OVERVIEW_SKILL);
+if (overview === undefined) fail(rel(SKILLS_DIR), `no ${OVERVIEW_SKILL} skill to map the others`);
+else {
+  const lines = overview.prose.split("\n");
+  const start = lines.findIndex((line) => line.trim() === SKILL_MAP);
+  const end = lines.findIndex((line, i) => i > start && /^#{1,2}\s/.test(line));
+  if (start < 0) fail(rel(overview.path), `has no "${SKILL_MAP}" section`);
+  const mapped = [];
+  for (const line of start < 0 ? [] : lines.slice(start + 1, end < 0 ? undefined : end)) {
+    if (!/^#{3,6}\s/.test(line)) continue;
+    const entry = /^###\s+`(sauce-[a-z0-9-]+)`\s*$/.exec(line);
+    if (entry === null)
+      fail(rel(overview.path), `maps "${line}"; an entry is a heading "### \`sauce-<name>\`"`);
+    else mapped.push(entry[1]);
+  }
+  for (const name of new Set(mapped)) {
+    if (!SKILL_NAMES.has(name)) fail(rel(overview.path), `maps ${name}, which is not a skill`);
+    const times = mapped.filter((each) => each === name).length;
+    if (times > 1) fail(rel(overview.path), `maps ${name} ${times} times`);
+  }
+  for (const skill of skills)
+    if (start >= 0 && !mapped.includes(skill.dir))
+      fail(
+        rel(overview.path),
+        `does not map ${skill.dir}: give it an entry saying what it holds and when to load it`,
+      );
+}
+
 // ---- 4-5. Programs through the command, and every command line ------------------------------------------
 /** A value for a `<placeholder>`, by what it names. */
 const fill = (word) =>
@@ -947,11 +983,12 @@ const headerProblems = (where, file, problems) => {
   else for (const problem of problems) fail(where, problem);
 };
 
-/** The leading comment block of a program: its header. */
+/** The leading comment block of a program: its header, after the `#!` line it may start with. */
 const headerOf = (file) => {
   const lines = read(file).split("\n");
-  const end = lines.findIndex((line) => !line.startsWith("//"));
-  return lines.slice(0, end < 0 ? lines.length : end);
+  const from = lines[0]?.startsWith("#!") ? 1 : 0;
+  const end = lines.findIndex((line, index) => index >= from && !line.startsWith("//"));
+  return lines.slice(from, end < 0 ? lines.length : end);
 };
 
 /**
@@ -1029,9 +1066,12 @@ async function runUsage(where, file, argv, chain, header = false) {
     return;
   }
   if (!["run", "simulate", "tx"].includes(name)) return;
-  const values = (args ?? []).map((word, i) =>
-    /<[^>]+>/.test(word) ? sample(entryParams[i].type) : word,
-  );
+  // A placeholder is sampled from its type; an array or record given as a value is the JSON
+  // `--args` takes for one, and goes to `--args-json` parsed.
+  const values = (args ?? []).map((word, i) => {
+    if (/<[^>]+>/.test(word)) return sample(entryParams[i].type);
+    return /^\{|\[\]$/.test(entryParams[i].type.trim()) ? JSON.parse(word) : word;
+  });
   await txOn(where, chain, [
     "tx",
     file,
@@ -1304,8 +1344,26 @@ try {
 }
 
 // ---- 6c. Execute every runner, offline ------------------------------------------------------------------
+// What a runner may import besides the package and Node's modules: viem, the package's TypeScript API
+// is typed in it. A package manager that installs a package's own dependencies beside it rather than
+// at a project's root (pnpm) resolves nothing else from the project the skills are installed in.
+const RUNNER_PACKAGES = new Set(["viem"]);
 for (const file of runners) {
   counts.runners++;
+  for (const { fileName: specifier } of ts.preProcessFile(read(file), true, true).importedFiles) {
+    const bare = !specifier.startsWith(".") && !specifier.startsWith("node:");
+    if (
+      bare &&
+      specifier !== PKG &&
+      !specifier.startsWith(`${PKG}/`) &&
+      !RUNNER_PACKAGES.has(specifier)
+    )
+      fail(
+        rel(file),
+        `imports ${specifier}; a runner imports ${PKG} and its subpaths, ` +
+          `${[...RUNNER_PACKAGES].join(", ")} and node:* only`,
+      );
+  }
   for (const m of read(file).matchAll(/(?:from|import\()\s*"([^"]+)"|new URL\("([^"]+)"/g)) {
     const specifier = m[1] ?? m[2];
     // Its examples, its references, and its own SKILL.md, whose values a runner may pin.

@@ -1,6 +1,6 @@
 # The Sauce MCP server
 
-[Documentation](../README.md) · [The sauce command](cli.md) · [Agent skills](cli.md#agent-skills)
+[Documentation](../README.md) · [The sauce command](cli.md) · [Agent skills](skills.md)
 
 `sauce mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server. A coding agent
 gets the building half of the [`sauce` command](cli.md) as tools, and the package's agent skills
@@ -274,13 +274,13 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_install_skills` | `sauce skills`         | For one agent, pinned to the server's version: the commands that add the package and install, update and check the skills, where it reads them, and its MCP configuration                                                                                                                                  |
 | `sauce_chains`         | —                      | Every chain: slug, id, name, kind, aliases, `support` (`supported` or `preview`) and where the server reads it (`endpoint`: `config`, `public` or `none`); `supported`, the supported slugs; `requestChain`, the chain-support request form                                                                |
 | `sauce_globals`        | `sauce globals`        | The chain's token symbols, protocol namespaces and contracts (with `protocol`, its methods), chain names, defines and `@sauce/token` functions; `stocks` and `search` for its tokenized stocks, 200 tokens a page (`offset`)                                                                               |
-| `sauce_price`          | `sauce price`          | A pair's price as the pool's `sqrtPriceX96` (also the swap's limit) and each direction's `minAvgPrice`; from `price`, `sqrtPriceX96` or a `pool` read now; with `slippageBps`, the `limits`                                                                                                                |
-| `sauce_pools`          | `sauce pools`          | Every price-limit pool of a pair on the chain, deepest first: venue, contract, address or V4 key, fee, liquidity, `sqrtPriceX96`, and each direction's price before and with the fee, the distributed swap's `maxPrice` and the depth to a 1% move; `empty`, the pools with no liquidity                   |
+| `sauce_price`          | `sauce price`          | A pair's price as the pool's `sqrtPriceX96` (also the swap's limit) and, each direction, the distributed swap's `maxPrice` and `maxAvgPrice` (input per output) and a single swap's `minAvgPrice` (output per input); from `price`, `sqrtPriceX96` or a `pool` read now; with `slippageBps`, the `limits`  |
+| `sauce_pools`          | `sauce pools`          | A pair's price-limit pools on the chain at one `block`, deepest first: venue, contract, address or V4 key, fee, liquidity, `sqrtPriceX96`, and each direction's price before and with the fee, the distributed swap's `maxPrice` and the depth to a 1% move; `empty`, the pools with no liquidity          |
 | `sauce_compile`        | `sauce compile`        | `bytecode`, `size`, `entryParams`, `entryEncoding`, `entrySchema`, each define it reads and where it came from, the `contracts` it calls, `compiler`, `engine`, on Solana the `manifest`; with `args` the `payload`, and with `rpcUrls` each intent's Pot checked                                          |
 | `sauce_actions`        | `sauce actions`        | An actions document (JSON) compiled for a chain: `sauce_compile`'s report with the generated `source`, its `parameters` and bindings, and, given a Pot, the unsigned cook `transaction` (on a preview chain, `refused` instead)                                                                            |
 | `sauce_tx`             | `sauce tx`             | EVM `{ chainId, to, data, value }`, the cook on the Pot, with `from` (who signs) and the `kitchenFee` read; Solana `{ chain, via, feePayer, pot, fee, maxExecutionFee, transaction }`, base64 and signed by no one                                                                                         |
 | `sauce_pot`            | `sauce pot`            | The Pot's address, its unsigned deployment (EVM `Kitchen.deployPot`; Solana `create_pot`; on a preview chain, `refused` instead), `deployed` (null with no endpoint), and with an endpoint what it holds and the Kitchen's fee                                                                             |
-| `sauce_simulate`       | `sauce simulate`       | `ok`, the `path` taken, gas, what `main` returns, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts                                                                                                                                                                     |
+| `sauce_simulate`       | `sauce simulate`       | `ok`, the `path` taken, each transaction's gas (`transactions`), what `main` returns, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts                                                                                                                                 |
 | `sauce_intent_publish` | `sauce intent publish` | Each fixed intent's `intentHash`, its `vault`, its `record` (what the other intent tools take) and its unsigned `transactions` (transfers into the vault, then `Portal.publish`; with `intentFundVia: "publishAndFund"`, approvals then `Portal.publishAndFund`); with `dryRun`, their status and `funded` |
 | `sauce_intent_fill`    | `sauce intent fill`    | For the solver `from`, its unsigned fill on the destination: approvals, then `fulfillAndProve` (the prover's fee in its value) or `fulfill`; with `dryRun`, the fill rehearsed: the calls and gas, what moved, or the decoded `reason`                                                                     |
 | `sauce_intent_import`  | `sauce intent import`  | The intents a source transaction published, each its `record`, vault, block and whether it was funded                                                                                                                                                                                                      |
@@ -295,11 +295,70 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_wallet_list`    | `sauce wallet list`    | Over stdio with `--wallets` only: each wallet's name, kind, address and policy                                                                                                                                                                                                                             |
 | `sauce_wallet_send`    | —                      | Over stdio with `--wallets` only: another tool's result (or a transaction, or a list) rehearsed, held to the wallet's policy, signed and sent; each one's `hash` and `status`, or the refusal                                                                                                              |
 
+### The command's flags as inputs
+
+A skill or a note may name a `sauce` command line. `sauce <command>` is the tool
+`sauce_<command>` (`sauce intent status` is `sauce_intent_status`); a program file is `source`, its
+text, or over stdio `path`, the file; every result is the command's `--json`; and a tool that reads
+several chains takes `rpcUrls`, one endpoint per chain. Each flag is the input beside it, as the
+server's instructions also list:
+
+| Flag                       | Input                  |
+| -------------------------- | ---------------------- |
+| `--args`, `--args-json`    | `args`                 |
+| `--assume-balance`         | `assumeBalance`        |
+| `--fund-mode`              | `fundMode`             |
+| `--fund`                   | `fund`                 |
+| `--sweep`                  | `sweep`                |
+| `--salt-hex`               | `saltHex`              |
+| `--salt`                   | `salt`                 |
+| `--owner`                  | `owner`                |
+| `--pot`                    | `pot`                  |
+| `--value`                  | `value`                |
+| `--account`                | `accounts`             |
+| `--intent-deadline`        | `intentDeadline`       |
+| `--intent-creator`         | `intentCreator`        |
+| `--intent-execution-fee`   | `intentExecutionFee`   |
+| `--intent-fund-via`        | `intentFundVia`        |
+| `--intent-reward-deadline` | `intentRewardDeadline` |
+| `--intent-prover`          | `intentProver`         |
+| `--no-prove`               | `prove: false`         |
+| `--max-execution-fee`      | `maxExecutionFee`      |
+| `--via`                    | `via`                  |
+| `--compact-args`           | `compactArgs`          |
+| `--chain`                  | `chain`                |
+| `--target`                 | `target`               |
+| `--rpc-url`                | `rpcUrl`               |
+| `--block`                  | `block`                |
+| `--from`, `--solver`       | `from`                 |
+| `--claimant`               | `claimant`             |
+| `--dry-run`                | `dryRun`               |
+| `--pin`                    | `pins`                 |
+| `--engine`                 | `engines`              |
+| `--min-out`                | `minOut`               |
+| `--spl-count`              | `splCount`             |
+| `--protocol`               | `protocol`             |
+| `--stocks`                 | `stocks`               |
+| `--search`                 | `search`               |
+| `--sqrt-price-x96`         | `sqrtPriceX96`         |
+| `--pool`                   | `pool`                 |
+| `--v4-key`                 | `v4Pools`              |
+
+Over stdio, `sauce_compile`, `sauce_simulate` and `sauce_tx` take `path` instead of `source`: a
+program file on the same machine, relative to the directory the server runs in, read with its
+relative imports beside it. A server over HTTP reads no file and refuses `path`. Each of the three
+returns `sourceSha256`, the sha256 of the program's text, which ties a rehearsal to the file it
+came from. `sauce_compile` with `omitBytecode` leaves the bytecode out; `sauce_simulate` with
+`scenarios` rehearses one program with several sets of `args` and `assumeBalance` at one
+block, and with `summary` returns only `ok` or the revert reason, what `main` returned, the balance
+changes, the transfers, each transaction's gas and the block.
+
 ### Supported and preview chains
 
 For the initial release the server builds transactions only on the chains the release supports:
-Ethereum, Base and Solana ([Supported chains](../README.md#supported-chains)). Every other chain is a
-preview chain. `sauce_chains` gives each chain's `support`, `"supported"` or `"preview"`.
+Ethereum, Base and Solana. Every other chain is a preview chain; [Chains](../reference/chains.md) has
+the policy and every chain. `sauce_chains` gives each chain's `support`, `"supported"` or
+`"preview"`.
 
 On a preview chain these work as they do everywhere: `sauce_compile`, `sauce_actions`' report,
 `sauce_simulate`, `sauce_globals`, `sauce_price`, `sauce_pools`, `sauce_inspect`, `sauce_verify`,
@@ -369,16 +428,15 @@ unknown field is refused, which is how a misspelt one is caught.
 
 The compiling tools take the program as text:
 
-| Input                                                   | Meaning                                                                                                                            |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `source`                                                | The program, the whole text of a `.sauce.ts` file (at most 256 KiB)                                                                |
-| `file`                                                  | Its name, for messages and relative imports (default `program.sauce.ts`)                                                           |
-| `modules`                                               | Files it imports by relative path, as path → text from the directory of `file`. Nothing is read from the server's disk             |
-| `chain`, `target`                                       | The chain, by slug, alias or id; or a `// @chain` header line in the program. `target: "svm"` alone is Solana                      |
-| `defines`                                               | Compile-time values by name: an integer in base units (decimal or `0x` hex), an address, `true` or `false`; a base58 key on Solana |
-| `compactArgs`                                           | Encode `main`'s arguments as compact-v1                                                                                            |
-| `intentDeadline`, `intentCreator`, `intentExecutionFee` | For intents the program opens: Unix seconds, a `0x` address, wei                                                                   |
-| `intentFundVia`                                         | How their reward reaches the vault: `transfer` (default: paid into it, then `publish`) or `publishAndFund`                         |
+| Input                                                   | Meaning                                                                                                                |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `source`                                                | The program, the whole text of a `.sauce.ts` file (at most 256 KiB)                                                    |
+| `file`                                                  | Its name, for messages and relative imports (default `program.sauce.ts`)                                               |
+| `modules`                                               | Files it imports by relative path, as path → text from the directory of `file`. Nothing is read from the server's disk |
+| `chain`, `target`                                       | The chain, by slug, alias or id; or a `// @chain` header line in the program. `target: "svm"` alone is Solana          |
+| `compactArgs`                                           | Encode `main`'s arguments as compact-v1                                                                                |
+| `intentDeadline`, `intentCreator`, `intentExecutionFee` | For intents the program opens: Unix seconds, a `0x` address, wei                                                       |
+| `intentFundVia`                                         | How their reward reaches the vault: `transfer` (default: paid into it, then `publish`) or `publishAndFund`             |
 
 `sauce_compile` also takes a cook's `args` and `accounts`, to size the payload and, on Solana, the
 cook's transaction (with `via`, the Kitchen's or the engine's direct one); and `rpcUrls`, each intent destination's endpoint by chain, to check that the
@@ -566,7 +624,7 @@ the [supported chains](#supported-and-preview-chains) too. Over HTTP there are n
 
 ## Skills, documents and prompts
 
-The [agent skills](cli.md#agent-skills) the package ships are the same files `sauce skills install`
+The [agent skills](skills.md) the package ships are the same files `sauce skills install`
 copies into a project. They are served two ways, because many clients call tools but never read
 resources:
 

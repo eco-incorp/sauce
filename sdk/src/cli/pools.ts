@@ -130,13 +130,20 @@ const TICKS = parseAbi([
   // Every fork's tick struct starts with these two, whatever follows.
   "function ticks(int24 tick) view returns (uint128 liquidityGross, int128 liquidityNet)",
 ]);
-/** A V3-style pool with no registry ABI (PancakeSwap V3's): its `slot0` differs from Uniswap's
- *  after the tick (a wider `feeProtocol`), so only the first two words are decoded. */
+/**
+ * Any V3-style pool, whatever its venue: for one with no registry ABI, and for a pool given by its
+ * address alone (`readPoolAt`). Every venue's `slot0` starts with the price and the tick and then
+ * differs — Uniswap V3's has seven words, PancakeSwap V3's widens `feeProtocol` to a uint32, and
+ * Aerodrome Slipstream's has six — so only those first two words are decoded.
+ */
 const V3_POOL = parseAbi([
   "function slot0() view returns (uint160 sqrtPriceX96, int24 tick)",
   "function liquidity() view returns (uint128)",
   "function fee() view returns (uint24)",
   "function tickSpacing() view returns (int24)",
+  "function token0() view returns (address)",
+  "function token1() view returns (address)",
+  "function factory() view returns (address)",
 ]);
 
 const call = (address: Address, abi: Abi, functionName: string, args?: readonly unknown[]) =>
@@ -417,6 +424,8 @@ export interface PoolsInput {
   readonly tokens: readonly [string, string];
   /** Hookless V4 keys to try beyond {@link STANDARD_V4_KEYS}. */
   readonly v4Keys?: readonly V4Key[];
+  /** The block `client` reads at (`connectAt`), which the report names. */
+  readonly block?: bigint;
 }
 
 /** What was asked of each venue: the tiers, spacings or keys a pool of the pair was looked for at. */
@@ -430,6 +439,118 @@ interface Checked {
 
 const value = <T>(result: ViewResult | undefined): T | undefined =>
   result?.ok === true ? (result.value as T) : undefined;
+
+/** A V3-style pool given by its address, read now: `sauce price --pool`. */
+export interface PoolAt {
+  readonly pool: Address;
+  readonly token0: Address;
+  readonly token1: Address;
+  readonly sqrtPriceX96: bigint;
+  readonly tick: number;
+  readonly liquidity: bigint;
+  /** In millionths: 500 is 0.05%. */
+  readonly fee: number;
+  readonly tickSpacing: number;
+  /** What its `factory()` answers, where it answers one. */
+  readonly factory?: Address;
+  /** The registry venue whose factory made it: that factory's lookup returns it. */
+  readonly venue?: { readonly name: string; readonly contract: string };
+  /** Why no venue is named, when none is. */
+  readonly unrecognized?: string;
+}
+
+/**
+ * The V3-style pool at `pool` on `chain`, in two requests: its price and tick (the first two words
+ * of `slot0`, which every venue shares), liquidity, fee, tick spacing, tokens and factory; then,
+ * where that factory is one of the registry's venues, its own lookup of the pool by tokens and fee
+ * (Slipstream: tick spacing), which names the venue only when it returns this pool.
+ */
+export async function readPoolAt(
+  client: PublicClient,
+  chain: CanonicalChain,
+  address: Address,
+): Promise<PoolAt> {
+  const pool = getAddress(address);
+  const reads = [
+    "slot0",
+    "liquidity",
+    "fee",
+    "tickSpacing",
+    "token0",
+    "token1",
+    "factory",
+  ] as const;
+  const answers = await readAll(
+    client,
+    "the pool",
+    reads.map((read) => call(pool, V3_POOL, read)),
+  );
+  const answer = Object.fromEntries(reads.map((read, index) => [read, answers[index]!])) as Record<
+    (typeof reads)[number],
+    ViewResult
+  >;
+  if (answers.every((each) => !each.ok)) {
+    throw new UsageError(
+      `${pool} answers none of a V3-style pool's reads on ${chain.slug} ` +
+        `(slot0(): ${(answer.slot0 as { error: string }).error}): is it a pool on ${chain.slug}? ` +
+        `sauce pools --chain ${chain.slug} <token> <token> lists a pair's pools`,
+    );
+  }
+  for (const read of ["slot0", "liquidity", "fee", "tickSpacing", "token0", "token1"] as const) {
+    const each = answer[read];
+    if (!each.ok) {
+      throw new UsageError(
+        `${pool} answers no ${read}() on ${chain.slug} (${each.error}): it is not a V3-style pool ` +
+          "(Uniswap V3, PancakeSwap V3, Aerodrome Slipstream). A Uniswap V4 pool has no address " +
+          `of its own: sauce pools --chain ${chain.slug} <token> <token> lists it by its id and key`,
+      );
+    }
+  }
+  const [sqrtPriceX96, tick] = value<readonly [bigint, number]>(answer.slot0)!;
+  const read = {
+    pool,
+    token0: getAddress(value<Address>(answer.token0)!),
+    token1: getAddress(value<Address>(answer.token1)!),
+    sqrtPriceX96,
+    tick: Number(tick),
+    liquidity: value<bigint>(answer.liquidity)!,
+    fee: Number(value<number>(answer.fee)),
+    tickSpacing: Number(value<number>(answer.tickSpacing)),
+  };
+  const made = value<Address>(answer.factory);
+  if (made === undefined) {
+    return { ...read, unrecognized: "it answers no factory(), so no venue is named" };
+  }
+  const factory = getAddress(made);
+  const venue = venuesOn(chain).find((each) => each.kind !== "v4" && each.address === factory);
+  if (venue === undefined) {
+    return {
+      ...read,
+      factory,
+      unrecognized:
+        `its factory, ${factory}, is none the registry records on ${chain.slug}, so a program ` +
+        "naming a venue's factory does not find it",
+    };
+  }
+  const [found] = await readAll(client, "the pool's factory", [
+    call(venue.address, venue.abi, "getPool", [
+      read.token0,
+      read.token1,
+      venue.kind === "slipstream" ? read.tickSpacing : read.fee,
+    ]),
+  ]);
+  const listed = value<Address>(found);
+
+  return listed !== undefined && getAddress(listed) === pool
+    ? { ...read, factory, venue: { name: venue.name, contract: venue.contract } }
+    : {
+        ...read,
+        factory,
+        unrecognized:
+          `it names ${venue.contract} as its factory, whose getPool does not return it: not a ` +
+          "pool that factory made",
+      };
+}
 
 /** `sauce pools`: the pair's pools on the chain, deepest first. */
 export async function poolsCommand(input: PoolsInput): Promise<CommandOutput> {
@@ -607,6 +728,7 @@ export async function poolsCommand(input: PoolsInput): Promise<CommandOutput> {
 
   return report({
     chain,
+    ...(input.block === undefined ? {} : { block: input.block }),
     a,
     b,
     token0,
@@ -714,6 +836,7 @@ const emptiness = (pool: Pool): string | undefined =>
 
 function report(found: {
   readonly chain: CanonicalChain;
+  readonly block?: bigint;
   readonly a: PriceToken;
   readonly b: PriceToken;
   readonly token0: PriceToken;
@@ -763,6 +886,7 @@ function report(found: {
   });
   const json = {
     chain: chain.slug,
+    ...(found.block === undefined ? {} : { block: found.block.toString() }),
     tokens: [tokenJson(a), tokenJson(b)],
     sortedBy: "liquidity",
     units: {
@@ -824,7 +948,9 @@ function report(found: {
       ? `${pool.venue.name} ${pool.pool}`
       : `${pool.venue.name} key ${pool.key.fee}:${pool.key.tickSpacing} (pool id ${pool.pool})`;
   const lines = [
-    `${a.symbol}/${b.symbol} on ${chain.slug}: ${live.length} pool${live.length === 1 ? "" : "s"} ` +
+    `${a.symbol}/${b.symbol} on ${chain.slug}` +
+      (found.block === undefined ? "" : ` at block ${found.block}`) +
+      `: ${live.length} pool${live.length === 1 ? "" : "s"} ` +
       `with liquidity, deepest first (by liquidity at the pool's price)`,
     tokenLine(token0),
     tokenLine(token1),

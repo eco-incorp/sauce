@@ -11,7 +11,7 @@ later level does not undo an earlier one.
 
 The examples use Ethereum and Base, two of the chains the release supports. The `sauce` command and
 the MCP server check the chains of the first level only, so keep every level on a supported chain
-([Supported chains](../README.md#supported-chains)).
+([Chains](../reference/chains.md)).
 
 ## Write the next intent inside the body
 

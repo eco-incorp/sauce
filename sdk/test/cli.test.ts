@@ -41,6 +41,7 @@ import {
   type TerminalChoice,
 } from "../src/cli/terminal.js";
 import { castSend } from "../src/cli/commands.js";
+import { PRICE_UNITS } from "../src/cli/price.js";
 import {
   awaitAccount,
   failureReason,
@@ -2292,7 +2293,7 @@ describe("waiting for a deployed Pot", () => {
 describe("sauce price", () => {
   const WETH_BASE = "0x4200000000000000000000000000000000000006";
 
-  it("prints the pool's sqrtPriceX96 for the chain's token order, and each direction's floor", async () => {
+  it("prints the pool's sqrtPriceX96 for the chain's token order, and each direction's limits", async () => {
     const out = json(await sauce("price", "--chain", "base", "WETH", "USDC", "2700", "--json"));
     // WETH is token0 on Base: the price is the SDK's conversion with WETH as the base.
     const sqrt = root.sqrtPriceX96FromPrice("2700", {
@@ -2315,22 +2316,30 @@ describe("sauce price", () => {
       token0: "WETH",
       token1: "USDC",
       sqrtPriceX96: sqrt.toString(),
-      // Selling WETH: 2700e6 USDC units per 1e18 WETH units, times 1e18.
+      units: PRICE_UNITS,
+      // Selling WETH: as the distributed swap's maxPrice, WETH units paid per USDC unit bought,
+      // 1e18 / 2700e6 times 1e18, rounded down; as minAvgPrice, 2700e6 USDC units per 1e18 WETH
+      // units, times 1e18.
       sell: {
         tokenIn: "WETH",
         tokenOut: "USDC",
         zeroForOne: true,
         sqrtPriceLimitX96: sqrt.toString(),
         limit: "floor",
+        maxPrice: (10n ** 36n / (2700n * 10n ** 6n)).toString(),
+        maxAvgPrice: (10n ** 36n / (2700n * 10n ** 6n)).toString(),
         minAvgPrice: "2700000000",
       },
-      // Buying WETH: 1e18 / 2700e6 WETH units per USDC unit, times 1e18, rounded up.
+      // Buying WETH: maxPrice is USDC units paid per WETH unit, times 1e18 — 2700 x 10^(18 + 6 -
+      // 18) — and minAvgPrice the other way round, WETH units per USDC unit, rounded up.
       buy: {
         tokenIn: "USDC",
         tokenOut: "WETH",
         zeroForOne: false,
         sqrtPriceLimitX96: sqrt.toString(),
         limit: "ceiling",
+        maxPrice: "2700000000",
+        maxAvgPrice: "2700000000",
         minAvgPrice: ((10n ** 36n + 2700n * 10n ** 6n - 1n) / (2700n * 10n ** 6n)).toString(),
       },
     });
@@ -2339,7 +2348,13 @@ describe("sauce price", () => {
       "2700 USDC per WETH on base: 1 WETH = 2700 USDC, 1 USDC = 0.00037037037037037 WETH",
     );
     expect(text.stdout).toContain(`sqrtPriceX96  ${sqrt}`);
-    expect(text.stdout).toMatch(/minAvgPrice +2700000000 +USDC units per WETH unit/);
+    // Each number says which way round it is, and which the distributed swap takes.
+    expect(text.stdout).toMatch(
+      /Buying WETH \(USDC in, WETH out\):\n.*\n {2}maxPrice +2700000000 +USDC units paid per WETH unit bought, times 1e18: the distributed swap's maxPrice\n {2}maxAvgPrice +2700000000 +the same, as its maxAvgPrice/,
+    );
+    expect(text.stdout).toMatch(
+      /minAvgPrice +2700000000 +the other way round, USDC units received per WETH unit, times 1e18: a floor for out \* 1e18 >= minAvgPrice \* spent, never a maxAvgPrice/,
+    );
     // Said in words, the same price: `2700 USDC per WETH`.
     const worded = await sauce("price", "--chain", "base", "2700", "USDC", "per", "WETH");
     expect(worded.stdout).toBe(text.stdout);
@@ -2521,6 +2536,15 @@ describe("sauce price", () => {
       [["--chain", "base", "WETH", "USDC:18", "1"], /USDC has 6 decimals, not 18/],
       [["--chain", "base", "WETH", "WETH", "1"], /WETH is both/],
       [["--chain", "base", "WETH", "USDC", "--sqrt-price-x96", "5"], /outside the range/],
+      [
+        ["--chain", "base", "WETH", "USDC", "1", "--pool", `0x${"12".repeat(20)}`],
+        /give <price>, --sqrt-price-x96 or --pool: one of them/,
+      ],
+      [["--chain", "base", "WETH", "USDC", "--pool", "0x12"], /--pool: '0x12' is not/],
+      [
+        ["--chain", "base", "WETH", "USDC", "--pool", `0x${"12".repeat(20)}`],
+        /missing --rpc-url <url> \(or --config <file>\)/,
+      ],
     ];
     for (const [argv, message] of cases) {
       const run = await sauce("price", ...argv);

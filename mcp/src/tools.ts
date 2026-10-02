@@ -13,13 +13,15 @@
  * reached, and the refusal comes back as the result's `refused` (`refusedResult`) — the supported
  * chains, and how to ask for that one — which the calling agent can act on.
  */
+import { createHash } from "node:crypto";
+
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
-import { formatUnits, parseAbi, type Address, type Hex } from "viem";
+import { formatUnits, type Address, type Hex } from "viem";
 import * as z from "zod";
 
 import type { Endpoints } from "./config.js";
-import { callFiles, DEFAULT_FILE } from "./files.js";
+import { callFiles, DEFAULT_FILE, diskProgram } from "./files.js";
 import type { RpcGuard } from "./guard.js";
 import { callReach, type Reach } from "./reach.js";
 import { toolTerms } from "./terms.js";
@@ -35,6 +37,7 @@ import {
   compileProgram,
   connect,
   bindMainArguments,
+  connectAt,
   definesReach,
   fillTargets,
   fundingFor,
@@ -70,6 +73,7 @@ import {
   programChains,
   withoutShebang,
   publishCommand,
+  readPoolAt,
   registeredBalances,
   requireSupported,
   resolvePriceTokens,
@@ -137,6 +141,13 @@ const RPC_URL = z
       "it, so pass only a key you would share with them, or run the server yourself. A server " +
       "served over HTTP reaches only public https endpoints.",
   );
+
+/** A block to read at: a number (a JSON number, or decimal or 0x-hex text) or a tag. */
+const BLOCK = z.union([z.string().min(1).max(80), z.number().int().nonnegative()]).optional();
+
+/** A `block` input as the `--block` text the commands parse. */
+const blockText = (block: string | number | undefined): string | undefined =>
+  block === undefined ? undefined : integerText(block, "block");
 
 export const PROGRAM = {
   source: z
@@ -229,6 +240,32 @@ export const PROGRAM = {
         "a solver's quote).",
     ),
 };
+
+/** `path`, beside an optional `source`: on a server over stdio, whose caller is its own user. */
+const PATH = z
+  .string()
+  .min(1)
+  .max(1024)
+  .describe(
+    "Instead of source: the program's file on this machine, relative to the directory the " +
+      "server runs in (or absolute), read when the call runs, with its relative imports read " +
+      "beside it — as `sauce compile <file>` reads it. sourceSha256 in the result is that " +
+      "file's sha256, to tie what was compiled or rehearsed to the file. Only a server over " +
+      "stdio reads files; give source, or path, not both.",
+  );
+
+/** A compiling tool's program inputs: `source`, and over stdio `path` instead. Typed as both, with
+ *  `source` optional, either way: over HTTP the schema holds `source` required and no `path`. */
+function sourceInputs(local: boolean): {
+  readonly source: z.ZodOptional<typeof PROGRAM.source>;
+  readonly path: z.ZodOptional<typeof PATH>;
+} {
+  return (
+    local
+      ? { source: PROGRAM.source.optional(), path: PATH.optional() }
+      : { source: PROGRAM.source }
+  ) as { source: z.ZodOptional<typeof PROGRAM.source>; path: z.ZodOptional<typeof PATH> };
+}
 
 const POT = {
   owner: z
@@ -338,6 +375,53 @@ const TOKEN_AMOUNTS = z
       "ETH:<amount> is the chain's native currency.",
   );
 
+/** How many rehearsals one `sauce_simulate` call may hold. */
+export const MAX_SCENARIOS = 16;
+
+/** One of `sauce_simulate`'s scenarios: the call's program with other arguments, defines and
+ *  balances. */
+const SCENARIO = z.strictObject({
+  args: ARGS,
+  defines: PROGRAM.defines.describe(
+    "Defines for this scenario, laid over the call's own (a define compiles into the program).",
+  ),
+  assumeBalance: TOKEN_AMOUNTS.describe(
+    "EVM only: the Pot's balances for this scenario, instead of the call's assumeBalance.",
+  ),
+});
+type Scenario = z.infer<typeof SCENARIO>;
+
+/** What a summary of a rehearsal keeps: whether it worked or why not, what main returned, what
+ *  moved, each transaction's gas, and the block. */
+const SUMMARY_FIELDS = [
+  "ok",
+  "chain",
+  "block",
+  "stage",
+  "reason",
+  "returnType",
+  "returned",
+  "gas",
+  "gasKind",
+  "transactions",
+  "computeUnits",
+  "fee",
+  "transfers",
+  "nativeTransfers",
+  "balanceChanges",
+  "tokenChanges",
+  "lamportChanges",
+] as const;
+
+/** A rehearsal's result as `summary` returns it: {@link SUMMARY_FIELDS}, and the raw return data
+ *  only where main declares no type to decode it as. */
+export function simulateSummary(json: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries([
+    ...SUMMARY_FIELDS.filter((field) => field in json).map((field) => [field, json[field]]),
+    ...("returns" in json && !("returnType" in json) ? [["returns", json.returns]] : []),
+  ]);
+}
+
 // ---------------------------------------------------------------------------------------------
 // Reading a call's arguments into the commands' inputs
 // ---------------------------------------------------------------------------------------------
@@ -412,6 +496,12 @@ function intentsOf(
 export function programOf(given: ProgramArgs, fallback?: CanonicalChain): Program {
   // A `#!` line, as a program file may start with, is blanked as the command blanks it.
   const args = { ...given, source: withoutShebang(given.source) };
+
+  return programWith(args, carried(args), fallback);
+}
+
+/** The program and the modules a call carries, served as the commands read files. */
+function carried(args: ProgramArgs): { readonly file: string; readonly files: CliFiles } {
   const moduleText = Object.values(args.modules ?? {});
   if (moduleText.length > LIMITS.modules) {
     throw new UsageError(`modules: at most ${LIMITS.modules} files`);
@@ -419,10 +509,79 @@ export function programOf(given: ProgramArgs, fallback?: CanonicalChain): Progra
   if (moduleText.reduce((sum, text) => sum + text.length, 0) > LIMITS.modulesTotal) {
     throw new UsageError(`modules: at most ${LIMITS.modulesTotal} characters in all`);
   }
+
+  return callFiles(args.file, args.source, args.modules);
+}
+
+/** The sha256 of a program's text as given or read, in hex: what `sha256sum <file>` prints. */
+export const sourceSha256 = (text: string): string =>
+  createHash("sha256").update(text, "utf8").digest("hex");
+
+/** A program as {@link programFrom} reads it: its text's sha256, and the same program compiled
+ *  with other defines, from the same text (a scenario's). */
+export interface ProgramFrom extends Program {
+  readonly sourceSha256: string;
+  withDefines(defines: ProgramArgs["defines"]): Program;
+}
+
+/** A program by `source`, or on a server over stdio (`local`) by `path`, read once. */
+export function programFrom(
+  given: Omit<ProgramArgs, "source"> & {
+    readonly source?: string | undefined;
+    readonly path?: string | undefined;
+  },
+  local: boolean,
+  fallback?: CanonicalChain,
+): ProgramFrom {
+  const { path, source, ...rest } = given;
+  let text: string;
+  let args: ProgramArgs;
+  let location: { readonly file: string; readonly files: CliFiles };
+  if (path === undefined) {
+    if (source === undefined) {
+      throw new UsageError(
+        local
+          ? "missing source: the program's text, or path: its file"
+          : "missing source: the program's text",
+      );
+    }
+    text = source;
+    args = { ...rest, source: withoutShebang(source) };
+    location = carried(args);
+  } else {
+    if (!local) {
+      throw new UsageError(
+        "path names a file on the server's disk, which a server over HTTP never reads: give " +
+          "the program's text as source",
+      );
+    }
+    if (source !== undefined) throw new UsageError("give source or path, not both");
+    if (rest.file !== undefined || rest.modules !== undefined) {
+      throw new UsageError(
+        "with path the program is that file and its imports are read beside it: give neither " +
+          "file nor modules",
+      );
+    }
+    const read = diskProgram(path, LIMITS.source);
+    text = read.text;
+    args = { ...rest, source: withoutShebang(read.text) };
+    location = { file: read.file, files: read.files };
+  }
+  const withDefines = (defines: ProgramArgs["defines"]): Program =>
+    programWith({ ...args, defines }, location, fallback);
+
+  return { ...withDefines(args.defines), sourceSha256: sourceSha256(text), withDefines };
+}
+
+/** A program's inputs read into the commands' `ProgramInput`, its files given. */
+function programWith(
+  args: ProgramArgs,
+  { file, files }: { readonly file: string; readonly files: CliFiles },
+  fallback: CanonicalChain | undefined,
+): Program {
   if (Object.keys(args.defines ?? {}).length > LIMITS.entries) {
     throw new UsageError(`defines: at most ${LIMITS.entries}`);
   }
-  const { file, files } = callFiles(args.file, args.source, args.modules);
   const chain = programChain(
     {
       ...(args.chain === undefined ? {} : { chain: String(args.chain) }),
@@ -585,45 +744,6 @@ async function compiled(program: {
   readonly files: CliFiles;
 }): Promise<ToolOutput> {
   return fromCommand(await compileCommand(program.input, program.files));
-}
-
-const POOL = parseAbi([
-  "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)",
-  "function liquidity() view returns (uint128)",
-  "function fee() view returns (uint24)",
-  "function token0() view returns (address)",
-  "function token1() view returns (address)",
-]);
-
-/** A Uniswap V3-style pool's price, liquidity, fee and tokens, read now. */
-async function readPool(client: Awaited<ReturnType<typeof connect>>, pool: Address) {
-  const read = async <T>(what: string, call: () => Promise<T>): Promise<T> => {
-    try {
-      return await call();
-    } catch (error) {
-      const why = ((error as { shortMessage?: string }).shortMessage ?? String(error)).split(
-        "\n",
-      )[0];
-      throw new UsageError(
-        `reading the pool's ${what} failed (${why}): is ${pool} a V3-style pool on this chain?`,
-      );
-    }
-  };
-  const [slot0, liquidity, fee, token0, token1] = await Promise.all([
-    read("slot0()", () => client.readContract({ address: pool, abi: POOL, functionName: "slot0" })),
-    read("liquidity()", () =>
-      client.readContract({ address: pool, abi: POOL, functionName: "liquidity" }),
-    ),
-    read("fee()", () => client.readContract({ address: pool, abi: POOL, functionName: "fee" })),
-    read("token0()", () =>
-      client.readContract({ address: pool, abi: POOL, functionName: "token0" }),
-    ),
-    read("token1()", () =>
-      client.readContract({ address: pool, abi: POOL, functionName: "token1" }),
-    ),
-  ]);
-
-  return { sqrtPriceX96: slot0[0], tick: slot0[1], liquidity, fee, token0, token1 };
 }
 
 /** The decimal `price` times `numerator / denominator`, to 24 decimal places. */
@@ -838,6 +958,9 @@ export const WALLET_UNSIGNED =
 export interface ToolContext {
   readonly endpoints: Endpoints;
   readonly guard?: RpcGuard;
+  /** Over stdio: the caller is the server's own user, so a program may be named by `path` and
+   *  read from disk. Never over HTTP. */
+  readonly local?: boolean;
   /** Over stdio with `--wallets`: the wallets the server signs with. Never over HTTP. */
   readonly wallets?: WalletContext;
 }
@@ -966,6 +1089,7 @@ function withSendNote(output: ToolOutput): ToolOutput {
 
 export function registerTools(server: McpServer, context: ToolContext): void {
   const { endpoints } = context;
+  const local = context.local === true;
   const tool = toolRegistrar(server, context);
 
   tool(
@@ -1129,14 +1253,19 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       description:
         "The numbers a swap program takes, for a pair on an EVM chain: the pool's sqrtPriceX96 " +
         "for the pair's order (token0 is the lower address) — which is also a swap's " +
-        "sqrtPriceLimitX96 — and, for selling and for buying the base token, the minAvgPrice a " +
-        "program checks a fill against (out * 1e18 >= minAvgPrice * spent). Give the price one " +
-        "of three ways: `price` (a decimal), `sqrtPriceX96` (to read it back), or `pool` with an " +
-        "endpoint, which reads a Uniswap V3-style pool's slot0, liquidity and fee now. With " +
+        "sqrtPriceLimitX96 — and, for selling (`sell`) and for buying (`buy`) the base token: " +
+        "`maxPrice` and `maxAvgPrice`, input paid per output bought in base units times 1e18 " +
+        "(the price times 10^(18 + tokenIn decimals - tokenOut decimals)), which are the " +
+        "distributed swap's maxPrice and maxAvgPrice — `buy` for buying the base token with the " +
+        "quote token; and `minAvgPrice`, the other way round (output received per input, a " +
+        "floor for out * 1e18 >= minAvgPrice * spent), never to be passed as a maxAvgPrice. " +
+        "`units` says each. Give the price one of three ways: `price` (a decimal), " +
+        "`sqrtPriceX96` (to read it back), or `pool` with an endpoint, which reads that V3-style " +
+        "pool (Uniswap V3, PancakeSwap V3, Aerodrome Slipstream) now and names its venue. With " +
         "slippageBps, `limits` gives each direction's sqrtPriceLimitX96 that far from the price, " +
-        "and a minAvgPrice that also pays the pool's fee (feePpm, or the pool's own). Uniswap V3 " +
-        "and V4 and their forks share the arithmetic. Use it to set a swap's limits, then pass " +
-        "them as defines or arguments.",
+        "and a maxPrice, maxAvgPrice and minAvgPrice that also pay the pool's fee (feePpm, or " +
+        "the pool's own). Uniswap V3 and V4 and their forks share the arithmetic. Use it to set " +
+        "a swap's limits, then pass them as defines or arguments.",
       input: {
         chain: chainRef,
         base: z
@@ -1171,9 +1300,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           .max(64)
           .optional()
           .describe(
-            "A Uniswap V3-style pool of the pair (0x address), read now through an endpoint: its " +
-              "slot0 price, liquidity and fee. (A V4 pool has no address; read it with its " +
-              "StateView in sauce_simulate.)",
+            "A V3-style pool of the pair (0x address: Uniswap V3, PancakeSwap V3 or Aerodrome " +
+              "Slipstream, as sauce_pools lists them), read now through an endpoint: its price, " +
+              "tick, liquidity, fee and tick spacing, and its venue when the registry's factory " +
+              "made it. (A V4 pool has no address; sauce_pools reads it by its key.)",
           ),
         slippageBps: z
           .number()
@@ -1219,37 +1349,22 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       const client = rpcUrl === undefined ? undefined : await connect(rpcUrl, chain);
       const tokens = await resolvePriceTokens([args.base, args.quote], chain, client);
       const [base, quote] = [tokens[0]!, tokens[1]!];
-      let pool: Record<string, unknown> | undefined;
-      let sqrtPriceX96 = args.sqrtPriceX96;
-      let feePpm = args.feePpm;
-      if (args.pool !== undefined) {
-        const address = parseAddress("pool", args.pool);
-        if (client === undefined) await reach.require(chain, args.rpcUrl, "Reading a pool");
-        const read = await readPool(client!, address);
-        const pair = [base.address, quote.address].map((token) => token.toLowerCase()).sort();
-        if (read.token0.toLowerCase() !== pair[0] || read.token1.toLowerCase() !== pair[1]) {
-          throw new UsageError(
-            `the pool trades ${read.token0} and ${read.token1}, not ${base.symbol} and ${quote.symbol}`,
-          );
-        }
-        sqrtPriceX96 = read.sqrtPriceX96.toString();
-        feePpm ??= read.fee;
-        pool = {
-          address,
-          sqrtPriceX96: read.sqrtPriceX96.toString(),
-          tick: read.tick,
-          liquidity: read.liquidity.toString(),
-          feePpm: read.fee,
-          readFrom: chain.slug,
-        };
+      // The pool, read now through the command's own reader: `sauce price --pool`.
+      if (args.pool !== undefined && client === undefined) {
+        await reach.require(chain, args.rpcUrl, "Reading a pool");
       }
+      const pool =
+        args.pool === undefined
+          ? undefined
+          : await readPoolAt(client!, chain, parseAddress("pool", args.pool));
+      const feePpm = args.feePpm ?? pool?.fee;
       const at = (price: { decimal: string } | { sqrtPriceX96: bigint }) =>
         priceCommand({ chain, base, quote, price });
-      const now = at(priceGiven(args.price, sqrtPriceX96));
-      const json: Record<string, unknown> = {
-        ...now.json,
-        ...(pool === undefined ? {} : { pool }),
-      };
+      const now =
+        pool === undefined
+          ? at(priceGiven(args.price, args.sqrtPriceX96))
+          : priceCommand({ chain, base, quote, price: { sqrtPriceX96: pool.sqrtPriceX96 }, pool });
+      const json: Record<string, unknown> = { ...now.json };
       if (args.slippageBps !== undefined) {
         const price = now.json.price as string;
         const bps = BigInt(args.slippageBps);
@@ -1265,17 +1380,23 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         const buyFloor = at({
           decimal: scaled(price, (10_000n + bps) * 1_000_000n, 10_000n * (1_000_000n - fee)),
         });
+        // maxPrice is fee-inclusive, as the distributed swap's: the floor's price, read as input
+        // paid per output.
         json.limits = {
           slippageBps: args.slippageBps,
           feePpm: feePpm ?? 0,
           sell: {
             price: sellLimit.json.price,
             sqrtPriceLimitX96: side(sellLimit, "sell").sqrtPriceLimitX96,
+            maxPrice: side(sellFloor, "sell").maxPrice,
+            maxAvgPrice: side(sellFloor, "sell").maxAvgPrice,
             minAvgPrice: side(sellFloor, "sell").minAvgPrice,
           },
           buy: {
             price: buyLimit.json.price,
             sqrtPriceLimitX96: side(buyLimit, "buy").sqrtPriceLimitX96,
+            maxPrice: side(buyFloor, "buy").maxPrice,
+            maxAvgPrice: side(buyFloor, "buy").maxAvgPrice,
             minAvgPrice: side(buyFloor, "buy").minAvgPrice,
           },
         };
@@ -1304,7 +1425,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "`maxPrice` (the taker price as the distributed swap's maxPrice argument: pay base " +
         "units per buy base unit times 1e18) and `depth1Pct` (pay tokens, fee included, that " +
         "move the price 1% against the taker, through its ticks). `empty` lists the pools with " +
-        "no liquidity at their price, which a swap skips; `checked`, what was looked at.",
+        "no liquidity at their price, which a swap skips; `checked`, what was looked at. Every " +
+        "read is at one block, `block` (the latest, or the one given): pass it to " +
+        "sauce_simulate's block to rehearse on the prices a maxPrice was taken from.",
       input: {
         chain: chainRef,
         tokenA: z
@@ -1325,10 +1448,14 @@ export function registerTools(server: McpServer, context: ToolContext): void {
             "More hookless Uniswap V4 pools to try, each by its key's <fee>:<tickSpacing>, the " +
               "fee in millionths: 50:1.",
           ),
+        block: BLOCK.describe(
+          "The block to read the pools at: a number, or latest, safe, finalized (default: latest).",
+        ),
         rpcUrl: RPC_URL,
       },
       output: {
         chain: z.string(),
+        block: z.string(),
         tokens: z.array(
           z.looseObject({ symbol: z.string(), address: z.string(), decimals: z.number() }),
         ),
@@ -1366,14 +1493,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       }
       const v4Keys = (args.v4Pools ?? []).map((raw) => parseV4Key(raw, "v4Pools"));
       const rpcUrl = await reach.require(chain, args.rpcUrl, "Listing a pair's pools");
+      const { client, block } = await connectAt(rpcUrl, chain, blockText(args.block));
 
       return fromCommand(
-        await poolsCommand({
-          chain,
-          client: await connect(rpcUrl, chain),
-          tokens: [args.tokenA, args.tokenB],
-          v4Keys,
-        }),
+        await poolsCommand({ chain, client, tokens: [args.tokenA, args.tokenB], v4Keys, block }),
       );
     },
   );
@@ -1398,9 +1521,18 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "intents, the result is the program the source chain runs; sauce_inspect with the " +
         "source alone lists each intent's destination, route and reward. Reads no chain unless " +
         "rpcUrls is given: then each intent's destination is checked for the Pot its cook " +
-        "needs (`intentPots`).",
+        "needs (`intentPots`). `sourceSha256` is the sha256 of the program's text. To check " +
+        "only that a program compiles, omitBytecode leaves the bytecode out.",
       input: {
         ...PROGRAM,
+        ...sourceInputs(local),
+        omitBytecode: z
+          .boolean()
+          .optional()
+          .describe(
+            "Leave the bytecode (the hex) out of the result, keeping its size: to check that a " +
+              "program compiles, and what it takes, without the bytes.",
+          ),
         args: COOK.args,
         accounts: COOK.accounts,
         via: COOK.via.describe(
@@ -1417,8 +1549,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         chain: z.string(),
         chainId: z.number(),
         target: z.enum(["evm", "svm"]),
-        bytecode: z.string(),
+        bytecode: z.string().optional(),
         size: z.number(),
+        sourceSha256: z.string(),
         entryEncoding: z.string(),
         entryParams: z.array(z.looseObject({ name: z.string(), type: z.string() })),
         entrySchema: z.string().nullable(),
@@ -1428,7 +1561,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
-      const program = programOf(args);
+      const program = programFrom(args, local);
       if (args.accounts !== undefined && program.input.chain.kind !== "svm") {
         throw new UsageError(
           `accounts names a Solana program's accounts; a program on ${program.input.chain.slug} takes none`,
@@ -1441,8 +1574,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         );
       }
       const byChain = await endpointsByChain(args.rpcUrls, reach);
-
-      return compiled({
+      const output = await compiled({
         input: {
           ...program.input,
           ...argsOf(args),
@@ -1460,6 +1592,15 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         },
         files: program.files,
       });
+      const { bytecode: _bytecode, ...lean } = output.json;
+
+      return {
+        ...output,
+        json: {
+          ...(args.omitBytecode === true ? lean : output.json),
+          sourceSha256: program.sourceSha256,
+        },
+      };
     },
   );
 
@@ -1565,26 +1706,33 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "feePayer, pot, fee, maxExecutionFee, transaction }: the Kitchen cook (or, via engine, " +
         "the engine's own paid cook, with no Pot) as a base64 transaction for the owner to sign, " +
         "which needs an endpoint (its blockhash and the fee). `notes` say what must be true for " +
-        `it to land: a deployed, funded Pot (sauce_pot deploys it). ${UNSIGNED} ${SUPPORTED_ONLY}`,
-      input: { ...PROGRAM, ...COOK },
+        `it to land: a deployed, funded Pot (sauce_pot deploys it). \`sourceSha256\` is the ` +
+        `sha256 of the program's text. ${UNSIGNED} ${SUPPORTED_ONLY}`,
+      input: { ...PROGRAM, ...sourceInputs(local), ...COOK },
       output: refusable({
         chainId: z.number(),
         to: z.string(),
         data: z.string(),
         value: z.string(),
         transaction: z.string(),
+        sourceSha256: z.string(),
       }),
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
-      const program = programOf(args);
+      const program = programFrom(args, local);
       // Before any endpoint: the chain, and every chain an intent the program opens goes to.
       requireSupported(
         "building the cook transaction",
         programChains(program.input, program.files),
       );
       const output = await cookTransaction(args, program, reach);
-      if (program.input.chain.kind === "svm") return fromCommand(output);
+      if (program.input.chain.kind === "svm") {
+        return {
+          json: { ...output.json, sourceSha256: program.sourceSha256 },
+          notes: output.notes,
+        };
+      }
       const chain = program.input.chain;
       const rpcUrl = await reach.endpoint(chain, args.rpcUrl);
       const client = rpcUrl === undefined ? undefined : await connect(rpcUrl, chain);
@@ -1599,6 +1747,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       return {
         json: {
           ...output.json,
+          sourceSha256: program.sourceSha256,
           from: owner ?? null,
           kitchenFee:
             fee === undefined
@@ -1728,16 +1877,24 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "Rehearses the cook from the Pot's owner on the chain as it is now, to see what it would " +
         "do before building the transaction with sauce_tx. Needs an endpoint (rpcUrl, or the " +
         "server's). EVM: through eth_simulateV1 (else eth_call with state overrides; `path` " +
-        "says which), on a Pot that need not be deployed yet — the rehearsal deploys it first. " +
+        "says which), on a Pot that need not be deployed yet — the rehearsal deploys it first, " +
+        "and `transactions` gives each transaction's gas (Kitchen.deployPot, then the cook). " +
         "Returns ok, gas, what main returns, the ERC-20 transfers and approvals, native " +
         "transfers and each address's net balance change; or the `stage` and decoded `reason` " +
         "it reverts — a revert is a result (ok: false), not an error. assumeBalance gives the " +
         "Pot balances for the rehearsal only; fund rehearses pulling tokens from the owner into " +
-        "the Pot in the cook, the Pot credited what they would bring. Solana: the Kitchen cook " +
-        "simulated from the owner (a missing Pot created first), or via engine the engine's own " +
-        "paid cook with no Pot: compute units, the fee, or the reason and the program logs. Nothing is signed or sent.",
+        "the Pot in the cook, the Pot credited what they would bring. block pins the chain's " +
+        "state (sauce_pools' block, to rehearse on the prices a limit was taken from). " +
+        "`scenarios` rehearses one program several times — each its own args, defines and " +
+        "balances, all at one block — with one result each. summary returns only what decides " +
+        "a trade: ok or the reason, what main returns, balance changes, transfers, each " +
+        "transaction's gas and the block. Solana: the Kitchen cook simulated from the owner (a " +
+        "missing Pot created first), or via engine the engine's own paid cook with no Pot: " +
+        "compute units, the fee, or the reason and the program logs. `sourceSha256` is the " +
+        "sha256 of the program's text. Nothing is signed or sent.",
       input: {
         ...PROGRAM,
+        ...sourceInputs(local),
         ...COOK,
         assumeBalance: TOKEN_AMOUNTS.describe(
           "EVM only: balances the Pot holds for this rehearsal only, by state override. Each " +
@@ -1757,45 +1914,141 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           .boolean()
           .optional()
           .describe("With fund: return what is left of each funded token to the owner afterwards."),
+        block: BLOCK.describe(
+          "EVM only: the block to rehearse on, a number, or latest, safe, finalized (default: " +
+            "latest).",
+        ),
+        scenarios: z
+          .array(SCENARIO)
+          .min(1)
+          .max(MAX_SCENARIOS)
+          .optional()
+          .describe(
+            `Up to ${MAX_SCENARIOS} rehearsals of the same program, in order, all at one block ` +
+              "(block, or the latest when the call starts). Each scenario's args and " +
+              "assumeBalance replace the call's own; its defines are laid over the call's. " +
+              "The result is { ok: every scenario ok, block, scenarios: [one result each, or " +
+              "its error] }.",
+          ),
+        summary: z
+          .boolean()
+          .optional()
+          .describe(
+            "Return only ok or the revert reason, what main returns (decoded), balance changes, " +
+              "transfers, each transaction's gas and the block: none of the state overrides, " +
+              "approvals or other logs.",
+          ),
       },
-      output: { ok: z.boolean() },
+      output: {
+        ok: z.boolean(),
+        sourceSha256: z.string(),
+        scenarios: z.array(z.looseObject({ ok: z.boolean() })).optional(),
+      },
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
-      const program = programOf(args);
+      const program = programFrom(args, local);
       const chain = program.input.chain;
       const rpcUrl = await reach.require(chain, args.rpcUrl, "Simulating");
-      const funding = {
-        chain,
-        rpcUrl,
-        fund: args.fund ?? [],
-        ...(args.fundMode === undefined ? {} : { mode: args.fundMode }),
-        sweep: args.sweep === true,
-        // A rehearsal: nothing sent, no key, so the pulls are credited rather than signed.
-        send: false,
-        approver: NO_APPROVER,
-      };
-      if (chain.kind === "svm") {
-        if ((args.assumeBalance ?? []).length > 0) {
-          throw new UsageError(
-            "assumeBalance is for EVM chains: a Solana endpoint's simulateTransaction takes no " +
-              "account overrides, so on solana the rehearsal runs on the accounts as they are",
+      if (args.block !== undefined && chain.kind === "svm") {
+        throw new UsageError(
+          "block is for EVM chains: a Solana endpoint simulates on the cluster as it is",
+        );
+      }
+      // One rehearsal, its scenario's args, defines and balances over the call's own.
+      const rehearse = async (each: Scenario, block: string | undefined): Promise<ToolOutput> => {
+        const scenario = {
+          ...args,
+          ...(each.args === undefined ? {} : { args: each.args }),
+          ...(each.assumeBalance === undefined ? {} : { assumeBalance: each.assumeBalance }),
+        };
+        const built =
+          each.defines === undefined
+            ? program
+            : program.withDefines({ ...(args.defines ?? {}), ...each.defines });
+        const funding = {
+          chain,
+          rpcUrl,
+          fund: scenario.fund ?? [],
+          ...(scenario.fundMode === undefined ? {} : { mode: scenario.fundMode }),
+          sweep: scenario.sweep === true,
+          // A rehearsal: nothing sent, no key, so the pulls are credited rather than signed.
+          send: false,
+          approver: NO_APPROVER,
+        };
+        if (chain.kind === "svm") {
+          if ((scenario.assumeBalance ?? []).length > 0) {
+            throw new UsageError(
+              "assumeBalance is for EVM chains: a Solana endpoint's simulateTransaction takes " +
+                "no account overrides, so on solana the rehearsal runs on the accounts as they are",
+            );
+          }
+          fundingFor(funding);
+
+          return fromCommand(
+            await svmSimulateCommand(svmCook(scenario, built, rpcUrl), built.files),
           );
         }
-        fundingFor(funding);
+        const cook = evmCook(scenario, built);
+        const assume = assumedBalances(scenario.assumeBalance ?? [], chain);
+        const fund = fundingFor(funding);
 
-        return fromCommand(await svmSimulateCommand(svmCook(args, program, rpcUrl), program.files));
+        return fromCommand(
+          await simulateCommand(
+            {
+              ...cook,
+              rpcUrl,
+              assume,
+              ...(fund === undefined ? {} : { fund }),
+              ...(block === undefined ? {} : { block }),
+            },
+            built.files,
+          ),
+        );
+      };
+      const shaped = (json: Record<string, unknown>) =>
+        args.summary === true ? simulateSummary(json) : json;
+      if (args.scenarios === undefined) {
+        const output = await rehearse({}, blockText(args.block));
+
+        return {
+          json: { ...shaped(output.json), sourceSha256: program.sourceSha256 },
+          notes: output.notes,
+        };
       }
-      const cook = evmCook(args, program);
-      const assume = assumedBalances(args.assumeBalance ?? [], chain);
-      const fund = fundingFor(funding);
+      // Every scenario on one block: the one given, or the latest now, read once.
+      const block =
+        chain.kind === "svm"
+          ? undefined
+          : (await connectAt(rpcUrl, chain, blockText(args.block))).block.toString();
+      const results: Array<Record<string, unknown>> = [];
+      for (const [index, each] of args.scenarios.entries()) {
+        try {
+          const output = await rehearse(each, block);
+          const notes = output.notes ?? [];
+          results.push({
+            index,
+            ...shaped(output.json),
+            ...(notes.length === 0 ? {} : { notes }),
+          });
+        } catch (error) {
+          // One scenario's mistake is its own result; the others still run.
+          results.push({
+            index,
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
 
-      return fromCommand(
-        await simulateCommand(
-          { ...cook, rpcUrl, assume, ...(fund === undefined ? {} : { fund }) },
-          program.files,
-        ),
-      );
+      return {
+        json: {
+          ok: results.every((each) => each.ok === true),
+          sourceSha256: program.sourceSha256,
+          ...(block === undefined ? {} : { block }),
+          scenarios: results,
+        },
+      };
     },
   );
 

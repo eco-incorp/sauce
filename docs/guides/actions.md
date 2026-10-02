@@ -477,7 +477,7 @@ The venues the library does not cover, each through its own contract:
 
 Arc (`chainId` 5042) pays gas in USDC, which is also the ERC-20 at
 `0x3600000000000000000000000000000000000000`: one balance, 18 decimals natively and 6 through the
-ERC-20 ([details](../api/coverage.md#arc-usdc-is-the-native-coin)). A program compiled for Arc is
+ERC-20 ([details](../reference/chains/arc.md#notes)). A program compiled for Arc is
 checked for what that changes — a document with no `chainId` too, when Arc is the chain it is
 compiled for:
 

@@ -13,6 +13,90 @@ const SWITCHES = "tokens|protocols|stocks|deploy|dry-run|json|compact-args|yes|f
 const FLAGS_AFTER = String.raw`(?:\s+(?:--(?:${SWITCHES})\b(?!-)|--?[\w-]+(?:[ =](?!-)[^\s\x60),;]+)?))*`;
 const command = (head: string): RegExp => new RegExp(`\`?${head}${FLAGS_AFTER}\`?`, "g");
 
+/** A `sauce` flag (or flags) and the tool input of the same meaning. */
+export interface FlagInput {
+  /** Without their `--`; the first is the one a person writes. */
+  readonly flags: readonly string[];
+  readonly input: string;
+  /** A low-level flag (`--define`): rewritten in messages, never listed for an agent to use. */
+  readonly lowLevel?: true;
+}
+
+/**
+ * Every flag of the `sauce` command a tool takes as an input, and that input: the table the
+ * server's instructions and the MCP guide print, and what the rewrites below turn a message's
+ * flags into. A flag another flag starts with comes after it (`--salt-hex`, then `--salt`): each
+ * is rewritten in this order.
+ */
+export const FLAG_INPUTS: readonly FlagInput[] = [
+  { flags: ["args", "args-json"], input: "args" },
+  { flags: ["assume-balance"], input: "assumeBalance" },
+  { flags: ["fund-mode"], input: "fundMode" },
+  { flags: ["fund"], input: "fund" },
+  { flags: ["sweep"], input: "sweep" },
+  { flags: ["salt-hex"], input: "saltHex" },
+  { flags: ["salt"], input: "salt" },
+  { flags: ["owner"], input: "owner" },
+  { flags: ["pot"], input: "pot" },
+  { flags: ["value"], input: "value" },
+  { flags: ["account"], input: "accounts" },
+  { flags: ["intent-deadline"], input: "intentDeadline" },
+  { flags: ["intent-creator"], input: "intentCreator" },
+  { flags: ["intent-execution-fee"], input: "intentExecutionFee" },
+  { flags: ["intent-fund-via"], input: "intentFundVia" },
+  { flags: ["intent-reward-deadline"], input: "intentRewardDeadline" },
+  { flags: ["intent-prover"], input: "intentProver" },
+  { flags: ["no-prove"], input: "prove: false" },
+  { flags: ["max-execution-fee"], input: "maxExecutionFee" },
+  { flags: ["via"], input: "via" },
+  { flags: ["compact-args"], input: "compactArgs" },
+  { flags: ["define", "defines"], input: "defines", lowLevel: true },
+  { flags: ["chain"], input: "chain" },
+  { flags: ["target"], input: "target" },
+  { flags: ["rpc-url"], input: "rpcUrl" },
+  { flags: ["block"], input: "block" },
+  // A fill's solver is its `from`, as every other transaction's sender is.
+  { flags: ["from", "solver"], input: "from" },
+  { flags: ["claimant"], input: "claimant" },
+  { flags: ["dry-run"], input: "dryRun" },
+  { flags: ["pin"], input: "pins" },
+  { flags: ["engine"], input: "engines" },
+  { flags: ["min-out"], input: "minOut" },
+  { flags: ["spl-count"], input: "splCount" },
+  { flags: ["protocol"], input: "protocol" },
+  { flags: ["stocks"], input: "stocks" },
+  { flags: ["search"], input: "search" },
+  { flags: ["sqrt-price-x96"], input: "sqrtPriceX96" },
+  { flags: ["pool"], input: "pool" },
+  { flags: ["v4-key"], input: "v4Pools" },
+];
+
+/** What the mapping does not show flag by flag: a command is its tool, and a file its text. */
+export const COMMAND_TOOLS = [
+  "`sauce <command>` is the tool sauce_<command> (`sauce intent status` is sauce_intent_status).",
+  "A program file is `source`, its text (over stdio, `path` names the file instead); every result",
+  "is the command's --json; a tool that reads several chains takes `rpcUrls`, one per chain.",
+] as const;
+
+/** {@link FLAG_INPUTS} but the low-level ones: the table the instructions and the guide print. */
+export const LISTED_FLAG_INPUTS = FLAG_INPUTS.filter((entry) => entry.lowLevel !== true);
+
+/** {@link LISTED_FLAG_INPUTS} as lines of `--flag → input`, for the server's instructions. */
+export function flagInputLines(width = 96): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const { flags, input } of LISTED_FLAG_INPUTS) {
+    const entry = `${flags.map((flag) => `--${flag}`).join("/")} → ${input}`;
+    if (line !== "" && line.length + 2 + entry.length > width) {
+      lines.push(line);
+      line = "";
+    }
+    line = line === "" ? entry : `${line}, ${entry}`;
+  }
+
+  return line === "" ? lines : [...lines, line];
+}
+
 const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
   // A signer never reaches this server: what a note would sign with goes.
   [/\s--(?:keystore|keypair|private-key|password-file)\s<[^>]*>/g, ""],
@@ -41,46 +125,14 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
     /needs ([\w-]+)'s endpoint \(chain id (\d+)\)/g,
     'needs $1\'s endpoint (chain id $2): pass rpcUrls { "$1": "<url>" } with the call',
   ],
-  // A flag, as the input of the same meaning. `--config` is the operator's, and stays.
+  // A flag, as the input of the same meaning (FLAG_INPUTS). `--config` is the operator's, and stays.
   [/pass them after --args, in order, or as --args-json/g, "pass them as args, in order"],
-  [/--args-json\b|--args\b/g, "args"],
-  [/--assume-balance\b/g, "assumeBalance"],
-  [/--fund-mode\b/g, "fundMode"],
-  [/--fund\b/g, "fund"],
-  [/--sweep\b/g, "sweep"],
-  [/--salt-hex\b/g, "saltHex"],
-  [/--salt\b/g, "salt"],
-  [/--owner\b/g, "owner"],
-  [/--pot\b/g, "pot"],
-  [/--value\b/g, "value"],
-  [/--account\b/g, "accounts"],
-  [/--intent-deadline\b/g, "intentDeadline"],
-  [/--intent-creator\b/g, "intentCreator"],
-  [/--intent-execution-fee\b/g, "intentExecutionFee"],
-  [/--intent-fund-via\b/g, "intentFundVia"],
-  [/--intent-reward-deadline\b/g, "intentRewardDeadline"],
-  [/--intent-prover\b/g, "intentProver"],
-  [/--no-prove\b/g, "prove: false"],
-  [/--max-execution-fee\b/g, "maxExecutionFee"],
-  [/--via\b/g, "via"],
-  [/--compact-args\b/g, "compactArgs"],
-  [/--defines?\b/g, "defines"],
-  [/--chain\b/g, "chain"],
-  [/--target\b/g, "target"],
-  [/--rpc-url\b/g, "rpcUrl"],
-  [/--from\b/g, "from"],
-  [/--solver\b/g, "solver"],
-  [/--claimant\b/g, "claimant"],
-  [/--dry-run\b/g, "dryRun"],
-  [/--pin\b/g, "pins"],
-  [/--engine\b/g, "engines"],
-  [/--min-out\b/g, "minOut"],
-  [/--spl-count\b/g, "splCount"],
-  [/--protocol\b/g, "protocol"],
-  [/--stocks\b/g, "stocks"],
-  [/--search\b/g, "search"],
-  [/--sqrt-price-x96\b/g, "sqrtPriceX96"],
-  [/--v4-key\b/g, "v4Pools"],
+  // The longer of an entry's flags first: `--args` would match the start of `--args-json`.
+  ...FLAG_INPUTS.flatMap(({ flags, input }) =>
+    [...flags]
+      .sort((a, b) => b.length - a.length)
+      .map((flag) => [new RegExp(`--${flag}\\b`, "g"), input] as const),
+  ),
 ];
 
 /** `text` in the tools' words. */
