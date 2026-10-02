@@ -38,7 +38,7 @@ function main(
   },
 ): { intentHash: Uint256; vault: Address } {
   // A native reward is sent to the vault with the cook's value; this program funds tokens only.
-  require(reward.nativeAmount == 0n, "a native reward is not funded here");
+  require(reward.nativeAmount == 0, "a native reward is not funded here");
   const vault = EcoRoutes.Portal.intentVaultAddress(destination, route, reward);
   for (const t of reward.tokens) {
     Token(t.token).transfer(vault, t.amount);

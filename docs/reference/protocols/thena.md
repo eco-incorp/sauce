@@ -22,7 +22,7 @@ BSC-native liquidity layer with ve(3,3) tokenomics. Solidly-fork supporting both
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### swap
 
@@ -74,7 +74,7 @@ On BNB Chain, `Thena` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // BNB Chain's routerV2, `0xd4ae6eCA985340Dd434D38F470aCCce4DC78D109`.
-  require(Thena.RouterV2 != 0n);
+  require(Thena.RouterV2 != 0);
 }
 ```
 

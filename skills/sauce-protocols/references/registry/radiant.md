@@ -19,7 +19,7 @@ On Arbitrum One, `Radiant` is a namespace: its contracts need no import.
 ```sauce chain=arbitrum
 function main() {
   // Arbitrum One's lendingPool, `0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1`.
-  require(Radiant.LendingPool != 0n);
+  require(Radiant.LendingPool != 0);
 }
 ```
 

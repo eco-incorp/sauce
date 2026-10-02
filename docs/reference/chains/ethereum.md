@@ -36,7 +36,7 @@ function main() {
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(USDC).balanceOf(ctx.self()) == held);
   // `AaveV2.LendingPool` is Ethereum's lendingPool: `0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9`.
-  require(AaveV2.LendingPool != 0n);
+  require(AaveV2.LendingPool != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Ethereum.AaveV2.LendingPool == AaveV2.LendingPool);
 }

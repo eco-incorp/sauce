@@ -19,7 +19,7 @@ On Avalanche C-Chain, `Benqi` is a namespace: its contracts need no import.
 ```sauce chain=avalanche
 function main() {
   // Avalanche C-Chain's comptroller, `0x486Af39519B4Dc9a7fCcd318217352830E8AD9b4`.
-  require(Benqi.Comptroller != 0n);
+  require(Benqi.Comptroller != 0);
 }
 ```
 

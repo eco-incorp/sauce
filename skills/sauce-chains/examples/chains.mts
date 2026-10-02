@@ -127,7 +127,7 @@ check(
 // Called, it is still that address: a program for Ethereum calls Base's address on Ethereum.
 const called = compile(
   "ethereum",
-  "function main(): Address { return Base.UniswapV3.Factory.getPool(USDC, WETH, 500n); }",
+  "function main(): Address { return Base.UniswapV3.Factory.getPool(USDC, WETH, 500); }",
 );
 check(
   called.contracts.get("Base.UniswapV3.Factory")?.address === factoryOnBase &&
@@ -171,7 +171,7 @@ check(
   "USDC has 6 decimals, and TSLAx, a stock, 8",
 );
 check(
-  /transferChecked\(TSLAx,[^)]*, 8n\)/.test(payoutSource),
+  /transferChecked\(TSLAx,[^)]*, 8\)/.test(payoutSource),
   "transferChecked is given TSLAx's decimals",
 );
 for (const mint of [usdc, tslax]) {

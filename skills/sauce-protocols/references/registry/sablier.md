@@ -19,7 +19,7 @@ On Ethereum, `Sablier` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's lockupLinear, `0xAFb979d9afAd1aD27C5eFf4E27226E3AB9e5dCC9`.
-  require(Sablier.LockupLinear != 0n);
+  require(Sablier.LockupLinear != 0);
 }
 ```
 

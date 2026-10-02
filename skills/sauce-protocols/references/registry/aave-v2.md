@@ -19,7 +19,7 @@ On Ethereum, `AaveV2` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's lendingPool, `0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9`.
-  require(AaveV2.LendingPool != 0n);
+  require(AaveV2.LendingPool != 0);
 }
 ```
 

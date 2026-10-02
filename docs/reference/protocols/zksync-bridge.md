@@ -16,7 +16,7 @@ Official zkSync Era bridge via DiamondProxy. Deposits ETH and executes L2 transa
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### depositETH
 
@@ -69,7 +69,7 @@ On Ethereum, `ZksyncBridge` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's diamondProxy, `0x32400084C286CF3E17e7B677ea9583e60a000324`.
-  require(ZksyncBridge.DiamondProxy != 0n);
+  require(ZksyncBridge.DiamondProxy != 0);
 }
 ```
 

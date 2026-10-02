@@ -21,7 +21,7 @@ Curve Finance native stablecoin using LLAMMA (Lending-Liquidating AMM Algorithm)
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Transfer crvUSD
@@ -54,7 +54,7 @@ On Ethereum, `Crvusd` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's crvusd, `0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E`.
-  require(Crvusd.CrvUSD != 0n);
+  require(Crvusd.CrvUSD != 0);
 }
 ```
 

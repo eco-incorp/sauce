@@ -176,6 +176,49 @@ describe("SauceScript in an editor", () => {
     expect(report(service(files), file)).toEqual([]);
   });
 
+  // TypeScript infers `number` for a plain literal, and the plugin takes it as the integer it is.
+  const plain = (name: string, source: string) => {
+    const file = join(work, `${name}.sauce.ts`);
+    const files = { [file]: source };
+    const bare = service(files, false)
+      .getSemanticDiagnostics(file)
+      .map((d) => d.code);
+
+    return { bare, shown: report(service(files), file) };
+  };
+
+  it("takes a plain integer wherever a bigint goes, either way round", () => {
+    const { bare, shown } = plain(
+      "plain",
+      "function half(x: number): Uint256 { return x / 2; }\n" +
+        "function main(a: Uint256): Uint256 { return half(a) + 1; }\n",
+    );
+    expect(bare).toEqual([2322, 2365, 2345]);
+    expect(shown).toEqual([]);
+  });
+
+  it("takes a local that starts at 0 and is later given a contract's result", () => {
+    const { bare, shown } = plain(
+      "zeroed",
+      "function main(): Uint256 {\n  let pool = 0;\n" +
+        "  pool = UniswapV3.Factory.getPool(USDC, WETH, 500);\n  return pool;\n}\n",
+    );
+    expect(bare).toEqual([2322, 2345, 2322]);
+    expect(shown).toEqual([]);
+  });
+
+  it("takes a ternary that defaults to 0, whatever it then meets", () => {
+    const { bare, shown } = plain(
+      "ternary",
+      "function main(a: Uint256, to: Address): Uint256 {\n" +
+        "  const rest = a > 5 ? a - 5 : 0;\n" +
+        "  USDC.transfer(to, a > 7 ? a : 0);\n" +
+        "  return Math.mulDiv(a, rest, 10000) - rest + (a > 1 ? a : 0);\n}\n",
+    );
+    expect(bare.length).toBeGreaterThan(0);
+    expect(shown).toEqual([]);
+  });
+
   it("checks every builtin's example in the SauceScript reference with no error", () => {
     const reference = JSON.parse(
       readFileSync(join(ROOT, "skills/sauce-script/references/builtins.json"), "utf8"),

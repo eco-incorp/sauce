@@ -19,7 +19,7 @@ On Arbitrum One, `Hegic` is a namespace: its contracts need no import.
 ```sauce chain=arbitrum
 function main() {
   // Arbitrum One's hegic, `0x431402e8b9dE9aa016C743880e04E517074D8cEC`.
-  require(Hegic.Hegic != 0n);
+  require(Hegic.Hegic != 0);
 }
 ```
 

@@ -16,7 +16,7 @@ Multi-chain bridging protocol using SGN (State Guardian Network) for cross-chain
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### bridge
 
@@ -63,7 +63,7 @@ On Ethereum, `Celer` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's bridge, `0x5427FEFA711Eff984124bFBB1AB6fbf5E3DA1820`.
-  require(Celer.Bridge != 0n);
+  require(Celer.Bridge != 0);
 }
 ```
 

@@ -19,7 +19,7 @@ On Ethereum, `LiquityV1` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's borrowerOperations, `0x24179CD81c9e782A4096035f7eC97fB8B783e007`.
-  require(LiquityV1.BorrowerOperations != 0n);
+  require(LiquityV1.BorrowerOperations != 0);
 }
 ```
 

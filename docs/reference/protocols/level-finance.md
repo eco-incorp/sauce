@@ -21,7 +21,7 @@ Decentralized perpetual exchange with risk-tranched liquidity pools. Senior (low
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Add liquidity to tranche
@@ -69,7 +69,7 @@ On BNB Chain, `LevelFinance` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // BNB Chain's liquidityPool, `0xA5aBFB56a78D2BD4689b25B8A77fd49Bb0675874`.
-  require(LevelFinance.LiquidityPool != 0n);
+  require(LevelFinance.LiquidityPool != 0);
 }
 ```
 

@@ -16,7 +16,7 @@ Leading lending protocol on Scroll. Compound-style markets (lTokens), but every 
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### supply
 
@@ -93,7 +93,7 @@ On Scroll, `Layerbank` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Scroll's core, `0xEC53c830f4444a8A56455c6836b5D2aA794289Aa`.
-  require(Layerbank.Core != 0n);
+  require(Layerbank.Core != 0);
 }
 ```
 

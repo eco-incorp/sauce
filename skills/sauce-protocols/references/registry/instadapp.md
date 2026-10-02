@@ -19,7 +19,7 @@ On Ethereum, `Instadapp` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's flashloanAggregator, `0xE6054aE0Dba269560061D736e7510Ce64fCD517d`.
-  require(Instadapp.FlashloanAggregator != 0n);
+  require(Instadapp.FlashloanAggregator != 0);
 }
 ```
 

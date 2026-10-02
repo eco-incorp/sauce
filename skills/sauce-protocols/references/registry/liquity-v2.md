@@ -19,7 +19,7 @@ On Ethereum, `LiquityV2` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's bold, `0x6440f144b7e50D6a8439336510312d2F54beB01D`.
-  require(LiquityV2.Bold != 0n);
+  require(LiquityV2.Bold != 0);
 }
 ```
 

@@ -19,7 +19,7 @@ On Ethereum, `Safe` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's safeL2V130, `0x3E5c63644E683549055b9Be8653de26E0B4CD36E`.
-  require(Safe.SafeL2V130 != 0n);
+  require(Safe.SafeL2V130 != 0);
 }
 ```
 

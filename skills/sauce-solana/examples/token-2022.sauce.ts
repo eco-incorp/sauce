@@ -33,6 +33,6 @@ function main(
 ): Uint256 {
   require(ownerOf(PYUSD, source) == pot.address, "not the Pot's account");
   const before = balanceOf(PYUSD, destination);
-  transferChecked(PYUSD, tokenProgram, source, mint, destination, pot, amount, 6n);
+  transferChecked(PYUSD, tokenProgram, source, mint, destination, pot, amount, 6);
   return balanceOf(PYUSD, destination) - before;
 }

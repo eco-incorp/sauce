@@ -22,7 +22,7 @@ Decentralized, non-custodial liquid restaking protocol. Stake ETH to receive eET
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Deposit ETH for eETH
@@ -62,7 +62,7 @@ On Ethereum, `Etherfi` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's eETH, `0x35fA164735182de50811E8e2E824cFb9B6118ac2`.
-  require(Etherfi.EETH != 0n);
+  require(Etherfi.EETH != 0);
 }
 ```
 

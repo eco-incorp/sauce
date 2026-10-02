@@ -7,8 +7,8 @@ import { uniswapV3 } from "@sauce/router";
 Base(
   () => {
     const amount = USDC.balanceOf(ctx.self());
-    const bought = uniswapV3(POOL, USDC, WETH, amount, 0n, MIN_OUT, ctx.self());
-    const payout = bought - bought / 1000n;
+    const bought = uniswapV3(POOL, USDC, WETH, amount, 0, MIN_OUT, ctx.self());
+    const payout = bought - bought / 1000;
     Ethereum(() => {
       WETH.transfer(RECIPIENT, payout);
     }).reward({ tokens: [{ token: WETH, amount: bought }] });

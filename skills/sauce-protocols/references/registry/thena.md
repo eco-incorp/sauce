@@ -19,7 +19,7 @@ On BNB Chain, `Thena` is a namespace: its contracts need no import.
 ```sauce chain=bsc
 function main() {
   // BNB Chain's routerV2, `0xd4ae6eCA985340Dd434D38F470aCCce4DC78D109`.
-  require(Thena.RouterV2 != 0n);
+  require(Thena.RouterV2 != 0);
 }
 ```
 

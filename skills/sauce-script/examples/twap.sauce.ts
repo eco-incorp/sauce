@@ -21,9 +21,9 @@ import IOracle from "./IOracle.json";
 
 function main(tokenA: Address, tokenB: Address, fee: Uint256, window: Uint256): bytes {
   const pool = UniswapV3.Factory.getPool(tokenA, tokenB, fee);
-  require(pool != 0n, "no pool for that pair and fee");
-  require(UniswapV3.Pool(pool).liquidity() > 0n, "the pool has no liquidity");
+  require(pool != 0, "no pool for that pair and fee");
+  require(UniswapV3.Pool(pool).liquidity() > 0, "the pool has no liquidity");
   // Only what is needed: observe's first result, the tick cumulatives.
-  const [ticks] = IOracle.at(pool).observe([window, 0n]);
+  const [ticks] = IOracle.at(pool).observe([window, 0]);
   return abi.encode(ticks[0], ticks[1]);
 }

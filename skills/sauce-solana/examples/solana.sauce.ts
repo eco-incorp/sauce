@@ -27,7 +27,7 @@
 //     --account tokenProgram=TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA \
 //     --account source=pot:EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v \
 //     --account destination=<token account> --account authority=pot --args 1000000
-const MINT = 0n; // the SPL mint's 32-byte key: a define replaces it
+const MINT = 0; // the SPL mint's 32-byte key: a define replaces it
 
 function main(
   tokenProgram: Account,
@@ -36,7 +36,7 @@ function main(
   authority: Account<Signer>,
   amount: Uint256,
 ): Uint256 {
-  require(MINT != 0n, "set MINT");
+  require(MINT != 0, "set MINT");
   const before = balanceOf(MINT, destination);
   transfer(MINT, tokenProgram, source, destination, authority, amount);
   const after = balanceOf(MINT, destination);

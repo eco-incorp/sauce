@@ -19,7 +19,7 @@ On Ethereum, `ScrollBridge` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's l1GatewayRouter, `0xF8B1378579659D8F7EE5f3C929c2f3E332E41Fd6`.
-  require(ScrollBridge.L1GatewayRouter != 0n);
+  require(ScrollBridge.L1GatewayRouter != 0);
 }
 ```
 

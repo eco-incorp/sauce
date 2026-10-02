@@ -19,7 +19,7 @@ On Arc, `SynthraV3` is a namespace: its contracts need no import.
 ```sauce chain=arc
 function main() {
   // Arc's factory, `0x6307fc239C7964942c1BfFE51930E55606619c74`.
-  require(SynthraV3.Factory != 0n);
+  require(SynthraV3.Factory != 0);
 }
 ```
 

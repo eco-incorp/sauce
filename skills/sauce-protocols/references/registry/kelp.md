@@ -19,7 +19,7 @@ On Ethereum, `Kelp` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's lrtDepositPool, `0x036676389e48133B63a802f8635AD39E752D375D`.
-  require(Kelp.LRTDepositPool != 0n);
+  require(Kelp.LRTDepositPool != 0);
 }
 ```
 

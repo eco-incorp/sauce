@@ -22,7 +22,7 @@ Deposit the Pot's USDC:
 function main(amount: Uint256) {
   const self = ctx.self();
   USDC.approve(AaveV2.LendingPool, amount);
-  AaveV2.LendingPool.deposit(USDC, amount, self, 0n);
+  AaveV2.LendingPool.deposit(USDC, amount, self, 0);
 }
 ```
 
@@ -35,7 +35,7 @@ lending | Chains and addresses: [registry/aave-v2.md](registry/aave-v2.md)
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### deposit
 

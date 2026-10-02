@@ -19,7 +19,7 @@ On Ethereum, `Gamma` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's uniProxy, `0xf5bfa20f4a77933fee0c7bb7f39e7642a070d599`.
-  require(Gamma.UniProxyLegacy != 0n);
+  require(Gamma.UniProxyLegacy != 0);
 }
 ```
 

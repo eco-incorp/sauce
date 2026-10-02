@@ -21,7 +21,7 @@ Web3 automation network for scheduling and executing smart contract functions an
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Create automated task
@@ -63,7 +63,7 @@ On Ethereum, `Gelato` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's automate, `0x2A6C106ae13B558BB9E2Ec64Bd2f1f7BEFF3A5E0`.
-  require(Gelato.Automate != 0n);
+  require(Gelato.Automate != 0);
 }
 ```
 

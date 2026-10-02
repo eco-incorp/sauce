@@ -33,7 +33,7 @@ Sell the Pot's USDC for WETH on the volatile pool:
 ```ts
 function main(amountIn: Uint256, minOut: Uint256, recipient: Address) {
   const self = ctx.self();
-  require(Aerodrome.PoolFactory.getPool(USDC, WETH, false) != 0n, "no volatile USDC/WETH pool");
+  require(Aerodrome.PoolFactory.getPool(USDC, WETH, false) != 0, "no volatile USDC/WETH pool");
   const routes = [{ from: USDC, to: WETH, stable: false, factory: Aerodrome.PoolFactory }];
   const before = WETH.balanceOf(self);
   USDC.approve(Aerodrome.Router, amountIn);
@@ -55,7 +55,7 @@ function main(amountIn: Uint256, minOut: Uint256, recipient: Address) {
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### swap
 
@@ -176,7 +176,7 @@ On Base, `Aerodrome` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Base's poolFactory, `0x420DD381b31aEf6683db6B902084cB0FFECe40Da`.
-  require(Aerodrome.PoolFactory != 0n);
+  require(Aerodrome.PoolFactory != 0);
 }
 ```
 

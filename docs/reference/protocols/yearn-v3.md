@@ -22,7 +22,7 @@ Yield aggregator protocol. V3 vaults follow the ERC-4626 standard for automated 
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Deposit into Yearn V3 vault
@@ -61,7 +61,7 @@ On Ethereum, `YearnV3` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's vaultFactory, `0x770D0d1Fb036483Ed4AbB6d53c1C89fb277D812F`.
-  require(YearnV3.VaultFactory != 0n);
+  require(YearnV3.VaultFactory != 0);
 }
 ```
 

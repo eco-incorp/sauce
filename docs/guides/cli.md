@@ -25,6 +25,7 @@ reads a chain through a built-in public endpoint unless you give it
 | `sauce verify`   | Check that a payload, cook, intent or transaction runs the audited settle program |
 | `sauce init`     | Scaffold a project that uses this package                                         |
 | `sauce skills`   | Install, update or check this package's agent skills in a project                 |
+| `sauce update`   | Update this `sauce` command to the latest release, the way it was installed       |
 
 Every command takes `--help`. A mistyped invocation exits 2. A program that does not compile, a
 cook that reverts, a rejected settle, an outdated skills install and a transaction on a
@@ -38,8 +39,15 @@ npm i -g @eco-incorp/sauce
 sauce --version
 ```
 
-Node.js 24 or newer. `npm i -g @eco-incorp/sauce@latest` upgrades it. Every command in this guide
-is written as `sauce …`, the global install.
+Node.js 24 or newer. Every command in this guide is written as `sauce …`, the global install.
+
+`sauce update` upgrades it to the latest release (or `--version <version>`), the way it was
+installed: a global install by npm, pnpm, yarn or bun is installed again by that manager, and skills
+installed in the current directory are then updated by the new `sauce`. A project's own copy is
+the project's to update, so `sauce update` prints the command its package manager takes and changes
+nothing; a copy in npx's cache prints the `npx -y` command. `sauce update --check` says which
+version is installed and which is the latest, and installs nothing. It reads the npm registry, and
+only then: `sauce` never checks for updates by itself.
 
 Two other ways run the same command:
 
@@ -350,9 +358,9 @@ sauce run pay.sauce.ts --chain base --keystore ~/.keys/me.json \
 
 `--fund <TOKEN|address>:<amount>` names a token the chain registers (`sauce globals --tokens`) or
 any ERC-20 by address, and an amount in whole units — `USDC:1.5`, by the registry's decimals or
-the token's own — or in base units ending in `n`, as SauceScript writes an integer:
-`USDC:1500000n`. Repeat it for more tokens. `ETH:<amount>` (or `native:`) is the chain's native
-currency: it rides as the cook's value, on top of the Kitchen's fee.
+the token's own — or in base units ending in `n`: `USDC:1500000n`. Repeat it for more tokens.
+`ETH:<amount>` (or `native:`) is the chain's native currency: it rides as the cook's value, on top
+of the Kitchen's fee.
 
 The command wraps the program: a new `main`, with the same parameters, first pulls each amount from
 you into the Pot, then calls the program's own `main` with the arguments as given, then, with
@@ -515,11 +523,11 @@ chain means `solana`.
 ### Values fixed when it is compiled: defines
 
 ```js
-const RECIPIENT = 0n;
-const AMOUNT = 0n;
+const RECIPIENT = 0;
+const AMOUNT = 0;
 
 function main() {
-  require(RECIPIENT != 0n);
+  require(RECIPIENT != 0);
   USDC.transfer(RECIPIENT, AMOUNT);
 }
 ```

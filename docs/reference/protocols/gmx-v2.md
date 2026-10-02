@@ -22,7 +22,7 @@ Next generation of GMX perpetual exchange with isolated markets, improved risk m
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Create a market order
@@ -117,7 +117,7 @@ On Arbitrum One, `GmxV2` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Arbitrum One's dataStore, `0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8`.
-  require(GmxV2.DataStore != 0n);
+  require(GmxV2.DataStore != 0);
 }
 ```
 

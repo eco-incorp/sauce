@@ -13,7 +13,7 @@
 Base(
   () => {
     const amount = USDC.balanceOf(ctx.self());
-    const payout = amount - amount / 1000n;
+    const payout = amount - amount / 1000;
     Ethereum(() => {
       USDC.transfer(RECIPIENT, payout);
     }).reward({ tokens: [{ token: USDC, amount }] });

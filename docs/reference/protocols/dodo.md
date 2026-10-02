@@ -22,7 +22,7 @@ Proactive Market Maker (PMM) DEX with capital-efficient liquidity provision. Unl
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### swap
 
@@ -80,7 +80,7 @@ On Ethereum, `Dodo` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's dodoV2Proxy, `0xa356867fDCeA8e71AEaf87805808803806231FDc`.
-  require(Dodo.DODOV2Proxy != 0n);
+  require(Dodo.DODOV2Proxy != 0);
 }
 ```
 

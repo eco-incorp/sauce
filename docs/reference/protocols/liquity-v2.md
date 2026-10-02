@@ -21,7 +21,7 @@ Next generation of Liquity protocol with user-set interest rates, multi-collater
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Transfer BOLD
@@ -53,7 +53,7 @@ On Ethereum, `LiquityV2` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's bold, `0x6440f144b7e50D6a8439336510312d2F54beB01D`.
-  require(LiquityV2.Bold != 0n);
+  require(LiquityV2.Bold != 0);
 }
 ```
 

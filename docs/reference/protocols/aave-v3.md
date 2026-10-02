@@ -26,7 +26,7 @@ Non-custodial liquidity protocol for earning interest on deposits and borrowing 
 - A reserve can be frozen, paused or at its supply cap, and then `supply` reverts.
 - Borrowing needs collateral and keeps the position's health factor (from
   `getUserAccountData`, scaled by 1e18) above 1; below it, anyone may liquidate.
-- `withdraw` with `~0n` withdraws everything; it reverts if that would leave a borrow
+- `withdraw` with `~0` withdraws everything; it reverts if that would leave a borrow
   undercollateralized.
 - `flashLoanSimple` calls back a receiver contract, which a Sauce program cannot be.
 
@@ -38,9 +38,9 @@ Supply the Pot's USDC and check the position now has collateral:
 function main(amount: Uint256) {
   const self = ctx.self();
   USDC.approve(AaveV3.Pool, amount);
-  AaveV3.Pool.supply(USDC, amount, self, 0n);
+  AaveV3.Pool.supply(USDC, amount, self, 0);
   const account = AaveV3.Pool.getUserAccountData(self);
-  require(account.totalCollateralBase > 0n, "nothing supplied");
+  require(account.totalCollateralBase > 0, "nothing supplied");
 }
 ```
 
@@ -49,7 +49,7 @@ function main(amount: Uint256) {
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### supply
 
@@ -149,7 +149,7 @@ On Ethereum, `AaveV3` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's pool, `0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2`.
-  require(AaveV3.Pool != 0n);
+  require(AaveV3.Pool != 0);
 }
 ```
 

@@ -19,7 +19,7 @@ On Ethereum, `Puffer` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's pufETH, `0xD9A442856C234a39a81a089C06451EBAa4306a72`.
-  require(Puffer.PufETH != 0n);
+  require(Puffer.PufETH != 0);
 }
 ```
 

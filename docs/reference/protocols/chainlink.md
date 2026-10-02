@@ -20,7 +20,7 @@ Industry-standard decentralized oracle network providing price feeds, VRF random
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Get latest price from feed
@@ -52,7 +52,7 @@ On Ethereum, `Chainlink` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's ethUsdFeed, `0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419`.
-  require(Chainlink.EthUsdFeed != 0n);
+  require(Chainlink.EthUsdFeed != 0);
 }
 ```
 

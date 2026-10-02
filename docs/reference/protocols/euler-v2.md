@@ -16,7 +16,7 @@ Modular lending platform built on the Ethereum Vault Connector (EVC). Supports p
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### deposit
 
@@ -101,7 +101,7 @@ On Ethereum, `EulerV2` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's ethereumVaultConnector, `0x0C9a3dd6b8F28529d72d7f9cE918D493519EE383`.
-  require(EulerV2.EthereumVaultConnector != 0n);
+  require(EulerV2.EthereumVaultConnector != 0);
 }
 ```
 

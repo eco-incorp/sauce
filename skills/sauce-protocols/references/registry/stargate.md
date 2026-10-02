@@ -19,7 +19,7 @@ On Ethereum, `Stargate` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's poolNative, `0x77b2043768d28E9C9aB44E1aBfC95944bcE57931`.
-  require(Stargate.PoolNative != 0n);
+  require(Stargate.PoolNative != 0);
 }
 ```
 

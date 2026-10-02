@@ -12,7 +12,7 @@ import { balanceOf } from "@sauce/token";
 function main(minOut: Uint256) {
   const pair = UniswapV2.Factory.getPair(WETH, USDC);
   const sold = balanceOf(WETH, ctx.self());
-  const received = uniswapV2(pair, WETH, USDC, sold, 3000n, 0n, ctx.self());
+  const received = uniswapV2(pair, WETH, USDC, sold, 3000, 0, ctx.self());
   // USDC is the 3pool's coin 1 and USDT its coin 2.
-  curve(Curve.ThreePool, USDC, USDT, received, 1n, 2n, false, minOut, ctx.self());
+  curve(Curve.ThreePool, USDC, USDT, received, 1, 2, false, minOut, ctx.self());
 }

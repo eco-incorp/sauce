@@ -19,7 +19,7 @@ On Ethereum, `Opyn` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's controller, `0x64187ae08781B09368e6253F9E94951243A493D5`.
-  require(Opyn.Controller != 0n);
+  require(Opyn.Controller != 0);
 }
 ```
 

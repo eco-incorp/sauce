@@ -19,7 +19,7 @@ On Arc, `AerodromeSlipstream` is a namespace: its contracts need no import.
 ```sauce chain=arc
 function main() {
   // Arc's clFactory, `0xb89Df768aF2CFE637ceB352c587Fe8edAf491d03`.
-  require(AerodromeSlipstream.CLFactory != 0n);
+  require(AerodromeSlipstream.CLFactory != 0);
 }
 ```
 

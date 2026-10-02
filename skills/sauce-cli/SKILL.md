@@ -13,7 +13,8 @@ tool and no configuration: it reads no environment variable but the one `--passw
 and reads a chain through a built-in public endpoint unless given one of its own.
 
 **Getting the command.** Install it once with `npm i -g @eco-incorp/sauce` (Node.js 24 or newer);
-`sauce --version` checks it, and `npm i -g @eco-incorp/sauce@latest` upgrades it. Without an
+`sauce --version` checks it, and `sauce update` upgrades it the way it was installed
+(`sauce update --check` only reports the latest). Without an
 install, run `npx -y @eco-incorp/sauce <command>` in its place. Never run a bare `npx sauce`
 outside a project that depends on the package: npx then fetches and runs npm's unrelated `sauce`
 package.
@@ -391,9 +392,8 @@ against its declared type before anything is sent: `Address`, `Uint256`, `bool`,
   `--define NAME=VALUE` replaces (`--defines values.json` gives several). A file of top-level
   statements with no `main`, such as an intent file, leaves the name undeclared and takes it from
   the define. In a `--defines` file, give an address or any value past 2^53 as a JSON string, hex
-  or decimal: a JSON number loses precision. An address in a program is a hex integer with an `n`,
-  as Base's USDC is `0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n`; on the command line it is plain
-  hex.
+  or decimal: a JSON number loses precision. An address in a program, as on the command line, is
+  its hex: Base's USDC is `0x833589fcd6edb6e08f4c7c32d4f71b54bda02913`.
 - In a project `sauce init` wrote, put programs in `programs/`: its `tsconfig.json` types them as
   SauceScript, so an editor's TypeScript errors there are real ones (with the project's own
   TypeScript running the editor). For programs anywhere else, `sauce init <dir> --tsconfig`

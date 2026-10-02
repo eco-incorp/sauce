@@ -19,7 +19,7 @@ On Ethereum, `UniswapV3` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's factory, `0x1F98431c8aD98523631AE4a59f267346ea31F984`.
-  require(UniswapV3.Factory != 0n);
+  require(UniswapV3.Factory != 0);
 }
 ```
 
