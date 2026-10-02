@@ -67,8 +67,10 @@ export async function destinationFees(
     if (url === undefined) {
       throw new UsageError(
         `an intent's body runs a program on ${chain.slug}, whose cook pays its Kitchen's fee: the ` +
-          `command reads the Kitchen's fee on ${chain.slug} through --config, with an rpcUrls entry ` +
-          `for chain id ${chain.id}, or takes it from --intent-execution-fee <wei>`,
+          `command reads the Kitchen's fee on ${chain.slug} from the chain, and nothing here reaches ` +
+          `it (--offline, or no endpoint: --config with an rpcUrls entry for chain id ` +
+          `${chain.id}). Give the fee with \`.fee(<wei>)\` after \`.receive(...)\`, or ` +
+          `--intent-execution-fee <wei>`,
       );
     }
     fees.set(chain.id, await kitchenFee(await connect(url, chain), chain));

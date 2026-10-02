@@ -1580,9 +1580,10 @@ function requireCreator(defaults: Partial<IntentSugarDefaults>, portalForm = fal
   if (defaults.creator === undefined && portalForm) {
     return fail(
       "the reward needs a creator — the address that can reclaim it after its deadline. Give " +
-        "`.creator(address)` after `.send(...)`; the `sauce` command makes it the wallet that " +
-        "publishes. It has no default here: the executing Pot is driven by every solver, so a " +
-        "refund there is a refund anyone can take.",
+        "`.creator(address)` after `.send(...)`, or `intents.creator` in the compile options; the " +
+        "`sauce` command takes `--intent-creator <address>`, and otherwise makes it the wallet " +
+        "that publishes or the owner of the Pot that cooks. It has no default here: the executing " +
+        "Pot is driven by every solver, so a refund there is a refund anyone can take.",
     );
   }
   if (defaults.creator === undefined) {
