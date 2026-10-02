@@ -937,7 +937,7 @@ function svmPayload(program: CompiledSauceProgram, args: ArgsInput | undefined):
   if (keyed && program.entryEncoding === "compact-v1") {
     throw new UsageError(
       "--compact-args: an Address argument on Solana is encoded as an ABI-v1 word only; compile " +
-        "without --compact-args, or take the key as an Account parameter or a define",
+        "without --compact-args, or take the key as an Account parameter",
     );
   }
 

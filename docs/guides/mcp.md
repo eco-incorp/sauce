@@ -326,7 +326,6 @@ server's instructions also list:
 | `--max-execution-fee`      | `maxExecutionFee`      |
 | `--via`                    | `via`                  |
 | `--compact-args`           | `compactArgs`          |
-| `--define`, `--defines`    | `defines`              |
 | `--chain`                  | `chain`                |
 | `--target`                 | `target`               |
 | `--rpc-url`                | `rpcUrl`               |
@@ -350,7 +349,7 @@ program file on the same machine, relative to the directory the server runs in, 
 relative imports beside it. A server over HTTP reads no file and refuses `path`. Each of the three
 returns `sourceSha256`, the sha256 of the program's text, which ties a rehearsal to the file it
 came from. `sauce_compile` with `omitBytecode` leaves the bytecode out; `sauce_simulate` with
-`scenarios` rehearses one program with several sets of `args`, `defines` and `assumeBalance` at one
+`scenarios` rehearses one program with several sets of `args` and `assumeBalance` at one
 block, and with `summary` returns only `ok` or the revert reason, what `main` returned, the balance
 changes, the transfers, each transaction's gas and the block.
 
@@ -429,16 +428,15 @@ unknown field is refused, which is how a misspelt one is caught.
 
 The compiling tools take the program as text:
 
-| Input                                                   | Meaning                                                                                                                            |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `source`                                                | The program, the whole text of a `.sauce.ts` file (at most 256 KiB)                                                                |
-| `file`                                                  | Its name, for messages and relative imports (default `program.sauce.ts`)                                                           |
-| `modules`                                               | Files it imports by relative path, as path → text from the directory of `file`. Nothing is read from the server's disk             |
-| `chain`, `target`                                       | The chain, by slug, alias or id; or a `// @chain` header line in the program. `target: "svm"` alone is Solana                      |
-| `defines`                                               | Compile-time values by name: an integer in base units (decimal or `0x` hex), an address, `true` or `false`; a base58 key on Solana |
-| `compactArgs`                                           | Encode `main`'s arguments as compact-v1                                                                                            |
-| `intentDeadline`, `intentCreator`, `intentExecutionFee` | For intents the program opens: Unix seconds, a `0x` address, wei                                                                   |
-| `intentFundVia`                                         | How their reward reaches the vault: `transfer` (default: paid into it, then `publish`) or `publishAndFund`                         |
+| Input                                                   | Meaning                                                                                                                |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `source`                                                | The program, the whole text of a `.sauce.ts` file (at most 256 KiB)                                                    |
+| `file`                                                  | Its name, for messages and relative imports (default `program.sauce.ts`)                                               |
+| `modules`                                               | Files it imports by relative path, as path → text from the directory of `file`. Nothing is read from the server's disk |
+| `chain`, `target`                                       | The chain, by slug, alias or id; or a `// @chain` header line in the program. `target: "svm"` alone is Solana          |
+| `compactArgs`                                           | Encode `main`'s arguments as compact-v1                                                                                |
+| `intentDeadline`, `intentCreator`, `intentExecutionFee` | For intents the program opens: Unix seconds, a `0x` address, wei                                                       |
+| `intentFundVia`                                         | How their reward reaches the vault: `transfer` (default: paid into it, then `publish`) or `publishAndFund`             |
 
 `sauce_compile` also takes a cook's `args` and `accounts`, to size the payload and, on Solana, the
 cook's transaction (with `via`, the Kitchen's or the engine's direct one); and `rpcUrls`, each intent destination's endpoint by chain, to check that the

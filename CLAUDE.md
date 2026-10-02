@@ -782,8 +782,9 @@ through a JSON-RPC shim; the packed check runs the installed bin through `npx`. 
 `sauce skills` installs (to `.claude/skills/` and `.agents/skills/`) live in the top-level
 `skills/<name>/` and ship in the package (see "Agent skills" below).
 
-What a command's input MEANS — the chain a program runs on, whether its defines reach it, the Pot a
-cook names, its funding and assumed balances — lives in `inputs.ts`, taking plain values, so a
+What a command's input MEANS — the chain a program runs on, whether its defines reach it, `main`'s
+arguments bound into the intents a wallet publishes, the Pot a cook names, its funding and assumed
+balances — lives in `inputs.ts`, taking plain values, so a
 second front end applies the same rules: `run.ts` reads flags into it, and the MCP server reads
 tool arguments into it.
 
@@ -1035,8 +1036,12 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   `sauce tx`'s unsigned JSON as the hand-off to any signer. Runners may use the SDK to pin facts;
   the `SKILL.md` must not depend on them.
 - **Program conventions.** A program names no chain (`--chain <chain>` in its usage line, no
-  `// @chain` header): runtime inputs are typed `main(...)` parameters passed with `--args`, and an
-  intent file is top-level statements whose values are defines left undeclared.
+  `// @chain` header), and every input it takes is a typed `main(...)` parameter passed with
+  `--args`, an intent file's included: `sauce intent publish`, `intent fill` and `inspect` (and the
+  MCP tools' `args`) bind them into the intents as constants (`inputs.ts#bindMainArguments`, over
+  `routes/entry.ts#bindEntryArguments`; `compileSauceProgram`'s `args`). A compile-time define is
+  the SDK's own mechanism: `--define`/`--defines` stay as the low-level flags `--help` lists apart,
+  and no skill, doc, example or usage line teaches them.
 - **They describe this tree, and their runners pin it.** Where the SDK's behaviour shapes how a
   skill tells agents to write something, a runner asserts that behaviour, so the change that moves
   it fails `skills:check` and the skill is rewritten with it. Today that covers, among others: on

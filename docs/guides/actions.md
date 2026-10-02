@@ -87,7 +87,7 @@ function main(a_amount: Uint256): void {
 // bytecode, 313 bytes: 0xa502…
 ```
 
-`--chain` takes a slug or a chain id and defaults to the document's `chainId`; `--json` prints the report `sauce compile --json` does — `bytecode`, `size`, `entryParams`, the paired compiler and engine — with the parsed `document`, the `source`, the ABI bindings it calls through (`bindings`), beside the protocol contracts it calls (`contracts`, as `sauce compile --json` reports them) and the argument names (`parameters`); `--compact-args` compiles the arguments compact-v1. `sauce compile`, `sauce tx`, `sauce simulate` and `sauce run` take the same document wherever they take a `.sauce.ts` file, with the same flags: its `argument` actions are `main`'s parameters, passed with `--args`, and its cook runs on the Pot `--owner` or `--pot` names, funded by `--fund` if you like. `--define` is refused: a document's values are its own fields.
+`--chain` takes a slug or a chain id and defaults to the document's `chainId`; `--json` prints the report `sauce compile --json` does — `bytecode`, `size`, `entryParams`, the paired compiler and engine — with the parsed `document`, the `source`, the ABI bindings it calls through (`bindings`), beside the protocol contracts it calls (`contracts`, as `sauce compile --json` reports them) and the argument names (`parameters`); `--compact-args` compiles the arguments compact-v1. `sauce compile`, `sauce tx`, `sauce simulate` and `sauce run` take the same document wherever they take a `.sauce.ts` file, with the same flags: its `argument` actions are `main`'s parameters, passed with `--args`, and its cook runs on the Pot `--owner` or `--pot` names, funded by `--fund` if you like.
 
 ```sh
 sauce simulate swap.json --chain base --owner <owner> \

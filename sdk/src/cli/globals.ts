@@ -209,11 +209,11 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
       ...(devnetListed.length === 0
         ? []
         : [
-            "  On devnet, pass a mint that differs as a define, which wins (--define USDC=0x…):",
+            "  On devnet a mint differs: take it as an Address argument of main, and pass its key:",
             ...devnetListed.map((token) => `    ${line(token)}`),
           ]),
-      "  Any other mint: --define MINT=<mint, as 32-byte hex>. Token accounts are Account",
-      "  parameters; USDC.transfer(…) and the other token methods are EVM-only.",
+      "  Any other mint: an Address argument of main, passed as its base58 key. Token accounts",
+      "  are Account parameters; USDC.transfer(…) and the other token methods are EVM-only.",
     );
   } else if (showTokens) {
     const what =

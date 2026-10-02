@@ -17,10 +17,6 @@
  * cannot tell the chains apart, which is how this went unnoticed. What a chain does with these
  * bytes is `routes-intent-chains.e2e.test.ts`.
  */
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import { bytesToHex, decodeAbiParameters, decodeFunctionData, erc20Abi, type Hex } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
@@ -32,6 +28,8 @@ import { ecoRoutesExecutorOf, ecoRoutesPortal } from "../src/protocols/eco-route
 import { EVM_ROUTE_PARAM } from "../src/routes/encode.js";
 import type { IntentOptions } from "../src/routes/intent-dsl.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
+
+import { BODY_TO_ARBITRUM, CASCADE_BODY } from "./fixtures/routes/bodies.js";
 
 // ESM jest exposes `jest` on `import.meta`, and every module that compiles must be imported AFTER
 // the mock is registered, so those imports are dynamic.
@@ -64,15 +62,6 @@ const { compileSauceRoute } = await import("../src/routes/sauce-route.js");
 const { openRoute } = await import("../src/routes/intent-dsl.js");
 const { chainDefines } = await import("../src/routes/ambient.js");
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const example = (name: string) =>
-  readFileSync(join(HERE, "../../docs/examples", `${name}.sauce.ts`), "utf8");
-/** A body that opens an intent to Arbitrum: the README's example before it took `main` arguments. */
-const BODY_TO_ARBITRUM = readFileSync(
-  join(HERE, "fixtures/routes/body-forwards-to-arbitrum.sauce.ts"),
-  "utf8",
-);
-const CASCADE_EXAMPLE = example("cross-chain-cascade");
 /**
  * The cascade over three DIFFERENT chains. The docs example keeps to the chains the release
  * supports, so it alternates Base and Ethereum, and there a level that resolved a name on its
@@ -91,7 +80,7 @@ const THREE_CHAIN_CASCADE = `function main() {
   ).reward({ tokens: [{ token: USDC, amount }] });
 }`;
 const CASCADES = [
-  ["the docs cascade: Base, Ethereum, then Base", CASCADE_EXAMPLE, ["base", "ethereum", "base"]],
+  ["a cascade body: Base, Ethereum, then Base", CASCADE_BODY, ["base", "ethereum", "base"]],
   ["a cascade over three chains", THREE_CHAIN_CASCADE, ["base", "arbitrum", "optimism"]],
 ] as const;
 
@@ -343,7 +332,7 @@ describe.each(PATHS)("through %s", (_name, build) => {
 describe("every path lowers every level to the same source", () => {
   it.each([
     ["a body opening an intent to Arbitrum", BODY_TO_ARBITRUM],
-    ["the docs cascade", CASCADE_EXAMPLE],
+    ["a cascade body", CASCADE_BODY],
     ["the cascade over three chains", THREE_CHAIN_CASCADE],
   ])("%s", (_name, program) => {
     const sources = PATHS.map(([, build]) =>

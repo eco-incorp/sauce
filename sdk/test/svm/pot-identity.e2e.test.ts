@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { AccountRole, generateKeyPairSigner, getAddressCodec, lamports } from "@solana/kit";
 import type { Address, KeyPairSigner } from "@solana/kit";
 
+import { encodeEntryArguments } from "../../src/routes/entry.js";
 import { compileSauceProgram } from "../../src/routes/sauce-route.js";
 import {
   buildComputeBudgetPrepend,
@@ -48,7 +49,7 @@ const rederived = (): string => {
     (match) => match[1]!,
   );
   const found = blocks.filter(
-    (block) => block.includes("crypto.findPDA(KITCHEN") && !block.includes("potUsdc"),
+    (block) => block.includes("crypto.findPDA(kitchen") && !block.includes("potUsdc"),
   );
   if (found.length !== 1) {
     throw new Error(`expected one Pot re-derivation block in ${SKILL}, found ${found.length}`);
@@ -61,6 +62,24 @@ const OWNER_CHECK =
   'function main(pot: Account<Signer>) { require(pot.owner == ctx.self(), "not an engine account"); }';
 
 const word = (key: Address): bigint => toBigInt(new Uint8Array(getAddressCodec().encode(key)));
+
+/**
+ * The skill's program with its `main` arguments, the Kitchen and the salt, appended as `sauce run
+ * --args` appends them: on Solana an `Address` is one word, the key's 32 bytes.
+ */
+const withArguments = (kitchen: Address, salt: bigint): Uint8Array => {
+  const program = compileSauceProgram("solana", rederived());
+  const words = {
+    ...program,
+    entryParams: program.entryParams.map((param) => ({ ...param, type: "Uint256" })),
+  };
+  const args = encodeEntryArguments(words, [word(kitchen), salt]);
+  const payload = new Uint8Array(program.bytecode.length + args.length);
+  payload.set(program.bytecode);
+  payload.set(args, program.bytecode.length);
+
+  return payload;
+};
 
 describeSvm("binding a slot to the Pot: the owner check, and re-deriving the address", () => {
   let harness: EngineHarness;
@@ -81,9 +100,7 @@ describeSvm("binding a slot to the Pot: the owner check, and re-deriving the add
       space: 8n,
     });
     ownerCheck = compileSauceProgram("solana", OWNER_CHECK).bytecode;
-    derived = compileSauceProgram("solana", rederived(), {
-      defines: { KITCHEN: word(harness.kitchen), SALT: toBigInt(HARNESS_POT_SALT) },
-    }).bytecode;
+    derived = withArguments(harness.kitchen, toBigInt(HARNESS_POT_SALT));
   });
 
   /** A Kitchen cook of `bytecode` on the harness Pot, with `tail` as the program's accounts. */
@@ -131,14 +148,12 @@ describeSvm("binding a slot to the Pot: the owner check, and re-deriving the add
     expect(new TextDecoder().decode(refused.revertData)).toBe("pot is not the wallet's Pot");
   });
 
-  // The harness Pot's salt is not zero, so the case above already runs the skill's `--define SALT`
-  // path. This is the other half: the derivation is the salt's, so the program compiled with the
+  // The harness Pot's salt is not zero, so the case above already passes the skill's salt
+  // argument. This is the other half: the derivation is the salt's, so the program given the
   // default salt (zero) refuses the same, real Pot.
-  it("the re-derivation is the salt's: compiled for the zero salt, it refuses the real Pot", async () => {
+  it("the re-derivation is the salt's: given the zero salt, it refuses the real Pot", async () => {
     expect(toBigInt(HARNESS_POT_SALT)).not.toBe(0n);
-    const zeroSalt = compileSauceProgram("solana", rederived(), {
-      defines: { KITCHEN: word(harness.kitchen) },
-    }).bytecode;
+    const zeroSalt = withArguments(harness.kitchen, 0n);
     const refused = expectFail(await cook(zeroSalt, [pot(), wallet()]));
 
     expect(new TextDecoder().decode(refused.revertData)).toBe("pot is not the wallet's Pot");

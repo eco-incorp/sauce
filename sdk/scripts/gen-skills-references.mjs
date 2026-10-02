@@ -788,9 +788,9 @@ function renderGlobals(data) {
       "On Solana a symbol is the mint's 32-byte key, a value for the `@sauce/token` functions",
       "(`balanceOf(USDC, account)`); the token accounts are `Account` parameters, and the token",
       "methods (`USDC.transfer(...)`) are EVM-only. Devnet's mints, which differ, are in the Solana",
-      "file in `sauce-chains`, passed as a define that wins over the symbol. That file also names each",
-      "mint's token program: legacy SPL Token, or Token-2022, whose mints a program moves with the",
-      "checked writes (`sauce-solana`).",
+      "file in `sauce-chains`; a program for devnet takes its mint as an `Address` parameter of",
+      "`main`. That file also names each mint's token program: legacy SPL Token, or Token-2022, whose",
+      "mints a program moves with the checked writes (`sauce-solana`).",
     );
   }
   tokens.push(
@@ -1107,8 +1107,8 @@ function renderChain(chain, supported, site) {
     }
     if (chain.devnet.length > 0) {
       lines.push(
-        "On devnet, pass a mint that differs as a define, which wins over the symbol",
-        "(`--define USDC=<key>`):",
+        "On devnet these mints differ: a program for devnet takes its mint as an `Address` parameter",
+        "of `main`, given to `--args` as the mint's base58 address:",
         "",
         ...mints(chain.devnet),
       );
@@ -1247,10 +1247,9 @@ function protocolExample(p, data) {
       `\`\`\`sauce chain=${chain.slug}`,
       `import ${e.name} from "./protocols/${p.slug}/${e.name}.json";`,
       "",
-      "const TARGET = 0; // the contract's address, as a define",
-      "",
-      "function main() {",
-      `  const target = ${e.name}.at(TARGET);`,
+      "// The contract's address, a `main` argument.",
+      "function main(contract: Address) {",
+      `  const target = ${e.name}.at(contract);`,
       "}",
       "```",
       "",
@@ -1273,7 +1272,7 @@ function protocolExample(p, data) {
   const constant = constName(first.role);
   return [
     `Where it is not a namespace, a program imports the ABI and binds it to the recorded address,`,
-    `as a module constant a define can replace (here ${chain.name}'s ${first.role}):`,
+    `as a module constant (here ${chain.name}'s ${first.role}):`,
     "",
     `\`\`\`sauce chain=${chain.slug}`,
     `import ${first.abi} from "./protocols/${p.slug}/${first.abi}.json";`,

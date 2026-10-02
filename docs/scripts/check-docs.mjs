@@ -13,6 +13,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
+  defineFlagProblems,
   executedExamplesProblems,
   inputProblems,
   namedProgramProblems,
@@ -78,6 +79,24 @@ for (const file of manual) {
 }
 if (failures.length) throw new Error(`Broken manual links:\n${failures.join("\n")}`);
 console.log(`Manual links: ${manual.length} files checked`);
+// No page teaches a define: `--define` and `--defines` are the command's low-level flags, and a value
+// a reader supplies is a `main` argument (`example-programs.mjs`). The manual and its examples; the
+// skills are skills:check's.
+{
+  const taught = [
+    join(root, "README.md"),
+    join(root, "docs/README.md"),
+    ...["concepts", "guides", "api", "examples"].flatMap((directory) =>
+      markdownFiles(join(root, "docs", directory)),
+    ),
+    ...readdirSync(join(root, "docs/examples"))
+      .filter((name) => name.endsWith(".ts"))
+      .map((name) => join(root, "docs/examples", name)),
+  ].flatMap((file) =>
+    defineFlagProblems({ where: file.slice(root.length + 1), text: readFileSync(file, "utf8") }),
+  );
+  if (taught.length) throw new Error(`Low-level flags taught:\n${taught.join("\n")}`);
+}
 
 // ---- The manual's shape: one place per fact, and a reader never sent into the skills ----------------
 // The skills are written for agents and carry their own copy of every fact; the manual carries the
@@ -207,23 +226,10 @@ for (const name of sauceExamples) {
   }
 }
 console.log(`SauceScript examples: ${sauceExamples.length} quoted verbatim in the manual`);
-// The intent files intent-defaults converts to `main` parameters, with `sauce intent publish
-// --args`, and executes in an eco-routes suite. Each entry fails once its example no longer needs
-// it, which is when that PR removes it.
-const BY_INTENT_DEFAULTS = "converted and executed by intent-defaults' intent publish --args PR";
-const EXECUTION_EXCEPTIONS = {
-  "nested-intent.sauce.ts": BY_INTENT_DEFAULTS,
-  "nested-swap.sauce.ts": BY_INTENT_DEFAULTS,
-};
-const INPUT_EXCEPTIONS = {
-  "cross-chain-cascade.sauce.ts": { RECIPIENT: BY_INTENT_DEFAULTS },
-  "nested-intent.sauce.ts": Object.fromEntries(
-    ["AMOUNT", "REWARD", "RECIPIENT"].map((name) => [name, BY_INTENT_DEFAULTS]),
-  ),
-  "nested-swap.sauce.ts": Object.fromEntries(
-    ["POOL", "MIN_OUT", "AMOUNT", "REWARD", "RECIPIENT"].map((name) => [name, BY_INTENT_DEFAULTS]),
-  ),
-};
+// An example no suite executes yet, with why; and a name an example reads that nothing declares,
+// example -> name -> why. Each entry fails once its example no longer needs it.
+const EXECUTION_EXCEPTIONS = {};
+const INPUT_EXCEPTIONS = {};
 // Compiled is not run: each example also names, in `executed.json`, the suites that execute it on
 // an engine. Tests do not ship, so the installed package's run skips this.
 if (packageArgument < 0) {

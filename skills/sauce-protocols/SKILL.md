@@ -37,7 +37,7 @@ An interface is called with the address of a deployment, `Erc4626.Vault(vault).t
 ABI; a deployed contract's name is never called with an address. A contract the
 registry does not record at all is called through its ABI, imported from
 `./protocols/<slug>/<Export>.json` and bound with `.at(address)` to an address passed in as a
-`main` input or a define.
+`main` input.
 
 A program that should also compile for a chain without the protocol asks `available(...)`, which is
 decided when it is compiled; the branch it rules out is left out, names and all:
