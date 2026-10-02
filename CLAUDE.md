@@ -55,7 +55,7 @@ pnpm lint           # eslint, whole repo
 pnpm lint:fix       # ...with --fix
 pnpm format         # prettier --write, whole repo
 pnpm format:check   # prettier --check, what CI runs
-pnpm docs:check     # manual links, README snippet, and executable examples; build first
+pnpm docs:check     # manual links, README snippet, executable examples, executed.json; build first
 pnpm skills:check   # the agent skills: programs, command lines, runners, wording; build first
 ```
 
@@ -72,6 +72,22 @@ module import. Prettier's list is different and narrower — generated output (`
 the two `settle.sauce.ts` recipes) and captured fixtures. Everything else, SauceScript included, is
 formatted; `.prettierrc.json` names the `typescript` parser for `sdk/src/std`, whose `.js` files
 carry type annotations Prettier's default parser rejects.
+
+**SauceScript in an editor.** The root `tsconfig.json` builds nothing: it is the project an editor
+opens every `*.sauce.ts` of the repository in — skills, docs, recipes, fixtures — the project
+`sauce init` writes into `programs/` (`sauceScriptTsconfig` in `sdk/src/cli/skills.ts`), with the
+declarations from `sdk/dist/sauce-script` (so build first) and the plugin from the SDK workspace,
+which pnpm links into `node_modules/.pnpm/node_modules` beside the workspace TypeScript. The plugin
+loads only when the editor runs that TypeScript (VS Code: "Use Workspace Version"); without it the
+types still apply and the false positives it drops show. `sdk/tsconfig.json` excludes
+`src/**/*.sauce.ts`, and tsserver (TypeScript 5.6 and later) goes on up to the root project for a
+file its nearest tsconfig does not include; the runners and the docs' `.ts` examples keep their
+inferred project. `pnpm docs:check` asks tsserver for each tracked program's project and
+diagnostics (`checkRepositoryEditor` in `sdk/scripts/check-editor.mjs`), and
+`sdk/test/sauce-script.test.ts` holds every program the root tsconfig lists to the declarations
+built from source. `sauce skills install` writes the same project, naming the installed package,
+beside the skills (`packaged` in `skills.ts`), and the packed check opens the installed programs
+in tsserver there.
 
 Per-workspace (`--filter`):
 
@@ -107,7 +123,18 @@ actions document through `compile`/`tx` via the built bin's `runCli` (here, not 
 because the command loads `actions/dist`, which CI builds after the SDK's tests).
 `names.mainnet` (`test:mainnet`) executes one chain-agnostic document — symbols, namespaces, pools by
 key — on Ethereum, Base and Avalanche state, against the same trade by address, and through
-`sauce run`.
+`sauce run`. `holdings.mainnet` (`test:mainnet`) runs the `sauce-chains` skill's
+`holdings.sauce.ts` as its header's `sauce simulate` line says, on Ethereum and Base state, and
+holds what it returns to each chain's own pool and the balances the Pot was given.
+`docs-examples.mainnet` (`test:mainnet`) executes the manual's router, venue and README examples
+(`docs/examples/router-route`, `router-swap`, `venue-where-deployed`, `cross-chain-intent`) as their
+runners build them, IMPORTING the runners for their exact bytes, and runs the `sauce run` usage
+line of each that has one as written, through `runCli`, on Ethereum, Base and OP Mainnet state;
+each output is held to the venues' own quotes, and `cross-chain-intent`'s published intent to Base's
+own Portal. Importing a runner is why `actions/tsconfig.json` sets
+`rootDir: ".."`: the runners import `@eco-incorp/sauce` by its own name, a self-reference
+TypeScript resolves only with a root; `tsconfig.build.json` pins its own `rootDir` to `src`, so the
+build's output does not move.
 After changing an action's fields in `actions/src/spec.ts`, run `pnpm --filter './actions'
 gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.json` is stale.
 
@@ -164,22 +191,26 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   `./artifacts/*.json` fail. Run `pnpm --filter './sdk' sync-engine-artifacts`.
 - **Mainnet state (`actions/tests/state/*.genesis.json.gz`)** — no test forks a live chain. The
   actions mainnet suites replay a chain at its pinned block (`CHAINS` in `actions/tests/mainnet.ts`:
-  Ethereum at `PINNED_BLOCK` 26,070,000, Base at 51,966,000, Avalanche C-Chain at 96,424,000) from
+  Ethereum at `PINNED_BLOCK` 26,070,000, Base at 51,966,000, Avalanche C-Chain at 96,424,000, OP
+  Mainnet at 157,600,000) from
   one gzipped anvil genesis per suite: every account and storage slot that suite read, at their
   values in that block. Replay pins the block number, its timestamp, the chain id and the chain's
-  block interval (12 s on Ethereum, 2 s on Base and Avalanche — WOOFi's oracle goes stale 120 s
+  block interval (12 s on Ethereum, 2 s elsewhere — WOOFi's oracle goes stale 120 s
   after its last post), refuses to fork, and makes any non-loopback `fetch` throw, so a suite that
   starts reading something new FAILS (a missing slot reads as zero) rather than reaching the
   network. Blob sizes at capture: actions ~680 KB, quote ~270 KB, split-swap ~80 KB, the swap
   venue suites `swap` (Ethereum) ~110 KB, `swap-base` ~90 KB, `swap-avalanche` ~30 KB, and the names
-  suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB.
+  suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB,
+  `holdings-{ethereum,base}` ~30 KB each, and the docs examples suite's three (`docs-examples`,
+  `-base`, `-optimism`) ~80, ~35 and ~25 KB.
 
   **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
   pinned block (then recapture every suite on that chain, and revisit every pinned figure: pools,
   strategy ids, the live Rocket Pool deposit pool, expected outputs). The RPC comes from one file,
   `sdk/rpc.config.json` (gitignored; chain id -> URL, the file `capture-registry-abi.mjs` reads),
   never from the environment, and it must serve state at the pinned block; public RPCs that did at
-  capture time: `eth.drpc.org`, `mainnet.base.org`, `api.avax.network/ext/bc/C/rpc`.
+  capture time: `eth.drpc.org`, `mainnet.base.org`, `api.avax.network/ext/bc/C/rpc`,
+  `mainnet.optimism.io`.
 
   ```sh
   pnpm --filter './actions' capture-mainnet                      # every suite
@@ -715,9 +746,21 @@ an intent the file opens resolves its body on its own chain) — and no encoder 
 `validateSettleProgram`/`verifySvmSettleExecution`, and Solana cooks `createSauceSvmClient`
 (`cookTransaction`). It is Node-only and deliberately in no `exports` entry and no barrel
 (`cli.test.ts` fails if a barrel exports it), reads no environment but the variable `--password-env`
-names, reaches a network only through `--rpc-url` or a `--config` file, and signs only with
+names, reaches a network only through `--rpc-url`, a `--config` file's entry for the chain, or
+else the built-in public endpoints (none with `--offline`), and signs only with
 `--wallet`, `--keystore`, `--private-key` or `--keypair`, scrubbing any key or password it was given
-from everything it prints. `run --fund` (`funding.ts`)
+from everything it prints. **The public endpoints are the one exception to "the package ships no
+RPC URL"** (the user's call: nobody should need a config to run the CLI or the MCP server). They
+live in exactly one module, `sdk/src/cli/public-rpcs.ts` (1–3 keyless endpoints per canonical chain,
+each flagged for `eth_simulateV1`, with the date they were checked), and nothing outside
+`sdk/src/cli/` may import it; `no-embedded-rpc.test.ts` allows that file alone and fails an import
+from anywhere else or an export that reaches `cli/`, so it never reaches a browser.
+`public-endpoints.ts` hands each chain to the command's clients as one loopback URL (like the MCP
+guard's forwarder) that falls back through the list on a network error, a timeout, 401, 403, 429 or
+5xx, keeps to the endpoint that answered, and sends `eth_simulateV1` only where it runs. The
+executable (`main.ts`) creates it and puts it on `CliIo.publicRpcs`; an in-process `runCli` without
+it (every test, the skills checker) reads no chain it is not given, so CI stays offline.
+`sdk/scripts/check-public-rpcs.mjs` re-verifies the list live, by hand, never in CI. `run --fund` (`funding.ts`)
 wraps the file's source before that compile — a new `main` with the same signature that pulls
 through `@sauce/token` (`permitTransferFrom`, `permit`, `transferFrom`), calls the original
 renamed, and sweeps; in a script, the pulls after its imports and the sweeps after its last
@@ -760,7 +803,8 @@ No tool takes a key or a password under any name (`tools.test.ts` and `wallets.t
 input that looks like one), and the server reads no environment. It signs only over stdio, started
 with `--wallets [dir]` and a password source (`mcp/src/wallets.ts`, see "Agent wallets"); without
 them, and always over HTTP, it never signs. A tool reads a chain through the call's own `rpcUrl`, else the
-`--config` endpoint, else refuses (`reach.ts`); a caller's URL is a secret for that call only, and
+`--config` endpoint, else the public endpoints `sauce mcp` hands it (`Endpoints.public`, saying so in
+the result's notes), else refuses (`reach.ts`); a caller's URL is a secret for that call only, and
 the server's are registered with `signer.ts#secret` at start — all scrubbed from every result,
 error and log (`secrets.test.ts`). Over HTTP a caller's URL goes only through `guard.ts`: https,
 no private/ULA/link-local/CGNAT/metadata address, checked again at each connection (rebinding),
@@ -901,7 +945,23 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   every name a program uses; the SauceScript reference
   (`sauce-script/references/builtins.{md,json}`, with `skills-check/builtins*.mjs`) to the
   compiler; every ```sauce block in a skill's `references/` compiled like its own; every relative
-  link resolving to a file inside the skills directory; and the wording rules below. Its exceptions
+  link resolving to a file inside the skills directory; every example program either executed by a
+  suite CI runs or listed as compile-only, with why, in `skills-check/executed.json` (the rules are
+  `docs/scripts/example-programs.mjs`'s, shared with `docs:check`, which holds
+  `docs/examples/executed.json` to them with no compile-only list; both skip on the installed
+  package, where the suites are absent); every example program, in the skills and in
+  `docs/examples`, writing what the registry names by its name — no `0x` literal of a token or
+  contract address `routes.sourceGlobals` names on any EVM chain, and no hand-built `hex` selector
+  of a function a namespace binding, interface or registry ABI declares (comments are exempt, so a
+  usage line may show an address; a deliberately low-level call is a `LOW_LEVEL_CALLS` entry, per
+  example and selector, with its reason); every value an example program reads having a visible
+  source — a name it never declares must be the registry's (`routes.sourceGlobals` on any chain),
+  the language's (a builtin root from `builtins.json`, or `available`, `Token`, `self`), an import,
+  a local or a parameter, so an input is a `main` parameter given with `--args` and never an
+  undeclared define, which is the SDK's mechanism and not a user's (an exception is an
+  `INPUT_EXCEPTIONS` entry, per example and name, with its reason; the intent files waiting on
+  `sauce intent publish --args` are listed there, and `docs:check`'s `EXECUTION_EXCEPTIONS` excuses
+  the two not yet executed); and the wording rules below. Its exceptions
   live in the checker, never as markers in a
   shipped skill (they mean nothing to the agent reading it): a name inline code may use although
   the package never declares it (an external contract's function) is an `UNDECLARED_NAMES` entry,

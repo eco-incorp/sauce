@@ -1,12 +1,11 @@
 import { Base } from "@eco-incorp/sauce";
 import type { routes } from "@eco-incorp/sauce";
 
-// Offline fixtures. Read the destination Kitchen fee before use. The Pot and engine are derived.
+// Offline fixtures: the creator, and the fee, which destinationExecutionFee() reads for real. The
+// Portals, the prover, the Pot, the engine and the route's native amount come from the SDK.
 const executionFee = 1_000n;
 const options: routes.IntentOptions = {
   execution: { value: executionFee },
-  nativeAmount: executionFee,
-  portal: "0x3333333333333333333333333333333333333333",
   deadline: 2_000_000_000n,
 };
 
@@ -15,15 +14,16 @@ const built = Base(() => {
 }, options).reward({
   source: "ethereum",
   creator: "0x4444444444444444444444444444444444444444",
-  prover: "0x5555555555555555555555555555555555555555",
   deadline: 2_000_003_600n,
-  nativeAmount: 0n,
 });
 
 if (!built.compiled.bytecode[0]?.length || built.intent.route.calls.length !== 1) {
   throw new Error("Expected a compiled approval and one Pot call");
 }
-if (built.intent.route.calls[0]!.value !== executionFee) {
-  throw new Error("Expected the destination cook to receive its fee");
+if (
+  built.intent.route.calls[0]!.value !== executionFee ||
+  built.intent.route.nativeAmount !== executionFee
+) {
+  throw new Error("Expected the destination cook to receive its fee, and the solver to send it");
 }
 console.log("Base approval intent:", built.hash().intentHash);

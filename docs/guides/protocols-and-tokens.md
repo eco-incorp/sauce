@@ -104,11 +104,12 @@ program can name a venue some of its chains lack:
 
 ```js
 // One program for every chain: the USDC/WETH 0.05% pool from PancakeSwap V3 where the chain has it,
-// from Uniswap V3 where it does not, and nothing where it has neither.
+// from Uniswap V3 where it does not, and nothing where it has neither venue or lacks either token.
 //
 // `available(...)` is decided when the program is compiled, for the chain it is compiled for, and
 // the branches it rules out are removed before anything in them is resolved.
 function main() {
+  if (!available(USDC) || !available(WETH)) return 0n;
   let pool = 0n;
   if (available(PancakeswapV3.Factory)) {
     pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
@@ -120,8 +121,10 @@ function main() {
 ```
 
 Compiled for Base this calls PancakeSwap V3's factory; compiled for Optimism, which has no
-PancakeSwap V3, it compiles to the Uniswap V3 lookup alone. [registry-names.ts](../examples/registry-names.ts)
-compiles it for both.
+PancakeSwap V3, it compiles to the Uniswap V3 lookup alone; compiled for a chain with neither, or
+without USDC or WETH, it returns 0 and calls nothing. The guard on the tokens is what makes it
+compile everywhere: a token the chain lacks is an unknown name in any branch that is kept.
+[registry-names.ts](../examples/registry-names.ts) compiles it for Base and Optimism.
 
 - It takes a contract — `UniswapV3.Factory`, `Uniswap.UniversalRouter`, or one on a named chain,
   `Arbitrum.UniswapV3.Factory` — or a token symbol, `USDT`. A token is available where the chain's

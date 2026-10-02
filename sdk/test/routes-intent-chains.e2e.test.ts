@@ -6,11 +6,16 @@
  * only way to show that a lowering named the right chain's token is to give each chain a different
  * one, and to have every other chain's address be empty there, as it is on a real chain.
  *
- * So: one anvil per chain, with its real chain id — Base (8453), Arbitrum (42161), Optimism (10) —
- * each running the real eco-routes Portal and the released engine behind a Kitchen-minted Pot, and
- * each holding a mock ERC-20 at ITS OWN registry USDC address and nowhere else. The programs are the
- * docs examples verbatim, compiled with the SDK's real registry. An intent published on one anvil
- * is fulfilled on the next from the bytes that anvil's Portal logged.
+ * So: one anvil per chain, with its real chain id — Base (8453), Arbitrum (42161), Optimism (10),
+ * Ethereum (1) — each running the real eco-routes Portal and the released engine behind a
+ * Kitchen-minted Pot, and each holding a mock ERC-20 at ITS OWN registry USDC address and nowhere
+ * else. The programs are compiled with the SDK's real registry: a body that forwards what it measured
+ * to Arbitrum (`fixtures/routes/body-forwards-to-arbitrum.sauce.ts`, the README's example before it
+ * took `main` arguments, which a body cannot), and the nested-intents guide's cascade, verbatim, on
+ * the chains the release supports (Base, Ethereum, then Base again). The cascade also runs over three different chains,
+ * where a level resolving a name on its grandparent's chain would show. An intent published on one
+ * anvil is fulfilled on the next from the bytes that anvil's Portal logged. The guide's two-level
+ * file is opened from a wallet, which `cli-lifecycle.e2e.test.ts` runs through `sauce intent`.
  *
  * WHY `routes-nest-dynamic.e2e.test.ts` MISSED THIS. It runs ONE anvil, as Base, and named every
  * token through a define or — in its README test, until this suite was written — a
@@ -83,6 +88,10 @@ const PORTAL_FIXTURE = fixture("evm/fixtures/Portal.json");
 const MOCK_ERC20 = fixture("std/token/fixtures/MockERC20.json");
 const example = (name: string) =>
   readFileSync(join(HERE, "../../docs/examples", `${name}.sauce.ts`), "utf8");
+const BODY_TO_ARBITRUM = readFileSync(
+  join(HERE, "fixtures/routes/body-forwards-to-arbitrum.sauce.ts"),
+  "utf8",
+);
 
 const DEPLOYER = privateKeyToAccount(
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
@@ -171,7 +180,7 @@ interface Published {
   rewardTokens: readonly { token: Address; amount: bigint }[];
 }
 
-type Slug = "base" | "arbitrum" | "optimism";
+type Slug = "base" | "arbitrum" | "optimism" | "ethereum";
 
 /** The registry's USDC for `slug` — a different address on each of the three. */
 const usdcOf = (slug: Slug): Address =>
@@ -409,27 +418,47 @@ const worker = Number(process.env.JEST_WORKER_ID ?? "1") % 100;
 const base = new Chain("base", 8800 + worker);
 const arbitrum = new Chain("arbitrum", 8900 + worker);
 const optimism = new Chain("optimism", 9000 + worker);
+const ethereum = new Chain("ethereum", 9600 + worker);
+const CHAINS = [base, arbitrum, optimism, ethereum];
+
+/**
+ * The cascade over three DIFFERENT chains. The docs example keeps to the chains the release
+ * supports, so it alternates Base and Ethereum, and there a level that resolved a name on its
+ * grandparent's chain instead of its own would look right.
+ */
+const THREE_CHAIN_CASCADE = `function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum(
+    () => {
+      const swapped = USDC.balanceOf(ctx.self());
+      Optimism(() => {
+        USDC.transfer(RECIPIENT, swapped);
+      }).reward({ tokens: [{ token: USDC, amount: swapped }] });
+    },
+    { tokens: [{ token: USDC, amount }] },
+  ).reward({ tokens: [{ token: USDC, amount }] });
+}`;
 
 describeEvm("an intent created inside a program, across chains with different tokens", () => {
   beforeAll(async () => {
     const creationCode = readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex;
-    await Promise.all([base, arbitrum, optimism].map((chain) => chain.start(creationCode)));
+    await Promise.all(CHAINS.map((chain) => chain.start(creationCode)));
   }, 180_000);
 
-  afterAll(() => Promise.all([base, arbitrum, optimism].map((chain) => chain.stop())));
+  afterAll(() => Promise.all(CHAINS.map((chain) => chain.stop())));
 
   it("each chain has its own USDC and none of the others'", async () => {
-    for (const chain of [base, arbitrum, optimism]) {
-      for (const other of [base, arbitrum, optimism]) {
+    for (const chain of CHAINS) {
+      for (const other of CHAINS) {
         const code = await chain.publicClient.getCode({ address: other.usdc });
         expect(code !== undefined).toBe(other === chain);
       }
     }
-    // One deployment script ran on each, so the Portal is at one address on all three. The
+    // One deployment script ran on each, so the Portal is at one address on all of them. The
     // `sourcePortal`/`destinationPortal` overrides below apply at every level of a cascade, and this
     // is what makes one value right for all of them.
-    expect(new Set([base, arbitrum, optimism].map((c) => lower(c.portal))).size).toBe(1);
-    expect(new Set([base, arbitrum, optimism].map((c) => lower(c.pot))).size).toBe(1);
+    expect(new Set(CHAINS.map((c) => lower(c.portal))).size).toBe(1);
+    expect(new Set(CHAINS.map((c) => lower(c.pot))).size).toBe(1);
   }, 60_000);
 
   let saltByte = 0x10;
@@ -507,8 +536,8 @@ describeEvm("an intent created inside a program, across chains with different to
   ] as const;
 
   describe.each(BUILDS)("built with %s", (_name, build) => {
-    it("the README example: funded on Base in Base's USDC, fulfilled on Arbitrum in Arbitrum's", async () => {
-      const { route, rewardHash } = build(example("cross-chain-intent"));
+    it("a body that opens an intent: funded on Base in Base's USDC, fulfilled on Arbitrum in Arbitrum's", async () => {
+      const { route, rewardHash } = build(BODY_TO_ARBITRUM);
       // What the Pot holds when the program measures it; an earlier test's reverted fulfilment can
       // leave its own mint behind.
       await base.mint(base.usdc, base.pot, SEEDED);
@@ -543,8 +572,45 @@ describeEvm("an intent created inside a program, across chains with different to
       ]);
     }, 300_000);
 
-    it("the cascade: each hop funded on its own source chain, down to Optimism", async () => {
+    it("the guide's cascade: Base, Ethereum, then Base again, each hop funded where it runs", async () => {
       const { route, rewardHash } = build(example("cross-chain-cascade"));
+      await base.mint(base.usdc, base.pot, SEEDED);
+      const held = await base.balanceOf(base.usdc, base.pot);
+
+      // ---- hop 1, on Base: publishes the Ethereum intent, funded in Base's USDC ----------------
+      const onBase = await base.fulfil(route, rewardHash);
+      expect(onBase.status).toBe("success");
+      const [toEthereum] = onBase.published;
+      expect(toEthereum!.destination).toBe(1n);
+      expect(toEthereum!.rewardTokens.map((t) => [lower(t.token), t.amount])).toEqual([
+        [lower(base.usdc), held],
+      ]);
+
+      // ---- hop 2, on Ethereum: its program publishes the Base intent, funded in ETHEREUM's USDC,
+      // out of what the solver just delivered to its Pot.
+      const second = fulfilmentOf(toEthereum!);
+      await ethereum.provide(second.route);
+      const onEthereum = await ethereum.fulfil(second.route, second.rewardHash);
+      expect(onEthereum.status).toBe("success");
+      const [backToBase] = onEthereum.published;
+      expect(backToBase!.destination).toBe(8453n);
+      expect(backToBase!.rewardTokens.map((t) => [lower(t.token), t.amount])).toEqual([
+        [lower(ethereum.usdc), held],
+      ]);
+      expect(await ethereum.isFunded(backToBase!)).toBe(true);
+      expect(await ethereum.balanceOf(ethereum.usdc, ethereum.pot)).toBe(0n);
+
+      // ---- hop 3, on Base: the body pays out in Base's USDC -------------------------------------
+      const third = fulfilmentOf(backToBase!);
+      const paid = await base.balanceOf(base.usdc, RECIPIENT);
+      await base.provide(third.route);
+      const onBaseAgain = await base.fulfil(third.route, third.rewardHash);
+      expect(onBaseAgain.status).toBe("success");
+      expect(await base.balanceOf(base.usdc, RECIPIENT)).toBe(paid + held);
+    }, 300_000);
+
+    it("the cascade over three chains: each hop funded on its own source chain, down to Optimism", async () => {
+      const { route, rewardHash } = build(THREE_CHAIN_CASCADE);
       await base.mint(base.usdc, base.pot, SEEDED);
       const held = await base.balanceOf(base.usdc, base.pot);
 

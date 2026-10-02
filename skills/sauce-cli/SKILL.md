@@ -9,11 +9,17 @@ A Sauce program is a file of SauceScript that a Sauce engine executes atomically
 transaction. On an EVM chain it runs as a **Pot**: a small contract its owner controls, which holds
 the program's tokens and calls `cook(engine, program)`. The `sauce` command in `@eco-incorp/sauce`
 compiles the file, deploys the Pot, rehearses the cook, signs it and sends it. It needs no other
-tool, reads no environment variable but the one `--password-env` names, and reaches a network only
-through `--rpc-url` or `--config`.
+tool and no configuration: it reads no environment variable but the one `--password-env` names,
+and reads a chain through a built-in public endpoint unless given one of its own.
 
-Run the project's own copy, `npx sauce <command> --help`, for every option. On Solana the same
-commands apply with differences in accounts, signing and fees: read `sauce-solana` alongside.
+**Getting the command.** Install it once with `npm i -g @eco-incorp/sauce` (Node.js 24 or newer);
+`sauce --version` checks it, and `npm i -g @eco-incorp/sauce@latest` upgrades it. Without an
+install, run `npx -y @eco-incorp/sauce <command>` in its place. Never run a bare `npx sauce`
+outside a project that depends on the package: npx then fetches and runs npm's unrelated `sauce`
+package.
+
+`sauce <command> --help` lists every option. On Solana the same commands apply with
+differences in accounts, signing and fees: read `sauce-solana` alongside.
 
 | Command          | Does                                                                              |
 | ---------------- | --------------------------------------------------------------------------------- |
@@ -37,7 +43,7 @@ For the initial release, Sauce supports transactions on **Ethereum, Base and Sol
 (`--chain ethereum`, `base`, `solana`). Every other chain is a **preview chain**: `globals`,
 `compile`, `actions`, `simulate`, `inspect`, `verify`, `price`, `pools`,
 `sauce intent publish --dry-run`, `sauce intent fill` without `--send`, `sauce intent status` and
-`sauce intent import` work there, and `sauce pot` predicts the Pot (and reads it with an endpoint)
+`sauce intent import` work there, and `sauce pot` predicts the Pot (and reads it)
 but leaves its deployment out.
 Everything that leaves a transaction ready to sign, unsigned JSON included, or sends one is refused
 there before anything is read or signed: `tx`, `run`, `pot --deploy`, `pot --format cast`,
@@ -64,8 +70,11 @@ volume and timing). The command's own help ends with the same note.
 
 ## Endpoints and signers
 
-- **RPC URL**: `--rpc-url <url>`, or `--config sauce.config.json` holding
-  `{ "rpcUrls": { "<chain id>": "<url>" } }`. Keep that file out of git; never commit a URL.
+- **Endpoints**: none needed. A command reads a chain through a built-in public endpoint, and says
+  so on stderr; it can be slow or rate-limited. Your own is optional: `--rpc-url <url>`, or
+  `--config <file>` holding `{ "rpcUrls": { "<chain id>": "<url>" } }` (a chain the file does not
+  name is read through the built-in one). Keep that file out of git; never commit a URL.
+  `--offline` reads no chain at all.
 - **Signer**: `--wallet <name>`, a wallet `sauce wallet` keeps (see Wallets below), or
   `--keystore <keystore>`, a JSON keystore; either's password comes from the source named, or is
   asked for at the terminal. `--private-key <hex>` also works but lands in shell history. On
@@ -74,7 +83,7 @@ volume and timing). The command's own help ends with the same note.
   owner's Pot instead, the signer paying; the Pot is that owner's alone.
 - Pass each flag and each value as a word of its own, in any order: a shell variable holding
   several flags reaches the command as one word unless the shell splits it.
-- A program can come from stdin: give `-` as the file (`cat pay.sauce.ts | npx sauce compile -
+- A program can come from stdin: give `-` as the file (`cat pay.sauce.ts | sauce compile -
 --chain base`). Its relative imports then resolve against the current directory, or
   `--source-dir <dir>`. Stdin is then spent, so questions go to the terminal; with none, pass a
   password source for a wallet or keystore, and `--auto-approve` once the user agrees to what the
@@ -94,10 +103,10 @@ password itself on a command line, in a file you commit, or in a message:
 - With none, the password is asked for at the terminal.
 
 ```sh
-npx sauce wallet new agent --password-env SAUCE_WALLET_PASSWORD
-npx sauce wallet new agent-sol --solana --password-env SAUCE_WALLET_PASSWORD
-npx sauce wallet list
-npx sauce wallet address agent
+sauce wallet new agent --password-env SAUCE_WALLET_PASSWORD
+sauce wallet new agent-sol --solana --password-env SAUCE_WALLET_PASSWORD
+sauce wallet list
+sauce wallet address agent
 ```
 
 `new` prints the wallet's name, kind and address, never its key. Fund the address, then sign with
@@ -106,7 +115,7 @@ npx sauce wallet address agent
 EVM wallet signs on an EVM chain, a Solana one on Solana:
 
 ```sh
-npx sauce run pay.sauce.ts --chain base --config sauce.config.json \
+sauce run pay.sauce.ts --chain base \
   --wallet agent --password-env SAUCE_WALLET_PASSWORD --args <recipient> 1000000
 ```
 
@@ -136,16 +145,16 @@ sends. Suggest small balances and a policy to the user.
 
 ## Steps
 
-1. **Look up the chain's names** before writing: `npx sauce globals --chain base` lists the token
+1. **Look up the chain's names** before writing: `sauce globals --chain base` lists the token
    symbols with their addresses, the protocol contracts a program can call, and the functions it
    needs no import for. `--protocol UniswapV3` shows one namespace's methods with every parameter
    named; `--json` gives the same for a program to read. Use only names it lists. Before a swap,
-   `npx sauce pools --chain base USDC WETH --config sauce.config.json` lists the pair's pools at
+   `sauce pools --chain base USDC WETH` lists the pair's pools at
    every price-limit venue on the chain, deepest first: each one's fee, liquidity and
    `sqrtPriceX96`, what a token costs both ways with and without the fee, the distributed swap's
    `maxPrice` at that price, and how much moves the price 1%. A token it is given may be an
    address; its decimals are read from the token.
-2. **Compile**, to check the program: `npx sauce compile pay.sauce.ts --chain ethereum`. It prints the
+2. **Compile**, to check the program: `sauce compile pay.sauce.ts --chain ethereum`. It prints the
    bytecode; `--json` adds the size, `main`'s parameters, the compiler and the engine it pairs with,
    and what the compile applied: `defines` (each define the file reads, its value, whether the user
    or the chain set it, and the chain it applied on), `contracts` (each protocol contract it calls,
@@ -156,12 +165,12 @@ sends. Suggest small balances and a policy to the user.
    `// @chain base` line among the `//` comment lines it starts with (and `// @target svm` alone
    picks Solana); `--chain` overrides it. Leave the line out of a file meant for more than one
    chain.
-3. **Pot**: `npx sauce pot --chain base --owner <address>` (or `--keystore <keystore>` for the
+3. **Pot**: `sauce pot --chain base --owner <address>` (or `--keystore <keystore>` for the
    signer's own) prints the Pot's address, known before it exists, and its deploy transaction (on
    a preview chain the address alone, with `refused` saying why the deployment is left out).
-   With `--config sauce.config.json` it also says whether the chain has the released engine and
-   Kitchen (and the Kitchen's fee) and whether the Pot is deployed.
-   `npx sauce pot --deploy --chain base --config sauce.config.json --keystore <keystore>` deploys the
+   It also says whether the chain has the released engine and Kitchen (and the Kitchen's fee) and
+   whether the Pot is deployed.
+   `sauce pot --deploy --chain base --keystore <keystore>` deploys the
    signer's Pot. `--salt <label>` names another Pot of the same owner (`--salt-hex <bytes32>` for an
    exact salt); use the same salt in every later command.
 4. **Fund** the Pot with what the program spends: send its address the tokens from any wallet, or
@@ -182,7 +191,7 @@ sends. Suggest small balances and a policy to the user.
    (`10000000` is 10 USDC). `simulate --fund` with the owner's key rehearses it.
 
 5. **Rehearse**:
-   `npx sauce simulate pay.sauce.ts --chain ethereum --owner <address> --config sauce.config.json --assume-balance USDC:1 --assume-balance USDT:1 --args <recipient> 1000000`
+   `sauce simulate pay.sauce.ts --chain ethereum --owner <address> --assume-balance USDC:1 --assume-balance USDT:1 --args <recipient> 1000000`
    runs the cook from the owner with no key and nothing sent, and needs neither a deployed Pot nor
    a funded one, so it can come before steps 3 and 4. A Pot not deployed yet is deployed in the
    same rehearsal first: anyone may send a Pot's deployment, and the Pot is the owner's either way.
@@ -198,7 +207,7 @@ sends. Suggest small balances and a policy to the user.
    limit on the wrong side of the pool's price or at a bound). `--json` gives the same for a
    program to read.
 6. **Run**:
-   `npx sauce run pay.sauce.ts --chain ethereum --config sauce.config.json --keystore <keystore> --args <recipient> 1000000`
+   `sauce run pay.sauce.ts --chain ethereum --keystore <keystore> --args <recipient> 1000000`
    compiles, rehearses, signs, sends and waits (on a supported chain), then prints the hash, status and gas used, what the
    cook cost (gas, any L1 data fee, the value) and the tokens it moved. A Pot not
    deployed yet is deployed first once the user agrees at the prompt. `--auto-approve` approves, in
@@ -206,7 +215,7 @@ sends. Suggest small balances and a policy to the user.
    for `--fund`) and names each; with no terminal the run lists what it needs approved and sends
    nothing until it is given. Ask the user before passing `--auto-approve`.
 7. **Check** what was sent:
-   `npx sauce inspect <tx hash> --chain ethereum --config sauce.config.json --source pay.sauce.ts`
+   `sauce inspect <tx hash> --chain ethereum --source pay.sauce.ts`
    reads the transaction back: the Pot, the engine, the arguments the program got, and the route and
    reward of every intent it opens. It also reads calldata, and a file (its intents, with every value
    measured at run time named).
@@ -215,7 +224,7 @@ The transaction's value defaults to the Kitchen's execution fee, read from the c
 `--value <wei>` when the program also spends native currency.
 
 **For a wallet instead**:
-`npx sauce tx pay.sauce.ts --chain ethereum --owner <address> --value <wei> --args <recipient> 1000000`
+`sauce tx pay.sauce.ts --chain ethereum --owner <address> --value <wei> --args <recipient> 1000000`
 prints the unsigned transaction as JSON, `{ chainId, to, data, value }`, for any wallet to sign from
 the owner. `--format cast` prints it as a `cast send` line instead. Like `run`, it is refused on a
 preview chain.
@@ -226,7 +235,7 @@ A program whose `main` declares typed parameters takes them at run time, so one 
 serves every call. `sauce compile --json` lists them as `entryParams`. Pass them last, in order:
 
 ```sh
-npx sauce run split.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+sauce run split.sauce.ts --chain base --keystore <keystore> \
   --args <token> '["<recipient>","<recipient>"]' 1000000 true
 ```
 
@@ -257,7 +266,7 @@ Every value is checked against its declared type before anything is sent: `Addre
   hex.
 - In a project `sauce init` wrote, put programs in `programs/`: its `tsconfig.json` types them as
   SauceScript, so an editor's TypeScript errors there are real ones (with the project's own
-  TypeScript running the editor). For programs anywhere else, `npx sauce init <dir> --tsconfig`
+  TypeScript running the editor). For programs anywhere else, `sauce init <dir> --tsconfig`
   writes the same `tsconfig.json` into `<dir>` and nothing else. Without one, an editor shows
   TypeScript errors that the compile does not have; `sauce compile` is what decides.
 - `sauce-script` covers the language and what compiling for a chain adds to it.
@@ -271,13 +280,13 @@ arguments.
 A program file whose first line is
 
 ```sh
-#!/usr/bin/env -S npx -y @eco-incorp/sauce simulate
+#!/usr/bin/env -S sauce simulate
 ```
 
 runs as a command once it is executable (`chmod +x pay.sauce.ts`):
 
 ```sh
-./pay.sauce.ts --chain base --config sauce.config.json --owner <address> --args <recipient> 1000000
+./pay.sauce.ts --chain base --owner <address> --args <recipient> 1000000
 ```
 
 is `sauce simulate pay.sauce.ts` with those words after it: the cook rehearsed from the owner's
@@ -286,7 +295,7 @@ sending it is `sauce run` on the same file. The compile ignores the line, and ke
 line numbers in its errors:
 
 ```sauce chain=base,ethereum
-#!/usr/bin/env -S npx -y @eco-incorp/sauce simulate
+#!/usr/bin/env -S sauce simulate
 function main(recipient: Address, amount: Uint256) {
   USDC.transfer(recipient, amount);
 }
@@ -295,7 +304,7 @@ function main(recipient: Address, amount: Uint256) {
 ## Actions documents
 
 An actions document is JSON: a list of protocol operations in place of a program (`sauce-actions`
-covers writing one). `npx sauce actions swap.json --chain base` lowers it for the chain and prints
+covers writing one). `sauce actions swap.json --chain base` lowers it for the chain and prints
 the SauceScript it becomes, `main`'s parameters and the bytecode; `--json` gives the same for a
 program to read. `compile`, `simulate`, `tx` and `run` take a document wherever they take a
 `.sauce.ts` file, with the same flags:
@@ -309,8 +318,8 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
 
 - **A file that opens intents** (`Ethereum(() => { … }).reward({ … })`) also takes
   `--intent-deadline <unix seconds>`, `--intent-creator <address>` and, when an intent's body runs a
-  program, `--intent-execution-fee <wei>` (`auto` reads it from the destination through
-  `--config`). With `--config`, `compile` and `sauce intent publish` warn while the Pot such an intent cooks on
+  program, `--intent-execution-fee <wei>` (`auto` reads it from the destination). `compile` and
+  `sauce intent publish` warn while the Pot such an intent cooks on
   is not deployed on its destination: no solver can fill it until then, and the warning names the
   `sauce pot --deploy` that deploys it. `sauce run` opens them from the Pot, which is the way when
   an amount is measured on chain; `sauce intent publish` opens fixed ones from a wallet with no Pot, and
@@ -319,10 +328,10 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
   into the intent's vault, then `publish`: no approval. `--intent-fund-via publishAndFund` switches
   either to an approve and `publishAndFund`. `sauce intent publish … --dry-run --assume-balance
 USDC:<amount>` rehearses it from a wallet that does not hold the reward yet.
-  `sauce intent fill <file> --chain <chain> --config sauce.config.json` rehearses each intent where its
+  `sauce intent fill <file> --chain <chain>` rehearses each intent where its
   body runs: on its destination chain, as the solver who fills it, with no key and nothing sent.
   `publish --dry-run` covers only the source chain. `fill` prints what the body moved, what it left
-  in the shared Pot, and why it reverts. `--config` must name the destination chain's endpoint.
+  in the shared Pot, and why it reverts.
   `sauce-intents` covers writing, publishing, funding (including a transfer into the intent's
   vault), rehearsing them, and every later step (`sauce intent fill --send`, `prove`, `claim`,
   `refund`, `cancel`, `status`, `import`). Publishing, from a wallet or a Pot, needs every chain the
@@ -339,10 +348,11 @@ USDC:<amount>` rehearses it from a wallet that does not hold the reward yet.
 
 ## Without the CLI: the MCP tools
 
-The same commands are tools of the Sauce MCP server (`npx -y @eco-incorp/sauce mcp`), by one rule:
+The same commands are tools of the Sauce MCP server (`sauce mcp`), by one rule:
 each `sauce <command>` is the tool `sauce_<command>` (`sauce intent publish` is
 `sauce_intent_publish`), its flags are the tool's inputs in camelCase, the program goes in as
-`source`, and an endpoint is the call's `rpcUrl`. Each tool's own description gives its inputs.
+`source`, and an endpoint of the user's own, optional, is the call's `rpcUrl`. Each tool's own
+description gives its inputs.
 
 The tools sign nothing, so `sauce run` has none: the user signs what they return. The one exception
 is a server started over stdio with `--wallets` and a password source (`--password-env <NAME>`,

@@ -11,7 +11,7 @@
 // the delivery argument after them, the body runs on Base: `WETH`, `USDC`, `UniswapV3.Factory`,
 // `UniswapV3.Pool`, `UniswapV4.StateView` and `UniswapV4.PoolManager` there are Base's.
 //
-//   sauce run swap-on-base.sauce.ts --chain <chain> --config sauce.config.json \
+//   sauce run swap-on-base.sauce.ts --chain <chain> \
 //     --keystore <keystore> --define AMOUNT_IN=<amount> --define REWARD=<amount> \
 //     --define SQRT_PRICE_LIMIT_X96=<sqrtPriceX96> --define MIN_OUT=<amount> \
 //     --define MIN_AVG_PRICE=<price> --define RECIPIENT=<address> --define REFUND_TO=<address> \
@@ -30,12 +30,12 @@
 //                                  1e18: 2490000000 is 2,490 USDC per WETH
 //   RECIPIENT: Address             who receives the USDC on Base
 //   REFUND_TO: Address             who receives the unsold WETH on Base
-//   --intent-execution-fee: wei    Base's Kitchen fee for the body's cook; `auto` reads it through
-//                                  --config
+//   --intent-execution-fee: wei    Base's Kitchen fee for the body's cook; `auto` reads it from
+//                                  Base
 //
 // From Ethereum, selling 1 WETH on Base no lower than 2,500 USDC per WETH, for 1.002 WETH:
 //
-//   sauce run swap-on-base.sauce.ts --chain ethereum --config sauce.config.json \
+//   sauce run swap-on-base.sauce.ts --chain ethereum \
 //     --keystore <keystore> --define AMOUNT_IN=1000000000000000000 \
 //     --define REWARD=1002000000000000000 --define SQRT_PRICE_LIMIT_X96=3961408125713216879677197 \
 //     --define MIN_OUT=2490000000 --define MIN_AVG_PRICE=2490000000 \

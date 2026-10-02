@@ -6,7 +6,7 @@
 // transfer: USDT, which returns nothing, works like any other token, and a token that answers
 // `false` reverts the whole transaction.
 //
-//   sauce run pay.sauce.ts --chain <chain> --config sauce.config.json --keystore <keystore> \
+//   sauce run pay.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <recipient> <amount>
 //
 //   recipient: Address  who is paid
@@ -15,7 +15,7 @@
 //
 // On Ethereum, 1 USDC and 1 USDT to the recipient:
 //
-//   sauce run pay.sauce.ts --chain ethereum --config sauce.config.json --keystore <keystore> \
+//   sauce run pay.sauce.ts --chain ethereum --keystore <keystore> \
 //     --args <recipient> 1000000
 function main(recipient: Address, amount: Uint256) {
   USDC.transfer(recipient, amount);

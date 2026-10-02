@@ -1,23 +1,33 @@
 /**
  * Where the server reads chains: the RPC endpoints of a `--config` file, in the `sauce` command's
- * format (`{ "rpcUrls": { "<chain id>": "<url>" } }`), and nothing else. The server ships no
- * endpoint and reads no environment variable.
+ * format (`{ "rpcUrls": { "<chain id>": "<url>" } }`), and for a chain the file does not name, the
+ * built-in public endpoints the `sauce` command hands the server (`sdk/src/cli/public-rpcs.ts`).
+ * The server reads no environment variable.
  *
  * A provider URL usually carries a key, so every URL is registered as a secret the moment the file
  * is read: `sdk.scrub` removes it from every tool result and every message the server writes. No
  * result names the file either — on a remote server its path is the operator's business.
  */
-import { endpointFor, secret, UsageError, type CanonicalChain } from "./sdk.js";
+import {
+  endpointFor,
+  secret,
+  UsageError,
+  type CanonicalChain,
+  type PublicEndpoints,
+} from "./sdk.js";
 
-/** The chains a server can read, by the endpoints its operator configured. */
+/** The chains a server can read, by the endpoints its operator configured, and the public ones. */
 export interface Endpoints {
-  /** The chain ids with an endpoint. */
+  /** The chain ids with an endpoint of the operator's. */
   readonly chainIds: readonly number[];
-  /** The endpoint for `chain`, or `undefined` when none is configured. */
+  /** The operator's endpoint for `chain`, or `undefined` when none is configured. */
   readonly endpoint: (chain: CanonicalChain) => string | undefined;
+  /** The built-in public endpoints, started: a chain's when neither the call nor the operator
+   *  gives one. Absent, as in a test, such a chain is not read. */
+  readonly public?: PublicEndpoints | undefined;
 }
 
-/** A server with no `--config`: it reads no chain. */
+/** A server with no `--config` and no public endpoints: it reads no chain. */
 export const NO_ENDPOINTS: Endpoints = { chainIds: [], endpoint: () => undefined };
 
 /** The name `endpointFor` gives the file in its messages: never its path. */
@@ -77,8 +87,9 @@ export function noEndpoint(chain: CanonicalChain, endpoints: Endpoints, what: st
   return new UsageError(
     `${what} needs an RPC endpoint for ${chain.slug} (chain id ${chain.id}), and this server ` +
       (endpoints.chainIds.length === 0
-        ? "has none of its own. "
-        : `has none of its own for that chain (it has ${endpoints.chainIds.join(", ")}). `) +
+        ? "has none of its own"
+        : `has none of its own for that chain (it has ${endpoints.chainIds.join(", ")})`) +
+      (endpoints.public === undefined ? ". " : ", nor a built-in public one. ") +
       "Pass rpcUrl with the call. (Or the server's operator adds the chain to its --config " +
       `file: { "rpcUrls": { "${chain.id}": "<url>" } }.)`,
   );

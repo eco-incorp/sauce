@@ -106,8 +106,9 @@ written in its body — which is how a hop whose amount is only known on arrival
 See [create an intent from inside a program](../guides/intents.md#create-an-intent-from-inside-a-program).
 
 Building an intent publishes nothing. Your application submits the source-chain transactions, and a
-solver fulfills the destination. Nested intents are separate executions composed with `.nest(...)` —
-a cascade, not one call stack spanning chains. See [create an intent](../guides/intents.md).
+solver fulfills the destination. A nested intent is opened by the body of the one before it, when
+that body runs — a cascade of separate executions, not one call stack spanning chains. See
+[create an intent](../guides/intents.md) and [nested intents](../guides/nested-intents.md).
 
 ## Versions travel with artifacts
 

@@ -93,17 +93,17 @@ the developer; never invent one.
 
 ## From a file to a transaction
 
-The `sauce` command comes with the package, which needs Node.js 24 or newer: install it in the
-project with `npm i -D -E @eco-incorp/sauce` and run it with `npx sauce`. With the program above
-saved as `payout.sauce.ts`:
+The `sauce` command comes with the package, which needs Node.js 24 or newer: install it once with
+`npm i -g @eco-incorp/sauce`, or run `npx -y @eco-incorp/sauce` in its place (`sauce-cli`). With
+the program above saved as `payout.sauce.ts`:
 
 ```sh
-npx sauce globals --chain base                     # the names a program on Base can use
-npx sauce compile payout.sauce.ts --chain base     # check it compiles: the bytecode
-npx sauce simulate payout.sauce.ts --chain base --owner <address> --config sauce.config.json \
+sauce globals --chain base                     # the names a program on Base can use
+sauce compile payout.sauce.ts --chain base     # check it compiles: the bytecode
+sauce simulate payout.sauce.ts --chain base --owner <address> \
   --assume-balance USDC:1 --args <recipient> 1000000
-npx sauce tx payout.sauce.ts --chain base --owner <address> --args <recipient> 1000000
-npx sauce run payout.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+sauce tx payout.sauce.ts --chain base --owner <address> --args <recipient> 1000000
+sauce run payout.sauce.ts --chain base --keystore <keystore> \
   --args <recipient> 1000000
 ```
 
@@ -116,9 +116,10 @@ owner's Pot, `cook(engine, program)` with `main`'s arguments appended to the pro
 Kitchen's fee. `sauce tx` prints that transaction unsigned, `{ chainId, to, data, value }`, for
 any wallet or signer to send; `sauce run` signs and sends it itself, deploying the Pot first if it
 is not there. Both work on a supported chain only; on a preview chain, compile and simulate.
-`sauce-cli` covers each command. Endpoints come from a config file the developer passes, never
-from the program or the environment. Without the CLI, the same steps are tools of the Sauce MCP
-server (`npx -y @eco-incorp/sauce mcp`); `sauce-cli` maps each command to its tool.
+`sauce-cli` covers each command. A chain is read through a built-in public endpoint, or one the
+developer passes, never one from the program or the environment. Without the CLI, the same steps
+are tools of the Sauce MCP server (`sauce mcp`); `sauce-cli` maps each command
+to its tool.
 
 ## Pick the next skill
 
@@ -147,8 +148,9 @@ server (`npx -y @eco-incorp/sauce mcp`); `sauce-cli` maps each command to its to
 3. **Every check belongs in the program.** A failed `require` reverts the whole transaction; that
    atomicity is the safety mechanism.
 4. **An intent is an offer.** Never promise it will be filled.
-5. **No endpoints or keys in code.** The package ships no RPC URL and reads no environment
-   variable: endpoints and signers are passed on the command line or from a config file.
+5. **No endpoints or keys in code.** A program names no RPC URL or key, and the package reads no
+   environment variable: the command reads chains through built-in public endpoints or the
+   developer's own, and signers are passed on the command line.
 6. **Transactions on supported chains only.** Build and send on Ethereum, Base or Solana. On a
    preview chain, compile and simulate; when a command refuses one, offer the user the
    chain-support request it names instead of looking for another way to send.
