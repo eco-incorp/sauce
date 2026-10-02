@@ -455,10 +455,17 @@ try {
   const project = join(work, "scaffolded");
   sauce("init", project);
   const scaffoldedManifest = JSON.parse(readFileSync(join(project, "package.json"), "utf8"));
+  // viem as the installed package resolves it: the one its TypeScript API is typed in.
+  const installedViem = JSON.parse(
+    readFileSync(
+      createRequire(join(installedRoot, "package.json")).resolve("viem/package.json"),
+      "utf8",
+    ),
+  ).version;
   assert.deepEqual(
     scaffoldedManifest.dependencies,
-    { [name]: installedManifest.version },
-    "sauce init pins the package to exactly the version that ran it",
+    { [name]: installedManifest.version, viem: installedViem },
+    "sauce init pins the package to exactly the version that ran it, and viem to the one beside it",
   );
   for (const file of [
     "AGENTS.md",
@@ -600,16 +607,26 @@ try {
 
   // The same runners in a project whose package manager installs a package's own dependencies
   // beside it rather than at the project's root (pnpm's default): only the project's direct
-  // dependencies resolve from it — the package, viem and Node's typings — and the package's own
-  // only from beside the package. Outside `work`, so nothing hoisted there is reached either. Every
-  // runner must typecheck there; a probe that imports one of the package's own dependencies must not.
+  // dependencies resolve from it — what `sauce init` writes: the package, viem and Node's typings
+  // (its TypeScript runs the check) — and the package's own only from beside the package. Outside
+  // `work`, so nothing hoisted there is reached either. Every runner must typecheck there; a probe
+  // that imports one of the package's own dependencies must not.
+  const projectDependencies = [
+    ...Object.keys(scaffoldedManifest.dependencies),
+    ...Object.keys(scaffoldedManifest.devDependencies).filter((each) => each !== "typescript"),
+  ];
+  assert.deepEqual(
+    projectDependencies,
+    [name, "viem", "@types/node"],
+    "what sauce init depends on",
+  );
   const isolated = mkdtempSync(join(tmpdir(), "sauce-isolated-project-"));
   try {
     writeFileSync(
       join(isolated, "package.json"),
       JSON.stringify({ private: true, type: "module" }),
     );
-    for (const dependency of [name, "viem", "@types/node"]) {
+    for (const dependency of projectDependencies) {
       const at = join(isolated, "node_modules", dependency);
       mkdirSync(dirname(at), { recursive: true });
       symlinkSync(join(work, "node_modules", dependency), at, "dir");
@@ -651,7 +668,7 @@ try {
     );
     console.log(
       `Clean package install: the ${installedRunners.length} installed runners typecheck in a ` +
-        `project that resolves only its own dependencies (${name}, viem, @types/node)`,
+        `project that resolves only what sauce init makes it depend on (${projectDependencies.join(", ")})`,
     );
   } finally {
     rmSync(isolated, { recursive: true, force: true });

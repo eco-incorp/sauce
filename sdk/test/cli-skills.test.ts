@@ -15,6 +15,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,6 +41,12 @@ const MANIFEST = JSON.parse(readFileSync(join(SDK, "..", "package.json"), "utf8"
   name: string;
   version: string;
 };
+/** The viem installed beside the package, read here on its own. */
+const VIEM = (
+  JSON.parse(readFileSync(createRequire(import.meta.url).resolve("viem/package.json"), "utf8")) as {
+    version: string;
+  }
+).version;
 
 let work: string;
 let project: string;
@@ -533,10 +540,16 @@ describe("sauce init", () => {
     expect(run.code).toBe(0);
     const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
     expect(manifest.name).toBe("my-app");
-    expect(manifest.dependencies).toEqual({ [MANIFEST.name]: MANIFEST.version });
-    // The TypeScript the programs' editor plugin runs in: the range the package itself takes.
+    // The package at this exact version, and viem, which its TypeScript API is typed in, exactly as
+    // installed beside it: a project's own dependencies, all a non-hoisting package manager
+    // resolves from it.
+    expect(manifest.dependencies).toEqual({ [MANIFEST.name]: MANIFEST.version, viem: VIEM });
+    expect(VIEM).toMatch(/^\d+\.\d+\.\d+$/);
+    // The TypeScript the programs' editor plugin runs in: the range the package itself takes; and
+    // Node's typings, for the skills' runners.
     expect(manifest.devDependencies).toEqual({
       typescript: (MANIFEST as { dependencies?: Record<string, string> }).dependencies?.typescript,
+      "@types/node": "^24.0.0",
     });
     // The programs directory: its own TypeScript project, of SauceScript alone.
     expect(JSON.parse(readFileSync(join(dir, "programs/tsconfig.json"), "utf8"))).toEqual(
@@ -584,6 +597,7 @@ describe("sauce init", () => {
     expect((await sauce("init", dir, "--force")).code).toBe(0);
     expect(JSON.parse(readFileSync(join(dir, "package.json"), "utf8")).dependencies).toEqual({
       [MANIFEST.name]: MANIFEST.version,
+      viem: VIEM,
     });
   });
 
