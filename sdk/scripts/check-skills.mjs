@@ -559,8 +559,12 @@ function wording(skill, file) {
   text.split("\n").forEach((line, i) => {
     for (const [pattern, what] of VERSION_TALK)
       if (pattern.test(line)) fail(where(i), `mentions ${what}; state the fact without it`);
+    // A generated table row is registry data, where a name is a company's own: a stock token of
+    // Gemini Space Station names no agent.
+    const registryRow = isGenerated(file) && line.startsWith("| `");
     for (const [pattern, what] of AGENT_SPECIFIC)
-      if (pattern.test(line)) fail(where(i), `names ${what}; skills are agent-neutral`);
+      if (!registryRow && pattern.test(line))
+        fail(where(i), `names ${what}; skills are agent-neutral`);
     for (const [pattern, what] of ENGINE_INTERNALS)
       if (pattern.test(line)) fail(where(i), `describes ${what}; describe the SauceScript surface`);
     for (const pattern of PLACEHOLDERS)

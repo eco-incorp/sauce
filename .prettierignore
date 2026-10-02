@@ -48,6 +48,9 @@ sdk/test/fixtures/cli/anvil-2.keystore.json
 # Captured registry-ABI evidence (scripts/capture-registry-abi.mjs), one entry per line so a
 # recapture diffs by deployment. targets.json beside it is hand-written and IS formatted.
 sdk/test/fixtures/registry-abi/evidence.json
+# Captured token-registry evidence (scripts/capture-token-registry.mjs), one token per line, the same
+# way.
+sdk/test/fixtures/token-registry/evidence.json
 # Programs an agent wrote, copied byte for byte from the project it wrote them in: the SauceScript
 # declarations are proved on them as they were written.
 sdk/test/fixtures/sauce-script
