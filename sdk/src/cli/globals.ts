@@ -79,7 +79,7 @@ function namespaceNamed(
 /** An interface's lines: how a program binds it, and with `methods` what it can call. */
 function interfaceLines(one: SourceInterface, methods: boolean): string[] {
   return [
-    `${one.namespace}.${one.name}.at(<address>)  interface (${one.protocolName}): no fixed address`,
+    `${one.namespace}.${one.name}(<address>)  interface (${one.protocolName}): no fixed address`,
     ...(methods
       ? one.methods.map((method) => `  ${method.declaration}  ${method.stateMutability}`)
       : []),
@@ -166,7 +166,7 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
     text.push(
       "",
       `Interfaces (${globals.interfaces.length}): an ABI with no fixed address, bound to one the ` +
-        "program gives: <Namespace>.<Contract>.at(<address>).<method>(…)",
+        "program gives: <Namespace>.<Interface>(<address>).<method>(…)",
       ...globals.interfaces.map(
         (bound) => `  ${bound.namespace}.${bound.name}  (${bound.protocolName})`,
       ),

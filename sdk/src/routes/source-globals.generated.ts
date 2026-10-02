@@ -27,14 +27,20 @@ export interface SauceBytes extends SauceArray<bigint> {
   toLe(): bigint;
 }
 
-/** A registry ABI with no fixed address: `.at(address)` names the deployment to call. */
-export interface SauceInterface<Methods> {
+/** `.at(address)`: the same ABI at another address. */
+export interface SauceBinding<Methods> {
   at(address: bigint): Methods;
+}
+
+/** A registry ABI with no fixed address: called with the address of a deployment,
+ *  `UniswapV3.Pool(pool).liquidity()`, or `.at(address)`. */
+export interface SauceInterface<Methods> extends SauceBinding<Methods> {
+  (address: bigint): Methods;
 }
 
 /** A deployed registry contract: its address on the destination chain, its methods, and
  *  `.at(address)` to call another deployment of the same ABI. */
-export type SauceContract<Methods> = bigint & Methods & SauceInterface<Methods>;
+export type SauceContract<Methods> = bigint & Methods & SauceBinding<Methods>;
 
 export interface AaveV2LendingPoolMethods {
   "deposit"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;

@@ -80,9 +80,10 @@ name of its own, as here, in a file that also uses the token syntax, which binds
 - `Ethereum.UniswapV4.UniversalRouter` takes Ethereum's address but still executes on the program's
   own chain; running on another chain is an intent (`sauce-intents`).
 - Every catalogued protocol has a namespace. An interface, such as `Erc4626.Vault` or
-  `UniswapV3.Pool`, has no one address and is called at one, in the same expression:
-  `Erc4626.Vault.at(vault).deposit(...)`, or `UniswapV3.Pool.at(pool).liquidity()` for a pool its
-  factory returned. [references/protocols.md](references/protocols.md) lists every interface.
+  `UniswapV3.Pool`, has no one address and is called with one, together with a method in the same
+  expression: `Erc4626.Vault(vault).deposit(...)`, or `UniswapV3.Pool(pool).liquidity()` for a pool
+  its factory returned (`.at(pool)` is the same).
+  [references/protocols.md](references/protocols.md) lists every interface.
 
 **A venue a chain may not have** is asked with `available(<name>)`, decided when the program is
 compiled for a chain: `if (available(UniswapV3.Factory)) { ... }` keeps its branch where the chain
