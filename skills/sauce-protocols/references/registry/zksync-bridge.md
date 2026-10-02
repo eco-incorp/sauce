@@ -19,7 +19,7 @@ On Ethereum, `ZksyncBridge` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's diamondProxy, `0x32400084C286CF3E17e7B677ea9583e60a000324`.
-  require(ZksyncBridge.DiamondProxy != 0n);
+  require(ZksyncBridge.DiamondProxy != 0);
 }
 ```
 

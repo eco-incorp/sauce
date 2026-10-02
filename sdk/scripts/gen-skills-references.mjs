@@ -556,7 +556,6 @@ const CHAIN_NOTES = {
 const code = (s) => `\`${s}\``;
 /** Text for a table cell: a `|` would end it. */
 const cell = (s) => s.replaceAll("|", "\\|");
-const word = (address) => `${address}n`;
 
 /** A Solana key the registry holds as 32 bytes of hex. */
 const SVM_KEY = /^0x[0-9a-fA-F]{64}$/;
@@ -591,7 +590,7 @@ const spelling = (d) =>
   d.namespace !== undefined
     ? code(d.namespace)
     : d.abi !== undefined
-      ? `${code(`${d.abi}.at(${word(d.address)})`)}`
+      ? `${code(`${d.abi}.at(${d.address})`)}`
       : "no registry ABI";
 
 function renderGlobals(data) {
@@ -810,7 +809,7 @@ function chainExample(chain) {
   if (contract) {
     body.push(
       `  // \`${contract.namespace}\` is ${chain.name}'s ${contract.role}: \`${contract.address}\`.`,
-      `  require(${contract.namespace} != 0n);`,
+      `  require(${contract.namespace} != 0);`,
       `  // The same contract, qualified by the chain's name, from a program on any chain.`,
       `  require(${chain.key}.${contract.namespace} == ${contract.namespace});`,
     );
@@ -1064,7 +1063,7 @@ function protocolExample(p, data) {
       `\`\`\`sauce chain=${chain.slug}`,
       `import ${e.name} from "./protocols/${p.slug}/${e.name}.json";`,
       "",
-      "const TARGET = 0n; // the contract's address, as a define",
+      "const TARGET = 0; // the contract's address, as a define",
       "",
       "function main() {",
       `  const target = ${e.name}.at(TARGET);`,
@@ -1081,7 +1080,7 @@ function protocolExample(p, data) {
       `\`\`\`sauce chain=${chain.slug}`,
       "function main() {",
       `  // ${chain.name}'s ${first.role}, \`${first.address}\`.`,
-      `  require(${first.namespace} != 0n);`,
+      `  require(${first.namespace} != 0);`,
       "}",
       "```",
       "",
@@ -1095,7 +1094,7 @@ function protocolExample(p, data) {
     `\`\`\`sauce chain=${chain.slug}`,
     `import ${first.abi} from "./protocols/${p.slug}/${first.abi}.json";`,
     "",
-    `const ${constant} = ${word(first.address)};`,
+    `const ${constant} = ${first.address};`,
     "",
     "function main() {",
     `  const bound = ${first.abi}.at(${constant});`,

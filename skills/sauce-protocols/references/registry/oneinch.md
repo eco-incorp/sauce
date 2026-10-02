@@ -19,7 +19,7 @@ On Ethereum, `Oneinch` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's aggregationRouterV6, `0x111111125421cA6dc452d289314280a0f8842A65`.
-  require(Oneinch.AggregationRouterV6 != 0n);
+  require(Oneinch.AggregationRouterV6 != 0);
 }
 ```
 

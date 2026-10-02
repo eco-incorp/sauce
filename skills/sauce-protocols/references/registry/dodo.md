@@ -19,7 +19,7 @@ On Ethereum, `Dodo` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's dodoV2Proxy, `0xa356867fDCeA8e71AEaf87805808803806231FDc`.
-  require(Dodo.DODOV2Proxy != 0n);
+  require(Dodo.DODOV2Proxy != 0);
 }
 ```
 

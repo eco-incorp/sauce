@@ -51,6 +51,6 @@ function main(
   transfer(USDC, usdcProgram, potUsdc, toUsdc, pot, cash);
   // A Token-2022 mint may withhold a transfer fee: measure what arrived rather than assume it.
   const before = balanceOf(TSLAx, toTslax);
-  transferChecked(TSLAx, tslaxProgram, potTslax, tslaxMint, toTslax, pot, shares, 8n);
+  transferChecked(TSLAx, tslaxProgram, potTslax, tslaxMint, toTslax, pot, shares, 8);
   return balanceOf(TSLAx, toTslax) - before;
 }

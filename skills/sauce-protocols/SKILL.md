@@ -45,11 +45,11 @@ decided when it is compiled; the branch it rules out is left out, names and all:
 ```sauce chain=base,arbitrum,optimism
 function main(fee: Uint256) {
   const uni = UniswapV3.Factory.getPool(WETH, USDC, fee);
-  let pancake = 0n;
+  let pancake = 0;
   if (available(PancakeswapV3.Factory)) {
     pancake = PancakeswapV3.Factory.getPool(WETH, USDC, fee);
   }
-  require(uni != 0n || pancake != 0n, "no WETH/USDC pool at that fee");
+  require(uni != 0 || pancake != 0, "no WETH/USDC pool at that fee");
 }
 ```
 
@@ -97,7 +97,7 @@ that lacks it.
   registry has no verified ABI with their pool lookup, so discover the pool off chain and pass its
   address as a `main` input.
 - **Solidity idioms in a document have SauceScript spellings**: `msg.sender` is `ctx.msgSender()`,
-  `address(this)` is `ctx.self()`, and `type(uint256).max` is `~0n`
+  `address(this)` is `ctx.self()`, and `type(uint256).max` is `~0`
   ([../sauce-script/references/builtins.md](../sauce-script/references/builtins.md)).
 - **Approve exactly what the call spends**: the Pot keeps any allowance it grants.
 

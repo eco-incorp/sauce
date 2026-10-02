@@ -17,7 +17,7 @@ dex | Chains and addresses: [registry/trader-joe.md](registry/trader-joe.md)
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### swap
 
@@ -61,4 +61,4 @@ an ABI import bound to the address), and the ABI functions are generated in
 - Each LB pair is uniquely identified by (tokenX, tokenY, binStep)
 - Trader Joe is the dominant DEX on Avalanche; use it for AVAX pairs and Avalanche ecosystem tokens
 - Input token must be ERC20-approved to the LB Router
-- From a Pot program, `@sauce/router` swaps at an LB pair directly, with no router and no approval: `traderJoeLB(pair, tokenIn, tokenOut, amountIn, tokenX, tokenY, minOut, recipient)` reverts unless `tokenIn` and `tokenOut` are the pair's X and Y, transfers the input to the pair and calls `swap(swapForY, to)` with `swapForY = tokenIn == tokenX`, returning the received lane of the packed `amountsOut` (X low, Y high). The pair spends the whole input or reverts `LBPair__OutOfLiquidity`, and a wrong `swapForY` reverts `LBPair__InsufficientAmountIn`. `tryTraderJoeLB` asks `getSwapOut` first and pushes only when nothing would be left over, returning `0n` otherwise. The `traderJoeLBSwap` action is the same call
+- From a Pot program, `@sauce/router` swaps at an LB pair directly, with no router and no approval: `traderJoeLB(pair, tokenIn, tokenOut, amountIn, tokenX, tokenY, minOut, recipient)` reverts unless `tokenIn` and `tokenOut` are the pair's X and Y, transfers the input to the pair and calls `swap(swapForY, to)` with `swapForY = tokenIn == tokenX`, returning the received lane of the packed `amountsOut` (X low, Y high). The pair spends the whole input or reverts `LBPair__OutOfLiquidity`, and a wrong `swapForY` reverts `LBPair__InsufficientAmountIn`. `tryTraderJoeLB` asks `getSwapOut` first and pushes only when nothing would be left over, returning `0` otherwise. The `traderJoeLBSwap` action is the same call

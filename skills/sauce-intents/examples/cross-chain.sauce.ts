@@ -23,15 +23,15 @@
 //   sauce run cross-chain.sauce.ts --chain base \
 //     --keystore <keystore> --define BENEFICIARY=<address> --intent-deadline <unix seconds> \
 //     --intent-creator <address> --intent-execution-fee auto
-require(BENEFICIARY != 0n, "set BENEFICIARY");
+require(BENEFICIARY != 0, "set BENEFICIARY");
 const amount = USDC.balanceOf(ctx.self());
-require(amount > 0n, "nothing to forward");
-const delivered = amount - (amount * 10n) / 10000n; // the solver keeps 0.1%
+require(amount > 0, "nothing to forward");
+const delivered = amount - (amount * 10) / 10000; // the solver keeps 0.1%
 
 Ethereum(
   () => {
     USDC.approve(AaveV3.Pool, delivered);
-    AaveV3.Pool.supply(USDC, delivered, BENEFICIARY, 0n);
+    AaveV3.Pool.supply(USDC, delivered, BENEFICIARY, 0);
   },
   { tokens: [{ token: USDC, amount: delivered }] },
 ).reward({ tokens: [{ token: USDC, amount }] });

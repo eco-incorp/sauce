@@ -788,7 +788,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     // Enough for every pool to reach the looser limits, the V4 pools' included.
     const budget = 10_000n * 10n ** 6n;
     await call(USDC, erc20, "mint", [sauce.pot, budget]);
-    const unadjusted = replacing("Math.sqrt((1000000n - fee) * 10n ** 30n)", "10n ** 18n");
+    const unadjusted = replacing("Math.sqrt((1000000 - fee) * 10 ** 30)", "10 ** 18");
 
     const receipt = await cook(buying(budget), unadjusted);
     expect(receipt.status).toBe("success");
@@ -803,8 +803,8 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     const budget = 5_000n * 10n ** 6n;
     await call(USDC, erc20, "mint", [sauce.pot, budget]);
     const swapped = replacing(
-      "(paysToken0 ? protocolFees : protocolFees >> 12n)",
-      "(paysToken0 ? protocolFees >> 12n : protocolFees)",
+      "(paysToken0 ? protocolFees : protocolFees >> 12)",
+      "(paysToken0 ? protocolFees >> 12 : protocolFees)",
     );
 
     const receipt = await cook(buying(budget), swapped);
@@ -817,7 +817,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
 
   it("without the check for a missing pool, reading it reverts the cook", async () => {
     await call(USDC, erc20, "mint", [sauce.pot, 10n ** 9n]);
-    const receipt = await cook(buying(10n ** 9n), replacing("pool == 0n || "));
+    const receipt = await cook(buying(10n ** 9n), replacing("pool == 0 || "));
     expect(receipt.status).toBe("reverted");
   });
 
@@ -826,13 +826,13 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     await call(USDC, erc20, "mint", [sauce.pot, budget]);
     // A V4 key with no pool reads as empty, at price 0: past nothing, so its liquidity check is
     // what keeps the swap from reaching a pool that does not exist.
-    const unchecked = await cook(buying(budget), replacing("liquidity == 0n || "));
+    const unchecked = await cook(buying(budget), replacing("liquidity == 0 || "));
     expect(unchecked.status).toBe("reverted");
     // Taken out for the other venues only, the empty 1% V3 pool, priced inside its limit, is swapped.
     const empty = await priceOf(venue("v3:10000"));
     const receipt = await cook(
       buying(budget),
-      replacing("liquidity == 0n || ", "(venue == 2n && liquidity == 0n) || "),
+      replacing("liquidity == 0 || ", "(venue == 2 && liquidity == 0) || "),
     );
     expect(receipt.status).toBe("success");
     const wasted = fills(receipt).find((fill) => fill.venue === "v3:10000")!;
@@ -863,12 +863,12 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     };
     const base = await gasOf(PROGRAM);
     const more = {
-      spacing: await gasOf(replacing("[1n, 10n, 50n,", "[1n, 3n, 10n, 50n,")),
-      tier: await gasOf(replacing("[100n, 200n, 300n,", "[100n, 150n, 200n, 300n,")),
+      spacing: await gasOf(replacing("[1, 10, 50,", "[1, 3, 10, 50,")),
+      tier: await gasOf(replacing("[100, 200, 300,", "[100, 150, 200, 300,")),
       key: await gasOf(
         replacing(
-          "{ fee: 100n, spacing: 1n },",
-          "{ fee: 100n, spacing: 1n },\n{ fee: 50n, spacing: 1n },",
+          "{ fee: 100, spacing: 1 },",
+          "{ fee: 100, spacing: 1 },\n{ fee: 50, spacing: 1 },",
         ),
       ),
     };

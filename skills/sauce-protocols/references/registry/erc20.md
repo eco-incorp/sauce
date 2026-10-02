@@ -20,7 +20,7 @@ program is given.
 ```sauce chain=ethereum
 import ERC20ABI from "./protocols/erc20/ERC20ABI.json";
 
-const TARGET = 0n; // the contract's address, as a define
+const TARGET = 0; // the contract's address, as a define
 
 function main() {
   const target = ERC20ABI.at(TARGET);

@@ -19,7 +19,7 @@ On Arbitrum One, `GmxV2` is a namespace: its contracts need no import.
 ```sauce chain=arbitrum
 function main() {
   // Arbitrum One's dataStore, `0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8`.
-  require(GmxV2.DataStore != 0n);
+  require(GmxV2.DataStore != 0);
 }
 ```
 

@@ -19,7 +19,7 @@ On Ethereum, `OptimismBridge` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's l1StandardBridge, `0x99C9fc46f92E8a1c0deC1b1747d010903E884bE1`.
-  require(OptimismBridge.L1StandardBridge != 0n);
+  require(OptimismBridge.L1StandardBridge != 0);
 }
 ```
 

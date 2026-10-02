@@ -19,7 +19,7 @@ On Ethereum, `Aevo` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's depositContract, `0x4082C9647c098a6493Fb499EaE63b5ce3259C574`.
-  require(Aevo.DepositContract != 0n);
+  require(Aevo.DepositContract != 0);
 }
 ```
 

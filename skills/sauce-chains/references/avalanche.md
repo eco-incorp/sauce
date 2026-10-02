@@ -34,7 +34,7 @@ chain does not have it.
 ```sauce chain=avalanche
 function main() {
   // `AaveV2.LendingPool` is Avalanche C-Chain's lendingPool: `0x4F01AeD16D97E3aB5ab2B501154DC9bb0F1A5A2C`.
-  require(AaveV2.LendingPool != 0n);
+  require(AaveV2.LendingPool != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Avalanche.AaveV2.LendingPool == AaveV2.LendingPool);
 }

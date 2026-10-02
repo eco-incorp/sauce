@@ -19,7 +19,7 @@ On Ethereum, `Chainlink` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's ethUsdFeed, `0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419`.
-  require(Chainlink.EthUsdFeed != 0n);
+  require(Chainlink.EthUsdFeed != 0);
 }
 ```
 

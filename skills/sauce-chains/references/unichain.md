@@ -36,7 +36,7 @@ chain does not have it.
 ```sauce chain=unichain
 function main() {
   // `Cctp.TokenMessenger` is Unichain's tokenMessenger: `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d`.
-  require(Cctp.TokenMessenger != 0n);
+  require(Cctp.TokenMessenger != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Unichain.Cctp.TokenMessenger == Cctp.TokenMessenger);
 }

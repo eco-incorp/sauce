@@ -19,7 +19,7 @@ On Ethereum, `Hop` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's l1EthBridge, `0xb8901acb165ed027e32754e0ffe830802919727f`.
-  require(Hop.L1EthBridge != 0n);
+  require(Hop.L1EthBridge != 0);
 }
 ```
 

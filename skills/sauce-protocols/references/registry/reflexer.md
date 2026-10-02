@@ -19,7 +19,7 @@ On Ethereum, `Reflexer` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's coinJoin, `0x0A5653CCa4DB1B6E265F47CAf6969e64f1CFdC45`.
-  require(Reflexer.CoinJoin != 0n);
+  require(Reflexer.CoinJoin != 0);
 }
 ```
 

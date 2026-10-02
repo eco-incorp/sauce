@@ -19,7 +19,7 @@ On Ethereum, `Stader` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's ETHx, `0xA35b1B31Ce002FBF2058D22F30f95D405200A15b`.
-  require(Stader.ETHx != 0n);
+  require(Stader.ETHx != 0);
 }
 ```
 

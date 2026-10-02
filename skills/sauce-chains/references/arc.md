@@ -40,7 +40,7 @@ function main() {
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(EURC).balanceOf(ctx.self()) == held);
   // `AaveV4.CoreHub` is Arc's coreHub: `0x17288dfc86205301064577b98B02b81017e6F79C`.
-  require(AaveV4.CoreHub != 0n);
+  require(AaveV4.CoreHub != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Arc.AaveV4.CoreHub == AaveV4.CoreHub);
 }

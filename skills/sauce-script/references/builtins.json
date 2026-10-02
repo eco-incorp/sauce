@@ -121,7 +121,7 @@
       "signature": "ctx.codeSize(address: Uint256): Uint256",
       "targets": ["evm"],
       "example": {
-        "evm": "function main(token: Address): void { require(ctx.codeSize(token) > 0n); }"
+        "evm": "function main(token: Address): void { require(ctx.codeSize(token) > 0); }"
       },
       "unavailable": {
         "svm": {
@@ -221,8 +221,8 @@
       "signature": "Math.mulDiv(x: Uint256, y: Uint256, d: Uint256): Uint256",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(amount: Uint256, bps: Uint256): Uint256 { return Math.mulDiv(amount, bps, 10000n); }",
-        "svm": "function main(amount: Uint256, bps: Uint256): Uint256 { return Math.mulDiv(amount, bps, 10000n); }"
+        "evm": "function main(amount: Uint256, bps: Uint256): Uint256 { return Math.mulDiv(amount, bps, 10000); }",
+        "svm": "function main(amount: Uint256, bps: Uint256): Uint256 { return Math.mulDiv(amount, bps, 10000); }"
       }
     },
     {
@@ -251,8 +251,8 @@
       "signature": "Math.sDiv(a: Uint256, b: Uint256): Uint256",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(delta: Uint256): Uint256 { return Math.sDiv(delta, 2n); }",
-        "svm": "function main(delta: Uint256): Uint256 { return Math.sDiv(delta, 2n); }"
+        "evm": "function main(delta: Uint256): Uint256 { return Math.sDiv(delta, 2); }",
+        "svm": "function main(delta: Uint256): Uint256 { return Math.sDiv(delta, 2); }"
       }
     },
     {
@@ -261,8 +261,8 @@
       "signature": "Math.sMod(a: Uint256, b: Uint256): Uint256",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(delta: Uint256): Uint256 { return Math.sMod(delta, 3n); }",
-        "svm": "function main(delta: Uint256): Uint256 { return Math.sMod(delta, 3n); }"
+        "evm": "function main(delta: Uint256): Uint256 { return Math.sMod(delta, 3); }",
+        "svm": "function main(delta: Uint256): Uint256 { return Math.sMod(delta, 3); }"
       }
     },
     {
@@ -271,8 +271,8 @@
       "signature": "Math.sShr(value: Uint256, bits: Uint256): Uint256",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(tick: Uint256): Uint256 { return Math.sShr(tick, 1n); }",
-        "svm": "function main(tick: Uint256): Uint256 { return Math.sShr(tick, 1n); }"
+        "evm": "function main(tick: Uint256): Uint256 { return Math.sShr(tick, 1); }",
+        "svm": "function main(tick: Uint256): Uint256 { return Math.sShr(tick, 1); }"
       }
     },
     {
@@ -281,8 +281,8 @@
       "signature": "Math.signExtend(value: Uint256, byte: Uint256): Uint256",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(raw: Uint256): Uint256 { return Math.signExtend(raw, 2n); }",
-        "svm": "function main(raw: Uint256): Uint256 { return Math.signExtend(raw, 2n); }"
+        "evm": "function main(raw: Uint256): Uint256 { return Math.signExtend(raw, 2); }",
+        "svm": "function main(raw: Uint256): Uint256 { return Math.signExtend(raw, 2); }"
       }
     },
     {
@@ -291,8 +291,8 @@
       "signature": "Math.sLt(a: Uint256, b: Uint256): Uint256",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(tick: Uint256): Uint256 { if (Math.sLt(tick, 0n)) { return 1n; } return 0n; }",
-        "svm": "function main(tick: Uint256): Uint256 { if (Math.sLt(tick, 0n)) { return 1n; } return 0n; }"
+        "evm": "function main(tick: Uint256): Uint256 { if (Math.sLt(tick, 0)) { return 1; } return 0; }",
+        "svm": "function main(tick: Uint256): Uint256 { if (Math.sLt(tick, 0)) { return 1; } return 0; }"
       }
     },
     {
@@ -365,7 +365,7 @@
       },
       "unavailable": {
         "svm": {
-          "program": "function main(a: Uint256, d: bytes): bytes { return evm.call(a, 0n, d); }",
+          "program": "function main(a: Uint256, d: bytes): bytes { return evm.call(a, 0, d); }",
           "error": "`evm.call` is not available on the svm target"
         }
       }
@@ -406,7 +406,7 @@
       "signature": "evm.sload(slot: Uint256): Uint256",
       "targets": ["evm"],
       "example": {
-        "evm": "function main(): Uint256 { return evm.sload(0n); }"
+        "evm": "function main(): Uint256 { return evm.sload(0); }"
       },
       "unavailable": {
         "svm": {
@@ -421,11 +421,11 @@
       "signature": "evm.sstore(slot: Uint256, value: Uint256): void",
       "targets": ["evm"],
       "example": {
-        "evm": "function main(): void { const count = evm.sload(0n); evm.sstore(0n, count + 1n); }"
+        "evm": "function main(): void { const count = evm.sload(0); evm.sstore(0, count + 1); }"
       },
       "unavailable": {
         "svm": {
-          "program": "function main(s: Uint256): void { evm.sstore(s, 1n); }",
+          "program": "function main(s: Uint256): void { evm.sstore(s, 1); }",
           "error": "`evm.sstore` is not available on the svm target"
         }
       }
@@ -451,11 +451,11 @@
       "signature": "evm.tstore(key: Uint256, value: Uint256): void",
       "targets": ["evm"],
       "example": {
-        "evm": "function main(key: Uint256): void { evm.tstore(key, 1n); }"
+        "evm": "function main(key: Uint256): void { evm.tstore(key, 1); }"
       },
       "unavailable": {
         "svm": {
-          "program": "function main(k: Uint256): void { evm.tstore(k, 1n); }",
+          "program": "function main(k: Uint256): void { evm.tstore(k, 1); }",
           "error": "`evm.tstore` is not available on the svm target"
         }
       }
@@ -466,11 +466,11 @@
       "signature": "svm.sload(account: Account, offset: Uint256, length: Uint256): bytes",
       "targets": ["svm"],
       "example": {
-        "svm": "function main(tokenAccount: Account): Uint256 { return svm.sload(tokenAccount, 64n, 8n).toLe(); }"
+        "svm": "function main(tokenAccount: Account): Uint256 { return svm.sload(tokenAccount, 64, 8).toLe(); }"
       },
       "unavailable": {
         "evm": {
-          "program": "function main(a: Account): bytes { return svm.sload(a, 0n, 8n); }",
+          "program": "function main(a: Account): bytes { return svm.sload(a, 0, 8); }",
           "error": "`svm.sload` is not available on the evm target"
         }
       }
@@ -481,11 +481,11 @@
       "signature": "svm.sstore(account: Account<Writable, Signer>, offset: Uint256, data: bytes): void",
       "targets": ["svm"],
       "example": {
-        "svm": "function main(state: Account<Writable, Signer>, counter: Uint256): void { svm.sstore(state, 0n, counter.toBytesLe(8n)); }"
+        "svm": "function main(state: Account<Writable, Signer>, counter: Uint256): void { svm.sstore(state, 0, counter.toBytesLe(8)); }"
       },
       "unavailable": {
         "evm": {
-          "program": "function main(a: Account, d: bytes): void { svm.sstore(a, 0n, d); }",
+          "program": "function main(a: Account, d: bytes): void { svm.sstore(a, 0, d); }",
           "error": "`svm.sstore` is not available on the evm target"
         }
       }
@@ -511,7 +511,7 @@
       "signature": "svm.remainingAccount(index: Uint256): Account",
       "targets": ["svm"],
       "example": {
-        "svm": "function main(program: Account): Uint256 { return svm.sload(svm.remainingAccount(0n), 0n, 32n).toBe(); }"
+        "svm": "function main(program: Account): Uint256 { return svm.sload(svm.remainingAccount(0), 0, 32).toBe(); }"
       },
       "unavailable": {
         "evm": {
@@ -530,7 +530,7 @@
       },
       "unavailable": {
         "evm": {
-          "program": "function main(): Uint256 { const rest = svm.remainingAccounts(); return 0n; }",
+          "program": "function main(): Uint256 { const rest = svm.remainingAccounts(); return 0; }",
           "error": "`svm.remainingAccounts` is not available on the evm target"
         }
       }
@@ -551,8 +551,8 @@
       "signature": "revert(data?: bytes): void",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(code: Uint256): void { if (code != 0n) { revert(code.toBytesBe(32n)); } }",
-        "svm": "function main(code: Uint256): void { if (code != 0n) { revert(code.toBytesBe(32n)); } }"
+        "evm": "function main(code: Uint256): void { if (code != 0) { revert(code.toBytesBe(32)); } }",
+        "svm": "function main(code: Uint256): void { if (code != 0) { revert(code.toBytesBe(32)); } }"
       }
     },
     {
@@ -571,8 +571,8 @@
       "signature": "log(data: bytes, ...topics: scalar[]): void",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(from: Address, to: Address, amount: Uint256): void { log(amount.toBytesBe(32n), crypto.keccak256(\"Transfer(address,address,uint256)\"), from, to); }",
-        "svm": "function main(amount: Uint256): void { log(amount.toBytesLe(8n)); }"
+        "evm": "function main(from: Address, to: Address, amount: Uint256): void { log(amount.toBytesBe(32), crypto.keccak256(\"Transfer(address,address,uint256)\"), from, to); }",
+        "svm": "function main(amount: Uint256): void { log(amount.toBytesLe(8)); }"
       }
     },
     {
@@ -591,8 +591,8 @@
       "signature": "bytes.slice(start: Uint256, end: Uint256): bytes",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(input: bytes): bytes { return input.slice(4n, 36n); }",
-        "svm": "function main(input: bytes): bytes { return input.slice(4n, 36n); }"
+        "evm": "function main(input: bytes): bytes { return input.slice(4, 36); }",
+        "svm": "function main(input: bytes): bytes { return input.slice(4, 36); }"
       }
     },
     {
@@ -601,8 +601,8 @@
       "signature": "bytes.concat(...parts: bytes[]): bytes",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(to: Uint256, amount: Uint256): bytes { const selector = hex`a9059cbb`; return selector.concat(to.toBytesBe(32n), amount.toBytesBe(32n)); }",
-        "svm": "function main(to: Uint256, amount: Uint256): bytes { const selector = hex`a9059cbb`; return selector.concat(to.toBytesBe(32n), amount.toBytesBe(32n)); }"
+        "evm": "function main(to: Uint256, amount: Uint256): bytes { const selector = hex`a9059cbb`; return selector.concat(to.toBytesBe(32), amount.toBytesBe(32)); }",
+        "svm": "function main(to: Uint256, amount: Uint256): bytes { const selector = hex`a9059cbb`; return selector.concat(to.toBytesBe(32), amount.toBytesBe(32)); }"
       }
     },
     {
@@ -631,8 +631,8 @@
       "signature": "value.toBytesBe(width: Uint256): bytes",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(total: Uint256): bytes { return total.toBytesBe(32n); }",
-        "svm": "function main(total: Uint256): bytes { return total.toBytesBe(32n); }"
+        "evm": "function main(total: Uint256): bytes { return total.toBytesBe(32); }",
+        "svm": "function main(total: Uint256): bytes { return total.toBytesBe(32); }"
       }
     },
     {
@@ -641,8 +641,8 @@
       "signature": "value.toBytesLe(width: Uint256): bytes",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(amount: Uint256): bytes { return amount.toBytesLe(8n); }",
-        "svm": "function main(amount: Uint256): bytes { return amount.toBytesLe(8n); }"
+        "evm": "function main(amount: Uint256): bytes { return amount.toBytesLe(8); }",
+        "svm": "function main(amount: Uint256): bytes { return amount.toBytesLe(8); }"
       }
     },
     {
@@ -651,8 +651,8 @@
       "signature": "(bytes | T[]).length: Uint256",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(amounts: Uint256[]): Uint256 { let total = 0n; for (let i = 0n; i < amounts.length; i++) { total += amounts[i]; } return total; }",
-        "svm": "function main(amounts: Uint256[]): Uint256 { let total = 0n; for (let i = 0n; i < amounts.length; i++) { total += amounts[i]; } return total; }"
+        "evm": "function main(amounts: Uint256[]): Uint256 { let total = 0; for (let i = 0; i < amounts.length; i++) { total += amounts[i]; } return total; }",
+        "svm": "function main(amounts: Uint256[]): Uint256 { let total = 0; for (let i = 0; i < amounts.length; i++) { total += amounts[i]; } return total; }"
       }
     },
     {
@@ -686,7 +686,7 @@
       "signature": "account.dataLen: Uint256",
       "targets": ["svm"],
       "example": {
-        "svm": "function main(acct: Account): void { require(acct.dataLen == 165n); }"
+        "svm": "function main(acct: Account): void { require(acct.dataLen == 165); }"
       },
       "unavailable": {
         "evm": {
@@ -770,7 +770,7 @@
       "targets": ["evm"],
       "contracts": ["ERC20"],
       "example": {
-        "evm": "function main(token: Address, spender: Address, amount: Uint256): Uint256 { let approved = 1n; ERC20.at(token).approve(spender, amount).catch(() => { approved = 0n; }); return approved; }"
+        "evm": "function main(token: Address, spender: Address, amount: Uint256): Uint256 { let approved = 1; ERC20.at(token).approve(spender, amount).catch(() => { approved = 0; }); return approved; }"
       }
     },
     {
@@ -780,11 +780,11 @@
       "targets": ["evm"],
       "contracts": ["ERC20"],
       "example": {
-        "evm": "function main(token: Address, who: Address): Uint256 { return ERC20.at(token).balanceOf(who).catch(() => { return 0n; }); }"
+        "evm": "function main(token: Address, who: Address): Uint256 { return ERC20.at(token).balanceOf(who).catch(() => { return 0; }); }"
       },
       "unavailable": {
         "svm": {
-          "program": "function main(p: Account, d: bytes): Uint256 { return svm.call(p, [], d).toLe().catch(() => { return 0n; }); }",
+          "program": "function main(p: Account, d: bytes): Uint256 { return svm.call(p, [], d).toLe().catch(() => { return 0; }); }",
           "error": "`.catch()` is not available on the svm target"
         }
       }
@@ -795,8 +795,8 @@
       "signature": "new Array(length: Uint256): Uint256[]",
       "targets": ["evm", "svm"],
       "example": {
-        "evm": "function main(n: Uint256): Uint256[] { const xs = new Array(n); xs[0] = 1n; return xs; }",
-        "svm": "function main(n: Uint256): Uint256[] { const xs = new Array(n); xs[0] = 1n; return xs; }"
+        "evm": "function main(n: Uint256): Uint256[] { const xs = new Array(n); xs[0] = 1; return xs; }",
+        "svm": "function main(n: Uint256): Uint256[] { const xs = new Array(n); xs[0] = 1; return xs; }"
       }
     },
     {

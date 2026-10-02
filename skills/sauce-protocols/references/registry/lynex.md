@@ -19,7 +19,7 @@ On Linea, `Lynex` is a namespace: its contracts need no import.
 ```sauce chain=linea
 function main() {
   // Linea's router, `0x610D2f07b7EdC67565160F587F37636194C34E74`.
-  require(Lynex.Router != 0n);
+  require(Lynex.Router != 0);
 }
 ```
 

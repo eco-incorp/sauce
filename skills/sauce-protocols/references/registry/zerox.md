@@ -19,7 +19,7 @@ On Ethereum, `Zerox` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's exchangeProxy, `0xDef1C0ded9bec7F1a1670819833240f027b25EfF`.
-  require(Zerox.ExchangeProxy != 0n);
+  require(Zerox.ExchangeProxy != 0);
 }
 ```
 

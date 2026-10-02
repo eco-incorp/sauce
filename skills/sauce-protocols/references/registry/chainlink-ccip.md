@@ -19,7 +19,7 @@ On Ethereum, `ChainlinkCcip` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's router, `0x80226fc0Ee2b096224EeAc085Bb9a8cba1146f7D`.
-  require(ChainlinkCcip.Router != 0n);
+  require(ChainlinkCcip.Router != 0);
 }
 ```
 

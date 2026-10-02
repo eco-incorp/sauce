@@ -19,7 +19,7 @@ On Ethereum, `Across` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's hubPool, `0xc186fA914353c44b2E33eBE05f21846F1048bEda`.
-  require(Across.HubPool != 0n);
+  require(Across.HubPool != 0);
 }
 ```
 

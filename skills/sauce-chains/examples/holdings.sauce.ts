@@ -17,7 +17,7 @@ function main(fee: Uint256): { pool: Address; usdc: Uint256; weth: Uint256; bcsp
   const pot = ctx.self();
   // This chain's factory, asked for this chain's pair: the pool is another contract on each chain.
   const pool = UniswapV3.Factory.getPool(USDC, WETH, fee);
-  require(pool != 0n, "no USDC/WETH pool at that fee on this chain");
+  require(pool != 0, "no USDC/WETH pool at that fee on this chain");
   return {
     pool: pool,
     usdc: USDC.balanceOf(pot),

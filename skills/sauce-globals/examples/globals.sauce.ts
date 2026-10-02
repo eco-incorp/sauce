@@ -42,6 +42,6 @@ function main(
 
   // A protocol call. The approve is exact, so no allowance is left standing afterwards.
   USDC.approve(AaveV3.Pool, usdcAmount);
-  AaveV3.Pool.supply(USDC, usdcAmount, payee, 0n);
-  require(allowance(USDC, me, AaveV3.Pool) == 0n, "an allowance was left standing");
+  AaveV3.Pool.supply(USDC, usdcAmount, payee, 0);
+  require(allowance(USDC, me, AaveV3.Pool) == 0, "an allowance was left standing");
 }

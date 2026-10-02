@@ -19,7 +19,7 @@ On Ethereum, `Layerzero` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's endpointV2, `0x1a44076050125825900e736c501f859c50fE728c`.
-  require(Layerzero.EndpointV2 != 0n);
+  require(Layerzero.EndpointV2 != 0);
 }
 ```
 
