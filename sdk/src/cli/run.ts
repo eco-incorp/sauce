@@ -3710,7 +3710,7 @@ const SIGNING = new Set([
   "private-key",
   "keypair",
 ]);
-const REACHING = new Set(["rpc-url", "config"]);
+const REACHING = new Set(["rpc-url", "config", "offline"]);
 
 /** Why `flag`, which another command takes, is not one of `name`'s (`intent fill`, say). */
 function notTaken(name: string, flag: string): string {
