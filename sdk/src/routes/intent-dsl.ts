@@ -153,7 +153,8 @@ export interface IntentEvmExecution {
   readonly pot?: AddressInput;
   /** Overrides the released engine the Pot cooks on. */
   readonly engine?: AddressInput;
-  /** Total cook value: the current Kitchen execution fee plus any native program funding. */
+  /** Total cook value: the current Kitchen execution fee plus any native program funding. The
+   *  route's `nativeAmount` defaults to include it. */
   readonly value?: bigint | number | string;
 }
 
