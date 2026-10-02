@@ -434,6 +434,11 @@ export async function skillsReferences(api, documented) {
     chains,
     protocols,
     familyMembers,
+    // What an intent's modifiers are when they are left out: the SDK's own constants.
+    intentDefaults: {
+      fill: sdk.routes.DEFAULT_FILL_WINDOW,
+      refund: sdk.routes.DEFAULT_REFUND_WINDOW,
+    },
     support: {
       supported: support.supportedChains().map((chain) => ({ slug: chain.slug, name: chain.name })),
       newIssue: support.CHAIN_SUPPORT_NEW_ISSUE_URL,
@@ -1497,6 +1502,7 @@ export function renderSkillsReferences(data) {
     ...renderGlobals(data),
     [site.chainIndex]: renderChainIndex(data, site),
     [site.protocolIndex]: renderProtocolIndex(data, site),
+    [INTENT_DEFAULTS_SKILL]: renderIntentDefaults(data),
   };
   for (const chain of data.chains) {
     files[site.chain(chain.slug)] = renderChain(chain, data.support.supported, site);
@@ -1507,6 +1513,55 @@ export function renderSkillsReferences(data) {
     files[site.protocol(p.slug)] = renderProtocolRegistry(p, data, site);
 
   return files;
+}
+
+// ---- An intent's defaults: one table, for the skill and the manual ------------------------------
+
+/** The skill's copy of the defaults table, and the manual's. */
+const INTENT_DEFAULTS_SKILL = "sauce-intents/references/defaults.md";
+const INTENT_DEFAULTS_DOCS = "intent-defaults.md";
+
+/**
+ * What each of an intent's modifiers is when it is left out — `Chain.Portal.send(...)[reward's]
+ * .receive(...)[route's].then(...)` — and why, as one table both audiences read. From the SDK's
+ * constants, so a changed window changes both.
+ */
+function renderIntentDefaults(data) {
+  const { fill, refund } = data.intentDefaults;
+  const days = Number(refund) / 86_400;
+
+  return [
+    HEADER,
+    "",
+    "# Intent defaults",
+    "",
+    "An intent opened with `Chain.Portal.send(reward).receive(delivery).then(() => { ... })` may set",
+    "each of these with a modifier: after `.send(...)` the reward's, after `.receive(...)` the",
+    "route's, each at most once and in any order. Left out, each is what Eco's Portal app gives an",
+    "intent, where it has one:",
+    "",
+    "| Modifier | Sets | Left out |",
+    "| --- | --- | --- |",
+    `| \`.deadline(t)\` after \`.receive\` | The last second the intent may be filled, Unix seconds | ${fill} seconds (${Number(fill) / 60} minutes) after the intent opens, the window Eco's solver quotes |`,
+    `| \`.deadline(t)\` after \`.send\` | From when an unproven reward may be refunded to the creator | ${refund} seconds (${days} days) after the fill deadline: Eco's solver fills no intent whose reward is refundable sooner |`,
+    "| `.creator(a)` after `.send` | Who may reclaim an unearned reward | The wallet that publishes the intent, or the owner of the Pot that runs the file; one level down, the creator of the intent above |",
+    "| `.prover(p)` after `.send` | The source chain's prover, which accepts the proof of the fill | The one the registry records on both chains, the HyperProver first |",
+    "| `.salt(s)` after `.receive` | The route's salt: two otherwise identical intents differ by it | Zero, so a file builds the same intent each time it is compiled |",
+    "| `.fee(f)` after `.receive` | The destination Kitchen's fee, in wei, that a body which is a program pays its cook | That Kitchen's fee, read from it when the intent is built, for each destination |",
+    "| `{ native: amount }` in `.send` | Native coin in the reward, in wei | None |",
+    "",
+    "A default deadline counts from when the intent opens. The `sauce` command and its MCP server open",
+    "the intents a file opens when they build them (`sauce intent publish`, `sauce run`), so each run",
+    "builds new ones unless a deadline is given. Compiled with no such time, an intent opens when the",
+    "program that opens it runs, at `ctx.timestamp()`; an intent a body opens, one level down, always",
+    "opens when that body runs. A modifier's value may be one the program computes as it runs, such",
+    "as `.deadline(ctx.timestamp() + 3600)`, but for the fee: that is known when the intent is built.",
+    "",
+    "Only the `sauce` command and its MCP server have a wallet to name and read a Kitchen. Compiled",
+    "any other way, an intent needs `.creator(...)`, and one whose body is a program `.fee(...)`, or",
+    "the compile refuses it.",
+    "",
+  ].join("\n");
 }
 
 // ---- The manual's reference -------------------------------------------------------------------------
@@ -1737,6 +1792,7 @@ export function renderDocsReference(data, skillFiles) {
     [site.chainIndex]: renderChainIndex(data, site),
     [site.protocolIndex]: renderProtocolIndex(data, site),
     "tokens.md": renderTokens(data, skillFiles.globals),
+    [INTENT_DEFAULTS_DOCS]: renderIntentDefaults(data),
     // Byte for byte below its note: its anchors are the skill's, and it links nothing outside itself.
     "saucescript.md": `${copiedFrom(BUILTINS)}\n\n${skillFiles.builtins}`,
     // A how-to rather than a reference, so it sits among the guides; this generator owns it.
