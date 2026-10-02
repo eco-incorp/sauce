@@ -203,10 +203,10 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    - **`main returns`** is what `main` returned, read as the type it declares: the pool the
      program chose, the 100 USDC it spent and the 0.0377 WETH it bought. With no declared type,
      the hex after `returns` is all there is.
-   - **What the cook did** comes from its logs: token transfers and approvals in whole units, the
-     native transfers (the cook's value, paid to the Kitchen), and each address's net change. The
-     rehearsal names its route: `eth_simulateV1`, or `eth_call` where the endpoint lacks it, which
-     shows no transfers.
+   - **What the cook did**: the token transfers and approvals in its logs, in whole units; the
+     native transfers the node traces (the cook's value, paid to the Kitchen); and each address's
+     net change. The rehearsal names its route: `eth_simulateV1`, or `eth_call` where the endpoint
+     lacks it, which shows no transfers.
    - **A revert** prints its reason and exits 1. With `minOut` at `40000000000000000`, 0.04 WETH,
      more than 100 USDC buys there:
 

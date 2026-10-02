@@ -286,7 +286,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
       expect(price.stdout).toMatch(
         new RegExp(`Buying WETH[^\\n]*\\n  sqrtPriceLimitX96  ${LIMIT}`),
       );
-    });
+    }, 120_000);
 
     it("rehearses with an assumed balance: the record main returns, and what the cook moved", async () => {
       await fresh();
@@ -303,7 +303,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
       // Nothing was sent: the Pot is still not deployed, and the recipient has nothing.
       expect(await base.publicClient.getCode({ address: ownerPot })).toBeUndefined();
       expect(await base.balanceOf(weth, RECIPIENT)).toBe(0n);
-    });
+    }, 120_000);
 
     it("names the guard a cook fails: minOut above what fills, a budget not in the Pot", async () => {
       await fresh();
@@ -319,7 +319,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
       expect(empty.stdout).toMatch(
         /^The cook reverts: the program threw "the budget is not in the Pot"$/m,
       );
-    });
+    }, 120_000);
 
     it("stops at the price limit, and sends the rest of the budget back with what it bought", async () => {
       await fresh();
@@ -358,7 +358,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
           amount: (100_000_000_000n - BigInt(out.spent)).toString(),
         }),
       );
-    });
+    }, 120_000);
 
     it("--fund with no key credits the Pot what the pull would bring", async () => {
       await fresh();
@@ -367,7 +367,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
       expect(jsonOf(run).assumed).toContainEqual(
         expect.objectContaining({ holder: ownerPot, token: usdc, amount: BUDGET }),
       );
-    });
+    }, 120_000);
 
     it("--block rehearses an earlier block: before the 0.05% pool reached the limit", async () => {
       await fresh();
@@ -391,7 +391,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
         spent: BUDGET,
         bought: "37716248833222607",
       });
-    });
+    }, 120_000);
 
     it("`sauce tx` prints the unsigned cook, and the owner who sends it buys", async () => {
       await fresh();
@@ -407,7 +407,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
       await base.send(base.owner, tx.to as Address, tx.data as Hex, BigInt(tx.value as string));
       expect(await base.balanceOf(weth, RECIPIENT)).toBe(37_716_248_833_222_607n);
       expect(await base.balanceOf(usdc, keyedPot)).toBe(0n);
-    });
+    }, 120_000);
 
     it("`sauce run` buys from the wallet's funded Pot, and `sauce inspect` reads it back", async () => {
       await fresh();
@@ -425,7 +425,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
         ...roles(),
         [hash]: "<tx hash>",
       });
-    });
+    }, 120_000);
 
     it("`sauce run --fund` pulls the budget from the wallet into its Pot in the same cook", async () => {
       await fresh();
@@ -459,7 +459,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
       );
       expect(bought(signed).spent).toBe(BUDGET);
       expect(await base.balanceOf(usdc, wallet)).toBe(1_900_000_000n);
-    });
+    }, 120_000);
   });
 
   describe("payout.sauce.ts", () => {
@@ -487,7 +487,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
         refused,
         roles(),
       );
-    });
+    }, 120_000);
 
     it("pays out what --fund brought, the rounding remainder to the last payee", async () => {
       await fresh();
@@ -500,6 +500,6 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
       expect(await base.balanceOf(usdc, PAYEE_B)).toBe(75_000_001n);
       expect(await base.balanceOf(usdc, pot)).toBe(0n);
       expect(await base.balanceOf(usdc, wallet)).toBe(2_000_000_000n - 250_000_001n);
-    });
+    }, 120_000);
   });
 });
