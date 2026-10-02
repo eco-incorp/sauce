@@ -1,22 +1,28 @@
 ---
 name: sauce-intents
-description: Cross-chain intents written in Sauce — a file that opens the intent, Base(() => { ... }).reward({ ... }) in main, its inputs main's parameters passed with --args; how an intent is published, funded, discovered, filled, proven, claimed, cancelled and refunded (a sauce intent command each) (the intent hash, the per-intent vault, IntentPublished and IntentFunded, isIntentFunded); every way to publish and fund it (sauce intent publish from a wallet, sauce run from a Pot, a transfer into the vault then publish, cascade children, quoted intents); amounts measured on chain; token-only bodies versus program bodies; the delivery; on which chain each name resolves; the shared destination Pot and the Kitchen fee the solver pays; rehearsing both sides; and the deadline and creator every intent needs. Use when a program should continue on another chain, forward a swap or bridge output, build a cascade, pay a solver, or when the user mentions intents, rewards, vaults, solvers, Portals, provers, Executors or Pots.
+description: Cross-chain intents written in Sauce — a file that opens the intent, Base.Portal.send(reward).receive(delivery).then(() => { ... }) in main, its inputs main's parameters passed with --args; the deadlines, creator, prover, salt and Kitchen fee as chained modifiers, and their defaults; how an intent is published, funded, discovered, filled, proven, claimed, cancelled and refunded (a sauce intent command each; the intent hash, the vault, isIntentFunded); every way to publish and fund it (sauce intent publish from a wallet, sauce run from a Pot, a transfer into the vault then publish, cascades, quoted intents); amounts measured on chain; token-only bodies versus program bodies; on which chain each name resolves; the shared destination Pot and the Kitchen fee the solver pays; rehearsing both sides. Use when a program should continue on another chain, forward a swap or bridge output, build a cascade, pay a solver, or when the user mentions intents, rewards, vaults, solvers, Portals, provers or Executors.
 ---
 
 # Cross-chain intents in Sauce
 
 An intent is an **offer**: run this on the destination chain, and the reward escrowed on this chain
-is yours. An intent file is a program like any other: the chain name called as a function opens the
-intent, and every value the file does not compute is one of `main`'s typed parameters, passed with
-`--args` (`sauce-script`).
+is yours. An intent file is a program like any other. `<Chain>.Portal` opens an intent to that chain
+in three steps: `.send(...)` names the reward this chain escrows, `.receive(...)` what the solver
+delivers on the destination, and `.then(() => { ... })` the body that runs there. Every value the
+file does not compute is one of `main`'s typed parameters, passed with `--args` (`sauce-script`).
 
 ```sauce chain=base
-function main(recipient: Address, amount: Uint256) {
-  Ethereum(() => {
-    USDC.transfer(recipient, amount); // Ethereum's USDC: the body runs there
-  }).reward({ tokens: [{ token: USDC, amount }] }); // the source chain's USDC
+function main(recipient: Address, amount: Uint256, reward: Uint256) {
+  Ethereum.Portal.send({ token: USDC, amount: reward }) // Base's USDC, escrowed here
+    .receive({ token: USDC, amount }) // Ethereum's USDC, brought by the solver
+    .then(() => {
+      USDC.transfer(recipient, amount); // Ethereum's USDC: the body runs there
+    });
 }
 ```
+
+The deadlines, the creator, the prover, the salt and the destination Kitchen's fee all have
+defaults, and each has a modifier to set it (below).
 
 Nothing about the fill is guaranteed: a solver decides whether the reward is worth it, and the
 package prices nothing. Say an intent is _offered_, never that it _will execute_.
@@ -88,6 +94,49 @@ reward)`, sent by anyone, returns everything the vault holds of the reward to th
    once the cancel is final on the destination: a reorg that let a fill in first would leave that
    solver unpaid.
 
+## Deadlines, creator, prover, salt and fee
+
+Each is a modifier on the step it belongs to. After `.send(...)`, the reward's: `.creator(address)`,
+who may reclaim an unearned reward (never a Pot); `.deadline(t)`, from when it may be refunded; and
+`.prover(address)`. After `.receive(...)`, the route's: `.deadline(t)`, the last second the intent
+may be filled; `.salt(s)`; and `.fee(wei)`, the destination Kitchen's fee a program body pays its
+cook. Each is optional and given at most once per step, in any order; `.then(...)` ends the intent
+and is required. Deadlines are Unix seconds.
+
+```sauce chain=base
+function main(recipient: Address, amount: Uint256, reward: Uint256, refundTo: Address) {
+  Ethereum.Portal.send({ token: USDC, amount: reward })
+    .creator(refundTo) // may reclaim the reward if no fill is proven
+    .deadline(ctx.timestamp() + 86400 * 14) // refundable after two weeks
+    .receive({ token: USDC, amount })
+    .deadline(ctx.timestamp() + 1800) // filled within half an hour, or never
+    .then(() => {
+      USDC.transfer(recipient, amount);
+    });
+}
+```
+
+Left out, each is what Eco's Portal app gives an intent: the fill deadline 5 minutes after the
+intent opens and the reward's 7 days after that, the wallet that publishes the intent as its creator
+(the Pot's owner when a Pot runs the file), the prover the registry records on both chains, a zero
+salt, and the fee the destination's Kitchen charges, read from it when the intent is built.
+[references/defaults.md](references/defaults.md) has the table.
+
+- **A value the program computes** works in a deadline, the creator, the prover and the salt, as it
+  does in an amount: `ctx.timestamp() + 1800` is read when the program opening the intent runs, so
+  such a file is run from a Pot (`sauce run`), not published from a wallet. A literal, a top-level
+  `const` of one or one of `main`'s arguments works everywhere.
+- **The fee is known when the intent is built**: a literal or a top-level `const` of one (published
+  from a wallet, also one of `main`'s arguments), never a value the program computes. Leave it out
+  and the command reads the Kitchen's fee itself.
+- **The `sauce` command's flags** set the same for every intent a file opens that does not set it
+  itself: `--intent-deadline`, `--intent-reward-deadline`, `--intent-creator`, `--intent-prover`,
+  `--intent-execution-fee`.
+- **A default deadline is a new intent each time.** It counts from when each command builds the
+  intent, so `sauce inspect`, `sauce intent fill` and `sauce intent publish` run a minute apart
+  build three intents with three hashes. To rehearse the intent you publish, give every command the
+  same `--intent-deadline` (or write `.deadline(t)` in the file).
+
 ## Every step from the command line
 
 `sauce intent` drives the whole lifecycle. Each verb takes the intent file (with `--chain`, the
@@ -158,12 +207,13 @@ The Portal's functions, events and errors, with selectors and topics, are in
 
 The file is compiled for the **source** chain, the one that pays the reward (`--chain`).
 
-- **In `.reward(...)`**, names are the source chain's, which funds and escrows the reward: `USDC`
-  there is the source chain's USDC. A reward token must be known when the file is compiled: a
-  symbol, or a token's address on the source chain as a literal, a top-level `const` of a literal,
-  or, published from a wallet, one of `main`'s arguments. Its amount may be a measured value.
-- **Inside the braces, and in the delivery argument**, the code runs on the destination, and every
-  name a chain supplies resolves there: in an `Ethereum(...)` body, `USDC` is Ethereum's USDC,
+- **In `.send(...)` and its modifiers**, names are the source chain's, which funds and escrows the
+  reward: `USDC` there is the source chain's USDC. A reward token must be known when the file is
+  compiled: a symbol, or a token's address on the source chain as a literal, a top-level `const` of
+  a literal, or, published from a wallet, one of `main`'s arguments. Its amount may be a measured
+  value. The route's modifiers are computed on the source chain too, where the intent is built.
+- **In `.receive(...)` and inside the body**, the code runs on the destination, and every name a
+  chain supplies resolves there: in an `Ethereum.Portal` intent, `USDC` is Ethereum's USDC,
   `AaveV3.Pool` is Ethereum's pool, and `chainId` and a `Namespace_Contract` name are Ethereum's.
   The tokens a destination has are listed in
   [../sauce-globals/references/tokens.md](../sauce-globals/references/tokens.md), with their
@@ -203,14 +253,15 @@ token to the vault (and sends a native reward to it), only what the vault does n
 calls `publish(destination, route, reward)` once the Portal reports the intent funded. A token whose
 transfer returns `false` stops it there, before the intent is published, with what was paid still
 in the vault: top it up and run it again, or `refund` after the deadline. A second run that finds
-the vault funded only publishes.
+the vault funded only publishes. The wallet is the intent's creator unless the file or
+`--intent-creator` names another, and the deadlines it leaves to their defaults run from when the
+command builds the intent.
 
 ```sh
 sauce intent publish pay-on-ethereum.sauce.ts --chain base \
-  --from <address> --dry-run --assume-balance USDC:1 \
-  --intent-deadline <unix seconds> --intent-creator <address> --args <address> 1000000
+  --from <address> --dry-run --assume-balance USDC:2 --args <address> 1000000 1100000
 sauce intent publish pay-on-ethereum.sauce.ts --chain base --from <address> --format json \
-  --intent-deadline <unix seconds> --intent-creator <address> --args <address> 1000000
+  --args <address> 1000000 1100000
 ```
 
 - `--dry-run` rehearses the transfers and `publish` together from the wallet, then reports what
@@ -229,18 +280,18 @@ steps: in the same transaction as everything else, the Pot reads the intent's va
 sends a native reward, and calls `publish`, so nothing is published unless the whole cook succeeds,
 and a token whose transfer returns `false` reverts it. Values measured while it runs can flow into the intent: in
 `const amount = USDC.balanceOf(ctx.self())`, `amount` does not exist until the program runs, and
-using it inside the braces, in the delivery or in the reward is enough. The package encodes the
-intent with a slot for it, and the program writes the measured value in before it publishes. Any
-one-word value can be carried this way.
+using it inside the body, in the delivery, in the reward or in a modifier is enough. The package
+encodes the intent with a slot for it, and the program writes the measured value in before it
+publishes. Any one-word value can be carried this way. The Pot's owner is the creator unless the
+file or `--intent-creator` names another, and the command reads each destination Kitchen's fee
+for a body that is a program.
 
 ```sh
-sauce run cross-chain.sauce.ts --chain base --keystore <keystore> \
-  --intent-deadline <unix seconds> --intent-creator <address> --intent-execution-fee <wei> \
-  --args <address>
+sauce run cross-chain.sauce.ts --chain base --keystore <keystore> --args <address>
 ```
 
 **(c) An intent built elsewhere, from a Pot.** (a) and (b) fund by transfer and publish every intent
-a file opens, so an intent you write with `Chain(() => …).reward(…)` needs nothing more. This file
+a file opens, so an intent you write with `<Chain>.Portal.send(…)` needs nothing more. This file
 is only for an intent you did not write: a route and a reward another tool encoded, published from a
 Pot. [examples/fund-by-transfer.sauce.ts](examples/fund-by-transfer.sauce.ts) takes them as
 `publish`'s three arguments and does in one cook what (b) does: it reads the vault with
@@ -263,8 +314,10 @@ sauce run fund-by-transfer.sauce.ts --chain base \
 - **What the CLI emits**: `sauce intent publish` and `sauce run` fund every intent this way by default, as
   (a) and (b) describe; `--intent-fund-via publishAndFund` gives the approve and `publishAndFund`
   instead.
-- A native reward (`reward.nativeAmount`) is native coin sent to the vault the same way, by
-  `sauce intent publish` and `sauce run` alike; the example funds tokens only and refuses a native reward.
+- A native reward is an item of its own in `.send(...)`, `{ native: amount }` in wei, beside the
+  tokens (`.send([{ token: USDC, amount }, { native: 1000000000000000 }])`): native coin sent to the
+  vault the same way, by `sauce intent publish` and `sauce run` alike. The example funds tokens only
+  and refuses a native reward.
 
 **Quoted intents.** A solver that quoted an intent marks its quote funded when it sees
 `IntentFunded`, which only `publishAndFund` and `fund` emit. For an intent built from a solver's
@@ -280,27 +333,27 @@ named.
 
 ## Two kinds of body
 
-| The body is…                                                                                          | Lowers to                                                    | Needs                                                                  | Token writes                                                                              |
-| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| only `transfer`/`approve` calls on a symbol or `Token(address)`, with literal or captured arguments   | plain calls the destination Portal's Executor makes          | nothing more: no Pot, no Kitchen fee                                   | USDT works and `approve` is reset to zero first, but a `false` return is **not** detected |
-| anything else: a local, a balance read, a condition, a protocol call, `transferFrom`, a nested intent | a program compiled for the destination and cooked on its Pot | the destination's Kitchen fee, and the delivery as the second argument | SafeERC20: a `false` return reverts the fulfilment                                        |
+| The body is…                                                                                          | Lowers to                                                    | Needs                                                                              | Token writes                                                                              |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| only `transfer`/`approve` calls on a symbol or `Token(address)`, with literal or captured arguments   | plain calls the destination Portal's Executor makes          | nothing more: no Pot, no Kitchen fee                                               | USDT works and `approve` is reset to zero first, but a `false` return is **not** detected |
+| anything else: a local, a balance read, a condition, a protocol call, `transferFrom`, a nested intent | a program compiled for the destination and cooked on its Pot | the destination's Kitchen fee, which the command reads unless `.fee(...)` gives it | SafeERC20: a `false` return reverts the fulfilment                                        |
 
 The Executor checks only that each call did not revert, so a token-only body's transfer that
 returns `false` fills the intent with nothing moved; a call with data to an address with no code
-reverts `CallToEOA`. A program body must say what the solver delivers, because a balance read
-inside it reads what is there, not what must be brought:
+reverts `CallToEOA`. Either way, `.receive(...)` says what the solver delivers: a balance read in
+the body reads what is there, not what must be brought. Here the solver brings on Ethereum what the
+Pot holds on Base, less 0.1%:
 
 ```sauce chain=base
 function main(beneficiary: Address) {
   const amount = USDC.balanceOf(ctx.self());
-  const delivered = amount - (amount * 10n) / 10000n;
-  Ethereum(
-    () => {
+  const delivered = amount - (amount * 10) / 10000;
+  Ethereum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount: delivered })
+    .then(() => {
       USDC.approve(AaveV3.Pool, delivered);
-      AaveV3.Pool.supply(USDC, delivered, beneficiary, 0n);
-    },
-    { tokens: [{ token: USDC, amount: delivered }] },
-  ).reward({ tokens: [{ token: USDC, amount }] });
+      AaveV3.Pool.supply(USDC, delivered, beneficiary, 0);
+    });
 }
 ```
 
@@ -338,19 +391,18 @@ function main(
   recipient: Address,
   refundTo: Address,
 ) {
-  Base(
-    () => {
-      const pool = UniswapV3.Factory.getPool(WETH, USDC, 500n); // Base's 0.05% tier
-      require(pool != 0n, "no WETH/USDC pool at 0.05%");
+  Base.Portal.send({ token: WETH, amount: reward }) // the source chain's WETH
+    .receive({ token: WETH, amount: amountIn }) // Base's WETH
+    .then(() => {
+      const pool = UniswapV3.Factory.getPool(WETH, USDC, 500); // Base's 0.05% tier
+      require(pool != 0, "no WETH/USDC pool at 0.05%");
       // Pays the recipient the USDC, and reverts the whole fulfilment below minOut.
       uniswapV3(pool, WETH, USDC, amountIn, sqrtPriceLimitX96, minOut, recipient);
       const unsold = WETH.balanceOf(ctx.self()); // the shared Pot: return all of it
-      if (unsold > 0n) {
+      if (unsold > 0) {
         WETH.transfer(refundTo, unsold);
       }
-    },
-    { tokens: [{ token: WETH, amount: amountIn }] }, // Base's WETH, which the solver delivers
-  ).reward({ tokens: [{ token: WETH, amount: reward }] }); // the source chain's WETH
+    });
 }
 ```
 
@@ -372,15 +424,16 @@ execution and carried into the level below; no amount past the first exists when
 ```sauce chain=base
 function main(recipient: Address) {
   const amount = USDC.balanceOf(ctx.self());
-  Ethereum(
-    () => {
+  Ethereum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount })
+    .then(() => {
       const arrived = USDC.balanceOf(ctx.self()); // Ethereum's USDC
-      Base(() => {
-        USDC.transfer(recipient, arrived); // Base's USDC
-      }).reward({ tokens: [{ token: USDC, amount: arrived }] }); // Ethereum's: it funds this level
-    },
-    { tokens: [{ token: USDC, amount }] },
-  ).reward({ tokens: [{ token: USDC, amount }] });
+      Base.Portal.send({ token: USDC, amount: arrived }) // Ethereum's: it funds this level
+        .receive({ token: USDC, amount: arrived })
+        .then(() => {
+          USDC.transfer(recipient, arrived); // Base's USDC
+        });
+    });
 }
 ```
 
@@ -391,40 +444,47 @@ vault on Ethereum's Portal from what it holds, in Ethereum's USDC, and calls `pu
 is published like any other intent and any solver can discover it. Keep every level on a supported
 chain, as here (Base, Ethereum, then Base again): the command checks the first level's chains only.
 
-Every level takes the same `--intent-deadline`, `--intent-reward-deadline`, `--intent-creator` and
-`--intent-execution-fee`; a `.reward(...)` in a program sets only `tokens` and `nativeAmount`. So a
-later level has whatever time the earlier ones leave before that one deadline, the creator reclaims
-each level's unearned reward on the chain that escrowed it, and one fee pays the cook of every body
-that is a program, whatever chain it runs on (`--intent-execution-fee auto` refuses when those
-Kitchens charge different fees). The Portal and the prover are looked up per level, for its own two
-chains. The hash of a level below the first exists only once the level above has run: import it
-from that fill's transaction (`sauce intent import <tx hash> --chain <chain>`), then fill, prove and
-claim it like any other. (The TypeScript builder, `.nest()` in `sauce-typescript`, takes options per
-level, and by default funds a child by a transfer into its vault with no publication of its own.)
+Each level takes its own modifiers, and each it leaves out takes its default for that level:
+
+- **Deadlines** count from when the level opens, which for a level below the first is when the
+  body above it runs: its fill deadline is 5 minutes after that, and its reward's 7 days after the
+  fill deadline. A deadline flag (`--intent-deadline`, `--intent-reward-deadline`) is the same
+  second for every level that sets none, so a later level has whatever time the earlier ones leave.
+- **The creator** is the creator of the level above, so one address reclaims each level's unearned
+  reward, on the chain that escrowed it.
+- **The fee** is each destination Kitchen's own, read for every chain a level's program runs on.
+- **The Portal and the prover** are looked up per level, for its own two chains.
+
+The hash of a level below the first exists only once the level above has run: import it from that
+fill's transaction (`sauce intent import <tx hash> --chain <chain>`), then fill, prove and claim it
+like any other. (The TypeScript builder, `.nest()` in `sauce-typescript`, takes a child per level,
+and by default funds it by a transfer into its vault with no publication of its own.)
 
 ## What the compile supplies, and what you pass
 
 The Portal, the prover, the destination Pot and the encoding are looked up from the eco-routes
 registry, which records each chain's Portal and a prover deployed on both sides. Each chain's file in
 `sauce-chains` says whether it takes intents and gives its Portal, Executor and shared intent Pot
-([../sauce-chains/references/index.md](../sauce-chains/references/index.md)). Three values are the
-developer's:
+([../sauce-chains/references/index.md](../sauce-chains/references/index.md)). Every other value has
+a default ([references/defaults.md](references/defaults.md)); two deserve a thought:
 
-- **`--intent-deadline <unix seconds>`**: when the intent must be filled by.
-- **`--intent-creator <address>`**: who may reclaim an unearned reward. Never a Pot.
-- **`--intent-execution-fee <wei>`** for a program body: the destination Kitchen's fee. It is
-  mutable on chain and lives on the destination, so read it there just before sending: an
-  `eth_call` of `executionFee()` on the destination's Kitchen (its address is in the chain's file in
-  `sauce-chains`), or pass `--intent-execution-fee auto`, which reads it there. An
-  increase before the fill makes the cook, and the fulfilment, revert.
+- **The fill deadline**, 5 minutes after the intent opens unless `.deadline(t)` after `.receive`
+  says otherwise: long enough for a solver that quoted it, short for one that must find and rehearse
+  it first.
+- **The fee** of a program body: the destination Kitchen's fee is mutable on chain and lives on the
+  destination, so the command reads it there when it builds the intent (an `eth_call` of
+  `executionFee()` on the destination's Kitchen, whose address is in the chain's file in
+  `sauce-chains`). An increase before the fill makes the cook, and the fulfilment, revert: build
+  close to sending. With `--offline`, give it with `.fee(wei)` or `--intent-execution-fee <wei>`.
 
 **Units and arguments.** Amounts are base units (`1000000` is 1 USDC); only `--assume-balance`
 and `--fund` take whole tokens. In `--args-json`, write an address or any value past 2^53 as a JSON
 string (`"1000000000000000000"`): a JSON number loses precision.
 
-Refused at compile time, never silently changed: a name the program does not declare, a missing
-deadline, creator or fee, a chain with no eco-routes deployment, a pair with no
-prover deployed on both sides.
+Refused at compile time, never silently changed: a name the program does not declare, a creator or
+fee nothing supplies (a compile with no wallet behind it, or offline with no fee), a modifier given
+twice or after the wrong step, an intent with no `.then(...)`, a chain with no eco-routes deployment,
+a pair with no prover deployed on both sides.
 
 ## The destination side
 
@@ -456,8 +516,7 @@ prover deployed on both sides.
 
 ```sh
 sauce intent fill swap-on-base.sauce.ts --chain <chain> \
-  --intent-deadline <unix seconds> --intent-creator <address> \
-  --intent-execution-fee <Base Kitchen fee in wei> --args-json <args.json>
+  --intent-deadline <unix seconds> --args-json <args.json>
 ```
 
 On each intent's destination it runs, in one simulated block, what a solver sends: the shared
@@ -468,7 +527,8 @@ with `--no-prove` or a prover it does not drive). The solver is given the delive
 transfer, each address's net change (an address one of `main`'s arguments holds is named by it) and what
 the shared Pot and the Executor were left holding, which must be nothing; or why the fill
 reverts, down to the body's own `require` message. It warns when the shared Pot is not deployed,
-and when `--intent-execution-fee` is below the destination Kitchen's fee, naming the fee to pass.
+and when the fee given (`.fee(...)` or `--intent-execution-fee`) is below the destination Kitchen's,
+naming the fee to pass.
 It reads the destination chain (`--rpc-url`, for an endpoint of your own, works when every intent
 goes to one chain, and is then that chain's). An intent that uses a value measured on chain
 cannot be rehearsed this way: its route exists only once the program runs. Fix what it reports
@@ -517,7 +577,8 @@ intent from TypeScript around a program it compiles itself (`sauce-typescript`).
   measured, so it can be run from a Pot or published from a wallet with the same `--args`.
 - [examples/fund-by-transfer.sauce.ts](examples/fund-by-transfer.sauce.ts) publishes an intent
   built elsewhere from a Pot, funded by a transfer into its vault, in one cook.
-- [examples/intents.mts](examples/intents.mts) compiles the intent files, with the deadline, the
-  creator, Base's and Ethereum's fees and the recipient as developer inputs, and pins on which chain
-  each name resolves, the fee requirement, the token-only case, the pool ABI's selectors, and the
-  rehearsal's transactions: the Pot's deploy and `fulfill` with the fee as its value.
+- [examples/intents.mts](examples/intents.mts) compiles the intent files, with the creator, Base's
+  and Ethereum's fees and the recipient as developer inputs, and pins the defaults, the modifiers
+  example, on which chain each name resolves, the fee requirement, the token-only case, the pool
+  ABI's selectors, and the rehearsal's transactions: the Pot's deploy and `fulfill` with the fee as
+  its value.

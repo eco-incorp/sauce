@@ -6,14 +6,13 @@
 // on Base. The solver earns `reward` of WETH. Nothing is measured on chain, so it can also be
 // published from a wallet (sauce intent publish, with the same --args).
 //
-// `--chain` is the source chain: `WETH` in `.reward(...)` is its WETH. Inside the braces, and in
-// the delivery argument after them, the body runs on Base: `WETH`, `USDC`, `UniswapV3.Factory`,
-// `UniswapV3.Pool`, `UniswapV4.StateView` and `UniswapV4.PoolManager` there are Base's.
+// `--chain` is the source chain: `WETH` in `.send(...)` is its WETH. In `.receive(...)` and inside
+// the body, the code runs on Base: `WETH`, `USDC`, `UniswapV3.Factory`, `UniswapV3.Pool`,
+// `UniswapV4.StateView` and `UniswapV4.PoolManager` there are Base's. The deadlines, the creator
+// and Base's Kitchen fee take their defaults.
 //
-//   sauce run swap-on-base.sauce.ts --chain <chain> \
-//     --keystore <keystore> --intent-deadline <unix seconds> --intent-creator <address> \
-//     --intent-execution-fee <Base Kitchen fee in wei> --args <amountIn> <reward> \
-//     <sqrtPriceLimitX96> <minOut> <minAvgPrice> <recipient> <refundTo>
+//   sauce run swap-on-base.sauce.ts --chain <chain> --keystore <keystore> \
+//     --args <amountIn> <reward> <sqrtPriceLimitX96> <minOut> <minAvgPrice> <recipient> <refundTo>
 //
 //   amountIn: Uint256            Base WETH the solver delivers and the body sells, in its smallest
 //                                units (18 decimals): 1000000000000000000 is 1 WETH
@@ -27,26 +26,23 @@
 //                                1e18: 2490000000 is 2,490 USDC per WETH
 //   recipient: Address           who receives the USDC on Base
 //   refundTo: Address            who receives the unsold WETH on Base
-//   --intent-execution-fee: wei  Base's Kitchen fee for the body's cook; `auto` reads it from
-//                                Base
 //
 // From Ethereum, selling 1 WETH on Base no lower than 2,500 USDC per WETH, for 1.002 WETH:
 //
-//   sauce run swap-on-base.sauce.ts --chain ethereum \
-//     --keystore <keystore> --intent-deadline <unix seconds> --intent-creator <address> \
-//     --intent-execution-fee auto --args 1000000000000000000 1002000000000000000 \
-//     3961408125713216879677197 2490000000 2490000000 <recipient> <refundTo>
+//   sauce run swap-on-base.sauce.ts --chain ethereum --keystore <keystore> \
+//     --args 1000000000000000000 1002000000000000000 3961408125713216879677197 2490000000 \
+//     2490000000 <recipient> <refundTo>
 import { uniswapV3, uniswapV4 } from "@sauce/router";
 
 // A pool's own limit: the caller's sqrt price limit moved by sqrt(1 - fee), so that what the pool
 // pays, fee included, never passes the caller's. Selling token0 pushes the price down: then the
 // limit is a floor, and higher is better.
 function ownLimit(limit: Uint256, fee: Uint256, sellsToken0: bool): Uint256 {
-  const root = Math.sqrt((1000000n - fee) * 10n ** 30n); // sqrt(1 - fee), times 1e18
+  const root = Math.sqrt((1000000 - fee) * 10 ** 30); // sqrt(1 - fee), times 1e18
   if (sellsToken0) {
-    return Math.mulDiv(limit, 10n ** 18n, root);
+    return Math.mulDiv(limit, 10 ** 18, root);
   }
-  return Math.mulDiv(limit, root, 10n ** 18n);
+  return Math.mulDiv(limit, root, 10 ** 18);
 }
 
 function main(
@@ -58,11 +54,12 @@ function main(
   recipient: Address,
   refundTo: Address,
 ) {
-  Base(
-    () => {
-      require(sqrtPriceLimitX96 != 0n &&
-        recipient != 0n &&
-        refundTo != 0n, "give sqrtPriceLimitX96, recipient and refundTo");
+  Base.Portal.send({ token: WETH, amount: reward })
+    .receive({ token: WETH, amount: amountIn })
+    .then(() => {
+      require(sqrtPriceLimitX96 != 0 &&
+        recipient != 0 &&
+        refundTo != 0, "give sqrtPriceLimitX96, recipient and refundTo");
       const self = ctx.self();
       const sellsToken0 = WETH < USDC;
       const wethBefore = WETH.balanceOf(self);
@@ -72,15 +69,15 @@ function main(
       // skipped when it is missing, has no liquidity, or is already past that limit. A pool fills
       // what it can and leaves the rest for the next.
       // Uniswap V3, by fee tier, each pool read through the `UniswapV3.Pool` namespace.
-      for (const tier of [100n, 500n, 3000n, 10000n]) {
+      for (const tier of [100, 500, 3000, 10000]) {
         const pool = UniswapV3.Factory.getPool(WETH, USDC, tier);
-        if (pool != 0n) {
-          if (UniswapV3.Pool(pool).liquidity() > 0n) {
+        if (pool != 0) {
+          if (UniswapV3.Pool(pool).liquidity() > 0) {
             const limit = ownLimit(sqrtPriceLimitX96, UniswapV3.Pool(pool).fee(), sellsToken0);
             const price = UniswapV3.Pool(pool).slot0().sqrtPriceX96;
             const unsold = WETH.balanceOf(self);
-            if (unsold > 0n && (sellsToken0 ? price > limit : price < limit)) {
-              uniswapV3(pool, WETH, USDC, unsold, limit, 0n, self);
+            if (unsold > 0 && (sellsToken0 ? price > limit : price < limit)) {
+              uniswapV3(pool, WETH, USDC, unsold, limit, 0, self);
             }
           }
         }
@@ -90,23 +87,23 @@ function main(
       // and the LP fee from the rest.
       const currency0 = sellsToken0 ? WETH : USDC;
       const currency1 = sellsToken0 ? USDC : WETH;
-      const v4Fees = [100n, 500n, 3000n, 10000n];
-      const v4TickSpacings = [1n, 10n, 60n, 200n];
-      for (let k = 0n; k < 4n; k++) {
+      const v4Fees = [100, 500, 3000, 10000];
+      const v4TickSpacings = [1, 10, 60, 200];
+      for (let k = 0; k < 4; k++) {
         const id = crypto.keccak256(
-          abi.encode(currency0, currency1, v4Fees[k], v4TickSpacings[k], 0n),
+          abi.encode(currency0, currency1, v4Fees[k], v4TickSpacings[k], 0),
         );
-        if (UniswapV4.StateView.getLiquidity(id) > 0n) {
+        if (UniswapV4.StateView.getLiquidity(id) > 0) {
           const slot0 = UniswapV4.StateView.getSlot0(id);
-          let protocolFee = slot0.protocolFee & 0xfffn;
+          let protocolFee = slot0.protocolFee & 0xfff;
           if (!sellsToken0) {
-            protocolFee = (slot0.protocolFee >> 12n) & 0xfffn;
+            protocolFee = (slot0.protocolFee >> 12) & 0xfff;
           }
-          const fee = protocolFee + slot0.lpFee - (protocolFee * slot0.lpFee) / 1000000n;
+          const fee = protocolFee + slot0.lpFee - (protocolFee * slot0.lpFee) / 1000000;
           const limit = ownLimit(sqrtPriceLimitX96, fee, sellsToken0);
           const unsold = WETH.balanceOf(self);
           if (
-            unsold > 0n &&
+            unsold > 0 &&
             (sellsToken0 ? slot0.sqrtPriceX96 > limit : slot0.sqrtPriceX96 < limit)
           ) {
             uniswapV4(
@@ -116,9 +113,9 @@ function main(
               unsold,
               v4Fees[k],
               v4TickSpacings[k],
-              0n,
+              0,
               limit,
-              0n,
+              0,
               self,
             );
           }
@@ -131,12 +128,10 @@ function main(
       const spent = wethBefore - unsold;
       const out = USDC.balanceOf(self) - usdcBefore;
       require(out >= minOut, "output below minOut");
-      require(out * 10n ** 18n >= minAvgPrice * spent, "average price below minAvgPrice");
+      require(out * 10 ** 18 >= minAvgPrice * spent, "average price below minAvgPrice");
       USDC.transfer(recipient, out);
-      if (unsold > 0n) {
+      if (unsold > 0) {
         WETH.transfer(refundTo, unsold);
       }
-    },
-    { tokens: [{ token: WETH, amount: amountIn }] },
-  ).reward({ tokens: [{ token: WETH, amount: reward }] });
+    });
 }

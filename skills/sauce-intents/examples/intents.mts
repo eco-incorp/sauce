@@ -2,10 +2,11 @@
 // (`routes.compileSauceProgram` with the intent settings, and main's arguments bound into the
 // intents where a wallet publishes them), and checks on which chain each name
 // resolves: the body and its delivery on the destination, the reward on the source. Each child's
-// Portal and prover come from the eco-routes registry; the deadline, the creator, the recipient and
-// each destination Kitchen's fee are the developer's. Then builds what rehearsing the swap-on-base
-// body on a fork of Base sends: the shared Pot's deploy, and the Portal's fulfill with the Kitchen
-// fee as its value. Pins the funding by transfer (fund-by-transfer.sauce.ts) and the Portal
+// Portal and prover come from the eco-routes registry; the creator, the recipient and each
+// destination Kitchen's fee are given here, as the `sauce` command supplies them. Pins the defaults
+// the skill states and its modifiers example. Then builds what rehearsing the swap-on-base body on a
+// fork of Base sends: the shared Pot's deploy, and the Portal's fulfill with the Kitchen fee as its
+// value. Pins the funding by transfer (fund-by-transfer.sauce.ts) and the Portal
 // reference (references/portal.md) to the registry's Portal ABI. Offline: nothing is sent.
 //
 //   node intents.mts --creator <address> --recipient <address> --ethereum-fee <wei> --base-fee <wei>
@@ -100,7 +101,7 @@ try {
 } catch (error) {
   missingFee = (error as Error).message;
 }
-check(missingFee.includes("executionFee"), "a program child needs the destination's Kitchen fee");
+check(missingFee.includes(".fee("), "a program child needs the destination's Kitchen fee");
 const forwardedProgram = compileFor("base", forward, undefined, fee.ethereum);
 check(
   forwardedProgram.entryParams.map((param) => param.name).join() === "beneficiary",
@@ -118,6 +119,29 @@ check(
 check(forwarded.calls.includes(word(contract("ethereum", "AaveV3_Pool"))), "Ethereum's Aave pool");
 check(!forwarded.calls.includes(word(contract("base", "AaveV3_Pool"))), "and not Base's");
 check(forwarded.rewarded.join() === word(token("base", "USDC")), "the reward is Base's USDC");
+
+// ---- The defaults the skill states, for an intent that sets none: the fill deadline 5 minutes
+// after it opens (when the command builds it: `openedAt`), the reward's 7 days after that, a zero
+// salt and the registry's prover.
+const openedAt = BigInt(Math.floor(Date.now() / 1000));
+const defaulted = routes.compileSauceProgram("base", forward, {
+  intents: { openedAt, creator, executionFee: fee.ethereum },
+}).intents[0]!.intent;
+const addressOf = (word32: string) => getAddress(`0x${word32.slice(-40)}`);
+check(
+  defaulted.route.deadline === openedAt + 300n,
+  "the fill deadline is 5 minutes after it opens",
+);
+check(
+  defaulted.reward.deadline === defaulted.route.deadline + 7n * 86400n,
+  "the reward's deadline is 7 days after the fill deadline",
+);
+check(BigInt(defaulted.route.salt) === 0n, "the salt is zero");
+check(
+  addressOf(defaulted.reward.prover) === getAddress(ecoRoutesProver("base", "ethereum")),
+  "the prover is the registry's",
+);
+check(addressOf(defaulted.reward.creator) === creator, "the creator is the one supplied");
 
 // ---- swap-on-base.sauce.ts: from Ethereum, the distributed swap as a program child on Base,
 // published from a wallet: main's arguments bound into it.
@@ -168,11 +192,11 @@ check(
 
 // ---- A token-only child is plain route calls for the destination's Executor: no Pot, no fee.
 // Inside the body, and in the delivery, a token symbol is the destination's: `USDC` here is
-// Ethereum's, while the one in `.reward(...)` is Base's, which the program escrows.
+// Ethereum's, while the one in `.send(...)` is Base's, which the program escrows.
 const direct = intentOf(
   compileFor(
     "base",
-    "function main(to: Address, amount: Uint256) { Ethereum(() => { USDC.transfer(to, amount); }).reward({ tokens: [{ token: USDC, amount }] }); }",
+    "function main(to: Address, amount: Uint256) { Ethereum.Portal.send({ token: USDC, amount }).receive({ token: USDC, amount }).then(() => { USDC.transfer(to, amount); }); }",
     [recipient, 1_000_000n],
   ),
 );
@@ -183,7 +207,7 @@ check(contracts.on("ethereum").AaveV3.Pool.available, "Ethereum has AaveV3.Pool"
 
 // ---- Inside a body, a decoded result is read by position or destructured, as anywhere else.
 const decodeIn = (statement: string) =>
-  `function main(pool: Address) { Base(() => { const d = hex\`3850c7bd\`; ${statement} require(x != 0n); }, { tokens: [{ token: 0x4200000000000000000000000000000000000006n, amount: 1n }] }).reward({ tokens: [{ token: WETH, amount: 1n }] }); }`;
+  `function main(pool: Address) { Base.Portal.send({ token: WETH, amount: 1 }).receive({ token: 0x4200000000000000000000000000000000000006, amount: 1 }).then(() => { const d = hex\`3850c7bd\`; ${statement} require(x != 0); }); }`;
 const refused = (source: string) => {
   try {
     compileFor("ethereum", source, [recipient], fee.base);
@@ -193,7 +217,7 @@ const refused = (source: string) => {
   }
 };
 check(
-  refused(decodeIn('const x = abi.decode(evm.static(pool, d), ["Uint256"])[0n];')) === "",
+  refused(decodeIn('const x = abi.decode(evm.static(pool, d), ["Uint256"])[0];')) === "",
   "a body reads a decoded result by position",
 );
 check(
@@ -331,6 +355,24 @@ const onePoolIntent = routes.compileSauceProgram("ethereum", onePool[1]!, {
 check(
   onePoolIntent.route.nativeAmount === fee.base && onePoolIntent.route.tokens.length === 1,
   "the one-pool body is a program body: the Kitchen fee as nativeAmount, WETH delivered",
+);
+
+// The modifiers example: its creator is main's argument, bound like the amounts, but its deadlines
+// are read as the program runs, so the intent is not fixed and no wallet publishes it.
+const modifiers = /```sauce chain=base\n(function main\([^)]*refundTo: Address\)[\s\S]*?)```/.exec(
+  skill,
+);
+check(modifiers !== null, "the skill gives the modifiers example");
+const [modified] = routes.compileSauceProgram("base", modifiers[1]!, {
+  args: [recipient, 1_000_000n, 1_100_000n, creator],
+}).intents;
+check(
+  addressOf(modified!.intent.reward.creator) === creator,
+  "`.creator(refundTo)` is the creator",
+);
+check(
+  modified!.captures.join() === "ctx.timestamp() + 1800,ctx.timestamp() + 86400 * 14",
+  "both deadlines are computed as the program runs",
 );
 
 console.log(

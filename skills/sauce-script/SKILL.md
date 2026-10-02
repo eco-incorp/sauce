@@ -291,14 +291,14 @@ Compiles: `let`/`const`, `if`/`else if`/`else`, `while`, C-style `for`, `for...o
 The full list, with what each rejection says, is section 14 of
 [references/builtins.md](references/builtins.md).
 
-| Rejected                                                                                                          | Write instead                                                                                |
-| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `switch`, `for...in`, `class`, `enum`, `type` aliases, `await`                                                    | `if` chains, arrays, inline object types, plain functions                                    |
-| `try`/`catch`, `throw new Error(...)`                                                                             | `require(cond, "reason")` or `throw "reason"`; for a failing external call, `.catch` (below) |
-| arrow functions and nested functions, except the intent syntax `Chain(() => { ... })` and `.catch(() => { ... })` | top-level function declarations                                                              |
-| template literals, comparing bytes with `==`                                                                      | `"text"`, or bytes built with `.concat`; compare `crypto.keccak256` of each                  |
-| `as` casts, default parameters, spread, object destructuring                                                      | explicit values and field access                                                             |
-| `arr.push(x)`, `console.log`, `Math.min`/`max`/`abs`/`pow`                                                        | `new Array(n)` and an index; `if`; `**`                                                      |
+| Rejected                                                                                                           | Write instead                                                                                |
+| ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `switch`, `for...in`, `class`, `enum`, `type` aliases, `await`                                                     | `if` chains, arrays, inline object types, plain functions                                    |
+| `try`/`catch`, `throw new Error(...)`                                                                              | `require(cond, "reason")` or `throw "reason"`; for a failing external call, `.catch` (below) |
+| arrow functions and nested functions, except an intent's body, `.then(() => { ... })`, and `.catch(() => { ... })` | top-level function declarations                                                              |
+| template literals, comparing bytes with `==`                                                                       | `"text"`, or bytes built with `.concat`; compare `crypto.keccak256` of each                  |
+| `as` casts, default parameters, spread, object destructuring                                                       | explicit values and field access                                                             |
+| `arr.push(x)`, `console.log`, `Math.min`/`max`/`abs`/`pow`                                                         | `new Array(n)` and an index; `if`; `**`                                                      |
 
 ```sauce fails
 function main(x: Uint256): Uint256 {

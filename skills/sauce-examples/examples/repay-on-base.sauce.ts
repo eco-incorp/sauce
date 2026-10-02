@@ -11,28 +11,23 @@
 // `borrower` and `solverBps` are this program's parameters, and using them inside the braces is
 // enough: their values go into each intent.
 //
-// `USDC` and `AaveV3.Pool` in the braces are Base's; in each `.reward(...)`, the chain's that pays
+// `USDC` and `AaveV3.Pool` in the braces are Base's; in each `.send(...)`, the chain's that pays
 // it: Ethereum's for the first, Base's for the second. The variable debt token is read from the
 // pool through AaveV3Reads.json beside this file, the reads the registry's Aave V3 ABI does not
 // declare.
 //
 //   sauce run repay-on-base.sauce.ts --chain <chain> --keystore <keystore> \
-//     --intent-deadline <unix seconds> --intent-creator <address> --intent-execution-fee auto \
 //     --args <borrower> <solverBps>
 //
-//   borrower: Address                  whose USDC debt on Base is repaid, and who is paid the
-//                                      change on Ethereum
-//   solverBps: Uint256                 what each solver keeps of what it carries, in hundredths of
-//                                      a percent: 10 is 0.1%
-//   --intent-deadline: unix seconds    the last second a solver may fill either intent
-//   --intent-creator: Address          who may reclaim a reward no solver earns
-//   --intent-execution-fee: wei        Base's Kitchen fee for the body's cook; `auto` reads it
-//                                      from Base
+//   borrower: Address    whose USDC debt on Base is repaid, and who is paid the change on Ethereum
+//   solverBps: Uint256   what each solver keeps of what it carries, in hundredths of a percent:
+//                        10 is 0.1%
 //
-// From Ethereum, a solver keeping 0.1% of each hop:
+// Each intent takes its defaults: filled within five minutes of opening, refundable seven days
+// after, created by the wallet that runs the cook, its body's cook paying the Kitchen fee read from
+// Base. From Ethereum, a solver keeping 0.1% of each hop:
 //
 //   sauce run repay-on-base.sauce.ts --chain ethereum --keystore <keystore> \
-//     --intent-deadline <unix seconds> --intent-creator <address> --intent-execution-fee auto \
 //     --args <borrower> 10
 import AaveV3Reads from "./AaveV3Reads.json";
 
@@ -43,8 +38,9 @@ function main(borrower: Address, solverBps: Uint256) {
   require(amount > 0, "no USDC in the Pot");
   const delivered = amount - (amount * solverBps) / 10000;
 
-  Base(
-    () => {
+  Base.Portal.send({ token: USDC, amount }) // Ethereum's
+    .receive({ token: USDC, amount: delivered }) // Base's USDC, which the solver delivers
+    .then(() => {
       // The shared intent Pot holds nothing of anyone's between intents: all of it is this one's.
       const arrived = USDC.balanceOf(ctx.self());
       const debtToken = AaveV3Reads.at(AaveV3.Pool).getReserveVariableDebtToken(USDC);
@@ -57,11 +53,11 @@ function main(borrower: Address, solverBps: Uint256) {
       const change = USDC.balanceOf(ctx.self());
       if (change > 0) {
         const paid = change - (change * solverBps) / 10000;
-        Ethereum(() => {
-          USDC.transfer(borrower, paid); // Ethereum's USDC
-        }).reward({ tokens: [{ token: USDC, amount: change }] }); // Base's: it funds this level
+        Ethereum.Portal.send({ token: USDC, amount: change }) // Base's: it funds this level
+          .receive({ token: USDC, amount: paid }) // Ethereum's
+          .then(() => {
+            USDC.transfer(borrower, paid); // Ethereum's USDC
+          });
       }
-    },
-    { tokens: [{ token: USDC, amount: delivered }] }, // Base's USDC, which the solver delivers
-  ).reward({ tokens: [{ token: USDC, amount }] }); // Ethereum's
+    });
 }

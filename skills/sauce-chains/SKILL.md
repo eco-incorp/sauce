@@ -113,9 +113,10 @@ function main(): Address {
 
 - **A token is never qualified.** `Base.USDC` is refused
   (`'USDC' is not a known protocol or family alias`); the symbol is always the compiled-for chain's.
-- **To act on another chain, open an intent** (`sauce-intents`). Inside its braces, and in its
-  delivery argument, every name is the destination's; its `.reward(...)` resolves on the chain the
-  file is compiled for, which funds it. Both chains must take intents (each chain's file says).
+- **To act on another chain, open an intent** (`sauce-intents`):
+  `Ethereum.Portal.send(reward).receive(delivery).then(() => { ... })`. In `.receive(...)` and the
+  body, every name is the destination's; `.send(...)` resolves on the chain the file is compiled
+  for, which funds it. Both chains must take intents (each chain's file says).
 
 ## EVM chains and Solana
 
