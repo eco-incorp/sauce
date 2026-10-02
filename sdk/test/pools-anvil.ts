@@ -176,8 +176,17 @@ export async function startPoolsChain(port: number): Promise<PoolsChain> {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
+  // Every transaction carries its own gas limit rather than an estimate. An estimate is made
+  // against the pending block, and a mint mined a second later may need more than it — the likely
+  // reason `PoolsLiquidity.mint` reverted here now and then, which a fixed limit stopped.
   const send = async (to: Address | null, data: Hex): Promise<Address | undefined> => {
-    const hash = await wallet.sendTransaction({ account: DEPLOYER, chain: null, to, data });
+    const hash = await wallet.sendTransaction({
+      account: DEPLOYER,
+      chain: null,
+      to,
+      data,
+      gas: 15_000_000n,
+    });
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
     if (receipt.status !== "success")
       throw new Error(`a transaction to ${to ?? "create"} reverted`);
