@@ -644,8 +644,9 @@ describe("what it refuses, and how clearly", () => {
       "a top-level `const` of a literal.";
 
     it("a delivery token the destination does not register", () => {
-      expect(messageOf(intent("USDT0"))).toBe(
-        `intent sugar: the delivery token 'USDT0' is not a token arbitrum registers, nor a define. ${DELIVERY}`,
+      // Arbitrum's Tether token is USDT0, never USDT.
+      expect(messageOf(intent("USDT"))).toBe(
+        `intent sugar: the delivery token 'USDT' is not a token arbitrum registers, nor a define. ${DELIVERY}`,
       );
     });
 
