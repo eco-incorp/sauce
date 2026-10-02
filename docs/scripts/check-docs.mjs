@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
@@ -40,7 +40,7 @@ const manual = [
 ].map((path) => join(root, path));
 // The agent skills ship in the package, and link to their own supporting files.
 manual.push(...markdownFiles(join(root, "skills")));
-for (const directory of ["concepts", "guides", "api", "examples"]) {
+for (const directory of ["concepts", "guides", "api", "reference", "examples"]) {
   manual.push(...markdownFiles(join(root, "docs", directory)));
 }
 const failures = [];
@@ -77,6 +77,109 @@ for (const file of manual) {
 }
 if (failures.length) throw new Error(`Broken manual links:\n${failures.join("\n")}`);
 console.log(`Manual links: ${manual.length} files checked`);
+
+// ---- The manual's shape: one place per fact, and a reader never sent into the skills ----------------
+// The skills are written for agents and carry their own copy of every fact; the manual carries the
+// reader's. Each stands alone, so the manual never links into `skills/` (and the skills checker
+// refuses the reverse). `docs/reference/` is generated from the same registries as the skills'
+// references; the hand-written pages are each listed once in the index, and none is only links.
+{
+  const docs = join(root, "docs");
+  const page = (file) => relative(root, file).split("\\").join("/");
+  const prose = (file) => readFileSync(file, "utf8").replace(/```[^]*?```/g, "");
+  const links = (file) =>
+    [...prose(file).matchAll(/\[([^\]]*)\]\(([^\s)]+)(?:\s+"[^"]*")?\)/g)]
+      .map(([, label, target]) => ({ label, target: target.replace(/^<|>$/g, "") }))
+      .filter(({ target }) => !/^[a-z]+:/i.test(target))
+      .map(({ label, target }) => {
+        const path = target.split(/[?#]/)[0];
+
+        return {
+          label,
+          to: path ? page(resolve(dirname(file), decodeURIComponent(path))) : page(file),
+        };
+      });
+  const shape = [];
+  const readerPages = [join(root, "README.md"), ...markdownFiles(docs)];
+  for (const file of readerPages) {
+    for (const { to } of links(file))
+      if (to.startsWith("skills/"))
+        shape.push(`${page(file)}: links ${to}; the manual never sends a reader into skills/`);
+    for (const [span] of prose(file).matchAll(/`(?:\.\.\/)*skills\/[^`]*`/g))
+      shape.push(
+        `${page(file)}: names the path ${span}; the manual never sends a reader into skills/`,
+      );
+  }
+  // The generated reference is reached from its own indexes; every other page is in the index once.
+  const generated = (path) => /^docs\/reference\/(chains|protocols)\//.test(path);
+  // The index's entries are its list items, `- [Page](path): what it is for`, one line a page; its
+  // prose may link a page as well.
+  const index = join(docs, "README.md");
+  const listed = readFileSync(index, "utf8")
+    .split("\n")
+    .filter((line) => /^- \[/.test(line))
+    .map((line) => /^- \[[^\]]*\]\(([^)#\s]+)/.exec(line)?.[1])
+    .filter((target) => target !== undefined && !/^[a-z]+:/i.test(target))
+    .map((target) => page(resolve(docs, target)));
+  for (const file of markdownFiles(docs)) {
+    const path = page(file);
+    if (file === index || generated(path)) continue;
+    const times = listed.filter((to) => to === path).length;
+    if (times !== 1)
+      shape.push(`docs/README.md: lists ${path} ${times} times; the index lists each page once`);
+  }
+  // A page that is mostly links sends its reader on instead of telling them. The indexes are lists.
+  const lists = new Set([
+    "docs/README.md",
+    "docs/examples/README.md",
+    "docs/reference/chains.md",
+    "docs/reference/protocols.md",
+  ]);
+  for (const file of readerPages) {
+    const path = page(file);
+    if (lists.has(path) || generated(path)) continue;
+    const words = prose(file)
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .split(/\s+/)
+      .filter(Boolean).length;
+    const count = links(file).length;
+    if (count * 100 > words * 3)
+      shape.push(`${path}: ${count} links in ${words} words; say it here, and link less`);
+  }
+  // The skills guide names every skill the package ships, and only those.
+  const shipped = readdirSync(join(root, "skills"), { withFileTypes: true })
+    .filter(
+      (entry) => entry.isDirectory() && existsSync(join(root, "skills", entry.name, "SKILL.md")),
+    )
+    .map((entry) => entry.name)
+    .sort();
+  const guide = [
+    ...readFileSync(join(docs, "guides", "skills.md"), "utf8").matchAll(/^\| `(sauce-[a-z-]+)`/gm),
+  ]
+    .map(([, name]) => name)
+    .sort();
+  if (guide.join() !== shipped.join())
+    shape.push(
+      `docs/guides/skills.md: its table names ${guide.join(", ")}; the package ships ${shipped.join(", ")}`,
+    );
+  // In the repository, the generated reference is what the generator renders now. An installed
+  // package ships what the repository held, which the packed check compares file by file.
+  if (packageArgument < 0) {
+    const { freshDocsReference } = await import(
+      pathToFileURL(join(root, "sdk", "scripts", "gen-skills-references.mjs")).href
+    );
+    const { files, extra } = await freshDocsReference();
+    for (const file of files.filter((one) => one.stale))
+      shape.push(
+        `${page(file.path)}: stale; rebuild the SDK (its generator writes docs/reference)`,
+      );
+    for (const path of extra) shape.push(`${page(path)}: generated by nothing; rebuild the SDK`);
+  }
+  if (shape.length) throw new Error(`The manual's shape:\n${shape.join("\n")}`);
+  console.log(
+    `The manual's shape: ${readerPages.length} pages, none into skills/, each in the index once`,
+  );
+}
 
 const examples = join(root, "docs/examples");
 // `.sauce.ts` files are SauceScript, not TypeScript: they are compiled by the Sauce compiler from

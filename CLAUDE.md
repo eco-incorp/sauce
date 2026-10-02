@@ -55,7 +55,7 @@ pnpm lint           # eslint, whole repo
 pnpm lint:fix       # ...with --fix
 pnpm format         # prettier --write, whole repo
 pnpm format:check   # prettier --check, what CI runs
-pnpm docs:check     # manual links, README snippet, executable examples, executed.json; build first
+pnpm docs:check     # manual links and shape, README snippet, executable examples, executed.json; build first
 pnpm skills:check   # the agent skills: programs, command lines, runners, wording; build first
 ```
 
@@ -369,7 +369,8 @@ repository's documentation is not an independent correctness check.
 **The language reference is held to the compiler, and there is one.**
 `skills/sauce-script/references/builtins.md` (the SauceScript reference) and its `builtins.json`
 (every builtin, with an example program per target and the error on a target that lacks it) are the
-`sauce-script` skill's reference and the manual's: `docs/` links to them rather than keeping a copy.
+`sauce-script` skill's reference and the manual's: the build renders `builtins.md` byte for byte as
+`docs/reference/saucescript.md` (see "The manual renders the same facts" below), so edit the skill's.
 `pnpm skills:check` (`sdk/scripts/skills-check/builtins.mjs`) holds them: every builtin example
 compiles on each target it lists, every table example compiles on each target its row claims, and
 every error the page quotes (`…` and `N` as wildcards) is produced by a rejected program — a
@@ -892,9 +893,9 @@ beside `refused`, because a client validates an error's structured content too. 
 `.github/ISSUE_TEMPLATE/chain-support.yml`, its field ids held to `CHAIN_SUPPORT_FIELDS` by
 `cli-chain-support.test.ts`; `cli-support.test.ts` and `mcp/test/support.test.ts` hold every gated
 path to its refusal before any request. To support a chain, add its slug, rebuild (the skills'
-chain references regenerate from the list), and update `docs/README.md#supported-chains` and the
-skills that name the three. A test that builds or sends a transaction through the CLI or MCP uses a
-supported chain.
+chain references and the manual's `docs/reference/chains.md` regenerate from the list), and update
+the README, the manual's pages and the skills that name the three (`git grep "Ethereum, Base"`). A
+test that builds or sends a transaction through the CLI or MCP uses a supported chain.
 
 ## Agent skills
 
@@ -931,6 +932,27 @@ them, `references/`.
   carries compiled examples; CI fails when the build changed `skills/`, and `skills:check` fails a
   stale or orphaned generated file, so commit the regenerated files with any registry change
   (`pnpm --filter './sdk' gen-skills-references`). Change their prose in the generator.
+- **The manual renders the same facts, and never links the skills.** The same generator, from the
+  same data, writes `docs/reference/` for a human reader: `chains.md` (the release's support and
+  every chain) and `chains/<chain>.md`/`<chain>-stocks.md`, `protocols.md` (by category, the family
+  aliases, the interfaces) and `protocols/<slug>.md` (the registry facts with the protocol's
+  hand-written document folded in, its `Category` and `Deployments and ABI` sections left out),
+  `tokens.md` (every chain's tokens, `sauce-globals`' "Tokenized stocks" section, the stocks by
+  issuer, the token functions) and `saucescript.md` (`sauce-script/references/builtins.md`, byte for
+  byte); and, outside it, `docs/guides/distributed-swap.md`, the `sauce-distributed-swap` skill
+  rendered as a guide (its example's whole file in place of the code the skill quotes). The two
+  renderings differ only in links: a skill names a skill (`sauce-swaps`), and the
+  manual links the page covering it (`DOCS_FOR_SKILL`), so a fact has one source and a reader is
+  never sent into `skills/`, nor an agent into `docs/`. `docs/reference/` is generated whole (a page
+  written there by hand is removed: hand-written reference pages belong in `docs/api/`), committed,
+  prettier-ignored, and held like the skills' references: CI fails when the build changed it, and
+  `docs:check` when it is stale. `docs:check` also holds the manual's shape: no link or path from the
+  README or `docs/` into `skills/`; every page an entry (`- [Page](path): …`) of `docs/README.md`
+  exactly once (the per-chain and per-protocol pages are reached from their indexes); no page other
+  than an index with more than 3 links per 100 words; and `docs/guides/skills.md`'s table naming
+  exactly the skills on disk. A fact an agent needs goes in a skill (or the generator), and the
+  manual renders it; a fact only a reader of the manual needs (TypeScript, the MCP server's
+  operation) is written once, in the manual.
 - **The actions reference is generated too.** `sdk/scripts/gen-skills-actions.mjs` renders
   `skills/sauce-actions/references/actions.md` (every action and field) from the committed
   `actions/action-program.schema.json`, in the same `build` step; regenerate the schema after a
@@ -982,8 +1004,8 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   `sauce-intents`; no RPC endpoint; Sauce never described as a multicall; no pointer into the
   package's docs (`node_modules/@eco-incorp/sauce/...`, `docs/guides/...`) outside
   `sauce-typescript`, because a skill carries every fact it needs in its `SKILL.md` and
-  `references/`. The protocol documents are third-party facts and are exempt from the address,
-  Portal and multicall rules only; the generated references are exempt from the Portal rule (a
+  `references/` (an agent may have only the skills, served by the MCP server). The protocol
+  documents are third-party facts and are exempt from the address, Portal and multicall rules only; the generated references are exempt from the Portal rule (a
   chain's file records its eco-routes deployment).
 - **Execution-agnostic.** Not every agent has the SDK installed: some have only the `sauce` CLI, or a
   remote compiler, and sign by local means. Every skill but `sauce-cli` (the CLI) and

@@ -1,6 +1,6 @@
 # The Sauce MCP server
 
-[Documentation](../README.md) · [The sauce command](cli.md) · [Agent skills](cli.md#agent-skills)
+[Documentation](../README.md) · [The sauce command](cli.md) · [Agent skills](skills.md)
 
 `sauce mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server. A coding agent
 gets the building half of the [`sauce` command](cli.md) as tools, and the package's agent skills
@@ -298,8 +298,9 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 ### Supported and preview chains
 
 For the initial release the server builds transactions only on the chains the release supports:
-Ethereum, Base and Solana ([Supported chains](../README.md#supported-chains)). Every other chain is a
-preview chain. `sauce_chains` gives each chain's `support`, `"supported"` or `"preview"`.
+Ethereum, Base and Solana. Every other chain is a preview chain; [Chains](../reference/chains.md) has
+the policy and every chain. `sauce_chains` gives each chain's `support`, `"supported"` or
+`"preview"`.
 
 On a preview chain these work as they do everywhere: `sauce_compile`, `sauce_actions`' report,
 `sauce_simulate`, `sauce_globals`, `sauce_price`, `sauce_pools`, `sauce_inspect`, `sauce_verify`,
@@ -566,7 +567,7 @@ the [supported chains](#supported-and-preview-chains) too. Over HTTP there are n
 
 ## Skills, documents and prompts
 
-The [agent skills](cli.md#agent-skills) the package ships are the same files `sauce skills install`
+The [agent skills](skills.md) the package ships are the same files `sauce skills install`
 copies into a project. They are served two ways, because many clients call tools but never read
 resources:
 
