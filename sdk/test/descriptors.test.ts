@@ -206,10 +206,10 @@ describe("descriptors: registry totals + purity", () => {
     const protocolSlugs = new Set(DESCRIPTORS.map((d) => d.protocol));
     const kinds = (kind: string) => DESCRIPTORS.filter((d) => d.kind === kind).length;
     expect(protocolSlugs).toEqual(new Set(listProtocolSlugs()));
-    expect(DESCRIPTORS.length).toBe(302);
-    expect(kinds("singleton")).toBe(222);
-    expect(kinds("address-only")).toBe(55);
-    expect(kinds("interface")).toBe(25);
+    expect(DESCRIPTORS.length).toBe(316);
+    expect(kinds("singleton")).toBe(226);
+    expect(kinds("address-only")).toBe(51);
+    expect(kinds("interface")).toBe(39);
   });
 
   it("listDescriptors() is stable/reference-equal across calls, and mutating a returned perChainAddress does not corrupt the registry", () => {

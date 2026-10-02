@@ -414,7 +414,7 @@ export const PROTOCOL_SOURCES = {
   "zksync-bridge": { abis: zksyncBridgeAbis, deployments: zksyncBridgeDeployments },
 } as const;
 
-/** One entry per contract: 302 contracts across 135 protocols. */
+/** One entry per contract: 316 contracts across 135 protocols. */
 export const CONTRACT_LINKS = [
   { protocol: "aave-v2", contract: "LendingPool", kind: "singleton", roleKey: "lendingPool", abiExport: "LendingPoolABI" },
   { protocol: "aave-v3", contract: "Pool", kind: "singleton", roleKey: "pool", abiExport: "PoolABI" },
@@ -446,6 +446,7 @@ export const CONTRACT_LINKS = [
   { protocol: "across", contract: "SpokePool", kind: "singleton", roleKey: "spokePool", abiExport: "AcrossSpokePoolABI" },
   { protocol: "aerodrome", contract: "PoolFactory", kind: "singleton", roleKey: "poolFactory", abiExport: "AerodromePoolFactoryABI" },
   { protocol: "aerodrome", contract: "Router", kind: "singleton", roleKey: "router", abiExport: "AerodromeRouterABI" },
+  { protocol: "aerodrome", contract: "Pool", kind: "interface", abiExport: "AerodromePoolABI" },
   { protocol: "aerodrome-slipstream", contract: "CLFactory", kind: "singleton", roleKey: "clFactory", abiExport: "SlipstreamCLFactoryABI" },
   { protocol: "aerodrome-slipstream", contract: "CLFactoryGaugeCaps", kind: "singleton", roleKey: "clFactoryGaugeCaps", abiExport: "SlipstreamCLFactoryABI" },
   { protocol: "aerodrome-slipstream", contract: "CLFactoryGaugesV3", kind: "singleton", roleKey: "clFactoryGaugesV3", abiExport: "SlipstreamCLFactoryABI" },
@@ -478,8 +479,10 @@ export const CONTRACT_LINKS = [
   { protocol: "benqi", contract: "QiToken", kind: "interface", abiExport: "QiTokenABI" },
   { protocol: "camelot", contract: "V2Router", kind: "singleton", roleKey: "v2Router", abiExport: "CamelotV2RouterABI" },
   { protocol: "camelot", contract: "V3SwapRouter", kind: "singleton", roleKey: "v3SwapRouter", abiExport: "CamelotV3SwapRouterABI" },
-  { protocol: "camelot", contract: "V2Factory", kind: "address-only", roleKey: "v2Factory", caveats: ["the registry has no ABI for this contract: its address only"] },
-  { protocol: "camelot", contract: "V3Factory", kind: "address-only", roleKey: "v3Factory", caveats: ["the registry has no ABI for this contract: its address only"] },
+  { protocol: "camelot", contract: "V2Factory", kind: "singleton", roleKey: "v2Factory", abiExport: "CamelotV2FactoryABI" },
+  { protocol: "camelot", contract: "V2Pair", kind: "interface", abiExport: "CamelotV2PairABI" },
+  { protocol: "camelot", contract: "V3Factory", kind: "singleton", roleKey: "v3Factory", abiExport: "CamelotV3FactoryABI" },
+  { protocol: "camelot", contract: "V3Pool", kind: "interface", abiExport: "CamelotV3PoolABI" },
   { protocol: "cbeth", contract: "CbETH", kind: "singleton", roleKey: "cbETH", abiExport: "CbETHABI", caveats: ["exchangeRate() is not available on base: Base cbETH is the bridged OptimismMintableERC20; the exchange rate lives only on the Ethereum StakedTokenV1","mint(address,uint256) is not available on base: Base cbETH's mint is the bridge's (returns nothing); the ABI describes the Ethereum token, whose mint returns bool"] },
   { protocol: "cctp", contract: "TokenMessenger", kind: "singleton", roleKey: "tokenMessenger", abiExport: "TokenMessengerABI" },
   { protocol: "celer", contract: "Bridge", kind: "singleton", roleKey: "bridge", abiExport: "CelerBridgeABI" },
@@ -589,6 +592,7 @@ export const CONTRACT_LINKS = [
   { protocol: "mantle-meth", contract: "Staking", kind: "singleton", roleKey: "staking", abiExport: "METHStakingABI" },
   { protocol: "maverick", contract: "V2Factory", kind: "singleton", roleKey: "v2Factory", abiExport: "MaverickV2FactoryABI", caveats: ["lookup(address,address,uint256,uint256) is checked against the deployed bytecode only: the MaverickV2Factory has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by the factory bytecode, and the address[] output is not verifiable"] },
   { protocol: "maverick", contract: "V2Router", kind: "singleton", roleKey: "v2Router", abiExport: "MaverickV2RouterABI" },
+  { protocol: "maverick", contract: "V2Pool", kind: "interface", abiExport: "MaverickV2PoolABI" },
   { protocol: "moonwell", contract: "MToken", kind: "interface", abiExport: "MTokenABI" },
   { protocol: "moonwell", contract: "Comptroller", kind: "singleton", roleKey: "comptroller", abiExport: "MoonwellComptrollerABI" },
   { protocol: "morpho-blue", contract: "Morpho", kind: "singleton", roleKey: "morpho", abiExport: "MorphoABI" },
@@ -606,9 +610,11 @@ export const CONTRACT_LINKS = [
   { protocol: "opyn", contract: "OSQTH", kind: "address-only", roleKey: "oSQTH", caveats: ["the registry has no ABI for this contract: its address only"] },
   { protocol: "pancakeswap-v2", contract: "Factory", kind: "singleton", roleKey: "factory", abiExport: "PancakeSwapV2FactoryABI" },
   { protocol: "pancakeswap-v2", contract: "Router", kind: "singleton", roleKey: "router", abiExport: "PancakeSwapV2RouterABI" },
+  { protocol: "pancakeswap-v2", contract: "Pair", kind: "interface", abiExport: "PancakeSwapV2PairABI" },
   { protocol: "pancakeswap-v3", contract: "Factory", kind: "singleton", roleKey: "factory", abiExport: "PancakeSwapV3FactoryABI" },
   { protocol: "pancakeswap-v3", contract: "NonfungiblePositionManager", kind: "singleton", roleKey: "nonfungiblePositionManager", abiExport: "PancakeSwapV3NFPMABI" },
   { protocol: "pancakeswap-v3", contract: "SmartRouter", kind: "singleton", roleKey: "smartRouter", abiExport: "PancakeSwapV3SmartRouterABI" },
+  { protocol: "pancakeswap-v3", contract: "Pool", kind: "interface", abiExport: "PancakeSwapV3PoolABI" },
   { protocol: "paraswap", contract: "AugustusV5", kind: "singleton", roleKey: "augustusV5", abiExport: "AugustusV5ABI", caveats: ["simpleSwap((address,address,uint256,uint256,uint256,address[],bytes,uint256[],uint256[],address,address,uint256,bytes,uint256,bytes16)) is not available on base: Augustus V5 on Base has no SimpleSwap router registered: getImplementation returns zero for the selector"] },
   { protocol: "paraswap", contract: "AugustusV6", kind: "address-only", roleKey: "augustusV6", caveats: ["the registry has no ABI for this contract: its address only"] },
   { protocol: "pendle", contract: "Router", kind: "singleton", roleKey: "router", abiExport: "PendleRouterABI" },
@@ -626,8 +632,10 @@ export const CONTRACT_LINKS = [
   { protocol: "pyth", contract: "Oracle", kind: "singleton", roleKey: "oracle", abiExport: "PythOracleABI", caveats: ["updatePriceFeeds(bytes[]) is checked against the deployed bytecode only: the Pyth implementation behind the proxy (0x3f38404a2e3cb949bcdfa19a5c3bdf3fe375feb0) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode","getUpdateFee(bytes[]) is checked against the deployed bytecode only: the Pyth implementation behind the proxy (0x3f38404a2e3cb949bcdfa19a5c3bdf3fe375feb0) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode","getPrice(bytes32) is checked against the deployed bytecode only: the Pyth implementation behind the proxy (0x3f38404a2e3cb949bcdfa19a5c3bdf3fe375feb0) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode; the PythStructs.Price output types come from the Pyth SDK and are not verifiable"] },
   { protocol: "quickswap", contract: "V2Router", kind: "singleton", roleKey: "v2Router", abiExport: "QuickSwapV2RouterABI" },
   { protocol: "quickswap", contract: "V3SwapRouter", kind: "singleton", roleKey: "v3SwapRouter", abiExport: "QuickSwapV3SwapRouterABI" },
-  { protocol: "quickswap", contract: "V2Factory", kind: "address-only", roleKey: "v2Factory", caveats: ["the registry has no ABI for this contract: its address only"] },
-  { protocol: "quickswap", contract: "V3Factory", kind: "address-only", roleKey: "v3Factory", caveats: ["the registry has no ABI for this contract: its address only"] },
+  { protocol: "quickswap", contract: "V2Factory", kind: "singleton", roleKey: "v2Factory", abiExport: "QuickSwapV2FactoryABI" },
+  { protocol: "quickswap", contract: "V2Pair", kind: "interface", abiExport: "QuickSwapV2PairABI" },
+  { protocol: "quickswap", contract: "V3Factory", kind: "singleton", roleKey: "v3Factory", abiExport: "QuickSwapV3FactoryABI" },
+  { protocol: "quickswap", contract: "V3Pool", kind: "interface", abiExport: "QuickSwapV3PoolABI" },
   { protocol: "radiant", contract: "LendingPool", kind: "address-only", roleKey: "lendingPool", caveats: ["RadiantLendingPoolABI does not describe this deployment: the only listed deployment (Arbitrum LendingPool proxy 0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1) now delegates to a three-function stub (0x3d4c56cdb97355807157f5c7d4f54957f0e9af44): deposit/withdraw/borrow/repay no longer exist on-chain, and no verified source exists for the stub"] },
   { protocol: "ramses", contract: "Router", kind: "singleton", roleKey: "router", abiExport: "RamsesRouterABI" },
   { protocol: "reflexer", contract: "CoinJoin", kind: "singleton", roleKey: "coinJoin", abiExport: "CoinJoinABI" },
@@ -666,6 +674,7 @@ export const CONTRACT_LINKS = [
   { protocol: "superfluid", contract: "Host", kind: "address-only", roleKey: "host", caveats: ["the registry has no ABI for this contract: its address only"] },
   { protocol: "sushiswap-v2", contract: "Factory", kind: "singleton", roleKey: "factory", abiExport: "SushiSwapV2FactoryABI" },
   { protocol: "sushiswap-v2", contract: "Router", kind: "singleton", roleKey: "router", abiExport: "SushiSwapV2RouterABI" },
+  { protocol: "sushiswap-v2", contract: "Pair", kind: "interface", abiExport: "SushiSwapV2PairABI" },
   { protocol: "swell", contract: "RswETH", kind: "singleton", roleKey: "rswETH", abiExport: "RswETHABI" },
   { protocol: "swell", contract: "SwETH", kind: "singleton", roleKey: "swETH", abiExport: "SwETHABI" },
   { protocol: "synapse", contract: "SynapseBridge", kind: "singleton", roleKey: "synapseBridge", abiExport: "SynapseBridgeABI" },
@@ -677,6 +686,7 @@ export const CONTRACT_LINKS = [
   { protocol: "synthra-v3", contract: "SwapRouter02", kind: "singleton", roleKey: "swapRouter02", abiExport: "SynthraV3SwapRouter02ABI", caveats: ["exactInputSingle((address,address,uint24,address,uint256,uint256,uint160)) is checked against the deployed bytecode only: the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode","exactInput((bytes,address,uint256,uint256)) is checked against the deployed bytecode only: the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode","exactOutputSingle((address,address,uint24,address,uint256,uint256,uint160)) is checked against the deployed bytecode only: the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode","exactOutput((bytes,address,uint256,uint256)) is checked against the deployed bytecode only: the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode"] },
   { protocol: "synthra-v3", contract: "QuoterV2", kind: "singleton", roleKey: "quoterV2", abiExport: "SynthraV3QuoterV2ABI", caveats: ["quoteExactInputSingle((address,address,uint256,uint24,uint160)) is checked against the deployed bytecode only: the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode"] },
   { protocol: "synthra-v3", contract: "NonfungiblePositionManager", kind: "singleton", roleKey: "nonfungiblePositionManager", abiExport: "SynthraV3NonfungiblePositionManagerABI", caveats: ["mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256)) is checked against the deployed bytecode only: the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode","increaseLiquidity((uint256,uint256,uint256,uint256,uint256,uint256)) is checked against the deployed bytecode only: the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode","decreaseLiquidity((uint256,uint128,uint256,uint256,uint256)) is checked against the deployed bytecode only: the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode","collect((uint256,address,uint128,uint128)) is checked against the deployed bytecode only: the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode"] },
+  { protocol: "synthra-v3", contract: "Pool", kind: "interface", abiExport: "SynthraV3PoolABI" },
   { protocol: "thales", contract: "SpeedMarketsAMM", kind: "singleton", roleKey: "speedMarketsAMM", abiExport: "SpeedMarketsAMMABI" },
   { protocol: "thales", contract: "ThalesAMM", kind: "singleton", roleKey: "thalesAMM", abiExport: "ThalesAMMABI" },
   { protocol: "thales", contract: "PositionalMarket", kind: "interface", abiExport: "PositionalMarketABI" },
@@ -688,8 +698,10 @@ export const CONTRACT_LINKS = [
   { protocol: "tokemak", contract: "AutopoolRegistry", kind: "address-only", roleKey: "autopoolRegistry", caveats: ["the registry has no ABI for this contract: its address only"] },
   { protocol: "trader-joe", contract: "LBFactory", kind: "singleton", roleKey: "lbFactory", abiExport: "LBFactoryABI" },
   { protocol: "trader-joe", contract: "LBRouter", kind: "singleton", roleKey: "lbRouter", abiExport: "LBRouterABI" },
+  { protocol: "trader-joe", contract: "LBPair", kind: "interface", abiExport: "LBPairABI" },
   { protocol: "uniswap-v2", contract: "Factory", kind: "singleton", roleKey: "factory", abiExport: "UniswapV2FactoryABI" },
   { protocol: "uniswap-v2", contract: "Router", kind: "singleton", roleKey: "router", abiExport: "UniswapV2RouterABI" },
+  { protocol: "uniswap-v2", contract: "Pair", kind: "interface", abiExport: "UniswapV2PairABI" },
   { protocol: "uniswap-v3", contract: "Factory", kind: "singleton", roleKey: "factory", abiExport: "UniswapV3FactoryABI" },
   { protocol: "uniswap-v3", contract: "NonfungiblePositionManager", kind: "singleton", roleKey: "nonfungiblePositionManager", abiExport: "UniswapV3NonfungiblePositionManagerABI" },
   { protocol: "uniswap-v3", contract: "QuoterV2", kind: "singleton", roleKey: "quoterV2", abiExport: "UniswapV3QuoterV2ABI" },
@@ -703,8 +715,10 @@ export const CONTRACT_LINKS = [
   { protocol: "unitflow-v3", contract: "Factory", kind: "singleton", roleKey: "factory", abiExport: "UnitFlowV3FactoryABI", caveats: ["getPool(address,address,uint24) is checked against the deployed bytecode only: the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Factory's (UnitFlow-Finance/UnitFlowV3-contract) and the selector is proven by the factory bytecode","feeAmountTickSpacing(uint24) is checked against the deployed bytecode only: the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Factory's (UnitFlow-Finance/UnitFlowV3-contract) and the selector is proven by the factory bytecode"] },
   { protocol: "unitflow-v3", contract: "Router", kind: "singleton", roleKey: "router", abiExport: "UnitFlowV3RouterABI" },
   { protocol: "unitflow-v3", contract: "Quoter", kind: "singleton", roleKey: "quoter", abiExport: "UnitFlowV3QuoterABI" },
+  { protocol: "unitflow-v3", contract: "Pool", kind: "interface", abiExport: "UnitFlowV3PoolABI" },
   { protocol: "velodrome", contract: "PoolFactory", kind: "singleton", roleKey: "poolFactory", abiExport: "VelodromePoolFactoryABI" },
   { protocol: "velodrome", contract: "RouterV2", kind: "singleton", roleKey: "routerV2", abiExport: "VelodromeRouterABI" },
+  { protocol: "velodrome", contract: "Pool", kind: "interface", abiExport: "VelodromePoolABI" },
   { protocol: "venus", contract: "VBNB", kind: "singleton", roleKey: "vBNB", abiExport: "VBNBABI" },
   { protocol: "venus", contract: "VToken", kind: "interface", abiExport: "VTokenABI" },
   { protocol: "venus", contract: "Comptroller", kind: "singleton", roleKey: "comptroller", abiExport: "VenusComptrollerABI", caveats: ["enterMarkets(address[]) is checked against the deployed bytecode only: the Diamond routes it (facetAddress) to MarketFacet 0x21f8e1471b153f49be1d645a008e4a57434eed23, which has no verified source on Sourcify or Routescan; the selector is proven by the routing only","exitMarket(address) is checked against the deployed bytecode only: the Diamond routes it (facetAddress) to MarketFacet 0x21f8e1471b153f49be1d645a008e4a57434eed23, which has no verified source on Sourcify or Routescan; the selector is proven by the routing only"] },
@@ -766,6 +780,7 @@ export interface AcrossContracts {
 export interface AerodromeContracts {
   readonly PoolFactory: Contract<typeof aerodromeAbis.AerodromePoolFactoryABI>;
   readonly Router: Contract<typeof aerodromeAbis.AerodromeRouterABI>;
+  readonly Pool: InterfaceContract<typeof aerodromeAbis.AerodromePoolABI>;
 }
 
 export interface AerodromeSlipstreamContracts {
@@ -837,8 +852,10 @@ export interface BenqiContracts {
 export interface CamelotContracts {
   readonly V2Router: Contract<typeof camelotAbis.CamelotV2RouterABI>;
   readonly V3SwapRouter: Contract<typeof camelotAbis.CamelotV3SwapRouterABI>;
-  readonly V2Factory: AddressOnlyContract;
-  readonly V3Factory: AddressOnlyContract;
+  readonly V2Factory: Contract<typeof camelotAbis.CamelotV2FactoryABI>;
+  readonly V2Pair: InterfaceContract<typeof camelotAbis.CamelotV2PairABI>;
+  readonly V3Factory: Contract<typeof camelotAbis.CamelotV3FactoryABI>;
+  readonly V3Pool: InterfaceContract<typeof camelotAbis.CamelotV3PoolABI>;
 }
 
 export interface CbethContracts {
@@ -1113,6 +1130,7 @@ export interface MantleMethContracts {
 export interface MaverickContracts {
   readonly V2Factory: Contract<typeof maverickAbis.MaverickV2FactoryABI>;
   readonly V2Router: Contract<typeof maverickAbis.MaverickV2RouterABI>;
+  readonly V2Pool: InterfaceContract<typeof maverickAbis.MaverickV2PoolABI>;
 }
 
 export interface MoonwellContracts {
@@ -1157,12 +1175,14 @@ export interface OpynContracts {
 export interface PancakeswapV2Contracts {
   readonly Factory: Contract<typeof pancakeswapV2Abis.PancakeSwapV2FactoryABI>;
   readonly Router: Contract<typeof pancakeswapV2Abis.PancakeSwapV2RouterABI>;
+  readonly Pair: InterfaceContract<typeof pancakeswapV2Abis.PancakeSwapV2PairABI>;
 }
 
 export interface PancakeswapV3Contracts {
   readonly Factory: Contract<typeof pancakeswapV3Abis.PancakeSwapV3FactoryABI>;
   readonly NonfungiblePositionManager: Contract<typeof pancakeswapV3Abis.PancakeSwapV3NFPMABI>;
   readonly SmartRouter: Contract<typeof pancakeswapV3Abis.PancakeSwapV3SmartRouterABI>;
+  readonly Pool: InterfaceContract<typeof pancakeswapV3Abis.PancakeSwapV3PoolABI>;
 }
 
 export interface ParaswapContracts {
@@ -1207,8 +1227,10 @@ export interface PythContracts {
 export interface QuickswapContracts {
   readonly V2Router: Contract<typeof quickswapAbis.QuickSwapV2RouterABI>;
   readonly V3SwapRouter: Contract<typeof quickswapAbis.QuickSwapV3SwapRouterABI>;
-  readonly V2Factory: AddressOnlyContract;
-  readonly V3Factory: AddressOnlyContract;
+  readonly V2Factory: Contract<typeof quickswapAbis.QuickSwapV2FactoryABI>;
+  readonly V2Pair: InterfaceContract<typeof quickswapAbis.QuickSwapV2PairABI>;
+  readonly V3Factory: Contract<typeof quickswapAbis.QuickSwapV3FactoryABI>;
+  readonly V3Pool: InterfaceContract<typeof quickswapAbis.QuickSwapV3PoolABI>;
 }
 
 export interface RadiantContracts {
@@ -1307,6 +1329,7 @@ export interface SuperfluidContracts {
 export interface SushiswapV2Contracts {
   readonly Factory: Contract<typeof sushiswapV2Abis.SushiSwapV2FactoryABI>;
   readonly Router: Contract<typeof sushiswapV2Abis.SushiSwapV2RouterABI>;
+  readonly Pair: InterfaceContract<typeof sushiswapV2Abis.SushiSwapV2PairABI>;
 }
 
 export interface SwellContracts {
@@ -1333,6 +1356,7 @@ export interface SynthraV3Contracts {
   readonly SwapRouter02: Contract<typeof synthraV3Abis.SynthraV3SwapRouter02ABI>;
   readonly QuoterV2: Contract<typeof synthraV3Abis.SynthraV3QuoterV2ABI>;
   readonly NonfungiblePositionManager: Contract<typeof synthraV3Abis.SynthraV3NonfungiblePositionManagerABI>;
+  readonly Pool: InterfaceContract<typeof synthraV3Abis.SynthraV3PoolABI>;
 }
 
 export interface ThalesContracts {
@@ -1359,11 +1383,13 @@ export interface TokemakContracts {
 export interface TraderJoeContracts {
   readonly LBFactory: Contract<typeof traderJoeAbis.LBFactoryABI>;
   readonly LBRouter: Contract<typeof traderJoeAbis.LBRouterABI>;
+  readonly LBPair: InterfaceContract<typeof traderJoeAbis.LBPairABI>;
 }
 
 export interface UniswapV2Contracts {
   readonly Factory: Contract<typeof uniswapV2Abis.UniswapV2FactoryABI>;
   readonly Router: Contract<typeof uniswapV2Abis.UniswapV2RouterABI>;
+  readonly Pair: InterfaceContract<typeof uniswapV2Abis.UniswapV2PairABI>;
 }
 
 export interface UniswapV3Contracts {
@@ -1386,11 +1412,13 @@ export interface UnitflowV3Contracts {
   readonly Factory: Contract<typeof unitflowV3Abis.UnitFlowV3FactoryABI>;
   readonly Router: Contract<typeof unitflowV3Abis.UnitFlowV3RouterABI>;
   readonly Quoter: Contract<typeof unitflowV3Abis.UnitFlowV3QuoterABI>;
+  readonly Pool: InterfaceContract<typeof unitflowV3Abis.UnitFlowV3PoolABI>;
 }
 
 export interface VelodromeContracts {
   readonly PoolFactory: Contract<typeof velodromeAbis.VelodromePoolFactoryABI>;
   readonly RouterV2: Contract<typeof velodromeAbis.VelodromeRouterABI>;
+  readonly Pool: InterfaceContract<typeof velodromeAbis.VelodromePoolABI>;
 }
 
 export interface VenusContracts {
@@ -1488,13 +1516,16 @@ export interface LiquityFamilyContracts {
 
 export interface PancakeswapFamilyContracts {
   readonly Router: PancakeswapV2Contracts["Router"];
+  readonly Pair: PancakeswapV2Contracts["Pair"];
   readonly NonfungiblePositionManager: PancakeswapV3Contracts["NonfungiblePositionManager"];
   readonly SmartRouter: PancakeswapV3Contracts["SmartRouter"];
+  readonly Pool: PancakeswapV3Contracts["Pool"];
 }
 
 export interface SushiswapFamilyContracts {
   readonly Factory: SushiswapV2Contracts["Factory"];
   readonly Router: SushiswapV2Contracts["Router"];
+  readonly Pair: SushiswapV2Contracts["Pair"];
 }
 
 export interface SynthetixFamilyContracts {
@@ -1507,10 +1538,12 @@ export interface SynthraFamilyContracts {
   readonly SwapRouter02: SynthraV3Contracts["SwapRouter02"];
   readonly QuoterV2: SynthraV3Contracts["QuoterV2"];
   readonly NonfungiblePositionManager: SynthraV3Contracts["NonfungiblePositionManager"];
+  readonly Pool: SynthraV3Contracts["Pool"];
 }
 
 export interface UniswapFamilyContracts {
   readonly Router: UniswapV2Contracts["Router"];
+  readonly Pair: UniswapV2Contracts["Pair"];
   readonly NonfungiblePositionManager: UniswapV3Contracts["NonfungiblePositionManager"];
   readonly QuoterV2: UniswapV3Contracts["QuoterV2"];
   readonly SwapRouter: UniswapV3Contracts["SwapRouter"];
@@ -1526,6 +1559,7 @@ export interface UnitflowFamilyContracts {
   readonly Factory: UnitflowV3Contracts["Factory"];
   readonly Router: UnitflowV3Contracts["Router"];
   readonly Quoter: UnitflowV3Contracts["Quoter"];
+  readonly Pool: UnitflowV3Contracts["Pool"];
 }
 
 export interface YearnFamilyContracts {

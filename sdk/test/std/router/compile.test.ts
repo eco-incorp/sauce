@@ -5,8 +5,8 @@
  *   1. every exported function compiles, from run-time arguments, to the same bytes either way;
  *   2. the exports are exactly the documented API, no more and no fewer;
  *   3. each ABI fragment the library calls is pinned: the pool fragments to the selectors their
- *      deployed contracts dispatch, the Router's to the released ABI, and the two registry twins to
- *      the registry's own fragments;
+ *      deployed contracts dispatch, the Router's to the released ABI, and those the registry also
+ *      declares (Curve, the Balancer V2 Vault, the Uniswap V2 pair, the LB pair) to its fragments;
  *   4. the packaging invariant: there is no neutral `router.js` and no SVM arm, so importing the
  *      package for the SVM fails on the import.
  *
@@ -148,7 +148,7 @@ describe("@sauce/router: every fragment it calls is pinned", () => {
     }
   });
 
-  it("holds the Curve and Balancer V2 fragments equal to the registry twins the registry pins", () => {
+  it("holds every fragment the registry also declares equal to the twin the registry pins", () => {
     const twin = (slug: string, file: string, name: string): AbiFunction[] =>
       (
         JSON.parse(readFileSync(join(SRC, "protocols", slug, file), "utf8")) as {
@@ -160,6 +160,16 @@ describe("@sauce/router: every fragment it calls is pinned", () => {
     );
     expect(fragments("balancer-v2-vault.abi.json").map(plain)).toEqual(
       twin("balancer-v2", "BalancerV2VaultABI.json", "swap").map(plain),
+    );
+    expect(fragments("uniswap-v2-pair.abi.json").map(plain)).toEqual(
+      ["getReserves", "swap"]
+        .flatMap((name) => twin("uniswap-v2", "UniswapV2PairABI.json", name))
+        .map(plain),
+    );
+    expect(fragments("lb-pair.abi.json").map(plain)).toEqual(
+      ["swap", "getSwapOut"]
+        .flatMap((name) => twin("trader-joe", "LBPairABI.json", name))
+        .map(plain),
     );
   });
 });
