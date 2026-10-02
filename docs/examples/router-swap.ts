@@ -29,17 +29,17 @@ export const compiled = routes.compileSauceRoute(
 );
 if (compiled.calls.length !== 1) throw new Error("Expected one cook");
 
-// The same program as an intent body: a solver runs it on Ethereum for a reward on Base.
+// The same program as an intent body: a solver runs it on Ethereum for a reward on Base. The
+// Portals, the prover, the Pot, the engine and what the solver sends come from the SDK; the fee is
+// a fixture, which destinationExecutionFee() reads for real.
 const executionFee = 1_000n;
 const built = Ethereum(program, {
   execution: { value: executionFee },
-  nativeAmount: executionFee,
   deadline: 2_000_000_000n,
   defines,
 }).reward({
   source: "base",
   creator: "0x4444444444444444444444444444444444444444",
-  prover: "0x5555555555555555555555555555555555555555",
   deadline: 2_000_003_600n,
   nativeAmount: executionFee,
 });

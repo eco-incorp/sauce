@@ -47,7 +47,7 @@ in `compiled.bytecode[0]`; read `source` to see exactly what the rewrites produc
 
 The call's `value` is the Kitchen fee plus whatever native the program itself spends — this approval
 spends none. For Portal fulfillment the Pot must be owned by the destination Portal's Executor and
-`route.nativeAmount` must cover every call value. [Create an intent](intents.md) covers reading the
+`route.nativeAmount` must cover every call value, which is what the intent builder sets it to. [Create an intent](intents.md) covers reading the
 fee, deriving that Pot, and adding the reward and Portal calldata.
 
 `compileSauceRoute` takes a SauceScript file as written: a module declaring `function main(...)`,

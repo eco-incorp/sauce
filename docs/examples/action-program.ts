@@ -63,25 +63,15 @@ try {
 }
 
 // As an intent on Base. A route takes no runtime arguments, so the swap spends the Pot's USDC
-// balance, read when it runs, instead of the argument. Offline fixtures throughout.
+// balance, read when it runs, instead of the argument. The creator and the fee are fixtures; the
+// Portals, the prover, the Pot, the engine and what the solver sends come from the SDK.
 const executionFee = 1_000n;
 const built = programIntent(
   { version: 1, actions: [{ type: "balanceOf", token: "USDC" }, program.actions[1]!] },
-  {
-    chain: "base",
-    execution: {
-      pot: "0x2222222222222222222222222222222222222222",
-      engine: "0x3333333333333333333333333333333333333333",
-      value: executionFee,
-    },
-    nativeAmount: executionFee,
-    portal: "0x4444444444444444444444444444444444444444",
-    deadline: 2_000_000_000n,
-  },
+  { chain: "base", execution: { value: executionFee }, deadline: 2_000_000_000n },
 ).reward({
   source: "ethereum",
   creator: "0x5555555555555555555555555555555555555555",
-  prover: "0x6666666666666666666666666666666666666666",
   deadline: 2_000_003_600n,
   nativeAmount: executionFee,
 });

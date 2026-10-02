@@ -1480,6 +1480,13 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
     const [family, contract] = name.split(".");
     return [...(members.get(family) ?? [])].some((ns) => contracts.has(`${ns}.${contract}`));
   };
+  // The globals index leaves the eco-routes namespace out: a program opens an intent with the chain
+  // syntax, never by calling the Portal. The one exception is the skill that names the Portal, for
+  // an intent built elsewhere: `fund-by-transfer.sauce.ts` publishes one through the registry's
+  // Portal by name rather than by hand-written selectors. Each entry must still be used.
+  const PORTAL_GLOBALS = new Set(["EcoRoutes.Portal"]);
+  const portalGlobalsUsed = new Set();
+  const inIntentsSkill = (where) => where.split(/[\\/]/).includes(INTENTS_SKILL);
   const uses = (where, text, strict, defines = []) => {
     const imported = new Set(
       [...text.matchAll(/import\s+(?:\{([^}]*)\}|([A-Za-z_$][\w$]*))\s+from/g)].flatMap((m) =>
@@ -1504,6 +1511,10 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
         (chainNames.has(first) && !third)
       )
         continue;
+      if (PORTAL_GLOBALS.has(name) && inIntentsSkill(where)) {
+        portalGlobalsUsed.add(name);
+        continue;
+      }
       if (!strict && (!namespaces.has(name.split(".")[0]) || ambiguous(name))) continue; // prose may name what fails
       if (!contracts.has(name) && !aliases.has(name) && !interfaces.has(name))
         fail(where, `uses the global ${name}, which the index does not list`);
@@ -1529,6 +1540,10 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
   for (const { where, text, defines } of sauceSources) uses(where, text, true, defines);
   for (const skill of skills)
     for (const span of inlineCode(skill)) uses(rel(skill.path), span, false);
+  for (const name of PORTAL_GLOBALS) {
+    if (!portalGlobalsUsed.has(name))
+      fail(INTENTS_SKILL, `no longer uses ${name}: drop it from the checker's PORTAL_GLOBALS`);
+  }
 }
 
 // ---- 9. The SauceScript reference: every example compiles, every rejection is refused ---------------------
@@ -1592,12 +1607,7 @@ if (skillsFlag < 0) {
 // No address the registry records as a literal, and no hand-built selector of a function a binding
 // declares (`docs/scripts/example-programs.mjs`). A deliberately low-level call is listed here:
 // example -> selector -> why. An entry nothing needs any more fails.
-const LOW_LEVEL_CALLS = {
-  "sauce-intents/examples/fund-by-transfer.sauce.ts": {
-    "0742ebe4": "until #66 calls EcoRoutes.Portal.intentVaultAddress through its binding",
-    "645c890c": "until #66 calls EcoRoutes.Portal.publish through its binding",
-  },
-};
+const LOW_LEVEL_CALLS = {};
 {
   const names = registryNames(
     sdk,
