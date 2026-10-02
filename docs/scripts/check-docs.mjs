@@ -12,6 +12,8 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { executedExamplesProblems } from "./executed-examples.mjs";
+
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const packageArgument = process.argv.indexOf("--package-root");
 if (packageArgument >= 0 && !process.argv[packageArgument + 1]) {
@@ -96,6 +98,20 @@ for (const name of sauceExamples) {
   }
 }
 console.log(`SauceScript examples: ${sauceExamples.length} quoted verbatim in the manual`);
+// Compiled is not run: each example also names, in `executed.json`, the suites that execute it on
+// an engine. Tests do not ship, so the installed package's run skips this.
+if (packageArgument < 0) {
+  const problems = executedExamplesProblems({
+    repository,
+    examplesRoot: examples,
+    examples: sauceExamples,
+    manifest: join(examples, "executed.json"),
+    compileOnly: false,
+  });
+  if (problems.length)
+    throw new Error(`SauceScript examples not executed:\n${problems.join("\n")}`);
+  console.log(`SauceScript examples: ${sauceExamples.length} executed by the suites named`);
+}
 // Keep examples under the package so Node resolves its public self-reference exports.
 const temporary = mkdtempSync(join(root, ".sauce-doc-examples-"));
 const input = join(temporary, "src");

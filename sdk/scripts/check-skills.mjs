@@ -51,7 +51,9 @@
 //   9. the SauceScript reference (sauce-script/references) compiles every example it gives and is
 //      refused every form it rejects, with the messages it quotes;
 //  10. the actions reference (sauce-actions/references) is what `gen-skills-actions.mjs` renders
-//      from the actions JSON Schema the package ships.
+//      from the actions JSON Schema the package ships;
+//  11. every example program is either executed by a suite CI runs, named in
+//      `skills-check/executed.json`, or listed there as compile-only with the reason.
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -76,6 +78,7 @@ import {
   skillsReferences,
 } from "./gen-skills-references.mjs";
 import { checkBuiltins, checkBuiltinsJson } from "./skills-check/builtins.mjs";
+import { executedExamplesProblems } from "../../docs/scripts/executed-examples.mjs";
 
 // ---- Arguments and resolution -------------------------------------------------------------------
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1558,6 +1561,27 @@ else {
     );
 }
 
+// ---- 11. Which example programs a suite executes -----------------------------------------------------------
+// Compiling a program is not running it: `skills-check/executed.json` names the suites that execute
+// each one on an engine, or says why none does yet. The suites are this repository's, so a check of
+// another skills directory (`--skills`) skips it.
+let executedExamples = 0;
+if (skillsFlag < 0) {
+  const programs = walk(SKILLS_DIR, (file) => file.endsWith(".sauce.ts"))
+    .map((file) => relative(SKILLS_DIR, file))
+    .filter((file) => /^[^/]+\/examples\/[^/]+$/.test(file));
+  const manifest = join(HERE, "skills-check", "executed.json");
+  for (const problem of executedExamplesProblems({
+    repository: REPOSITORY,
+    examplesRoot: SKILLS_DIR,
+    examples: programs,
+    manifest,
+  })) {
+    fail(rel(manifest), problem);
+  }
+  executedExamples = Object.keys(JSON.parse(read(manifest)).executed).length;
+}
+
 // ---- Report ----------------------------------------------------------------------------------------------
 const summary =
   `${counts.skills} skills, ${counts.files} files read; ${counts.programRuns} program runs through sauce ` +
@@ -1566,7 +1590,8 @@ const summary =
   `${counts.sauceFails} refused as documented; ${counts.ts} ts blocks typechecked; ${counts.runners} runners ` +
   `executed offline; ${counts.indexed} indexed globals compiled on their chains; ${builtinExamples} ` +
   `reference examples compiled and ${builtinRejections} rejections refused; ${counts.subpaths} subpaths, ` +
-  `${counts.identifiers} inline identifiers and ${counts.addresses} addresses checked; against ` +
+  `${counts.identifiers} inline identifiers and ${counts.addresses} addresses checked; ` +
+  `${executedExamples} example programs executed by a suite; against ` +
   `${PKG}@${sdkPkg.version}`;
 if (failures.length > 0) {
   console.error(
