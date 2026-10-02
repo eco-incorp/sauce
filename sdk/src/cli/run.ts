@@ -88,7 +88,7 @@ import { intentOf, intentRecord } from "./lifecycle.js";
 import type { Ask } from "./prompt.js";
 import { defaultStoreDir, IntentStore } from "./store.js";
 import { globalsCommand } from "./globals.js";
-import { initProject, writeSauceScriptTsconfig } from "./init.js";
+import { initProject, installedViem, writeSauceScriptTsconfig } from "./init.js";
 import {
   assumedBalances,
   definesReach,
@@ -332,12 +332,14 @@ function packageInfo(): {
 const skillsSource = (): SkillsSource => {
   const { name, version, dependencies } = packageInfo();
   const typescript = dependencies?.typescript;
+  const viem = installedViem();
 
   return {
     dir: PACKAGED_SKILLS,
     packageName: name,
     version,
     ...(typescript === undefined ? {} : { typescript }),
+    ...(viem === undefined ? {} : { viem }),
   };
 };
 
