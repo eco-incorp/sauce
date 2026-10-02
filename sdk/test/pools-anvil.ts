@@ -5,7 +5,8 @@
  * The Uniswap V3 and PancakeSwap V3 pools are Uniswap's own `UniswapV3Factory` and `UniswapV3Pool`
  * bytecode from `@uniswap/v3-core`: a factory deployed here creates and initializes them, and its
  * code and storage are then replayed onto the registry's factory address, so the factory a program
- * names finds them. Liquidity comes through `fixtures/cli/Pools.sol`'s `PoolsLiquidity`, which also
+ * names finds them; each pool's `factory` immutable is rewritten to that address too, so a pool
+ * names the factory a pool of that venue on Base names. Liquidity comes through `fixtures/cli/Pools.sol`'s `PoolsLiquidity`, which also
  * swaps, to hold a reported depth to what the pool really takes. Slipstream's factory and Uniswap
  * V4's StateView cannot run here (they need their voter and PoolManager), so `SlipstreamFactoryStub`
  * (whose pool is a real V3 pool) and `StateViewStub` stand at their registry addresses. The pair's
@@ -184,6 +185,18 @@ export async function startPoolsChain(port: number): Promise<PoolsChain> {
     return receipt.contractAddress ?? undefined;
   };
   const deploy = async (creationCode: Hex): Promise<Address> => (await send(null, creationCode))!;
+  /** `pools`' code with their `factory` immutable, `from`, rewritten to `to`: the factory replayed
+   *  at the registry's address. A pool reads it only for its owner's fee switch. */
+  const rehome = async (pools: readonly Address[], from: Address, to: Address) => {
+    const word = (address: Address) => address.slice(2).toLowerCase().padStart(64, "0");
+    for (const pool of pools) {
+      const code = (await publicClient.getCode({ address: pool }))!;
+      await testClient.setCode({
+        address: pool,
+        bytecode: code.toLowerCase().replaceAll(word(from), word(to)) as Hex,
+      });
+    }
+  };
   const call = (to: Address, abi: Abi, functionName: string, args: readonly unknown[]) =>
     send(to, encodeFunctionData({ abi, functionName, args }));
   /** `from`'s code and storage onto `to`: a contract at the address the registry names. */
@@ -220,6 +233,8 @@ export async function startPoolsChain(port: number): Promise<PoolsChain> {
   }
 
   const pools = new Map<string, LocalPool>();
+  const named = (prefix: string) =>
+    [...pools].filter(([name]) => name.startsWith(prefix)).map(([, pool]) => pool.address);
   /** A pool by `factory` at `fee`, initialized at `price`, with liquidity in `ranges` (ticks). */
   const pool = async (
     factory: Address,
@@ -276,12 +291,14 @@ export async function startPoolsChain(port: number): Promise<PoolsChain> {
   await pool(uniswap, "v3:10000", 10_000, "390", []);
   await pool(uniswap, "v3:100", 100, undefined, []);
   await replay(uniswap, VENUES.uniswapV3);
+  await rehome(named("v3:"), uniswap, VENUES.uniswapV3);
 
   // PancakeSwap V3: its 0.25% tier.
   const pancake = await deploy(FACTORY.bytecode);
   await call(pancake, FACTORY.abi, "enableFeeAmount", [2500, 50]);
   await pool(pancake, "pancake:2500", 2500, "399", [[...around("399", 50, 100, 100), 10n ** 11n]]);
   await replay(pancake, VENUES.pancakeV3);
+  await rehome(named("pancake:"), pancake, VENUES.pancakeV3);
 
   // Aerodrome Slipstream: a real V3 pool behind the lookup, found at tick spacing 10, the deepest.
   const behind = await deploy(FACTORY.bytecode);
@@ -292,6 +309,7 @@ export async function startPoolsChain(port: number): Promise<PoolsChain> {
   await call(stub, SLIPSTREAM.abi, "setTickSpacings", [[1, 10, 50]]);
   await call(stub, SLIPSTREAM.abi, "setPool", [USDC, SPCX, 10, slipstreamPool]);
   await replay(stub, VENUES.slipstream);
+  await rehome([slipstreamPool], behind, VENUES.slipstream);
 
   // Uniswap V4: 0.05% at spacing 10 with a protocol fee each way and a tick within 1% of its
   // price, and 0.005% at spacing 1, a key only --v4-key names. 0.3% at 60 has no pool.
