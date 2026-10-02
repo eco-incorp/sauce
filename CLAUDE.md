@@ -108,6 +108,12 @@ because the command loads `actions/dist`, which CI builds after the SDK's tests)
 `names.mainnet` (`test:mainnet`) executes one chain-agnostic document — symbols, namespaces, pools by
 key — on Ethereum, Base and Avalanche state, against the same trade by address, and through
 `sauce run`.
+`examples-cookbook.mainnet` (`test:mainnet`) runs every EVM program of the `sauce-examples`
+skill's own cookbook through `sauce simulate` and `sauce run` on Ethereum and Base state, its
+results held to Uniswap's QuoterV2, the feed, Aave's account data and the recipients' balances, and
+its cross-chain cascade filled hop by hop with `sauce intent fill` (Ethereum's eco-routes Portal
+postdates the pinned block, so the v2.12.0 fixture is planted there; Base's is the deployed one).
+The cookbook's Solana program runs in `sdk/test/examples-cookbook-solana.e2e.test.ts`.
 After changing an action's fields in `actions/src/spec.ts`, run `pnpm --filter './actions'
 gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.json` is stale.
 
@@ -172,7 +178,8 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   starts reading something new FAILS (a missing slot reads as zero) rather than reaching the
   network. Blob sizes at capture: actions ~680 KB, quote ~270 KB, split-swap ~80 KB, the swap
   venue suites `swap` (Ethereum) ~110 KB, `swap-base` ~90 KB, `swap-avalanche` ~30 KB, and the names
-  suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB.
+  suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB, and
+  the cookbook's two (`cookbook-{ethereum,base}`) ~135 and ~135 KB.
 
   **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
   pinned block (then recapture every suite on that chain, and revisit every pinned figure: pools,
