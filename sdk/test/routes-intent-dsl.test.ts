@@ -486,17 +486,19 @@ describe("openRoute: fail-closed", () => {
     ).toThrow(/creator/i);
   });
 
-  it("throws naming 'prover' when the reward has no prover and options has none either", () => {
+  it("throws naming 'prover' when neither names one and the registry records none for the pair", () => {
+    // Ronin carries a Portal but no prover, so there is nothing to default to: see
+    // `routes-intent-defaults.test.ts` for the pairs that do have one.
     expect(() =>
       openRoute("ethereum", "function main() { return 1n; }", {
         pot: POT,
         engine: ENGINE,
         deadline: 2000n,
         portal: PORTAL,
-        source: "base",
+        source: "ronin",
         creator: CREATOR,
       }).reward(0n),
-    ).toThrow(/prover/i);
+    ).toThrow(/'prover' is required for a reward on ronin/);
   });
 });
 

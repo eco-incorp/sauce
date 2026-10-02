@@ -262,7 +262,7 @@ Everything in [creating an intent](intents.md) applies: the Pot must be owned by
 
 ### Fund a child from a measured amount
 
-A program's output is only known once it runs. [Dynamic nesting](nested-intents.md#create-the-child-on-chain-from-a-measured-amount) publishes a child intent funded from what the parent's Pot holds after its program ran, so the pattern is:
+A program's output is only known once it runs. An action program has no action that opens an intent, so it is chained to another with the TypeScript builder's `.nest()`. [Dynamic nesting](../api/routes.md#dynamic-children) publishes a child intent funded from what the parent's Pot holds after its program ran, so the pattern is:
 
 1. The parent program keeps its output in the Pot (`"recipient": "self"`).
 2. `.nest(child, { via: "dynamic", measure: { kind: "erc20Balance", token } })` measures that balance.
@@ -270,7 +270,7 @@ A program's output is only known once it runs. [Dynamic nesting](nested-intents.
 
 ```ts
 import { programIntent, type ActionProgram } from "@eco-incorp/sauce/actions";
-import { routes } from "@eco-incorp/sauce";
+import { destinationPot, routes } from "@eco-incorp/sauce";
 import { encodeFunctionData, parseAbi, type Address } from "viem";
 
 const { AMOUNT_IN_PLACEHOLDER, AMOUNT_OUT_PLACEHOLDER } = routes;
@@ -279,17 +279,18 @@ export function buildCascade(
   parentProgram: ActionProgram, // e.g. a swap into USDC with "recipient": "self", run on Base
   childProgram: ActionProgram, // e.g. balanceOf "USDC", an approve, then aaveV3Supply, on Arbitrum
   parentOptions: routes.IntentOptions,
-  childOptions: routes.IntentOptions & { pot: Address },
+  childOptions: routes.IntentOptions,
   usdcBase: Address,
   usdcArbitrum: Address,
   parentReward: routes.SauceRewardSpec,
   childReward: Omit<routes.SauceRewardSpec, "tokens">,
 ) {
-  // The Executor receives the child's tokens; move them into the Pot the child program runs in.
+  // The Executor receives the child's tokens; move them into the Pot the child program runs in,
+  // the shared one the SDK derives for Arbitrum's Portal.
   const toPot = encodeFunctionData({
     abi: parseAbi(["function transfer(address,uint256)"]),
     functionName: "transfer",
-    args: [childOptions.pot, AMOUNT_OUT_PLACEHOLDER],
+    args: [destinationPot("arbitrum", childOptions), AMOUNT_OUT_PLACEHOLDER],
   });
   const child = programIntent(childProgram, {
     ...childOptions,
@@ -312,7 +313,7 @@ export function buildCascade(
 }
 ```
 
-The measurement is the Pot's balance after the parent program, not the program's own output figure: another action, or a donation, that leaves the same token in the Pot is measured too. The rest of the nested-intents guide — scale, floors, hash recovery — applies unchanged. The route's token amounts and precalls are TypeScript, outside the document, so they take addresses: `Base.USDC.address` and `Arbitrum.USDC.address` from the package root are the same tokens the documents' `"USDC"` names on each chain.
+The measurement is the Pot's balance after the parent program, not the program's own output figure: another action, or a donation, that leaves the same token in the Pot is measured too. The rest of [dynamic children](../api/routes.md#dynamic-children) — scale, floors, hash recovery — applies unchanged. The route's token amounts and precalls are TypeScript, outside the document, so they take addresses: `Base.USDC.address` and `Arbitrum.USDC.address` from the package root are the same tokens the documents' `"USDC"` names on each chain.
 
 ## Runtime amounts
 
