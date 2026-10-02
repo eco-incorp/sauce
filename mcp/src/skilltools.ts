@@ -134,9 +134,10 @@ export const DEV_TOPICS: ReadonlyArray<{
   },
   {
     topic: "mcp",
-    about: "this MCP server: running it, endpoints, agent setup, self-hosting",
-    keywords: ["mcp", "server", "setup", "agent", "agents", "selfhost", "http", "stdio"],
-    files: ["guides/mcp.md"],
+    about:
+      "this MCP server and the agent skills: running it, endpoints, agent setup, skills, self-hosting",
+    keywords: ["mcp", "server", "setup", "agent", "agents", "selfhost", "http", "stdio", "skills"],
+    files: ["guides/mcp.md", "guides/skills.md"],
   },
 ];
 
