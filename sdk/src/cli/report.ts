@@ -16,6 +16,7 @@ import { getAddress, hexToBytes, numberToHex } from "viem";
 import type { CanonicalChain } from "../chains/canonical.js";
 import { chainDefines } from "../routes/ambient.js";
 import { walk, type AstNode } from "../routes/ast-walk.js";
+import { portalIntent } from "../routes/intent-portal.js";
 import { parseSauce } from "../routes/parse.js";
 import type { AccessorTarget } from "../routes/protocol-rewrite.js";
 import { chainAccessorNames } from "../routes/sauce-route.js";
@@ -77,11 +78,21 @@ interface IntentPart {
 }
 
 /** The parts of `program` each intent it opens runs on its destination, as the intent lowering
- *  finds them: `Chain(() => { body }, delivery).reward(reward)`, the reward left out. */
+ *  finds them: the body and the delivery of `Chain.Portal.send(reward).receive(delivery).then(body)`
+ *  and of `Chain(body, delivery).reward(reward)`, the reward left out. */
 function intentParts(program: AstNode): IntentPart[] {
   const chains = chainAccessorNames();
   const parts: IntentPart[] = [];
   walk(program, (node) => {
+    const portal = portalIntent(node);
+    if (portal !== undefined) {
+      const chain = chains.get(portal.chainName);
+      if (chain === undefined) return;
+      for (const part of [...portal.then, ...portal.receive]) {
+        parts.push({ chain, start: part.start, end: part.end });
+      }
+      return;
+    }
     if (node.type !== "CallExpression") return;
     const callee = node.callee as AstNode | undefined;
     if (callee?.type !== "MemberExpression" || callee.computed === true) return;

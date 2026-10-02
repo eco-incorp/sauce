@@ -1,15 +1,22 @@
 /**
- * `Chain(() => { ... }).reward({ ... })` — creating an Eco intent from inside a Sauce program,
- * with no import, no Portal, no selector and no approve written by hand.
+ * `Chain.Portal.send(...).receive(...).then(() => { ... })` — creating an Eco intent from inside a
+ * Sauce program, with no import, no Portal address, no selector and no approve written by hand.
  *
  * ```js
  * function main() {
  *   const amount = USDC.balanceOf(ctx.self());
- *   Base(() => {
- *     USDC.transfer(RECIPIENT, amount);
- *   }).reward({ tokens: [{ token: USDC, amount }] });
+ *   Base.Portal.send({ token: USDC, amount })
+ *     .receive({ token: USDC, amount })
+ *     .then(() => {
+ *       USDC.transfer(RECIPIENT, amount);
+ *     });
  * }
  * ```
+ *
+ * `send` is the reward, `receive` what the solver delivers to the destination, `then` the body that
+ * runs there (`intent-portal.ts`). The form it replaces, `Base(() => { ... }, { tokens: delivery })
+ * .reward({ tokens: reward })`, means exactly the same and is still read, with the delivery
+ * optional, until the compiler opens intents itself; every site below is one of the two.
  *
  * WHAT THIS IS. A source rewrite, run before the compiler ever sees the program — the same class of
  * thing as `token-rewrite.ts`'s `Token(x).transfer(...)` -> `transfer(x, ...)`, and for the same
@@ -39,9 +46,9 @@
  * approvals and `publishAndFund` instead. See `vaultFundingStatements` and `portal.ts`'s module doc.
  *
  * WHICH CHAIN A NAME MEANS. Two chains are in play, and each part of the expression belongs to one.
- * The body and the delivery argument run on the destination, so `USDC` there is the destination's.
- * The reward is escrowed by the enclosing program, on the chain it runs on, in a vault of that
- * chain's Portal, so `USDC` in `.reward(...)` is that chain's. An intent opened inside a body is
+ * The body (`.then`) and the delivery (`.receive`) run on the destination, so `USDC` there is the
+ * destination's. The reward (`.send`) is escrowed by the enclosing program, on the chain it runs on,
+ * in a vault of that chain's Portal, so its `USDC` is that chain's. An intent opened inside a body is
  * funded on the body's chain: its reward resolves there and its own body on its own destination —
  * the same rule one level down, because the child compile re-enters this pass with `source` set to
  * the chain it compiles for.
@@ -73,6 +80,14 @@ import {
   publishTx,
   type IntentFundVia,
 } from "./portal.js";
+import {
+  DEFAULT_FILL_WINDOW,
+  DEFAULT_REFUND_WINDOW,
+  portalChainProblem,
+  portalIntent,
+  type RewardModifier,
+  type RouteModifier,
+} from "./intent-portal.js";
 import { parseSauce } from "./parse.js";
 import { emitTemplate, splitByPlaceholders, type PlaceholderSpec } from "./template.js";
 import type { AddressInput, Intent } from "./types.js";
@@ -100,13 +115,30 @@ export const childCaptureSentinel = (index: number): bigint =>
 const captureSentinel = (index: number): bigint =>
   BigInt(`0x${CAPTURE_TAG}${"00".repeat(14)}${index.toString(16).padStart(4, "0")}`);
 
+/**
+ * The sentinel a run-time value occupies in a `uint64` field — a deadline. The capture sentinel is
+ * twenty bytes, which a `uint64` cannot hold, so these are eight: the tag, zeros, an index. In the
+ * payload either is one left-padded word, which is what the splice writes.
+ */
+const DEADLINE_TAG = "5aced1";
+const deadlineSentinel = (index: number): bigint =>
+  BigInt(`0x${DEADLINE_TAG}${"00".repeat(3)}${index.toString(16).padStart(4, "0")}`);
+
 /** What a caller must supply because the SDK cannot correctly guess it, plus what it may override. */
 export interface IntentSugarDefaults {
-  /** Absolute Unix seconds. Required: a deadline is a policy decision, and a wrong one either
-   *  strands the reward or makes the intent unfulfillable. */
+  /** The route's deadline, absolute Unix seconds, for every intent the program opens at any depth.
+   *  `.deadline(...)` after `receive` sets one intent's. Left out, an intent written
+   *  `Chain.Portal...` gets {@link DEFAULT_FILL_WINDOW} past when it opens; one written
+   *  `Chain(...).reward(...)` is refused. */
   readonly deadline: bigint;
-  /** Defaults to `route.deadline`. */
+  /** The reward's deadline. Left out: the route's deadline plus {@link DEFAULT_REFUND_WINDOW} for an
+   *  intent written `Chain.Portal...`, the route's deadline itself for `Chain(...).reward(...)`. */
   readonly rewardDeadline?: bigint;
+  /** When the program's own intents open, Unix seconds: the default deadlines of those written
+   *  `Chain.Portal...` count from it, so they are fixed when the file compiles, as a wallet that
+   *  publishes them needs. A level below opens when its parent's body runs, at `ctx.timestamp()`;
+   *  so does every level when this is left out. */
+  readonly openedAt?: bigint;
   /** Who may reclaim the reward after `rewardDeadline`. Defaults to the executing Pot, which is
    *  correct when the program itself funded the reward and wrong when a user did — supply it
    *  explicitly in that case. */
@@ -138,9 +170,10 @@ export interface IntentSugarDefaults {
   readonly pot?: AddressInput;
   /** The interpreter that Pot cooks on. Defaults to the released engine address. */
   readonly engine?: AddressInput;
-  /** The destination Kitchen's current execution fee, in wei, paid on every cook. Required for a
-   *  cook-based child: it is read from the chain and it changes. */
-  readonly executionFee?: bigint;
+  /** The destination Kitchen's current execution fee, in wei, paid on every cook: one for every
+   *  destination, or each destination's own. Required for a cook-based child, unless it is given
+   *  `.fee(...)`: it is read from the chain and it changes. */
+  readonly executionFee?: bigint | ((destination: CanonicalChain) => bigint | undefined);
 }
 
 /** Everything the rewrite needs that is not in the source text. */
@@ -177,6 +210,9 @@ export interface IntentSugarContext {
     captures: readonly string[],
     /** The destination Portal the child's route records — whose Executor must own the Pot. */
     destinationPortal: AddressInput,
+    /** The child's cook: the destination Kitchen's fee it pays, `undefined` when none was given,
+     *  and the creator its own intents inherit, when this intent named one. */
+    level: { readonly fee: bigint | undefined; readonly creator?: AddressInput },
   ) => CompiledChild;
 }
 
@@ -191,16 +227,18 @@ export interface CompiledChild {
 export interface IntentSugarResult {
   readonly source: string;
   readonly rewrote: boolean;
-  /** One per lowered `Chain(...).reward(...)` site, in source order. */
+  /** One per lowered intent site, in source order. */
   readonly intents: readonly LoweredIntent[];
 }
 
 export interface LoweredIntent {
   /** The child as encoded, with a sentinel wherever a captured value belongs. */
   readonly intent: Intent;
-  /** Enclosing locals spliced into it, in slot order. */
+  /** Enclosing locals spliced into it, in slot order — an amount the program computes from them
+   *  as it is written (`amount * 99n / 100n`). */
   readonly captures: readonly string[];
-  /** Each sentinel the encoded child carries, and the local whose value replaces it on chain. */
+  /** Each sentinel the encoded child carries, and the value (as `captures` names it) that replaces
+   *  it on chain. */
   readonly sentinels: readonly { readonly sentinel: bigint; readonly capture: string }[];
   readonly destination: CanonicalChain;
   /** How the emitted program funds it: by transfer to its vault then `publish`, or
@@ -235,11 +273,80 @@ function literalOf(node: AstNode): bigint | undefined {
   return undefined;
 }
 
+/** SauceScript's integer arithmetic, which an amount may be written in: `amount * 99n / 100n`. */
+const ARITHMETIC = new Set(["+", "-", "*", "/", "%"]);
+
+/** The reads of the executing block a value may use, computed where the intent opens:
+ *  `.deadline(ctx.timestamp() + 3600)`. */
+const BLOCK_READS = new Set(["timestamp", "blockNumber"]);
+
+/** `node` as `ctx.timestamp()` or `ctx.blockNumber()`: its text, or `undefined`. */
+function blockRead(node: AstNode): string | undefined {
+  if (
+    node.type !== "CallExpression" ||
+    ((node as { arguments?: AstNode[] }).arguments ?? []).length
+  ) {
+    return undefined;
+  }
+  const callee = (node as { callee?: AstNode }).callee;
+  if (callee?.type !== "MemberExpression" || (callee as { computed?: boolean }).computed) {
+    return undefined;
+  }
+  const object = (callee as { object?: AstNode }).object;
+  const property = (callee as { property?: AstNode }).property;
+  const read =
+    property?.type === "Identifier" ? (property as unknown as { name: string }).name : "";
+  return object?.type === "Identifier" &&
+    (object as unknown as { name: string }).name === "ctx" &&
+    BLOCK_READS.has(read)
+    ? `ctx.${read}()`
+    : undefined;
+}
+const MAX_WORD = (1n << 256n) - 1n;
+
+/**
+ * Names an arithmetic amount the enclosing program computes where the intent opens: a local holding
+ * `expression` (literals and the program's own variables), declared ahead of the intent. `written`
+ * is the expression as the author wrote it, which is how a message names the value.
+ */
+type Hoist = (expression: string, written: AstNode | string) => string;
+
 function makeResolver(
   defines: ReadonlyMap<string, bigint>,
   outerLocals: ReadonlySet<string>,
+  hoist?: Hoist,
 ): Resolver {
-  return (node, what, unknown) => {
+  /** `node` as a value, or — arithmetic over a variable of the program — the expression computing
+   *  it, in which every compile-time value is already its literal. */
+  const operand = (
+    node: AstNode,
+    what: string,
+    unknown?: (name: string) => string,
+  ): { readonly literal: bigint } | { readonly expression: string } => {
+    const read = hoist === undefined ? undefined : blockRead(node);
+    if (read !== undefined) return { expression: read };
+    if (node.type === "BinaryExpression" && hoist !== undefined) {
+      const operator = (node as { operator?: string }).operator ?? "";
+      if (!ARITHMETIC.has(operator)) {
+        return fail(
+          `${what} uses \`${operator}\`; an amount is integer arithmetic: \`+ - * / %\` of ` +
+            "literals, compile-time values and variables of the enclosing program",
+        );
+      }
+      const left = operand((node as { left?: AstNode }).left!, what, unknown);
+      const right = operand((node as { right?: AstNode }).right!, what, unknown);
+      if ("literal" in left && "literal" in right) {
+        return { literal: fold(left.literal, operator, right.literal, what) };
+      }
+      const text = (side: typeof left): string =>
+        "literal" in side ? `${side.literal}n` : side.expression;
+      return { expression: `(${text(left)} ${operator} ${text(right)})` };
+    }
+    const value = resolveOne(node, what, unknown);
+    return "literal" in value ? value : { expression: value.capture };
+  };
+
+  const resolveOne: Resolver = (node, what, unknown) => {
     const direct = literalOf(node);
     if (direct !== undefined) return { literal: direct };
     if (node.type === "Identifier") {
@@ -256,9 +363,43 @@ function makeResolver(
     }
     return fail(
       `${what} is a ${node.type}, which cannot be resolved when the intent is built. Use a literal, ` +
-        `a compile-time define, or a variable of the enclosing program.`,
+        `a compile-time define, a variable of the enclosing program` +
+        (hoist === undefined ? "." : ", or integer arithmetic of them (`amount * 99n / 100n`)."),
     );
   };
+
+  return (node, what, unknown) => {
+    if (
+      hoist === undefined ||
+      (node.type !== "BinaryExpression" && blockRead(node) === undefined)
+    ) {
+      return resolveOne(node, what, unknown);
+    }
+    const value = operand(node, what, unknown);
+    return "literal" in value ? value : { capture: hoist(value.expression, node) };
+  };
+}
+
+/** `left <operator> right` as the program would compute it — checked, unsigned, 256-bit — refusing
+ *  what would revert there rather than build an intent no run could open. */
+function fold(left: bigint, operator: string, right: bigint, what: string): bigint {
+  if ((operator === "/" || operator === "%") && right === 0n) {
+    return fail(`${what} divides by zero`);
+  }
+  const result =
+    operator === "+"
+      ? left + right
+      : operator === "-"
+        ? left - right
+        : operator === "*"
+          ? left * right
+          : operator === "/"
+            ? left / right
+            : left % right;
+  if (result < 0n || result > MAX_WORD) {
+    return fail(`${what} is ${result}, outside an unsigned 256-bit word: computing it reverts`);
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -396,11 +537,26 @@ interface TokenList {
   /** The chain its names resolve on: the enclosing program's for the reward, the destination for
    *  the delivery. */
   readonly chain: CanonicalChain;
+  /** How the site was written, so a message names what the author wrote. */
+  readonly form: SiteForm;
 }
 
+/** `portal`: `Chain.Portal.send(reward).receive(delivery).then(body)`. `call`: `Chain(body,
+ *  delivery).reward(reward)`. */
+type SiteForm = "portal" | "call";
+
+/** The step of the portal form that names `list`. */
+const stepOf = (list: TokenList): string =>
+  list.part === "reward" ? "`.send(...)`" : "`.receive(...)`";
+
 /** How a message names a field of `list`. */
-const fieldOf = (list: TokenList, path: string): string =>
-  list.part === "reward" ? `\`reward.${path}\`` : `the delivery's \`${path}\``;
+const fieldOf = (list: TokenList, path: string): string => {
+  if (list.form === "portal") {
+    const field = path.replace(/^tokens(\[\]\.?)?/, "");
+    return field === "" ? stepOf(list) : `${stepOf(list)}'s \`${field}\``;
+  }
+  return list.part === "reward" ? `\`reward.${path}\`` : `the delivery's \`${path}\``;
+};
 
 /** A token address of `list`. It is encoded into the intent, so it must be known when the intent is
  *  built: a symbol, a literal, a define or a top-level `const` of a literal, never a value the
@@ -409,11 +565,17 @@ function tokenOf(node: AstNode, resolve: Resolver, list: TokenList): bigint {
   const chain = list.chain.slug;
   const subject = `the ${list.part} token`;
   const where =
-    list.part === "delivery"
-      ? `The delivery — the intent's second argument, \`{ tokens: [...] }\` — is what the solver ` +
-        `brings to ${chain}, so its symbols are ${chain}'s: fix it there, not in \`.reward(...)\`.`
-      : `The reward — \`.reward({ tokens: [...] })\` — is escrowed on ${chain}, where the program ` +
-        `opening the intent runs, so its symbols are ${chain}'s.`;
+    list.form === "portal"
+      ? list.part === "delivery"
+        ? `The delivery — what \`.receive(...)\` names — is what the solver brings to ${chain}, ` +
+          `so its symbols are ${chain}'s: fix it there, not in \`.send(...)\`.`
+        : `The reward — what \`.send(...)\` pays — is escrowed on ${chain}, where the program ` +
+          `opening the intent runs, so its symbols are ${chain}'s.`
+      : list.part === "delivery"
+        ? `The delivery — the intent's second argument, \`{ tokens: [...] }\` — is what the solver ` +
+          `brings to ${chain}, so its symbols are ${chain}'s: fix it there, not in \`.reward(...)\`.`
+        : `The reward — \`.reward({ tokens: [...] })\` — is escrowed on ${chain}, where the ` +
+          `program opening the intent runs, so its symbols are ${chain}'s.`;
   const fix =
     `Use a symbol ${chain} registers, or the token's ${chain} address as a literal, a define or a ` +
     "top-level `const` of a literal.";
@@ -435,6 +597,104 @@ function tokenOf(node: AstNode, resolve: Resolver, list: TokenList): bigint {
   );
 }
 
+/** One `{ token, amount }` of `list`. */
+function lowerEntry(
+  element: AstNode | null,
+  resolve: Resolver,
+  list: TokenList,
+): RewardSpec["tokens"][number] {
+  if (element === null || element.type !== "ObjectExpression") {
+    return fail(`each entry of ${fieldOf(list, "tokens")} must be \`{ token, amount }\``);
+  }
+  let token: bigint | undefined;
+  let amount: Value | undefined;
+  for (const field of (element as { properties?: AstNode[] }).properties ?? []) {
+    const fieldKey = (field as { key?: AstNode }).key;
+    const fieldName =
+      fieldKey?.type === "Identifier" ? (fieldKey as unknown as { name: string }).name : "";
+    // `{ token: USDC, amount }` -- shorthand's value IS the identifier.
+    const fieldValue = (field as { value?: AstNode }).value!;
+    if (field.type !== "Property" || (field as { computed?: boolean }).computed) {
+      return fail(`each entry of ${fieldOf(list, "tokens")} must be \`{ token, amount }\``);
+    } else if (fieldName === "token") {
+      token = tokenOf(fieldValue, resolve, list);
+    } else if (fieldName === "amount") {
+      amount = resolve(fieldValue, fieldOf(list, "tokens[].amount"));
+    } else {
+      return fail(`${fieldOf(list, `tokens[].${fieldName}`)} is not a field of a token amount`);
+    }
+  }
+  if (token === undefined || amount === undefined) {
+    return fail(`each entry of ${fieldOf(list, "tokens")} needs both \`token\` and \`amount\``);
+  }
+  return { token, amount };
+}
+
+/** `{ native: amount }`: the one key of an item that is native coin rather than a token. */
+function nativeOf(element: AstNode | null): AstNode | undefined {
+  if (element?.type !== "ObjectExpression") return undefined;
+  const properties = (element as { properties?: AstNode[] }).properties ?? [];
+  const [only] = properties;
+  const key = (only as { key?: AstNode } | undefined)?.key;
+  return properties.length === 1 &&
+    key?.type === "Identifier" &&
+    (key as unknown as { name: string }).name === "native"
+    ? (only as { value?: AstNode }).value
+    : undefined;
+}
+
+/**
+ * The argument of `.send(...)` or `.receive(...)`: one item, or an array of them, written out where
+ * the intent opens — the intent names its tokens when it is built, so a list the program holds in a
+ * variable is not one it can read. An item is `{ token, amount }`, or, in the reward, `{ native:
+ * amount }` for native coin.
+ */
+function lowerItems(args: readonly AstNode[], resolve: Resolver, list: TokenList): RewardSpec {
+  const step = stepOf(list);
+  const what = list.part === "reward" ? "the reward" : "what the solver delivers";
+  if (args.length !== 1) {
+    return fail(
+      `${step} takes one argument, ${what}: \`{ token, amount }\` or an array of them, got ` +
+        `${args.length}`,
+    );
+  }
+  const [node] = args as [AstNode];
+  const entries =
+    node.type === "ObjectExpression"
+      ? [node]
+      : node.type === "ArrayExpression"
+        ? ((node as { elements?: (AstNode | null)[] }).elements ?? [])
+        : fail(
+            `${step} takes ${what} written out in place, \`{ token, amount }\` or an array of ` +
+              `them, not a ${node.type}: the intent names its tokens when it is built.`,
+          );
+  if (entries.length === 0 && list.part === "reward") {
+    return fail("`.send([])` pays nothing: name at least one `{ token, amount }` or `{ native }`");
+  }
+  let nativeAmount: Value | undefined;
+  const tokens: RewardSpec["tokens"][number][] = [];
+  for (const element of entries) {
+    if (element?.type === "SpreadElement") {
+      return fail(`${step} lists each \`{ token, amount }\` in place; a spread is not read`);
+    }
+    const native = nativeOf(element);
+    if (native === undefined) {
+      tokens.push(lowerEntry(element, resolve, list));
+    } else if (list.part === "delivery") {
+      return fail(
+        "`.receive(...)` names the tokens the solver delivers. The native coin a route needs is " +
+          "its program's Kitchen fee, which the SDK adds itself: offer native coin in " +
+          "`.send({ native: amount })`, the reward",
+      );
+    } else if (nativeAmount !== undefined) {
+      return fail("`.send(...)` names `{ native }` once: add the amounts");
+    } else {
+      nativeAmount = resolve(native, "`.send(...)`'s `native`");
+    }
+  }
+  return nativeAmount === undefined ? { tokens } : { tokens, nativeAmount };
+}
+
 function lowerReward(node: AstNode, resolve: Resolver, list: TokenList): RewardSpec {
   if (node.type !== "ObjectExpression") {
     return fail("`.reward(...)` takes an object, e.g. `{ tokens: [{ token: USDC, amount }] }`");
@@ -449,35 +709,9 @@ function lowerReward(node: AstNode, resolve: Resolver, list: TokenList): RewardS
       if (value.type !== "ArrayExpression") {
         return fail(`${fieldOf(list, "tokens")} must be an array`);
       }
-      tokens = ((value as { elements?: AstNode[] }).elements ?? []).map((element) => {
-        if (element === null || element.type !== "ObjectExpression") {
-          return fail(`each entry of ${fieldOf(list, "tokens")} must be \`{ token, amount }\``);
-        }
-        let token: bigint | undefined;
-        let amount: Value | undefined;
-        for (const field of (element as { properties?: AstNode[] }).properties ?? []) {
-          const fieldKey = (field as { key?: AstNode }).key;
-          const fieldName =
-            fieldKey?.type === "Identifier" ? (fieldKey as unknown as { name: string }).name : "";
-          // `{ token: USDC, amount }` -- shorthand's value IS the identifier.
-          const fieldValue = (field as { value?: AstNode }).value!;
-          if (fieldName === "token") {
-            token = tokenOf(fieldValue, resolve, list);
-          } else if (fieldName === "amount") {
-            amount = resolve(fieldValue, fieldOf(list, "tokens[].amount"));
-          } else {
-            return fail(
-              `${fieldOf(list, `tokens[].${fieldName}`)} is not a field of a token amount`,
-            );
-          }
-        }
-        if (token === undefined || amount === undefined) {
-          return fail(
-            `each entry of ${fieldOf(list, "tokens")} needs both \`token\` and \`amount\``,
-          );
-        }
-        return { token, amount };
-      });
+      tokens = ((value as { elements?: AstNode[] }).elements ?? []).map((element) =>
+        lowerEntry(element, resolve, list),
+      );
     } else if (name === "nativeAmount") {
       nativeAmount = resolve(value, fieldOf(list, "nativeAmount"));
     } else if (list.part === "delivery") {
@@ -521,69 +755,122 @@ interface SugarSite {
   readonly start: number;
   readonly end: number;
   readonly chain: CanonicalChain;
+  readonly form: SiteForm;
   readonly body: AstNode[];
   /** Source range of the closure's block, so a general body is compiled from the text as written. */
   readonly bodyStart: number;
   readonly bodyEnd: number;
-  readonly reward: AstNode;
-  /** `Chain(() => {...}, { tokens: [...] })` — what the solver delivers to the destination. */
-  readonly delivery: AstNode | undefined;
+  /** The reward as written: `.send(...)`'s arguments, or `.reward(...)`'s one. */
+  readonly reward: readonly AstNode[];
+  /** What the solver delivers to the destination: `.receive(...)`'s arguments, or the call form's
+   *  second argument — which it may leave out. */
+  readonly delivery: readonly AstNode[];
+  /** The portal form's modifiers, each's argument: the reward's after `send`, the route's after
+   *  `receive`. None in the call form. */
+  readonly modifiers: {
+    readonly reward: ReadonlyMap<RewardModifier, AstNode>;
+    readonly route: ReadonlyMap<RouteModifier, AstNode>;
+  };
+}
+
+const NO_MODIFIERS: SugarSite["modifiers"] = { reward: new Map(), route: new Map() };
+
+/** The site `node` is, if it opens an intent on a chain: the portal form or the call form. */
+function siteAt(node: AstNode, context: IntentSugarContext): SugarSite | undefined {
+  const portal = portalIntent(node);
+  if (portal !== undefined) {
+    const chain = context.chains.get(portal.chainName);
+    if (chain === undefined) return undefined;
+    const [closure] = portal.then;
+    if (portal.then.length !== 1 || closure?.type !== "ArrowFunctionExpression") {
+      fail(
+        `\`.then(...)\` takes the intent's body, the code that runs on ${chain.slug}: ` +
+          "`.then(() => { ... })`.",
+      );
+    }
+    return site(node, chain, "portal", closure!, portal.send, portal.receive, {
+      reward: portal.reward,
+      route: portal.route,
+    });
+  }
+
+  if (node.type !== "CallExpression") return undefined;
+  const callee = (node as { callee?: AstNode }).callee;
+  if (callee?.type !== "MemberExpression") return undefined;
+  const property = (callee as { property?: AstNode }).property;
+  if (property?.type !== "Identifier") return undefined;
+  if ((property as unknown as { name: string }).name !== "reward") return undefined;
+
+  const opener = (callee as { object?: AstNode }).object;
+  if (opener?.type !== "CallExpression") return undefined;
+  const chainNode = (opener as { callee?: AstNode }).callee;
+  if (chainNode?.type !== "Identifier") return undefined;
+  const chainName = (chainNode as unknown as { name: string }).name;
+  const chain = context.chains.get(chainName);
+  if (chain === undefined) return undefined;
+
+  const openerArgs = (opener as { arguments?: AstNode[] }).arguments ?? [];
+  const closure = openerArgs[0];
+  if (
+    openerArgs.length < 1 ||
+    openerArgs.length > 2 ||
+    closure === undefined ||
+    closure.type !== "ArrowFunctionExpression"
+  ) {
+    fail(
+      `\`${chainName}(...)\` opens an intent: \`() => { ... }\`, optionally followed by ` +
+        `\`{ tokens: [...] }\` naming what the solver must deliver to run it.`,
+    );
+  }
+  const rewardArgs = (node as { arguments?: AstNode[] }).arguments ?? [];
+  if (rewardArgs.length !== 1) fail("`.reward(...)` takes exactly one argument");
+  return site(node, chain, "call", closure!, rewardArgs, openerArgs.slice(1), NO_MODIFIERS);
+}
+
+/** A site, its closure checked: no parameters, a block. */
+function site(
+  node: AstNode,
+  chain: CanonicalChain,
+  form: SiteForm,
+  closure: AstNode,
+  reward: readonly AstNode[],
+  delivery: readonly AstNode[],
+  modifiers: SugarSite["modifiers"],
+): SugarSite {
+  if (((closure as { params?: AstNode[] }).params ?? []).length > 0) {
+    fail("an intent body takes no parameters — values come from the enclosing program");
+  }
+  const closureBody = (closure as { body?: AstNode }).body!;
+  if (closureBody.type !== "BlockStatement") {
+    fail("an intent body must be a block: `() => { ... }`");
+  }
+  return {
+    start: node.start,
+    end: node.end,
+    chain,
+    form,
+    body: (closureBody as { body?: AstNode[] }).body ?? [],
+    bodyStart: closureBody.start,
+    bodyEnd: closureBody.end,
+    reward,
+    delivery,
+    modifiers,
+  };
 }
 
 function collectSites(program: AstNode, context: IntentSugarContext): SugarSite[] {
+  // A `Chain.Portal` that does not open an intent is refused before anything is lowered: read as
+  // anything else, it would compile as a contract address or fail on a name no chain has.
+  const problem = portalChainProblem(program, (name) => context.chains.get(name)?.slug);
+  if (problem !== undefined) fail(problem);
+
   const sites: SugarSite[] = [];
   walk(program, (node) => {
-    if (node.type !== "CallExpression") return;
-    const callee = (node as { callee?: AstNode }).callee;
-    if (callee?.type !== "MemberExpression") return;
-    const property = (callee as { property?: AstNode }).property;
-    if (property?.type !== "Identifier") return;
-    if ((property as unknown as { name: string }).name !== "reward") return;
-
-    const opener = (callee as { object?: AstNode }).object;
-    if (opener?.type !== "CallExpression") return;
-    const chainNode = (opener as { callee?: AstNode }).callee;
-    if (chainNode?.type !== "Identifier") return;
-    const chainName = (chainNode as unknown as { name: string }).name;
-    const chain = context.chains.get(chainName);
-    if (chain === undefined) return;
-
-    const openerArgs = (opener as { arguments?: AstNode[] }).arguments ?? [];
-    const closure = openerArgs[0];
-    if (
-      openerArgs.length < 1 ||
-      openerArgs.length > 2 ||
-      closure === undefined ||
-      closure.type !== "ArrowFunctionExpression"
-    ) {
-      fail(
-        `\`${chainName}(...)\` opens an intent: \`() => { ... }\`, optionally followed by ` +
-          `\`{ tokens: [...] }\` naming what the solver must deliver to run it.`,
-      );
-    }
-    if (((closure as { params?: AstNode[] }).params ?? []).length > 0) {
-      fail("an intent body takes no parameters — values come from the enclosing program");
-    }
-    const closureBody = (closure as { body?: AstNode }).body!;
-    if (closureBody.type !== "BlockStatement") {
-      fail("an intent body must be a block: `() => { ... }`");
-    }
-    const rewardArgs = (node as { arguments?: AstNode[] }).arguments ?? [];
-    if (rewardArgs.length !== 1) fail("`.reward(...)` takes exactly one argument");
-
     // A site inside another site's closure is not its own site: the OUTER lowering walks that
     // closure and reports it, with a message about nesting rather than about a stray `.reward`.
     if (sites.some((s) => node.start > s.start && node.end < s.end)) return;
-    sites.push({
-      start: node.start,
-      end: node.end,
-      chain,
-      body: (closureBody as { body?: AstNode[] }).body ?? [],
-      bodyStart: closureBody.start,
-      bodyEnd: closureBody.end,
-      reward: rewardArgs[0]!,
-      delivery: openerArgs[1],
-    });
+    const found = siteAt(node, context);
+    if (found !== undefined) sites.push(found);
   });
   return sites;
 }
@@ -594,16 +881,17 @@ function collectSites(program: AstNode, context: IntentSugarContext): SugarSite[
 
 const addressHex = (value: bigint): Hex => `0x${value.toString(16).padStart(40, "0")}`;
 
-/** Lowers every `Chain(() => { ... }).reward({ ... })` in `source`. Purely textual surgery driven by
- *  parser ranges, so everything else survives byte for byte. */
+/** Lowers every intent `source` opens — `Chain.Portal.send(...).receive(...).then(() => { ... })`,
+ *  or `Chain(() => { ... }).reward({ ... })`. Purely textual surgery driven by parser ranges, so
+ *  everything else survives byte for byte. */
 export function rewriteIntentSugar(source: string, context: IntentSugarContext): IntentSugarResult {
   // Every route compile comes through here, and most programs have no sugar, so skip the parse
-  // when a site is impossible. A site is a call whose callee's property is the identifier
-  // `reward`, and an identifier appears in the text either literally or through a `\u` escape
-  // (`.\u0072eward(`). With neither in the source there is nothing to find, so this only ever
-  // skips a program `collectSites` would find nothing in. A syntax error in one is still reported:
+  // when a site is impossible. A site names the identifier `Portal` or `reward`, and an identifier
+  // appears in the text either literally or through a `\u` escape (`.\u0072eward(`). With none of
+  // them in the source there is nothing to find, so this only ever skips a program `collectSites`
+  // would find nothing in. A syntax error in one is still reported:
   // the token and protocol rewrites after this parse every program.
-  if (!source.includes("reward") && !source.includes("\\u")) {
+  if (!source.includes("reward") && !source.includes("Portal") && !source.includes("\\u")) {
     return { source, rewrote: false, intents: [] };
   }
   const program = parseSauce(source);
@@ -645,6 +933,19 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       }
       return captureSentinel(at);
     };
+    /** {@link sentinelFor} for a `uint64` field, a deadline: its own, narrower sentinels. */
+    const deadlineCaptureIndex = new Map<string, number>();
+    const deadlineFor = (value: Value): bigint => {
+      if ("literal" in value) return value.literal;
+      let at = deadlineCaptureIndex.get(value.capture);
+      if (at === undefined) {
+        at = deadlineCaptureIndex.size;
+        deadlineCaptureIndex.set(value.capture, at);
+        placeholders.push({ value: deadlineSentinel(at), source: value.capture });
+        if (!captures.includes(value.capture)) captures.push(value.capture);
+      }
+      return deadlineSentinel(at);
+    };
 
     // TWO chains, so two resolvers. The body and the delivery argument run on the DESTINATION:
     // `USDC` in the closure is the destination's USDC. The reward is escrowed by THIS program, on
@@ -672,21 +973,77 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       ...scope.imports.keys(),
       ...[...scope.declarations].filter(([, d]) => d.kind === "variable").map(([name]) => name),
     ]);
-    const resolve = makeResolver(defines, readable);
-    const resolveFunding = makeResolver(compileTime(context.source), readable);
+    // An amount written as arithmetic over the program's own variables (`amount * 99n / 100n`) is
+    // computed once, where the intent opens, into a local spliced like any other capture. Every
+    // compile-time value in it is already its literal for the chain its part runs on, so the one
+    // expression means the same in the reward and in the delivery.
+    const hoisted: string[] = [];
+    const hoistedLocals = new Map<string, string>();
+    /** A hoisted local -> the expression as written, which is how the intent reports it. */
+    const written = new Map<string, string>();
+    const hoist: Hoist = (expression, node) => {
+      let local = hoistedLocals.get(expression);
+      if (local === undefined) {
+        local = `${prefix}e${hoistedLocals.size}`;
+        hoistedLocals.set(expression, local);
+        written.set(local, typeof node === "string" ? node : source.slice(node.start, node.end));
+        hoisted.push(`const ${local} = ${expression};`);
+      }
+      return local;
+    };
+    const resolve = makeResolver(defines, readable, hoist);
+    const resolveFunding = makeResolver(compileTime(context.source), readable, hoist);
+    const { defaults } = context;
+
+    // The portal form's modifiers. Each value resolves on the chain the program runs on, which
+    // escrows the reward and publishes the intent; a deadline may be computed there as it runs.
+    const portalForm = site.form === "portal";
+    const rewardModifier = (name: RewardModifier, what: string): Value | undefined => {
+      const node = site.modifiers.reward.get(name);
+      return node === undefined ? undefined : resolveFunding(node, what);
+    };
+    const routeModifier = (name: RouteModifier, what: string): Value | undefined => {
+      const node = site.modifiers.route.get(name);
+      return node === undefined ? undefined : resolveFunding(node, what);
+    };
+    // The Kitchen fee the body's cook pays on this intent's destination: `.fee(...)`, else the
+    // compile's for that destination. A fee is in the route's encoding and in the call's value, so
+    // it is known when the intent is built.
+    const feeValue = routeModifier("fee", "`.fee(...)`");
+    if (feeValue !== undefined && !("literal" in feeValue)) {
+      fail(
+        "`.fee(...)` is the destination Kitchen's fee, which the intent is built with: a literal, " +
+          "a compile-time value or one of `main`'s arguments bound when it compiles, not a value " +
+          "the program computes as it runs",
+      );
+    }
+    // Asked for only where a cook pays it: a body that is a program.
+    const feeFor = (): bigint | undefined =>
+      feeValue !== undefined && "literal" in feeValue
+        ? feeValue.literal
+        : typeof defaults.executionFee === "function"
+          ? defaults.executionFee(site.chain)
+          : defaults.executionFee;
+    // The reward's creator, which an intent opened inside this one's body inherits when it is
+    // known now.
+    const creatorValue = rewardModifier("creator", "`.creator(...)`");
 
     /**
      * What the solver delivers to the destination Executor so this intent can run.
      *
      * Distinct from the reward, which is what the solver COLLECTS on the source chain for doing it.
-     * Given explicitly as a second argument; for a body of plain token writes it is derived instead,
-     * because there it is not a judgement call — a `transfer` of N moves N, so N is what has to
-     * arrive. A program's needs cannot be read off its source, so the general path asks.
+     * Named by `.receive(...)`, or the call form's second argument. The call form may leave it out
+     * for a body of plain token writes, where it is derived instead, because there it is not a
+     * judgement call — a `transfer` of N moves N, so N is what has to arrive. A program's needs
+     * cannot be read off its source, so the general path asks.
      */
+    const deliveryList: TokenList = { part: "delivery", chain: site.chain, form: site.form };
     const explicitDelivery =
-      site.delivery === undefined
-        ? undefined
-        : lowerDelivery(site.delivery, resolve, { part: "delivery", chain: site.chain });
+      site.form === "portal"
+        ? lowerItems(site.delivery, resolve, deliveryList).tokens
+        : site.delivery.length === 0
+          ? undefined
+          : lowerDelivery(site.delivery[0]!, resolve, deliveryList);
 
     // TWO SHAPES, chosen by what the closure actually contains.
     //
@@ -731,6 +1088,12 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
         childModule.source,
         captured,
         destinationPortal,
+        {
+          fee: feeFor(),
+          ...(creatorValue !== undefined && "literal" in creatorValue
+            ? { creator: addressHex(creatorValue.literal) }
+            : {}),
+        },
       );
       captured.forEach((name, i) => {
         captureWords.push({ name, sentinel: child.captureSentinels[i]! });
@@ -800,10 +1163,11 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
     }
 
     // On the enclosing chain: see `resolveFunding` above.
-    const reward = lowerReward(site.reward, resolveFunding, {
-      part: "reward",
-      chain: context.source,
-    });
+    const rewardList: TokenList = { part: "reward", chain: context.source, form: site.form };
+    const reward =
+      site.form === "portal"
+        ? lowerItems(site.reward, resolveFunding, rewardList)
+        : lowerReward(site.reward[0]!, resolveFunding, rewardList);
     // A native amount known to be zero offers nothing; any other (a literal or a run-time value)
     // is a native leg the source Portal would count against a leg of its native ERC-20.
     const offersNative =
@@ -815,14 +1179,47 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       reward.tokens.map((t) => addressHex(t.token)),
     );
     if (conflict !== undefined) fail(conflict);
-    const { defaults } = context;
-    const rewardDeadline = defaults.rewardDeadline ?? requireDeadline(defaults);
+    // The deadlines. The portal form defaults each, as Eco's Portal app does: the route
+    // `DEFAULT_FILL_WINDOW` past when the intent opens, the reward `DEFAULT_REFUND_WINDOW` past the
+    // route's. An intent opens when the compile says (`openedAt`), else when the program opening it
+    // runs. The call form keeps its own rule: a deadline is required.
+    const routeDeadline: Value = !portalForm
+      ? { literal: requireDeadline(defaults) }
+      : (routeModifier("deadline", "the route's `.deadline(...)`") ??
+        (defaults.deadline !== undefined
+          ? { literal: defaults.deadline }
+          : defaults.openedAt !== undefined
+            ? { literal: defaults.openedAt + DEFAULT_FILL_WINDOW }
+            : {
+                capture: hoist(
+                  `(ctx.timestamp() + ${DEFAULT_FILL_WINDOW}n)`,
+                  `ctx.timestamp() + ${DEFAULT_FILL_WINDOW}`,
+                ),
+              }));
+    const rewardDeadline: Value = !portalForm
+      ? { literal: defaults.rewardDeadline ?? requireDeadline(defaults) }
+      : (rewardModifier("deadline", "the reward's `.deadline(...)`") ??
+        (defaults.rewardDeadline !== undefined
+          ? { literal: defaults.rewardDeadline }
+          : "literal" in routeDeadline
+            ? { literal: routeDeadline.literal + DEFAULT_REFUND_WINDOW }
+            : {
+                capture: hoist(
+                  `(${routeDeadline.capture} + ${DEFAULT_REFUND_WINDOW}n)`,
+                  `the route's deadline + ${DEFAULT_REFUND_WINDOW}`,
+                ),
+              }));
+    const saltValue = routeModifier("salt", "`.salt(...)`");
+    const proverValue = rewardModifier("prover", "`.prover(...)`");
     const child: Intent = {
       destination: BigInt(site.chain.id),
       sourceChainId: BigInt(context.source.id),
       route: normalizeRoute({
-        salt: defaults.salt,
-        deadline: requireDeadline(defaults),
+        salt:
+          saltValue === undefined
+            ? defaults.salt
+            : (`0x${sentinelFor(saltValue).toString(16).padStart(64, "0")}` as Hex),
+        deadline: deadlineFor(routeDeadline),
         portal: destinationPortal,
         // Native the route's own calls need: the Kitchen fee, once per cook.
         nativeAmount: calls.reduce((sum, call) => sum + call.value, 0n),
@@ -835,11 +1232,16 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
         calls,
       }),
       reward: normalizeReward({
-        deadline: rewardDeadline,
-        // The executing Pot is the default refund recipient: the program funded this reward, so
-        // that is where an unclaimed one belongs unless the caller says otherwise.
-        creator: requireCreator(defaults),
-        prover: defaults.prover ?? context.proverFor(context.source, site.chain),
+        deadline: deadlineFor(rewardDeadline),
+        // Never the executing Pot: see `requireCreator`.
+        creator:
+          creatorValue === undefined
+            ? requireCreator(defaults, portalForm)
+            : addressHex(sentinelFor(creatorValue)),
+        prover:
+          proverValue === undefined
+            ? (defaults.prover ?? context.proverFor(context.source, site.chain))
+            : addressHex(sentinelFor(proverValue)),
         nativeAmount: reward.nativeAmount === undefined ? 0n : sentinelFor(reward.nativeAmount),
         tokens: reward.tokens.map((t) => ({
           token: addressHex(t.token),
@@ -866,7 +1268,7 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
     // carrying `0x5acecab7…` where an amount belongs. That happened once, silently, which is why it
     // is checked rather than reasoned about.
     for (const segment of template?.segments ?? [tx.data]) {
-      for (const tag of [CAPTURE_TAG, CHILD_CAPTURE_TAG]) {
+      for (const tag of [CAPTURE_TAG, CHILD_CAPTURE_TAG, `${DEADLINE_TAG}000000`]) {
         if (segment.includes(tag)) {
           throw new SugarError(
             `intent sugar: a capture sentinel (0x${tag}) survived into the encoded intent — some ` +
@@ -885,7 +1287,7 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
           }
         : emitTemplate(template, { prefix, locals });
 
-    const statements: string[] = [...emitted.statements];
+    const statements: string[] = [...hoisted, ...emitted.statements];
     const portalWord = {
       literal: BigInt(denormalizeToEvm(toUniversalAddress(sourcePortal))),
     } as const;
@@ -921,10 +1323,14 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       );
     }
 
+    const named = (capture: string): string => written.get(capture) ?? capture;
     intents.push({
       intent: child,
-      captures,
-      sentinels: placeholders.map(({ value, source }) => ({ sentinel: value, capture: source })),
+      captures: captures.map(named),
+      sentinels: placeholders.map(({ value, source }) => ({
+        sentinel: value,
+        capture: named(source),
+      })),
       destination: site.chain,
       fundVia,
     });
@@ -1128,7 +1534,15 @@ function requireDeadline(defaults: Partial<IntentSugarDefaults>): bigint {
   return defaults.deadline;
 }
 
-function requireCreator(defaults: Partial<IntentSugarDefaults>): AddressInput {
+function requireCreator(defaults: Partial<IntentSugarDefaults>, portalForm = false): AddressInput {
+  if (defaults.creator === undefined && portalForm) {
+    return fail(
+      "the reward needs a creator — the address that can reclaim it after its deadline. Give " +
+        "`.creator(address)` after `.send(...)`; the `sauce` command makes it the wallet that " +
+        "publishes. It has no default here: the executing Pot is driven by every solver, so a " +
+        "refund there is a refund anyone can take.",
+    );
+  }
   if (defaults.creator === undefined) {
     return fail(
       "the reward needs a `creator` — the address that can reclaim it after the deadline. It has no " +

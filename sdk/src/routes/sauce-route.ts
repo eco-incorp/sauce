@@ -98,8 +98,8 @@ export interface SauceCompileOptions {
    */
   ambient?: string[];
   /**
-   * Settings for `Chain(() => { ... }).reward({ ... })` written inside the program — creating an
-   * intent from a program, rather than compiling a program into one. Everything the SDK can look up
+   * Settings for `Chain.Portal.send(...).receive(...).then(() => { ... })` written inside the
+   * program — creating an intent from a program, rather than compiling a program into one. Everything the SDK can look up
    * it looks up; these are the fields it cannot, plus overrides. See `intent-sugar.ts`.
    *
    * Omitted entirely, the sugar still lowers if the source uses it — `deadline` and `creator` have
@@ -136,8 +136,8 @@ export interface CompiledSauceRoute {
   readonly source: string;
 }
 
-/** Accessor name -> chain, for every canonical chain. `Base(() => ...)` in a program opens an
- *  intent for exactly the chains `import { Base }` gives a caller, so the two cannot diverge. */
+/** Accessor name -> chain, for every canonical chain. `Base.Portal` in a program opens an intent
+ *  for exactly the chains `import { Base }` gives a caller, so the two cannot diverge. */
 let chainAccessorCache: ReadonlyMap<string, (typeof CANONICAL_CHAINS)[number]> | undefined;
 export function chainAccessorNames(): ReadonlyMap<string, (typeof CANONICAL_CHAINS)[number]> {
   chainAccessorCache ??= new Map(
@@ -282,30 +282,40 @@ function compileIntentChild(
   childSource: string,
   captures: readonly string[],
   destinationPortal: AddressInput,
+  level: { readonly fee: bigint | undefined; readonly creator?: AddressInput },
   options: SauceCompileOptions,
   scope: RouteScope,
 ): CompiledChild {
   const intents = options.intents ?? {};
+  const executionFee = level.fee;
   // DERIVED, not asked for. A Pot is CREATE2 from the Kitchen over its owner and a salt; the owner a
   // route call must cook as is the Executor of the Portal this child's route RECORDS, itself that
   // Portal's second CREATE. Both ends are already in the SDK, so this needs no chain read and no
   // caller input -- `intents.pot` remains as an override for a Pot the caller owns instead. Derived
   // is not deployed: the Pot must exist before the child is fulfilled (`intent-pot.ts`).
   const { pot, engine } = resolveIntentPot(destinationPortal, intents);
-  if (intents.executionFee === undefined) {
+  if (executionFee === undefined) {
     throw new Error(
       `intent sugar: the intent on ${destination.slug} runs a program, so its cook must pay that ` +
-        `chain's Kitchen fee — set \`intents.executionFee\`. This one is NOT derivable: the fee is ` +
+        `chain's Kitchen fee — give it \`.fee(...)\` after \`.receive(...)\`, or set ` +
+        `\`intents.executionFee\`. This one is NOT derivable: the fee is ` +
         `mutable on-chain and lives on the destination, which the source chain cannot read while it ` +
         `executes. Read it before building with \`destinationExecutionFee()\` from ` +
         `\`@eco-incorp/sauce\`, or \`Kitchen.executionFee()\` at ${v12KitchenAddress()}.`,
     );
   }
+  // The body's own intents open when it runs, not when the file compiles; and inherit this
+  // level's creator when it named one.
+  const { openedAt: _openedAt, ...inherited } = intents;
   const compiled = compileScopedRoute(
     destination,
     childSource,
-    { pot, engine, value: intents.executionFee },
-    { ...options, compactArgs: captures.length > 0 },
+    { pot, engine, value: executionFee },
+    {
+      ...options,
+      intents: { ...inherited, ...(level.creator === undefined ? {} : { creator: level.creator }) },
+      compactArgs: captures.length > 0,
+    },
     scope,
   );
 
@@ -328,14 +338,14 @@ function compileIntentChild(
     pot,
     engine,
     program,
-    value: intents.executionFee,
+    value: executionFee,
   });
 
   return {
     call: {
       target: denormalizeToEvm(toUniversalAddress(call.target)) as Hex,
       data: call.data,
-      value: intents.executionFee,
+      value: executionFee,
     },
     captureSentinels,
   };
@@ -420,8 +430,8 @@ export interface CompiledSauceProgram {
   /** The SVM account manifest: the accounts to attach, in order. Absent on the EVM. */
   readonly manifest?: AccountManifest;
   /**
-   * The intents the program itself publishes (`Arbitrum(() => { ... }).reward({ ... })`), in source
-   * order, each as the lowering encoded it. One with no `captures` is fixed now: its hash, and the
+   * The intents the program itself publishes (`Arbitrum.Portal.send(...).receive(...).then(...)`),
+   * in source order, each as the lowering encoded it. One with no `captures` is fixed now: its hash, and the
    * Portal transactions that publish it, can be built without running the program. One that
    * captures a local of the program holds a sentinel where the value will be, which only exists
    * once the program runs.
@@ -449,8 +459,8 @@ export interface SauceProgramOptions extends SauceCompileOptions {
  * It gets everything `openRoute` gives a route body except the intent around it: the chain's
  * ambient bundle (`chainId`, protocol addresses and token symbols as compile-time values scoped to
  * this chain, and the `@sauce/token` functions with no import), the token and protocol syntax, and
- * intents the program itself opens (`Arbitrum(() => { ... }).reward({ ... })`, which take their deadline and
- * creator from `options.intents`). So one source compiles, unchanged, for any chain whose names it
+ * intents the program itself opens (`Arbitrum.Portal.send(...).receive(...).then(...)`, which take
+ * their deadline and creator from `options.intents`). So one source compiles, unchanged, for any chain whose names it
  * uses. `main` may declare typed runtime parameters; `entryParams` reports them and
  * `encodeEntryArguments` encodes values for them. Or `options.args` binds them into the program as
  * it compiles, as `sauce intent publish --args` does: then the intents it opens are fixed, and a
@@ -569,13 +579,14 @@ function compileForChain(
     portalOf: (destination) => ecoRoutesPortal(destination, options.intents),
     proverFor: (from, to) => ecoRoutesProver(from, to, options.intents),
     defaults: options.intents ?? {},
-    compileChild: (destination, childSource, captures, destinationPortal) => {
+    compileChild: (destination, childSource, captures, destinationPortal, child) => {
       const level = levelOn(chain, destination, options, scope);
       return compileIntentChild(
         destination,
         childSource,
         captures,
         destinationPortal,
+        child,
         level.options,
         level.scope,
       );

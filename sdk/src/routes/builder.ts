@@ -1,7 +1,8 @@
 /**
  * Chain-global surface machinery: every canonical chain global is BOTH
- * callable (`Base(sauce, opts)`) and a namespace carrying `.chain` and
- * `.route` (the same callable, `Base.route === Base`'s own behavior).
+ * callable (`Base(sauce, opts)`) and a namespace carrying `.chain`, `.route`
+ * (the same callable, `Base.route === Base`'s own behavior) and `.Portal`
+ * (`Base.Portal.send(...).receive(...).then(body)`, the same intent).
  *
  * `ChainRoute`/`ChainGlobal` are ONE interface hierarchy — `ChainGlobal
  * extends ChainRoute`, so the call signature and `.route` can never drift
@@ -13,8 +14,8 @@
  */
 import type { CanonicalChain, ChainRef, ChainSlug } from "../chains/canonical.js";
 import { canonicalChains } from "../chains/canonical.js";
-import type { IntentOptions, PendingSauceRoute, SauceBody } from "./intent-dsl.js";
-import { openRoute } from "./intent-dsl.js";
+import type { ChainPortal, IntentOptions, PendingSauceRoute, SauceBody } from "./intent-dsl.js";
+import { chainPortal, openRoute } from "./intent-dsl.js";
 
 export type { ChainRef };
 
@@ -33,12 +34,15 @@ export interface ChainRoute {
   (sauce: SauceBody, options?: IntentOptions): PendingSauceRoute;
 }
 
-/** A chain global: callable (the SAME behavior as `.route`), plus `.chain`/`.route`. */
+/** A chain global: callable (the SAME behavior as `.route`), plus `.chain`/`.route`/`.Portal`. */
 export interface ChainGlobal extends ChainRoute {
   /** The registry record this global was generated from (or resolved via `chain(ref)`). */
   readonly chain: CanonicalChain;
   /** The SAME interface as the call signature -- `Base.route === Base` in behavior, by construction. */
   readonly route: ChainRoute;
+  /** Opens an intent whose body runs on this chain: `send(reward).receive(delivery).then(body)`,
+   *  the intent `route(body, { tokens: delivery }).reward({ tokens: reward })` builds. */
+  readonly Portal: ChainPortal;
 }
 
 /** One generated `ChainGlobal` per canonical chain slug, PascalCase-keyed. */
@@ -61,14 +65,15 @@ const FUNCTION_INTRINSICS: ReadonlySet<string> = new Set([
   "constructor",
   "chain",
   "route",
+  "Portal",
 ]);
 
 /**
  * Builds the callable `ChainGlobal` for `chain` -- what a generated global
  * (`Base`) or `chain(ref)` returns. An ARROW function (no own `prototype` to
- * collide with) forwarding to `openRoute`, with `chain`/`route` defined onto
- * it as enumerable so `Object.keys(chainAccessors.Base)` stays exactly
- * `["chain","route"]`.
+ * collide with) forwarding to `openRoute`, with `chain`/`route`/`Portal`
+ * defined onto it as enumerable so `Object.keys(chainAccessors.Base)` is
+ * exactly `["Portal","chain","route"]`.
  */
 export function makeChainGlobal(chain: CanonicalChain): ChainGlobal {
   const route: ChainRoute = (sauce: SauceBody, options?: IntentOptions): PendingSauceRoute =>
@@ -80,6 +85,7 @@ export function makeChainGlobal(chain: CanonicalChain): ChainGlobal {
   Object.defineProperties(fn, {
     chain: { value: chain, enumerable: true, configurable: false, writable: false },
     route: { value: route, enumerable: true, configurable: false, writable: false },
+    Portal: { value: chainPortal(chain), enumerable: true, configurable: false, writable: false },
   });
 
   return fn;

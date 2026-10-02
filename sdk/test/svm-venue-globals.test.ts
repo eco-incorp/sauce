@@ -83,7 +83,7 @@ describe("svm venue accessors: coexistence with .route", () => {
   });
 
   it("composition never mutates the imported chainAccessors.Solana object", () => {
-    expect(Object.keys(chainAccessors.Solana).sort()).toEqual(["chain", "route"]);
+    expect(Object.keys(chainAccessors.Solana).sort()).toEqual(["Portal", "chain", "route"]);
   });
 });
 

@@ -582,9 +582,41 @@ list must only ever name modules the SDK resolves itself. Two DISTINCT mechanism
 share the word "ambient": ambient **DEFINES** (`chainDefines` — chain-scoped SCALARS: chainId,
 protocol addresses, token symbols) vs ambient **MODULES** (this — whole library exports).
 
-**Chain-scoped names are resolved per level.** In `Chain(() => …).reward(…)` (`intent-sugar.ts`)
-the body and the delivery argument resolve on the destination and the reward on the enclosing
-chain, which escrows and approves it. `sauce-route.ts#levelOn` gives each level on another chain
+**An intent opened in a program** is
+`Chain.Portal.send(reward).receive(delivery).then(() => { body })`: the reward the program pays,
+escrowed on the chain it runs on; what the solver delivers on `Chain`; the body that runs there.
+`send` and `receive` take one item or an array, written in place: `{ token, amount }`, and in the
+reward `{ native: amount }`. Modifiers may follow `send` — `.creator()`, `.deadline()` (the
+reward's), `.prover()` — and `receive` — `.deadline()` (the fill's), `.salt()`, `.fee()` (the
+destination Kitchen's fee its cook pays) — each at most once, in any order within its stage;
+`intent-portal.ts#portalChainProblem` refuses anything else by name. Each left out has its default,
+Eco's Portal app's where it has one (`intent-portal.ts#DEFAULT_FILL_WINDOW`, 300 s, and
+`#DEFAULT_REFUND_WINDOW`, the seven days Eco's solver requires past the fill deadline): the fill
+deadline counts from when the intent opens — `intents.openedAt`, which the CLI and MCP set to now
+once per command, else `ctx.timestamp()` as the program runs, which is how every nested level opens
+— the creator is the compile's (`sauce` defaults it to the wallet that publishes or cooks; a
+nested level inherits a literal `.creator()` from the level above), the prover the registry's, the
+salt zero (not Eco's random one: a file must compile to the same intent each time), and the fee
+`intents.executionFee`, one for every destination or a function of it (`sauce` reads each
+destination's Kitchen when no `--intent-execution-fee` is given). The creator and, for a program
+body, the fee are refused when neither is given: the executing Pot is no safe creator. An amount, a
+deadline or a creator may be a value the program computes (`amount * 99 / 100`,
+`ctx.timestamp() + 3600`): folded when every operand is known, else computed into a local where the
+intent opens and spliced like any capture (a deadline into its own eight-byte sentinel); a fee is
+known when the intent is built. `intent-sugar.ts` lowers it, and still reads the old call form,
+`Chain(() => { body }, { tokens: delivery }).reward({ tokens: reward })`, with its old rules (a
+deadline required, the reward's defaulting to the route's), until the compiler opens intents itself
+(#61); document only the Portal form. On the host, every chain export's `Portal`
+(`intent-dsl.ts#chainPortal`) takes the same modifiers plus `.source(chain)` on the reward and
+`.nest(child, options)` on the route, and `.then(body)` returns the `BuiltIntent` of
+`Chain(body, { deadline, execution: { value: fee }, tokens, precalls }).nest(...).reward({ source,
+creator, deadline, prover, tokens, nativeAmount })`, its `precalls` moving the delivery into the
+Pot; there the source, the creator and the fee are required (it runs on no chain and reads none).
+Its `then` is the intent's, not a promise's, so it refuses being awaited.
+
+**Chain-scoped names are resolved per level.** In an intent a program opens (`intent-sugar.ts`) the
+body and the delivery resolve on the destination and the reward on the enclosing chain, which
+escrows and approves it. `sauce-route.ts#levelOn` gives each level on another chain
 its own values (`NESTED_SCOPE`, the registry's `chainDefines`) and DROPS every caller `defines`
 entry named like a chain-scoped value of the enclosing chain or the destination, and every `tokens`
 override — by name, not value, so `defines: chainDefines(base)` and a hand-picked `USDC` are
@@ -621,7 +653,8 @@ the name) and svm-rejected: the SVM arm's writes need SPL account slots the suga
 The compiler therefore never sees a method call on a `Token(...)` result, and no compiler feature is
 needed — the earlier "`Token(addr)` needs a compiler feature" framing only applied to making
 `@sauce/token` _export_ a real `Token` value (blocked by the M1 subset). A token-only INTENT body
-(`Base(() => { USDC.transfer(...) })` inside a program, every statement a `transfer`/`approve` on a
+(`Base.Portal.send(…).receive(…).then(() => { USDC.transfer(...) })` inside a program, every
+statement a `transfer`/`approve` on a
 symbol or literal `Token(...)` — `intent-sugar.ts#isDirectCallBody`) is different again: it lowers
 to plain `route.calls` the Portal's Executor runs raw, not to a Sauce program, so it gets the
 Executor's checks (revert, code) and not SafeERC20's. USDT is supported there: no-return transfers

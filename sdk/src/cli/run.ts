@@ -48,6 +48,8 @@ import {
   pastDeadline,
   compileProgram,
   potCommand,
+  PROBE_CREATOR,
+  probeProgram,
   programChains,
   potDeployCommand,
   potStatusCommand,
@@ -101,7 +103,7 @@ import {
 import { inspectCommand, inspectFile } from "./inspect.js";
 import {
   checkIntentPots,
-  destinationFee,
+  destinationFees,
   intentCooks,
   missingPotNote,
   uncheckedPotNote,
@@ -594,30 +596,58 @@ function endpointsOf(args: ParsedArgs, io: CliIo, source: CanonicalChain): Endpo
 }
 
 /**
- * `--intent-execution-fee auto`: the fee the program's intents' destination Kitchens charge, read
- * from each through `endpoints`. The program is compiled once with a fee of zero to find which
- * intents run a program there; one with none pays no fee.
+ * `--intent-execution-fee auto`, and the default: the fee each destination's Kitchen charges, read
+ * from it through `endpoints`, for the cook of every intent body that is a program, at any depth.
+ * The program is compiled once with a fee of zero to find which destinations' cooks are paid; with
+ * none, nothing is read. `told` says so on stderr, which the default stays quiet about.
  */
 async function autoExecutionFee(
   input: ProgramInput,
   io: CliIo,
   endpoints: Endpoints,
   gate: Gate | undefined,
-): Promise<bigint | undefined> {
-  const probe = compileProgram({ ...input, intents: { ...input.intents, executionFee: 0n } }, io);
-  // Before the fee is read: a command refused on these chains reads nothing for them.
-  if (gate !== undefined) gated(gate, input.chain, probe.intents);
-  const cooks = intentCooks(probe.intents);
-  if (cooks.length === 0) {
-    io.stderr("--intent-execution-fee auto: no intent here runs a program, so none pays a fee\n");
+  told: boolean,
+): Promise<((destination: CanonicalChain) => bigint | undefined) | undefined> {
+  // By default, only where an intent could be opened: an EVM program naming a Portal or a reward.
+  // One that does not compile is left to the compile that follows, whose refusal is the one to see.
+  if (!told && (input.chain.kind !== "evm" || !/\.Portal\b|\.reward\s*\(/.test(input.text))) {
+    return undefined;
+  }
+  const paid = new Map<number, CanonicalChain>();
+  let probe: ReturnType<typeof compileProgram>;
+  try {
+    probe = compileProgram(
+      {
+        ...input,
+        intents: {
+          ...input.intents,
+          creator: input.intents.creator ?? PROBE_CREATOR,
+          executionFee: (destination) => (paid.set(destination.id, destination), 0n),
+        },
+      },
+      io,
+    );
+  } catch (error) {
+    if (told) throw error;
 
     return undefined;
   }
-  const fee = await destinationFee(cooks, endpoints);
-  const chains = [...new Set(cooks.map((cook) => cook.destination.slug))].join(" and ");
-  io.stderr(`--intent-execution-fee auto: the Kitchen on ${chains} charges ${fee} wei\n`);
+  // Before the fee is read: a command refused on these chains reads nothing for them.
+  if (gate !== undefined) gated(gate, input.chain, probe.intents);
+  if (paid.size === 0) {
+    if (told) {
+      io.stderr("--intent-execution-fee auto: no intent here runs a program, so none pays a fee\n");
+    }
 
-  return fee;
+    return undefined;
+  }
+  const fees = await destinationFees([...paid.values()], endpoints);
+  io.stderr(
+    `${told ? "--intent-execution-fee auto" : "the intents' execution fees"}: the Kitchen on ` +
+      `${[...fees].map(([id, fee]) => `${paid.get(id)!.slug} charges ${fee} wei`).join(", on ")}\n`,
+  );
+
+  return (destination) => fees.get(destination.id);
 }
 
 /**
@@ -710,8 +740,10 @@ async function programInput(
     compactArgs: args.values["compact-args"] === true,
     defines,
     intents: {
+      // With no deadline, the intents open now: once, so every compile the command makes of the
+      // file builds the same ones.
       ...(deadline === undefined
-        ? {}
+        ? { openedAt: BigInt(Math.floor(Date.now() / 1000)) }
         : { deadline: parseUnixSeconds("intent-deadline", deadline) }),
       ...(rewardDeadline === undefined
         ? {}
@@ -726,8 +758,14 @@ async function programInput(
   };
   bind?.before?.(given);
   const input = bind === undefined ? given : bindMainArguments(given, bind.args);
-  if (fee !== "auto") return input;
-  const executionFee = await autoExecutionFee(input, io, endpointsOf(args, io, chain), gate);
+  if (fee !== undefined && fee !== "auto") return input;
+  const executionFee = await autoExecutionFee(
+    input,
+    io,
+    endpointsOf(args, io, chain),
+    gate,
+    fee === "auto",
+  );
 
   return executionFee === undefined
     ? input
@@ -1684,7 +1722,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         throw new UsageError(`--format: '${format}' is not json or cast`);
       }
       // Compiled once: refused before the signer or any endpoint, then the Pots checked.
-      const compiled = compileProgram(program, io);
+      const compiled = probeProgram(program, io);
       if (gate !== undefined) gated(gate, program.chain, compiled.intents);
       const account = hasSigner(args, io) ? await signerOf(args, io) : undefined;
       const from = stringFlag(args, "from");
@@ -2755,7 +2793,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         ([verb, command]) => `  ${verb.padEnd(8)}  ${command.summary}`,
       ),
       "",
-      "An intent is a file that opens one (`Base(() => { … }).reward({ … })`), named with the",
+      "An intent is a file that opens one (`Base.Portal.send(…).receive(…).then(…)`), named with the",
       "flags it is built with, or its hash once the store keeps it: `publish`, `fill` and",
       "`import` store every intent they touch (--store, default ~/.sauce/intents), and every verb",
       "takes the hash. With no verb, at a terminal: a list of the stored intents, read live from",

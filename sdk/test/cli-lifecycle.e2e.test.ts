@@ -27,6 +27,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createWalletClient,
+  decodeAbiParameters,
   encodeAbiParameters,
   encodeFunctionData,
   formatEther,
@@ -50,7 +51,7 @@ import {
   ecoRoutesProver,
 } from "../src/protocols/eco-routes/lookup.js";
 import { Base, Ethereum } from "../src/routes/chain-exports.generated.js";
-import { encodeRouteEvm } from "../src/routes/encode.js";
+import { EVM_ROUTE_PARAM, encodeRouteEvm } from "../src/routes/encode.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
@@ -105,6 +106,32 @@ const INTENT = [
   "  Base(() => {",
   "    USDC.transfer(recipient, amount);",
   "  }).reward({ tokens: [{ token: USDC, amount: reward }] });",
+  "}",
+  "",
+].join("\n");
+
+/** The same intent, written `Base.Portal.send(reward).receive(delivery).then(body)`. */
+const PORTAL_INTENT = [
+  "function main(recipient: Address, amount: Uint256, reward: Uint256) {",
+  "  Base.Portal.send({ token: USDC, amount: reward })",
+  "    .receive({ token: USDC, amount })",
+  "    .then(() => {",
+  "      USDC.transfer(recipient, amount);",
+  "    });",
+  "}",
+  "",
+].join("\n");
+
+/** A program a Pot runs on Ethereum: it opens an intent to Base for all the USDC it holds, of which
+ *  the solver delivers 99% there, computed as the intent opens. */
+const PORTAL_PROGRAM = [
+  "function main(recipient: Address) {",
+  "  const amount = USDC.balanceOf(ctx.self());",
+  "  Base.Portal.send([{ token: USDC, amount }])",
+  "    .receive([{ token: USDC, amount: amount * 99n / 100n }])",
+  "    .then(() => {",
+  "      USDC.transfer(recipient, amount * 99n / 100n);",
+  "    });",
   "}",
   "",
 ].join("\n");
@@ -522,6 +549,114 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(await base.balanceOf(baseUsdc, SOLVER.address)).toBe(before + AMOUNT);
   }, 240_000);
 
+  it("the Portal form: the call form's intent, published from a wallet and filled", async () => {
+    const store = mkdtempSync(join(work, "store-"));
+    const portalFile = join(work, "portal.sauce.ts");
+    writeFileSync(portalFile, PORTAL_INTENT);
+    const start = await now(base);
+    const flags = intentFlags(start + 3610n, start + 7200n);
+    // The call form's file, printed unsigned: the intent it opens, sent nowhere.
+    const printed = jsonOf(await sauce("intent", "publish", file, ...flags, "--format", "json"));
+    const expected = (printed.intents as Array<{ intentHash: Hex }>)[0]!.intentHash;
+
+    const out = jsonOf(
+      await sauce(
+        ...["intent", "publish", portalFile, ...flags],
+        ...["--rpc-url", ethereum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
+      ),
+    );
+    const hash = (out.intents as Array<{ intentHash: Hex }>)[0]!.intentHash;
+    expect(hash).toBe(expected);
+
+    const paid = await base.balanceOf(baseUsdc, RECIPIENT);
+    const filled = await lifecycle(
+      "fill",
+      hash,
+      store,
+      ...["--send", "--private-key", SOLVER_KEY, "--auto-approve", "--json"],
+    );
+    expect(filled.code).toBe(0);
+    expect(await base.balanceOf(baseUsdc, RECIPIENT)).toBe(paid + AMOUNT);
+  }, 240_000);
+
+  it("the Portal form's defaults: published from a wallet with no intent flag, then filled", async () => {
+    const store = mkdtempSync(join(work, "store-"));
+    const portalFile = join(work, "portal-defaults.sauce.ts");
+    writeFileSync(portalFile, PORTAL_INTENT);
+    const before = BigInt(Math.floor(Date.now() / 1000));
+    const out = jsonOf(
+      await sauce(
+        ...["intent", "publish", portalFile, "--chain", "ethereum"],
+        ...["--args", RECIPIENT, String(AMOUNT), String(REWARD)],
+        ...["--rpc-url", ethereum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
+      ),
+    );
+    const after = BigInt(Math.floor(Date.now() / 1000));
+    const hash = (out.intents as Array<{ intentHash: Hex }>)[0]!.intentHash;
+    const record = JSON.parse(readFileSync(join(store, hash, "intent.json"), "utf8")) as {
+      route: { deadline: string };
+      reward: { deadline: string; creator: string; prover: string };
+    };
+    // Eco's defaults: filled within five minutes, refundable seven days later, created by the
+    // wallet that published it, proven by the registry's prover for the pair.
+    const deadline = BigInt(record.route.deadline);
+    expect(deadline >= before + 300n && deadline <= after + 300n).toBe(true);
+    expect(BigInt(record.reward.deadline)).toBe(deadline + 604_800n);
+    expect(getAddress(record.reward.creator)).toBe(OWNER.address);
+    expect(getAddress(record.reward.prover)).toBe(getAddress(ecoRoutesProver("ethereum", "base")));
+
+    const paid = await base.balanceOf(baseUsdc, RECIPIENT);
+    const filled = await lifecycle(
+      "fill",
+      hash,
+      store,
+      ...["--send", "--private-key", SOLVER_KEY, "--auto-approve", "--json"],
+    );
+    expect(filled.code).toBe(0);
+    expect(await base.balanceOf(baseUsdc, RECIPIENT)).toBe(paid + AMOUNT);
+  }, 240_000);
+
+  it("the Portal form in a program `sauce run` cooks: the Pot opens the intent it measures", async () => {
+    const program = join(work, "portal-program.sauce.ts");
+    writeFileSync(program, PORTAL_PROGRAM);
+    const pot = v12PredictPot(OWNER.address, `0x${"00".repeat(32)}`) as Address;
+    const held = (await ethereum.balanceOf(ethereumUsdc, pot)) + REWARD;
+    await ethereum.mint(ethereumUsdc, pot, REWARD);
+
+    // No deadline and no creator: the intent opens now, for the wallet that runs the cook.
+    const before = BigInt(Math.floor(Date.now() / 1000));
+    const run = jsonOf(
+      await sauce(
+        ...["run", program, "--chain", "ethereum", "--rpc-url", ethereum.rpcUrl],
+        ...["--intent-execution-fee", String(FEE)],
+        ...["--private-key", OWNER_KEY, "--auto-approve", "--json", "--args", RECIPIENT],
+      ),
+    );
+    const after = BigInt(Math.floor(Date.now() / 1000));
+    const { hash } = (run as { cook: { hash: Hex } }).cook;
+    const receipt = await ethereum.publicClient.getTransactionReceipt({ hash });
+    const [published] = parseEventLogs({
+      abi: PortalABI,
+      logs: receipt.logs,
+      eventName: "IntentPublished",
+    });
+    expect(published!.args.destination).toBe(8453n);
+    expect(published!.args.rewardTokens.map((t) => [getAddress(t.token), t.amount])).toEqual([
+      [ethereumUsdc, held],
+    ]);
+    const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], published!.args.route) as unknown as [
+      { deadline: bigint; tokens: readonly { token: Hex; amount: bigint }[] },
+    ];
+    expect(route.tokens.map((t) => [getAddress(t.token), t.amount])).toEqual([
+      [baseUsdc, (held * 99n) / 100n],
+    ]);
+    expect(await ethereum.balanceOf(ethereumUsdc, pot)).toBe(0n);
+    // Eco's defaults: filled within five minutes, refundable seven days after that, by the signer.
+    expect(getAddress(published!.args.creator)).toBe(OWNER.address);
+    expect(route.deadline >= before + 300n && route.deadline <= after + 300n).toBe(true);
+    expect(published!.args.rewardDeadline).toBe(route.deadline + 604_800n);
+  }, 240_000);
+
   it("sauce-intents' fund-by-transfer publishes an intent built elsewhere, funded from a Pot", async () => {
     // The skill's file as written: the vault read and the publish go through the registry's Portal
     // by name, so nothing names the Portal here either.
@@ -899,7 +1034,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(run.stderr).toContain("Filling, rehearsed on base (as a solver will):");
     expect(run.stderr).toMatch(/the solver's costs on base: ~250000 gas/);
     expect(readFileSync(out, "utf8")).toContain(
-      `USDC.transfer(${RECIPIENT.toLowerCase()}n, 1250000n);`,
+      `USDC.transfer(${RECIPIENT.toLowerCase()}, 1250000);`,
     );
     const published = JSON.parse(run.stdout) as { intents: Array<{ intentHash: Hex }> };
     const hash = published.intents[0]!.intentHash;

@@ -88,7 +88,7 @@ describe("chain-accessor exports drift guard", () => {
     // `Composed` itself is what carries `ChainContracts` onto every one of them, after the
     // SauceScript intent call a closure makes.
     expect(committed).toContain(
-      `type Composed<N extends keyof ChainGlobals> = SauceIntentChain & ChainGlobals[N] & ChainContracts;`,
+      `type Composed<N extends keyof ChainGlobals> = SauceIntentCall & ChainGlobals[N] & ChainContracts;`,
     );
   });
 

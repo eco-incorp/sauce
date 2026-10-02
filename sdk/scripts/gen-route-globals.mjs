@@ -138,27 +138,25 @@ function render(chains, tokensByChain) {
 // \`@sauce/token\`'s SafeERC20 function, a read to \`IERC20.at(x)\`) and is never invoked
 // by the host.
 //
-// Every chain export carries \`SauceIntentChain\` the same way: the SauceScript call that opens an
-// intent, \`Ethereum(() => { ... }, { tokens }).reward({ tokens })\`, so a closure that opens one
-// inside \`Base(() => { ... })\` typechecks with the chain imported. It is the FIRST signature,
-// because a closure's \`Ethereum(() => { ... })\` would otherwise resolve to the host one and its
-// \`.reward({ token: USDC })\` would not typecheck. A host call still resolves to the host signature:
-// a string body, or any options, fails the SauceScript one (its delivery requires \`tokens\` of
-// bigints), and \`Parameters\`/\`ReturnType\` read the last signature, the host's.
+// Every chain export carries \`SauceIntentCall\` the same way: the SauceScript call that opens an
+// intent in the deprecated form, \`Ethereum(() => { ... }, { tokens }).reward({ tokens })\`, ahead of the
+// host signature, so a closure that still writes it typechecks with the chain imported. Its
+// \`Portal\` is the host's (\`ChainPortal\`), which takes a SauceScript token value and amount as well
+// as an address, so a closure's \`Ethereum.Portal.send({ token: USDC, amount })...\` typechecks too.
 import type { ChainGlobals } from "./builder.js";
 import type { ChainContracts } from "../descriptors/accessors.js";
 import type { SvmVenueAccessors } from "../svm/accessors.js";
 import type { TokenApi, TokenFactory } from "../token/api.js";
 import { Token as tokenApi } from "../token/api.js";
 import { composedChainGlobal } from "./composed.js";
-import type { SauceIntentChain } from "./source-globals.generated.js";
+import type { SauceIntentCall } from "./source-globals.generated.js";
 import type { RegistryToken } from "./token-registry.js";
 
-/** What every chain accessor is: the SauceScript intent call a closure makes, then the eco-routes
- *  DSL for that chain (callable, plus \`.chain\`/\`.route\`), intersected with the
+/** What every chain accessor is: the SauceScript intent a closure opens, then the eco-routes
+ *  DSL for that chain (callable, plus \`.chain\`/\`.route\`/\`.Portal\`), intersected with the
  *  chain-independent native contract tree. Naming the chain through \`ChainGlobals\` is the
  *  structural cross-check above. */
-type Composed<N extends keyof ChainGlobals> = SauceIntentChain & ChainGlobals[N] & ChainContracts;
+type Composed<N extends keyof ChainGlobals> = SauceIntentCall & ChainGlobals[N] & ChainContracts;
 
 /** The chain's registry tokens, by symbol: \`Base.USDC\` is \`{ address, decimals, symbol, chain }\`. */
 type Tokens<S extends string> = { readonly [K in S]: RegistryToken };

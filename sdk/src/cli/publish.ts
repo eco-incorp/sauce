@@ -38,7 +38,8 @@ import type { PrivateKeyAccount } from "viem/accounts";
 
 import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm, hashIntent } from "../routes/encode.js";
-import { isTypeDeclaration } from "../routes/ast-walk.js";
+import { isTypeDeclaration, type AstNode } from "../routes/ast-walk.js";
+import { portalIntent } from "../routes/intent-portal.js";
 import type { LoweredIntent } from "../routes/intent-sugar.js";
 import {
   approvalTxs,
@@ -86,6 +87,7 @@ interface Node {
 
 const isIntentSite = (node: Node): boolean => {
   const call = node.type === "ExpressionStatement" ? (node.expression as Node) : undefined;
+  if (call !== undefined && portalIntent(call as unknown as AstNode) !== undefined) return true;
   const callee = call?.type === "CallExpression" ? (call.callee as Node) : undefined;
   const property = callee?.type === "MemberExpression" ? (callee.property as Node) : undefined;
   const opened = callee?.object as Node | undefined;
@@ -137,14 +139,19 @@ function otherStatement(file: string, text: string): string | undefined {
 }
 
 /** The intents `input`'s file opens, refusing a file that is not only fixed intents. */
-function fixedIntents(input: ProgramInput, files: CliFiles): readonly LoweredIntent[] {
+function fixedIntents(input: PublishInput, files: CliFiles): readonly LoweredIntent[] {
   if (input.chain.kind !== "evm") {
     throw new UsageError(
       `sauce intent publish sends source-chain Portal transactions, and ${input.chain.slug} is not an ` +
         "EVM chain: the eco-routes Portal this SDK addresses is EVM only.",
     );
   }
-  const program = compileProgram(input, files);
+  // The wallet that publishes them is their creator, unless the flags name one.
+  const creator = input.intents.creator ?? input.account?.address ?? input.from;
+  const program = compileProgram(
+    creator === undefined ? input : { ...input, intents: { ...input.intents, creator } },
+    files,
+  );
   if (program.intents.length === 0) {
     throw new UsageError(
       `${input.file} opens no intent — there is nothing to publish. Run it on a Pot with ` +
