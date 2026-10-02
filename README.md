@@ -150,7 +150,7 @@ command-line argument or a tool input, and it never reaches the model's context:
 
 ```sh
 npx sauce wallet new agent --password-env SAUCE_WALLET_PASSWORD
-npx sauce run pay.sauce.ts --chain base --config sauce.config.json \
+npx sauce run pay.sauce.ts --chain base \
   --wallet agent --password-env SAUCE_WALLET_PASSWORD --args <recipient> 1000000
 npx -y @eco-incorp/sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD
 ```

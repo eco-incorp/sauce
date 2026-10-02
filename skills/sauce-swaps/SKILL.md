@@ -181,9 +181,9 @@ The library checks `minOut`; what is left is the input a price limit left unspen
 Rehearse it, then run it, with the input in the Pot (or pulled in with `--fund`):
 
 ```sh
-npx sauce simulate swap-leg.sauce.ts --chain base --owner <address> --config sauce.config.json \
+npx sauce simulate swap-leg.sauce.ts --chain base --owner <address> \
   --args <tokenIn> <tokenOut> 500 <amountIn> <sqrtPriceLimitX96> <minOut> <recipient>
-npx sauce run swap-leg.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+npx sauce run swap-leg.sauce.ts --chain base --keystore <keystore> \
   --fund WETH:0.5 --args <tokenIn> <tokenOut> 500 <amountIn> <sqrtPriceLimitX96> <minOut> <recipient>
 ```
 

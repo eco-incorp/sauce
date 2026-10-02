@@ -3,18 +3,19 @@
  * skills as resources — over stdio for an agent to launch, or over Streamable HTTP to self-host:
  *
  *     npx -y @eco-incorp/sauce mcp
- *     npx -y @eco-incorp/sauce mcp --http 3000 --config sauce.config.json
+ *     npx -y @eco-incorp/sauce mcp --http 3000
  *
  * The server is the `mcp/` workspace, built to `mcp/dist` beside `sdk/dist` in the package. It is
  * LOADED HERE ONLY WHEN THIS COMMAND RUNS, by a dynamic import of that build, so no other command
  * pays for the MCP SDK; and it is reached through the interface below, which the workspace's own
  * entry module is checked against when it compiles (`mcp/src/entry.ts`), so neither side can drift.
  *
- * The chains it reads are `--config`'s. Over stdio, `--wallets [dir]` with a password source (as
- * `sauce wallet` takes one, never a prompt: stdin is the protocol's) lets it sign, with the wallets
- * of that directory alone: the password is read here, once, before the server starts, and never
- * reaches a tool's input or result. Without `--wallets`, and always over HTTP, it holds no key and
- * every transaction it builds comes back unsigned.
+ * It reads a chain through a caller's `rpcUrl`, else `--config`'s entry for the chain, else the
+ * built-in public endpoints the command hands it. Over stdio, `--wallets [dir]` with a password
+ * source (as `sauce wallet` takes one, never a prompt: stdin is the protocol's) lets it sign, with
+ * the wallets of that directory alone: the password is read here, once, before the server starts,
+ * and never reaches a tool's input or result. Without `--wallets`, and always over HTTP, it holds
+ * no key and every transaction it builds comes back unsigned.
  */
 import {
   CliError,
@@ -26,6 +27,7 @@ import {
 } from "./args.js";
 import type { CommandOutput } from "./commands.js";
 import { describeSource, passwordSource, readPassword, type PasswordIo } from "./password.js";
+import type { PublicEndpoints } from "./public-endpoints.js";
 import { PASSWORD, WALLETS } from "./wallet-commands.js";
 import { defaultWalletsDir } from "./wallets.js";
 
@@ -33,6 +35,8 @@ import { defaultWalletsDir } from "./wallets.js";
 export interface McpServeOptions {
   /** `--config`: the RPC endpoints file. */
   readonly config?: string;
+  /** The built-in public endpoints, started: a chain's when neither the call nor `--config` has one. */
+  readonly publicRpcs?: PublicEndpoints;
   /** `--http <port>`: Streamable HTTP on this port instead of stdio. */
   readonly http?: string;
   readonly host?: string;
@@ -76,7 +80,7 @@ export const MCP_FLAGS: FlagSpecs = {
   config: {
     type: "string",
     value: "<file>",
-    help: 'RPC endpoints: { "rpcUrls": { "<chain id>": "<url>" } }. Without one, no chain is read',
+    help: 'Your own RPC endpoints: { "rpcUrls": { "<chain id>": "<url>" } } (default: public ones)',
   },
   http: {
     type: "string",
@@ -156,7 +160,10 @@ const SETUP_ONLY = ["agent", "dir", "force"] as const;
 /** `sauce mcp [setup]`. Prints nothing on stdout while it serves: stdio's protocol owns it. */
 export async function mcpCommand(
   args: ParsedArgs,
-  io: { readonly stderr: (text: string) => void } & PasswordIo,
+  io: {
+    readonly stderr: (text: string) => void;
+    readonly publicRpcs?: PublicEndpoints | undefined;
+  } & PasswordIo,
 ): Promise<CommandOutput | undefined> {
   const [sub, ...rest] = args.positionals;
   if (rest.length > 0 || (sub !== undefined && sub !== "setup")) {
@@ -187,6 +194,7 @@ export async function mcpCommand(
     await loadMcp()
   ).serve({
     ...(config === undefined ? {} : { config }),
+    ...(io.publicRpcs === undefined ? {} : { publicRpcs: io.publicRpcs }),
     ...(http === undefined ? {} : { http }),
     ...(host === undefined ? {} : { host }),
     allowedHosts: repeatedFlag(args, "allowed-host"),

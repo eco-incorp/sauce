@@ -38,10 +38,10 @@ after(async () => {
 describe("a server with endpoints", () => {
   it("says which chains it reads, never how", async () => {
     const { chains } = ok(await mcp.call("sauce_chains")) as {
-      chains: Array<{ slug: string; endpoint: boolean }>;
+      chains: Array<{ slug: string; endpoint: string }>;
     };
     assert.deepEqual(
-      chains.filter((chain) => chain.endpoint).map((chain) => chain.slug),
+      chains.filter((chain) => chain.endpoint === "config").map((chain) => chain.slug),
       ["base", "solana"].sort((a, b) => (a === "base" ? -1 : b === "base" ? 1 : 0)),
     );
     assert.match(mcp.client.getInstructions() ?? "", /own endpoints for chains 8453/);

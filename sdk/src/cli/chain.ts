@@ -3,8 +3,9 @@
  * Kitchen's fee, a Pot's state, a dry run, and a transaction sent and waited for — with a revert
  * reported as its decoded reason rather than as viem's error dump.
  *
- * The endpoint comes from `--rpc-url`, or from the chain's entry in a `--config` file; nothing else.
- * No message here repeats it: a provider URL often carries a key.
+ * The endpoint comes from `--rpc-url`, else from the chain's entry in a `--config` file, else from
+ * the built-in public endpoints (`public-endpoints.ts`). No message here repeats it: a provider URL
+ * often carries a key.
  */
 import {
   createPublicClient,
@@ -49,7 +50,8 @@ export interface TxRequest {
 
 /**
  * The endpoint for `chain`: `--rpc-url`, else the `--config` file's `rpcUrls` entry for the chain's
- * id. `config` is the file's path and text, when one was given.
+ * id; `undefined` when the file has none for it. `config` is the file's path and text, when one was
+ * given.
  */
 export function endpointFor(
   chain: CanonicalChain,
@@ -71,11 +73,7 @@ export function endpointFor(
     );
   }
   const url = (urls as Record<string, unknown>)[String(chain.id)];
-  if (url === undefined) {
-    throw new UsageError(
-      `--config ${config.path} has no rpcUrls entry for ${chain.slug} (chain id ${chain.id})`,
-    );
-  }
+  if (url === undefined) return undefined;
   if (typeof url !== "string" || /^<.*>$/.test(url)) {
     throw new UsageError(
       `--config ${config.path}: rpcUrls["${chain.id}"] is not a URL; replace the placeholder`,
