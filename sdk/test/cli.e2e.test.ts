@@ -57,6 +57,7 @@ import { SETTLE_VECTORS, SETTLE_WIRE, settlePayload } from "../src/verify/index.
 import { v12Pot } from "../src/evm/engine.js";
 import {
   CLI_FIXTURES,
+  KEYSTORE_PASSWORD_FILE,
   deployPot,
   describeEvm,
   erc20,
@@ -268,7 +269,7 @@ describeEvm("sauce, sent to a chain", () => {
       "--keystore",
       join(CLI_FIXTURES, "anvil-2.keystore.json"),
       "--password-file",
-      join(CLI_FIXTURES, "anvil-2.password"),
+      KEYSTORE_PASSWORD_FILE,
     ];
     const KEYSTORE_OWNER = getAddress("0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC");
     const RAW_KEY = "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6";

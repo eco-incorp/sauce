@@ -37,6 +37,7 @@ import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
 import { addressOn, getDescriptor } from "../src/descriptors/query.js";
 import {
   CLI_FIXTURES,
+  KEYSTORE_PASSWORD_FILE,
   deployPot,
   describeEvm,
   erc20,
@@ -72,7 +73,7 @@ const nonces = parseAbi(["function nonces(address) view returns (uint256)"]);
 /** What a run printed to stderr besides the warning every `--private-key` signer gets. */
 const notes = (run: Run): string =>
   run.stderr.replace(
-    "warning: --private-key puts the key in your shell history and in the process list; prefer --keystore\n",
+    "warning: --private-key puts the key in your shell history and in the process list; prefer --keystore or --wallet\n",
     "",
   );
 
@@ -847,7 +848,7 @@ describeEvm(
           "--keystore",
           join(CLI_FIXTURES, "anvil-2.keystore.json"),
           "--password-file",
-          join(CLI_FIXTURES, "anvil-2.password"),
+          KEYSTORE_PASSWORD_FILE,
           "--salt",
           "funded",
           "--fund",

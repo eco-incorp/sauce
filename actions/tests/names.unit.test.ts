@@ -422,6 +422,63 @@ describe("names — refused on the chain that lacks them", () => {
   });
 });
 
+describe("names — tokenized stocks", () => {
+  // Coinbase's SpaceX on Base, bought with USDC at the Slipstream pool the demo trades.
+  const BUY_SPCXC = {
+    type: "uniswapV3Swap",
+    amount: "1000000",
+    pool: "0x0bf58fe0FAc935Ac69595c19B12Ba0d75E3F8c0E",
+    tokenIn: "USDC",
+    tokenOut: "SPCXc",
+    amountOutMin: "1",
+    recipient: "self",
+  };
+
+  it("takes a stock's symbol as its issuer writes it, in the schema too", () => {
+    const named = doc(
+      BUY_SPCXC,
+      { ...SAMPLES.approve, token: "bTSLA" },
+      {
+        ...SAMPLES.approve,
+        token: "BRK_Bx",
+      },
+    );
+    assert.deepEqual(parseProgram(JSON.parse(JSON.stringify(named))), named);
+    const validate = new Ajv2020({ allErrors: true, strict: true }).compile(programSchema());
+    assert.ok(validate(JSON.parse(JSON.stringify(named))), JSON.stringify(validate.errors));
+  });
+
+  it("compiles a Base document buying SPCXc with USDC, the symbol resolved on Base", () => {
+    const program = compileProgram(doc(BUY_SPCXC), { chain: "base" });
+    assert.ok(program.bytecode.length > 0);
+    assert.match(program.source, /\buniswapV3\([^)]*USDC, SPCXc,/);
+  });
+
+  it("compiles Ethereum's stock tokens by their issuers' tickers", () => {
+    for (const token of ["SPCXon", "SPCXx", "TSLAon", "bTSLA", "BRK_Bx"]) {
+      const program = compileProgram(doc({ ...SAMPLES.approve, token }), { chain: "ethereum" });
+      assert.ok(program.bytecode.length > 0, token);
+    }
+  });
+
+  it("refuses SPCXc for Ethereum with its path, naming the chain that has it", () => {
+    const found = problems(() => compileProgram(doc(BUY_SPCXC), { chain: "ethereum" }));
+    assert.equal(found.length, 1, found.join("\n"));
+    assert.match(
+      found[0]!,
+      /^actions\[0\]\.tokenOut: no token "SPCXc" on Ethereum \(chain 1\), whose tokens are USDC, USDT, WETH and \d+ stock tokens; SPCXc is a token on Base — give its address there instead$/,
+    );
+  });
+
+  it("refuses a stock's symbol in another case, with the issuer's spelling", () => {
+    const found = problems(() => parseProgram(doc({ ...BUY_SPCXC, tokenOut: "spcxc" })));
+    assert.match(
+      found[0]!,
+      /^actions\[0\]\.tokenOut: expected .* — a stock token's symbol is its issuer's ticker: did you mean "SPCXc"\?$/,
+    );
+  });
+});
+
 describe("names — native", () => {
   it("measures a native output with the Pot's native balance, not an ERC-20 read of zero", () => {
     const ambient = {

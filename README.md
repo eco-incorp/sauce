@@ -139,20 +139,41 @@ application values reach it through `defines`.
 requests your application submits. [Quick start](docs/guides/quick-start.md) walks through it, and
 [protocols and tokens](docs/guides/protocols-and-tokens.md) covers the names available.
 
+## Agent wallets
+
+An agent with no wallet can make one, through the `sauce` command or the local MCP server, and
+keep it. The key is encrypted under a password the agent holds in its `.env` or secret store; the
+command and the server read the password from the source they are told about, so it is never a
+command-line argument or a tool input, and it never reaches the model's context:
+
+```sh
+npx sauce wallet new agent --password-env SAUCE_WALLET_PASSWORD
+npx sauce run pay.sauce.ts --chain base --config sauce.config.json \
+  --wallet agent --password-env SAUCE_WALLET_PASSWORD --args <recipient> 1000000
+npx -y @eco-incorp/sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD
+```
+
+An EVM wallet is a standard keystore that `cast wallet` and geth read too. A policy file beside a
+wallet limits what it sends, per transaction and per day, by chain, by recipient, in the native
+coin and per token. These are hot wallets: keep small balances in them.
+[Agent wallets](docs/guides/cli.md#agent-wallets) covers the command, and
+[the MCP server's](docs/guides/mcp.md#agent-wallets) its tools. The HTTP server never signs.
+
 ## What else is in the package
 
-| You want to                                         | Start at                                        |
-| --------------------------------------------------- | ----------------------------------------------- |
-| Build, fund and submit an intent                    | [Create an intent](docs/guides/intents.md)      |
-| Chain intents together, statically or at run time   | [Nested intents](docs/guides/nested-intents.md) |
-| Generate programs from data instead of writing them | [Builders](docs/guides/builders-and-actions.md) |
-| Compile a standalone program with runtime arguments | [Compiling programs](docs/guides/compiling.md)  |
-| Compile and run a program file from a terminal      | [The sauce command](docs/guides/cli.md)         |
-| Have a coding agent write and run programs          | [Agent skills](docs/guides/cli.md#agent-skills) |
-| Give a coding agent Sauce's tools over MCP          | [The MCP server](docs/guides/mcp.md)            |
-| Execute on Solana                                   | [Solana](docs/guides/solana.md)                 |
-| Check what a settlement payload contains            | [Verification](docs/guides/verification.md)     |
-| Know which protocols, tokens and chains are wired   | [Coverage](docs/api/coverage.md)                |
+| You want to                                         | Start at                                          |
+| --------------------------------------------------- | ------------------------------------------------- |
+| Build, fund and submit an intent                    | [Create an intent](docs/guides/intents.md)        |
+| Chain intents together, statically or at run time   | [Nested intents](docs/guides/nested-intents.md)   |
+| Generate programs from data instead of writing them | [Builders](docs/guides/builders-and-actions.md)   |
+| Compile a standalone program with runtime arguments | [Compiling programs](docs/guides/compiling.md)    |
+| Compile and run a program file from a terminal      | [The sauce command](docs/guides/cli.md)           |
+| Have a coding agent write and run programs          | [Agent skills](docs/guides/cli.md#agent-skills)   |
+| Give a coding agent Sauce's tools over MCP          | [The MCP server](docs/guides/mcp.md)              |
+| Give an agent a wallet of its own, with limits      | [Agent wallets](docs/guides/cli.md#agent-wallets) |
+| Execute on Solana                                   | [Solana](docs/guides/solana.md)                   |
+| Check what a settlement payload contains            | [Verification](docs/guides/verification.md)       |
+| Know which protocols, tokens and chains are wired   | [Coverage](docs/api/coverage.md)                  |
 
 The SauceScript compiler ships inside this package; there is no separate install and no compiler
 checkout. [Architecture](docs/concepts/architecture.md) explains how the pieces fit,

@@ -20,7 +20,13 @@ import {
   type FieldKind,
   type Fields,
 } from "./spec.js";
-import { CONTRACT_NAME_RE, NATIVE, TOKEN_SYMBOL_RE } from "./names.js";
+import {
+  CONTRACT_NAME_RE,
+  isTokenSymbol,
+  NATIVE,
+  registrySpelling,
+  TOKEN_SYMBOL_RE,
+} from "./names.js";
 import { IDENTIFIER_RE, ProgramError, programIssues, type ProgramIssue } from "./semantics.js";
 import type { Action, ActionProgram, ActionType } from "./types.js";
 
@@ -235,7 +241,7 @@ class Checker {
       }
       return;
     }
-    if (TOKEN_SYMBOL_RE.test(value)) {
+    if (isTokenSymbol(value)) {
       if (!symbols) {
         this.fail(
           path,
@@ -256,12 +262,16 @@ class Checker {
       return;
     }
     const upper = value.toUpperCase();
+    // A stock's symbol is its issuer's ticker, not upper case: `spcxc` is `SPCXc`.
+    const spelled = symbols ? registrySpelling(value) : undefined;
     const hint =
       native && (upper === "ETH" || upper === "NATIVE")
         ? ' — the native currency is "native"'
-        : symbols && TOKEN_SYMBOL_RE.test(upper)
-          ? ` — symbols are upper case: did you mean ${JSON.stringify(upper)}?`
-          : "";
+        : spelled !== undefined && spelled !== upper
+          ? ` — a stock token's symbol is its issuer's ticker: did you mean ${JSON.stringify(spelled)}?`
+          : symbols && TOKEN_SYMBOL_RE.test(upper)
+            ? ` — symbols are upper case: did you mean ${JSON.stringify(upper)}?`
+            : "";
     this.fail(path, `${wanted}, got ${describe(value)}${hint}`);
   }
 

@@ -2,12 +2,14 @@
 // Every generated file of the agent skills, from the SDK's registries — ONE generator, so the
 // three views of the same facts cannot drift from each other or from the registry:
 //
-//   skills/sauce-globals/references/{tokens,protocols,chains}.md   the NAMES a program uses with no
-//                                                                  import (no addresses)
+//   skills/sauce-globals/references/{tokens,stocks,protocols,chains}.md   the NAMES a program uses
+//                                                                  with no import (no addresses)
 //   skills/sauce-chains/references/index.md, <chain>.md            per chain: whether the release
 //                                                                  supports it, ids, native coin, the
 //                                                                  Sauce release, intents, tokens and
 //                                                                  every protocol with its addresses
+//   skills/sauce-chains/references/<chain>-stocks.md               a chain's tokenized stocks, with
+//                                                                  their addresses
 //   skills/sauce-protocols/references/index.md                     every protocol by category, with
 //                                                                  how to choose between them
 //   skills/sauce-protocols/references/registry/<slug>.md           per protocol: its deployments per
@@ -75,13 +77,16 @@ export function globalsIndex(sdk, ecoRoutes, support) {
             );
 
       // Solana's are mints: the base58 address beside the 32-byte key a program holds, and the
-      // token program that owns the mint.
-      const row = ({ symbol, address, decimals, mint, tokenProgram }) => ({
+      // token program that owns the mint. A tokenized stock carries its issuer, name and ticker.
+      const row = ({ symbol, address, decimals, mint, tokenProgram, stock }) => ({
         symbol,
         address,
         decimals,
         ...(mint === undefined ? {} : { mint }),
         ...(tokenProgram === undefined ? {} : { tokenProgram }),
+        ...(stock === undefined
+          ? {}
+          : { stock: { ...stock, issuer: routes.STOCK_ISSUERS[stock.issuer].name } }),
       });
 
       return {
@@ -165,9 +170,33 @@ export function globalsIndex(sdk, ecoRoutes, support) {
         }));
   });
 
+  // Interfaces: ABIs with no fixed address, the same on every EVM chain. A program binds one to an
+  // address it holds, `Namespace.Contract(address).method(...)`. The first method whose inputs
+  // are all scalars is the one the skills checker compiles a call of.
+  const evm = listed.find(({ chain }) => chain.kind === "evm");
+  const scalar = /^(address|bool|u?int\d*)$/;
+  const interfaces = (evm?.globals.interfaces ?? [])
+    .map((one) => {
+      const call = one.methods.find((m) =>
+        /^\w+\((.*)\)$/
+          .exec(m.signature)[1]
+          .split(",")
+          .every((type) => type === "" || scalar.test(type)),
+      );
+      return {
+        name: `${one.namespace}.${one.name}`,
+        protocol: one.protocol,
+        ...(call === undefined
+          ? {}
+          : { call: { name: call.name, inputs: /^\w+\((.*)\)$/.exec(call.signature)[1] } }),
+      };
+    })
+    .sort(byName);
+
   return {
     tokens,
     contracts: [...contracts.values()].sort(byName),
+    interfaces,
     aliases: [...aliases.values()]
       .map(({ name, targets }) => ({
         name,
@@ -516,6 +545,8 @@ const CHAIN_NOTES = {
 // ---- Rendering ------------------------------------------------------------------------------------
 
 const code = (s) => `\`${s}\``;
+/** Text for a table cell: a `|` would end it. */
+const cell = (s) => s.replaceAll("|", "\\|");
 const word = (address) => `${address}n`;
 
 /** A Solana key the registry holds as 32 bytes of hex. */
@@ -565,9 +596,14 @@ function renderGlobals(data) {
     "",
   ];
   for (const entry of globals.tokens) {
+    const stocks = entry.tokens.filter((t) => t.stock).length;
     tokens.push(
       `- **${entry.chain.key}** (\`${entry.chain.slug}\`, [addresses](../../sauce-chains/references/${entry.chain.slug}.md)): ` +
-        entry.tokens.map((t) => `\`${t.symbol}\` (${t.decimals})`).join(", "),
+        entry.tokens
+          .filter((t) => !t.stock)
+          .map((t) => `\`${t.symbol}\` (${t.decimals})`)
+          .join(", ") +
+        (stocks ? `; and ${stocks} tokenized stocks ([stocks](stocks.md))` : ""),
     );
   }
   if (globals.tokens.some((entry) => entry.chain.kind === "svm")) {
@@ -619,6 +655,21 @@ function renderGlobals(data) {
   }
   protocols.push(
     "",
+    "## Interfaces",
+    "",
+    "An interface is an ABI with no fixed address, the same on every EVM chain: a program binds it to",
+    "an address it holds and calls a method in the same expression,",
+    "`Namespace.Contract(address).method(...)` (or `.at(address)`), such as a pool its factory",
+    "returned.",
+    "",
+  );
+  for (const one of globals.interfaces) {
+    protocols.push(
+      `- \`${one.name}(<address>)\` ([\`${one.protocol}\`](../../sauce-protocols/references/registry/${one.protocol}.md))`,
+    );
+  }
+  protocols.push(
+    "",
     "## Family aliases",
     "",
     "A family names a contract when exactly one of its members has it on the program's chain. Any",
@@ -654,8 +705,44 @@ function renderGlobals(data) {
   }
   chains.push("");
 
+  const stocks = [
+    HEADER,
+    "",
+    "# Stock tokens",
+    "",
+    "A tokenized stock is a token like any other: a program compiled for its chain names it by its",
+    "symbol with no import (`SPCXc.balanceOf(ctx.self())` on Base), and amounts are in its smallest",
+    "units (its decimals). The symbol is the issuer's own ticker for the token, with a `.` written",
+    "`_` (`BRK.Bx` is `BRK_Bx`). Their addresses are in the chain's stocks file in `sauce-chains`.",
+    "",
+    "Any contract can hold, receive and send them, a program's Pot included; an issuer can pause its",
+    "token or refuse a sanctioned address. Backed's (its xStocks, and bTokens such as `bTSLA`)",
+    "rebase: a balance can change between transactions, never within one, and a transfer can credit",
+    "one unit less than sent, so paying one into a pool that checks what it received can fail (buying",
+    "one is unaffected). Coinbase's are B20 tokens, built into the Base node: they run on Base, and",
+    "not in a local copy of the chain. The rest is in the skill's",
+    "[Tokenized stocks](../SKILL.md#tokenized-stocks).",
+    "",
+  ];
+  for (const entry of globals.tokens) {
+    const listed = entry.tokens.filter((t) => t.stock);
+    if (listed.length === 0) continue;
+    stocks.push(
+      `## ${entry.chain.key} (\`${entry.chain.slug}\`, [addresses](../../sauce-chains/references/${entry.chain.slug}-stocks.md))`,
+      "",
+      "| Symbol | Token | Ticker | Issuer | Decimals |",
+      "| --- | --- | --- | --- | --- |",
+      ...listed.map(
+        (t) =>
+          `| \`${t.symbol}\` | ${cell(t.stock.name)} | ${cell(t.stock.ticker)} | ${t.stock.issuer} | ${t.decimals} |`,
+      ),
+      "",
+    );
+  }
+
   return {
     "sauce-globals/references/tokens.md": tokens.join("\n"),
+    "sauce-globals/references/stocks.md": stocks.join("\n"),
     "sauce-globals/references/protocols.md": protocols.join("\n"),
     "sauce-globals/references/chains.md": chains.join("\n"),
   };
@@ -687,7 +774,8 @@ function chainExample(chain) {
       "",
     ];
   }
-  const token = chain.tokens[0];
+  // A tokenized stock is a token like any other, but not the one a chain's example should show.
+  const token = chain.tokens.find((t) => !t.stock);
   const contract = namespaced[0];
   const body = [];
   if (token) {
@@ -821,10 +909,18 @@ function renderChain(chain, supported) {
       );
     }
   } else {
+    const stocks = chain.tokens.filter((t) => t.stock).length;
     lines.push("| Symbol | Address | Decimals |", "| --- | --- | --- |");
-    for (const t of chain.tokens)
+    for (const t of chain.tokens.filter((t) => !t.stock))
       lines.push(`| \`${t.symbol}\` | \`${t.address}\` | ${t.decimals} |`);
     lines.push("");
+    if (stocks) {
+      lines.push(
+        `And ${stocks} tokenized stocks, each named by its symbol in the same way: they are in`,
+        `[${chain.slug}-stocks.md](${chain.slug}-stocks.md), with their addresses.`,
+        "",
+      );
+    }
   }
   lines.push("## Protocols", "");
   if (chain.protocols.length === 0) {
@@ -849,6 +945,28 @@ function renderChain(chain, supported) {
   }
 
   return lines.join("\n");
+}
+
+function renderChainStocks(chain) {
+  return [
+    HEADER,
+    "",
+    `# ${chain.name} stock tokens`,
+    "",
+    `Every tokenized stock a program compiled for \`${chain.slug}\` names by its symbol, with its`,
+    `address. [${chain.slug}.md](${chain.slug}.md) has the chain's other tokens and its contracts;`,
+    "`sauce-globals` has what a stock token is and how its symbol is spelled.",
+    "",
+    "| Symbol | Token | Issuer | Address | Decimals |",
+    "| --- | --- | --- | --- | --- |",
+    ...chain.tokens
+      .filter((t) => t.stock)
+      .map(
+        (t) =>
+          `| \`${t.symbol}\` | ${cell(t.stock.name)} | ${t.stock.issuer} | \`${t.address}\` | ${t.decimals} |`,
+      ),
+    "",
+  ].join("\n");
 }
 
 function renderChainIndex(data) {
@@ -1031,8 +1149,11 @@ export function renderSkillsReferences(data) {
     "sauce-chains/references/index.md": renderChainIndex(data),
     "sauce-protocols/references/index.md": renderProtocolIndex(data),
   };
-  for (const chain of data.chains)
+  for (const chain of data.chains) {
     files[`sauce-chains/references/${chain.slug}.md`] = renderChain(chain, data.support.supported);
+    if (chain.tokens.some((t) => t.stock))
+      files[`sauce-chains/references/${chain.slug}-stocks.md`] = renderChainStocks(chain);
+  }
   for (const p of data.protocols)
     files[`sauce-protocols/references/registry/${p.slug}.md`] = renderProtocolRegistry(p, data);
 

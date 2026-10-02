@@ -11,6 +11,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { NO_ENDPOINTS, readEndpoints, type Endpoints } from "../src/config.js";
 import type { RpcGuard } from "../src/guard.js";
 import { createSauceServer } from "../src/server.js";
+import type { WalletContext } from "../src/tools.js";
 
 export interface Connected {
   readonly client: Client;
@@ -28,8 +29,13 @@ export const endpointsFor = (urls: Record<string, string>): Endpoints =>
 export async function connect(
   endpoints: Endpoints = NO_ENDPOINTS,
   guard?: RpcGuard,
+  wallets?: WalletContext,
 ): Promise<Connected> {
-  const server = createSauceServer({ endpoints, ...(guard === undefined ? {} : { guard }) });
+  const server = createSauceServer({
+    endpoints,
+    ...(guard === undefined ? {} : { guard }),
+    ...(wallets === undefined ? {} : { wallets }),
+  });
   const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "sauce-mcp-test", version: "0.0.0" });
   await Promise.all([server.connect(serverSide), client.connect(clientSide)]);

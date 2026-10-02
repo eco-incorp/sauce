@@ -21,6 +21,10 @@ function main(amount: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256) {
 Every argument is a run-time value, so a program can choose the pool, the direction and the amount
 while it runs: spend what an earlier swap returned, read a balance, loop over a list of pools.
 
+A tokenized stock (`SPCXc` on Base, `TSLAon` on Ethereum) is swapped like any token; its symbol
+and what differs about it are in `sauce-globals`
+([Tokenized stocks](../sauce-globals/SKILL.md#tokenized-stocks)).
+
 ## Functions
 
 Every function takes its arguments in one order — the pool, the two tokens, the amount, the venue's
@@ -122,8 +126,7 @@ loose reference. `sauce-distributed-swap` works this through on Base.
 on every V3-style pool of the pair, but the fee comes on top, and it differs per pool: under one
 limit, the last unit a 1% pool fills costs about 1% more than the limit, a 0.05% pool's about
 0.05%. To bound the price paid, give each pool its own limit: `limit ÷ √(1 − fee)` selling token0,
-`limit × √(1 − fee)` selling token1 (`sauce-distributed-swap` computes it and reads each pool's
-fee).
+`limit × √(1 − fee)` selling token1 (`sauce-distributed-swap` computes it for each pool).
 
 A pool offered more than it can fill before its price reaches the limit **takes only what it
 can**: the Router pays exactly the pool's delta, and the rest of the input stays in the Pot. That

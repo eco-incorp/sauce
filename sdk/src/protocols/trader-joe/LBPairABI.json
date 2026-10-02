@@ -1,0 +1,185 @@
+{
+  "abi": [
+    {
+      "name": "getTokenX",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "tokenX",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getTokenY",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "tokenY",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getBinStep",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "getActiveId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "activeId",
+          "type": "uint24"
+        }
+      ]
+    },
+    {
+      "name": "getReserves",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "reserveX",
+          "type": "uint128"
+        },
+        {
+          "name": "reserveY",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "getBin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "uint24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "binReserveX",
+          "type": "uint128"
+        },
+        {
+          "name": "binReserveY",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "getPriceFromId",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "uint24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "price",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getSwapIn",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "amountOut",
+          "type": "uint128"
+        },
+        {
+          "name": "swapForY",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amountIn",
+          "type": "uint128"
+        },
+        {
+          "name": "amountOutLeft",
+          "type": "uint128"
+        },
+        {
+          "name": "fee",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "getSwapOut",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "amountIn",
+          "type": "uint128"
+        },
+        {
+          "name": "swapForY",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amountInLeft",
+          "type": "uint128"
+        },
+        {
+          "name": "amountOut",
+          "type": "uint128"
+        },
+        {
+          "name": "fee",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "swap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "swapForY",
+          "type": "bool"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amountsOut",
+          "type": "bytes32"
+        }
+      ]
+    }
+  ]
+}
