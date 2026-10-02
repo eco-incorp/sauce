@@ -10,8 +10,8 @@ application calls them.
 
 | Example                                                        | Shows                                                                                                                                          |
 | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| [cross-chain-intent.sauce.ts](cross-chain-intent.sauce.ts)     | A program that measures a balance and publishes a new intent carrying it — written in SauceScript                                              |
-| [cross-chain-intent.ts](cross-chain-intent.ts)                 | Compiling that program with `defines` and attaching it to a route                                                                              |
+| [cross-chain-intent.sauce.ts](cross-chain-intent.sauce.ts)     | A program that measures its Pot and publishes a new intent carrying what it measured — written in SauceScript                                  |
+| [cross-chain-intent.ts](cross-chain-intent.ts)                 | Compiling that program for Base with its intents' deadline and creator, and building the cook that runs it with `main`'s arguments             |
 | [nested-intent.sauce.ts](nested-intent.sauce.ts)               | An intent from Ethereum to Base whose body opens the next intent, back to Ethereum, from what it measured — written in SauceScript             |
 | [nested-swap.sauce.ts](nested-swap.sauce.ts)                   | The same with a swap on Base, whose output is the inner intent's reward — written in SauceScript                                               |
 | [nested-intent.ts](nested-intent.ts)                           | Compiling both for Ethereum and building the wallet transactions that publish them                                                             |
@@ -46,7 +46,7 @@ pnpm exec tsc example.ts --target ES2022 --module NodeNext --moduleResolution No
 node dist/example.js
 ```
 
-For `first-intent.ts`, `evm-execution.ts`, `pot-router.ts`, `router-route.ts` and `registry-names.ts`, also run `pnpm add viem`: they use Viem's address formatter and RPC interfaces.
+For `first-intent.ts`, `cross-chain-intent.ts`, `evm-execution.ts`, `pot-router.ts`, `router-route.ts` and `registry-names.ts`, also run `pnpm add viem`: they use Viem's encoding helpers and RPC interfaces.
 
 CI typechecks and runs each of them, and asserts the encoded output including a nonzero cook-fee
 budget. Each SauceScript program is also executed in CI, through the released engine. The RPC
