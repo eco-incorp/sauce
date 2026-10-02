@@ -10,7 +10,8 @@ import { getAddress, toFunctionSelector } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
 import { UsageError } from "../src/cli/args.js";
-import { parseFund, wrapProgram } from "../src/cli/funding.js";
+import { baseUnits, parseFund, wrapProgram } from "../src/cli/funding.js";
+import { assumedBalances } from "../src/cli/inputs.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { Permit2ABI } from "../src/protocols/permit2/abis.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
@@ -24,13 +25,14 @@ const BASE_USDC = getAddress(
 const TOKEN = "0x1111111111111111111111111111111111111111";
 
 describe("--fund <TOKEN|address>:<amount>", () => {
-  it("reads a registered symbol in whole units, by the registry's decimals", () => {
+  it("reads a registered symbol in whole tokens, by the registry's decimals", () => {
     expect(parseFund("USDC:1.5", base)).toEqual({
       raw: "USDC:1.5",
       token: BASE_USDC,
       label: "USDC",
       decimals: 6,
-      amount: { units: "1.5" },
+      amount: "1.5",
+      flag: "--fund",
     });
     // The symbol in any case, as the program names it.
     expect(parseFund("usdc:2", base).token).toBe(BASE_USDC);
@@ -45,8 +47,34 @@ describe("--fund <TOKEN|address>:<amount>", () => {
     }
   });
 
-  it("reads base units from an amount ending in n, as SauceScript writes an integer", () => {
-    expect(parseFund("USDC:1500000n", base).amount).toEqual({ base: 1_500_000n });
+  // A program's integers are base units, and these amounts are not: a base-unit amount is refused,
+  // with the whole tokens it is.
+  it.each([
+    ["USDC:1500000n", "--fund: USDC:1500000n is 1.5 USDC: write USDC:1.5"],
+    ["ETH:10000000000000000n", "--fund: ETH:10000000000000000n is 0.01 ETH: write ETH:0.01"],
+    ["SPCXc:150000000n", "--fund: SPCXc:150000000n is 1.5 SPCXc: write SPCXc:1.5"],
+    [`${TOKEN}:1500000n`, "is in base units, which are not taken here: write the amount in whole"],
+  ])("refuses a base-unit amount, %s, saying what to write", (raw, message) => {
+    expect(() => parseFund(raw, base)).toThrow(UsageError);
+    expect(() => parseFund(raw, base)).toThrow(message);
+  });
+
+  it("is exact in whole tokens through the token's decimals, and says when they read like base units", async () => {
+    const at = async (raw: string) => baseUnits(undefined as never, parseFund(raw, base));
+    expect(await at("USDC:1.5")).toEqual({ amount: 1_500_000n });
+    expect(await at("ETH:0.000000000000000001")).toEqual({ amount: 1n });
+    expect(await at("USDC:999999.999999")).toEqual({ amount: 999_999_999_999n });
+    // At or above 10^decimals whole tokens: said, not refused — it may be meant.
+    expect(await at("USDC:1500000")).toEqual({
+      amount: 1_500_000_000_000n,
+      note:
+        "--fund USDC:1500000: that is 1.5 million USDC; base units are not taken here " +
+        "(1500000 base units would be USDC:1.5)",
+    });
+    const assumed = assumedBalances(["USDC:1000000"], base)[0]!;
+    expect((await baseUnits(undefined as never, assumed)).note).toMatch(
+      /^--assume-balance USDC:1000000: that is 1 million USDC; base units are not taken here/,
+    );
   });
 
   it("takes a token by address, its decimals left to the token", () => {
@@ -56,7 +84,7 @@ describe("--fund <TOKEN|address>:<amount>", () => {
   });
 
   it("names the chain's native currency ETH or native, with 18 decimals and no token", () => {
-    for (const raw of ["ETH:0.01", "native:0.01", "eth:10000000000000000n"]) {
+    for (const raw of ["ETH:0.01", "native:0.01", "eth:1"]) {
       const fund = parseFund(raw, base);
       expect(fund.token).toBeUndefined();
       expect(fund.decimals).toBe(18);

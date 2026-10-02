@@ -160,7 +160,7 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
       "--assume-balance",
       "USDC:2",
       "--assume-balance",
-      "USDT:2000000n",
+      "USDT:2",
       "--json",
     );
     const out = jsonOf(run);
@@ -507,11 +507,27 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
     await untouched();
   }, 120_000);
 
+  it("takes --assume-balance in whole tokens only, and says on stderr when one reads like base units", async () => {
+    const refused = await pay(local.rpcUrl, "--assume-balance", "USDC:2000000n");
+    expect(refused.code).toBe(2);
+    expect(refused.stderr).toContain("--assume-balance: USDC:2000000n is 2 USDC: write USDC:2");
+    // Two million whole USDC may be meant: rehearsed, and the note says what it is.
+    const large = await pay(
+      local.rpcUrl,
+      ...["--assume-balance", "USDC:2000000", "--assume-balance", "USDT:2"],
+    );
+    expect(large.code).toBe(0);
+    expect(large.stderr).toContain(
+      "--assume-balance USDC:2000000: that is 2 million USDC; base units are not taken here " +
+        "(2000000 base units would be USDC:2)",
+    );
+  }, 120_000);
+
   it("refuses to assume a balance a token does not store", async () => {
     // A token whose balanceOf answers 7 for everyone, whatever its storage holds.
     const computed = "0x5a0Ce00000000000000000000000000000000007" as Address;
     await local.testClient.setCode({ address: computed, bytecode: "0x600760005260206000f3" });
-    const run = await pay(local.rpcUrl, "--assume-balance", `${computed}:1n`);
+    const run = await pay(local.rpcUrl, "--assume-balance", `${computed}:1`);
     expect(run.code).toBe(1);
     expect(run.stderr).toContain(
       `no storage slot of ${computed} holds the balance its balanceOf reports`,

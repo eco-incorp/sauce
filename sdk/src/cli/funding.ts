@@ -31,6 +31,7 @@ import {
   maxUint256,
   parseAbi,
   parseSignature,
+  formatUnits,
   parseUnits,
   type Address,
   type Hex,
@@ -63,16 +64,19 @@ export interface FundRequest {
   readonly label: string;
   /** Registry decimals for a symbol; `undefined` for an address, read from the token. */
   readonly decimals?: number;
-  /** The amount in base units (`…n`), or as written, in whole units. */
-  readonly amount: { readonly base: bigint } | { readonly units: string };
+  /** The amount in whole tokens, as written: `1.5`. */
+  readonly amount: string;
+  /** The flag it was given with, for what is said about it. */
+  readonly flag: string;
 }
 
 const NATIVE = /^(eth|native)$/i;
 
 /**
  * `<TOKEN|address>:<amount>`, as `--fund` and `--assume-balance` take it (`flag` names which, for
- * the error). The amount is in whole units — `USDC:1.5` is 1.5 USDC, by the registry's decimals (or
- * the token's own, for an address) — or, ending in `n`, in base units: `USDC:1500000n`.
+ * the error). The amount is in whole tokens, and only whole tokens: `USDC:1.5` is 1.5 USDC, exact
+ * through the registry's decimals (or the token's own, for an address). A program's integers are
+ * base units, so a base-unit amount here (`USDC:1500000n`) is refused, with what to write instead.
  * `ETH:<amount>` (or `native:`) is the chain's native currency, 18 decimals.
  */
 export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: string): FundRequest {
@@ -87,23 +91,43 @@ export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: strin
   const amount = raw.slice(at + 1).trim();
   if (at <= 0 || amount === "") {
     throw new UsageError(
-      `${flag}: expected <TOKEN|address>:<amount>, as USDC:1.5 or USDC:1500000n; got '${raw}'`,
+      `${flag}: expected <TOKEN|address>:<amount>, the amount in whole tokens, as USDC:1.5; ` +
+        `got '${raw}'`,
     );
   }
-  const parsed = /^\d+n$/.test(amount)
-    ? { base: BigInt(amount.slice(0, -1)) }
-    : /^\d+(\.\d+)?$/.test(amount)
-      ? { units: amount }
-      : undefined;
-  if (parsed === undefined) {
+  const request = tokenRequest(raw, what, chain, flag, amount);
+  const base = /^(\d+)n$/.exec(amount);
+  if (base !== null) {
+    const whole =
+      request.decimals === undefined ? undefined : formatUnits(BigInt(base[1]!), request.decimals);
     throw new UsageError(
-      `${flag} ${raw}: '${amount}' is not an amount — whole units (1.5) or base units ending in n ` +
-        "(1500000n)",
+      whole === undefined
+        ? `${flag}: ${raw} is in base units, which are not taken here: write the amount in whole ` +
+            "tokens (the token's decimals() say how many base units make one)"
+        : `${flag}: ${raw} is ${whole} ${request.label}: write ${what}:${whole} (amounts here are ` +
+            "whole tokens, never base units)",
     );
   }
-  if (NATIVE.test(what)) return { raw, label: what.toUpperCase(), decimals: 18, amount: parsed };
+  if (!/^\d+(\.\d+)?$/.test(amount)) {
+    throw new UsageError(
+      `${flag} ${raw}: '${amount}' is not an amount in whole tokens, as 1.5 or 100`,
+    );
+  }
+
+  return request;
+}
+
+/** The token `what` names on `chain`, with `amount` as given. */
+function tokenRequest(
+  raw: string,
+  what: string,
+  chain: CanonicalChain,
+  flag: string,
+  amount: string,
+): FundRequest {
+  if (NATIVE.test(what)) return { raw, label: what.toUpperCase(), decimals: 18, amount, flag };
   if (isAddress(what, { strict: false })) {
-    return { raw, token: getAddress(what), label: getAddress(what), amount: parsed };
+    return { raw, token: getAddress(what), label: getAddress(what), amount, flag };
   }
   // Without regard to case: a stock's symbol is its issuer's ticker (`TSLAx`), not uppercase.
   const row = (TOKEN_REGISTRY[chain.id] ?? []).find(
@@ -121,7 +145,8 @@ export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: strin
     token: getAddress(row.address),
     label: row.symbol,
     decimals: row.decimals,
-    amount: parsed,
+    amount,
+    flag,
   };
 }
 
@@ -218,9 +243,16 @@ const read = async <T>(what: string, call: () => Promise<T>): Promise<T> => {
   }
 };
 
-/** A request's amount in base units, a token's decimals read from it when not registered. */
-export async function baseUnits(client: PublicClient, request: FundRequest): Promise<bigint> {
-  if ("base" in request.amount) return request.amount.base;
+/**
+ * A request's amount in base units, a token's decimals read from it when not registered, and a note
+ * when the amount reads like base units: whole tokens at or above 10^decimals (`USDC:1500000`, 1.5
+ * million USDC), which a program's habit of base units makes easy to write by mistake. A note, not a
+ * refusal: it may be meant.
+ */
+export async function baseUnits(
+  client: PublicClient,
+  request: FundRequest,
+): Promise<{ readonly amount: bigint; readonly note?: string }> {
   const decimals =
     request.decimals ??
     Number(
@@ -228,21 +260,40 @@ export async function baseUnits(client: PublicClient, request: FundRequest): Pro
         client.readContract({ address: request.token!, abi: ERC20, functionName: "decimals" }),
       ),
     );
+  const amount = parseUnits(request.amount, decimals);
+  const whole = BigInt(request.amount.split(".")[0]!);
+  if (decimals === 0 || whole < 10n ** BigInt(decimals)) return { amount };
+  const words = new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    compactDisplay: "long",
+    maximumSignificantDigits: 6,
+  }).format(Number(request.amount));
 
-  return parseUnits(request.amount.units, decimals);
+  const what = request.raw.slice(0, request.raw.lastIndexOf(":"));
+
+  return {
+    amount,
+    note:
+      `${request.flag} ${request.raw}: that is ${words} ${request.label}; base units are not ` +
+      `taken here (${request.amount} base units would be ${what}:${formatUnits(whole, decimals)})`,
+  };
 }
 
-/** Every request's amount in base units. */
-async function amounts(input: FundingInput): Promise<{ tokens: Funded[]; native: bigint }> {
+/** Every request's amount in base units, and what is said of them. */
+async function amounts(
+  input: FundingInput,
+): Promise<{ tokens: Funded[]; native: bigint; notes: string[] }> {
   const tokens: Funded[] = [];
+  const notes: string[] = [];
   let native = 0n;
   for (const request of input.requests) {
-    const amount = await baseUnits(input.client, request);
+    const { amount, note } = await baseUnits(input.client, request);
+    if (note !== undefined) notes.push(note);
     if (request.token === undefined) native += amount;
     else tokens.push({ request, token: request.token, amount });
   }
 
-  return { tokens, native };
+  return { tokens, native, notes };
 }
 
 /** The registry's Permit2 on `chain`. */
@@ -427,8 +478,7 @@ const word = (value: bigint): string => `0x${value.toString(16)}n`;
  * made, and the wrapper that pulls, runs and sweeps.
  */
 export async function planFunding(input: FundingInput): Promise<Funding> {
-  const { tokens, native } = await amounts(input);
-  const notes: string[] = [];
+  const { tokens, native, notes } = await amounts(input);
   const needs: string[] = [];
   const beforeCook: BeforeCook[] = [];
   const sent: Array<{ what: string; sent: Sent }> = [];
