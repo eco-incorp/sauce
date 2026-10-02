@@ -68,7 +68,7 @@ const COOKED = [
 
 /** An intent whose body is plain token transfers: route calls the Executor runs, no Pot. */
 const DIRECT = [
-  "Base.Portal.send([{ token: USDC, amount: 6000000n }]).then(() => {",
+  "Base.Portal.send([{ token: USDC, amount: 6000000n }]).receive().then(() => {",
   "  Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, AMOUNT_IN);",
   "});",
   "",
@@ -78,7 +78,7 @@ const DIRECT = [
 const MEASURED = [
   "function main() {",
   "  const amount = USDC.balanceOf(ctx.self());",
-  "  Base.Portal.send([{ token: USDC, amount }]).then(() => {",
+  "  Base.Portal.send([{ token: USDC, amount }]).receive().then(() => {",
   "    Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, amount);",
   "  });",
   "}",
@@ -364,7 +364,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
     const run = await fill(
       file(
         "computed.sauce.ts",
-        `Base.Portal.send([{ token: USDC, amount: 6000000n }]).then(() => {\n  Token(${computed.toLowerCase()}n).transfer(RECIPIENT, AMOUNT_IN);\n});\n`,
+        `Base.Portal.send([{ token: USDC, amount: 6000000n }]).receive().then(() => {\n  Token(${computed.toLowerCase()}n).transfer(RECIPIENT, AMOUNT_IN);\n});\n`,
       ),
       ...defines(),
     );

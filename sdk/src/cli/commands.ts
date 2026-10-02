@@ -113,7 +113,8 @@ export interface ProgramInput {
   readonly addressDefines?: readonly string[];
   /** Compile `main`'s parameters for compact-v1 arguments instead of ABI-v1. */
   readonly compactArgs: boolean;
-  /** `Chain.Portal.send(…).then(() => …)` inside the program: what the SDK cannot look up. */
+  /** `Chain.Portal.send(…).receive(…).then(() => …)` inside the program: what the SDK cannot
+   *  look up. */
   readonly intents: {
     readonly deadline?: bigint;
     /** From when an unproven intent's reward may be refunded; the route's deadline by default. */

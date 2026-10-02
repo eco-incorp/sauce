@@ -1,7 +1,7 @@
 /**
  * An intent written inside a program, EXECUTED on chains whose tokens live at DIFFERENT addresses.
  *
- * `Chain(() => { ... }).reward({ ... })` names tokens on two chains at once: the body's run on the
+ * `Chain.Portal.send({ ... }).receive({ ... }).then(() => { ... })` names tokens on two chains at once: the body's run on the
  * destination, and the reward's are escrowed — paid into the vault — on the chain the program runs on. The
  * only way to show that a lowering named the right chain's token is to give each chain a different
  * one, and to have every other chain's address be empty there, as it is on a real chain.
@@ -664,7 +664,7 @@ function main() {
     // the failure the suite above exists to rule out, shown to be real rather than assumed.
     const program = `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum.Portal.send([{ token: ARBITRUM_USDC, amount }]).then(() => {
+  Arbitrum.Portal.send([{ token: ARBITRUM_USDC, amount }]).receive().then(() => {
     USDC.transfer(RECIPIENT, amount);
   });
 }`;

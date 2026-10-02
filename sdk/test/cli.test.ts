@@ -443,7 +443,7 @@ describe("sauce compile", () => {
     // An intent's limit, named before it is published, whichever way its reward is paid.
     const intent = file(
       "limit-intent.sauce.ts",
-      "// @chain ethereum\nBase.Portal.send({ token: USDC, amount: 7n }).then(() => {\n" +
+      "// @chain ethereum\nBase.Portal.send({ token: USDC, amount: 7n }).receive().then(() => {\n" +
         "  require(SQRT_PRICE_LIMIT_X96 > 0n);\n  USDC.transfer(RECIPIENT, 5n);\n});\n",
     );
     const published = await sauce(
@@ -503,7 +503,7 @@ describe("sauce compile", () => {
     const recipient = "0x6666666666666666666666666666666666666666";
     const mine = "0x7777777777777777777777777777777777777777";
     const text = [
-      "Arbitrum.Portal.send([{ token: USDC, amount: 1n }]).then(() => {",
+      "Arbitrum.Portal.send([{ token: USDC, amount: 1n }]).receive().then(() => {",
       "  USDC.transfer(RECIPIENT, 1n);",
       "  require(chainId == 42161n && WETH != 0n);",
       "});",
@@ -582,7 +582,7 @@ describe("sauce compile", () => {
         "  require(UniswapV3_Factory != 0n && PANCAKE != 0n && amount > 0n);",
         "  const pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);",
         "  require(pool != 0n);",
-        "  Arbitrum.Portal.send([{ token: USDC, amount: amount }]).then(() => {",
+        "  Arbitrum.Portal.send([{ token: USDC, amount: amount }]).receive().then(() => {",
         "    const there = UniswapV3.Factory.getPool(USDC, 2n, 3n);",
         "    require(there != 0n);",
         "  });",
@@ -873,7 +873,7 @@ describe("sauce compile", () => {
     // A token-only body is calls the Portal's Executor makes itself: no cook, no Kitchen fee.
     const program = file(
       "bridge.sauce.ts",
-      "Base.Portal.send([{ token: USDC, amount: 7n }]).then(() => {\n  USDC.transfer(RECIPIENT, 5n);\n});\n",
+      "Base.Portal.send([{ token: USDC, amount: 7n }]).receive().then(() => {\n  USDC.transfer(RECIPIENT, 5n);\n});\n",
     );
     const run = await sauce(
       ...["compile", program, "--chain", "arbitrum", "--define", `RECIPIENT=${RECIPIENT}`],
@@ -888,7 +888,7 @@ describe("sauce compile", () => {
   it("builds an intent the program opens, naming each setting it lacks", async () => {
     const body = [
       "const amount = USDC.balanceOf(ctx.self());",
-      "Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {",
+      "Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {",
       "  USDC.transfer(RECIPIENT, amount);",
       "});",
       "",
@@ -1354,7 +1354,7 @@ describe("sauce tx", () => {
 describe("sauce intent publish, offline", () => {
   const INTENT = [
     "// @chain ethereum",
-    "Base.Portal.send([{ token: USDC, amount: 7n }]).then(() => {",
+    "Base.Portal.send([{ token: USDC, amount: 7n }]).receive().then(() => {",
     "  USDC.transfer(RECIPIENT, 5n);",
     "});",
     "",
@@ -1459,7 +1459,7 @@ describe("sauce intent publish, offline", () => {
       "publish",
       file(
         "typed.sauce.ts",
-        "function main(recipient: Address) {\n  Base.Portal.send([{ token: USDC, amount: 7n }]).then(() => {\n    USDC.transfer(recipient, 5n);\n  });\n}\n",
+        "function main(recipient: Address) {\n  Base.Portal.send([{ token: USDC, amount: 7n }]).receive().then(() => {\n    USDC.transfer(recipient, 5n);\n  });\n}\n",
       ),
       "--chain",
       "ethereum",
@@ -1479,7 +1479,7 @@ describe("sauce intent publish, offline", () => {
     const AMOUNT = 1_000_000n;
     const body = (amount: string) =>
       [
-        `Base.Portal.send({ token: USDC, amount: ${amount} }).then(() => {`,
+        `Base.Portal.send({ token: USDC, amount: ${amount} }).receive().then(() => {`,
         `  USDC.transfer(RECIPIENT, ${amount});`,
         "});",
       ].join("\n");
@@ -1557,7 +1557,7 @@ describe("sauce intent publish, offline", () => {
 describe("sauce intent fill, offline", () => {
   const INTENT = [
     "// @chain arbitrum",
-    "Base.Portal.send([{ token: USDC, amount: 7n }]).then(() => {",
+    "Base.Portal.send([{ token: USDC, amount: 7n }]).receive().then(() => {",
     "  Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, 5n);",
     "});",
     "",
@@ -1611,7 +1611,7 @@ describe("sauce intent fill, offline", () => {
       "fill",
       file(
         "two.sauce.ts",
-        `${INTENT}Optimism.Portal.send([{ token: USDC, amount: 7n }]).then(() => {\n  Token(0x0b2c639c533813f4aa9d7837caf62653d097ff85n).transfer(RECIPIENT, 5n);\n});\n`,
+        `${INTENT}Optimism.Portal.send([{ token: USDC, amount: 7n }]).receive().then(() => {\n  Token(0x0b2c639c533813f4aa9d7837caf62653d097ff85n).transfer(RECIPIENT, 5n);\n});\n`,
       ),
       ...FLAGS,
       ...NOWHERE,

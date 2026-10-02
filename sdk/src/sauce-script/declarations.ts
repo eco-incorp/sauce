@@ -215,7 +215,7 @@ export function sauceScriptDeclarations(): string {
     "  lib(address: SauceInt): B;",
     "}",
     "",
-    "/** A chain: its `Portal` opens an intent there (`Base.Portal.send({ … }).then(() => { … })`);",
+    "/** A chain: its `Portal` opens an intent there (`Base.Portal.send({ … }).receive().then(() => { … })`);",
     " *  its namespaces qualify an accessor to that chain (`Base.UniswapV3.Factory`). */",
     "interface SauceChain {",
     "  readonly Portal: SaucePortal;",

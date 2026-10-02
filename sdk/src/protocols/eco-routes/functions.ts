@@ -2,10 +2,10 @@
  * Portal calls as SauceScript templates.
  *
  * These are the low-level form. A program does not normally write them:
- * `Chain.Portal.send({ ... }).then(() => { ... })` lowers to the same calls with the addresses,
- * encoding and approvals filled in (`routes/intent-host.ts`). They are here because a registered protocol describes what its
- * contract can be asked to do, and because reading them is the quickest way to see what the sugar
- * actually produces.
+ * `Chain.Portal.send({ ... }).receive().then(() => { ... })` lowers to the same calls with the
+ * addresses, encoding and approvals filled in (`routes/intent-host.ts`). They are here because a
+ * registered protocol describes what its contract can be asked to do, and because reading them is
+ * the quickest way to see what the sugar actually produces.
  */
 export const rewardStatus = `
 import { PortalABI as IPortal } from "./abis";

@@ -85,30 +85,27 @@ interface SauceTokenAmount {
   readonly amount: SauceInt;
 }
 
-/** What an intent's reward pays, on the chain that opens it: a token amount, a list of them, the
- *  native coin as `{ native: amount }`, or tokens and the native coin together. */
-type SauceReward =
-  | SauceTokenAmount
-  | ReadonlyArray<SauceTokenAmount>
-  | { readonly native: SauceInt }
-  | { readonly tokens: ReadonlyArray<SauceTokenAmount>; readonly native?: SauceInt };
+/** One item of an intent's reward, paid on the chain that opens it: a token amount, a list of
+ *  them, or the native coin as `{ native: amount }`. */
+type SauceRewardItem =
+  SauceTokenAmount | ReadonlyArray<SauceTokenAmount> | { readonly native: SauceInt };
 
-/** What the solver delivers on the destination for the body to run on: a token amount, or a list. */
-type SauceDelivery = SauceTokenAmount | ReadonlyArray<SauceTokenAmount>;
+/** One item of what the solver delivers on the destination for the body to run on: a token
+ *  amount, or a list of them. */
+type SauceDeliveryItem = SauceTokenAmount | ReadonlyArray<SauceTokenAmount>;
 
 /** `<Chain>.Portal`: an intent to that chain, opened from a program —
  *  `Base.Portal.send({ … }).receive({ … }).then(() => { … })`. */
 interface SaucePortal {
-  /** The reward, paid here. */
-  send(reward: SauceReward): SauceSending;
+  /** The reward, paid here: any number of items, each an argument. */
+  send(...reward: SauceRewardItem[]): SauceSending;
 }
 
-/** An intent with its reward: what the solver delivers next, or the body. */
+/** An intent with its reward, waiting for what the solver delivers. */
 interface SauceSending {
-  /** What the solver delivers on the destination, named there. */
-  receive(delivery: SauceDelivery): SauceReceiving;
-  /** What runs on the destination: a program of its own, or token transfers the route makes. */
-  then(body: () => void): void;
+  /** What the solver delivers on the destination, named there: any number of items, none with
+   *  `.receive()`. */
+  receive(...delivery: SauceDeliveryItem[]): SauceReceiving;
 }
 
 /** An intent with its reward and delivery: the body is what it needs. */

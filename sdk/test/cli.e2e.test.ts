@@ -831,7 +831,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
   // A top-level file: no `main`, one intent, every amount a define.
   const INTENT = [
     "// @chain ethereum",
-    "Base.Portal.send([{ token: USDC, amount: REWARD }]).then(() => {",
+    "Base.Portal.send([{ token: USDC, amount: REWARD }]).receive().then(() => {",
     "  USDC.transfer(RECIPIENT, AMOUNT);",
     "});",
     "",
@@ -1170,7 +1170,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
         path,
         [
           "// @chain ethereum",
-          `Base.Portal.send(${reward}).then(() => {`,
+          `Base.Portal.send(${reward}).receive().then(() => {`,
           "  USDC.transfer(RECIPIENT, AMOUNT);",
           "});",
           "",
@@ -1279,7 +1279,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
       [
         "// @chain ethereum",
         "const amount = USDC.balanceOf(ctx.self());",
-        "Base.Portal.send([{ token: USDC, amount }]).then(() => {",
+        "Base.Portal.send([{ token: USDC, amount }]).receive().then(() => {",
         "  USDC.transfer(RECIPIENT, amount);",
         "});",
         "",
@@ -1310,7 +1310,7 @@ describeEvm("what is deployed: the released contracts, a Pot, and an intent's de
   // the Pot every intent through Base's Portal shares.
   const INTENT = [
     "// @chain ethereum",
-    "Base.Portal.send([{ token: USDC, amount: REWARD }]).then(() => {",
+    "Base.Portal.send([{ token: USDC, amount: REWARD }]).receive().then(() => {",
     "  require(AMOUNT > 0n);",
     "  Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, AMOUNT);",
     "});",

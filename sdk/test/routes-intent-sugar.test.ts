@@ -1,5 +1,5 @@
 /**
- * `Chain(() => { ... }).reward({ ... })` written inside a Sauce program.
+ * `Chain.Portal.send({ ... }).receive({ ... }).then(() => { ... })` written inside a Sauce program.
  *
  * The property under test is not "does it compile" — it is **which values end up where**. A value
  * the enclosing program has only while it runs cannot be in the encoded intent; it is a sentinel
@@ -70,7 +70,8 @@ function lower(source: string, intents: Record<string, unknown> = DEFAULTS) {
 const program = (body: string) =>
   `function main() {\n  const amount = USDC.balanceOf(self);\n${body}\n}`;
 
-const TRANSFER_INTENT = program(`  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
+const TRANSFER_INTENT =
+  program(`  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
     USDC.transfer(RECIPIENT, amount);
   });`);
 
@@ -128,7 +129,7 @@ describe("what the lowering produces", () => {
   // non-zero value. One Executor runs every intent on a chain, so the approve is reset to zero first.
   describe("a token-only approve is reset to zero first", () => {
     const approveIntent = (spender: string, amount: string) =>
-      program(`  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
+      program(`  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
     USDC.approve(${spender}, ${amount});
   });`);
     const callsOf = (source: string) =>
@@ -169,7 +170,7 @@ describe("what the lowering produces", () => {
   describe("a top-level `const` is baked in, as a define is", () => {
     // Known when the file is compiled, so nothing is spliced at run time and the intent is fixed:
     // `sauce intent publish` can build it from a wallet.
-    const site = `Arbitrum.Portal.send([{ token: USDC, amount: AMOUNT }]).then(() => {
+    const site = `Arbitrum.Portal.send([{ token: USDC, amount: AMOUNT }]).receive().then(() => {
     USDC.transfer(RECIPIENT, AMOUNT);
   });`;
     const amountsOf = (source: string, defines: Record<string, bigint> = {}) => {
@@ -256,14 +257,14 @@ describe("what the lowering produces", () => {
 
     it("sends a literal native reward, and splices a captured one", () => {
       const literal = lower(
-        program(`  Arbitrum.Portal.send({ native: 9n }).then(() => {
+        program(`  Arbitrum.Portal.send({ native: 9n }).receive().then(() => {
     USDC.transfer(RECIPIENT, amount);
   });`),
       ).bound[0]!;
       expect(bytesHex(literal[4]!)).toBe(word(9n));
 
       const captured = lower(
-        program(`  Arbitrum.Portal.send({ tokens: [{ token: USDC, amount: 3n }], native: amount }).then(() => {
+        program(`  Arbitrum.Portal.send({ token: USDC, amount: 3n }, { native: amount }).receive().then(() => {
     USDC.transfer(RECIPIENT, amount);
   });`),
       ).bound[0]!;
@@ -275,7 +276,7 @@ describe("what the lowering produces", () => {
     it("hands every entry of a token listed twice to the library, which funds the larger", () => {
       const rewards = lower(
         program(`  const more = 9n;
-  Arbitrum.Portal.send([{ token: USDC, amount }, { token: USDC, amount: more }, { token: USDC, amount: 4n }]).then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }, { token: USDC, amount: more }, { token: USDC, amount: 4n }]).receive().then(() => {
     USDC.transfer(RECIPIENT, amount);
   });`),
       ).bound[0]![3]!;
@@ -317,10 +318,10 @@ describe("what the lowering produces", () => {
   });
 
   it("lowers several intents in one program", () => {
-    const two = program(`  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
+    const two = program(`  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
     USDC.transfer(RECIPIENT, amount);
   });
-  Optimism.Portal.send([{ token: USDC, amount }]).then(() => {
+  Optimism.Portal.send([{ token: USDC, amount }]).receive().then(() => {
     USDC.transfer(RECIPIENT, amount);
   });`);
     expect(lower(two).intents.map((i) => i.destination.slug)).toEqual(["arbitrum", "optimism"]);
@@ -344,7 +345,7 @@ describe("a body that is not just token writes becomes a program", () => {
     ],
   ])("compiles a program for %s", (_name, body) => {
     const source = program(
-      `  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {\n    ${body}\n  });`,
+      `  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {\n    ${body}\n  });`,
     );
     const [lowered] = lower(source, { ...DEFAULTS, executionFee: 0n }).intents;
 
@@ -359,16 +360,16 @@ describe("a body that is not just token writes becomes a program", () => {
     expect(() =>
       lower(
         program(
-          `  Solana.Portal.send([{ token: USDC, amount }]).then(() => {\n    USDC.transfer(RECIPIENT, amount);\n  });`,
+          `  Solana.Portal.send([{ token: USDC, amount }]).receive().then(() => {\n    USDC.transfer(RECIPIENT, amount);\n  });`,
         ),
       ),
     ).toThrow();
   });
 
   it("lowers an intent opened inside an intent, each by its own level", () => {
-    const source = program(`  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
+    const source = program(`  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
     const got = USDC.balanceOf(self);
-    Base.Portal.send([{ token: USDC, amount: got }]).then(() => {
+    Base.Portal.send([{ token: USDC, amount: got }]).receive().then(() => {
       USDC.transfer(RECIPIENT, got);
     });
   });`);
@@ -437,7 +438,7 @@ describe("the Pot a program body cooks on", () => {
 describe("what it refuses, and how clearly", () => {
   it("an identifier nothing declares is the compiler's unknown name", () => {
     const source = program(
-      "  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {\n    USDC.transfer(mystery, amount);\n  });",
+      "  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {\n    USDC.transfer(mystery, amount);\n  });",
     );
     expect(() => lower(source)).toThrow(/`mystery` is not a declared variable/);
   });
@@ -478,7 +479,7 @@ describe("what it refuses, and how clearly", () => {
   });
 
   it("says which chain has no eco-routes deployment", () => {
-    const source = program(`  Zora.Portal.send([{ token: USDC, amount }]).then(() => {
+    const source = program(`  Zora.Portal.send([{ token: USDC, amount }]).receive().then(() => {
     Token(0x7777777777777777777777777777777777777777).transfer(RECIPIENT, amount);
   });`);
     expect(() => lower(source)).toThrow(/eco-routes v3 is not deployed on zora/);
@@ -519,7 +520,7 @@ describe("through the route compile", () => {
       intents,
       bound: [args],
     } = lower(`function main() {
-  Arbitrum.Portal.send([{ token: USDC, amount: 7n }]).then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount: 7n }]).receive().then(() => {
     USDC.transfer(RECIPIENT, 5n);
   });
 }`);
@@ -537,7 +538,7 @@ describe("through the route compile", () => {
         `function main() {
   const amount = USDC.balanceOf(self);
   const native = ctx.selfBalance();
-  Arbitrum.Portal.send({ tokens: [{ token: USDC, amount }, { token: USDC, amount: 7n }], native: native }).then(() => {
+  Arbitrum.Portal.send({ token: USDC, amount }, { token: USDC, amount: 7n }, { native: native }).receive().then(() => {
     USDC.transfer(RECIPIENT, 5n);
   });
 }`,
@@ -553,7 +554,7 @@ describe("through the route compile", () => {
       "base",
       `function main() {
   const amount = Token(USDC).balanceOf(self);
-  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
     USDC.transfer(RECIPIENT, amount);
   });
 }`,

@@ -167,9 +167,11 @@ function main() {
         return x / 2n;
       }
       const amount = USDC.balanceOf(0x1234n);
-      Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
-        USDC.transfer(RECIPIENT, half(amount));
-      });
+      Arbitrum.Portal.send([{ token: USDC, amount }])
+        .receive()
+        .then(() => {
+          USDC.transfer(RECIPIENT, half(amount));
+        });
     };
     const out = compileSauceRoute("base", body, execution, {
       defines: { RECIPIENT: 0x99n },

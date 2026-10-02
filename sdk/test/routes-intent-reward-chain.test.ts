@@ -1,5 +1,5 @@
 /**
- * Which chain a name inside `Chain(() => { ... }).reward({ ... })` resolves on, at every level.
+ * Which chain a name inside `Chain.Portal.send({ ... }).receive({ ... }).then(() => { ... })` resolves on, at every level.
  *
  * The BODY runs on the destination, so its names — and the delivery argument's — are the
  * destination's. The REWARD is escrowed where the program runs, and the program pays it into the
@@ -364,7 +364,7 @@ describe.each(CHAIN_DEFINE_PATHS)(
     // route calls when the intent is built, so the decoded calldata says which chain's they were.
     const program = `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum.Portal.send([{ token: USDC, amount: chainId }]).then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount: chainId }]).receive().then(() => {
     USDC.transfer(RECIPIENT, chainId);
     USDC.approve(UniswapV4_UniversalRouter, amount);
   });
@@ -397,7 +397,7 @@ describe.each(CHAIN_DEFINE_PATHS)(
 describe.each(PATHS)("a caller's own defines, through %s", (_name, build) => {
   const program = `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum.Portal.send([{ token: CHOSEN, amount }]).then(() => {
+  Arbitrum.Portal.send([{ token: CHOSEN, amount }]).receive().then(() => {
     USDC.transfer(RECIPIENT, amount);
   });
 }`;

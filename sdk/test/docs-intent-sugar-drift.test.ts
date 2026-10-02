@@ -43,7 +43,7 @@ const lower = (
 ) => compileSauceProgram("base", program, { defines: { RECIPIENT }, intents });
 
 const wrap = (body: string, reward = "[{ token: USDC, amount }]", chain = "Arbitrum") =>
-  `function main() {\n  const amount = 5n;\n  ${chain}.Portal.send(${reward}).then(() => {\n    ${body}\n  });\n}`;
+  `function main() {\n  const amount = 5n;\n  ${chain}.Portal.send(${reward}).receive().then(() => {\n    ${body}\n  });\n}`;
 
 /** Documented sentence -> the program that must produce it. */
 const REFUSALS: readonly {
@@ -88,7 +88,7 @@ const REFUSALS: readonly {
     trigger: () =>
       lower(
         `function payout(amount: Uint256) {
-  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
     if (amount > 0n) { payout(amount); }
   });
 }
@@ -192,7 +192,7 @@ describe("the guide's account of which chain a name resolves on is the lowering'
           "base",
           `function main() {
   const amount = 5n;
-  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
     USDC.transfer(RECIPIENT, amount);
   });
 }`,
@@ -231,7 +231,7 @@ function half(): Uint256 {
 }
 function main() {
   const total = 5n;
-  Arbitrum.Portal.send([{ token: USDC, amount: total }]).then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount: total }]).receive().then(() => {
     if (half() > 0n) { USDC.transfer(RECIPIENT, total); }
   });
 }`,

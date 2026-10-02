@@ -1,7 +1,7 @@
 /**
  * What an intent body's names mean when the body is a program of its own.
  *
- * `Chain.Portal.send(...).then(() => { ... })` with a body that is not plain token writes compiles that body
+ * `Chain.Portal.send(...).receive().then(() => { ... })` with a body that is not plain token writes compiles that body
  * as a program for the destination — the compiler's program argument, in the destination's scope.
  * A name the body reads is one of: its own local; a value of the enclosing program, carried in as
  * an entry argument (a capture); or a declaration of the file — a function, an import, an
@@ -57,7 +57,7 @@ function captures(source: string): readonly string[] {
 const fileWithIntent = (file: string, body: string) => `${file}
 function main() {
   const amount = USDC.balanceOf(self);
-  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
 ${body}
   });
 }`;
@@ -173,7 +173,7 @@ function legOf(amount: Uint256): Leg {
 }
 function main() {
   const amount = USDC.balanceOf(self);
-  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
     if (amount > 0n) { USDC.transfer(RECIPIENT, amount); }
   });
 }`),
@@ -190,7 +190,7 @@ function half(): Uint256 {
 }
 function main() {
   total = USDC.balanceOf(self);
-  Arbitrum.Portal.send([{ token: USDC, amount: total }]).then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount: total }]).receive().then(() => {
     const out = half() + total;
     if (out > 0n) { USDC.transfer(RECIPIENT, out); }
   });
@@ -208,7 +208,7 @@ function bump(): Uint256 {
 function main() {
   scratch = 5n;
   const amount = USDC.balanceOf(self);
-  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
     if (bump() > 1n) { USDC.transfer(RECIPIENT, amount); }
   });
 }`),
@@ -223,7 +223,7 @@ function half(): Uint256 {
 }
 function main() {
   const total = USDC.balanceOf(self);
-  Arbitrum.Portal.send([{ token: USDC, amount: total }]).then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount: total }]).receive().then(() => {
     if (half() > 0n) { USDC.transfer(RECIPIENT, total); }
   });
 }`),
@@ -243,7 +243,7 @@ function net(x: Uint256, fees: Uint256): Uint256 {
   return x - fees;
 }
 function payout(amount: Uint256): void {
-  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
     if (amount > 1n) { USDC.transfer(RECIPIENT, net(compute(amount), 1n)); }
   });
 }
@@ -258,7 +258,7 @@ function main() {
       compileSauceProgram(
         "base",
         `function payout(amount: Uint256): void {
-  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
     if (amount > 0n) { payout(amount); }
   });
 }
@@ -275,7 +275,7 @@ function main() {
       captures(`${ARRAY_HELPERS}
 function main(): void {
   const amount: Uint256 = total(doubled([USDC.balanceOf(self), 1n]));
-  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
     const parts: Uint256[] = doubled([amount, 2n]);
     if (total(parts) > 0n) { USDC.transfer(RECIPIENT, total(parts)); }
   });
@@ -294,7 +294,7 @@ function main(): void {
 }
 function main() {
   const amount = USDC.balanceOf(self);
-  Optimism.Portal.send([{ token: USDC, amount }]).then(() => {
+  Optimism.Portal.send([{ token: USDC, amount }]).receive().then(() => {
     const held = USDT.balanceOf(self);
     if (held > 0n) { payout(RECIPIENT, held); }
   });
@@ -333,7 +333,7 @@ describe("an intent opened at a script's top level", () => {
   // there captures, as `main`'s would be.
   const SCRIPT = `const amount = USDC.balanceOf(self);
 const [fee] = abi.decode(ctx.msgData(), ["Uint256"]);
-Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
+Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
   if (amount > fee) { USDC.transfer(RECIPIENT, amount - fee); }
 });`;
 

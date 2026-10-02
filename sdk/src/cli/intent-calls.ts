@@ -1,5 +1,5 @@
 /**
- * Where a program opens an intent, read off its syntax: `<Chain>.Portal.send(…)[.receive(…)]
+ * Where a program opens an intent, read off its syntax: `<Chain>.Portal.send(…).receive(…)
  * .then(() => { … })`, a chain of calls rooted at a chain's `Portal`. What the compiler is told
  * about these names is `routes/intent-host.ts`'s; this only finds them in the text, for the
  * commands that report on a file or check what it does.

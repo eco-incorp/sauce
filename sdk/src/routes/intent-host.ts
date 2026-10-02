@@ -15,17 +15,19 @@
  *
  * WHAT THE COMPILER IS TOLD. `<Chain>.Portal` is a constant of the `Portal` type, its value the
  * destination's chain id. `send` (the reward, paid here) and `receive` (what the solver delivers
- * there) make records, one argument each — a token amount or a list of them — so the chain is one
- * record of everything in it. `receive`'s argument is evaluated here but named on the destination
- * (`scope: "nested"`, its scope picked from the record's chain). `then` takes a PROGRAM: its closure
- * is compiled as a program of its own in the scope `nested` returns for that chain — the
+ * there) make records, each taking any number of items as arguments of its own (`rest`) — a token
+ * amount or a list of them, and for the reward the native coin — so the chain is one record of
+ * everything in it, which the compiler shows `nested` and `bind` call by call. `receive`'s items
+ * are evaluated here but named on the destination (`scope: "nested"`, its scope picked from the
+ * record's chain). `receive` is required, `.receive()` naming nothing. `then` takes a PROGRAM: its
+ * closure is compiled as a program of its own in the scope `nested` returns for that chain — the
  * destination's names, its target, its own intents — and what it reads of the enclosing program
  * reaches it as entry arguments. A closure of nothing but token `transfer`/`approve` calls is
  * RECORDED instead: there is no program, only the calls, which become the route's own. The record
  * `then` makes ends the chain: its type's ending is bound at its site, so the compiler hands `bind`
  * what it knows there — the chain, the reward, the delivery, the program or the recorded calls —
- * and calls `@sauce/intents` with what `bind` returns. A chain that stops before `then` is refused
- * in this file's words: an intent needs a body.
+ * and calls `@sauce/intents` with what `bind` returns. A chain that stops before `receive` or
+ * `then` is refused in this file's words.
  *
  * WHAT `bind` DOES. It builds the intent exactly as before: the route's calls (each recorded write,
  * or the delivered tokens' transfers into the Pot then its `cook`), the reward, the deadlines, the
@@ -137,6 +139,11 @@ const INTENTS = "@sauce/intents";
 const NEEDS_A_BODY =
   "an intent needs what runs on its destination: end it with `.then(() => { … })`";
 
+/** The refusal of a chain that skips what the solver delivers. */
+const NEEDS_A_DELIVERY =
+  "an intent names what the solver delivers before its body: `.receive(…)`, or `.receive()` " +
+  "for nothing, then `.then(() => { … })`";
+
 /**
  * One sentinel per run-time value of a site. TWENTY bytes, so the same sentinel is a legal
  * `uint256` and a legal `address` when viem encodes the call; the trailing index keeps them apart.
@@ -166,17 +173,23 @@ export function intentHost(level: IntentLevel): {
     export: fundVia === "transfer" ? "publish" : "publishAndFund",
   };
   const then: Signature = { params: [{ kind: "program", record: true }], returns: "Opened" };
+  // `send` and `receive` take any number of items, each an argument of its own.
   const types: Record<string, HostType> = {
     Portal: {
       of: "Uint256",
-      methods: { send: { params: [{ kind: "value" }], returns: "Sending" } },
+      methods: { send: { params: [{ kind: "value" }], rest: true, returns: "Sending" } },
     },
     Sending: {
       methods: {
-        receive: { params: [{ kind: "value", scope: "nested" }], returns: "Receiving" },
+        receive: {
+          params: [{ kind: "value", scope: "nested" }],
+          rest: true,
+          returns: "Receiving",
+        },
+        // Declared only to be refused in this file's words, where its program would compile.
         then,
       },
-      ending: { refused: NEEDS_A_BODY },
+      ending: { refused: NEEDS_A_DELIVERY },
     },
     Receiving: { methods: { then }, ending: { refused: NEEDS_A_BODY } },
     Opened: { ending: { calls: publish, site: true } },
@@ -202,7 +215,9 @@ export function intentHost(level: IntentLevel): {
   };
 
   const nested = (site: ProgramSite): ProgramOptions =>
-    level.programOn(destinationOf(site.receiver, `\`${site.callee}\``));
+    site.callee === "Sending.then"
+      ? fail(NEEDS_A_DELIVERY)
+      : level.programOn(destinationOf(site.receiver, `\`${site.callee}\``));
 
   const bind = (site: CallSite): BoundArgument[] => {
     if (site.callee !== "Opened") return fail(`'${site.callee}' is not an intent's publication`);
@@ -237,15 +252,16 @@ function bindIntent(
 
   // Each call of the chain, by the method that made it, wherever it was written.
   const { parts } = recordOf(site.receiver, "the intent");
-  const argumentOf = (method: string) =>
-    parts.find((part) => part.callee.endsWith(`.${method}`))?.args[0];
-  const body = argumentOf("then");
-  const rewardView = argumentOf("send") ?? fail("`.send(...)` names the reward");
-  const deliveryView = argumentOf("receive");
+  const argumentsOf = (method: string) =>
+    parts.find((part) => part.callee.endsWith(`.${method}`))?.args;
+  const body = argumentsOf("then")?.[0];
+  const rewardItems = argumentsOf("send") ?? fail("`.send(...)` names the reward");
+  // `.receive()` names nothing: a token-only body's delivery is then what its transfers move.
+  const deliveryItems = argumentsOf("receive") ?? [];
   const explicitDelivery =
-    deliveryView === undefined
+    deliveryItems.length === 0
       ? undefined
-      : tokenList(deliveryView, { part: "delivery", chain: destination }, valueOf).tokens;
+      : tokenList(deliveryItems, { part: "delivery", chain: destination }, valueOf).tokens;
 
   const destinationPortal = defaults.destinationPortal ?? ecoRoutesPortal(destination, defaults);
   const calls: { target: Hex; data: Hex; value: bigint }[] = [];
@@ -303,7 +319,7 @@ function bindIntent(
     return fail("an intent's body must be a closure");
   }
 
-  const rewardSpec = tokenList(rewardView, { part: "reward", chain: source }, valueOf);
+  const rewardSpec = tokenList(rewardItems, { part: "reward", chain: source }, valueOf);
   const offersNative =
     rewardSpec.nativeAmount !== undefined &&
     !("literal" in rewardSpec.nativeAmount && rewardSpec.nativeAmount.literal === 0n);
@@ -501,37 +517,34 @@ const methodOf = (list: TokenList): string =>
   list.part === "reward" ? "`.send(...)`" : "`.receive(...)`";
 
 /**
- * A `.send(...)` or `.receive(...)` argument: one token amount, `{ token, amount }`, or a list of
- * them. The reward may also pay the native coin: `{ native: amount }` alone, or beside its tokens
- * as `{ tokens: [...], native: amount }`.
+ * The items of a `.send(...)` or `.receive(...)`, one argument each: a token amount,
+ * `{ token, amount }`, or a list of them. The reward may also pay the native coin, once:
+ * `{ native: amount }`.
  */
 function tokenList(
-  view: View,
+  items: readonly View[],
   list: TokenList,
   valueOf: (view: View | undefined, what: string) => Value,
 ): {
   readonly tokens: readonly { readonly token: bigint; readonly amount: Value }[];
   readonly nativeAmount?: Value;
 } {
-  const amounts = `each amount ${methodOf(list)} takes is \`{ token, amount }\`, or a list of them`;
-  let entries: readonly View[] = "elements" in view ? view.elements : [view];
+  const amounts =
+    `each item ${methodOf(list)} takes is \`{ token, amount }\`` +
+    (list.part === "reward" ? ", `{ native: amount }`" : "") +
+    ", or a list of token amounts";
+  const entries = items.flatMap((item) => ("elements" in item ? item.elements : [item]));
   let nativeAmount: Value | undefined;
-  if ("fields" in view && list.part === "reward" && !new Map(view.fields).has("token")) {
-    const fields = new Map(view.fields);
-    for (const key of fields.keys()) {
-      if (key !== "tokens" && key !== "native") {
-        return fail(`\`${key}\` is not a field of a reward: it takes \`tokens\` and \`native\``);
-      }
-    }
-    const tokens = fields.get("tokens");
-    if (tokens !== undefined && !("elements" in tokens)) {
-      return fail("`.send({ tokens })` takes a list of `{ token, amount }`");
-    }
-    entries = tokens === undefined ? [] : tokens.elements;
-    if (fields.has("native")) nativeAmount = valueOf(fields.get("native"), "the native amount");
-  }
-  const tokens = entries.map((element) => {
+  const tokens = entries.flatMap((element) => {
     const entry = fieldsOf(element, amounts);
+    if (entry.has("native") && entry.size === 1) {
+      if (list.part !== "reward") {
+        return fail("`.receive(...)` names tokens: the native coin is paid with `.send(...)`");
+      }
+      if (nativeAmount !== undefined) return fail("`.send(...)` names its native amount once");
+      nativeAmount = valueOf(entry.get("native"), "the native amount");
+      return [];
+    }
     if (!entry.has("token") || !entry.has("amount") || entry.size !== 2) return fail(amounts);
     const token = valueOf(entry.get("token"), `the ${list.part} token`);
     if (!("literal" in token)) {
@@ -541,17 +554,15 @@ function tokenList(
       );
     }
 
-    return {
-      token: token.literal,
-      amount: valueOf(entry.get("amount"), `the ${list.part} amount`),
-    };
+    return [
+      {
+        token: token.literal,
+        amount: valueOf(entry.get("amount"), `the ${list.part} amount`),
+      },
+    ];
   });
-  if (tokens.length === 0 && nativeAmount === undefined) {
-    return fail(
-      list.part === "reward"
-        ? "`.send(...)` must offer something: a token amount, a list of them, or `{ native: amount }`"
-        : "`.receive(...)` names no token: list what the solver brings, or leave `.receive` out",
-    );
+  if (list.part === "reward" && tokens.length === 0 && nativeAmount === undefined) {
+    return fail("`.send(...)` must offer something: a token amount, or `{ native: amount }`");
   }
 
   return { tokens, nativeAmount };

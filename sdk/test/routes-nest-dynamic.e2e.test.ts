@@ -1442,7 +1442,7 @@ describeEvm("route nesting, executed", () => {
     }, 180_000);
   });
 
-  describe("`Chain(() => ...).reward(...)` written inside the program", () => {
+  describe("`Chain.Portal.send(...).receive(...).then(...)` written inside the program", () => {
     // The syntax the SDK exists to offer: an intent created from a Sauce program with no Portal,
     // no selector, no offset word and no approve written by the author. Everything below the
     // `PROGRAM` constant is the lowering's output, and none of it appears in the source.
@@ -1455,7 +1455,7 @@ describeEvm("route nesting, executed", () => {
 
     const PROGRAM = `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
-  Base.Portal.send([{ token: TOKEN, amount }]).then(() => {
+  Base.Portal.send([{ token: TOKEN, amount }]).receive().then(() => {
     Token(TOKEN).transfer(RECIPIENT, amount);
   });
 }`;
@@ -1609,7 +1609,7 @@ describeEvm("route nesting, executed", () => {
       // publish an intent whose vault is empty.
       const { status } = await runIntentProgram(
         `function main() {
-  Base.Portal.send([{ token: TOKEN, amount: 5n }]).then(() => {
+  Base.Portal.send([{ token: TOKEN, amount: 5n }]).receive().then(() => {
     Token(TOKEN).transfer(RECIPIENT, 1n);
   });
 }`,
@@ -1627,7 +1627,7 @@ describeEvm("route nesting, executed", () => {
       const { status, logs } = await runIntentProgram(
         `function main() {
   const native = ctx.selfBalance();
-  Base.Portal.send({ native: native }).then(() => {
+  Base.Portal.send({ native: native }).receive().then(() => {
     Token(TOKEN).transfer(RECIPIENT, 1n);
   });
 }`,
@@ -1690,7 +1690,7 @@ describeEvm("route nesting, executed", () => {
         const { status, logs } = await runIntentProgram(
           `function main() {
   const native = ctx.selfBalance();
-  Base.Portal.send({ native: native }).then(() => {
+  Base.Portal.send({ native: native }).receive().then(() => {
     Token(TOKEN).transfer(RECIPIENT, 1n);
   });
 }`,
@@ -1729,11 +1729,12 @@ describeEvm("route nesting, executed", () => {
       );
 
     /** Publishes the intent a program opens around `body`, and returns the route and reward hash
-     *  the Portal logged — what a solver fulfils. `delivery` is what it `.receive`s, if anything. */
+     *  the Portal logged — what a solver fulfils. `delivery` is what it `.receive`s: nothing, by
+     *  default. */
     const publish = async (
       body: string,
       token: Address,
-      delivery = "",
+      delivery = ".receive()",
     ): Promise<{ route: EvmRoute; rewardHash: Hex }> => {
       const reward = await deploy(MOCK_ERC20.creationCode);
       const program = `function main() {
@@ -1971,7 +1972,7 @@ describeEvm("route nesting, executed", () => {
     // The headline case: every hop's amount is only known when that hop runs. The parent measures a
     // balance and offers an intent; fulfilling THAT intent delivers the amount to a Pot, where a
     // program measures it again and offers a third. Nothing below is written by hand -- the program
-    // text is the three `Chain(() => ...).reward(...)` expressions and nothing else.
+    // text is the three `Chain.Portal.send(...).receive(...).then(...)` expressions and nothing else.
     const SEEDED = 7_000_000n;
     const FINAL_RECIPIENT = "0x00000000000000000000000000000000000000c3" as Address;
 
@@ -1979,7 +1980,7 @@ describeEvm("route nesting, executed", () => {
   const amount = Token(TOKEN).balanceOf(ctx.self());
   Base.Portal.send([{ token: TOKEN, amount }]).receive([{ token: TOKEN, amount }]).then(() => {
     const got = Token(TOKEN).balanceOf(ctx.self());
-    Base.Portal.send([{ token: TOKEN, amount: got }]).then(() => {
+    Base.Portal.send([{ token: TOKEN, amount: got }]).receive().then(() => {
       Token(TOKEN).transfer(RECIPIENT, got);
     });
   });
@@ -2326,7 +2327,7 @@ describeEvm("route nesting, executed", () => {
         );
     };
 
-    describe("inside a program: `Chain(() => ...).reward(...)`", () => {
+    describe("inside a program: `Chain.Portal.send(...).receive(...).then(...)`", () => {
       // Control flow, so the child is a PROGRAM cooked on its destination Pot, not a list of
       // token calls. Base -> Base so this one anvil can fulfil the child too.
       const PROGRAM = `function main() {

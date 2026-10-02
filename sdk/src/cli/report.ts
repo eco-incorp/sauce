@@ -89,8 +89,9 @@ function intentParts(program: AstNode): IntentPart[] {
     if (method !== "receive" && method !== "then") return;
     const name = portalRoot(node);
     const chain = name === undefined ? undefined : chains.get(name);
-    const [part] = (node.arguments as AstNode[] | undefined) ?? [];
-    if (chain !== undefined && part !== undefined) {
+    // `receive` takes any number of items, `then` its body.
+    if (chain === undefined) return;
+    for (const part of (node.arguments as AstNode[] | undefined) ?? []) {
       parts.push({ chain, start: part.start, end: part.end });
     }
   });

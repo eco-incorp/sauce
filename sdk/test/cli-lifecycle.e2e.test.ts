@@ -71,7 +71,7 @@ const APPROVE = parseAbi(["function approve(address, uint256)"]);
 
 /** Base USDC to RECIPIENT, for Ethereum USDC: a body of plain transfers, run by the Executor. */
 const INTENT = [
-  "Base.Portal.send([{ token: USDC, amount: REWARD }]).then(() => {",
+  "Base.Portal.send([{ token: USDC, amount: REWARD }]).receive().then(() => {",
   "  USDC.transfer(RECIPIENT, AMOUNT);",
   "});",
   "",

@@ -330,7 +330,7 @@ const SPLIT = [
 ].join("\n");
 const FIXED = [
   "// @chain ethereum",
-  "Base.Portal.send([{ token: USDC, amount: 2000n }]).then(() => {",
+  "Base.Portal.send([{ token: USDC, amount: 2000n }]).receive().then(() => {",
   "  USDC.transfer(RECIPIENT, 1000n);",
   "});",
   "",
@@ -339,7 +339,7 @@ const MEASURED = [
   "// @chain ethereum",
   "function main(recipient: Address) {",
   "  const amount = USDC.balanceOf(ctx.self());",
-  "  Base.Portal.send([{ token: USDC, amount: amount }]).then(() => {",
+  "  Base.Portal.send([{ token: USDC, amount: amount }]).receive().then(() => {",
   "    USDC.transfer(recipient, amount);",
   "  });",
   "}",

@@ -134,7 +134,7 @@ interface IntentOptionsCommon {
 
 /**
  * An EVM destination's execution. Every field is optional: the Pot and engine are derived exactly as
- * `Chain(() => ...).reward(...)` inside a program derives them (`intent-pot.ts`).
+ * `Chain.Portal.send(...).receive(...).then(...)` inside a program derives them (`intent-pot.ts`).
  */
 export interface IntentEvmExecution {
   /** Overrides the derived Pot — the shared one owned by the recorded Portal's Executor. Either
@@ -582,9 +582,9 @@ export function openRoute(
   );
   const compileOptions: SauceCompileOptions = {
     ...options.compile,
-    // `Chain(() => ...).reward(...)` written INSIDE the program inherits this intent's own creator,
-    // deadlines and eco-routes selection, so the common case needs no second set of options. An
-    // explicit `compile.intents` field still wins.
+    // `Chain.Portal.send(...).receive(...).then(...)` written INSIDE the program inherits this
+    // intent's own creator, deadlines and eco-routes selection, so the common case needs no second
+    // set of options. An explicit `compile.intents` field still wins.
     intents: {
       deadline: toBigInt(options.deadline),
       rewardDeadline:
