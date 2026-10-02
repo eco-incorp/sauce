@@ -69,11 +69,13 @@ const INTENT = [
 /** INTENT, written `Base.Portal.send(reward).receive(delivery).then(body)`. */
 const PORTAL_INTENT = [
   "// @chain ethereum",
-  "Base.Portal.send({ token: USDC, amount: 7n })",
-  "  .receive({ token: USDC, amount: 5n })",
-  "  .then(() => {",
-  "    USDC.transfer(RECIPIENT, 5n);",
-  "  });",
+  "function main(recipient: Address) {",
+  "  Base.Portal.send({ token: USDC, amount: 7 })",
+  "    .receive({ token: USDC, amount: 5 })",
+  "    .then(() => {",
+  "      USDC.transfer(recipient, 5);",
+  "    });",
+  "}",
   "",
 ].join("\n");
 
@@ -1157,7 +1159,7 @@ describe("sauce_intent_publish", () => {
     // route's.
     const call = { ...args, intentRewardDeadline: args.intentDeadline + 604_800 };
     // A program a Pot runs names its intent's creator; a wallet publishing one is its creator.
-    const named = PORTAL_INTENT.replace(".receive(", `.creator(${CREATOR})\n  .receive(`);
+    const named = PORTAL_INTENT.replace(".receive(", `.creator(${CREATOR})\n    .receive(`);
     const compiled = ok(await mcp.call("sauce_compile", { ...portal, source: named }));
     assert.equal(compiled.bytecode, ok(await mcp.call("sauce_compile", call)).bytecode);
     assert.match(failed(await mcp.call("sauce_compile", portal)), /needs `\.creator\(<address>\)`/);
@@ -1171,7 +1173,7 @@ describe("sauce_intent_publish", () => {
     const out = ok(
       await mcp.call("sauce_intent_publish", {
         source: PORTAL_INTENT,
-        defines: { RECIPIENT },
+        args: [RECIPIENT],
         from: OWNER,
       }),
     ) as Published & {

@@ -267,6 +267,8 @@ describe("bindMainArguments: main's arguments, bound into the intents a wallet p
           [
             ...["intent", "publish", file, "--chain", "ethereum", "--format", "json"],
             ...["--from", OWNER, "--intent-deadline", "2000000000", "--intent-creator", OWNER],
+            // One salt for every run: each picks a random one otherwise.
+            ...["--intent-salt", `0x${"5a".repeat(32)}`],
             ...extra,
           ],
           io,

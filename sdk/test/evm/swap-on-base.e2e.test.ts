@@ -734,7 +734,7 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
   it("without the √(1 − fee), the 0.3% V3 pool's last unit pays less than the limit", async () => {
     const receipt = await fulfil(
       { amountIn: WETH_UNIT },
-      replacing("Math.sqrt((1000000n - fee) * 10n ** 30n)", "10n ** 18n"),
+      replacing("Math.sqrt((1000000 - fee) * 10 ** 30)", "10 ** 18"),
     );
     expect(receipt.status).toBe("success");
     const pricier = fills(receipt).find((fill) => fill.venue === "v3:3000")!;
