@@ -891,9 +891,9 @@ describe(
         const opened = await sauce([
           ...["run", example("repay-on-base"), "--chain", "ethereum", "--config", config],
           ...["--private-key", OWNER_KEY, "--salt-hex", POT_SALT, "--json"],
-          ...["--define", `BORROWER=${borrower.address}`, "--define", `SOLVER_BPS=${SOLVER_BPS}`],
           ...["--intent-deadline", deadline, "--intent-creator", PEOPLE[0]!],
           ...["--intent-execution-fee", "auto"],
+          ...["--args", borrower.address, String(SOLVER_BPS)],
         ]);
         assert.equal(opened.code, 0, `${opened.stderr}\n${opened.stdout}`);
         const cookTx = (JSON.parse(opened.stdout) as { cook: { hash: Hex } }).cook.hash;
