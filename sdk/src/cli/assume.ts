@@ -17,7 +17,9 @@
  * at slots 0–255 (`keccak256(holder . slot)`), Vyper's `HashMap` at slots 0–31
  * (`keccak256(slot . holder)`), OpenZeppelin's namespaced (ERC-7201) upgradeable ERC-20, and
  * Solady's ERC-20. A token whose balance is computed rather than stored (a rebasing token, shares)
- * has no such slot, and is refused with that said.
+ * has no such slot, and is refused with that said. So is a B20 token, a precompile of the Base
+ * node (Coinbase's tokenized stocks), whose account holds the one byte `0xef` and whose balances
+ * the node keeps where no override reaches.
  */
 import {
   concat,
@@ -47,6 +49,8 @@ export interface BalanceSlot {
 
 type Candidate = BalanceSlot;
 
+/** A B20 token's code: no bytecode, the one byte that marks the node's own token. */
+const B20_CODE = "0xef";
 const SOLIDITY_SLOTS = 256;
 const VYPER_SLOTS = 32;
 /** OpenZeppelin's `ERC20Upgradeable` (v5) storage namespace, `openzeppelin.storage.ERC20`, whose
@@ -152,6 +156,19 @@ export async function findBalanceSlot(
   holder: Address,
   label: string,
 ): Promise<BalanceSlot> {
+  let code: Hex | undefined;
+  try {
+    code = await client.getCode({ address: token });
+  } catch {
+    // Unread code says nothing: the search below decides.
+  }
+  if (code === B20_CODE) {
+    throw new CliError(
+      `--assume-balance ${label}: ${token} is a B20 token, a precompile of the Base node, which ` +
+        "keeps its balances where no state override reaches, so a rehearsal cannot give the Pot " +
+        "one. Fund the Pot with it instead (--fund), from an account that holds it.",
+    );
+  }
   const candidates = balanceSlotCandidates(holder);
   const current = await balanceWith(client, token, holder, []);
   if (current === undefined) {

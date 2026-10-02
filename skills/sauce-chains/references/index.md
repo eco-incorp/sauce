@@ -15,7 +15,7 @@ file links its own.
 
 | Chain | Slug | Id | Kind | Support | Intents | CCTP | Tokens | Protocols |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| [Ethereum](ethereum.md) | `ethereum` | 1 | EVM | supported | yes | 0 | 3 | 96 |
+| [Ethereum](ethereum.md) | `ethereum` | 1 | EVM | supported | yes | 0 | 1734 | 96 |
 | [Optimism](optimism.md) | `optimism` | 10 | EVM | preview | yes | 2 | 3 | 40 |
 | [Cronos](cronos.md) | `cronos` | 25 | EVM | preview | no | — | 0 | 0 |
 | [BNB Chain](bsc.md) | `bsc` | 56 | EVM | preview | no | — | 0 | 29 |
@@ -41,7 +41,7 @@ file links its own.
 | [Arc](arc.md) | `arc` | 5042 | EVM | preview | yes | 26 | 4 | 23 |
 | [ZetaChain](zetachain.md) | `zetachain` | 7000 | EVM | preview | no | — | 0 | 0 |
 | [Klaytn](klaytn.md) | `klaytn` | 8217 | EVM | preview | no | — | 0 | 0 |
-| [Base](base.md) | `base` | 8453 | EVM | supported | yes | 6 | 2 | 47 |
+| [Base](base.md) | `base` | 8453 | EVM | supported | yes | 6 | 69 | 47 |
 | [Evmos](evmos.md) | `evmos` | 9001 | EVM | preview | no | — | 0 | 0 |
 | [Plasma](plasma.md) | `plasma` | 9745 | EVM | preview | yes | — | 0 | 0 |
 | [Mode](mode.md) | `mode` | 34443 | EVM | preview | no | — | 0 | 2 |

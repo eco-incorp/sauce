@@ -36,7 +36,7 @@ import { unknownGlobalError } from "./unknown-global.js";
 import { pascalOfSlug } from "./accessors.js";
 import { encodeCompactArguments } from "../compact-arguments.js";
 import { v12KitchenAddress } from "../deployments/index.js";
-import { chainAmbient, chainDefines } from "./ambient.js";
+import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
 import { denormalizeToEvm } from "./encode.js";
 import { toUniversalAddress } from "./normalize.js";
 import { childCaptureSentinel, type CompiledChild } from "./intent-sugar.js";
@@ -167,7 +167,7 @@ export interface RouteScope {
 
 /** What a nested level resolves its chain-scoped names with: its own chain's registry values and
  *  nothing a caller supplied for another chain. */
-const NESTED_SCOPE: RouteScope = { chainDefines: (chain) => chainDefines(chain) };
+const NESTED_SCOPE: RouteScope = { chainDefines: (chain) => sharedChainDefines(chain) };
 
 /**
  * The options and scope a level on `destination` gets, when a program compiled for `enclosing`
@@ -197,8 +197,8 @@ function levelOn(
   if (destination.id === enclosing.id) return { options, scope };
   const chainScoped = new Set([
     ...Object.keys(scope.chainDefines?.(enclosing) ?? {}),
-    ...Object.keys(chainDefines(enclosing, { tokens: options.tokens })),
-    ...Object.keys(chainDefines(destination)),
+    ...Object.keys(definesOf(enclosing, options.tokens)),
+    ...Object.keys(sharedChainDefines(destination)),
   ]);
   const defines =
     options.defines === undefined
@@ -207,6 +207,37 @@ function levelOn(
           Object.entries(options.defines).filter(([name]) => !chainScoped.has(name)),
         );
   return { options: { ...options, defines, tokens: undefined }, scope: NESTED_SCOPE };
+}
+
+/** A chain's defines with `tokens` over its registry's: the chain's own, built once, with none. */
+function definesOf(
+  chain: ChainRefResolved,
+  tokens: SauceCompileOptions["tokens"],
+): Readonly<Record<string, DefineValue>> {
+  return tokens === undefined ? sharedChainDefines(chain) : chainDefines(chain, { tokens });
+}
+
+/** The chain's defines a compile starts from: its token map, then its scope's values, merged once
+ *  for each pair of them. A chain's own map and values are one object each on every compile
+ *  (`resolveTokenMap`, `sharedChainDefines`), so their merge is kept, by both. */
+const baseDefinesCache = new WeakMap<
+  ReadonlyMap<string, bigint>,
+  WeakMap<object, Readonly<Record<string, DefineValue>>>
+>();
+const NO_SCOPE = {};
+
+function baseDefines(
+  tokenMap: ReadonlyMap<string, bigint>,
+  scoped: Readonly<Record<string, DefineValue>> | undefined,
+): Readonly<Record<string, DefineValue>> {
+  const byScope = baseDefinesCache.get(tokenMap) ?? new WeakMap();
+  baseDefinesCache.set(tokenMap, byScope);
+  let merged = byScope.get(scoped ?? NO_SCOPE);
+  if (merged === undefined) {
+    merged = Object.freeze({ ...Object.fromEntries(tokenMap), ...scoped });
+    byScope.set(scoped ?? NO_SCOPE, merged);
+  }
+  return merged;
 }
 
 /** Every name the program can read as a compile-time scalar on `chain`: the chain's token symbols,
@@ -424,7 +455,7 @@ export function compileSauceProgram(
   // and `defines` stays exactly what the caller wrote.
   const ambient = Array.from(new Set([...chainAmbient(resolved), ...(options.ambient ?? [])]));
   const scope: RouteScope = {
-    chainDefines: (on) => chainDefines(on, { tokens: options.tokens }),
+    chainDefines: (on) => definesOf(on, options.tokens),
   };
   const program = compileForChain(
     resolved,
@@ -535,10 +566,16 @@ function compileForChain(
   // scoped values, when `openRoute` supplied a scope (ambient.ts#chainDefines resolves the SAME
   // registry, so the token symbols agree), and the caller's own defines over both.
   const scoped = scope.chainDefines?.(chain);
-  const defines: Record<string, DefineValue> | undefined =
-    tokenMap.size > 0 || scoped !== undefined
-      ? { ...Object.fromEntries(tokenMap), ...scoped, ...options.defines }
-      : options.defines;
+  // The chain's values are one frozen object for a chain's own map and scope (`baseDefines`), handed
+  // over as they are when the caller adds none, so the compile adapter converts them once.
+  const chainValues =
+    tokenMap.size > 0 || scoped !== undefined ? baseDefines(tokenMap, scoped) : undefined;
+  const defines: Readonly<Record<string, DefineValue>> | undefined =
+    chainValues === undefined
+      ? options.defines
+      : options.defines === undefined || Object.keys(options.defines).length === 0
+        ? chainValues
+        : { ...chainValues, ...options.defines };
 
   // ORDER IS LOAD-BEARING: the token pass (member and balance syntax) runs BEFORE the protocol-accessor
   // pass. The accessor pass's `self` sugar rewrites a bare `self` Identifier -> `ctx.self()`
@@ -608,6 +645,7 @@ function compileForChain(
       resolve: options.resolve,
       resolvePackage: options.resolvePackage,
       defines,
+      ...(chainValues === undefined ? {} : { baseDefines: chainValues }),
       contracts,
       ambient: options.ambient,
       compactArgs: options.compactArgs,

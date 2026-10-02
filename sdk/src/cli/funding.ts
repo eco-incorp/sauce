@@ -106,7 +106,10 @@ export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: strin
   if (isAddress(what, { strict: false })) {
     return { raw, token: getAddress(what), label: getAddress(what), amount: parsed };
   }
-  const row = (TOKEN_REGISTRY[chain.id] ?? []).find((entry) => entry.symbol === what.toUpperCase());
+  // Without regard to case: a stock's symbol is its issuer's ticker (`TSLAx`), not uppercase.
+  const row = (TOKEN_REGISTRY[chain.id] ?? []).find(
+    (entry) => entry.symbol.toUpperCase() === what.toUpperCase(),
+  );
   if (row === undefined) {
     throw new UsageError(
       `${flag} ${raw}: ${what} is not a token ${chain.slug} registers` +

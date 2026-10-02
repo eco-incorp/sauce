@@ -9,7 +9,7 @@ Each of the three can be true without the others.
 | Protocol catalog                 | 135 protocols with metadata, deployments, ABI fragments, and program templates | `listProtocols()`, `getProtocol(slug)`, `getProtocolsByChain(id)`      |
 | Contract descriptors             | 302 descriptors across 135 protocol namespaces                                 | `contracts.listDescriptors()`, `contracts.listContracts(slug)`         |
 | Compiled-source protocol globals | The same 135 protocol namespaces, plus 13 family aliases                       | TypeScript completion after importing `@eco-incorp/sauce`; names below |
-| Token symbols                    | 7 symbols distributed across 7 EVM chains                                      | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
+| Token symbols                    | 1796 symbols distributed across 7 EVM chains, 1789 of them tokenized stocks    | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
 | Canonical chain identities       | 41 chains: 40 EVM and Solana                                                   | `CANONICAL_CHAINS`, `requireChain(ref)`                                |
 | EVM chain metadata               | 34 records with native-currency and explorer information                       | `chains`, `getChain(id)`, `getAllChainIds()`                           |
 
@@ -68,6 +68,36 @@ The exported `routes.TOKEN_REGISTRY` contains:
 
 On Arc, `USDC` is the ERC-20 face of the chain's native coin, and `WETH` is bridged ETH rather than
 a wrapped native. See [Arc: USDC is the native coin](#arc-usdc-is-the-native-coin).
+
+### Tokenized stocks
+
+Ethereum and Base also register tokenized stocks, which a program names by symbol like any other
+token (`SPCXc.balanceOf(ctx.self())` on Base). Each list is copied from its issuer's own published
+list and every row is checked on chain; a stock row carries `stock`, its issuer, name and ticker:
+
+| Chain    | ID   | Issuer                            | Tokens | For example                 |
+| -------- | ---- | --------------------------------- | ------ | --------------------------- |
+| Ethereum | 1    | Backed (xStocks, and its bTokens) | 1280   | `TSLAx`, `SPCXx`, `bTSLA`   |
+| Ethereum | 1    | Ondo Global Markets               | 450    | `TSLAon`, `SPCXon`, `SPYon` |
+| Ethereum | 1    | Mt Pelerin (its own shares)       | 1      | `MPS`                       |
+| Base     | 8453 | Coinbase                          | 58     | `TSLAc`, `SPCXc`, `NVDAc`   |
+| Base     | 8453 | Backed (its bTokens)              | 9      | `bTSLA`, `bNVDA`, `bCOIN`   |
+
+A stock's symbol is its issuer's ticker for the token, which is not always uppercase, with a `.`
+written `_` (`BRK.Bx` is `BRK_Bx`). In a program and an actions document it is case-sensitive; the
+command line matches it without regard to case. `sauce globals --chain <chain>` counts a chain's
+stock tokens, `--stocks` lists them and `--search <text>` finds one by symbol, company name or
+ticker (`sauce_globals` takes `stocks` and `search` too, a page of 200 tokens at a time).
+
+Any contract, a Pot included, can hold and swap them: only minting and redeeming with the issuer
+need KYC. An issuer can pause its token or refuse a sanctioned address. Backed's tokens rebase: a
+balance changes between transactions, never within one, and a transfer can credit one unit less
+than sent, so paying one into a pool that checks what it received can fail. Ondo's keep their
+balance while dividends raise the shares each token stands for. Coinbase's are B20 tokens built into
+the Base node, so they run on Base but not in a local EVM such as anvil: `sauce simulate` against
+Base rehearses them, and `--assume-balance` cannot give one, since no state override reaches a B20
+balance. Solana's tokenized stocks are Token-2022 mints, which the SVM token functions do not take,
+so none is registered.
 
 A missing symbol means the registry has no verified row under that name. Token variants can have
 different symbols and addresses. `IntentOptions.tokenDefines` or `SauceCompileOptions.tokens`

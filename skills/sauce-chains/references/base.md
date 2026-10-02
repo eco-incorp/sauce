@@ -53,6 +53,9 @@ function main() {
 | `USDC` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | 6 |
 | `WETH` | `0x4200000000000000000000000000000000000006` | 18 |
 
+And 67 tokenized stocks, each named by its symbol in the same way: they are in
+[base-stocks.md](base-stocks.md), with their addresses.
+
 ## Protocols
 
 Every protocol the registry records here, each contract with how a program names it: its

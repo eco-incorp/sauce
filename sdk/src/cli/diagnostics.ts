@@ -7,7 +7,7 @@
  * says so plainly where the SDK rewrote the line itself.
  */
 import type { CanonicalChain } from "../chains/canonical.js";
-import { knownTokenSymbols } from "../routes/token-registry.js";
+import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 
 /** The entry name `rs-compile.ts` compiles every route program under. */
 const ENTRY = "main.js";
@@ -222,18 +222,30 @@ const TOKEN_USE =
  */
 function unregisteredTokens(text: string, chain: CanonicalChain): string[] {
   if (chain.kind !== "evm") return [];
-  const known = new Set(knownTokenSymbols(chain));
+  const rows = TOKEN_REGISTRY[chain.id] ?? [];
+  const known = new Set(rows.map((row) => row.symbol));
+  // The chain's tokens by name, and its stock tokens by count: Ethereum has over a thousand.
+  const listed = rows.filter((row) => row.stock === undefined).map((row) => row.symbol);
+  const stocks = rows.length - listed.length;
   const declared = (name: string): boolean =>
     new RegExp(`\\b(?:const|let|var|function|import)\\b[^;\\n]*\\b${name}\\b`).test(text);
   const unknown = [...new Set([...text.matchAll(TOKEN_USE)].map((match) => match[1]!))].filter(
     (symbol) => !known.has(symbol) && !declared(symbol),
   );
 
-  return unknown.map(
-    (symbol) =>
-      `${symbol} is not a registered token on ${chain.slug} (it has ${[...known].join(", ") || "none"}): ` +
-      `write Token(${symbol}_ADDRESS).transfer(…) and pass --define ${symbol}_ADDRESS=0x…`,
-  );
+  return unknown.map((symbol) => {
+    // A stock's symbol is its issuer's ticker, not uppercase: `TSLAX` is `TSLAx`.
+    const cased = rows.find((row) => row.symbol.toUpperCase() === symbol.toUpperCase());
+    if (cased !== undefined) {
+      return `${symbol} is ${cased.symbol} on ${chain.slug}: a token's symbol is case-sensitive`;
+    }
+    const has = [...listed.sort(), ...(stocks > 0 ? [`${stocks} stock tokens`] : [])];
+
+    return (
+      `${symbol} is not a registered token on ${chain.slug} (it has ${has.join(", ") || "none"}): ` +
+      `write Token(${symbol}_ADDRESS).transfer(…) and pass --define ${symbol}_ADDRESS=0x…`
+    );
+  });
 }
 
 function withHints(message: string, text: string, chain: CanonicalChain): string {

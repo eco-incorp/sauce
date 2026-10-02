@@ -955,6 +955,8 @@ npx sauce globals --chain base                       # everything
 npx sauce globals --chain base --tokens              # token symbols only
 npx sauce globals --chain base --protocols           # protocol namespaces only
 npx sauce globals --chain base --protocol UniswapV3  # one namespace, with its methods
+npx sauce globals --chain base --stocks              # the chain's tokenized stocks
+npx sauce globals --chain base --search spacex       # tokens by symbol, company name or ticker
 ```
 
 lists every name a program compiled for the chain may use without declaring it: the token symbols
@@ -967,6 +969,15 @@ Erc4626` lists their methods. `--json` prints the same for a program to read (`i
 `protocols`). It is `routes.sourceGlobals(chain)`, which reads the registries the compile reads and
 lists contracts through the protocol rewrite's own resolver, so a name it lists is one the compile
 accepts, at the address the program gets.
+
+A chain's tokenized stocks (Ethereum has over a thousand) are counted rather than listed unless you
+ask: `--stocks` lists them, each with its name, the underlying's ticker and its issuer, and
+`--search <text>` lists the tokens, stocks included, whose symbol, name, ticker or issuer contains
+the text, without regard to case. A search also finds a stock by the name another issuer gives it:
+`--search spacex` finds Coinbase's `SPCXc`, whose own name is "Space Exploration Technologies
+Corp.". In `--json`, a stock token carries `stock` with its issuer, name, ticker and the issuer's
+list it was copied from. Symbols are matched without regard to case on the command line too
+(`--fund spcxc:1`, `sauce price spcxc USDC 150`); in a program they are case-sensitive.
 
 ### `sauce price`
 

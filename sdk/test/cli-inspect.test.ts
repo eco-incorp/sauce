@@ -133,7 +133,12 @@ describe("sourceGlobals: the names a program on a chain may use", () => {
     const globals = sourceGlobals(base);
     expect(globals.tokens).toEqual(
       [...TOKEN_REGISTRY[8453]!]
-        .map(({ symbol, address, decimals }) => ({ symbol, address, decimals }))
+        .map(({ symbol, address, decimals, stock }) => ({
+          symbol,
+          address,
+          decimals,
+          ...(stock === undefined ? {} : { stock }),
+        }))
         .sort((a, b) => (a.symbol < b.symbol ? -1 : 1)),
     );
     expect(globals.defines).toEqual(chainDefines(base));
@@ -200,6 +205,40 @@ describe("sauce globals", () => {
     expect((full.defines as Record<string, unknown>).USDC).toBe(
       "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     );
+  });
+
+  it("counts a chain's stock tokens, lists them with --stocks and finds one with --search", async () => {
+    const all = await sauce("globals", "--chain", "base", "--tokens");
+    expect(all.stdout).toMatch(
+      /^ {2}And 67 stock tokens, named the same way: --stocks lists them/m,
+    );
+    expect(all.stdout).not.toContain("SPCXc");
+    const stocks = await sauce("globals", "--chain", "base", "--stocks");
+    expect(stocks.stdout).toMatch(/^Stock tokens \(67\): tokenized stocks/m);
+    expect(stocks.stdout).not.toMatch(/^ {2}USDC /m);
+    // Found by the company's name, its ticker or the symbol, without regard to case.
+    for (const text of ["spacex", "Space Exploration", "SPCX"]) {
+      const found = await sauce("globals", "--chain", "base", "--search", text);
+      expect(found.stdout).toMatch(
+        /^ {2}SPCXc +0xb2000000000000000000007b9fcbd005511aCBd5 {2}8 decimals {2}Space Exploration Technologies Corp\. \(SPCX, Coinbase\)$/m,
+      );
+    }
+    const eth = json(await sauce("globals", "--chain", "ethereum", "--search", "spacex", "--json"));
+    const tokens = eth.tokens as Array<{
+      symbol: string;
+      stock?: { issuer: string; ticker: string; issuerName: string; source: string };
+    }>;
+    expect(tokens.map((token) => token.symbol)).toEqual(
+      expect.arrayContaining(["SPCXon", "SPCXx"]),
+    );
+    expect(tokens.find((token) => token.symbol === "SPCXon")!.stock).toEqual({
+      issuer: "ondo",
+      name: "SpaceX (Ondo Tokenized)",
+      ticker: "SPCX",
+      issuerName: "Ondo Global Markets",
+      source: "https://docs.ondo.finance/partner-docs/tokens",
+    });
+    expect((await sauce("globals", "--chain", "base", "--search", " ")).code).toBe(2);
   });
 
   it("prints Solana's mints, base58 and as the key a program holds, and devnet's", async () => {
