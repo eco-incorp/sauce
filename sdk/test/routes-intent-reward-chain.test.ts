@@ -67,10 +67,35 @@ const { chainDefines } = await import("../src/routes/ambient.js");
 const HERE = dirname(fileURLToPath(import.meta.url));
 const example = (name: string) =>
   readFileSync(join(HERE, "../../docs/examples", `${name}.sauce.ts`), "utf8");
-const README_EXAMPLE = example("cross-chain-intent");
+/** A body that opens an intent to Arbitrum: the README's example before it took `main` arguments. */
+const BODY_TO_ARBITRUM = readFileSync(
+  join(HERE, "fixtures/routes/body-forwards-to-arbitrum.sauce.ts"),
+  "utf8",
+);
 const CASCADE_EXAMPLE = example("cross-chain-cascade");
+/**
+ * The cascade over three DIFFERENT chains. The docs example keeps to the chains the release
+ * supports, so it alternates Base and Ethereum, and there a level that resolved a name on its
+ * grandparent's chain instead of its own would look right. Here every level's chain is a new one.
+ */
+const THREE_CHAIN_CASCADE = `function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum(
+    () => {
+      const swapped = USDC.balanceOf(ctx.self());
+      Optimism(() => {
+        USDC.transfer(RECIPIENT, swapped);
+      }).reward({ tokens: [{ token: USDC, amount: swapped }] });
+    },
+    { tokens: [{ token: USDC, amount }] },
+  ).reward({ tokens: [{ token: USDC, amount }] });
+}`;
+const CASCADES = [
+  ["the docs cascade: Base, Ethereum, then Base", CASCADE_EXAMPLE, ["base", "ethereum", "base"]],
+  ["a cascade over three chains", THREE_CHAIN_CASCADE, ["base", "arbitrum", "optimism"]],
+] as const;
 
-type Slug = "base" | "arbitrum" | "optimism";
+type Slug = "base" | "arbitrum" | "optimism" | "ethereum";
 const address = (value: bigint): Hex => `0x${value.toString(16).padStart(40, "0")}`;
 const usdcOf = (slug: Slug): Hex => address(registryTokenAddress(requireChain(slug), "USDC")!);
 const idOf = (slug: Slug) => BigInt(requireChain(slug).id);
@@ -261,9 +286,9 @@ function expectLevel(
 describe.each(PATHS)("through %s", (_name, build) => {
   const callerDefines = { RECIPIENT, MIN_AMOUNT: 1n };
 
-  it("the README example: Base's USDC funds it, Arbitrum's is delivered and transferred", () => {
+  it("a body opening an intent to Arbitrum: Base's USDC funds it, Arbitrum's is delivered and transferred", () => {
     const levels = levelsOf(
-      record(() => build(README_EXAMPLE, callerDefines)),
+      record(() => build(BODY_TO_ARBITRUM, callerDefines)),
       { arbitrum: "base" },
     );
     expect([...levels.keys()]).toEqual(["base->arbitrum"]);
@@ -277,42 +302,49 @@ describe.each(PATHS)("through %s", (_name, build) => {
     expect(BigInt(transfer.args[0] as Hex)).toBe(RECIPIENT);
   });
 
-  it("the cascade: every level funded on its own chain and run on the next", () => {
-    const recorded = record(() => build(CASCADE_EXAMPLE, callerDefines));
-    const levels = levelsOf(recorded, { arbitrum: "base", optimism: "arbitrum" });
-    expect([...levels.keys()].sort()).toEqual(["arbitrum->optimism", "base->arbitrum"]);
+  it.each(CASCADES)(
+    "%s: every level funded on its own chain and run on the next",
+    (_cascade, program, [first, second, third]) => {
+      const recorded = record(() => build(program, callerDefines));
+      const levels = levelsOf(recorded, { [second]: first, [third]: second });
+      expect([...levels.keys()].sort()).toEqual(
+        [`${first}->${second}`, `${second}->${third}`].sort(),
+      );
 
-    // Level 1, on Base: its body is a program, so the route forwards the delivery to Arbitrum's Pot
-    // and cooks the level-2 program there.
-    const first = levels.get("base->arbitrum")!;
-    expectLevel(first, "base", "arbitrum", undefined);
-    const arbitrumPot = v12PredictPot(ecoRoutesExecutorOf(ecoRoutesPortal("arbitrum")));
-    expect(first.intent.route.calls).toHaveLength(2);
-    const forward = decodeFunctionData({ abi: erc20Abi, data: first.intent.route.calls[0]!.data });
-    expect([forward.functionName, lower(forward.args[0] as Hex)]).toEqual([
-      "transfer",
-      lower(arbitrumPot),
-    ]);
-    const cook = first.intent.route.calls[1]!;
-    expect(lower(cook.target)).toBe(lower(arbitrumPot));
-    const [engine, program] = decodeFunctionData({ abi: v12Pot.abi, data: cook.data })
-      .args as readonly [Hex, Hex];
-    expect(lower(engine)).toBe(lower(v12EngineAddress()));
+      // Level 1, on the first chain: its body is a program, so the route forwards the delivery to
+      // the second chain's Pot and cooks the level-2 program there.
+      const one = levels.get(`${first}->${second}`)!;
+      expectLevel(one, first, second, undefined);
+      const secondPot = v12PredictPot(ecoRoutesExecutorOf(ecoRoutesPortal(second)));
+      expect(one.intent.route.calls).toHaveLength(2);
+      const forward = decodeFunctionData({ abi: erc20Abi, data: one.intent.route.calls[0]!.data });
+      expect([forward.functionName, lower(forward.args[0] as Hex)]).toEqual([
+        "transfer",
+        lower(secondPot),
+      ]);
+      const cook = one.intent.route.calls[1]!;
+      expect(lower(cook.target)).toBe(lower(secondPot));
+      const [engine, compiled] = decodeFunctionData({ abi: v12Pot.abi, data: cook.data })
+        .args as readonly [Hex, Hex];
+      expect(lower(engine)).toBe(lower(v12EngineAddress()));
 
-    // Level 2, on Arbitrum: the program that cook runs is the recorded compile, byte for byte.
-    const second = levels.get("arbitrum->optimism")!;
-    expect(lower(program).startsWith(lower(second.bytecode))).toBe(true);
-    expectLevel(second, "arbitrum", "optimism", "base");
-    // A caller's define that no chain defines holds at every depth.
-    const payout = decodeFunctionData({ abi: erc20Abi, data: second.intent.route.calls[0]!.data });
-    expect([payout.functionName, BigInt(payout.args[0] as Hex)]).toEqual(["transfer", RECIPIENT]);
-  });
+      // Level 2, on the second chain: the program that cook runs is the recorded compile, byte for
+      // byte.
+      const two = levels.get(`${second}->${third}`)!;
+      expect(lower(compiled).startsWith(lower(two.bytecode))).toBe(true);
+      expectLevel(two, second, third, first);
+      // A caller's define that no chain defines holds at every depth.
+      const payout = decodeFunctionData({ abi: erc20Abi, data: two.intent.route.calls[0]!.data });
+      expect([payout.functionName, BigInt(payout.args[0] as Hex)]).toEqual(["transfer", RECIPIENT]);
+    },
+  );
 });
 
 describe("every path lowers every level to the same source", () => {
   it.each([
-    ["the README example", README_EXAMPLE],
-    ["the cascade", CASCADE_EXAMPLE],
+    ["a body opening an intent to Arbitrum", BODY_TO_ARBITRUM],
+    ["the docs cascade", CASCADE_EXAMPLE],
+    ["the cascade over three chains", THREE_CHAIN_CASCADE],
   ])("%s", (_name, program) => {
     const sources = PATHS.map(([, build]) =>
       record(() => build(program, { RECIPIENT, MIN_AMOUNT: 1n })).map((c) => c.source),

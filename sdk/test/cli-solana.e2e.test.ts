@@ -16,6 +16,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   address,
   createKeyPairSignerFromBytes,
@@ -1758,4 +1759,120 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       expect(direct.size).toBeLessThan(kitchen.size);
     }, 60_000);
   });
+
+  // Last: the cooks it sends would shift the counts of sent transactions the tests above read.
+  it("runs the sauce-chains Solana payout as its header says: USDC by transfer, TSLAx by transferChecked", async () => {
+    const salt = "payout";
+    const pot = await potOf(hexToBytes(potSalt(salt)));
+    const rows = svmTokenRows(requireChain("solana"));
+    const usdc = address(rows.find((row) => row.symbol === "USDC")!.mint);
+    const tslax = address(rows.find((row) => row.symbol === "TSLAx")!.mint);
+    // USDC, an SPL Token mint; TSLAx as mainnet holds it, a Token-2022 mint, the harness's payer
+    // its mint authority.
+    setMint(harness, usdc, 6);
+    const image = new Uint8Array(Buffer.from(TSLAX_IMAGE.dataBase64, "base64"));
+    image.set(getAddressCodec().encode(harness.payer.address), 4);
+    harness.svm.setAccount({
+      address: tslax,
+      data: image,
+      executable: false,
+      lamports: lamports(harness.svm.minimumBalanceForRentExemption(BigInt(image.length))),
+      programAddress: TOKEN_2022_PROGRAM,
+      space: BigInt(image.length),
+    });
+    // The Pot's accounts where pot:USDC and pot:TSLAx find them, and the recipient's.
+    const [potUsdc] = await findAssociatedTokenPda({
+      owner: pot,
+      mint: usdc,
+      tokenProgram: TOKEN_PROGRAM_ADDRESS,
+    });
+    setTokenAccount(harness, potUsdc, usdc, pot, 3_000_000n);
+    const recipient = randomAddress();
+    const toUsdc = setTokenAccount(harness, randomAddress(), usdc, recipient, 0n);
+    const tslaxAccount = async (holder: Address, amount: bigint) => {
+      const [account] = await findAssociatedTokenPda({
+        owner: holder,
+        mint: tslax,
+        tokenProgram: TOKEN_2022_PROGRAM,
+      });
+      const made = await sendInstructions(harness, [
+        getCreateAssociatedTokenIdempotentInstruction({
+          payer: harness.payer,
+          ata: account,
+          owner: holder,
+          mint: tslax,
+          tokenProgram: TOKEN_2022_PROGRAM,
+        }),
+        ...(amount === 0n
+          ? []
+          : [
+              getMintToCheckedInstruction(
+                { mint: tslax, token: account, mintAuthority: harness.payer, amount, decimals: 8 },
+                { programAddress: TOKEN_2022_PROGRAM },
+              ),
+            ]),
+      ]);
+      if (!made.ok) throw new Error(`creating ${account} failed: ${made.err}`);
+
+      return account;
+    };
+    const potTslax = await tslaxAccount(pot, 100_000_000n);
+    const toTslax = await tslaxAccount(recipient, 0n);
+
+    // The example line of the program's header, as written: its placeholders filled in, and the
+    // endpoint, the Pot's salt and the approval to create the Pot added.
+    const file = fileURLToPath(
+      new URL("../../skills/sauce-chains/examples/payout-solana.sauce.ts", import.meta.url),
+    );
+    const header = readFileSync(file, "utf8")
+      .split("\n")
+      .filter((one) => one.startsWith("//"))
+      .map((one) => one.replace(/^\/\/\s*/, ""));
+    const first = header.findIndex((one) =>
+      one.startsWith("sauce run payout-solana.sauce.ts --chain solana"),
+    );
+    const last = header.findIndex((one, i) => i >= first && !one.endsWith("\\"));
+    const line = header
+      .slice(first, last + 1)
+      .map((one) => one.replace(/\\$/, ""))
+      .join(" ");
+    const filled: Record<string, string> = {
+      "<keypair>": owner.path,
+      "<the recipient's USDC account>": toUsdc,
+      "<the recipient's TSLAx account>": toTslax,
+    };
+    const argv = line
+      .match(/[^\s<]*<[^>]*>|\S+/g)!
+      .slice(1)
+      .map((word) => word.replace(/<[^>]*>/, (placeholder) => filled[placeholder] ?? placeholder));
+    expect(argv.slice(0, 2)).toEqual(["run", "payout-solana.sauce.ts"]);
+    expect(argv.join(" ")).not.toContain("<");
+    argv[1] = file;
+    const at = argv.indexOf("--args");
+    const run = json(
+      await sauce(
+        ...argv.slice(0, at),
+        ...["--salt", salt, "--rpc-url", RPC_URL, "--auto-approve", "--json"],
+        ...argv.slice(at),
+      ),
+    );
+    expect(run).toMatchObject({ cook: { status: "success" }, staged: expect.any(Object) });
+    expect(tokenAmount(harness, potUsdc)).toBe(2_000_000n);
+    expect(tokenAmount(harness, toUsdc)).toBe(1_000_000n);
+    expect(tokenAmount(harness, potTslax)).toBe(50_000_000n);
+    expect(tokenAmount(harness, toTslax)).toBe(50_000_000n);
+
+    // Past one transaction: a rehearsal is refused, saying by how much, and that `run` stages it.
+    const accounts = argv
+      .slice(2, at)
+      .filter((word, i, all) => word === "--account" || all[i - 1] === "--account");
+    const refused = await sauce(
+      ...["simulate", file, "--chain", "solana", "--owner", owner.signer.address],
+      ...["--salt", salt, "--rpc-url", RPC_URL, ...accounts, ...argv.slice(at)],
+    );
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toMatch(
+      /Shrink the payload by at least \d+ bytes to fit, or let `sauce run` stage it/,
+    );
+  }, 120_000);
 });
