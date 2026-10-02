@@ -9,8 +9,8 @@ A Sauce program is a file of SauceScript that a Sauce engine executes atomically
 transaction. On an EVM chain it runs as a **Pot**: a small contract its owner controls, which holds
 the program's tokens and calls `cook(engine, program)`. The `sauce` command in `@eco-incorp/sauce`
 compiles the file, deploys the Pot, rehearses the cook, signs it and sends it. It needs no other
-tool, reads no environment variable but the one `--password-env` names, and reaches a network only
-through `--rpc-url` or `--config`.
+tool and no configuration: it reads no environment variable but the one `--password-env` names,
+and reads a chain through a built-in public endpoint unless given one of its own.
 
 Run the project's own copy, `npx sauce <command> --help`, for every option. On Solana the same
 commands apply with differences in accounts, signing and fees: read `sauce-solana` alongside.
@@ -37,7 +37,7 @@ For the initial release, Sauce supports transactions on **Ethereum, Base and Sol
 (`--chain ethereum`, `base`, `solana`). Every other chain is a **preview chain**: `globals`,
 `compile`, `actions`, `simulate`, `inspect`, `verify`, `price`, `pools`,
 `sauce intent publish --dry-run`, `sauce intent fill` without `--send`, `sauce intent status` and
-`sauce intent import` work there, and `sauce pot` predicts the Pot (and reads it with an endpoint)
+`sauce intent import` work there, and `sauce pot` predicts the Pot (and reads it)
 but leaves its deployment out.
 Everything that leaves a transaction ready to sign, unsigned JSON included, or sends one is refused
 there before anything is read or signed: `tx`, `run`, `pot --deploy`, `pot --format cast`,
@@ -64,8 +64,11 @@ volume and timing). The command's own help ends with the same note.
 
 ## Endpoints and signers
 
-- **RPC URL**: `--rpc-url <url>`, or `--config sauce.config.json` holding
-  `{ "rpcUrls": { "<chain id>": "<url>" } }`. Keep that file out of git; never commit a URL.
+- **Endpoints**: none needed. A command reads a chain through a built-in public endpoint, and says
+  so on stderr; it can be slow or rate-limited. Your own is optional: `--rpc-url <url>`, or
+  `--config <file>` holding `{ "rpcUrls": { "<chain id>": "<url>" } }` (a chain the file does not
+  name is read through the built-in one). Keep that file out of git; never commit a URL.
+  `--offline` reads no chain at all.
 - **Signer**: `--wallet <name>`, a wallet `sauce wallet` keeps (see Wallets below), or
   `--keystore <keystore>`, a JSON keystore; either's password comes from the source named, or is
   asked for at the terminal. `--private-key <hex>` also works but lands in shell history. On
@@ -240,8 +243,8 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
 
 4. **Pot**: `npx sauce pot --chain base --owner <address>` (or `--wallet <name>` for the signer's
    own) prints the Pot's address, known before it exists, and its deploy transaction (on a preview
-   chain the address alone, with `refused` saying why the deployment is left out). With an
-   endpoint, it also says whether the chain has the released engine and Kitchen (and the Kitchen's
+   chain the address alone, with `refused` saying why the deployment is left out). It also
+   says whether the chain has the released engine and Kitchen (and the Kitchen's
    fee) and whether the Pot is deployed.
    `npx sauce pot --deploy --chain base --wallet <name> --password-env <NAME>` deploys the signer's
    Pot. `--salt <label>` names another Pot of the same owner (`--salt-hex <bytes32>` for an exact
@@ -430,8 +433,8 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
 
 - **A file that opens intents** (`Ethereum(() => { … }).reward({ … })`) also takes
   `--intent-deadline <unix seconds>`, `--intent-creator <address>` and, when an intent's body runs a
-  program, `--intent-execution-fee <wei>` (`auto` reads it from the destination through
-  `--config`). With `--config`, `compile` and `sauce intent publish` warn while the Pot such an intent cooks on
+  program, `--intent-execution-fee <wei>` (`auto` reads it from the destination). `compile` and
+  `sauce intent publish` warn while the Pot such an intent cooks on
   is not deployed on its destination: no solver can fill it until then, and the warning names the
   `sauce pot --deploy` that deploys it. `sauce run` opens them from the Pot, which is the way when
   an amount is measured on chain; `sauce intent publish` opens fixed ones from a wallet with no Pot, and
@@ -440,10 +443,10 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
   into the intent's vault, then `publish`: no approval. `--intent-fund-via publishAndFund` switches
   either to an approve and `publishAndFund`. `sauce intent publish … --dry-run --assume-balance
 USDC:<amount>` rehearses it from a wallet that does not hold the reward yet.
-  `sauce intent fill <file> --chain <chain> --config sauce.config.json` rehearses each intent where its
+  `sauce intent fill <file> --chain <chain>` rehearses each intent where its
   body runs: on its destination chain, as the solver who fills it, with no key and nothing sent.
   `publish --dry-run` covers only the source chain. `fill` prints what the body moved, what it left
-  in the shared Pot, and why it reverts. `--config` must name the destination chain's endpoint.
+  in the shared Pot, and why it reverts.
   `sauce-intents` covers writing, publishing, funding (including a transfer into the intent's
   vault), rehearsing them, and every later step (`sauce intent fill --send`, `prove`, `claim`,
   `refund`, `cancel`, `status`, `import`). Publishing, from a wallet or a Pot, needs every chain the
@@ -463,7 +466,8 @@ USDC:<amount>` rehearses it from a wallet that does not hold the reward yet.
 The same commands are tools of the Sauce MCP server (`npx -y @eco-incorp/sauce mcp`), by one rule:
 each `sauce <command>` is the tool `sauce_<command>` (`sauce intent publish` is
 `sauce_intent_publish`), its flags are the tool's inputs in camelCase, the program goes in as
-`source`, and an endpoint is the call's `rpcUrl`. Each tool's own description gives its inputs.
+`source`, and an endpoint of the user's own, optional, is the call's `rpcUrl`. Each tool's own
+description gives its inputs.
 
 The tools sign nothing, so `sauce run` has none: the user signs what they return. The one exception
 is a server started over stdio with `--wallets` and a password source (`--password-env <NAME>`,

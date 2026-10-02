@@ -1363,19 +1363,23 @@ describe("sauce tx", () => {
     );
     expect(run.code).toBe(2);
     expect(run.stderr).toMatch(/rpcUrls\["1"\] is not a URL; replace the placeholder/);
+    // A chain the file has no entry for is read through the built-in endpoints (none here), not
+    // refused: with --value, the cook is built without reading it.
     const other = await sauce(
       "tx",
-      pay(),
+      file("usdc.sauce.ts", "USDC.transfer(RECIPIENT, AMOUNT);\n"),
       "--chain",
       "base",
       "--owner",
       OWNER,
+      ...PAY_DEFINES,
       "--config",
       config,
       "--value",
       "0",
     );
-    expect(other.stderr).toMatch(/has no rpcUrls entry for base \(chain id 8453\)/);
+    expect(other.code).toBe(0);
+    expect(JSON.parse(other.stdout).chainId).toBe(8453);
   });
 });
 
@@ -1601,12 +1605,10 @@ describe("sauce intent fill, offline", () => {
   /** An endpoint nothing listens on: every refusal below comes before any request. */
   const NOWHERE = ["--rpc-url", "http://127.0.0.1:9/"];
 
-  it("needs the destination's endpoint", async () => {
+  it("needs the destination's endpoint, where no built-in one reaches it", async () => {
     const run = await sauce("intent", "fill", file("bridge.sauce.ts", INTENT), ...FLAGS);
     expect(run.code).toBe(2);
-    expect(run.stderr).toMatch(
-      /missing --config <file> \(or --rpc-url <url>\): the endpoint of each intent's destination/,
-    );
+    expect(run.stderr).toMatch(/missing --rpc-url <url> \(or --config <file>\): the base endpoint/);
   });
 
   it("refuses a claimant that is neither 20 nor 32 bytes", async () => {

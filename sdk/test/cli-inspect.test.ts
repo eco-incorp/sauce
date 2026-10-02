@@ -549,7 +549,7 @@ describe("sauce inspect", () => {
   it("asks for an endpoint for a transaction hash, and reads a non-hex operand as a file", async () => {
     const hash = await sauce("inspect", `0x${"ab".repeat(32)}`);
     expect(hash.code).toBe(2);
-    expect(hash.stderr).toMatch(/32 bytes of hex is a transaction hash: give --rpc-url/);
+    expect(hash.stderr).toMatch(/32 bytes of hex is a transaction hash: give --chain <slug\|id>/);
     const missing = await sauce("inspect", join(work, "nope.sauce.ts"), "--chain", "base");
     expect(missing.code).toBe(1);
     expect(missing.stderr).toMatch(/nope\.sauce\.ts: no such file/);

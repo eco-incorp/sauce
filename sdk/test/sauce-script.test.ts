@@ -1,9 +1,10 @@
 /**
  * The SauceScript declarations an editor loads for a program file, and the plugin beside them,
  * through a real TypeScript language service set up as `sauce init`'s `programs/tsconfig.json`
- * sets it up: every program the package ships, and the three an agent wrote in a project of its own
- * (copied unchanged into `fixtures/sauce-script/demo`), check with no error at all — and a real
- * mistake in one still does not.
+ * sets it up: every program in the repository — those the package ships, the three an agent wrote
+ * in a project of its own (copied unchanged into `fixtures/sauce-script/demo`), the fixtures — as
+ * the repository's tsconfig.json lists them, checks with no error at all, and a real mistake in one
+ * still does not.
  *
  * The declarations are built here from the sources, as `scripts/gen-sauce-script-types.mjs` builds
  * them into `dist/`; the packed check runs the shipped ones, in an editor's own tsserver.
@@ -24,7 +25,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
-import { sauceScriptTsconfig } from "../src/cli/init.js";
+import { sauceScriptTsconfig } from "../src/cli/skills.js";
 import { sauceScriptDeclarations } from "../src/sauce-script/declarations.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -42,17 +43,29 @@ const plugin = createRequire(import.meta.url)("../sauce-script/ts-plugin.cjs") a
 const programs = (dir: string): string[] =>
   readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
-    if (statSync(path).isDirectory()) return name === "node_modules" ? [] : programs(path);
+    if (statSync(path).isDirectory()) {
+      return name === "node_modules" || name === "dist" || name.startsWith(".")
+        ? []
+        : programs(path);
+    }
 
     return name.endsWith(".sauce.ts") ? [path] : [];
   });
 
-/** Every program the package ships, and the agent's three. */
-const CORPUS = [
-  ...programs(join(ROOT, "skills")),
-  ...programs(join(ROOT, "docs")),
-  ...programs(join(HERE, "fixtures/sauce-script/demo")),
-];
+/** Every program in the repository, as its tsconfig.json — the project an editor opens them in —
+ *  lists them: those the package ships (skills, docs, recipes), the agent's three, the fixtures. */
+const CORPUS = ts
+  .getParsedCommandLineOfConfigFile(
+    join(ROOT, "tsconfig.json"),
+    {},
+    {
+      ...ts.sys,
+      onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
+        throw new Error(ts.flattenDiagnosticMessageText(diagnostic.messageText, " "));
+      },
+    },
+  )!
+  .fileNames.filter((file) => file.endsWith(".sauce.ts"));
 
 let work: string;
 let declarations: string;
@@ -122,7 +135,14 @@ const textOf = (paths: readonly string[]): Record<string, string> =>
   Object.fromEntries(paths.map((path) => [path, readFileSync(path, "utf8")]));
 
 describe("SauceScript in an editor", () => {
-  it("checks every shipped program, and the agent's three, with no error", () => {
+  it("types every program in the repository: its tsconfig.json claims each one", () => {
+    expect([...CORPUS].sort()).toEqual(programs(ROOT).sort());
+    for (const dir of ["skills", "docs", "sdk/src/recipes", "sdk/test/fixtures/sauce-script"]) {
+      expect([dir, CORPUS.some((file) => file.startsWith(join(ROOT, dir)))]).toEqual([dir, true]);
+    }
+  });
+
+  it("checks every program in the repository, the agent's three among them, with no error", () => {
     expect(CORPUS.length).toBeGreaterThanOrEqual(14);
     const checked = service(textOf(CORPUS));
     expect(CORPUS.flatMap((file) => report(checked, file))).toEqual([]);
@@ -139,6 +159,21 @@ describe("SauceScript in an editor", () => {
       expect([2538, 2365, 2367, 2322, 2345, 2304, 2552]).toContain(diagnostic.code);
       expect(plugin.isFalsePositive(diagnostic, ts.flattenDiagnosticMessageText)).toBe(true);
     }
+  });
+
+  it("takes an account beside a number for its address beside a number", () => {
+    const file = join(work, "account.sauce.ts");
+    const files = {
+      [file]:
+        "const SPL_TOKEN = 0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9;\n" +
+        'function main(program: Account<Writable>) {\n  require(program == SPL_TOKEN, "not SPL");\n}\n',
+    };
+    expect(
+      service(files, false)
+        .getSemanticDiagnostics(file)
+        .map((d) => d.code),
+    ).toEqual([2367]);
+    expect(report(service(files), file)).toEqual([]);
   });
 
   it("checks every builtin's example in the SauceScript reference with no error", () => {
