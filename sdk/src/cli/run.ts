@@ -162,6 +162,7 @@ import {
   passwordOn,
   writeToTerminal,
 } from "./terminal.js";
+import { updateCommand, type Updater } from "./update.js";
 import {
   AGENTS,
   describeStatus,
@@ -211,6 +212,12 @@ export interface CliIo extends CliFiles {
    * (`main.ts`); without them, as in a test, such a chain is not read.
    */
   readonly publicRpcs?: PublicEndpoints | undefined;
+  /**
+   * What `sauce update` reaches: this package's directory, the npm registry and the package
+   * managers (`update.ts`). The executable gives it (`main.ts`); without it, as in a test, nothing
+   * is updated.
+   */
+  readonly updater?: Updater | undefined;
 }
 
 /** The real process's streams, filesystem, children and terminal. */
@@ -3440,6 +3447,52 @@ const COMMANDS: Readonly<Record<string, Command>> = {
               : updateTarget(project, source, target, args.values.force === true)
             ).lines,
         ),
+      );
+    },
+  },
+  update: {
+    usage: "sauce update [--check] [--version <version|tag>] [--json]",
+    summary: "Update this sauce command, the way it was installed",
+    flags: {
+      check: {
+        type: "boolean",
+        help: "Say which version is installed and which an update installs; install nothing",
+      },
+      version: {
+        type: "string",
+        value: "<version|tag>",
+        help: "The version or dist-tag to install (default: latest)",
+      },
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Updates the copy of the package this sauce runs from, the way it was installed, which its",
+      "own path says:",
+      "  a global install    npm, pnpm, yarn or bun installs the version globally again, run with",
+      "                      no shell (npm with the prefix this copy is under), and the command",
+      "                      prints the version before and after",
+      "  a project's copy    the project updates it: the command its package manager takes is",
+      "                      printed, pinned exactly, and nothing runs",
+      "  npx's cache         the npx -y command that runs the latest is printed",
+      "  anything else       refused, with npm's global install of it",
+      "After a global update, skills installed in the current directory (sauce skills status) are",
+      "updated by the NEW sauce, and what changed is printed.",
+      "",
+      "The version comes from the npm registry, read when this command runs and at no other time:",
+      "sauce never checks for updates by itself. --check reads it and installs nothing.",
+      "",
+      "Examples:",
+      "  sauce update --check",
+      "  sauce update",
+      "  sauce update --version 1.2.0",
+    ].join("\n"),
+    run: async (args, io) => {
+      const version = stringFlag(args, "version");
+
+      return updateCommand(
+        { check: args.values.check === true, ...(version === undefined ? {} : { version }) },
+        io.updater,
       );
     },
   },
