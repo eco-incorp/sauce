@@ -4,6 +4,11 @@
  * connection takes its URL, or a client, from the developer — as an argument or a config value,
  * never a default, a public fallback or `process.env` (a browser has none).
  *
+ * The ONE exception is the `sauce` command's and its MCP server's list of public endpoints,
+ * `sdk/src/cli/public-rpcs.ts`, which they read a chain through when given none: exactly that file
+ * may hold RPC URLs, and nothing a browser loads may import it — no module outside `sdk/src/cli/`,
+ * and no package export (`cli/` is in none).
+ *
  * This guard scans the TRACKED source that ships or that a developer copies from — `sdk/src` (the
  * `sauce` command in `sdk/src/cli` included), `sdk/scripts`, `actions/src`, `dev-tools/src`,
  * `dev-tools/scripts`, `docs/`, the agent skills in `skills/`, the workflows, and
@@ -49,12 +54,14 @@ const REQUIRED = [
   "actions/README.md",
   "dev-tools/README.md",
   "sdk/rpc.config.example.json",
-  // The `sauce` command, whose network access is `--rpc-url` alone.
+  // The `sauce` command, whose network access is --rpc-url, --config and the public list alone.
   "sdk/src/cli/run.ts",
   "sdk/src/cli/commands.ts",
 ];
 /** Generated, not authored: its URLs are package tarballs. */
 const SKIP = new Set(["pnpm-lock.yaml"]);
+/** The `sauce` command's public endpoints: the one file that may hold RPC URLs. */
+const PUBLIC_RPCS = "sdk/src/cli/public-rpcs.ts";
 /** Shipped code, the `sauce` command included: must not read the environment at all. */
 const SHIPPED_ROOTS = ["sdk/src", "actions/src", "dev-tools/src"];
 /** Shipped files the environment scan must include, so a move cannot take the command out of it. */
@@ -196,11 +203,27 @@ describe("the SDK ships no RPC endpoints", () => {
     for (const file of REQUIRED) expect(sources.has(file)).toBe(true);
   });
 
-  it("no scanned file embeds an RPC-shaped URL", () => {
-    const found = [...sources].flatMap(([file, text]) =>
-      rpcFindings(text).map((finding) => `${file}:${finding}`),
-    );
+  it("no scanned file embeds an RPC-shaped URL, but the command's list of public ones", () => {
+    const found = [...sources]
+      .filter(([file]) => file !== PUBLIC_RPCS)
+      .flatMap(([file, text]) => rpcFindings(text).map((finding) => `${file}:${finding}`));
     expect(found).toEqual([]);
+    // The exception is scanned, and is what it claims to be: not an empty file that moved.
+    expect(rpcFindings(sources.get(PUBLIC_RPCS)!).length).toBeGreaterThan(30);
+  });
+
+  it("nothing a browser loads reaches the public endpoints", () => {
+    const shipped = scanned(SHIPPED_ROOTS);
+    const importers = [...shipped]
+      .filter(([, text]) => /from\s+["'][^"']*\/public-(?:rpcs|endpoints)(?:\.js)?["']/.test(text))
+      .map(([file]) => file);
+    expect(importers.length).toBeGreaterThan(0);
+    for (const file of importers) expect(file.startsWith("sdk/src/cli/")).toBe(true);
+    // No export of the package reaches into the command: its modules are the bin's alone.
+    const manifest = JSON.parse(readFileSync(join(REPO, "package.json"), "utf8")) as {
+      exports: Record<string, unknown>;
+    };
+    expect(JSON.stringify(manifest.exports)).not.toMatch(/\/cli\//);
   });
 
   it("shipped code reads nothing from the environment but the variable --password-env names", () => {

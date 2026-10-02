@@ -1898,14 +1898,15 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         );
       }
       const account = sending ? await signerOf(args, io) : undefined;
-      const lookup = await endpointLookup(args, io);
+      // --rpc-url is the destination's alone: the source is read only through the others.
+      const lookup = rpcUrl === undefined ? await endpointLookup(args, io) : undefined;
 
       return fillCommand({
         intents: targets,
         from,
         labels,
         endpointOf: (chain) => requiredEndpoint(args, io, chain),
-        sourceEndpointOf: lookup,
+        ...(lookup === undefined ? {} : { sourceEndpointOf: lookup }),
         endpointFlag: rpcUrl === undefined ? "--config" : "--rpc-url",
         ...(solver === undefined ? {} : { solver: parseAddress("solver", solver) }),
         ...(claimant === undefined ? {} : { claimant: claimant as `0x${string}` }),

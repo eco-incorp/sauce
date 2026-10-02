@@ -135,7 +135,7 @@ describe("sauce mcp, before the server loads", () => {
     expect((await sauce("--help")).stdout).toMatch(/\n {2}mcp +Serve the commands and the agent/);
     const help = await sauce("mcp", "--help");
     expect(help.code).toBe(0);
-    expect(help.stdout).toMatch(/npx -y @eco-incorp\/sauce mcp --http 3000 --config/);
+    expect(help.stdout).toMatch(/npx -y @eco-incorp\/sauce mcp --http 3000\n/);
     expect(help.stdout).toMatch(/--wallets \[<dir>\] +Over stdio: sign with the wallets/);
     for (const [argv, message] of [
       [["mcp", "--agent", "claude"], /--agent goes with sauce mcp setup/],
