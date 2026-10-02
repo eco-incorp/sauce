@@ -1,6 +1,7 @@
 // An Ethereum -> Base intent whose body opens a Base -> Ethereum intent when it runs, written as a
 // closure; then the same intent from nested-intent.sauce.ts, the file `sauce intent publish` opens
-// with its `main` arguments, which is the same bytes.
+// with its `main` arguments, which is the same bytes. And nested-swap.sauce.ts, whose inner reward
+// is a swap's output.
 //
 // Offline: the creator, the recipient, the amounts and the fee are fixtures and nothing is sent. The
 // Portals, the provers, the Pot, the engine and the native amounts come from the SDK.
@@ -60,13 +61,18 @@ console.log("Ethereum → Base → Ethereum:", built.hash().intentHash);
 
 // The file form, compiled for Ethereum where it opens its intent, with main's arguments fixed into
 // it as `sauce intent publish --args <recipient> <delivered> <reward>` fixes them.
-const source = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "nested-intent.sauce.ts"),
-  "utf8",
-);
-const [opened] = routes.compileSauceProgram("ethereum", source, {
-  args: [toHex(RECIPIENT, { size: 20 }), AMOUNT, REWARD],
-  intents: { deadline: 2_000_000_000n, rewardDeadline: 2_000_003_600n, creator, executionFee },
+const source = (name: string) =>
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), name), "utf8");
+const recipient = toHex(RECIPIENT, { size: 20 });
+const intents = {
+  deadline: 2_000_000_000n,
+  rewardDeadline: 2_000_003_600n,
+  creator,
+  executionFee,
+} as const;
+const [opened] = routes.compileSauceProgram("ethereum", source("nested-intent.sauce.ts"), {
+  args: [recipient, AMOUNT, REWARD],
+  intents,
 }).intents;
 if (
   opened === undefined ||
@@ -77,3 +83,13 @@ if (
 // Fixed when it is built, so a wallet publishes it: what `sauce intent publish` sends.
 const transactions = built.sourceTxs();
 console.log(`Published by ${transactions.length} transactions on Ethereum`);
+
+// The swap variant, `minOut` the least WETH the swap on Base may buy.
+const [swap] = routes.compileSauceProgram("ethereum", source("nested-swap.sauce.ts"), {
+  args: [recipient, AMOUNT, REWARD, 1n],
+  intents,
+}).intents;
+if (swap === undefined || swap.captures.length > 0 || swap.intent.route.calls.length !== 2) {
+  throw new Error("Expected nested-swap.sauce.ts to open one fixed intent to Base");
+}
+console.log("The swap variant:", routes.hashIntent(swap.intent).intentHash);

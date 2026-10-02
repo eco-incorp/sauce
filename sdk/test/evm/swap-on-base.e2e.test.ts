@@ -26,6 +26,10 @@
  * unsold WETH to `refundTo`, leaving the shared Pot empty; `minOut` and `minAvgPrice` revert the whole
  * fulfilment. And what the fee adjustment is for, by taking it out.
  *
+ * The same Base runs the nested-intents guide's swap (`docs/examples/nested-swap.sauce.ts`), opened
+ * on Ethereum with its `main` arguments bound: its body buys WETH on the 0.05% pool it looks up and
+ * pays what it bought into the next intent's vault on this Portal, publishing it for Ethereum.
+ *
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite, and a hard failure
  * without it in CI.
  */
@@ -644,6 +648,87 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     expect(await balance(WETH, OWNER.address)).toBe(solverWeth + 2n * WETH_UNIT);
     expect(await balance(USDC, RECIPIENT)).toBe(0n);
     expect(await balance(WETH, REFUND_TO)).toBe(0n);
+  });
+
+  it("runs the nested-intents guide's swap: the body buys WETH on Base and opens the next intent with it", async () => {
+    // docs/examples/nested-swap.sauce.ts as written, opened on Ethereum and its main arguments fixed
+    // into the intents as `sauce intent publish --args` fixes them. This anvil's Portal is the one
+    // the outer route names and the one the body publishes the inner intent on; the pool is the
+    // 0.05% one, which the body finds through Base's factory.
+    const source = readFileSync(join(HERE, "../../../docs/examples/nested-swap.sauce.ts"), "utf8");
+    const delivered = 1_000n * 10n ** 6n; // 1,000 USDC
+    const [outer] = compileSauceProgram("ethereum", source, {
+      args: [RECIPIENT, delivered, delivered + 10n ** 6n, 1n],
+      intents: {
+        deadline: DEADLINE,
+        creator: CREATOR,
+        executionFee: 0n,
+        sourcePortal: portal,
+        destinationPortal: portal,
+      },
+    }).intents;
+    expect(outer!.captures).toEqual([]);
+    const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], encodeRouteEvm(outer!.intent.route));
+    expect(route.tokens).toEqual([{ token: USDC, amount: delivered }]);
+    for (const { token, amount } of route.tokens) {
+      await call(token, erc20, "mint", [OWNER.address, amount]);
+      await call(token, erc20, "approve", [portal, amount]);
+    }
+    const { intentHash, rewardHash } = hashIntent(outer!.intent);
+    const claimant = pad(OWNER.address, { size: 32 });
+    const receipt = await send(
+      portal,
+      encodeFunctionData({
+        abi: PortalABI,
+        functionName: "fulfill",
+        args: [intentHash, route, rewardHash, claimant],
+      }),
+    );
+    expect(receipt.status).toBe("success");
+
+    // The swap ran on the 0.05% pool, and what it bought is the inner intent's reward, in Base's
+    // WETH, paid into its vault on this Portal and published there for Ethereum.
+    const [swap] = fills(receipt);
+    expect(swap!.venue).toBe("v3:500");
+    const [published] = parseEventLogs({
+      abi: PortalABI,
+      eventName: "IntentPublished",
+      logs: receipt.logs,
+    });
+    const inner = published!.args;
+    expect(inner.destination).toBe(1n);
+    expect(inner.rewardTokens).toHaveLength(1);
+    const [{ token, amount: bought }] = inner.rewardTokens;
+    expect(getAddress(token)).toBe(WETH);
+    expect(bought).toBeGreaterThan(0n);
+    const reward = {
+      deadline: inner.rewardDeadline,
+      creator: inner.creator,
+      prover: inner.prover,
+      nativeAmount: inner.rewardNativeAmount,
+      tokens: inner.rewardTokens,
+    };
+    const funded = await publicClient.readContract({
+      abi: PortalABI,
+      address: portal,
+      functionName: "isIntentFunded",
+      args: [inner.destination, inner.route, reward],
+    });
+    expect(funded).toBe(true);
+    // Its route pays the recipient on Ethereum what was bought, less the next solver's tenth of a
+    // percent: one WETH transfer, to Ethereum's WETH.
+    const [next] = decodeAbiParameters([EVM_ROUTE_PARAM], inner.route);
+    expect(next.calls).toHaveLength(1);
+    expect(next.calls[0]!.data).toBe(
+      encodeFunctionData({
+        abi: parseAbi(["function transfer(address to, uint256 amount)"]),
+        functionName: "transfer",
+        args: [RECIPIENT, bought - bought / 1000n],
+      }),
+    );
+    // The shared Pot keeps nothing: the USDC went into the pool, the WETH into the vault.
+    expect(await balance(USDC, pot)).toBe(0n);
+    expect(await balance(WETH, pot)).toBe(0n);
   });
 
   it("without the √(1 − fee), the 0.3% V3 pool's last unit pays less than the limit", async () => {
