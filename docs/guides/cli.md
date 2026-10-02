@@ -1065,6 +1065,7 @@ root; without an endpoint, nothing reaches a network.
 
 ```sh
 npx sauce pools --chain base USDC WETH --config sauce.config.json
+npx sauce pools --chain base USDC SPCXc --config sauce.config.json   # a tokenized stock
 npx sauce pools --chain base USDC 0x<token> --config sauce.config.json --json
 npx sauce pools --chain base WETH USDC --v4-key 50:1 --config sauce.config.json
 ```
@@ -1073,11 +1074,12 @@ lists every pool of a pair at the price-limit venues the registry records on the
 Uniswap V3 and PancakeSwap V3 at each fee tier their factory enables (the tiers tried are 0.01%,
 0.02%, 0.03%, 0.04%, 0.05%, 0.25%, 0.3% and 1%), Aerodrome Slipstream at each tick spacing each of
 its CLFactories enables, and hookless Uniswap V4 pools at the keys `100:1`, `500:10`, `3000:60`
-and `10000:200`, and any `--v4-key <fee>:<tickSpacing>`. A token is a registered symbol or an
-address, whose decimals and symbol are read from the token (or given, `0x…:8`). It needs an
-endpoint, and reads everything in five rounds, each a few `eth_call`s carrying up to 32 reads
-apiece (Multicall3's `aggregate3`, sent deployless, so it needs nothing deployed). It reads on every
-chain, preview chains included.
+and `10000:200`, and any `--v4-key <fee>:<tickSpacing>`. A token is a symbol the chain registers,
+a tokenized stock's included (`SPCXc`, in any case), or an address the registry does not know, whose
+decimals and symbol are read from the token (or given, `0x…:8`). It needs an endpoint, and reads
+everything in five rounds, each a few `eth_call`s carrying up to 32 reads apiece (Multicall3's
+`aggregate3`, sent deployless, so it needs nothing deployed). It reads on every chain, preview
+chains included.
 
 Pools with liquidity at their price come first, **deepest first, by that liquidity** (`sortedBy`
 in `--json`), which is in the same units at every venue for one pair. For each:
@@ -1105,9 +1107,9 @@ be read. A pool that answers wrongly is left out with a note on stderr.
 ```text
 USDC/SPCXc on base: 3 pools with liquidity, deepest first (by liquidity at the pool's price)
   token0  USDC   0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913  6 decimals
-  token1  SPCXc  0x…  8 decimals, read from the token
+  token1  SPCXc  0xb2000000000000000000007b9fcbd005511aCBd5  8 decimals
 
-1. Aerodrome Slipstream 0x…
+1. Aerodrome Slipstream 0x0bf58fe0FAc935Ac69595c19B12Ba0d75E3F8c0E
    AerodromeSlipstream.CLFactoryGaugesV3 0xf8f2eB4940CFE7d13603DDDD87f123820Fc061Ef
    fee 0.05% (read from the pool), tick spacing 10, liquidity 206953500095168, tick -3968
    sqrtPriceX96  64972491279845651558239670148

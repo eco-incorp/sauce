@@ -14,6 +14,7 @@ import { connect as viemConnect } from "../../sdk/dist/cli/chain.js";
 import { poolsCommand } from "../../sdk/dist/cli/pools.js";
 import { requireChain } from "../../sdk/dist/chains/canonical.js";
 import {
+  ACME,
   freePort,
   SPCX,
   startPoolsChain,
@@ -42,7 +43,7 @@ describe("sauce_pools and sauce_price against a chain", { skip: !ANVIL }, () => 
   });
 
   it("lists the pair's pools, deepest first, as the command does", async () => {
-    const args = { chain: "base", tokenA: "USDC", tokenB: SPCX, v4Pools: ["50:1"] };
+    const args = { chain: "base", tokenA: "USDC", tokenB: "SPCXc", v4Pools: ["50:1"] };
     const out = ok(await mcp.call("sauce_pools", { ...args, rpcUrl: chain.rpcUrl })) as {
       tokens: Array<Record<string, unknown>>;
       pools: Array<{ contract: string; liquidity: string; sides: Array<Record<string, unknown>> }>;
@@ -52,7 +53,6 @@ describe("sauce_pools and sauce_price against a chain", { skip: !ANVIL }, () => 
       symbol: "SPCXc",
       address: SPCX,
       decimals: 8,
-      readFromChain: true,
       position: "token1",
     });
     assert.equal(out.tokens[0]!.address, USDC);
@@ -67,7 +67,7 @@ describe("sauce_pools and sauce_price against a chain", { skip: !ANVIL }, () => 
     const command = await poolsCommand({
       chain: base,
       client: await viemConnect(chain.rpcUrl, base),
-      tokens: ["USDC", SPCX],
+      tokens: ["USDC", "SPCXc"],
       v4Keys: [{ fee: 50, tickSpacing: 1 }],
     });
     assert.deepEqual(out, JSON.parse(JSON.stringify(command.json)));
@@ -77,15 +77,15 @@ describe("sauce_pools and sauce_price against a chain", { skip: !ANVIL }, () => 
     const out = ok(
       await mcp.call("sauce_price", {
         chain: "base",
-        base: SPCX,
+        base: ACME,
         quote: "USDC",
         price: "400",
         rpcUrl: chain.rpcUrl,
       }),
     );
     assert.deepEqual(out.base, {
-      symbol: "SPCXc",
-      address: SPCX,
+      symbol: "ACME",
+      address: ACME,
       decimals: 8,
       readFromChain: true,
     });
@@ -93,7 +93,7 @@ describe("sauce_pools and sauce_price against a chain", { skip: !ANVIL }, () => 
     // Without the endpoint, the same address is refused, naming what would read it.
     assert.match(
       failed(
-        await mcp.call("sauce_price", { chain: "base", base: SPCX, quote: "USDC", price: "400" }),
+        await mcp.call("sauce_price", { chain: "base", base: ACME, quote: "USDC", price: "400" }),
       ),
       /or an endpoint \(rpcUrl or --config\)/,
     );
