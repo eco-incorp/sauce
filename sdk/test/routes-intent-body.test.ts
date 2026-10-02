@@ -27,7 +27,9 @@ jest.unstable_mockModule("../src/routes/intent-host.js", () => ({
       bind: (site: Parameters<typeof host.bind>[0]) => {
         const receiver = site.receiver;
         const body =
-          receiver !== undefined && "fields" in receiver ? receiver.fields.at(-1)?.[1] : undefined;
+          receiver !== undefined && "record" in receiver
+            ? receiver.record.parts.at(-1)?.args[0]
+            : undefined;
         if (body !== undefined && "program" in body) {
           bodies.push(body.program.captures.map((capture) => capture.name));
         }

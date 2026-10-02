@@ -90,8 +90,8 @@ jest.unstable_mockModule("../src/routes/intent-host.js", () => ({
       bind: (site: Parameters<typeof host.bind>[0]) => {
         const bound = host.bind(site);
         const body =
-          site.receiver !== undefined && "fields" in site.receiver
-            ? site.receiver.fields.at(-1)?.[1]
+          site.receiver !== undefined && "record" in site.receiver
+            ? site.receiver.record.parts.at(-1)?.args[0]
             : undefined;
         compiles.push({
           on: level.source.slug,

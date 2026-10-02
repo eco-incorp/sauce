@@ -23,8 +23,8 @@ jest.unstable_mockModule("../src/routes/intent-host.js", () => ({
       bind: (site: Parameters<typeof host.bind>[0]) => {
         const receiver = site.receiver;
         const delivery =
-          receiver !== undefined && "fields" in receiver && receiver.fields.length === 4
-            ? receiver.fields[2]?.[1]
+          receiver !== undefined && "record" in receiver
+            ? receiver.record.parts.find((part) => part.callee === "Sending.receive")?.args[0]
             : undefined;
         if (delivery !== undefined) bound.push(delivery);
         return host.bind(site);

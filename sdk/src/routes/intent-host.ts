@@ -192,9 +192,9 @@ export function intentHost(level: IntentLevel): {
     return { kind: "constant", value: String(chain.id), type: "Portal" };
   };
 
-  /** The chain a record's intent goes to: its first field, the `Portal` it started from. */
+  /** The chain a record's intent goes to: the `Portal` its first call was made on. */
   const destinationOf = (record: View | undefined, what: string): CanonicalChain => {
-    const portal = fieldsOf(record, what).get("0");
+    const portal = recordOf(record, what).receiver;
     const chain =
       portal !== undefined && "constant" in portal ? byId.get(BigInt(portal.constant)) : undefined;
 
@@ -235,10 +235,13 @@ function bindIntent(
   const sentinelFor = (value: Value): bigint =>
     "literal" in value ? value.literal : sentinelOf(value.runtime);
 
-  const fields = [...fieldsOf(site.receiver, "the intent").values()];
-  const body = fields[fields.length - 1];
-  const rewardView = fields[1] ?? fail("`.send(...)` names the reward");
-  const deliveryView = fields.length === 4 ? fields[2] : undefined;
+  // Each call of the chain, by the method that made it, wherever it was written.
+  const { parts } = recordOf(site.receiver, "the intent");
+  const argumentOf = (method: string) =>
+    parts.find((part) => part.callee.endsWith(`.${method}`))?.args[0];
+  const body = argumentOf("then");
+  const rewardView = argumentOf("send") ?? fail("`.send(...)` names the reward");
+  const deliveryView = argumentOf("receive");
   const explicitDelivery =
     deliveryView === undefined
       ? undefined
@@ -470,11 +473,21 @@ function splicesIn(
   return splices;
 }
 
-/** A view's fields by name, refusing anything that is not a record or an object. */
+/** A view's fields by name, refusing anything that is not an object. */
 function fieldsOf(view: View | undefined, what: string): Map<string, View> {
   if (view === undefined || !("fields" in view)) return fail(`${what} must be an object`);
 
   return new Map(view.fields);
+}
+
+/** A chain's record: the value its first call was made on, then each call with its arguments. */
+function recordOf(
+  view: View | undefined,
+  what: string,
+): Extract<View, { record: unknown }>["record"] {
+  if (view === undefined || !("record" in view)) return fail(`${what} is not a chain of calls`);
+
+  return view.record;
 }
 
 /** Which token amounts are read: the reward, escrowed on the enclosing chain, or the delivery,
