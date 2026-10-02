@@ -45,11 +45,12 @@ function earns its place only with logic of its own used more than once; one tha
 call adds nothing to read and costs a call frame of gas. Call bindings and library functions
 directly where they are used.
 
-- **Read a pool through its typed binding**: `UniswapV3.Pool.at(pool).liquidity()`, or
-  `AerodromeSlipstream.Pool.at(pool)` for a Slipstream pool, whose `slot0` has no `feeProtocol`.
-  `.at(...)` and the call are one expression; a binding is not a value to keep in a variable.
-  Take only the output you need, by name, `.slot0().sqrtPriceX96`, or by position,
-  `const [sqrtPriceX96] = UniswapV3.Pool.at(pool).slot0();`, never all of them.
+- **Read a pool through its typed binding, called with the pool's address**:
+  `UniswapV3.Pool(pool).liquidity()`, or `AerodromeSlipstream.Pool(pool)` for a Slipstream pool,
+  whose `slot0` has no `feeProtocol`. The binding and the method are one expression; a binding is
+  not a value to keep in a variable. Take only the output you need, by name,
+  `.slot0().sqrtPriceX96`, or by position, `const [sqrtPriceX96] = UniswapV3.Pool(pool).slot0();`,
+  never all of them.
 - **A function that returns a value returns it on every path**, or the program does not compile:
   `` `trade` does not return on every path ``. End every early exit with `return 0n;`.
 
@@ -88,13 +89,13 @@ function trade(
   let price = 0n;
   let fee = 0n;
   if (slipstream) {
-    liquidity = AerodromeSlipstream.Pool.at(pool).liquidity();
-    price = AerodromeSlipstream.Pool.at(pool).slot0().sqrtPriceX96;
-    fee = AerodromeSlipstream.Pool.at(pool).fee();
+    liquidity = AerodromeSlipstream.Pool(pool).liquidity();
+    price = AerodromeSlipstream.Pool(pool).slot0().sqrtPriceX96;
+    fee = AerodromeSlipstream.Pool(pool).fee();
   } else {
-    liquidity = UniswapV3.Pool.at(pool).liquidity();
-    price = UniswapV3.Pool.at(pool).slot0().sqrtPriceX96;
-    fee = UniswapV3.Pool.at(pool).fee();
+    liquidity = UniswapV3.Pool(pool).liquidity();
+    price = UniswapV3.Pool(pool).slot0().sqrtPriceX96;
+    fee = UniswapV3.Pool(pool).fee();
   }
   // The pool's own limit: the caller's moved by √(1 − fee), so that its last unit, fee paid,
   // costs exactly maxPrice. Paying token0 pushes the price down, token1 pushes it up.

@@ -69,7 +69,7 @@ check(
 check(!/evm\.static|hex`/.test(code), "the program reads no pool by selector");
 for (const venue of ["UniswapV3", "AerodromeSlipstream"])
   for (const read of ["liquidity()", "slot0().sqrtPriceX96", "fee()"])
-    check(code.includes(`${venue}.Pool.at(pool).${read}`), `the program reads ${venue} ${read}`);
+    check(code.includes(`${venue}.Pool(pool).${read}`), `the program reads ${venue} ${read}`);
 check(code.match(/^function /gm)?.length === 2, "the program has trade and main, nothing else");
 check(code.match(/trade\(pool, (true|false), /g)?.length === 2, "each venue's loop calls trade");
 
