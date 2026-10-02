@@ -185,16 +185,20 @@ functions, protocol namespaces and family aliases, `available(...)`, chain names
 
 ### `sauce-chains`
 
-One chain at a time: whether it is supported or a preview chain, and how to request it; its id,
-slug and aliases, native coin, Sauce engine, Kitchen and Router, whether it takes intents, its CCTP
-domain, every token with its address and decimals, and every protocol deployment there with its
-address and how a program names it.
+How a program's names resolve per chain, and each chain's facts. One file compiled for two chains
+gets each one's own tokens, stocks, contracts and `chainId`; a name a chain lacks is refused when
+compiling; another chain's contract (`Base.UniswapV3.Factory`) is only its address, never a call;
+the same names are written for an EVM chain or for Solana. Per chain: supported or preview (and
+how to request it), its id, slug, native coin, Sauce engine and Kitchen, intents, CCTP domain,
+every token and every protocol deployment with its address.
 
 - **Holds** [references/index.md](../sauce-chains/references/index.md) and a generated file per
   chain, such as [references/base.md](../sauce-chains/references/base.md), with a separate file of
-  tokenized stocks for each chain that has them.
-- **Load it** for an address, for what one chain offers, or when a transaction is refused on a
-  preview chain. For a name alone, `sauce-globals` is lighter.
+  tokenized stocks for each chain that has them. Its examples read what a Pot holds on any EVM
+  chain, and pay cash and stock on Solana.
+- **Load it** for an address, for what one chain offers, for one program meant for several chains,
+  or when a transaction is refused on a preview chain. For a name alone, `sauce-globals` is
+  lighter; for a Solana program in depth, `sauce-solana`.
 - **Asked as:** "Does Base take intents, and where is Uniswap V3's factory there?"
 
 ### `sauce-protocols`
@@ -230,11 +234,13 @@ and the guard every leg needs.
 
 One exact-input order spread over several price-limited pools: a limit buy that pays no more than
 one price for any unit, fees included, and refunds what it did not spend. Covers the rules, a
-fee-adjusted limit per pool, `maxPrice` for tokens of any decimals, finding a token and its pools,
-the three rehearsals before sending, and adding venues.
+fee-adjusted limit per pool, a Uniswap V4 pool found by its key, `maxPrice`, `minTokens` and
+`maxAvgPrice` for tokens of any decimals, finding a token and its pools, running it, and adding
+venues.
 
-- **Holds** one complete program for Base (its header buys the SpaceX stock token with USDC), and
-  a runner that holds the skill's arithmetic and commands to it.
+- **Holds** one complete program over Base's Aerodrome Slipstream, Uniswap V3 and Uniswap V4 pools
+  (its header buys the SpaceX stock token, and WETH, with USDC), and a runner that holds the
+  skill's arithmetic and commands to it.
 - **Load it** when an order should take the best of several pools or stop at a price; it is built
   from the single swap `sauce-swaps` teaches.
 - **Asked as:** "Buy SpaceX stock on Base with up to 1,000 USDC, never paying more than 150 USDC a
@@ -338,17 +344,17 @@ actions document, and each runner with what it pins, each beside the skill that 
 
 ## Reading the skills over MCP
 
-An agent with no skill files on disk reads the same files from the Sauce MCP server
-(`npx -y @eco-incorp/sauce mcp`). `sauce_skills` lists every skill with its description and files
-(a skill with many references lists a few, and how the rest are named). `sauce_skill` returns a
-skill's `SKILL.md`; with `path`, one of its files, such as `references/builtins.md` of
-`sauce-script`; with `section`, only the part under the heading holding those words; with `query`,
-only the lines holding a term. Read a large reference that way: `references/base.md` of
-`sauce-chains` with `section` set to Tokens, or `references/stocks.md` of `sauce-globals` with
-`query` set to a company's name. The same files are resources, `sauce://skills/<skill>/SKILL.md`
-and `sauce://skills/<skill>/<path>`, listed at `sauce://skills/index`. For TypeScript work,
-`sauce_dev` returns the package's own documents on a topic, with `sauce-typescript`; and
-`sauce_install_skills` says how to put the skills in a project for an agent that reads files.
+An agent with no skill files on disk reads the same files from the Sauce MCP server (`sauce mcp`).
+`sauce_skills` lists every skill with its description and files (a skill with many references lists
+a few, and how the rest are named). `sauce_skill` returns a skill's `SKILL.md`; with `path`, one of
+its files, such as `references/builtins.md` of `sauce-script`; with `section`, only the part under
+the heading holding those words; with `query`, only the lines holding a term. Read a large reference
+that way: `references/base.md` of `sauce-chains` with `section` set to Tokens, or
+`references/stocks.md` of `sauce-globals` with `query` set to a company's name. The same files are
+resources, `sauce://skills/<skill>/SKILL.md` and `sauce://skills/<skill>/<path>`, listed at
+`sauce://skills/index`. For TypeScript work, `sauce_dev` returns the package's own documents on a
+topic, with `sauce-typescript`; and `sauce_install_skills` says how to put the skills in a project
+for an agent that reads files.
 
 ## Example
 
