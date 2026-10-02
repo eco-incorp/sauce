@@ -831,9 +831,9 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
   // A top-level file: no `main`, one intent, every amount a define.
   const INTENT = [
     "// @chain ethereum",
-    "Base(() => {",
+    "Base.Portal.send([{ token: USDC, amount: REWARD }]).then(() => {",
     "  USDC.transfer(RECIPIENT, AMOUNT);",
-    "}).reward({ tokens: [{ token: USDC, amount: REWARD }] });",
+    "});",
     "",
   ].join("\n");
   const definesFor = (reward: bigint): string[] => [
@@ -1170,9 +1170,9 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
         path,
         [
           "// @chain ethereum",
-          "Base(() => {",
+          `Base.Portal.send(${reward}).then(() => {`,
           "  USDC.transfer(RECIPIENT, AMOUNT);",
-          `}).reward(${reward});`,
+          "});",
           "",
         ].join("\n"),
       );
@@ -1193,7 +1193,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     it("a USDT-style token, whose transfer returns nothing, funds its vault", async () => {
       const usdt = await ethereum.plant(USDT_CREATION);
       await ethereum.mint(usdt, OWNER.address, REWARD);
-      const file = rewardFile("usdt", "{ tokens: [{ token: TOKEN, amount: REWARD }] }");
+      const file = rewardFile("usdt", "{ token: TOKEN, amount: REWARD }");
       const run = await publishFile(file, "--define", `TOKEN=${usdt}`);
 
       expect(run.code).toBe(0);
@@ -1204,7 +1204,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
 
     it("a native reward is sent to the vault", async () => {
       const NATIVE = 12_345_000_000n;
-      const file = rewardFile("native", `{ nativeAmount: ${NATIVE}n }`);
+      const file = rewardFile("native", `{ native: ${NATIVE}n }`);
       const run = await publishFile(file);
 
       expect(run.code).toBe(0);
@@ -1218,7 +1218,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
       // Its transfer "succeeds" and moves nothing: the Portal, asked before `publish` is sent, does
       // not count the intent funded, and the command stops there.
       const liar = await ethereum.plant(fixture("FalseReturnERC20"));
-      const file = rewardFile("liar", "{ tokens: [{ token: TOKEN, amount: REWARD }] }");
+      const file = rewardFile("liar", "{ token: TOKEN, amount: REWARD }");
       const run = await publishFile(file, "--define", `TOKEN=${liar}`);
 
       expect(run.code).toBe(1);
@@ -1279,9 +1279,9 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
       [
         "// @chain ethereum",
         "const amount = USDC.balanceOf(ctx.self());",
-        "Base(() => {",
+        "Base.Portal.send([{ token: USDC, amount }]).then(() => {",
         "  USDC.transfer(RECIPIENT, amount);",
-        "}).reward({ tokens: [{ token: USDC, amount }] });",
+        "});",
         "",
       ].join("\n"),
     );
@@ -1310,10 +1310,10 @@ describeEvm("what is deployed: the released contracts, a Pot, and an intent's de
   // the Pot every intent through Base's Portal shares.
   const INTENT = [
     "// @chain ethereum",
-    "Base(() => {",
+    "Base.Portal.send([{ token: USDC, amount: REWARD }]).then(() => {",
     "  require(AMOUNT > 0n);",
     "  Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, AMOUNT);",
-    "}).reward({ tokens: [{ token: USDC, amount: REWARD }] });",
+    "});",
     "",
   ].join("\n");
   const DEFINES = [

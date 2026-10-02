@@ -265,9 +265,9 @@ describe("BuiltIntent.sourceTxs and predictVault", () => {
   it("hands IntentOptions.fundVia to the intents the route's own program opens", () => {
     const body = `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Base(() => {
+  Base.Portal.send([{ token: USDC, amount }]).then(() => {
     USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }`;
     const programOf = (fundVia?: "publishAndFund") =>
       bytesToHex(

@@ -79,20 +79,42 @@ interface SauceBinding {
   readonly [method: string]: (...args: any[]) => any;
 }
 
-/** An intent's route: what the solver delivers to the destination for the body to run on. */
-interface SauceDelivery {
-  readonly tokens?: ReadonlyArray<{ readonly token: SauceInt; readonly amount: SauceInt }>;
+/** A token amount an intent names: `{ token: USDC, amount }`. */
+interface SauceTokenAmount {
+  readonly token: SauceInt;
+  readonly amount: SauceInt;
 }
 
-/** An intent's reward, paid on the chain that opens it. */
-interface SauceReward {
-  readonly tokens?: ReadonlyArray<{ readonly token: SauceInt; readonly amount: SauceInt }>;
-  readonly nativeAmount?: SauceInt;
+/** What an intent's reward pays, on the chain that opens it: a token amount, a list of them, the
+ *  native coin as `{ native: amount }`, or tokens and the native coin together. */
+type SauceReward =
+  | SauceTokenAmount
+  | ReadonlyArray<SauceTokenAmount>
+  | { readonly native: SauceInt }
+  | { readonly tokens: ReadonlyArray<SauceTokenAmount>; readonly native?: SauceInt };
+
+/** What the solver delivers on the destination for the body to run on: a token amount, or a list. */
+type SauceDelivery = SauceTokenAmount | ReadonlyArray<SauceTokenAmount>;
+
+/** `<Chain>.Portal`: an intent to that chain, opened from a program —
+ *  `Base.Portal.send({ … }).receive({ … }).then(() => { … })`. */
+interface SaucePortal {
+  /** The reward, paid here. */
+  send(reward: SauceReward): SauceSending;
 }
 
-/** An intent opened in a program: `Base(() => { … }).reward({ … })`. */
-interface SauceIntent {
-  reward(reward: SauceReward): void;
+/** An intent with its reward: what the solver delivers next, or the body. */
+interface SauceSending {
+  /** What the solver delivers on the destination, named there. */
+  receive(delivery: SauceDelivery): SauceReceiving;
+  /** What runs on the destination: a program of its own, or token transfers the route makes. */
+  then(body: () => void): void;
+}
+
+/** An intent with its reward and delivery: the body is what it needs. */
+interface SauceReceiving {
+  /** What runs on the destination: a program of its own, or token transfers the route makes. */
+  then(body: () => void): void;
 }
 
 /** Context reads: who called, where, when. */

@@ -1455,9 +1455,9 @@ describeEvm("route nesting, executed", () => {
 
     const PROGRAM = `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
-  Base(() => {
+  Base.Portal.send([{ token: TOKEN, amount }]).then(() => {
     Token(TOKEN).transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: TOKEN, amount }] });
+  });
 }`;
 
     it("publishes and funds the intent the SDK encodes, with the captured amount in it", async () => {
@@ -1609,9 +1609,9 @@ describeEvm("route nesting, executed", () => {
       // publish an intent whose vault is empty.
       const { status } = await runIntentProgram(
         `function main() {
-  Base(() => {
+  Base.Portal.send([{ token: TOKEN, amount: 5n }]).then(() => {
     Token(TOKEN).transfer(RECIPIENT, 1n);
-  }).reward({ tokens: [{ token: TOKEN, amount: 5n }] });
+  });
 }`,
         { TOKEN: BigInt(liar), RECIPIENT: BigInt(DELIVER_TO) },
         "e2",
@@ -1627,9 +1627,9 @@ describeEvm("route nesting, executed", () => {
       const { status, logs } = await runIntentProgram(
         `function main() {
   const native = ctx.selfBalance();
-  Base(() => {
+  Base.Portal.send({ native: native }).then(() => {
     Token(TOKEN).transfer(RECIPIENT, 1n);
-  }).reward({ nativeAmount: native });
+  });
 }`,
         { TOKEN: BigInt(token), RECIPIENT: BigInt(DELIVER_TO) },
         "e3",
@@ -1690,9 +1690,9 @@ describeEvm("route nesting, executed", () => {
         const { status, logs } = await runIntentProgram(
           `function main() {
   const native = ctx.selfBalance();
-  Base(() => {
+  Base.Portal.send({ native: native }).then(() => {
     Token(TOKEN).transfer(RECIPIENT, 1n);
-  }).reward({ nativeAmount: native });
+  });
 }`,
           { TOKEN: BigInt(token), RECIPIENT: BigInt(DELIVER_TO) },
           "e6",
@@ -1729,7 +1729,7 @@ describeEvm("route nesting, executed", () => {
       );
 
     /** Publishes the intent a program opens around `body`, and returns the route and reward hash
-     *  the Portal logged — what a solver fulfils. `delivery` is the optional second argument. */
+     *  the Portal logged — what a solver fulfils. `delivery` is what it `.receive`s, if anything. */
     const publish = async (
       body: string,
       token: Address,
@@ -1738,9 +1738,9 @@ describeEvm("route nesting, executed", () => {
       const reward = await deploy(MOCK_ERC20.creationCode);
       const program = `function main() {
   const amount = Token(REWARD).balanceOf(ctx.self());
-  Base(() => {
+  Base.Portal.send([{ token: REWARD, amount }])${delivery}.then(() => {
     ${body}
-  }${delivery}).reward({ tokens: [{ token: REWARD, amount }] });
+  });
 }`;
       const compiled = compileSauceRoute(
         "base",
@@ -1945,7 +1945,7 @@ describeEvm("route nesting, executed", () => {
         const { route, rewardHash } = await publish(
           "Token(TOKEN).transfer(RECIPIENT, AMOUNT);",
           liarToken,
-          `, { tokens: [{ token: ${BigInt(delivered)}n, amount: 1n }] }`,
+          `.receive([{ token: ${BigInt(delivered)}n, amount: 1n }])`,
         );
         await provide(route);
 
@@ -1977,12 +1977,12 @@ describeEvm("route nesting, executed", () => {
 
     const THREE_HOP = `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
-  Base(() => {
+  Base.Portal.send([{ token: TOKEN, amount }]).receive([{ token: TOKEN, amount }]).then(() => {
     const got = Token(TOKEN).balanceOf(ctx.self());
-    Base(() => {
+    Base.Portal.send([{ token: TOKEN, amount: got }]).then(() => {
       Token(TOKEN).transfer(RECIPIENT, got);
-    }).reward({ tokens: [{ token: TOKEN, amount: got }] });
-  }, { tokens: [{ token: TOKEN, amount }] }).reward({ tokens: [{ token: TOKEN, amount }] });
+    });
+  });
 }`;
 
     it("publishes hop 2, and fulfilling it publishes hop 3 with its own measured amount", async () => {
@@ -2081,12 +2081,12 @@ describeEvm("route nesting, executed", () => {
       // Control flow in the body, so this takes the program path rather than the direct-call one.
       const WITH_LOGIC = `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
-  Base(() => {
+  Base.Portal.send([{ token: TOKEN, amount }]).receive([{ token: TOKEN, amount }]).then(() => {
     const here = Token(TOKEN).balanceOf(ctx.self());
     if (here > 0n) {
       Token(TOKEN).transfer(RECIPIENT, here);
     }
-  }, { tokens: [{ token: TOKEN, amount }] }).reward({ tokens: [{ token: TOKEN, amount }] });
+  });
 }`;
       const compiled = compileSauceRoute(
         "base",
@@ -2195,12 +2195,12 @@ describeEvm("route nesting, executed", () => {
         "base",
         `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
-  Base(() => {
+  Base.Portal.send([{ token: TOKEN, amount }]).receive([{ token: TOKEN, amount }]).then(() => {
     const here = Token(TOKEN).balanceOf(ctx.self());
     if (here > 0n) {
       Token(TOKEN).transfer(RECIPIENT, here);
     }
-  }, { tokens: [{ token: TOKEN, amount }] }).reward({ tokens: [{ token: TOKEN, amount }] });
+  });
 }`,
         { pot: derived, engine: sauce.engine },
         {
@@ -2331,12 +2331,12 @@ describeEvm("route nesting, executed", () => {
       // token calls. Base -> Base so this one anvil can fulfil the child too.
       const PROGRAM = `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
-  Base(() => {
+  Base.Portal.send([{ token: TOKEN, amount }]).receive([{ token: TOKEN, amount }]).then(() => {
     const here = Token(TOKEN).balanceOf(ctx.self());
     if (here > 0n) {
       Token(TOKEN).transfer(RECIPIENT, here);
     }
-  }, { tokens: [{ token: TOKEN, amount }] }).reward({ tokens: [{ token: TOKEN, amount }] });
+  });
 }`;
 
       /** Fulfils a parent that publishes one child routed through `theirs`. */

@@ -1,8 +1,8 @@
 /**
  * The destination Pot an intent's route cooks on, when the caller does not name one.
  *
- * One implementation for both ways of building an intent — `Chain(() => ...).reward(...)` written
- * inside a program (`sauce-route.ts#compileIntentChild`) and the TypeScript builder
+ * One implementation for both ways of building an intent — `Chain.Portal.send(...).then(...)`
+ * written inside a program (`intent-host.ts`) and the TypeScript builder
  * (`intent-dsl.ts#openRoute`) — so the two cannot derive different Pots for the same route.
  *
  * THE OWNER IS THE RECORDED PORTAL'S EXECUTOR. A route call runs as the Executor of the Portal that

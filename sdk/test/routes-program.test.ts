@@ -80,9 +80,9 @@ describe("compileSauceProgram", () => {
     const body = [
       "function main(recipient: Address) {",
       "  const amount = USDC.balanceOf(ctx.self());",
-      "  Arbitrum(() => {",
+      "  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {",
       "    USDC.transfer(recipient, amount);",
-      "  }).reward({ tokens: [{ token: USDC, amount }] });",
+      "  });",
       "}",
     ].join("\n");
     expect(() => compileSauceProgram("base", body)).toThrow(/needs a `deadline`/);
@@ -95,9 +95,9 @@ describe("compileSauceProgram", () => {
 
   it("compiles an intent every value of which is known now, and reports it fixed", () => {
     const body = [
-      "Base(() => {",
+      "Base.Portal.send([{ token: USDC, amount: 7n }]).then(() => {",
       "  USDC.transfer(RECIPIENT, 5n);",
-      "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
+      "});",
     ].join("\n");
     const program = compileSauceProgram("arbitrum", body, {
       defines: { RECIPIENT: BigInt(RECIPIENT) },

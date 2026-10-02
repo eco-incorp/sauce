@@ -23,7 +23,9 @@ jest.unstable_mockModule("../src/routes/intent-host.js", () => ({
       bind: (site: Parameters<typeof host.bind>[0]) => {
         const receiver = site.receiver;
         const delivery =
-          receiver !== undefined && "fields" in receiver ? receiver.fields[1]?.[1] : undefined;
+          receiver !== undefined && "fields" in receiver && receiver.fields.length === 4
+            ? receiver.fields[2]?.[1]
+            : undefined;
         if (delivery !== undefined) bound.push(delivery);
         return host.bind(site);
       },
@@ -48,16 +50,16 @@ function delivery(defines: Record<string, bigint | boolean | number>): [string, 
     "base",
     `function main() {
   const amount = USDC.balanceOf(self);
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).receive([{ token: USDC, amount: chainId }]).then(() => {
     USDC.transfer(self, amount);
-  }, { tokens: [{ token: USDC, amount: chainId }] }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }`,
     { defines, intents: INTENTS },
   );
   expect(bound).toHaveLength(1);
   const fields = (view: View) =>
     "fields" in view ? new Map(view.fields) : fail("a record of fields");
-  const entries = fields(bound[0]!).get("tokens")!;
+  const entries = bound[0]!;
   const [entry] = "elements" in entries ? entries.elements : fail("a list of tokens");
   const constant = (view: View | undefined) =>
     view !== undefined && "constant" in view ? view.constant : fail("a constant");

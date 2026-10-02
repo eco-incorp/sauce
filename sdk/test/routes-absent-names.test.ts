@@ -187,9 +187,9 @@ describe("what a chain can lack", () => {
     } as const;
     const program = (guarded: string) => `function main() {
   const amount = USDC.balanceOf(self);
-  Optimism(() => {
+  Optimism.Portal.send([{ token: USDC, amount }]).then(() => {
     ${guarded}
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }`;
     // PancakeSwap V3 is on Base, where the program is compiled, and not on Optimism, where the body
     // runs: the body's branch is left out, so its program never names the factory.

@@ -21,6 +21,7 @@ import type { AccessorTarget } from "../routes/protocol-names.js";
 import { chainAccessorNames } from "../routes/sauce-route.js";
 import { resolveTokenMap } from "../routes/token-registry.js";
 import { pascalOfSlug } from "../routes/builder.js";
+import { portalMethod, portalRoot } from "./intent-calls.js";
 import type { DefineValue } from "./args.js";
 
 /** One define the program reads, as the compile applied it. */
@@ -77,23 +78,20 @@ interface IntentPart {
 }
 
 /** The parts of `program` each intent it opens runs on its destination, as the intent lowering
- *  finds them: `Chain(() => { body }, delivery).reward(reward)`, the reward left out. */
+ *  finds them: in `Chain.Portal.send(reward).receive(delivery).then(() => { body })`, the delivery
+ *  and the body, the reward left out. */
 function intentParts(program: AstNode): IntentPart[] {
   const chains = chainAccessorNames();
   const parts: IntentPart[] = [];
   walk(program, (node) => {
     if (node.type !== "CallExpression") return;
-    const callee = node.callee as AstNode | undefined;
-    if (callee?.type !== "MemberExpression" || callee.computed === true) return;
-    if ((callee.property as AstNode | undefined)?.name !== "reward") return;
-    const opener = callee.object as AstNode | undefined;
-    if (opener?.type !== "CallExpression") return;
-    const name = (opener.callee as AstNode | undefined)?.name;
-    const chain = typeof name === "string" ? chains.get(name) : undefined;
-    const [body, delivery] = (opener.arguments as AstNode[] | undefined) ?? [];
-    if (chain === undefined || body?.type !== "ArrowFunctionExpression") return;
-    for (const part of [body, delivery]) {
-      if (part !== undefined) parts.push({ chain, start: part.start, end: part.end });
+    const method = portalMethod(node);
+    if (method !== "receive" && method !== "then") return;
+    const name = portalRoot(node);
+    const chain = name === undefined ? undefined : chains.get(name);
+    const [part] = (node.arguments as AstNode[] | undefined) ?? [];
+    if (chain !== undefined && part !== undefined) {
+      parts.push({ chain, start: part.start, end: part.end });
     }
   });
 

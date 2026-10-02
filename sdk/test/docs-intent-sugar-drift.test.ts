@@ -42,8 +42,8 @@ const lower = (
   intents: Record<string, unknown> = { deadline: 4_000_000_000n, creator: CREATOR },
 ) => compileSauceProgram("base", program, { defines: { RECIPIENT }, intents });
 
-const wrap = (body: string, reward = "{ tokens: [{ token: USDC, amount }] }", chain = "Arbitrum") =>
-  `function main() {\n  const amount = 5n;\n  ${chain}(() => {\n    ${body}\n  }).reward(${reward});\n}`;
+const wrap = (body: string, reward = "[{ token: USDC, amount }]", chain = "Arbitrum") =>
+  `function main() {\n  const amount = 5n;\n  ${chain}.Portal.send(${reward}).then(() => {\n    ${body}\n  });\n}`;
 
 /** Documented sentence -> the program that must produce it. */
 const REFUSALS: readonly {
@@ -58,9 +58,8 @@ const REFUSALS: readonly {
   },
   {
     documented: "a token entry missing `token` or `amount`",
-    trigger: () =>
-      lower(wrap("USDC.transfer(RECIPIENT, amount);", "{ tokens: [{ token: USDC }] }")),
-    message: /needs both `token` and `amount`/,
+    trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);", "[{ token: USDC }]")),
+    message: /takes is `\{ token, amount \}`/,
   },
   {
     documented: "A missing `deadline`",
@@ -89,9 +88,9 @@ const REFUSALS: readonly {
     trigger: () =>
       lower(
         `function payout(amount: Uint256) {
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
     if (amount > 0n) { payout(amount); }
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }
 function main() {
   payout(5n);
@@ -162,9 +161,9 @@ describe("the guide's account of which chain a name resolves on is the lowering'
   const lowered = () =>
     lower(`function main() {
   const amount = 5n;
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).receive([{ token: USDC, amount }]).then(() => {
     USDC.transfer(RECIPIENT, amount);
-  }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }`).intents[0]!.intent;
   const onChain = (slug: string) =>
     `0x${"00".repeat(12)}${registryTokenAddress(requireChain(slug), "USDC")!.toString(16).padStart(40, "0")}`;
@@ -172,16 +171,15 @@ describe("the guide's account of which chain a name resolves on is the lowering'
 
   const CLAIMS: readonly { readonly documented: string; readonly holds: () => boolean }[] = [
     {
-      documented: "| The braces | Arbitrum, the destination | Arbitrum's |",
+      documented: "| `.then(...)`'s braces | Arbitrum, the destination | Arbitrum's |",
       holds: () => lowered().route.calls[0]!.target === onChain(ARBITRUM.slug),
     },
     {
-      documented:
-        "| The second argument, what is delivered | Arbitrum, the destination | Arbitrum's |",
+      documented: "| `.receive(...)`, what is delivered | Arbitrum, the destination | Arbitrum's |",
       holds: () => lowered().route.tokens[0]!.token === onChain(ARBITRUM.slug),
     },
     {
-      documented: "| `.reward(...)` | The chain the program runs on | That chain's |",
+      documented: "| `.send(...)`, the reward | The chain the program runs on | That chain's |",
       holds: () => lowered().reward.tokens[0]!.token === onChain("base"),
     },
     {
@@ -194,9 +192,9 @@ describe("the guide's account of which chain a name resolves on is the lowering'
           "base",
           `function main() {
   const amount = 5n;
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
     USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }`,
           {
             defines: { USDC: chosen, RECIPIENT: 1n },
@@ -233,9 +231,9 @@ function half(): Uint256 {
 }
 function main() {
   const total = 5n;
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount: total }]).then(() => {
     if (half() > 0n) { USDC.transfer(RECIPIENT, total); }
-  }).reward({ tokens: [{ token: USDC, amount: total }] });
+  });
 }`,
         { deadline: 4_000_000_000n, creator: CREATOR, executionFee: 0n },
       ),
@@ -269,9 +267,9 @@ describe("the guide's account of the destination Pot is the builder's", () => {
       "base",
       `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).receive([{ token: USDC, amount }]).then(() => {
     if (amount > 0n) { USDC.transfer(RECIPIENT, amount); }
-  }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }`,
       {
         defines: { RECIPIENT: 0x9999999999999999999999999999999999999999n },

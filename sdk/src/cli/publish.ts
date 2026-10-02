@@ -38,7 +38,7 @@ import type { PrivateKeyAccount } from "viem/accounts";
 
 import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm, hashIntent } from "../routes/encode.js";
-import { isTypeDeclaration } from "../routes/ast-walk.js";
+import { isTypeDeclaration, type AstNode } from "../routes/ast-walk.js";
 import type { LoweredIntent } from "../routes/intent-host.js";
 import {
   approvalTxs,
@@ -69,6 +69,7 @@ import {
 } from "./commands.js";
 import { nativeSymbol, tokenInfo } from "./effects.js";
 import { baseUnits, type FundRequest } from "./funding.js";
+import { portalMethod, portalRoot } from "./intent-calls.js";
 import { intentDestinations, requireSupported } from "./support.js";
 
 const ERC20 = parseAbi([
@@ -86,15 +87,11 @@ interface Node {
 
 const isIntentSite = (node: Node): boolean => {
   const call = node.type === "ExpressionStatement" ? (node.expression as Node) : undefined;
-  const callee = call?.type === "CallExpression" ? (call.callee as Node) : undefined;
-  const property = callee?.type === "MemberExpression" ? (callee.property as Node) : undefined;
-  const opened = callee?.object as Node | undefined;
 
   return (
-    property?.type === "Identifier" &&
-    property.name === "reward" &&
-    opened?.type === "CallExpression" &&
-    (opened.callee as Node).type === "Identifier"
+    call?.type === "CallExpression" &&
+    portalMethod(call as AstNode) === "then" &&
+    portalRoot(call as AstNode) !== undefined
   );
 };
 

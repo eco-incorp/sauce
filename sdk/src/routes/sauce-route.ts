@@ -78,7 +78,7 @@ export interface SauceCompileOptions {
    */
   ambient?: string[];
   /**
-   * Settings for `Chain(() => { ... }).reward({ ... })` written inside the program — creating an
+   * Settings for `Chain.Portal.send({ ... }).then(() => { ... })` written inside the program — creating an
    * intent from a program, rather than compiling a program into one. Everything the SDK can look up
    * it looks up; these are the fields it cannot, plus overrides. See `intent-host.ts`.
    *
@@ -262,7 +262,7 @@ function routeHost(
  * it would win over the host's declaration wherever the program reads the name:
  *  - a `USDC` define would be a plain number in place of the host's `Token`-typed `USDC`, and
  *    `USDC.transfer(...)` would stop compiling, in the program it was given for;
- *  - an intent's delivery (`Chain(() => …, { tokens: [{ token: USDC, … }] })`) is a `scope: "nested"`
+ *  - an intent's delivery (`Chain.Portal.send(…).receive({ token: USDC, … })`) is a `scope: "nested"`
  *    argument, evaluated in the enclosing program's frame with the destination's names — where the
  *    enclosing program's `USDC` or `chainId` define would bind first, and the delivery would name
  *    the enclosing chain's value on the destination.
@@ -382,7 +382,7 @@ export interface CompiledSauceProgram {
   /** The SVM account manifest: the accounts to attach, in order. Absent on the EVM. */
   readonly manifest?: AccountManifest;
   /**
-   * The intents the program itself publishes (`Arbitrum(() => { ... }).reward({ ... })`), in source
+   * The intents the program itself publishes (`Arbitrum.Portal.send({ ... }).then(() => { ... })`), in source
    * order, each as the lowering encoded it. One with no `captures` is fixed now: its hash, and the
    * Portal transactions that publish it, can be built without running the program. One that
    * captures a local of the program holds a sentinel where the value will be, which only exists
@@ -400,7 +400,7 @@ export interface CompiledSauceProgram {
  * It gets everything `openRoute` gives a route body except the intent around it: the chain's
  * ambient bundle (`chainId`, protocol addresses and token symbols as compile-time values scoped to
  * this chain, and the `@sauce/token` functions with no import), the token and protocol syntax, and
- * intents the program itself opens (`Arbitrum(() => { ... }).reward({ ... })`, which take their deadline and
+ * intents the program itself opens (`Arbitrum.Portal.send({ ... }).then(() => { ... })`, which take their deadline and
  * creator from `options.intents`). So one source compiles, unchanged, for any chain whose names it
  * uses. `main` may declare typed runtime parameters; `entryParams` reports them and
  * `encodeEntryArguments` encodes values for them.

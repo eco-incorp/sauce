@@ -16,9 +16,9 @@ const TX = `0x${"ab".repeat(32)}`;
 /** Base USDC to RECIPIENT for Ethereum USDC: an intent fixed when it is built. */
 const PROGRAM = {
   source: [
-    "Base(() => {",
+    "Base.Portal.send([{ token: USDC, amount: 7n }]).then(() => {",
     "  USDC.transfer(RECIPIENT, 5n);",
-    "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
+    "});",
     "",
   ].join("\n"),
   chain: "ethereum",

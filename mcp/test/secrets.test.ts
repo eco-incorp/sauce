@@ -58,7 +58,7 @@ describe("a server with endpoints", () => {
         "sauce_intent_publish",
         {
           source:
-            "Arbitrum(() => {\n  USDC.transfer(R, 5n);\n}).reward({ tokens: [{ token: USDC, amount: 7n }] });\n",
+            "Arbitrum.Portal.send([{ token: USDC, amount: 7n }]).then(() => {\n  USDC.transfer(R, 5n);\n});\n",
           chain: "base",
           defines: { R: OWNER },
           intentDeadline: 2000000000,

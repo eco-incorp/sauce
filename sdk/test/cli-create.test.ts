@@ -73,7 +73,7 @@ describe("making an intent: sauce intent publish with no file", () => {
     expect(created.rewardDeadline).toBe(NOW + 86_400n);
     const text = readFileSync(out, "utf8");
     expect(text).toContain(`USDC.transfer(${RECIPIENT.toLowerCase()}n, 1500000n);`);
-    expect(text).toContain("reward({ tokens: [{ token: USDC, amount: 1600000n }] })");
+    expect(text).toContain("Base.Portal.send({ token: USDC, amount: 1600000n }).then(() => {");
     expect(text).toContain(`sauce intent publish ${out} --chain ethereum`);
     expect(text).toContain("--intent-fund-via publishAndFund");
     // With no endpoint the solver's costs are not estimated, and it says so.

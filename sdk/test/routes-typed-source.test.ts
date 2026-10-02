@@ -94,9 +94,9 @@ function main(amount: Uint256): Uint256 {
     const source = `function main(amount: Uint256): void {
   const held: Uint256 = USDC.balanceOf(ctx.self());
   require(held >= amount);
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
     USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }`;
     const out = compileSauceRoute("base", source, EXECUTION, {
       defines: { RECIPIENT },

@@ -167,9 +167,9 @@ function main() {
         return x / 2n;
       }
       const amount = USDC.balanceOf(0x1234n);
-      Arbitrum(() => {
+      Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
         USDC.transfer(RECIPIENT, half(amount));
-      }).reward({ tokens: [{ token: USDC, amount }] });
+      });
     };
     const out = compileSauceRoute("base", body, execution, {
       defines: { RECIPIENT: 0x99n },
@@ -189,4 +189,4 @@ function main() {
 // capture nothing).
 declare const chainId: bigint;
 declare const RECIPIENT: bigint;
-declare const Arbitrum: (body: () => void) => { reward(spec: unknown): void };
+declare const Arbitrum: { Portal: { send(tokens: unknown): { then(body: () => void): void } } };

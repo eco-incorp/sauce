@@ -1,7 +1,7 @@
 /**
  * What an intent body's names mean when the body is a program of its own.
  *
- * `Chain(() => { ... }).reward(...)` with a body that is not plain token writes compiles that body
+ * `Chain.Portal.send(...).then(() => { ... })` with a body that is not plain token writes compiles that body
  * as a program for the destination — the compiler's program argument, in the destination's scope.
  * A name the body reads is one of: its own local; a value of the enclosing program, carried in as
  * an entry argument (a capture); or a declaration of the file — a function, an import, an
@@ -27,7 +27,7 @@ jest.unstable_mockModule("../src/routes/intent-host.js", () => ({
       bind: (site: Parameters<typeof host.bind>[0]) => {
         const receiver = site.receiver;
         const body =
-          receiver !== undefined && "fields" in receiver ? receiver.fields[0]?.[1] : undefined;
+          receiver !== undefined && "fields" in receiver ? receiver.fields.at(-1)?.[1] : undefined;
         if (body !== undefined && "program" in body) {
           bodies.push(body.program.captures.map((capture) => capture.name));
         }
@@ -55,9 +55,9 @@ function captures(source: string): readonly string[] {
 const fileWithIntent = (file: string, body: string) => `${file}
 function main() {
   const amount = USDC.balanceOf(self);
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
 ${body}
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }`;
 
 /** Annotated helpers taking and returning arrays: they cannot be written without annotations. */
@@ -171,9 +171,9 @@ function legOf(amount: Uint256): Leg {
 }
 function main() {
   const amount = USDC.balanceOf(self);
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
     if (amount > 0n) { USDC.transfer(RECIPIENT, amount); }
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }`),
     ).toEqual(["amount"]);
   });
@@ -188,10 +188,10 @@ function half(): Uint256 {
 }
 function main() {
   total = USDC.balanceOf(self);
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount: total }]).then(() => {
     const out = half() + total;
     if (out > 0n) { USDC.transfer(RECIPIENT, out); }
-  }).reward({ tokens: [{ token: USDC, amount: total }] });
+  });
 }`),
     ).toEqual(["total"]);
   });
@@ -206,9 +206,9 @@ function bump(): Uint256 {
 function main() {
   scratch = 5n;
   const amount = USDC.balanceOf(self);
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
     if (bump() > 1n) { USDC.transfer(RECIPIENT, amount); }
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }`),
     ).toEqual(["amount", "scratch"]);
   });
@@ -221,9 +221,9 @@ function half(): Uint256 {
 }
 function main() {
   const total = USDC.balanceOf(self);
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount: total }]).then(() => {
     if (half() > 0n) { USDC.transfer(RECIPIENT, total); }
-  }).reward({ tokens: [{ token: USDC, amount: total }] });
+  });
 }`),
     ).toEqual(["total", "total"]);
   });
@@ -241,9 +241,9 @@ function net(x: Uint256, fees: Uint256): Uint256 {
   return x - fees;
 }
 function payout(amount: Uint256): void {
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
     if (amount > 1n) { USDC.transfer(RECIPIENT, net(compute(amount), 1n)); }
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }
 function main() {
   payout(USDC.balanceOf(self) + fees());
@@ -256,9 +256,9 @@ function main() {
       compileSauceProgram(
         "base",
         `function payout(amount: Uint256): void {
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
     if (amount > 0n) { payout(amount); }
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }
 function main() {
   payout(USDC.balanceOf(self));
@@ -273,10 +273,10 @@ function main() {
       captures(`${ARRAY_HELPERS}
 function main(): void {
   const amount: Uint256 = total(doubled([USDC.balanceOf(self), 1n]));
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
     const parts: Uint256[] = doubled([amount, 2n]);
     if (total(parts) > 0n) { USDC.transfer(RECIPIENT, total(parts)); }
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }`),
     ).toEqual(["amount"]);
   });
@@ -292,10 +292,10 @@ function main(): void {
 }
 function main() {
   const amount = USDC.balanceOf(self);
-  Optimism(() => {
+  Optimism.Portal.send([{ token: USDC, amount }]).then(() => {
     const held = USDT.balanceOf(self);
     if (held > 0n) { payout(RECIPIENT, held); }
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }`,
       { defines: { RECIPIENT }, intents: INTENTS },
     );
@@ -331,9 +331,9 @@ describe("an intent opened at a script's top level", () => {
   // there captures, as `main`'s would be.
   const SCRIPT = `const amount = USDC.balanceOf(self);
 const [fee] = abi.decode(ctx.msgData(), ["Uint256"]);
-Arbitrum(() => {
+Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
   if (amount > fee) { USDC.transfer(RECIPIENT, amount - fee); }
-}).reward({ tokens: [{ token: USDC, amount }] });`;
+});`;
 
   it("captures the script's locals the body reads", () => {
     expect(captures(SCRIPT)).toEqual(["amount", "fee"]);

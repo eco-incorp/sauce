@@ -91,7 +91,7 @@ jest.unstable_mockModule("../src/routes/intent-host.js", () => ({
         const bound = host.bind(site);
         const body =
           site.receiver !== undefined && "fields" in site.receiver
-            ? site.receiver.fields[0]?.[1]
+            ? site.receiver.fields.at(-1)?.[1]
             : undefined;
         compiles.push({
           on: level.source.slug,
@@ -364,10 +364,10 @@ describe.each(CHAIN_DEFINE_PATHS)(
     // route calls when the intent is built, so the decoded calldata says which chain's they were.
     const program = `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount: chainId }]).then(() => {
     USDC.transfer(RECIPIENT, chainId);
     USDC.approve(UniswapV4_UniversalRouter, amount);
-  }).reward({ tokens: [{ token: USDC, amount: chainId }] });
+  });
 }`;
     const routerOn = (slug: Slug) => BigInt(definesOf(slug).UniswapV4_UniversalRouter as bigint);
 
@@ -397,9 +397,9 @@ describe.each(CHAIN_DEFINE_PATHS)(
 describe.each(PATHS)("a caller's own defines, through %s", (_name, build) => {
   const program = `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: CHOSEN, amount }]).then(() => {
     USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: CHOSEN, amount }] });
+  });
 }`;
   const chosen = 0x7777777777777777777777777777777777777777n;
 

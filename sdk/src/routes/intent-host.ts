@@ -1,25 +1,31 @@
 /**
- * `Chain(() => { ... }).reward({ ... })` — an Eco intent opened from inside a Sauce program, built
- * on the compiler's host API rather than on the program's text.
+ * `<Chain>.Portal.send(…).receive(…).then(() => { … })` — an Eco intent opened from inside a Sauce
+ * program, built on the compiler's host API rather than on the program's text.
  *
  * ```js
  * function main() {
- *   const amount = USDC.balanceOf(self);
- *   Arbitrum(() => {
- *     USDC.transfer(RECIPIENT, amount);
- *   }).reward({ tokens: [{ token: USDC, amount }] });
+ *   const amount = USDC.balanceOf(ctx.self());
+ *   Arbitrum.Portal.send({ token: USDC, amount })
+ *     .receive({ token: USDC, amount: (amount * 99n) / 100n })
+ *     .then(() => {
+ *       USDC.transfer(RECIPIENT, (amount * 99n) / 100n);
+ *     });
  * }
  * ```
  *
- * WHAT THE COMPILER IS TOLD. Each chain's name is a declared function taking a PROGRAM: its closure
- * is compiled as a program of its own, in the scope `nested` returns for that chain — the
+ * WHAT THE COMPILER IS TOLD. `<Chain>.Portal` is a constant of the `Portal` type, its value the
+ * destination's chain id. `send` (the reward, paid here) and `receive` (what the solver delivers
+ * there) make records, one argument each — a token amount or a list of them — so the chain is one
+ * record of everything in it. `receive`'s argument is evaluated here but named on the destination
+ * (`scope: "nested"`, its scope picked from the record's chain). `then` takes a PROGRAM: its closure
+ * is compiled as a program of its own in the scope `nested` returns for that chain — the
  * destination's names, its target, its own intents — and what it reads of the enclosing program
  * reaches it as entry arguments. A closure of nothing but token `transfer`/`approve` calls is
- * RECORDED instead: there is no program, only the calls, which become the route's own. The optional
- * second argument, the delivery, is evaluated here but named on the destination (`scope: "nested"`).
- * The call returns a record of one per-destination type, `<Chain>Intent`, whose `reward` method is
- * bound at its site: the compiler hands `bind` what it knows there — the program or the recorded
- * calls, the delivery, the reward — and calls `@sauce/intents` with what `bind` returns.
+ * RECORDED instead: there is no program, only the calls, which become the route's own. The record
+ * `then` makes ends the chain: its type's ending is bound at its site, so the compiler hands `bind`
+ * what it knows there — the chain, the reward, the delivery, the program or the recorded calls —
+ * and calls `@sauce/intents` with what `bind` returns. A chain that stops before `then` is refused
+ * in this file's words: an intent needs a body.
  *
  * WHAT `bind` DOES. It builds the intent exactly as before: the route's calls (each recorded write,
  * or the delivered tokens' transfers into the Pot then its `cook`), the reward, the deadlines, the
@@ -39,6 +45,7 @@ import type {
   ProgramOptions,
   ProgramReport,
   ProgramSite,
+  Signature,
   View,
 } from "sauce-compiler";
 import { bytesToHex, encodeFunctionData, hexToBytes, type Hex } from "viem";
@@ -126,9 +133,9 @@ const fail = (message: string): never => {
 
 const INTENTS = "@sauce/intents";
 
-/** The record type `<Chain>(...)` returns, named for the accessor (`ArbitrumIntent`): its name
- *  says which destination it is for. */
-const intentType = (accessor: string): string => `${accessor}Intent`;
+/** The refusal of a chain that stops before saying what runs on the destination. */
+const NEEDS_A_BODY =
+  "an intent needs what runs on its destination: end it with `.then(() => { … })`";
 
 /**
  * One sentinel per run-time value of a site. TWENTY bytes, so the same sentinel is a legal
@@ -154,50 +161,61 @@ export function intentHost(level: IntentLevel): {
   readonly bind: (site: CallSite) => BoundArgument[];
 } {
   const fundVia = requireFundVia(level.defaults);
-  const reward = { module: INTENTS, export: fundVia === "transfer" ? "publish" : "publishAndFund" };
-  const types: Record<string, HostType> = {};
-  const byType = new Map<string, CanonicalChain>();
-  for (const [accessor, chain] of level.chains) {
-    types[intentType(accessor)] = {
-      methods: { reward: { params: [{ kind: "value" }], calls: reward, site: true } },
-    };
-    byType.set(intentType(accessor), chain);
-  }
+  const publish = {
+    module: INTENTS,
+    export: fundVia === "transfer" ? "publish" : "publishAndFund",
+  };
+  const then: Signature = { params: [{ kind: "program", record: true }], returns: "Opened" };
+  const types: Record<string, HostType> = {
+    Portal: {
+      of: "Uint256",
+      methods: { send: { params: [{ kind: "value" }], returns: "Sending" } },
+    },
+    Sending: {
+      methods: {
+        receive: { params: [{ kind: "value", scope: "nested" }], returns: "Receiving" },
+        then,
+      },
+      ending: { refused: NEEDS_A_BODY },
+    },
+    Receiving: { methods: { then }, ending: { refused: NEEDS_A_BODY } },
+    Opened: { ending: { calls: publish, site: true } },
+  };
+  const byId = new Map([...level.chains.values()].map((chain) => [BigInt(chain.id), chain]));
 
   const declare = (name: string): Declaration | undefined => {
-    if (!level.chains.has(name)) return undefined;
-    const returns = intentType(name);
+    const [accessor, member, ...rest] = name.split(".");
+    if (member !== "Portal" || rest.length > 0) return undefined;
+    const chain = level.chains.get(accessor!);
+    if (chain === undefined) return undefined;
 
-    return {
-      kind: "function",
-      signatures: [
-        { params: [{ kind: "program", record: true }], returns },
-        {
-          params: [
-            { kind: "program", record: true },
-            { kind: "value", scope: "nested" },
-          ],
-          returns,
-        },
-      ],
-    };
+    return { kind: "constant", value: String(chain.id), type: "Portal" };
+  };
+
+  /** The chain a record's intent goes to: its first field, the `Portal` it started from. */
+  const destinationOf = (record: View | undefined, what: string): CanonicalChain => {
+    const portal = fieldsOf(record, what).get("0");
+    const chain =
+      portal !== undefined && "constant" in portal ? byId.get(BigInt(portal.constant)) : undefined;
+
+    return chain ?? fail(`${what} does not start from a chain's \`Portal\``);
   };
 
   const nested = (site: ProgramSite): ProgramOptions =>
-    level.programOn(level.chains.get(site.callee) ?? fail(`'${site.callee}' opens no intent`));
+    level.programOn(destinationOf(site.receiver, `\`${site.callee}\``));
 
   const bind = (site: CallSite): BoundArgument[] => {
-    const destination = byType.get(site.callee.split(".")[0]!);
-    if (destination === undefined) return fail(`'${site.callee}' is not an intent's reward`);
+    if (site.callee !== "Opened") return fail(`'${site.callee}' is not an intent's publication`);
 
-    return bindReward(level, destination, fundVia, site);
+    return bindIntent(level, destinationOf(site.receiver, "the intent"), fundVia, site);
   };
 
   return { declare, types, hostModules: [INTENTS], nested, bind };
 }
 
-/** The reward call's arguments, for `@sauce/intents#publish` or `#publishAndFund`. */
-function bindReward(
+/** The publication's arguments, for `@sauce/intents#publish` or `#publishAndFund`: the record a
+ *  chain built — its `Portal`, the reward, the delivery when it names one, then the body. */
+function bindIntent(
   level: IntentLevel,
   destination: CanonicalChain,
   fundVia: IntentFundVia,
@@ -217,9 +235,10 @@ function bindReward(
   const sentinelFor = (value: Value): bigint =>
     "literal" in value ? value.literal : sentinelOf(value.runtime);
 
-  const receiver = fieldsOf(site.receiver, "the intent");
-  const body = receiver.get("0");
-  const deliveryView = receiver.get("1");
+  const fields = [...fieldsOf(site.receiver, "the intent").values()];
+  const body = fields[fields.length - 1];
+  const rewardView = fields[1] ?? fail("`.send(...)` names the reward");
+  const deliveryView = fields.length === 4 ? fields[2] : undefined;
   const explicitDelivery =
     deliveryView === undefined
       ? undefined
@@ -281,11 +300,7 @@ function bindReward(
     return fail("an intent's body must be a closure");
   }
 
-  const rewardSpec = tokenList(
-    site.args[0] ?? fail("`.reward(...)` takes exactly one argument"),
-    { part: "reward", chain: source },
-    valueOf,
-  );
+  const rewardSpec = tokenList(rewardView, { part: "reward", chain: source }, valueOf);
   const offersNative =
     rewardSpec.nativeAmount !== undefined &&
     !("literal" in rewardSpec.nativeAmount && rewardSpec.nativeAmount.literal === 0n);
@@ -462,16 +477,21 @@ function fieldsOf(view: View | undefined, what: string): Map<string, View> {
   return new Map(view.fields);
 }
 
-/** Which `{ tokens: [...] }` object is read: the reward, escrowed on the enclosing chain, or the
- *  delivery, which the solver brings to the destination. */
+/** Which token amounts are read: the reward, escrowed on the enclosing chain, or the delivery,
+ *  which the solver brings to the destination. */
 interface TokenList {
   readonly part: "reward" | "delivery";
   readonly chain: CanonicalChain;
 }
 
-const fieldOf = (list: TokenList, path: string): string =>
-  list.part === "reward" ? `\`reward.${path}\`` : `the delivery's \`${path}\``;
+const methodOf = (list: TokenList): string =>
+  list.part === "reward" ? "`.send(...)`" : "`.receive(...)`";
 
+/**
+ * A `.send(...)` or `.receive(...)` argument: one token amount, `{ token, amount }`, or a list of
+ * them. The reward may also pay the native coin: `{ native: amount }` alone, or beside its tokens
+ * as `{ tokens: [...], native: amount }`.
+ */
 function tokenList(
   view: View,
   list: TokenList,
@@ -480,56 +500,44 @@ function tokenList(
   readonly tokens: readonly { readonly token: bigint; readonly amount: Value }[];
   readonly nativeAmount?: Value;
 } {
-  const fields = fieldsOf(
-    view,
-    list.part === "reward" ? "`.reward(...)`'s argument" : "an intent's second argument",
-  );
-  let tokens: { token: bigint; amount: Value }[] = [];
+  const amounts = `each amount ${methodOf(list)} takes is \`{ token, amount }\`, or a list of them`;
+  let entries: readonly View[] = "elements" in view ? view.elements : [view];
   let nativeAmount: Value | undefined;
-  for (const [name, field] of fields) {
-    if (name === "tokens") {
-      if (!("elements" in field)) return fail(`${fieldOf(list, "tokens")} must be an array`);
-      tokens = field.elements.map((element) => {
-        const entry = fieldsOf(element, `each entry of ${fieldOf(list, "tokens")}`);
-        if (!entry.has("token") || !entry.has("amount")) {
-          return fail(
-            `each entry of ${fieldOf(list, "tokens")} needs both \`token\` and \`amount\``,
-          );
-        }
-        const token = valueOf(entry.get("token"), `the ${list.part} token`);
-        if (!("literal" in token)) {
-          return fail(
-            `the ${list.part} token is a variable of the program, known only while it runs, and an ` +
-              `intent names its tokens when it is built. Use a symbol ${list.chain.slug} registers.`,
-          );
-        }
-        for (const key of entry.keys()) {
-          if (key !== "token" && key !== "amount") {
-            fail(`${fieldOf(list, `tokens[].${key}`)} is not a field of a token amount`);
-          }
-        }
-        return {
-          token: token.literal,
-          amount: valueOf(entry.get("amount"), fieldOf(list, "tokens[].amount")),
-        };
-      });
-    } else if (name === "nativeAmount" && list.part === "reward") {
-      nativeAmount = valueOf(field, fieldOf(list, "nativeAmount"));
-    } else if (list.part === "delivery") {
-      return fail(`\`${name}\` is not a field of the delivery, which takes only \`tokens\``);
-    } else {
+  if ("fields" in view && list.part === "reward" && !new Map(view.fields).has("token")) {
+    const fields = new Map(view.fields);
+    for (const key of fields.keys()) {
+      if (key !== "tokens" && key !== "native") {
+        return fail(`\`${key}\` is not a field of a reward: it takes \`tokens\` and \`native\``);
+      }
+    }
+    const tokens = fields.get("tokens");
+    if (tokens !== undefined && !("elements" in tokens)) {
+      return fail("`.send({ tokens })` takes a list of `{ token, amount }`");
+    }
+    entries = tokens === undefined ? [] : tokens.elements;
+    if (fields.has("native")) nativeAmount = valueOf(fields.get("native"), "the native amount");
+  }
+  const tokens = entries.map((element) => {
+    const entry = fieldsOf(element, amounts);
+    if (!entry.has("token") || !entry.has("amount") || entry.size !== 2) return fail(amounts);
+    const token = valueOf(entry.get("token"), `the ${list.part} token`);
+    if (!("literal" in token)) {
       return fail(
-        `\`reward.${name}\` is not settable here. Deadlines, creator and prover come from the ` +
-          `route's own options so every intent in a program agrees on them.`,
+        `the ${list.part} token is a variable of the program, known only while it runs, and an ` +
+          `intent names its tokens when it is built. Use a symbol ${list.chain.slug} registers.`,
       );
     }
-  }
+
+    return {
+      token: token.literal,
+      amount: valueOf(entry.get("amount"), `the ${list.part} amount`),
+    };
+  });
   if (tokens.length === 0 && nativeAmount === undefined) {
     return fail(
       list.part === "reward"
-        ? "`.reward(...)` must offer something — `tokens`, `nativeAmount`, or both"
-        : "the delivery names no token: list what the solver brings in `tokens`, or leave the " +
-            "intent's second argument out",
+        ? "`.send(...)` must offer something: a token amount, a list of them, or `{ native: amount }`"
+        : "`.receive(...)` names no token: list what the solver brings, or leave `.receive` out",
     );
   }
 

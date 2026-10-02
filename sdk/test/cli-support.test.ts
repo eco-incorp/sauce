@@ -152,20 +152,19 @@ function expectRefused(
 const PAY = "function main() {\n  USDC.transfer(RECIPIENT, 1000n);\n}\n";
 /** Base to Arbitrum, the body token writes the Portal's Executor runs. */
 const TO_ARBITRUM =
-  "Arbitrum(() => {\n  USDC.transfer(RECIPIENT, 5n);\n}).reward({ tokens: [{ token: USDC, amount: 7n }] });\n";
+  "Arbitrum.Portal.send([{ token: USDC, amount: 7n }]).then(() => {\n  USDC.transfer(RECIPIENT, 5n);\n});\n";
 /** Base to Arbitrum, the body a program on the destination's Pot: it pays the Kitchen's fee. */
 const TO_ARBITRUM_PROGRAM = [
-  "Arbitrum(",
-  "  () => {",
+  "Arbitrum.Portal.send({ token: USDC, amount: 7n })",
+  "  .receive({ token: USDC, amount: 5n })",
+  "  .then(() => {",
   "    USDC.transfer(RECIPIENT, USDC.balanceOf(ctx.self()));",
-  "  },",
-  "  { tokens: [{ token: USDC, amount: 5n }] },",
-  ").reward({ tokens: [{ token: USDC, amount: 7n }] });",
+  "  });",
   "",
 ].join("\n");
 /** Arbitrum to Base: Arbitrum is its source. */
 const TO_BASE =
-  "Base(() => {\n  USDC.transfer(RECIPIENT, 5n);\n}).reward({ tokens: [{ token: USDC, amount: 7n }] });\n";
+  "Base.Portal.send([{ token: USDC, amount: 7n }]).then(() => {\n  USDC.transfer(RECIPIENT, 5n);\n});\n";
 
 describe("the gate", () => {
   it("refuses only a preview chain, naming each one once with its request", () => {

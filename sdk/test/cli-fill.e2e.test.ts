@@ -52,8 +52,9 @@ const DEADLINE = "2000000000";
 
 /** The intent: Base USDC delivered to the shared Pot, a floor checked, all of it sent on. */
 const COOKED = [
-  "Base(",
-  "  () => {",
+  "Base.Portal.send({ token: USDC, amount: 6000000n })",
+  "  .receive({ token: 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n, amount: AMOUNT_IN })",
+  "  .then(() => {",
   "    const usdc = 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n;",
   "    const got = Token(usdc).balanceOf(ctx.self());",
   '    require(got >= MIN_OUT, "output below MIN_OUT");',
@@ -61,17 +62,15 @@ const COOKED = [
   "    if (REFUND > 0n) {",
   "      Token(usdc).transfer(REFUND_TO, REFUND);",
   "    }",
-  "  },",
-  "  { tokens: [{ token: 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n, amount: AMOUNT_IN }] }",
-  ").reward({ tokens: [{ token: USDC, amount: 6000000n }] });",
+  "  });",
   "",
 ].join("\n");
 
 /** An intent whose body is plain token transfers: route calls the Executor runs, no Pot. */
 const DIRECT = [
-  "Base(() => {",
+  "Base.Portal.send([{ token: USDC, amount: 6000000n }]).then(() => {",
   "  Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, AMOUNT_IN);",
-  "}).reward({ tokens: [{ token: USDC, amount: 6000000n }] });",
+  "});",
   "",
 ].join("\n");
 
@@ -79,9 +78,9 @@ const DIRECT = [
 const MEASURED = [
   "function main() {",
   "  const amount = USDC.balanceOf(ctx.self());",
-  "  Base(() => {",
+  "  Base.Portal.send([{ token: USDC, amount }]).then(() => {",
   "    Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, amount);",
-  "  }).reward({ tokens: [{ token: USDC, amount }] });",
+  "  });",
   "}",
   "",
 ].join("\n");
@@ -365,7 +364,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
     const run = await fill(
       file(
         "computed.sauce.ts",
-        `Base(() => {\n  Token(${computed.toLowerCase()}n).transfer(RECIPIENT, AMOUNT_IN);\n}).reward({ tokens: [{ token: USDC, amount: 6000000n }] });\n`,
+        `Base.Portal.send([{ token: USDC, amount: 6000000n }]).then(() => {\n  Token(${computed.toLowerCase()}n).transfer(RECIPIENT, AMOUNT_IN);\n});\n`,
       ),
       ...defines(),
     );

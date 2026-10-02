@@ -89,6 +89,8 @@ const SKILLS_DIR =
   skillsFlag < 0 ? join(REPOSITORY, "skills") : resolve(process.argv[skillsFlag + 1]);
 const INDEX_SKILL = "sauce-examples";
 const INTENTS_SKILL = "sauce-intents";
+// A program that opens an intent: `<Chain>.Portal.send(…)`.
+const OPENS_INTENT = /\.Portal\s*\.send\s*\(/;
 const PKG = "@eco-incorp/sauce";
 
 const failures = [];
@@ -637,7 +639,9 @@ function wording(skill, file) {
     if (
       skill.dir !== INTENTS_SKILL &&
       !isGenerated(file) &&
-      /\b(?:Portal|portal|[Pp]rover)s?\b/.test(line)
+      // A chain's `Portal` is the intent syntax every skill may show (`Base.Portal.send(…)`); what
+      // stays in the intents skill is the Portal contract and its provers.
+      /\b(?:Portal|portal|[Pp]rover)s?\b/.test(line.replace(/(?:\b[A-Z]\w*|<\w+>)\.Portal\b/g, ""))
     )
       fail(where(i), `names the Portal or a prover outside ${INTENTS_SKILL}`);
     for (const m of line.matchAll(/0x[0-9a-fA-F]{40}(?![0-9a-fA-F])/g)) {
@@ -901,7 +905,7 @@ async function runUsage(where, file, argv, chain, header = false) {
     } else if (flag === "--compact-args") kept.push(flag);
     else if (/^--/.test(flag) && value !== undefined && !value.startsWith("-")) i++;
   }
-  if (/\.reward\(/.test(read(file)) && !kept.includes("--intent-deadline"))
+  if (OPENS_INTENT.test(read(file)) && !kept.includes("--intent-deadline"))
     fail(
       where,
       "opens an intent, so its usage line must give --intent-deadline and --intent-creator",
@@ -1107,7 +1111,7 @@ try {
       if (chains !== undefined) {
         const file = join(SCRATCH, `block-${n++}.sauce.ts`);
         writeFileSync(file, `${block.body}\n`);
-        const intents = /\.reward\(/.test(block.body)
+        const intents = OPENS_INTENT.test(block.body)
           ? ["--intent-deadline", DEADLINE, "--intent-creator", DEV, "--intent-execution-fee", "0"]
           : [];
         for (const chain of chains) {

@@ -41,9 +41,9 @@ const PAY = [
   "",
 ].join("\n");
 const INTENT = [
-  "Base(() => {",
+  "Base.Portal.send([{ token: USDC, amount: 7n }]).then(() => {",
   "  USDC.transfer(RECIPIENT, 5n);",
-  "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
+  "});",
   "",
 ].join("\n");
 
@@ -82,13 +82,12 @@ function answering(answers: ReadonlyArray<readonly [string, readonly bigint[]]>)
 
 /** An intent whose body is a program, so it cooks on the destination's shared intent Pot. */
 const COOKED = [
-  "Base(",
-  "  () => {",
+  "Base.Portal.send({ token: USDC, amount: 7n })",
+  "  .receive({ token: 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n, amount: 5n })",
+  "  .then(() => {",
   "    const got = Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).balanceOf(ctx.self());",
   "    Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, got);",
-  "  },",
-  "  { tokens: [{ token: 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n, amount: 5n }] },",
-  ").reward({ tokens: [{ token: USDC, amount: 7n }] });",
+  "  });",
   "",
 ].join("\n");
 

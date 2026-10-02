@@ -603,11 +603,11 @@ function sum(parts: Uint256[]): Uint256 {
 function main() {
   const amount = USDC.balanceOf(ctx.self());
   require(amount >= MIN_AMOUNT);
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).receive([{ token: USDC, amount }]).then(() => {
     const [held] = abi.decode(abi.encode(balanceOf(USDC, ctx.self())), ["Uint256"]);
     const parts: Uint256[] = [held - fee(held), fee(held)];
     USDC.transfer(RECIPIENT, sum(parts) - fee(held));
-  }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }`;
     const { route, rewardHash } = direct(program, {});
     await base.mint(base.usdc, base.pot, SEEDED);
@@ -640,9 +640,9 @@ function half(): Uint256 {
 function main() {
   total = USDC.balanceOf(ctx.self());
   require(total >= MIN_AMOUNT);
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount: total }]).receive([{ token: USDC, amount: total }]).then(() => {
     USDC.transfer(RECIPIENT, half());
-  }, { tokens: [{ token: USDC, amount: total }] }).reward({ tokens: [{ token: USDC, amount: total }] });
+  });
 }`;
     const { route, rewardHash } = direct(program, {});
     await base.mint(base.usdc, base.pot, SEEDED);
@@ -664,9 +664,9 @@ function main() {
     // the failure the suite above exists to rule out, shown to be real rather than assumed.
     const program = `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: ARBITRUM_USDC, amount }]).then(() => {
     USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: ARBITRUM_USDC, amount }] });
+  });
 }`;
     const compiled = compileSauceRoute(
       "base",

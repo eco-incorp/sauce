@@ -204,9 +204,9 @@ describe("Arc: a reward cannot offer native value and USDC together", () => {
   const program = (destination: string) => `
     function main() {
       const amount = USDC.balanceOf(ctx.self());
-      ${destination}(() => {
+      ${destination}.Portal.send({ tokens: [{ token: USDC, amount }], native: 1n }).then(() => {
         USDC.transfer(RECIPIENT, amount);
-      }).reward({ nativeAmount: 1n, tokens: [{ token: USDC, amount }] });
+      });
     }
   `;
   const compileOn = (chain: string, destination: string) =>

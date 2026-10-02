@@ -1,6 +1,6 @@
 // @sauce/intents — EVM arm.
 //
-// What `Chain(() => { ... }).reward({ ... })` lowers to. The SDK encodes the intent itself, with
+// What `Chain.Portal.send({ ... }).then(() => { ... })` lowers to. The SDK encodes the intent itself, with
 // viem, at the call site (`routes/intent-host.ts`): `data` is the Portal's `publish` (or
 // `publishAndFund`) calldata, with each value the enclosing program knows only at run time already
 // written into it. These functions fund the reward and publish it, in the one cook, so the vault

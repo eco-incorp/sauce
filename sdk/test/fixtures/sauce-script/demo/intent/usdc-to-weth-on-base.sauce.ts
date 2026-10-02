@@ -16,7 +16,7 @@
 //     --intent-deadline <unix seconds> --intent-creator <address> \
 //     --intent-execution-fee <Base Kitchen fee in wei>
 //
-// `--chain arbitrum` is the source: `USDC` in `.reward(...)` is Arbitrum's USDC. Inside the braces
+// `--chain arbitrum` is the source: `USDC` in `.send(...)` is Arbitrum's USDC. Inside `.then(...)`
 // the body runs on Base: `UniswapV3.Factory` and `UniswapV4.PoolManager` are Base's, and every other
 // Base address is a literal from the package's registry (tokens, pancakeswap-v3,
 // aerodrome-slipstream).
@@ -34,8 +34,7 @@
 // sqrtPrice, so every fill costs at most the limit after its fee, and the pools are ranked by that
 // same fee-inclusive price. When AMOUNT_IN is enough to reach the limit everywhere, every pool ends
 // at the same marginal cost, and what is left over is refunded.
-Base(
-  () => {
+Base.Portal.send({ token: USDC, amount: REWARD }).receive({ token: 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n, amount: AMOUNT_IN }).then(() => {
     require(SQRT_PRICE_LIMIT_X96 != 0n &&
       MIN_OUT != 0n &&
       RECIPIENT != 0n &&
@@ -170,6 +169,4 @@ Base(
     if (unsold > 0n) {
       Token(usdc).transfer(REFUND_TO, unsold);
     }
-  },
-  { tokens: [{ token: 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n, amount: AMOUNT_IN }] }
-).reward({ tokens: [{ token: USDC, amount: REWARD }] });
+  });

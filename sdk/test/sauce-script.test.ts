@@ -211,7 +211,8 @@ describe("SauceScript in an editor", () => {
         'import { uniswapV9 } from "@sauce/router";\nfunction main() { uniswapV9(); }\n',
         [2305, 2724],
       ],
-      ["reward", "Base(() => {}).rewards({ tokens: [] });\n", missing],
+      ["send", "Base.Portal.sends({ token: USDC, amount: 1n }).then(() => {});\n", missing],
+      ["then", "Base.Portal.send({ token: USDC, amount: 1n }).than(() => {});\n", missing],
     ];
     for (const [name, body, codes] of cases) {
       const files = program(name, body);

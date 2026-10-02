@@ -7,8 +7,8 @@
  * `--reward-deadline`, `--out`); at a terminal what no flag gave is asked, and with no terminal a
  * missing one is an error naming every flag still needed (`prompt.ts#missingFlags`).
  *
- * The file is an ordinary intent file — `Dest(() => { TOKEN.transfer(RECIPIENT, AMOUNT) })
- * .reward({ tokens: [{ token, amount }] })`, a body of plain token transfers, which the Portal's
+ * The file is an ordinary intent file — `Dest.Portal.send({ token, amount }).then(() => {
+ * TOKEN.transfer(RECIPIENT, AMOUNT) })`, a body of plain token transfers, which the Portal's
  * Executor runs with no Pot — and `run.ts` then publishes it exactly as `sauce intent publish
  * <file>` would: rehearsed on the source (`--dry-run`) and on the destination (`fill`), confirmed,
  * sent, stored.
@@ -357,9 +357,9 @@ function intentText(options: {
 
   return [
     ...options.header.map((line) => `// ${line}`),
-    `${accessor}(() => {`,
+    `${accessor}.Portal.send({ token: ${options.rewardToken.spelled === options.rewardToken.symbol ? options.rewardToken.symbol : options.rewardToken.address.toLowerCase() + "n"}, amount: ${options.reward}n }).then(() => {`,
     `  ${options.delivered.spelled}.transfer(${options.recipient.toLowerCase()}n, ${options.amount}n);`,
-    `}).reward({ tokens: [{ token: ${options.rewardToken.spelled === options.rewardToken.symbol ? options.rewardToken.symbol : options.rewardToken.address.toLowerCase() + "n"}, amount: ${options.reward}n }] });`,
+    `});`,
     "",
   ].join("\n");
 }

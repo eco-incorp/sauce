@@ -70,9 +70,9 @@ function lower(source: string, intents: Record<string, unknown> = DEFAULTS) {
 const program = (body: string) =>
   `function main() {\n  const amount = USDC.balanceOf(self);\n${body}\n}`;
 
-const TRANSFER_INTENT = program(`  Arbitrum(() => {
+const TRANSFER_INTENT = program(`  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
     USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });`);
+  });`);
 
 const selector = (name: string) =>
   toFunctionSelector(
@@ -128,9 +128,9 @@ describe("what the lowering produces", () => {
   // non-zero value. One Executor runs every intent on a chain, so the approve is reset to zero first.
   describe("a token-only approve is reset to zero first", () => {
     const approveIntent = (spender: string, amount: string) =>
-      program(`  Arbitrum(() => {
+      program(`  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
     USDC.approve(${spender}, ${amount});
-  }).reward({ tokens: [{ token: USDC, amount }] });`);
+  });`);
     const callsOf = (source: string) =>
       lower(source).intents[0]!.intent.route.calls.map((call) => {
         const { functionName, args } = decodeFunctionData({ abi: erc20Abi, data: call.data });
@@ -169,9 +169,9 @@ describe("what the lowering produces", () => {
   describe("a top-level `const` is baked in, as a define is", () => {
     // Known when the file is compiled, so nothing is spliced at run time and the intent is fixed:
     // `sauce intent publish` can build it from a wallet.
-    const site = `Arbitrum(() => {
+    const site = `Arbitrum.Portal.send([{ token: USDC, amount: AMOUNT }]).then(() => {
     USDC.transfer(RECIPIENT, AMOUNT);
-  }).reward({ tokens: [{ token: USDC, amount: AMOUNT }] });`;
+  });`;
     const amountsOf = (source: string, defines: Record<string, bigint> = {}) => {
       bound = [];
       const [lowered] = compileSauceProgram("base", source, {
@@ -256,16 +256,16 @@ describe("what the lowering produces", () => {
 
     it("sends a literal native reward, and splices a captured one", () => {
       const literal = lower(
-        program(`  Arbitrum(() => {
+        program(`  Arbitrum.Portal.send({ native: 9n }).then(() => {
     USDC.transfer(RECIPIENT, amount);
-  }).reward({ nativeAmount: 9n });`),
+  });`),
       ).bound[0]!;
       expect(bytesHex(literal[4]!)).toBe(word(9n));
 
       const captured = lower(
-        program(`  Arbitrum(() => {
+        program(`  Arbitrum.Portal.send({ tokens: [{ token: USDC, amount: 3n }], native: amount }).then(() => {
     USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: USDC, amount: 3n }], nativeAmount: amount });`),
+  });`),
       ).bound[0]!;
       expect("bytes" in captured[4]! && captured[4].splices).toEqual([
         { offset: 0, runtime: expect.any(Number) },
@@ -275,9 +275,9 @@ describe("what the lowering produces", () => {
     it("hands every entry of a token listed twice to the library, which funds the larger", () => {
       const rewards = lower(
         program(`  const more = 9n;
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }, { token: USDC, amount: more }, { token: USDC, amount: 4n }]).then(() => {
     USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: USDC, amount }, { token: USDC, amount: more }, { token: USDC, amount: 4n }] });`),
+  });`),
       ).bound[0]![3]!;
       const hex = bytesHex(rewards).slice(2);
       // Three entries of 64 bytes, each Base's USDC; `more` is a constant, so it is baked in.
@@ -317,12 +317,12 @@ describe("what the lowering produces", () => {
   });
 
   it("lowers several intents in one program", () => {
-    const two = program(`  Arbitrum(() => {
+    const two = program(`  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
     USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });
-  Optimism(() => {
+  });
+  Optimism.Portal.send([{ token: USDC, amount }]).then(() => {
     USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });`);
+  });`);
     expect(lower(two).intents.map((i) => i.destination.slug)).toEqual(["arbitrum", "optimism"]);
   });
 });
@@ -344,7 +344,7 @@ describe("a body that is not just token writes becomes a program", () => {
     ],
   ])("compiles a program for %s", (_name, body) => {
     const source = program(
-      `  Arbitrum(() => {\n    ${body}\n  }).reward({ tokens: [{ token: USDC, amount }] });`,
+      `  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {\n    ${body}\n  });`,
     );
     const [lowered] = lower(source, { ...DEFAULTS, executionFee: 0n }).intents;
 
@@ -359,19 +359,19 @@ describe("a body that is not just token writes becomes a program", () => {
     expect(() =>
       lower(
         program(
-          `  Solana(() => {\n    USDC.transfer(RECIPIENT, amount);\n  }).reward({ tokens: [{ token: USDC, amount }] });`,
+          `  Solana.Portal.send([{ token: USDC, amount }]).then(() => {\n    USDC.transfer(RECIPIENT, amount);\n  });`,
         ),
       ),
     ).toThrow();
   });
 
   it("lowers an intent opened inside an intent, each by its own level", () => {
-    const source = program(`  Arbitrum(() => {
+    const source = program(`  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
     const got = USDC.balanceOf(self);
-    Base(() => {
+    Base.Portal.send([{ token: USDC, amount: got }]).then(() => {
       USDC.transfer(RECIPIENT, got);
-    }).reward({ tokens: [{ token: USDC, amount: got }] });
-  }).reward({ tokens: [{ token: USDC, amount }] });`);
+    });
+  });`);
 
     const { intents, bound: all } = lower(source, { ...DEFAULTS, executionFee: 0n });
     // The program's own intent is reported; the inner one was bound by the body's level, first.
@@ -382,9 +382,10 @@ describe("a body that is not just token writes becomes a program", () => {
 });
 
 describe("the Pot a program body cooks on", () => {
-  const PROGRAM_BODY = program(`  Arbitrum(() => {
+  const PROGRAM_BODY =
+    program(`  Arbitrum.Portal.send([{ token: USDC, amount }]).receive([{ token: USDC, amount }]).then(() => {
     if (amount > 1n) { USDC.transfer(RECIPIENT, amount); }
-  }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount }] });`);
+  });`);
   const callsWith = (intents: Record<string, unknown> = {}) =>
     lower(PROGRAM_BODY, { ...DEFAULTS, executionFee: 0n, ...intents }).intents[0]!.intent.route
       .calls;
@@ -436,16 +437,16 @@ describe("the Pot a program body cooks on", () => {
 describe("what it refuses, and how clearly", () => {
   it("an identifier nothing declares is the compiler's unknown name", () => {
     const source = program(
-      "  Arbitrum(() => {\n    USDC.transfer(mystery, amount);\n  }).reward({ tokens: [{ token: USDC, amount }] });",
+      "  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {\n    USDC.transfer(mystery, amount);\n  });",
     );
     expect(() => lower(source)).toThrow(/`mystery` is not a declared variable/);
   });
 
   describe("a token it cannot resolve, named as the chain it is on", () => {
     const intent = (deliveryToken: string, deliveryAmount = "amount", rewardToken = "USDC") =>
-      program(`  Arbitrum(() => {
+      program(`  Arbitrum.Portal.send([{ token: ${rewardToken}, amount }]).receive([{ token: ${deliveryToken}, amount: ${deliveryAmount} }]).then(() => {
     if (amount > 1n) { USDC.transfer(RECIPIENT, amount); }
-  }, { tokens: [{ token: ${deliveryToken}, amount: ${deliveryAmount} }] }).reward({ tokens: [{ token: ${rewardToken}, amount }] });`);
+  });`);
     const lowerOne = (source: string) => lower(source, { ...DEFAULTS, executionFee: 0n });
 
     it("a delivery token the destination does not register", () => {
@@ -477,9 +478,9 @@ describe("what it refuses, and how clearly", () => {
   });
 
   it("says which chain has no eco-routes deployment", () => {
-    const source = program(`  Zora(() => {
+    const source = program(`  Zora.Portal.send([{ token: USDC, amount }]).then(() => {
     Token(0x7777777777777777777777777777777777777777).transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });`);
+  });`);
     expect(() => lower(source)).toThrow(/eco-routes v3 is not deployed on zora/);
   });
 
@@ -518,9 +519,9 @@ describe("through the route compile", () => {
       intents,
       bound: [args],
     } = lower(`function main() {
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount: 7n }]).then(() => {
     USDC.transfer(RECIPIENT, 5n);
-  }).reward({ tokens: [{ token: USDC, amount: 7n }] });
+  });
 }`);
     expect(intents[0]!.captures).toEqual([]);
     // No slot to fill: the whole publish calldata is fixed.
@@ -536,9 +537,9 @@ describe("through the route compile", () => {
         `function main() {
   const amount = USDC.balanceOf(self);
   const native = ctx.selfBalance();
-  Arbitrum(() => {
+  Arbitrum.Portal.send({ tokens: [{ token: USDC, amount }, { token: USDC, amount: 7n }], native: native }).then(() => {
     USDC.transfer(RECIPIENT, 5n);
-  }).reward({ tokens: [{ token: USDC, amount }, { token: USDC, amount: 7n }], nativeAmount: native });
+  });
 }`,
         execution,
         { defines: { RECIPIENT }, intents: { ...DEFAULTS, fundVia } },
@@ -552,9 +553,9 @@ describe("through the route compile", () => {
       "base",
       `function main() {
   const amount = Token(USDC).balanceOf(self);
-  Arbitrum(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).then(() => {
     USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }`,
       execution,
       { defines: { RECIPIENT }, intents: DEFAULTS },
