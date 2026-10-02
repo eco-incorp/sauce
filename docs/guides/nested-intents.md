@@ -135,12 +135,12 @@ of the Kitchen on the chain whose body is a program.
 Each part of the file runs on one chain, and a token symbol, `chainId` or protocol address in it is
 that chain's:
 
-| Part                                              | Runs on                         | `USDC` is  |
-| ------------------------------------------------- | ------------------------------- | ---------- |
-| The outer `.send(...)`                            | Ethereum, which escrows it      | Ethereum's |
-| The outer `.receive(...)`, and the outer body     | Base, the outer destination     | Base's     |
-| The inner `.send(...)`                            | Base: the outer body funds it   | Base's     |
-| The inner `.receive(...)`, and the inner body     | Ethereum, the inner destination | Ethereum's |
+| Part                                          | Runs on                         | `USDC` is  |
+| --------------------------------------------- | ------------------------------- | ---------- |
+| The outer `.send(...)`                        | Ethereum, which escrows it      | Ethereum's |
+| The outer `.receive(...)`, and the outer body | Base, the outer destination     | Base's     |
+| The inner `.send(...)`                        | Base: the outer body funds it   | Base's     |
+| The inner `.receive(...)`, and the inner body | Ethereum, the inner destination | Ethereum's |
 
 A body and its delivery resolve on their destination; a reward, in `.send(...)`, resolves on the
 chain whose program offers it, because that program pays it into the vault there. The rule repeats at every depth.
@@ -222,8 +222,8 @@ returns.
 Every intent a file opens, at every depth, takes the same route deadline, reward deadline, creator,
 funding mode, salt and execution fee: `--intent-deadline`, `--intent-reward-deadline`,
 `--intent-creator`, `--intent-fund-via` and `--intent-execution-fee`, or `deadline`, `rewardDeadline`,
-`creator` and `fundVia` in `IntentOptions` and the rest in `compile.intents`. A `.reward(...)` written in a
-program takes only `tokens` and `nativeAmount`.
+`creator` and `fundVia` in the route options (`.receive(...)`'s) and the rest in `compile.intents`.
+`.send(...)` written in a program names only the reward's tokens.
 
 - **One deadline.** Every level must be filled by the same moment, so a later level has whatever
   time the earlier ones leave it. Choose the deadline for the whole chain of intents, and the reward
@@ -232,9 +232,9 @@ program takes only `tokens` and `nativeAmount`.
   so it must be an address its owner controls on each of them.
 - **One execution fee** pays the cook of every program body the file opens, whatever its depth. In
   the two-level file only the outer body is a program, so it is Base's Kitchen fee. `--intent-execution-fee auto` reads
-  each such destination's Kitchen and refuses when they differ. An outer intent built with
-  `Base(body, options)` pays its own body's fee as `execution.value`, apart from the one in
-  `compile.intents`.
+  each such destination's Kitchen and refuses when they differ. An outer intent built in
+  TypeScript with `Base.Portal` pays its own body's fee as `execution.value` in its route options,
+  apart from the one in `compile.intents`.
 - **The Portal and the prover are per level.** Each is looked up for that level's own chains: the
   inner intent above is published on Base's Portal, its route names Ethereum's, and its reward names
   the prover for Base to Ethereum. An override in `compile.intents` applies to every level alike.
@@ -297,7 +297,7 @@ to, and it is the reward of the third. Each level's numbers are filled in by the
 that level's own execution time.
 
 The first two bodies measure and open an intent, so each is a program, cooked on its chain's Pot.
-The second argument of each names what the solver of that level delivers, so the program has
+The `.receive(...)` of each names what the solver of that level delivers, so the program has
 something to measure, and that level's route moves it into the Pot first. Each level is funded on
 the chain whose program offers it: the second level's reward in Base's USDC, the third's in
 Ethereum's, out of what the second level's solver delivered there.
@@ -317,35 +317,37 @@ it.
 
 The program form above is the way to write nested intents. `.nest(child, options)` is the lower
 level underneath it: it attaches an intent you built in TypeScript to a route you built in
-TypeScript, before either runs.
+TypeScript, before either runs. It goes between `.receive(...)` and `.then(...)`:
 
 ```ts
 import { Base, Ethereum } from "@eco-incorp/sauce";
 import type { routes } from "@eco-incorp/sauce";
 
 export function attachChild(
-  parentOptions: routes.IntentOptions,
-  childOptions: routes.IntentOptions,
-  parentReward: routes.SauceRewardSpec,
-  childReward: Omit<routes.SauceRewardSpec, "source">,
+  parentReward: routes.TokenAmounts,
+  parentRewardOptions: routes.PortalSendOptions,
+  parentOptions: routes.PortalReceiveOptions,
+  childReward: routes.TokenAmounts,
+  childRewardOptions: Omit<routes.PortalSendOptions, "source">,
+  childOptions: routes.PortalReceiveOptions,
   executionFee: bigint,
 ) {
-  return Base("function main() { return 1n; }", parentOptions)
+  return Base.Portal.send(parentReward, parentRewardOptions)
+    .receive([], parentOptions)
     .nest(
       (on) =>
-        Ethereum("function main() { return 1n; }", childOptions).reward({
-          ...childReward,
-          source: on,
-        }),
+        Ethereum.Portal.send(childReward, { ...childRewardOptions, source: on })
+          .receive([], childOptions)
+          .then("function main() { return 1n; }"),
       { requireCap: true, executionFee },
     )
-    .reward(parentReward);
+    .then("function main() { return 1n; }");
 }
 ```
 
 Reach for it where the program form does not reach:
 
-- **Per-level options.** Each child takes its own `IntentOptions`, so its own deadline, creator,
+- **Per-level options.** Each child takes its own options, so its own deadline, creator,
   prover and fee.
 - **Action programs.** A JSON action program has no action that opens an intent, so `.nest()` is how
   one is chained to another ([actions](actions.md#fund-a-child-from-a-measured-amount)).

@@ -15,27 +15,30 @@ This is a complete program. It builds an Eco intent offline: the creator and the
 and nothing is sent to a chain.
 
 ```ts
-import { Base } from "@eco-incorp/sauce";
+import { Base, Ethereum } from "@eco-incorp/sauce";
 
 const executionFee = 1_000n; // Fixture: read Base's Kitchen fee with destinationExecutionFee().
 
-const built = Base(
-  () => {
-    USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+const built = Base.Portal.send(
+  { token: Ethereum.USDC.address, amount: 10_000n },
+  {
+    source: "ethereum",
+    creator: "0x4444444444444444444444444444444444444444",
+    deadline: 2_000_003_600n,
   },
-  { execution: { value: executionFee }, deadline: 2_000_000_000n },
-).reward({
-  source: "ethereum",
-  creator: "0x4444444444444444444444444444444444444444",
-  deadline: 2_000_003_600n,
-});
+)
+  .receive([], { execution: { value: executionFee }, deadline: 2_000_000_000n })
+  .then(() => {
+    USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+  });
 
 console.log(built.hash().intentHash);
 ```
 
-`Base` names the **destination**, the chain the program runs on; `.reward(...)` names the
-**source**, where the reward is escrowed. That one expression does what an intent otherwise takes
-by hand:
+`Base.Portal` names the **destination**, the chain the program runs on. `.send(...)` is the reward
+and names the **source**, where it is escrowed; `.receive(...)` is what the solver delivers on Base,
+here nothing, since an approval moves no tokens; `.then(...)` is the program. That one expression
+does what an intent otherwise takes by hand:
 
 - looks up USDC and the Universal Router on Base, and binds the ERC-20 ABI;
 - compiles the body, so there is no contract to write or deploy;

@@ -63,8 +63,8 @@ const context = (overrides: Record<string, unknown> = {}) =>
     ...overrides,
   }) as never;
 
-const wrap = (body: string, reward = "{ tokens: [{ token: USDC, amount }] }", chain = "Arbitrum") =>
-  `function main() {\n  const amount = 5n;\n  ${chain}(() => {\n    ${body}\n  }).reward(${reward});\n}`;
+const wrap = (body: string, reward = "{ token: USDC, amount }", chain = "Arbitrum") =>
+  `function main() {\n  const amount = 5n;\n  ${chain}.Portal.send(${reward})\n    .receive({ token: USDC, amount })\n    .then(() => {\n      ${body}\n    });\n}`;
 
 /** Documented sentence -> the program that must produce it. */
 const REFUSALS: readonly {
@@ -80,11 +80,26 @@ const REFUSALS: readonly {
   {
     documented: "a token entry missing `token` or `amount`",
     trigger: () =>
+      rewriteIntentSugar(wrap("USDC.transfer(RECIPIENT, amount);", "{ token: USDC }"), context()),
+    message: /needs both `token` and `amount`/,
+  },
+  {
+    documented: "An intent missing `.send`, `.receive` or `.then`",
+    trigger: () =>
       rewriteIntentSugar(
-        wrap("USDC.transfer(RECIPIENT, amount);", "{ tokens: [{ token: USDC }] }"),
+        `function main() {\n  Arbitrum.Portal.send({ token: USDC, amount: 5n }).receive({ token: USDC, amount: 5n });\n}`,
         context(),
       ),
-    message: /needs both `token` and `amount`/,
+    message: /has no body\. Finish it with `\.then/,
+  },
+  {
+    documented: "An amount's arithmetic that would revert",
+    trigger: () =>
+      rewriteIntentSugar(
+        wrap("USDC.transfer(RECIPIENT, amount);", "{ token: USDC, amount: 1n - 2n }"),
+        context(),
+      ),
+    message: /outside an unsigned 256-bit word/,
   },
   {
     documented: "A missing `deadline`",
@@ -112,9 +127,11 @@ const REFUSALS: readonly {
     trigger: () =>
       rewriteIntentSugar(
         `function payout(amount) {
-  Arbitrum(() => {
-    if (amount > 0n) { payout(amount); }
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount })
+    .then(() => {
+      if (amount > 0n) { payout(amount); }
+    });
 }
 function main() {
   payout(5n);
@@ -134,9 +151,11 @@ function half() {
 }
 function main() {
   const total = 5n;
-  Arbitrum(() => {
-    if (half() > 0n) { USDC.transfer(RECIPIENT, total); }
-  }).reward({ tokens: [{ token: USDC, amount: total }] });
+  Arbitrum.Portal.send({ token: USDC, amount: total })
+    .receive({ token: USDC, amount: total })
+    .then(() => {
+      if (half() > 0n) { USDC.transfer(RECIPIENT, total); }
+    });
 }`,
         context(),
       ),
@@ -209,9 +228,11 @@ describe("the guide's account of which chain a name resolves on is the lowering'
     rewriteIntentSugar(
       `function main() {
   const amount = 5n;
-  Arbitrum(() => {
-    USDC.transfer(RECIPIENT, amount);
-  }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount }] });
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount })
+    .then(() => {
+      USDC.transfer(RECIPIENT, amount);
+    });
 }`,
       context({
         definesFor: (chain: typeof BASE) =>
@@ -226,16 +247,15 @@ describe("the guide's account of which chain a name resolves on is the lowering'
 
   const CLAIMS: readonly { readonly documented: string; readonly holds: () => boolean }[] = [
     {
-      documented: "| The braces | Arbitrum, the destination | Arbitrum's |",
+      documented: "| The braces of `.then(...)` | Arbitrum, the destination | Arbitrum's |",
       holds: () => lowered().route.calls[0]!.target === onChain(ARBITRUM.slug),
     },
     {
-      documented:
-        "| The second argument, what is delivered | Arbitrum, the destination | Arbitrum's |",
+      documented: "| `.receive(...)`, what is delivered | Arbitrum, the destination | Arbitrum's |",
       holds: () => lowered().route.tokens[0]!.token === onChain(ARBITRUM.slug),
     },
     {
-      documented: "| `.reward(...)` | The chain the program runs on | That chain's |",
+      documented: "| `.send(...)`, the reward | The chain the program runs on | That chain's |",
       holds: () => lowered().reward.tokens[0]!.token === onChain(BASE.slug),
     },
     {
@@ -249,9 +269,11 @@ describe("the guide's account of which chain a name resolves on is the lowering'
           "base",
           `function main() {
   const amount = 5n;
-  Arbitrum(() => {
-    USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount })
+    .then(() => {
+      USDC.transfer(RECIPIENT, amount);
+    });
 }`,
           { pot: CREATOR, engine: CREATOR },
           {
@@ -302,9 +324,11 @@ describe("the guide's account of the destination Pot is the builder's", () => {
       "base",
       `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum(() => {
-    if (amount > 0n) { USDC.transfer(RECIPIENT, amount); }
-  }, { tokens: [{ token: USDC, amount }] }).reward({ tokens: [{ token: USDC, amount }] });
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount })
+    .then(() => {
+      if (amount > 0n) { USDC.transfer(RECIPIENT, amount); }
+    });
 }`,
       { pot: PORTAL, engine: PORTAL },
       {

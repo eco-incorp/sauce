@@ -116,7 +116,7 @@ mints it has not opened yet, which are left out, as are Superstate's, which only
 holder can hold.
 
 A missing symbol means the registry has no verified row under that name. Token variants can have
-different symbols and addresses. `IntentOptions.tokenDefines` or `SauceCompileOptions.tokens`
+different symbols and addresses. `tokenDefines` in the route options or `SauceCompileOptions.tokens`
 can override or add a chain-local mapping. Amounts are integer token units; the compiler does not
 apply decimal scaling.
 

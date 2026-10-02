@@ -85,10 +85,10 @@ Without Sauce, this hop is either a contract you write and deploy (read the bala
 intent around the amount, ask the Portal for its vault, pay the reward into it, call `publish`) or
 a second intent you publish yourself after the first lands and you have read what it produced.
 
-`USDC` is a registered token symbol, and inside the braces it means **Arbitrum's** USDC, because
-that is where those calls run. In `.reward(...)` it means the USDC of the chain the program runs
-on — Base, in [the caller](docs/examples/cross-chain-intent.ts) — because the program escrows the
-reward there. `RECIPIENT` and `MIN_AMOUNT` are compile-time `defines`: a program captures nothing
+`USDC` is a registered token symbol. In `.receive(...)` and inside the braces it means
+**Arbitrum's** USDC, because that is where those tokens are delivered and those calls run. In
+`.send(...)` it means the USDC of the chain the program runs on — Base, in
+[the caller](docs/examples/cross-chain-intent.ts) — because the program escrows the reward there. `RECIPIENT` and `MIN_AMOUNT` are compile-time `defines`: a program captures nothing
 from the JavaScript around it, so defines are how application values reach one.
 
 You supply what the SDK cannot know once, on the enclosing intent, and every intent the program
@@ -107,20 +107,22 @@ chain, so a program reads like the operation it performs. This example builds a 
 offline; the creator and the fee are fixtures and nothing is sent.
 
 ```ts
-import { Base } from "@eco-incorp/sauce";
+import { Base, Ethereum } from "@eco-incorp/sauce";
 
 const executionFee = 1_000n; // Fixture: read Base's Kitchen fee with destinationExecutionFee().
 
-const built = Base(
-  () => {
-    USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+const built = Base.Portal.send(
+  { token: Ethereum.USDC.address, amount: 10_000n },
+  {
+    source: "ethereum",
+    creator: "0x4444444444444444444444444444444444444444",
+    deadline: 2_000_003_600n,
   },
-  { execution: { value: executionFee }, deadline: 2_000_000_000n },
-).reward({
-  source: "ethereum",
-  creator: "0x4444444444444444444444444444444444444444",
-  deadline: 2_000_003_600n,
-});
+)
+  .receive([], { execution: { value: executionFee }, deadline: 2_000_000_000n })
+  .then(() => {
+    USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+  });
 
 console.log(built.hash().intentHash);
 ```
@@ -131,13 +133,13 @@ sends, which is the cook's fee. The options take any of them as an override. Wha
 the deadlines, the creator, the reward and the fee, which is on-chain state the destination's
 Kitchen sets: `destinationExecutionFee()` builds the read.
 
-Two kinds of name meet in that snippet. `Base` is a **named export**, one per chain; importing the
+Two kinds of name meet in that snippet. `Base` and `Ethereum` are **named exports**, one per chain; importing the
 package puts nothing on `globalThis`. `USDC` and `Uniswap` are **program syntax**: the SDK resolves
 them to Base's addresses and binds the ABI, so there is no address to look up and no JavaScript
 object to import. The callback is read as source text and never invoked, so it captures nothing;
 application values reach it through `defines`.
 
-`.reward(...)` completes the intent and returns its hashes, bytecode and the Portal transaction
+`.then(...)` completes the intent and returns its hashes, bytecode and the Portal transaction
 requests your application submits. [Quick start](docs/guides/quick-start.md) walks through it, and
 [protocols and tokens](docs/guides/protocols-and-tokens.md) covers the names available.
 

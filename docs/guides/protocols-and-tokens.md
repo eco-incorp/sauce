@@ -49,7 +49,7 @@ export function compileApproval(pot: routes.AddressInput, engine: routes.Address
 }
 ```
 
-The returned `calls` encode an EVM Pot `cook`; this function does not submit a transaction. The same body can be a callback to `Base(() => { ... }, options).reward(...)`; see [creating intents](intents.md).
+The returned `calls` encode an EVM Pot `cook`; this function does not submit a transaction. The same body can be the callback of `Base.Portal.send(...).receive(...).then(() => { ... })`; see [creating intents](intents.md).
 
 The supported Universal Router spelling is `UniswapV4.UniversalRouter`, or the unambiguous family alias `Uniswap.UniversalRouter`. `UniswapV3.UniversalRouter` is not registered. The router's `execute` method takes the arguments declared by its ABI; the namespace does not construct swap commands or select a route for you.
 
@@ -134,7 +134,8 @@ compiles it for both.
 - A name the registry does not know on any chain is an error, not `false`, as are an ambiguous
   family name and an interface, so a typo cannot quietly drop a branch. A program that declares its
   own `available` keeps it.
-- Inside an intent to another chain, `Arbitrum(() => { ... })`, it is decided for that chain.
+- Inside an intent to another chain, `Arbitrum.Portal.send(...).receive(...).then(() => { ... })`,
+  it is decided for that chain.
 
 In TypeScript, the same question is a contract's `.available`, and whether the chain export has the
 token: `Optimism.PancakeswapV3.Factory.available` is `false`, and `Celo.USDC` is a type error.
@@ -180,7 +181,7 @@ The raw ABI call is **not** SafeERC20: `Erc20.ERC20.at(address).transfer(...)`, 
 reverts on a token that returns nothing and accepts one that returns `false`. Use it only when that
 is the behavior you want; otherwise use one of the spellings above.
 
-Use `tokenDefines` on an intent to add or override symbols, or `tokens` on `compileSauceRoute`'s compile options. Overrides merge per symbol with the registry. These maps contain **addresses**; `IntentOptions.tokens` instead declares the **token amounts** a solver must deliver for the route.
+Use `tokenDefines` on an intent to add or override symbols, or `tokens` on `compileSauceRoute`'s compile options. Overrides merge per symbol with the registry. These maps contain **addresses**; `.receive(...)` instead names the **token amounts** a solver must deliver for the route.
 
 ```ts
 import { routes } from "@eco-incorp/sauce";

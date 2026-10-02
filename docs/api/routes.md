@@ -11,18 +11,24 @@ import { Base, routes } from "@eco-incorp/sauce";
 const destination = routes.chain("base");
 ```
 
-There is no `/routes` subpath. The public types are members of the namespace: `routes.IntentOptions`,
-`routes.BuiltIntent`, and so on.
+There is no `/routes` subpath. The public types are members of the namespace:
+`routes.PortalReceiveOptions`, `routes.BuiltIntent`, and so on.
 
 ## Chain entry points
 
-| Entry point                            | Result                                            |
-| -------------------------------------- | ------------------------------------------------- |
-| `Base(body, options)`                  | Pending destination route awaiting `.reward(...)` |
-| `Base.route(body, options)`            | Same behavior as the callable chain               |
-| `routes.chain(ref)`                    | Chain route entry point for a chain reference     |
-| `routes.chainAccessors.Base`           | Explicit access to the route chain entry point    |
-| `routes.openRoute(ref, body, options)` | Direct function behind chain entry points         |
+| Entry point                                       | Result                                                                      |
+| ------------------------------------------------- | --------------------------------------------------------------------------- |
+| `Base.Portal.send(reward, rewardOptions?)`        | The intent with its reward, awaiting `.receive(...)`                        |
+| `.receive(delivery, routeOptions)`                | Awaiting the body: `.then(...)`, after any `.nest(...)`                     |
+| `.nest(childOrThunk, nestOptions?)`               | Attaches a child built in TypeScript; see [nesting](#nesting-in-typescript) |
+| `.then(body)`                                     | The `BuiltIntent`                                                           |
+| `routes.chainPortal(ref)`                         | The same Portal for a chain reference                                       |
+| `routes.chain(ref)`, `routes.chainAccessors.Base` | The chain entry point, with `.chain` and `.Portal`                          |
+| `routes.openRoute(ref, body, routeOptions)`       | The builder behind each Portal, which the actions API returns               |
+
+`.then` is the intent's, not a promise's: `await` on the expression, or returning it from an async
+function, is refused by TypeScript and rejected at run time. `send` and `receive` each take one
+`{ token, amount }` or an array of them; `[]` names none.
 
 Chain references accept canonical slugs, names/aliases supported by the registry, numeric chain IDs, and canonical chain records. `.chain` exposes the canonical record.
 
@@ -30,7 +36,10 @@ Chain references accept canonical slugs, names/aliases supported by the registry
 
 `body` accepts a source string or a synchronous zero-argument callback. A string is a SauceScript file, compiled as written: a module declaring `function main(...)`, or a script whose top-level statements are the entry. A script cannot `return`, so a program that returns a value declares `main`. A callback supplies source text, with no JavaScript capture. See [callback semantics](../guides/intents.md#callbacks-are-compiled-source).
 
-## Intent options
+## Route options
+
+`.receive(delivery, routeOptions)` takes the solver-delivered destination tokens, and these
+(`routes.PortalReceiveOptions`):
 
 | Option                                          | Purpose                                                                          |
 | ----------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -40,17 +49,20 @@ Chain references accept canonical slugs, names/aliases supported by the registry
 | `portal`                                        | Destination Portal. Defaults to the eco-routes deployment for that chain         |
 | `ecoRoutes`                                     | Which eco-routes deployment to address: `generation` and `environment`           |
 | `salt`                                          | Route salt; defaults to 32 zero bytes                                            |
-| `tokens`                                        | Solver-delivered destination tokens                                              |
 | `nativeAmount`                                  | Native the solver sends with the fill. Defaults to the sum of the calls' values  |
 | `precalls`                                      | Calls before the compiled program and nested calls                               |
 | `tokenDefines`                                  | Token-symbol address overrides                                                   |
 | `defines`, `compile`                            | Program specialization and compile options                                       |
 | `sourcePortal`                                  | Source Portal for submission/read requests. Defaults like `portal`               |
-| `source`, `creator`, `prover`, `rewardDeadline` | Fallback fields for `.reward(...)`; `prover` defaults as the reward's does       |
+| `source`, `creator`, `prover`, `rewardDeadline` | Fallbacks for the reward options; `prover` defaults as the reward's does         |
 
 On an EVM destination the Pot and engine are derived when omitted: the Pot owned by the `executor()` of the Portal the route records, under salt zero (`SAUCE_INTENT_POT_SALT`) — the one Pot per Portal the solver deploys — and the released engine. The route does not deploy it: the Pot must exist before fulfilment, and the solver deploys it. A Pot you name must equally exist and be owned by that Executor. `destinationPot(chain, { portal?, ecoRoutes? })` returns the derived address. Set `execution.value` to the current Kitchen fee plus any native assets the program spends; with no `value`, the cook sends zero and works only with a fee-free Kitchen. `nativeAmount` defaults to the sum of the route's call values — each cook's `value`, each precall's, each nested child's — less a `fundedByBody` child's native reward: what the Executor pays out, so the solver sends exactly that. One you set is used as given. See [the destination Pot](../guides/intents.md#the-destination-pot).
 
-`.reward(...)` accepts an object, a native amount as `bigint`, or an array of `{ token, amount }`. Object fields override option fallbacks. `source` and `creator` must resolve from one of those places. `prover` defaults to `ecoRoutesProver(source, destination, options.ecoRoutes)`, the registry's prover for the pair — the one an intent opened inside a program and `sauce intent publish` record — and a pair the registry has none for must name one. Reward deadline resolution is `reward.deadline`, then `options.rewardDeadline`, then `options.deadline`. Native and token amounts default to zero/empty where omitted.
+## Reward options
+
+`.send(reward, rewardOptions)` takes the source tokens offered as the reward, and
+`{ source, creator, deadline, prover, nativeAmount }` (`routes.PortalSendOptions`). Each overrides
+the route options' fallback. `source` and `creator` must resolve from one of those places. `prover` defaults to `ecoRoutesProver(source, destination, routeOptions.ecoRoutes)`, the registry's prover for the pair — the one an intent opened inside a program and `sauce intent publish` record — and a pair the registry has none for must name one. Reward deadline resolution is the reward options' `deadline`, then `routeOptions.rewardDeadline`, then `routeOptions.deadline`. The native amount defaults to zero.
 
 The compiler needs no source reward to compile a destination program. Use `compileSauceRoute` when you only need destination calls.
 
@@ -113,7 +125,7 @@ Every address helper here returns a **recorded** address, never a verified one. 
 
 Submission and read helpers take an optional `{ portal }` override; without one they use `sourcePortal`, which itself defaults to the eco-routes Portal for the reward's source chain. They build EVM requests, require an EVM source, and perform no RPC — you send them. The codec represents an SVM destination fine; building that execution is the separate matter above. `encodeEVM()`/`encodeSVM()` force a codec for inspection; they do not change an intent's chain kinds.
 
-`sourceTxs()` funds by transfer by default: a `transfer` of each reward token to the intent's vault, a plain send of the native amount, then `publish`. Pass `vault` as `vaultCall()` read it; it must equal `predictVault()` or `IntentVaultMismatchError` is thrown. `fundVia: "publishAndFund"` (or `IntentOptions.fundVia`, which also selects it for the intents the route's own program opens) returns `approvals()` then `publishAndFundCalldata(allowPartial)`. The same choice is `intentSourceTxs(intent, { portal }, options)` for an `Intent` built some other way, over `vaultTransferTxs`, `rewardVaultLegs`, `predictIntentVault` and `assertIntentVault`; `ecoRoutesVaultConfig(portal)` is the vault configuration behind the prediction. [Intents](../guides/intents.md#submit-the-source-reward) covers the order and the checks.
+`sourceTxs()` funds by transfer by default: a `transfer` of each reward token to the intent's vault, a plain send of the native amount, then `publish`. Pass `vault` as `vaultCall()` read it; it must equal `predictVault()` or `IntentVaultMismatchError` is thrown. `fundVia: "publishAndFund"` (or `routeOptions.fundVia`, which also selects it for the intents the route's own program opens) returns `approvals()` then `publishAndFundCalldata(allowPartial)`. The same choice is `intentSourceTxs(intent, { portal }, options)` for an `Intent` built some other way, over `vaultTransferTxs`, `rewardVaultLegs`, `predictIntentVault` and `assertIntentVault`; `ecoRoutesVaultConfig(portal)` is the vault configuration behind the prediction. [Intents](../guides/intents.md#submit-the-source-reward) covers the order and the checks.
 
 The destination side is a solver's, and two helpers build it from `built.intent`: `fulfillTx(intent, { claimant })` is `Portal.fulfill(intentHash, route, rewardHash, claimant)`, sent to the Portal the route records with `route.nativeAmount` as its value, and `fulfillApprovalTxs(intent)` the solver's approvals of that Portal for the route's tokens, which it pulls from the solver first (one per token, the entries summed). Both require an EVM destination. The route they carry is `evmRouteTuple(route)`, the value `routeHash` is taken over, so the Portal's hash check agrees with `hashIntent`. [`sauce intent fill`](../guides/cli.md#rehearsing-the-fill-sauce-intent-fill) rehearses them on the destination with no key, and with `--send` sends them.
 
@@ -121,15 +133,17 @@ After the fill, the same module builds the rest of an intent's life, each as a r
 
 ## Nested intents
 
-A nested intent is written in the program: `Chain(() => { ... }).reward({ ... })` in a body opens
-an intent when that body runs, at any depth. In a typed closure the chain is the imported export,
-which carries that SauceScript call (`SauceIntentChain`) ahead of its host signature — see [nested intents](../guides/nested-intents.md) and
+A nested intent is written in the program:
+`Ethereum.Portal.send(reward).receive(delivery).then(() => { ... })` in a body opens an intent when
+that body runs, at any depth. In a typed closure the chain is the imported export, whose `Portal`
+carries those SauceScript steps (`SaucePortal`, through `SauceIntentChain`) ahead of its host ones —
+see [nested intents](../guides/nested-intents.md) and
 [create an intent](../guides/intents.md#create-an-intent-from-inside-a-program).
 `SauceCompileOptions.intents` carries what that lowering cannot look up (a deadline, a creator, the
 fee of a program body's cook) and what overrides it: `sourcePortal`, `destinationPortal`, `prover`,
 `salt`, `fundVia`, `allowPartial`, and the eco-routes `generation`/`environment`. They apply to every
-intent the program opens, at every depth. Through `Base(...)` the deadlines, the creator, `fundVia`
-and the eco-routes selection are inherited from the enclosing intent.
+intent the program opens, at every depth. Through `Base.Portal`, the route options' deadlines,
+creator, `fundVia` and eco-routes selection are inherited from the enclosing intent.
 
 `compileSauceProgram(chain, source, options).intents` lists the intents a program opens, each as
 the lowering encoded it (`LoweredIntent`): one with no `captures` is fixed when it is built, so
@@ -137,10 +151,11 @@ the lowering encoded it (`LoweredIntent`): one with no `captures` is fixed when 
 
 ## Nesting in TypeScript
 
-`.nest(childOrThunk, options?)`, called before `.reward(...)`, attaches an intent built in
-TypeScript to a route built in TypeScript: the lower level under the program form, for per-level
+`.nest(childOrThunk, options?)`, between `.receive(...)` and `.then(...)`, attaches an intent built
+in TypeScript to a route built in TypeScript: the lower level under the program form, for per-level
 options, for [action programs](../guides/actions.md#fund-a-child-from-a-measured-amount), and for a
-child that is never published. The thunk form, `(on) => Chain(...).reward({ ...reward, source: on })`,
+child that is never published. The thunk form,
+`(on) => Ethereum.Portal.send(reward, { ...rewardOptions, source: on }).receive(...).then(...)`,
 receives the parent's destination as the child's source; an already built child is checked to have
 it. Each mode below is the `via` option.
 

@@ -691,7 +691,7 @@ npx sauce run swap.json --chain base --keystore ~/.keys/me.json \
 
 ## Intents: `sauce run` or `sauce intent`
 
-A program can open an intent on another chain — `Base(() => { … }).reward({ … })`. The command
+A program can open an intent on another chain — `Base.Portal.send(…).receive(…).then(() => { … })`. The command
 needs what the SDK cannot look up: `--intent-deadline <unix seconds>` and `--intent-creator
 <address>`, and, when the intent's body compiles to a program of its own,
 `--intent-execution-fee <wei>`, the destination Kitchen's fee. It names whichever is missing, and
