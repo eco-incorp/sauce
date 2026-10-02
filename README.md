@@ -45,78 +45,77 @@ Cursor and VS Code, and how to check that it worked.
 ## Supported chains
 
 For the initial release, Sauce supports transactions on **Ethereum**, **Base** and **Solana**.
-Every other chain in the registry is a preview chain: programs compile for it and the `sauce`
-command and MCP server simulate and rehearse them there, but they build and send no transaction on
-it. The TypeScript SDK is not gated — its builders still build transactions for every registry
-chain, at the integrator's own risk. To ask for another chain,
-[search the existing requests](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support)
-and add your use case, or
-[open a chain-support request](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml).
-[Supported chains](docs/README.md#supported-chains) has the details.
+Every other chain in the registry is a preview chain: programs compile for it, and the `sauce`
+command and the MCP server rehearse them there but build and send no transaction.
+[Chains](docs/reference/chains.md) has the policy, every chain's tokens and protocols, and how to
+request a chain.
 
 ## A program that creates a cross-chain intent
 
-A program can spend an intent's funds, and it can also create the next intent. That is where the
+A program can spend what a Pot holds, and it can also create the next intent. That is where the
 runtime and the routes layer meet. This program measures an amount nobody knew in advance and offers
 an intent carrying it onward.
 
 ```js
 // Create a cross-chain intent from inside a Sauce program.
 //
-// This runs on one chain as part of an intent's route, measures what the calls before it left in
-// the Pot, and offers a NEW intent that carries that amount onward to another chain. The amount is
-// never known in advance — it is whatever the swap, bridge or transfer just before it produced —
-// which is the reason to build the intent here rather than off-chain.
+// This runs on your Pot, measures the USDC the calls before it left there, and offers a NEW intent
+// that carries that amount to `recipient` on another chain. The amount is never known in advance —
+// it is whatever the swap, bridge or transfer just before it produced — which is the reason to
+// build the intent here rather than off-chain.
 //
-// `Arbitrum(() => { ... }).reward({ ... })` is the whole of it. `amount` is an ordinary variable of
-// this program, and using it inside the intent is enough: the SDK splices its run-time value into
-// the encoded intent, and fills in the Portal, the prover, the approval and the encoding.
+// `Ethereum(() => { ... }).reward({ ... })` is the whole of it. `amount` is an ordinary variable of
+// this program and `recipient` one of its parameters, and using them inside the intent is enough:
+// the SDK splices their run-time values into the encoded intent, and fills in the Portal, the
+// prover, the vault and the encoding.
 //
-// RECIPIENT is a compile-time `define` the caller supplies. `USDC` is a registered symbol, and
-// inside the braces it means Arbitrum's USDC, because that is the chain those calls run on. In
-// `.reward(...)` it means the USDC of the chain this program runs on, which escrows the reward.
-function main() {
+// `USDC` is a registered symbol, and inside the braces it means Ethereum's USDC, because that is the
+// chain those calls run on. In `.reward(...)` it means the USDC of the chain this program runs on,
+// which escrows the reward.
+//
+//   sauce run cross-chain-intent.sauce.ts --chain base --keystore <keystore> \
+//     --intent-deadline <unix seconds> --intent-creator <address> --args <recipient> <minAmount>
+//
+//   recipient: Address   who the intent pays on Ethereum
+//   minAmount: Uint256   the least USDC worth forwarding, in its smallest units (6 decimals):
+//                        below it the whole transaction reverts and nothing is published
+function main(recipient: Address, minAmount: Uint256) {
   const amount = USDC.balanceOf(ctx.self());
-  if (amount < MIN_AMOUNT) {
-    throw "cross-chain-intent: nothing to forward";
-  }
+  require(amount >= minAmount, "nothing to forward");
 
-  Arbitrum(() => {
-    USDC.transfer(RECIPIENT, amount);
+  Ethereum(() => {
+    USDC.transfer(recipient, amount);
   }).reward({ tokens: [{ token: USDC, amount }] });
 }
 ```
 
 That is the whole program. What you did not have to do:
 
-- **Write or deploy a contract.** It compiles to bytecode that a Sauce engine runs in the shared
-  Pot the solver deploys.
-- **Import anything.** `USDC`, `Arbitrum` and `ctx` need no import line.
+- **Write or deploy a contract.** It compiles to bytecode that a Sauce engine runs in your Pot.
+- **Import anything.** `USDC`, `Ethereum` and `ctx` need no import line.
 - **Encode the intent.** No Portal, prover, selector, approval or ABI encoding appears. The SDK
   looks up the Portal and prover in its eco-routes deployment tables and emits the rest.
 - **Know the amount in advance.** `amount` is an ordinary variable, and the published intent
   carries the value the program measured.
-- **Roll back by hand.** Below `MIN_AMOUNT` the `throw` reverts the whole fulfilment: nothing is
-  published, and no earlier call in the route survives.
+- **Roll back by hand.** Below `minAmount` the `require` reverts the whole transaction: nothing is
+  published.
 
-Without Sauce, this hop is either a contract you write and deploy (read the balance, encode the
+Without Sauce, this step is either a contract you write and deploy (read the balance, encode the
 intent around the amount, ask the Portal for its vault, pay the reward into it, call `publish`) or
-a second intent you publish yourself after the first lands and you have read what it produced.
+a second transaction you build yourself after reading what the first produced.
 
-`USDC` is a registered token symbol, and inside the braces it means **Arbitrum's** USDC, because
+`USDC` is a registered token symbol, and inside the braces it means **Ethereum's** USDC, because
 that is where those calls run. In `.reward(...)` it means the USDC of the chain the program runs
-on — Base, in [the caller](docs/examples/cross-chain-intent.ts) — because the program escrows the
-reward there. `RECIPIENT` and `MIN_AMOUNT` are compile-time `defines`: a program captures nothing
-from the JavaScript around it, so defines are how application values reach one.
+on — Base, in the line above — because the program escrows the reward there. `recipient` and
+`minAmount` are `main`'s parameters: they arrive with the transaction (`--args`), so one compiled
+program serves every call.
 
-You supply what the SDK cannot know once, on the enclosing intent, and every intent the program
-creates inherits it: a deadline, and the creator who may reclaim the reward if nobody earns it. The
-intent is an offer; a solver still decides to fill it. Arbitrum is a
-[preview chain](docs/README.md#supported-chains) for the initial release: the SDK builds this
-intent, and the `sauce` command and MCP server compile and rehearse it, but they publish intents
-only between Ethereum, Base and Solana.
-[docs/examples/cross-chain-intent.ts](docs/examples/cross-chain-intent.ts) is the caller, run on
-every release; [nested intents](docs/guides/nested-intents.md) covers cascades several hops deep.
+What the SDK cannot know you give once, for every intent the program opens: a deadline, and the
+creator who may reclaim the reward if nobody earns it. The intent is an offer; a solver still
+decides to fill it. [docs/examples/cross-chain-intent.ts](docs/examples/cross-chain-intent.ts)
+builds the same transaction from TypeScript, and runs on every release;
+[nested intents](docs/guides/nested-intents.md) opens one intent inside another's body, and covers
+cascades several hops deep.
 
 ## A program that calls protocols and tokens by name
 
@@ -179,21 +178,15 @@ coin and per token. These are hot wallets: keep small balances in them.
 [Agent wallets](docs/guides/cli.md#agent-wallets) covers the command, and
 [the MCP server's](docs/guides/mcp.md#agent-wallets) its tools. The HTTP server never signs.
 
-## What else is in the package
+## Where to go next
 
-| You want to                                         | Start at                                          |
-| --------------------------------------------------- | ------------------------------------------------- |
-| Build, fund and submit an intent                    | [Create an intent](docs/guides/intents.md)        |
-| Open an intent from inside another intent's body    | [Nested intents](docs/guides/nested-intents.md)   |
-| Generate programs from data instead of writing them | [Builders](docs/guides/builders-and-actions.md)   |
-| Compile a standalone program with runtime arguments | [Compiling programs](docs/guides/compiling.md)    |
-| Compile and run a program file from a terminal      | [The sauce command](docs/guides/cli.md)           |
-| Have a coding agent write and run programs          | [Agent skills](docs/guides/cli.md#agent-skills)   |
-| Give a coding agent Sauce's tools over MCP          | [The MCP server](docs/guides/mcp.md)              |
-| Give an agent a wallet of its own, with limits      | [Agent wallets](docs/guides/cli.md#agent-wallets) |
-| Execute on Solana                                   | [Solana](docs/guides/solana.md)                   |
-| Check what a settlement payload contains            | [Verification](docs/guides/verification.md)       |
-| Know which protocols, tokens and chains are wired   | [Coverage](docs/api/coverage.md)                  |
+- [Documentation](docs/README.md): every guide and reference page, one line each.
+- [Quick start](docs/guides/quick-start.md): build a first intent, offline.
+- [The sauce command](docs/guides/cli.md): compile, rehearse, run and publish from a terminal.
+- [Agent skills](docs/guides/skills.md): the skills that teach a coding agent to write and run
+  programs, beside [the MCP server](docs/guides/mcp.md).
+- [Chains](docs/reference/chains.md), [protocols](docs/reference/protocols.md) and
+  [tokens](docs/reference/tokens.md): what a program can name, and where.
 
 The SauceScript compiler ships inside this package; there is no separate install and no compiler
 checkout. [Architecture](docs/concepts/architecture.md) explains how the pieces fit,

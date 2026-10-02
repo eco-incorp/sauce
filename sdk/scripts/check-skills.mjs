@@ -29,6 +29,7 @@
 //      is referenced by its own skill, and every program and actions document names the chains it
 //      is checked on there, one of them at least a chain the release supports; a contract's ABI
 //      (`.json`, a JSON array) is a module a program beside it imports, not an example of its own;
+//      and the `sauce-overview` skill map has one entry for every skill directory and no other;
 //   4. every program's header says how to run it: a usage line (`--chain <chain>`) whose `--args`
 //      are `main`'s parameters by name, `<name>` each, in order; a line per parameter
 //      (`//   name: Type  meaning and units`); and an example line on a supported chain with real
@@ -44,7 +45,7 @@
 //      raw) or, as ```sauce fails, does not; every ```json chain=a,b block is an actions document
 //      `sauce actions` lowers on those chains (```json fails chain=a: refused there); every ```ts
 //      block and every runner (`*.mts`) typechecks, and every runner EXECUTES with the network
-//      disabled;
+//      disabled, importing nothing but the package, viem and Node's modules (`RUNNER_PACKAGES`);
 //   7. every `@eco-incorp/sauce/...` subpath and `node_modules/@eco-incorp/sauce/...` path exists,
 //      and every identifier in inline code is one the package declares;
 //   8. every generated reference (the globals index, the chains, the protocol index and registry
@@ -53,7 +54,12 @@
 //   9. the SauceScript reference (sauce-script/references) compiles every example it gives and is
 //      refused every form it rejects, with the messages it quotes;
 //  10. the actions reference (sauce-actions/references) is what `gen-skills-actions.mjs` renders
-//      from the actions JSON Schema the package ships.
+//      from the actions JSON Schema the package ships;
+//  11. every example program is either executed by a suite CI runs, named in
+//      `skills-check/executed.json`, or listed there as compile-only with the reason;
+//  12. every example program writes what the registry names by its name: no recorded address as
+//      a literal, no hand-built selector of a function a binding declares (LOW_LEVEL_CALLS); and
+//      takes its inputs as `main` parameters, never an undeclared define (INPUT_EXCEPTIONS).
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -78,6 +84,12 @@ import {
   skillsReferences,
 } from "./gen-skills-references.mjs";
 import { checkBuiltins, checkBuiltinsJson } from "./skills-check/builtins.mjs";
+import {
+  executedExamplesProblems,
+  inputProblems,
+  namedProgramProblems,
+  registryNames,
+} from "../../docs/scripts/example-programs.mjs";
 
 // ---- Arguments and resolution -------------------------------------------------------------------
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -736,9 +748,11 @@ if (howToGetIt.length !== 1)
 // One line, the same in every such document: a protocol's own router template is for a pool the
 // Sauce Router does not service, and a zero price limit there leaves the minimum output alone.
 const SWAP_POINTER =
-  "> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a " +
-  "price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools " +
-  "under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.";
+  "> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, " +
+  "`uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra " +
+  "pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit " +
+  "(`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below " +
+  "call the protocol's own contracts.";
 const swapDocuments = [];
 const protocolList = sdk.listProtocols();
 const protocolModules = await Promise.all(
@@ -851,6 +865,39 @@ if (index !== undefined) {
     if (!allExamples.has(entry)) fail(rel(index.path), `lists ${entry}, which does not exist`);
 }
 
+// ---- 3b. The overview's map of the skills ----------------------------------------------------------
+// The overview maps every skill, one `### \`sauce-<name>\`` entry each under one heading, saying what
+// it holds and when to load it: a skill added, renamed or removed fails here until the map says so.
+const OVERVIEW_SKILL = "sauce-overview";
+const SKILL_MAP = "## The skill map";
+const overview = skills.find((s) => s.dir === OVERVIEW_SKILL);
+if (overview === undefined) fail(rel(SKILLS_DIR), `no ${OVERVIEW_SKILL} skill to map the others`);
+else {
+  const lines = overview.prose.split("\n");
+  const start = lines.findIndex((line) => line.trim() === SKILL_MAP);
+  const end = lines.findIndex((line, i) => i > start && /^#{1,2}\s/.test(line));
+  if (start < 0) fail(rel(overview.path), `has no "${SKILL_MAP}" section`);
+  const mapped = [];
+  for (const line of start < 0 ? [] : lines.slice(start + 1, end < 0 ? undefined : end)) {
+    if (!/^#{3,6}\s/.test(line)) continue;
+    const entry = /^###\s+`(sauce-[a-z0-9-]+)`\s*$/.exec(line);
+    if (entry === null)
+      fail(rel(overview.path), `maps "${line}"; an entry is a heading "### \`sauce-<name>\`"`);
+    else mapped.push(entry[1]);
+  }
+  for (const name of new Set(mapped)) {
+    if (!SKILL_NAMES.has(name)) fail(rel(overview.path), `maps ${name}, which is not a skill`);
+    const times = mapped.filter((each) => each === name).length;
+    if (times > 1) fail(rel(overview.path), `maps ${name} ${times} times`);
+  }
+  for (const skill of skills)
+    if (start >= 0 && !mapped.includes(skill.dir))
+      fail(
+        rel(overview.path),
+        `does not map ${skill.dir}: give it an entry saying what it holds and when to load it`,
+      );
+}
+
 // ---- 4-5. Programs through the command, and every command line ------------------------------------------
 /** A value for a `<placeholder>`, by what it names. */
 const fill = (word) =>
@@ -933,11 +980,12 @@ const headerProblems = (where, file, problems) => {
   else for (const problem of problems) fail(where, problem);
 };
 
-/** The leading comment block of a program: its header. */
+/** The leading comment block of a program: its header, after the `#!` line it may start with. */
 const headerOf = (file) => {
   const lines = read(file).split("\n");
-  const end = lines.findIndex((line) => !line.startsWith("//"));
-  return lines.slice(0, end < 0 ? lines.length : end);
+  const from = lines[0]?.startsWith("#!") ? 1 : 0;
+  const end = lines.findIndex((line, index) => index >= from && !line.startsWith("//"));
+  return lines.slice(from, end < 0 ? lines.length : end);
 };
 
 /**
@@ -1015,9 +1063,12 @@ async function runUsage(where, file, argv, chain, header = false) {
     return;
   }
   if (!["run", "simulate", "tx"].includes(name)) return;
-  const values = (args ?? []).map((word, i) =>
-    /<[^>]+>/.test(word) ? sample(entryParams[i].type) : word,
-  );
+  // A placeholder is sampled from its type; an array or record given as a value is the JSON
+  // `--args` takes for one, and goes to `--args-json` parsed.
+  const values = (args ?? []).map((word, i) => {
+    if (/<[^>]+>/.test(word)) return sample(entryParams[i].type);
+    return /^\{|\[\]$/.test(entryParams[i].type.trim()) ? JSON.parse(word) : word;
+  });
   await txOn(where, chain, [
     "tx",
     file,
@@ -1295,8 +1346,26 @@ try {
 }
 
 // ---- 6c. Execute every runner, offline ------------------------------------------------------------------
+// What a runner may import besides the package and Node's modules: viem, the package's TypeScript API
+// is typed in it. A package manager that installs a package's own dependencies beside it rather than
+// at a project's root (pnpm) resolves nothing else from the project the skills are installed in.
+const RUNNER_PACKAGES = new Set(["viem"]);
 for (const file of runners) {
   counts.runners++;
+  for (const { fileName: specifier } of ts.preProcessFile(read(file), true, true).importedFiles) {
+    const bare = !specifier.startsWith(".") && !specifier.startsWith("node:");
+    if (
+      bare &&
+      specifier !== PKG &&
+      !specifier.startsWith(`${PKG}/`) &&
+      !RUNNER_PACKAGES.has(specifier)
+    )
+      fail(
+        rel(file),
+        `imports ${specifier}; a runner imports ${PKG} and its subpaths, ` +
+          `${[...RUNNER_PACKAGES].join(", ")} and node:* only`,
+      );
+  }
   for (const m of read(file).matchAll(/(?:from|import\()\s*"([^"]+)"|new URL\("([^"]+)"/g)) {
     const specifier = m[1] ?? m[2];
     // Its examples, its references, and its own SKILL.md, whose values a runner may pin.
@@ -1649,6 +1718,96 @@ else {
     );
 }
 
+// ---- 11. Which example programs a suite executes ----------------------------------------------------------
+// Compiling a program is not running it: `skills-check/executed.json` names the suites that execute
+// each one on an engine, or says why none does yet. The suites are this repository's, so a check of
+// another skills directory (`--skills`) skips it.
+const examplePrograms = walk(SKILLS_DIR, (file) => file.endsWith(".sauce.ts"))
+  .map((file) => relative(SKILLS_DIR, file))
+  .filter((file) => /^[^/]+\/examples\/[^/]+$/.test(file));
+let executedExamples = 0;
+if (skillsFlag < 0) {
+  const manifest = join(HERE, "skills-check", "executed.json");
+  for (const problem of executedExamplesProblems({
+    repository: REPOSITORY,
+    examplesRoot: SKILLS_DIR,
+    examples: examplePrograms,
+    manifest,
+  })) {
+    fail(rel(manifest), problem);
+  }
+  executedExamples = Object.keys(JSON.parse(read(manifest)).executed).length;
+}
+
+// ---- 12. Example programs write what the registry names by its name, and show their inputs ---------------
+// No address the registry records as a literal, and no hand-built selector of a function a binding
+// declares (`docs/scripts/example-programs.mjs`). A deliberately low-level call is listed here:
+// example -> selector -> why. And every value a program reads has a visible source: an input is a
+// `main` parameter; an exception is INPUT_EXCEPTIONS's, example -> name -> why. An entry nothing
+// needs any more fails.
+const LOW_LEVEL_CALLS = {};
+// The intent files intent-defaults converts to `main` parameters (`sauce intent publish --args`);
+// that PR removes these, which fail once nothing reads them.
+const BY_INTENT_DEFAULTS = "converted by intent-defaults' intent publish --args PR";
+const INPUT_EXCEPTIONS = {
+  "sauce-intents/examples/cross-chain.sauce.ts": { BENEFICIARY: BY_INTENT_DEFAULTS },
+  "sauce-intents/examples/swap-on-base.sauce.ts": Object.fromEntries(
+    [
+      "AMOUNT_IN",
+      "REWARD",
+      "SQRT_PRICE_LIMIT_X96",
+      "MIN_OUT",
+      "MIN_AVG_PRICE",
+      "RECIPIENT",
+      "REFUND_TO",
+    ].map((name) => [name, BY_INTENT_DEFAULTS]),
+  ),
+};
+{
+  const names = registryNames(
+    sdk,
+    await Promise.all(
+      sdk.listProtocolSlugs().map(async (slug) => [slug, await load(`${PKG}/protocols/${slug}`)]),
+    ),
+    JSON.parse(read(join(SKILLS_DIR, "sauce-script", "references", "builtins.json"))),
+  );
+  for (const program of examplePrograms) {
+    const where = rel(join(SKILLS_DIR, program));
+    const source = read(join(SKILLS_DIR, program));
+    const lowLevel = LOW_LEVEL_CALLS[program] ?? {};
+    const allowed = INPUT_EXCEPTIONS[program] ?? {};
+    const usedCalls = new Set();
+    const usedInputs = new Set();
+    failures.push(
+      ...namedProgramProblems({ where, source, names, lowLevel, used: usedCalls }),
+      ...inputProblems({ where, source, ts, names, allowed, used: usedInputs }),
+    );
+    for (const selector of Object.keys(lowLevel)) {
+      if (!usedCalls.has(selector))
+        fail(
+          "check-skills.mjs LOW_LEVEL_CALLS",
+          `allows ${selector} in ${program}, which no longer builds it: remove the entry`,
+        );
+    }
+    for (const input of Object.keys(allowed)) {
+      if (!usedInputs.has(input))
+        fail(
+          "check-skills.mjs INPUT_EXCEPTIONS",
+          `allows ${input} in ${program}, which no longer reads it: remove the entry`,
+        );
+    }
+  }
+  for (const [list, entries] of [
+    ["LOW_LEVEL_CALLS", LOW_LEVEL_CALLS],
+    ["INPUT_EXCEPTIONS", INPUT_EXCEPTIONS],
+  ]) {
+    for (const program of Object.keys(entries)) {
+      if (!examplePrograms.includes(program))
+        fail(`check-skills.mjs ${list}`, `names ${program}, which is not an example program`);
+    }
+  }
+}
+
 // ---- Report ----------------------------------------------------------------------------------------------
 const summary =
   `${counts.skills} skills, ${counts.files} files read; ${counts.programRuns} program runs through sauce ` +
@@ -1657,7 +1816,8 @@ const summary =
   `${counts.sauceFails} refused as documented; ${counts.ts} ts blocks typechecked; ${counts.runners} runners ` +
   `executed offline; ${counts.indexed} indexed globals compiled on their chains; ${builtinExamples} ` +
   `reference examples compiled and ${builtinRejections} rejections refused; ${counts.subpaths} subpaths, ` +
-  `${counts.identifiers} inline identifiers and ${counts.addresses} addresses checked; against ` +
+  `${counts.identifiers} inline identifiers and ${counts.addresses} addresses checked; ` +
+  `${executedExamples} example programs executed by a suite; against ` +
   `${PKG}@${sdkPkg.version}`;
 if (failures.length > 0) {
   console.error(

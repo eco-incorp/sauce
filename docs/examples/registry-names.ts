@@ -21,8 +21,8 @@ const execution = {
 } as const;
 
 // Base has PancakeSwap V3; Optimism does not, so there the program asks Uniswap V3.
-const onBase = routes.compileSauceRoute("base", program, execution);
-const onOptimism = routes.compileSauceRoute("optimism", program, execution);
+export const onBase = routes.compileSauceRoute("base", program, execution);
+export const onOptimism = routes.compileSauceRoute("optimism", program, execution);
 const calls = (bytecode: Uint8Array, factory: string | undefined) =>
   factory !== undefined &&
   Array.from(bytecode, (byte) => byte.toString(16).padStart(2, "0"))

@@ -1,6 +1,6 @@
 # Protocols and tokens
 
-[Documentation](../README.md) · [Quick start](quick-start.md) · [Coverage](../api/coverage.md)
+[Documentation](../README.md) · [Quick start](quick-start.md) · [Tokens](../reference/tokens.md) · [Protocols](../reference/protocols.md)
 
 Every protocol in the registry is a namespace, and every registered token a name, in both languages
 the SDK speaks. Inside a program they are names the compiler resolves against the chain the program
@@ -22,19 +22,18 @@ Base.UniswapV4.UniversalRouter.address; // the address `UniswapV4.UniversalRoute
 `USDC` resolves to the chain's registered token address. `Uniswap.UniversalRouter` resolves to the
 registered contract address when used as a value, and exposes its ABI methods when used as a call
 target. Amounts are integers in the token's smallest units; the SDK does not infer decimal
-conversions.
+conversions. The reference lists every name with its address: [tokens](../reference/tokens.md),
+[protocols](../reference/protocols.md), and each [chain](../reference/chains.md)'s tokens and
+contracts.
 
 ### Tokenized stocks
 
 Ethereum, Base and Solana also register tokenized stocks, named the same way: `SPCXc.balanceOf(...)`
-reads Coinbase's SpaceX token on Base, and `Base.SPCXc.address` is its address. Ethereum has Backed's
-xStocks (`TSLAx`, `SPCXx`) and bTokens (`bTSLA`), Ondo Global Markets' tokens (`TSLAon`,
-`SPCXon`) and Mt Pelerin's own shares (`MPS`); Base has Coinbase's (`TSLAc`, `SPCXc`) and Backed's bTokens; Solana has Token-2022 mints from Backed (`TSLAx`), Ondo (`TSLAon`), Backpack Securities (`NVDA_US`) and PreStocks (`SPACEX`), which a program passes to `@sauce/token`'s functions (`balanceOf(TSLAx, account)`), and `Solana.TSLAx.mint` is the mint. A symbol is the issuer's
-own ticker for the token, case-sensitive, with a `.` written `_` (`BRK_Bx`, `NVDA_US`). Each row of
-`routes.TOKEN_REGISTRY` that is a stock carries `stock`: its issuer, its name and the underlying's
-ticker. `sauce globals --chain <chain> --stocks` lists a chain's, and `--search <text>` finds one
-by symbol, company name or ticker. [What is registered](../api/coverage.md#tokenized-stocks) counts
-them and says how they differ from a plain ERC-20.
+reads Coinbase's SpaceX token on Base, and `Base.SPCXc.address` is its address. On Solana each is a
+Token-2022 mint that a program passes to `@sauce/token`'s functions (`balanceOf(TSLAx, account)`),
+and `Solana.TSLAx.mint` is the mint. [Tokenized stocks](../reference/tokens.md#tokenized-stocks) has
+the issuers, how a symbol is spelled and what differs from a plain ERC-20, and each chain's page in
+the reference lists its stocks.
 
 ## Compile a global call
 
@@ -93,8 +92,9 @@ the address, `UniswapV3.Pool(pool).liquidity()`, or binds it with `.at(pool)`, w
 
 A name existing does not mean the contract is deployed on your chain. Naming one that is not fails
 when the program compiles, or when TypeScript builds the call — the point at which you can still do
-something about it. [Coverage](../api/coverage.md) has the totals, and
-`contracts.listContracts(slug)` lists a protocol's contracts.
+something about it. Each protocol's page in the [reference](../reference/protocols.md) lists its
+contracts on every chain, the [family aliases](../reference/protocols.md#family-aliases) what each
+alias resolves to where, and `contracts.listContracts(slug)` a protocol's contracts in TypeScript.
 
 ## Use a venue only where the chain has it
 
@@ -104,11 +104,12 @@ program can name a venue some of its chains lack:
 
 ```js
 // One program for every chain: the USDC/WETH 0.05% pool from PancakeSwap V3 where the chain has it,
-// from Uniswap V3 where it does not, and nothing where it has neither.
+// from Uniswap V3 where it does not, and nothing where it has neither venue or lacks either token.
 //
 // `available(...)` is decided when the program is compiled, for the chain it is compiled for, and
 // the branches it rules out are removed before anything in them is resolved.
 function main() {
+  if (!available(USDC) || !available(WETH)) return 0n;
   let pool = 0n;
   if (available(PancakeswapV3.Factory)) {
     pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
@@ -120,8 +121,10 @@ function main() {
 ```
 
 Compiled for Base this calls PancakeSwap V3's factory; compiled for Optimism, which has no
-PancakeSwap V3, it compiles to the Uniswap V3 lookup alone. [registry-names.ts](../examples/registry-names.ts)
-compiles it for both.
+PancakeSwap V3, it compiles to the Uniswap V3 lookup alone; compiled for a chain with neither, or
+without USDC or WETH, it returns 0 and calls nothing. The guard on the tokens is what makes it
+compile everywhere: a token the chain lacks is an unknown name in any branch that is kept.
+[registry-names.ts](../examples/registry-names.ts) compiles it for Base and Optimism.
 
 - It takes a contract — `UniswapV3.Factory`, `Uniswap.UniversalRouter`, or one on a named chain,
   `Arbitrum.UniswapV3.Factory` — or a token symbol, `USDT`. A token is available where the chain's

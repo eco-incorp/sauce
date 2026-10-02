@@ -3,7 +3,7 @@
  * released gated stack (`cli-anvil.ts` over `evm/gated-engine.ts`, deployed from the pinned creation
  * code), with the released engine at the address the SDK records, so the CLI runs with no override.
  *
- * Ethereum, the example the `sauce-cli` skill ships (`pay.sauce.ts`):
+ * Ethereum, the suites' smallest program (`fixtures/cli/pay.sauce.ts`):
  *   1. `sauce tx --rpc-url` before the Pot exists says so, and names the `sauce pot` to run;
  *   2. `sauce pot` prints the Kitchen.deployPot transaction — sent, it lands the Pot it predicted;
  *   3. the Pot is funded with a standard ERC-20 and a USDT-shaped one (no return values), planted
@@ -13,7 +13,7 @@
  *   5. the `cast send` line `sauce tx` prints is run VERBATIM through a shell — only its two
  *      `<…>` placeholders filled — and its effect asserted too.
  *
- * Base and Ethereum, the skill's `split.sauce.ts`: ONE source with a typed `main(token: Address,
+ * Base and Ethereum, `fixtures/cli/split.sauce.ts`: ONE source with a typed `main(token: Address,
  * recipients: Address[], amount: Uint256, alsoUsdc: bool)`, compiled for each chain (so `USDC` is
  * each chain's own; on Arbitrum too, a preview chain, where its cook is refused), its arguments
  * encoded by `sauce tx --args`, executed on each chain's anvil —
@@ -85,9 +85,8 @@ if (!HAS_CAST && process.env.CI) {
 }
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-/** The examples the `sauce-cli` agent skill ships: executing them here keeps them from rotting. */
-const EXAMPLES = join(HERE, "../../skills/sauce-cli/examples");
-const PAY = join(EXAMPLES, "pay.sauce.ts");
+/** The suites' programs (the `sauce-cli` skill's own are executed by `cli-examples.e2e.test.ts`). */
+const PAY = join(CLI_FIXTURES, "pay.sauce.ts");
 /** eco-routes' own Portal creation code, vendored (see routes-nest-dynamic.e2e.test.ts). */
 const PORTAL_CREATION = (
   JSON.parse(readFileSync(join(HERE, "evm/fixtures/Portal.json"), "utf8")) as { creationCode: Hex }
@@ -95,7 +94,7 @@ const PORTAL_CREATION = (
 /** Its deployment: the creation code and `nativeErc20 = address(0)`. */
 const PORTAL_DEPLOYMENT =
   `${PORTAL_CREATION}${encodeAbiParameters([{ type: "address" }], [zeroAddress]).slice(2)}` as Hex;
-const SPLIT = join(EXAMPLES, "split.sauce.ts");
+const SPLIT = join(CLI_FIXTURES, "split.sauce.ts");
 
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
 const SECOND_RECIPIENT: Address = "0x7777777777777777777777777777777777777777";
@@ -348,7 +347,7 @@ describeEvm("sauce, sent to a chain", () => {
       // A deployed Pot: the cook alone, and what it moved, read from its logs.
       expect(ok.stdout).toMatch(
         new RegExp(
-          `^Rehearsed with eth_simulateV1 on the state of block \\d+; nothing was signed or sent:\n  the cook, from the owner ${KEYSTORE_OWNER}$`,
+          `^Rehearsed with eth_simulateV1 on the state of block \\d+; nothing was signed or sent:\n  the cook, from the owner ${KEYSTORE_OWNER}, gas used \\d+$`,
           "m",
         ),
       );

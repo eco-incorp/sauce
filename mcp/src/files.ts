@@ -1,9 +1,12 @@
 /**
  * The files a program compiles from, as a tool call gives them: the program's own text and the
- * modules it imports by relative path. Nothing is ever read from the server's disk — a remote
- * server must not hand its own files to whoever calls it — so the `CliFiles` the commands read
- * through serves only what the call carried.
+ * modules it imports by relative path. A server over HTTP reads nothing from its own disk — a
+ * remote server must not hand its own files to whoever calls it — so the `CliFiles` the commands
+ * read through serves only what the call carried. Over stdio, where the caller is the server's own
+ * user on the same machine, a call may instead name a program file by `path`, read from disk with
+ * its imports as `sauce compile <file>` reads them (`diskProgram`).
  */
+import { readFileSync } from "node:fs";
 import { posix, relative, resolve, sep } from "node:path";
 
 import { UsageError, type CliFiles } from "./sdk.js";
@@ -68,6 +71,49 @@ export function callFiles(
         const found = lookup(path);
 
         return found === undefined ? undefined : encoder.encode(found);
+      },
+    },
+  };
+}
+
+/**
+ * The program at `path` on this machine — relative to the server's working directory, or absolute —
+ * and the `CliFiles` that read it and its relative imports from disk, as the `sauce` command does.
+ * Only a server over stdio calls this: its caller is its own user.
+ */
+export function diskProgram(
+  path: string,
+  maxLength: number,
+): { readonly file: string; readonly text: string; readonly files: CliFiles } {
+  if (path.includes("\0")) throw new UsageError("path: a path holds a NUL byte");
+  let text: string;
+  try {
+    text = readFileSync(resolve(path), "utf8");
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    throw new UsageError(
+      `path ${path}: ${code === "ENOENT" ? "no such file" : code === "EISDIR" ? "a directory" : "unreadable"} ` +
+        `(read relative to ${process.cwd()})`,
+    );
+  }
+  if (text.length > maxLength) {
+    throw new UsageError(`path ${path}: at most ${maxLength} characters`);
+  }
+
+  return {
+    file: path,
+    text,
+    files: {
+      readText: (file) => readFileSync(file, "utf8"),
+      readModule: (file) => {
+        try {
+          return readFileSync(file);
+        } catch (error) {
+          const code = (error as { code?: string }).code;
+          // Absent is `undefined`, the compiler's resolver contract; anything else propagates.
+          if (code === "ENOENT" || code === "ENOTDIR" || code === "EISDIR") return undefined;
+          throw error;
+        }
       },
     },
   };

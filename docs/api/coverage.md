@@ -1,18 +1,25 @@
 # What is actually registered
 
+[API reference](README.md) · [Chains](../reference/chains.md) · [Protocols](../reference/protocols.md) · [Tokens](../reference/tokens.md)
+
 The SDK carries several registries, and they answer different questions. "Is this protocol in the
 catalog?" is not "can I call it by name in a program?", and neither is "is it deployed on my chain?".
-Each of the three can be true without the others.
+Each of the three can be true without the others. The [reference](../reference/chains.md) lists
+what each holds, generated from the registries themselves; this page is how to tell them apart.
 
-| Registry                         | Current scope                                                                  | Inspect it                                                             |
-| -------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| Protocol catalog                 | 135 protocols with metadata, deployments, ABI fragments, and program templates | `listProtocols()`, `getProtocol(slug)`, `getProtocolsByChain(id)`      |
-| Contract descriptors             | 316 descriptors across 135 protocol namespaces                                 | `contracts.listDescriptors()`, `contracts.listContracts(slug)`         |
-| Compiled-source protocol globals | The same 135 protocol namespaces, plus 13 family aliases                       | TypeScript completion after importing `@eco-incorp/sauce`; names below |
-| Token symbols                    | 1796 symbols distributed across 7 EVM chains, 1789 of them tokenized stocks    | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
-| Solana mints                     | 1803 mints on mainnet-beta, 1799 of them tokenized stocks                      | `routes.SVM_TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`         |
-| Canonical chain identities       | 41 chains: 40 EVM and Solana                                                   | `CANONICAL_CHAINS`, `requireChain(ref)`                                |
-| EVM chain metadata               | 34 records with native-currency and explorer information                       | `chains`, `getChain(id)`, `getAllChainIds()`                           |
+| Registry                         | What it holds                                                                     | Inspect it                                                        |
+| -------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Protocol catalog                 | Each protocol's metadata, deployments, ABI fragments and program templates        | `listProtocols()`, `getProtocol(slug)`, `getProtocolsByChain(id)` |
+| Contract descriptors             | Each protocol's contracts, every one bound to the ABI the registry's evidence has | `contracts.listDescriptors()`, `contracts.listContracts(slug)`    |
+| Compiled-source protocol globals | A namespace per catalog protocol, and the family aliases                          | TypeScript completion after importing `@eco-incorp/sauce`         |
+| Token symbols                    | Each EVM chain's tokens, tokenized stocks included                                | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`        |
+| Solana mints                     | Mainnet-beta's mints, tokenized stocks included, and devnet's                     | `routes.SVM_TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`    |
+| Canonical chain identities       | Every chain a route can name: the EVM chains and Solana                           | `CANONICAL_CHAINS`, `requireChain(ref)`                           |
+| EVM chain metadata               | Native currency and explorer, for most EVM chains                                 | `chains`, `getChain(id)`, `getAllChainIds()`                      |
+
+[Protocols](../reference/protocols.md) lists the catalog by category, each protocol's page its
+contracts on every chain; [Tokens](../reference/tokens.md) every chain's symbols and stocks; and
+[Chains](../reference/chains.md) every canonical chain, with its metadata where it has a record.
 
 Every catalog protocol is a namespace, in a program and in TypeScript: the descriptor registry is
 generated from the same binding of addresses to ABIs that the registry's ABI evidence is checked
@@ -22,30 +29,18 @@ them and `contracts.listContracts(slug)` one protocol's.
 ## Protocol namespaces
 
 A namespace is its protocol's slug in PascalCase, and every one has a contract per registered
-deployment role, plus its interfaces. The [contracts reference](contracts.md) has the naming rules
-and both surfaces.
+deployment role, plus its interfaces. [Names](../guides/protocols-and-tokens.md#names) has the
+naming rules, and the [contracts reference](contracts.md) both surfaces.
 
-| Contract kind     | Count | What it is                                                                    |
-| ----------------- | ----- | ----------------------------------------------------------------------------- |
-| Deployed contract | 226   | An address per chain and a verified ABI: callable, and its address as a value |
-| Address only      | 51    | An address per chain with no verified ABI: usable as an address, no methods   |
-| Interface         | 39    | An ABI with no fixed address: called with one, `Erc4626.Vault(vault)`         |
+| Contract kind     | What it is                                                                    |
+| ----------------- | ----------------------------------------------------------------------------- |
+| Deployed contract | An address per chain and a verified ABI: callable, and its address as a value |
+| Address only      | An address per chain with no verified ABI: usable as an address, no methods   |
+| Interface         | An ABI with no fixed address: called with one, `Erc4626.Vault(vault)`         |
 
 A name existing does not mean the contract is deployed on your chain: `available(...)` in a program
 and `.available` in TypeScript answer that, and naming an absent contract fails at compile or call
 construction, listing the chains that have it.
-
-Family aliases are `Aave`, `Balancer`, `Compound`, `Euler`, `Gmx`, `Liquity`, `Pancakeswap`,
-`Sushiswap`, `Synthetix`, `Synthra`, `Uniswap`, `Unitflow` and `Yearn`. A family exposes a contract
-only when exactly one member owns its name. Consequently:
-
-- `Uniswap.UniversalRouter` resolves to `UniswapV4.UniversalRouter`.
-- `Uniswap.Factory` and `Pancakeswap.Factory` are ambiguous; use a versioned namespace.
-- `UniswapV3.UniversalRouter` is absent from this registry.
-- A family always requires a contract name, even when it has one protocol member.
-
-A protocol with exactly one deployed contract also supports a shortcut in programs, such as
-`Cctp.depositForBurn(...)` or `AaveV3.supply(...)`.
 
 Every registry ABI declares its contract's deployed types, so its selectors are the deployed ones,
 and is a subset of the contract's complete API. A `coverage.caveats` entry records a deployment the
@@ -54,66 +49,6 @@ whose selector is checked but whose source is not verified. `compile.accessors.a
 is still accepted, and no shipped descriptor needs it.
 
 ## Tokens
-
-The exported `routes.TOKEN_REGISTRY` contains:
-
-| Chain    | ID    | Symbols                        |
-| -------- | ----- | ------------------------------ |
-| Ethereum | 1     | `USDC`, `USDT`, `WETH`         |
-| Optimism | 10    | `USDC`, `USDT`, `WETH`         |
-| Polygon  | 137   | `USDC`, `WETH`, `WPOL`         |
-| Monad    | 143   | `USDC`, `WMON`                 |
-| Arc      | 5042  | `USDC`, `EURC`, `USYC`, `WETH` |
-| Base     | 8453  | `USDC`, `WETH`                 |
-| Arbitrum | 42161 | `USDC`, `WETH`                 |
-
-On Arc, `USDC` is the ERC-20 face of the chain's native coin, and `WETH` is bridged ETH rather than
-a wrapped native. See [Arc: USDC is the native coin](#arc-usdc-is-the-native-coin).
-
-### Tokenized stocks
-
-Ethereum, Base and Solana also register tokenized stocks, which a program names by symbol like any
-other token (`SPCXc.balanceOf(ctx.self())` on Base, `balanceOf(TSLAx, account)` on Solana). Each list
-is copied from its issuer's own published list and every row is checked on chain; a stock row
-carries `stock`, its issuer, name and ticker:
-
-| Chain    | ID         | Issuer                            | Tokens | For example                     |
-| -------- | ---------- | --------------------------------- | ------ | ------------------------------- |
-| Ethereum | 1          | Backed (xStocks, and its bTokens) | 1280   | `TSLAx`, `SPCXx`, `bTSLA`       |
-| Ethereum | 1          | Ondo Global Markets               | 450    | `TSLAon`, `SPCXon`, `SPYon`     |
-| Ethereum | 1          | Mt Pelerin (its own shares)       | 1      | `MPS`                           |
-| Base     | 8453       | Coinbase                          | 58     | `TSLAc`, `SPCXc`, `NVDAc`       |
-| Base     | 8453       | Backed (its bTokens)              | 9      | `bTSLA`, `bNVDA`, `bCOIN`       |
-| Solana   | 1399811149 | Backed (xStocks)                  | 1271   | `TSLAx`, `SPCXx`, `BRK_Bx`      |
-| Solana   | 1399811149 | Ondo Global Markets               | 450    | `TSLAon`, `SPCXon`, `SPYon`     |
-| Solana   | 1399811149 | Backpack Securities               | 69     | `NVDA_US`, `SPCX_US`, `MSTR_US` |
-| Solana   | 1399811149 | PreStocks (private companies)     | 9      | `SPACEX`, `OPENAI`, `ANTHROPIC` |
-
-A stock's symbol is its issuer's ticker for the token, which is not always uppercase, with a `.`
-written `_` (`BRK.Bx` is `BRK_Bx`, Backpack's `NVDA.US` is `NVDA_US`); PreStocks' is the company's
-name (`SPACEX`). In a program and an actions document it is case-sensitive; the
-command line matches it without regard to case. `sauce globals --chain <chain>` counts a chain's
-stock tokens, `--stocks` lists them and `--search <text>` finds one by symbol, company name or
-ticker (`sauce_globals` takes `stocks` and `search` too, a page of 200 tokens at a time).
-
-Any contract, a Pot included, can hold and swap them: only minting and redeeming with the issuer
-need KYC. An issuer can pause its token or refuse a sanctioned address. Backed's tokens rebase: a
-balance changes between transactions, never within one, and a transfer can credit one unit less
-than sent, so paying one into a pool that checks what it received can fail. Ondo's keep their
-balance while dividends raise the shares each token stands for. Coinbase's are B20 tokens built into
-the Base node, so they run on Base but not in a local EVM such as anvil: `sauce simulate` against
-Base rehearses them, and `--assume-balance` cannot give one, since no state override reaches a B20
-balance.
-
-On Solana each is a Token-2022 mint, registered with `tokenProgram` set to Token-2022: the symbol is
-the mint's 32-byte key, and a program moves one with `@sauce/token`'s checked writes
-(`transferChecked`, `approveChecked`). Every row is checked on chain: owned by Token-2022,
-initialized, with its decimals and its issuer's symbol in its own metadata, and no transfer hook that
-names a program, which the token functions refuse. Amounts are raw; the issuer's multiplier (the
-scaled UI amount) is for display and moves for corporate actions. PreStocks' mints charge a transfer
-fee, so the recipient gets less than was sent: a program measures the balance change. Backpack lists
-mints it has not opened yet, which are left out, as are Superstate's, which only an allowlisted
-holder can hold.
 
 A missing symbol means the registry has no verified row under that name. Token variants can have
 different symbols and addresses. `IntentOptions.tokenDefines` or `SauceCompileOptions.tokens`
@@ -124,54 +59,27 @@ apply decimal scaling.
 import { requireChain, routes } from "@eco-incorp/sauce";
 
 const base = requireChain("base");
-routes.knownTokenSymbols(base); // ["USDC", "WETH"]
+routes.knownTokenSymbols(base); // every symbol on Base: "USDC", "WETH" and its tokenized stocks
 routes.registryTokenAddress(base, "USDC"); // bigint address, or undefined if absent
 ```
 
-These ERC-20 source globals target EVM. Use the [Solana account and token helpers](../guides/solana.md)
-for SPL tokens.
+A row of `routes.TOKEN_REGISTRY` that is a tokenized stock carries `stock`, its issuer, its name
+and the underlying's ticker, and `source`, the issuer's list it was copied from. These ERC-20 source
+globals target EVM. Use the [Solana account and token helpers](../guides/solana.md) for SPL tokens.
 
-## Arc: USDC is the native coin
+## Arc from TypeScript
 
-Arc (chain 5042) pays gas in USDC, and it has **one USDC balance with two decimal scales**:
+Arc (chain 5042) pays gas in USDC, one balance read at two scales: [its page](../reference/chains/arc.md#notes)
+has what that changes for a program. From TypeScript, `getChain(5042).nativeCurrency.erc20` records
+the ERC-20, and `nativeErc20(chainId)` returns it, or `undefined` on a chain whose native coin is
+separate from every token. `nativeToErc20Amount(5042, wei)` converts a native amount to the ERC-20's
+scale, rounding down as `balanceOf` does.
 
-| Read through                                               | Scale       | 1 USDC is             |
-| ---------------------------------------------------------- | ----------- | --------------------- |
-| Native: `msg.value`, `eth_getBalance`, gas                 | 18 decimals | `1000000000000000000` |
-| The ERC-20 at `0x3600000000000000000000000000000000000000` | 6 decimals  | `1000000`             |
-
-`getChain(5042).nativeCurrency.erc20` records the ERC-20, and `nativeErc20(chainId)` returns it, or
-`undefined` on a chain whose native coin is separate from every token.
-
-- **One balance.** Sending native value and calling `USDC.transfer` move the same money. A Pot that
-  bridges its whole `balanceOf(USDC)` and also pays a native fee — a Hyperlane or LayerZero fee,
-  the Kitchen's execution fee, deBridge's fixed fee — runs out, because the fee comes from that same
-  balance. Leave room for the fee.
-- **Dust is invisible to the ERC-20.** `balanceOf` is the native balance divided by 10¹² and rounded
-  down, so less than 10¹² wei reads as 0. `nativeToErc20Amount(5042, wei)` converts the same way.
-  Compare native and token amounts only after converting one to the other's scale.
-- **Every native amount is 18 decimals.** That includes `executionFee`, `execution.value`,
-  `nativeAmount` in a route or reward, and a cook's `value`. `1_000_000n` of native value is
-  10⁻¹² USDC, not 1 USDC. `Kitchen.executionFee()` read on Arc on 2026-09-28 was
-  `10000000000000000`, which is 0.01 USDC.
-- **Gas has a 20 gwei floor.** The minimum base fee is 20 gwei, and the mempool silently drops a
-  transaction whose `maxFeePerGas` is below it: no error, no receipt. Gas costs
-  `gasUsed × gasPrice / 10¹²` in `USDC` token units.
-- **There is no canonical wrapped native.** Nothing needs wrapping. `WETH` in the token registry is
-  bridged ETH with no `deposit()` or `withdraw()`, and Uniswap's Arc periphery reports a `WETH9()` that
-  always reverts, so the ETH paths of those routers revert too. The one WETH9-shaped contract on Arc is
-  CCIP's fee token `CCIP_USDC`, which the SDK does not register. Actions `wrapETH`, `unwrapETH`, the
-  native ETH stakes, and a `nativeBalance` spent as a token amount are rejected when a program's
-  `chainId` is 5042. The deposit builder's `weth` templates reject Arc's `USDC` and registry tokens as
-  a target.
-- **Native value can be refused.** A value transfer to the zero address, to or from a
-  blocklisted address, or to a self-destructed account reverts, including one a contract forwards.
-- **A reward offers native value or `USDC`, not both.** Arc's eco-routes Portal treats the native
-  coin and the `USDC` ERC-20 as one asset, so an intent reward with a `nativeAmount` and a `USDC`
-  token leg reverts `RewardTokensNotUnique(USDC)` when it is published or funded. The SDK refuses
-  such a reward when it is built, before anything is signed: fold the two into one leg.
-
-An intent to Arc uses the same Portal, Executor and derived Pot as every other chain; see
+The SDK refuses what Arc cannot do before anything is signed: the actions `wrapETH` and `unwrapETH`,
+the native ETH stakes and a `nativeBalance` spent as a token amount, when a program's `chainId` is
+5042; the deposit builder's `weth` templates with Arc's `USDC` or a registry token as the target; and
+an intent reward that offers both native value and `USDC`. An intent to Arc uses the same Portal,
+Executor and derived Pot as every other chain; see
 [One Portal, one Pot](../guides/intents.md#one-portal-one-pot).
 
 ## Host discovery and chain coverage
@@ -194,8 +102,8 @@ objects when their methods are invoked, typed from the contract's ABI, and run t
 client you pass; see the [contracts reference](contracts.md).
 
 Use `requireChain` for route identities. `getChain` is a separate metadata lookup with
-native-currency and explorer details, and it covers fewer chains: Unichain, Monad, Sonic, Ronin,
-Plasma and Ink are canonical chains with no metadata record.
+native-currency and explorer details, and it covers fewer chains: a chain's
+[page](../reference/chains.md) says "not recorded" for a native coin where it has no record.
 
 The SDK ships no RPC endpoints; pass your own. No chain record, Solana cluster or default carries a
 URL, and nothing reads one from the environment. Whatever reads a chain takes its connection from

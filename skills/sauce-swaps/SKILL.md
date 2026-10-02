@@ -107,8 +107,11 @@ blocks:
 - **`sell`** (the base token in: WETH → USDC): its `sqrtPriceLimitX96` is a **floor**;
 - **`buy`** (the base token out: USDC → WETH): its `sqrtPriceLimitX96` is a **ceiling**.
 
-Each block also gives `minAvgPrice` for that direction. Take the limit from the block of the
-direction you trade.
+Each block also gives that direction's average floor `minAvgPrice`, output received per input
+paid (`out * 1e18 >= minAvgPrice * spent`), and, the other way round, `maxPrice` and `maxAvgPrice`,
+input paid per output bought, which the distributed swap takes (`sauce-distributed-swap`). Take the
+limit from the block of the direction you trade. With an endpoint, `--pool <address>` reads the
+price from that pool now.
 
 **Put the limit near the current price, on the far side of it.** A limit far beyond the price, such
 as the bound itself, is no limit at all: the pool fills down (or up) to it at any price. One on the

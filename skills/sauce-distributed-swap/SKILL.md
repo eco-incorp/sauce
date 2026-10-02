@@ -324,7 +324,9 @@ whose fee alone puts it past `maxPrice` sits out. A V4 pool with a protocol fee 
 0.05% with a 0.1% protocol fee, its fee is 0.15%. As sqrt prices, 2,713.5 USDC per WETH is
 **4127095293177970497328754** and 2,686.5 is **4106511148422261116904015**, the limits the program
 derives from those two `maxPrice` values. `sauce price --chain base WETH USDC 2713.5` prints a
-price's `sqrtPriceX96`, and `--sqrt-price-x96 <value>` reads a pool's back as a price.
+price's `sqrtPriceX96`, and `--sqrt-price-x96 <value>` reads a pool's back as a price. Its `buy`
+block gives that price as `maxPrice` and `maxAvgPrice` in these units (`2713500000`); its
+`minAvgPrice` runs the other way round, output per input, and is never a `maxAvgPrice`.
 
 ## Getting the price right
 
@@ -365,7 +367,8 @@ rounded up. The cook as rehearsed lands; one whose average has moved past halfwa
 
 The budget must be in the Pot before the program runs: send it there from any wallet, or let
 `sauce run --fund` pull it from the signer in the same cook (`sauce-cli`). **Rehearse before
-sending**, with no key and nothing sent: once with `maxAvgPrice` 0 to read the average, then once
+sending**, with no key and nothing sent, on the block `sauce pools` read the prices at
+(`--block <number>`, which it prints): once with `maxAvgPrice` 0 to read the average, then once
 with `minTokens` above what fills, which reverts `bought below minTokens`, and once with
 `maxAvgPrice` below the average, which reverts `average too high`: that shows both checks work.
 Then send it with `maxAvgPrice` from the rule above; `sauce run` rehearses it once more before

@@ -42,7 +42,7 @@ import {
   type ParsedArgs,
 } from "./args.js";
 import { actionsCommand, actionsProgram, isActionsDocument, type ActionsInput } from "./actions.js";
-import { chainServedBy, connect, endpointFor, type Sent } from "./chain.js";
+import { chainServedBy, connect, connectAt, endpointFor, type Sent } from "./chain.js";
 import {
   compileCommand,
   pastDeadline,
@@ -110,7 +110,7 @@ import {
 } from "./intents.js";
 import { MCP_FLAGS, mcpCommand } from "./mcp.js";
 import { livePrice, priceCommand, pricedChain, priceGiven, resolvePriceTokens } from "./price.js";
-import { parseV4Key, poolsCommand } from "./pools.js";
+import { parseV4Key, poolsCommand, readPoolAt } from "./pools.js";
 import { publishCommand } from "./publish.js";
 import { simulateCommand } from "./simulate.js";
 import {
@@ -3047,14 +3047,20 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     usage: [
       "sauce price --chain <slug|id> <price> <quote> per <base> [--offline] [--json]",
       "sauce price --chain <slug|id> <base> <quote> (<price> | --sqrt-price-x96 <value>) [--json]",
+      "sauce price --chain <slug|id> <base> <quote> --pool <address> [--json]",
     ],
-    summary: "Turn a price into a pool's sqrtPriceX96 and a swap's limit and average-price floor",
+    summary: "Turn a price into a pool's sqrtPriceX96 and a swap's limits, maxPrice included",
     flags: {
       chain: { type: "string", value: "<slug|id>", help: "The chain the pool is on" },
       "sqrt-price-x96": {
         type: "string",
         value: "<value>",
         help: "Read a pool's sqrtPriceX96 as a price instead",
+      },
+      pool: {
+        type: "string",
+        value: "<address>",
+        help: "Read the price from this V3-style pool of the pair now (needs an endpoint)",
       },
       ...ENDPOINT,
       ...JSON_FLAG,
@@ -3067,13 +3073,20 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "its decimals (0x…:18); with an endpoint, an address alone, its decimals read from the",
       "token. The first line says what the price means, both ways round",
       "(1 WETH = 2700 USDC, 1 USDC = 0.00037… WETH). Then the pool's sqrtPriceX96 at that price,",
-      "for the pair's order on the chain (token0 is the lower address), and for each direction:",
+      "for the pair's order on the chain (token0 is the lower address), and for each direction",
+      "(selling the base token, then buying it):",
       "  sqrtPriceLimitX96  the same number as a swap's limit: a floor when selling token0, a",
       "                     ceiling when selling token1",
-      "  minAvgPrice        output units per input unit times 1e18, rounded up, for a program's",
-      "                     check out * 1e18 >= minAvgPrice * spent",
+      "  maxPrice           input units paid per output unit bought, times 1e18, rounded down:",
+      "                     the price times 10^(18 + input decimals - output decimals), the",
+      "                     distributed swap's maxPrice, as sauce pools prints it",
+      "  maxAvgPrice        the same number, as the distributed swap's maxAvgPrice",
+      "  minAvgPrice        the other way round, output units received per input unit times",
+      "                     1e18, rounded up, for a check out * 1e18 >= minAvgPrice * spent",
       "Uniswap V3 and V4 and their forks share this price. With --sqrt-price-x96, a pool's",
-      "price is read back the other way.",
+      "price is read back the other way. With --pool, it is read from that pool of the pair now:",
+      "a Uniswap V3, PancakeSwap V3 or Aerodrome Slipstream pool (sauce pools lists them), named",
+      "by its venue when the registry's factory made it.",
       "",
       "It also reads the pair's price now, from its deepest Uniswap V3 pool on the chain, and",
       "warns when the price given is 10x or more away from it, saying so when the price looks",
@@ -3083,6 +3096,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "  sauce price --chain base 2700 USDC per WETH",
       "  sauce price --chain base 2700 USDC per WETH --offline",
       "  sauce price --chain base WETH USDC --sqrt-price-x96 4116816085950893928074568",
+      "  sauce price --chain base SPCXc USDC --pool 0x0bf58fe0FAc935Ac69595c19B12Ba0d75E3F8c0E",
     ].join("\n"),
     run: async (args, io) => {
       const chain = pricedChain(parseChain(requiredFlag(args, "chain", "<slug|id>")));
@@ -3098,20 +3112,32 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         );
       }
       if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}`);
-      const given = priceGiven(price, sqrt);
+      const poolGiven = stringFlag(args, "pool");
+      if (poolGiven !== undefined && (price !== undefined || sqrt !== undefined)) {
+        throw new UsageError("give <price>, --sqrt-price-x96 or --pool: one of them");
+      }
+      const poolAddress = poolGiven === undefined ? undefined : parseAddress("pool", poolGiven);
+      const given = poolAddress === undefined ? priceGiven(price, sqrt) : undefined;
 
-      const url = endpoint(args, io, chain);
+      // A pool is read now, so --pool needs an endpoint; a price reads the pair's now with one.
+      const url =
+        poolAddress === undefined ? endpoint(args, io, chain) : requiredEndpoint(args, io, chain);
       const reach = url !== undefined;
       const client = url === undefined ? undefined : await connect(url, chain);
       // A token the chain registers no decimals for has them read from it, with an endpoint.
       const [baseToken, quoteToken] = await resolvePriceTokens([base, quote], chain, client);
       const pair = { base: baseToken!, quote: quoteToken! };
+      if (poolAddress !== undefined) {
+        const pool = await readPoolAt(client!, chain, poolAddress);
+
+        return priceCommand({ chain, ...pair, price: { sqrtPriceX96: pool.sqrtPriceX96 }, pool });
+      }
       const live =
         client === undefined ? undefined : await livePrice(client, chain, pair.base, pair.quote);
       const output = priceCommand({
         chain,
         ...pair,
-        price: given,
+        price: given!,
         ...(live === undefined ? {} : { live }),
       });
 
@@ -3128,7 +3154,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   pools: {
-    usage: "sauce pools --chain <slug|id> <token> <token> [--v4-key <fee:spacing>]… [--json]",
+    usage:
+      "sauce pools --chain <slug|id> <token> <token> [--v4-key <fee:spacing>]… [--block <number|tag>] [--json]",
     summary: "List a pair's price-limit pools on a chain, deepest first, with their prices",
     flags: {
       chain: { type: "string", value: "<slug|id>", help: "The chain the pools are on" },
@@ -3137,6 +3164,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         multiple: true,
         value: "<fee:spacing>",
         help: "Also try this hookless Uniswap V4 pool key (3000:60)",
+      },
+      block: {
+        type: "string",
+        value: "<number|tag>",
+        help: "Read the pools at this block: a number, or latest, safe, finalized (default: latest)",
       },
       ...ENDPOINT,
       ...JSON_FLAG,
@@ -3161,7 +3193,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "through the pool's ticks. Pools with no liquidity at their price are listed after them, as",
       "skipped. Then what was looked at.",
       "",
-      "It reads the chain in five requests, each one eth_call for every read in it.",
+      "It reads the chain in five requests, each one eth_call for every read in it, all at one",
+      "block, which it names: --block, or the latest when it starts. Pass that block to sauce",
+      "simulate --block to rehearse on the prices maxPrice was taken from.",
       "",
       "Examples:",
       "  sauce pools --chain base USDC WETH",
@@ -3181,13 +3215,14 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         );
       }
       const v4Keys = repeatedFlag(args, "v4-key").map((raw) => parseV4Key(raw));
-
-      return poolsCommand({
+      // Every read at one block, which the report names.
+      const { client, block } = await connectAt(
+        requiredEndpoint(args, io, chain),
         chain,
-        client: await connect(requiredEndpoint(args, io, chain), chain),
-        tokens: [first, second],
-        v4Keys,
-      });
+        stringFlag(args, "block"),
+      );
+
+      return poolsCommand({ chain, client, tokens: [first, second], v4Keys, block });
     },
   },
   inspect: {

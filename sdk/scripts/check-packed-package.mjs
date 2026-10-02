@@ -4,7 +4,16 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -354,14 +363,22 @@ try {
     `${name} ${installedManifest.version}\n`,
     `npx ${name} runs the package's sauce bin`,
   );
-  // The skill's `pay.sauce.ts` names no chain and takes `main(recipient, amount)` at run time.
+  // The skill's `buy.sauce.ts` names no chain, starts with a `#!` line, imports `@sauce/router`
+  // and takes `main(token, budget, sqrtPriceLimitX96, minOut, recipient)` at run time.
   // `--offline`: the bin reads a chain through its built-in public endpoints otherwise, and this
   // check reaches no network.
-  const example = join(installedRoot, "skills/sauce-cli/examples/pay.sauce.ts");
+  const example = join(installedRoot, "skills/sauce-cli/examples/buy.sauce.ts");
   const recipient = "0x6666666666666666666666666666666666666666";
   const owner = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
-  const chain = ["--chain", "ethereum"];
-  const args = ["--args", recipient, "1000000"];
+  const chain = ["--chain", "base"];
+  const args = [
+    "--args",
+    "0x4200000000000000000000000000000000000006",
+    "100000000",
+    "4116816085950893928074568",
+    "37000000000000000",
+    recipient,
+  ];
   const bytecode = sauce("compile", example, ...chain).trim();
   assert.match(bytecode, /^0x[0-9a-f]+$/, "sauce compile prints the program as hex");
   const compiled = JSON.parse(sauce("compile", example, ...chain, "--json"));
@@ -369,18 +386,15 @@ try {
     readFileSync(join(work, "node_modules/sauce-compiler/package.json"), "utf8"),
   );
   assert.equal(compiled.bytecode, bytecode);
-  assert.equal(compiled.chain, "ethereum", "--chain chose the chain");
+  assert.equal(compiled.chain, "base", "--chain chose the chain");
   assert.deepEqual(
-    compiled.entryParams,
-    [
-      { name: "recipient", type: "Address" },
-      { name: "amount", type: "Uint256" },
-    ],
+    compiled.entryParams.map((param) => param.name),
+    ["token", "budget", "sqrtPriceLimitX96", "minOut", "recipient"],
     "main's parameters, as --args takes them",
   );
   assert.equal(compiled.compiler.version, installedCompiler.version);
   assert.equal(compiled.engine.release, "v12-evm");
-  const pot = JSON.parse(sauce("pot", "--owner", owner, "--chain", "ethereum", "--offline"));
+  const pot = JSON.parse(sauce("pot", "--owner", owner, "--chain", "base", "--offline"));
   assert.equal(pot.to, pot.kitchen, "sauce pot prints the Kitchen.deployPot transaction");
   const tx = JSON.parse(
     sauce("tx", example, ...chain, "--owner", owner, "--value", "0", "--offline", ...args),
@@ -424,7 +438,8 @@ try {
     sauce(
       "tx",
       document,
-      ...chain,
+      "--chain",
+      "ethereum",
       "--owner",
       owner,
       "--value",
@@ -588,6 +603,65 @@ try {
     /: up to date \(/,
     "the check leaves the installed skills as they were",
   );
+
+  // The same runners in a project whose package manager installs a package's own dependencies
+  // beside it rather than at the project's root (pnpm's default): only the project's direct
+  // dependencies resolve from it — the package, viem and Node's typings — and the package's own
+  // only from beside the package. Outside `work`, so nothing hoisted there is reached either. Every
+  // runner must typecheck there; a probe that imports one of the package's own dependencies must not.
+  const isolated = mkdtempSync(join(tmpdir(), "sauce-isolated-project-"));
+  try {
+    writeFileSync(
+      join(isolated, "package.json"),
+      JSON.stringify({ private: true, type: "module" }),
+    );
+    for (const dependency of [name, "viem", "@types/node"]) {
+      const at = join(isolated, "node_modules", dependency);
+      mkdirSync(dirname(at), { recursive: true });
+      symlinkSync(join(work, "node_modules", dependency), at, "dir");
+    }
+    sauce("skills", "install", "--agent", "codex", "--dir", isolated);
+    const installedRunners = shippedSkills
+      .filter((file) => file.endsWith(".mts"))
+      .map((file) => join(isolated, ".agents/skills", file));
+    const probe = join(isolated, ".agents/skills/probe.mts");
+    writeFileSync(probe, 'import { address } from "@solana/kit";\nconsole.log(address);\n');
+    const options = {
+      target: ts.ScriptTarget.ES2022,
+      lib: ["lib.es2023.d.ts"],
+      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      types: ["node"],
+      typeRoots: [join(isolated, "node_modules/@types")],
+      strict: true,
+      noEmit: true,
+      skipLibCheck: true,
+      verbatimModuleSyntax: true,
+      erasableSyntaxOnly: true,
+      allowImportingTsExtensions: true,
+    };
+    const diagnostics = ts.getPreEmitDiagnostics(
+      ts.createProgram([...installedRunners, probe], options),
+    );
+    const where = (d) =>
+      `${d.file === undefined ? "" : `${relative(isolated, d.file.fileName)}: `}` +
+      ts.flattenDiagnosticMessageText(d.messageText, " ");
+    assert.deepEqual(
+      diagnostics.filter((d) => d.file?.fileName !== probe).map(where),
+      [],
+      "every installed runner typechecks with only the project's own dependencies",
+    );
+    assert.ok(
+      diagnostics.some((d) => d.file?.fileName === probe && d.code === 2307),
+      "the project does not resolve the package's own dependencies (@solana/kit)",
+    );
+    console.log(
+      `Clean package install: the ${installedRunners.length} installed runners typecheck in a ` +
+        `project that resolves only its own dependencies (${name}, viem, @types/node)`,
+    );
+  } finally {
+    rmSync(isolated, { recursive: true, force: true });
+  }
 
   // `sauce mcp`, from the install, the way `sauce mcp setup` launches it — `npx @eco-incorp/sauce
   // mcp`, here with `--no` so nothing is fetched — over both transports: the tools, a compile, and

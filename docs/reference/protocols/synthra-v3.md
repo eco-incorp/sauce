@@ -1,0 +1,126 @@
+<!-- Generated from the SDK's registries. Do not edit. -->
+
+# Synthra V3 (`synthra-v3`)
+
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit ([the `@sauce/router` reference](../../api/router.md); several pools under one limit, the `sauce-distributed-swap` agent skill). The templates below call the protocol's own contracts.
+
+Concentrated-liquidity spot DEX on Arc: a Uniswap V3 fork with renamed pool callbacks.
+
+| Fact | Value |
+| --- | --- |
+| Category | DEX |
+| Family | `Synthra`: `synthra-v3` |
+| Namespace | `SynthraV3` on arc |
+| Chains | arc |
+
+## Typed templates for the raw compiler (not for `sauce compile`)
+
+These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
+compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
+namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
+top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+
+### swap
+
+Exact-input single-hop swap through SwapRouter02.
+
+```typescript
+import { SynthraV3SwapRouter02ABI as ISwapRouter02 } from "./abis";
+
+function main(
+  routerAddress: Address,
+  tokenIn: Address,
+  tokenOut: Address,
+  fee: Uint256,
+  amountIn: Uint256,
+  amountOutMin: Uint256,
+  recipient: Address,
+): Uint256 {
+  const router = ISwapRouter02.at(routerAddress);
+  return router.exactInputSingle({
+    tokenIn: tokenIn,
+    tokenOut: tokenOut,
+    fee: fee,
+    recipient: recipient,
+    amountIn: amountIn,
+    amountOutMinimum: amountOutMin,
+    sqrtPriceLimitX96: 0,
+  });
+}
+```
+
+- SwapRouter02's params have no `deadline`
+- `tokenIn` must be `approve`d to the router
+
+## Notes
+
+- The external ABIs are Uniswap V3's (`getPool`, `exactInputSingle`, `quoteExactInputSingle`, `mint`, …), and the Arc bytecode dispatches every one of them
+- Pools call back `synthraV3SwapCallback` (`0x13abb0ca`) and `synthraV3MintCallback`, not the `uniswapV3*` callbacks, so a contract that swaps or mints against a Synthra pool directly must implement the renamed callbacks
+- On Arc there is no wrapped native token; pools pair against USDC's ERC-20 interface `0x3600…0000`
+- Addresses come from docs.synthra.org's contract-addresses page
+- From a Pot program, instead of the protocol's own router: `@sauce/router`'s `uniswapV3(pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient)` calls the Router's `swapV3`, and only a generation-3 Router answers `synthraV3SwapCallback`; on an older one the swap reverts. A Pot for which `potRouterUpdate(client, pot)` returns nothing runs the Kitchen's Router, generation `v12RouterGeneration()`; otherwise its owner signs the update it returns
+- `uniswapV3` is exact input: the Router caps what the callback may take at `amountIn`
+
+## Its names in a program
+
+On Arc, `SynthraV3` is a namespace: its contracts need no import.
+
+```ts
+function main() {
+  // Arc's factory, `0x6307fc239C7964942c1BfFE51930E55606619c74`.
+  require(SynthraV3.Factory != 0n);
+}
+```
+
+## Deployments
+
+| Chain | Contract | Address | In a program |
+| --- | --- | --- | --- |
+| [Arc](../chains/arc.md) | factory | `0x6307fc239C7964942c1BfFE51930E55606619c74` | `SynthraV3.Factory` |
+| [Arc](../chains/arc.md) | nonfungiblePositionManager | `0x2743b771659fD9CE13970d7367e7e84AF6a31049` | `SynthraV3.NonfungiblePositionManager` |
+| [Arc](../chains/arc.md) | quoterV2 | `0x9c179A7335B3fc841F59Aa6a62daf6d5c61b65D7` | `SynthraV3.QuoterV2` |
+| [Arc](../chains/arc.md) | swapRouter02 | `0xa50eDe66a573eE5bB37E28AF5789B76aE5FEb828` | `SynthraV3.SwapRouter02` |
+
+## ABI
+
+### `SynthraV3FactoryABI`
+
+`import SynthraV3FactoryABI from "./protocols/synthra-v3/SynthraV3FactoryABI.json";` Speaks for: factory.
+
+- `getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)`
+- `createPool(address tokenA, address tokenB, uint24 fee) returns (address pool)`
+
+### `SynthraV3NonfungiblePositionManagerABI`
+
+`import SynthraV3NonfungiblePositionManagerABI from "./protocols/synthra-v3/SynthraV3NonfungiblePositionManagerABI.json";` Speaks for: nonfungiblePositionManager.
+
+- `mint((address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, address recipient, uint256 deadline) params) payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)`
+- `increaseLiquidity((uint256 tokenId, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, uint256 deadline) params) payable returns (uint128 liquidity, uint256 amount0, uint256 amount1)`
+- `decreaseLiquidity((uint256 tokenId, uint128 liquidity, uint256 amount0Min, uint256 amount1Min, uint256 deadline) params) payable returns (uint256 amount0, uint256 amount1)`
+- `collect((uint256 tokenId, address recipient, uint128 amount0Max, uint128 amount1Max) params) payable returns (uint256 amount0, uint256 amount1)`
+
+### `SynthraV3PoolABI`
+
+`import SynthraV3PoolABI from "./protocols/synthra-v3/SynthraV3PoolABI.json";`
+
+- `slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)`
+- `liquidity() view returns (uint128)`
+- `fee() view returns (uint24)`
+- `tickSpacing() view returns (int24)`
+- `token0() view returns (address)`
+- `token1() view returns (address)`
+
+### `SynthraV3QuoterV2ABI`
+
+`import SynthraV3QuoterV2ABI from "./protocols/synthra-v3/SynthraV3QuoterV2ABI.json";` Speaks for: quoterV2.
+
+- `quoteExactInputSingle((address tokenIn, address tokenOut, uint256 amountIn, uint24 fee, uint160 sqrtPriceLimitX96) params) returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)`
+
+### `SynthraV3SwapRouter02ABI`
+
+`import SynthraV3SwapRouter02ABI from "./protocols/synthra-v3/SynthraV3SwapRouter02ABI.json";` Speaks for: swapRouter02.
+
+- `exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)`
+- `exactInput((bytes path, address recipient, uint256 amountIn, uint256 amountOutMinimum) params) payable returns (uint256 amountOut)`
+- `exactOutputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 amountOut, uint256 amountInMaximum, uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountIn)`
+- `exactOutput((bytes path, address recipient, uint256 amountOut, uint256 amountInMaximum) params) payable returns (uint256 amountIn)`
