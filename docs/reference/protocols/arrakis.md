@@ -21,7 +21,7 @@ Automated liquidity management protocol for Uniswap V3. Provides vaults that act
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Add liquidity - NOTE: uses tuple params via router
@@ -54,7 +54,7 @@ On Ethereum, `Arrakis` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's factory, `0xEA1aFf9dbFfD1580F6b81A3ad3589E66652dB7D9`.
-  require(Arrakis.Factory != 0n);
+  require(Arrakis.Factory != 0);
 }
 ```
 

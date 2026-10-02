@@ -89,7 +89,7 @@ calling a method on it.
 ```sauce chain=solana
 function main(pot: Account<Signer>, wallet: Account<Signer>, kitchen: Address, salt: Uint256) {
   const owner = wallet.address;
-  const [expected] = crypto.findPDA(kitchen, ["pot", owner.toBytesBe(32n), salt.toBytesBe(32n)]);
+  const [expected] = crypto.findPDA(kitchen, ["pot", owner.toBytesBe(32), salt.toBytesBe(32)]);
   require(pot.address == expected, "pot is not the wallet's Pot");
 }
 ```
@@ -110,14 +110,14 @@ An SPL token account is 165 bytes, and `acct.owner` is the program that owns it 
 program, or Token-2022), not whose balance it is. A Token-2022 account has the same first 165 bytes,
 then its extensions:
 
-| Bytes   | Field                              | Read                               |
-| ------- | ---------------------------------- | ---------------------------------- |
-| 0–32    | mint                               | `svm.sload(acct, 0n, 32n).toBe()`  |
-| 32–64   | owner: whose balance it is         | `ownerOf(mint, acct)`              |
-| 64–72   | amount (u64, little-endian)        | `svm.sload(acct, 64n, 8n).toLe()`  |
-| 72–76   | delegate tag (u32: 0 none, 1 some) | `svm.sload(acct, 72n, 4n).toLe()`  |
-| 76–108  | delegate                           | `svm.sload(acct, 76n, 32n).toBe()` |
-| 121–129 | delegated amount (u64)             | `svm.sload(acct, 121n, 8n).toLe()` |
+| Bytes   | Field                              | Read                             |
+| ------- | ---------------------------------- | -------------------------------- |
+| 0–32    | mint                               | `svm.sload(acct, 0, 32).toBe()`  |
+| 32–64   | owner: whose balance it is         | `ownerOf(mint, acct)`            |
+| 64–72   | amount (u64, little-endian)        | `svm.sload(acct, 64, 8).toLe()`  |
+| 72–76   | delegate tag (u32: 0 none, 1 some) | `svm.sload(acct, 72, 4).toLe()`  |
+| 76–108  | delegate                           | `svm.sload(acct, 76, 32).toBe()` |
+| 121–129 | delegated amount (u64)             | `svm.sload(acct, 121, 8).toLe()` |
 
 **Check the owner before calling a balance the Pot's**: a transfer with the Pot as `authority` also
 succeeds from an account where the Pot is only a delegate, up to the delegated amount.
@@ -145,7 +145,7 @@ function main(
   salt: Uint256
 ): Uint256 {
   const owner = wallet.address;
-  const [expected] = crypto.findPDA(kitchen, ["pot", owner.toBytesBe(32n), salt.toBytesBe(32n)]);
+  const [expected] = crypto.findPDA(kitchen, ["pot", owner.toBytesBe(32), salt.toBytesBe(32)]);
   require(pot.address == expected, "pot is not the wallet's Pot");
   require(ownerOf(USDC, potUsdc) == pot.address, "not the Pot's USDC account");
   return balanceOf(USDC, potUsdc);
@@ -249,7 +249,7 @@ function main(
 ): Uint256 {
   require(ownerOf(PYUSD, source) == pot.address, "not the Pot's account");
   const before = balanceOf(PYUSD, destination);
-  transferChecked(PYUSD, tokenProgram, source, mint, destination, pot, amount, 6n);
+  transferChecked(PYUSD, tokenProgram, source, mint, destination, pot, amount, 6);
   return balanceOf(PYUSD, destination) - before;
 }
 ```

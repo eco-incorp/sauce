@@ -23,7 +23,7 @@ Decentralized borrowing protocol offering interest-free loans against ETH collat
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Close Trove
@@ -62,7 +62,7 @@ On Ethereum, `LiquityV1` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's borrowerOperations, `0x24179CD81c9e782A4096035f7eC97fB8B783e007`.
-  require(LiquityV1.BorrowerOperations != 0n);
+  require(LiquityV1.BorrowerOperations != 0);
 }
 ```
 

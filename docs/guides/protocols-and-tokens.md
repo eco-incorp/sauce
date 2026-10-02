@@ -7,7 +7,7 @@ the SDK speaks. Inside a program they are names the compiler resolves against th
 runs on:
 
 ```js
-USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+USDC.approve(Uniswap.UniversalRouter, 1_000_000);
 ```
 
 In host TypeScript the same names hang off a chain export:
@@ -109,12 +109,12 @@ program can name a venue some of its chains lack:
 // `available(...)` is decided when the program is compiled, for the chain it is compiled for, and
 // the branches it rules out are removed before anything in them is resolved.
 function main() {
-  if (!available(USDC) || !available(WETH)) return 0n;
-  let pool = 0n;
+  if (!available(USDC) || !available(WETH)) return 0;
+  let pool = 0;
   if (available(PancakeswapV3.Factory)) {
-    pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
+    pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500);
   } else if (available(UniswapV3.Factory)) {
-    pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);
+    pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
   }
   return pool;
 }
@@ -130,7 +130,7 @@ compile everywhere: a token the chain lacks is an unknown name in any branch tha
   `Arbitrum.UniswapV3.Factory` — or a token symbol, `USDT`. A token is available where the chain's
   token map has it, which includes the `tokens` you pass.
 - It folds `if`/`else`, `?:`, `&&`, `||` and `!`. A guard that returns,
-  `if (!available(X)) return 0n;`, removes the rest of its block where `X` is absent.
+  `if (!available(X)) return 0;`, removes the rest of its block where `X` is absent.
 - Anywhere else it is the literal `true` or `false`. A branch that depends on it only through a
   runtime value (`const has = available(X); if (has) ...`) is live code, and every name in it must
   still resolve.
@@ -152,14 +152,14 @@ compiles, naming it and the chain's closest names: `USDCC.balanceOf(...)` on Bas
 These are SauceScript route-body fragments:
 
 ```js
-USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+USDC.approve(Uniswap.UniversalRouter, 1_000_000);
 let balance = USDC.balanceOf(self);
 ```
 
 For a token absent from the registry, use `Token(address)`:
 
 ```js
-Token(0x1111111111111111111111111111111111111111n).approve(Uniswap.UniversalRouter, 1_000_000n);
+Token(0x1111111111111111111111111111111111111111).approve(Uniswap.UniversalRouter, 1_000_000);
 ```
 
 Replace that illustrative address with your ERC-20. The wrapper accepts a literal, a local variable, or a compile-time define. It can also be bound once and called, `const t = Token(address); t.approve(spender, amount);`, as long as `t` is never reassigned or used other than as `t.<method>(...)`. The token member syntax supports `transfer`, `approve`, `transferFrom`, and `balanceOf`. Use an explicit ABI binding for additional ERC-20 methods. The shorthand `self.USDC` reads the executing contract's balance; `USDC.balanceOf(self)` makes the same intent explicit. `self` refers to the executing contract, which is the Pot in the EVM route path.

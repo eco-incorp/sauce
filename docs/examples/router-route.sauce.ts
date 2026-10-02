@@ -16,14 +16,14 @@ function main(legs: Leg[], amountIn: Uint256, minOut: Uint256): Uint256 {
   let out = amountIn;
   for (let k = 0; k < legs.length; k = k + 1) {
     const leg = legs[k];
-    if (leg.venue == 0n) {
-      out = uniswapV2(leg.pool, leg.tokenIn, leg.tokenOut, out, 0n, 0n, ctx.self());
-    } else if (leg.venue == 1n) {
-      out = uniswapV3(leg.pool, leg.tokenIn, leg.tokenOut, out, 0n, 0n, ctx.self());
-    } else if (leg.venue == 3n) {
-      out = curve(leg.pool, leg.tokenIn, leg.tokenOut, out, leg.i, leg.j, false, 0n, ctx.self());
-    } else if (leg.venue == 4n) {
-      out = balancerV2(leg.pool, leg.tokenIn, leg.tokenOut, out, leg.poolId, 0n, ctx.self());
+    if (leg.venue == 0) {
+      out = uniswapV2(leg.pool, leg.tokenIn, leg.tokenOut, out, 0, 0, ctx.self());
+    } else if (leg.venue == 1) {
+      out = uniswapV3(leg.pool, leg.tokenIn, leg.tokenOut, out, 0, 0, ctx.self());
+    } else if (leg.venue == 3) {
+      out = curve(leg.pool, leg.tokenIn, leg.tokenOut, out, leg.i, leg.j, false, 0, ctx.self());
+    } else if (leg.venue == 4) {
+      out = balancerV2(leg.pool, leg.tokenIn, leg.tokenOut, out, leg.poolId, 0, ctx.self());
     } else {
       throw "router-route: unknown venue";
     }

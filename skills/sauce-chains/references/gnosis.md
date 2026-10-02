@@ -33,7 +33,7 @@ chain does not have it.
 ```sauce chain=gnosis
 function main() {
   // `AaveV3.Pool` is Gnosis's pool: `0xb50201558B00496A145fE76f7424749556E326D8`.
-  require(AaveV3.Pool != 0n);
+  require(AaveV3.Pool != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Gnosis.AaveV3.Pool == AaveV3.Pool);
 }

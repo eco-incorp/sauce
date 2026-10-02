@@ -22,9 +22,9 @@ import { balanceOf } from "@sauce/token";
 function main(minOut: Uint256) {
   const pair = UniswapV2.Factory.getPair(WETH, USDC);
   const sold = balanceOf(WETH, ctx.self());
-  const received = uniswapV2(pair, WETH, USDC, sold, 3000n, 0n, ctx.self());
+  const received = uniswapV2(pair, WETH, USDC, sold, 3000, 0, ctx.self());
   // USDC is the 3pool's coin 1 and USDT its coin 2.
-  curve(Curve.ThreePool, USDC, USDT, received, 1n, 2n, false, minOut, ctx.self());
+  curve(Curve.ThreePool, USDC, USDT, received, 1, 2, false, minOut, ctx.self());
 }
 ```
 
@@ -64,7 +64,7 @@ Addresses are `Address`, amounts and the other numbers `Uint256`, and `uint256In
 
 - **`amountIn`** is what the Pot pays. Every swap is **exact input**; nothing here expresses an
   exact-output swap.
-- **`minOut`** is the least the swap may deliver; below it the whole program reverts. `0n` sets no
+- **`minOut`** is the least the swap may deliver; below it the whole program reverts. `0` sets no
   floor, except for `woofi`, which requires a positive one. Where the venue enforces a floor
   itself — Curve's `min_dy`, the Balancer Vault's `limit`, WooPPV2's `minToAmount` — `minOut` is
   that floor; otherwise the function checks it against the amount the venue reports.
@@ -117,7 +117,7 @@ it. (Through the Router, a price limit or a pool that runs out can leave part of
 it stays in the Pot.)
 
 The `try` forms are the one way to get a swap that may fail without reverting the program, and they
-lose nothing either: a `try` that cannot swap returns `0n` having moved nothing, and the program
+lose nothing either: a `try` that cannot swap returns `0` having moved nothing, and the program
 goes on. Each exists only where that can be guaranteed:
 
 - `tryUniswapV2` and `tryTraderJoeLB` check, before anything moves, that the pool fills the whole
@@ -126,21 +126,21 @@ goes on. Each exists only where that can be guaranteed:
 - `tryCurve` and `tryBalancerV2` catch the pool's failure and reset the approval to zero.
 
 DODO V2 and WOOFi offer neither, so they have no `try` form. A swap that ran returns at least 1, so
-`0n` always means skipped.
+`0` always means skipped.
 
 ## Venues
 
 - **Uniswap V2** prices the output from the pair's reserves with the Sauce Router's own
   constant-product math and takes exactly that, so the pair's K check holds for a correctly stated
   fee and reverts for one stated too low. `feePpm` is the pair's LP fee in parts per million: 3000
-  (0.30%) for Uniswap V2 and its forks that charge it, which `0n` also means; 2500 for PancakeSwap
+  (0.30%) for Uniswap V2 and its forks that charge it, which `0` also means; 2500 for PancakeSwap
   V2; 1,000,000 or more reverts. An input past the reserve's `uint112` width reverts at the pair.
 - **Uniswap V3** sends `amountIn` positive, the pool's exact-input sign. A non-zero
   `sqrtPriceLimitX96` stops the swap at that price.
 - **Uniswap V4**'s pool key is `tokenIn` and `tokenOut` in sort order — native ETH is the zero
   address, which sorts first and which the Pot pays from its own balance — with the pool's `fee`,
   `tickSpacing` and `hooks`. V4 reads a negative amount as exact input, so the function passes
-  `-amountIn`: unary negation, never `0n - amountIn`, which reverts for any non-zero amount.
+  `-amountIn`: unary negation, never `0 - amountIn`, which reverts for any non-zero amount.
 - **Curve** calls the pool's 4-argument `exchange(i, j, dx, min_dy)`. `uint256Indices` picks the
   CryptoSwap spelling over the StableSwap and NG one (`int128` indices). The pool pays the Pot, which
   forwards the output when `recipient` is not the Pot.
@@ -176,14 +176,14 @@ function main(legs: Leg[], amountIn: Uint256, minOut: Uint256): Uint256 {
   let out = amountIn;
   for (let k = 0; k < legs.length; k = k + 1) {
     const leg = legs[k];
-    if (leg.venue == 0n) {
-      out = uniswapV2(leg.pool, leg.tokenIn, leg.tokenOut, out, 0n, 0n, ctx.self());
-    } else if (leg.venue == 1n) {
-      out = uniswapV3(leg.pool, leg.tokenIn, leg.tokenOut, out, 0n, 0n, ctx.self());
-    } else if (leg.venue == 3n) {
-      out = curve(leg.pool, leg.tokenIn, leg.tokenOut, out, leg.i, leg.j, false, 0n, ctx.self());
-    } else if (leg.venue == 4n) {
-      out = balancerV2(leg.pool, leg.tokenIn, leg.tokenOut, out, leg.poolId, 0n, ctx.self());
+    if (leg.venue == 0) {
+      out = uniswapV2(leg.pool, leg.tokenIn, leg.tokenOut, out, 0, 0, ctx.self());
+    } else if (leg.venue == 1) {
+      out = uniswapV3(leg.pool, leg.tokenIn, leg.tokenOut, out, 0, 0, ctx.self());
+    } else if (leg.venue == 3) {
+      out = curve(leg.pool, leg.tokenIn, leg.tokenOut, out, leg.i, leg.j, false, 0, ctx.self());
+    } else if (leg.venue == 4) {
+      out = balancerV2(leg.pool, leg.tokenIn, leg.tokenOut, out, leg.poolId, 0, ctx.self());
     } else {
       throw "router-route: unknown venue";
     }

@@ -33,10 +33,10 @@ function rejects(source: string, target: "evm" | "svm" = "evm"): string {
 // A guarded program: a module const, a loop, a helper, `require` and `throw`.
 // Either failure reverts the WHOLE surrounding transaction; nothing before it survives.
 const guarded = `
-const FLOOR = 1n;
+const FLOOR = 1;
 
 function sum(xs: Uint256[]): Uint256 {
-  let total = 0n;
+  let total = 0;
   for (const x of xs) {
     total += x;
   }
@@ -59,7 +59,7 @@ check(a.entryEncoding === "abi-v1", "entry arguments default to ABI-v1");
 // Outside the subset. Each one is a compile error, never a silently different program.
 check(
   /unsupported construct/.test(
-    rejects("function main(x: Uint256): Uint256 { switch (x) { case 1n: return 1n; } return 0n; }"),
+    rejects("function main(x: Uint256): Uint256 { switch (x) { case 1: return 1; } return 0; }"),
   ),
   "switch",
 );
@@ -79,19 +79,19 @@ check(
   /not a context builtin/.test(rejects("function main(): Address { return ctx.caller(); }")),
   "the caller is ctx.msgSender(), not ctx.caller()",
 );
-// A negative amount is `-x`, two's complement, on both targets; `~x + 1n` overflows at x = 0.
+// A negative amount is `-x`, two's complement, on both targets; `~x + 1` overflows at x = 0.
 for (const target of ["evm", "svm"] as const)
   build("function main(x: Uint256): Uint256 { return -x; }", target);
 check(
-  /overflows 256 bits/.test(rejects("function main(): Uint256 { return ~0n + 1n; }")),
-  "~0n + 1n overflows",
+  /overflows 256 bits/.test(rejects("function main(): Uint256 { return ~0 + 1; }")),
+  "~0 + 1 overflows",
 );
 check(
   /not a valid 256-bit literal/.test(rejects("function main(): Uint256 { return 1.5; }")),
   "no floats",
 );
 check(
-  /overflows 256 bits/.test(rejects("function main(): Uint256 { return 0n - 1n; }")),
+  /overflows 256 bits/.test(rejects("function main(): Uint256 { return 0 - 1; }")),
   "checked arithmetic",
 );
 
@@ -123,14 +123,14 @@ const compiled = (source: string) => {
   return result;
 };
 const typed = compiled(
-  "function half(x: Uint256): Uint256 { return x / 2n; }\nfunction main(to: Address, amount, items: { amount: Uint256, to: Address }[]) { USDC.transfer(to, half(amount)); require(items.length > 0n); }",
+  "function half(x: Uint256): Uint256 { return x / 2; }\nfunction main(to: Address, amount, items: { amount: Uint256, to: Address }[]) { USDC.transfer(to, half(amount)); require(items.length > 0); }",
 );
 check(
   typed.entryParams.map((p) => `${p.name}: ${p.type}`).join(", ") ===
     "to: Address, amount: Uint256, items: { amount: Uint256, to: Address }[]",
   "a parameter with no annotation is a Uint256",
 );
-compiled("function main(x: Uint256) { let y: Uint256 = x; require(y > 0n); }"); // an annotated local
+compiled("function main(x: Uint256) { let y: Uint256 = x; require(y > 0); }"); // an annotated local
 const records = compiled(
   "interface Order { amount: Uint256; to: Address; }\nfunction main(orders: Order[]) { for (const o of orders) { USDC.transfer(o.to, o.amount); } }",
 );
@@ -141,15 +141,15 @@ check(
 compiled("function main(\n  a: Uint256,\n  b: Uint256,\n) { require(a > b); }"); // a trailing comma
 // A script: its statements are the entry, beside its imports and helpers.
 compiled(
-  'import { balanceOf as held } from "@sauce/token";\nfunction twice(x: Uint256): Uint256 { return x * 2n; }\nrequire(twice(held(USDC, ctx.self())) >= 0n);',
+  'import { balanceOf as held } from "@sauce/token";\nfunction twice(x: Uint256): Uint256 { return x * 2; }\nrequire(twice(held(USDC, ctx.self())) >= 0);',
 );
-compiled("require(chainId == 8453n);");
+compiled("require(chainId == 8453);");
 // ...and its top-level consts are its own locals, which a helper cannot read.
 check(
   /`FEE` is not a declared variable/.test(
     String(
       forChain(
-        "const FEE = 3n;\nfunction f(x: Uint256): Uint256 { return x * FEE; }\nrequire(f(1n) == 3n);",
+        "const FEE = 3;\nfunction f(x: Uint256): Uint256 { return x * FEE; }\nrequire(f(1) == 3);",
       ),
     ),
   ),

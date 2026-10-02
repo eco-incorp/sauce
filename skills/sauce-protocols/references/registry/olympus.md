@@ -19,7 +19,7 @@ On Ethereum, `Olympus` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's ohm, `0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5`.
-  require(Olympus.Ohm != 0n);
+  require(Olympus.Ohm != 0);
 }
 ```
 

@@ -19,7 +19,7 @@ On Base, `Baseswap` is a namespace: its contracts need no import.
 ```sauce chain=base
 function main() {
   // Base's v2Router, `0x327Df1E6de05895d2ab08513aaDD9313Fe505d86`.
-  require(Baseswap.V2Router != 0n);
+  require(Baseswap.V2Router != 0);
 }
 ```
 

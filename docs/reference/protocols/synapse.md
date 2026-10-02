@@ -16,7 +16,7 @@ Cross-chain bridge and DEX with multi-chain AMM pools. Supports token swaps and 
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### bridge
 
@@ -59,7 +59,7 @@ On Ethereum, `Synapse` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's cctpRouter, `0x12715a66773BD9C54534a01aBF01d05F6B4Bd35E`.
-  require(Synapse.CctpRouter != 0n);
+  require(Synapse.CctpRouter != 0);
 }
 ```
 

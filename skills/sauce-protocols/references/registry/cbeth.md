@@ -19,7 +19,7 @@ On Ethereum, `Cbeth` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's cbETH, `0xBe9895146f7AF43049ca1c1AE358B0541Ea49704`.
-  require(Cbeth.CbETH != 0n);
+  require(Cbeth.CbETH != 0);
 }
 ```
 

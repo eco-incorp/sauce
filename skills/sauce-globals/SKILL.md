@@ -60,7 +60,7 @@ these.
 function main(payee: Address, amount: Uint256) {
   require(USDT.balanceOf(ctx.self()) >= amount, "not enough USDT");
   USDT.transfer(payee, amount);
-  require(allowance(USDT, ctx.self(), payee) == 0n, "no allowance left standing");
+  require(allowance(USDT, ctx.self(), payee) == 0, "no allowance left standing");
 }
 ```
 
@@ -145,7 +145,7 @@ function main(
   amount: Uint256,
 ): Uint256 {
   const before = balanceOf(SPACEX, destination);
-  transferChecked(SPACEX, tokenProgram, source, mint, destination, pot, amount, 9n);
+  transferChecked(SPACEX, tokenProgram, source, mint, destination, pot, amount, 9);
   return balanceOf(SPACEX, destination) - before;
 }
 ```
@@ -153,8 +153,8 @@ function main(
 ## Protocols
 
 - `Namespace.Contract` is the contract's address on the program's chain where a value is expected,
-  and a bound contract where a method is called: `UniswapV3.Factory.getPool(a, b, 500n)`. A
-  Uniswap fee is in millionths: `500n` is the 0.05% tier, `3000n` 0.3%.
+  and a bound contract where a method is called: `UniswapV3.Factory.getPool(a, b, 500)`. A
+  Uniswap fee is in millionths: `500` is the 0.05% tier, `3000` 0.3%.
 - A namespace's default contract is also called by the namespace alone:
   `Cctp.depositForBurn(...)` calls `Cctp.TokenMessenger`.
 - A family alias (`Uniswap`, `Aave`, …) names a contract only when one member has it on the chain:
@@ -171,15 +171,15 @@ function main(
 compiled for a chain: `if (available(UniswapV3.Factory)) { ... }` keeps its branch where the chain
 has the contract, and removes it, names and all, where it does not. It takes a contract or a token
 symbol (`available(USDT)`); it folds `if`/`else`, `?:`, `&&`, `||` and `!`; and a guard
-`if (!available(X)) { return 0n; }` drops the rest of its function. A name no chain has is an
+`if (!available(X)) { return 0; }` drops the rest of its function. A name no chain has is an
 error rather than `false`, so a typo cannot quietly drop a branch. `Namespace.Contract` without it
 is for a contract the program requires: on a chain without it, the program does not compile.
 
 ```sauce chain=base,linea
 function main(tokenA: Address, tokenB: Address) {
   if (available(UniswapV3.Factory)) {
-    const pool = UniswapV3.Factory.getPool(tokenA, tokenB, 500n);
-    require(pool != 0n, "no 0.05% pool");
+    const pool = UniswapV3.Factory.getPool(tokenA, tokenB, 500);
+    require(pool != 0, "no 0.05% pool");
   }
 }
 ```

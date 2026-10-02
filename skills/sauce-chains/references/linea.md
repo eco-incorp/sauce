@@ -34,7 +34,7 @@ chain does not have it.
 ```sauce chain=linea
 function main() {
   // `Across.SpokePool` is Linea's spokePool: `0x7E63A5f1a8F0B4d0934B2f2327DAED3F6bb2ee75`.
-  require(Across.SpokePool != 0n);
+  require(Across.SpokePool != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Linea.Across.SpokePool == Across.SpokePool);
 }

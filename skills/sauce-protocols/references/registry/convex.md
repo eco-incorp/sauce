@@ -19,7 +19,7 @@ On Ethereum, `Convex` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's booster, `0xF403C135812408BFbE8713b5A23a04b3D48AAE31`.
-  require(Convex.Booster != 0n);
+  require(Convex.Booster != 0);
 }
 ```
 

@@ -11,6 +11,8 @@ export default tseslint.config(
       "artifacts/**",
       "**/artifacts/**",
       "dev-tools/cache/**",
+      // Agents' git worktrees: whole checkouts of this repository, linted in their own right.
+      ".claude/worktrees/**",
       // SauceScript, not application code — compiler INPUT, and every finding on it is a false
       // positive because eslint cannot know the language's own rules. Measured: `main` is the entry
       // point the Sauce compiler calls, so `no-unused-vars` fires on EVERY program, and

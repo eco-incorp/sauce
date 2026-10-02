@@ -22,7 +22,7 @@ Mode-native DEX. Its V2 router is a Camelot fork: swaps take a plain token path 
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### swap
 
@@ -71,7 +71,7 @@ On Mode, `Kim` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Mode's v2Router, `0x5D61c537393cf21893BE619E36fC94cd73C77DD3`.
-  require(Kim.V2Router != 0n);
+  require(Kim.V2Router != 0);
 }
 ```
 

@@ -19,7 +19,7 @@ On Ethereum, `Renzo` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's ezETH, `0xbf5495Efe5DB9ce00f80364C8B423567e58d2110`.
-  require(Renzo.EzETH != 0n);
+  require(Renzo.EzETH != 0);
 }
 ```
 

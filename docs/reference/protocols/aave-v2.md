@@ -31,7 +31,7 @@ Deposit the Pot's USDC:
 function main(amount: Uint256) {
   const self = ctx.self();
   USDC.approve(AaveV2.LendingPool, amount);
-  AaveV2.LendingPool.deposit(USDC, amount, self, 0n);
+  AaveV2.LendingPool.deposit(USDC, amount, self, 0);
 }
 ```
 
@@ -40,7 +40,7 @@ function main(amount: Uint256) {
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### deposit
 
@@ -147,7 +147,7 @@ On Ethereum, `AaveV2` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's lendingPool, `0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9`.
-  require(AaveV2.LendingPool != 0n);
+  require(AaveV2.LendingPool != 0);
 }
 ```
 

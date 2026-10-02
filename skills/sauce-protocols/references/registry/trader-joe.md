@@ -19,7 +19,7 @@ On BNB Chain, `TraderJoe` is a namespace: its contracts need no import.
 ```sauce chain=bsc
 function main() {
   // BNB Chain's lbFactory, `0x8e42f2F4101563bF679975178e880FD87d3eFd4e`.
-  require(TraderJoe.LBFactory != 0n);
+  require(TraderJoe.LBFactory != 0);
 }
 ```
 

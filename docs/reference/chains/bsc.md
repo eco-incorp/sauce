@@ -34,7 +34,7 @@ chain does not have it.
 ```ts
 function main() {
   // `AaveV3.Pool` is BNB Chain's pool: `0x6807dc923806fE8Fd134338EABCA509979a7e0cB`.
-  require(AaveV3.Pool != 0n);
+  require(AaveV3.Pool != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Bsc.AaveV3.Pool == AaveV3.Pool);
 }

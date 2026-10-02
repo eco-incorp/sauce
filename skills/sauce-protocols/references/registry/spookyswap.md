@@ -19,7 +19,7 @@ On Fantom, `Spookyswap` is a namespace: its contracts need no import.
 ```sauce chain=fantom
 function main() {
   // Fantom's v2Router, `0xF491e7B69E4244ad4002BC14e878a34207E38c29`.
-  require(Spookyswap.V2Router != 0n);
+  require(Spookyswap.V2Router != 0);
 }
 ```
 

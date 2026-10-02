@@ -19,7 +19,7 @@ On Ethereum, `Gelato` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's automate, `0x2A6C106ae13B558BB9E2Ec64Bd2f1f7BEFF3A5E0`.
-  require(Gelato.Automate != 0n);
+  require(Gelato.Automate != 0);
 }
 ```
 

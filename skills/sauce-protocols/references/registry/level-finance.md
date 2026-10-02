@@ -19,7 +19,7 @@ On BNB Chain, `LevelFinance` is a namespace: its contracts need no import.
 ```sauce chain=bsc
 function main() {
   // BNB Chain's liquidityPool, `0xA5aBFB56a78D2BD4689b25B8A77fd49Bb0675874`.
-  require(LevelFinance.LiquidityPool != 0n);
+  require(LevelFinance.LiquidityPool != 0);
 }
 ```
 

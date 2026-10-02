@@ -18,7 +18,7 @@ Aerodrome's concentrated-liquidity pools (Uniswap V3-style, keyed by tick spacin
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### getPool
 
@@ -56,7 +56,7 @@ On Arc, `AerodromeSlipstream` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Arc's clFactory, `0xb89Df768aF2CFE637ceB352c587Fe8edAf491d03`.
-  require(AerodromeSlipstream.CLFactory != 0n);
+  require(AerodromeSlipstream.CLFactory != 0);
 }
 ```
 

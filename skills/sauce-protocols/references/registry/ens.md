@@ -19,7 +19,7 @@ On Ethereum, `Ens` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's baseRegistrar, `0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85`.
-  require(Ens.BaseRegistrar != 0n);
+  require(Ens.BaseRegistrar != 0);
 }
 ```
 

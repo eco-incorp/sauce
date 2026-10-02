@@ -21,8 +21,8 @@ From a terminal, [`sauce compile`](cli.md) compiles a program file with everythi
 supplies except the intent, and `sauce tx` builds the call that runs it on your own Pot.
 
 Bare `USDC`, `Token(address)` and protocol members only exist on the route path. There,
-`USDC.approve(Uniswap.UniversalRouter, 1_000_000n)` becomes an import of `@sauce/token`'s
-`approve` and `approve(USDC, <the router's Base address>, 1_000_000n)`, with `USDC` defined as
+`USDC.approve(Uniswap.UniversalRouter, 1_000_000)` becomes an import of `@sauce/token`'s
+`approve` and `approve(USDC, <the router's Base address>, 1_000_000)`, with `USDC` defined as
 Base's USDC. That is the `SafeERC20` write; see
 [protocols and tokens](protocols-and-tokens.md#writes-follow-safeerc20). Raw `compile()` expects
 you to write it yourself, resolving `@sauce/token` with `resolveSdkPackage`.

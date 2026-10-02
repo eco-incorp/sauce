@@ -41,7 +41,7 @@ function main() {
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(USDC).balanceOf(ctx.self()) == held);
   // `AaveV3.Pool` is Base's pool: `0xA238Dd80C259a72e81d7e4664a9801593F98d1c5`.
-  require(AaveV3.Pool != 0n);
+  require(AaveV3.Pool != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Base.AaveV3.Pool == AaveV3.Pool);
 }

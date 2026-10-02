@@ -19,7 +19,7 @@ On Ethereum, `LineaBridge` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's l1MessageService, `0xd19d4B5d358258f05D7B411E21A1460D11B0876F`.
-  require(LineaBridge.L1MessageService != 0n);
+  require(LineaBridge.L1MessageService != 0);
 }
 ```
 

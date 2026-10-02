@@ -16,7 +16,7 @@ Cross-Chain Interoperability Protocol by Chainlink. Enterprise-grade cross-chain
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### sendMessage
 
@@ -70,7 +70,7 @@ On Ethereum, `ChainlinkCcip` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's router, `0x80226fc0Ee2b096224EeAc085Bb9a8cba1146f7D`.
-  require(ChainlinkCcip.Router != 0n);
+  require(ChainlinkCcip.Router != 0);
 }
 ```
 

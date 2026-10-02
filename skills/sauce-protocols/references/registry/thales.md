@@ -19,7 +19,7 @@ On Optimism, `Thales` is a namespace: its contracts need no import.
 ```sauce chain=optimism
 function main() {
   // Optimism's speedMarketsAMM, `0xE16B8a01490835EC1e76bAbbB3Cadd8921b32001`.
-  require(Thales.SpeedMarketsAMM != 0n);
+  require(Thales.SpeedMarketsAMM != 0);
 }
 ```
 

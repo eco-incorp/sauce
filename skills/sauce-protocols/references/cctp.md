@@ -16,7 +16,7 @@ on this chain, Circle attests the burn, and a `receiveMessage` on the destinatio
 - `destinationDomain` is Circle's domain id, not the chain id: each chain's file in `sauce-chains`
   gives its CCTP domain.
 - `mintRecipient` and `destinationCaller` are 32-byte words: an EVM address fits as is, and a
-  `destinationCaller` of `0n` lets anyone complete the mint.
+  `destinationCaller` of `0` lets anyone complete the mint.
 - `minFinalityThreshold` 2000 waits for standard finality; 1000 asks for a fast transfer, for which
   `maxFee` (in USDC units, taken on the destination) must cover Circle's fee.
 
@@ -28,7 +28,7 @@ Burn the Pot's USDC on Base for `recipient` on Arbitrum:
 function main(amount: Uint256, recipient: Address, maxFee: Uint256) {
   // Arbitrum is CCTP domain 3; 2000 is standard finality (1000 asks for a fast transfer).
   USDC.approve(Cctp.TokenMessenger, amount);
-  Cctp.TokenMessenger.depositForBurn(amount, 3n, recipient, USDC, 0n, maxFee, 2000n);
+  Cctp.TokenMessenger.depositForBurn(amount, 3, recipient, USDC, 0, maxFee, 2000);
 }
 ```
 

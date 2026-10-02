@@ -19,7 +19,7 @@ On Ethereum, `Hyperlane` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's mailbox, `0xc005dc82818d67AF737725bD4bf75435d065D239`.
-  require(Hyperlane.Mailbox != 0n);
+  require(Hyperlane.Mailbox != 0);
 }
 ```
 

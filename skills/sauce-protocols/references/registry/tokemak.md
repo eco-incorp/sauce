@@ -19,7 +19,7 @@ On Ethereum, `Tokemak` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's autopoolRegistry, `0x7E5828a3A6Ae75426d739E798140513A2E2964E4`.
-  require(Tokemak.AutopoolRegistry != 0n);
+  require(Tokemak.AutopoolRegistry != 0);
 }
 ```
 

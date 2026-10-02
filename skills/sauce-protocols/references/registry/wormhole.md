@@ -19,7 +19,7 @@ On Ethereum, `Wormhole` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's coreBridge, `0x98f3c9e6E3fAce36bAAd05FE09d375Ef1464288B`.
-  require(Wormhole.CoreBridge != 0n);
+  require(Wormhole.CoreBridge != 0);
 }
 ```
 

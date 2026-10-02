@@ -19,7 +19,7 @@ On Ethereum, `Maker` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's dai, `0x6B175474E89094C44Da98b954EedeAC495271d0F`.
-  require(Maker.Dai != 0n);
+  require(Maker.Dai != 0);
 }
 ```
 

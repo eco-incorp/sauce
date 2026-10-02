@@ -19,7 +19,7 @@ On Ethereum, `Axelar` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's gasService, `0x2d5d7d31F671F86C782533cc367F14109a082712`.
-  require(Axelar.GasService != 0n);
+  require(Axelar.GasService != 0);
 }
 ```
 

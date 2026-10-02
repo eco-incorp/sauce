@@ -16,7 +16,7 @@ Official Optimism L1StandardBridge for depositing ETH and ERC-20 tokens from Eth
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### depositETH
 
@@ -81,7 +81,7 @@ On Ethereum, `OptimismBridge` is a namespace: its contracts need no import.
 ```ts
 function main() {
   // Ethereum's l1StandardBridge, `0x99C9fc46f92E8a1c0deC1b1747d010903E884bE1`.
-  require(OptimismBridge.L1StandardBridge != 0n);
+  require(OptimismBridge.L1StandardBridge != 0);
 }
 ```
 

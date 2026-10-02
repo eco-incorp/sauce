@@ -19,7 +19,7 @@ On Ethereum, `CompoundV2` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's cETH, `0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5`.
-  require(CompoundV2.CETH != 0n);
+  require(CompoundV2.CETH != 0);
 }
 ```
 

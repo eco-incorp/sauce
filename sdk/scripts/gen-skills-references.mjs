@@ -598,7 +598,7 @@ const CHAIN_NOTES = {
     "  reads as 0. Compare a native amount with a token amount only after converting one to the",
     "  other's scale.",
     "- Every native amount has 18 decimals: an execution fee, a cook's value, the `nativeAmount` of a",
-    "  route or a reward. `1_000_000n` of native value is 10^-12 USDC, not 1 USDC.",
+    "  route or a reward. `1_000_000` of native value is 10^-12 USDC, not 1 USDC.",
     "- The minimum base fee is 20 gwei, and a transaction whose `maxFeePerGas` is below it is dropped",
     "  silently: no error, and no receipt.",
     "- There is no canonical wrapped native, and nothing needs wrapping. `WETH` is bridged ETH, with no",
@@ -622,7 +622,6 @@ const CHAIN_NOTES = {
 const code = (s) => `\`${s}\``;
 /** Text for a table cell: a `|` would end it. */
 const cell = (s) => s.replaceAll("|", "\\|");
-const word = (address) => `${address}n`;
 
 /** A Solana key the registry holds as 32 bytes of hex. */
 const SVM_KEY = /^0x[0-9a-fA-F]{64}$/;
@@ -762,7 +761,7 @@ const spelling = (d) =>
   d.namespace !== undefined
     ? code(d.namespace)
     : d.abi !== undefined
-      ? `${code(`${d.abi}.at(${word(d.address)})`)}`
+      ? `${code(`${d.abi}.at(${d.address})`)}`
       : "no registry ABI";
 
 function renderGlobals(data) {
@@ -982,7 +981,7 @@ function chainExample(chain) {
   if (contract) {
     body.push(
       `  // \`${contract.namespace}\` is ${chain.name}'s ${contract.role}: \`${contract.address}\`.`,
-      `  require(${contract.namespace} != 0n);`,
+      `  require(${contract.namespace} != 0);`,
       `  // The same contract, qualified by the chain's name, from a program on any chain.`,
       `  require(${chain.key}.${contract.namespace} == ${contract.namespace});`,
     );
@@ -1270,7 +1269,7 @@ function protocolExample(p, data) {
       `\`\`\`sauce chain=${chain.slug}`,
       "function main() {",
       `  // ${chain.name}'s ${first.role}, \`${first.address}\`.`,
-      `  require(${first.namespace} != 0n);`,
+      `  require(${first.namespace} != 0);`,
       "}",
       "```",
       "",
@@ -1284,7 +1283,7 @@ function protocolExample(p, data) {
     `\`\`\`sauce chain=${chain.slug}`,
     `import ${first.abi} from "./protocols/${p.slug}/${first.abi}.json";`,
     "",
-    `const ${constant} = ${word(first.address)};`,
+    `const ${constant} = ${first.address};`,
     "",
     "function main() {",
     `  const bound = ${first.abi}.at(${constant});`,
