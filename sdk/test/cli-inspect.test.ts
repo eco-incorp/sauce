@@ -264,7 +264,7 @@ describe("sauce globals", () => {
     expect((out.defines as Record<string, unknown>).USDC).toBe(usdc.address);
   });
 
-  it("lists the interfaces a program binds to its own address, and their methods", async () => {
+  it("lists the interfaces a program calls with its own address, and their methods", async () => {
     const all = await sauce("globals", "--chain", "base");
     expect(all.stdout).toMatch(/^Interfaces \(\d+\): an ABI with no fixed address/m);
     expect(all.stdout).toMatch(/^ {2}Erc4626\.Vault {2}\(.+\)$/m);
@@ -272,7 +272,7 @@ describe("sauce globals", () => {
     const one = await sauce("globals", "--chain", "base", "--protocol", "Erc4626");
     expect(one.code).toBe(0);
     expect(one.stdout).toMatch(
-      /^Erc4626\.Vault\.at\(<address>\) {2}interface \(.+\): no fixed address$/m,
+      /^Erc4626\.Vault\(<address>\) {2}interface \(.+\): no fixed address$/m,
     );
     expect(one.stdout).toMatch(/^ {2}totalAssets\(\): \(.+\) {2}view$/m);
     const out = json(await sauce("globals", "--chain", "base", "--protocol", "erc4626", "--json"));
@@ -285,7 +285,7 @@ describe("sauce globals", () => {
     expect(vault.methods.map((m) => m.name)).toContain("totalAssets");
     const program = file(
       "vault.sauce.ts",
-      "function main(vault: Address): Uint256 {\n  return Erc4626.Vault.at(vault).totalAssets();\n}\n",
+      "function main(vault: Address): Uint256 {\n  return Erc4626.Vault(vault).totalAssets();\n}\n",
     );
     expect((await sauce("compile", program, "--chain", "base")).code).toBe(0);
     // None on Solana: interfaces are EVM ABIs.

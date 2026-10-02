@@ -28,7 +28,7 @@ and both surfaces.
 | ----------------- | ----- | ----------------------------------------------------------------------------- |
 | Deployed contract | 222   | An address per chain and a verified ABI: callable, and its address as a value |
 | Address only      | 55    | An address per chain with no verified ABI: usable as an address, no methods   |
-| Interface         | 25    | An ABI with no fixed address: called through `.at(address)`                   |
+| Interface         | 25    | An ABI with no fixed address: called with one, `Erc4626.Vault(vault)`         |
 
 A name existing does not mean the contract is deployed on your chain: `available(...)` in a program
 and `.available` in TypeScript answer that, and naming an absent contract fails at compile or call

@@ -1375,7 +1375,7 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
     for (const token of entry.tokens) add(entry.chain.slug, token.symbol);
   const program = (list) =>
     `function main() {\n${list.map((e) => `  require(${e} != 0n);`).join("\n")}\n}`;
-  // An interface is bound to an address and called in the same expression, on any EVM chain.
+  // An interface is called with an address and a method in the same expression, on any EVM chain.
   const evmChain = GLOBALS.chains.find((chain) => chain.kind === "evm")?.slug;
   for (const one of GLOBALS.interfaces) {
     if (one.call === undefined || evmChain === undefined) continue;
@@ -1386,7 +1386,7 @@ const REFERENCE = join(SKILLS_DIR, "sauce-globals", "references");
     try {
       sdk.routes.compileSauceProgram(
         evmChain,
-        `function main(target: Address) {\n  ${one.name}.at(target).${one.call.name}(${args.join(", ")});\n}`,
+        `function main(target: Address) {\n  ${one.name}(target).${one.call.name}(${args.join(", ")});\n}`,
       );
       counts.indexed++;
     } catch (error) {
