@@ -206,6 +206,11 @@ describe("sauce_install_skills", () => {
       assert.equal(out.commands.init, `npx -y ${pinned} init "my app" --agent ${agent}`);
       assert.ok(!JSON.stringify(out).includes("@latest"));
       assert.ok(out.notes.some((note) => /no-op on a project already installed/.test(note)));
+      assert.ok(
+        out.notes.some((note) =>
+          note.includes("`sauce <command>`, which `npm i -g @eco-incorp/sauce` installs"),
+        ),
+      );
       if (agent === "agents-md") {
         assert.equal(out.mcp, undefined);
         continue;

@@ -1,42 +1,42 @@
-// Compiles cross-chain-intent.sauce.ts — the program that creates an intent from inside another
-// intent — and packages it as an Eco intent of its own.
+// Compiles cross-chain-intent.sauce.ts — a program that measures its Pot and opens an intent
+// carrying what it measured — for Base, and builds the cook that runs it: what `sauce run` sends.
 //
 // The SauceScript is its own file rather than a template literal so it is the same text the README
-// shows and the same text you can compile yourself. Everything here is offline: the addresses and
-// the fee are fixtures and nothing is sent.
+// shows and the same text you can compile yourself. Everything here is offline: the owner, the
+// recipient and the deadline are fixtures, and nothing is sent.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { Base } from "@eco-incorp/sauce";
-import type { routes } from "@eco-incorp/sauce";
+import { routes, v12PredictPot } from "@eco-incorp/sauce";
+import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
+import { v12Pot } from "@eco-incorp/sauce/evm/engine";
+import { bytesToHex, concatHex, getAddress } from "viem";
 
-const program = readFileSync(
+const source = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "cross-chain-intent.sauce.ts"),
   "utf8",
 );
 
-// Offline fixtures. Read the destination Kitchen fee before use: destinationExecutionFee(). The
-// Portals, the prover, the Pot, the engine and the route's native amount come from the SDK.
-const executionFee = 1_000n;
-const creator = "0x4444444444444444444444444444444444444444";
+// Offline fixtures: the Pot's owner, who also creates the intent, and who it pays on Ethereum.
+const owner = "0x4444444444444444444444444444444444444444";
+const recipient = "0x6666666666666666666666666666666666666666";
 
-const options: routes.IntentOptions = {
-  execution: { value: executionFee },
-  deadline: 2_000_000_000n,
-  creator,
-  source: "ethereum",
-  // The names the program reads. A define is one 256-bit word folded into the bytecode, which is
-  // how a program is parameterised — it captures nothing from the JavaScript around it.
-  defines: {
-    RECIPIENT: BigInt("0x6666666666666666666666666666666666666666"),
-    MIN_AMOUNT: 1n,
-  },
-};
+// What the SDK cannot look up for the intent the program opens: its deadline and its creator, who
+// may reclaim the reward if no solver earns it. The Portal, the prover and the vault are the SDK's.
+export const program = routes.compileSauceProgram("base", source, {
+  intents: { deadline: 2_000_000_000n, creator: owner },
+});
 
-// The intent the program creates inherits this one's deadline, creator and eco-routes deployment,
-// so there is nothing extra to configure for it.
-const built = Base(program, options).reward({ deadline: 2_000_003_600n });
+// main(recipient, minAmount), encoded as `--args` encodes them and appended to the program: forward
+// whatever the Pot holds once it is at least 1 USDC.
+export const args = routes.encodeEntryArguments(program, [recipient, 1_000_000n]);
+const payload = concatHex([bytesToHex(program.bytecode), bytesToHex(args)]);
 
-console.log(`Cross-chain intent program: ${built.compiled.bytecode[0]!.length} bytes`);
-console.log(built.hash().intentHash);
+// The cook, which the owner sends to the Pot. Its value is the Kitchen's executionFee(), read at
+// run time.
+const pot = v12PredictPot(owner, `0x${"00".repeat(32)}`);
+const cook = { to: pot, data: v12Pot.encodeCook(getAddress(v12EngineAddress()), payload) };
+
+console.log(`Cross-chain intent program: ${program.bytecode.length} bytes`);
+console.log(`cook to ${cook.to}: ${(cook.data.length - 2) / 2} bytes`);

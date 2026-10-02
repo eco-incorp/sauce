@@ -10,7 +10,14 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+import {
+  executedExamplesProblems,
+  inputProblems,
+  namedProgramProblems,
+  registryNames,
+} from "./example-programs.mjs";
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const packageArgument = process.argv.indexOf("--package-root");
@@ -96,6 +103,85 @@ for (const name of sauceExamples) {
   }
 }
 console.log(`SauceScript examples: ${sauceExamples.length} quoted verbatim in the manual`);
+// The intent files intent-defaults converts to `main` parameters, with `sauce intent publish
+// --args`, and executes in an eco-routes suite. Each entry fails once its example no longer needs
+// it, which is when that PR removes it.
+const BY_INTENT_DEFAULTS = "converted and executed by intent-defaults' intent publish --args PR";
+const EXECUTION_EXCEPTIONS = {
+  "nested-intent.sauce.ts": BY_INTENT_DEFAULTS,
+  "nested-swap.sauce.ts": BY_INTENT_DEFAULTS,
+};
+const INPUT_EXCEPTIONS = {
+  "cross-chain-cascade.sauce.ts": { RECIPIENT: BY_INTENT_DEFAULTS },
+  "nested-intent.sauce.ts": Object.fromEntries(
+    ["AMOUNT", "REWARD", "RECIPIENT"].map((name) => [name, BY_INTENT_DEFAULTS]),
+  ),
+  "nested-swap.sauce.ts": Object.fromEntries(
+    ["POOL", "MIN_OUT", "AMOUNT", "REWARD", "RECIPIENT"].map((name) => [name, BY_INTENT_DEFAULTS]),
+  ),
+};
+// Compiled is not run: each example also names, in `executed.json`, the suites that execute it on
+// an engine. Tests do not ship, so the installed package's run skips this.
+if (packageArgument < 0) {
+  const problems = executedExamplesProblems({
+    repository,
+    examplesRoot: examples,
+    examples: sauceExamples,
+    manifest: join(examples, "executed.json"),
+    compileOnly: false,
+    pending: EXECUTION_EXCEPTIONS,
+  });
+  if (problems.length)
+    throw new Error(`SauceScript examples not executed:\n${problems.join("\n")}`);
+  const pending = Object.keys(EXECUTION_EXCEPTIONS).length;
+  console.log(
+    `SauceScript examples: ${sauceExamples.length - pending} executed by the suites named, ` +
+      `${pending} pending (EXECUTION_EXCEPTIONS)`,
+  );
+}
+// What the registry names, a program writes by its name: no recorded address as a literal, no
+// selector of a function a binding declares built by hand. None of these examples is low-level.
+// And every value a program reads has a visible source: an input is a `main` parameter
+// (`example-programs.mjs`). An exception is INPUT_EXCEPTIONS's, above: example -> name -> why, and
+// one nothing needs fails.
+{
+  const sdk = await import(pathToFileURL(join(root, "sdk/dist/index.js")).href);
+  const protocols = await Promise.all(
+    sdk
+      .listProtocolSlugs()
+      .map(async (slug) => [
+        slug,
+        await import(pathToFileURL(join(root, "sdk/dist/protocols", slug, "index.js")).href),
+      ]),
+  );
+  const builtins = JSON.parse(
+    readFileSync(join(root, "skills/sauce-script/references/builtins.json"), "utf8"),
+  );
+  const ts = createRequire(join(root, "package.json"))("typescript");
+  const names = registryNames(sdk, protocols, builtins);
+  const problems = sauceExamples.flatMap((name) => {
+    const where = `docs/examples/${name}`;
+    const source = readFileSync(join(examples, name), "utf8");
+    const allowed = INPUT_EXCEPTIONS[name] ?? {};
+    const used = new Set();
+    return [
+      ...namedProgramProblems({ where, source, names }),
+      ...inputProblems({ where, source, ts, names, allowed, used }),
+      ...Object.keys(allowed)
+        .filter((input) => !used.has(input))
+        .map((input) => `check-docs.mjs INPUT_EXCEPTIONS: ${where} no longer reads ${input}`),
+    ];
+  });
+  for (const name of Object.keys(INPUT_EXCEPTIONS)) {
+    if (!sauceExamples.includes(name)) {
+      problems.push(`check-docs.mjs INPUT_EXCEPTIONS: ${name} is not an example`);
+    }
+  }
+  if (problems.length) throw new Error(`SauceScript examples:\n${problems.join("\n")}`);
+  console.log(
+    `SauceScript examples: ${sauceExamples.length} name what the registry records, and show their inputs`,
+  );
+}
 // Keep examples under the package so Node resolves its public self-reference exports.
 const temporary = mkdtempSync(join(root, ".sauce-doc-examples-"));
 const input = join(temporary, "src");

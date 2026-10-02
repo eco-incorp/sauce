@@ -7,7 +7,9 @@ pnpm add @eco-incorp/sauce
 ```
 
 Node.js **24 or newer**. The SauceScript compiler is a dependency of this package — there is nothing
-else to install and no compiler checkout to keep in sync.
+else to install and no compiler checkout to keep in sync. For [the `sauce` command](cli.md), install
+the package once globally: `npm i -g @eco-incorp/sauce`, then `sauce --version`
+(`npm i -g @eco-incorp/sauce@latest` upgrades it).
 
 ## Build your first intent
 
