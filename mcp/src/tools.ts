@@ -46,13 +46,16 @@ import {
   parseChain,
   parseDefineMap,
   parseLamports,
+  MAX_V4_KEYS,
   parsePin,
-  parsePriceToken,
   parsePubkey,
   parseSalt,
+  plannedTransactions,
   parseUnixSeconds,
+  parseV4Key,
   parseVia,
   parseWei,
+  poolsCommand,
   potCommand,
   potState,
   potTarget,
@@ -67,6 +70,8 @@ import {
   publishCommand,
   registeredBalances,
   requireSupported,
+  resolvePriceTokens,
+  tokenGiven,
   simulateCommand,
   svmPotCommand,
   svmPotExists,
@@ -87,6 +92,7 @@ import {
   type PreviewChainRefusal,
   type ProgramInput,
   type SvmCookInput,
+  type WalletStore,
 } from "./sdk.js";
 
 /** Input bounds, so one call cannot hand the server unbounded work. */
@@ -795,6 +801,11 @@ export const SUPPORTED_ONLY =
   "chain and a prefilled new one, and the title, body and comment to post. Offer the user that " +
   "request; compile and simulate work on every chain.";
 
+/** That sentence on a server with wallets (`sauce mcp --wallets`). */
+export const WALLET_UNSIGNED =
+  "Nothing is signed or sent here: pass the result to sauce_wallet_send to send it from one of " +
+  "this server's wallets, or sign it with any other wallet.";
+
 // ---------------------------------------------------------------------------------------------
 // The tools
 // ---------------------------------------------------------------------------------------------
@@ -803,13 +814,28 @@ export const SUPPORTED_ONLY =
 export interface ToolContext {
   readonly endpoints: Endpoints;
   readonly guard?: RpcGuard;
+  /** Over stdio with `--wallets`: the wallets the server signs with. Never over HTTP. */
+  readonly wallets?: WalletContext;
 }
+
+/** The wallet directory a stdio server was started with, and the password its wallets open with. */
+export interface WalletContext {
+  readonly store: WalletStore;
+  /** Read once at start from the source the server was given; never an input, never returned. */
+  readonly password: string;
+  /** That source, as the instructions name it. */
+  readonly source: string;
+}
+
+/** How many tokens `sauce_globals` returns at a time. */
+const TOKEN_PAGE = 200;
 
 /** The names of the tools, in the order `tools/list` gives them. */
 export const TOOL_NAMES = [
   "sauce_chains",
   "sauce_globals",
   "sauce_price",
+  "sauce_pools",
   "sauce_compile",
   "sauce_actions",
   "sauce_tx",
@@ -842,11 +868,15 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
   const { endpoints, guard } = context;
 
   return (name, config, run) => {
+    // A tool that builds a transaction, on a server that can send it: the result says how.
+    const sendable = context.wallets !== undefined && config.description.includes(UNSIGNED);
     server.registerTool(
       name,
       {
         title: config.title,
-        description: config.description,
+        description: sendable
+          ? config.description.replace(UNSIGNED, WALLET_UNSIGNED)
+          : config.description,
         // A tool that takes nothing declares no schema, so a call that sends no arguments is
         // still a call; every other refuses a field it does not know.
         inputSchema:
@@ -857,7 +887,14 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
       async (args: unknown) => {
         const reach = callReach(endpoints, guard);
         try {
-          return result(await run(args as never, reach), reach.scrub);
+          const output = await run(args as never, reach);
+
+          return result(
+            sendable && (args as { dryRun?: unknown }).dryRun !== true
+              ? withSendNote(output)
+              : output,
+            reach.scrub,
+          );
         } catch (error) {
           if (error instanceof PreviewChainError) return refusedResult(error.refusal, reach.scrub);
 
@@ -871,6 +908,27 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
       },
     );
   };
+}
+
+/** `output` with a note on sending it from a wallet, when it carries transactions to send. */
+function withSendNote(output: ToolOutput): ToolOutput {
+  // A Pot that is there already: its deployment is not to be sent.
+  if (output.json.deployed === true) return output;
+  try {
+    const count = plannedTransactions(output.json).length;
+
+    return {
+      ...output,
+      notes: [
+        ...(output.notes ?? []),
+        `To send ${count === 1 ? "it" : `these ${count}`} from one of this server's wallets: ` +
+          "sauce_wallet_send { wallet, transaction: <this result> }. It rehearses them first, " +
+          "and holds them to the wallet's policy.",
+      ],
+    };
+  } catch {
+    return output;
+  }
 }
 
 export function registerTools(server: McpServer, context: ToolContext): void {
@@ -934,11 +992,32 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "writing a program, to call tokens and protocols by name instead of by address: token " +
         "symbols with their addresses and decimals, protocol namespaces with each contract's " +
         "address (with `protocol`, also its methods), the chain names that open intents, the " +
-        "defines, and the @sauce/token functions. With no filter, everything. Reads nothing.",
+        "defines, and the @sauce/token functions. With no filter, everything but the chain's " +
+        "tokenized stocks (Ethereum has over a thousand; Base's include Coinbase's, such as " +
+        "SPCXc for SpaceX), which a program names like any token: `stocks` lists them and " +
+        "`search` finds one by symbol, company name or ticker, each with its issuer, the " +
+        "underlying's ticker and the issuer's list it was copied from. Tokens come " +
+        `${TOKEN_PAGE} at a time: \`offset\` pages on. Reads nothing.`,
       input: {
         chain: chainRef,
         tokens: z.boolean().optional().describe("Only the token symbols."),
         protocols: z.boolean().optional().describe("Only the protocol namespaces."),
+        stocks: z.boolean().optional().describe("Only the chain's tokenized stocks."),
+        search: z
+          .string()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe(
+            "Only the tokens, stocks included, whose symbol, name, ticker or issuer contains " +
+              "this text, without regard to case: spacex, SPCX, Tesla.",
+          ),
+        offset: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe(`The first token to return, for the next page (${TOKEN_PAGE} a page).`),
         protocol: z
           .string()
           .min(1)
@@ -958,26 +1037,49 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           chain: parseChain(String(args.chain), "chain"),
           tokens: args.tokens === true,
           protocols: args.protocols === true,
+          stocks: args.stocks === true,
           ...(args.protocol === undefined ? {} : { protocol: args.protocol }),
+          ...(args.search === undefined ? {} : { search: args.search }),
         }),
       );
       const protocols = output.json.protocols as
         Array<{ contracts?: Array<Record<string, unknown>> }> | undefined;
+      const tokens = output.json.tokens as unknown[] | undefined;
+      // A page of tokens: `stocks` on Ethereum is over a thousand.
+      const offset = args.offset ?? 0;
+      const page =
+        tokens === undefined
+          ? {}
+          : {
+              tokens: tokens.slice(offset, offset + TOKEN_PAGE),
+              ...(tokens.length > TOKEN_PAGE || offset > 0
+                ? {
+                    page: {
+                      offset,
+                      total: tokens.length,
+                      ...(offset + TOKEN_PAGE < tokens.length ? { next: offset + TOKEN_PAGE } : {}),
+                    },
+                  }
+                : {}),
+            };
       // Every namespace's methods are tens of kilobytes: they come with `protocol`, for one.
-      return protocols === undefined
-        ? output
-        : {
-            ...output,
-            json: {
-              ...output.json,
-              protocols: protocols.map((namespace) => ({
-                ...namespace,
-                contracts: (namespace.contracts ?? []).map(
-                  ({ methods: _methods, ...contract }) => contract,
-                ),
-              })),
-            },
-          };
+      return {
+        ...output,
+        json: {
+          ...output.json,
+          ...page,
+          ...(protocols === undefined
+            ? {}
+            : {
+                protocols: protocols.map((namespace) => ({
+                  ...namespace,
+                  contracts: (namespace.contracts ?? []).map(
+                    ({ methods: _methods, ...contract }) => contract,
+                  ),
+                })),
+              }),
+        },
+      };
     },
   );
 
@@ -1003,14 +1105,18 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           .min(1)
           .max(64)
           .describe(
-            "The token the price is per one of: a symbol the chain registers (WETH), or " +
-              "<0x address>:<decimals>.",
+            "The token the price is per one of: a symbol the chain registers (WETH, or a " +
+              "tokenized stock's such as SPCXc, in any case), or <0x address>:<decimals>, or with " +
+              "an endpoint a 0x address alone (its decimals read from the token).",
           ),
         quote: z
           .string()
           .min(1)
           .max(64)
-          .describe("The token the price is in: a symbol (USDC), or <0x address>:<decimals>."),
+          .describe(
+            "The token the price is in: a symbol (USDC), or <0x address>:<decimals>, or with an " +
+              "endpoint a 0x address alone.",
+          ),
         price: z
           .string()
           .max(80)
@@ -1061,19 +1167,26 @@ export function registerTools(server: McpServer, context: ToolContext): void {
     },
     async (args, reach) => {
       const chain = pricedChain(parseChain(String(args.chain), "chain"));
-      const base = parsePriceToken(args.base, chain);
-      const quote = parsePriceToken(args.quote, chain);
       const given = [args.price, args.sqrtPriceX96, args.pool].filter((each) => each !== undefined);
       if (given.length !== 1) {
         throw new UsageError("give one of price, sqrtPriceX96, or pool (with an endpoint)");
       }
+      // A pool is read now, and an address with no decimals given has them read from the token;
+      // otherwise the call reaches no chain.
+      const reads =
+        args.pool !== undefined ||
+        [args.base, args.quote].some((raw) => typeof tokenGiven(raw, chain) === "string");
+      const rpcUrl = reads ? await reach.endpoint(chain, args.rpcUrl) : undefined;
+      const client = rpcUrl === undefined ? undefined : await connect(rpcUrl, chain);
+      const tokens = await resolvePriceTokens([args.base, args.quote], chain, client);
+      const [base, quote] = [tokens[0]!, tokens[1]!];
       let pool: Record<string, unknown> | undefined;
       let sqrtPriceX96 = args.sqrtPriceX96;
       let feePpm = args.feePpm;
       if (args.pool !== undefined) {
         const address = parseAddress("pool", args.pool);
-        const rpcUrl = await reach.require(chain, args.rpcUrl, "Reading a pool");
-        const read = await readPool(await connect(rpcUrl, chain), address);
+        if (client === undefined) await reach.require(chain, args.rpcUrl, "Reading a pool");
+        const read = await readPool(client!, address);
         const pair = [base.address, quote.address].map((token) => token.toLowerCase()).sort();
         if (read.token0.toLowerCase() !== pair[0] || read.token1.toLowerCase() !== pair[1]) {
           throw new UsageError(
@@ -1130,6 +1243,99 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       }
 
       return { json, notes: now.notes };
+    },
+  );
+
+  tool(
+    "sauce_pools",
+    {
+      title: "List a pair's price-limit pools on a chain",
+      description:
+        "Every pool of a pair on an EVM chain at the price-limit venues the registry records " +
+        "there — Uniswap V3 and PancakeSwap V3 at each fee tier their factory enables, Aerodrome " +
+        "Slipstream at each tick spacing of each CLFactory, hookless Uniswap V4 pools at the " +
+        "keys 100:1, 500:10, 3000:60 and 10000:200 and any in v4Pools — read now through an " +
+        "endpoint. Use it before a distributed or limit swap, to know which pools exist, how " +
+        "deep each is and what each charges. `pools` holds those with liquidity, deepest " +
+        "first (by liquidity at the pool's price): each pool's venue, the contract a program " +
+        "finds it through (UniswapV3.Factory), its address (a V4 pool's poolId and key), fee " +
+        "in millionths read from the pool (a V4 pool's LP fee and protocolFee), tickSpacing, " +
+        "liquidity, tick and sqrtPriceX96, and two `sides`, paying tokenA for tokenB then the " +
+        "reverse: `mid` and `taker` (pay tokens per buy token, before and with the fee), " +
+        "`maxPrice` (the taker price as the distributed swap's maxPrice argument: pay base " +
+        "units per buy base unit times 1e18) and `depth1Pct` (pay tokens, fee included, that " +
+        "move the price 1% against the taker, through its ticks). `empty` lists the pools with " +
+        "no liquidity at their price, which a swap skips; `checked`, what was looked at.",
+      input: {
+        chain: chainRef,
+        tokenA: z
+          .string()
+          .min(1)
+          .max(64)
+          .describe(
+            "One token of the pair, paid in the first side: a symbol the chain registers " +
+              "(USDC, or a tokenized stock's such as SPCXc, in any case), or a 0x address (its " +
+              "decimals and symbol read from the token), or <0x address>:<decimals>.",
+          ),
+        tokenB: z.string().min(1).max(64).describe("The other token, written the same ways."),
+        v4Pools: z
+          .array(z.string().min(3).max(16))
+          .max(MAX_V4_KEYS)
+          .optional()
+          .describe(
+            "More hookless Uniswap V4 pools to try, each by its key's <fee>:<tickSpacing>, the " +
+              "fee in millionths: 50:1.",
+          ),
+        rpcUrl: RPC_URL,
+      },
+      output: {
+        chain: z.string(),
+        tokens: z.array(
+          z.looseObject({ symbol: z.string(), address: z.string(), decimals: z.number() }),
+        ),
+        sortedBy: z.string(),
+        pools: z.array(
+          z.looseObject({
+            venue: z.string(),
+            contract: z.string(),
+            fee: z.number(),
+            tickSpacing: z.number(),
+            liquidity: z.string(),
+            sqrtPriceX96: z.string(),
+            sides: z.array(
+              z.looseObject({
+                pay: z.string(),
+                buy: z.string(),
+                mid: z.string(),
+                taker: z.string(),
+                maxPrice: z.string(),
+              }),
+            ),
+          }),
+        ),
+        empty: z.array(z.looseObject({ venue: z.string(), why: z.string() })),
+        checked: z.array(z.looseObject({ venue: z.string(), contract: z.string() })),
+      },
+      annotations: READS_CHAIN,
+    },
+    async (args, reach) => {
+      const chain = parseChain(String(args.chain), "chain");
+      if (chain.kind !== "evm") {
+        throw new UsageError(
+          `sauce_pools lists Uniswap V3- and V4-style pools, on an EVM chain; ${chain.slug} has none`,
+        );
+      }
+      const v4Keys = (args.v4Pools ?? []).map((raw) => parseV4Key(raw, "v4Pools"));
+      const rpcUrl = await reach.require(chain, args.rpcUrl, "Listing a pair's pools");
+
+      return fromCommand(
+        await poolsCommand({
+          chain,
+          client: await connect(rpcUrl, chain),
+          tokens: [args.tokenA, args.tokenB],
+          v4Keys,
+        }),
+      );
     },
   );
 

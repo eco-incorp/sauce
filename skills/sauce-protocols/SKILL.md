@@ -1,6 +1,6 @@
 ---
 name: sauce-protocols
-description: Every DeFi protocol a Sauce program can call, from the SDK's registry — an index by category with how to choose between them (a lending market versus another, a concentrated-liquidity pool versus a V2 pair or a stable pool, an aggregator, a bridge), a registry file per protocol (its deployments on every chain, how a program names each contract there, its ABI functions), and a document per protocol (what it is for, its pitfalls, a compiled example, its templates and notes). Covers every protocol as a registry namespace (deployed contracts, address-only contracts, interfaces called with .at(address)), available(...) for a chain that may lack one, ABI imports for unrecorded contracts, factories and pool lookups, and checking a recorded address has code. Use when a program must call a protocol (PancakeSwap V3, Aerodrome Slipstream, Curve, Balancer, Camelot, Lido, …), when the user asks which protocols or pools exist on a chain or which to use, needs a factory or router address, or wants a protocol's pitfalls.
+description: Every DeFi protocol a Sauce program can call, from the SDK's registry — an index by category with how to choose between them (a lending market versus another, a concentrated-liquidity pool versus a V2 pair or a stable pool, an aggregator, a bridge), a registry file per protocol (its deployments on every chain, how a program names each contract there, its ABI functions), and a document per protocol (what it is for, its pitfalls, a compiled example, its templates and notes). Covers every protocol as a registry namespace (deployed contracts, address-only contracts, interfaces called with an address), available(...) for a chain that may lack one, ABI imports for unrecorded contracts, factories and pool lookups, and checking a recorded address has code. Use when a program must call a protocol (PancakeSwap V3, Aerodrome Slipstream, Curve, Balancer, Camelot, Lido, …), when the user asks which protocols or pools exist on a chain or which to use, needs a factory or router address, or wants a protocol's pitfalls.
 ---
 
 # Protocols
@@ -30,9 +30,11 @@ member is one of three kinds:
 | ------------------- | -------------------------------------------------------- | ------------------------------------ |
 | A deployed contract | `PancakeswapV3.Factory`, `AerodromeSlipstream.CLFactory` | its address; `.method(...)` calls it |
 | An address only     | `Camelot.V3Factory` (no ABI the registry has verified)   | its address                          |
-| An interface        | `Erc4626.Vault` (a vault has no one fixed address)       | `.at(address).method(...)`           |
+| An interface        | `Erc4626.Vault` (a vault has no one fixed address)       | `(address).method(...)`              |
 
-`.at(address)` also reaches another deployment of a deployed contract's ABI. A contract the
+An interface is called with the address of a deployment, `Erc4626.Vault(vault).totalAssets()`
+(`.at(vault)` is the same). `.at(address)` also reaches another deployment of a deployed contract's
+ABI; a deployed contract's name is never called with an address. A contract the
 registry does not record at all is called through its ABI, imported from
 `./protocols/<slug>/<Export>.json` and bound with `.at(address)` to an address passed in as a
 `main` input or a define.

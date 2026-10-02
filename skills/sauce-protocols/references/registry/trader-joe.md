@@ -18,8 +18,8 @@ On BNB Chain, `TraderJoe` is a namespace: its contracts need no import.
 
 ```sauce chain=bsc
 function main() {
-  // BNB Chain's lbRouter, `0xb4315e873dBcf96Ffd0acd8EA43f689D8c20fB30`.
-  require(TraderJoe.LBRouter != 0n);
+  // BNB Chain's lbFactory, `0x8e42f2F4101563bF679975178e880FD87d3eFd4e`.
+  require(TraderJoe.LBFactory != 0n);
 }
 ```
 
@@ -27,7 +27,9 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
+| [BNB Chain](../../../sauce-chains/references/bsc.md) | lbFactory | `0x8e42f2F4101563bF679975178e880FD87d3eFd4e` | `TraderJoe.LBFactory` |
 | [BNB Chain](../../../sauce-chains/references/bsc.md) | lbRouter | `0xb4315e873dBcf96Ffd0acd8EA43f689D8c20fB30` | `TraderJoe.LBRouter` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | lbFactory | `0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c` | `TraderJoe.LBFactory` |
 | [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | lbRouter | `0x18556da13313f3532c54711497a8fedac273220e` | `TraderJoe.LBRouter` |
 | [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | lbFactory | `0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c` | `TraderJoe.LBFactory` |
 | [Avalanche C-Chain](../../../sauce-chains/references/avalanche.md) | lbRouter | `0x18556DA13313f3532c54711497A8FedAC273220E` | `TraderJoe.LBRouter` |
@@ -39,6 +41,21 @@ function main() {
 `import LBFactoryABI from "./protocols/trader-joe/LBFactoryABI.json";` Speaks for: lbFactory.
 
 - `getLBPairInformation(address tokenA, address tokenB, uint256 binStep) view returns ((uint16 binStep, address LBPair, bool createdByOwner, bool ignoredForRouting) lbPairInformation)`
+
+### `LBPairABI`
+
+`import LBPairABI from "./protocols/trader-joe/LBPairABI.json";`
+
+- `getTokenX() pure returns (address tokenX)`
+- `getTokenY() pure returns (address tokenY)`
+- `getBinStep() pure returns (uint16)`
+- `getActiveId() view returns (uint24 activeId)`
+- `getReserves() view returns (uint128 reserveX, uint128 reserveY)`
+- `getBin(uint24 id) view returns (uint128 binReserveX, uint128 binReserveY)`
+- `getPriceFromId(uint24 id) pure returns (uint256 price)`
+- `getSwapIn(uint128 amountOut, bool swapForY) view returns (uint128 amountIn, uint128 amountOutLeft, uint128 fee)`
+- `getSwapOut(uint128 amountIn, bool swapForY) view returns (uint128 amountInLeft, uint128 amountOut, uint128 fee)`
+- `swap(bool swapForY, address to) returns (bytes32 amountsOut)`
 
 ### `LBRouterABI`
 

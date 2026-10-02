@@ -50,6 +50,17 @@ function main() {
 - `decreaseLiquidity((uint256 tokenId, uint128 liquidity, uint256 amount0Min, uint256 amount1Min, uint256 deadline) params) payable returns (uint256 amount0, uint256 amount1)`
 - `collect((uint256 tokenId, address recipient, uint128 amount0Max, uint128 amount1Max) params) payable returns (uint256 amount0, uint256 amount1)`
 
+### `SynthraV3PoolABI`
+
+`import SynthraV3PoolABI from "./protocols/synthra-v3/SynthraV3PoolABI.json";`
+
+- `slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)`
+- `liquidity() view returns (uint128)`
+- `fee() view returns (uint24)`
+- `tickSpacing() view returns (int24)`
+- `token0() view returns (address)`
+- `token1() view returns (address)`
+
 ### `SynthraV3QuoterV2ABI`
 
 `import SynthraV3QuoterV2ABI from "./protocols/synthra-v3/SynthraV3QuoterV2ABI.json";` Speaks for: quoterV2.

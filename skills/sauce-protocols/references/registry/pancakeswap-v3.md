@@ -57,6 +57,17 @@ function main() {
 
 - `mint((address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, address recipient, uint256 deadline) params) payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)`
 
+### `PancakeSwapV3PoolABI`
+
+`import PancakeSwapV3PoolABI from "./protocols/pancakeswap-v3/PancakeSwapV3PoolABI.json";`
+
+- `slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint32 feeProtocol, bool unlocked)`
+- `liquidity() view returns (uint128)`
+- `fee() view returns (uint24)`
+- `tickSpacing() view returns (int24)`
+- `token0() view returns (address)`
+- `token1() view returns (address)`
+
 ### `PancakeSwapV3SmartRouterABI`
 
 `import PancakeSwapV3SmartRouterABI from "./protocols/pancakeswap-v3/PancakeSwapV3SmartRouterABI.json";` Speaks for: smartRouter.

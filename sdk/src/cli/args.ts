@@ -31,6 +31,8 @@ export interface FlagSpec {
   readonly help: string;
   /** A flag one kind of chain takes and the other refuses, listed under its own heading. */
   readonly only?: "evm" | "svm";
+  /** A string flag that may be given bare: `--wallets` alone is `--wallets=`, its default. */
+  readonly optionalValue?: boolean;
 }
 
 export type FlagSpecs = Readonly<Record<string, FlagSpec>>;
@@ -52,9 +54,20 @@ export function parseFlags(argv: readonly string[], flags: FlagSpecs): ParsedArg
       },
     ]),
   );
+  // A bare optional-value flag — last, or followed by another flag — takes the empty value.
+  const words = argv.map((word, index) => {
+    const name = /^--([\w-]+)$/.exec(word)?.[1];
+    const next = argv[index + 1];
+
+    return name !== undefined &&
+      flags[name]?.optionalValue === true &&
+      (next === undefined || next.startsWith("-"))
+      ? `${word}=`
+      : word;
+  });
   try {
     const { values, positionals } = parseArgs({
-      args: [...argv],
+      args: words,
       options,
       strict: true,
       allowPositionals: true,
@@ -62,7 +75,7 @@ export function parseFlags(argv: readonly string[], flags: FlagSpecs): ParsedArg
 
     return { values, positionals };
   } catch (error) {
-    throw new UsageError(describeParseError(error, flags, argv));
+    throw new UsageError(describeParseError(error, flags, words));
   }
 }
 
@@ -445,7 +458,14 @@ export function describeFlags(flags: FlagSpecs): string {
   const rows = Object.entries(flags).map(([name, spec]) => {
     const short = spec.short === undefined ? "    " : `-${spec.short}, `;
 
-    return [`${short}--${name}${spec.value === undefined ? "" : ` ${spec.value}`}`, spec.help];
+    const value =
+      spec.value === undefined
+        ? ""
+        : spec.optionalValue === true
+          ? ` [${spec.value}]`
+          : ` ${spec.value}`;
+
+    return [`${short}--${name}${value}`, spec.help];
   });
   const width = Math.max(...rows.map(([left]) => left.length));
 

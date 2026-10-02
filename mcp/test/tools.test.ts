@@ -131,6 +131,64 @@ describe("sauce_globals", () => {
     assert.ok(one.protocol.contracts.some((contract) => Array.isArray(contract.methods)));
   });
 
+  it("counts tokenized stocks out of the default, and says how to list and find them", async () => {
+    const { tools } = await mcp.client.listTools();
+    const description = tools.find((tool) => tool.name === "sauce_globals")!.description ?? "";
+    assert.match(description, /tokenized stocks/);
+    assert.match(description, /`search` finds one by symbol, company name or ticker/);
+    const base = ok(await mcp.call("sauce_globals", { chain: "base", tokens: true })) as {
+      tokens: Array<{ symbol: string }>;
+      page?: unknown;
+    };
+    assert.deepEqual(
+      base.tokens.map((token) => token.symbol),
+      ["USDC", "WETH"],
+    );
+    assert.equal(base.page, undefined);
+  });
+
+  it("finds a stock by the company's name, with its issuer, ticker and source", async () => {
+    const found = ok(await mcp.call("sauce_globals", { chain: "base", search: "spacex" })) as {
+      tokens: Array<{ symbol: string; decimals: number; stock?: Record<string, string> }>;
+    };
+    assert.deepEqual(found.tokens, [
+      {
+        symbol: "SPCXc",
+        address: "0xb2000000000000000000007b9fcbd005511aCBd5",
+        decimals: 8,
+        stock: {
+          issuer: "coinbase",
+          name: "Space Exploration Technologies Corp.",
+          ticker: "SPCX",
+          issuerName: "Coinbase",
+          source: "https://api.coinbase.com/v1/tokenized-stocks",
+        },
+      },
+    ]);
+  });
+
+  it("pages a chain's stock tokens", async () => {
+    type Page = {
+      tokens: Array<{ symbol: string }>;
+      page: { offset: number; total: number; next?: number };
+    };
+    const first = ok(await mcp.call("sauce_globals", { chain: "ethereum", stocks: true })) as Page;
+    assert.equal(first.tokens.length, 200);
+    assert.ok(first.page.total > 1000);
+    assert.equal(first.page.next, 200);
+    const last = ok(
+      await mcp.call("sauce_globals", {
+        chain: "ethereum",
+        stocks: true,
+        offset: first.page.total - 5,
+      }),
+    ) as Page;
+    assert.equal(last.tokens.length, 5);
+    assert.equal(last.page.next, undefined);
+    const symbols = new Set(first.tokens.map((token) => token.symbol));
+    assert.ok(!symbols.has("USDC"), "the stocks alone");
+  });
+
   it("names an unknown chain or namespace as the error", async () => {
     assert.match(failed(await mcp.call("sauce_globals", { chain: "nowhere" })), /nowhere/);
     assert.match(
@@ -209,6 +267,58 @@ describe("sauce_price", () => {
         await mcp.call("sauce_price", { chain: "solana", base: "SOL", quote: "USDC", price: "1" }),
       ),
       /solana has none/,
+    );
+  });
+
+  it("reads an unregistered address's decimals only through an endpoint, and says so", async () => {
+    const message = failed(
+      await mcp.call("sauce_price", {
+        chain: "base",
+        base: `0x${"12".repeat(20)}`,
+        quote: "USDC",
+        price: "1",
+      }),
+    );
+    assert.match(message, /its decimals are not known: give them as 0x[0-9a-fA-F]{40}:<decimals>/);
+    assert.match(message, /or an endpoint \(rpcUrl or --config\) to read them from the token/);
+  });
+});
+
+describe("sauce_pools", () => {
+  it("lists a pair's pools only through an endpoint, and says so without one", async () => {
+    const message = failed(
+      await mcp.call("sauce_pools", { chain: "base", tokenA: "USDC", tokenB: "WETH" }),
+    );
+    assert.match(message, /Listing a pair's pools needs an RPC endpoint for base/);
+    assert.match(message, /Pass rpcUrl with the call/);
+  });
+
+  it("refuses a chain with no such pools, and a V4 key it cannot read, before any endpoint", async () => {
+    assert.match(
+      failed(await mcp.call("sauce_pools", { chain: "solana", tokenA: "USDC", tokenB: "SOL" })),
+      /sauce_pools lists Uniswap V3- and V4-style pools, on an EVM chain; solana has none/,
+    );
+    assert.match(
+      failed(
+        await mcp.call("sauce_pools", {
+          chain: "base",
+          tokenA: "USDC",
+          tokenB: "WETH",
+          v4Pools: ["3000"],
+        }),
+      ),
+      /v4Pools 3000: a hookless V4 pool's key is <fee>:<tickSpacing>/,
+    );
+    assert.equal(
+      (
+        await mcp.call("sauce_pools", {
+          chain: "base",
+          tokenA: "USDC",
+          tokenB: "WETH",
+          v4Pools: Array.from({ length: 33 }, () => "1:1"),
+        })
+      ).isError,
+      true,
     );
   });
 });

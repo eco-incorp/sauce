@@ -1,0 +1,41 @@
+{
+  "$comment": "Two tokenized-stock mints as Solana mainnet-beta held them at slot 452422187 (read with getMultipleAccounts, finalized, 2026-10-01): the extension sets every xStocks and every Ondo Global Markets mint then carried (MetadataPointer, TokenMetadata, ScaledUiAmount, Pausable, DefaultAccountState initialized, ConfidentialTransferMint, TransferHook with no program, and PermanentDelegate on the xStocks). Read by test/std/token/svm-token-2022.e2e.test.ts, which plants each image unchanged but for its mint authority.",
+  "slot": 452422187,
+  "mints": {
+    "TSLAx": {
+      "issuer": "Backed (xStocks)",
+      "mint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB",
+      "owner": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+      "space": 678,
+      "decimals": 8,
+      "extensions": [
+        "metadataPointer",
+        "permanentDelegate",
+        "defaultAccountState",
+        "scaledUiAmountConfig",
+        "pausableConfig",
+        "confidentialTransferMint",
+        "transferHook",
+        "tokenMetadata"
+      ],
+      "dataBase64": "AQAAAGVqQkIv6okUBqQZ0dHeCPQqhHlBtaGulevOYZrDFyk0rv1TouIUAAAIAQEAAAD/3+wbzSzTg5PITaoIyRzA041nf/jQq3tdAz8A9zLMMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARIAQABD+fHuLje4B+pFy3TmAJcivsAJKWAm5ORVi0NeJKXpxgfoNYJBH+oUgvCZS4CqUSqXyU8l3yg77Fpno4H8hitKDAAgAEP58e4uN7gH6kXLdOYAlyK+wAkpYCbk5FWLQ14kpenGBgABAAEZADgABm9ZIlHMR3R4JaWa0UIupDVz9SjaXe4q94ErMU+ZReMAAAAAAADwPwAAAAAAAAAAAAAAAAAA8D8aACEA/9/sG80s04OTyE2qCMkcwNONZ3/40Kt7XQM/APcyzDAABABBAEP58e4uN7gH6kXLdOYAlyK+wAkpYCbk5FWLQ14kpenGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgBAAEP58e4uN7gH6kXLdOYAlyK+wAkpYCbk5FWLQ14kpenGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATAKUAQ/nx7i43uAfqRct05gCXIr7ACSlgJuTkVYtDXiSl6cYH6DWCQR/qFILwmUuAqlEql8lPJd8oO+xaZ6OB/IYrSgwAAABUZXNsYSB4U3RvY2sFAAAAVFNMQXhEAAAAaHR0cHM6Ly94c3RvY2tzLW1ldGFkYXRhLmJhY2tlZC5maS90b2tlbnMvU29sYW5hL1RTTEF4L21ldGFkYXRhLmpzb24AAAAA"
+    },
+    "TSLAon": {
+      "issuer": "Ondo Global Markets",
+      "mint": "KeGv7bsfR4MheC1CkmnAVceoApjrkvBhHYjWb67ondo",
+      "owner": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+      "space": 648,
+      "decimals": 9,
+      "extensions": [
+        "scaledUiAmountConfig",
+        "metadataPointer",
+        "pausableConfig",
+        "defaultAccountState",
+        "confidentialTransferMint",
+        "transferHook",
+        "tokenMetadata"
+      ],
+      "dataBase64": "AQAAAIDN+V3tTSNwlENXrqyVggTjy5tukmIsnoBRuggfXn9mZw35uHQAAAAJAQEAAAA7iU3CRLV7yVzMKBHpxpAv2aPlYPWrmnLpZakLVu4ErgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARkAOACAzfld7U0jcJRDV66slYIE48ubbpJiLJ6AUboIH15/ZgAAAAAAAPA/x3qtagAAAAAAAAAAAADwPxIAQACAzfld7U0jcJRDV66slYIE48ubbpJiLJ6AUboIH15/ZgTGmdLJyoB92auFZHWE4hlJ3ob6Il8qYrcMCOvZmXpaGgAhAIDN+V3tTSNwlENXrqyVggTjy5tukmIsnoBRuggfXn9mAAYAAQABBABBAIDN+V3tTSNwlENXrqyVggTjy5tukmIsnoBRuggfXn9mAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgBAAIDN+V3tTSNwlENXrqyVggTjy5tukmIsnoBRuggfXn9mAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATAKsAgM35Xe1NI3CUQ1eurJWCBOPLm26SYiyegFG6CB9ef2YExpnSycqAfdmrhWR1hOIZSd6G+iJfKmK3DAjr2Zl6WhYAAABUZXNsYSAoT25kbyBUb2tlbml6ZWQpBgAAAFRTTEFvbj8AAABodHRwczovL2FwcC5vbmRvLmZpbmFuY2UvYXBpL3YyL2Fzc2V0cy9UU0xBb24vc29sX21ldGFkYXRhLmpzb24AAAAA"
+    }
+  }
+}

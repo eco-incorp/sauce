@@ -146,7 +146,7 @@ for (const [signature, selector] of [
   check(toFunctionSelector(signature) === `0x${selector}`, `${signature} is 0x${selector}`);
   check(swapped.calls.includes(selector), `the child calls ${signature} on a pool`);
 }
-check(/UniswapV3\.Pool\.at\(pool\)/.test(swap), "the body reads a pool through UniswapV3.Pool");
+check(/UniswapV3\.Pool\(pool\)/.test(swap), "the body reads a pool through UniswapV3.Pool");
 check(!/hex`[0-9a-f]{8}`/.test(swap), "and calls no raw selector");
 check(
   /import \{ uniswapV3, uniswapV4 \} from "@sauce\/router"/.test(swap),

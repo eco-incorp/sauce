@@ -11,7 +11,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -70,6 +70,16 @@ export const fixture = (name: string, dir = join(HERE, "std/token/fixtures")): H
   (JSON.parse(readFileSync(join(dir, `${name}.json`), "utf8")) as { creationCode: Hex })
     .creationCode;
 export const CLI_FIXTURES = join(HERE, "fixtures/cli");
+/**
+ * The password of `anvil-2.keystore.json`, in a file only its owner can read, as `--password-file`
+ * requires: git checks the committed fixture out readable by all, so the suites pass a 0600 copy.
+ */
+export const KEYSTORE_PASSWORD_FILE = (() => {
+  const path = join(mkdtempSync(join(tmpdir(), "sauce-password-")), "anvil-2.password");
+  writeFileSync(path, readFileSync(join(CLI_FIXTURES, "anvil-2.password")), { mode: 0o600 });
+
+  return path;
+})();
 
 /** Anvil's first two dev accounts: the Kitchen's owner, and the Pot's. Public keys, local only. */
 export const DEPLOYER_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";

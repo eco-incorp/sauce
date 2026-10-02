@@ -26,6 +26,12 @@
  *     transfer_fee_basis_points u16 LE (2).
  *   - TransferHook (extension_type 14) value: authority Pubkey (32),
  *     program_id Pubkey (32) — both OptionalNonZeroPubkey (all-zero == None).
+ *   - ScaledUiAmountConfig (extension_type 25) value: authority Pubkey (32),
+ *     multiplier f64 (8), new_multiplier_effective_timestamp i64 (8),
+ *     new_multiplier f64 (8). A display multiplier only: every amount an
+ *     instruction or a program sees is raw.
+ *   - PausableConfig (extension_type 26) value: authority Pubkey (32), paused
+ *     bool (1). While paused, Token-2022 refuses transfers, mints and burns.
  *
  * FEE FORMULA (spl-token-2022 `TransferFee::calculate_fee` /
  * `TransferFeeConfig::calculate_epoch_fee`, cross-checked):
@@ -35,6 +41,17 @@
  *   newer_transfer_fee  if epoch >= newer_transfer_fee.epoch
  *   older_transfer_fee  otherwise
  * The recipient receives amount - fee.
+ *
+ * The INVERSE (spl-token-2022 `TransferFee::calculate_pre_fee_amount`), the
+ * amount to send for the recipient to receive exactly `received`:
+ *   received                                     if bps == 0
+ *   0                                            if received == 0
+ *   received + maximum_fee                       if bps == 10_000
+ *   otherwise raw = ceil(received * 10_000 / (10_000 - bps)), and
+ *   received + maximum_fee                       if raw - received >= maximum_fee
+ *   raw                                          otherwise
+ * The fee on that amount is exactly the difference, so the recipient nets
+ * `received` to the unit.
  */
 import { getAddressDecoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
@@ -53,6 +70,8 @@ export const EXT_MEMO_TRANSFER = 8; // account-level extension; recognized defen
 export const EXT_NON_TRANSFERABLE = 9;
 export const EXT_PERMANENT_DELEGATE = 12;
 export const EXT_TRANSFER_HOOK = 14;
+export const EXT_SCALED_UI_AMOUNT = 25;
+export const EXT_PAUSABLE = 26;
 
 /** DefaultAccountState value 2 == Frozen (0 Uninitialized, 1 Initialized, 2 Frozen). */
 const ACCOUNT_STATE_FROZEN = 2;
@@ -94,8 +113,9 @@ export interface MintExtensions {
   /**
    * HARD un-routable reasons: a plain `transferChecked` into a fresh recipient
    * ATA genuinely fails or the received amount is unusable. Empty for a routable
-   * mint. Only NonTransferable and DefaultAccountState=frozen qualify — see the
-   * `advisories` note for why PermanentDelegate / ConfidentialTransfer do NOT.
+   * mint. Only NonTransferable, DefaultAccountState=frozen and a paused
+   * Pausable mint qualify — see the `advisories` note for why PermanentDelegate
+   * / ConfidentialTransfer do NOT.
    */
   blocking: string[];
   /**
@@ -154,11 +174,13 @@ function parseTransferHook(
 
 /**
  * Parse the Token-2022 TLV extension region of a mint. Returns
- * `{ blocking: [] }` for a legacy 82-byte mint (or any non-T22 shape). For a
- * Token-2022 mint, recognizes TransferFeeConfig and TransferHook (returned as
- * structured fields) plus the un-routable set (NonTransferable,
- * PermanentDelegate, ConfidentialTransferMint, MemoTransfer-required, and
- * DefaultAccountState frozen), each pushed as a reason string into `blocking`.
+ * `{ blocking: [], advisories: [] }` for a legacy 82-byte mint (or any non-T22
+ * shape). For a Token-2022 mint, recognizes TransferFeeConfig and TransferHook
+ * (returned as structured fields), the un-routable set (NonTransferable,
+ * DefaultAccountState frozen, Pausable paused), each pushed as a reason string
+ * into `blocking`, and the routable trust flags (PermanentDelegate,
+ * ConfidentialTransferMint, Pausable not paused, ScaledUiAmount, MemoTransfer),
+ * each pushed into `advisories`.
  */
 export function parseMintExtensions(mintData: Uint8Array): MintExtensions {
   const result: MintExtensions = { blocking: [], advisories: [] };
@@ -203,6 +225,21 @@ export function parseMintExtensions(mintData: Uint8Array): MintExtensions {
           "ConfidentialTransferMint (confidential transfers are opt-in; plain transfers still work)",
         );
         break;
+      case EXT_PAUSABLE:
+        if (length >= 33 && mintData[value + 32] !== 0) {
+          // Token-2022 refuses every transfer, mint and burn until the authority resumes it.
+          result.blocking.push("Pausable=paused (transfers fail until the mint is resumed)");
+        } else {
+          // Tokenized stocks carry it unpaused: an issuer's switch, not a transfer gate today.
+          result.advisories.push("Pausable (the issuer can pause transfers)");
+        }
+        break;
+      case EXT_SCALED_UI_AMOUNT:
+        // NOT blocking: a display multiplier. Balances, transfers and quotes stay raw.
+        result.advisories.push(
+          "ScaledUiAmount (a UI amount is the raw amount times a multiplier; amounts here are raw)",
+        );
+        break;
       case EXT_MEMO_TRANSFER:
         // Account-level extension — cannot appear on a mint; recognized only
         // defensively. Surfaced as advisory, never a mint-level block.
@@ -238,4 +275,24 @@ export function calcTransferFee(amount: bigint, cfg: TransferFeeConfig, epoch: b
 /** The amount the recipient actually receives: `amount - calcTransferFee(...)`. */
 export function netTransferAmount(amount: bigint, cfg: TransferFeeConfig, epoch: bigint): bigint {
   return amount - calcTransferFee(amount, cfg, epoch);
+}
+
+/**
+ * The amount to send under `cfg` at `epoch` for the recipient to receive exactly `received`, as
+ * spl-token-2022's `calculate_pre_fee_amount` computes it (the formula is in this file's header):
+ * `netTransferAmount(grossTransferAmount(r, cfg, e), cfg, e) === r`.
+ */
+export function grossTransferAmount(
+  received: bigint,
+  cfg: TransferFeeConfig,
+  epoch: bigint,
+): bigint {
+  const fee = getEpochFee(cfg, epoch);
+  const bps = BigInt(fee.transferFeeBasisPoints);
+  if (bps === 0n) return received;
+  if (received === 0n) return 0n;
+  if (bps === ONE_IN_BASIS_POINTS) return received + fee.maximumFee;
+  const denominator = ONE_IN_BASIS_POINTS - bps;
+  const raw = (received * ONE_IN_BASIS_POINTS + denominator - 1n) / denominator; // ceil
+  return raw - received >= fee.maximumFee ? received + fee.maximumFee : raw;
 }

@@ -13,6 +13,9 @@
  *   (E) `<Protocol>.<Contract>.at(<address>).<method>(...)` — the contract's ABI at another
  *       address: how an interface (an ABI with no fixed address, `Erc4626.Vault`) is called, and
  *       how a deployed contract's ABI reaches another deployment
+ *   (F) `<Protocol>.<Interface>(<address>).<method>(...)` — an interface called with the address
+ *       it is bound to, the same as shape E: `UniswapV3.Pool(pool).liquidity()`. Only an
+ *       interface binds this way; a deployed contract's name called with an address is refused
  * and, in value position, `<Protocol>.<Contract>` / `<Chain>.<Protocol>.<Contract>` is the
  * contract's address on that chain — an address-only contract included.
  *
@@ -110,6 +113,27 @@ function decomposeMemberChain(
   };
 }
 
+/**
+ * The kind of contract `<head>.<path>` names, when it names one directly: `<Ns>.<Contract>` or
+ * `<Chain>.<Ns>.<Contract>`, a family alias resolving to its one owner. Undefined for anything
+ * else (a method, an unknown name, an ambiguous alias), which the other shapes own.
+ */
+function namedContractKind(
+  head: string,
+  path: readonly string[],
+): ContractDescriptor["kind"] | undefined {
+  const segments = isChainKey(head) ? path : [head, ...path];
+  if (segments.length !== 2) return undefined;
+  const [namespace, contract] = segments as [string, string];
+  const ns = resolveNamespace(namespace);
+  if (ns === undefined) return undefined;
+  if (ns.kind === "protocol") return ns.contracts.get(contract)?.kind;
+  const owners = ns.contractOwners.get(contract);
+  if (owners?.length !== 1) return undefined;
+  const member = resolveNamespace(pascalOfSlug(owners[0]!));
+  return member?.kind === "protocol" ? member.contracts.get(contract)?.kind : undefined;
+}
+
 interface AccessorCandidate {
   readonly calleeStart: number;
   readonly calleeEnd: number;
@@ -135,15 +159,27 @@ function collectAccessorCandidates(
     // head is left completely untouched (isolation).
     if (!isChainKey(head) && resolveNamespace(head) === undefined) return;
     if (path.length < 1 || path.length > 3) return;
-    // `<…>.<Contract>.at(<address>)`: shape E, which `collectBoundCandidates` owns.
+    // `<…>.<Contract>.at(<address>)`: shape E, and `<…>.<Interface>(<address>)`: shape F, which
+    // `collectBoundCandidates` owns.
     if (path.length >= 2 && path[path.length - 1] === "at") return;
+    const named = namedContractKind(head, path);
+    if (named === "interface") return;
+    if (named !== undefined) {
+      const shown = `${head}.${path.join(".")}`;
+      fail(
+        `'${shown}(...)' calls a deployed contract's name: call one of its methods, ` +
+          `'${shown}.<method>(...)', or bind its ABI to another address with ` +
+          `'${shown}.at(<address>).<method>(...)'. Only an interface is called with an address.`,
+      );
+    }
     out.push({ calleeStart: callee.start, calleeEnd: callee.end, head, path });
   });
   return out;
 }
 
 interface BoundCandidate {
-  /** The `<…>.<Contract>.at` callee of the binding call, which the rewrite replaces. */
+  /** The `<…>.<Contract>.at` (or `<…>.<Interface>`) callee of the binding call, which the rewrite
+   *  replaces. */
   readonly calleeStart: number;
   readonly calleeEnd: number;
   readonly head: string;
@@ -151,12 +187,15 @@ interface BoundCandidate {
   readonly path: readonly string[];
   /** The method called on the bound contract. */
   readonly method: string;
+  /** The binding as the program spells it, for messages: `UniswapV3.Pool.at` or `UniswapV3.Pool`. */
+  readonly spelled: string;
 }
 
 /**
- * Collects shape E: `<…>.<Contract>.at(<address>).<method>(...)`. The binding call has to be the
- * object of a method call, because a bound contract is not a value Sauce can hold: anything else
- * spelled `<…>.<Contract>.at(...)` on a recognized namespace is refused by name.
+ * Collects shape E, `<…>.<Contract>.at(<address>).<method>(...)`, and shape F,
+ * `<…>.<Interface>(<address>).<method>(...)`. The binding call has to be the object of a method
+ * call, because a bound contract is not a value Sauce can hold: anything else spelled
+ * `<…>.<Contract>.at(...)` or `<…>.<Interface>(...)` on a recognized namespace is refused by name.
  */
 function collectBoundCandidates(program: AstNode, shadowed: ReadonlySet<string>): BoundCandidate[] {
   const calledOn = new Map<AstNode, string>();
@@ -179,8 +218,10 @@ function collectBoundCandidates(program: AstNode, shadowed: ReadonlySet<string>)
     const decomposed = decomposeMemberChain(callee);
     if (decomposed === undefined) return;
     const { head, path } = decomposed;
-    if (path.length < 2 || path[path.length - 1] !== "at" || shadowed.has(head)) return;
+    if (shadowed.has(head)) return;
     if (!isChainKey(head) && resolveNamespace(head) === undefined) return;
+    const viaAt = path.length >= 2 && path[path.length - 1] === "at";
+    if (!viaAt && namedContractKind(head, path) !== "interface") return;
     const shown = `${head}.${path.join(".")}(...)`;
     const method = calledOn.get(n);
     if (method === undefined) {
@@ -196,8 +237,9 @@ function collectBoundCandidates(program: AstNode, shadowed: ReadonlySet<string>)
       calleeStart: callee.start,
       calleeEnd: callee.end,
       head,
-      path: path.slice(0, -1),
+      path: viaAt ? path.slice(0, -1) : path,
       method,
+      spelled: `${head}.${path.join(".")}`,
     });
   });
   return out;
@@ -390,7 +432,7 @@ function resolveAccessorTarget(
   if (descriptor.kind === "interface") {
     fail(
       `${protocol}.${contract} is an interface descriptor (no fixed address) — bind the deployment ` +
-        `to ${hasMethod ? "call" : "use"}: '${namespaceHead}.${contract}.at(<address>).<method>(...)'`,
+        `to ${hasMethod ? "call" : "use"}: '${namespaceHead}.${contract}(<address>).<method>(...)'`,
     );
   }
   if (descriptor.coverage.typeFidelity === "widened" && !allowWidenedSelectors) {
@@ -482,8 +524,9 @@ function resolveBound(
   chainScope: ReadonlySet<number> | undefined,
   allowWidenedSelectors: boolean,
 ): ResolvedSite {
-  const { head, path, method } = candidate;
-  const shown = `'${head}.${path.join(".")}.at(...).${method}(...)'`;
+  const { path, method, spelled } = candidate;
+  const head = candidate.head;
+  const shown = `'${spelled}(...).${method}(...)'`;
   // A bound contract is always named: `<Protocol>.<Contract>`, never a protocol's default.
   if (path.length !== (isChainKey(head) ? 2 : 1)) {
     fail(`${shown} -- expected '<Protocol>.<Contract>.at(<address>).<method>(...)'`);

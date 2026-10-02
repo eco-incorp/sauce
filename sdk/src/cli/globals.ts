@@ -1,8 +1,9 @@
 /**
  * `sauce globals`: the names a program on one chain may use without declaring them — everything
  * `routes.sourceGlobals` lists, which reads the same registries and the same resolver the compile
- * path does. Nothing here adds or filters a name beyond what `--tokens`, `--protocols` and
- * `--protocol` ask for.
+ * path does. Nothing here adds or filters a name beyond what `--tokens`, `--protocols`,
+ * `--protocol`, `--stocks` and `--search` ask for. A chain's tokenized stocks (Ethereum has over a
+ * thousand) are counted, not listed, until `--stocks` lists them or `--search` finds one.
  */
 import { getAddress, numberToHex } from "viem";
 
@@ -11,8 +12,11 @@ import {
   sourceGlobals,
   type SourceInterface,
   type SourceNamespace,
+  type SourceToken,
 } from "../routes/source-globals.js";
-import { SVM_TOKEN_REGISTRY } from "../routes/token-registry.js";
+import { STOCK_ISSUERS } from "../routes/stock-tokens.js";
+import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../routes/token-registry.js";
+import { TOKEN_2022_PROGRAM_ID } from "../svm/token-program.js";
 import { UsageError } from "./args.js";
 import type { CommandOutput } from "./commands.js";
 
@@ -22,6 +26,42 @@ export interface GlobalsInput {
   readonly protocols: boolean;
   /** One namespace, by what a program writes (`UniswapV4`) or its slug (`uniswap-v4`). */
   readonly protocol?: string;
+  /** The chain's tokenized stocks, instead of its other tokens. */
+  readonly stocks?: boolean;
+  /** The tokens, stocks included, whose symbol, name, ticker or issuer contains this text. */
+  readonly search?: string;
+}
+
+/** A token as `sauce globals --json` gives it: a stock's with its issuer's name and list. */
+function tokenJson(token: SourceToken): object {
+  if (token.stock === undefined) return token;
+  const issuer = STOCK_ISSUERS[token.stock.issuer];
+
+  return { ...token, stock: { ...token.stock, issuerName: issuer.name, source: issuer.source } };
+}
+
+/** What a search for `text` matches a token by: its symbol, and a stock's name, ticker and issuer,
+ *  or the ticker of a stock another issuer names that way. Coinbase names SpaceX "Space
+ *  Exploration Technologies Corp.", and Backed "SpaceX xStock": both are SPCX. */
+function searcher(text: string): (token: SourceToken) => boolean {
+  const wanted = text.toLowerCase();
+  const has = (field: string): boolean => field.toLowerCase().includes(wanted);
+  const tickers = new Set(
+    Object.values(TOKEN_REGISTRY).flatMap((rows) =>
+      rows.flatMap((row) =>
+        row.stock !== undefined && has(row.stock.name) ? [row.stock.ticker] : [],
+      ),
+    ),
+  );
+
+  return (token) =>
+    has(token.symbol) ||
+    has(token.mint ?? "") ||
+    (token.stock !== undefined &&
+      (has(token.stock.name) ||
+        has(token.stock.ticker) ||
+        has(STOCK_ISSUERS[token.stock.issuer].name) ||
+        tickers.has(token.stock.ticker)));
 }
 
 /** A define as JSON: an address-sized value as its checksummed address, a wider one (a Solana
@@ -79,7 +119,7 @@ function namespaceNamed(
 /** An interface's lines: how a program binds it, and with `methods` what it can call. */
 function interfaceLines(one: SourceInterface, methods: boolean): string[] {
   return [
-    `${one.namespace}.${one.name}.at(<address>)  interface (${one.protocolName}): no fixed address`,
+    `${one.namespace}.${one.name}(<address>)  interface (${one.protocolName}): no fixed address`,
     ...(methods
       ? one.methods.map((method) => `  ${method.declaration}  ${method.stateMutability}`)
       : []),
@@ -113,10 +153,21 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
       ? undefined
       : namespaceNamed(globals.protocols, globals.interfaces, input.protocol);
   const one = named?.namespace;
+  const search = input.search?.trim();
+  if (input.search !== undefined && !search)
+    throw new UsageError("--search: give the text to find");
   // No filter shows everything; any filter shows only what it names.
-  const all = !input.tokens && !input.protocols && named === undefined;
-  const showTokens = all || input.tokens;
+  const all = !input.tokens && !input.protocols && named === undefined && !input.stocks && !search;
+  const showTokens = all || input.tokens || input.stocks === true || search !== undefined;
   const showProtocols = all || input.protocols;
+  // The tokens listed: a search's matches, the chain's stocks, or its other tokens.
+  const stocks = globals.tokens.filter((token) => token.stock !== undefined);
+  const listed =
+    search !== undefined
+      ? globals.tokens.filter(searcher(search))
+      : input.stocks === true
+        ? stocks
+        : globals.tokens.filter((token) => token.stock === undefined);
   const { chain } = globals;
   const text: string[] = [`${chain.key}: ${chain.slug}, chain id ${chain.id} (${chain.kind})`];
   if (one !== undefined) text.push("", ...namespaceLines(one, true));
@@ -126,30 +177,45 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
   // they are listed for it to pass as defines, which override the registry's.
   const devnet = svm ? SVM_TOKEN_REGISTRY.devnet : [];
   if (showTokens && svm) {
-    const rows = [...globals.tokens, ...devnet];
+    const rows = [...listed, ...devnet];
     const width = Math.max(0, ...rows.map((token) => token.symbol.length));
     const mintWidth = Math.max(0, ...rows.map((token) => (token.mint ?? "").length));
+    // A Token-2022 mint says so: its writes are the checked ones, and its accounts derive under it.
     const line = (token: (typeof rows)[number]): string =>
       `${token.symbol.padEnd(width)}  ${(token.mint ?? "").padEnd(mintWidth)}  ${token.address}  ` +
-      `${token.decimals} decimals`;
+      `${token.decimals} decimals${token.tokenProgram === TOKEN_2022_PROGRAM_ID ? ", Token-2022" : ""}`;
     text.push(
       "",
-      `Tokens (${globals.tokens.length}): the symbol is the mint's 32-byte key, a value for the ` +
+      `Tokens (${listed.length}): the symbol is the mint's 32-byte key, a value for the ` +
         "@sauce/token functions: balanceOf(USDC, account)",
-      ...globals.tokens.map((token) => `  ${line(token)}`),
+      ...listed.map((token) => `  ${line(token)}`),
       "  On devnet, pass a mint that differs as a define, which wins (--define USDC=0x…):",
       ...devnet.map((token) => `    ${line(token)}`),
       "  Any other mint: --define MINT=<mint, as 32-byte hex>. Token accounts are Account",
       "  parameters; USDC.transfer(…) and the other token methods are EVM-only.",
     );
   } else if (showTokens) {
-    text.push(
-      "",
-      `Tokens (${globals.tokens.length}): <Sym>.transfer(…), or the symbol as an address`,
-    );
-    const width = Math.max(0, ...globals.tokens.map((token) => token.symbol.length));
-    for (const token of globals.tokens) {
-      text.push(`  ${token.symbol.padEnd(width)}  ${token.address}  ${token.decimals} decimals`);
+    const what =
+      search !== undefined
+        ? `Tokens matching '${search}' (${listed.length})`
+        : input.stocks === true
+          ? `Stock tokens (${listed.length}): tokenized stocks`
+          : `Tokens (${listed.length})`;
+    text.push("", `${what}: <Sym>.transfer(…), or the symbol as an address`);
+    const width = Math.max(0, ...listed.map((token) => token.symbol.length));
+    for (const { symbol, address, decimals, stock } of listed) {
+      // A stock with what it is, so a search for the company finds its token.
+      const about =
+        stock === undefined
+          ? ""
+          : `  ${stock.name} (${stock.ticker}, ${STOCK_ISSUERS[stock.issuer].name})`;
+      text.push(`  ${symbol.padEnd(width)}  ${address}  ${decimals} decimals${about}`);
+    }
+    if (search === undefined && input.stocks !== true && stocks.length > 0) {
+      text.push(
+        `  And ${stocks.length} stock tokens, named the same way: --stocks lists them, and ` +
+          "--search <text> finds one by symbol, name or ticker",
+      );
     }
     text.push("  Any other token: Token(0x…).transfer(…)");
   }
@@ -166,7 +232,7 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
     text.push(
       "",
       `Interfaces (${globals.interfaces.length}): an ABI with no fixed address, bound to one the ` +
-        "program gives: <Namespace>.<Contract>.at(<address>).<method>(…)",
+        "program gives: <Namespace>.<Interface>(<address>).<method>(…)",
       ...globals.interfaces.map(
         (bound) => `  ${bound.namespace}.${bound.name}  (${bound.protocolName})`,
       ),
@@ -193,7 +259,7 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
     json: {
       chain,
       ...(one === undefined ? {} : { protocol: one }),
-      ...(showTokens ? { tokens: globals.tokens } : {}),
+      ...(showTokens ? { tokens: listed.map(tokenJson) } : {}),
       ...(showTokens && svm ? { devnetTokens: devnet } : {}),
       // The interfaces asked for: every one beside the namespaces, or --protocol's own.
       ...(showProtocols

@@ -34,7 +34,10 @@ describe("TOKEN_REGISTRY module-eval invariants", () => {
   it("every row's symbol matches the ticker shape and none collides with a U4 rewritable method", () => {
     for (const rows of Object.values(TOKEN_REGISTRY)) {
       for (const row of rows) {
-        expect(row.symbol).toMatch(/^[A-Z][A-Z0-9]{1,10}$/);
+        // A stock's is its issuer's ticker as an identifier, in the issuer's case ("bTSLA").
+        expect(row.symbol).toMatch(
+          row.stock === undefined ? /^[A-Z][A-Z0-9]{1,10}$/ : /^[A-Za-z][A-Za-z0-9_]{1,15}$/,
+        );
         for (const method of REWRITABLE_METHODS) {
           expect(row.symbol.toUpperCase()).not.toBe(method.toUpperCase());
         }
@@ -48,8 +51,9 @@ describe("TOKEN_REGISTRY module-eval invariants", () => {
       const addresses = new Set<string>();
       for (const row of rows) {
         expect(row.address).toMatch(/^0x[0-9a-fA-F]{40}$/);
-        expect(symbols.has(row.symbol)).toBe(false);
-        symbols.add(row.symbol);
+        // Unique without regard to case, which is how the CLI looks a symbol up.
+        expect(symbols.has(row.symbol.toUpperCase())).toBe(false);
+        symbols.add(row.symbol.toUpperCase());
         const key = row.address.toLowerCase();
         expect(addresses.has(key)).toBe(false);
         addresses.add(key);
@@ -67,13 +71,21 @@ describe("Base USDC/WETH match verify/vectors.ts's pinned constants", () => {
 });
 
 describe("coverage matrix (pinned exactly -- a new row is a deliberate edit)", () => {
+  /** The chain's symbols, less its stock tokens, which `token-registry-evidence.test.ts` holds. */
+  const tokensOf = (slug: string) =>
+    knownTokenSymbols(requireChain(slug)).filter(
+      (symbol) =>
+        TOKEN_REGISTRY[requireChain(slug).id]!.find((row) => row.symbol === symbol)!.stock ===
+        undefined,
+    );
+
   it("matches the exact chain -> sorted-symbols table this cut lands", () => {
     const matrix: Record<string, readonly string[]> = {
-      ethereum: knownTokenSymbols(requireChain("ethereum")),
-      optimism: knownTokenSymbols(requireChain("optimism")),
-      arbitrum: knownTokenSymbols(requireChain("arbitrum")),
-      polygon: knownTokenSymbols(requireChain("polygon")),
-      base: knownTokenSymbols(requireChain("base")),
+      ethereum: tokensOf("ethereum"),
+      optimism: tokensOf("optimism"),
+      arbitrum: tokensOf("arbitrum"),
+      polygon: tokensOf("polygon"),
+      base: tokensOf("base"),
     };
     expect(matrix).toEqual({
       ethereum: ["USDC", "USDT", "WETH"],
@@ -84,12 +96,30 @@ describe("coverage matrix (pinned exactly -- a new row is a deliberate edit)", (
     });
   });
 
+  it("registers stock tokens on ethereum and base only, each chain from its issuers' lists", () => {
+    const issuers = Object.fromEntries(
+      Object.entries(TOKEN_REGISTRY)
+        .map(([id, rows]) => [
+          requireChain(Number(id)).slug,
+          [...new Set(rows.flatMap((row) => (row.stock === undefined ? [] : [row.stock.issuer])))],
+        ])
+        .filter(([, list]) => list.length > 0),
+    );
+    expect(issuers).toEqual({
+      ethereum: ["backed", "ondo", "mtpelerin"],
+      base: ["coinbase", "backed"],
+    });
+    expect(registryTokenAddress(requireChain("base"), "SPCXc")).toBe(
+      BigInt("0xb2000000000000000000007b9fcbd005511aCBd5"),
+    );
+  });
+
   it("a chain with no rows returns an empty symbol list, not an error", () => {
     expect(knownTokenSymbols(requireChain("ronin"))).toEqual([]);
   });
 
-  it("solana registers its cluster's classic SPL mints", () => {
-    expect(knownTokenSymbols(requireChain("solana"))).toEqual(["USDC", "USDT", "WSOL"]);
+  it("solana registers its cluster's mints, legacy SPL Token and Token-2022 alike", () => {
+    expect(knownTokenSymbols(requireChain("solana"))).toEqual(["PYUSD", "USDC", "USDT", "WSOL"]);
   });
 
   it("arbitrum and polygon deliberately do NOT register USDT (bridged/renamed symbol() mismatch)", () => {
@@ -124,7 +154,7 @@ describe("resolveTokenMap: the one precedence resolver", () => {
     const map = resolveTokenMap(solana, { USDC: DEVNET_USDC });
     expect(map.get("USDC")).toBe(BigInt(DEVNET_USDC));
     expect(map.get("USDT")).toBe(registryTokenAddress(solana, "USDT"));
-    expect([...map.keys()].sort()).toEqual(["USDC", "USDT", "WSOL"]);
+    expect([...map.keys()].sort()).toEqual(["PYUSD", "USDC", "USDT", "WSOL"]);
   });
 
   it("an evm chain the registry doesn't cover resolves to only the caller tokens", () => {
@@ -164,23 +194,24 @@ describe("SVM_TOKEN_REGISTRY: the Solana mints", () => {
     expect(mainnet.WSOL).toBe(NATIVE_MINT);
   });
 
-  it("pins the coverage: USDC, USDT and the wrapped native on mainnet; USDC and WSOL on devnet", () => {
+  it("pins the coverage and each mint's token program: PYUSD on Token-2022, the rest legacy", () => {
     expect(
       Object.fromEntries(
         Object.entries(SVM_TOKEN_REGISTRY).map(([cluster, rows]) => [
           cluster,
-          rows.map((row) => `${row.symbol} ${row.mint} ${row.decimals}`),
+          rows.map((row) => `${row.symbol} ${row.mint} ${row.decimals} ${row.tokenProgram}`),
         ]),
       ),
     ).toEqual({
       "mainnet-beta": [
-        "USDC EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v 6",
-        "USDT Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB 6",
-        "WSOL So11111111111111111111111111111111111111112 9",
+        "PYUSD 2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo 6 TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        "USDC EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v 6 TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "USDT Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB 6 TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "WSOL So11111111111111111111111111111111111111112 9 TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
       ],
       devnet: [
-        "USDC 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU 6",
-        "WSOL So11111111111111111111111111111111111111112 9",
+        "USDC 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU 6 TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "WSOL So11111111111111111111111111111111111111112 9 TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
       ],
     });
   });

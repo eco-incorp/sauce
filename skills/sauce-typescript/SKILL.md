@@ -144,7 +144,11 @@ a recorded address, not proof of live code on the chain.
   instruction the engine accepts, so build execution with the Kitchen client. `USDC_MINT` is the
   mainnet USDC mint. The token builder generates Token-2022 and `TransferChecked` programs:
   `token.Token.transfer({ amount, svm: { ... } }).source("svm")`, with top-level
-  `tokenProgram: "token-2022"`. Venue adapters (`venue("raydium-cp-swap")`, also `Solana.RaydiumCpSwap`) build
+  `tokenProgram: "token-2022"`. For a `@sauce/token` program's accounts,
+  `resolveSvmToken(load, mint)` reads a mint through an owned-account loader and returns its token
+  program (by the mint's owner), decimals and extensions, and why a checked transfer of it would be
+  refused; `svmTokenAccount(token, owner)` derives a holder's account under that program, and
+  `svmTokenReceived`/`svmTokenToSend` net a Token-2022 transfer fee exactly, either way. Venue adapters (`venue("raydium-cp-swap")`, also `Solana.RaydiumCpSwap`) build
   pool configs, quote source and swap CPIs over an account loader you supply. For a local validator
   or LiteSVM, `svmEnginePath()`, `svmKitchenPath()` and `svmKitchenIdlPath()` from
   `@eco-incorp/sauce/svm/engine-artifacts` (Node only) locate the packaged programs; the program

@@ -6,19 +6,21 @@ A program compiled for a chain names these symbols with no import; each is that 
 and amounts are in its smallest units (its decimals). Their addresses are in the chain's file in
 `sauce-chains`. Any other ERC-20 is `Token(<address>)`.
 
-- **Ethereum** (`ethereum`, [addresses](../../sauce-chains/references/ethereum.md)): `USDC` (6), `USDT` (6), `WETH` (18)
+- **Ethereum** (`ethereum`, [addresses](../../sauce-chains/references/ethereum.md)): `USDC` (6), `USDT` (6), `WETH` (18); and 1731 tokenized stocks ([stocks](stocks.md))
 - **Optimism** (`optimism`, [addresses](../../sauce-chains/references/optimism.md)): `USDC` (6), `USDT` (6), `WETH` (18)
 - **Polygon** (`polygon`, [addresses](../../sauce-chains/references/polygon.md)): `USDC` (6), `WETH` (18), `WPOL` (18)
 - **Monad** (`monad`, [addresses](../../sauce-chains/references/monad.md)): `USDC` (6), `WMON` (18)
 - **Arc** (`arc`, [addresses](../../sauce-chains/references/arc.md)): `EURC` (6), `USDC` (6), `USYC` (6), `WETH` (18)
-- **Base** (`base`, [addresses](../../sauce-chains/references/base.md)): `USDC` (6), `WETH` (18)
+- **Base** (`base`, [addresses](../../sauce-chains/references/base.md)): `USDC` (6), `WETH` (18); and 67 tokenized stocks ([stocks](stocks.md))
 - **Arbitrum** (`arbitrum`, [addresses](../../sauce-chains/references/arbitrum.md)): `USDC` (6), `WETH` (18)
-- **Solana** (`solana`, [addresses](../../sauce-chains/references/solana.md)): `USDC` (6), `USDT` (6), `WSOL` (9)
+- **Solana** (`solana`, [addresses](../../sauce-chains/references/solana.md)): `PYUSD` (6), `USDC` (6), `USDT` (6), `WSOL` (9)
 
 On Solana a symbol is the mint's 32-byte key, a value for the `@sauce/token` functions
 (`balanceOf(USDC, account)`); the token accounts are `Account` parameters, and the token
 methods (`USDC.transfer(...)`) are EVM-only. Devnet's mints, which differ, are in the Solana
-file in `sauce-chains`, passed as a define that wins over the symbol.
+file in `sauce-chains`, passed as a define that wins over the symbol. That file also names each
+mint's token program: legacy SPL Token, or Token-2022, whose mints a program moves with the
+checked writes (`sauce-solana`).
 
 ## Token functions
 
@@ -47,3 +49,5 @@ On Solana:
 - `transfer(token: Address, tokenProgram: Account, source: Account, dest: Account, authority: Account, amount: Uint256): void`
 - `transferFrom(token: Address, tokenProgram: Account, source: Account, dest: Account, authority: Account, amount: Uint256): void`
 - `approve(token: Address, tokenProgram: Account, source: Account, delegate: Account, authority: Account, amount: Uint256): void`
+- `transferChecked(token: Address, tokenProgram: Account, source: Account, mint: Account, dest: Account, authority: Account, amount: Uint256, decimals: Uint256): void`
+- `approveChecked(token: Address, tokenProgram: Account, source: Account, mint: Account, delegate: Account, authority: Account, amount: Uint256, decimals: Uint256): void`

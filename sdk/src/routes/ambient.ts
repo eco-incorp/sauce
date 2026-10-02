@@ -45,6 +45,34 @@ export function chainDefines(
   chain: CanonicalChain,
   opts: AmbientDefinesOptions = {},
 ): Record<string, bigint | boolean | number> {
+  return opts.tokens === undefined
+    ? { ...sharedChainDefines(chain) }
+    : buildChainDefines(chain, opts);
+}
+
+/** Each chain's own defines, with no `tokens` override, built once: they are a function of the chain
+ *  alone, and Ethereum's are over 2,000 values a compile would otherwise rebuild. */
+const sharedDefines = new Map<number, Readonly<Record<string, bigint | boolean | number>>>();
+
+/**
+ * `chainDefines(chain)` with no override, as one frozen object, the same on every call: what a
+ * compile's scope hands over, where `chainDefines` gives its caller a copy of its own.
+ */
+export function sharedChainDefines(
+  chain: CanonicalChain,
+): Readonly<Record<string, bigint | boolean | number>> {
+  let defines = sharedDefines.get(chain.id);
+  if (defines === undefined) {
+    defines = Object.freeze(buildChainDefines(chain, {}));
+    sharedDefines.set(chain.id, defines);
+  }
+  return defines;
+}
+
+function buildChainDefines(
+  chain: CanonicalChain,
+  opts: AmbientDefinesOptions,
+): Record<string, bigint | boolean | number> {
   const defines: Record<string, bigint | boolean | number> = {
     chainId: BigInt(chain.id),
     CHAIN_ID: BigInt(chain.id),
