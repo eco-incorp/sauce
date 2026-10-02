@@ -4,7 +4,16 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -549,6 +558,65 @@ try {
     /: up to date \(/,
     "the check leaves the installed skills as they were",
   );
+
+  // The same runners in a project whose package manager installs a package's own dependencies
+  // beside it rather than at the project's root (pnpm's default): only the project's direct
+  // dependencies resolve from it — the package, viem and Node's typings — and the package's own
+  // only from beside the package. Outside `work`, so nothing hoisted there is reached either. Every
+  // runner must typecheck there; a probe that imports one of the package's own dependencies must not.
+  const isolated = mkdtempSync(join(tmpdir(), "sauce-isolated-project-"));
+  try {
+    writeFileSync(
+      join(isolated, "package.json"),
+      JSON.stringify({ private: true, type: "module" }),
+    );
+    for (const dependency of [name, "viem", "@types/node"]) {
+      const at = join(isolated, "node_modules", dependency);
+      mkdirSync(dirname(at), { recursive: true });
+      symlinkSync(join(work, "node_modules", dependency), at, "dir");
+    }
+    sauce("skills", "install", "--agent", "codex", "--dir", isolated);
+    const installedRunners = shippedSkills
+      .filter((file) => file.endsWith(".mts"))
+      .map((file) => join(isolated, ".agents/skills", file));
+    const probe = join(isolated, ".agents/skills/probe.mts");
+    writeFileSync(probe, 'import { address } from "@solana/kit";\nconsole.log(address);\n');
+    const options = {
+      target: ts.ScriptTarget.ES2022,
+      lib: ["lib.es2023.d.ts"],
+      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      types: ["node"],
+      typeRoots: [join(isolated, "node_modules/@types")],
+      strict: true,
+      noEmit: true,
+      skipLibCheck: true,
+      verbatimModuleSyntax: true,
+      erasableSyntaxOnly: true,
+      allowImportingTsExtensions: true,
+    };
+    const diagnostics = ts.getPreEmitDiagnostics(
+      ts.createProgram([...installedRunners, probe], options),
+    );
+    const where = (d) =>
+      `${d.file === undefined ? "" : `${relative(isolated, d.file.fileName)}: `}` +
+      ts.flattenDiagnosticMessageText(d.messageText, " ");
+    assert.deepEqual(
+      diagnostics.filter((d) => d.file?.fileName !== probe).map(where),
+      [],
+      "every installed runner typechecks with only the project's own dependencies",
+    );
+    assert.ok(
+      diagnostics.some((d) => d.file?.fileName === probe && d.code === 2307),
+      "the project does not resolve the package's own dependencies (@solana/kit)",
+    );
+    console.log(
+      `Clean package install: the ${installedRunners.length} installed runners typecheck in a ` +
+        `project that resolves only its own dependencies (${name}, viem, @types/node)`,
+    );
+  } finally {
+    rmSync(isolated, { recursive: true, force: true });
+  }
 
   // `sauce mcp`, from the install, the way the guide launches it — `npx @eco-incorp/sauce mcp`,
   // here with `--no` so nothing is fetched — over both transports: the tools, a compile, and every
