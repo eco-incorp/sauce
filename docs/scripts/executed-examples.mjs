@@ -1,7 +1,8 @@
 // Which shipped SauceScript examples a test EXECUTES, held to the repository: `docs:check` runs it
 // for `docs/examples/*.sauce.ts` and `skills:check` for `skills/*/examples/*.sauce.ts`. Compiling an
 // example proves it compiles; only running it on an engine proves it does what its page says, so
-// each example names, in a manifest beside its checker, the suites that run it.
+// each example names the suites that run it: `docs/examples/executed.json` for the manual's,
+// `sdk/scripts/skills-check/executed.json` for the skills' (which ship, so it is not beside them).
 //
 // A manifest is `{ "executed": { "<example>": ["<suite>", ...] }, "compileOnly": { "<example>":
 // "<why>" } }`, examples relative to `examplesRoot`, suites to the repository. It holds each example
