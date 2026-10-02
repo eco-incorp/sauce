@@ -89,7 +89,8 @@ describe("making an intent: sauce intent publish with no file", () => {
         intents: {
           deadline: created.deadline,
           rewardDeadline: created.rewardDeadline,
-          creator: ME,
+          // As `sauce intent publish` builds it: the wallet that publishes it is its creator.
+          publisher: ME,
           prover: created.prover,
         },
       },

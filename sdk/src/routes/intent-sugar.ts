@@ -85,6 +85,7 @@ import {
   DEFAULT_REFUND_WINDOW,
   portalChainProblem,
   portalIntent,
+  randomSalt,
   type RewardModifier,
   type RouteModifier,
 } from "./intent-portal.js";
@@ -139,18 +140,28 @@ export interface IntentSugarDefaults {
    *  publishes them needs. A level below opens when its parent's body runs, at `ctx.timestamp()`;
    *  so does every level when this is left out. */
   readonly openedAt?: bigint;
-  /** Who may reclaim the reward after `rewardDeadline`. Defaults to the executing Pot, which is
-   *  correct when the program itself funded the reward and wrong when a user did — supply it
-   *  explicitly in that case. */
+  /** Who may reclaim the reward after `rewardDeadline`, for an intent written
+   *  `Chain(...).reward(...)`. An intent written `Chain.Portal...` names its own with
+   *  `.creator(...)`, and this is never its creator: see {@link IntentSugarDefaults.publisher}. */
   readonly creator?: AddressInput;
+  /**
+   * The wallet that publishes the program's top-level intents itself, as `sauce intent publish`
+   * does: the creator of each one written `Chain.Portal...` that names none, as Eco's Portal app
+   * makes the publishing wallet the creator. It is never the creator of an intent a body opens, and
+   * the child compile drops it: every intent a program opens names its own `.creator(...)`, since
+   * the Pot it runs on may be shared and a refund there could go to anyone.
+   */
+  readonly publisher?: AddressInput;
   /** Defaults to the prover the deployment registry records for this source/destination pair. */
   readonly prover?: AddressInput;
   /** Overrides the source-chain Portal the program publishes through. */
   readonly sourcePortal?: AddressInput;
   /** Overrides the destination-chain Portal recorded in the child's route. */
   readonly destinationPortal?: AddressInput;
-  /** Route salt, defaulting to 32 zero bytes. Two structurally identical children collapse into one
-   *  intent without distinct salts. */
+  /** Route salt, for every intent that names none with `.salt(...)`. Left out: 32 random bytes per
+   *  intent written `Chain.Portal...`, picked as it is compiled ({@link randomSalt}); 32 zero bytes
+   *  for one written `Chain(...).reward(...)`. Two structurally identical intents collapse into one
+   *  hash without distinct salts. */
   readonly salt?: Hex;
   /**
    * How the program funds the reward. `"transfer"` (default): it reads the intent's vault from the
@@ -210,9 +221,8 @@ export interface IntentSugarContext {
     captures: readonly string[],
     /** The destination Portal the child's route records — whose Executor must own the Pot. */
     destinationPortal: AddressInput,
-    /** The child's cook: the destination Kitchen's fee it pays, `undefined` when none was given,
-     *  and the creator its own intents inherit, when this intent named one. */
-    level: { readonly fee: bigint | undefined; readonly creator?: AddressInput },
+    /** The child's cook: the destination Kitchen's fee it pays, `undefined` when none was given. */
+    level: { readonly fee: bigint | undefined },
   ) => CompiledChild;
 }
 
@@ -273,8 +283,9 @@ function literalOf(node: AstNode): bigint | undefined {
   return undefined;
 }
 
-/** SauceScript's integer arithmetic, which an amount may be written in: `amount * 99n / 100n`. */
-const ARITHMETIC = new Set(["+", "-", "*", "/", "%"]);
+/** SauceScript's integer arithmetic, which an amount may be written in: `amount * 99 / 100`,
+ *  `10 ** 18`. */
+const ARITHMETIC = new Set(["+", "-", "*", "/", "%", "**"]);
 
 /** The reads of the executing block a value may use, computed where the intent opens:
  *  `.deadline(ctx.timestamp() + 3600)`. */
@@ -329,7 +340,7 @@ function makeResolver(
       const operator = (node as { operator?: string }).operator ?? "";
       if (!ARITHMETIC.has(operator)) {
         return fail(
-          `${what} uses \`${operator}\`; an amount is integer arithmetic: \`+ - * / %\` of ` +
+          `${what} uses \`${operator}\`; an amount is integer arithmetic: \`+ - * / % **\` of ` +
             "literals, compile-time values and variables of the enclosing program",
         );
       }
@@ -386,6 +397,12 @@ function fold(left: bigint, operator: string, right: bigint, what: string): bigi
   if ((operator === "/" || operator === "%") && right === 0n) {
     return fail(`${what} divides by zero`);
   }
+  // Past 256 bits for any base above 1, and too large to compute first.
+  if (operator === "**" && right > 256n && left > 1n) {
+    return fail(
+      `${what} is ${left} ** ${right}, outside an unsigned 256-bit word: computing it reverts`,
+    );
+  }
   const result =
     operator === "+"
       ? left + right
@@ -395,7 +412,9 @@ function fold(left: bigint, operator: string, right: bigint, what: string): bigi
           ? left * right
           : operator === "/"
             ? left / right
-            : left % right;
+            : operator === "%"
+              ? left % right
+              : left ** right;
   if (result < 0n || result > MAX_WORD) {
     return fail(`${what} is ${result}, outside an unsigned 256-bit word: computing it reverts`);
   }
@@ -644,32 +663,36 @@ function nativeOf(element: AstNode | null): AstNode | undefined {
 }
 
 /**
- * The argument of `.send(...)` or `.receive(...)`: one item, or an array of them, written out where
- * the intent opens — the intent names its tokens when it is built, so a list the program holds in a
- * variable is not one it can read. An item is `{ token, amount }`, or, in the reward, `{ native:
- * amount }` for native coin.
+ * The arguments of `.send(...)` or `.receive(...)`: each one an item, or one argument that is a
+ * list of them, written out where the intent opens — the intent names its tokens when it is built,
+ * so a list the program holds in a variable is not one it can read. An item is `{ token, amount }`,
+ * or, in the reward, `{ native: amount }` for native coin. `.receive()` names none.
  */
 function lowerItems(args: readonly AstNode[], resolve: Resolver, list: TokenList): RewardSpec {
   const step = stepOf(list);
   const what = list.part === "reward" ? "the reward" : "what the solver delivers";
-  if (args.length !== 1) {
-    return fail(
-      `${step} takes one argument, ${what}: \`{ token, amount }\` or an array of them, got ` +
-        `${args.length}`,
-    );
-  }
-  const [node] = args as [AstNode];
+  const inPlace = (node: AstNode): string =>
+    `${step} takes ${what} written out in place, each \`{ token, amount }\` an argument or one ` +
+    `list of them, not a ${node.type}: the intent names its tokens when it is built.`;
+  const [first] = args;
   const entries =
-    node.type === "ObjectExpression"
-      ? [node]
-      : node.type === "ArrayExpression"
-        ? ((node as { elements?: (AstNode | null)[] }).elements ?? [])
-        : fail(
-            `${step} takes ${what} written out in place, \`{ token, amount }\` or an array of ` +
-              `them, not a ${node.type}: the intent names its tokens when it is built.`,
-          );
+    args.length === 1 && first!.type === "ArrayExpression"
+      ? ((first as { elements?: (AstNode | null)[] }).elements ?? [])
+      : args.map((node) =>
+          node.type === "ObjectExpression"
+            ? node
+            : node.type === "ArrayExpression"
+              ? fail(
+                  `${step} takes each item as an argument, or one list of them on its own: not a ` +
+                    "list beside other arguments",
+                )
+              : fail(inPlace(node)),
+        );
   if (entries.length === 0 && list.part === "reward") {
-    return fail("`.send([])` pays nothing: name at least one `{ token, amount }` or `{ native }`");
+    return fail(
+      "`.send(...)` with nothing in it pays nothing: name at least one `{ token, amount }` or " +
+        "`{ native }`",
+    );
   }
   let nativeAmount: Value | undefined;
   const tokens: RewardSpec["tokens"][number][] = [];
@@ -1024,9 +1047,12 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
         : typeof defaults.executionFee === "function"
           ? defaults.executionFee(site.chain)
           : defaults.executionFee;
-    // The reward's creator, which an intent opened inside this one's body inherits when it is
-    // known now.
+    // The reward's creator: named, or, for a top-level intent a wallet publishes itself, that
+    // wallet. Refused here, before anything is compiled for the body, when it is neither.
     const creatorValue = rewardModifier("creator", "`.creator(...)`");
+    if (portalForm && creatorValue === undefined && defaults.publisher === undefined) {
+      fail(UNNAMED_CREATOR);
+    }
 
     /**
      * What the solver delivers to the destination Executor so this intent can run.
@@ -1038,9 +1064,13 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
      * cannot be read off its source, so the general path asks.
      */
     const deliveryList: TokenList = { part: "delivery", chain: site.chain, form: site.form };
+    // `.receive()` names nothing: a body of token writes is then delivered what it moves, as the
+    // call form derives it, and a program nothing.
     const explicitDelivery =
       site.form === "portal"
-        ? lowerItems(site.delivery, resolve, deliveryList).tokens
+        ? ((items) => (items.length === 0 ? undefined : items))(
+            lowerItems(site.delivery, resolve, deliveryList).tokens,
+          )
         : site.delivery.length === 0
           ? undefined
           : lowerDelivery(site.delivery[0]!, resolve, deliveryList);
@@ -1088,12 +1118,7 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
         childModule.source,
         captured,
         destinationPortal,
-        {
-          fee: feeFor(),
-          ...(creatorValue !== undefined && "literal" in creatorValue
-            ? { creator: addressHex(creatorValue.literal) }
-            : {}),
-        },
+        { fee: feeFor() },
       );
       captured.forEach((name, i) => {
         captureWords.push({ name, sentinel: child.captureSentinels[i]! });
@@ -1216,9 +1241,9 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       sourceChainId: BigInt(context.source.id),
       route: normalizeRoute({
         salt:
-          saltValue === undefined
-            ? defaults.salt
-            : (`0x${sentinelFor(saltValue).toString(16).padStart(64, "0")}` as Hex),
+          saltValue !== undefined
+            ? (`0x${sentinelFor(saltValue).toString(16).padStart(64, "0")}` as Hex)
+            : (defaults.salt ?? (portalForm ? randomSalt() : undefined)),
         deadline: deadlineFor(routeDeadline),
         portal: destinationPortal,
         // Native the route's own calls need: the Kitchen fee, once per cook.
@@ -1233,11 +1258,13 @@ export function rewriteIntentSugar(source: string, context: IntentSugarContext):
       }),
       reward: normalizeReward({
         deadline: deadlineFor(rewardDeadline),
-        // Never the executing Pot: see `requireCreator`.
+        // Never the executing Pot: see `requireCreator` and `UNNAMED_CREATOR`.
         creator:
-          creatorValue === undefined
-            ? requireCreator(defaults, portalForm)
-            : addressHex(sentinelFor(creatorValue)),
+          creatorValue !== undefined
+            ? addressHex(sentinelFor(creatorValue))
+            : portalForm
+              ? defaults.publisher!
+              : requireCreator(defaults),
         prover:
           proverValue === undefined
             ? (defaults.prover ?? context.proverFor(context.source, site.chain))
@@ -1534,16 +1561,7 @@ function requireDeadline(defaults: Partial<IntentSugarDefaults>): bigint {
   return defaults.deadline;
 }
 
-function requireCreator(defaults: Partial<IntentSugarDefaults>, portalForm = false): AddressInput {
-  if (defaults.creator === undefined && portalForm) {
-    return fail(
-      "the reward needs a creator — the address that can reclaim it after its deadline. Give " +
-        "`.creator(address)` after `.send(...)`, or `intents.creator` in the compile options; the " +
-        "`sauce` command takes `--intent-creator <address>`, and otherwise makes it the wallet " +
-        "that publishes or the owner of the Pot that cooks. It has no default here: the executing " +
-        "Pot is driven by every solver, so a refund there is a refund anyone can take.",
-    );
-  }
+function requireCreator(defaults: Partial<IntentSugarDefaults>): AddressInput {
   if (defaults.creator === undefined) {
     return fail(
       "the reward needs a `creator` — the address that can reclaim it after the deadline. It has no " +
@@ -1553,5 +1571,18 @@ function requireCreator(defaults: Partial<IntentSugarDefaults>, portalForm = fal
   }
   return defaults.creator;
 }
+
+/**
+ * Why an intent written `Chain.Portal...` with no `.creator(...)` is refused: no default is safe for
+ * one a program opens, at any depth. The Pot a program runs on may be shared — the destination's
+ * intent Pot is every solver's — so a refund there could go to anyone; and an address from the
+ * level above, the recipient or the compile options would be a guess at whose the refund is.
+ */
+const UNNAMED_CREATOR =
+  "an intent opened by a program needs `.creator(<address>)` after `.send(...)`: the address an " +
+  "unfilled intent's reward is refunded to. The Pot a program runs on may be shared, so a refund " +
+  "there could go to anyone; name it, usually from one of `main`'s parameters " +
+  "(`.creator(refundTo)`). Only a top-level intent a wallet publishes itself (`sauce intent " +
+  "publish`, or `intents.publisher` in the compile options) takes that wallet as its creator.";
 
 export { SugarError };

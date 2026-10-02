@@ -80,6 +80,9 @@ import {
 import * as gated from "./evm/gated-engine.js";
 
 const HAS_CAST = spawnSync("cast", ["--version"], { stdio: "ignore" }).status === 0;
+/** The salt the SDK compiles an intent written the old way with when none is given; the
+ *  command picks a random one per run unless told. */
+const ZERO_SALT = `0x${"00".repeat(32)}`;
 if (!HAS_CAST && process.env.CI) {
   throw new Error("`cast` is not on PATH in CI: Foundry is installed there, so this is a failure.");
 }
@@ -846,6 +849,8 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     DEADLINE,
     "--intent-creator",
     OWNER.address,
+    "--intent-salt",
+    ZERO_SALT,
   ];
   const DEFINES = definesFor(REWARD);
   let intentFile: string;
@@ -1258,6 +1263,8 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
       DEADLINE,
       "--intent-creator",
       creator,
+      "--intent-salt",
+      ZERO_SALT,
       "--rpc-url",
       ethereum.rpcUrl,
       "--private-key",
@@ -1318,7 +1325,7 @@ describeEvm("what is deployed: the released contracts, a Pot, and an intent's de
   const DEFINES = [
     ...["--define", `RECIPIENT=${RECIPIENT}`, "--define", `AMOUNT=${AMOUNT}`],
     ...["--define", `REWARD=${REWARD}`, "--intent-deadline", "2000000000"],
-    ...["--intent-creator", OWNER.address],
+    ...["--intent-creator", OWNER.address, "--intent-salt", ZERO_SALT],
   ];
   const sharedPot = () =>
     v12PredictPot(

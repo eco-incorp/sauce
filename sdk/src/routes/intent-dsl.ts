@@ -43,7 +43,7 @@ import {
   type PlaceholderSpec,
 } from "./nest-dynamic.js";
 import { destinationPot, resolveIntentPot } from "./intent-pot.js";
-import { DEFAULT_FILL_WINDOW, DEFAULT_REFUND_WINDOW } from "./intent-portal.js";
+import { DEFAULT_FILL_WINDOW, DEFAULT_REFUND_WINDOW, randomSalt } from "./intent-portal.js";
 import { Token } from "../token/api.js";
 import { normalizeRoute, toBigInt } from "./normalize.js";
 import {
@@ -1072,13 +1072,13 @@ export interface PortalTokenAmount {
   readonly amount: bigint | number | string;
 }
 
-/** What `send` pays: tokens, and native coin as `{ native: amount }`. One item or a list. */
-export type PortalReward =
-  | PortalTokenAmount
-  | { readonly native: bigint | number | string }
-  | readonly (PortalTokenAmount | { readonly native: bigint | number | string })[];
+/** One thing `send` pays: a token and an amount, or native coin as `{ native: amount }`. */
+export type PortalRewardItem = PortalTokenAmount | { readonly native: bigint | number | string };
 
-/** What `receive` names: the tokens the solver delivers. One item or a list. */
+/** What `send` takes as one argument: an item, or a list of them. */
+export type PortalReward = PortalRewardItem | readonly PortalRewardItem[];
+
+/** What `receive` takes as one argument: a token the solver delivers, or a list of them. */
 export type PortalDelivery = PortalTokenAmount | readonly PortalTokenAmount[];
 
 /** A chain, as a reference or as a chain export (`Ethereum`). */
@@ -1096,8 +1096,9 @@ export interface PortalSendSteps<Used extends string> {
   deadline(seconds: bigint | number): PortalSent<Used | "deadline">;
   /** The source chain's prover. Defaults to the registry's for the pair. */
   prover(address: PortalAddress): PortalSent<Used | "prover">;
-  /** What the solver delivers on the destination. `[]` for nothing. */
-  receive(delivery: PortalDelivery): PortalReceived;
+  /** What the solver delivers on the destination, each token an argument or one list of them.
+   *  `.receive()` for nothing. */
+  receive(...delivery: readonly PortalDelivery[]): PortalReceived;
 }
 
 /** An intent with its reward: the reward's modifiers not given yet, then `receive`. */
@@ -1109,7 +1110,7 @@ export interface PortalReceiveSteps<Used extends string> {
    *  `DEFAULT_FILL_WINDOW` past when it is built. */
   deadline(seconds: bigint | number): PortalReceived<Used | "deadline">;
   /** The route's salt: two otherwise identical intents are distinct with distinct salts. Defaults
-   *  to zero. */
+   *  to 32 random bytes, picked when the intent is built. */
   salt(salt: Hex | bigint): PortalReceived<Used | "salt">;
   /** The destination Kitchen's fee, in wei, which the body's cook pays: read it with
    *  `destinationExecutionFee()`. Required: it changes, and the SDK reads no chain. */
@@ -1129,12 +1130,14 @@ export type PortalReceived<Used extends string = never> = Omit<PortalReceiveStep
 
 /** A chain's Portal, opening an intent whose body runs on that chain. */
 export interface ChainPortal {
-  /** The reward the creator pays: tokens, and native coin as `{ native: amount }`. */
-  send(reward: PortalReward): PortalSent;
+  /** The reward the creator pays, each item an argument or one list of them: tokens, and native
+   *  coin as `{ native: amount }`. */
+  send(...reward: readonly PortalReward[]): PortalSent;
 }
 
-const listOf = <T>(items: T | readonly T[]): readonly T[] =>
-  Array.isArray(items) ? (items as readonly T[]) : [items as T];
+/** Items given as arguments, any of them a list of items. */
+const itemsOf = <T>(given: readonly (T | readonly T[])[]): readonly T[] =>
+  given.flatMap((item) => (Array.isArray(item) ? (item as readonly T[]) : [item as T]));
 
 const isNative = (value: unknown): boolean =>
   typeof value === "function" && Function.prototype.toString.call(value).includes("[native code]");
@@ -1153,10 +1156,10 @@ const nowSeconds = (): bigint => BigInt(Math.floor(Date.now() / 1000));
  *
  * - each value a modifier left out at its default: the route's deadline `DEFAULT_FILL_WINDOW` past
  *   now, the reward's `DEFAULT_REFUND_WINDOW` past that (as Eco's Portal app quotes them), the
- *   registry's prover, a zero salt;
+ *   registry's prover, a random salt;
  * - `precalls` moving what the solver delivers from the Portal's Executor into the Pot the body
  *   runs in, since the body is a program;
- * - the body's own intents opening when it runs: they inherit the creator, not the deadlines.
+ * - the body's own intents opening when it runs, each naming its own creator.
  *
  * The source chain, the creator and the fee have no default here and are refused when left out: a
  * TypeScript intent runs on no chain, so neither the chain nor the wallet that will publish it is
@@ -1173,14 +1176,14 @@ export function chainPortal(chain: ChainRef): ChainPortal {
   };
 
   return {
-    send: (reward) => {
+    send: (...reward) => {
       const rewardSteps = new Map<string, unknown>();
       const sent = {
         source: (value: PortalChain) => (once(rewardSteps, "source", value, "send"), sent),
         creator: (value: PortalAddress) => (once(rewardSteps, "creator", value, "send"), sent),
         deadline: (value: bigint | number) => (once(rewardSteps, "deadline", value, "send"), sent),
         prover: (value: PortalAddress) => (once(rewardSteps, "prover", value, "send"), sent),
-        receive: (delivery: PortalDelivery) => {
+        receive: (...delivery: readonly PortalDelivery[]) => {
           const routeSteps = new Map<string, unknown>();
           const nested: (readonly [NestChildOrThunk, NestOptions | undefined])[] = [];
           const received = {
@@ -1208,9 +1211,9 @@ export function chainPortal(chain: ChainRef): ChainPortal {
                 );
               }
               return buildPortalIntent(destination, name, {
-                reward: listOf(reward),
+                reward: itemsOf(reward),
                 rewardSteps,
-                delivery: listOf(delivery),
+                delivery: itemsOf(delivery),
                 routeSteps,
                 nested,
                 body: body as SauceBody,
@@ -1247,7 +1250,7 @@ function buildPortalIntent(
   destination: CanonicalChain,
   name: string,
   given: {
-    readonly reward: readonly (PortalTokenAmount | { readonly native: bigint | number | string })[];
+    readonly reward: readonly PortalRewardItem[];
     readonly rewardSteps: ReadonlyMap<string, unknown>;
     readonly delivery: readonly PortalTokenAmount[];
     readonly routeSteps: ReadonlyMap<string, unknown>;
@@ -1310,13 +1313,14 @@ function buildPortalIntent(
         Token.transfer({ token: token.token, to: pot, amount: toBigInt(token.amount) }).toCall(),
       ),
       creator: hexAddress(creator),
-      ...(salt === undefined
-        ? {}
-        : {
-            salt:
-              typeof salt === "bigint" ? (`0x${salt.toString(16).padStart(64, "0")}` as Hex) : salt,
-          }),
-      // The body's own intents inherit the creator, and open when it runs.
+      // Random unless given, as Eco's Portal app picks one: see `randomSalt`.
+      salt:
+        salt === undefined
+          ? randomSalt()
+          : typeof salt === "bigint"
+            ? (`0x${salt.toString(16).padStart(64, "0")}` as Hex)
+            : salt,
+      // The body's own intents name their own creators, and open when it runs.
       compile: { intents: { deadline: undefined, rewardDeadline: undefined } },
     }),
   );

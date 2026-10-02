@@ -585,34 +585,47 @@ protocol addresses, token symbols) vs ambient **MODULES** (this — whole librar
 **An intent opened in a program** is
 `Chain.Portal.send(reward).receive(delivery).then(() => { body })`: the reward the program pays,
 escrowed on the chain it runs on; what the solver delivers on `Chain`; the body that runs there.
-`send` and `receive` take one item or an array, written in place: `{ token, amount }`, and in the
-reward `{ native: amount }`. Modifiers may follow `send` — `.creator()`, `.deadline()` (the
+`send` and `receive` take any number of items as arguments, or one list of them, written in place:
+`{ token, amount }`, and in the reward `{ native: amount }`. `.receive` is required; `.receive()`
+with no items gives a body of token writes the delivery its transfers move (the old form's
+derivation), and a program nothing. Modifiers may follow `send` — `.creator()`, `.deadline()` (the
 reward's), `.prover()` — and `receive` — `.deadline()` (the fill's), `.salt()`, `.fee()` (the
-destination Kitchen's fee its cook pays) — each at most once, in any order within its stage;
-`intent-portal.ts#portalChainProblem` refuses anything else by name. Each left out has its default,
-Eco's Portal app's where it has one (`intent-portal.ts#DEFAULT_FILL_WINDOW`, 300 s, and
-`#DEFAULT_REFUND_WINDOW`, the seven days Eco's solver requires past the fill deadline): the fill
-deadline counts from when the intent opens — `intents.openedAt`, which the CLI and MCP set to now
-once per command, else `ctx.timestamp()` as the program runs, which is how every nested level opens
-— the creator is the compile's (`sauce` defaults it to the wallet that publishes or cooks; a
-nested level inherits a literal `.creator()` from the level above), the prover the registry's, the
-salt zero (not Eco's random one: a file must compile to the same intent each time), and the fee
-`intents.executionFee`, one for every destination or a function of it (`sauce` reads each
-destination's Kitchen when no `--intent-execution-fee` is given). The creator and, for a program
-body, the fee are refused when neither is given: the executing Pot is no safe creator. An amount, a
-deadline or a creator may be a value the program computes (`amount * 99 / 100`,
-`ctx.timestamp() + 3600`): folded when every operand is known, else computed into a local where the
-intent opens and spliced like any capture (a deadline into its own eight-byte sentinel); a fee is
-known when the intent is built. `intent-sugar.ts` lowers it, and still reads the old call form,
-`Chain(() => { body }, { tokens: delivery }).reward({ tokens: reward })`, with its old rules (a
-deadline required, the reward's defaulting to the route's), until the compiler opens intents itself
-(#61); document only the Portal form. On the host, every chain export's `Portal`
-(`intent-dsl.ts#chainPortal`) takes the same modifiers plus `.source(chain)` on the reward and
-`.nest(child, options)` on the route, and `.then(body)` returns the `BuiltIntent` of
-`Chain(body, { deadline, execution: { value: fee }, tokens, precalls }).nest(...).reward({ source,
-creator, deadline, prover, tokens, nativeAmount })`, its `precalls` moving the delivery into the
-Pot; there the source, the creator and the fee are required (it runs on no chain and reads none).
-Its `then` is the intent's, not a promise's, so it refuses being awaited.
+destination Kitchen's fee its cook pays) — each at most once, in any order within its stage. The
+syntax is ONE table, `routes/intent-syntax.ts#INTENT_STAGES` (stages, methods, parameter kinds, the
+option each modifier sets, the refusal where a chain stops): `gen-source-globals.mjs` renders the
+editor's `SaucePortal`/`SauceIntentSent`/`SauceIntentReceived` from it, `intent-portal.ts` checks a
+chain of calls against it, and the compiler-native lowering (#61) reads the same rows — change the
+syntax there, not in a template. Each value left out has its default, Eco's Portal app's
+(`intent-portal.ts#DEFAULT_FILL_WINDOW`, 300 s, and `#DEFAULT_REFUND_WINDOW`, the seven days Eco's
+solver requires past the fill deadline): the fill deadline counts from when the intent opens —
+`intents.openedAt`, which the CLI and MCP set to now once per command, else `ctx.timestamp()` as
+the program runs, which is how every nested level opens — the prover the registry's, the salt 32
+random bytes (`intent-portal.ts#randomSalt`: a fixed one would make two identical intents one
+hash; the CLI and MCP pick one per command, `--intent-salt`/`intentSalt` to choose it, and the
+compile takes `intents.salt`), and the fee `intents.executionFee`, one for every destination or a
+function of it (`sauce` reads each destination's Kitchen when no `--intent-execution-fee` is
+given). **The creator has no default for an intent a program opens, at any depth**: the Pot a
+program runs on may be shared, so a refund there could go to anyone, and nothing is derived from
+the Pot, its owner, the level above or `intents.creator` (the old form's only). The one default is
+`intents.publisher`, the wallet that publishes a top-level intent itself — `sauce intent publish`
+(its signer or `--from`; `--intent-creator` names another) and MCP's `sauce_intent_publish` set it,
+and `fill`/`inspect` of a file take `--intent-creator` as that wallet — which the child compile
+drops. A missing creator is refused before the body compiles, and a program body's missing fee
+when neither is given. An amount, a deadline or a creator may be a value the program computes
+(`amount * 99 / 100`, `10 ** 18`, `ctx.timestamp() + 3600`): folded when every operand is known —
+literals read from their text, so a plain literal past 2^53 is exact — else computed into a local
+where the intent opens and spliced like any capture (a deadline into its own eight-byte sentinel);
+a fee is known when the intent is built. `intent-sugar.ts` lowers it, and still reads the old call
+form, `Chain(() => { body }, { tokens: delivery }).reward({ tokens: reward })`, with its old rules
+(a deadline and `intents.creator` required, the reward's deadline defaulting to the route's),
+until the compiler opens intents itself (#61); document only the Portal form. On the host, every
+chain export's `Portal` (`intent-dsl.ts#chainPortal`) takes the same steps and items plus
+`.source(chain)` on the reward and `.nest(child, options)` on the route, and `.then(body)` returns
+the `BuiltIntent` of `Chain(body, { deadline, execution: { value: fee }, tokens, precalls, salt
+}).nest(...).reward({ source, creator, deadline, prover, tokens, nativeAmount })`, its `precalls`
+moving the delivery into the Pot and its salt random per build; there the source, the creator and
+the fee are required (it runs on no chain and reads none). Its `then` is the intent's, not a
+promise's, so it refuses being awaited.
 
 **Chain-scoped names are resolved per level.** In an intent a program opens (`intent-sugar.ts`) the
 body and the delivery resolve on the destination and the reward on the enclosing chain, which

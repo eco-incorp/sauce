@@ -162,6 +162,7 @@ export type {
   PortalReceived,
   PortalReceiveSteps,
   PortalReward,
+  PortalRewardItem,
   PortalSendSteps,
   PortalSent,
   PortalTokenAmount,
@@ -172,9 +173,17 @@ export type {
 export {
   DEFAULT_FILL_WINDOW,
   DEFAULT_REFUND_WINDOW,
+  randomSalt,
   REWARD_MODIFIERS,
   ROUTE_MODIFIERS,
 } from "./intent-portal.js";
+export {
+  INTENT_STAGES,
+  type IntentMethod,
+  type IntentParam,
+  type IntentStage,
+  type IntentStageSpec,
+} from "./intent-syntax.js";
 
 export {
   approvalTxs,

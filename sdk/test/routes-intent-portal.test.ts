@@ -11,14 +11,15 @@
  *
  * The defaults: the route's deadline `DEFAULT_FILL_WINDOW` past when the intent opens — when the
  * compile says, else `ctx.timestamp()` as the program runs — the reward's `DEFAULT_REFUND_WINDOW`
- * past that, a nested intent's creator the one above it, each destination's own Kitchen fee.
+ * past that, a random salt, each destination's own Kitchen fee. The creator has none: every intent
+ * a program opens names its own, but a top-level one a wallet publishes itself (`publisher`).
  *
  * On the host: `Base.Portal.send(...)...then(body)` builds the intent `Base(body,
  * options).reward(reward)` builds, and its `then` refuses to be a promise's.
  *
  * And what the lowering refuses, by name: an expression that stops before its body, steps or
  * modifiers out of place or repeated, a list not written out, native coin delivered, a fee computed
- * as it runs; and an amount's arithmetic that would revert.
+ * as it runs, a creator nobody named; and an amount's arithmetic that would revert.
  */
 import { bytesToHex, decodeFunctionData, type Hex } from "viem";
 
@@ -73,7 +74,16 @@ const RECIPIENT = 0x6666666666666666666666666666666666666666n;
 const DEADLINE = 2_000_000_000n;
 /** The reward's deadline the portal form defaults to, given the route's. */
 const REWARD_DEADLINE = DEADLINE + DEFAULT_REFUND_WINDOW;
-const INTENTS = { deadline: DEADLINE, creator: CREATOR, executionFee: 1_000n };
+const SALT = `0x${"5a".repeat(32)}` as const;
+/** A top-level intent's creator, as the wallet publishing it: the call form's `creator`, the portal
+ *  form's `publisher`. One salt for both: the portal form's own default is random. */
+const INTENTS = {
+  deadline: DEADLINE,
+  creator: CREATOR,
+  publisher: CREATOR,
+  salt: SALT,
+  executionFee: 1_000n,
+};
 /** The call form takes the reward's deadline as given: the portal form's default, here. */
 const CALL_INTENTS = { ...INTENTS, rewardDeadline: REWARD_DEADLINE };
 const usdcOf = (slug: string): bigint => registryTokenAddress(requireChain(slug), "USDC")!;
@@ -131,6 +141,7 @@ const PAIRS: readonly Pair[] = [
     .then(() => {
       USDC.transfer(recipient, amount * 99 / 100 / 2);
       Optimism.Portal.send({ token: USDC, amount: amount * 99 / 100 / 2 })
+        .creator(${CREATOR})
         .receive({ token: USDT, amount: amount * 98 / 100 / 2 })
         .then(() => { USDT.transfer(recipient, amount * 98 / 100 / 2); });
     });
@@ -263,12 +274,13 @@ describe("the intents a program opens", () => {
     const openedAt = 1_900_000_000n;
     const [portal] = compileSauceProgram("base", bound(PAIRS[0]!.portal), {
       defines: ARGS,
-      intents: { creator: CREATOR, openedAt },
+      intents: { publisher: CREATOR, salt: SALT, openedAt },
     }).intents;
     const [call] = compileSauceProgram("base", bound(PAIRS[0]!.call), {
       defines: ARGS,
       intents: {
         creator: CREATOR,
+        salt: SALT,
         deadline: openedAt + DEFAULT_FILL_WINDOW,
         rewardDeadline: openedAt + DEFAULT_FILL_WINDOW + DEFAULT_REFUND_WINDOW,
       },
@@ -280,7 +292,7 @@ describe("the intents a program opens", () => {
   it("and, with no time given, from when the program opening it runs", () => {
     const program = compileSauceProgram("base", bound(PAIRS[0]!.portal), {
       defines: ARGS,
-      intents: { creator: CREATOR },
+      intents: { publisher: CREATOR },
     });
     const [opened] = program.intents;
     expect(opened!.captures).toEqual([
@@ -299,7 +311,7 @@ describe("the intents a program opens", () => {
     .deadline(ctx.timestamp() + 3600)
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`,
-      { defines: { RECIPIENT }, intents: { creator: CREATOR } },
+      { defines: { RECIPIENT }, intents: { publisher: CREATOR } },
     ).intents;
     expect(opened!.captures).toEqual([
       "ctx.timestamp() + 3600",
@@ -307,42 +319,177 @@ describe("the intents a program opens", () => {
     ]);
   });
 
-  it("a nested intent inherits its creator, opens as its parent runs, and pays its own fee", () => {
-    const inner = 0x7777777777777777777777777777777777777777n;
-    const fees: Record<string, bigint> = { arbitrum: 11n, optimism: 22n };
-    const { result, compiles: made } = record(() =>
-      compileSauceProgram(
-        "base",
-        `function main() {
+  it("every intent a program opens names its creator: none comes from above or the options", () => {
+    const opens = (inner: string) => `function main() {
   Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .creator(${hex(inner)})
+    .creator(0x7777777777777777777777777777777777777777)
     .receive({ token: USDC, amount: 1000000 })
     .then(() => {
       const held = USDC.balanceOf(ctx.self());
-      Optimism.Portal.send({ token: USDC, amount: held })
+      Optimism.Portal.send({ token: USDC, amount: held })${inner}
         .receive({ token: USDT, amount: held })
         .then(() => { const left = USDT.balanceOf(ctx.self()); USDT.transfer(RECIPIENT, left); });
     });
-}`,
-        {
-          defines: { RECIPIENT },
-          intents: {
-            creator: CREATOR,
-            openedAt: 1_900_000_000n,
-            executionFee: (destination: CanonicalChain) => fees[destination.slug],
-          },
-        },
-      ),
+}`;
+    const fees: Record<string, bigint> = { arbitrum: 11n, optimism: 22n };
+    const intents = {
+      creator: CREATOR,
+      publisher: CREATOR,
+      openedAt: 1_900_000_000n,
+      executionFee: (destination: CanonicalChain) => fees[destination.slug],
+    };
+    // The level above names one, and the compile gives both its options: the nested one is refused.
+    expect(() =>
+      compileSauceProgram("base", opens(""), { defines: { RECIPIENT }, intents }),
+    ).toThrow(
+      /an intent opened by a program needs `\.creator\(<address>\)` after `\.send\(\.\.\.\)`.*may be shared, so a refund there could go to anyone/,
+    );
+
+    // Named, it opens as its parent runs and pays its own chain's fee.
+    const inner = 0x8888888888888888888888888888888888888888n;
+    const { result, compiles: made } = record(() =>
+      compileSauceProgram("base", opens(`\n        .creator(${hex(inner)})`), {
+        defines: { RECIPIENT },
+        intents,
+      }),
     );
     const [outer] = result.intents;
-    expect(outer!.intent.reward.creator.slice(-40)).toBe(inner.toString(16));
+    expect(outer!.intent.reward.creator.slice(-40)).toBe("77".repeat(20));
     expect(outer!.intent.route.calls.at(-1)!.value).toBe(11n);
     expect(outer!.captures).toEqual([]);
-    // The Arbitrum body's program: it opens the Optimism intent as it runs, for the creator above.
     const arbitrumProgram = made.find((c) => c.source.includes("ctx.timestamp()"))!;
     expect(arbitrumProgram.source).toContain(`(ctx.timestamp() + ${DEFAULT_FILL_WINDOW}n)`);
     expect(arbitrumProgram.source.toLowerCase()).toContain(inner.toString(16));
     expect(arbitrumProgram.source.toLowerCase()).not.toContain(CREATOR.slice(2));
+    expect(arbitrumProgram.source.toLowerCase()).not.toContain("77".repeat(20));
+  });
+
+  it("a top-level intent a wallet publishes defaults to that wallet, and no other does", () => {
+    const program = (creator: string) => `function main() {
+  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })${creator}
+    .receive({ token: USDC, amount: 1000000 })
+    .then(() => { USDC.transfer(RECIPIENT, 1000000); });
+}`;
+    const [published] = compileSauceProgram("base", program(""), {
+      defines: { RECIPIENT },
+      intents: { publisher: CREATOR },
+    }).intents;
+    expect(published!.intent.reward.creator.slice(-40)).toBe(CREATOR.slice(2));
+    // Named, it is its own.
+    const [named] = compileSauceProgram(
+      "base",
+      program("\n    .creator(0x7777777777777777777777777777777777777777)"),
+      { defines: { RECIPIENT }, intents: { publisher: CREATOR } },
+    ).intents;
+    expect(named!.intent.reward.creator.slice(-40)).toBe("77".repeat(20));
+    // `creator` is the call form's: a Portal intent never takes it.
+    expect(() =>
+      compileSauceProgram("base", program(""), {
+        defines: { RECIPIENT },
+        intents: { creator: CREATOR },
+      }),
+    ).toThrow(/needs `\.creator\(<address>\)`/);
+  });
+
+  it("picks a random salt for each intent built, unless one is given", () => {
+    const program = `function main() {
+  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
+    .creator(${CREATOR})
+    .receive({ token: USDC, amount: 1000000 })
+    .then(() => { USDC.transfer(RECIPIENT, 1000000); });
+}`;
+    const saltOf = (intents: Record<string, unknown>, source = program) =>
+      compileSauceProgram("base", source, { defines: { RECIPIENT }, intents }).intents[0]!.intent
+        .route.salt;
+    const first = saltOf({ openedAt: DEADLINE });
+    const second = saltOf({ openedAt: DEADLINE });
+    expect(first).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(first).not.toBe(second);
+    expect(saltOf({ openedAt: DEADLINE, salt: SALT })).toBe(SALT);
+    expect(
+      saltOf(
+        { openedAt: DEADLINE, salt: SALT },
+        program.replace(".then(", ".salt(0x1234)\n    .then("),
+      ),
+    ).toBe(`0x${"1234".padStart(64, "0")}`);
+  });
+
+  it("takes each item as an argument, as one list", () => {
+    const opened = (send: string, receive: string) =>
+      compileSauceProgram(
+        "base",
+        `function main() {
+  Arbitrum.Portal.send(${send})
+    .creator(${CREATOR})
+    .receive(${receive})
+    .then(() => { USDC.transfer(RECIPIENT, 1000000); USDT0.transfer(RECIPIENT, 5); });
+}`,
+        { defines: { RECIPIENT }, intents: { salt: SALT, openedAt: DEADLINE } },
+      ).intents[0]!.intent;
+    const items = "{ token: USDC, amount: 1010000 }, { native: 5 }";
+    const delivered = "{ token: USDC, amount: 1000000 }, { token: USDT0, amount: 5 }";
+    const asArguments = opened(items, delivered);
+    expect(asArguments).toEqual(opened(`[${items}]`, `[${delivered}]`));
+    expect(asArguments.reward.nativeAmount).toBe(5n);
+    expect(asArguments.route.tokens).toHaveLength(2);
+  });
+
+  it(".receive() with no items: a body of token writes is delivered what it moves, a program nothing", () => {
+    const tokenOnly = (receive: string) => `function main() {
+  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
+    .creator(${CREATOR})
+    .receive(${receive})
+    .then(() => { USDC.transfer(RECIPIENT, 1000000); });
+}`;
+    const options = { defines: { RECIPIENT }, intents: { salt: SALT, openedAt: DEADLINE } };
+    const [derived] = compileSauceProgram("base", tokenOnly(""), options).intents;
+    const [named] = compileSauceProgram(
+      "base",
+      tokenOnly("{ token: USDC, amount: 1000000 }"),
+      options,
+    ).intents;
+    expect(derived!.intent).toEqual(named!.intent);
+    expect(BigInt(derived!.intent.route.tokens[0]!.token)).toBe(usdcOf("arbitrum"));
+
+    const [program] = compileSauceProgram(
+      "base",
+      `function main() {
+  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
+    .creator(${CREATOR})
+    .receive()
+    .fee(7)
+    .then(() => { const held = USDC.balanceOf(ctx.self()); USDC.transfer(RECIPIENT, held); });
+}`,
+      options,
+    ).intents;
+    expect(program!.intent.route.tokens).toEqual([]);
+    // The cook alone: nothing to move into the Pot first.
+    expect(program!.intent.route.calls).toHaveLength(1);
+  });
+
+  it("reads a plain literal past 2^53 exactly, in an item and a modifier", () => {
+    const [opened] = compileSauceProgram(
+      "base",
+      `function main() {
+  Arbitrum.Portal.send({ token: WETH, amount: 1000000000000000001 }, { native: 10 ** 18 })
+    .creator(0x1234567890abcdef1234567890abcdef12345678)
+    .deadline(9007199254740993)
+    .receive({ token: WETH, amount: 10 ** 18 + 1 })
+    .deadline(9007199254740995)
+    .salt(0xffffffffffffffffffff)
+    .then(() => { WETH.transfer(RECIPIENT, 1000000000000000001); });
+}`,
+      { defines: { RECIPIENT } },
+    ).intents;
+    const { route, reward } = opened!.intent;
+    expect(opened!.captures).toEqual([]);
+    expect(reward.tokens[0]!.amount).toBe(1_000_000_000_000_000_001n);
+    expect(reward.nativeAmount).toBe(10n ** 18n);
+    expect(reward.creator.slice(-40)).toBe("1234567890abcdef1234567890abcdef12345678");
+    expect(reward.deadline).toBe(9_007_199_254_740_993n);
+    expect(route.tokens[0]!.amount).toBe(10n ** 18n + 1n);
+    expect(route.deadline).toBe(9_007_199_254_740_995n);
+    expect(route.salt).toBe(`0x${"ff".repeat(10).padStart(64, "0")}`);
   });
 
   it("folds arithmetic of known values, so an intent from main's bound arguments is fixed", () => {
@@ -387,8 +534,9 @@ describe("on the host", () => {
       .receive(delivered)
       .fee(FEE)
       .deadline(DEADLINE)
+      .salt(SALT)
       .then(program);
-    const expected = Base(program, routeOptions(DEADLINE)).reward({
+    const expected = Base(program, { ...routeOptions(DEADLINE), salt: SALT }).reward({
       source: "ethereum",
       creator: CREATOR,
       deadline: REWARD_DEADLINE + 1n,
@@ -406,12 +554,12 @@ describe("on the host", () => {
     expect(published.functionName).toBe("publish");
   });
 
-  it("defaults the deadlines from now, the prover from the registry, the salt to zero", () => {
+  it("defaults the deadlines from now, the prover from the registry, the salt to random bytes", () => {
     const before = BigInt(Math.floor(Date.now() / 1000));
-    const built = Base.Portal.send([paid, { native: 3n }])
+    const built = Base.Portal.send(paid, { native: 3n })
       .source("ethereum")
       .creator(CREATOR)
-      .receive(delivered)
+      .receive(...delivered)
       .fee(FEE)
       .then(program);
     const after = BigInt(Math.floor(Date.now() / 1000));
@@ -420,8 +568,11 @@ describe("on the host", () => {
     expect(route.deadline <= after + DEFAULT_FILL_WINDOW).toBe(true);
     expect(reward.deadline).toBe(route.deadline + DEFAULT_REFUND_WINDOW);
     expect(reward.nativeAmount).toBe(3n);
-    expect(route.salt).toBe(`0x${"00".repeat(32)}`);
-    const expected = Base(program, routeOptions(route.deadline)).reward({
+    expect(route.salt).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(route.salt).not.toBe(`0x${"00".repeat(32)}`);
+    const again = Base.Portal.send(paid).source("ethereum").creator(CREATOR).receive().fee(FEE);
+    expect(again.then(program).intent.route.salt).not.toBe(again.then(program).intent.route.salt);
+    const expected = Base(program, { ...routeOptions(route.deadline), salt: route.salt }).reward({
       source: "ethereum",
       creator: CREATOR,
       deadline: route.deadline + DEFAULT_REFUND_WINDOW,
@@ -447,7 +598,7 @@ describe("on the host", () => {
     expect(() => sent.creator(CREATOR)).toThrow(/`\.creator\(\.\.\.\)` is given twice/);
   });
 
-  it("takes a closure that opens the next intent, and one item or an array", () => {
+  it("takes a closure that opens the next intent, and items as arguments or one list", () => {
     const options = { source: "base" as const };
     const one = Ethereum.Portal.send(paid)
       .source(options.source)
@@ -455,10 +606,13 @@ describe("on the host", () => {
       .receive(delivered[0]!)
       .fee(FEE)
       .deadline(DEADLINE)
+      .salt(SALT)
       .then(() => {
         const held = USDC.balanceOf(ctx.self());
         Arbitrum.Portal.send({ token: USDC, amount: held })
+          .creator(0x4444444444444444444444444444444444444444n)
           .receive({ token: USDC, amount: held })
+          .salt(1n)
           .then(() => {
             USDC.transfer(0x6666666666666666666666666666666666666666n, held);
           });
@@ -469,10 +623,13 @@ describe("on the host", () => {
       .receive(delivered)
       .fee(FEE)
       .deadline(DEADLINE)
+      .salt(SALT)
       .then(() => {
         const held = USDC.balanceOf(ctx.self());
         Arbitrum.Portal.send({ token: USDC, amount: held })
+          .creator(0x4444444444444444444444444444444444444444n)
           .receive({ token: USDC, amount: held })
+          .salt(1n)
           .then(() => {
             USDC.transfer(0x6666666666666666666666666666666666666666n, held);
           });
@@ -486,9 +643,10 @@ describe("on the host", () => {
       Ethereum.Portal.send(delivered)
         .source(on)
         .creator(CREATOR)
-        .receive([])
+        .receive()
         .fee(FEE)
         .deadline(DEADLINE)
+        .salt(SALT)
         .then(body);
     const nest = { requireCap: true, executionFee: 1_000n } as const;
     const built = Base.Portal.send(paid)
@@ -497,9 +655,10 @@ describe("on the host", () => {
       .receive([])
       .fee(FEE)
       .deadline(DEADLINE)
+      .salt(SALT)
       .nest(child, nest)
       .then(body);
-    const expected = Base(body, { ...routeOptions(DEADLINE), tokens: [], precalls: [] })
+    const expected = Base(body, { ...routeOptions(DEADLINE), tokens: [], precalls: [], salt: SALT })
       .nest(child, nest)
       .reward({
         source: "ethereum",
@@ -547,6 +706,10 @@ describe("what the lowering refuses", () => {
   it.each([
     [`Arbitrum.Portal.send(${item}).receive(${item});`, /has no body\. Finish it with `\.then/],
     [`Arbitrum.Portal.send(${item}).creator(1);`, /stops before `\.receive\(\.\.\.\)`/],
+    [
+      `Arbitrum.Portal.send(${item})${then};`,
+      /stops before `\.receive\(\.\.\.\)`, which every intent has.*`\.receive\(\)` for nothing/,
+    ],
     [`Arbitrum.Portal.receive(${item}).send(${item})${then};`, /It starts with `\.send/],
     [`Arbitrum.Portal;`, /opens an intent on arbitrum/],
     [
@@ -578,7 +741,18 @@ describe("what the lowering refuses", () => {
       `const items = [${item}];\nArbitrum.Portal.send(items).receive(${item})${then};`,
       /`\.send\(\.\.\.\)` takes the reward written out in place/,
     ],
-    [`Arbitrum.Portal.send([]).receive(${item})${then};`, /`\.send\(\[\]\)` pays nothing/],
+    [
+      `Arbitrum.Portal.send([${item}], ${item}).receive(${item})${then};`,
+      /takes each item as an argument, or one list of them on its own/,
+    ],
+    [
+      `Arbitrum.Portal.send([]).receive(${item})${then};`,
+      /`\.send\(\.\.\.\)` with nothing in it pays nothing/,
+    ],
+    [
+      `Arbitrum.Portal.send().receive(${item})${then};`,
+      /`\.send\(\.\.\.\)` with nothing in it pays nothing/,
+    ],
     [
       `Arbitrum.Portal.send(${item}).receive({ native: 1 })${then};`,
       /`\.receive\(\.\.\.\)` names the tokens the solver delivers/,
@@ -592,8 +766,8 @@ describe("what the lowering refuses", () => {
       /`\.fee\(\.\.\.\)` is the destination Kitchen's fee, which the intent is built with/,
     ],
     [
-      `Arbitrum.Portal.send(${item}).receive().then(() => {});`,
-      /`\.receive\(\.\.\.\)` takes one argument, what the solver delivers/,
+      `Arbitrum.Portal.send(${item}).receive(1).then(() => {});`,
+      /`\.receive\(\.\.\.\)` takes what the solver delivers written out in place/,
     ],
     [
       `Arbitrum.Portal.send(${item}).receive(${item}).then(function () {});`,
@@ -623,13 +797,15 @@ describe("what the lowering refuses", () => {
     expect(() => compile(body)).toThrow(message);
   });
 
-  it("names .creator(...) when no creator is given", () => {
+  it("names .creator(...) when no creator is given, before compiling the body", () => {
     expect(() =>
       compileSauceProgram(
         "base",
-        `function main() {\n  Arbitrum.Portal.send({ token: USDC, amount: 1 }).receive({ token: USDC, amount: 1 }).then(() => { USDC.transfer(RECIPIENT, 1); });\n}`,
+        `function main() {\n  Arbitrum.Portal.send({ token: USDC, amount: 1 }).receive({ token: USDC, amount: 1 }).then(() => { const held = USDC.balanceOf(ctx.self()); USDC.transfer(RECIPIENT, held); });\n}`,
         { defines: { RECIPIENT }, intents: { deadline: DEADLINE } },
       ),
-    ).toThrow(/Give `\.creator\(address\)` after `\.send\(\.\.\.\)`/);
+    ).toThrow(
+      /needs `\.creator\(<address>\)` after `\.send\(\.\.\.\)`: the address an unfilled intent's reward is refunded to/,
+    );
   });
 });

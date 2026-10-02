@@ -99,11 +99,13 @@ export interface SauceCompileOptions {
   ambient?: string[];
   /**
    * Settings for `Chain.Portal.send(...).receive(...).then(() => { ... })` written inside the
-   * program — creating an intent from a program, rather than compiling a program into one. Everything the SDK can look up
-   * it looks up; these are the fields it cannot, plus overrides. See `intent-sugar.ts`.
+   * program — creating an intent from a program, rather than compiling a program into one. Everything
+   * the SDK can look up it looks up; these are the fields it cannot, plus overrides, for every intent
+   * that does not set its own. See `intent-sugar.ts`.
    *
-   * Omitted entirely, the sugar still lowers if the source uses it — `deadline` and `creator` have
-   * no safe defaults and are reported by name when missing.
+   * Omitted entirely, the sugar still lowers: an intent's deadlines and salt have defaults, and
+   * its creator, which has none, is its own `.creator(...)` — or `publisher`'s, for a top-level
+   * intent a wallet publishes itself.
    */
   intents?: Partial<IntentSugarDefaults> & EcoRoutesSelector;
   /** Compile for compact-v1 entry arguments. Set by the intent lowering for a child program whose
@@ -282,7 +284,7 @@ function compileIntentChild(
   childSource: string,
   captures: readonly string[],
   destinationPortal: AddressInput,
-  level: { readonly fee: bigint | undefined; readonly creator?: AddressInput },
+  level: { readonly fee: bigint | undefined },
   options: SauceCompileOptions,
   scope: RouteScope,
 ): CompiledChild {
@@ -304,16 +306,16 @@ function compileIntentChild(
         `\`@eco-incorp/sauce\`, or \`Kitchen.executionFee()\` at ${v12KitchenAddress()}.`,
     );
   }
-  // The body's own intents open when it runs, not when the file compiles; and inherit this
-  // level's creator when it named one.
-  const { openedAt: _openedAt, ...inherited } = intents;
+  // The body's own intents open when it runs, not when the file compiles, and no wallet publishes
+  // them: each names its own creator.
+  const { openedAt: _openedAt, publisher: _publisher, ...inherited } = intents;
   const compiled = compileScopedRoute(
     destination,
     childSource,
     { pot, engine, value: executionFee },
     {
       ...options,
-      intents: { ...inherited, ...(level.creator === undefined ? {} : { creator: level.creator }) },
+      intents: inherited,
       compactArgs: captures.length > 0,
     },
     scope,

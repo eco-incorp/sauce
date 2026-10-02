@@ -34,6 +34,7 @@ import {
   CHAIN_SUPPORT_NEW_ISSUE_URL,
   chainSupport,
   compileCommand,
+  asPublished,
   compileProgram,
   connect,
   connectAt,
@@ -53,9 +54,11 @@ import {
   MAX_V4_KEYS,
   parsePin,
   parsePubkey,
+  parseIntentSalt,
   parseSalt,
   plannedTransactions,
   parseUnixSeconds,
+  randomSalt,
   parseV4Key,
   parseVia,
   parseWei,
@@ -206,8 +209,9 @@ export const PROGRAM = {
     .max(64)
     .optional()
     .describe(
-      "For intents the program opens: their creator (0x address), who may reclaim an unearned " +
-        "reward.",
+      "For intents a wallet publishes itself (sauce_intent_publish, or inspecting such a file): " +
+        "the creator of each top-level one that names none, in place of that wallet (0x address). " +
+        "An intent a program opens on a Pot names its own creator with .creator(<address>).",
     ),
   intentRewardDeadline: integer
     .optional()
@@ -222,6 +226,14 @@ export const PROGRAM = {
     .describe(
       "For intents the program opens: the reward's prover (0x address; default the registry's " +
         "for the pair).",
+    ),
+  intentSalt: z
+    .string()
+    .max(66)
+    .optional()
+    .describe(
+      "For intents the program opens: their route salt, 32 bytes of 0x hex (default random, " +
+        "picked once per call; give the same one to build the same intent again).",
     ),
   intentExecutionFee: integer
     .optional()
@@ -431,11 +443,12 @@ function intentsOf(
     | "intentRewardDeadline"
     | "intentCreator"
     | "intentProver"
+    | "intentSalt"
     | "intentExecutionFee"
     | "intentFundVia"
   >,
 ) {
-  const { intentDeadline, intentRewardDeadline, intentCreator, intentProver } = args;
+  const { intentDeadline, intentRewardDeadline, intentCreator, intentProver, intentSalt } = args;
   const { intentExecutionFee, intentFundVia } = args;
 
   return {
@@ -457,6 +470,8 @@ function intentsOf(
           ),
         }),
     ...(intentProver === undefined ? {} : { prover: parseAddress("intent-prover", intentProver) }),
+    // Random unless given, and picked once, as the command picks it.
+    salt: intentSalt === undefined ? randomSalt() : parseIntentSalt(intentSalt),
     ...(intentCreator === undefined
       ? {}
       : { creator: parseAddress("intent-creator", intentCreator) }),
@@ -2083,13 +2098,15 @@ export function registerTools(server: McpServer, context: ToolContext): void {
     async (args, reach) => {
       const from = args.from === undefined ? undefined : parseAddress("from", args.from);
       const given = programOf(args);
-      // The wallet that publishes is the intents' creator, unless the call names one.
+      // The wallet that publishes is the creator of each top-level intent that names none, unless
+      // the call names another.
+      const publisher = given.input.intents.creator ?? from;
       const program =
-        from === undefined || given.input.intents.creator !== undefined
+        publisher === undefined
           ? given
           : {
               ...given,
-              input: { ...given.input, intents: { ...given.input.intents, creator: from } },
+              input: { ...given.input, intents: { ...given.input.intents, publisher } },
             };
       const chain = program.input.chain;
       const assume = chain.kind === "evm" ? assumedBalances(args.assumeBalance ?? [], chain) : [];
@@ -2175,7 +2192,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         const program = programOf({ ...args, source: args.source });
 
         return fromCommand(
-          inspectFile(program.input.file, compileProgram(program.input, program.files)),
+          inspectFile(
+            program.input.file,
+            compileProgram(asPublished(program.input), program.files),
+          ),
         );
       }
       const hex = hexArg(args.hex, "hex");

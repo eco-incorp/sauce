@@ -44,6 +44,7 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["intent-fund-via"], input: "intentFundVia" },
   { flags: ["intent-reward-deadline"], input: "intentRewardDeadline" },
   { flags: ["intent-prover"], input: "intentProver" },
+  { flags: ["intent-salt"], input: "intentSalt" },
   { flags: ["no-prove"], input: "prove: false" },
   { flags: ["max-execution-fee"], input: "maxExecutionFee" },
   { flags: ["via"], input: "via" },

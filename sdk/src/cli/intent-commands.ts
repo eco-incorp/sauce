@@ -18,6 +18,7 @@ import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { CliError, UsageError } from "./args.js";
 import { connect, sendAndWait, type Sent } from "./chain.js";
 import {
+  asPublished,
   compileProgram,
   type CliFiles,
   unapproved,
@@ -100,7 +101,8 @@ export function fileTargets(input: ProgramInput, files: CliFiles, store: IntentS
         "eco-routes Portal this SDK publishes through is EVM only",
     );
   }
-  const intents = compileProgram(input, files).intents;
+  // Built as `sauce intent publish` builds them, `--intent-creator` standing in for its wallet.
+  const intents = compileProgram(asPublished(input), files).intents;
   if (intents.length === 0) throw new UsageError(`${input.file} opens no intent`);
   const measured = intents.find((intent) => intent.captures.length > 0);
   if (measured !== undefined) {

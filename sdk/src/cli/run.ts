@@ -16,6 +16,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
+import { randomSalt } from "../routes/intent-portal.js";
 import type { LoweredIntent } from "../routes/intent-sugar.js";
 import {
   addressDefines,
@@ -30,6 +31,7 @@ import {
   parseLamports,
   parseSalt,
   parseTarget,
+  parseIntentSalt,
   parseUnixSeconds,
   parseVia,
   parseWei,
@@ -46,6 +48,7 @@ import { chainServedBy, connect, connectAt, endpointFor, type Sent } from "./cha
 import {
   compileCommand,
   pastDeadline,
+  asPublished,
   compileProgram,
   potCommand,
   PROBE_CREATOR,
@@ -381,7 +384,7 @@ const PROGRAM: FlagSpecs = {
   "intent-creator": {
     type: "string",
     value: "<address>",
-    help: "…their creator, who may reclaim an unearned reward",
+    help: "…the creator of those a wallet publishes itself, in its place; a program names its own",
   },
   "intent-reward-deadline": {
     type: "string",
@@ -392,6 +395,11 @@ const PROGRAM: FlagSpecs = {
     type: "string",
     value: "<address>",
     help: "…their prover (default: the registry's for the pair)",
+  },
+  "intent-salt": {
+    type: "string",
+    value: "<bytes32>",
+    help: "…their route salt (default: random, picked once per command)",
   },
   "intent-execution-fee": {
     type: "string",
@@ -621,6 +629,7 @@ async function autoExecutionFee(
         intents: {
           ...input.intents,
           creator: input.intents.creator ?? PROBE_CREATOR,
+          publisher: input.intents.publisher ?? input.intents.creator ?? PROBE_CREATOR,
           executionFee: (destination) => (paid.set(destination.id, destination), 0n),
         },
       },
@@ -712,6 +721,7 @@ async function programInput(
   const rewardDeadline = stringFlag(args, "intent-reward-deadline");
   const creator = stringFlag(args, "intent-creator");
   const prover = stringFlag(args, "intent-prover");
+  const salt = stringFlag(args, "intent-salt");
   const fee = stringFlag(args, "intent-execution-fee");
   const fundVia = stringFlag(args, "intent-fund-via");
   const defines = {
@@ -746,6 +756,8 @@ async function programInput(
         : { rewardDeadline: parseUnixSeconds("intent-reward-deadline", rewardDeadline) }),
       ...(creator === undefined ? {} : { creator: parseAddress("intent-creator", creator) }),
       ...(prover === undefined ? {} : { prover: parseAddress("intent-prover", prover) }),
+      // Random unless given, and picked once, for the same reason as the time the intents open.
+      salt: salt === undefined ? randomSalt() : parseIntentSalt(salt),
       ...(fee === undefined || fee === "auto"
         ? {}
         : { executionFee: parseWei("intent-execution-fee", fee) }),
@@ -3275,7 +3287,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           piped === undefined ? fileOperand(args) : { file: STDIN, text: piped, stdin: true },
         );
 
-        return inspectFile(input.file, compileProgram(input, io));
+        return inspectFile(input.file, compileProgram(asPublished(input), io));
       }
       const hex =
         piped === undefined

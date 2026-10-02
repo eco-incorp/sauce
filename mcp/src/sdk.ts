@@ -16,6 +16,7 @@ export {
   parseChain,
   parseDefineMap,
   parseLamports,
+  parseIntentSalt,
   parseSalt,
   parseUnixSeconds,
   parseVia,
@@ -31,6 +32,7 @@ export {
   registeredBalances,
 } from "../../sdk/dist/cli/chain.js";
 export {
+  asPublished,
   compileCommand,
   compileProgram,
   pastDeadline,
@@ -44,6 +46,7 @@ export {
   type ProgramInput,
 } from "../../sdk/dist/cli/commands.js";
 export { globalsCommand } from "../../sdk/dist/cli/globals.js";
+export { randomSalt } from "../../sdk/dist/routes/intent-portal.js";
 export {
   assumedBalances,
   definesReach,
