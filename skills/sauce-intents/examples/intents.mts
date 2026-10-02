@@ -1,5 +1,6 @@
-// Compiles the two intent files the way `sauce run` and `sauce compile` do
-// (`routes.compileSauceProgram` with the intent settings), and checks on which chain each name
+// Compiles the two intent files the way `sauce run` and `sauce intent publish --args` do
+// (`routes.compileSauceProgram` with the intent settings, and main's arguments bound into the
+// intents where a wallet publishes them), and checks on which chain each name
 // resolves: the body and its delivery on the destination, the reward on the source. Each child's
 // Portal and prover come from the eco-routes registry; the deadline, the creator, the recipient and
 // each destination Kitchen's fee are the developer's. Then builds what rehearsing the swap-on-base
@@ -51,19 +52,21 @@ function check(condition: unknown, message: string): asserts condition {
 }
 
 const creator = getAddress(flag("creator")); // may reclaim an unearned reward; never a Pot
-const recipient = BigInt(getAddress(flag("recipient")));
+const recipient = getAddress(flag("recipient"));
 const fee = { ethereum: BigInt(flag("ethereum-fee")), base: BigInt(flag("base-fee")) };
 const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600); // filled within the hour or not at all
 const feeRead = destinationExecutionFee(); // { to, data, decode }: eth_call it on each destination
 
+/** `source` compiled for `slug`: with `args`, main's arguments bound into the intents it opens, as
+ *  `sauce intent publish --args` binds them; without, main takes them as it runs, on a Pot. */
 const compileFor = (
   slug: string,
   source: string,
-  defines: Record<string, bigint>,
+  args?: readonly (bigint | string)[],
   executionFee?: bigint,
 ) =>
   routes.compileSauceProgram(slug, source, {
-    defines,
+    ...(args === undefined ? {} : { args }),
     intents: { deadline, creator, ...(executionFee === undefined ? {} : { executionFee }) },
   });
 const word = (value: bigint | string) => BigInt(value).toString(16).padStart(40, "0");
@@ -88,17 +91,26 @@ function intentOf(program: ReturnType<typeof compileFor>) {
   };
 }
 
-// ---- cross-chain.sauce.ts: from Base, a program child on Ethereum.
+// ---- cross-chain.sauce.ts: from Base, a program child on Ethereum, run on a Pot.
 const forward = readFileSync(new URL("./cross-chain.sauce.ts", import.meta.url), "utf8");
-check(!/function main\b/.test(forward), "an intent file is top-level statements");
+check(/function main\(beneficiary: Address\)/.test(forward), "its input is main's parameter");
 let missingFee = "";
 try {
-  compileFor("base", forward, { BENEFICIARY: recipient });
+  compileFor("base", forward);
 } catch (error) {
   missingFee = (error as Error).message;
 }
 check(missingFee.includes("executionFee"), "a program child needs the destination's Kitchen fee");
-const forwarded = intentOf(compileFor("base", forward, { BENEFICIARY: recipient }, fee.ethereum));
+const forwardedProgram = compileFor("base", forward, undefined, fee.ethereum);
+check(
+  forwardedProgram.entryParams.map((param) => param.name).join() === "beneficiary",
+  "run on a Pot, main takes the beneficiary as it runs",
+);
+check(
+  forwardedProgram.intents[0]!.captures.includes("beneficiary"),
+  "and the program writes it into the intent it opens",
+);
+const forwarded = intentOf(forwardedProgram);
 check(
   forwarded.delivered.join() === word(token("ethereum", "USDC")),
   "the solver delivers Ethereum's USDC",
@@ -107,25 +119,25 @@ check(forwarded.calls.includes(word(contract("ethereum", "AaveV3_Pool"))), "Ethe
 check(!forwarded.calls.includes(word(contract("base", "AaveV3_Pool"))), "and not Base's");
 check(forwarded.rewarded.join() === word(token("base", "USDC")), "the reward is Base's USDC");
 
-// ---- swap-on-base.sauce.ts: from Ethereum, the distributed swap as a program child on Base.
+// ---- swap-on-base.sauce.ts: from Ethereum, the distributed swap as a program child on Base,
+// published from a wallet: main's arguments bound into it.
 const swap = readFileSync(new URL("./swap-on-base.sauce.ts", import.meta.url), "utf8");
-check(!/function main\b/.test(swap), "an intent file is top-level statements");
-const swapped = intentOf(
-  compileFor(
-    "ethereum",
-    swap,
-    {
-      AMOUNT_IN: 10n ** 18n,
-      REWARD: 10n ** 18n + 10n ** 15n,
-      SQRT_PRICE_LIMIT_X96: 3068493539683605256287027n, // 1,500 USDC per WETH on Base
-      MIN_OUT: 0n,
-      MIN_AVG_PRICE: 1_500_000_000n,
-      RECIPIENT: recipient,
-      REFUND_TO: recipient,
-    },
-    fee.base,
-  ),
+const swapArgs = [
+  10n ** 18n, // amountIn
+  10n ** 18n + 10n ** 15n, // reward
+  3068493539683605256287027n, // sqrtPriceLimitX96: 1,500 USDC per WETH on Base
+  0n, // minOut
+  1_500_000_000n, // minAvgPrice
+  recipient,
+  recipient, // refundTo
+];
+const swapProgram = compileFor("ethereum", swap, swapArgs, fee.base);
+check(swapProgram.entryParams.length === 0, "bound, main takes nothing more");
+check(
+  swapProgram.intents[0]!.captures.length === 0,
+  "and the intent is fixed: a wallet publishes it",
 );
+const swapped = intentOf(swapProgram);
 check(swapped.delivered.join() === word(token("base", "WETH")), "the solver delivers Base's WETH");
 for (const [what, value] of [
   ["Base's USDC", token("base", "USDC")],
@@ -160,8 +172,8 @@ check(
 const direct = intentOf(
   compileFor(
     "base",
-    "Ethereum(() => { USDC.transfer(RECIPIENT, AMOUNT); }).reward({ tokens: [{ token: USDC, amount: AMOUNT }] });",
-    { RECIPIENT: recipient, AMOUNT: 1_000_000n },
+    "function main(to: Address, amount: Uint256) { Ethereum(() => { USDC.transfer(to, amount); }).reward({ tokens: [{ token: USDC, amount }] }); }",
+    [recipient, 1_000_000n],
   ),
 );
 check(direct.calls.startsWith(word(token("ethereum", "USDC"))), "Ethereum's USDC, called directly");
@@ -171,35 +183,26 @@ check(contracts.on("ethereum").AaveV3.Pool.available, "Ethereum has AaveV3.Pool"
 
 // ---- Inside a body, a decoded result is read by position or destructured, as anywhere else.
 const decodeIn = (statement: string) =>
-  `Base(() => { const d = hex\`3850c7bd\`; ${statement} require(x != 0); }, { tokens: [{ token: 0x4200000000000000000000000000000000000006, amount: 1 }] }).reward({ tokens: [{ token: WETH, amount: 1 }] });`;
+  `function main(pool: Address) { Base(() => { const d = hex\`3850c7bd\`; ${statement} require(x != 0); }, { tokens: [{ token: 0x4200000000000000000000000000000000000006, amount: 1 }] }).reward({ tokens: [{ token: WETH, amount: 1 }] }); }`;
 const refused = (source: string) => {
   try {
-    compileFor("ethereum", source, { RECIPIENT: recipient }, fee.base);
+    compileFor("ethereum", source, [recipient], fee.base);
     return "";
   } catch (error) {
     return (error as Error).message;
   }
 };
 check(
-  refused(decodeIn('const x = abi.decode(evm.static(RECIPIENT, d), ["Uint256"])[0];')) === "",
+  refused(decodeIn('const x = abi.decode(evm.static(pool, d), ["Uint256"])[0];')) === "",
   "a body reads a decoded result by position",
 );
 check(
-  refused(decodeIn('const [x] = abi.decode(evm.static(RECIPIENT, d), ["Uint256"]);')) === "",
+  refused(decodeIn('const [x] = abi.decode(evm.static(pool, d), ["Uint256"]);')) === "",
   "and destructures one, as anywhere else",
 );
 
 // ---- Rehearsing the swap-on-base body on a fork of Base: what the solver sends there.
-const swapDefines = {
-  AMOUNT_IN: 10n ** 18n,
-  REWARD: 10n ** 18n + 10n ** 15n,
-  SQRT_PRICE_LIMIT_X96: 3068493539683605256287027n,
-  MIN_OUT: 0n,
-  MIN_AVG_PRICE: 1_500_000_000n,
-  RECIPIENT: recipient,
-  REFUND_TO: recipient,
-};
-const { intent } = compileFor("ethereum", swap, swapDefines, fee.base).intents[0]!;
+const { intent } = swapProgram.intents[0]!;
 // The Kitchen fee is the route's native amount: the solver pays it, in Base's native coin, as the
 // value of fulfill. Nothing in the reward pays it back.
 check(intent.route.nativeAmount === fee.base, "route.nativeAmount is Base's Kitchen fee");
@@ -239,7 +242,7 @@ check(decoded.functionName === "fulfill" && decoded.args[0] === intentHash, "ful
 const rehashed = (deadlineShift: bigint, executionFee: bigint) =>
   routes.hashIntent(
     routes.compileSauceProgram("ethereum", swap, {
-      defines: swapDefines,
+      args: swapArgs,
       intents: { deadline: deadline + deadlineShift, creator, executionFee },
     }).intents[0]!.intent,
   ).intentHash;
@@ -318,13 +321,11 @@ check(pinned >= 15, `the reference pins ${pinned} of the Portal's selectors and 
 
 // The one-pool swap body compiles as an intent to Base, with the delivery the solver brings.
 const skill = readFileSync(new URL("../SKILL.md", import.meta.url), "utf8");
-const onePool =
-  /```sauce chain=ethereum define=AMOUNT_IN,REWARD,SQRT_PRICE_LIMIT_X96,MIN_OUT,RECIPIENT,REFUND_TO\n([\s\S]*?)```/.exec(
-    skill,
-  );
+const onePool = /```sauce chain=ethereum\n(import \{ uniswapV3 \}[\s\S]*?)```/.exec(skill);
 check(onePool !== null, "the skill gives the one-pool body");
 const onePoolIntent = routes.compileSauceProgram("ethereum", onePool[1]!, {
-  defines: { ...swapDefines, MIN_OUT: 1n },
+  // amountIn, reward, sqrtPriceLimitX96, minOut, recipient, refundTo
+  args: [10n ** 18n, 10n ** 18n + 10n ** 15n, 3068493539683605256287027n, 1n, recipient, recipient],
   intents: { deadline, creator, executionFee: fee.base },
 }).intents[0]!.intent;
 check(

@@ -24,9 +24,9 @@ and amounts are in its smallest units (its decimals). Their addresses are in the
 On Solana a symbol is the mint's 32-byte key, a value for the `@sauce/token` functions
 (`balanceOf(USDC, account)`); the token accounts are `Account` parameters, and the token
 methods (`USDC.transfer(...)`) are EVM-only. Devnet's mints, which differ, are in the Solana
-file in `sauce-chains`, passed as a define that wins over the symbol. That file also names each
-mint's token program: legacy SPL Token, or Token-2022, whose mints a program moves with the
-checked writes (`sauce-solana`).
+file in `sauce-chains`; a program for devnet takes its mint as an `Address` parameter of
+`main`. That file also names each mint's token program: legacy SPL Token, or Token-2022, whose
+mints a program moves with the checked writes (`sauce-solana`).
 
 ## Token functions
 

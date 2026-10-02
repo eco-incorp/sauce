@@ -36,6 +36,7 @@ import {
   compileCommand,
   compileProgram,
   connect,
+  bindMainArguments,
   connectAt,
   definesReach,
   fillTargets,
@@ -189,10 +190,11 @@ export const PROGRAM = {
     )
     .optional()
     .describe(
-      "Compile-time values, by the name the program reads: an integer in base units (decimal " +
-        "or 0x hex; a string past 2^53), an EVM address as 0x hex, a Solana key in base58 " +
-        "(Solana programs), true or false. A define replaces the program's module-level const " +
-        "of that name.",
+      "Low-level: compile-time values for names the program leaves undeclared. A program's " +
+        "inputs are main's parameters, given as args; these are the compiler's own mechanism. " +
+        "Each is an integer in base units (decimal or 0x hex; a string past 2^53), an EVM " +
+        "address as 0x hex, a Solana key in base58 (Solana programs), true or false. A define " +
+        "replaces the program's module-level const of that name.",
     ),
   compactArgs: z
     .boolean()
@@ -296,6 +298,26 @@ const ARGS = z
       "as 0x hex, a bool as true/false, an array as an array, a tuple as an array of its fields " +
       "or an object naming them. sauce_compile's entryParams lists what main takes.",
   );
+
+/** An intent file's `main` arguments, which a wallet's intents are built with (`bindMainArguments`). */
+export const INTENT_ARGS = z
+  .array(z.unknown())
+  .max(LIMITS.entries)
+  .optional()
+  .describe(
+    "main's arguments, in order, as JSON values: the values the intents are built with. " +
+      "A wallet publishes what it knows before anything runs, so each is bound into the " +
+      "intents as it is, and each is one word: an integer in base units as a decimal " +
+      "string (or a number up to 2^53), an address as 0x hex, or a bool. Required " +
+      "exactly when main declares parameters.",
+  );
+
+/** A program file's `main` arguments with `bindMainArguments`, which a wallet's intents use. */
+export function boundProgram(args: ProgramArgs & { readonly args?: readonly unknown[] }): Program {
+  const given = programOf(args);
+
+  return { ...given, input: bindMainArguments(given.input, argsOf(args).args) };
+}
 
 const COOK = {
   ...POT,
@@ -2056,6 +2078,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         `destination are supported. ${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: {
         ...PROGRAM,
+        args: INTENT_ARGS,
         from: z
           .string()
           .max(64)
@@ -2083,7 +2106,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
-      const program = programOf(args);
+      const program = boundProgram(args);
       const chain = program.input.chain;
       const from = args.from === undefined ? undefined : parseAddress("from", args.from);
       const assume = chain.kind === "evm" ? assumedBalances(args.assumeBalance ?? [], chain) : [];
@@ -2156,6 +2179,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
             "The program the hex was compiled from, to check and decode it against; or, with " +
               "no hex, the program to inspect.",
           ),
+        args: INTENT_ARGS.describe(
+          "With source and no hex: main's arguments, bound into the intents the program opens " +
+            "as sauce_intent_publish binds them, so they are listed as published. A cook's " +
+            "arguments are decoded from its hex instead.",
+        ),
         rpcUrl: RPC_URL,
       },
       output: {},
@@ -2166,10 +2194,18 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         if (args.source === undefined) {
           throw new UsageError("give hex (calldata, a program or a transaction hash), or source");
         }
-        const program = programOf({ ...args, source: args.source });
+        const program =
+          args.args === undefined
+            ? programOf({ ...args, source: args.source })
+            : boundProgram({ ...args, source: args.source });
 
         return fromCommand(
           inspectFile(program.input.file, compileProgram(program.input, program.files)),
+        );
+      }
+      if (args.args !== undefined) {
+        throw new UsageError(
+          "args gives source's main its arguments; a cook's are decoded from its hex",
         );
       }
       const hex = hexArg(args.hex, "hex");

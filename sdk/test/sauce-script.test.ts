@@ -153,10 +153,9 @@ describe("SauceScript in an editor", () => {
     const bare = service(textOf(CORPUS), false);
     const left = CORPUS.flatMap((file) => bare.getSemanticDiagnostics(file));
     expect(left.length).toBeGreaterThan(0);
-    // Each is a bigint index, a number beside a bigint, or an undeclared define — and the plugin
-    // says so of every one.
+    // Each is a bigint index or a number beside a bigint — and the plugin says so of every one.
     for (const diagnostic of left) {
-      expect([2538, 2365, 2367, 2322, 2345, 2304, 2552]).toContain(diagnostic.code);
+      expect([2538, 2365, 2367, 2322, 2345]).toContain(diagnostic.code);
       expect(plugin.isFalsePositive(diagnostic, ts.flattenDiagnosticMessageText)).toBe(true);
     }
   });
@@ -229,7 +228,9 @@ describe("SauceScript in an editor", () => {
       reference.intrinsics.flatMap(({ name, example }, index) =>
         Object.entries(example).map(([target, text]) => [
           join(work, `builtin-${index}-${target}.sauce.ts`),
-          `// ${name} (${target})\n${text}\n`,
+          // `ERC20` is the reference's name for an ERC-20 ABI a program imports, as its checker
+          // binds it (`skills-check/builtins.mjs`).
+          `// ${name} (${target})\n${/\bERC20\b/.test(text) ? 'import ERC20 from "./artifacts/IERC20.json";\n' : ""}${text}\n`,
         ]),
       ),
     );
@@ -278,6 +279,8 @@ describe("SauceScript in an editor", () => {
         missing,
       ],
       ["lowercase", "function main() { require(recipent != 0n); }\n", [2304, 2552]],
+      // An input is main's parameter: a name never declared shows whatever its case.
+      ["uppercase", "function main() { require(MIN_AMOUNT > 0n); }\n", [2304, 2552]],
       ["require", "function main() { require(); }\n", [2554]],
       [
         "router",

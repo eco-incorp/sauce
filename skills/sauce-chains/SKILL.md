@@ -91,7 +91,7 @@ declared: `return TSLAx;` compiled for Base is refused as `TSLAx` "is not a decl
 The same company often has a different symbol per issuer and chain: Tesla is `TSLAx` on Ethereum
 and on Solana, but `TSLAc` or `bTSLA` on Base, so search by name or ticker on each chain. Then pick
 a chain that has the name, or, for a token the registry does not carry, use `Token(address)` with
-the address as a define.
+the address as a `main` parameter.
 
 ## Another chain's names
 

@@ -43,8 +43,8 @@ function main(account: Account): Uint256 {
 And 1799 tokenized stocks, each a Token-2022 mint named by its symbol in the same way:
 they are in [solana-stocks.md](solana-stocks.md), with their mints.
 
-On devnet, pass a mint that differs as a define, which wins over the symbol
-(`--define USDC=<key>`):
+On devnet these mints differ: a program for devnet takes its mint as an `Address` parameter
+of `main`, given to `--args` as the mint's base58 address:
 
 | Symbol | Mint | Key, the value a program holds | Decimals | Token program |
 | --- | --- | --- | --- | --- |

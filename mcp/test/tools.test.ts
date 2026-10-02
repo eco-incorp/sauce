@@ -24,7 +24,7 @@ import {
 import { INTENT_TOOL_NAMES } from "../src/intents.js";
 import { SKILL_TOOL_NAMES } from "../src/skilltools.js";
 import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
-import { FLAG_INPUTS, flagInputLines } from "../src/terms.js";
+import { FLAG_INPUTS, flagInputLines, LISTED_FLAG_INPUTS } from "../src/terms.js";
 import { simulateSummary, TOOL_NAMES } from "../src/tools.js";
 import { connect, failed, ok, type Connected } from "./harness.js";
 
@@ -58,9 +58,11 @@ const SVM_PAY = [
 
 const INTENT = [
   "// @chain ethereum",
-  "Base(() => {",
-  "  USDC.transfer(RECIPIENT, 5n);",
-  "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
+  "function main(recipient: Address) {",
+  "  Base(() => {",
+  "    USDC.transfer(recipient, 5n);",
+  "  }).reward({ tokens: [{ token: USDC, amount: 7n }] });",
+  "}",
   "",
 ].join("\n");
 
@@ -159,7 +161,7 @@ describe("the sauce command's flags as the tools' inputs", () => {
         input,
       }),
     );
-    assert.deepEqual(rows, FLAG_INPUTS);
+    assert.deepEqual(rows, LISTED_FLAG_INPUTS);
   });
 });
 
@@ -517,7 +519,7 @@ describe("sauce_compile", () => {
     const refused = failed(
       await mcp.call("sauce_compile", {
         source: INTENT,
-        defines: { RECIPIENT },
+        args: [RECIPIENT],
         intentDeadline: 1728432000,
         intentCreator: CREATOR,
       }),
@@ -1102,7 +1104,7 @@ describe("sauce_simulate", () => {
 describe("sauce_intent_publish", () => {
   const args = {
     source: INTENT,
-    defines: { RECIPIENT },
+    args: [RECIPIENT],
     intentDeadline: 2_000_000_000,
     intentCreator: CREATOR,
   };
@@ -1164,7 +1166,13 @@ describe("sauce_intent_publish", () => {
 
   it("refuses a program that does more than open fixed intents", async () => {
     assert.match(
-      failed(await mcp.call("sauce_intent_publish", { source: PAY, chain: "base" })),
+      failed(
+        await mcp.call("sauce_intent_publish", {
+          source: PAY,
+          chain: "base",
+          args: [RECIPIENT, "1"],
+        }),
+      ),
       /opens no intent/,
     );
   });
@@ -1201,12 +1209,16 @@ describe("sauce_inspect", () => {
     const out = ok(
       await mcp.call("sauce_inspect", {
         source: INTENT,
-        defines: { RECIPIENT },
+        args: [RECIPIENT],
         intentDeadline: "2000000000",
         intentCreator: CREATOR,
       }),
     );
     assert.match(JSON.stringify(out), /base/);
+    assert.match(
+      failed(await mcp.call("sauce_inspect", { hex: "0x00", args: [RECIPIENT] })),
+      /a cook's are decoded from its hex/,
+    );
   });
 
   it("needs an endpoint and a chain for a transaction hash, and hex to be hex", async () => {

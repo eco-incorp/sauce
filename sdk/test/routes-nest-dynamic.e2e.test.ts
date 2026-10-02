@@ -92,6 +92,7 @@ import { scaleAmount, WAD } from "../src/routes/template.js";
 import type { Intent } from "../src/routes/types.js";
 import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 import { predictIntentVault } from "../src/routes/portal.js";
+import { BODY_TO_ARBITRUM } from "./fixtures/routes/bodies.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -1183,10 +1184,6 @@ describeEvm("route nesting, executed", () => {
     // arguments, which a body cannot; the README's own runs in `docs-examples.mainnet`). What only
     // an engine can settle is whether the Portal accepts what its lowering builds -- and whether the
     // amount the program measured is the amount the published intent carries.
-    const BODY_TO_ARBITRUM = readFileSync(
-      join(HERE, "fixtures/routes/body-forwards-to-arbitrum.sauce.ts"),
-      "utf8",
-    );
     const SEEDED = 12_345_678n;
     const DELIVER_TO = "0x00000000000000000000000000000000000000a5" as Address;
 
