@@ -1,6 +1,6 @@
 ---
 name: sauce-overview
-description: Start here for any Sauce task — what Sauce is (a programmable-transaction runtime whose programs, written in SauceScript as .sauce.ts files, run atomically on EVM chains and Solana), the path from a program file to an executed transaction with the sauce command, the rules every program follows, and which Sauce skill to load next. Use when the user mentions Sauce, SauceScript, a .sauce or .sauce.ts file, @eco-incorp/sauce, the sauce command, a Pot, Kitchen, cook or engine, Eco intents, or asks to "write a Sauce program", "do this atomically on chain", or "swap/bridge/lend with Sauce".
+description: Start here for any Sauce task — what Sauce is (a programmable-transaction runtime whose programs, written in SauceScript as .sauce.ts files, run atomically on EVM chains and Solana), the path from a program file to an executed transaction with the sauce command, the rules every program follows, and a map of every Sauce skill (what each teaches and holds, when to load it rather than its neighbour, the skills to read in order for common tasks, and how to read them over MCP). Use when the user mentions Sauce, SauceScript, a .sauce or .sauce.ts file, @eco-incorp/sauce, the sauce command, a Pot, Kitchen, cook or engine, Eco intents, or asks to "write a Sauce program", "do this atomically on chain", or "swap/bridge/lend with Sauce".
 ---
 
 # Sauce
@@ -120,23 +120,6 @@ is not there. Both work on a supported chain only; on a preview chain, compile a
 from the program or the environment. Without the CLI, the same steps are tools of the Sauce MCP
 server (`npx -y @eco-incorp/sauce mcp`); `sauce-cli` maps each command to its tool.
 
-## Pick the next skill
-
-| Task                                                                                     | Skill                    |
-| ---------------------------------------------------------------------------------------- | ------------------------ |
-| The language: the two program forms, `main(...)` inputs and defines, compile errors      | `sauce-script`           |
-| Names with no import: tokens, `Token(...)`, protocol namespaces, chains, `ctx`           | `sauce-globals`          |
-| What is on a chain: support, tokens, every protocol with its addresses, intents          | `sauce-chains`           |
-| Every protocol: how to choose one, its deployments, how a program calls it, its pitfalls | `sauce-protocols`        |
-| Any swap: `@sauce/router`, price limits, the Pot's Router, the guard every leg needs     | `sauce-swaps`            |
-| One swap spread over several price-limited pools: a limit order                          | `sauce-distributed-swap` |
-| Protocol operations as JSON data, not a program: actions documents                       | `sauce-actions`          |
-| Continuing on another chain: intents, cascades, rewards                                  | `sauce-intents`          |
-| Solana programs: accounts, SPL, the Kitchen                                              | `sauce-solana`           |
-| Compiling and running: the `sauce` commands, the Pot, funding, simulating, publishing    | `sauce-cli`              |
-| Application code: compiling, arguments, cooks, actions and verification from TypeScript  | `sauce-typescript`       |
-| Complete programs, each showing an idiom                                                 | `sauce-examples`         |
-
 ## Rules for every program
 
 1. **Nothing is left behind.** Measure outputs as balance deltas, move them out, return unspent
@@ -153,9 +136,223 @@ server (`npx -y @eco-incorp/sauce mcp`); `sauce-cli` maps each command to its to
    preview chain, compile and simulate; when a command refuses one, offer the user the
    chain-support request it names instead of looking for another way to send.
 
+## The skill map
+
+Each skill is a `SKILL.md`, its instructions, to read whole. Several add `references/`, to look up
+rather than read through (the generated ones list every chain, token and protocol), and most add
+`examples/`: programs (`.sauce.ts`), actions documents (`.json`) and runners (`.mts`) that pin
+what the skill says. Load a skill when the task reaches it. Each entry below says what the skill
+teaches, what it holds, when to load it rather than its neighbour, and a request that leads there.
+
+### `sauce-overview`
+
+This skill: what Sauce is, the rules every program follows, the path from a file to a transaction,
+and this map. It holds no references or examples of its own.
+
+- **Load it** first, for any Sauce task.
+- **Asked as:** "What is Sauce, and how do I run something with it?"
+
+### `sauce-script`
+
+The language: the two program forms (`main(...)` with runtime arguments, or top-level statements
+with defines), the file's header, values, calling a contract, helpers, atomic failure and `.catch`,
+what a program costs, and compile errors.
+
+- **Holds** the language reference,
+  [references/builtins.md](../sauce-script/references/builtins.md): every type, operator,
+  statement and builtin, its targets, an example and the error a misuse gives. Its example reads a
+  pool's price history through an ABI kept beside the program.
+- **Load it** to write or fix any program. It says what the language expresses; `sauce-globals`
+  says which names a chain supplies.
+- **Asked as:** "My helper fails with 'does not return on every path'. What do I write instead?"
+
+### `sauce-globals`
+
+The names a program uses with no import, resolved on the chain it is compiled for: token symbols
+and tokenized stocks, `Token(address)`, the SafeERC20 token methods and the `@sauce/token`
+functions, protocol namespaces and family aliases, `available(...)`, chain names and `ctx`.
+
+- **Holds** generated indexes of names, the lists `sauce globals` prints:
+  [tokens](../sauce-globals/references/tokens.md),
+  [stocks](../sauce-globals/references/stocks.md) (every tokenized stock per chain, with its
+  issuer), [protocols](../sauce-globals/references/protocols.md) and
+  [chains](../sauce-globals/references/chains.md).
+- **Load it** to find a name or check that it exists. It lists names; `sauce-chains` gives each
+  one's address on a chain, and `sauce-protocols` a protocol across every chain.
+- **Asked as:** "What is the SpaceX stock token called on Base?"
+
+### `sauce-chains`
+
+One chain at a time: whether it is supported or a preview chain, and how to request it; its id,
+slug and aliases, native coin, Sauce engine, Kitchen and Router, whether it takes intents, its CCTP
+domain, every token with its address and decimals, and every protocol deployment there with its
+address and how a program names it.
+
+- **Holds** [references/index.md](../sauce-chains/references/index.md) and a generated file per
+  chain, such as [references/base.md](../sauce-chains/references/base.md), with a separate file of
+  tokenized stocks for each chain that has them.
+- **Load it** for an address, for what one chain offers, or when a transaction is refused on a
+  preview chain. For a name alone, `sauce-globals` is lighter.
+- **Asked as:** "Does Base take intents, and where is Uniswap V3's factory there?"
+
+### `sauce-protocols`
+
+Every protocol the registry knows: how to choose between protocols that do the same job, and how a
+program reaches each (a namespace contract, an address only, an interface called with an address,
+or an imported ABI), with `available(...)` for a chain that may lack it.
+
+- **Holds** [references/index.md](../sauce-protocols/references/index.md), every protocol by
+  category with "Choosing between them"; per protocol, a generated registry file
+  (`references/registry/<slug>.md`: its deployments on every chain, how a program names each
+  contract, its ABI functions) and a document (`references/<slug>.md`: what it is for, its
+  pitfalls, a compiled example, its templates).
+- **Load it** before calling a protocol, or to pick one. A swap goes through `sauce-swaps` first:
+  a program swaps through `@sauce/router`, not through a protocol's own router.
+- **Asked as:** "Which lending market on Base takes USDC, and how does a program supply to it?"
+
+### `sauce-swaps`
+
+Any swap inside a program, through `@sauce/router`: one function per venue (Uniswap V2, V3 and V4,
+Curve, Balancer V2, DODO V2, Trader Joe LB, WOOFi, Maverick V2), which venues are paid first and
+which call back through the Pot's Router, exact input, price limits and partial fills, the reverts,
+and the guard every leg needs.
+
+- **Holds** the functions' arguments, `sauce price` for turning a price into a limit, and an
+  example: one guarded Uniswap V3 leg that returns its unspent input.
+- **Load it** for one swap, or a swap as one step of a program. One order over several pools
+  under one price is `sauce-distributed-swap`; a swap as a step of a JSON document is
+  `sauce-actions`.
+- **Asked as:** "Sell 1 WETH for USDC on Base, no lower than 2,600 USDC per WETH."
+
+### `sauce-distributed-swap`
+
+One exact-input order spread over several price-limited pools: a limit buy that pays no more than
+one price for any unit, fees included, and refunds what it did not spend. Covers the rules, a
+fee-adjusted limit per pool, `maxPrice` for tokens of any decimals, finding a token and its pools,
+the three rehearsals before sending, and adding venues.
+
+- **Holds** one complete program for Base (its header buys the SpaceX stock token with USDC), and
+  a runner that holds the skill's arithmetic and commands to it.
+- **Load it** when an order should take the best of several pools or stop at a price; it is built
+  from the single swap `sauce-swaps` teaches.
+- **Asked as:** "Buy SpaceX stock on Base with up to 1,000 USDC, never paying more than 150 USDC a
+  token."
+
+### `sauce-actions`
+
+A program as a JSON actions document rather than SauceScript: an ordered list of swaps,
+approvals, supplies, bridges, wraps and stakes, with tokens by symbol, contracts by namespace and
+pools by their factory's key, so one document serves every chain that has its names.
+
+- **Holds** [references/actions.md](../sauce-actions/references/actions.md), every action and
+  field, generated from the document's JSON Schema; its examples swap by a pool's key, and swap
+  then supply to Aave.
+- **Load it** when the steps are fixed or produced as data by a service. A condition, a loop, a
+  best venue or an intent needs SauceScript (`sauce-script`).
+- **Asked as:** "Our backend emits swap-then-supply steps as JSON. How do we run them?"
+
+### `sauce-intents`
+
+Work continued on another chain: an intent file (`Base(() => { ... }).reward({ ... })` as
+top-level statements, its values as defines), its life (fund, publish, fill, prove, claim, refund
+or cancel, a `sauce intent` command each), every way to publish and fund one, token-only bodies
+and program bodies, cascades, on which chain each name resolves, and rehearsing both sides.
+
+- **Holds** a reference of the intent contract's functions, events and errors, and examples that
+  forward USDC to Aave on another chain, run a distributed swap as the body, and fund an intent by
+  a transfer into its vault.
+- **Load it** whenever the work crosses chains; `sauce-chains` says which chains take intents.
+- **Asked as:** "Move my USDC from Base to Ethereum and supply it to Aave there."
+
+### `sauce-solana`
+
+Programs for Solana: every account an `Account` parameter with its roles, the account manifest,
+the Pot's key and token accounts, `@sauce/token` for SPL Token and Token-2022 (and what each
+extension does to a program), CPIs and raw account reads, transaction size, and running through
+the Kitchen or directly on the engine.
+
+- **Holds** examples that move a mint's tokens and move PYUSD with `transferChecked`.
+- **Load it** for any program compiled for Solana, beside the skill for the task: namespaces and
+  token methods do not exist there.
+- **Asked as:** "Send 10 TSLAx from my Pot to a wallet on Solana."
+
+### `sauce-cli`
+
+The `sauce` command, in the order a run takes it: look up names, compile, deploy the Pot, fund it,
+rehearse (`sauce simulate`), print the unsigned transaction (`sauce tx`) or sign and send it
+(`sauce run`), and read it back (`sauce inspect`); endpoints and signers, agent wallets and their
+policies, arguments to `main`, and the MCP tool for each command.
+
+- **Holds** a table of every command, the steps of a run with their flags and units, and example
+  programs whose headers give the command lines that run them.
+- **Load it** to compile, rehearse, send or read back, or when a command refuses a preview chain.
+  The other skills say what to write; this one how to run it.
+- **Asked as:** "Rehearse this program on Base, then send it from my keystore."
+
+### `sauce-typescript`
+
+The package from application code: compiling a program for a chain as `sauce compile` does,
+encoding `main`'s arguments, the owner's Pot and its cook, the raw compiler and compact arguments,
+the protocol registry, JSON action programs, settlement verification, the Solana client, intents
+and cascades, and compiling in a browser.
+
+- **Holds** runners that build a cook offline, run the raw compiler, compile an action program
+  and verify a settlement; it is the one skill that points into the package's own guides.
+- **Load it** when code, not a person at the command line, builds the transactions. The program
+  itself is still SauceScript (`sauce-script`).
+- **Asked as:** "How does my Node service compile a program and build its cook?"
+
+### `sauce-examples`
+
+The index of every example in every skill: each program with the chains it is checked on, each
+actions document, and each runner with what it pins, each beside the skill that explains it.
+
+- **Load it** to see a complete program for an idiom, then read its skill and write the program
+  the task needs.
+- **Asked as:** "Show me a complete Sauce program that swaps on Base."
+
+## Paths for common tasks
+
+- **Buy a token up to a price on Base**: `sauce-globals` (the token's symbol; a stock's is under
+  Tokenized stocks) → `sauce-distributed-swap` → `sauce-cli` (`sauce simulate`, then `sauce run`,
+  or `sauce tx` for the user's wallet).
+- **Swap, then use the output**, such as supplying it to a lending market: `sauce-swaps` (the
+  guard) → `sauce-protocols` (the market's registry file and document) → `sauce-script` (Calling a
+  contract) → `sauce-cli`.
+- **Run protocol steps that arrive as data**: `sauce-actions` (each action's fields in its
+  reference) → `sauce-cli` (`sauce actions` prints the program a document lowers to).
+- **Call a protocol**: `sauce-protocols` (its category in the index, then its registry file for
+  the chain and its document's pitfalls) → `sauce-script` (Calling a contract).
+- **A cross-chain intent**: `sauce-intents` → `sauce-chains` (both chains take intents) →
+  `sauce-cli` (`sauce intent publish`, then `sauce intent status`).
+- **Move a Token-2022 stock on Solana**: `sauce-globals` (Tokenized stocks, On Solana: its symbol,
+  and how the command names its accounts) → `sauce-solana` (Token-2022 mints and their extensions)
+  → `sauce-cli`.
+- **Fix a program that does not compile**: `sauce-script` (Reading a compile error, and the
+  language reference) → `sauce-globals` (a name that does not resolve) → `sauce-chains` (a name
+  recorded on one chain and not another).
+- **Integrate from TypeScript**: `sauce-typescript`, with `sauce-script` for the program the code
+  compiles.
+
+## Reading the skills over MCP
+
+An agent with no skill files on disk reads the same files from the Sauce MCP server
+(`npx -y @eco-incorp/sauce mcp`). `sauce_skills` lists every skill with its description and files
+(a skill with many references lists a few, and how the rest are named). `sauce_skill` returns a
+skill's `SKILL.md`; with `path`, one of its files, such as `references/builtins.md` of
+`sauce-script`; with `section`, only the part under the heading holding those words; with `query`,
+only the lines holding a term. Read a large reference that way: `references/base.md` of
+`sauce-chains` with `section` set to Tokens, or `references/stocks.md` of `sauce-globals` with
+`query` set to a company's name. The same files are resources, `sauce://skills/<skill>/SKILL.md`
+and `sauce://skills/<skill>/<path>`, listed at `sauce://skills/index`. For TypeScript work,
+`sauce_dev` returns the package's own documents on a topic, with `sauce-typescript`; and
+`sauce_install_skills` says how to put the skills in a project for an agent that reads files.
+
 ## Example
 
-[../sauce-cli/examples/pay.sauce.ts](../sauce-cli/examples/pay.sauce.ts) pays a recipient in USDC
-and USDT, and
 [../sauce-distributed-swap/examples/distributed-swap.sauce.ts](../sauce-distributed-swap/examples/distributed-swap.sauce.ts)
-is a complete swap. `sauce-examples` lists every example in every skill.
+is one complete program that keeps every rule above: it buys a token on Base across several
+venues' pools up to one price, names everything through the chain's globals and `@sauce/router`,
+checks the amount bought and its average price, refunds the unspent budget, and opens with the
+header that says how to run it. `sauce-examples` lists every example in every skill, with the
+chains each is checked on and the skill that explains it.
