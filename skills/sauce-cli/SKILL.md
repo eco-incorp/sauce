@@ -28,7 +28,7 @@ commands apply with differences in accounts, signing and fees: read `sauce-solan
 | `sauce wallet`   | Creates, lists and imports the wallets `--wallet` signs with                      |
 | `sauce inspect`  | Reads a transaction, calldata or a file back as what the program does             |
 | `sauce verify`   | Checks that a payload, cook or transaction runs the audited settle program        |
-| `sauce price`    | Turns a price into a pool's `sqrtPriceX96`, a swap's limit and its average floor  |
+| `sauce price`    | Turns a price, or a pool's now, into `sqrtPriceX96`, the limits and `maxPrice`    |
 | `sauce pools`    | Lists a pair's price-limit pools on a chain, deepest first, with their prices     |
 
 ## Supported chains
@@ -144,7 +144,8 @@ sends. Suggest small balances and a policy to the user.
    every price-limit venue on the chain, deepest first: each one's fee, liquidity and
    `sqrtPriceX96`, what a token costs both ways with and without the fee, the distributed swap's
    `maxPrice` at that price, and how much moves the price 1%. A token it is given may be an
-   address; its decimals are read from the token.
+   address; its decimals are read from the token. It reads at one block and prints it: rehearse
+   with `sauce simulate --block <number>` on the prices `maxPrice` came from.
 2. **Compile**, to check the program: `npx sauce compile pay.sauce.ts --chain ethereum`. It prints the
    bytecode; `--json` adds the size, `main`'s parameters, the compiler and the engine it pairs with,
    and what the compile applied: `defines` (each define the file reads, its value, whether the user

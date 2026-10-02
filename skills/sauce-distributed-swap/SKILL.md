@@ -256,7 +256,9 @@ So buying at most 2,713.5, a 1% pool trades only while its own price is below 2,
 whose fee alone puts it past `maxPrice` sits out. As sqrt prices, 2,713.5 USDC per WETH is
 **4127095293177970497328754** and 2,686.5 is **4106511148422261116904015**, the limits the program
 derives from those two `maxPrice` values. `sauce price --chain base WETH USDC 2713.5` prints a
-price's `sqrtPriceX96`, and `--sqrt-price-x96 <value>` reads a pool's back as a price.
+price's `sqrtPriceX96`, and `--sqrt-price-x96 <value>` reads a pool's back as a price. Its `buy`
+block gives that price as `maxPrice` and `maxAvgPrice` in these units (`2713500000`); its
+`minAvgPrice` runs the other way round, output per input, and is never a `maxAvgPrice`.
 
 ## Getting the price right
 
@@ -287,7 +289,8 @@ whole budget buys at least `budget × 1e18 ÷ maxPrice`:
 
 The budget must be in the Pot before the program runs: send it there from any wallet, or let
 `sauce run --fund` pull it from the signer in the same cook (`sauce-cli`). **Rehearse three times
-before sending**, with no key and nothing sent: the trade as meant, one with `minTokens` above what
+before sending**, with no key and nothing sent, on the block `sauce pools` read the prices at
+(`--block <number>`, which it prints): the trade as meant, one with `minTokens` above what
 fills, which reverts `bought below minTokens`, and one with `maxAvgPrice` below the average, which
 reverts `average too high`. That shows both checks work. Buying SPCXc with 1,000 USDC at most 150
 each, with the price near 148.8 on 2026-10-01:
