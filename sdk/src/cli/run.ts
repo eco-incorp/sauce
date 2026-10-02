@@ -2605,7 +2605,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   globals: {
-    usage: "sauce globals --chain <slug|id> [--tokens] [--protocols] [--protocol <name>] [--json]",
+    usage:
+      "sauce globals --chain <slug|id> [--tokens] [--protocols] [--protocol <name>] [--stocks] " +
+      "[--search <text>] [--json]",
     summary: "List the tokens, protocols and other names a program on a chain can use",
     flags: {
       chain: { type: "string", value: "<slug|id>", help: "The chain whose names to list" },
@@ -2616,6 +2618,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         value: "<name>",
         help: "One namespace (UniswapV4, or its slug) with its methods",
       },
+      stocks: { type: "boolean", help: "Only the chain's tokenized stocks" },
+      search: {
+        type: "string",
+        value: "<text>",
+        help: "Only the tokens, stocks included, whose symbol, name or ticker contains the text",
+      },
       ...JSON_FLAG,
       ...HELP,
     },
@@ -2624,23 +2632,30 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "registries (routes.sourceGlobals) — the ones the compile resolves: token symbols with",
       "their addresses and decimals, protocol namespaces with each contract's address (and,",
       "with --protocol, its methods), the chain names that open intents, the defines, and the",
-      "zero-import @sauce/token functions. With no filter it lists everything.",
+      "zero-import @sauce/token functions. With no filter it lists everything but the chain's",
+      "tokenized stocks, which it counts: Ethereum has over a thousand. A stock token is named",
+      "like any other (SPCXc.balanceOf(...)); --stocks lists them with what each one is, and",
+      "--search finds one by symbol, company name or ticker.",
       "",
       "Examples:",
       "  sauce globals --chain base",
       "  sauce globals --chain base --protocol UniswapV3 --json",
+      "  sauce globals --chain base --search spacex",
     ].join("\n"),
     run: (args) => {
       if (args.positionals.length > 0) {
         throw new UsageError(`unexpected argument ${args.positionals[0]}`);
       }
       const protocol = stringFlag(args, "protocol");
+      const search = stringFlag(args, "search");
 
       return globalsCommand({
         chain: parseChain(requiredFlag(args, "chain", "<slug|id>")),
         tokens: args.values.tokens === true,
         protocols: args.values.protocols === true,
+        stocks: args.values.stocks === true,
         ...(protocol === undefined ? {} : { protocol }),
+        ...(search === undefined ? {} : { search }),
       });
     },
   },

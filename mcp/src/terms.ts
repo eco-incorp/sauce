@@ -9,7 +9,7 @@
  * A command's flags and their values, as a note spells them after the command. A switch takes no
  * value, so the word after it is the sentence again (`--tokens lists them`).
  */
-const SWITCHES = "tokens|protocols|deploy|dry-run|json|compact-args|yes|force|install";
+const SWITCHES = "tokens|protocols|stocks|deploy|dry-run|json|compact-args|yes|force|install";
 const FLAGS_AFTER = String.raw`(?:\s+(?:--(?:${SWITCHES})\b(?!-)|--?[\w-]+(?:[ =](?!-)[^\s\x60),;]+)?))*`;
 const command = (head: string): RegExp => new RegExp(`\`?${head}${FLAGS_AFTER}\`?`, "g");
 
@@ -77,6 +77,8 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
   [/--min-out\b/g, "minOut"],
   [/--spl-count\b/g, "splCount"],
   [/--protocol\b/g, "protocol"],
+  [/--stocks\b/g, "stocks"],
+  [/--search\b/g, "search"],
   [/--sqrt-price-x96\b/g, "sqrtPriceX96"],
   [/--v4-key\b/g, "v4Pools"],
 ];
