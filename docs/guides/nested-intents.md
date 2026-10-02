@@ -3,7 +3,8 @@
 [Documentation](../README.md) · [Create an intent](intents.md) · [Routes API](../api/routes.md)
 
 A nested intent is an intent opened inside another intent's body. You write it in SauceScript, in
-the braces of the outer one: `Base(() => { …; Ethereum(() => { … }).reward({ … }); })`. When a
+the braces of the outer one:
+`Base.Portal.send(…).receive(…).then(() => { …; Ethereum.Portal.send(…).receive(…).then(() => { … }); })`. When a
 solver fills the outer intent, its body runs on Base, and in that same fulfilment it pays the inner
 intent's reward into a vault on Base and publishes it. A solver fills the inner intent later, on
 Ethereum. Each level is an intent of its own, filled, proven and claimed on its own: a failure on a
@@ -28,8 +29,29 @@ const RECIPIENT = 0x6666666666666666666666666666666666666666n;
 const AMOUNT = 1_000_000n;
 const executionFee = 1_000n; // Base's Kitchen fee: read it with destinationExecutionFee().
 
-const built = Base(
-  () => {
+const built = Base.Portal.send(
+  { token: usdc(Ethereum.chain), amount: 1_010_000n },
+  { source: Ethereum.chain, deadline: 2_000_003_600n },
+)
+  // What the solver brings to Base. It arrives at the Executor; the body measures the Pot.
+  .receive(
+    { token: BASE_USDC, amount: AMOUNT },
+    {
+      execution: { value: executionFee },
+      deadline: 2_000_000_000n,
+      rewardDeadline: 2_000_003_600n,
+      creator: "0x4444444444444444444444444444444444444444", // every level's
+      defines: { RECIPIENT },
+      precalls: [
+        token.Token.transfer({
+          token: BASE_USDC,
+          to: destinationPot(Base.chain),
+          amount: AMOUNT,
+        }).toCall(),
+      ],
+    },
+  )
+  .then(() => {
     // Runs on Base, in the fill of this intent: what the solver delivered, measured there.
     const amount = USDC.balanceOf(ctx.self());
     const payout = amount - amount / 1000n;
@@ -39,35 +61,14 @@ const built = Base(
       .then(() => {
         USDC.transfer(RECIPIENT, payout);
       });
-  },
-  {
-    execution: { value: executionFee },
-    deadline: 2_000_000_000n,
-    rewardDeadline: 2_000_003_600n,
-    creator: "0x4444444444444444444444444444444444444444", // every level's
-    defines: { RECIPIENT },
-    // What the solver brings to Base. It arrives at the Executor; the body measures the Pot.
-    tokens: [{ token: BASE_USDC, amount: AMOUNT }],
-    precalls: [
-      token.Token.transfer({
-        token: BASE_USDC,
-        to: destinationPot(Base.chain),
-        amount: AMOUNT,
-      }).toCall(),
-    ],
-  },
-).reward({
-  source: Ethereum.chain,
-  deadline: 2_000_003_600n,
-  tokens: [{ token: usdc(Ethereum.chain), amount: 1_010_000n }],
-});
+  });
 ```
 
 The chain names inside the closure come from the same imports as the host calls:
-`import { Base, Ethereum }` serves both. Each chain export carries, besides its host signature, the
-SauceScript call that opens an intent, so `Ethereum(() => { … })` inside the closure typechecks
-beside the token symbols and builtins a closure already has, and gives a SauceScript intent, not a
-host one. Nothing is declared globally: a chain the closure names without importing it is an error.
+`import { Base, Ethereum }` serves both. Each chain export's `Portal` carries, besides its host
+steps, the SauceScript ones, so `Ethereum.Portal.send(…).receive(…).then(() => { … })` inside the
+closure typechecks beside the token symbols and builtins a closure already has, and gives a
+SauceScript intent, not a host one. Nothing is declared globally: a chain the closure names without importing it is an error.
 The closure is never run: its text is compiled, so `RECIPIENT` reaches it as a
 define, and a bundler that renames imports breaks it
 ([callbacks are compiled source](intents.md#callbacks-are-compiled-source)). `built.sourceTxs()` is
@@ -75,8 +76,8 @@ the wallet's funding and publication on Ethereum.
 
 The same intent can be a file, all of it SauceScript, and the CLI opens it on the chain that pays
 the outer reward. Its inputs are `main`'s parameters, and `sauce intent publish --args` fixes them
-into the intents it publishes. Here the delivery is the second argument of `Base(...)`, and the
-lowering adds the transfer into the Pot itself:
+into the intents it publishes. Here the delivery is `.receive(...)`'s, and the lowering adds the
+transfer into the Pot itself:
 
 ```js
 // An intent from Ethereum to Base whose body opens an intent of its own, from Base back to
@@ -134,15 +135,15 @@ of the Kitchen on the chain whose body is a program.
 Each part of the file runs on one chain, and a token symbol, `chainId` or protocol address in it is
 that chain's:
 
-| Part                                                        | Runs on                         | `USDC` is  |
-| ----------------------------------------------------------- | ------------------------------- | ---------- |
-| The outer `.reward(...)`                                    | Ethereum, which escrows it      | Ethereum's |
-| The outer body, and what its solver delivers (`{ tokens }`) | Base, the outer destination     | Base's     |
-| The inner `.reward(...)`                                    | Base: the outer body funds it   | Base's     |
-| The inner body                                              | Ethereum, the inner destination | Ethereum's |
+| Part                                              | Runs on                         | `USDC` is  |
+| ------------------------------------------------- | ------------------------------- | ---------- |
+| The outer `.send(...)`                            | Ethereum, which escrows it      | Ethereum's |
+| The outer `.receive(...)`, and the outer body     | Base, the outer destination     | Base's     |
+| The inner `.send(...)`                            | Base: the outer body funds it   | Base's     |
+| The inner `.receive(...)`, and the inner body     | Ethereum, the inner destination | Ethereum's |
 
-A body and its delivery resolve on their destination; a reward resolves on the chain whose program
-offers it, because that program pays it into the vault there. The rule repeats at every depth.
+A body and its delivery resolve on their destination; a reward, in `.send(...)`, resolves on the
+chain whose program offers it, because that program pays it into the vault there. The rule repeats at every depth.
 [Names resolve per chain](intents.md#names-resolve-per-chain) says what goes wrong when a name is
 taken from the other chain.
 
@@ -150,10 +151,10 @@ taken from the other chain.
 
 The outer body is more than token writes, so it is a program, run on Base's shared Pot. Its route
 first moves the delivered USDC from the Portal's Executor into the Pot (the lowering adds that
-transfer, from the second argument), then cooks the program, with Base's Kitchen fee as the call's
+transfer, from `.receive(...)`), then cooks the program, with Base's Kitchen fee as the call's
 value; the route's native amount is that fee, which the solver sends.
 
-When the program reaches the inner `.reward(...)`, it asks Base's Portal for the inner intent's
+When the program reaches the inner intent, it asks Base's Portal for the inner intent's
 vault, transfers each reward token there with `SafeERC20` semantics, sends any native amount from
 the Pot, and calls `Portal.publish`. The inner intent is then on Base's Portal like any other:
 `IntentPublished` names it, `isIntentFunded` counts it funded, and any solver can fill it.
