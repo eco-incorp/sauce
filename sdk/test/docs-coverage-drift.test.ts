@@ -16,7 +16,14 @@ import { CANONICAL_CHAINS, getAllChainIds } from "../src/chains/index.js";
 import { listProtocols } from "../src/protocols/index.js";
 import { listDescriptors } from "../src/descriptors/query.js";
 import { STOCK_ISSUERS } from "../src/routes/stock-tokens.js";
-import { TOKEN_REGISTRY } from "../src/routes/token-registry.js";
+import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../src/routes/token-registry.js";
+
+/** Solana's canonical chain id, whose mints are mainnet-beta's: the page counts them under it. */
+const SOLANA = 1399811149;
+/** Every chain's rows, an EVM chain's and Solana's, by chain id as the page lists them. */
+const ROWS_BY_CHAIN: ReadonlyArray<
+  readonly [string, ReadonlyArray<{ symbol: string; stock?: { issuer: string } }>]
+> = [...Object.entries(TOKEN_REGISTRY), [String(SOLANA), SVM_TOKEN_REGISTRY["mainnet-beta"]]];
 
 /** `TOKEN_REGISTRY` maps a chain id to a LIST of rows, not a symbol-keyed object. */
 const symbolsOf = (rows: (typeof TOKEN_REGISTRY)[number]): string[] =>
@@ -90,6 +97,16 @@ describe("docs/api/coverage.md still states the registry sizes it has", () => {
           ),
         ).size,
     ],
+    [
+      "Solana mints",
+      /(\d+) mints on mainnet-beta/,
+      () => SVM_TOKEN_REGISTRY["mainnet-beta"].length,
+    ],
+    [
+      "Solana stock mints",
+      /mints on mainnet-beta, (\d+) of them tokenized stocks/,
+      () => SVM_TOKEN_REGISTRY["mainnet-beta"].filter((row) => row.stock !== undefined).length,
+    ],
   ])("%s", (_name, pattern, actual) => {
     expect(stated(pattern)).toBe(actual());
   });
@@ -110,7 +127,7 @@ describe("docs/api/coverage.md still states the registry sizes it has", () => {
   });
 
   it("counts every chain's tokenized stocks per issuer, with examples it registers", () => {
-    for (const [chainId, rows] of Object.entries(TOKEN_REGISTRY)) {
+    for (const [chainId, rows] of ROWS_BY_CHAIN) {
       const counts = new Map<string, number>();
       for (const row of rows) {
         if (row.stock !== undefined) {

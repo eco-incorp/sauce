@@ -26,11 +26,11 @@ conversions.
 
 ### Tokenized stocks
 
-Ethereum and Base also register tokenized stocks, named the same way: `SPCXc.balanceOf(...)` reads
-Coinbase's SpaceX token on Base, and `Base.SPCXc.address` is its address. Ethereum has Backed's
+Ethereum, Base and Solana also register tokenized stocks, named the same way: `SPCXc.balanceOf(...)`
+reads Coinbase's SpaceX token on Base, and `Base.SPCXc.address` is its address. Ethereum has Backed's
 xStocks (`TSLAx`, `SPCXx`) and bTokens (`bTSLA`), Ondo Global Markets' tokens (`TSLAon`,
-`SPCXon`) and Mt Pelerin's own shares (`MPS`); Base has Coinbase's (`TSLAc`, `SPCXc`) and Backed's bTokens. A symbol is the issuer's
-own ticker for the token, case-sensitive, with a `.` written `_` (`BRK_Bx`). Each row of
+`SPCXon`) and Mt Pelerin's own shares (`MPS`); Base has Coinbase's (`TSLAc`, `SPCXc`) and Backed's bTokens; Solana has Token-2022 mints from Backed (`TSLAx`), Ondo (`TSLAon`), Backpack Securities (`NVDA_US`) and PreStocks (`SPACEX`), which a program passes to `@sauce/token`'s functions (`balanceOf(TSLAx, account)`), and `Solana.TSLAx.mint` is the mint. A symbol is the issuer's
+own ticker for the token, case-sensitive, with a `.` written `_` (`BRK_Bx`, `NVDA_US`). Each row of
 `routes.TOKEN_REGISTRY` that is a stock carries `stock`: its issuer, its name and the underlying's
 ticker. `sauce globals --chain <chain> --stocks` lists a chain's, and `--search <text>` finds one
 by symbol, company name or ticker. [What is registered](../api/coverage.md#tokenized-stocks) counts

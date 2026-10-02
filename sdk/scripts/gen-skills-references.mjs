@@ -77,7 +77,8 @@ export function globalsIndex(sdk, ecoRoutes, support) {
             );
 
       // Solana's are mints: the base58 address beside the 32-byte key a program holds, and the
-      // token program that owns the mint. A tokenized stock carries its issuer, name and ticker.
+      // token program that owns the mint. A tokenized stock carries its issuer, name and ticker,
+      // and on Solana whether its issuer's mints charge a transfer fee.
       const row = ({ symbol, address, decimals, mint, tokenProgram, stock }) => ({
         symbol,
         address,
@@ -86,7 +87,15 @@ export function globalsIndex(sdk, ecoRoutes, support) {
         ...(tokenProgram === undefined ? {} : { tokenProgram }),
         ...(stock === undefined
           ? {}
-          : { stock: { ...stock, issuer: routes.STOCK_ISSUERS[stock.issuer].name } }),
+          : {
+              stock: {
+                ...stock,
+                issuer: routes.STOCK_ISSUERS[stock.issuer].name,
+                ...(chain.kind === "svm"
+                  ? { transferFee: routes.STOCK_ISSUERS[stock.issuer].transferFee === true }
+                  : {}),
+              },
+            }),
       });
 
       return {
@@ -570,6 +579,8 @@ const tokenProgramName = (program) =>
   program === "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
     ? `Token-2022 (\`${program}\`)`
     : `SPL Token (\`${program}\`)`;
+/** Whether a transfer of a Solana stock mint pays its issuer's fee, as a table cell. */
+const transferFee = (t) => (t.stock.transferFee ? "yes: the recipient gets less" : "none");
 const categoryName = (category) => CATEGORIES.find(([key]) => key === category)?.[1] ?? category;
 const constName = (role) => role.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase();
 const chainLink = (chain, from) =>
@@ -720,21 +731,31 @@ function renderGlobals(data) {
     "rebase: a balance can change between transactions, never within one, and a transfer can credit",
     "one unit less than sent, so paying one into a pool that checks what it received can fail (buying",
     "one is unaffected). Coinbase's are B20 tokens, built into the Base node: they run on Base, and",
-    "not in a local copy of the chain. The rest is in the skill's",
+    "not in a local copy of the chain.",
+    "",
+    "On Solana each is a Token-2022 mint: the symbol is the mint's 32-byte key, a value for the",
+    "`@sauce/token` functions (`balanceOf(TSLAx, account)`), and a program moves one with the checked",
+    "writes (`transferChecked`), which take the mint, its token program and its decimals. Amounts are",
+    "raw: the issuer's multiplier, which a wallet shows them times, does not apply to them. A mint",
+    "marked with a transfer fee (PreStocks') keeps part of every transfer, so the recipient gets less",
+    "than was sent: measure the balance change. The rest is in the skill's",
     "[Tokenized stocks](../SKILL.md#tokenized-stocks).",
     "",
   ];
   for (const entry of globals.tokens) {
     const listed = entry.tokens.filter((t) => t.stock);
     if (listed.length === 0) continue;
+    // A Solana mint says whether a transfer of it pays a fee.
+    const svm = entry.chain.kind === "svm";
     stocks.push(
       `## ${entry.chain.key} (\`${entry.chain.slug}\`, [addresses](../../sauce-chains/references/${entry.chain.slug}-stocks.md))`,
       "",
-      "| Symbol | Token | Ticker | Issuer | Decimals |",
-      "| --- | --- | --- | --- | --- |",
+      `| Symbol | Token | Ticker | Issuer | Decimals |${svm ? " Transfer fee |" : ""}`,
+      `| --- | --- | --- | --- | --- |${svm ? " --- |" : ""}`,
       ...listed.map(
         (t) =>
-          `| \`${t.symbol}\` | ${cell(t.stock.name)} | ${cell(t.stock.ticker)} | ${t.stock.issuer} | ${t.decimals} |`,
+          `| \`${t.symbol}\` | ${cell(t.stock.name)} | ${cell(t.stock.ticker)} | ${t.stock.issuer} | ${t.decimals} |` +
+          (svm ? ` ${transferFee(t)} |` : ""),
       ),
       "",
     );
@@ -899,7 +920,16 @@ function renderChain(chain, supported) {
       ),
       "",
     ];
-    lines.push(...mints(chain.tokens));
+    // Its tokenized stocks, over a thousand mints, are in a file of their own.
+    const stocks = chain.tokens.filter((t) => t.stock).length;
+    lines.push(...mints(chain.tokens.filter((t) => !t.stock)));
+    if (stocks) {
+      lines.push(
+        `And ${stocks} tokenized stocks, each a Token-2022 mint named by its symbol in the same way:`,
+        `they are in [${chain.slug}-stocks.md](${chain.slug}-stocks.md), with their mints.`,
+        "",
+      );
+    }
     if (chain.devnet.length > 0) {
       lines.push(
         "On devnet, pass a mint that differs as a define, which wins over the symbol",
@@ -948,6 +978,29 @@ function renderChain(chain, supported) {
 }
 
 function renderChainStocks(chain) {
+  const listed = chain.tokens.filter((t) => t.stock);
+  if (chain.kind === "svm") {
+    return [
+      HEADER,
+      "",
+      `# ${chain.name} stock tokens`,
+      "",
+      `Every tokenized stock a program compiled for \`${chain.slug}\` names by its symbol, with its`,
+      `mint. Each is a Token-2022 mint (${tokenProgramName(listed[0].tokenProgram)}), whose writes`,
+      "are the checked ones, and the symbol is the mint's key, the value a program holds.",
+      `[${chain.slug}.md](${chain.slug}.md) has the chain's other mints; \`sauce-globals\` has what a`,
+      "stock token is and how its symbol is spelled. A transfer of a mint with a fee pays it out of",
+      "what was sent: the recipient gets less.",
+      "",
+      "| Symbol | Token | Issuer | Mint | Key, the value a program holds | Decimals | Transfer fee |",
+      "| --- | --- | --- | --- | --- | --- | --- |",
+      ...listed.map(
+        (t) =>
+          `| \`${t.symbol}\` | ${cell(t.stock.name)} | ${t.stock.issuer} | \`${t.mint}\` | \`${t.address}\` | ${t.decimals} | ${transferFee(t)} |`,
+      ),
+      "",
+    ].join("\n");
+  }
   return [
     HEADER,
     "",
@@ -959,12 +1012,10 @@ function renderChainStocks(chain) {
     "",
     "| Symbol | Token | Issuer | Address | Decimals |",
     "| --- | --- | --- | --- | --- |",
-    ...chain.tokens
-      .filter((t) => t.stock)
-      .map(
-        (t) =>
-          `| \`${t.symbol}\` | ${cell(t.stock.name)} | ${t.stock.issuer} | \`${t.address}\` | ${t.decimals} |`,
-      ),
+    ...listed.map(
+      (t) =>
+        `| \`${t.symbol}\` | ${cell(t.stock.name)} | ${t.stock.issuer} | \`${t.address}\` | ${t.decimals} |`,
+    ),
     "",
   ].join("\n");
 }

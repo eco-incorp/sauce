@@ -192,7 +192,9 @@ four accounts. What costs bytes:
 Solana has two token programs, and every mint belongs to one, with every token account of it: the
 SPL Token program (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) or Token-2022
 (`TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`). USDC, USDT and WSOL are SPL Token mints; PYUSD and
-the tokenized stocks are Token-2022 mints. The arm takes the mint first, then the accounts:
+the tokenized stocks (`TSLAx`, `NVDA_US`, `SPACEX`, …, in `sauce-globals`'
+[Tokenized stocks](../sauce-globals/SKILL.md#on-solana)) are Token-2022 mints. The arm takes the
+mint first, then the accounts:
 
 - **Reads, either program:** `balanceOf(mint, account)`, `allowance(mint, account, spender)`,
   `ownerOf(mint, account)`, `totalSupply(mintAccount)`, `decimals(mintAccount)`.

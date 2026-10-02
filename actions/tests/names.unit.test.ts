@@ -470,6 +470,24 @@ describe("names — tokenized stocks", () => {
     );
   });
 
+  it("refuses Solana's stock symbols on an EVM chain, naming Solana, where no action runs", () => {
+    const only = problems(() =>
+      compileProgram(doc({ ...BUY_SPCXC, tokenOut: "NVDA_US" }), { chain: "base" }),
+    );
+    assert.equal(only.length, 1, only.join("\n"));
+    assert.match(
+      only[0]!,
+      /^actions\[0\]\.tokenOut: no token "NVDA_US" on Base \(chain 8453\), whose tokens are USDC, WETH and \d+ stock tokens; NVDA_US is a token on Solana, where action programs do not run — give its address there instead$/,
+    );
+    const both = problems(() =>
+      compileProgram(doc({ ...BUY_SPCXC, tokenOut: "TSLAon" }), { chain: "base" }),
+    );
+    assert.match(
+      both[0]!,
+      /TSLAon is a token on Ethereum and Solana, where action programs do not run/,
+    );
+  });
+
   it("refuses a stock's symbol in another case, with the issuer's spelling", () => {
     const found = problems(() => parseProgram(doc({ ...BUY_SPCXC, tokenOut: "spcxc" })));
     assert.match(
