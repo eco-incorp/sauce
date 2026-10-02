@@ -73,6 +73,22 @@ the two `settle.sauce.ts` recipes) and captured fixtures. Everything else, Sauce
 formatted; `.prettierrc.json` names the `typescript` parser for `sdk/src/std`, whose `.js` files
 carry type annotations Prettier's default parser rejects.
 
+**SauceScript in an editor.** The root `tsconfig.json` builds nothing: it is the project an editor
+opens every `*.sauce.ts` of the repository in — skills, docs, recipes, fixtures — the project
+`sauce init` writes into `programs/` (`sauceScriptTsconfig` in `sdk/src/cli/skills.ts`), with the
+declarations from `sdk/dist/sauce-script` (so build first) and the plugin from the SDK workspace,
+which pnpm links into `node_modules/.pnpm/node_modules` beside the workspace TypeScript. The plugin
+loads only when the editor runs that TypeScript (VS Code: "Use Workspace Version"); without it the
+types still apply and the false positives it drops show. `sdk/tsconfig.json` excludes
+`src/**/*.sauce.ts`, and tsserver (TypeScript 5.6 and later) goes on up to the root project for a
+file its nearest tsconfig does not include; the runners and the docs' `.ts` examples keep their
+inferred project. `pnpm docs:check` asks tsserver for each tracked program's project and
+diagnostics (`checkRepositoryEditor` in `sdk/scripts/check-editor.mjs`), and
+`sdk/test/sauce-script.test.ts` holds every program the root tsconfig lists to the declarations
+built from source. `sauce skills install` writes the same project, naming the installed package,
+beside the skills (`packaged` in `skills.ts`), and the packed check opens the installed programs
+in tsserver there.
+
 Per-workspace (`--filter`):
 
 ```sh

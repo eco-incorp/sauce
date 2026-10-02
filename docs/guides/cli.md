@@ -648,6 +648,12 @@ TypeScript leaves them to their own project. The file it writes is this, `<packa
 A contract ABI beside a program is typed by its default import, `import IOracle from "./IOracle.json"`,
 as a contract whose methods the editor does not check; the compile checks them against the ABI.
 
+`sauce skills install` and `sauce skills update` write the same file as `tsconfig.json` in each
+skills directory, so the skills' example programs open typed as well. Its declarations, like the
+plugin, come from the project's own copy of the package: in a project that does not depend on
+`@eco-incorp/sauce`, the editor reports that it cannot find `@eco-incorp/sauce/sauce-script`, and
+the programs show what they would with no `tsconfig.json` at all.
+
 ## An actions document instead of a program
 
 An [actions document](actions.md) is JSON — `{ "version": 1, "actions": [ … ] }`, each action one
@@ -1453,7 +1459,9 @@ npx sauce skills update                           # after upgrading the package
 - **`status`** reports each target as up to date, outdated or modified, listing the files, and
   exits 1 while any is outdated: put it in CI to notice an upgrade the skills have not followed.
 
-Each skills directory records what it was given in `.sauce-skills.json` — the package, its version,
+Beside the skills, each directory gets `tsconfig.json`, which types their example programs in an
+editor ([In an editor](#in-an-editor)); it is installed, recorded, updated and reported like a skill
+file. Each skills directory records what it was given in `.sauce-skills.json` — the package, its version,
 and the sha256 of each file as written — and the `AGENTS.md` block records the same in its opening
 marker. That record is how a package upgrade (a file still as installed) is told apart from an edit
 (a file that is not). Skills of your own in the same directories are never touched.
