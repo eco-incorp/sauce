@@ -110,10 +110,12 @@ key — on Ethereum, Base and Avalanche state, against the same trade by address
 `sauce run`. `holdings.mainnet` (`test:mainnet`) runs the `sauce-chains` skill's
 `holdings.sauce.ts` as its header's `sauce simulate` line says, on Ethereum and Base state, and
 holds what it returns to each chain's own pool and the balances the Pot was given.
-`docs-examples.mainnet` (`test:mainnet`) executes the manual's router and venue
-examples (`docs/examples/router-route`, `router-swap`, `venue-where-deployed`) as their runners
-build them, IMPORTING the runners for their exact bytes, on Ethereum, Base and OP Mainnet state,
-each output held to the venues' own quotes. Importing a runner is why `actions/tsconfig.json` sets
+`docs-examples.mainnet` (`test:mainnet`) executes the manual's router, venue and README examples
+(`docs/examples/router-route`, `router-swap`, `venue-where-deployed`, `cross-chain-intent`) as their
+runners build them, IMPORTING the runners for their exact bytes, and runs the `sauce run` usage
+line of each that has one as written, through `runCli`, on Ethereum, Base and OP Mainnet state;
+each output is held to the venues' own quotes, and `cross-chain-intent`'s published intent to Base's
+own Portal. Importing a runner is why `actions/tsconfig.json` sets
 `rootDir: ".."`: the runners import `@eco-incorp/sauce` by its own name, a self-reference
 TypeScript resolves only with a root; `tsconfig.build.json` pins its own `rootDir` to `src`, so the
 build's output does not move.
@@ -184,7 +186,7 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   venue suites `swap` (Ethereum) ~110 KB, `swap-base` ~90 KB, `swap-avalanche` ~30 KB, and the names
   suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB,
   `holdings-{ethereum,base}` ~30 KB each, and the docs examples suite's three (`docs-examples`,
-  `-base`, `-optimism`) ~80, ~15 and ~25 KB.
+  `-base`, `-optimism`) ~80, ~35 and ~25 KB.
 
   **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
   pinned block (then recapture every suite on that chain, and revisit every pinned figure: pools,
@@ -923,7 +925,13 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   contract address `routes.sourceGlobals` names on any EVM chain, and no hand-built `hex` selector
   of a function a namespace binding, interface or registry ABI declares (comments are exempt, so a
   usage line may show an address; a deliberately low-level call is a `LOW_LEVEL_CALLS` entry, per
-  example and selector, with its reason); and the wording rules below. Its exceptions
+  example and selector, with its reason); every value an example program reads having a visible
+  source — a name it never declares must be the registry's (`routes.sourceGlobals` on any chain),
+  the language's (a builtin root from `builtins.json`, or `available`, `Token`, `self`), an import,
+  a local or a parameter, so in a program with a `main` an input is a `main` parameter and never an
+  undeclared define, and an intent file with no `main` shows each UPPER_CASE define it reads as
+  `--define NAME=…` in its header (an exception is an `INPUT_EXCEPTIONS` entry, per example and
+  name, with its reason); and the wording rules below. Its exceptions
   live in the checker, never as markers in a
   shipped skill (they mean nothing to the agent reading it): a name inline code may use although
   the package never declares it (an external contract's function) is an `UNDECLARED_NAMES` entry,
