@@ -22,10 +22,11 @@
  *     contract's OWN `symbol()` string-equals "USDT" (see the note below), plus the wrapped native
  *     under whatever `symbol()` actually returns where it isn't WETH (polygon's WPOL).
  *
- *   STOCKS (`stock-tokens.ts`): tokenized stocks on ethereum and base, each issuer's list copied
- *     from the issuer and held to the chain by `test/token-registry-evidence.test.ts`. A stock row
- *     carries `stock` (its issuer, name and ticker), and its symbol is the issuer's ticker, which is
- *     not always uppercase ("TSLAx", "bTSLA"), so those rows have their own shape below.
+ *   STOCKS (`stock-tokens.ts`): tokenized stocks on ethereum, base and solana, each issuer's list
+ *     copied from the issuer and held to the chain by `test/token-registry-evidence.test.ts`. A
+ *     stock row carries `stock` (its issuer, name and ticker), and its symbol is the issuer's
+ *     ticker, which is not always uppercase ("TSLAx", "bTSLA"), so those rows have their own shape
+ *     below. On Solana each is a Token-2022 mint.
  *
  *   NOT CLAIMED: every other canonical chain; DAI/WBTC/USDS/cbETH/LST symbols; bridged token
  *   variants under a plain key (see below); decimals-aware amount sugar; anything auto-derived from
@@ -61,7 +62,7 @@ import { bytesToHex, getAddress, isAddress } from "viem";
 import type { CanonicalChain } from "../chains/canonical.js";
 import { CANONICAL_CHAINS, chainById } from "../chains/canonical.js";
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../svm/token-program.js";
-import { STOCK_TOKENS } from "./stock-tokens.generated.js";
+import { STOCK_TOKENS, SVM_STOCK_TOKENS } from "./stock-tokens.generated.js";
 import type { StockIssuer } from "./stock-tokens.js";
 import { STOCK_ISSUERS } from "./stock-tokens.js";
 import type { AddressInput } from "./types.js";
@@ -285,7 +286,8 @@ export type SvmTokenCluster = "mainnet-beta" | "devnet";
 export interface SvmTokenRow {
   /**
    * The ticker, uppercase: the mint's metadata symbol (Metaplex, or a Token-2022 mint's own
-   * TokenMetadata), except where noted on the row.
+   * TokenMetadata), except where noted on the row. A stock's is its issuer's, with a "." as "_"
+   * ("TSLAx", "NVDA_US").
    */
   readonly symbol: string;
   /** The mint's base58 address. */
@@ -298,6 +300,9 @@ export interface SvmTokenRow {
   readonly tokenProgram: SolanaAddress;
   /** The mint's 32-byte key as hex: the value a program compares an account's mint@0 against. */
   readonly address: `0x${string}`;
+  /** A tokenized stock's issuer, its name as the issuer lists it, and its underlying's ticker; its
+   *  symbol is the issuer's, as on an EVM chain. */
+  readonly stock?: StockToken;
   /** Verification metadata only, as on the EVM rows. */
   readonly decimals: number;
   /** Provenance: `probe:<cluster>@<date>`, plus the publisher's own listing where there is one. */
@@ -374,14 +379,30 @@ const SVM_TOKEN_ENTRIES: Readonly<Record<SvmTokenCluster, readonly SvmTokenEntry
 const svmKey = (mint: string): `0x${string}` =>
   bytesToHex(new Uint8Array(getAddressEncoder().encode(solanaAddress(mint))));
 
+/** The cluster's rows: its entries above, then its tokenized stocks, each a Token-2022 mint (the
+ *  evidence holds every one to its owner). */
+function svmRows(cluster: SvmTokenCluster): readonly SvmTokenRow[] {
+  return [
+    ...SVM_TOKEN_ENTRIES[cluster].map((row) => ({ ...row, address: svmKey(row.mint) })),
+    ...(SVM_STOCK_TOKENS[cluster] ?? []).flatMap(({ issuer, decimals, tokens }) =>
+      tokens.map(([symbol, mint, name, ticker]): SvmTokenRow => ({
+        symbol,
+        mint,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+        address: svmKey(mint),
+        decimals,
+        source: STOCK_ISSUERS[issuer].source,
+        stock: { issuer, name, ticker },
+      })),
+    ),
+  ];
+}
+
 /** Registered SPL mints, per Solana cluster. A canonical `solana` program compiles against
  *  `mainnet-beta`'s; a devnet program passes its mint as a define, which overrides the registry. */
 export const SVM_TOKEN_REGISTRY: Readonly<Record<SvmTokenCluster, readonly SvmTokenRow[]>> = {
-  "mainnet-beta": SVM_TOKEN_ENTRIES["mainnet-beta"].map((row) => ({
-    ...row,
-    address: svmKey(row.mint),
-  })),
-  devnet: SVM_TOKEN_ENTRIES.devnet.map((row) => ({ ...row, address: svmKey(row.mint) })),
+  "mainnet-beta": svmRows("mainnet-beta"),
+  devnet: svmRows("devnet"),
 };
 
 /** The cluster each canonical SVM chain is. */
@@ -413,16 +434,18 @@ for (const [cluster, rows] of Object.entries(SVM_TOKEN_REGISTRY)) {
     const collides = [...REWRITABLE_METHODS].some(
       (method) => method.toUpperCase() === row.symbol.toUpperCase(),
     );
-    if (!SYMBOL_RE.test(row.symbol) || collides) {
+    const shape = row.stock === undefined ? SYMBOL_RE : STOCK_SYMBOL_RE;
+    if (!shape.test(row.symbol) || collides) {
       throw new Error(`token-registry: ${cluster} row '${row.symbol}' is not a usable ticker`);
     }
-    if (seenSymbols.has(row.symbol) || seenMints.has(row.mint)) {
+    // Unique without regard to case, as on an EVM chain: the CLI finds a symbol that way.
+    if (seenSymbols.has(row.symbol.toUpperCase()) || seenMints.has(row.mint)) {
       throw new Error(`token-registry: ${cluster} registers '${row.symbol}' or its mint twice`);
     }
     if (row.tokenProgram !== TOKEN_PROGRAM_ID && row.tokenProgram !== TOKEN_2022_PROGRAM_ID) {
       throw new Error(`token-registry: ${cluster} row '${row.symbol}' names no token program`);
     }
-    seenSymbols.add(row.symbol);
+    seenSymbols.add(row.symbol.toUpperCase());
     seenMints.add(row.mint);
   }
 }

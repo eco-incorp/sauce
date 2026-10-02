@@ -410,7 +410,12 @@ a contract upgrade to look at, not noise.
 
 **Every token-registry row is pinned to the chain, offline, and the stock tokens come from their
 issuers.** `test/token-registry-evidence.test.ts` checks each EVM row of `TOKEN_REGISTRY` against
-`test/fixtures/token-registry/evidence.json`: code at the address, `symbol()` and `decimals()`.
+`test/fixtures/token-registry/evidence.json`: code at the address, `symbol()` and `decimals()`; and
+each mainnet-beta mint of `SVM_TOKEN_REGISTRY`, under Solana's chain id 1399811149: its owner is the
+row's `tokenProgram`, it is initialized, has the row's decimals and its metadata symbol (the mint's
+own TokenMetadata, else Metaplex's), a checked transfer of it is refused for nothing
+(`resolveSvmToken`'s `transferRefusals`: no hook program, no pause, no frozen default), and it
+charges a transfer fee exactly when its issuer's `STOCK_ISSUERS` entry says `transferFee`.
 `node scripts/capture-token-registry.mjs --recapture --rpc-config rpc.config.json [--chains <id>,…]`
 (from `sdk/`, no build needed) writes it, reading endpoints only from that file, as the registry-ABI
 capture does. A row added without recapturing fails the test. The tokenized stocks (Backed's
@@ -424,9 +429,18 @@ precompiles of the Base node whose account holds the single byte `0xef`: anvil c
 (`OpcodeNotFound`), so no execution suite may depend on one; the evidence reads them through
 `eth_call` on the live chain, and `--assume-balance` refuses one by that code. Ondo's rows are the
 registry page's that Ondo's app lists (`app.ondo.finance/api/v2/assets`), which leaves out a token
-not launched yet. Solana's tokenized stocks are all Token-2022 mints and are not registered (the SVM
-token arm takes classic SPL Token only). `sauce globals` and `sauce_globals` count a chain's stocks
-by default; `--stocks`/`stocks` lists them and `--search`/`search` finds one.
+not launched yet. On Solana the stocks are Token-2022 mints (`SVM_STOCK_TOKENS`, merged into
+`SVM_TOKEN_REGISTRY["mainnet-beta"]` with `tokenProgram` Token-2022): Backed's Solana list, Ondo's
+`solAddr` column, Backpack's `<ticker>.US` assets it takes deposits of (its list carries mints it
+has not opened; the evidence holds each copied one to a supply above zero) and PreStocks' product
+page. Backpack's symbol is `NVDA_US` while the mint's metadata says `NVDA` (the row's ticker, which
+the evidence checks); PreStocks' mints charge a transfer fee. Superstate is left out (allowlisted
+holders only). `sauce globals` and `sauce_globals` count a chain's stocks by default;
+`--stocks`/`stocks` lists them and `--search`/`search` finds one. `sauce pot` on Solana reads the
+Pot's account for every registered mint but the stocks. Every compile hands the chain's token map to
+the compiler as defines, so a chain with a thousand stocks costs about 2 ms more per compile (Ethereum
+and Solana alike); that goes away with the compiler's lazy `declare` (v12 #550), and the SDK does not
+scan program text to trim it.
 
 `src/std/` is the SauceScript **standard library** — source shipped for the compiler to consume, not
 TypeScript. `src/std/token/` is `@sauce/token` (an ERC20/SPL token interface behind one import), and

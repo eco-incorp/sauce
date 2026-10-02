@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import { address as svmAddress } from "@solana/kit";
+import { findAssociatedTokenPda } from "@solana-program/token";
 import {
   bytesToHex,
   decodeFunctionData,
@@ -40,7 +41,12 @@ import {
   type TerminalChoice,
 } from "../src/cli/terminal.js";
 import { castSend } from "../src/cli/commands.js";
-import { awaitAccount, failureReason } from "../src/cli/solana.js";
+import {
+  awaitAccount,
+  failureReason,
+  parseAccounts,
+  resolveTokenAccounts,
+} from "../src/cli/solana.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import {
   v12DeployedAddresses,
@@ -57,6 +63,8 @@ import * as root from "../src/index.js";
 import * as routes from "../src/routes/index.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
+import { svmTokenRows } from "../src/routes/token-registry.js";
+import { TOKEN_2022_PROGRAM_ID } from "../src/svm/token-program.js";
 import { encodeCompactArguments } from "../src/compact-arguments.js";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
@@ -867,6 +875,26 @@ describe("sauce compile", () => {
       "function main() {\n  require(SPCXc.balanceOf(ctx.self()) >= 0n);\n}\n",
     );
     expect((await sauce("compile", fixed, "--chain", "base")).code).toBe(0);
+  });
+
+  it("names a Solana stock mint's symbol in its issuer's case, and an EVM chain's token as one", async () => {
+    const program = (symbol: string) =>
+      file(
+        `stock-${symbol}.sauce.ts`,
+        `function main(account: Account): Uint256 {\n  return balanceOf(${symbol}, account);\n}\n`,
+      );
+    const cased = await sauce("compile", program("tslax"), "--chain", "solana");
+    expect(cased.code).toBe(1);
+    expect(cased.stderr).toContain(
+      "hint: tslax is TSLAx on solana: a token's symbol is case-sensitive",
+    );
+    const evm = await sauce("compile", program("SPCXc"), "--chain", "solana");
+    expect(evm.code).toBe(1);
+    expect(evm.stderr).toContain(
+      "hint: SPCXc is a token on base, not solana: sauce globals --chain solana --search <text> " +
+        "finds the mints it has",
+    );
+    expect((await sauce("compile", program("TSLAx"), "--chain", "solana")).code).toBe(0);
   });
 
   it("needs no fee for --intent-execution-fee auto when no intent runs a program", async () => {
@@ -1811,6 +1839,39 @@ describe("sauce pot", () => {
     const compiled = await sauce("compile", program, "--chain", "base", "--via", "engine");
     expect(compiled.code).toBe(2);
     expect(compiled.stderr).toMatch(/--via chooses how a Solana cook reaches the engine/);
+  });
+
+  it("names a Solana stock mint's accounts by its symbol in any case, under Token-2022", async () => {
+    const solana = requireChain("solana");
+    const owner = svmAddress("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
+    const pot = svmAddress("4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T");
+    const nvda = svmTokenRows(solana).find((row) => row.symbol === "NVDA_US")!;
+    // A stock's symbol can carry a "_", and is found without regard to case.
+    const given = parseAccounts([
+      "source=pot:nvda_us",
+      "mint=mint:NVDA_US",
+      "program=program:tslax",
+    ]);
+    const { accounts } = await resolveTokenAccounts(given, owner, pot, solana);
+    expect(accounts).toEqual({
+      source: (
+        await findAssociatedTokenPda({
+          owner: pot,
+          mint: svmAddress(nvda.mint),
+          tokenProgram: svmAddress(TOKEN_2022_PROGRAM_ID),
+        })
+      )[0],
+      mint: nvda.mint,
+      program: TOKEN_2022_PROGRAM_ID,
+    });
+    // A symbol the cluster does not register names its other mints and counts its stocks.
+    const stocks = svmTokenRows(solana).filter((row) => row.stock !== undefined).length;
+    await expect(
+      resolveTokenAccounts(parseAccounts(["held=pot:SPCXc"]), owner, pot, solana),
+    ).rejects.toThrow(
+      `SPCXc is not a mint solana registers (PYUSD, USDC, USDT, WSOL, and ${stocks} stock ` +
+        "tokens: sauce globals --chain solana --stocks)",
+    );
   });
 
   it("derives a Solana Pot as the Kitchen's PDA over (owner, salt), offline", async () => {

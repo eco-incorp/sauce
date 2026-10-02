@@ -12,7 +12,14 @@ token or refuse a sanctioned address. Backed's (its xStocks, and bTokens such as
 rebase: a balance can change between transactions, never within one, and a transfer can credit
 one unit less than sent, so paying one into a pool that checks what it received can fail (buying
 one is unaffected). Coinbase's are B20 tokens, built into the Base node: they run on Base, and
-not in a local copy of the chain. The rest is in the skill's
+not in a local copy of the chain.
+
+On Solana each is a Token-2022 mint: the symbol is the mint's 32-byte key, a value for the
+`@sauce/token` functions (`balanceOf(TSLAx, account)`), and a program moves one with the checked
+writes (`transferChecked`), which take the mint, its token program and its decimals. Amounts are
+raw: the issuer's multiplier, which a wallet shows them times, does not apply to them. A mint
+marked with a transfer fee (PreStocks') keeps part of every transfer, so the recipient gets less
+than was sent: measure the balance change. The rest is in the skill's
 [Tokenized stocks](../SKILL.md#tokenized-stocks).
 
 ## Ethereum (`ethereum`, [addresses](../../sauce-chains/references/ethereum-stocks.md))
@@ -1822,3 +1829,1807 @@ not in a local copy of the chain. The rest is in the skill's
 | `bNIU` | Backed Niu Technologies | NIU | Backed | 18 |
 | `bNVDA` | Backed NVIDIA Corp | NVDA | Backed | 18 |
 | `bTSLA` | Backed Tesla Inc | TSLA | Backed | 18 |
+
+## Solana (`solana`, [addresses](../../sauce-chains/references/solana-stocks.md))
+
+| Symbol | Token | Ticker | Issuer | Decimals | Transfer fee |
+| --- | --- | --- | --- | --- | --- |
+| `A5Gx` | AIB xStock | A5GI | Backed | 8 | none |
+| `AAFx` | Airtel Africa xStock | AAFL | Backed | 8 | none |
+| `AALon` | American Airlines Group (Ondo Tokenized) | AAL | Ondo Global Markets | 9 | none |
+| `AALx` | American Airlines xStock | AAL | Backed | 8 | none |
+| `AAOIon` | Applied Optoelectronics (Ondo Tokenized) | AAOI | Ondo Global Markets | 9 | none |
+| `AAOIx` | Applied Optoelectronics xStock | AAOI | Backed | 8 | none |
+| `AAONon` | AAON (Ondo Tokenized) | AAON | Ondo Global Markets | 9 | none |
+| `AAONx` | AAON xStock | AAON | Backed | 8 | none |
+| `AAPLon` | Apple (Ondo Tokenized) | AAPL | Ondo Global Markets | 9 | none |
+| `AAPLx` | Apple xStock | AAPL | Backed | 8 | none |
+| `AAx` | Alcoa xStock | AA | Backed | 8 | none |
+| `ABBVon` | AbbVie (Ondo Tokenized) | ABBV | Ondo Global Markets | 9 | none |
+| `ABBVx` | AbbVie xStock | ABBV | Backed | 8 | none |
+| `ABDNx` | Aberdeen xStock | ABDNL | Backed | 8 | none |
+| `ABFx` | Associated British Foods xStock | ABFL | Backed | 8 | none |
+| `ABI_BEx` | Anheuser-Busch InBev SA/NV xStock | ABIB | Backed | 8 | none |
+| `ABNBon` | Airbnb (Ondo Tokenized) | ABNB | Ondo Global Markets | 9 | none |
+| `ABNBx` | Airbnb xStock | ABNB | Backed | 8 | none |
+| `ABNx` | ABN AMRO Bank xStock | ABNA | Backed | 8 | none |
+| `ABTon` | Abbott (Ondo Tokenized) | ABT | Ondo Global Markets | 9 | none |
+| `ABTx` | Abbott xStock | ABT | Backed | 8 | none |
+| `ACA_FRx` | Credit Agricole xStock | ACAP | Backed | 8 | none |
+| `ACHRon` | Archer Aviation (Ondo Tokenized) | ACHR | Ondo Global Markets | 9 | none |
+| `ACIx` | Albertsons Companies xStock | ACI | Backed | 8 | none |
+| `ACLSon` | Axcelis Technologies (Ondo Tokenized) | ACLS | Ondo Global Markets | 9 | none |
+| `ACMRon` | ACM Research (Ondo Tokenized) | ACMR | Ondo Global Markets | 9 | none |
+| `ACMx` | Aecom xStock | ACM | Backed | 8 | none |
+| `ACNon` | Accenture (Ondo Tokenized) | ACN | Ondo Global Markets | 9 | none |
+| `ACNx` | Accenture xStock | ACN | Backed | 8 | none |
+| `ADBEon` | Adobe (Ondo Tokenized) | ADBE | Ondo Global Markets | 9 | none |
+| `ADBEx` | Adobe xStock | ADBE | Backed | 8 | none |
+| `ADCx` | Agree Realty xStock | ADC | Backed | 8 | none |
+| `ADIon` | Analog Devices (Ondo Tokenized) | ADI | Ondo Global Markets | 9 | none |
+| `ADIx` | Analog Devices xStock | ADI | Backed | 8 | none |
+| `ADM_GBx` | Admiral xStock | ADML | Backed | 8 | none |
+| `ADMx` | Archer-Daniels-Midland xStock | ADM | Backed | 8 | none |
+| `ADPx` | Automatic Data Processing xStock | ADP | Backed | 8 | none |
+| `ADSKx` | Autodesk xStock | ADSK | Backed | 8 | none |
+| `ADSx` | adidas xStock | ADSD | Backed | 8 | none |
+| `ADTx` | ADT xStock | ADT | Backed | 8 | none |
+| `ADYENx` | Adyen xStock | ADYENA | Backed | 8 | none |
+| `AD_NLx` | Koninklijke Ahold Delhaize xStock | ADA | Backed | 8 | none |
+| `AEEx` | Ameren xStock | AEE | Backed | 8 | none |
+| `AEHRon` | Aehr Test Systems (Ondo Tokenized) | AEHR | Ondo Global Markets | 9 | none |
+| `AEHRx` | Aehr Test Systems xStock | AEHR | Backed | 8 | none |
+| `AEISx` | Advanced Energy Industries xStock | AEIS | Backed | 8 | none |
+| `AENAx` | Aena SME xStock | AENAE | Backed | 8 | none |
+| `AEPx` | American Electric Power xStock | AEP | Backed | 8 | none |
+| `AFGx` | American Financial xStock | AFG | Backed | 8 | none |
+| `AFLx` | Aflac xStock | AFL | Backed | 8 | none |
+| `AFRMx` | Affirm xStock | AFRM | Backed | 8 | none |
+| `AGCOx` | AGCO xStock | AGCO | Backed | 8 | none |
+| `AGGon` | iShares Core US Aggregate Bond ETF (Ondo Tokenized) | AGG | Ondo Global Markets | 9 | none |
+| `AGNCx` | AGNC Investment xStock | AGNC | Backed | 8 | none |
+| `AGon` | First Majestic Silver (Ondo Tokenized) | AG | Ondo Global Markets | 9 | none |
+| `AHRx` | American Healthcare REIT xStock | AHR | Backed | 8 | none |
+| `AIAGRx` | AIA xStock | 1299 | Backed | 8 | none |
+| `AIGx` | American International xStock | AIG | Backed | 8 | none |
+| `AIPon` | Arteris (Ondo Tokenized) | AIP | Ondo Global Markets | 9 | none |
+| `AIQon` | Global X Artificial Intelligence & Technology ETF (Ondo Tokenized) | AIQ | Ondo Global Markets | 9 | none |
+| `AIR_FRx` | Airbus xStock | AIRP | Backed | 8 | none |
+| `AITx` | Applied Industrial Technologies xStock | AIT | Backed | 8 | none |
+| `AIZx` | Assurant xStock | AIZ | Backed | 8 | none |
+| `AI_FRx` | Air Liquide xStock | AIP | Backed | 8 | none |
+| `AIon` | C3.ai (Ondo Tokenized) | AI | Ondo Global Markets | 9 | none |
+| `AIx` | C3.ai xStock | AI | Backed | 8 | none |
+| `AJBx` | AJ Bell xStock | AJBL | Backed | 8 | none |
+| `AJGx` | Arthur J. Gallagher xStock | AJG | Backed | 8 | none |
+| `AKAMx` | Akamai Technologies xStock | AKAM | Backed | 8 | none |
+| `ALABon` | Astera Labs (Ondo Tokenized) | ALAB | Ondo Global Markets | 9 | none |
+| `ALABx` | Astera Labs xStock | ALAB | Backed | 8 | none |
+| `ALBon` | Albemarle (Ondo Tokenized) | ALB | Ondo Global Markets | 9 | none |
+| `ALBx` | Albemarle xStock | ALB | Backed | 8 | none |
+| `ALGMx` | Allegro Microsystems xStock | ALGM | Backed | 8 | none |
+| `ALGNx` | Align Technology xStock | ALGN | Backed | 8 | none |
+| `ALLYx` | Ally Financial xStock | ALLY | Backed | 8 | none |
+| `ALLx` | Allstate xStock | ALL | Backed | 8 | none |
+| `ALMx` | Almonty Industries xStock | ALM | Backed | 8 | none |
+| `ALNYx` | Alnylam Pharmaceuticals xStock | ALNY | Backed | 8 | none |
+| `ALOYon` | REalloys (Ondo Tokenized) | ALOY | Ondo Global Markets | 9 | none |
+| `ALSNx` | Allison Transmission xStock | ALSN | Backed | 8 | none |
+| `ALV_DEx` | Allianz xStock | ALVD | Backed | 8 | none |
+| `AMATon` | Applied Materials (Ondo Tokenized) | AMAT | Ondo Global Markets | 9 | none |
+| `AMATx` | Applied Materials, Inc. xStock | AMAT | Backed | 8 | none |
+| `AMBRx` | Amber xStock | AMBR | Backed | 8 | none |
+| `AMC_US` | AMC Entertainment | AMC | Backpack Securities | 6 | none |
+| `AMCon` | AMC Entertainment (Ondo Tokenized) | AMC | Ondo Global Markets | 9 | none |
+| `AMCx` | AMC Entertainment xStock | AMC | Backed | 8 | none |
+| `AMD_US` | Advanced Micro Devices, Inc. | AMD | Backpack Securities | 6 | none |
+| `AMDon` | AMD (Ondo Tokenized) | AMD | Ondo Global Markets | 9 | none |
+| `AMDx` | AMD xStock | AMD | Backed | 8 | none |
+| `AMEon` | AMETEK (Ondo Tokenized) | AME | Ondo Global Markets | 9 | none |
+| `AMEx` | AMETEK xStock | AME | Backed | 8 | none |
+| `AMGNon` | Amgen (Ondo Tokenized) | AMGN | Ondo Global Markets | 9 | none |
+| `AMGNx` | Amgen xStock | AMGN | Backed | 8 | none |
+| `AMGx` | Affiliated Managers xStock | AMG | Backed | 8 | none |
+| `AMHx` | American Homes 4 Rent xStock | AMH | Backed | 8 | none |
+| `AMKRon` | Amkor Technology (Ondo Tokenized) | AMKR | Ondo Global Markets | 9 | none |
+| `AMKRx` | Amkor Technology xStock | AMKR | Backed | 8 | none |
+| `AMPx` | Ameriprise Financial xStock | AMP | Backed | 8 | none |
+| `AMS_ESx` | Amadeus IT xStock | AMSE | Backed | 8 | none |
+| `AMTMx` | Amentum xStock | AMTM | Backed | 8 | none |
+| `AMTx` | American Tower xStock | AMT | Backed | 8 | none |
+| `AMZNon` | Amazon (Ondo Tokenized) | AMZN | Ondo Global Markets | 9 | none |
+| `AMZNx` | Amazon.com xStock | AMZN | Backed | 8 | none |
+| `AMx` | Antero Midstream xStock | AM | Backed | 8 | none |
+| `ANDURIL` | Anduril | ANDURIL | PreStocks | 9 | yes: the recipient gets less |
+| `ANETon` | Arista Networks (Ondo Tokenized) | ANET | Ondo Global Markets | 9 | none |
+| `ANETx` | Arista Networks, Inc. xStock | ANET | Backed | 8 | none |
+| `ANTASx` | ANTA Sports Products xStock | 2020 | Backed | 8 | none |
+| `ANTHROPIC` | Anthropic | ANTHROPIC | PreStocks | 9 | yes: the recipient gets less |
+| `ANTOx` | Antofagasta xStock | ANTOL | Backed | 8 | none |
+| `AOSLon` | Alpha and Omega Semiconductor (Ondo Tokenized) | AOSL | Ondo Global Markets | 9 | none |
+| `AOSx` | A.O. Smith xStock | AOS | Backed | 8 | none |
+| `APAx` | APA xStock | APA | Backed | 8 | none |
+| `APDx` | Air Products and Chemicals xStock | APD | Backed | 8 | none |
+| `APGx` | APi xStock | APG | Backed | 8 | none |
+| `APHon` | Amphenol (Ondo Tokenized) | APH | Ondo Global Markets | 9 | none |
+| `APHx` | Amphenol xStock | APH | Backed | 8 | none |
+| `APLDon` | Applied Digital (Ondo Tokenized) | APLD | Ondo Global Markets | 9 | none |
+| `APLDx` | Applied Digital Corporation xStock | APLD | Backed | 8 | none |
+| `APOon` | Apollo Global Management (Ondo Tokenized) | APO | Ondo Global Markets | 9 | none |
+| `APOx` | Apollo Global Management xStock | APO | Backed | 8 | none |
+| `APPFx` | AppFolio xStock | APPF | Backed | 8 | none |
+| `APPon` | AppLovin (Ondo Tokenized) | APP | Ondo Global Markets | 9 | none |
+| `APPx` | AppLovin xStock | APP | Backed | 8 | none |
+| `ARESx` | Ares Management xStock | ARES | Backed | 8 | none |
+| `AREx` | Alexandria Real Estate Equities xStock | ARE | Backed | 8 | none |
+| `ARGTon` | Global X MSCI Argentina ETF (Ondo Tokenized) | ARGT | Ondo Global Markets | 9 | none |
+| `ARMKx` | Aramark xStock | ARMK | Backed | 8 | none |
+| `ARM_US` | Arm Holdings plc | ARM | Backpack Securities | 6 | none |
+| `ARMon` | Arm Holdings plc (Ondo Tokenized) | ARM | Ondo Global Markets | 9 | none |
+| `ARMx` | ARM xStock | ARM | Backed | 8 | none |
+| `ARQQon` | Arqit Quantum (Ondo Tokenized) | ARQQ | Ondo Global Markets | 9 | none |
+| `ARWRx` | Arrowhead Pharmaceuticals xStock | ARWR | Backed | 8 | none |
+| `ARWx` | Arrow Electronics xStock | ARW | Backed | 8 | none |
+| `ARx` | Antero Resources xStock | AR | Backed | 8 | none |
+| `ASMLon` | ASML Holding NV (Ondo Tokenized) | ASML | Ondo Global Markets | 9 | none |
+| `ASMLx` | ASML xStock | ASML | Backed | 8 | none |
+| `ASMPTx` | ASMPT xStock | 522 | Backed | 8 | none |
+| `ASM_NLx` | ASM International xStock | ASMA | Backed | 8 | none |
+| `ASTSon` | AST SpaceMobile (Ondo Tokenized) | ASTS | Ondo Global Markets | 9 | none |
+| `ASTSx` | AST SpaceMobile xStock | ASTS | Backed | 8 | none |
+| `ASx` | Amer Sports xStock | AS | Backed | 8 | none |
+| `ATIx` | ATI xStock | ATI | Backed | 8 | none |
+| `ATKRon` | Atkore (Ondo Tokenized) | ATKR | Ondo Global Markets | 9 | none |
+| `ATOx` | Atmos Energy xStock | ATO | Backed | 8 | none |
+| `ATRx` | AptarGroup xStock | ATR | Backed | 8 | none |
+| `AUGOx` | Aura Minerals xStock | AUGO | Backed | 8 | none |
+| `AURon` | Aurora Innovation (Ondo Tokenized) | AUR | Ondo Global Markets | 9 | none |
+| `AURx` | Aurora Innovation xStock | AUR | Backed | 8 | none |
+| `AUTO_GBx` | Auto Trader xStock | AUTOL | Backed | 8 | none |
+| `AVAVx` | AeroVironment xStock | AVAV | Backed | 8 | none |
+| `AVGOon` | Broadcom (Ondo Tokenized) | AVGO | Ondo Global Markets | 9 | none |
+| `AVGOx` | Broadcom xStock | AVGO | Backed | 8 | none |
+| `AVTRx` | Avantor xStock | AVTR | Backed | 8 | none |
+| `AVTx` | Avnet xStock | AVT | Backed | 8 | none |
+| `AVYx` | Avery Dennison xStock | AVY | Backed | 8 | none |
+| `AV_GBx` | Aviva xStock | AVL | Backed | 8 | none |
+| `AWIx` | Armstrong World Industries xStock | AWI | Backed | 8 | none |
+| `AWKx` | American Water Works xStock | AWK | Backed | 8 | none |
+| `AXONx` | Axon Enterprise xStock | AXON | Backed | 8 | none |
+| `AXPon` | American Express (Ondo Tokenized) | AXP | Ondo Global Markets | 9 | none |
+| `AXSMx` | Axsome Therapeutics xStock | AXSM | Backed | 8 | none |
+| `AXSx` | Axis Capital xStock | AXS | Backed | 8 | none |
+| `AXTAx` | Axalta Coating Systems xStock | AXTA | Backed | 8 | none |
+| `AXTIon` | AXT (Ondo Tokenized) | AXTI | Ondo Global Markets | 9 | none |
+| `AXTIx` | AXT xStock | AXTI | Backed | 8 | none |
+| `AYIx` | Acuity xStock | AYI | Backed | 8 | none |
+| `AZNx` | AstraZeneca xStock | AZN | Backed | 8 | none |
+| `AZOx` | AutoZone xStock | AZO | Backed | 8 | none |
+| `Ax` | Agilent Technologies xStock | A | Backed | 8 | none |
+| `BABA_US` | Alibaba Group Holding Limited | BABA | Backpack Securities | 6 | none |
+| `BABAon` | Alibaba (Ondo Tokenized) | BABA | Ondo Global Markets | 9 | none |
+| `BABAx` | Alibaba xStock | BABA | Backed | 8 | none |
+| `BAB_GBx` | Babcock International xStock | BABL | Backed | 8 | none |
+| `BACon` | Bank of America (Ondo Tokenized) | BAC | Ondo Global Markets | 9 | none |
+| `BACx` | Bank of America xStock | BAC | Backed | 8 | none |
+| `BAHx` | Booz Allen Hamilton xStock | BAH | Backed | 8 | none |
+| `BAIon` | iShares A.I. Innovation and Tech Active ETF (Ondo Tokenized) | BAI | Ondo Global Markets | 9 | none |
+| `BALLx` | Ball xStock | BALL | Backed | 8 | none |
+| `BAMIx` | Banco BPM xStock | BAMIM | Backed | 8 | none |
+| `BAMx` | Brookfield Asset Management xStock | BAM | Backed | 8 | none |
+| `BANKCx` | Bank Of China xStock | 3988 | Backed | 8 | none |
+| `BARCx` | Barclays xStock | BARCL | Backed | 8 | none |
+| `BASx` | Basf xStock | BASD | Backed | 8 | none |
+| `BATSx` | British American Tobacco xStock | BATSL | Backed | 8 | none |
+| `BAXx` | Baxter International xStock | BAX | Backed | 8 | none |
+| `BAYNx` | Bayer xStock | BAYND | Backed | 8 | none |
+| `BA_GBx` | BAE Systems xStock | BAL | Backed | 8 | none |
+| `BA_US` | The Boeing Company | BA | Backpack Securities | 6 | none |
+| `BAon` | Boeing (Ondo Tokenized) | BA | Ondo Global Markets | 9 | none |
+| `BAx` | Boeing xStock | BA | Backed | 8 | none |
+| `BBAIon` | BigBear.ai Holdings (Ondo Tokenized) | BBAI | Ondo Global Markets | 9 | none |
+| `BBIOx` | BridgeBio Pharma xStock | BBIO | Backed | 8 | none |
+| `BBVAx` | Banco Bilbao Vizcaya Argentaria xStock | BBVAE | Backed | 8 | none |
+| `BBY_GBx` | Balfour Beatty xStock | BBYL | Backed | 8 | none |
+| `BBYx` | Best Buy xStock | BBY | Backed | 8 | none |
+| `BB_US` | BlackBerry Limited | BB | Backpack Securities | 6 | none |
+| `BBx` | BlackBerry xStock | BB | Backed | 8 | none |
+| `BCx` | Brunswick xStock | BC | Backed | 8 | none |
+| `BDWAPx` | Budweiser Brewing Co APAC xStock | 1876 | Backed | 8 | none |
+| `BDXx` | Becton Dickinson xStock | BDX | Backed | 8 | none |
+| `BENx` | Franklin Templeton xStock | BEN | Backed | 8 | none |
+| `BEPCx` | Brookfield Renewable xStock | BEPC | Backed | 8 | none |
+| `BETRx` | Better Home & Finance xStock | BETR | Backed | 8 | none |
+| `BEZ_GBx` | Beazley xStock | BEZL | Backed | 8 | none |
+| `BE_US` | Bloom Energy Corporation | BE | Backpack Securities | 6 | none |
+| `BEon` | Bloom Energy (Ondo Tokenized) | BE | Ondo Global Markets | 9 | none |
+| `BEx` | Bloom Energy xStock | BE | Backed | 8 | none |
+| `BGEOx` | Lion Finance xStock | BGEOL | Backed | 8 | none |
+| `BIDUon` | Baidu (Ondo Tokenized) | BIDU | Ondo Global Markets | 9 | none |
+| `BIDUx` | Baidu xStock | BIDU | Backed | 8 | none |
+| `BIIBx` | Biogen xStock | BIIB | Backed | 8 | none |
+| `BILIon` | Bilibili (Ondo Tokenized) | BILI | Ondo Global Markets | 9 | none |
+| `BILIx` | Bilibili xStock | BILI | Backed | 8 | none |
+| `BILon` | SPDR Bloomberg 1-3 Month T-Bill ETF (Ondo Tokenized) | BIL | Ondo Global Markets | 9 | none |
+| `BINCon` | iShares Flexible Income Active ETF (Ondo Tokenized) | BINC | Ondo Global Markets | 9 | none |
+| `BIOx` | Bio-Rad Laboratories xStock | BIO | Backed | 8 | none |
+| `BITXx` | Volatility Shares 2x Bitcoin Strategy xStock | BITX | Backed | 8 | none |
+| `BJx` | BJ's Wholesale Club xStock | BJ | Backed | 8 | none |
+| `BKCHon` | Global X Blockchain ETF (Ondo Tokenized) | BKCH | Ondo Global Markets | 9 | none |
+| `BKG_GBx` | Berkeley xStock | BKGL | Backed | 8 | none |
+| `BKRx` | Baker Hughes xStock | BKR | Backed | 8 | none |
+| `BLCRon` | iShares Large Cap Core Active ETF (Ondo Tokenized) | BLCR | Ondo Global Markets | 9 | none |
+| `BLDRx` | Builders FirstSource xStock | BLDR | Backed | 8 | none |
+| `BLKon` | Blackrock, Inc. (Ondo Tokenized) | BLK | Ondo Global Markets | 9 | none |
+| `BLSHon` | Bullish (Ondo Tokenized) | BLSH | Ondo Global Markets | 9 | none |
+| `BMNRon` | BitMine Immersion Technologies (Ondo Tokenized) | BMNR | Ondo Global Markets | 9 | none |
+| `BMNRx` | Bitmine xStock | BMNR | Backed | 8 | none |
+| `BMRNx` | BioMarin Pharmaceutical xStock | BMRN | Backed | 8 | none |
+| `BMWx` | Bayerische Motoren Werke xStock | BMWD | Backed | 8 | none |
+| `BMYx` | Bristol-Myers Squibb xStock | BMY | Backed | 8 | none |
+| `BNOon` | US Brent Oil Fund (Ondo Tokenized) | BNO | Ondo Global Markets | 9 | none |
+| `BNPx` | BNP Paribas xStock | BNPP | Backed | 8 | none |
+| `BNYx` | Bank of New York Mellon xStock | BNY | Backed | 8 | none |
+| `BNZLx` | Bunzl xStock | BNZLL | Backed | 8 | none |
+| `BN_FRx` | Danone xStock | BNP | Backed | 8 | none |
+| `BOCHKx` | BOC Hong Kong xStock | 2388 | Backed | 8 | none |
+| `BOCOMx` | Bank of Communications xStock | 3328 | Backed | 8 | none |
+| `BOKFx` | BOK Financial xStock | BOKF | Backed | 8 | none |
+| `BOTZon` | Global X Robotics & Artificial Intelligence ETF (Ondo Tokenized) | BOTZ | Ondo Global Markets | 9 | none |
+| `BOT_US` | BOT.US | BOT | Backpack Securities | 6 | none |
+| `BOTon` | RoboStrategy (Ondo Tokenized) | BOT | Ondo Global Markets | 9 | none |
+| `BOTx` | RoboStrategy xStock | BOT | Backed | 8 | none |
+| `BPEx` | BPER Banca xStock | BPEM | Backed | 8 | none |
+| `BPOPx` | Popular xStock | BPOP | Backed | 8 | none |
+| `BPx` | BP xStock | BPL | Backed | 8 | none |
+| `BRBYx` | Burberry xStock | BRBYL | Backed | 8 | none |
+| `BRHYon` | iShares High Yield Active ETF (Ondo Tokenized) | BRHY | Ondo Global Markets | 9 | none |
+| `BRKRx` | Bruker xStock | BRKR | Backed | 8 | none |
+| `BRK_Bx` | Berkshire Hathaway xStock | BRK.B | Backed | 8 | none |
+| `BRLNon` | iShares Floating Rate Loan Active ETF (Ondo Tokenized) | BRLN | Ondo Global Markets | 9 | none |
+| `BROS_US` | Dutch Bros Inc. | BROS | Backpack Securities | 6 | none |
+| `BROSx` | Dutch Bros xStock | BROS | Backed | 8 | none |
+| `BROx` | Brown & Brown xStock | BRO | Backed | 8 | none |
+| `BRTRon` | iShares Total Return Active ETF (Ondo Tokenized) | BRTR | Ondo Global Markets | 9 | none |
+| `BRXx` | Brixmor Property xStock | BRX | Backed | 8 | none |
+| `BRx` | Broadridge Financial Solutions xStock | BR | Backed | 8 | none |
+| `BSPx` | Bending Spoons xStock | BSP | Backed | 8 | none |
+| `BSXx` | Boston Scientific xStock | BSX | Backed | 8 | none |
+| `BSYx` | Bentley Systems xStock | BSY | Backed | 8 | none |
+| `BTBTx` | Bit Digital xStock | BTBT | Backed | 8 | none |
+| `BTDRon` | Bitdeer Technologies (Ondo Tokenized) | BTDR | Ondo Global Markets | 9 | none |
+| `BTGOon` | BitGo Holdings (Ondo Tokenized) | BTGO | Ondo Global Markets | 9 | none |
+| `BTGOx` | Bitgo xStock | BTGO | Backed | 8 | none |
+| `BTGon` | B2Gold (Ondo Tokenized) | BTG | Ondo Global Markets | 9 | none |
+| `BTRWx` | Barratt Redrow xStock | BTRWL | Backed | 8 | none |
+| `BT_Ax` | BT xStock | BTL | Backed | 8 | none |
+| `BULL_US` | Webull Corporation | BULL | Backpack Securities | 6 | none |
+| `BURLx` | Burlington Stores xStock | BURL | Backed | 8 | none |
+| `BWAx` | BorgWarner xStock | BWA | Backed | 8 | none |
+| `BWETon` | Breakwave Tanker Shipping ETF (Ondo Tokenized) | BWET | Ondo Global Markets | 9 | none |
+| `BWXTx` | BWX Technologies xStock | BWXT | Backed | 8 | none |
+| `BWYx` | Bellway xStock | BWYL | Backed | 8 | none |
+| `BXPx` | BXP xStock | BXP | Backed | 8 | none |
+| `BXx` | Blackstone xStock | BX | Backed | 8 | none |
+| `BYDCOx` | BYD xStock | 1211 | Backed | 8 | none |
+| `BYDx` | Boyd Gaming xStock | BYD | Backed | 8 | none |
+| `BZon` | Kanzhun (Ondo Tokenized) | BZ | Ondo Global Markets | 9 | none |
+| `CABKx` | CaixaBank xStock | CABKE | Backed | 8 | none |
+| `CACCx` | Credit Acceptance xStock | CACC | Backed | 8 | none |
+| `CACIx` | CACI International xStock | CACI | Backed | 8 | none |
+| `CAGx` | Conagra Brands xStock | CAG | Backed | 8 | none |
+| `CAHx` | Cardinal Health xStock | CAH | Backed | 8 | none |
+| `CAIx` | Caris Life Sciences xStock | CAI | Backed | 8 | none |
+| `CAMTon` | Camtek (Ondo Tokenized) | CAMT | Ondo Global Markets | 9 | none |
+| `CAPRon` | Capricor Therapeutics (Ondo Tokenized) | CAPR | Ondo Global Markets | 9 | none |
+| `CARRx` | Carrier Global xStock | CARR | Backed | 8 | none |
+| `CARx` | Avis Budget xStock | CAR | Backed | 8 | none |
+| `CASYx` | Casey's General Stores xStock | CASY | Backed | 8 | none |
+| `CATon` | Caterpillar (Ondo Tokenized) | CAT | Ondo Global Markets | 9 | none |
+| `CATx` | Caterpillar xStock | CAT | Backed | 8 | none |
+| `CBREx` | CBRE xStock | CBRE | Backed | 8 | none |
+| `CBRSon` | Cerebras Systems (Ondo Tokenized) | CBRS | Ondo Global Markets | 9 | none |
+| `CBRSx` | Cerebras Systems xStock | CBRS | Backed | 8 | none |
+| `CBSHx` | Commerce Bancshares xStock | CBSH | Backed | 8 | none |
+| `CCC_GBx` | Computacenter xStock | CCCL | Backed | 8 | none |
+| `CCIx` | Crown Castle xStock | CCI | Backed | 8 | none |
+| `CCJon` | Cameco (Ondo Tokenized) | CCJ | Ondo Global Markets | 9 | none |
+| `CCKx` | Crown xStock | CCK | Backed | 8 | none |
+| `CCONBx` | China Construction Bank xStock | 939 | Backed | 8 | none |
+| `CDEx` | Coeur Mining xStock | CDE | Backed | 8 | none |
+| `CDNSx` | Cadence Design Systems xStock | CDNS | Backed | 8 | none |
+| `CDWx` | CDW xStock | CDW | Backed | 8 | none |
+| `CEGon` | Constellation Energy (Ondo Tokenized) | CEG | Ondo Global Markets | 9 | none |
+| `CEGx` | Constellation Energy Corporation xStock | CEG | Backed | 8 | none |
+| `CELHx` | Celsius xStock | CELH | Backed | 8 | none |
+| `CEVAon` | CEVA (Ondo Tokenized) | CEVA | Ondo Global Markets | 9 | none |
+| `CFGx` | Citizens Financial xStock | CFG | Backed | 8 | none |
+| `CFRx` | Cullen/Frost Bankers xStock | CFR | Backed | 8 | none |
+| `CFx` | CF Industries xStock | CF | Backed | 8 | none |
+| `CGNXx` | Cognex xStock | CGNX | Backed | 8 | none |
+| `CGx` | The Carlyle xStock | CG | Backed | 8 | none |
+| `CHDNx` | Churchill Downs xStock | CHDN | Backed | 8 | none |
+| `CHDx` | Church & Dwight xStock | CHD | Backed | 8 | none |
+| `CHEx` | Chemed xStock | CHE | Backed | 8 | none |
+| `CHONGx` | China Hongqiao xStock | 1378 | Backed | 8 | none |
+| `CHRDx` | Chord Energy xStock | CHRD | Backed | 8 | none |
+| `CHRWx` | C.H. Robinson Worldwide xStock | CHRW | Backed | 8 | none |
+| `CHTRx` | Charter Communications xStock | CHTR | Backed | 8 | none |
+| `CHWYx` | Chewy xStock | CHWY | Backed | 8 | none |
+| `CIBRon` | First Trust NASDAQ Cybersecurity ETF (Ondo Tokenized) | CIBR | Ondo Global Markets | 9 | none |
+| `CIENon` | Ciena (Ondo Tokenized) | CIEN | Ondo Global Markets | 9 | none |
+| `CIENx` | Ciena xStock | CIEN | Backed | 8 | none |
+| `CIFRon` | Cipher Mining (Ondo Tokenized) | CIFR | Ondo Global Markets | 9 | none |
+| `CINFx` | Cincinnati Financial xStock | CINF | Backed | 8 | none |
+| `CITICx` | CITIC xStock | 267 | Backed | 8 | none |
+| `CIx` | The Cigna xStock | CI | Backed | 8 | none |
+| `CKAHx` | CK Asset xStock | 1113 | Backed | 8 | none |
+| `CKHUTx` | CK Hutchison xStock | 1 | Backed | 8 | none |
+| `CKINFx` | CK Infrastructure xStock | 1038 | Backed | 8 | none |
+| `CLFon` | Cleveland-Cliffs (Ondo Tokenized) | CLF | Ondo Global Markets | 9 | none |
+| `CLFx` | Cleveland-Cliffs xStock | CLF | Backed | 8 | none |
+| `CLHx` | Clean Harbors xStock | CLH | Backed | 8 | none |
+| `CLINSx` | China Life Insurance xStock | 2628 | Backed | 8 | none |
+| `CLOAon` | iShares AAA CLO Active ETF (Ondo Tokenized) | CLOA | Ondo Global Markets | 9 | none |
+| `CLOIon` | VanEck CLO ETF (Ondo Tokenized) | CLOI | Ondo Global Markets | 9 | none |
+| `CLONPx` | China Longyuan Power xStock | 916 | Backed | 8 | none |
+| `CLPHDx` | CLP xStock | 2 | Backed | 8 | none |
+| `CLSKx` | CleanSpark xStock | CLSK | Backed | 8 | none |
+| `CLSon` | Celestica (Ondo Tokenized) | CLS | Ondo Global Markets | 9 | none |
+| `CLXx` | Clorox xStock | CLX | Backed | 8 | none |
+| `CLx` | Colgate-Palmolive xStock | CL | Backed | 8 | none |
+| `CMCSAx` | Comcast xStock | CMCSA | Backed | 8 | none |
+| `CMENDx` | China Mengniu Dairy xStock | 2319 | Backed | 8 | none |
+| `CMERPx` | China Merchants Port xStock | 144 | Backed | 8 | none |
+| `CMEx` | CME xStock | CME | Backed | 8 | none |
+| `CMGon` | Chipotle (Ondo Tokenized) | CMG | Ondo Global Markets | 9 | none |
+| `CMGx` | Chipotle Mexican Grill xStock | CMG | Backed | 8 | none |
+| `CMIx` | Cummins xStock | CMI | Backed | 8 | none |
+| `CMSx` | CMS Energy xStock | CMS | Backed | 8 | none |
+| `CNA_GBx` | Centrica xStock | CNAL | Backed | 8 | none |
+| `CNAx` | CNA Financial xStock | CNA | Backed | 8 | none |
+| `CNCx` | Centene xStock | CNC | Backed | 8 | none |
+| `CNMx` | Core & Main xStock | CNM | Backed | 8 | none |
+| `CNPx` | CenterPoint Energy xStock | CNP | Backed | 8 | none |
+| `COFon` | Capital One (Ondo Tokenized) | COF | Ondo Global Markets | 9 | none |
+| `COFx` | Capital One Financial xStock | COF | Backed | 8 | none |
+| `COHRon` | Coherent (Ondo Tokenized) | COHR | Ondo Global Markets | 9 | none |
+| `COHRx` | Coherent xStock | COHR | Backed | 8 | none |
+| `COHUon` | Cohu (Ondo Tokenized) | COHU | Ondo Global Markets | 9 | none |
+| `COINon` | Coinbase (Ondo Tokenized) | COIN | Ondo Global Markets | 9 | none |
+| `COINx` | Coinbase xStock | COIN | Backed | 8 | none |
+| `COLBx` | Columbia Banking System xStock | COLB | Backed | 8 | none |
+| `COOx` | The Cooper Companies xStock | COO | Backed | 8 | none |
+| `COPX_US` | Global X Copper Miners ETF | COPX | Backpack Securities | 6 | none |
+| `COPXon` | Global X Copper Miners ETF (Ondo Tokenized) | COPX | Ondo Global Markets | 9 | none |
+| `COPXx` | Global X Copper Miners xStock | COPX | Backed | 8 | none |
+| `COPon` | ConocoPhillips (Ondo Tokenized) | COP | Ondo Global Markets | 9 | none |
+| `COPx` | ConocoPhillips xStock | COP | Backed | 8 | none |
+| `COROon` | iShares International Country Rotation Active ETF (Ondo Tokenized) | CORO | Ondo Global Markets | 9 | none |
+| `CORTx` | Corcept Therapeutics xStock | CORT | Backed | 8 | none |
+| `CORZon` | Core Scientific (Ondo Tokenized) | CORZ | Ondo Global Markets | 9 | none |
+| `CORZx` | Core Scientific xStock | CORZ | Backed | 8 | none |
+| `CORx` | Cencora xStock | COR | Backed | 8 | none |
+| `COSCx` | COSCO SHIPPING xStock | 1919 | Backed | 8 | none |
+| `COST_US` | Costco Wholesale Corporation | COST | Backpack Securities | 6 | none |
+| `COSTon` | Costco (Ondo Tokenized) | COST | Ondo Global Markets | 9 | none |
+| `COVELx` | China Overseas Land & Investment xStock | 688 | Backed | 8 | none |
+| `CPAYx` | Corpay xStock | CPAY | Backed | 8 | none |
+| `CPBx` | The Campbell's xStock | CPB | Backed | 8 | none |
+| `CPERon` | US Copper Index Fund (Ondo Tokenized) | CPER | Ondo Global Markets | 9 | none |
+| `CPETCx` | China Petroleum & Chemical xStock | 386 | Backed | 8 | none |
+| `CPNGon` | Coupang (Ondo Tokenized) | CPNG | Ondo Global Markets | 9 | none |
+| `CPNGx` | Coupang xStock | CPNG | Backed | 8 | none |
+| `CPRTx` | Copart xStock | CPRT | Backed | 8 | none |
+| `CPTx` | Camden Property Trust xStock | CPT | Backed | 8 | none |
+| `CRAUTx` | Chery Automobile xStock | 9973 | Backed | 8 | none |
+| `CRBGx` | Corebridge Financial xStock | CRBG | Backed | 8 | none |
+| `CRCLon` | Circle Internet Group (Ondo Tokenized) | CRCL | Ondo Global Markets | 9 | none |
+| `CRCLx` | Circle xStock | CRCL | Backed | 8 | none |
+| `CRDAx` | Croda International xStock | CRDAL | Backed | 8 | none |
+| `CRDOon` | Credo Technology Group Holding (Ondo Tokenized) | CRDO | Ondo Global Markets | 9 | none |
+| `CRDOx` | Credo Technology xStock | CRDO | Backed | 8 | none |
+| `CRESBx` | China Resources Beer Holdings xStock | 291 | Backed | 8 | none |
+| `CRESLx` | China Resources Land xStock | 1109 | Backed | 8 | none |
+| `CRESMx` | China Resources Mixc Lifestyle Services xStock | 1209 | Backed | 8 | none |
+| `CRESPx` | China Resources Power xStock | 836 | Backed | 8 | none |
+| `CRMon` | Salesforce (Ondo Tokenized) | CRM | Ondo Global Markets | 9 | none |
+| `CRMx` | Salesforce xStock | CRM | Backed | 8 | none |
+| `CROXx` | Crocs xStock | CROX | Backed | 8 | none |
+| `CRSx` | Carpenter Technology xStock | CRS | Backed | 8 | none |
+| `CRUSx` | Cirrus Logic xStock | CRUS | Backed | 8 | none |
+| `CRWDon` | CrowdStrike (Ondo Tokenized) | CRWD | Ondo Global Markets | 9 | none |
+| `CRWDx` | CrowdStrike xStock | CRWD | Backed | 8 | none |
+| `CRWV_US` | CoreWeave, Inc. | CRWV | Backpack Securities | 6 | none |
+| `CRWVon` | CoreWeave (Ondo Tokenized) | CRWV | Ondo Global Markets | 9 | none |
+| `CRWVx` | CoreWeave xStock | CRWV | Backed | 8 | none |
+| `CRx` | Crane xStock | CR | Backed | 8 | none |
+| `CSCOon` | Cisco Systems (Ondo Tokenized) | CSCO | Ondo Global Markets | 9 | none |
+| `CSCOx` | Cisco xStock | CSCO | Backed | 8 | none |
+| `CSGPx` | CoStar xStock | CSGP | Backed | 8 | none |
+| `CSHEEx` | China Shenhua Energy xStock | 1088 | Backed | 8 | none |
+| `CSLx` | Carlisle Companies xStock | CSL | Backed | 8 | none |
+| `CSPCx` | CSPC Pharmaceutical xStock | 1093 | Backed | 8 | none |
+| `CSXx` | CSX xStock | CSX | Backed | 8 | none |
+| `CSx` | AXA xStock | CSP | Backed | 8 | none |
+| `CTASx` | Cintas xStock | CTAS | Backed | 8 | none |
+| `CTEC_GBx` | ConvaTec xStock | CTECL | Backed | 8 | none |
+| `CTFJWx` | Chow Tai Fook Jewellery xStock | 1929 | Backed | 8 | none |
+| `CTINSx` | China Taiping Insurance xStock | 966 | Backed | 8 | none |
+| `CTPCAx` | Cathay Pacific Airways xStock | 293 | Backed | 8 | none |
+| `CTSHx` | Cognizant Technology Solutions xStock | CTSH | Backed | 8 | none |
+| `CTVAx` | Corteva xStock | CTVA | Backed | 8 | none |
+| `CUBEx` | CubeSmart xStock | CUBE | Backed | 8 | none |
+| `CURYx` | Currys xStock | CURYL | Backed | 8 | none |
+| `CVNAon` | Carvana (Ondo Tokenized) | CVNA | Ondo Global Markets | 9 | none |
+| `CVNAx` | Carvana xStock | CVNA | Backed | 8 | none |
+| `CVSx` | CVS Health xStock | CVS | Backed | 8 | none |
+| `CVXon` | Chevron (Ondo Tokenized) | CVX | Ondo Global Markets | 9 | none |
+| `CVXx` | Chevron xStock | CVX | Backed | 8 | none |
+| `CWENx` | Clearway Energy xStock | CWEN | Backed | 8 | none |
+| `CWK_GBx` | Cranswick xStock | CWKL | Backed | 8 | none |
+| `CWx` | Curtiss-Wright xStock | CW | Backed | 8 | none |
+| `CYPH_US` | Cypherpunk Technologies Inc. | CYPH | Backpack Securities | 6 | none |
+| `CZRx` | Caesars Entertainment xStock | CZR | Backed | 8 | none |
+| `Con` | Citigroup (Ondo Tokenized) | C | Ondo Global Markets | 9 | none |
+| `Cx` | Citigroup xStock | C | Backed | 8 | none |
+| `DALx` | Delta Air Lines xStock | DAL | Backed | 8 | none |
+| `DARx` | Darling Ingredients xStock | DAR | Backed | 8 | none |
+| `DASHon` | DoorDash (Ondo Tokenized) | DASH | Ondo Global Markets | 9 | none |
+| `DASHx` | DoorDash xStock | DASH | Backed | 8 | none |
+| `DAXx` | Global X DAX Germany xStock | DAX | Backed | 8 | none |
+| `DB1x` | Deutsche Boerse xStock | DB1D | Backed | 8 | none |
+| `DBCon` | Invesco DB Commodity Index Tracking Fund (Ondo Tokenized) | DBC | Ondo Global Markets | 9 | none |
+| `DBKx` | Deutsche Bank xStock | DBKD | Backed | 8 | none |
+| `DBXx` | Dropbox xStock | DBX | Backed | 8 | none |
+| `DCIx` | Donaldson xStock | DCI | Backed | 8 | none |
+| `DDOGx` | Datadog xStock | DDOG | Backed | 8 | none |
+| `DDSx` | Dillard's xStock | DDS | Backed | 8 | none |
+| `DECKx` | Deckers Outdoor xStock | DECK | Backed | 8 | none |
+| `DELL_US` | Dell Technologies Inc. | DELL | Backpack Securities | 6 | none |
+| `DELLon` | Dell Technologies (Ondo Tokenized) | DELL | Ondo Global Markets | 9 | none |
+| `DELLx` | Dell Technologies Inc. xStock | DELL | Backed | 8 | none |
+| `DEon` | Deere (Ondo Tokenized) | DE | Ondo Global Markets | 9 | none |
+| `DEx` | Deere xStock | DE | Backed | 8 | none |
+| `DFDVx` | DFDV xStock | DFDV | Backed | 8 | none |
+| `DGEx` | Diageo xStock | DGEL | Backed | 8 | none |
+| `DGRWon` | WisdomTree US Quality Dividend Growth Fund (Ondo Tokenized) | DGRW | Ondo Global Markets | 9 | none |
+| `DGXXon` | Digi Power X (Ondo Tokenized) | DGXX | Ondo Global Markets | 9 | none |
+| `DGXx` | Quest Diagnostics xStock | DGX | Backed | 8 | none |
+| `DG_FRx` | Vinci xStock | DGP | Backed | 8 | none |
+| `DGx` | Dollar General xStock | DG | Backed | 8 | none |
+| `DHIx` | D.R. Horton xStock | DHI | Backed | 8 | none |
+| `DHLx` | Deutsche Post xStock | DHLD | Backed | 8 | none |
+| `DHRx` | Danaher xStock | DHR | Backed | 8 | none |
+| `DINOx` | HF Sinclair xStock | DINO | Backed | 8 | none |
+| `DISon` | Disney (Ondo Tokenized) | DIS | Ondo Global Markets | 9 | none |
+| `DISx` | The Walt Disney xStock | DIS | Backed | 8 | none |
+| `DJT_US` | Trump Media & Technology Group Corp. | DJT | Backpack Securities | 6 | none |
+| `DJTx` | Trump Media & Technology Group xStock | DJT | Backed | 8 | none |
+| `DKNG_US` | DraftKings Inc. | DKNG | Backpack Securities | 6 | none |
+| `DKNGx` | DraftKings xStock | DKNG | Backed | 8 | none |
+| `DKSx` | Dick's Sporting Goods xStock | DKS | Backed | 8 | none |
+| `DLBx` | Dolby Laboratories xStock | DLB | Backed | 8 | none |
+| `DLRx` | Digital Realty Trust xStock | DLR | Backed | 8 | none |
+| `DLTRx` | Dollar Tree xStock | DLTR | Backed | 8 | none |
+| `DNNon` | Denison Mines (Ondo Tokenized) | DNN | Ondo Global Markets | 9 | none |
+| `DNUT_US` | DNUT.US | DNUT | Backpack Securities | 6 | none |
+| `DOCNx` | DigitalOcean xStock | DOCN | Backed | 8 | none |
+| `DOCUx` | Docusign xStock | DOCU | Backed | 8 | none |
+| `DOCx` | Healthpeak Properties xStock | DOC | Backed | 8 | none |
+| `DOVx` | Dover xStock | DOV | Backed | 8 | none |
+| `DOWx` | Dow xStock | DOW | Backed | 8 | none |
+| `DPLMx` | Diploma xStock | DPLML | Backed | 8 | none |
+| `DPZx` | Domino's Pizza xStock | DPZ | Backed | 8 | none |
+| `DRAM_US` | Roundhill Memory ETF | DRAM | Backpack Securities | 6 | none |
+| `DRAMon` | Roundhill Memory ETF (Ondo Tokenized) | DRAM | Ondo Global Markets | 9 | none |
+| `DRAMx` | Storage ETF (Roundhill) xStock | DRAM | Backed | 8 | none |
+| `DRIx` | Darden Restaurants xStock | DRI | Backed | 8 | none |
+| `DRSon` | Leonardo DRS (Ondo Tokenized) | DRS | Ondo Global Markets | 9 | none |
+| `DRSx` | Leonardo DRS xStock | DRS | Backed | 8 | none |
+| `DRXx` | Drax xStock | DRXL | Backed | 8 | none |
+| `DSY_FRx` | Dassault Systemes xStock | DSYP | Backed | 8 | none |
+| `DTCRon` | Global X Data Center & Digital Infrastructure ETF (Ondo Tokenized) | DTCR | Ondo Global Markets | 9 | none |
+| `DTE_DEx` | Deutsche Telekom xStock | DTED | Backed | 8 | none |
+| `DTEx` | DTE Energy xStock | DTE | Backed | 8 | none |
+| `DTG_DEx` | Daimler Truck xStock | DTGD | Backed | 8 | none |
+| `DTx` | Dynatrace xStock | DT | Backed | 8 | none |
+| `DUKx` | Duke Energy xStock | DUK | Backed | 8 | none |
+| `DVAx` | DaVita xStock | DVA | Backed | 8 | none |
+| `DVNx` | Devon Energy xStock | DVN | Backed | 8 | none |
+| `DXCMx` | DexCom xStock | DXCM | Backed | 8 | none |
+| `DYNFon` | iShares US Equity Factor Rotation Active ETF (Ondo Tokenized) | DYNF | Ondo Global Markets | 9 | none |
+| `DYx` | Dycom Industries xStock | DY | Backed | 8 | none |
+| `Dx` | Dominion Energy xStock | D | Backed | 8 | none |
+| `EBS_ATx` | Erste Group Bank xStock | EBSV | Backed | 8 | none |
+| `ECGx` | Everus Construction xStock | ECG | Backed | 8 | none |
+| `ECHon` | iShares MSCI Chile ETF (Ondo Tokenized) | ECH | Ondo Global Markets | 9 | none |
+| `ECLx` | Ecolab xStock | ECL | Backed | 8 | none |
+| `ECOon` | Okeanis Eco Tankers (Ondo Tokenized) | ECO | Ondo Global Markets | 9 | none |
+| `EDPx` | EDP-Energias De Portugal xStock | EDPU | Backed | 8 | none |
+| `EDV_GBx` | Endeavour Mining xStock | EDVL | Backed | 8 | none |
+| `EDx` | Consolidated Edison xStock | ED | Backed | 8 | none |
+| `EEMon` | iShares MSCI Emerging Markets ETF (Ondo Tokenized) | EEM | Ondo Global Markets | 9 | none |
+| `EFAon` | iShares MSCI EAFE ETF (Ondo Tokenized) | EFA | Ondo Global Markets | 9 | none |
+| `EFVon` | iShares MSCI EAFE Value ETF (Ondo Tokenized) | EFV | Ondo Global Markets | 9 | none |
+| `EFXx` | Equifax xStock | EFX | Backed | 8 | none |
+| `EGPx` | EastGroup Properties xStock | EGP | Backed | 8 | none |
+| `EGx` | Everest xStock | EG | Backed | 8 | none |
+| `EHCx` | Encompass Health xStock | EHC | Backed | 8 | none |
+| `EIXx` | Edison International xStock | EIX | Backed | 8 | none |
+| `ELANx` | Elanco Animal Health xStock | ELAN | Backed | 8 | none |
+| `ELE_ESx` | Endesa, S.A. xStock | ELEE | Backed | 8 | none |
+| `ELFx` | e.l.f. Beauty xStock | ELF | Backed | 8 | none |
+| `ELSx` | Equity Lifestyle Properties xStock | ELS | Backed | 8 | none |
+| `ELVx` | Elevance Health xStock | ELV | Backed | 8 | none |
+| `EL_FRx` | Essilorluxottica xStock | ELP | Backed | 8 | none |
+| `ELx` | The Estee Lauder Companies xStock | EL | Backed | 8 | none |
+| `EMEx` | EMCOR xStock | EME | Backed | 8 | none |
+| `EMGx` | Man xStock | EMGL | Backed | 8 | none |
+| `EMNx` | Eastman Chemical xStock | EMN | Backed | 8 | none |
+| `EMRon` | Emerson Electric (Ondo Tokenized) | EMR | Ondo Global Markets | 9 | none |
+| `EMRx` | Emerson Electric xStock | EMR | Backed | 8 | none |
+| `ENBon` | Enbridge (Ondo Tokenized) | ENB | Ondo Global Markets | 9 | none |
+| `ENELx` | Enel xStock | ENELM | Backed | 8 | none |
+| `ENGIx` | Engie xStock | ENGIP | Backed | 8 | none |
+| `ENHAx` | Enhanced Group xStock | ENHA | Backed | 8 | none |
+| `ENIx` | Eni xStock | ENIM | Backed | 8 | none |
+| `ENLVon` | Enlivex Therapeutics (Ondo Tokenized) | ENLV | Ondo Global Markets | 9 | none |
+| `ENNHLx` | ENN Energy xStock | 2688 | Backed | 8 | none |
+| `ENPHon` | Enphase Energy (Ondo Tokenized) | ENPH | Ondo Global Markets | 9 | none |
+| `ENR_DEx` | Siemens Energy xStock | ENRD | Backed | 8 | none |
+| `ENSGx` | Ensign xStock | ENSG | Backed | 8 | none |
+| `ENTGon` | Entegris (Ondo Tokenized) | ENTG | Ondo Global Markets | 9 | none |
+| `ENTGx` | Entegris xStock | ENTG | Backed | 8 | none |
+| `ENTx` | Entain xStock | ENTL | Backed | 8 | none |
+| `ENx` | Bouygues xStock | ENP | Backed | 8 | none |
+| `EOANx` | E.ON xStock | EOAND | Backed | 8 | none |
+| `EOGx` | EOG Resources xStock | EOG | Backed | 8 | none |
+| `EPAMx` | EPAM Systems xStock | EPAM | Backed | 8 | none |
+| `EQHx` | Equitable xStock | EQH | Backed | 8 | none |
+| `EQIXon` | Equinix (Ondo Tokenized) | EQIX | Ondo Global Markets | 9 | none |
+| `EQIXx` | Equinix xStock | EQIX | Backed | 8 | none |
+| `EQTon` | EQT (Ondo Tokenized) | EQT | Ondo Global Markets | 9 | none |
+| `EQTx` | EQT xStock | EQT | Backed | 8 | none |
+| `ESIx` | Element Solutions xStock | ESI | Backed | 8 | none |
+| `ESSx` | Essex Property Trust xStock | ESS | Backed | 8 | none |
+| `ESx` | Eversource Energy xStock | ES | Backed | 8 | none |
+| `ETHAon` | iShares Ethereum Trust (Ondo Tokenized) | ETHA | Ondo Global Markets | 9 | none |
+| `ETNon` | Eaton (Ondo Tokenized) | ETN | Ondo Global Markets | 9 | none |
+| `ETNx` | Eaton Corporation plc xStock | ETN | Backed | 8 | none |
+| `ETRx` | Entergy xStock | ETR | Backed | 8 | none |
+| `ETSYx` | Etsy xStock | ETSY | Backed | 8 | none |
+| `EUHYon` | iShares Euro High Yield Corporate Bond USD Hedged ETF (Ondo Tokenized) | EUHY | Ondo Global Markets | 9 | none |
+| `EVRGx` | Evergy xStock | EVRG | Backed | 8 | none |
+| `EVRx` | Evercore xStock | EVR | Backed | 8 | none |
+| `EWBCx` | East West Bancorp xStock | EWBC | Backed | 8 | none |
+| `EWGx` | iShares MSCI Germany xStock | EWG | Backed | 8 | none |
+| `EWJon` | iShares MSCI Japan ETF (Ondo Tokenized) | EWJ | Ondo Global Markets | 9 | none |
+| `EWJx` | iShares MSCI Japan ETF xStock | EWJ | Backed | 8 | none |
+| `EWQx` | iShares MSCI France xStock | EWQ | Backed | 8 | none |
+| `EWTx` | iShares MSCI Taiwan ETF xStock | EWT | Backed | 8 | none |
+| `EWUx` | iShares MSCI United Kingdom xStock | EWU | Backed | 8 | none |
+| `EWY_US` | iShares MSCI South Korea ETF | EWY | Backpack Securities | 6 | none |
+| `EWYon` | iShares MSCI South Korea ETF (Ondo Tokenized) | EWY | Ondo Global Markets | 9 | none |
+| `EWYx` | iShares MSCI South Korea xStock | EWY | Backed | 8 | none |
+| `EWZon` | iShares MSCI Brazil ETF (Ondo Tokenized) | EWZ | Ondo Global Markets | 9 | none |
+| `EWZx` | iShares MSCI Brazil ETF xStock | EWZ | Backed | 8 | none |
+| `EWx` | Edwards Lifesciences xStock | EW | Backed | 8 | none |
+| `EXCx` | Exelon xStock | EXC | Backed | 8 | none |
+| `EXELx` | Exelixis xStock | EXEL | Backed | 8 | none |
+| `EXEx` | Expand Energy xStock | EXE | Backed | 8 | none |
+| `EXLSx` | ExlService xStock | EXLS | Backed | 8 | none |
+| `EXODon` | Exodus Movement (Ondo Tokenized) | EXOD | Ondo Global Markets | 9 | none |
+| `EXPDx` | Expeditors International of Washington xStock | EXPD | Backed | 8 | none |
+| `EXPNx` | Experian xStock | EXPNL | Backed | 8 | none |
+| `EXPx` | Eagle Materials xStock | EXP | Backed | 8 | none |
+| `EXRx` | Extra Space Storage xStock | EXR | Backed | 8 | none |
+| `EXTRon` | Extreme Networks (Ondo Tokenized) | EXTR | Ondo Global Markets | 9 | none |
+| `FAAAx` | Fidelity AAA CLO xStock | FAAA | Backed | 8 | none |
+| `FAFx` | First American Financial xStock | FAF | Backed | 8 | none |
+| `FANGx` | Diamondback Energy xStock | FANG | Backed | 8 | none |
+| `FASTx` | Fastenal xStock | FAST | Backed | 8 | none |
+| `FBINx` | Fortune Brands Innovations xStock | FBIN | Backed | 8 | none |
+| `FCELon` | FuelCell Energy (Ondo Tokenized) | FCEL | Ondo Global Markets | 9 | none |
+| `FCNCAx` | First Citizens BancShares xStock | FCNCA | Backed | 8 | none |
+| `FCXon` | Freeport-McMoRan (Ondo Tokenized) | FCX | Ondo Global Markets | 9 | none |
+| `FCXx` | Freeport-McMoRan xStock | FCX | Backed | 8 | none |
+| `FDSx` | FactSet Research Systems xStock | FDS | Backed | 8 | none |
+| `FDXFx` | FedEx Freight xStock | FDXF | Backed | 8 | none |
+| `FDXx` | FedEx xStock | FDX | Backed | 8 | none |
+| `FERGx` | Ferguson Enterprises xStock | FERG | Backed | 8 | none |
+| `FEZx` | SPDR EURO STOXX 50 xStock | FEZ | Backed | 8 | none |
+| `FEx` | FirstEnergy xStock | FE | Backed | 8 | none |
+| `FFIVx` | F5 xStock | FFIV | Backed | 8 | none |
+| `FFOGon` | Franklin Focused Growth ETF (Ondo Tokenized) | FFOG | Ondo Global Markets | 9 | none |
+| `FGDLon` | Franklin Responsibly Sourced Gold ETF (Ondo Tokenized) | FGDL | Ondo Global Markets | 9 | none |
+| `FGDLx` | Franklin Responsibly Sourced Gold ETF xStock | FGDL | Backed | 8 | none |
+| `FHNx` | First Horizon xStock | FHN | Backed | 8 | none |
+| `FICOx` | Fair Isaac xStock | FICO | Backed | 8 | none |
+| `FIGRon` | Figure Technology Solutions (Ondo Tokenized) | FIGR | Ondo Global Markets | 9 | none |
+| `FIGUREAI` | Figure AI | FIGUREAI | PreStocks | 9 | yes: the recipient gets less |
+| `FIGon` | Figma (Ondo Tokenized) | FIG | Ondo Global Markets | 9 | none |
+| `FISVx` | Fiserv xStock | FISV | Backed | 8 | none |
+| `FISx` | Fidelity National Information Services xStock | FIS | Backed | 8 | none |
+| `FITBx` | Fifth Third Bancorp xStock | FITB | Backed | 8 | none |
+| `FIVEx` | Five Below xStock | FIVE | Backed | 8 | none |
+| `FIXx` | Comfort Systems USA xStock | FIX | Backed | 8 | none |
+| `FLBLx` | Franklin Senior Loan xStock | FLBL | Backed | 8 | none |
+| `FLEXon` | Flex (Ondo Tokenized) | FLEX | Ondo Global Markets | 9 | none |
+| `FLHYon` | Franklin High Yield Corporate ETF (Ondo Tokenized) | FLHY | Ondo Global Markets | 9 | none |
+| `FLNCon` | Fluence Energy (Ondo Tokenized) | FLNC | Ondo Global Markets | 9 | none |
+| `FLNCx` | Fluence Energy xStock | FLNC | Backed | 8 | none |
+| `FLQLon` | Franklin US Large Cap Multifactor Index ETF (Ondo Tokenized) | FLQL | Ondo Global Markets | 9 | none |
+| `FLQMx` | Franklin U.S. Mid Cap Multi-Factor xStock | FLQM | Backed | 8 | none |
+| `FLSx` | Flowserve xStock | FLS | Backed | 8 | none |
+| `FLWS_US` | FLWS.US | FLWS | Backpack Securities | 6 | none |
+| `FLY_US` | Firefly Aerospace Inc. | FLY | Backpack Securities | 6 | none |
+| `FLYx` | Firefly Aerospace xStock | FLY | Backed | 8 | none |
+| `FNBx` | F N B xStock | FNB | Backed | 8 | none |
+| `FNDx` | Floor & Decor xStock | FND | Backed | 8 | none |
+| `FNFx` | Fidelity National Financial xStock | FNF | Backed | 8 | none |
+| `FNon` | Fabrinet (Ondo Tokenized) | FN | Ondo Global Markets | 9 | none |
+| `FNx` | Fabrinet xStock | FN | Backed | 8 | none |
+| `FORMon` | FormFactor (Ondo Tokenized) | FORM | Ondo Global Markets | 9 | none |
+| `FORMx` | FormFactor xStock | FORM | Backed | 8 | none |
+| `FPSon` | Forgent Power Solutions (Ondo Tokenized) | FPS | Ondo Global Markets | 9 | none |
+| `FPSx` | Forgent Power Solutions xStock | FPS | Backed | 8 | none |
+| `FRESx` | Fresnillo xStock | FRESL | Backed | 8 | none |
+| `FRE_DEx` | Fresenius xStock | FRED | Backed | 8 | none |
+| `FRHCx` | Freedom xStock | FRHC | Backed | 8 | none |
+| `FRTx` | Federal Realty Investment Trust xStock | FRT | Backed | 8 | none |
+| `FRx` | First Industrial Realty Trust xStock | FR | Backed | 8 | none |
+| `FSLRx` | First Solar xStock | FSLR | Backed | 8 | none |
+| `FSMLx` | Franklin Small Cap Enhanced xStock | FSML | Backed | 8 | none |
+| `FSOLon` | Fidelity Solana Fund (Ondo Tokenized) | FSOL | Ondo Global Markets | 9 | none |
+| `FTAIx` | FTAI Aviation xStock | FTAI | Backed | 8 | none |
+| `FTGCon` | First Trust Global Tactical Commodity Strategy Fund (Ondo Tokenized) | FTGC | Ondo Global Markets | 9 | none |
+| `FTNTx` | Fortinet xStock | FTNT | Backed | 8 | none |
+| `FTVx` | Fortive xStock | FTV | Backed | 8 | none |
+| `FUTUon` | Futu Holdings (Ondo Tokenized) | FUTU | Ondo Global Markets | 9 | none |
+| `FWDI_US` | Forward Industries Inc | FWDI | Backpack Securities | 6 | none |
+| `FWDIx` | Forward Industries xStock | FWDI | Backed | 8 | none |
+| `FWONKx` | Liberty Media xStock | FWONK | Backed | 8 | none |
+| `FXIon` | iShares China Large-Cap ETF (Ondo Tokenized) | FXI | Ondo Global Markets | 9 | none |
+| `Fon` | Ford Motor (Ondo Tokenized) | F | Ondo Global Markets | 9 | none |
+| `Fx` | Ford Motor xStock | F | Backed | 8 | none |
+| `GAPx` | Gap xStock | GAP | Backed | 8 | none |
+| `GAWx` | Games Workshop xStock | GAWL | Backed | 8 | none |
+| `GDDYx` | GoDaddy xStock | GDDY | Backed | 8 | none |
+| `GDXx` | VanEck Gold Miners xStock | GDX | Backed | 8 | none |
+| `GDon` | General Dynamics (Ondo Tokenized) | GD | Ondo Global Markets | 9 | none |
+| `GDx` | General Dynamics xStock | GD | Backed | 8 | none |
+| `GEELx` | Geely Automobile xStock | 175 | Backed | 8 | none |
+| `GEHCx` | GE HealthCare Technologies xStock | GEHC | Backed | 8 | none |
+| `GEMIon` | Gemini Space Station (Ondo Tokenized) | GEMI | Ondo Global Markets | 9 | none |
+| `GENTEx` | Galaxy Entertainment xStock | 27 | Backed | 8 | none |
+| `GENx` | Gen Digital xStock | GEN | Backed | 8 | none |
+| `GEVon` | GE Vernova (Ondo Tokenized) | GEV | Ondo Global Markets | 9 | none |
+| `GEVx` | GE Vernova Inc. xStock | GEV | Backed | 8 | none |
+| `GEon` | General Electric (Ondo Tokenized) | GE | Ondo Global Markets | 9 | none |
+| `GEx` | GE Aerospace xStock | GE | Backed | 8 | none |
+| `GFLx` | GFL Environmental xStock | GFL | Backed | 8 | none |
+| `GFSon` | GlobalFoundries (Ondo Tokenized) | GFS | Ondo Global Markets | 9 | none |
+| `GFSx` | GLOBALFOUNDRIES xStock | GFS | Backed | 8 | none |
+| `GGGx` | Graco xStock | GGG | Backed | 8 | none |
+| `GGOVon` | iShares Global Government Bond USD Hedged Active ETF (Ondo Tokenized) | GGOV | Ondo Global Markets | 9 | none |
+| `GHx` | Guardant Health xStock | GH | Backed | 8 | none |
+| `GILDx` | Gilead Sciences xStock | GILD | Backed | 8 | none |
+| `GISx` | General Mills xStock | GIS | Backed | 8 | none |
+| `GLDon` | SPDR Gold Shares (Ondo Tokenized) | GLD | Ondo Global Markets | 9 | none |
+| `GLDx` | Gold xStock | GLD | Backed | 8 | none |
+| `GLENx` | Glencore xStock | GLENL | Backed | 8 | none |
+| `GLE_FRx` | Societe Generale xStock | GLEP | Backed | 8 | none |
+| `GLPIx` | Gaming and Leisure Properties xStock | GLPI | Backed | 8 | none |
+| `GLTRon` | abrdn Physical Precious Metals Basket Shares ETF (Ondo Tokenized) | GLTR | Ondo Global Markets | 9 | none |
+| `GLWon` | Corning (Ondo Tokenized) | GLW | Ondo Global Markets | 9 | none |
+| `GLWx` | Corning xStock | GLW | Backed | 8 | none |
+| `GLXYon` | Galaxy Digital (Ondo Tokenized) | GLXY | Ondo Global Markets | 9 | none |
+| `GLXYx` | Galaxy Digital xStock | GLXY | Backed | 8 | none |
+| `GLx` | Globe Life xStock | GL | Backed | 8 | none |
+| `GMEDx` | Globus Medical xStock | GMED | Backed | 8 | none |
+| `GMEon` | GameStop (Ondo Tokenized) | GME | Ondo Global Markets | 9 | none |
+| `GMEx` | Gamestop xStock | GME | Backed | 8 | none |
+| `GMx` | General Motors xStock | GM | Backed | 8 | none |
+| `GNRCon` | Generac Holdings (Ondo Tokenized) | GNRC | Ondo Global Markets | 9 | none |
+| `GNRCx` | Generac xStock | GNRC | Backed | 8 | none |
+| `GNS_GBx` | Genus xStock | GNSL | Backed | 8 | none |
+| `GOOGLon` | Alphabet Class A (Ondo Tokenized) | GOOGL | Ondo Global Markets | 9 | none |
+| `GOOGLx` | Alphabet xStock | GOOGL | Backed | 8 | none |
+| `GOOGon` | Alphabet Class C (Ondo Tokenized) | GOOG | Ondo Global Markets | 9 | none |
+| `GPCx` | Genuine Parts xStock | GPC | Backed | 8 | none |
+| `GPNx` | Global Payments xStock | GPN | Backed | 8 | none |
+| `GPRO_US` | GPRO.US | GPRO | Backpack Securities | 6 | none |
+| `GPROx` | GoPro xStock | GPRO | Backed | 8 | none |
+| `GRABon` | Grab Holdings (Ondo Tokenized) | GRAB | Ondo Global Markets | 9 | none |
+| `GRG_GBx` | Greggs xStock | GRGL | Backed | 8 | none |
+| `GRND_US` | GRND.US | GRND | Backpack Securities | 6 | none |
+| `GRNDon` | Grindr (Ondo Tokenized) | GRND | Ondo Global Markets | 9 | none |
+| `GSATx` | Globalstar xStock | GSAT | Backed | 8 | none |
+| `GSKx` | GSK xStock | GSKL | Backed | 8 | none |
+| `GSon` | Goldman Sachs (Ondo Tokenized) | GS | Ondo Global Markets | 9 | none |
+| `GSx` | Goldman Sachs xStock | GS | Backed | 8 | none |
+| `GTESx` | Gates Industrial xStock | GTES | Backed | 8 | none |
+| `GTLBx` | GitLab xStock | GTLB | Backed | 8 | none |
+| `GWREx` | Guidewire Software xStock | GWRE | Backed | 8 | none |
+| `GWWx` | W.W. Grainger xStock | GWW | Backed | 8 | none |
+| `GXOx` | GXO Logistics xStock | GXO | Backed | 8 | none |
+| `G_ITx` | Generali xStock | MTAA:GM | Backed | 8 | none |
+| `Gx` | Genpact xStock | G | Backed | 8 | none |
+| `HAIDLx` | Haidilao International xStock | 6862 | Backed | 8 | none |
+| `HAIERx` | Haier Smart Home xStock | 6690 | Backed | 8 | none |
+| `HALOx` | Halozyme Therapeutics xStock | HALO | Backed | 8 | none |
+| `HALon` | Halliburton (Ondo Tokenized) | HAL | Ondo Global Markets | 9 | none |
+| `HALx` | Halliburton xStock | HAL | Backed | 8 | none |
+| `HASx` | Hasbro xStock | HAS | Backed | 8 | none |
+| `HBANx` | Huntington Bancshares xStock | HBAN | Backed | 8 | none |
+| `HBR_GBx` | Harbour Energy xStock | HBRL | Backed | 8 | none |
+| `HCAx` | HCA Healthcare xStock | HCA | Backed | 8 | none |
+| `HDon` | Home Depot (Ondo Tokenized) | HD | Ondo Global Markets | 9 | none |
+| `HDx` | Home Depot xStock | HD | Backed | 8 | none |
+| `HEIAx` | Heineken xStock | HEIAA | Backed | 8 | none |
+| `HEI_DEx` | Heidelberg Materials xStock | HEID | Backed | 8 | none |
+| `HEIx` | Heico xStock | HEI | Backed | 8 | none |
+| `HIGx` | The Hartford Insurance xStock | HIG | Backed | 8 | none |
+| `HIIon` | Huntington Ingalls Industries (Ondo Tokenized) | HII | Ondo Global Markets | 9 | none |
+| `HIIx` | Huntington Ingalls Industries xStock | HII | Backed | 8 | none |
+| `HIK_GBx` | Hikma Pharmaceuticals xStock | HIKL | Backed | 8 | none |
+| `HILSx` | Hill & Smith xStock | HILSL | Backed | 8 | none |
+| `HIMS_US` | Hims & Hers Health, Inc. | HIMS | Backpack Securities | 6 | none |
+| `HIMSon` | Hims & Hers Health (Ondo Tokenized) | HIMS | Ondo Global Markets | 9 | none |
+| `HIMSx` | Hims & Hers xStock | HIMS | Backed | 8 | none |
+| `HIMXon` | Himax Technologies (Ondo Tokenized) | HIMX | Ondo Global Markets | 9 | none |
+| `HIVEon` | HIVE Digital Technologies (Ondo Tokenized) | HIVE | Ondo Global Markets | 9 | none |
+| `HKCGAx` | Hong Kong and China Gas xStock | 3 | Backed | 8 | none |
+| `HKEXCx` | Hong Kong Exchanges and Clearing xStock | 388 | Backed | 8 | none |
+| `HLITon` | Harmonic (Ondo Tokenized) | HLIT | Ondo Global Markets | 9 | none |
+| `HLIx` | Houlihan Lokey xStock | HLI | Backed | 8 | none |
+| `HLMAx` | Halma xStock | HLMAL | Backed | 8 | none |
+| `HLNx` | Haleon xStock | HLNL | Backed | 8 | none |
+| `HLTx` | Hilton Worldwide xStock | HLT | Backed | 8 | none |
+| `HLx` | Hecla Mining xStock | HL | Backed | 8 | none |
+| `HNDLDx` | Henderson Land Development xStock | 12 | Backed | 8 | none |
+| `HONx` | Honeywell xStock | HON | Backed | 8 | none |
+| `HOOD_US` | Robinhood Markets, Inc. | HOOD | Backpack Securities | 6 | none |
+| `HOODon` | Robinhood Markets (Ondo Tokenized) | HOOD | Ondo Global Markets | 9 | none |
+| `HOODx` | Robinhood xStock | HOOD | Backed | 8 | none |
+| `HOx` | Thales xStock | HOP | Backed | 8 | none |
+| `HPEon` | Hewlett Packard Enterprise (Ondo Tokenized) | HPE | Ondo Global Markets | 9 | none |
+| `HPEx` | Hewlett Packard Enterprise xStock | HPE | Backed | 8 | none |
+| `HPQx` | HP xStock | HPQ | Backed | 8 | none |
+| `HRBx` | H&R Block xStock | HRB | Backed | 8 | none |
+| `HRLx` | Hormel Foods xStock | HRL | Backed | 8 | none |
+| `HRZRBx` | Horizon Robotics xStock | 9660 | Backed | 8 | none |
+| `HRx` | Healthcare Realty Trust xStock | HR | Backed | 8 | none |
+| `HSAIon` | Hesai Group (Ondo Tokenized) | HSAI | Ondo Global Markets | 9 | none |
+| `HSBAx` | HSBC xStock | HSBAL | Backed | 8 | none |
+| `HSICx` | Henry Schein xStock | HSIC | Backed | 8 | none |
+| `HSTx` | Host Hotels & Resorts xStock | HST | Backed | 8 | none |
+| `HSXx` | Hiscox xStock | HSXL | Backed | 8 | none |
+| `HSYx` | The Hershey xStock | HSY | Backed | 8 | none |
+| `HTZ_US` | HTZ.US | HTZ | Backpack Securities | 6 | none |
+| `HTZon` | Hertz Global Holdings (Ondo Tokenized) | HTZ | Ondo Global Markets | 9 | none |
+| `HUBBon` | Hubbell (Ondo Tokenized) | HUBB | Ondo Global Markets | 9 | none |
+| `HUBBx` | Hubbell xStock | HUBB | Backed | 8 | none |
+| `HUBSx` | HubSpot xStock | HUBS | Backed | 8 | none |
+| `HUMx` | Humana xStock | HUM | Backed | 8 | none |
+| `HUTon` | Hut 8 (Ondo Tokenized) | HUT | Ondo Global Markets | 9 | none |
+| `HUTx` | Hut 8 xStock | HUT | Backed | 8 | none |
+| `HWDNx` | Howden Joinery xStock | HWDNL | Backed | 8 | none |
+| `HWMx` | Howmet Aerospace xStock | HWM | Backed | 8 | none |
+| `HXLx` | Hexcel xStock | HXL | Backed | 8 | none |
+| `HYDBon` | iShares High Yield Systematic Bond ETF (Ondo Tokenized) | HYDB | Ondo Global Markets | 9 | none |
+| `HYGWon` | iShares High Yield Corporate Bond BuyWrite Strategy ETF (Ondo Tokenized) | HYGW | Ondo Global Markets | 9 | none |
+| `HYGon` | iBoxx $ High Yield Corporate Bond ETF (Ondo Tokenized) | HYG | Ondo Global Markets | 9 | none |
+| `HYSon` | PIMCO 0-5 Year High Yield Corporate Bond Index ETF (Ondo Tokenized) | HYS | Ondo Global Markets | 9 | none |
+| `Hx` | Hyatt Hotels xStock | H | Backed | 8 | none |
+| `IAG_GBx` | International Consolidated Airlines xStock | IAGL | Backed | 8 | none |
+| `IALTon` | iShares Systematic Alternatives Active ETF (Ondo Tokenized) | IALT | Ondo Global Markets | 9 | none |
+| `IAUon` | iShares Gold Trust (Ondo Tokenized) | IAU | Ondo Global Markets | 9 | none |
+| `IBEx` | Iberdrola xStock | IBEE | Backed | 8 | none |
+| `IBITon` | iShares Bitcoin Trust (Ondo Tokenized) | IBIT | Ondo Global Markets | 9 | none |
+| `IBKRx` | Interactive Brokers xStock | IBKR | Backed | 8 | none |
+| `IBM_US` | International Business Machines Corporation | IBM | Backpack Securities | 6 | none |
+| `IBMon` | IBM (Ondo Tokenized) | IBM | Ondo Global Markets | 9 | none |
+| `IBMx` | International Business Machines xStock | IBM | Backed | 8 | none |
+| `ICBCx` | Industrial And Commercial Bank Of China xStock | 1398 | Backed | 8 | none |
+| `ICEx` | Intercontinental Exchange xStock | ICE | Backed | 8 | none |
+| `ICG_GBx` | ICG xStock | ICGL | Backed | 8 | none |
+| `ICHRon` | Ichor Holdings (Ondo Tokenized) | ICHR | Ondo Global Markets | 9 | none |
+| `IDAx` | Idacorp xStock | IDA | Backed | 8 | none |
+| `IDEFon` | iShares Defense Industrials Active ETF (Ondo Tokenized) | IDEF | Ondo Global Markets | 9 | none |
+| `IDXXx` | IDEXX Laboratories xStock | IDXX | Backed | 8 | none |
+| `IEFAon` | iShares Core MSCI EAFE ETF (Ondo Tokenized) | IEFA | Ondo Global Markets | 9 | none |
+| `IEFon` | iShares 7-10 Year Treasury Bond ETF (Ondo Tokenized) | IEF | Ondo Global Markets | 9 | none |
+| `IEIon` | iShares 3-7 Year Treasury Bond ETF (Ondo Tokenized) | IEI | Ondo Global Markets | 9 | none |
+| `IEMGon` | iShares Core MSCI Emerging Markets ETF (Ondo Tokenized) | IEMG | Ondo Global Markets | 9 | none |
+| `IEMGx` | Core MSCI Emerging Markets xStock | IEMG | Backed | 8 | none |
+| `IESCx` | IES xStock | IESC | Backed | 8 | none |
+| `IEXx` | IDEX xStock | IEX | Backed | 8 | none |
+| `IFFx` | International Flavors & Fragrances xStock | IFF | Backed | 8 | none |
+| `IFXx` | Infineon Technologies xStock | IFXD | Backed | 8 | none |
+| `IGEBon` | iShares Investment Grade Systematic Bond ETF (Ondo Tokenized) | IGEB | Ondo Global Markets | 9 | none |
+| `IGGx` | IG xStock | IGGL | Backed | 8 | none |
+| `IGVon` | iShares Expanded Tech-Software ETF (Ondo Tokenized) | IGV | Ondo Global Markets | 9 | none |
+| `IJHon` | iShares Core S&P MidCap ETF (Ondo Tokenized) | IJH | Ondo Global Markets | 9 | none |
+| `IJRx` | S&P Small Cap xStock | IJR | Backed | 8 | none |
+| `IJSon` | iShares S&P Small-Cap 600 Value ETF (Ondo Tokenized) | IJS | Ondo Global Markets | 9 | none |
+| `ILMNx` | Illumina xStock | ILMN | Backed | 8 | none |
+| `IMBx` | Imperial Brands xStock | IMBL | Backed | 8 | none |
+| `IMIx` | IMI xStock | IMIL | Backed | 8 | none |
+| `INCEon` | Franklin Income Equity Focus ETF (Ondo Tokenized) | INCE | Ondo Global Markets | 9 | none |
+| `INCHx` | Inchcape xStock | INCHL | Backed | 8 | none |
+| `INCYx` | Incyte xStock | INCY | Backed | 8 | none |
+| `INDAon` | iShares MSCI India ETF (Ondo Tokenized) | INDA | Ondo Global Markets | 9 | none |
+| `INDIx` | Indie Semiconductor xStock | INDI | Backed | 8 | none |
+| `INFQx` | Infleqtion xStock | INFQ | Backed | 8 | none |
+| `INF_GBx` | Informa xStock | INFL | Backed | 8 | none |
+| `INGAx` | ING Groep xStock | INGAA | Backed | 8 | none |
+| `INGMx` | Ingram Micro xStock | INGM | Backed | 8 | none |
+| `INGRx` | Ingredion xStock | INGR | Backed | 8 | none |
+| `INODon` | Innodata (Ondo Tokenized) | INOD | Ondo Global Markets | 9 | none |
+| `INROon` | iShares US Industry Rotation Active ETF (Ondo Tokenized) | INRO | Ondo Global Markets | 9 | none |
+| `INSMx` | Insmed xStock | INSM | Backed | 8 | none |
+| `INSWon` | International Seaways (Ondo Tokenized) | INSW | Ondo Global Markets | 9 | none |
+| `INTC_US` | Intel Corporation | INTC | Backpack Securities | 6 | none |
+| `INTCon` | Intel (Ondo Tokenized) | INTC | Ondo Global Markets | 9 | none |
+| `INTCx` | Intel xStock | INTC | Backed | 8 | none |
+| `INTUon` | Intuit (Ondo Tokenized) | INTU | Ondo Global Markets | 9 | none |
+| `INTUx` | Intuit xStock | INTU | Backed | 8 | none |
+| `INTWx` | INTC 2x Long ETF xStock | INTW | Backed | 8 | none |
+| `INVHx` | Invitation Homes xStock | INVH | Backed | 8 | none |
+| `INVPx` | Investec xStock | INVPL | Backed | 8 | none |
+| `IONQ_US` | IonQ, Inc. | IONQ | Backpack Securities | 6 | none |
+| `IONQon` | IonQ (Ondo Tokenized) | IONQ | Ondo Global Markets | 9 | none |
+| `IONQx` | IonQ xStock | IONQ | Backed | 8 | none |
+| `IONSx` | Ionis Pharmaceuticals xStock | IONS | Backed | 8 | none |
+| `IOTx` | Samsara xStock | IOT | Backed | 8 | none |
+| `IPx` | International Paper xStock | IP | Backed | 8 | none |
+| `IQMx` | Franklin Intelligent Machines xStock | IQM | Backed | 8 | none |
+| `IQVx` | IQVIA xStock | IQV | Backed | 8 | none |
+| `IRDMon` | Iridium Communications (Ondo Tokenized) | IRDM | Ondo Global Markets | 9 | none |
+| `IRDMx` | Iridium Communications xStock | IRDM | Backed | 8 | none |
+| `IREN_US` | IREN Limited | IREN | Backpack Securities | 6 | none |
+| `IRENon` | Iren (Ondo Tokenized) | IREN | Ondo Global Markets | 9 | none |
+| `IRENx` | IREN xStock | IREN | Backed | 8 | none |
+| `IRMx` | Iron Mountain xStock | IRM | Backed | 8 | none |
+| `IRx` | Ingersoll Rand xStock | IR | Backed | 8 | none |
+| `ISPx` | Intesa Sanpaolo xStock | ISPM | Backed | 8 | none |
+| `ISRGon` | Intuitive Surgical (Ondo Tokenized) | ISRG | Ondo Global Markets | 9 | none |
+| `ISRGx` | Intuitive Surgical xStock | ISRG | Backed | 8 | none |
+| `ITAon` | iShares US Aerospace and Defense ETF (Ondo Tokenized) | ITA | Ondo Global Markets | 9 | none |
+| `ITAx` | iShares U.S. Aerospace & Defense ETF xStock | ITA | Backed | 8 | none |
+| `ITOTon` | iShares Core S&P Total US Stock Market ETF (Ondo Tokenized) | ITOT | Ondo Global Markets | 9 | none |
+| `ITTx` | ITT xStock | ITT | Backed | 8 | none |
+| `ITWx` | Illinois Tool Works xStock | ITW | Backed | 8 | none |
+| `ITX_ESx` | Industria De Diseno Textil xStock | ITXE | Backed | 8 | none |
+| `ITx` | Gartner xStock | IT | Backed | 8 | none |
+| `IVVon` | iShares Core S&P 500 ETF (Ondo Tokenized) | IVV | Ondo Global Markets | 9 | none |
+| `IVZx` | Invesco xStock | IVZ | Backed | 8 | none |
+| `IWFon` | iShares Russell 1000 Growth ETF (Ondo Tokenized) | IWF | Ondo Global Markets | 9 | none |
+| `IWMon` | iShares Russell 2000 ETF (Ondo Tokenized) | IWM | Ondo Global Markets | 9 | none |
+| `IWMx` | Russell 2000 xStock | IWM | Backed | 8 | none |
+| `IWNon` | iShares Russell 2000 Value ETF (Ondo Tokenized) | IWN | Ondo Global Markets | 9 | none |
+| `IYWon` | iShares US Technology ETF (Ondo Tokenized) | IYW | Ondo Global Markets | 9 | none |
+| `JAAAon` | Janus Henderson AAA CLO ETF (Ondo Tokenized) | JAAA | Ondo Global Markets | 9 | none |
+| `JAAAx` | Janus Henderson AAA CLO xStock | JAAA | Backed | 8 | none |
+| `JANx` | Janus Living xStock | JAN | Backed | 8 | none |
+| `JBHTx` | JB Hunt Transport Services xStock | JBHT | Backed | 8 | none |
+| `JBLon` | Jabil (Ondo Tokenized) | JBL | Ondo Global Markets | 9 | none |
+| `JBLx` | Jabil xStock | JBL | Backed | 8 | none |
+| `JDHLTx` | JD Health International xStock | 6618 | Backed | 8 | none |
+| `JDLOGx` | JD Logistics xStock | 2618 | Backed | 8 | none |
+| `JD_GBx` | JD Sports Fashion xStock | JDL | Backed | 8 | none |
+| `JDon` | JD.com (Ondo Tokenized) | JD | Ondo Global Markets | 9 | none |
+| `JDx` | JD.com xStock | JD | Backed | 8 | none |
+| `JEFx` | Jefferies Financial xStock | JEF | Backed | 8 | none |
+| `JKHYx` | Jack Henry & Associates xStock | JKHY | Backed | 8 | none |
+| `JLLx` | Jones Lang LaSalle xStock | JLL | Backed | 8 | none |
+| `JMKEx` | Jersey Mike's Subs xStock | JMKE | Backed | 8 | none |
+| `JNJ_US` | Johnson & Johnson | JNJ | Backpack Securities | 6 | none |
+| `JNJon` | Johnson & Johnson (Ondo Tokenized) | JNJ | Ondo Global Markets | 9 | none |
+| `JNJx` | Johnson & Johnson xStock | JNJ | Backed | 8 | none |
+| `JPMon` | JPMorgan Chase (Ondo Tokenized) | JPM | Ondo Global Markets | 9 | none |
+| `JPMx` | JPMorgan Chase xStock | JPM | Backed | 8 | none |
+| `JPSTx` | JPMorgan Ultra-Short Income xStock | JPST | Backed | 8 | none |
+| `JTGEXx` | J&T Global Express xStock | 1519 | Backed | 8 | none |
+| `Jx` | Jacobs Solutions xStock | J | Backed | 8 | none |
+| `KALSHI` | Kalshi | KALSHI | PreStocks | 9 | yes: the recipient gets less |
+| `KBCx` | KBC xStock | KBCB | Backed | 8 | none |
+| `KDPx` | Keurig Dr Pepper xStock | KDP | Backed | 8 | none |
+| `KEELon` | Keel Infrastructure (Ondo Tokenized) | KEEL | Ondo Global Markets | 9 | none |
+| `KERx` | Kering xStock | KERP | Backed | 8 | none |
+| `KEXx` | Kirby xStock | KEX | Backed | 8 | none |
+| `KEYSon` | Keysight Technologies (Ondo Tokenized) | KEYS | Ondo Global Markets | 9 | none |
+| `KEYSx` | Keysight Technologies xStock | KEYS | Backed | 8 | none |
+| `KEYx` | KeyCorp xStock | KEY | Backed | 8 | none |
+| `KGFx` | Kingfisher xStock | KGFL | Backed | 8 | none |
+| `KHCx` | The Kraft Heinz xStock | KHC | Backed | 8 | none |
+| `KIMx` | Kimco Realty xStock | KIM | Backed | 8 | none |
+| `KKRx` | KKR xStock | KKR | Backed | 8 | none |
+| `KLACon` | KLA (Ondo Tokenized) | KLAC | Ondo Global Markets | 9 | none |
+| `KLACx` | KLA Corporation xStock | KLAC | Backed | 8 | none |
+| `KMBx` | Kimberly-Clark xStock | KMB | Backed | 8 | none |
+| `KMIx` | Kinder Morgan xStock | KMI | Backed | 8 | none |
+| `KMXx` | CarMax xStock | KMX | Backed | 8 | none |
+| `KNEBVx` | KONE Class B xStock | KNEBVH | Backed | 8 | none |
+| `KNSLx` | Kinsale Capital xStock | KNSL | Backed | 8 | none |
+| `KNXx` | Knight-Swift Transportation xStock | KNX | Backed | 8 | none |
+| `KOPNon` | Kopin (Ondo Tokenized) | KOPN | Ondo Global Markets | 9 | none |
+| `KORUx` | Korea 3x Long ETF xStock | KORU | Backed | 8 | none |
+| `KOon` | Coca-Cola (Ondo Tokenized) | KO | Ondo Global Markets | 9 | none |
+| `KOx` | Coca-Cola xStock | KO | Backed | 8 | none |
+| `KRAQx` | KRAQ xStock | KRAQ | Backed | 8 | none |
+| `KRMNx` | Karman xStock | KRMN | Backed | 8 | none |
+| `KRx` | The Kroger xStock | KR | Backed | 8 | none |
+| `KTOSx` | Kratos Defense & Security Solutions xStock | KTOS | Backed | 8 | none |
+| `KUAIx` | Kuaishou Technology xStock | 1024 | Backed | 8 | none |
+| `KUNLx` | Kunlun Energy xStock | 135 | Backed | 8 | none |
+| `KVUEx` | Kenvue xStock | KVUE | Backed | 8 | none |
+| `KWEBon` | KraneShares CSI China Internet ETF (Ondo Tokenized) | KWEB | Ondo Global Markets | 9 | none |
+| `LADx` | Lithia Motors xStock | LAD | Backed | 8 | none |
+| `LAMRx` | Lamar Advertising xStock | LAMR | Backed | 8 | none |
+| `LAOPGx` | Laopu Gold xStock | 6181 | Backed | 8 | none |
+| `LASRon` | nLIGHT (Ondo Tokenized) | LASR | Ondo Global Markets | 9 | none |
+| `LDOSx` | Leidos xStock | LDOS | Backed | 8 | none |
+| `LDOx` | Leonardo xStock | LDOM | Backed | 8 | none |
+| `LEAx` | Lear xStock | LEA | Backed | 8 | none |
+| `LECOon` | Lincoln Electric (Ondo Tokenized) | LECO | Ondo Global Markets | 9 | none |
+| `LECOx` | Lincoln Electric xStock | LECO | Backed | 8 | none |
+| `LEMBon` | iShares J.P. Morgan EM Local Currency Bond ETF (Ondo Tokenized) | LEMB | Ondo Global Markets | 9 | none |
+| `LENx` | Lennar xStock | LEN | Backed | 8 | none |
+| `LFUSx` | Littelfuse xStock | LFUS | Backed | 8 | none |
+| `LGENx` | Legal & General xStock | LGENL | Backed | 8 | none |
+| `LHXx` | L3Harris Technologies xStock | LHX | Backed | 8 | none |
+| `LIIx` | Lennox International xStock | LII | Backed | 8 | none |
+| `LINEx` | Lineage xStock | LINE | Backed | 8 | none |
+| `LINon` | Linde plc (Ondo Tokenized) | LIN | Ondo Global Markets | 9 | none |
+| `LINx` | Linde xStock | LIN | Backed | 8 | none |
+| `LITEon` | Lumentum Holdings (Ondo Tokenized) | LITE | Ondo Global Markets | 9 | none |
+| `LITEx` | Lumentum Holdings Inc. xStock | LITE | Backed | 8 | none |
+| `LITon` | Global X Lithium & Battery Tech ETF (Ondo Tokenized) | LIT | Ondo Global Markets | 9 | none |
+| `LIon` | Li Auto (Ondo Tokenized) | LI | Ondo Global Markets | 9 | none |
+| `LKQx` | LKQ xStock | LKQ | Backed | 8 | none |
+| `LLOYx` | Lloyds Banking xStock | LLOYL | Backed | 8 | none |
+| `LLY_US` | Eli Lilly and Company | LLY | Backpack Securities | 6 | none |
+| `LLYon` | Eli Lilly (Ondo Tokenized) | LLY | Ondo Global Markets | 9 | none |
+| `LLYx` | Eli Lilly xStock | LLY | Backed | 8 | none |
+| `LMT_US` | Lockheed Martin Corporation | LMT | Backpack Securities | 6 | none |
+| `LMTon` | Lockheed (Ondo Tokenized) | LMT | Ondo Global Markets | 9 | none |
+| `LMTx` | Lockheed Martin xStock | LMT | Backed | 8 | none |
+| `LNCx` | Lincoln National xStock | LNC | Backed | 8 | none |
+| `LNGx` | Cheniere Energy xStock | LNG | Backed | 8 | none |
+| `LNTx` | Alliant Energy xStock | LNT | Backed | 8 | none |
+| `LOWon` | Lowe's (Ondo Tokenized) | LOW | Ondo Global Markets | 9 | none |
+| `LOWx` | Lowe's Companies xStock | LOW | Backed | 8 | none |
+| `LPLAx` | LPL Financial xStock | LPLA | Backed | 8 | none |
+| `LPTHon` | LightPath Technologies (Ondo Tokenized) | LPTH | Ondo Global Markets | 9 | none |
+| `LRCXon` | Lam Research (Ondo Tokenized) | LRCX | Ondo Global Markets | 9 | none |
+| `LRCXx` | Lam Research Corporation xStock | LRCX | Backed | 8 | none |
+| `LRx` | Legrand xStock | LRP | Backed | 8 | none |
+| `LSCCon` | Lattice Semiconductor (Ondo Tokenized) | LSCC | Ondo Global Markets | 9 | none |
+| `LSCCx` | Lattice Semiconductor xStock | LSCC | Backed | 8 | none |
+| `LSEGx` | London Stock Exchange xStock | LSEGL | Backed | 8 | none |
+| `LSTRx` | Landstar System xStock | LSTR | Backed | 8 | none |
+| `LULU_US` | Lululemon Athletica Inc. | LULU | Backpack Securities | 6 | none |
+| `LULUx` | lululemon xStock | LULU | Backed | 8 | none |
+| `LUNRon` | Intuitive Machines (Ondo Tokenized) | LUNR | Ondo Global Markets | 9 | none |
+| `LUNRx` | Intuitive Machines xStock | LUNR | Backed | 8 | none |
+| `LUV_US` | Southwest Airlines Co. | LUV | Backpack Securities | 6 | none |
+| `LUVx` | Southwest Airlines xStock | LUV | Backed | 8 | none |
+| `LVSx` | Las Vegas Sands xStock | LVS | Backed | 8 | none |
+| `LWLGon` | Lightwave Logic (Ondo Tokenized) | LWLG | Ondo Global Markets | 9 | none |
+| `LWx` | Lamb Weston xStock | LW | Backed | 8 | none |
+| `LYFTx` | Lyft xStock | LYFT | Backed | 8 | none |
+| `LYTEx` | Roundhill Photonics & Optics ETF xStock | LYTE | Backed | 8 | none |
+| `LYVx` | Live Nation Entertainment xStock | LYV | Backed | 8 | none |
+| `Lx` | Loews xStock | L | Backed | 8 | none |
+| `MAAx` | Mid-America Apartment Communities xStock | MAA | Backed | 8 | none |
+| `MANHx` | Manhattan Associates xStock | MANH | Backed | 8 | none |
+| `MARAon` | MARA Holdings (Ondo Tokenized) | MARA | Ondo Global Markets | 9 | none |
+| `MARAx` | MARA xStock | MARA | Backed | 8 | none |
+| `MARx` | Marriott International xStock | MAR | Backed | 8 | none |
+| `MASx` | Masco xStock | MAS | Backed | 8 | none |
+| `MAon` | Mastercard (Ondo Tokenized) | MA | Ondo Global Markets | 9 | none |
+| `MAx` | Mastercard xStock | MA | Backed | 8 | none |
+| `MBGLx` | Mobility Global xStock | MBGL | Backed | 8 | none |
+| `MBGx` | Mercedes-Benz xStock | MBGD | Backed | 8 | none |
+| `MBLYon` | Mobileye Global (Ondo Tokenized) | MBLY | Ondo Global Markets | 9 | none |
+| `MCDon` | McDonald's (Ondo Tokenized) | MCD | Ondo Global Markets | 9 | none |
+| `MCDx` | McDonald's xStock | MCD | Backed | 8 | none |
+| `MCHPx` | Microchip Technology xStock | MCHP | Backed | 8 | none |
+| `MCKx` | McKesson xStock | MCK | Backed | 8 | none |
+| `MCOx` | Moody's xStock | MCO | Backed | 8 | none |
+| `MC_FRx` | LVMH Moet Hennessy Louis Vuitton xStock | MCP | Backed | 8 | none |
+| `MDBx` | MongoDB xStock | MDB | Backed | 8 | none |
+| `MDGLx` | Madrigal Pharmaceuticals xStock | MDGL | Backed | 8 | none |
+| `MDLNx` | Medline xStock | MDLN | Backed | 8 | none |
+| `MDLZx` | Mondelez International xStock | MDLZ | Backed | 8 | none |
+| `MDTx` | Medtronic xStock | MDT | Backed | 8 | none |
+| `MEDPx` | Medpace xStock | MEDP | Backed | 8 | none |
+| `MEITx` | Meituan xStock | 3690 | Backed | 8 | none |
+| `MEIon` | Methode Electronics (Ondo Tokenized) | MEI | Ondo Global Markets | 9 | none |
+| `MELIon` | MercadoLibre (Ondo Tokenized) | MELI | Ondo Global Markets | 9 | none |
+| `METAon` | Meta Platforms (Ondo Tokenized) | META | Ondo Global Markets | 9 | none |
+| `METAx` | Meta xStock | META | Backed | 8 | none |
+| `METCx` | Ramaco Resources xStock | METC | Backed | 8 | none |
+| `METx` | MetLife xStock | MET | Backed | 8 | none |
+| `MGM_US` | MGM Resorts International | MGM | Backpack Securities | 6 | none |
+| `MGMx` | MGM Resorts International xStock | MGM | Backed | 8 | none |
+| `MHKx` | Mohawk Industries xStock | MHK | Backed | 8 | none |
+| `MIDDx` | The Middleby xStock | MIDD | Backed | 8 | none |
+| `MIXUx` | Mixue xStock | 2097 | Backed | 8 | none |
+| `MKCx` | McCormick xStock | MKC | Backed | 8 | none |
+| `MKLx` | Markel xStock | MKL | Backed | 8 | none |
+| `MKSIon` | MKS Inc. (Ondo Tokenized) | MKSI | Ondo Global Markets | 9 | none |
+| `MKSIx` | MKS xStock | MKSI | Backed | 8 | none |
+| `MKS_GBx` | Marks & Spencer xStock | MKSL | Backed | 8 | none |
+| `MKTXx` | MarketAxess xStock | MKTX | Backed | 8 | none |
+| `MLIx` | Mueller Industries xStock | MLI | Backed | 8 | none |
+| `MLMx` | Martin Marietta Materials xStock | MLM | Backed | 8 | none |
+| `MLx` | Michelin xStock | MLP | Backed | 8 | none |
+| `MMGx` | MMG xStock | 1208 | Backed | 8 | none |
+| `MMMx` | 3M xStock | MMM | Backed | 8 | none |
+| `MNDIx` | Mondi xStock | MNDIL | Backed | 8 | none |
+| `MNGx` | M&G xStock | MNGL | Backed | 8 | none |
+| `MODx` | Modine Manufacturing xStock | MOD | Backed | 8 | none |
+| `MOOx` | VanEck Agribusiness ETF xStock | MOO | Backed | 8 | none |
+| `MORNx` | Morningstar xStock | MORN | Backed | 8 | none |
+| `MOSx` | The Mosaic xStock | MOS | Backed | 8 | none |
+| `MOx` | Altria xStock | MO | Backed | 8 | none |
+| `MPCx` | Marathon Petroleum xStock | MPC | Backed | 8 | none |
+| `MPWRx` | Monolithic Power Systems xStock | MPWR | Backed | 8 | none |
+| `MPon` | MP Materials (Ondo Tokenized) | MP | Ondo Global Markets | 9 | none |
+| `MPx` | MP Materials xStock | MP | Backed | 8 | none |
+| `MRK_DEx` | Merck KGaA xStock | MRKD | Backed | 8 | none |
+| `MRKon` | Merck (Ondo Tokenized) | MRK | Ondo Global Markets | 9 | none |
+| `MRKx` | Merck xStock | MRK | Backed | 8 | none |
+| `MRNA_US` | Moderna, Inc. | MRNA | Backpack Securities | 6 | none |
+| `MRNAon` | Moderna (Ondo Tokenized) | MRNA | Ondo Global Markets | 9 | none |
+| `MRNAx` | Moderna xStock | MRNA | Backed | 8 | none |
+| `MROx` | Melrose Industries xStock | MROL | Backed | 8 | none |
+| `MRSHx` | Marsh xStock | MRSH | Backed | 8 | none |
+| `MRVL_US` | Marvell Technology, Inc. | MRVL | Backpack Securities | 6 | none |
+| `MRVLon` | Marvell Technology (Ondo Tokenized) | MRVL | Ondo Global Markets | 9 | none |
+| `MRVLx` | Marvell xStock | MRVL | Backed | 8 | none |
+| `MSAx` | MSA Safety xStock | MSA | Backed | 8 | none |
+| `MSCIx` | MSCI xStock | MSCI | Backed | 8 | none |
+| `MSFTon` | Microsoft (Ondo Tokenized) | MSFT | Ondo Global Markets | 9 | none |
+| `MSFTx` | Microsoft xStock | MSFT | Backed | 8 | none |
+| `MSGSx` | Madison Square Garden Sports xStock | MSGS | Backed | 8 | none |
+| `MSIx` | Motorola Solutions xStock | MSI | Backed | 8 | none |
+| `MSMx` | MSC Industrial Direct xStock | MSM | Backed | 8 | none |
+| `MSTR_US` | Strategy Inc | MSTR | Backpack Securities | 6 | none |
+| `MSTRon` | MicroStrategy (Ondo Tokenized) | MSTR | Ondo Global Markets | 9 | none |
+| `MSTRx` | MicroStrategy xStock | MSTR | Backed | 8 | none |
+| `MSx` | Morgan Stanley xStock | MS | Backed | 8 | none |
+| `MTBx` | M&T Bank xStock | MTB | Backed | 8 | none |
+| `MTCHx` | Match xStock | MTCH | Backed | 8 | none |
+| `MTDRx` | Matador Resources xStock | MTDR | Backed | 8 | none |
+| `MTDx` | Mettler-Toledo International xStock | MTD | Backed | 8 | none |
+| `MTGx` | MGIC Investment xStock | MTG | Backed | 8 | none |
+| `MTNx` | Vail Resorts xStock | MTN | Backed | 8 | none |
+| `MTRCPx` | MTR xStock | 66 | Backed | 8 | none |
+| `MTSIon` | MACOM Technology Solutions Holdings (Ondo Tokenized) | MTSI | Ondo Global Markets | 9 | none |
+| `MTSIx` | MACOM Technology Solutions xStock | MTSI | Backed | 8 | none |
+| `MTX_DEx` | MTU Aero Engines xStock | MTXD | Backed | 8 | none |
+| `MTZon` | MasTec (Ondo Tokenized) | MTZ | Ondo Global Markets | 9 | none |
+| `MTZx` | MasTec xStock | MTZ | Backed | 8 | none |
+| `MTx` | ArcelorMittal xStock | MTA | Backed | 8 | none |
+| `MUSAx` | Murphy USA xStock | MUSA | Backed | 8 | none |
+| `MUUx` | Micron 2x Long ETF xStock | MUU | Backed | 8 | none |
+| `MUV2x` | Munchener Ruckversicherungs-Gesellschaft xStock | MUV2D | Backed | 8 | none |
+| `MU_US` | Micron Technology, Inc. | MU | Backpack Securities | 6 | none |
+| `MUon` | Micron Technology (Ondo Tokenized) | MU | Ondo Global Markets | 9 | none |
+| `MUx` | Micron Technology xStock | MU | Backed | 8 | none |
+| `MVLLx` | Marvell 2x Long ETF xStock | MVLL | Backed | 8 | none |
+| `MXLon` | MaxLinear (Ondo Tokenized) | MXL | Ondo Global Markets | 9 | none |
+| `MYRGon` | MYR Group (Ondo Tokenized) | MYRG | Ondo Global Markets | 9 | none |
+| `Mx` | Macy's xStock | M | Backed | 8 | none |
+| `NATon` | Nordic American Tankers (Ondo Tokenized) | NAT | Ondo Global Markets | 9 | none |
+| `NBIS_US` | Nebius Group N.V. | NBIS | Backpack Securities | 6 | none |
+| `NBISon` | Nebius Group (Ondo Tokenized) | NBIS | Ondo Global Markets | 9 | none |
+| `NBISx` | Nebius xStock | NBIS | Backed | 8 | none |
+| `NBIXx` | Neurocrine Biosciences xStock | NBIX | Backed | 8 | none |
+| `NCLHx` | Norwegian Cruise Line xStock | NCLH | Backed | 8 | none |
+| `NDAQx` | Nasdaq Inc. xStock | NDAQ | Backed | 8 | none |
+| `NDA_FIx` | Nordea Bank Abp xStock | NDAH | Backed | 8 | none |
+| `NDSNx` | Nordson xStock | NDSN | Backed | 8 | none |
+| `NEARon` | iShares Short Duration Bond Active ETF (Ondo Tokenized) | NEAR | Ondo Global Markets | 9 | none |
+| `NEEon` | NextEra Energy (Ondo Tokenized) | NEE | Ondo Global Markets | 9 | none |
+| `NEEx` | NextEra Energy xStock | NEE | Backed | 8 | none |
+| `NEMon` | Newmont (Ondo Tokenized) | NEM | Ondo Global Markets | 9 | none |
+| `NEMx` | Newmont xStock | NEM | Backed | 8 | none |
+| `NESTEx` | Neste xStock | NESTEH | Backed | 8 | none |
+| `NETon` | Cloudflare (Ondo Tokenized) | NET | Ondo Global Markets | 9 | none |
+| `NETx` | Cloudflare xStock | NET | Backed | 8 | none |
+| `NEURALINK` | Neuralink | NEURALINK | PreStocks | 9 | yes: the recipient gets less |
+| `NEUx` | NewMarket xStock | NEU | Backed | 8 | none |
+| `NFGx` | National Fuel Gas xStock | NFG | Backed | 8 | none |
+| `NFLX_US` | Netflix, Inc. | NFLX | Backpack Securities | 6 | none |
+| `NFLXon` | Netflix (Ondo Tokenized) | NFLX | Ondo Global Markets | 9 | none |
+| `NFLXx` | Netflix xStock | NFLX | Backed | 8 | none |
+| `NG_GBx` | National Grid xStock | NGL | Backed | 8 | none |
+| `NIKLon` | Sprott Nickel Miners ETF (Ondo Tokenized) | NIKL | Ondo Global Markets | 9 | none |
+| `NIOon` | NIO (Ondo Tokenized) | NIO | Ondo Global Markets | 9 | none |
+| `NIx` | NiSource xStock | NI | Backed | 8 | none |
+| `NKE_US` | NIKE, Inc. | NKE | Backpack Securities | 6 | none |
+| `NKEon` | Nike (Ondo Tokenized) | NKE | Ondo Global Markets | 9 | none |
+| `NKEx` | Nike xStock | NKE | Backed | 8 | none |
+| `NLRx` | VanEck Uranium and Nuclear xStock | NLR | Backed | 8 | none |
+| `NLYx` | Annaly Capital Management xStock | NLY | Backed | 8 | none |
+| `NNEon` | NANO Nuclear Energy (Ondo Tokenized) | NNE | Ondo Global Markets | 9 | none |
+| `NNNx` | NNN REIT xStock | NNN | Backed | 8 | none |
+| `NN_NLx` | NN xStock | NNA | Backed | 8 | none |
+| `NOCon` | Northrop Grumman (Ondo Tokenized) | NOC | Ondo Global Markets | 9 | none |
+| `NOCx` | Northrop Grumman xStock | NOC | Backed | 8 | none |
+| `NOKIAx` | Nokia xStock | NOKIAH | Backed | 8 | none |
+| `NOK_US` | Nokia Oyj | NOK | Backpack Securities | 6 | none |
+| `NOKon` | Nokia (Ondo Tokenized) | NOK | Ondo Global Markets | 9 | none |
+| `NONGx` | Nongfu Spring xStock | 9633 | Backed | 8 | none |
+| `NOVx` | NOV xStock | NOV | Backed | 8 | none |
+| `NOWon` | ServiceNow (Ondo Tokenized) | NOW | Ondo Global Markets | 9 | none |
+| `NOWx` | ServiceNow xStock | NOW | Backed | 8 | none |
+| `NRGx` | NRG Energy xStock | NRG | Backed | 8 | none |
+| `NSCx` | Norfolk Southern xStock | NSC | Backed | 8 | none |
+| `NTAPx` | NetApp xStock | NTAP | Backed | 8 | none |
+| `NTESon` | NetEase (Ondo Tokenized) | NTES | Ondo Global Markets | 9 | none |
+| `NTESx` | NetEase xStock | NTES | Backed | 8 | none |
+| `NTNXx` | Nutanix xStock | NTNX | Backed | 8 | none |
+| `NTRAx` | Natera xStock | NTRA | Backed | 8 | none |
+| `NTRSx` | Northern Trust xStock | NTRS | Backed | 8 | none |
+| `NUEon` | Nucor (Ondo Tokenized) | NUE | Ondo Global Markets | 9 | none |
+| `NUEx` | Nucor xStock | NUE | Backed | 8 | none |
+| `NVDA_US` | NVIDIA Corporation | NVDA | Backpack Securities | 6 | none |
+| `NVDAon` | NVIDIA (Ondo Tokenized) | NVDA | Ondo Global Markets | 9 | none |
+| `NVDAx` | NVIDIA xStock | NVDA | Backed | 8 | none |
+| `NVDLx` | GraniteShares 2x Long NVDA Daily ETF xStock | NVDL | Backed | 8 | none |
+| `NVMIon` | Nova (Ondo Tokenized) | NVMI | Ondo Global Markets | 9 | none |
+| `NVOon` | Novo Nordisk (Ondo Tokenized) | NVO | Ondo Global Markets | 9 | none |
+| `NVOx` | Novo Nordisk xStock | NVO | Backed | 8 | none |
+| `NVRx` | NVR xStock | NVR | Backed | 8 | none |
+| `NVTSon` | Navitas Semiconductor (Ondo Tokenized) | NVTS | Ondo Global Markets | 9 | none |
+| `NVTon` | nVent Electric (Ondo Tokenized) | NVT | Ondo Global Markets | 9 | none |
+| `NWGx` | NatWest xStock | NWGL | Backed | 8 | none |
+| `NWSAx` | News xStock | NWSA | Backed | 8 | none |
+| `NWSx` | News xStock | NWS | Backed | 8 | none |
+| `NXSTx` | Nexstar Media xStock | NXST | Backed | 8 | none |
+| `NXT_GBx` | Next xStock | NXTL | Backed | 8 | none |
+| `NYTx` | New York Times xStock | NYT | Backed | 8 | none |
+| `OCx` | Owens-Corning xStock | OC | Backed | 8 | none |
+| `ODFLx` | Old Dominion Freight Line xStock | ODFL | Backed | 8 | none |
+| `OGEx` | OGE Energy xStock | OGE | Backed | 8 | none |
+| `OHIx` | Omega Healthcare Investors xStock | OHI | Backed | 8 | none |
+| `OIHon` | VanEck Oil Services ETF (Ondo Tokenized) | OIH | Ondo Global Markets | 9 | none |
+| `OIIon` | Oceaneering International (Ondo Tokenized) | OII | Ondo Global Markets | 9 | none |
+| `OKEx` | ONEOK xStock | OKE | Backed | 8 | none |
+| `OKLOon` | Oklo (Ondo Tokenized) | OKLO | Ondo Global Markets | 9 | none |
+| `OKLOx` | Oklo xStock | OKLO | Backed | 8 | none |
+| `OKTAx` | Okta xStock | OKTA | Backed | 8 | none |
+| `OMCx` | Omnicom xStock | OMC | Backed | 8 | none |
+| `OMFx` | OneMain xStock | OMF | Backed | 8 | none |
+| `ONDSon` | Ondas Holdings (Ondo Tokenized) | ONDS | Ondo Global Markets | 9 | none |
+| `ONDSx` | Ondas xStock | ONDS | Backed | 8 | none |
+| `ONTOon` | Onto Innovation (Ondo Tokenized) | ONTO | Ondo Global Markets | 9 | none |
+| `ONTOx` | Onto Innovation xStock | ONTO | Backed | 8 | none |
+| `ONon` | ON Semiconductor (Ondo Tokenized) | ON | Ondo Global Markets | 9 | none |
+| `ONx` | ON Semiconductor xStock | ON | Backed | 8 | none |
+| `OPENAI` | OpenAI | OPENAI | PreStocks | 9 | yes: the recipient gets less |
+| `OPENon` | Opendoor Technologies (Ondo Tokenized) | OPEN | Ondo Global Markets | 9 | none |
+| `OPENx` | OPEN xStock | OPEN | Backed | 8 | none |
+| `OPRAon` | Opera (Ondo Tokenized) | OPRA | Ondo Global Markets | 9 | none |
+| `ORA_FRx` | Orange xStock | ORAP | Backed | 8 | none |
+| `ORBXon` | Global X Space Tech ETF (Ondo Tokenized) | ORBX | Ondo Global Markets | 9 | none |
+| `ORCLon` | Oracle (Ondo Tokenized) | ORCL | Ondo Global Markets | 9 | none |
+| `ORCLx` | Oracle xStock | ORCL | Backed | 8 | none |
+| `ORIx` | Old Republic International xStock | ORI | Backed | 8 | none |
+| `ORLYx` | O'Reilly Automotive xStock | ORLY | Backed | 8 | none |
+| `OR_FRx` | L'Oreal xStock | ORP | Backed | 8 | none |
+| `OSCRon` | Oscar Health (Ondo Tokenized) | OSCR | Ondo Global Markets | 9 | none |
+| `OSCRx` | Oscar Health xStock | OSCR | Backed | 8 | none |
+| `OSKx` | Oshkosh xStock | OSK | Backed | 8 | none |
+| `OTISx` | Otis Worldwide xStock | OTIS | Backed | 8 | none |
+| `OUSTon` | Ouster (Ondo Tokenized) | OUST | Ondo Global Markets | 9 | none |
+| `OUSTx` | Ouster xStock | OUST | Backed | 8 | none |
+| `OVVx` | Ovintiv xStock | OVV | Backed | 8 | none |
+| `OWLx` | Blue Owl Capital xStock | OWL | Backed | 8 | none |
+| `OXYon` | Occidental Petroleum (Ondo Tokenized) | OXY | Ondo Global Markets | 9 | none |
+| `OXYx` | Occidental Petroleum xStock | OXY | Backed | 8 | none |
+| `OZKx` | Bank OZK xStock | OZK | Backed | 8 | none |
+| `Ox` | Realty Income xStock | O | Backed | 8 | none |
+| `PAGx` | Penske Automotive xStock | PAG | Backed | 8 | none |
+| `PALLon` | abrdn Physical Palladium Shares ETF (Ondo Tokenized) | PALL | Ondo Global Markets | 9 | none |
+| `PALLx` | abrdn Physical Palladium Shares xStock | PALL | Backed | 8 | none |
+| `PANWon` | Palo Alto Networks (Ondo Tokenized) | PANW | Ondo Global Markets | 9 | none |
+| `PANWx` | Palo Alto Networks xStock | PANW | Backed | 8 | none |
+| `PATHx` | UiPath xStock | PATH | Backed | 8 | none |
+| `PAVEon` | Global X US Infrastructure Development ETF (Ondo Tokenized) | PAVE | Ondo Global Markets | 9 | none |
+| `PAYCx` | Paycom Software xStock | PAYC | Backed | 8 | none |
+| `PAYXx` | Paychex xStock | PAYX | Backed | 8 | none |
+| `PBRon` | Petrobras (Ondo Tokenized) | PBR | Ondo Global Markets | 9 | none |
+| `PCARx` | PACCAR xStock | PCAR | Backed | 8 | none |
+| `PCGon` | PG&E (Ondo Tokenized) | PCG | Ondo Global Markets | 9 | none |
+| `PCGx` | PG&E xStock | PCG | Backed | 8 | none |
+| `PCORx` | Procore Technologies xStock | PCOR | Backed | 8 | none |
+| `PCTYx` | Paylocity xStock | PCTY | Backed | 8 | none |
+| `PCTx` | PureCycle Technologies xStock | PCT | Backed | 8 | none |
+| `PDBCon` | Invesco Optimum Yld Dvsfd Cmd Str No K-1 ETF (Ondo Tokenized) | PDBC | Ondo Global Markets | 9 | none |
+| `PDDon` | PDD Holdings (Ondo Tokenized) | PDD | Ondo Global Markets | 9 | none |
+| `PDDx` | PDD xStock | PDD | Backed | 8 | none |
+| `PEGAx` | Pegasystems xStock | PEGA | Backed | 8 | none |
+| `PEGx` | Public Service Enterprise xStock | PEG | Backed | 8 | none |
+| `PENGon` | Penguin Solutions (Ondo Tokenized) | PENG | Ondo Global Markets | 9 | none |
+| `PENGx` | Penguin Solutions xStock | PENG | Backed | 8 | none |
+| `PENx` | Penumbra xStock | PEN | Backed | 8 | none |
+| `PEPon` | PepsiCo (Ondo Tokenized) | PEP | Ondo Global Markets | 9 | none |
+| `PEPx` | PepsiCo xStock | PEP | Backed | 8 | none |
+| `PFE_US` | Pfizer Inc. | PFE | Backpack Securities | 6 | none |
+| `PFEon` | Pfizer (Ondo Tokenized) | PFE | Ondo Global Markets | 9 | none |
+| `PFEx` | Pfizer xStock | PFE | Backed | 8 | none |
+| `PFGCx` | Performance Food xStock | PFGC | Backed | 8 | none |
+| `PFGx` | Principal Financial xStock | PFG | Backed | 8 | none |
+| `PGRx` | Progressive xStock | PGR | Backed | 8 | none |
+| `PGon` | Procter & Gamble (Ondo Tokenized) | PG | Ondo Global Markets | 9 | none |
+| `PGx` | Procter & Gamble xStock | PG | Backed | 8 | none |
+| `PHIAx` | Koninklijke Philips xStock | PHIAA | Backed | 8 | none |
+| `PHx` | Parker Hannifin xStock | PH | Backed | 8 | none |
+| `PICCx` | PICC Property and Casualty xStock | 2328 | Backed | 8 | none |
+| `PICOx` | Ping An Insurance Group Co. of China xStock | 2318 | Backed | 8 | none |
+| `PINSon` | Pinterest (Ondo Tokenized) | PINS | Ondo Global Markets | 9 | none |
+| `PINSx` | Pinterest xStock | PINS | Backed | 8 | none |
+| `PKGx` | Packaging Corp of America xStock | PKG | Backed | 8 | none |
+| `PLDx` | Prologis xStock | PLD | Backed | 8 | none |
+| `PLTRon` | Palantir Technologies (Ondo Tokenized) | PLTR | Ondo Global Markets | 9 | none |
+| `PLTRx` | Palantir xStock | PLTR | Backed | 8 | none |
+| `PLUGon` | Plug Power (Ondo Tokenized) | PLUG | Ondo Global Markets | 9 | none |
+| `PLon` | Planet Labs (Ondo Tokenized) | PL | Ondo Global Markets | 9 | none |
+| `PLx` | Planet Labs xStock | PL | Backed | 8 | none |
+| `PMx` | Philip Morris xStock | PM | Backed | 8 | none |
+| `PNCx` | PNC Financial Services xStock | PNC | Backed | 8 | none |
+| `PNFPx` | Pinnacle Financial Partners xStock | PNFP | Backed | 8 | none |
+| `PNWx` | Pinnacle West Capital xStock | PNW | Backed | 8 | none |
+| `PODDx` | Insulet xStock | PODD | Backed | 8 | none |
+| `POETx` | POET Technologies xStock | POET | Backed | 8 | none |
+| `POLYMARKET` | Polymarket | POLYMARKET | PreStocks | 9 | yes: the recipient gets less |
+| `POOLx` | Pool xStock | POOL | Backed | 8 | none |
+| `POPMTx` | Pop Mart International xStock | 9992 | Backed | 8 | none |
+| `POWIon` | Power Integrations (Ondo Tokenized) | POWI | Ondo Global Markets | 9 | none |
+| `POWLon` | Powell Industries (Ondo Tokenized) | POWL | Ondo Global Markets | 9 | none |
+| `POWLx` | Powell Industries xStock | POWL | Backed | 8 | none |
+| `PPCx` | Pilgrims Pride xStock | PPC | Backed | 8 | none |
+| `PPGx` | PPG Industries xStock | PPG | Backed | 8 | none |
+| `PPLTon` | abrdn Physical Platinum Shares ETF (Ondo Tokenized) | PPLT | Ondo Global Markets | 9 | none |
+| `PPLTx` | abrdn Physical Platinum Shares xStock | PPLT | Backed | 8 | none |
+| `PPLx` | PPL xStock | PPL | Backed | 8 | none |
+| `PRADx` | Prada xStock | 1913 | Backed | 8 | none |
+| `PRIMon` | Primoris Services (Ondo Tokenized) | PRIM | Ondo Global Markets | 9 | none |
+| `PRIx` | Primerica xStock | PRI | Backed | 8 | none |
+| `PRMBx` | Primo Brands xStock | PRMB | Backed | 8 | none |
+| `PRU_GBx` | Prudential xStock | PRUL | Backed | 8 | none |
+| `PRUx` | Prudential Financial xStock | PRU | Backed | 8 | none |
+| `PRYx` | Prysmian xStock | PRYM | Backed | 8 | none |
+| `PRx` | Permian Resources xStock | PR | Backed | 8 | none |
+| `PSAx` | Public Storage xStock | PSA | Backed | 8 | none |
+| `PSBOCx` | Postal Savings Bank Of China xStock | 1658 | Backed | 8 | none |
+| `PSN_GBx` | Persimmon xStock | PSNL | Backed | 8 | none |
+| `PSNx` | Parsons xStock | PSN | Backed | 8 | none |
+| `PSONx` | Pearson xStock | PSONL | Backed | 8 | none |
+| `PSQon` | ProShares Short QQQ (Ondo Tokenized) | PSQ | Ondo Global Markets | 9 | none |
+| `PST_ITx` | Poste Italiane xStock | PSTM | Backed | 8 | none |
+| `PSXx` | Phillips 66 xStock | PSX | Backed | 8 | none |
+| `PTCx` | PTC xStock | PTC | Backed | 8 | none |
+| `PTN_US` | Palatin Technologies, Inc. | PTN | Backpack Securities | 6 | none |
+| `PUB_FRx` | Publicis Groupe xStock | PUBP | Backed | 8 | none |
+| `PURRon` | Hyperliquid Strategies (Ondo Tokenized) | PURR | Ondo Global Markets | 9 | none |
+| `PURRx` | Hyperliquid Strategies xStock | PURR | Backed | 8 | none |
+| `PWAHLx` | Power Assets xStock | 6 | Backed | 8 | none |
+| `PWRon` | Quanta Services (Ondo Tokenized) | PWR | Ondo Global Markets | 9 | none |
+| `PWRx` | Quanta Services, Inc. xStock | PWR | Backed | 8 | none |
+| `PYPLon` | PayPal (Ondo Tokenized) | PYPL | Ondo Global Markets | 9 | none |
+| `PYPLx` | PayPal xStock | PYPL | Backed | 8 | none |
+| `Px` | Everpure xStock | P | Backed | 8 | none |
+| `QBTSon` | D-Wave Quantum (Ondo Tokenized) | QBTS | Ondo Global Markets | 9 | none |
+| `QCOMon` | Qualcomm (Ondo Tokenized) | QCOM | Ondo Global Markets | 9 | none |
+| `QCOMx` | Qualcomm xStock | QCOM | Backed | 8 | none |
+| `QLTAon` | iShares Aaa - A Rated Corporate Bond ETF (Ondo Tokenized) | QLTA | Ondo Global Markets | 9 | none |
+| `QNTx` | Quantinuum xStock | QNT | Backed | 8 | none |
+| `QQQon` | Invesco QQQ (Ondo Tokenized) | QQQ | Ondo Global Markets | 9 | none |
+| `QQQx` | Nasdaq xStock | QQQ | Backed | 8 | none |
+| `QQ_GBx` | QinetiQ xStock | QQL | Backed | 8 | none |
+| `QRVOx` | Qorvo xStock | QRVO | Backed | 8 | none |
+| `QSRx` | Restaurant Brands International xStock | QSR | Backed | 8 | none |
+| `QTUMon` | Defiance Quantum ETF (Ondo Tokenized) | QTUM | Ondo Global Markets | 9 | none |
+| `QUBT_US` | Quantum Computing Inc. | QUBT | Backpack Securities | 6 | none |
+| `QUBTon` | Quantum Computing (Ondo Tokenized) | QUBT | Ondo Global Markets | 9 | none |
+| `QUBTx` | Quantum Computing xStock | QUBT | Backed | 8 | none |
+| `QUREx` | uniQure xStock | QURE | Backed | 8 | none |
+| `QYLDon` | Global X NASDAQ 100 Covered Call ETF (Ondo Tokenized) | QYLD | Ondo Global Markets | 9 | none |
+| `QYLDx` | Global X NASDAQ 100 Covered Call ETF xStock | QYLD | Backed | 8 | none |
+| `Qx` | Qnity Electronics xStock | Q | Backed | 8 | none |
+| `RAMx` | Roundhill T-REX 2X Long DRAM Daily Target ETF xStock | RAM | Backed | 8 | none |
+| `RBAx` | RB Global xStock | RBA | Backed | 8 | none |
+| `RBLX_US` | Roblox Corporation | RBLX | Backpack Securities | 6 | none |
+| `RBLXx` | Roblox xStock | RBLX | Backed | 8 | none |
+| `RBRKx` | Rubrik xStock | RBRK | Backed | 8 | none |
+| `RCATx` | Red Cat xStock | RCAT | Backed | 8 | none |
+| `RDDT_US` | Reddit, Inc. | RDDT | Backpack Securities | 6 | none |
+| `RDDTon` | Reddit (Ondo Tokenized) | RDDT | Ondo Global Markets | 9 | none |
+| `RDDTx` | Reddit xStock | RDDT | Backed | 8 | none |
+| `RDWon` | Redwire (Ondo Tokenized) | RDW | Ondo Global Markets | 9 | none |
+| `RDWx` | Redwire xStock | RDW | Backed | 8 | none |
+| `REGNon` | Regeneron Pharmaceuticals (Ondo Tokenized) | REGN | Ondo Global Markets | 9 | none |
+| `REGNx` | Regeneron Pharmaceuticals xStock | REGN | Backed | 8 | none |
+| `REGx` | Regency Centers xStock | REG | Backed | 8 | none |
+| `REL_GBx` | Relx xStock | RELL | Backed | 8 | none |
+| `REMXon` | VanEck Rare Earth and Strategic Metals ETF (Ondo Tokenized) | REMX | Ondo Global Markets | 9 | none |
+| `REPx` | Repsol xStock | REPE | Backed | 8 | none |
+| `REXRx` | Rexford Industrial Realty xStock | REXR | Backed | 8 | none |
+| `REYNx` | Reynolds Consumer Products xStock | REYN | Backed | 8 | none |
+| `RFx` | Regions Financial xStock | RF | Backed | 8 | none |
+| `RGAx` | Reinsurance Group of America xStock | RGA | Backed | 8 | none |
+| `RGENx` | Repligen xStock | RGEN | Backed | 8 | none |
+| `RGLDx` | Royal Gold xStock | RGLD | Backed | 8 | none |
+| `RGTIon` | Rigetti Computing (Ondo Tokenized) | RGTI | Ondo Global Markets | 9 | none |
+| `RHMx` | Rheinmetall xStock | RHMD | Backed | 8 | none |
+| `RIOTon` | Riot Platforms (Ondo Tokenized) | RIOT | Ondo Global Markets | 9 | none |
+| `RIOTx` | Riot Platforms xStock | RIOT | Backed | 8 | none |
+| `RIO_GBx` | Rio Tinto xStock | RIOL | Backed | 8 | none |
+| `RITMx` | Rithm Capital xStock | RITM | Backed | 8 | none |
+| `RIVN_US` | Rivian Automotive, Inc. | RIVN | Backpack Securities | 6 | none |
+| `RIVNon` | Rivian Automotive (Ondo Tokenized) | RIVN | Ondo Global Markets | 9 | none |
+| `RIVNx` | Rivian Automotive xStock | RIVN | Backed | 8 | none |
+| `RJFx` | Raymond James Financial xStock | RJF | Backed | 8 | none |
+| `RKLB_US` | Rocket Lab Corporation | RKLB | Backpack Securities | 6 | none |
+| `RKLBon` | Rocket Lab (Ondo Tokenized) | RKLB | Ondo Global Markets | 9 | none |
+| `RKLBx` | Rocket Lab xStock | RKLB | Backed | 8 | none |
+| `RKT_GBx` | Reckitt Benckiser xStock | RKTL | Backed | 8 | none |
+| `RLIx` | RLI xStock | RLI | Backed | 8 | none |
+| `RLx` | Ralph Lauren xStock | RL | Backed | 8 | none |
+| `RMBSon` | Rambus (Ondo Tokenized) | RMBS | Ondo Global Markets | 9 | none |
+| `RMBSx` | Rambus xStock | RMBS | Backed | 8 | none |
+| `RMDx` | ResMed xStock | RMD | Backed | 8 | none |
+| `RMSx` | Hermes International xStock | RMSP | Backed | 8 | none |
+| `RMVx` | Rightmove xStock | RMVL | Backed | 8 | none |
+| `RNGx` | RingCentral xStock | RNG | Backed | 8 | none |
+| `RNRx` | RenaissanceRe xStock | RNR | Backed | 8 | none |
+| `ROIVx` | Roivant Sciences xStock | ROIV | Backed | 8 | none |
+| `ROKUx` | Roku xStock | ROKU | Backed | 8 | none |
+| `ROKon` | Rockwell Automation (Ondo Tokenized) | ROK | Ondo Global Markets | 9 | none |
+| `ROKx` | Rockwell Automation xStock | ROK | Backed | 8 | none |
+| `ROLx` | Rollins xStock | ROL | Backed | 8 | none |
+| `ROPx` | Roper Technologies xStock | ROP | Backed | 8 | none |
+| `ROSTx` | Ross Stores xStock | ROST | Backed | 8 | none |
+| `RPMx` | RPM International xStock | RPM | Backed | 8 | none |
+| `RRCx` | Range Resources xStock | RRC | Backed | 8 | none |
+| `RRXx` | Regal Rexnord xStock | RRX | Backed | 8 | none |
+| `RR_GBx` | Rolls-Royce xStock | RRL | Backed | 8 | none |
+| `RS1_GBx` | RS xStock | RS1L | Backed | 8 | none |
+| `RSGx` | Republic Services xStock | RSG | Backed | 8 | none |
+| `RSx` | Reliance xStock | RS | Backed | 8 | none |
+| `RTOx` | Rentokil Initial xStock | RTOL | Backed | 8 | none |
+| `RTXon` | RTX (Ondo Tokenized) | RTX | Ondo Global Markets | 9 | none |
+| `RTXx` | RTX xStock | RTX | Backed | 8 | none |
+| `RUM_US` | RUM Group Inc. | RUM | Backpack Securities | 6 | none |
+| `RVMDx` | Revolution Medicines xStock | RVMD | Backed | 8 | none |
+| `RVTYx` | Revvity xStock | RVTY | Backed | 8 | none |
+| `RWEx` | RWE Class A xStock | RWED | Backed | 8 | none |
+| `RXRXon` | Recursion Pharmaceuticals (Ondo Tokenized) | RXRX | Ondo Global Markets | 9 | none |
+| `RYANx` | Ryan Specialty xStock | RYAN | Backed | 8 | none |
+| `RYNx` | Rayonier xStock | RYN | Backed | 8 | none |
+| `Rx` | Ryder System xStock | R | Backed | 8 | none |
+| `SAFx` | Safran xStock | SAFP | Backed | 8 | none |
+| `SAIAx` | Saia xStock | SAIA | Backed | 8 | none |
+| `SAICx` | Science Applications International xStock | SAIC | Backed | 8 | none |
+| `SAILx` | SailPoint xStock | SAIL | Backed | 8 | none |
+| `SAMPOx` | Sampo Class A xStock | SAMPOH | Backed | 8 | none |
+| `SANMx` | Sanmina xStock | SANM | Backed | 8 | none |
+| `SAN_ESx` | Banco Santander xStock | SANE | Backed | 8 | none |
+| `SAN_FRx` | Sanofi xStock | SANP | Backed | 8 | none |
+| `SAPon` | SAP (Ondo Tokenized) | SAP | Ondo Global Markets | 9 | none |
+| `SAPx` | SAP xStock | SAPD | Backed | 8 | none |
+| `SAROx` | StandardAero xStock | SARO | Backed | 8 | none |
+| `SATAon` | Strive Preferred (Ondo Tokenized) | SATA | Ondo Global Markets | 9 | none |
+| `SATAx` | Strive, Inc. Series A Preferred xStock | SATA | Backed | 8 | none |
+| `SBACx` | SBA Communications xStock | SBAC | Backed | 8 | none |
+| `SBETon` | SharpLink Gaming (Ondo Tokenized) | SBET | Ondo Global Markets | 9 | none |
+| `SBETx` | SharpLink Gaming xStock | SBET | Backed | 8 | none |
+| `SBRYx` | Sainsbury xStock | SBRYL | Backed | 8 | none |
+| `SBUXon` | Starbucks (Ondo Tokenized) | SBUX | Ondo Global Markets | 9 | none |
+| `SBUXx` | Starbucks xStock | SBUX | Backed | 8 | none |
+| `SCCOon` | Southern Copper (Ondo Tokenized) | SCCO | Ondo Global Markets | 9 | none |
+| `SCCOx` | Southern Copper xStock | SCCO | Backed | 8 | none |
+| `SCHFx` | Schwab International Equity xStock | SCHF | Backed | 8 | none |
+| `SCHH_US` | Schwab U.S. REIT ETF | SCHH | Backpack Securities | 6 | none |
+| `SCHWon` | Charles Schwab (Ondo Tokenized) | SCHW | Ondo Global Markets | 9 | none |
+| `SCHWx` | Charles Schwab xStock | SCHW | Backed | 8 | none |
+| `SCIx` | Service Corp International xStock | SCI | Backed | 8 | none |
+| `SCT_GBx` | Softcat xStock | SCTL | Backed | 8 | none |
+| `SECUon` | iShares Securitized Income Active ETF (Ondo Tokenized) | SECU | Ondo Global Markets | 9 | none |
+| `SEDGon` | SolarEdge Technologies (Ondo Tokenized) | SEDG | Ondo Global Markets | 9 | none |
+| `SEICx` | SEI Investments xStock | SEIC | Backed | 8 | none |
+| `SFDx` | Smithfield Foods xStock | SFD | Backed | 8 | none |
+| `SFMx` | Sprouts Farmers Market xStock | SFM | Backed | 8 | none |
+| `SFx` | Stifel Financial xStock | SF | Backed | 8 | none |
+| `SGE_GBx` | Sage xStock | SGEL | Backed | 8 | none |
+| `SGIx` | Somnigroup International xStock | SGI | Backed | 8 | none |
+| `SGOVon` | iShares 0-3 Month Treasury Bond ETF (Ondo Tokenized) | SGOV | Ondo Global Markets | 9 | none |
+| `SGOVx` | iShares 0-3 Month Treasury Bond ETF xStock | SGOV | Backed | 8 | none |
+| `SGOx` | Compagnie de Saint-Gobain xStock | SGOP | Backed | 8 | none |
+| `SHAZx` | SharonAI xStock | SHAZ | Backed | 8 | none |
+| `SHCx` | Sotera Health xStock | SHC | Backed | 8 | none |
+| `SHEINx` | SHEIN xStock | 625 | Backed | 8 | none |
+| `SHELx` | Shell xStock | SHELL | Backed | 8 | none |
+| `SHLDon` | Global X Defense Tech ETF (Ondo Tokenized) | SHLD | Ondo Global Markets | 9 | none |
+| `SHLDx` | Global X Defense Tech ETF xStock | SHLD | Backed | 8 | none |
+| `SHLx` | Siemens Healthineers xStock | XETR:SHLD | Backed | 8 | none |
+| `SHOP_US` | Shopify Inc. | SHOP | Backpack Securities | 6 | none |
+| `SHOPon` | Shopify (Ondo Tokenized) | SHOP | Ondo Global Markets | 9 | none |
+| `SHOPx` | Shopify xStock | SHOP | Backed | 8 | none |
+| `SHWx` | Sherwin-Williams xStock | SHW | Backed | 8 | none |
+| `SHYon` | iShares 1-3 Year Treasury Bond ETF (Ondo Tokenized) | SHY | Ondo Global Markets | 9 | none |
+| `SIEx` | Siemens xStock | SIED | Backed | 8 | none |
+| `SILon` | Global X Silver Miners ETF (Ondo Tokenized) | SIL | Ondo Global Markets | 9 | none |
+| `SIMOx` | Silicon Motion Technology xStock | SIMO | Backed | 8 | none |
+| `SINOTx` | Sinotruk xStock | 3808 | Backed | 8 | none |
+| `SINOx` | Sino Land xStock | 83 | Backed | 8 | none |
+| `SIRIx` | Sirius XM xStock | SIRI | Backed | 8 | none |
+| `SITCx` | SITC International xStock | 1308 | Backed | 8 | none |
+| `SJMx` | J.M. Smucker xStock | SJM | Backed | 8 | none |
+| `SKDDx` | GraniteShares 2x Short SK Hynix Daily ETF xStock | SKDD | Backed | 8 | none |
+| `SKHY_US` | SK Hynix | SKHY | Backpack Securities | 6 | none |
+| `SKHYon` | SK Hynix (Ondo Tokenized) | SKHY | Ondo Global Markets | 9 | none |
+| `SKHYx` | SK hynix xStock | SKHY | Backed | 8 | none |
+| `SKUUx` | GraniteShares 2x Long SK Hynix Daily ETF xStock | SKUU | Backed | 8 | none |
+| `SLBon` | SLB (Ondo Tokenized) | SLB | Ondo Global Markets | 9 | none |
+| `SLMTx` | Brera xStock | SLMT | Backed | 8 | none |
+| `SLVon` | iShares Silver Trust (Ondo Tokenized) | SLV | Ondo Global Markets | 9 | none |
+| `SLVx` | iShares Silver Trust xStock | SLV | Backed | 8 | none |
+| `SMCIon` | Super Micro Computer (Ondo Tokenized) | SMCI | Ondo Global Markets | 9 | none |
+| `SMCIx` | Super Micro Computer, Inc. xStock | SMCI | Backed | 8 | none |
+| `SMHx` | VanEck Semiconductor ETF xStock | SMH | Backed | 8 | none |
+| `SMIN_GBx` | Smiths xStock | SMINL | Backed | 8 | none |
+| `SMMTx` | Summit Therapeutics xStock | SMMT | Backed | 8 | none |
+| `SMOIHx` | Smoore International xStock | 6969 | Backed | 8 | none |
+| `SMRon` | NuScale Power (Ondo Tokenized) | SMR | Ondo Global Markets | 9 | none |
+| `SMRx` | NuScale Power Corporation xStock | SMR | Backed | 8 | none |
+| `SMTCx` | Semtech xStock | SMTC | Backed | 8 | none |
+| `SNAP_US` | Snap Inc. | SNAP | Backpack Securities | 6 | none |
+| `SNAPon` | Snap (Ondo Tokenized) | SNAP | Ondo Global Markets | 9 | none |
+| `SNAx` | Snap-on xStock | SNA | Backed | 8 | none |
+| `SNBIOx` | Sino Biopharmaceutical xStock | 1177 | Backed | 8 | none |
+| `SNDK_US` | Sandisk Corporation | SNDK | Backpack Securities | 6 | none |
+| `SNDKon` | SanDisk (Ondo Tokenized) | SNDK | Ondo Global Markets | 9 | none |
+| `SNDKx` | Sandisk Corporation xStock | SNDK | Backed | 8 | none |
+| `SNDRx` | Schneider National xStock | SNDR | Backed | 8 | none |
+| `SNDSCx` | Sands China xStock | 1928 | Backed | 8 | none |
+| `SNOWon` | Snowflake (Ondo Tokenized) | SNOW | Ondo Global Markets | 9 | none |
+| `SNOWx` | Snowflake xStock | SNOW | Backed | 8 | none |
+| `SNPSx` | Synopsys xStock | SNPS | Backed | 8 | none |
+| `SNXXx` | SNDK 2x Long ETF xStock | SNXX | Backed | 8 | none |
+| `SNXx` | TD Synnex xStock | SNX | Backed | 8 | none |
+| `SN_GBx` | Smith & Nephew xStock | SNL | Backed | 8 | none |
+| `SOFIon` | SoFi Technologies (Ondo Tokenized) | SOFI | Ondo Global Markets | 9 | none |
+| `SOFIx` | SoFi Technologies xStock | SOFI | Backed | 8 | none |
+| `SOLSx` | Solstice Advanced Materials xStock | SOLS | Backed | 8 | none |
+| `SONYx` | Sony xStock | SONY | Backed | 8 | none |
+| `SONx` | Sonoco Products xStock | SON | Backed | 8 | none |
+| `SOUNon` | SoundHound AI (Ondo Tokenized) | SOUN | Ondo Global Markets | 9 | none |
+| `SOXLon` | Direxion Daily Semi Bull 3X ETF (Ondo Tokenized) | SOXL | Ondo Global Markets | 9 | none |
+| `SOXLx` | Direxion Semiconductor Bull 3X xStock | SOXL | Backed | 8 | none |
+| `SOXQon` | Invesco PHLX Semiconductor ETF (Ondo Tokenized) | SOXQ | Ondo Global Markets | 9 | none |
+| `SOXSon` | Direxion Daily Semi Bear 3X ETF (Ondo Tokenized) | SOXS | Ondo Global Markets | 9 | none |
+| `SOXSx` | 3x Short Semiconductor ETF xStock | SOXS | Backed | 8 | none |
+| `SOXXon` | iShares Semiconductor ETF (Ondo Tokenized) | SOXX | Ondo Global Markets | 9 | none |
+| `SOXXx` | iShares Semiconductor xStock | SOXX | Backed | 8 | none |
+| `SOon` | Southern (Ondo Tokenized) | SO | Ondo Global Markets | 9 | none |
+| `SOx` | Southern xStock | SO | Backed | 8 | none |
+| `SPACEX` | SpaceX | SPACEX | PreStocks | 9 | yes: the recipient gets less |
+| `SPCEx` | Virgin Galactic xStock | SPCE | Backed | 8 | none |
+| `SPCHx` | Leverage Shares 2X Long SPCX Daily ETF xStock | SPCH | Backed | 8 | none |
+| `SPCX_US` | SpaceX | SPCX | Backpack Securities | 6 | none |
+| `SPCXon` | SpaceX (Ondo Tokenized) | SPCX | Ondo Global Markets | 9 | none |
+| `SPCXx` | SpaceX xStock | SPCX | Backed | 8 | none |
+| `SPGIon` | S&P Global (Ondo Tokenized) | SPGI | Ondo Global Markets | 9 | none |
+| `SPGx` | Simon Property xStock | SPG | Backed | 8 | none |
+| `SPHR_US` | Sphere Entertainment Co. | SPHR | Backpack Securities | 6 | none |
+| `SPOTon` | Spotify (Ondo Tokenized) | SPOT | Ondo Global Markets | 9 | none |
+| `SPX_GBx` | Spirax xStock | SPXL | Backed | 8 | none |
+| `SPYon` | SPDR S&P 500 ETF (Ondo Tokenized) | SPY | Ondo Global Markets | 9 | none |
+| `SPYx` | SP500 xStock | SPY | Backed | 8 | none |
+| `SQQQ_US` | ProShares UltraPro Short QQQ | SQQQ | Backpack Securities | 6 | none |
+| `SQQQon` | ProShares UltraPro Short QQQ (Ondo Tokenized) | SQQQ | Ondo Global Markets | 9 | none |
+| `SQQQx` | ProShares UltraPro Short QQQ xStock | SQQQ | Backed | 8 | none |
+| `SREx` | Sempra xStock | SRE | Backed | 8 | none |
+| `SRG_ITx` | Snam xStock | SRGM | Backed | 8 | none |
+| `SSBx` | SouthState Bank xStock | SSB | Backed | 8 | none |
+| `SSDx` | Simpson Manufacturing xStock | SSD | Backed | 8 | none |
+| `SSEx` | SSE xStock | SSEL | Backed | 8 | none |
+| `SSNCx` | SS&C Technologies xStock | SSNC | Backed | 8 | none |
+| `STAGx` | Stag Industrial xStock | STAG | Backed | 8 | none |
+| `STANx` | Standard Chartered xStock | STANL | Backed | 8 | none |
+| `STJ_GBx` | St. James's Place xStock | STJL | Backed | 8 | none |
+| `STLDon` | Steel Dynamics (Ondo Tokenized) | STLD | Ondo Global Markets | 9 | none |
+| `STLDx` | Steel Dynamics xStock | STLD | Backed | 8 | none |
+| `STMMIx` | STMicroelectronics xStock | STMMIM | Backed | 8 | none |
+| `STMon` | STMicroelectronics (Ondo Tokenized) | STM | Ondo Global Markets | 9 | none |
+| `STNGon` | Scorpio Tankers (Ondo Tokenized) | STNG | Ondo Global Markets | 9 | none |
+| `STRCon` | Strategy STRC Preferred (Ondo Tokenized) | STRC | Ondo Global Markets | 9 | none |
+| `STRCx` | Strategy PP Variable xStock | STRC | Backed | 8 | none |
+| `STRKx` | Strategy PP Fixed xStock | STRK | Backed | 8 | none |
+| `STRLx` | Sterling Infrastructure xStock | STRL | Backed | 8 | none |
+| `STTx` | State Street xStock | STT | Backed | 8 | none |
+| `STWDx` | Starwood Property Trust xStock | STWD | Backed | 8 | none |
+| `STXon` | Seagate (Ondo Tokenized) | STX | Ondo Global Markets | 9 | none |
+| `STZx` | Constellation Brands xStock | STZ | Backed | 8 | none |
+| `SUIx` | Sun Communities xStock | SUI | Backed | 8 | none |
+| `SUOPTx` | Sunny Optical Technology Group xStock | 2382 | Backed | 8 | none |
+| `SU_FRx` | Schneider Electric xStock | SUP | Backed | 8 | none |
+| `SVTx` | Severn Trent xStock | SVTL | Backed | 8 | none |
+| `SWKSon` | Skyworks Solutions (Ondo Tokenized) | SWKS | Ondo Global Markets | 9 | none |
+| `SWKx` | Stanley Black & Decker xStock | SWK | Backed | 8 | none |
+| `SWPRPx` | Swire Properties xStock | 1972 | Backed | 8 | none |
+| `SYFx` | Synchrony Financial xStock | SYF | Backed | 8 | none |
+| `SYKx` | Stryker xStock | SYK | Backed | 8 | none |
+| `SYMon` | Symbotic (Ondo Tokenized) | SYM | Ondo Global Markets | 9 | none |
+| `SYSBon` | iShares Systematic Bond ETF (Ondo Tokenized) | SYSB | Ondo Global Markets | 9 | none |
+| `SYYx` | Sysco xStock | SYY | Backed | 8 | none |
+| `SZIGHx` | Shenzhou International xStock | 2313 | Backed | 8 | none |
+| `Sx` | SentinelOne xStock | S | Backed | 8 | none |
+| `TAPx` | Molson Coors Beverage xStock | TAP | Backed | 8 | none |
+| `TASKon` | TaskUs (Ondo Tokenized) | TASK | Ondo Global Markets | 9 | none |
+| `TBLLx` | TBLL xStock | TBLL | Backed | 8 | none |
+| `TCAPx` | TP Icap xStock | TCAPL | Backed | 8 | none |
+| `TCENTx` | Tencent xStock | 700 | Backed | 8 | none |
+| `TCOMon` | Trip.com Group (Ondo Tokenized) | TCOM | Ondo Global Markets | 9 | none |
+| `TDGx` | TransDigm xStock | TDG | Backed | 8 | none |
+| `TDYx` | Teledyne Technologies xStock | TDY | Backed | 8 | none |
+| `TEAMx` | Atlassian xStock | TEAM | Backed | 8 | none |
+| `TEFx` | Telefonica xStock | TEFE | Backed | 8 | none |
+| `TELon` | TE Connectivity (Ondo Tokenized) | TEL | Ondo Global Markets | 9 | none |
+| `TENon` | Tsakos Energy Navigation (Ondo Tokenized) | TEN | Ondo Global Markets | 9 | none |
+| `TERon` | Teradyne (Ondo Tokenized) | TER | Ondo Global Markets | 9 | none |
+| `TERx` | Teradyne, Inc. xStock | TER | Backed | 8 | none |
+| `TEx` | T1 Energy xStock | TE | Backed | 8 | none |
+| `TFCx` | Truist Financial xStock | TFC | Backed | 8 | none |
+| `TFXx` | Teleflex xStock | TFX | Backed | 8 | none |
+| `THCx` | Tenet Healthcare xStock | THC | Backed | 8 | none |
+| `THGx` | The Hanover Insurance xStock | THG | Backed | 8 | none |
+| `TIPon` | iShares TIPS Bond ETF (Ondo Tokenized) | TIP | Ondo Global Markets | 9 | none |
+| `TJXx` | TJX Companies xStock | TJX | Backed | 8 | none |
+| `TKRx` | The Timken xStock | TKR | Backed | 8 | none |
+| `TLNon` | Talen Energy (Ondo Tokenized) | TLN | Ondo Global Markets | 9 | none |
+| `TLNx` | Talen Energy xStock | TLN | Backed | 8 | none |
+| `TLTon` | iShares 20+ Year Treasury Bond ETF (Ondo Tokenized) | TLT | Ondo Global Markets | 9 | none |
+| `TMFx` | Direxion Daily 20 Year Treasury Bull 3X ETF xStock | TMF | Backed | 8 | none |
+| `TMOon` | Thermo Fisher Scientific (Ondo Tokenized) | TMO | Ondo Global Markets | 9 | none |
+| `TMOx` | Thermo Fisher xStock | TMO | Backed | 8 | none |
+| `TMUSon` | T-Mobile US (Ondo Tokenized) | TMUS | Ondo Global Markets | 9 | none |
+| `TMUSx` | T-Mobile xStock | TMUS | Backed | 8 | none |
+| `TMon` | Toyota (Ondo Tokenized) | TM | Ondo Global Markets | 9 | none |
+| `TNGYIx` | Tingyi xStock | 322 | Backed | 8 | none |
+| `TNKon` | Teekay Tankers (Ondo Tokenized) | TNK | Ondo Global Markets | 9 | none |
+| `TOLx` | Toll Brothers xStock | TOL | Backed | 8 | none |
+| `TONXx` | TON xStock | TONX | Backed | 8 | none |
+| `TOSTx` | Toast xStock | TOST | Backed | 8 | none |
+| `TPGx` | TPG xStock | TPG | Backed | 8 | none |
+| `TPLx` | Texas Pacific Land xStock | TPL | Backed | 8 | none |
+| `TPRx` | Tapestry xStock | TPR | Backed | 8 | none |
+| `TQQQon` | ProShares UltraPro QQQ (Ondo Tokenized) | TQQQ | Ondo Global Markets | 9 | none |
+| `TQQQx` | TQQQ xStock | TQQQ | Backed | 8 | none |
+| `TRGPx` | Targa Resources xStock | TRGP | Backed | 8 | none |
+| `TRMBx` | Trimble xStock | TRMB | Backed | 8 | none |
+| `TRN_ITx` | Terna xStock | TRNM | Backed | 8 | none |
+| `TRONx` | Tron xStock | TRON | Backed | 8 | none |
+| `TROWx` | T. Rowe Price xStock | TROW | Backed | 8 | none |
+| `TRUx` | TransUnion xStock | TRU | Backed | 8 | none |
+| `TRVx` | The Travelers Companies xStock | TRV | Backed | 8 | none |
+| `TSCO_GBx` | Tesco xStock | TSCOL | Backed | 8 | none |
+| `TSCOx` | Tractor Supply xStock | TSCO | Backed | 8 | none |
+| `TSEMon` | Tower Semiconductor (Ondo Tokenized) | TSEM | Ondo Global Markets | 9 | none |
+| `TSEMx` | Tower Semiconductor xStock | TSEM | Backed | 8 | none |
+| `TSLAon` | Tesla (Ondo Tokenized) | TSLA | Ondo Global Markets | 9 | none |
+| `TSLAx` | Tesla xStock | TSLA | Backed | 8 | none |
+| `TSLLx` | Direxion Daily TSLA Bull 2X Shares xStock | TSLL | Backed | 8 | none |
+| `TSMon` | Taiwan Semiconductor Manufacturing (Ondo Tokenized) | TSM | Ondo Global Markets | 9 | none |
+| `TSMx` | TSMC xStock | TSM | Backed | 8 | none |
+| `TSNx` | Tyson Foods xStock | TSN | Backed | 8 | none |
+| `TTCx` | The Toro xStock | TTC | Backed | 8 | none |
+| `TTDx` | The Trade Desk xStock | TTD | Backed | 8 | none |
+| `TTEKx` | Tetra Tech xStock | TTEK | Backed | 8 | none |
+| `TTEx` | TotalEnergies xStock | TTEP | Backed | 8 | none |
+| `TTMIon` | TTM Technologies (Ondo Tokenized) | TTMI | Ondo Global Markets | 9 | none |
+| `TTMIx` | TTM Technologies xStock | TTMI | Backed | 8 | none |
+| `TTWO_US` | Take-Two Interactive Software, Inc. | TTWO | Backpack Securities | 6 | none |
+| `TTWOx` | Take-Two Interactive Software xStock | TTWO | Backed | 8 | none |
+| `TTon` | Trane Technologies (Ondo Tokenized) | TT | Ondo Global Markets | 9 | none |
+| `TWLOx` | Twilio xStock | TWLO | Backed | 8 | none |
+| `TWSTx` | Twist Bioscience xStock | TWST | Backed | 8 | none |
+| `TW_GBx` | Taylor Wimpey xStock | TWL | Backed | 8 | none |
+| `TWx` | Tradeweb Markets xStock | TW | Backed | 8 | none |
+| `TXNon` | Texas Instruments (Ondo Tokenized) | TXN | Ondo Global Markets | 9 | none |
+| `TXNx` | Texas Instruments xStock | TXN | Backed | 8 | none |
+| `TXRHx` | Texas Roadhouse xStock | TXRH | Backed | 8 | none |
+| `TXTx` | Textron xStock | TXT | Backed | 8 | none |
+| `TYLx` | Tyler Technologies xStock | TYL | Backed | 8 | none |
+| `Ton` | AT&T (Ondo Tokenized) | T | Ondo Global Markets | 9 | none |
+| `UALx` | United Airlines xStock | UAL | Backed | 8 | none |
+| `UAMYon` | United States Antimony (Ondo Tokenized) | UAMY | Ondo Global Markets | 9 | none |
+| `UBERon` | Uber (Ondo Tokenized) | UBER | Ondo Global Markets | 9 | none |
+| `UBERx` | Uber xStock | UBER | Backed | 8 | none |
+| `UCB_BEx` | UCB xStock | UCBB | Backed | 8 | none |
+| `UCGx` | UniCredit xStock | UCGM | Backed | 8 | none |
+| `UCTTon` | Ultra Clean Holdings (Ondo Tokenized) | UCTT | Ondo Global Markets | 9 | none |
+| `UDRx` | UDR xStock | UDR | Backed | 8 | none |
+| `UECon` | Uranium Energy (Ondo Tokenized) | UEC | Ondo Global Markets | 9 | none |
+| `UGIx` | UGI xStock | UGI | Backed | 8 | none |
+| `UHALx` | U-Haul xStock | UHAL | Backed | 8 | none |
+| `UHSx` | Universal Health Services xStock | UHS | Backed | 8 | none |
+| `UIx` | Ubiquiti xStock | UI | Backed | 8 | none |
+| `ULSx` | UL Solutions xStock | ULS | Backed | 8 | none |
+| `ULTAx` | Ulta Beauty xStock | ULTA | Backed | 8 | none |
+| `ULVRx` | Unilever xStock | ULVRL | Backed | 8 | none |
+| `UMCon` | United Microelectronics (Ondo Tokenized) | UMC | Ondo Global Markets | 9 | none |
+| `UMGx` | Universal Music xStock | UMGA | Backed | 8 | none |
+| `UNGon` | US Natural Gas Fund (Ondo Tokenized) | UNG | Ondo Global Markets | 9 | none |
+| `UNHon` | UnitedHealth (Ondo Tokenized) | UNH | Ondo Global Markets | 9 | none |
+| `UNHx` | UnitedHealth xStock | UNH | Backed | 8 | none |
+| `UNMx` | Unum xStock | UNM | Backed | 8 | none |
+| `UNPon` | Union Pacific Corporation (Ondo Tokenized) | UNP | Ondo Global Markets | 9 | none |
+| `UNPx` | Union Pacific xStock | UNP | Backed | 8 | none |
+| `UPS_US` | United Parcel Service, Inc. | UPS | Backpack Securities | 6 | none |
+| `UPSx` | United Parcel Service xStock | UPS | Backed | 8 | none |
+| `URA_US` | Global X Uranium ETF | URA | Backpack Securities | 6 | none |
+| `URAon` | Global X Uranium ETF (Ondo Tokenized) | URA | Ondo Global Markets | 9 | none |
+| `URAx` | Global X Uranium ETF xStock | URA | Backed | 8 | none |
+| `URIx` | United Rentals xStock | URI | Backed | 8 | none |
+| `URNMon` | Sprott Uranium Miners ETF (Ondo Tokenized) | URNM | Ondo Global Markets | 9 | none |
+| `URNMx` | Sprott Uranium Miners ETF xStock | URNM | Backed | 8 | none |
+| `USARon` | USA Rare Earth (Ondo Tokenized) | USAR | Ondo Global Markets | 9 | none |
+| `USARx` | USA Rare Earth Inc. xStock | USAR | Backed | 8 | none |
+| `USBx` | U.S. Bancorp xStock | USB | Backed | 8 | none |
+| `USFDx` | US Foods xStock | USFD | Backed | 8 | none |
+| `USFRon` | WisdomTree Floating Rate Treasury Fund (Ondo Tokenized) | USFR | Ondo Global Markets | 9 | none |
+| `USHYon` | iShares Broad USD High Yield Corporate Bond ETF (Ondo Tokenized) | USHY | Ondo Global Markets | 9 | none |
+| `USO_US` | United States Oil Fund, LP | USO | Backpack Securities | 6 | none |
+| `USOon` | United States Oil Fund (Ondo Tokenized) | USO | Ondo Global Markets | 9 | none |
+| `USOx` | United States Oil Fund xStock | USO | Backed | 8 | none |
+| `USPXx` | Franklin U.S. Equity Index xStock | USPX | Backed | 8 | none |
+| `UTHRx` | United Therapeutics xStock | UTHR | Backed | 8 | none |
+| `UUUUon` | Energy Fuels (Ondo Tokenized) | UUUU | Ondo Global Markets | 9 | none |
+| `UUUUx` | Energy Fuels Inc. xStock | UUUU | Backed | 8 | none |
+| `UU_GBx` | United Utilities xStock | UUL | Backed | 8 | none |
+| `UVXYx` | ProShares Ultra VIX Short-Term Futures ETF xStock | UVXY | Backed | 8 | none |
+| `Ux` | Unity Software xStock | U | Backed | 8 | none |
+| `VCXon` | Fundrise Innovation Fund (Ondo Tokenized) | VCX | Ondo Global Markets | 9 | none |
+| `VCXx` | Fundrise Innovation Fund, LLC xStock | VCX | Backed | 8 | none |
+| `VDEon` | Vanguard Energy ETF (Ondo Tokenized) | VDE | Ondo Global Markets | 9 | none |
+| `VEEVx` | Veeva Systems xStock | VEEV | Backed | 8 | none |
+| `VFCx` | VF xStock | VFC | Backed | 8 | none |
+| `VFSon` | VinFast Auto (Ondo Tokenized) | VFS | Ondo Global Markets | 9 | none |
+| `VGKx` | Vanguard FTSE Europe ETF xStock | VGK | Backed | 8 | none |
+| `VIAVx` | Viavi Solutions xStock | VIAV | Backed | 8 | none |
+| `VICIx` | VICI Properties xStock | VICI | Backed | 8 | none |
+| `VICRon` | Vicor (Ondo Tokenized) | VICR | Ondo Global Markets | 9 | none |
+| `VICRx` | Vicor xStock | VICR | Backed | 8 | none |
+| `VIDAx` | Vida Global xStock | VIDA | Backed | 8 | none |
+| `VIEx` | Veolia Environnement xStock | VIEP | Backed | 8 | none |
+| `VIKx` | Viking xStock | VIK | Backed | 8 | none |
+| `VIRTx` | Virtu Financial xStock | VIRT | Backed | 8 | none |
+| `VLOx` | Valero Energy xStock | VLO | Backed | 8 | none |
+| `VLTOx` | Veralto xStock | VLTO | Backed | 8 | none |
+| `VMCx` | Vulcan Materials xStock | VMC | Backed | 8 | none |
+| `VMIx` | Valmont Industries xStock | VMI | Backed | 8 | none |
+| `VNAx` | Vonovia xStock | VNAD | Backed | 8 | none |
+| `VNOMx` | Viper Energy xStock | VNOM | Backed | 8 | none |
+| `VNOx` | Vornado Realty Trust xStock | VNO | Backed | 8 | none |
+| `VNQon` | Vanguard Real Estate ETF (Ondo Tokenized) | VNQ | Ondo Global Markets | 9 | none |
+| `VODx` | Vodafone xStock | VODL | Backed | 8 | none |
+| `VOOx` | Vanguard S&P 500 xStock | VOO | Backed | 8 | none |
+| `VOW3x` | Volkswagen xStock | VOW3D | Backed | 8 | none |
+| `VOYAx` | Voya Financial xStock | VOYA | Backed | 8 | none |
+| `VPGon` | Vishay Precision Group (Ondo Tokenized) | VPG | Ondo Global Markets | 9 | none |
+| `VRSKx` | Verisk Analytics xStock | VRSK | Backed | 8 | none |
+| `VRSNon` | VeriSign (Ondo Tokenized) | VRSN | Ondo Global Markets | 9 | none |
+| `VRSNx` | VeriSign xStock | VRSN | Backed | 8 | none |
+| `VRTXon` | Vertex Pharmaceuticals (Ondo Tokenized) | VRTX | Ondo Global Markets | 9 | none |
+| `VRTXx` | Vertex Pharmaceuticals xStock | VRTX | Backed | 8 | none |
+| `VRTon` | Vertiv (Ondo Tokenized) | VRT | Ondo Global Markets | 9 | none |
+| `VRTx` | Vertiv Holdings Co xStock | VRT | Backed | 8 | none |
+| `VSHon` | Vishay Intertechnology (Ondo Tokenized) | VSH | Ondo Global Markets | 9 | none |
+| `VSNTx` | Versant Media xStock | VSNT | Backed | 8 | none |
+| `VSTon` | Vistra (Ondo Tokenized) | VST | Ondo Global Markets | 9 | none |
+| `VTIon` | Vanguard Total Stock Market ETF (Ondo Tokenized) | VTI | Ondo Global Markets | 9 | none |
+| `VTIx` | Vanguard xStock | VTI | Backed | 8 | none |
+| `VTRSx` | Viatris xStock | VTRS | Backed | 8 | none |
+| `VTRx` | Ventas xStock | VTR | Backed | 8 | none |
+| `VTVon` | Vanguard Value ETF (Ondo Tokenized) | VTV | Ondo Global Markets | 9 | none |
+| `VTx` | Vanguard Total World xStock | VT | Backed | 8 | none |
+| `VUGx` | Vanguard Growth ETF xStock | VUG | Backed | 8 | none |
+| `VXUSx` | Vanguard Total International Stock ETF xStock | VXUS | Backed | 8 | none |
+| `VZon` | Verizon (Ondo Tokenized) | VZ | Ondo Global Markets | 9 | none |
+| `VZx` | Verizon Communications xStock | VZ | Backed | 8 | none |
+| `Von` | Visa (Ondo Tokenized) | V | Ondo Global Markets | 9 | none |
+| `Vx` | Visa xStock | V | Backed | 8 | none |
+| `WABx` | Westinghouse Air Brake Technologies xStock | WAB | Backed | 8 | none |
+| `WALx` | Western Alliance Bancorp xStock | WAL | Backed | 8 | none |
+| `WATx` | Waters xStock | WAT | Backed | 8 | none |
+| `WBDx` | Warner Bros. Discovery xStock | WBD | Backed | 8 | none |
+| `WCCon` | WESCO International (Ondo Tokenized) | WCC | Ondo Global Markets | 9 | none |
+| `WCCx` | WESCO International xStock | WCC | Backed | 8 | none |
+| `WDAYx` | Workday xStock | WDAY | Backed | 8 | none |
+| `WDCon` | Western Digital (Ondo Tokenized) | WDC | Ondo Global Markets | 9 | none |
+| `WDCx` | Western Digital xStock | WDC | Backed | 8 | none |
+| `WECx` | WEC Energy xStock | WEC | Backed | 8 | none |
+| `WEIRx` | Weir xStock | WEIRL | Backed | 8 | none |
+| `WELLx` | Welltower xStock | WELL | Backed | 8 | none |
+| `WEN_US` | WEN.US | WEN | Backpack Securities | 6 | none |
+| `WENon` | Wendy's (Ondo Tokenized) | WEN | Ondo Global Markets | 9 | none |
+| `WENx` | Wendy's xStock | WEN | Backed | 8 | none |
+| `WEXx` | WEX xStock | WEX | Backed | 8 | none |
+| `WFCon` | Wells Fargo (Ondo Tokenized) | WFC | Ondo Global Markets | 9 | none |
+| `WFCx` | Wells Fargo xStock | WFC | Backed | 8 | none |
+| `WGSx` | GeneDx xStock | WGS | Backed | 8 | none |
+| `WHGROx` | WH xStock | 288 | Backed | 8 | none |
+| `WHRFRx` | Wharf Real Estate Investment xStock | 1997 | Backed | 8 | none |
+| `WHx` | Wyndham Hotels & Resorts xStock | WH | Backed | 8 | none |
+| `WLKon` | Westlake (Ondo Tokenized) | WLK | Ondo Global Markets | 9 | none |
+| `WLKx` | Westlake xStock | WLK | Backed | 8 | none |
+| `WMBon` | Williams (Ondo Tokenized) | WMB | Ondo Global Markets | 9 | none |
+| `WMBx` | Williams Companies xStock | WMB | Backed | 8 | none |
+| `WMSx` | Advanced Drainage Systems xStock | WMS | Backed | 8 | none |
+| `WMTon` | Walmart (Ondo Tokenized) | WMT | Ondo Global Markets | 9 | none |
+| `WMTx` | Walmart xStock | WMT | Backed | 8 | none |
+| `WMon` | Waste Management (Ondo Tokenized) | WM | Ondo Global Markets | 9 | none |
+| `WMx` | Waste Management xStock | WM | Backed | 8 | none |
+| `WOLFon` | Wolfspeed (Ondo Tokenized) | WOLF | Ondo Global Markets | 9 | none |
+| `WPCx` | W.P. Carey xStock | WPC | Backed | 8 | none |
+| `WPPx` | WPP xStock | WPPL | Backed | 8 | none |
+| `WRBx` | W.R. Berkley xStock | WRB | Backed | 8 | none |
+| `WRFHDx` | The Wharf Holdings xStock | 4 | Backed | 8 | none |
+| `WRLDx` | World Acceptance xStock | WRLD | Backed | 8 | none |
+| `WSMx` | Williams-Sonoma xStock | WSM | Backed | 8 | none |
+| `WSOx` | Watsco xStock | WSO | Backed | 8 | none |
+| `WSTx` | West Pharmaceutical Services xStock | WST | Backed | 8 | none |
+| `WSon` | Worthington Steel (Ondo Tokenized) | WS | Ondo Global Markets | 9 | none |
+| `WTBx` | Whitbread xStock | WTBL | Backed | 8 | none |
+| `WTFCx` | Wintrust Financial xStock | WTFC | Backed | 8 | none |
+| `WTRGx` | Essential Utilities xStock | WTRG | Backed | 8 | none |
+| `WTSx` | Watts Water Technologies xStock | WTS | Backed | 8 | none |
+| `WULF_US` | TeraWulf Inc. | WULF | Backpack Securities | 6 | none |
+| `WULFon` | Terawulf (Ondo Tokenized) | WULF | Ondo Global Markets | 9 | none |
+| `WULFx` | TeraWulf xStock | WULF | Backed | 8 | none |
+| `WUXIBx` | WuXi Biologics xStock | 2269 | Backed | 8 | none |
+| `WWDx` | Woodward xStock | WWD | Backed | 8 | none |
+| `WXXDCx` | WuXi XDC Cayman xStock | 2268 | Backed | 8 | none |
+| `WYFIon` | WhiteFiber (Ondo Tokenized) | WYFI | Ondo Global Markets | 9 | none |
+| `WYFIx` | Whitefiber xStock | WYFI | Backed | 8 | none |
+| `WYNNx` | Wynn Resorts xStock | WYNN | Backed | 8 | none |
+| `WYx` | Weyerhaeuser xStock | WY | Backed | 8 | none |
+| `Wx` | Wayfair xStock | W | Backed | 8 | none |
+| `XAI` | xAI | XAI | PreStocks | 9 | yes: the recipient gets less |
+| `XBIx` | State Street SPDR S&P Biotech ETF xStock | XBI | Backed | 8 | none |
+| `XELx` | Xcel Energy xStock | XEL | Backed | 8 | none |
+| `XEx` | X-Energy xStock | XE | Backed | 8 | none |
+| `XIAOx` | Xiaomi xStock | 1810 | Backed | 8 | none |
+| `XLEx` | Energy Select Sector SPDR Fund xStock | XLE | Backed | 8 | none |
+| `XOMon` | Exxon Mobil (Ondo Tokenized) | XOM | Ondo Global Markets | 9 | none |
+| `XOMx` | Exxon Mobil xStock | XOM | Backed | 8 | none |
+| `XOPx` | SPDR S&P Oil & Gas Exploration & Production ETF xStock | XOP | Backed | 8 | none |
+| `XPOx` | XPO xStock | XPO | Backed | 8 | none |
+| `XPx` | XP xStock | XP | Backed | 8 | none |
+| `XRXx` | Xerox xStock | XRX | Backed | 8 | none |
+| `XYLDon` | Global X S&P 500 Covered Call ETF (Ondo Tokenized) | XYLD | Ondo Global Markets | 9 | none |
+| `XYLx` | Xylem xStock | XYL | Backed | 8 | none |
+| `XYZon` | Block (Ondo Tokenized) | XYZ | Ondo Global Markets | 9 | none |
+| `XYZx` | Block xStock | XYZ | Backed | 8 | none |
+| `YEARon` | AB Ultra Short Income ETF (Ondo Tokenized) | YEAR | Ondo Global Markets | 9 | none |
+| `YLDEx` | Franklin ClearBridge Enhanced Income xStock | YLDE | Backed | 8 | none |
+| `YUMx` | Yum Brands xStock | YUM | Backed | 8 | none |
+| `ZBHx` | Zimmer Biomet xStock | ZBH | Backed | 8 | none |
+| `ZBRAx` | Zebra Technologies xStock | ZBRA | Backed | 8 | none |
+| `ZHAOMx` | Zhaojin Mining Industry xStock | 1818 | Backed | 8 | none |
+| `ZJGLDx` | Zijin Gold International xStock | 2259 | Backed | 8 | none |
+| `ZMx` | Zoom Communications xStock | ZM | Backed | 8 | none |
+| `ZSx` | Zscaler xStock | ZS | Backed | 8 | none |
+| `ZTSx` | Zoetis xStock | ZTS | Backed | 8 | none |
+| `Zx` | Zillow xStock | Z | Backed | 8 | none |

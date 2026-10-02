@@ -10,6 +10,7 @@ Each of the three can be true without the others.
 | Contract descriptors             | 316 descriptors across 135 protocol namespaces                                 | `contracts.listDescriptors()`, `contracts.listContracts(slug)`         |
 | Compiled-source protocol globals | The same 135 protocol namespaces, plus 13 family aliases                       | TypeScript completion after importing `@eco-incorp/sauce`; names below |
 | Token symbols                    | 1796 symbols distributed across 7 EVM chains, 1789 of them tokenized stocks    | `routes.TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`             |
+| Solana mints                     | 1803 mints on mainnet-beta, 1799 of them tokenized stocks                      | `routes.SVM_TOKEN_REGISTRY`, `routes.knownTokenSymbols(chain)`         |
 | Canonical chain identities       | 41 chains: 40 EVM and Solana                                                   | `CANONICAL_CHAINS`, `requireChain(ref)`                                |
 | EVM chain metadata               | 34 records with native-currency and explorer information                       | `chains`, `getChain(id)`, `getAllChainIds()`                           |
 
@@ -71,20 +72,26 @@ a wrapped native. See [Arc: USDC is the native coin](#arc-usdc-is-the-native-coi
 
 ### Tokenized stocks
 
-Ethereum and Base also register tokenized stocks, which a program names by symbol like any other
-token (`SPCXc.balanceOf(ctx.self())` on Base). Each list is copied from its issuer's own published
-list and every row is checked on chain; a stock row carries `stock`, its issuer, name and ticker:
+Ethereum, Base and Solana also register tokenized stocks, which a program names by symbol like any
+other token (`SPCXc.balanceOf(ctx.self())` on Base, `balanceOf(TSLAx, account)` on Solana). Each list
+is copied from its issuer's own published list and every row is checked on chain; a stock row
+carries `stock`, its issuer, name and ticker:
 
-| Chain    | ID   | Issuer                            | Tokens | For example                 |
-| -------- | ---- | --------------------------------- | ------ | --------------------------- |
-| Ethereum | 1    | Backed (xStocks, and its bTokens) | 1280   | `TSLAx`, `SPCXx`, `bTSLA`   |
-| Ethereum | 1    | Ondo Global Markets               | 450    | `TSLAon`, `SPCXon`, `SPYon` |
-| Ethereum | 1    | Mt Pelerin (its own shares)       | 1      | `MPS`                       |
-| Base     | 8453 | Coinbase                          | 58     | `TSLAc`, `SPCXc`, `NVDAc`   |
-| Base     | 8453 | Backed (its bTokens)              | 9      | `bTSLA`, `bNVDA`, `bCOIN`   |
+| Chain    | ID         | Issuer                            | Tokens | For example                     |
+| -------- | ---------- | --------------------------------- | ------ | ------------------------------- |
+| Ethereum | 1          | Backed (xStocks, and its bTokens) | 1280   | `TSLAx`, `SPCXx`, `bTSLA`       |
+| Ethereum | 1          | Ondo Global Markets               | 450    | `TSLAon`, `SPCXon`, `SPYon`     |
+| Ethereum | 1          | Mt Pelerin (its own shares)       | 1      | `MPS`                           |
+| Base     | 8453       | Coinbase                          | 58     | `TSLAc`, `SPCXc`, `NVDAc`       |
+| Base     | 8453       | Backed (its bTokens)              | 9      | `bTSLA`, `bNVDA`, `bCOIN`       |
+| Solana   | 1399811149 | Backed (xStocks)                  | 1271   | `TSLAx`, `SPCXx`, `BRK_Bx`      |
+| Solana   | 1399811149 | Ondo Global Markets               | 450    | `TSLAon`, `SPCXon`, `SPYon`     |
+| Solana   | 1399811149 | Backpack Securities               | 69     | `NVDA_US`, `SPCX_US`, `MSTR_US` |
+| Solana   | 1399811149 | PreStocks (private companies)     | 9      | `SPACEX`, `OPENAI`, `ANTHROPIC` |
 
 A stock's symbol is its issuer's ticker for the token, which is not always uppercase, with a `.`
-written `_` (`BRK.Bx` is `BRK_Bx`). In a program and an actions document it is case-sensitive; the
+written `_` (`BRK.Bx` is `BRK_Bx`, Backpack's `NVDA.US` is `NVDA_US`); PreStocks' is the company's
+name (`SPACEX`). In a program and an actions document it is case-sensitive; the
 command line matches it without regard to case. `sauce globals --chain <chain>` counts a chain's
 stock tokens, `--stocks` lists them and `--search <text>` finds one by symbol, company name or
 ticker (`sauce_globals` takes `stocks` and `search` too, a page of 200 tokens at a time).
@@ -96,8 +103,17 @@ than sent, so paying one into a pool that checks what it received can fail. Ondo
 balance while dividends raise the shares each token stands for. Coinbase's are B20 tokens built into
 the Base node, so they run on Base but not in a local EVM such as anvil: `sauce simulate` against
 Base rehearses them, and `--assume-balance` cannot give one, since no state override reaches a B20
-balance. Solana's tokenized stocks are Token-2022 mints, which the SVM token functions do not take,
-so none is registered.
+balance.
+
+On Solana each is a Token-2022 mint, registered with `tokenProgram` set to Token-2022: the symbol is
+the mint's 32-byte key, and a program moves one with `@sauce/token`'s checked writes
+(`transferChecked`, `approveChecked`). Every row is checked on chain: owned by Token-2022,
+initialized, with its decimals and its issuer's symbol in its own metadata, and no transfer hook that
+names a program, which the token functions refuse. Amounts are raw; the issuer's multiplier (the
+scaled UI amount) is for display and moves for corporate actions. PreStocks' mints charge a transfer
+fee, so the recipient gets less than was sent: a program measures the balance change. Backpack lists
+mints it has not opened yet, which are left out, as are Superstate's, which only an allowlisted
+holder can hold.
 
 A missing symbol means the registry has no verified row under that name. Token variants can have
 different symbols and addresses. `IntentOptions.tokenDefines` or `SauceCompileOptions.tokens`

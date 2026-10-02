@@ -13,7 +13,7 @@ and amounts are in its smallest units (its decimals). Their addresses are in the
 - **Arc** (`arc`, [addresses](../../sauce-chains/references/arc.md)): `EURC` (6), `USDC` (6), `USYC` (6), `WETH` (18)
 - **Base** (`base`, [addresses](../../sauce-chains/references/base.md)): `USDC` (6), `WETH` (18); and 67 tokenized stocks ([stocks](stocks.md))
 - **Arbitrum** (`arbitrum`, [addresses](../../sauce-chains/references/arbitrum.md)): `USDC` (6), `WETH` (18)
-- **Solana** (`solana`, [addresses](../../sauce-chains/references/solana.md)): `PYUSD` (6), `USDC` (6), `USDT` (6), `WSOL` (9)
+- **Solana** (`solana`, [addresses](../../sauce-chains/references/solana.md)): `PYUSD` (6), `USDC` (6), `USDT` (6), `WSOL` (9); and 1799 tokenized stocks ([stocks](stocks.md))
 
 On Solana a symbol is the mint's 32-byte key, a value for the `@sauce/token` functions
 (`balanceOf(USDC, account)`); the token accounts are `Account` parameters, and the token

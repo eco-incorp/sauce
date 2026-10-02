@@ -40,6 +40,9 @@ function main(account: Account): Uint256 {
 | `USDT` | `Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB` | `0xce010e60afedb22717bd63192f54145a3f965a33bb82d2c7029eb2ce1e208264` | 6 | SPL Token (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) |
 | `WSOL` | `So11111111111111111111111111111111111111112` | `0x069b8857feab8184fb687f634618c035dac439dc1aeb3b5598a0f00000000001` | 9 | SPL Token (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) |
 
+And 1799 tokenized stocks, each a Token-2022 mint named by its symbol in the same way:
+they are in [solana-stocks.md](solana-stocks.md), with their mints.
+
 On devnet, pass a mint that differs as a define, which wins over the symbol
 (`--define USDC=<key>`):
 

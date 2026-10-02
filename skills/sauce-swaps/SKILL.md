@@ -21,7 +21,7 @@ function main(amount: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256) {
 Every argument is a run-time value, so a program can choose the pool, the direction and the amount
 while it runs: spend what an earlier swap returned, read a balance, loop over a list of pools.
 
-A tokenized stock (`SPCXc` on Base, `TSLAon` on Ethereum) is swapped like any token; its symbol
+A tokenized stock (`SPCXc` on Base, `TSLAon` on Ethereum, `TSLAx` on Solana) is swapped like any token; its symbol
 and what differs about it are in `sauce-globals`
 ([Tokenized stocks](../sauce-globals/SKILL.md#tokenized-stocks)).
 

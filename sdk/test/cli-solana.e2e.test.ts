@@ -75,6 +75,13 @@ import {
   type EngineHarness,
 } from "./svm/engine-harness.js";
 
+/** TSLAx, Backed's tokenized Tesla, as mainnet holds it (`svm/fixtures/token-2022/stock-mints.json`). */
+const TSLAX_IMAGE = (
+  JSON.parse(
+    readFileSync(new URL("./svm/fixtures/token-2022/stock-mints.json", import.meta.url), "utf8"),
+  ) as { mints: { TSLAx: { dataBase64: string } } }
+).mints.TSLAx;
+
 /** PYUSD's mint as mainnet holds it (`svm/fixtures/token-2022/real-mints.json`). */
 const PYUSD_IMAGE = (
   JSON.parse(
@@ -734,7 +741,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     const unknown = await rehearse("pot:USDX");
     expect(unknown.code).toBe(2);
     expect(unknown.stderr).toContain(
-      "USDX is not a mint solana registers (PYUSD, USDC, USDT, WSOL)",
+      "USDX is not a mint solana registers (PYUSD, USDC, USDT, WSOL, and ",
     );
     // Cooked directly, there is no Pot, so no Pot's token account either.
     const direct = await sauce(
@@ -854,6 +861,93 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
         "Token-2022 refused: Transferring, minting, and burning is paused on this mint " +
         "(custom program error 67)",
     });
+  }, 60_000);
+
+  it("moves a stock mint by its symbol, its accounts named by it in any case; `sauce pot` reads none", async () => {
+    const salt = "stock";
+    const pot = await potOf(hexToBytes(potSalt(salt)));
+    const tslax = svmTokenRows(requireChain("solana")).find((row) => row.symbol === "TSLAx")!;
+    expect(tslax.tokenProgram).toBe(TOKEN_2022_PROGRAM);
+    // TSLAx as mainnet holds it, at its address, the harness's payer its mint authority.
+    const mint = address(tslax.mint);
+    const image = new Uint8Array(Buffer.from(TSLAX_IMAGE.dataBase64, "base64"));
+    image.set(getAddressCodec().encode(harness.payer.address), 4);
+    harness.svm.setAccount({
+      address: mint,
+      data: image,
+      executable: false,
+      lamports: lamports(harness.svm.minimumBalanceForRentExemption(BigInt(image.length))),
+      programAddress: TOKEN_2022_PROGRAM,
+      space: BigInt(image.length),
+    });
+    const ata = async (holder: Address, amount: bigint) => {
+      const [account] = await findAssociatedTokenPda({
+        owner: holder,
+        mint,
+        tokenProgram: TOKEN_2022_PROGRAM,
+      });
+      const made = await sendInstructions(harness, [
+        getCreateAssociatedTokenIdempotentInstruction({
+          payer: harness.payer,
+          ata: account,
+          owner: holder,
+          mint,
+          tokenProgram: TOKEN_2022_PROGRAM,
+        }),
+        ...(amount === 0n
+          ? []
+          : [
+              getMintToCheckedInstruction(
+                { mint, token: account, mintAuthority: harness.payer, amount, decimals: 8 },
+                { programAddress: TOKEN_2022_PROGRAM },
+              ),
+            ]),
+      ]);
+      if (!made.ok) throw new Error(`creating ${account} failed: ${made.err}`);
+
+      return account;
+    };
+    const potTslax = await ata(pot, 1_000n);
+    const ownerTslax = await ata(owner.signer.address, 0n);
+
+    // The symbol is the mint's key, from the registry: no define names it.
+    const program = join(work, "stock.sauce.ts");
+    writeFileSync(
+      program,
+      "function main(tokenProgram: Account, source: Account<Writable>, mint: Account, dest: Account<Writable>, authority: Account<Signer>, amount: Uint256) {\n" +
+        "  transferChecked(TSLAx, tokenProgram, source, mint, dest, authority, amount, 8n);\n" +
+        "}\n",
+    );
+    const out = json(
+      await sauce(
+        ...["simulate", program, "--chain", "solana", "--owner", owner.signer.address],
+        ...["--salt", salt, "--rpc-url", RPC_URL, "--json"],
+        ...["--account", "tokenProgram=program:tslax", "--account", "source=pot:TSLAX"],
+        ...["--account", "mint=mint:TSLAx", "--account", "dest=owner:tslax"],
+        ...["--account", "authority=pot", "--args", "400"],
+      ),
+    );
+    expect(out).toMatchObject({ ok: true });
+    expect(out.tokenChanges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ account: potTslax, delta: "-400", symbol: "TSLAx" }),
+        expect.objectContaining({ account: ownerTslax, delta: "400", symbol: "TSLAx" }),
+      ]),
+    );
+
+    // `sauce pot` lists the Pot's account for each registered mint but the stocks, over a thousand.
+    const status = await sauce(
+      ...["pot", "--chain", "solana", "--owner", owner.signer.address, "--salt", salt],
+      ...["--rpc-url", RPC_URL],
+    );
+    const listed = (json(status).tokenAccounts as Array<{ symbol: string }>).map(
+      (one) => one.symbol,
+    );
+    expect(listed).toEqual(
+      svmTokenRows(requireChain("solana"))
+        .filter((row) => row.stock === undefined)
+        .map((row) => row.symbol),
+    );
   }, 60_000);
 
   it("`sauce simulate` reads a revert's message from the engine's return data in the logs", async () => {

@@ -189,6 +189,44 @@ describe("sauce_globals", () => {
     assert.ok(!symbols.has("USDC"), "the stocks alone");
   });
 
+  it("lists, finds and pages Solana's stock mints, each a Token-2022 mint with its issuer", async () => {
+    const { tools } = await mcp.client.listTools();
+    const description = tools.find((tool) => tool.name === "sauce_globals")!.description ?? "";
+    assert.match(description, /Solana's are Token-2022 mints/);
+    const solana = ok(await mcp.call("sauce_globals", { chain: "solana", tokens: true })) as {
+      tokens: Array<{ symbol: string }>;
+    };
+    assert.deepEqual(
+      solana.tokens.map((token) => token.symbol),
+      ["PYUSD", "USDC", "USDT", "WSOL"],
+    );
+    const found = ok(await mcp.call("sauce_globals", { chain: "solana", search: "NVDA_US" })) as {
+      tokens: Array<Record<string, unknown>>;
+    };
+    assert.deepEqual(found.tokens, [
+      {
+        symbol: "NVDA_US",
+        address: "0x05811804c522f00623562e27a21b33757ca5dd2902cd2225f6411b393b04bb65",
+        decimals: 6,
+        mint: "NVDAVuiB7hwd3m5Wa1JuHNovPaPG6BH1QNztbKFxNjv",
+        tokenProgram: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        stock: {
+          issuer: "backpack",
+          name: "NVIDIA Corporation",
+          ticker: "NVDA",
+          issuerName: "Backpack Securities",
+          source: "https://api.backpack.exchange/api/v1/assets",
+        },
+      },
+    ]);
+    const page = ok(
+      await mcp.call("sauce_globals", { chain: "solana", stocks: true, offset: 200 }),
+    ) as { tokens: Array<{ symbol: string }>; page: { offset: number; total: number } };
+    assert.equal(page.tokens.length, 200);
+    assert.ok(page.page.total > 1000);
+    assert.deepEqual(page.page.offset, 200);
+  });
+
   it("names an unknown chain or namespace as the error", async () => {
     assert.match(failed(await mcp.call("sauce_globals", { chain: "nowhere" })), /nowhere/);
     assert.match(

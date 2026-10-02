@@ -306,8 +306,9 @@ A token amount is whole units (`USDC:1.5`) or base units ending in `n` (`USDC:15
 
 `sauce_pot` with an endpoint reads what a cook needs: on an EVM chain the Kitchen's fee (the least
 a cook's `value` can be) and the Pot's balance of the native currency and of each token the chain
-registers but its tokenized stocks (`null` where a token cannot be read there); on Solana the Pot's associated token account
-for each registered mint, whether it exists, and its balance. `balances: false` skips those reads.
+registers but its tokenized stocks (`null` where a token cannot be read there); on Solana the Pot's
+associated token account for each registered mint but the tokenized stocks, whether it exists, and
+its balance. `balances: false` skips those reads.
 
 `sauce_price` takes the price one of three ways: `price` (a decimal), `sqrtPriceX96`, or `pool`, a
 Uniswap V3-style pool of the pair read through an endpoint (its `slot0` price, liquidity and fee).

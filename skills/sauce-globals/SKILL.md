@@ -1,6 +1,6 @@
 ---
 name: sauce-globals
-description: The names a Sauce program uses without any import, and how they resolve on the chain it is compiled for — token symbols (USDC, USDT, WETH, …) and tokenized stocks (SPCXc, TSLAon, TSLAx, …), Token(address) and a bound const t = Token(x), the token methods .transfer/.approve/.transferFrom/.balanceOf with SafeERC20 behaviour and USDT, the @sauce/token functions, protocol namespaces (UniswapV3.Factory, UniswapV4.StateView, AaveV3.Pool, …) and family aliases, available(...) for a venue a chain may lack, the Namespace_Contract compile-time defines, chain names, chainId and ctx.*. Links generated indexes of every token, protocol contract and chain, the same lists sauce globals prints. Use when writing any Sauce program that moves tokens, calls a protocol or names a chain, when checking whether a name exists on a chain, or when a name does not resolve ("is not a declared variable", "ambiguous", "is not deployed").
+description: The names a Sauce program uses without any import, and how they resolve on the chain it is compiled for — token symbols (USDC, USDT, WETH, …) and tokenized stocks (SPCXc, TSLAon, TSLAx, NVDA_US, SPACEX, …, on Ethereum, Base and Solana), Token(address) and a bound const t = Token(x), the token methods .transfer/.approve/.transferFrom/.balanceOf with SafeERC20 behaviour and USDT, the @sauce/token functions, protocol namespaces (UniswapV3.Factory, UniswapV4.StateView, AaveV3.Pool, …) and family aliases, available(...) for a venue a chain may lack, the Namespace_Contract compile-time defines, chain names, chainId and ctx.*. Links generated indexes of every token, protocol contract and chain, the same lists sauce globals prints. Use when writing any Sauce program that moves tokens, calls a protocol or names a chain, when checking whether a name exists on a chain, or when a name does not resolve ("is not a declared variable", "ambiguous", "is not deployed").
 ---
 
 # Globals in a Sauce program
@@ -79,13 +79,17 @@ functions, a token a swap buys or sells.
 - **Ethereum**: Backed's xStocks (`TSLAx`, `SPCXx`) and bTokens (`bTSLA`), Ondo Global Markets'
   (`TSLAon`, `SPCXon`), and Mt Pelerin's own shares (`MPS`).
 - **Base**: Coinbase's (`TSLAc`, `SPCXc`) and Backed's bTokens.
-- On Solana a tokenized stock is not a symbol.
+- **Solana**: Backed's xStocks (`TSLAx`), Ondo Global Markets' (`TSLAon`), Backpack Securities'
+  (`NVDA_US`, `SPCX_US`) and PreStocks' shares of private companies (`SPACEX`, `OPENAI`), each a
+  Token-2022 mint (below).
 
 The symbol is the issuer's own ticker for the token, in its case: symbols are case-sensitive, and
-`SPCXC` is not `SPCXc`. A `.` in a ticker is written `_`: `BRK.Bx` is `BRK_Bx`. One company has
-one token per issuer: SpaceX is `SPCXx` and `SPCXon` on Ethereum, `SPCXc` on Base. Find one by the
-company's name or ticker with `npx sauce globals --chain base --search spacex`, list a chain's with
-`--stocks`, or read [references/stocks.md](references/stocks.md).
+`SPCXC` is not `SPCXc`. A `.` in a ticker is written `_`: `BRK.Bx` is `BRK_Bx`, and Backpack's
+`NVDA.US` is `NVDA_US`. PreStocks' symbol is the company's name, `SPACEX`. One company has one token
+per issuer: SpaceX is `SPCXx` and `SPCXon` on Ethereum, `SPCXc` on Base, and `SPCXx`, `SPCXon`,
+`SPCX_US` and `SPACEX` on Solana. Find one by the company's name or ticker with
+`npx sauce globals --chain base --search spacex`, list a chain's with `--stocks`, or read
+[references/stocks.md](references/stocks.md).
 
 Buying and selling one on a DEX needs no account with its issuer, and any contract can hold it,
 the program's Pot included; only minting and redeeming with the issuer need KYC. What differs from
@@ -104,6 +108,40 @@ a plain ERC-20:
 function main(recipient: Address, amount: Uint256) {
   require(SPCXc.balanceOf(ctx.self()) >= amount, "not enough SPCXc");
   SPCXc.transfer(recipient, amount);
+}
+```
+
+### On Solana
+
+A stock on Solana is a Token-2022 mint, and its symbol is the mint's 32-byte key, a value for
+`@sauce/token`'s functions: `balanceOf(TSLAx, account)`. A program moves one with the checked
+writes, `transferChecked` and `approveChecked`, which take the mint's token program, the mint and
+its decimals beside the token accounts (`transfer` and `approve` take legacy SPL Token mints only).
+`sauce` names each of those accounts by the symbol: `program:TSLAx` the token program,
+`mint:TSLAx` the mint, `pot:TSLAx` the Pot's token account and `owner:TSLAx` the owner's.
+
+- Amounts are raw, in the mint's decimals. The issuer's multiplier, by which a wallet shows them,
+  moves for splits and dividends, so a raw unit is not always one share.
+- PreStocks' mints charge a transfer fee: the token program keeps part of every transfer, so the
+  recipient gets less than was sent. Measure what arrived, as below; the references mark each mint
+  that charges one.
+- Every stock mint has a transfer hook that names no program, which is no hook. `@sauce/token`
+  refuses a mint whose hook names a program (`transfer hook`), and no registered mint has one.
+- The issuer can pause its mint, and can hold a permanent delegate, which can move or burn any
+  balance. A new token account is usable, not frozen.
+
+```sauce chain=solana
+function main(
+  tokenProgram: Account,
+  source: Account<Writable>,
+  mint: Account,
+  destination: Account<Writable>,
+  pot: Account<Signer>,
+  amount: Uint256,
+): Uint256 {
+  const before = balanceOf(SPACEX, destination);
+  transferChecked(SPACEX, tokenProgram, source, mint, destination, pot, amount, 9n);
+  return balanceOf(SPACEX, destination) - before;
 }
 ```
 

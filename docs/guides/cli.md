@@ -1026,14 +1026,16 @@ Erc4626` lists their methods. `--json` prints the same for a program to read (`i
 lists contracts through the protocol rewrite's own resolver, so a name it lists is one the compile
 accepts, at the address the program gets.
 
-A chain's tokenized stocks (Ethereum has over a thousand) are counted rather than listed unless you
-ask: `--stocks` lists them, each with its name, the underlying's ticker and its issuer, and
+A chain's tokenized stocks (Ethereum and Solana have over a thousand each) are counted rather than
+listed unless you ask: `--stocks` lists them, each with its name, the underlying's ticker and its issuer, and
 `--search <text>` lists the tokens, stocks included, whose symbol, name, ticker or issuer contains
 the text, without regard to case. A search also finds a stock by the name another issuer gives it:
 `--search spacex` finds Coinbase's `SPCXc`, whose own name is "Space Exploration Technologies
 Corp.". In `--json`, a stock token carries `stock` with its issuer, name, ticker and the issuer's
 list it was copied from. Symbols are matched without regard to case on the command line too
-(`--fund spcxc:1`, `sauce price spcxc USDC 150`); in a program they are case-sensitive.
+(`--fund spcxc:1`, `sauce price spcxc USDC 150`, `--account source=pot:tslax` on Solana); in a
+program they are case-sensitive. On Solana each stock is a Token-2022 mint, listed with its mint
+and the 32-byte key a program holds; `--stocks` leaves out devnet's mints, which have none.
 
 ### `sauce price`
 
@@ -1180,7 +1182,8 @@ under the token program that owns the mint — `pot:<mint>` the same for any min
 the owner's (a direct cook, `--via engine`, has no Pot, so no `pot:` account); `mint:USDC` is the
 mint and `program:USDC` its token program, SPL Token or Token-2022, the accounts
 `transferChecked` takes. A registered symbol's program is the registry's; any other mint's is read
-from the cluster. A slot with no `--account` is named with the role it needs, and `simulate` notes each
+from the cluster. A tokenized stock is named the same way, by its symbol in any case
+(`pot:TSLAx`, `mint:NVDA_US`). A slot with no `--account` is named with the role it needs, and `simulate` notes each
 account it was given that the cluster does not have (a guard on it fails with no message of its
 own).
 
@@ -1207,8 +1210,9 @@ npx sauce run sweep.sauce.ts --config sauce.config.json --keypair ~/.config/sola
 
 **The Pot.** A Pot is the Kitchen's PDA over the owner and the salt. `sauce pot --chain solana
 --owner <pubkey>` prints it and the `create_pot` instruction; `--deploy` with `--keypair` creates
-it. With an endpoint it also lists the Pot's token account for each registered mint: its address,
-whether it exists and what it holds (`tokenAccounts` in its JSON). A cook names its Pot by `--owner` and `--salt`, never `--pot`, and `run` asks before creating a
+it. With an endpoint it also lists the Pot's token account for each registered mint but the
+tokenized stocks, over a thousand of them: its address, whether it exists and what it holds
+(`tokenAccounts` in its JSON). A stock's is `pot:<symbol>`. A cook names its Pot by `--owner` and `--salt`, never `--pot`, and `run` asks before creating a
 missing one, as on an EVM chain.
 
 **The cook.** The execution fee is read from the cluster, so there is no `--value`: every output
