@@ -89,9 +89,9 @@ describe("coverage matrix (pinned exactly -- a new row is a deliberate edit)", (
     };
     expect(matrix).toEqual({
       ethereum: ["USDC", "USDT", "WETH"],
-      optimism: ["USDC", "USDT", "WETH"],
-      arbitrum: ["USDC", "WETH"],
-      polygon: ["USDC", "WETH", "WPOL"],
+      optimism: ["USDC", "USDT", "USDT0", "WETH"],
+      arbitrum: ["USDC", "USDT0", "WETH"],
+      polygon: ["USDC", "USDT0", "WETH", "WPOL"],
       base: ["USDC", "WETH"],
     });
   });
@@ -147,6 +147,35 @@ describe("coverage matrix (pinned exactly -- a new row is a deliberate edit)", (
   it("arbitrum and polygon deliberately do NOT register USDT (bridged/renamed symbol() mismatch)", () => {
     expect(registryTokenAddress(requireChain("arbitrum"), "USDT")).toBeUndefined();
     expect(registryTokenAddress(requireChain("polygon"), "USDT")).toBeUndefined();
+  });
+
+  it("registers Tether's USDT0 as USDT0 on each canonical chain Tether's list names it on", () => {
+    // docs.usdt0.to/technical-documentation/deployments, each chain's "Token" contract.
+    const usdt0 = Object.fromEntries(
+      Object.entries(TOKEN_REGISTRY).flatMap(([id, rows]) =>
+        rows
+          .filter((row) => row.symbol === "USDT0")
+          .map((row) => [requireChain(Number(id)).slug, row.address]),
+      ),
+    );
+    expect(usdt0).toEqual({
+      optimism: "0x01bFF41798a0BcF287b996046Ca68b395DbC1071",
+      unichain: "0x9151434b16b9763660705744891fA906F660EcC5",
+      polygon: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
+      monad: "0xe7cd86e13AC4309349F30B3435a9d337750fC82D",
+      sei: "0x9151434b16b9763660705744891fA906F660EcC5",
+      mantle: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+      plasma: "0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb",
+      arbitrum: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+      ink: "0x0200C29006150606B650577BBE7B6248F58470c1",
+      berachain: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+    });
+    // Optimism's USDT is the bridged token, a different contract from its USDT0.
+    expect(registryTokenAddress(requireChain("optimism"), "USDT")).not.toBe(
+      registryTokenAddress(requireChain("optimism"), "USDT0"),
+    );
+    // On Ethereum USDT0 is an adapter that locks USDT itself: the token there is USDT.
+    expect(registryTokenAddress(requireChain("ethereum"), "USDT0")).toBeUndefined();
   });
 });
 

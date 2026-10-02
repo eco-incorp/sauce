@@ -441,11 +441,15 @@ const THREE_CHAIN_CASCADE = `function main() {
 /**
  * The same three chains, written `Chain.Portal.send(reward).receive(delivery).then(body)`, with each
  * delivery an amount computed where the intent opens (`amount * 99n / 100n`): spliced in at run
- * time on Base, and again on Arbitrum by the program the outer body compiles to.
+ * time on Base, and again on Arbitrum by the program the outer body compiles to. The outer creator
+ * is a value only the run knows too (the Base Pot, which a real intent would not name), and the
+ * Optimism intent, which names none, is handed it.
  */
 const PORTAL_CASCADE = `function main() {
   const amount = USDC.balanceOf(ctx.self());
+  const owner = ctx.self();
   Arbitrum.Portal.send({ token: USDC, amount })
+    .creator(owner)
     .receive({ token: USDC, amount: amount * 99n / 100n })
     .then(() => {
       const arrived = USDC.balanceOf(ctx.self());
@@ -679,6 +683,7 @@ describeEvm("an intent created inside a program, across chains with different to
       expect(toArbitrum!.rewardTokens.map((t) => [lower(t.token), t.amount])).toEqual([
         [lower(base.usdc), held],
       ]);
+      expect(lower(toArbitrum!.creator)).toBe(lower(base.pot));
       const second = fulfilmentOf(toArbitrum!);
       expect(second.route.tokens.map((t) => [lower(t.token), t.amount])).toEqual([
         [lower(arbitrum.usdc), delivered],
@@ -693,6 +698,9 @@ describeEvm("an intent created inside a program, across chains with different to
       expect(toOptimism!.rewardTokens.map((t) => [lower(t.token), t.amount])).toEqual([
         [lower(arbitrum.usdc), delivered],
       ]);
+      // The creator above, handed down, not the compile's.
+      expect(lower(toOptimism!.creator)).toBe(lower(base.pot));
+      expect(lower(toOptimism!.creator)).not.toBe(lower(CREATOR));
       expect(await arbitrum.isFunded(toOptimism!)).toBe(true);
       expect(await arbitrum.balanceOf(arbitrum.usdc, arbitrum.pot)).toBe(0n);
 

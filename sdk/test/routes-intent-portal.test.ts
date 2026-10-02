@@ -345,6 +345,45 @@ describe("the intents a program opens", () => {
     expect(arbitrumProgram.source.toLowerCase()).not.toContain(CREATOR.slice(2));
   });
 
+  it("hands a creator the program computes down to the intents the body opens", () => {
+    const body = (inner: string) => `function main(owner: Address) {
+  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
+    .creator(owner)
+    .receive({ token: USDC, amount: 1000000 })
+    .then(() => {
+      const held = USDC.balanceOf(ctx.self());
+      Optimism.Portal.send({ token: USDC, amount: held })${inner}
+        .receive({ token: USDC, amount: held })
+        .then(() => { USDC.transfer(RECIPIENT, held); });
+    });
+}`;
+    const options = {
+      defines: { RECIPIENT },
+      intents: { creator: CREATOR, openedAt: 1_900_000_000n, executionFee: 1_000n },
+    };
+    const program = (made: readonly Compile[]) =>
+      made.find((c) => c.source.includes("ctx.timestamp()"))!.source;
+    /** How many times the Base program writes `owner` into what it publishes. */
+    const written = (made: readonly Compile[]) =>
+      made.find((c) => c.source.includes("main(owner"))!.source.split("owner.toBytesBe(32)")
+        .length - 1;
+
+    // Named by none of its own: the Arbitrum body's program takes the owner and gives it on.
+    const { result, compiles: made } = record(() => compileSauceProgram("base", body(""), options));
+    expect(result.intents[0]!.captures).toEqual(["owner"]);
+    expect(program(made)).toContain("function main(__sauce_creator)");
+    expect(program(made)).toContain("__sauce_creator.toBytesBe(32)");
+    expect(program(made).toLowerCase()).not.toContain(CREATOR.slice(2));
+    expect(written(made)).toBe(2); // the reward's creator, and the body program's argument
+
+    // Named its own: nothing is handed down.
+    const own = record(() =>
+      compileSauceProgram("base", body(`\n        .creator(${hex(RECIPIENT)})`), options),
+    );
+    expect(program(own.compiles)).not.toContain("__sauce_creator");
+    expect(written(own.compiles)).toBe(1);
+  });
+
   it("folds arithmetic of known values, so an intent from main's bound arguments is fixed", () => {
     const [opened] = compileSauceProgram("base", bound(PAIRS[1]!.portal), {
       defines: ARGS,

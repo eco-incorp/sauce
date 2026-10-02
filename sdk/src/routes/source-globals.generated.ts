@@ -4222,6 +4222,7 @@ declare global {
   const USDC: bigint & SauceTokenSource;
   const USDEc: bigint & SauceTokenSource;
   const USDT: bigint & SauceTokenSource;
+  const USDT0: bigint & SauceTokenSource;
   const USFDx: bigint & SauceTokenSource;
   const USFRon: bigint & SauceTokenSource;
   const USHYon: bigint & SauceTokenSource;

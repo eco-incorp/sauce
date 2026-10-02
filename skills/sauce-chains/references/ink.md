@@ -32,6 +32,10 @@ chain does not have it.
 
 ```sauce chain=ink
 function main() {
+  // `USDT0` is Ink's USDT0: `0x0200C29006150606B650577BBE7B6248F58470c1`.
+  const held = USDT0.balanceOf(ctx.self());
+  // `Token(address)` is any other ERC-20, and works for a symbol's address too.
+  require(Token(USDT0).balanceOf(ctx.self()) == held);
   // `UniswapV4.PoolManager` is Ink's poolManager: `0x360e68faccca8ca495c1b759fd9eee466db9fb32`.
   require(UniswapV4.PoolManager != 0n);
   // The same contract, qualified by the chain's name, from a program on any chain.
@@ -41,7 +45,9 @@ function main() {
 
 ## Tokens
 
-The registry names no token on this chain: a program uses `Token(<address>)`.
+| Symbol | Address | Decimals |
+| --- | --- | --- |
+| `USDT0` | `0x0200C29006150606B650577BBE7B6248F58470c1` | 6 |
 
 ## Protocols
 
