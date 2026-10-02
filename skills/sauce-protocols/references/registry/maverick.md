@@ -29,7 +29,9 @@ function main() {
 | --- | --- | --- | --- |
 | [Ethereum](../../../sauce-chains/references/ethereum.md) | v2Factory | `0x0A7e848Aca42d879EF06507Fca0E7b33A0a63c1e` | `Maverick.V2Factory` |
 | [Ethereum](../../../sauce-chains/references/ethereum.md) | v2Router | `0x62e31802c6145A2D5E842EeD8efe01fC224422fA` | `Maverick.V2Router` |
+| [Base](../../../sauce-chains/references/base.md) | v2Factory | `0x0A7e848Aca42d879EF06507Fca0E7b33A0a63c1e` | `Maverick.V2Factory` |
 | [Base](../../../sauce-chains/references/base.md) | v2Router | `0x5eDEd0d7E76C563FF081Ca01D9d12D6B404Df527` | `Maverick.V2Router` |
+| [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | v2Factory | `0x0A7e848Aca42d879EF06507Fca0E7b33A0a63c1e` | `Maverick.V2Factory` |
 | [Arbitrum One](../../../sauce-chains/references/arbitrum.md) | v2Router | `0x5c3b380e5Aeec389d1014Da3Eb372FA2C9e0fc76` | `Maverick.V2Router` |
 
 ## ABI
@@ -39,6 +41,16 @@ function main() {
 `import MaverickV2FactoryABI from "./protocols/maverick/MaverickV2FactoryABI.json";` Speaks for: v2Factory.
 
 - `lookup(address tokenA, address tokenB, uint256 startIndex, uint256 endIndex) view returns (address[] pools)`
+
+### `MaverickV2PoolABI`
+
+`import MaverickV2PoolABI from "./protocols/maverick/MaverickV2PoolABI.json";`
+
+- `getState() view returns ((uint128 reserveA, uint128 reserveB, int64 lastTwaD8, int64 lastLogPriceD8, uint40 lastTimestamp, int32 activeTick, bool isLocked, uint32 binCounter, uint8 protocolFeeRatioD3))`
+- `fee(bool tokenAIn) view returns (uint256)`
+- `tickSpacing() view returns (uint256)`
+- `tokenA() view returns (address)`
+- `tokenB() view returns (address)`
 
 ### `MaverickV2RouterABI`
 

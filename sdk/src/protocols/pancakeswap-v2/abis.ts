@@ -97,3 +97,47 @@ export const PancakeSwapV2FactoryABI = [
     outputs: [{ name: "pair", type: "address" }],
   },
 ] as const;
+
+// PancakePair, a UniswapV2Pair fork: the reads a program makes on a pair it looked up through the
+// factory, and `swap`, called directly once the input is transferred to the pair. Its fee is 0.25%,
+// not Uniswap's 0.3%. Pass empty `data`: any other calls `pancakeCall` back on `to`. From the
+// verified PancakePair source.
+export const PancakeSwapV2PairABI = [
+  {
+    name: "getReserves",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      { name: "_reserve0", type: "uint112" },
+      { name: "_reserve1", type: "uint112" },
+      { name: "_blockTimestampLast", type: "uint32" },
+    ],
+  },
+  {
+    name: "token0",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "token1",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "swap",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "amount0Out", type: "uint256" },
+      { name: "amount1Out", type: "uint256" },
+      { name: "to", type: "address" },
+      { name: "data", type: "bytes" },
+    ],
+    outputs: [],
+  },
+] as const;

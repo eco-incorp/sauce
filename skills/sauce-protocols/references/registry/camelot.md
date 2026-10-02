@@ -34,6 +34,23 @@ function main() {
 
 ## ABI
 
+### `CamelotV2FactoryABI`
+
+`import CamelotV2FactoryABI from "./protocols/camelot/CamelotV2FactoryABI.json";` Speaks for: v2Factory.
+
+- `getPair(address tokenA, address tokenB) view returns (address pair)`
+
+### `CamelotV2PairABI`
+
+`import CamelotV2PairABI from "./protocols/camelot/CamelotV2PairABI.json";`
+
+- `getReserves() view returns (uint112 _reserve0, uint112 _reserve1, uint16 _token0FeePercent, uint16 _token1FeePercent)`
+- `getAmountOut(uint256 amountIn, address tokenIn) view returns (uint256)`
+- `stableSwap() view returns (bool)`
+- `token0() view returns (address)`
+- `token1() view returns (address)`
+- `swap(uint256 amount0Out, uint256 amount1Out, address to, bytes data)`
+
 ### `CamelotV2RouterABI`
 
 `import CamelotV2RouterABI from "./protocols/camelot/CamelotV2RouterABI.json";` Speaks for: v2Router.
@@ -41,6 +58,22 @@ function main() {
 - `swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, address referrer, uint256 deadline)`
 - `addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) returns (uint256 amountA, uint256 amountB, uint256 liquidity)`
 - `removeLiquidity(address tokenA, address tokenB, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) returns (uint256 amountA, uint256 amountB)`
+
+### `CamelotV3FactoryABI`
+
+`import CamelotV3FactoryABI from "./protocols/camelot/CamelotV3FactoryABI.json";` Speaks for: v3Factory.
+
+- `poolByPair(address tokenA, address tokenB) view returns (address pool)`
+
+### `CamelotV3PoolABI`
+
+`import CamelotV3PoolABI from "./protocols/camelot/CamelotV3PoolABI.json";`
+
+- `globalState() view returns (uint160 price, int24 tick, uint16 feeZto, uint16 feeOtz, uint16 timepointIndex, uint8 communityFeeToken0, uint8 communityFeeToken1, bool unlocked)`
+- `liquidity() view returns (uint128)`
+- `tickSpacing() view returns (int24)`
+- `token0() view returns (address)`
+- `token1() view returns (address)`
 
 ### `CamelotV3SwapRouterABI`
 
