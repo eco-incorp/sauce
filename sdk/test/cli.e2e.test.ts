@@ -348,7 +348,7 @@ describeEvm("sauce, sent to a chain", () => {
       // A deployed Pot: the cook alone, and what it moved, read from its logs.
       expect(ok.stdout).toMatch(
         new RegExp(
-          `^Rehearsed with eth_simulateV1 on the state of block \\d+; nothing was signed or sent:\n  the cook, from the owner ${KEYSTORE_OWNER}$`,
+          `^Rehearsed with eth_simulateV1 on the state of block \\d+; nothing was signed or sent:\n  the cook, from the owner ${KEYSTORE_OWNER}, gas used \\d+$`,
           "m",
         ),
       );
