@@ -16,17 +16,15 @@ const program = readFileSync(
   "utf8",
 );
 
-// Offline fixtures. Read the destination Kitchen fee before use. The Pot and engine are derived.
+// Offline fixtures. Read the destination Kitchen fee before use: destinationExecutionFee(). The
+// Portals, the prover, the Pot, the engine and the route's native amount come from the SDK.
 const executionFee = 1_000n;
 const creator = "0x4444444444444444444444444444444444444444";
 
 const options: routes.IntentOptions = {
   execution: { value: executionFee },
-  nativeAmount: executionFee,
-  // No `portal`: the SDK carries the eco-routes deployments, and this intent runs on Base.
   deadline: 2_000_000_000n,
   creator,
-  prover: "0x5555555555555555555555555555555555555555",
   source: "ethereum",
   // The names the program reads. A define is one 256-bit word folded into the bytecode, which is
   // how a program is parameterised — it captures nothing from the JavaScript around it.
@@ -38,12 +36,7 @@ const options: routes.IntentOptions = {
 
 // The intent the program creates inherits this one's deadline, creator and eco-routes deployment,
 // so there is nothing extra to configure for it.
-const built = Base(program, options).reward({
-  creator,
-  prover: "0x5555555555555555555555555555555555555555",
-  deadline: 2_000_003_600n,
-  nativeAmount: 0n,
-});
+const built = Base(program, options).reward({ deadline: 2_000_003_600n });
 
 console.log(`Cross-chain intent program: ${built.compiled.bytecode[0]!.length} bytes`);
 console.log(built.hash().intentHash);
