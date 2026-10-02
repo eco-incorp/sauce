@@ -84,7 +84,7 @@ function main(
 
 - `routerAddress`: Camelot V3 SwapRouter on Arbitrum
 - No `fee` parameter needed: Camelot V3 uses dynamic fees (Algebra-based), not fixed fee tiers
-- `limitSqrtPrice`: `0` in this template, no price limit, so `amountOutMin` is the only bound. Camelot V3 is an Algebra pool, which the Sauce Router's `swapV3` drives with a real limit (`sauce-swaps`)
+- `limitSqrtPrice`: `0` in this template, no price limit, so `amountOutMin` is the only bound. Camelot V3 is an Algebra pool, which `@sauce/router`'s `uniswapV3` drives with a real limit through the Pot's Router (`sauce-swaps`)
 
 ### addLiquidity
 

@@ -52,7 +52,7 @@ function main(
 - `amountIn`: Exact input amount (in wei)
 - `amountOutMin`: Minimum output for slippage protection
 - `recipient`: Address to receive output tokens
-- `sqrtPriceLimitX96`: `0` in this template, no price limit, so `amountOutMin` is the only bound. Through the Sauce Router, set a real limit (`sauce-swaps`)
+- `sqrtPriceLimitX96`: `0` in this template, no price limit, so `amountOutMin` is the only bound. With `@sauce/router`'s `uniswapV3`, set a real limit (`sauce-swaps`)
 - Note: SmartRouter does NOT include a `deadline` param in the struct (unlike Uniswap V3)
 
 ## Deployments and ABI
@@ -67,6 +67,6 @@ an ABI import bound to the address), and the ABI functions are generated in
 - SmartRouter struct does NOT include `deadline` (unlike Uniswap V3's router)
 - Factory address is the same across all chains; SmartRouter addresses vary
 - NFPM address is consistent across all chains (`0x46A15B...`)
-- Swapping through the SmartRouter needs the input token approved to it; the Sauce Router needs no approval, since its callback pays the pool from the Pot (`sauce-swaps`)
+- Swapping through the SmartRouter needs the input token approved to it. From a Pot program, `@sauce/router`'s `uniswapV3(pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient)` swaps a PancakeSwap V3 pool (`PancakeswapV3.Factory.getPool(tokenA, tokenB, fee)`) with no approval: it calls the Pot's Router, which answers the pool's `pancakeV3SwapCallback` from the Pot (`sauce-swaps`)
 - Both tokens must be ERC20-approved to the NFPM for minting positions
 - Prefer V3 over V2 for major pairs on BSC for better capital efficiency
