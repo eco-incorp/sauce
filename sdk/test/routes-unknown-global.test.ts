@@ -39,7 +39,7 @@ describe("an unknown token or protocol name", () => {
   it("suggests from the chain it compiles for: Optimism has USDT, Base does not", () => {
     expect(() =>
       compileOn("optimism", "function main() { return USDTT.balanceOf(ctx.self()); }"),
-    ).toThrow(/Did you mean `USDT`\?/);
+    ).toThrow(/Did you mean `USDT` or `USDT0`\?/);
     expect(() =>
       compileOn("base", "function main() { return USDTT.balanceOf(ctx.self()); }"),
     ).not.toThrow(/Did you mean `USDT`/);
