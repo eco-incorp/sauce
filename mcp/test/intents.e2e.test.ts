@@ -48,11 +48,13 @@ const REWARD = 1_050_000n;
 /** What the Mailbox charges per message: the prover's quoted fee. */
 const HYPERLANE_FEE = 7_777n;
 
-/** Base USDC to RECIPIENT, for Ethereum USDC: a body of plain transfers. */
+/** Base USDC to `recipient`, for Ethereum USDC: a body of plain transfers. */
 const INTENT = [
-  "Base.Portal.send([{ token: USDC, amount: REWARD }]).receive().then(() => {",
-  "  USDC.transfer(RECIPIENT, AMOUNT);",
-  "});",
+  "function main(recipient: Address, amount: Uint256, reward: Uint256) {",
+  "  Base.Portal.send({ token: USDC, amount: reward }).receive().then(() => {",
+  "    USDC.transfer(recipient, amount);",
+  "  });",
+  "}",
   "",
 ].join("\n");
 
@@ -130,7 +132,7 @@ describe(
         await mcp.call("sauce_intent_publish", {
           source: INTENT,
           chain: "ethereum",
-          defines: { RECIPIENT, AMOUNT: String(AMOUNT), REWARD: String(REWARD) },
+          args: [RECIPIENT, String(AMOUNT), String(REWARD)],
           intentDeadline: String(route),
           intentRewardDeadline: String(reward),
           intentCreator: OWNER.address,

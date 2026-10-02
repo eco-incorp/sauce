@@ -28,7 +28,9 @@ function main(amounts: Uint256[], minimum: Uint256): Uint256 {
 This is SauceScript source, not a host TypeScript module: `Uint256` and `require`
 mean something to the Sauce compiler and nothing to `tsc`. A source error points at
 a location and span; an error about an option, a resolver or an unavailable
-target feature has nothing to point at.
+target feature has nothing to point at. An editor learns SauceScript's names from the
+`tsconfig.json` that `sauce init` writes beside a directory of programs
+([In an editor](../guides/cli.md#in-an-editor)).
 
 A function declared `: void` can finish without returning a value. Other
 functions must return on every path. Annotate helper functions returning arrays,
@@ -43,7 +45,7 @@ The SDK provides a second authoring form: a route body passed to a chain helper.
 
 ```js
 () => {
-  USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+  USDC.approve(Uniswap.UniversalRouter, 1_000_000);
 };
 ```
 
@@ -75,14 +77,15 @@ the same values. Neither is a drop-in for the other.
 
 ## The language
 
-The [SauceScript reference](../../skills/sauce-script/references/builtins.md) is the complete account of the language, and
-every example and quoted error in it is checked against the compiler this package ships: types,
+The [SauceScript reference](../reference/saucescript.md) is the complete account of the language,
+and every example and quoted error in it is checked against the compiler this package ships: types,
 literals, operators, statements, functions and modules, every builtin on each target, and the
 limits. What most often surprises a TypeScript author:
 
-- Numbers are unsigned 256-bit integers, and arithmetic is checked: overflow, underflow and division
-  by zero revert. Write a negative amount as `-x`; `~x + 1n` reverts when `x` is zero. Prefer
-  `bigint` literals in host-authored route callbacks so the host keeps exact values.
+- Numbers are unsigned 256-bit integers, written plainly (`3000`, `10 ** 18`), and arithmetic is
+  checked: overflow, underflow and division by zero revert. Write a negative amount as `-x`;
+  `~x + 1` reverts when `x` is zero. A route callback written in TypeScript uses `bigint` literals
+  (`3000n`), which TypeScript types; the compiler reads both spellings as the same integer.
 - `bool` is kept apart from numbers, and `bytes`/`string` are byte strings: `"text"` is its UTF-8
   bytes and `` hex`a9059cbb` `` raw bytes. Every untagged template literal is rejected, with or
   without `${}`.

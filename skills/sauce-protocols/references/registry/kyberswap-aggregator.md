@@ -19,7 +19,7 @@ On Ethereum, `KyberswapAggregator` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's metaAggregationRouter, `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5`.
-  require(KyberswapAggregator.MetaAggregationRouter != 0n);
+  require(KyberswapAggregator.MetaAggregationRouter != 0);
 }
 ```
 

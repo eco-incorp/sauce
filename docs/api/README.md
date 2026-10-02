@@ -42,16 +42,16 @@ are on the chain export in TypeScript (`Base.USDC`, `Base.Uniswap`). See
 
 ## Detailed references
 
-- [SauceScript reference](../../skills/sauce-script/references/builtins.md): every type, operator,
-  statement, builtin and limit, per target, checked against the compiler;
-  [`builtins.json`](../../skills/sauce-script/references/builtins.json) lists the builtins with an
-  example program each. It is the `sauce-script` agent skill's reference, shipped in the package.
+- [SauceScript reference](../reference/saucescript.md): every type, operator, statement, builtin
+  and limit, per target, checked against the compiler.
 - [Compiler](compiler.md): direct compilation, result metadata, compact argument encoding.
 - [`@sauce/router`](router.md): the SauceScript swap library a program imports — one function per
   venue.
 - [Routes](routes.md): compile options, intent construction, nested execution, and submission helpers.
 - [Contracts and tokens](contracts.md): every protocol namespace and token, in a program and in TypeScript, and running a call through viem.
 - [Coverage](coverage.md): distinguish catalog entries, callable descriptors, and available deployments.
+- [Chains](../reference/chains.md), [protocols](../reference/protocols.md) and
+  [tokens](../reference/tokens.md): what the registries hold, generated from them.
 
 For programs assembled from data rather than written, see [builders](../guides/builders-and-actions.md).
 For account-based execution and settlement checks, see the [Solana](../guides/solana.md) and
@@ -74,10 +74,9 @@ const availableSkills = listSkillSlugs();
 
 Each document is Markdown written for coding agents; loading one reads a document and performs no
 protocol operation. `getProtocolSkill` throws for a slug absent from `listSkillSlugs()`. The
-documents are the `sauce-protocols` agent skill's references
-([`skills/sauce-protocols/references/`](../../skills/sauce-protocols/references/index.md)), the same
-files `sauce skills install` puts in a project ([Agent skills](../guides/cli.md#agent-skills)), so the
-text this export returns is the text an agent reads.
+documents are the `sauce-protocols` agent skill's, the same files `sauce skills install` puts in a
+project ([Agent skills](../guides/skills.md)), so the text this export returns is the text an agent
+reads. Each protocol's page in the [reference](../reference/protocols.md) carries its document too.
 
 ## Where each import runs
 

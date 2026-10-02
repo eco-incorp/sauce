@@ -19,7 +19,7 @@ On Blast, `Fenix` is a namespace: its contracts need no import.
 ```sauce chain=blast
 function main() {
   // Blast's router, `0xbD571125856975DBfC2E9b6d1DE496D614D7BAEE`.
-  require(Fenix.Router != 0n);
+  require(Fenix.Router != 0);
 }
 ```
 

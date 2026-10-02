@@ -19,7 +19,7 @@ On Ethereum, `Spark` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's pool, `0xC13e21B648A5Ee794902342038FF3aDAB66BE987`.
-  require(Spark.Pool != 0n);
+  require(Spark.Pool != 0);
 }
 ```
 

@@ -1,13 +1,13 @@
 # Protocols and tokens
 
-[Documentation](../README.md) · [Quick start](quick-start.md) · [Coverage](../api/coverage.md)
+[Documentation](../README.md) · [Quick start](quick-start.md) · [Tokens](../reference/tokens.md) · [Protocols](../reference/protocols.md)
 
 Every protocol in the registry is a namespace, and every registered token a name, in both languages
 the SDK speaks. Inside a program they are names the compiler resolves against the chain the program
 runs on:
 
 ```js
-USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+USDC.approve(Uniswap.UniversalRouter, 1_000_000);
 ```
 
 In host TypeScript the same names hang off a chain export:
@@ -22,19 +22,18 @@ Base.UniswapV4.UniversalRouter.address; // the address `UniswapV4.UniversalRoute
 `USDC` resolves to the chain's registered token address. `Uniswap.UniversalRouter` resolves to the
 registered contract address when used as a value, and exposes its ABI methods when used as a call
 target. Amounts are integers in the token's smallest units; the SDK does not infer decimal
-conversions.
+conversions. The reference lists every name with its address: [tokens](../reference/tokens.md),
+[protocols](../reference/protocols.md), and each [chain](../reference/chains.md)'s tokens and
+contracts.
 
 ### Tokenized stocks
 
-Ethereum and Base also register tokenized stocks, named the same way: `SPCXc.balanceOf(...)` reads
-Coinbase's SpaceX token on Base, and `Base.SPCXc.address` is its address. Ethereum has Backed's
-xStocks (`TSLAx`, `SPCXx`) and bTokens (`bTSLA`), Ondo Global Markets' tokens (`TSLAon`,
-`SPCXon`) and Mt Pelerin's own shares (`MPS`); Base has Coinbase's (`TSLAc`, `SPCXc`) and Backed's bTokens. A symbol is the issuer's
-own ticker for the token, case-sensitive, with a `.` written `_` (`BRK_Bx`). Each row of
-`routes.TOKEN_REGISTRY` that is a stock carries `stock`: its issuer, its name and the underlying's
-ticker. `sauce globals --chain <chain> --stocks` lists a chain's, and `--search <text>` finds one
-by symbol, company name or ticker. [What is registered](../api/coverage.md#tokenized-stocks) counts
-them and says how they differ from a plain ERC-20.
+Ethereum, Base and Solana also register tokenized stocks, named the same way: `SPCXc.balanceOf(...)`
+reads Coinbase's SpaceX token on Base, and `Base.SPCXc.address` is its address. On Solana each is a
+Token-2022 mint that a program passes to `@sauce/token`'s functions (`balanceOf(TSLAx, account)`),
+and `Solana.TSLAx.mint` is the mint. [Tokenized stocks](../reference/tokens.md#tokenized-stocks) has
+the issuers, how a symbol is spelled and what differs from a plain ERC-20, and each chain's page in
+the reference lists its stocks.
 
 ## Compile a global call
 
@@ -49,7 +48,7 @@ export function compileApproval(pot: routes.AddressInput, engine: routes.Address
 }
 ```
 
-The returned `calls` encode an EVM Pot `cook`; this function does not submit a transaction. The same body can be a callback to `Base(() => { ... }, options).reward(...)`; see [creating intents](intents.md).
+The returned `calls` encode an EVM Pot `cook`; this function does not submit a transaction. The same body can be an intent's, `Base.Portal.send(...).receive(...).then(() => { ... })`; see [creating intents](intents.md).
 
 The supported Universal Router spelling is `UniswapV4.UniversalRouter`, or the unambiguous family alias `Uniswap.UniversalRouter`. `UniswapV3.UniversalRouter` is not registered. The router's `execute` method takes the arguments declared by its ABI; the namespace does not construct swap commands or select a route for you.
 
@@ -93,8 +92,9 @@ the address, `UniswapV3.Pool(pool).liquidity()`, or binds it with `.at(pool)`, w
 
 A name existing does not mean the contract is deployed on your chain. Naming one that is not fails
 when the program compiles, or when TypeScript builds the call — the point at which you can still do
-something about it. [Coverage](../api/coverage.md) has the totals, and
-`contracts.listContracts(slug)` lists a protocol's contracts.
+something about it. Each protocol's page in the [reference](../reference/protocols.md) lists its
+contracts on every chain, the [family aliases](../reference/protocols.md#family-aliases) what each
+alias resolves to where, and `contracts.listContracts(slug)` a protocol's contracts in TypeScript.
 
 ## Use a venue only where the chain has it
 
@@ -104,16 +104,17 @@ compiled, so nothing in it is resolved, and one program can name a venue some of
 
 ```js
 // One program for every chain: the USDC/WETH 0.05% pool from PancakeSwap V3 where the chain has it,
-// from Uniswap V3 where it does not, and nothing where it has neither.
+// from Uniswap V3 where it does not, and nothing where it has neither venue or lacks either token.
 //
 // A contract the chain lacks is zero there, and comparing it with zero is decided when the program
 // is compiled, for the chain it is compiled for: a branch it rules out is never compiled.
 function main() {
-  let pool = 0n;
-  if (PancakeswapV3.Factory != 0n) {
-    pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500n);
-  } else if (UniswapV3.Factory != 0n) {
-    pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);
+  if (USDC == 0 || WETH == 0) return 0;
+  let pool = 0;
+  if (PancakeswapV3.Factory != 0) {
+    pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500);
+  } else if (UniswapV3.Factory != 0) {
+    pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
   }
   return pool;
 }
@@ -128,10 +129,10 @@ compiles it for both.
   there where the chain's token map has it, which includes the `tokens` you pass.
 - `==`, `!=`, `===` and `!==` are the only uses of an absent name; any other use is a compile error
   saying the chain does not have it. The comparison folds `if`/`else`, `?:`, `&&`, `||` and `!`, and
-  a guard that returns, `if (UniswapV3.Factory == 0n) return 0n;`, drops the rest of its block where
+  a guard that returns, `if (UniswapV3.Factory == 0) return 0;`, drops the rest of its block where
   the contract is absent.
 - A branch that depends on it only through a runtime value
-  (`const has = UniswapV3.Factory != 0n; if (has) ...`) is live code, and every name in it must
+  (`const has = UniswapV3.Factory != 0; if (has) ...`) is live code, and every name in it must
   still resolve.
 - A name the registry does not know on any chain is the compiler's unknown name, not zero, so a typo
   cannot quietly drop a branch. A program that declares the name owns it.
@@ -150,14 +151,14 @@ compiles, naming it and the chain's closest names: `USDCC.balanceOf(...)` on Bas
 These are SauceScript route-body fragments:
 
 ```js
-USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+USDC.approve(Uniswap.UniversalRouter, 1_000_000);
 let balance = USDC.balanceOf(self);
 ```
 
 For a token absent from the registry, use `Token(address)`:
 
 ```js
-Token(0x1111111111111111111111111111111111111111n).approve(Uniswap.UniversalRouter, 1_000_000n);
+Token(0x1111111111111111111111111111111111111111).approve(Uniswap.UniversalRouter, 1_000_000);
 ```
 
 Replace that illustrative address with your ERC-20. The wrapper accepts a literal, a local variable, or a compile-time define. It can also be bound once and called, `const t = Token(address); t.approve(spender, amount);`, as long as `t` is never reassigned or used other than as `t.<method>(...)`. The token member syntax supports `transfer`, `approve`, `transferFrom`, and `balanceOf`. Use an explicit ABI binding for additional ERC-20 methods. The shorthand `self.USDC` reads the executing contract's balance; `USDC.balanceOf(self)` makes the same intent explicit. `self` refers to the executing contract, which is the Pot in the EVM route path.
@@ -182,7 +183,7 @@ The raw ABI call is **not** SafeERC20: `Erc20.ERC20.at(address).transfer(...)`, 
 reverts on a token that returns nothing and accepts one that returns `false`. Use it only when that
 is the behavior you want; otherwise use one of the spellings above.
 
-Use `tokenDefines` on an intent to add or override symbols, or `tokens` on `compileSauceRoute`'s compile options. Overrides merge per symbol with the registry. These maps contain **addresses**; `IntentOptions.tokens` instead declares the **token amounts** a solver must deliver for the route.
+Use `tokenDefines` on `routes.openRoute`'s options to add or override symbols, or `tokens` on `compileSauceRoute`'s compile options. Overrides merge per symbol with the registry. These maps contain **addresses**; an intent's `.receive(...)`, or a route's `tokens` option, instead declares the **token amounts** a solver must deliver for the route.
 
 ```ts
 import { routes } from "@eco-incorp/sauce";
@@ -250,7 +251,7 @@ Two different mechanisms share the look of a bare name, and the difference is wh
 
 Chain accessors such as `Base` and `Solana`, the `chain(ref)` front door, and the host `Token` builder are **named exports**: `import { Base, Solana, Token } from "@eco-incorp/sauce"`. They are ordinary JavaScript values, and importing the package installs nothing on `globalThis`.
 
-Bare route names such as `USDC` and `Uniswap` are **route syntax**, resolved by the compiler against the destination chain. The package supplies TypeScript declarations for them so a typed callback checks, but there is no host JavaScript `USDC` or `Uniswap` object to import or execute. The host spelling of the same registry entry is on the chain export: `Base.USDC`, `Base.Uniswap`.
+Bare route names such as `USDC`, `Uniswap` and `available` are **route syntax**, resolved by the compiler against the destination chain. The package supplies TypeScript declarations for them so a typed callback checks, but there is no host JavaScript `USDC` or `Uniswap` object to import or execute. The host spelling of the same registry entry is on the chain export: `Base.USDC`, `Base.Uniswap`.
 
 A host that wants the chain names as runtime globals anyway can opt in with `installRouteGlobals()`, which defines them on `globalThis` (or any target you pass) and never overwrites a name already there. It installs values only; declare the names yourself.
 

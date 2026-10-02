@@ -27,6 +27,33 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 | Shared intent Pot | `0xDd330394620fBFF4D0AdcfA33B0D7b3622Db15B0`: the Kitchen's `deployPot(<Executor>, 0x0)` creates it, from any account |
 | CCTP domain | 26 |
 
+## Notes
+
+Arc pays gas in USDC, and has one USDC balance at two decimal scales: the native coin
+(`msg.value`, `eth_getBalance`, gas) has 18 decimals, and the ERC-20 `USDC` at
+`0x3600000000000000000000000000000000000000` has 6. Sending native value and calling
+`USDC.transfer` move the same money.
+
+- A Pot that spends its whole `USDC` balance and also pays a native fee (a bridge's or a
+  messenger's fee, the Kitchen's execution fee) runs out: the fee comes from the same balance.
+  Leave room for it.
+- `balanceOf` is the native balance divided by 10^12 and rounded down, so less than 10^12 wei
+  reads as 0. Compare a native amount with a token amount only after converting one to the
+  other's scale.
+- Every native amount has 18 decimals: an execution fee, a cook's value, the `nativeAmount` of a
+  route or a reward. `1_000_000` of native value is 10^-12 USDC, not 1 USDC.
+- The minimum base fee is 20 gwei, and a transaction whose `maxFeePerGas` is below it is dropped
+  silently: no error, and no receipt.
+- There is no canonical wrapped native, and nothing needs wrapping. `WETH` is bridged ETH, with no
+  `deposit()` or `withdraw()`, and Uniswap's Arc periphery reports a `WETH9()` that always
+  reverts, so the ETH paths of its routers revert too. Wrapping, unwrapping and staking the
+  native coin are refused for Arc.
+- Native value sent to the zero address, to or from a blocklisted address, or to a
+  self-destructed account reverts, also when a contract forwards it.
+- An intent's reward offers native value or `USDC`, not both: Arc's Portal takes them for one
+  asset and reverts `RewardTokensNotUnique(USDC)`, so the SDK refuses such a reward when it is
+  built. Fold the two into one amount.
+
 ## In a program
 
 Compiled with `--chain arc`, a program names Arc's tokens and contracts with no
@@ -40,7 +67,7 @@ function main() {
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(EURC).balanceOf(ctx.self()) == held);
   // `AaveV4.CoreHub` is Arc's coreHub: `0x17288dfc86205301064577b98B02b81017e6F79C`.
-  require(AaveV4.CoreHub != 0n);
+  require(AaveV4.CoreHub != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Arc.AaveV4.CoreHub == AaveV4.CoreHub);
 }

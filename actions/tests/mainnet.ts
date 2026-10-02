@@ -1,6 +1,7 @@
 /**
- * A mainnet — Ethereum, Base or Avalanche — frozen at one block, as a LOCAL anvil, so the prod-like
- * suites run against real deployed contracts with no RPC and no network at all. NOT a `.test.ts`.
+ * A mainnet — Ethereum, Base, Avalanche or OP Mainnet — frozen at one block, as a LOCAL anvil, so
+ * the prod-like suites run against real deployed contracts with no RPC and no network at all. NOT a
+ * `.test.ts`.
  *
  * REPLAY (every normal run). `tests/state/<suite>.genesis.json.gz` is a genesis file holding every
  * account and storage slot that suite read from its chain at the chain's pinned block (`CHAINS`).
@@ -69,6 +70,14 @@ export const CHAINS = {
     timestamp: 1_790_730_293,
     gasLimit: 80_000_000,
     baseFee: 5_000_000_000,
+    blockInterval: 2,
+  },
+  optimism: {
+    chainId: 10,
+    block: 157_600_000,
+    timestamp: 1_790_798_777,
+    gasLimit: 40_000_000,
+    baseFee: 869,
     blockInterval: 2,
   },
 } as const satisfies Record<string, CapturedChain>;

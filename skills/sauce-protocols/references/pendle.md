@@ -1,6 +1,6 @@
 # Pendle
 
-> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
 
 Yield trading protocol that tokenizes future yield. Split yield-bearing assets into principal tokens (PT) and yield tokens (YT) for trading. PT = discounted principal (fixed yield), YT = future variable yield.
 
@@ -28,7 +28,7 @@ function main(tokenIn: Address, amountIn: Uint256, pt: Address, minPtOut: Uint25
   const self = ctx.self();
   const before = Token(pt).balanceOf(self);
   Token(tokenIn).approve(Pendle.Router, amountIn);
-  evm.call(Pendle.Router, 0n, call);
+  evm.call(Pendle.Router, 0, call);
   const out = Token(pt).balanceOf(self) - before;
   require(out >= minPtOut, "below minPtOut");
 }
@@ -50,7 +50,7 @@ yield | Chains and addresses: [registry/pendle.md](registry/pendle.md)
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Buy PT (fixed yield)

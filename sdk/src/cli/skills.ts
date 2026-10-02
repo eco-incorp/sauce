@@ -23,6 +23,10 @@
  * the skills go to `.agents/skills/` and an index of them into a block of `AGENTS.md`, owned by this
  * command and delimited by markers. The user's own text around the block is never touched.
  *
+ * Beside the skills, each skills directory gets `tsconfig.json`: SauceScript's TypeScript project
+ * (`sauceScriptTsconfig`), so an editor types the skills' example programs as `sauce init` types
+ * `programs/`. It is installed, recorded, updated and reported like a skill file.
+ *
  * WHAT WAS INSTALLED. Each skills directory holds `.sauce-skills.json`: the package and version
  * the files came from and the sha256 of each as written. The index block carries the same in its
  * opening marker. That record is what tells the two reasons a file differs from the package apart
@@ -93,6 +97,13 @@ export interface SkillsSource {
   readonly version: string;
   /** The TypeScript range the package itself depends on, for a project `sauce init` writes. */
   readonly typescript?: string;
+  /**
+   * The exact viem version installed beside the package, which its TypeScript API is typed in:
+   * a project `sauce init` writes depends on it directly, so the project resolves it (a package
+   * manager that does not hoist resolves only a project's own dependencies) and gets the same
+   * types the package's functions take.
+   */
+  readonly viem?: string;
 }
 
 /** `--agent`: names, comma-separated or repeated; `all` is `DEFAULT_AGENTS`, and may be joined
@@ -158,14 +169,62 @@ function filesUnder(dir: string): string[] {
     .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
+/**
+ * The tsconfig.json of a directory of SauceScript programs: a TypeScript project of SauceScript
+ * files alone, with the package's declarations of the language (`<package>/sauce-script`) and its
+ * plugin, which drops what TypeScript reports on valid SauceScript (integer indexes, a plain
+ * integer beside a `Uint256`, undeclared UPPER_CASE defines). Its own project, because those declarations name
+ * `require`, `crypto` and `eval` as SauceScript has them: kept out of the project's other
+ * TypeScript, they cannot change it. An editor takes a file's nearest tsconfig.json, so every
+ * program under the directory gets it. `sauce init` writes it into `programs/` (and with
+ * `--tsconfig` into any directory), and `sauce skills install` beside the skills.
+ */
+export function sauceScriptTsconfig(packageName: string): Record<string, unknown> {
+  return {
+    compilerOptions: {
+      target: "ES2022",
+      lib: ["ES2022"],
+      module: "ESNext",
+      moduleResolution: "Bundler",
+      // Each program is a module of its own: two programs' `main` never collide.
+      moduleDetection: "force",
+      // Only SauceScript's names: no Node, no DOM.
+      types: [`${packageName}/sauce-script`],
+      // An unannotated helper parameter is a number in SauceScript, not an error.
+      strict: true,
+      noImplicitAny: false,
+      noEmit: true,
+      allowImportingTsExtensions: true,
+      // A JSON import is a contract binding, which the declarations type, not the file's JSON.
+      resolveJsonModule: false,
+      skipLibCheck: true,
+      // Loaded by an editor running the project's own TypeScript (node_modules/typescript).
+      plugins: [{ name: `${packageName}/sdk/dist/sauce-script/ts-plugin.cjs` }],
+    },
+    include: ["**/*.sauce.ts"],
+  };
+}
+
+/** The file an install writes beside the skills: {@link sauceScriptTsconfig}, over every program
+ *  in the skills directory. */
+export const SKILLS_TSCONFIG = "tsconfig.json";
+
+/** What an install writes: every file of the packaged skills, and {@link SKILLS_TSCONFIG}. */
 function packaged(source: SkillsSource): Map<string, Buffer> {
   if (!existsSync(source.dir)) {
     throw new CliError(`this package ships no agent skills: ${source.dir} does not exist`);
   }
 
-  return new Map(
-    filesUnder(source.dir).map((path) => [path, readFileSync(join(source.dir, path))]),
-  );
+  return new Map([
+    ...filesUnder(source.dir).map((path): [string, Buffer] => [
+      path,
+      readFileSync(join(source.dir, path)),
+    ]),
+    [
+      SKILLS_TSCONFIG,
+      Buffer.from(`${JSON.stringify(sauceScriptTsconfig(source.packageName), null, 2)}\n`),
+    ],
+  ]);
 }
 
 /** A skill's `name` and `description`, from its SKILL.md frontmatter. */

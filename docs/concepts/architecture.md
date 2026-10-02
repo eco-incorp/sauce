@@ -24,13 +24,13 @@ program — and only a Sauce engine interprets it.
 Inside an EVM route body you write:
 
 ```js
-USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+USDC.approve(Uniswap.UniversalRouter, 1_000_000);
 ```
 
 The destination chain picks which `USDC` and which router that means. Before compiling, the SDK
 rewrites those names, supplies the matching ABIs and injects the addresses. A token write becomes a
 call to the `@sauce/token` library, whose writes follow OpenZeppelin `SafeERC20`, so the compiler
-sees the equivalent of `approve(USDC, <the router's address>, 1_000_000n)`. A token read and a
+sees the equivalent of `approve(USDC, <the router's address>, 1_000_000)`. A token read and a
 protocol call become ABI-bound calls such as `IERC20.at(USDC).balanceOf(...)`.
 
 These names belong to the SDK's route path, not to the compiler. A direct `compile()` call resolves
@@ -80,7 +80,7 @@ ownership transfer and upgrade).
 Every cook must send the Kitchen's current `executionFee()` as native value, even for a program that
 moves only ERC-20s. Native the program itself spends is on top of that. A balance already sitting in
 the Pot does not pay the fee. On Arc, native value is USDC at 18 decimals, drawn from the same
-balance as the USDC ERC-20 ([Arc: USDC is the native coin](../api/coverage.md#arc-usdc-is-the-native-coin)).
+balance as the USDC ERC-20 ([Arc: USDC is the native coin](../reference/chains/arc.md#notes)).
 
 One route body is one program and one cook, however many statements it contains. For a Portal-driven
 intent the Pot's owner must be the destination `Portal.executor()`, and the Pot is shared: put
@@ -107,8 +107,9 @@ hop whose amount is only known on arrival gets built at all. See [create an inte
 program](../guides/intents.md#create-an-intent-from-inside-a-program).
 
 Building an intent publishes nothing. Your application submits the source-chain transactions, and a
-solver fulfills the destination. Nested intents are separate executions composed with `.nest(...)` —
-a cascade, not one call stack spanning chains. See [create an intent](../guides/intents.md).
+solver fulfills the destination. A nested intent is opened by the body of the one before it, when
+that body runs — a cascade of separate executions, not one call stack spanning chains. See
+[create an intent](../guides/intents.md) and [nested intents](../guides/nested-intents.md).
 
 ## Versions travel with artifacts
 

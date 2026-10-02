@@ -7,20 +7,26 @@ and amounts are in its smallest units (its decimals). Their addresses are in the
 `sauce-chains`. Any other ERC-20 is `Token(<address>)`.
 
 - **Ethereum** (`ethereum`, [addresses](../../sauce-chains/references/ethereum.md)): `USDC` (6), `USDT` (6), `WETH` (18); and 1731 tokenized stocks ([stocks](stocks.md))
-- **Optimism** (`optimism`, [addresses](../../sauce-chains/references/optimism.md)): `USDC` (6), `USDT` (6), `WETH` (18)
-- **Polygon** (`polygon`, [addresses](../../sauce-chains/references/polygon.md)): `USDC` (6), `WETH` (18), `WPOL` (18)
-- **Monad** (`monad`, [addresses](../../sauce-chains/references/monad.md)): `USDC` (6), `WMON` (18)
+- **Optimism** (`optimism`, [addresses](../../sauce-chains/references/optimism.md)): `USDC` (6), `USDT` (6), `USDT0` (6), `WETH` (18)
+- **Unichain** (`unichain`, [addresses](../../sauce-chains/references/unichain.md)): `USDT0` (6)
+- **Polygon** (`polygon`, [addresses](../../sauce-chains/references/polygon.md)): `USDC` (6), `USDT0` (6), `WETH` (18), `WPOL` (18)
+- **Monad** (`monad`, [addresses](../../sauce-chains/references/monad.md)): `USDC` (6), `USDT0` (6), `WMON` (18)
+- **Sei** (`sei`, [addresses](../../sauce-chains/references/sei.md)): `USDT0` (6)
+- **Mantle** (`mantle`, [addresses](../../sauce-chains/references/mantle.md)): `USDT0` (6)
 - **Arc** (`arc`, [addresses](../../sauce-chains/references/arc.md)): `EURC` (6), `USDC` (6), `USYC` (6), `WETH` (18)
 - **Base** (`base`, [addresses](../../sauce-chains/references/base.md)): `USDC` (6), `WETH` (18); and 67 tokenized stocks ([stocks](stocks.md))
-- **Arbitrum** (`arbitrum`, [addresses](../../sauce-chains/references/arbitrum.md)): `USDC` (6), `WETH` (18)
-- **Solana** (`solana`, [addresses](../../sauce-chains/references/solana.md)): `PYUSD` (6), `USDC` (6), `USDT` (6), `WSOL` (9)
+- **Plasma** (`plasma`, [addresses](../../sauce-chains/references/plasma.md)): `USDT0` (6)
+- **Arbitrum** (`arbitrum`, [addresses](../../sauce-chains/references/arbitrum.md)): `USDC` (6), `USDT0` (6), `WETH` (18)
+- **Ink** (`ink`, [addresses](../../sauce-chains/references/ink.md)): `USDT0` (6)
+- **Berachain** (`berachain`, [addresses](../../sauce-chains/references/berachain.md)): `USDT0` (6)
+- **Solana** (`solana`, [addresses](../../sauce-chains/references/solana.md)): `PYUSD` (6), `USDC` (6), `USDT` (6), `WSOL` (9); and 1799 tokenized stocks ([stocks](stocks.md))
 
 On Solana a symbol is the mint's 32-byte key, a value for the `@sauce/token` functions
 (`balanceOf(USDC, account)`); the token accounts are `Account` parameters, and the token
 methods (`USDC.transfer(...)`) are EVM-only. Devnet's mints, which differ, are in the Solana
-file in `sauce-chains`, passed as a define that wins over the symbol. That file also names each
-mint's token program: legacy SPL Token, or Token-2022, whose mints a program moves with the
-checked writes (`sauce-solana`).
+file in `sauce-chains`; a program for devnet takes its mint as an `Address` parameter of
+`main`. That file also names each mint's token program: legacy SPL Token, or Token-2022, whose
+mints a program moves with the checked writes (`sauce-solana`).
 
 ## Token functions
 

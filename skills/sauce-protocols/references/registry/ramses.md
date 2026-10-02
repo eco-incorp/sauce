@@ -19,7 +19,7 @@ On Arbitrum One, `Ramses` is a namespace: its contracts need no import.
 ```sauce chain=arbitrum
 function main() {
   // Arbitrum One's router, `0xAAA87963EFeB6f7E0a2711F397663105Acb1805e`.
-  require(Ramses.Router != 0n);
+  require(Ramses.Router != 0);
 }
 ```
 

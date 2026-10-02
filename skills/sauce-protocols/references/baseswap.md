@@ -1,6 +1,6 @@
 # BaseSwap
 
-> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
 
 Base-native DEX with UniV2-style constant product pools (x*y=k). Features yield farming, launchpad, and NFT marketplace. A simple and straightforward fork of Uniswap V2 on Base.
 
@@ -19,7 +19,7 @@ dex | Chains and addresses: [registry/baseswap.md](registry/baseswap.md)
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### swap
 

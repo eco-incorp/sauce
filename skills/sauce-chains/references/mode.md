@@ -33,7 +33,7 @@ chain does not have it.
 ```sauce chain=mode
 function main() {
   // `Across.SpokePool` is Mode's spokePool: `0x3baD7AD0728f9917d1Bf08af5782dCbD516cDd96`.
-  require(Across.SpokePool != 0n);
+  require(Across.SpokePool != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Mode.Across.SpokePool == Across.SpokePool);
 }

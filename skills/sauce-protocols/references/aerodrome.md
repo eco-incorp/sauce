@@ -1,6 +1,6 @@
 # Aerodrome
 
-> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
 
 The central trading and liquidity marketplace on Base. Fork of Velodrome with ve(3,3) tokenomics, the largest DEX on Base by TVL ($1B+). Supports both stable and volatile pool types.
 
@@ -24,7 +24,7 @@ Sell the Pot's USDC for WETH on the volatile pool:
 ```sauce chain=base
 function main(amountIn: Uint256, minOut: Uint256, recipient: Address) {
   const self = ctx.self();
-  require(Aerodrome.PoolFactory.getPool(USDC, WETH, false) != 0n, "no volatile USDC/WETH pool");
+  require(Aerodrome.PoolFactory.getPool(USDC, WETH, false) != 0, "no volatile USDC/WETH pool");
   const routes = [{ from: USDC, to: WETH, stable: false, factory: Aerodrome.PoolFactory }];
   const before = WETH.balanceOf(self);
   USDC.approve(Aerodrome.Router, amountIn);
@@ -50,7 +50,7 @@ dex | Chains and addresses: [registry/aerodrome.md](registry/aerodrome.md)
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### swap
 

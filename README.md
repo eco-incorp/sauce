@@ -18,127 +18,151 @@ npm install @eco-incorp/sauce
 Node.js **24 or newer**, or a browser — [one `await ready()`](docs/api/compiler.md#in-a-browser) and the
 same code compiles the same bytes.
 
+For the [`sauce` command](docs/guides/cli.md), install the package once globally:
+
+```sh
+npm i -g @eco-incorp/sauce
+sauce --version
+```
+
+`npm i -g @eco-incorp/sauce@latest` upgrades it, and [Install](docs/guides/cli.md#install) has the
+other ways to run it.
+
+A coding agent uses Sauce through its MCP server, `sauce mcp`, which the agent starts on your
+machine. Add it once:
+
+```sh
+claude mcp add sauce -- sauce mcp    # Claude Code
+codex mcp add sauce -- sauce mcp     # OpenAI Codex
+```
+
+[The MCP server's quick start](docs/guides/mcp.md#quick-start) covers Gemini CLI, Claude Desktop,
+Cursor and VS Code, and how to check that it worked.
+
 [Documentation](docs/README.md) · [Quick start](docs/guides/quick-start.md) ·
 [Examples](docs/examples/README.md) · [API reference](docs/api/README.md)
 
 ## Supported chains
 
 For the initial release, Sauce supports transactions on **Ethereum**, **Base** and **Solana**.
-Every other chain in the registry is a preview chain: programs compile for it and the `sauce`
-command and MCP server simulate and rehearse them there, but they build and send no transaction on
-it. The TypeScript SDK is not gated — its builders still build transactions for every registry
-chain, at the integrator's own risk. To ask for another chain,
-[search the existing requests](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support)
-and add your use case, or
-[open a chain-support request](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml).
-[Supported chains](docs/README.md#supported-chains) has the details.
+Every other chain in the registry is a preview chain: programs compile for it, and the `sauce`
+command and the MCP server rehearse them there but build and send no transaction.
+[Chains](docs/reference/chains.md) has the policy, every chain's tokens and protocols, and how to
+request a chain.
 
 ## A program that creates a cross-chain intent
 
-A program can spend an intent's funds, and it can also create the next intent. That is where the
+A program can spend what a Pot holds, and it can also create the next intent. That is where the
 runtime and the routes layer meet. This program measures an amount nobody knew in advance and offers
 an intent carrying it onward.
 
 ```js
 // Create a cross-chain intent from inside a Sauce program.
 //
-// This runs on one chain as part of an intent's route, measures what the calls before it left in
-// the Pot, and offers a NEW intent that carries that amount onward to another chain. The amount is
-// never known in advance — it is whatever the swap, bridge or transfer just before it produced —
-// which is the reason to build the intent here rather than off-chain.
+// This runs on your Pot, measures the USDC the calls before it left there, and offers a NEW intent
+// that carries that amount to `recipient` on another chain. The amount is never known in advance —
+// it is whatever the swap, bridge or transfer just before it produced — which is the reason to
+// build the intent here rather than off-chain.
 //
-// `Arbitrum.Portal.send({ ... }).receive().then(() => { ... })` is the whole of it: `send` names
-// the reward, and `then` what runs on Arbitrum. `amount` is an ordinary variable of this program,
-// and using it inside the intent is enough: the SDK splices its run-time value into the encoded
-// intent, and fills in the Portal's address, the prover, the approval and the encoding.
+// `Ethereum.Portal.send(reward).receive(delivery).then(() => { ... })` is the whole of it: the
+// reward this program escrows, what a solver delivers on Ethereum, and what runs there. `amount` is
+// an ordinary variable of this program and `recipient` one of its parameters, and using them in the
+// intent is enough: the SDK splices their run-time values into the encoded intent, and fills in the
+// Portal, the prover, the vault and the encoding. The intent names its creator, `refundTo`, where
+// its reward goes back if no solver fills it: a program's intent has no default creator. The
+// deadlines and the salt take their defaults.
 //
-// RECIPIENT is a compile-time `define` the caller supplies. `USDC` is a registered symbol, and
-// inside the braces it means Arbitrum's USDC, because that is the chain those calls run on. In
-// `.send(...)` it means the USDC of the chain this program runs on, which escrows the reward.
-function main() {
+// `USDC` is a registered symbol. In `.receive(...)` and the body it means Ethereum's USDC, because
+// that is the chain they run on. In `.send(...)` it means the USDC of the chain this program runs
+// on, which escrows the reward.
+//
+//   sauce run cross-chain-intent.sauce.ts --chain base --keystore <keystore> \
+//     --args <recipient> <minAmount> <refundTo>
+//
+//   recipient: Address   who the intent pays on Ethereum
+//   minAmount: Uint256   the least USDC worth forwarding, in its smallest units (6 decimals):
+//                        below it the whole transaction reverts and nothing is published
+//   refundTo: Address    who reclaims the reward if no solver earns it
+function main(recipient: Address, minAmount: Uint256, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
-  if (amount < MIN_AMOUNT) {
-    throw "cross-chain-intent: nothing to forward";
-  }
+  require(amount >= minAmount, "nothing to forward");
 
-  Arbitrum.Portal.send({ token: USDC, amount })
-    .receive()
+  Ethereum.Portal.send({ token: USDC, amount })
+    .creator(refundTo)
+    .receive({ token: USDC, amount })
     .then(() => {
-      USDC.transfer(RECIPIENT, amount);
+      USDC.transfer(recipient, amount);
     });
 }
 ```
 
 That is the whole program. What you did not have to do:
 
-- **Write or deploy a contract.** It compiles to bytecode that a Sauce engine runs in the shared
-  Pot the solver deploys.
-- **Import anything.** `USDC`, `Arbitrum` and `ctx` need no import line.
-- **Encode the intent.** No Portal address, prover, selector, approval or ABI encoding appears. The SDK
+- **Write or deploy a contract.** It compiles to bytecode that a Sauce engine runs in your Pot.
+- **Import anything.** `USDC`, `Ethereum` and `ctx` need no import line.
+- **Encode the intent.** No Portal, prover, selector, approval or ABI encoding appears. The SDK
   looks up the Portal and prover in its eco-routes deployment tables and emits the rest.
 - **Know the amount in advance.** `amount` is an ordinary variable, and the published intent
   carries the value the program measured.
-- **Roll back by hand.** Below `MIN_AMOUNT` the `throw` reverts the whole fulfilment: nothing is
-  published, and no earlier call in the route survives.
+- **Roll back by hand.** Below `minAmount` the `require` reverts the whole transaction: nothing is
+  published.
 
-Without Sauce, this hop is either a contract you write and deploy (read the balance, encode the
+Without Sauce, this step is either a contract you write and deploy (read the balance, encode the
 intent around the amount, ask the Portal for its vault, pay the reward into it, call `publish`) or
-a second intent you publish yourself after the first lands and you have read what it produced.
+a second transaction you build yourself after reading what the first produced.
 
-`USDC` is a registered token symbol, and inside the braces it means **Arbitrum's** USDC, because
-that is where those calls run. In `.send(...)` it means the USDC of the chain the program runs
-on — Base, in [the caller](docs/examples/cross-chain-intent.ts) — because the program escrows the
-reward there. `RECIPIENT` and `MIN_AMOUNT` are compile-time `defines`: a program captures nothing
-from the JavaScript around it, so defines are how application values reach one.
+`USDC` is a registered token symbol, and in `.receive(...)` and the body it means **Ethereum's**
+USDC, because that is where those run. In `.send(...)` it means the USDC of the chain the program
+runs on — Base, in the line above — because the program escrows the reward there. `recipient`,
+`minAmount` and `refundTo` are `main`'s parameters: they arrive with the transaction (`--args`), so
+one compiled program serves every call.
 
-You supply what the SDK cannot know once, on the enclosing intent, and every intent the program
-creates inherits it: a deadline, and the creator who may reclaim the reward if nobody earns it. The
-intent is an offer; a solver still decides to fill it. Arbitrum is a
-[preview chain](docs/README.md#supported-chains) for the initial release: the SDK builds this
-intent, and the `sauce` command and MCP server compile and rehearse it, but they publish intents
-only between Ethereum, Base and Solana.
-[docs/examples/cross-chain-intent.ts](docs/examples/cross-chain-intent.ts) is the caller, run on
-every release; [nested intents](docs/guides/nested-intents.md) covers cascades several hops deep.
+`.creator(refundTo)` is the refund address: who reclaims the reward if nobody earns it. A program
+names it for every intent it opens, since the Pot it runs on may be shared. Everything else has a
+default: the deadlines count from when the intent opens, the salt is random, and Ethereum's
+Kitchen fee, which a body that is a program pays, is read from Ethereum. Each has a modifier to set
+it ([Intent defaults](docs/reference/intent-defaults.md)). The intent is an offer; a solver still
+decides to fill it. [docs/examples/cross-chain-intent.ts](docs/examples/cross-chain-intent.ts)
+builds the same transaction from TypeScript, and runs on every release;
+[nested intents](docs/guides/nested-intents.md) opens one intent inside another's body, and covers
+cascades several hops deep.
 
 ## A program that calls protocols and tokens by name
 
 Inside a route body the SDK resolves token symbols and protocol contracts against the destination
 chain, so a program reads like the operation it performs. This example builds a complete intent
-offline; the repeated-digit addresses and the fee are fixtures and nothing is sent.
+offline; the creator and the fee are fixtures and nothing is sent.
 
 ```ts
 import { Base } from "@eco-incorp/sauce";
-import type { routes } from "@eco-incorp/sauce";
 
-const executionFee = 1_000n; // Read the destination Kitchen's executionFee() before use.
-const options: routes.IntentOptions = {
-  // No Pot or engine: both are derived. The Pot is the shared one the solver deploys per Portal.
-  execution: { value: executionFee },
-  nativeAmount: executionFee,
-  portal: "0x3333333333333333333333333333333333333333",
-  deadline: 2_000_000_000n,
-};
+const executionFee = 1_000n; // Fixture: read Base's Kitchen fee with destinationExecutionFee().
 
-const built = Base(() => {
-  USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
-}, options).reward({
-  source: "ethereum",
-  creator: "0x4444444444444444444444444444444444444444",
-  prover: "0x5555555555555555555555555555555555555555",
-  deadline: 2_000_003_600n,
-  nativeAmount: 0n,
-});
+const built = Base.Portal.send([])
+  .source("ethereum")
+  .creator("0x4444444444444444444444444444444444444444")
+  .receive([])
+  .fee(executionFee)
+  .then(() => {
+    USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+  });
 
 console.log(built.hash().intentHash);
 ```
+
+What the snippet leaves out, the SDK fills in from what it records: the eco-routes Portal on both
+chains, the prover for the pair, the destination Pot and engine, and the native amount the solver
+sends, which is the cook's fee, and the deadlines, counted from now. A modifier sets a deadline, the
+prover or the salt instead. What stays yours are the creator, the reward and the fee, which is
+on-chain state the destination's Kitchen sets: `destinationExecutionFee()` builds the read.
 
 Two kinds of name meet in that snippet. `Base` is a **named export**, one per chain; importing the
 package puts nothing on `globalThis`. `USDC` and `Uniswap` are **program syntax**: the SDK resolves
 them to Base's addresses and binds the ABI, so there is no address to look up and no JavaScript
 object to import. The callback is read as source text and never invoked, so it captures nothing;
-application values reach it through `defines`.
+an application value is written into it as a literal, or into a body written as a source string.
 
-`.reward(...)` completes the intent and returns its hashes, bytecode and the Portal transaction
+`.then(...)` completes the intent and returns its hashes, bytecode and the Portal transaction
 requests your application submits. [Quick start](docs/guides/quick-start.md) walks through it, and
 [protocols and tokens](docs/guides/protocols-and-tokens.md) covers the names available.
 
@@ -150,10 +174,10 @@ command and the server read the password from the source they are told about, so
 command-line argument or a tool input, and it never reaches the model's context:
 
 ```sh
-npx sauce wallet new agent --password-env SAUCE_WALLET_PASSWORD
-npx sauce run pay.sauce.ts --chain base --config sauce.config.json \
+sauce wallet new agent --password-env SAUCE_WALLET_PASSWORD
+sauce run pay.sauce.ts --chain base \
   --wallet agent --password-env SAUCE_WALLET_PASSWORD --args <recipient> 1000000
-npx -y @eco-incorp/sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD
+sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD
 ```
 
 An EVM wallet is a standard keystore that `cast wallet` and geth read too. A policy file beside a
@@ -162,21 +186,15 @@ coin and per token. These are hot wallets: keep small balances in them.
 [Agent wallets](docs/guides/cli.md#agent-wallets) covers the command, and
 [the MCP server's](docs/guides/mcp.md#agent-wallets) its tools. The HTTP server never signs.
 
-## What else is in the package
+## Where to go next
 
-| You want to                                         | Start at                                          |
-| --------------------------------------------------- | ------------------------------------------------- |
-| Build, fund and submit an intent                    | [Create an intent](docs/guides/intents.md)        |
-| Chain intents together, statically or at run time   | [Nested intents](docs/guides/nested-intents.md)   |
-| Generate programs from data instead of writing them | [Builders](docs/guides/builders-and-actions.md)   |
-| Compile a standalone program with runtime arguments | [Compiling programs](docs/guides/compiling.md)    |
-| Compile and run a program file from a terminal      | [The sauce command](docs/guides/cli.md)           |
-| Have a coding agent write and run programs          | [Agent skills](docs/guides/cli.md#agent-skills)   |
-| Give a coding agent Sauce's tools over MCP          | [The MCP server](docs/guides/mcp.md)              |
-| Give an agent a wallet of its own, with limits      | [Agent wallets](docs/guides/cli.md#agent-wallets) |
-| Execute on Solana                                   | [Solana](docs/guides/solana.md)                   |
-| Check what a settlement payload contains            | [Verification](docs/guides/verification.md)       |
-| Know which protocols, tokens and chains are wired   | [Coverage](docs/api/coverage.md)                  |
+- [Documentation](docs/README.md): every guide and reference page, one line each.
+- [Quick start](docs/guides/quick-start.md): build a first intent, offline.
+- [The sauce command](docs/guides/cli.md): compile, rehearse, run and publish from a terminal.
+- [Agent skills](docs/guides/skills.md): the skills that teach a coding agent to write and run
+  programs, beside [the MCP server](docs/guides/mcp.md).
+- [Chains](docs/reference/chains.md), [protocols](docs/reference/protocols.md) and
+  [tokens](docs/reference/tokens.md): what a program can name, and where.
 
 The SauceScript compiler ships inside this package; there is no separate install and no compiler
 checkout. [Architecture](docs/concepts/architecture.md) explains how the pieces fit,

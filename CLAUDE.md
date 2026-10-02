@@ -55,7 +55,7 @@ pnpm lint           # eslint, whole repo
 pnpm lint:fix       # ...with --fix
 pnpm format         # prettier --write, whole repo
 pnpm format:check   # prettier --check, what CI runs
-pnpm docs:check     # manual links, README snippet, and executable examples; build first
+pnpm docs:check     # manual links and shape, README snippet, executable examples, executed.json; build first
 pnpm skills:check   # the agent skills: programs, command lines, runners, wording; build first
 ```
 
@@ -72,6 +72,22 @@ module import. Prettier's list is different and narrower — generated output (`
 the two `settle.sauce.ts` recipes) and captured fixtures. Everything else, SauceScript included, is
 formatted; `.prettierrc.json` names the `typescript` parser for `sdk/src/std`, whose `.js` files
 carry type annotations Prettier's default parser rejects.
+
+**SauceScript in an editor.** The root `tsconfig.json` builds nothing: it is the project an editor
+opens every `*.sauce.ts` of the repository in — skills, docs, recipes, fixtures — the project
+`sauce init` writes into `programs/` (`sauceScriptTsconfig` in `sdk/src/cli/skills.ts`), with the
+declarations from `sdk/dist/sauce-script` (so build first) and the plugin from the SDK workspace,
+which pnpm links into `node_modules/.pnpm/node_modules` beside the workspace TypeScript. The plugin
+loads only when the editor runs that TypeScript (VS Code: "Use Workspace Version"); without it the
+types still apply and the false positives it drops show. `sdk/tsconfig.json` excludes
+`src/**/*.sauce.ts`, and tsserver (TypeScript 5.6 and later) goes on up to the root project for a
+file its nearest tsconfig does not include; the runners and the docs' `.ts` examples keep their
+inferred project. `pnpm docs:check` asks tsserver for each tracked program's project and
+diagnostics (`checkRepositoryEditor` in `sdk/scripts/check-editor.mjs`), and
+`sdk/test/sauce-script.test.ts` holds every program the root tsconfig lists to the declarations
+built from source. `sauce skills install` writes the same project, naming the installed package,
+beside the skills (`packaged` in `skills.ts`), and the packed check opens the installed programs
+in tsserver there.
 
 Per-workspace (`--filter`):
 
@@ -107,7 +123,24 @@ actions document through `compile`/`tx` via the built bin's `runCli` (here, not 
 because the command loads `actions/dist`, which CI builds after the SDK's tests).
 `names.mainnet` (`test:mainnet`) executes one chain-agnostic document — symbols, namespaces, pools by
 key — on Ethereum, Base and Avalanche state, against the same trade by address, and through
-`sauce run`.
+`sauce run`. `holdings.mainnet` (`test:mainnet`) runs the `sauce-chains` skill's
+`holdings.sauce.ts` as its header's `sauce simulate` line says, on Ethereum and Base state, and
+holds what it returns to each chain's own pool and the balances the Pot was given.
+`docs-examples.mainnet` (`test:mainnet`) executes the manual's router, venue and README examples
+(`docs/examples/router-route`, `router-swap`, `venue-where-deployed`, `cross-chain-intent`) as their
+runners build them, IMPORTING the runners for their exact bytes, and runs the `sauce run` usage
+line of each that has one as written, through `runCli`, on Ethereum, Base and OP Mainnet state;
+each output is held to the venues' own quotes, and `cross-chain-intent`'s published intent to Base's
+own Portal. Importing a runner is why `actions/tsconfig.json` sets
+`rootDir: ".."`: the runners import `@eco-incorp/sauce` by its own name, a self-reference
+TypeScript resolves only with a root; `tsconfig.build.json` pins its own `rootDir` to `src`, so the
+build's output does not move.
+`examples-cookbook.mainnet` (`test:mainnet`) runs every EVM program of the `sauce-examples`
+skill's own cookbook through `sauce simulate` and `sauce run` on Ethereum and Base state, its
+results held to Uniswap's QuoterV2, the feed, Aave's account data and the recipients' balances, and
+its cross-chain cascade filled hop by hop with `sauce intent fill` (Ethereum's eco-routes Portal
+postdates the pinned block, so the v2.12.0 fixture is planted there; Base's is the deployed one).
+The cookbook's Solana program runs in `sdk/test/examples-cookbook-solana.e2e.test.ts`.
 After changing an action's fields in `actions/src/spec.ts`, run `pnpm --filter './actions'
 gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.json` is stale.
 
@@ -164,22 +197,27 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   `./artifacts/*.json` fail. Run `pnpm --filter './sdk' sync-engine-artifacts`.
 - **Mainnet state (`actions/tests/state/*.genesis.json.gz`)** — no test forks a live chain. The
   actions mainnet suites replay a chain at its pinned block (`CHAINS` in `actions/tests/mainnet.ts`:
-  Ethereum at `PINNED_BLOCK` 26,070,000, Base at 51,966,000, Avalanche C-Chain at 96,424,000) from
+  Ethereum at `PINNED_BLOCK` 26,070,000, Base at 51,966,000, Avalanche C-Chain at 96,424,000, OP
+  Mainnet at 157,600,000) from
   one gzipped anvil genesis per suite: every account and storage slot that suite read, at their
   values in that block. Replay pins the block number, its timestamp, the chain id and the chain's
-  block interval (12 s on Ethereum, 2 s on Base and Avalanche — WOOFi's oracle goes stale 120 s
+  block interval (12 s on Ethereum, 2 s elsewhere — WOOFi's oracle goes stale 120 s
   after its last post), refuses to fork, and makes any non-loopback `fetch` throw, so a suite that
   starts reading something new FAILS (a missing slot reads as zero) rather than reaching the
   network. Blob sizes at capture: actions ~680 KB, quote ~270 KB, split-swap ~80 KB, the swap
   venue suites `swap` (Ethereum) ~110 KB, `swap-base` ~90 KB, `swap-avalanche` ~30 KB, and the names
-  suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB.
+  suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB,
+  `holdings-{ethereum,base}` ~30 KB each, the docs examples suite's three (`docs-examples`,
+  `-base`, `-optimism`) ~80, ~35 and ~25 KB, and the cookbook's two
+  (`cookbook-{ethereum,base}`) ~135 KB each.
 
   **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
   pinned block (then recapture every suite on that chain, and revisit every pinned figure: pools,
   strategy ids, the live Rocket Pool deposit pool, expected outputs). The RPC comes from one file,
   `sdk/rpc.config.json` (gitignored; chain id -> URL, the file `capture-registry-abi.mjs` reads),
   never from the environment, and it must serve state at the pinned block; public RPCs that did at
-  capture time: `eth.drpc.org`, `mainnet.base.org`, `api.avax.network/ext/bc/C/rpc`.
+  capture time: `eth.drpc.org`, `mainnet.base.org`, `api.avax.network/ext/bc/C/rpc`,
+  `mainnet.optimism.io`.
 
   ```sh
   pnpm --filter './actions' capture-mainnet                      # every suite
@@ -337,7 +375,8 @@ repository's documentation is not an independent correctness check.
 **The language reference is held to the compiler, and there is one.**
 `skills/sauce-script/references/builtins.md` (the SauceScript reference) and its `builtins.json`
 (every builtin, with an example program per target and the error on a target that lacks it) are the
-`sauce-script` skill's reference and the manual's: `docs/` links to them rather than keeping a copy.
+`sauce-script` skill's reference and the manual's: the build renders `builtins.md` byte for byte as
+`docs/reference/saucescript.md` (see "The manual renders the same facts" below), so edit the skill's.
 `pnpm skills:check` (`sdk/scripts/skills-check/builtins.mjs`) holds them: every builtin example
 compiles on each target it lists, every table example compiles on each target its row claims, and
 every error the page quotes (`…` and `N` as wildcards) is produced by a rejected program — a
@@ -441,7 +480,12 @@ a contract upgrade to look at, not noise.
 
 **Every token-registry row is pinned to the chain, offline, and the stock tokens come from their
 issuers.** `test/token-registry-evidence.test.ts` checks each EVM row of `TOKEN_REGISTRY` against
-`test/fixtures/token-registry/evidence.json`: code at the address, `symbol()` and `decimals()`.
+`test/fixtures/token-registry/evidence.json`: code at the address, `symbol()` and `decimals()`; and
+each mainnet-beta mint of `SVM_TOKEN_REGISTRY`, under Solana's chain id 1399811149: its owner is the
+row's `tokenProgram`, it is initialized, has the row's decimals and its metadata symbol (the mint's
+own TokenMetadata, else Metaplex's), a checked transfer of it is refused for nothing
+(`resolveSvmToken`'s `transferRefusals`: no hook program, no pause, no frozen default), and it
+charges a transfer fee exactly when its issuer's `STOCK_ISSUERS` entry says `transferFee`.
 `node scripts/capture-token-registry.mjs --recapture --rpc-config rpc.config.json [--chains <id>,…]`
 (from `sdk/`, no build needed) writes it, reading endpoints only from that file, as the registry-ABI
 capture does. A row added without recapturing fails the test. The tokenized stocks (Backed's
@@ -455,9 +499,18 @@ precompiles of the Base node whose account holds the single byte `0xef`: anvil c
 (`OpcodeNotFound`), so no execution suite may depend on one; the evidence reads them through
 `eth_call` on the live chain, and `--assume-balance` refuses one by that code. Ondo's rows are the
 registry page's that Ondo's app lists (`app.ondo.finance/api/v2/assets`), which leaves out a token
-not launched yet. Solana's tokenized stocks are all Token-2022 mints and are not registered (the SVM
-token arm takes classic SPL Token only). `sauce globals` and `sauce_globals` count a chain's stocks
-by default; `--stocks`/`stocks` lists them and `--search`/`search` finds one.
+not launched yet. On Solana the stocks are Token-2022 mints (`SVM_STOCK_TOKENS`, merged into
+`SVM_TOKEN_REGISTRY["mainnet-beta"]` with `tokenProgram` Token-2022): Backed's Solana list, Ondo's
+`solAddr` column, Backpack's `<ticker>.US` assets it takes deposits of (its list carries mints it
+has not opened; the evidence holds each copied one to a supply above zero) and PreStocks' product
+page. Backpack's symbol is `NVDA_US` while the mint's metadata says `NVDA` (the row's ticker, which
+the evidence checks); PreStocks' mints charge a transfer fee. Superstate is left out (allowlisted
+holders only). `sauce globals` and `sauce_globals` count a chain's stocks by default;
+`--stocks`/`stocks` lists them and `--search`/`search` finds one. `sauce pot` on Solana reads the
+Pot's account for every registered mint but the stocks. Every compile hands the chain's token map to
+the compiler as defines, so a chain with a thousand stocks costs about 2 ms more per compile (Ethereum
+and Solana alike); that goes away with the compiler's lazy `declare` (v12 #550), and the SDK does not
+scan program text to trim it.
 
 `src/std/` is the SauceScript **standard library** — source shipped for the compiler to consume, not
 TypeScript. `src/std/token/` is `@sauce/token` (an ERC20/SPL token interface behind one import), and
@@ -726,9 +779,23 @@ an intent the file opens resolves its body on its own chain) — and no encoder 
 `validateSettleProgram`/`verifySvmSettleExecution`, and Solana cooks `createSauceSvmClient`
 (`cookTransaction`). It is Node-only and deliberately in no `exports` entry and no barrel
 (`cli.test.ts` fails if a barrel exports it), reads no environment but the variable `--password-env`
-names, reaches a network only through `--rpc-url` or a `--config` file, and signs only with
+names, reaches a network only through `--rpc-url`, a `--config` file's entry for the chain, or
+else the built-in public endpoints (none with `--offline`) — and `sauce update`, its one other
+network access, the npm registry, read only when that command runs (no background or automatic
+update check; `no-embedded-rpc.test.ts` holds the registry to `update.ts`) — and signs only with
 `--wallet`, `--keystore`, `--private-key` or `--keypair`, scrubbing any key or password it was given
-from everything it prints. `run --fund` (`funding.ts`)
+from everything it prints. **The public endpoints are the one exception to "the package ships no
+RPC URL"** (the user's call: nobody should need a config to run the CLI or the MCP server). They
+live in exactly one module, `sdk/src/cli/public-rpcs.ts` (1–3 keyless endpoints per canonical chain,
+each flagged for `eth_simulateV1`, with the date they were checked), and nothing outside
+`sdk/src/cli/` may import it; `no-embedded-rpc.test.ts` allows that file alone and fails an import
+from anywhere else or an export that reaches `cli/`, so it never reaches a browser.
+`public-endpoints.ts` hands each chain to the command's clients as one loopback URL (like the MCP
+guard's forwarder) that falls back through the list on a network error, a timeout, 401, 403, 429 or
+5xx, keeps to the endpoint that answered, and sends `eth_simulateV1` only where it runs. The
+executable (`main.ts`) creates it and puts it on `CliIo.publicRpcs`; an in-process `runCli` without
+it (every test, the skills checker) reads no chain it is not given, so CI stays offline.
+`sdk/scripts/check-public-rpcs.mjs` re-verifies the list live, by hand, never in CI. `run --fund` (`funding.ts`)
 wraps the file's source before that compile — a new `main` with the same signature that pulls
 through `@sauce/token` (`permitTransferFrom`, `permit`, `transferFrom`), calls the original
 renamed, and sweeps; in a script, the pulls after its imports and the sweeps after its last
@@ -740,8 +807,9 @@ through a JSON-RPC shim; the packed check runs the installed bin through `npx`. 
 `sauce skills` installs (to `.claude/skills/` and `.agents/skills/`) live in the top-level
 `skills/<name>/` and ship in the package (see "Agent skills" below).
 
-What a command's input MEANS — the chain a program runs on, whether its defines reach it, the Pot a
-cook names, its funding and assumed balances — lives in `inputs.ts`, taking plain values, so a
+What a command's input MEANS — the chain a program runs on, whether its defines reach it, `main`'s
+arguments bound into the intents a wallet publishes, the Pot a cook names, its funding and assumed
+balances — lives in `inputs.ts`, taking plain values, so a
 second front end applies the same rules: `run.ts` reads flags into it, and the MCP server reads
 tool arguments into it.
 
@@ -771,7 +839,8 @@ No tool takes a key or a password under any name (`tools.test.ts` and `wallets.t
 input that looks like one), and the server reads no environment. It signs only over stdio, started
 with `--wallets [dir]` and a password source (`mcp/src/wallets.ts`, see "Agent wallets"); without
 them, and always over HTTP, it never signs. A tool reads a chain through the call's own `rpcUrl`, else the
-`--config` endpoint, else refuses (`reach.ts`); a caller's URL is a secret for that call only, and
+`--config` endpoint, else the public endpoints `sauce mcp` hands it (`Endpoints.public`, saying so in
+the result's notes), else refuses (`reach.ts`); a caller's URL is a secret for that call only, and
 the server's are registered with `signer.ts#secret` at start — all scrubbed from every result,
 error and log (`secrets.test.ts`). Over HTTP a caller's URL goes only through `guard.ts`: https,
 no private/ULA/link-local/CGNAT/metadata address, checked again at each connection (rebinding),
@@ -852,9 +921,9 @@ beside `refused`, because a client validates an error's structured content too. 
 `.github/ISSUE_TEMPLATE/chain-support.yml`, its field ids held to `CHAIN_SUPPORT_FIELDS` by
 `cli-chain-support.test.ts`; `cli-support.test.ts` and `mcp/test/support.test.ts` hold every gated
 path to its refusal before any request. To support a chain, add its slug, rebuild (the skills'
-chain references regenerate from the list), and update `docs/README.md#supported-chains` and the
-skills that name the three. A test that builds or sends a transaction through the CLI or MCP uses a
-supported chain.
+chain references and the manual's `docs/reference/chains.md` regenerate from the list), and update
+the README, the manual's pages and the skills that name the three (`git grep "Ethereum, Base"`). A
+test that builds or sends a transaction through the CLI or MCP uses a supported chain.
 
 ## Agent skills
 
@@ -891,6 +960,27 @@ them, `references/`.
   carries compiled examples; CI fails when the build changed `skills/`, and `skills:check` fails a
   stale or orphaned generated file, so commit the regenerated files with any registry change
   (`pnpm --filter './sdk' gen-skills-references`). Change their prose in the generator.
+- **The manual renders the same facts, and never links the skills.** The same generator, from the
+  same data, writes `docs/reference/` for a human reader: `chains.md` (the release's support and
+  every chain) and `chains/<chain>.md`/`<chain>-stocks.md`, `protocols.md` (by category, the family
+  aliases, the interfaces) and `protocols/<slug>.md` (the registry facts with the protocol's
+  hand-written document folded in, its `Category` and `Deployments and ABI` sections left out),
+  `tokens.md` (every chain's tokens, `sauce-globals`' "Tokenized stocks" section, the stocks by
+  issuer, the token functions) and `saucescript.md` (`sauce-script/references/builtins.md`, byte for
+  byte); and, outside it, `docs/guides/distributed-swap.md`, the `sauce-distributed-swap` skill
+  rendered as a guide (its example's whole file in place of the code the skill quotes). The two
+  renderings differ only in links: a skill names a skill (`sauce-swaps`), and the
+  manual links the page covering it (`DOCS_FOR_SKILL`), so a fact has one source and a reader is
+  never sent into `skills/`, nor an agent into `docs/`. `docs/reference/` is generated whole (a page
+  written there by hand is removed: hand-written reference pages belong in `docs/api/`), committed,
+  prettier-ignored, and held like the skills' references: CI fails when the build changed it, and
+  `docs:check` when it is stale. `docs:check` also holds the manual's shape: no link or path from the
+  README or `docs/` into `skills/`; every page a list entry of `docs/README.md` (its link, then one line)
+  exactly once (the per-chain and per-protocol pages are reached from their indexes); no page other
+  than an index with more than 3 links per 100 words; and `docs/guides/skills.md`'s table naming
+  exactly the skills on disk. A fact an agent needs goes in a skill (or the generator), and the
+  manual renders it; a fact only a reader of the manual needs (TypeScript, the MCP server's
+  operation) is written once, in the manual.
 - **The actions reference is generated too.** `sdk/scripts/gen-skills-actions.mjs` renders
   `skills/sauce-actions/references/actions.md` (every action and field) from the committed
   `actions/action-program.schema.json`, in the same `build` step; regenerate the schema after a
@@ -899,20 +989,43 @@ them, `references/`.
   first) runs in CI after `docs:check`, and the packed check reruns it (`--skills <dir>`) on the
   copy `sauce skills install` writes into a project from the tarball — a project, because Node does
   not strip TypeScript from a runner under `node_modules`. It holds: the frontmatter to the spec; the `sauce-examples` index
-  to the example files on disk, both ways; every program compiled through the `sauce` bin
-  (in-process `runCli`) on each chain its index row names, running the `//   sauce …` usage line in
-  its header offline (`compile`, then `tx` with `main`'s arguments sampled from its declared types);
+  to the example files on disk, both ways; the `sauce-overview` skill map (one
+  ``### `sauce-<name>` `` entry each under "The skill map") to the skill directories, both ways,
+  so a new or renamed skill fails until the map says what it holds and when to load it; every
+  program compiled through the `sauce` bin (in-process `runCli`) on each chain its index row
+  names, running the `//   sauce …` usage line in its header offline (`compile`, then `tx` with `main`'s arguments sampled from its declared types);
   every actions document (`.json`, no `chainId`) lowered through `sauce actions` on each chain its
   row names, its cook built by `tx`, and ` ```json chain=a,b ` blocks lowered (` ```json fails `
   refused);
   every `sauce …` command line in a skill to the flags that command's `--help` lists; ` ```sauce
 chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refused;
   ` ```ts ` blocks and runners typechecked, and runners executed with
-  `skills-check/offline-guard.mjs` preloaded; the globals index fresh, compilable and covering
+  `skills-check/offline-guard.mjs` preloaded, importing nothing but the package, viem and `node:*`
+  (`RUNNER_PACKAGES`: pnpm does not hoist the package's own dependencies, so a project the skills
+  are installed in resolves only its own — `sauce init` writes the package, viem at the version
+  installed beside it, and `@types/node` — which the packed check proves in a project of exactly
+  what `init` wrote, with a probe that must not resolve `@solana/kit`; re-export what a runner
+  needs from a subpath, as `svm/kit.ts` does); the globals index fresh, compilable and covering
   every name a program uses; the SauceScript reference
   (`sauce-script/references/builtins.{md,json}`, with `skills-check/builtins*.mjs`) to the
   compiler; every ```sauce block in a skill's `references/` compiled like its own; every relative
-  link resolving to a file inside the skills directory; and the wording rules below. Its exceptions
+  link resolving to a file inside the skills directory; every example program either executed by a
+  suite CI runs or listed as compile-only, with why, in `skills-check/executed.json` (the rules are
+  `docs/scripts/example-programs.mjs`'s, shared with `docs:check`, which holds
+  `docs/examples/executed.json` to them with no compile-only list; both skip on the installed
+  package, where the suites are absent); every example program, in the skills and in
+  `docs/examples`, writing what the registry names by its name — no `0x` literal of a token or
+  contract address `routes.sourceGlobals` names on any EVM chain, and no hand-built `hex` selector
+  of a function a namespace binding, interface or registry ABI declares (comments are exempt, so a
+  usage line may show an address; a deliberately low-level call is a `LOW_LEVEL_CALLS` entry, per
+  example and selector, with its reason); every value an example program reads having a visible
+  source — a name it never declares must be the registry's (`routes.sourceGlobals` on any chain),
+  the language's (a builtin root from `builtins.json`, or `available`, `Token`, `self`), an import,
+  a local or a parameter, so an input is a `main` parameter given with `--args` and never an
+  undeclared define, which is the SDK's mechanism and not a user's (an exception is an
+  `INPUT_EXCEPTIONS` entry, per example and name, with its reason; the intent files waiting on
+  `sauce intent publish --args` are listed there, and `docs:check`'s `EXECUTION_EXCEPTIONS` excuses
+  the two not yet executed); and the wording rules below. Its exceptions
   live in the checker, never as markers in a
   shipped skill (they mean nothing to the agent reading it): a name inline code may use although
   the package never declares it (an external contract's function) is an `UNDECLARED_NAMES` entry,
@@ -924,9 +1037,28 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   `sauce-intents`; no RPC endpoint; Sauce never described as a multicall; no pointer into the
   package's docs (`node_modules/@eco-incorp/sauce/...`, `docs/guides/...`) outside
   `sauce-typescript`, because a skill carries every fact it needs in its `SKILL.md` and
-  `references/`. The protocol documents are third-party facts and are exempt from the address,
-  Portal and multicall rules only; the generated references are exempt from the Portal rule (a
+  `references/` (an agent may have only the skills, served by the MCP server). The protocol
+  documents are third-party facts and are exempt from the address, Portal and multicall rules only; the generated references are exempt from the Portal rule (a
   chain's file records its eco-routes deployment).
+- **Plain integers, enforced.** SauceScript a reader sees writes `3000`, never `3000n`: the
+  compiler reads a literal from its text as a 256-bit integer, so both are the same program
+  (`sdk/test/integer-literals.test.ts`, both targets), and agents copy whichever they are shown.
+  `docs/scripts/integer-literals.mjs` is the rule; `skills:check` applies it to the example
+  programs, ` ```sauce ` blocks, references (generated ones included), `builtins.json`'s programs
+  and the protocol documents' ` ```typescript ` templates, and `docs:check` to
+  `docs/examples/*.sauce.ts`, the manual's ` ```js ` fences and every fence of a page generated
+  from the skills (`docs/reference/`, which renders SauceScript as ` ```ts `). TypeScript host
+  code (runners, ` ```ts ` blocks, a closure in a `.ts` file) keeps the `n`: there tsc types the
+  literal. An exception is a checker's `INTEGER_EXCEPTIONS`, with its reason. The SDK folds an
+  intent's literals itself (`intent-body.ts#literalValue`), from the literal's text, so a plain
+  one past 2^53 is exact there too. A quoted compiler message keeps its words
+  (``write `i += 1n` ``). What the SDK writes for a reader is plain too: the intent file that
+  `sauce intent publish` writes, and the lowering `sauce actions` prints (with `token/safe`'s
+  checked writes, which the settle recipe quotes). The command's token amounts (`--fund`,
+  `--assume-balance`, a wallet policy, MCP `fund`/`assumeBalance`) are the other way round from a
+  program: whole tokens (`USDC:1.5`), a bare integer included, and base units only with a trailing
+  `n` (`USDC:1500000n`). A bare integer at or above 10^decimals (`USDC:1500000`) is said to be 1.5
+  million in a note, which names the `n` spelling (`funding.ts#baseUnits`, `policy.ts#amountOf`).
 - **Execution-agnostic.** Not every agent has the SDK installed: some have only the `sauce` CLI, or a
   remote compiler, and sign by local means. Every skill but `sauce-cli` (the CLI) and
   `sauce-typescript` (the SDK) teaches the program, what compiling for a chain produces (bytecode,
@@ -934,8 +1066,12 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   `sauce tx`'s unsigned JSON as the hand-off to any signer. Runners may use the SDK to pin facts;
   the `SKILL.md` must not depend on them.
 - **Program conventions.** A program names no chain (`--chain <chain>` in its usage line, no
-  `// @chain` header): runtime inputs are typed `main(...)` parameters passed with `--args`, and an
-  intent file is top-level statements whose values are defines left undeclared.
+  `// @chain` header), and every input it takes is a typed `main(...)` parameter passed with
+  `--args`, an intent file's included: `sauce intent publish`, `intent fill` and `inspect` (and the
+  MCP tools' `args`) bind them into the intents as constants (`inputs.ts#bindMainArguments`, over
+  `routes/entry.ts#bindEntryArguments`; `compileSauceProgram`'s `args`). A compile-time define is
+  the SDK's own mechanism: `--define`/`--defines` stay as the low-level flags `--help` lists apart,
+  and no skill, doc, example or usage line teaches them.
 - **They describe this tree, and their runners pin it.** Where the SDK's behaviour shapes how a
   skill tells agents to write something, a runner asserts that behaviour, so the change that moves
   it fails `skills:check` and the skill is rewritten with it. Today that covers, among others: on

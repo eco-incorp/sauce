@@ -253,6 +253,14 @@ export function formatAmount(
   return `${formatUnits(amount, info.decimals)} ${symbol}`;
 }
 
+/** A whole-token amount in words: `1500000` is "1.5 million". */
+export const wordsOf = (whole: string): string =>
+  new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    compactDisplay: "long",
+    maximumSignificantDigits: 6,
+  }).format(Number(whole));
+
 /** An address with what it is, when that is known: `0x… (the Pot)`. */
 export const labelled = (labels: ReadonlyMap<string, string>, address: Address): string => {
   const label = labels.get(getAddress(address));

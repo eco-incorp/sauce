@@ -1,6 +1,6 @@
 # Camelot
 
-> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
 
 Native Arbitrum DEX with dual AMM: V2 constant product pools (with native fee-on-transfer token support) and V3 concentrated liquidity pools (Algebra-based with dynamic fees, no fixed fee tiers).
 
@@ -20,7 +20,7 @@ dex | Chains and addresses: [registry/camelot.md](registry/camelot.md)
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### swapV2
 
@@ -84,7 +84,7 @@ function main(
 
 - `routerAddress`: Camelot V3 SwapRouter on Arbitrum
 - No `fee` parameter needed: Camelot V3 uses dynamic fees (Algebra-based), not fixed fee tiers
-- `limitSqrtPrice`: `0` in this template, no price limit, so `amountOutMin` is the only bound. Camelot V3 is an Algebra pool, which the Sauce Router's `swapV3` drives with a real limit (`sauce-swaps`)
+- `limitSqrtPrice`: `0` in this template, no price limit, so `amountOutMin` is the only bound. Camelot V3 is an Algebra pool, which `@sauce/router`'s `uniswapV3` drives with a real limit through the Pot's Router (`sauce-swaps`)
 
 ### addLiquidity
 

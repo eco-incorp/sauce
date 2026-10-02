@@ -1,9 +1,10 @@
 /**
  * The SauceScript declarations an editor loads for a program file, and the plugin beside them,
  * through a real TypeScript language service set up as `sauce init`'s `programs/tsconfig.json`
- * sets it up: every program the package ships, and the three an agent wrote in a project of its own
- * (copied unchanged into `fixtures/sauce-script/demo`), check with no error at all — and a real
- * mistake in one still does not.
+ * sets it up: every program in the repository — those the package ships, the three an agent wrote
+ * in a project of its own (copied unchanged into `fixtures/sauce-script/demo`), the fixtures — as
+ * the repository's tsconfig.json lists them, checks with no error at all, and a real mistake in one
+ * still does not.
  *
  * The declarations are built here from the sources, as `scripts/gen-sauce-script-types.mjs` builds
  * them into `dist/`; the packed check runs the shipped ones, in an editor's own tsserver.
@@ -24,7 +25,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
-import { sauceScriptTsconfig } from "../src/cli/init.js";
+import { sauceScriptTsconfig } from "../src/cli/skills.js";
 import { sauceScriptDeclarations } from "../src/sauce-script/declarations.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -42,17 +43,29 @@ const plugin = createRequire(import.meta.url)("../sauce-script/ts-plugin.cjs") a
 const programs = (dir: string): string[] =>
   readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
-    if (statSync(path).isDirectory()) return name === "node_modules" ? [] : programs(path);
+    if (statSync(path).isDirectory()) {
+      return name === "node_modules" || name === "dist" || name.startsWith(".")
+        ? []
+        : programs(path);
+    }
 
     return name.endsWith(".sauce.ts") ? [path] : [];
   });
 
-/** Every program the package ships, and the agent's three. */
-const CORPUS = [
-  ...programs(join(ROOT, "skills")),
-  ...programs(join(ROOT, "docs")),
-  ...programs(join(HERE, "fixtures/sauce-script/demo")),
-];
+/** Every program in the repository, as its tsconfig.json — the project an editor opens them in —
+ *  lists them: those the package ships (skills, docs, recipes), the agent's three, the fixtures. */
+const CORPUS = ts
+  .getParsedCommandLineOfConfigFile(
+    join(ROOT, "tsconfig.json"),
+    {},
+    {
+      ...ts.sys,
+      onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
+        throw new Error(ts.flattenDiagnosticMessageText(diagnostic.messageText, " "));
+      },
+    },
+  )!
+  .fileNames.filter((file) => file.endsWith(".sauce.ts"));
 
 let work: string;
 let declarations: string;
@@ -122,7 +135,14 @@ const textOf = (paths: readonly string[]): Record<string, string> =>
   Object.fromEntries(paths.map((path) => [path, readFileSync(path, "utf8")]));
 
 describe("SauceScript in an editor", () => {
-  it("checks every shipped program, and the agent's three, with no error", () => {
+  it("types every program in the repository: its tsconfig.json claims each one", () => {
+    expect([...CORPUS].sort()).toEqual(programs(ROOT).sort());
+    for (const dir of ["skills", "docs", "sdk/src/recipes", "sdk/test/fixtures/sauce-script"]) {
+      expect([dir, CORPUS.some((file) => file.startsWith(join(ROOT, dir)))]).toEqual([dir, true]);
+    }
+  });
+
+  it("checks every program in the repository, the agent's three among them, with no error", () => {
     expect(CORPUS.length).toBeGreaterThanOrEqual(14);
     const checked = service(textOf(CORPUS));
     expect(CORPUS.flatMap((file) => report(checked, file))).toEqual([]);
@@ -133,12 +153,69 @@ describe("SauceScript in an editor", () => {
     const bare = service(textOf(CORPUS), false);
     const left = CORPUS.flatMap((file) => bare.getSemanticDiagnostics(file));
     expect(left.length).toBeGreaterThan(0);
-    // Each is a bigint index, a number beside a bigint, or an undeclared define — and the plugin
-    // says so of every one.
+    // Each is a bigint index or a number beside a bigint — and the plugin says so of every one.
     for (const diagnostic of left) {
-      expect([2538, 2365, 2367, 2322, 2345, 2304, 2552]).toContain(diagnostic.code);
+      expect([2538, 2365, 2367, 2322, 2345]).toContain(diagnostic.code);
       expect(plugin.isFalsePositive(diagnostic, ts.flattenDiagnosticMessageText)).toBe(true);
     }
+  });
+
+  it("takes an account beside a number for its address beside a number", () => {
+    const file = join(work, "account.sauce.ts");
+    const files = {
+      [file]:
+        "const SPL_TOKEN = 0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9;\n" +
+        'function main(program: Account<Writable>) {\n  require(program == SPL_TOKEN, "not SPL");\n}\n',
+    };
+    expect(
+      service(files, false)
+        .getSemanticDiagnostics(file)
+        .map((d) => d.code),
+    ).toEqual([2367]);
+    expect(report(service(files), file)).toEqual([]);
+  });
+
+  // TypeScript infers `number` for a plain literal, and the plugin takes it as the integer it is.
+  const plain = (name: string, source: string) => {
+    const file = join(work, `${name}.sauce.ts`);
+    const files = { [file]: source };
+    const bare = service(files, false)
+      .getSemanticDiagnostics(file)
+      .map((d) => d.code);
+
+    return { bare, shown: report(service(files), file) };
+  };
+
+  it("takes a plain integer wherever a bigint goes, either way round", () => {
+    const { bare, shown } = plain(
+      "plain",
+      "function half(x: number): Uint256 { return x / 2; }\n" +
+        "function main(a: Uint256): Uint256 { return half(a) + 1; }\n",
+    );
+    expect(bare).toEqual([2322, 2365, 2345]);
+    expect(shown).toEqual([]);
+  });
+
+  it("takes a local that starts at 0 and is later given a contract's result", () => {
+    const { bare, shown } = plain(
+      "zeroed",
+      "function main(): Uint256 {\n  let pool = 0;\n" +
+        "  pool = UniswapV3.Factory.getPool(USDC, WETH, 500);\n  return pool;\n}\n",
+    );
+    expect(bare).toEqual([2322, 2345, 2322]);
+    expect(shown).toEqual([]);
+  });
+
+  it("takes a ternary that defaults to 0, whatever it then meets", () => {
+    const { bare, shown } = plain(
+      "ternary",
+      "function main(a: Uint256, to: Address): Uint256 {\n" +
+        "  const rest = a > 5 ? a - 5 : 0;\n" +
+        "  USDC.transfer(to, a > 7 ? a : 0);\n" +
+        "  return Math.mulDiv(a, rest, 10000) - rest + (a > 1 ? a : 0);\n}\n",
+    );
+    expect(bare.length).toBeGreaterThan(0);
+    expect(shown).toEqual([]);
   });
 
   it("checks every builtin's example in the SauceScript reference with no error", () => {
@@ -151,7 +228,9 @@ describe("SauceScript in an editor", () => {
       reference.intrinsics.flatMap(({ name, example }, index) =>
         Object.entries(example).map(([target, text]) => [
           join(work, `builtin-${index}-${target}.sauce.ts`),
-          `// ${name} (${target})\n${text}\n`,
+          // `ERC20` is the reference's name for an ERC-20 ABI a program imports, as its checker
+          // binds it (`skills-check/builtins.mjs`).
+          `// ${name} (${target})\n${/\bERC20\b/.test(text) ? 'import ERC20 from "./artifacts/IERC20.json";\n' : ""}${text}\n`,
         ]),
       ),
     );
@@ -200,6 +279,8 @@ describe("SauceScript in an editor", () => {
         missing,
       ],
       ["lowercase", "function main() { require(recipent != 0n); }\n", [2304, 2552]],
+      // An input is main's parameter: a name never declared shows whatever its case.
+      ["uppercase", "function main() { require(MIN_AMOUNT > 0n); }\n", [2304, 2552]],
       ["require", "function main() { require(); }\n", [2554]],
       [
         "router",

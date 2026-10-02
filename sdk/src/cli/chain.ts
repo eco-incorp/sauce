@@ -3,8 +3,9 @@
  * Kitchen's fee, a Pot's state, a dry run, and a transaction sent and waited for — with a revert
  * reported as its decoded reason rather than as viem's error dump.
  *
- * The endpoint comes from `--rpc-url`, or from the chain's entry in a `--config` file; nothing else.
- * No message here repeats it: a provider URL often carries a key.
+ * The endpoint comes from `--rpc-url`, else from the chain's entry in a `--config` file, else from
+ * the built-in public endpoints (`public-endpoints.ts`). No message here repeats it: a provider URL
+ * often carries a key.
  */
 import {
   createPublicClient,
@@ -49,7 +50,8 @@ export interface TxRequest {
 
 /**
  * The endpoint for `chain`: `--rpc-url`, else the `--config` file's `rpcUrls` entry for the chain's
- * id. `config` is the file's path and text, when one was given.
+ * id; `undefined` when the file has none for it. `config` is the file's path and text, when one was
+ * given.
  */
 export function endpointFor(
   chain: CanonicalChain,
@@ -71,11 +73,7 @@ export function endpointFor(
     );
   }
   const url = (urls as Record<string, unknown>)[String(chain.id)];
-  if (url === undefined) {
-    throw new UsageError(
-      `--config ${config.path} has no rpcUrls entry for ${chain.slug} (chain id ${chain.id})`,
-    );
-  }
+  if (url === undefined) return undefined;
   if (typeof url !== "string" || /^<.*>$/.test(url)) {
     throw new UsageError(
       `--config ${config.path}: rpcUrls["${chain.id}"] is not a URL; replace the placeholder`,
@@ -625,7 +623,10 @@ export interface RegisteredBalance {
   readonly balance: bigint | null;
 }
 
-/** `holder`'s native balance, and its balance of every token `chain` registers by symbol. */
+/**
+ * `holder`'s native balance, and its balance of every token `chain` registers by symbol but its
+ * tokenized stocks: Ethereum has over a thousand, one `balanceOf` each.
+ */
 export async function registeredBalances(
   client: PublicClient,
   chain: CanonicalChain,
@@ -633,19 +634,21 @@ export async function registeredBalances(
 ): Promise<{ readonly native: bigint; readonly tokens: readonly RegisteredBalance[] }> {
   const native = await request("the native balance", () => client.getBalance({ address: holder }));
   const tokens = await Promise.all(
-    (TOKEN_REGISTRY[chain.id] ?? []).map(async (row) => {
-      const token = getAddress(row.address);
-      const balance = await client
-        .readContract({
-          address: token,
-          abi: BALANCE_OF,
-          functionName: "balanceOf",
-          args: [holder],
-        })
-        .catch(() => null);
+    (TOKEN_REGISTRY[chain.id] ?? [])
+      .filter((row) => row.stock === undefined)
+      .map(async (row) => {
+        const token = getAddress(row.address);
+        const balance = await client
+          .readContract({
+            address: token,
+            abi: BALANCE_OF,
+            functionName: "balanceOf",
+            args: [holder],
+          })
+          .catch(() => null);
 
-      return { symbol: row.symbol, address: token, decimals: row.decimals, balance };
-    }),
+        return { symbol: row.symbol, address: token, decimals: row.decimals, balance };
+      }),
   );
 
   return { native, tokens };

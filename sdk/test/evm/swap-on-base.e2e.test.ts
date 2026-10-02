@@ -22,9 +22,13 @@
  * empty one and one past its limit are skipped; each pool is offered all the WETH still unsold and
  * stops at its own limit, the caller's moved by √(1 − fee) with the fee read from the pool (for V4,
  * this direction's protocol fee composed with the LP fee), so every unit sold pays at least the
- * limit with its fee paid, and the last one pays the limit; the USDC goes to RECIPIENT and the
- * unsold WETH to REFUND_TO, leaving the shared Pot empty; MIN_OUT and MIN_AVG_PRICE revert the whole
+ * limit with its fee paid, and the last one pays the limit; the USDC goes to `recipient` and the
+ * unsold WETH to `refundTo`, leaving the shared Pot empty; `minOut` and `minAvgPrice` revert the whole
  * fulfilment. And what the fee adjustment is for, by taking it out.
+ *
+ * The same Base runs the nested-intents guide's swap (`docs/examples/nested-swap.sauce.ts`), opened
+ * on Ethereum with its `main` arguments bound: its body buys WETH on the 0.05% pool it looks up and
+ * pays what it bought into the next intent's vault on this Portal, publishing it for Ethereum.
  *
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite, and a hard failure
  * without it in CI.
@@ -139,7 +143,7 @@ const PAIR = { baseDecimals: 18, quoteDecimals: 6, baseIsToken0: true };
 const sqrtAt = (usdcPerWeth: string): bigint => sqrtPriceX96FromPrice(usdcPerWeth, PAIR);
 const Q192 = 2n ** 192n;
 const WETH_UNIT = 10n ** 18n;
-/** The body's SQRT_PRICE_LIMIT_X96: no pool sells a WETH for less than 2,695 USDC, fee paid. */
+/** The body's `sqrtPriceLimitX96`: no pool sells a WETH for less than 2,695 USDC, fee paid. */
 const LIMIT = sqrtAt("2695");
 
 interface Venue {
@@ -270,33 +274,32 @@ const priceOf = async (venue: Venue): Promise<bigint> => {
   return sqrtPriceX96;
 };
 
-interface Defines {
-  AMOUNT_IN: bigint;
-  SQRT_PRICE_LIMIT_X96?: bigint;
-  MIN_OUT?: bigint;
-  MIN_AVG_PRICE?: bigint;
+/** main's arguments, as `--args` gives them: the rest take the suite's defaults. */
+interface Args {
+  amountIn: bigint;
+  sqrtPriceLimitX96?: bigint;
+  minOut?: bigint;
+  minAvgPrice?: bigint;
 }
 
 /**
- * The fulfilment of the intent the file opens, compiled from Ethereum as `sauce run --chain
- * ethereum` compiles it, with this anvil's Portal as the destination Portal its route records
- * (every other address, the tokens and pools included, is the SDK's own for Base): the solver's
- * side on Base, after it holds the delivery and lets the Portal pull it.
+ * The fulfilment of the intent the file opens, built as `sauce intent publish --chain ethereum
+ * --args …` builds it — main's arguments bound into it (`compileSauceProgram`'s `args`) — with this
+ * anvil's Portal as the destination Portal its route records (every other address, the tokens and
+ * pools included, is the SDK's own for Base): the solver's side on Base, after it holds the
+ * delivery and lets the Portal pull it.
  */
-const fulfilment = async (
-  defines: Defines,
-  source = PROGRAM,
-): Promise<{ data: Hex; value: bigint }> => {
+const fulfilment = async (args: Args, source = PROGRAM): Promise<{ data: Hex; value: bigint }> => {
   const compiled = compileSauceProgram("ethereum", source, {
-    defines: {
-      REWARD: defines.AMOUNT_IN + 10n ** 15n,
-      SQRT_PRICE_LIMIT_X96: LIMIT,
-      MIN_OUT: 1n,
-      MIN_AVG_PRICE: 0n,
-      RECIPIENT: BigInt(RECIPIENT),
-      REFUND_TO: BigInt(REFUND_TO),
-      ...defines,
-    },
+    args: [
+      args.amountIn,
+      args.amountIn + 10n ** 15n,
+      args.sqrtPriceLimitX96 ?? LIMIT,
+      args.minOut ?? 1n,
+      args.minAvgPrice ?? 0n,
+      RECIPIENT,
+      REFUND_TO,
+    ],
     intents: { deadline: DEADLINE, creator: CREATOR, executionFee: 0n, destinationPortal: portal },
   });
   expect(compiled.intents).toHaveLength(1);
@@ -319,8 +322,8 @@ const fulfilment = async (
 };
 
 /** Sends that fulfilment from the solver; the receipt, reverted or not. */
-const fulfil = async (defines: Defines, source = PROGRAM): Promise<TransactionReceipt> => {
-  const { data, value } = await fulfilment(defines, source);
+const fulfil = async (args: Args, source = PROGRAM): Promise<TransactionReceipt> => {
+  const { data, value } = await fulfilment(args, source);
   const hash = await walletClient.sendTransaction({
     account: OWNER,
     chain: null,
@@ -333,8 +336,8 @@ const fulfil = async (defines: Defines, source = PROGRAM): Promise<TransactionRe
 };
 
 /** The revert data of that fulfilment, simulated: the Portal's, which carries the body's. */
-const revertOf = async (defines: Defines): Promise<Hex> => {
-  const { data, value } = await fulfilment(defines);
+const revertOf = async (args: Args): Promise<Hex> => {
+  const { data, value } = await fulfilment(args);
   try {
     await publicClient.call({ account: OWNER.address, data, to: portal, value });
   } catch (error) {
@@ -579,7 +582,7 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     const solverWeth = await balance(WETH, OWNER.address);
 
     // The average floor at the limit itself: every unit pays at least 2,695 with its fee paid.
-    const receipt = await fulfil({ AMOUNT_IN: amountIn, MIN_AVG_PRICE: 2_695n * 10n ** 6n });
+    const receipt = await fulfil({ amountIn: amountIn, minAvgPrice: 2_695n * 10n ** 6n });
     expect(receipt.status).toBe("success");
     const swapped = fills(receipt);
     // In the body's order: V3 by fee tier, then V4. The 0.05% V4 pool's fee is its LP fee and the
@@ -606,7 +609,7 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
 
   it("sells a small amount to the first pool, within its limit, and returns nothing", async () => {
     const amountIn = WETH_UNIT / 20n;
-    const receipt = await fulfil({ AMOUNT_IN: amountIn });
+    const receipt = await fulfil({ amountIn: amountIn });
     expect(receipt.status).toBe("success");
     const swapped = fills(receipt);
     expect(swapped.map((fill) => fill.venue)).toEqual(["v3:500"]);
@@ -620,9 +623,9 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
   it("sells nothing under a limit above every pool's price, and returns all the WETH", async () => {
     const amountIn = WETH_UNIT;
     const receipt = await fulfil({
-      AMOUNT_IN: amountIn,
-      SQRT_PRICE_LIMIT_X96: sqrtAt("2800"),
-      MIN_OUT: 0n,
+      amountIn: amountIn,
+      sqrtPriceLimitX96: sqrtAt("2800"),
+      minOut: 0n,
     });
     expect(receipt.status).toBe("success");
     expect(fills(receipt)).toEqual([]);
@@ -631,26 +634,107 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     expect(await balance(WETH, pot)).toBe(0n);
   });
 
-  it("reverts the whole fulfilment below MIN_OUT, and below MIN_AVG_PRICE", async () => {
+  it("reverts the whole fulfilment below minOut, and below minAvgPrice", async () => {
     // A million USDC for one WETH.
-    const short = { AMOUNT_IN: WETH_UNIT, MIN_OUT: 10n ** 12n };
-    expect(await revertOf(short)).toContain(reason("output below MIN_OUT"));
+    const short = { amountIn: WETH_UNIT, minOut: 10n ** 12n };
+    expect(await revertOf(short)).toContain(reason("output below minOut"));
     // Every unit sold below 2,705 less its fee, and most below 2,700: an average of 2,700 is more
     // than the pools pay.
-    const dear = { AMOUNT_IN: WETH_UNIT, MIN_AVG_PRICE: 2_700n * 10n ** 6n };
-    expect(await revertOf(dear)).toContain(reason("average price below MIN_AVG_PRICE"));
+    const dear = { amountIn: WETH_UNIT, minAvgPrice: 2_700n * 10n ** 6n };
+    expect(await revertOf(dear)).toContain(reason("average price below minAvgPrice"));
     const solverWeth = await balance(WETH, OWNER.address);
-    for (const defines of [short, dear]) expect((await fulfil(defines)).status).toBe("reverted");
+    for (const args of [short, dear]) expect((await fulfil(args)).status).toBe("reverted");
     // The solver keeps its WETH (each attempt minted its own delivery first), and nothing moved.
     expect(await balance(WETH, OWNER.address)).toBe(solverWeth + 2n * WETH_UNIT);
     expect(await balance(USDC, RECIPIENT)).toBe(0n);
     expect(await balance(WETH, REFUND_TO)).toBe(0n);
   });
 
+  it("runs the nested-intents guide's swap: the body buys WETH on Base and opens the next intent with it", async () => {
+    // docs/examples/nested-swap.sauce.ts as written, opened on Ethereum and its main arguments fixed
+    // into the intents as `sauce intent publish --args` fixes them. This anvil's Portal is the one
+    // the outer route names and the one the body publishes the inner intent on; the pool is the
+    // 0.05% one, which the body finds through Base's factory.
+    const source = readFileSync(join(HERE, "../../../docs/examples/nested-swap.sauce.ts"), "utf8");
+    const delivered = 1_000n * 10n ** 6n; // 1,000 USDC
+    const [outer] = compileSauceProgram("ethereum", source, {
+      args: [RECIPIENT, delivered, delivered + 10n ** 6n, 1n],
+      intents: {
+        deadline: DEADLINE,
+        creator: CREATOR,
+        executionFee: 0n,
+        sourcePortal: portal,
+        destinationPortal: portal,
+      },
+    }).intents;
+    expect(outer!.captures).toEqual([]);
+    const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], encodeRouteEvm(outer!.intent.route));
+    expect(route.tokens).toEqual([{ token: USDC, amount: delivered }]);
+    for (const { token, amount } of route.tokens) {
+      await call(token, erc20, "mint", [OWNER.address, amount]);
+      await call(token, erc20, "approve", [portal, amount]);
+    }
+    const { intentHash, rewardHash } = hashIntent(outer!.intent);
+    const claimant = pad(OWNER.address, { size: 32 });
+    const receipt = await send(
+      portal,
+      encodeFunctionData({
+        abi: PortalABI,
+        functionName: "fulfill",
+        args: [intentHash, route, rewardHash, claimant],
+      }),
+    );
+    expect(receipt.status).toBe("success");
+
+    // The swap ran on the 0.05% pool, and what it bought is the inner intent's reward, in Base's
+    // WETH, paid into its vault on this Portal and published there for Ethereum.
+    const [swap] = fills(receipt);
+    expect(swap!.venue).toBe("v3:500");
+    const [published] = parseEventLogs({
+      abi: PortalABI,
+      eventName: "IntentPublished",
+      logs: receipt.logs,
+    });
+    const inner = published!.args;
+    expect(inner.destination).toBe(1n);
+    expect(inner.rewardTokens).toHaveLength(1);
+    const [{ token, amount: bought }] = inner.rewardTokens;
+    expect(getAddress(token)).toBe(WETH);
+    expect(bought).toBeGreaterThan(0n);
+    const reward = {
+      deadline: inner.rewardDeadline,
+      creator: inner.creator,
+      prover: inner.prover,
+      nativeAmount: inner.rewardNativeAmount,
+      tokens: inner.rewardTokens,
+    };
+    const funded = await publicClient.readContract({
+      abi: PortalABI,
+      address: portal,
+      functionName: "isIntentFunded",
+      args: [inner.destination, inner.route, reward],
+    });
+    expect(funded).toBe(true);
+    // Its route pays the recipient on Ethereum what was bought, less the next solver's tenth of a
+    // percent: one WETH transfer, to Ethereum's WETH.
+    const [next] = decodeAbiParameters([EVM_ROUTE_PARAM], inner.route);
+    expect(next.calls).toHaveLength(1);
+    expect(next.calls[0]!.data).toBe(
+      encodeFunctionData({
+        abi: parseAbi(["function transfer(address to, uint256 amount)"]),
+        functionName: "transfer",
+        args: [RECIPIENT, bought - bought / 1000n],
+      }),
+    );
+    // The shared Pot keeps nothing: the USDC went into the pool, the WETH into the vault.
+    expect(await balance(USDC, pot)).toBe(0n);
+    expect(await balance(WETH, pot)).toBe(0n);
+  });
+
   it("without the √(1 − fee), the 0.3% V3 pool's last unit pays less than the limit", async () => {
     const receipt = await fulfil(
-      { AMOUNT_IN: WETH_UNIT },
-      replacing("Math.sqrt((1000000n - fee) * 10n ** 30n)", "10n ** 18n"),
+      { amountIn: WETH_UNIT },
+      replacing("Math.sqrt((1000000 - fee) * 10 ** 30)", "10 ** 18"),
     );
     expect(receipt.status).toBe("success");
     const pricier = fills(receipt).find((fill) => fill.venue === "v3:3000")!;
@@ -660,10 +744,10 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
 
   it("with the other direction's protocol fee, the V4 pool's last unit pays less than the limit", async () => {
     const receipt = await fulfil(
-      { AMOUNT_IN: WETH_UNIT },
+      { amountIn: WETH_UNIT },
       replacing(
-        "if (!sellsToken0) {\n          protocolFee",
-        "if (sellsToken0) {\n          protocolFee",
+        "if (!sellsToken0) {\n            protocolFee",
+        "if (sellsToken0) {\n            protocolFee",
       ),
     );
     expect(receipt.status).toBe("success");

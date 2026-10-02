@@ -1,13 +1,13 @@
 ---
 name: sauce-globals
-description: The names a Sauce program uses without any import, and how they resolve on the chain it is compiled for — token symbols (USDC, USDT, WETH, …) and tokenized stocks (SPCXc, TSLAon, TSLAx, …), Token(address) and a bound const t = Token(x), the token methods .transfer/.approve/.transferFrom/.balanceOf with SafeERC20 behaviour and USDT, the @sauce/token functions, protocol namespaces (UniswapV3.Factory, UniswapV4.StateView, AaveV3.Pool, …) and family aliases, comparing with zero for a venue a chain may lack, the Namespace_Contract compile-time defines, chain names, chainId and ctx.*. Links generated indexes of every token, protocol contract and chain, the same lists sauce globals prints. Use when writing any Sauce program that moves tokens, calls a protocol or names a chain, when checking whether a name exists on a chain, or when a name does not resolve ("is not a declared variable", "ambiguous", "is not deployed").
+description: The names a Sauce program uses without any import, and how they resolve on the chain it is compiled for — token symbols (USDC, USDT, WETH, …) and tokenized stocks (SPCXc, TSLAon, TSLAx, NVDA_US, SPACEX, …, on Ethereum, Base and Solana), Token(address) and a bound const t = Token(x), the token methods .transfer/.approve/.transferFrom/.balanceOf with SafeERC20 behaviour and USDT, the @sauce/token functions, protocol namespaces (UniswapV3.Factory, UniswapV4.StateView, AaveV3.Pool, …) and family aliases, comparing with zero for a venue a chain may lack, the Namespace_Contract compile-time defines, chain names, chainId and ctx.*. Links generated indexes of every token, protocol contract and chain, the same lists sauce globals prints. Use when writing any Sauce program that moves tokens, calls a protocol or names a chain, when checking whether a name exists on a chain, or when a name does not resolve ("is not a declared variable", "ambiguous", "is not deployed").
 ---
 
 # Globals in a Sauce program
 
 A program compiled for a chain resolves these names against **that chain**, with no import. They
 are program syntax, not JavaScript values. **Look names up before writing a program**:
-`npx sauce globals --chain <chain>` lists one chain's, and these indexes list every chain's, from
+`sauce globals --chain <chain>` lists one chain's, and these indexes list every chain's, from
 the same registries the compile reads:
 
 - [references/tokens.md](references/tokens.md): every token symbol per chain, with its decimals,
@@ -60,7 +60,7 @@ these.
 function main(payee: Address, amount: Uint256) {
   require(USDT.balanceOf(ctx.self()) >= amount, "not enough USDT");
   USDT.transfer(payee, amount);
-  require(allowance(USDT, ctx.self(), payee) == 0n, "no allowance left standing");
+  require(allowance(USDT, ctx.self(), payee) == 0, "no allowance left standing");
 }
 ```
 
@@ -79,13 +79,17 @@ functions, a token a swap buys or sells.
 - **Ethereum**: Backed's xStocks (`TSLAx`, `SPCXx`) and bTokens (`bTSLA`), Ondo Global Markets'
   (`TSLAon`, `SPCXon`), and Mt Pelerin's own shares (`MPS`).
 - **Base**: Coinbase's (`TSLAc`, `SPCXc`) and Backed's bTokens.
-- On Solana a tokenized stock is not a symbol.
+- **Solana**: Backed's xStocks (`TSLAx`), Ondo Global Markets' (`TSLAon`), Backpack Securities'
+  (`NVDA_US`, `SPCX_US`) and PreStocks' shares of private companies (`SPACEX`, `OPENAI`), each a
+  Token-2022 mint (below).
 
 The symbol is the issuer's own ticker for the token, in its case: symbols are case-sensitive, and
-`SPCXC` is not `SPCXc`. A `.` in a ticker is written `_`: `BRK.Bx` is `BRK_Bx`. One company has
-one token per issuer: SpaceX is `SPCXx` and `SPCXon` on Ethereum, `SPCXc` on Base. Find one by the
-company's name or ticker with `npx sauce globals --chain base --search spacex`, list a chain's with
-`--stocks`, or read [references/stocks.md](references/stocks.md).
+`SPCXC` is not `SPCXc`. A `.` in a ticker is written `_`: `BRK.Bx` is `BRK_Bx`, and Backpack's
+`NVDA.US` is `NVDA_US`. PreStocks' symbol is the company's name, `SPACEX`. One company has one token
+per issuer: SpaceX is `SPCXx` and `SPCXon` on Ethereum, `SPCXc` on Base, and `SPCXx`, `SPCXon`,
+`SPCX_US` and `SPACEX` on Solana. Find one by the company's name or ticker with
+`sauce globals --chain base --search spacex`, list a chain's with `--stocks`, or read
+[references/stocks.md](references/stocks.md).
 
 Buying and selling one on a DEX needs no account with its issuer, and any contract can hold it,
 the program's Pot included; only minting and redeeming with the issuer need KYC. What differs from
@@ -98,7 +102,12 @@ a plain ERC-20:
 - Ondo's keep their balance: dividends raise the shares each token stands for (Ondo's multiplier),
   so its price follows the stock with dividends reinvested.
 - Coinbase's are B20 tokens, built into the Base node: they run on Base, and not in a local copy of
-  the chain. Rehearse a program that moves one with `sauce simulate` against Base itself.
+  the chain. Rehearse a program that moves one with `sauce simulate` against Base itself; no assumed
+  balance can give a Pot one, since no state override reaches a B20 balance.
+
+Each issuer's list is copied from the issuer's own published list, and every row is checked on
+chain. Backpack lists mints it has not opened yet, and Superstate's can be held only by an
+allowlisted holder: neither is registered.
 
 ```sauce chain=base
 function main(recipient: Address, amount: Uint256) {
@@ -107,11 +116,45 @@ function main(recipient: Address, amount: Uint256) {
 }
 ```
 
+### On Solana
+
+A stock on Solana is a Token-2022 mint, and its symbol is the mint's 32-byte key, a value for
+`@sauce/token`'s functions: `balanceOf(TSLAx, account)`. A program moves one with the checked
+writes, `transferChecked` and `approveChecked`, which take the mint's token program, the mint and
+its decimals beside the token accounts (`transfer` and `approve` take legacy SPL Token mints only).
+`sauce` names each of those accounts by the symbol: `program:TSLAx` the token program,
+`mint:TSLAx` the mint, `pot:TSLAx` the Pot's token account and `owner:TSLAx` the owner's.
+
+- Amounts are raw, in the mint's decimals. The issuer's multiplier, by which a wallet shows them,
+  moves for splits and dividends, so a raw unit is not always one share.
+- PreStocks' mints charge a transfer fee: the token program keeps part of every transfer, so the
+  recipient gets less than was sent. Measure what arrived, as below; the references mark each mint
+  that charges one.
+- Every stock mint has a transfer hook that names no program, which is no hook. `@sauce/token`
+  refuses a mint whose hook names a program (`transfer hook`), and no registered mint has one.
+- The issuer can pause its mint, and can hold a permanent delegate, which can move or burn any
+  balance. A new token account is usable, not frozen.
+
+```sauce chain=solana
+function main(
+  tokenProgram: Account,
+  source: Account<Writable>,
+  mint: Account,
+  destination: Account<Writable>,
+  pot: Account<Signer>,
+  amount: Uint256,
+): Uint256 {
+  const before = balanceOf(SPACEX, destination);
+  transferChecked(SPACEX, tokenProgram, source, mint, destination, pot, amount, 9);
+  return balanceOf(SPACEX, destination) - before;
+}
+```
+
 ## Protocols
 
 - `Namespace.Contract` is the contract's address on the program's chain where a value is expected,
-  and a bound contract where a method is called: `UniswapV3.Factory.getPool(a, b, 500n)`. A
-  Uniswap fee is in millionths: `500n` is the 0.05% tier, `3000n` 0.3%.
+  and a bound contract where a method is called: `UniswapV3.Factory.getPool(a, b, 500)`. A
+  Uniswap fee is in millionths: `500` is the 0.05% tier, `3000` 0.3%.
 - A namespace's default contract is also called by the namespace alone:
   `Cctp.depositForBurn(...)` calls `Cctp.TokenMessenger`.
 - A family alias (`Uniswap`, `Aave`, …) names a contract only when one member has it on the chain:
@@ -126,18 +169,18 @@ function main(recipient: Address, amount: Uint256) {
 
 **A venue a chain may not have** is zero on that chain, and a program compares it with zero: the
 comparison is decided when the program is compiled for a chain, so
-`if (UniswapV3.Factory != 0n) { ... }` keeps its branch where the chain has the contract, and leaves
-it out, names and all, where it does not. A contract and a token symbol (`USDT != 0n`) both compare
+`if (UniswapV3.Factory != 0) { ... }` keeps its branch where the chain has the contract, and leaves
+it out, names and all, where it does not. A contract and a token symbol (`USDT != 0`) both compare
 this way; it folds `if`/`else`, `?:`, `&&`, `||` and `!`; and a guard
-`if (UniswapV3.Factory == 0n) { return 0n; }` drops the rest of its function. Any other use of an
+`if (UniswapV3.Factory == 0) { return 0; }` drops the rest of its function. Any other use of an
 absent name is a compile error saying the chain does not have it, and a name no chain has is an
 unknown name rather than zero, so a typo cannot quietly drop a branch.
 
 ```sauce chain=base,linea
 function main(tokenA: Address, tokenB: Address) {
-  if (UniswapV3.Factory != 0n) {
-    const pool = UniswapV3.Factory.getPool(tokenA, tokenB, 500n);
-    require(pool != 0n, "no 0.05% pool");
+  if (UniswapV3.Factory != 0) {
+    const pool = UniswapV3.Factory.getPool(tokenA, tokenB, 500);
+    require(pool != 0, "no 0.05% pool");
   }
 }
 ```
@@ -145,10 +188,11 @@ function main(tokenA: Address, tokenB: Address) {
 ## Chains, context, imports
 
 - **Chain names** (`Base`, `Ethereum`, … in [references/chains.md](references/chains.md)) open an
-  intent from inside a program: `Ethereum.Portal.send({ ... }).receive().then(() => { ... })`. Every
-  chain's names compile; for the initial release its transactions are built and sent only on
-  Ethereum, Base and Solana, and [references/chains.md](references/chains.md) marks every other
-  chain a preview chain (`sauce-chains` says how to request one).
+  intent from inside a program: `Ethereum.Portal.send(reward).receive(delivery).then(() => { ... })`.
+  Every chain's names
+  compile; for the initial release its transactions are built and sent only on Ethereum, Base and
+  Solana, and [references/chains.md](references/chains.md) marks every other chain a preview chain
+  (`sauce-chains` says how to request one).
 - **`chainId`** is the chain the program is compiled for.
 - **`ctx`**: context reads, each a call. The complete list, with what each returns per target, is
   section 6 of [../sauce-script/references/builtins.md](../sauce-script/references/builtins.md).

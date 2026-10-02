@@ -19,7 +19,7 @@ On Ethereum, `Superfluid` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's cfaForwarder, `0xcfA132E353cB4E398080B9700609bb008eceB125`.
-  require(Superfluid.CFAForwarder != 0n);
+  require(Superfluid.CFAForwarder != 0);
 }
 ```
 

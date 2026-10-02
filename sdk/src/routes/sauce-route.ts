@@ -32,7 +32,12 @@ import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
 import type { EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
 import { intentHost, type IntentSugarDefaults, type LoweredIntent } from "./intent-host.js";
-import { entryParamsOf, type EntryParam } from "./entry.js";
+import {
+  bindEntryArguments,
+  entryParamsOf,
+  type EntryParam,
+  type EntryValue,
+} from "./entry.js";
 import { unknownGlobalError } from "./unknown-global.js";
 import { closureText, isSauceClosure, type SauceBody } from "./closure.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
@@ -394,6 +399,17 @@ export interface CompiledSauceProgram {
   readonly source: string;
 }
 
+/** {@link compileSauceProgram}'s options: a route's, and `main`'s arguments to bind. */
+export interface SauceProgramOptions extends SauceCompileOptions {
+  /**
+   * `main`'s arguments, in order, bound into the program as constants: each must be one word (an
+   * unsigned integer, an address or a `bool`), and the program then takes none at run time. How a
+   * wallet publishes the intents a program opens from values known before anything runs. Leave it
+   * out to compile `main` taking its arguments as it runs.
+   */
+  readonly args?: readonly EntryValue[];
+}
+
 /**
  * Compiles a standalone program for `chain`: a program that runs directly on a Pot, rather than
  * the destination half of an intent.
@@ -404,27 +420,42 @@ export interface CompiledSauceProgram {
  * intents the program itself opens (`Arbitrum.Portal.send({ ... }).receive().then(() => { ... })`,
  * which take their deadline and creator from `options.intents`). So one source compiles, unchanged,
  * for any chain whose names it uses. `main` may declare typed runtime parameters; `entryParams`
- * reports them and `encodeEntryArguments` encodes values for them.
+ * reports them and `encodeEntryArguments` encodes values for them. Or `options.args` binds them into
+ * the program as it compiles, as `sauce intent publish --args` does: then the intents it opens are
+ * fixed, and a wallet can publish them (`intentSourceTxs`).
  */
 export function compileSauceProgram(
   chain: ChainRef,
   body: SauceBody,
-  options: SauceCompileOptions = {},
+  options: SauceProgramOptions = {},
 ): CompiledSauceProgram {
-  const sauce = isSauceClosure(body) ? closureText(body) : body;
+  const source = isSauceClosure(body) ? closureText(body) : body;
   const resolved = requireChain(chain);
+  const { args, ...given } = options;
+  if (args !== undefined && isSauceClosure(body)) {
+    throw new RangeError("args binds a module's `main` parameters; a closure takes none");
+  }
+  const bound = args === undefined ? undefined : bindEntryArguments(source, args);
+  const taken = Object.keys(bound?.constants ?? {}).find((name) =>
+    Object.hasOwn(given.defines ?? {}, name),
+  );
+  if (taken !== undefined) {
+    throw new RangeError(`${taken} is main's parameter, given in args; it is not also a define`);
+  }
+  const compile: SauceCompileOptions =
+    bound === undefined ? given : { ...given, defines: { ...given.defines, ...bound.constants } };
   // The bundle `openRoute` compiles a route body with, in the same two halves. The ambient MODULES
   // join the caller's. The chain-scoped NAMES travel as a scope for this program's chain, never in
   // `defines`, so an intent the program opens on another chain gets that chain's own (`levelOn`),
   // and `defines` stays exactly what the caller wrote.
-  const ambient = Array.from(new Set([...chainAmbient(resolved), ...(options.ambient ?? [])]));
+  const ambient = Array.from(new Set([...chainAmbient(resolved), ...(compile.ambient ?? [])]));
   const scope: RouteScope = {
-    chainDefines: (on) => definesOf(on, options.tokens),
+    chainDefines: (on) => definesOf(on, compile.tokens),
   };
   const program = compileForChain(
     resolved,
-    sauce,
-    { ...options, ambient: ambient.length > 0 ? ambient : options.ambient },
+    bound?.source ?? source,
+    { ...compile, ambient: ambient.length > 0 ? ambient : compile.ambient },
     scope,
     isSauceClosure(body) ? "closure" : "module",
   );

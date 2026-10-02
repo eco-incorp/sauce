@@ -89,9 +89,9 @@ describe("coverage matrix (pinned exactly -- a new row is a deliberate edit)", (
     };
     expect(matrix).toEqual({
       ethereum: ["USDC", "USDT", "WETH"],
-      optimism: ["USDC", "USDT", "WETH"],
-      arbitrum: ["USDC", "WETH"],
-      polygon: ["USDC", "WETH", "WPOL"],
+      optimism: ["USDC", "USDT", "USDT0", "WETH"],
+      arbitrum: ["USDC", "USDT0", "WETH"],
+      polygon: ["USDC", "USDT0", "WETH", "WPOL"],
       base: ["USDC", "WETH"],
     });
   });
@@ -119,12 +119,63 @@ describe("coverage matrix (pinned exactly -- a new row is a deliberate edit)", (
   });
 
   it("solana registers its cluster's mints, legacy SPL Token and Token-2022 alike", () => {
-    expect(knownTokenSymbols(requireChain("solana"))).toEqual(["PYUSD", "USDC", "USDT", "WSOL"]);
+    // Less its stock mints, which `token-registry-evidence.test.ts` holds.
+    const stocks = new Set(
+      SVM_TOKEN_REGISTRY["mainnet-beta"].filter((row) => row.stock).map((row) => row.symbol),
+    );
+    expect(
+      knownTokenSymbols(requireChain("solana")).filter((symbol) => !stocks.has(symbol)),
+    ).toEqual(["PYUSD", "USDC", "USDT", "WSOL"]);
+  });
+
+  it("registers stock mints on solana's mainnet-beta only, from its issuers' lists", () => {
+    const issuers = Object.fromEntries(
+      Object.entries(SVM_TOKEN_REGISTRY).map(([cluster, rows]) => [
+        cluster,
+        [...new Set(rows.flatMap((row) => (row.stock === undefined ? [] : [row.stock.issuer])))],
+      ]),
+    );
+    expect(issuers).toEqual({
+      "mainnet-beta": ["backed", "ondo", "backpack", "prestocks"],
+      devnet: [],
+    });
+    expect(registryTokenAddress(requireChain("solana"), "TSLAx")).toBe(
+      BigInt("0x07e83582411fea1482f0994b80aa512a97c94f25df283bec5a67a381fc862b4a"),
+    );
   });
 
   it("arbitrum and polygon deliberately do NOT register USDT (bridged/renamed symbol() mismatch)", () => {
     expect(registryTokenAddress(requireChain("arbitrum"), "USDT")).toBeUndefined();
     expect(registryTokenAddress(requireChain("polygon"), "USDT")).toBeUndefined();
+  });
+
+  it("registers Tether's USDT0 as USDT0 on each canonical chain Tether's list names it on", () => {
+    // docs.usdt0.to/technical-documentation/deployments, each chain's "Token" contract.
+    const usdt0 = Object.fromEntries(
+      Object.entries(TOKEN_REGISTRY).flatMap(([id, rows]) =>
+        rows
+          .filter((row) => row.symbol === "USDT0")
+          .map((row) => [requireChain(Number(id)).slug, row.address]),
+      ),
+    );
+    expect(usdt0).toEqual({
+      optimism: "0x01bFF41798a0BcF287b996046Ca68b395DbC1071",
+      unichain: "0x9151434b16b9763660705744891fA906F660EcC5",
+      polygon: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
+      monad: "0xe7cd86e13AC4309349F30B3435a9d337750fC82D",
+      sei: "0x9151434b16b9763660705744891fA906F660EcC5",
+      mantle: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+      plasma: "0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb",
+      arbitrum: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+      ink: "0x0200C29006150606B650577BBE7B6248F58470c1",
+      berachain: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+    });
+    // Optimism's USDT is the bridged token, a different contract from its USDT0.
+    expect(registryTokenAddress(requireChain("optimism"), "USDT")).not.toBe(
+      registryTokenAddress(requireChain("optimism"), "USDT0"),
+    );
+    // On Ethereum USDT0 is an adapter that locks USDT itself: the token there is USDT.
+    expect(registryTokenAddress(requireChain("ethereum"), "USDT0")).toBeUndefined();
   });
 });
 
@@ -154,7 +205,8 @@ describe("resolveTokenMap: the one precedence resolver", () => {
     const map = resolveTokenMap(solana, { USDC: DEVNET_USDC });
     expect(map.get("USDC")).toBe(BigInt(DEVNET_USDC));
     expect(map.get("USDT")).toBe(registryTokenAddress(solana, "USDT"));
-    expect([...map.keys()].sort()).toEqual(["PYUSD", "USDC", "USDT", "WSOL"]);
+    expect([...map.keys()].sort()).toEqual(knownTokenSymbols(solana));
+    expect(map.size).toBe(SVM_TOKEN_REGISTRY["mainnet-beta"].length);
   });
 
   it("an evm chain the registry doesn't cover resolves to only the caller tokens", () => {
@@ -176,12 +228,16 @@ describe("SVM_TOKEN_REGISTRY: the Solana mints", () => {
 
   it("each row's key is its mint's 32 bytes, and symbols and mints are unique per cluster", () => {
     for (const rows of Object.values(SVM_TOKEN_REGISTRY)) {
-      expect(new Set(rows.map((row) => row.symbol)).size).toBe(rows.length);
+      // Unique without regard to case, which is how the CLI looks a symbol up.
+      expect(new Set(rows.map((row) => row.symbol.toUpperCase())).size).toBe(rows.length);
       expect(new Set(rows.map((row) => row.mint)).size).toBe(rows.length);
       for (const row of rows) {
         expect(row.address).toMatch(/^0x[0-9a-f]{64}$/);
         expect(row.address).toBe(keyOf(row.mint));
-        expect(row.symbol).toMatch(/^[A-Z][A-Z0-9]{1,10}$/);
+        // A stock's is its issuer's ticker as an identifier, in the issuer's case ("NVDA_US").
+        expect(row.symbol).toMatch(
+          row.stock === undefined ? /^[A-Z][A-Z0-9]{1,10}$/ : /^[A-Za-z][A-Za-z0-9_]{1,15}$/,
+        );
       }
     }
   });
@@ -197,9 +253,12 @@ describe("SVM_TOKEN_REGISTRY: the Solana mints", () => {
   it("pins the coverage and each mint's token program: PYUSD on Token-2022, the rest legacy", () => {
     expect(
       Object.fromEntries(
+        // Less the stock mints, which `token-registry-evidence.test.ts` holds.
         Object.entries(SVM_TOKEN_REGISTRY).map(([cluster, rows]) => [
           cluster,
-          rows.map((row) => `${row.symbol} ${row.mint} ${row.decimals} ${row.tokenProgram}`),
+          rows
+            .filter((row) => row.stock === undefined)
+            .map((row) => `${row.symbol} ${row.mint} ${row.decimals} ${row.tokenProgram}`),
         ]),
       ),
     ).toEqual({

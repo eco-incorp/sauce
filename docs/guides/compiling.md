@@ -21,8 +21,8 @@ From a terminal, [`sauce compile`](cli.md) compiles a program file with everythi
 supplies except the intent, and `sauce tx` builds the call that runs it on your own Pot.
 
 Bare `USDC`, `Token(address)` and protocol members only exist on the route path. There,
-`USDC.approve(Uniswap.UniversalRouter, 1_000_000n)` becomes an import of `@sauce/token`'s
-`approve` and `approve(USDC, <the router's Base address>, 1_000_000n)`, with `USDC` defined as
+`USDC.approve(Uniswap.UniversalRouter, 1_000_000)` becomes an import of `@sauce/token`'s
+`approve` and `approve(USDC, <the router's Base address>, 1_000_000)`, with `USDC` defined as
 Base's USDC. That is the `SafeERC20` write; see
 [protocols and tokens](protocols-and-tokens.md#writes-follow-safeerc20). Raw `compile()` expects
 you to write it yourself, resolving `@sauce/token` with `resolveSdkPackage`.
@@ -47,7 +47,7 @@ in `compiled.bytecode[0]`; read `source` to see exactly what the rewrites produc
 
 The call's `value` is the Kitchen fee plus whatever native the program itself spends — this approval
 spends none. For Portal fulfillment the Pot must be owned by the destination Portal's Executor and
-`route.nativeAmount` must cover every call value. [Create an intent](intents.md) covers reading the
+`route.nativeAmount` must cover every call value, which is what the intent builder sets it to. [Create an intent](intents.md) covers reading the
 fee, deriving that Pot, and adding the reward and Portal calldata.
 
 `compileSauceRoute` takes a SauceScript file as written: a module declaring `function main(...)`,

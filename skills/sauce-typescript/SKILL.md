@@ -13,6 +13,13 @@ you. Every address comes from the package (`/deployments`, the registries) or fr
 never invent one. The shipped manual starts at `node_modules/@eco-incorp/sauce/docs/README.md`; the
 subpath list is `node_modules/@eco-incorp/sauce/docs/api/README.md`.
 
+**A TypeScript project using the package depends on `@eco-incorp/sauce` and `viem`**, both
+directly: the package's API is typed in viem's types (`Address`, `Hex`, `PublicClient`), and a
+package manager that installs a package's own dependencies beside it (pnpm) resolves only the
+project's. Pin viem to the version the package resolves, so both use the same types; `sauce init`
+writes both pins. Everything else, the Solana kit included, comes from the package's subpaths
+(`@eco-incorp/sauce/svm` re-exports the kit primitives its functions take).
+
 ## Supported chains
 
 For the initial release, Sauce supports transactions on Ethereum, Base and Solana. Every other
@@ -28,8 +35,9 @@ and add the use case, or
 ## Compile a program for a chain, and cook it
 
 `routes.compileSauceProgram(chain, source, options)` is what `sauce compile` runs: the chain's
-names, its defines and `@sauce/token`, with `options.defines` for the program's own compile-time
-values and `options.intents` for the intents it opens. The result carries `main`'s declared
+names and `@sauce/token`, with `options.intents` for the intents it opens, and `options.args` to fix
+`main`'s arguments into the program, as `sauce intent publish --args` does for intents published
+from a wallet. Without `args`, the result carries `main`'s declared
 parameters (`entryParams`); `routes.encodeEntryArguments` encodes values for them as `--args` does,
 and program plus arguments is the `program` of the owner's `Pot.cook(engine, program)`.
 
@@ -165,10 +173,15 @@ a recorded address, not proof of live code on the chain.
   `routes.intentVaultAddressCall`: it is checked against `routes.predictIntentVault`, the package's
   own computation. `routes.publishTx`, `routes.publishAndFundTx`, `routes.approvalTxs` and
   `routes.isIntentFundedCall` build the single calls (`{ to, data }`, with `decode` for a read).
-- **Cascades from TypeScript**: `routes.openRoute(chain, body, options).nest(child, { via })`
-  attaches a child intent to a route. By default (`via: "transfer"`) the parent's route funds the
-  child by a transfer into the child's vault, with no publication of its own;
-  `via: "publishAndFund"` publishes and funds it for public discovery instead.
+- **Nested intents** are written in the program: a body that opens the next intent with
+  `Chain(() => { ... }).reward({ ... })` (`sauce-intents`, Cascades). In a typed closure,
+  `Base(() => { ... Ethereum(() => { ... }).reward({ ... }) }, options)`, the inner chain is the
+  imported export, which typechecks there. `routes.compileSauceProgram`
+  lists the intents a program opens in `.intents`, and `routes.intentSourceTxs` publishes a fixed
+  one from a wallet. The lower-level builder, `routes.openRoute(chain, body, options).nest(child,
+{ via })`, attaches a child built in TypeScript instead, with options of its own: by default
+  (`via: "transfer"`) the parent's route funds the child by a transfer into its vault, with no
+  publication of its own; `via: "publishAndFund"` publishes and funds it for public discovery.
 
 ## Example
 

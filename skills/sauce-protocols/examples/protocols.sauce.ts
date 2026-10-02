@@ -4,7 +4,7 @@
 // zero uses it only where that chain has it, and the file compiles for chains without PancakeSwap V3
 // too.
 //
-//   sauce run protocols.sauce.ts --chain <chain> --config sauce.config.json --keystore <keystore> \
+//   sauce run protocols.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <beneficiary> <amount>
 //
 //   beneficiary: Address  who the Aave V3 position is supplied for
@@ -13,16 +13,16 @@
 //
 // On Base, 5,000 USDC supplied for the beneficiary:
 //
-//   sauce run protocols.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+//   sauce run protocols.sauce.ts --chain base --keystore <keystore> \
 //     --args <beneficiary> 5000000000
 function main(beneficiary: Address, amount: Uint256) {
   // 1. Supply `amount` of the Pot's USDC to Aave V3 for `beneficiary`, approving exactly that.
   USDC.approve(AaveV3.Pool, amount);
-  AaveV3.Pool.supply(USDC, amount, beneficiary, 0n);
+  AaveV3.Pool.supply(USDC, amount, beneficiary, 0);
 
   // 2. Look a pool up through PancakeSwap V3's factory, where the chain has one.
-  if (PancakeswapV3.Factory != 0n) {
-    const pool = PancakeswapV3.Factory.getPool(WETH, USDC, 500n);
-    require(pool != 0n, "no PancakeSwap V3 WETH/USDC 0.05% pool");
+  if (PancakeswapV3.Factory != 0) {
+    const pool = PancakeswapV3.Factory.getPool(WETH, USDC, 500);
+    require(pool != 0, "no PancakeSwap V3 WETH/USDC 0.05% pool");
   }
 }

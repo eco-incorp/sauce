@@ -13,7 +13,7 @@ it needs:
 import { uniswapV3 } from "@sauce/router";
 
 function main(amount: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256) {
-  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500n);
+  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
   uniswapV3(pool, WETH, USDC, amount, sqrtPriceLimitX96, minOut, ctx.self());
 }
 ```
@@ -21,7 +21,7 @@ function main(amount: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256) {
 Every argument is a run-time value, so a program can choose the pool, the direction and the amount
 while it runs: spend what an earlier swap returned, read a balance, loop over a list of pools.
 
-A tokenized stock (`SPCXc` on Base, `TSLAon` on Ethereum) is swapped like any token; its symbol
+A tokenized stock (`SPCXc` on Base, `TSLAon` on Ethereum, `TSLAx` on Solana) is swapped like any token; its symbol
 and what differs about it are in `sauce-globals`
 ([Tokenized stocks](../sauce-globals/SKILL.md#tokenized-stocks)).
 
@@ -44,16 +44,16 @@ received:
 | `maverickV2`  | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                    | the Pot's Router |
 
 - **`amountIn`** is what the Pot pays. **Every swap is exact input.**
-- **`minOut`** is the least the swap may deliver; below it the whole program reverts. `0n` sets no
+- **`minOut`** is the least the swap may deliver; below it the whole program reverts. `0` sets no
   floor, except for `woofi`, which requires a positive one.
 - **`recipient`** receives the output; `ctx.self()` keeps it in the Pot.
-- `feePpm` is a V2 pair's LP fee in parts per million (3000, which `0n` also means, for Uniswap V2;
+- `feePpm` is a V2 pair's LP fee in parts per million (3000, which `0` also means, for Uniswap V2;
   2500 for PancakeSwap V2). `uniswapV4` takes the pool key's `fee`, `tickSpacing` and `hooks`, and
   builds the key from `tokenIn` and `tokenOut` in sort order. `uint256Indices` picks a Curve
   CryptoSwap pool's `uint256` coin indices over a StableSwap pool's `int128` ones.
 
 `tryUniswapV2`, `tryCurve`, `tryBalancerV2` and `tryTraderJoeLB` take the same arguments as the
-function they name and return `0n`, having moved nothing, instead of reverting when the swap cannot
+function they name and return `0`, having moved nothing, instead of reverting when the swap cannot
 be made. DODO V2 and WOOFi have no `try` form.
 
 ## How each venue is reached
@@ -94,11 +94,11 @@ the two addresses, so one number means the same price on every V3-style pool of 
 pools of the same two currencies. Selling token0 moves the price down, so the limit is a floor;
 selling token1 moves it up, so it is a ceiling. It must lie strictly between `4295128739` and
 `1461446703485210103287273052203988822378723970342` and on the far side of the pool's current
-price, or the pool reverts `SPL`. A limit of `0n` means none, which leaves `minOut` as the only
+price, or the pool reverts `SPL`. A limit of `0` means none, which leaves `minOut` as the only
 bound: set a real limit.
 
 **Convert a price with `sauce price`**, which reads no network:
-`npx sauce price --chain base WETH USDC 2686.5`. The price is **quote per base**: the first token
+`sauce price --chain base WETH USDC 2686.5`. The price is **quote per base**: the first token
 is the one priced, the second what it is priced in, so this is 2,686.5 USDC per WETH. Swapped,
 `USDC WETH 2686.5` would mean 2,686.5 WETH per USDC, a limit nowhere near any pool. It prints the
 pair's order on the chain (on Base WETH is token0, the lower address, and USDC token1) and two
@@ -107,8 +107,11 @@ blocks:
 - **`sell`** (the base token in: WETH → USDC): its `sqrtPriceLimitX96` is a **floor**;
 - **`buy`** (the base token out: USDC → WETH): its `sqrtPriceLimitX96` is a **ceiling**.
 
-Each block also gives `minAvgPrice` for that direction. Take the limit from the block of the
-direction you trade.
+Each block also gives that direction's average floor `minAvgPrice`, output received per input
+paid (`out * 1e18 >= minAvgPrice * spent`), and, the other way round, `maxPrice` and `maxAvgPrice`,
+input paid per output bought, which the distributed swap takes (`sauce-distributed-swap`). Take the
+limit from the block of the direction you trade. With an endpoint, `--pool <address>` reads the
+price from that pool now.
 
 **Put the limit near the current price, on the far side of it.** A limit far beyond the price, such
 as the bound itself, is no limit at all: the pool fills down (or up) to it at any price. One on the
@@ -181,9 +184,9 @@ The library checks `minOut`; what is left is the input a price limit left unspen
 Rehearse it, then run it, with the input in the Pot (or pulled in with `--fund`):
 
 ```sh
-npx sauce simulate swap-leg.sauce.ts --chain base --owner <address> --config sauce.config.json \
+sauce simulate swap-leg.sauce.ts --chain base --owner <address> \
   --args <tokenIn> <tokenOut> 500 <amountIn> <sqrtPriceLimitX96> <minOut> <recipient>
-npx sauce run swap-leg.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+sauce run swap-leg.sauce.ts --chain base --keystore <keystore> \
   --fund WETH:0.5 --args <tokenIn> <tokenOut> 500 <amountIn> <sqrtPriceLimitX96> <minOut> <recipient>
 ```
 

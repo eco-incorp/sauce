@@ -19,7 +19,7 @@ On Ethereum, `Alchemix` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's alETH, `0x0100546F2cD4C9D97f798fFC9755E47865FF7Ee6`.
-  require(Alchemix.AlETH != 0n);
+  require(Alchemix.AlETH != 0);
 }
 ```
 

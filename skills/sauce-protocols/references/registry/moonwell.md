@@ -19,7 +19,7 @@ On Base, `Moonwell` is a namespace: its contracts need no import.
 ```sauce chain=base
 function main() {
   // Base's comptroller, `0xfBb21d0380beE3312B33c4353c8936a0F13EF26C`.
-  require(Moonwell.Comptroller != 0n);
+  require(Moonwell.Comptroller != 0);
 }
 ```
 

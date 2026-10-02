@@ -87,10 +87,10 @@ function main(a_amount: Uint256): void {
 // bytecode, 313 bytes: 0xa502…
 ```
 
-`--chain` takes a slug or a chain id and defaults to the document's `chainId`; `--json` prints the report `sauce compile --json` does — `bytecode`, `size`, `entryParams`, the paired compiler and engine — with the parsed `document`, the `source`, the ABI bindings it calls through (`bindings`), beside the protocol contracts it calls (`contracts`, as `sauce compile --json` reports them) and the argument names (`parameters`); `--compact-args` compiles the arguments compact-v1. `sauce compile`, `sauce tx`, `sauce simulate` and `sauce run` take the same document wherever they take a `.sauce.ts` file, with the same flags: its `argument` actions are `main`'s parameters, passed with `--args`, and its cook runs on the Pot `--owner` or `--pot` names, funded by `--fund` if you like. `--define` is refused: a document's values are its own fields.
+`--chain` takes a slug or a chain id and defaults to the document's `chainId`; `--json` prints the report `sauce compile --json` does — `bytecode`, `size`, `entryParams`, the paired compiler and engine — with the parsed `document`, the `source`, the ABI bindings it calls through (`bindings`), beside the protocol contracts it calls (`contracts`, as `sauce compile --json` reports them) and the argument names (`parameters`); `--compact-args` compiles the arguments compact-v1. `sauce compile`, `sauce tx`, `sauce simulate` and `sauce run` take the same document wherever they take a `.sauce.ts` file, with the same flags: its `argument` actions are `main`'s parameters, passed with `--args`, and its cook runs on the Pot `--owner` or `--pot` names, funded by `--fund` if you like.
 
 ```sh
-npx sauce simulate swap.json --chain base --owner <owner> --rpc-url <url> \
+sauce simulate swap.json --chain base --owner <owner> \
   --assume-balance USDC:1000 --args 1000000000
 ```
 
@@ -262,7 +262,7 @@ Everything in [creating an intent](intents.md) applies: the Pot must be owned by
 
 ### Fund a child from a measured amount
 
-A program's output is only known once it runs. [Dynamic nesting](nested-intents.md#create-the-child-on-chain-from-a-measured-amount) publishes a child intent funded from what the parent's Pot holds after its program ran, so the pattern is:
+A program's output is only known once it runs. An action program has no action that opens an intent, so it is chained to another with the TypeScript builder's `.nest()`. [Dynamic nesting](../api/routes.md#dynamic-children) publishes a child intent funded from what the parent's Pot holds after its program ran, so the pattern is:
 
 1. The parent program keeps its output in the Pot (`"recipient": "self"`).
 2. `.nest(child, { via: "dynamic", measure: { kind: "erc20Balance", token } })` measures that balance.
@@ -270,7 +270,7 @@ A program's output is only known once it runs. [Dynamic nesting](nested-intents.
 
 ```ts
 import { programIntent, type ActionProgram } from "@eco-incorp/sauce/actions";
-import { routes } from "@eco-incorp/sauce";
+import { destinationPot, routes } from "@eco-incorp/sauce";
 import { encodeFunctionData, parseAbi, type Address } from "viem";
 
 const { AMOUNT_IN_PLACEHOLDER, AMOUNT_OUT_PLACEHOLDER } = routes;
@@ -279,17 +279,18 @@ export function buildCascade(
   parentProgram: ActionProgram, // e.g. a swap into USDC with "recipient": "self", run on Base
   childProgram: ActionProgram, // e.g. balanceOf "USDC", an approve, then aaveV3Supply, on Arbitrum
   parentOptions: routes.IntentOptions,
-  childOptions: routes.IntentOptions & { pot: Address },
+  childOptions: routes.IntentOptions,
   usdcBase: Address,
   usdcArbitrum: Address,
   parentReward: routes.SauceRewardSpec,
   childReward: Omit<routes.SauceRewardSpec, "tokens">,
 ) {
-  // The Executor receives the child's tokens; move them into the Pot the child program runs in.
+  // The Executor receives the child's tokens; move them into the Pot the child program runs in,
+  // the shared one the SDK derives for Arbitrum's Portal.
   const toPot = encodeFunctionData({
     abi: parseAbi(["function transfer(address,uint256)"]),
     functionName: "transfer",
-    args: [childOptions.pot, AMOUNT_OUT_PLACEHOLDER],
+    args: [destinationPot("arbitrum", childOptions), AMOUNT_OUT_PLACEHOLDER],
   });
   const child = programIntent(childProgram, {
     ...childOptions,
@@ -312,7 +313,7 @@ export function buildCascade(
 }
 ```
 
-The measurement is the Pot's balance after the parent program, not the program's own output figure: another action, or a donation, that leaves the same token in the Pot is measured too. The rest of the nested-intents guide — scale, floors, hash recovery — applies unchanged. The route's token amounts and precalls are TypeScript, outside the document, so they take addresses: `Base.USDC.address` and `Arbitrum.USDC.address` from the package root are the same tokens the documents' `"USDC"` names on each chain.
+The measurement is the Pot's balance after the parent program, not the program's own output figure: another action, or a donation, that leaves the same token in the Pot is measured too. The rest of [dynamic children](../api/routes.md#dynamic-children) — scale, floors, hash recovery — applies unchanged. The route's token amounts and precalls are TypeScript, outside the document, so they take addresses: `Base.USDC.address` and `Arbitrum.USDC.address` from the package root are the same tokens the documents' `"USDC"` names on each chain.
 
 ## Runtime amounts
 
@@ -357,15 +358,15 @@ import { uniswapV3 } from "@sauce/router";
 
 function main(): void {
   // … the wrap, whose output is t_out0 …
-  const pool1 = UniswapV3.Factory.getPool(WETH, USDC, 500n); // the pool, read on chain
-  require(pool1 != 0n, "actions[1]: no pool under that key");
+  const pool1 = UniswapV3.Factory.getPool(WETH, USDC, 500); // the pool, read on chain
+  require(pool1 != 0, "actions[1]: no pool under that key");
   const amt2 = uniswapV3(
     pool1, // pool
     WETH, // tokenIn: the registry's WETH on the chain compiled for
     USDC, // tokenOut
     t_out0, // amountIn: the previous action's output
-    0n, // sqrtPriceLimitX96: none
-    3000000000n, // minOut
+    0, // sqrtPriceLimitX96: none
+    3000000000, // minOut
     ctx.self(), // recipient: the Pot, because a later action spends the output
   );
   let v_usdc = amt2;
@@ -476,7 +477,7 @@ The venues the library does not cover, each through its own contract:
 
 Arc (`chainId` 5042) pays gas in USDC, which is also the ERC-20 at
 `0x3600000000000000000000000000000000000000`: one balance, 18 decimals natively and 6 through the
-ERC-20 ([details](../api/coverage.md#arc-usdc-is-the-native-coin)). A program compiled for Arc is
+ERC-20 ([details](../reference/chains/arc.md#notes)). A program compiled for Arc is
 checked for what that changes — a document with no `chainId` too, when Arc is the chain it is
 compiled for:
 

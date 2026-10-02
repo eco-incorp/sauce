@@ -37,7 +37,7 @@ An interface is called with the address of a deployment, `Erc4626.Vault(vault).t
 ABI; a deployed contract's name is never called with an address. A contract the
 registry does not record at all is called through its ABI, imported from
 `./protocols/<slug>/<Export>.json` and bound with `.at(address)` to an address passed in as a
-`main` input or a define.
+`main` input.
 
 A program that should also compile for a chain without the protocol compares the contract with
 zero: a contract the chain lacks is zero there, and the comparison is decided when the program is
@@ -46,11 +46,11 @@ compiled, so the branch it rules out is left out, names and all:
 ```sauce chain=base,arbitrum,optimism
 function main(fee: Uint256) {
   const uni = UniswapV3.Factory.getPool(WETH, USDC, fee);
-  let pancake = 0n;
-  if (PancakeswapV3.Factory != 0n) {
+  let pancake = 0;
+  if (PancakeswapV3.Factory != 0) {
     pancake = PancakeswapV3.Factory.getPool(WETH, USDC, fee);
   }
-  require(uni != 0n || pancake != 0n, "no WETH/USDC pool at that fee");
+  require(uni != 0 || pancake != 0, "no WETH/USDC pool at that fee");
 }
 ```
 
@@ -58,7 +58,7 @@ With that program in `pools.sauce.ts`, a run on Base passes nothing but the fee 
 `500` is the 0.05% tier):
 
 ```sh
-npx sauce run pools.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+sauce run pools.sauce.ts --chain base --keystore <keystore> \
   --args 500
 ```
 
@@ -73,7 +73,7 @@ lacks it.
 | How to name a contract       | the registry file's "In a program" column for your chain                                                 |
 | A chain may lack it          | `if (Namespace.Contract != 0n) { … }`                                                                    |
 | A pool, not a fixed contract | look it up at run time through the factory (`getPool`, `getPair`), which returns `0` where there is none |
-| A swap                       | through the Sauce Router wherever it services the pool (`sauce-swaps`), not the protocol's own router    |
+| A swap                       | a `@sauce/router` function for the venue (`sauce-swaps`), not the protocol's own router                  |
 | Code on another chain        | a Sauce intent (`sauce-intents`), not a bridge call alone                                                |
 
 ## Workflow
@@ -98,7 +98,7 @@ lacks it.
   registry has no verified ABI with their pool lookup, so discover the pool off chain and pass its
   address as a `main` input.
 - **Solidity idioms in a document have SauceScript spellings**: `msg.sender` is `ctx.msgSender()`,
-  `address(this)` is `ctx.self()`, and `type(uint256).max` is `~0n`
+  `address(this)` is `ctx.self()`, and `type(uint256).max` is `~0`
   ([../sauce-script/references/builtins.md](../sauce-script/references/builtins.md)).
 - **Approve exactly what the call spends**: the Pot keeps any allowance it grants.
 

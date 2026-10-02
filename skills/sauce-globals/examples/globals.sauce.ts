@@ -4,7 +4,7 @@
 // Every write is SafeERC20, so USDT works and a false return reverts. The addresses and amounts are
 // main(...) inputs, passed with the transaction.
 //
-//   sauce run globals.sauce.ts --chain <chain> --config sauce.config.json --keystore <keystore> \
+//   sauce run globals.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <payee> <payer> <otherToken> <usdtAmount> <otherAmount> <usdcAmount>
 //
 //   payee: Address         who receives the USDT and the other token, and the Aave position
@@ -19,7 +19,7 @@
 //
 // On Ethereum, 1 USDT, 0.001 WETH from the payer, and 1 USDC supplied to Aave:
 //
-//   sauce run globals.sauce.ts --chain ethereum --config sauce.config.json \
+//   sauce run globals.sauce.ts --chain ethereum \
 //     --keystore <keystore> --args <payee> <payer> 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2 \
 //     1000000 1000000000000000 1000000
 function main(
@@ -42,6 +42,6 @@ function main(
 
   // A protocol call. The approve is exact, so no allowance is left standing afterwards.
   USDC.approve(AaveV3.Pool, usdcAmount);
-  AaveV3.Pool.supply(USDC, usdcAmount, payee, 0n);
-  require(allowance(USDC, me, AaveV3.Pool) == 0n, "an allowance was left standing");
+  AaveV3.Pool.supply(USDC, usdcAmount, payee, 0);
+  require(allowance(USDC, me, AaveV3.Pool) == 0, "an allowance was left standing");
 }

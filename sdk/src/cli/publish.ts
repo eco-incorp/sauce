@@ -1,8 +1,8 @@
 /**
  * `sauce intent publish`: the intents a file opens, published from a wallet on the source chain — no Pot.
  *
- * For a file whose intents are FIXED when it is built: every amount a literal, a define or a
- * top-level `const` of a literal. Then the SDK's own lowering (`compileSauceProgram(...).intents`)
+ * For a file whose intents are FIXED when it is built: every amount a literal, one of `main`'s
+ * arguments bound by `--args` (`inputs.ts#bindMainArguments`), or a top-level `const` of a literal. Then the SDK's own lowering (`compileSauceProgram(...).intents`)
  * has already encoded each intent exactly, and publishing it is what the TypeScript builder hands a
  * caller (`routes/portal.ts` `intentSourceTxs`), sent from the wallet instead of a program. An
  * amount the program measures on chain (`const amount = USDC.balanceOf(ctx.self())`) exists only
@@ -150,8 +150,9 @@ function fixedIntents(input: ProgramInput, files: CliFiles): readonly LoweredInt
   }
   if (program.entryParams.length > 0) {
     throw new UsageError(
-      `${input.file} takes arguments at run time (main(${program.entryParams.map((p) => p.name).join(", ")})), ` +
-        "which only a run has: use `sauce run` on a Pot",
+      `${input.file} takes arguments (main(${program.entryParams.map((p) => p.name).join(", ")})): ` +
+        "give them with --args, and they are bound into the intents; or run it on a Pot with " +
+        "`sauce run`",
     );
   }
   const measured = program.intents.find((intent) => intent.captures.length > 0);
@@ -159,8 +160,8 @@ function fixedIntents(input: ProgramInput, files: CliFiles): readonly LoweredInt
     throw new CliError(
       `the intent to ${measured.destination.slug} uses ${measured.captures.map((name) => `\`${name}\``).join(", ")}, ` +
         "which the program measures or computes while it runs, so it cannot be built from a " +
-        "wallet: use `sauce run` on a Pot, or make it a literal, a define or a top-level `const` " +
-        "of a literal",
+        "wallet: use `sauce run` on a Pot, or make it a literal, one of main's arguments (given " +
+        "with --args) or a top-level `const` of a literal",
     );
   }
   const other = otherStatement(input.file, input.text);
@@ -360,12 +361,19 @@ async function walletBalances(
   client: PublicClient,
   input: PublishInput,
   wallet: Address,
-): Promise<{ overrides: StateOverride; lines: string[]; json: Record<string, string>[] }> {
+): Promise<{
+  overrides: StateOverride;
+  lines: string[];
+  json: Record<string, string>[];
+  notes: string[];
+}> {
   const overrides: StateOverride[number][] = [];
   const lines: string[] = [];
   const json: Record<string, string>[] = [];
+  const notes: string[] = [];
   for (const request of input.assume ?? []) {
-    const amount = await baseUnits(client, request);
+    const { amount, note } = await baseUnits(client, request);
+    if (note !== undefined) notes.push(note);
     if (request.token === undefined) {
       overrides.push({ address: wallet, balance: amount });
       lines.push(`  ${wallet} holds ${formatUnits(amount, 18)} ${nativeSymbol(input.chain)}`);
@@ -395,6 +403,7 @@ async function walletBalances(
     lines:
       lines.length === 0 ? [] : ["Assumed for this rehearsal only, by state override:", ...lines],
     json,
+    notes,
   };
 }
 
@@ -579,6 +588,7 @@ async function publishIntents(input: PublishInput, files: CliFiles): Promise<Com
         }),
       },
       notes: [
+        ...assumed.notes,
         `This rehearses publishing on ${input.chain.slug} only. What the intent does runs on ` +
           `${[...new Set(plans.map((plan) => plan.intent.destination.slug))].join(" and ")}, when ` +
           "a solver fills it: `sauce intent fill` with the same file and flags, and the destination's " +

@@ -19,7 +19,7 @@ On Ethereum, `Fluid` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's liquidity, `0x52Aa899454998Be5b000Ad077a46Bbe360F4e497`.
-  require(Fluid.Liquidity != 0n);
+  require(Fluid.Liquidity != 0);
 }
 ```
 

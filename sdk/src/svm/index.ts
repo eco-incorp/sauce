@@ -14,6 +14,7 @@ export * from "./args.js";
 export * from "./prepends.js";
 export * from "./alt.js";
 export * from "./transaction.js";
+export * from "./kit.js";
 export * from "./send.js";
 export * from "./client.js";
 export * from "./quoteSim.js";

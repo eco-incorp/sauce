@@ -173,7 +173,7 @@ function statementsFor(
     chunkIndex++;
   }
   const resultVar = `${prefix}${fn === "approve" ? "ar" : "tr"}`;
-  statements.push(`const ${resultVar} = evm.call(${token}, 0n, ${expr});`);
+  statements.push(`const ${resultVar} = evm.call(${token}, 0, ${expr});`);
   statements.push(optionalReturnCheck(resultVar, token));
 
   // Drop the byte-run consts that were skipped above, so the program declares nothing unused. Only
@@ -196,7 +196,7 @@ function optionalReturnCheck(resultVar: string, token: string): string {
   return (
     `if (${resultVar}.length == 0) { require(ctx.codeSize(${token}) > 0); } ` +
     `else { const [${resultVar}ok] = abi.decode(${resultVar}, ["Uint256"]); ` +
-    `require(${resultVar}ok == 1n); }`
+    `require(${resultVar}ok == 1); }`
   );
 }
 
@@ -250,7 +250,7 @@ export function safeApproveStatements(
   // The reset, only when there is something to reset. USDT refuses a non-zero -> non-zero change,
   // and a shared Pot is exactly where a stale allowance is waiting.
   const reset = statementsFor("approve", `${prefix}z`, token, [spender, { literal: 0n }]);
-  statements.push(`if (${allowanceVar} > 0n) {`, ...reset.map((line) => `  ${line}`), `}`);
+  statements.push(`if (${allowanceVar} > 0) {`, ...reset.map((line) => `  ${line}`), `}`);
   statements.push(...statementsFor("approve", prefix, token, [spender, amount]));
 
   return statements;

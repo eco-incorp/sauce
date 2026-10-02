@@ -19,7 +19,7 @@ On Ethereum, `YearnV3` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's vaultFactory, `0x770D0d1Fb036483Ed4AbB6d53c1C89fb277D812F`.
-  require(YearnV3.VaultFactory != 0n);
+  require(YearnV3.VaultFactory != 0);
 }
 ```
 

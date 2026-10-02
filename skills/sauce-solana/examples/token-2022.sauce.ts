@@ -6,7 +6,7 @@
 // mint, the same call either way. Each account is passed by its token: `program:PYUSD` is the mint's
 // token program, `mint:PYUSD` the mint, `pot:PYUSD` the Pot's account for it.
 //
-//   sauce run token-2022.sauce.ts --chain <chain> --config sauce.config.json --keypair <keypair> \
+//   sauce run token-2022.sauce.ts --chain <chain> --keypair <keypair> \
 //     --account tokenProgram=program:PYUSD --account source=pot:PYUSD --account mint=mint:PYUSD \
 //     --account destination=<token account> --account pot=pot --args <amount>
 //
@@ -20,7 +20,7 @@
 //
 // On Solana, 1 PYUSD from the Pot's PYUSD account:
 //
-//   sauce run token-2022.sauce.ts --chain solana --config sauce.config.json --keypair <keypair> \
+//   sauce run token-2022.sauce.ts --chain solana --keypair <keypair> \
 //     --account tokenProgram=program:PYUSD --account source=pot:PYUSD --account mint=mint:PYUSD \
 //     --account destination=<token account> --account pot=pot --args 1000000
 function main(
@@ -33,6 +33,6 @@ function main(
 ): Uint256 {
   require(ownerOf(PYUSD, source) == pot.address, "not the Pot's account");
   const before = balanceOf(PYUSD, destination);
-  transferChecked(PYUSD, tokenProgram, source, mint, destination, pot, amount, 6n);
+  transferChecked(PYUSD, tokenProgram, source, mint, destination, pot, amount, 6);
   return balanceOf(PYUSD, destination) - before;
 }

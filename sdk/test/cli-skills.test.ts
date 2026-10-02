@@ -15,11 +15,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { initProject, sauceScriptTsconfig } from "../src/cli/init.js";
+import { initProject } from "../src/cli/init.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import {
   DEFAULT_AGENTS,
@@ -27,6 +28,7 @@ import {
   installTarget,
   PACKAGED_SKILLS,
   parseAgents,
+  sauceScriptTsconfig,
   statusOf,
   targetsFor,
   updateTarget,
@@ -39,6 +41,12 @@ const MANIFEST = JSON.parse(readFileSync(join(SDK, "..", "package.json"), "utf8"
   name: string;
   version: string;
 };
+/** The viem installed beside the package, read here on its own. */
+const VIEM = (
+  JSON.parse(readFileSync(createRequire(import.meta.url).resolve("viem/package.json"), "utf8")) as {
+    version: string;
+  }
+).version;
 
 let work: string;
 let project: string;
@@ -122,8 +130,13 @@ describe("where each agent's skills go", () => {
           "alpha/SKILL.md": expect.stringMatching(/^[0-9a-f]{64}$/),
           "alpha/examples/one.sauce.ts": expect.stringMatching(/^[0-9a-f]{64}$/),
           "beta/SKILL.md": expect.stringMatching(/^[0-9a-f]{64}$/),
+          "tsconfig.json": expect.stringMatching(/^[0-9a-f]{64}$/),
         },
       });
+      // Beside them, the TypeScript project that types their programs for an editor.
+      expect(JSON.parse(read(`${dir}/tsconfig.json`))).toEqual(
+        sauceScriptTsconfig("@eco-incorp/sauce"),
+      );
     }
     const index = read("AGENTS.md");
     expect(index).toMatch(
@@ -261,6 +274,7 @@ describe("install, update and status over a package upgrade", () => {
       [join(".claude", "skills", "alpha", "examples", "one.sauce.ts"), "current"],
       [join(".claude", "skills", "beta", "SKILL.md"), "remove"],
       [join(".claude", "skills", "gamma", "SKILL.md"), "add"],
+      [join(".claude", "skills", "tsconfig.json"), "current"],
     ]);
 
     const report = updateTarget(project, upgraded, target!, false);
@@ -305,6 +319,33 @@ describe("install, update and status over a package upgrade", () => {
     updateTarget(project, upgraded, target!, true);
     expect(read(".claude/skills/alpha/SKILL.md")).toMatch(/alpha v2/);
     expect(statusOf(project, upgraded, target!).state).toBe("up to date");
+  });
+
+  it("adds the programs' tsconfig.json to an install from before it, and keeps one edited here", () => {
+    const source = packageAt("1.0.0");
+    const [target] = targetsFor(["claude"]);
+    installTarget(project, source, target!);
+    // An install that predates it: no file, and none in the record.
+    const record = JSON.parse(read(`.claude/skills/${INSTALL_RECORD}`));
+    delete record.files["tsconfig.json"];
+    write(`.claude/skills/${INSTALL_RECORD}`, JSON.stringify(record));
+    rmSync(join(project, ".claude/skills/tsconfig.json"));
+    const before = statusOf(project, source, target!);
+    expect(before.state).toBe("outdated");
+    expect(
+      before.files.filter((file) => file.change !== "current").map((file) => file.change),
+    ).toEqual(["add"]);
+    updateTarget(project, source, target!, false);
+    expect(JSON.parse(read(".claude/skills/tsconfig.json"))).toEqual(
+      sauceScriptTsconfig("@eco-incorp/sauce"),
+    );
+    expect(statusOf(project, source, target!).state).toBe("up to date");
+
+    // A project that merged options of its own into it keeps them.
+    write(".claude/skills/tsconfig.json", '{ "extends": "../../tsconfig.base.json" }\n');
+    expect(statusOf(project, source, target!).state).toBe("modified");
+    updateTarget(project, { ...source, version: "1.1.0" }, target!, false);
+    expect(read(".claude/skills/tsconfig.json")).toContain("tsconfig.base.json");
   });
 
   it("refuses a record that names a file outside the skills directory, even with --force", () => {
@@ -456,13 +497,13 @@ describe("the commands", () => {
 
     // An install that predates a file the package ships now is outdated.
     const record = JSON.parse(read(`.agents/skills/${INSTALL_RECORD}`));
-    delete record.files["sauce-cli/examples/split.sauce.ts"];
+    delete record.files["sauce-cli/examples/payout.sauce.ts"];
     write(`.agents/skills/${INSTALL_RECORD}`, JSON.stringify(record));
-    rmSync(join(project, ".agents/skills/sauce-cli/examples/split.sauce.ts"));
+    rmSync(join(project, ".agents/skills/sauce-cli/examples/payout.sauce.ts"));
     const outdated = await sauce("skills", "status", ...dir());
     expect(outdated.code).toBe(1);
     expect(outdated.stdout).toContain(
-      `add       ${join(".agents", "skills", "sauce-cli", "examples", "split.sauce.ts")}`,
+      `add       ${join(".agents", "skills", "sauce-cli", "examples", "payout.sauce.ts")}`,
     );
     const update = await sauce("skills", "update", ...dir());
     expect(update.code).toBe(0);
@@ -499,10 +540,16 @@ describe("sauce init", () => {
     expect(run.code).toBe(0);
     const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
     expect(manifest.name).toBe("my-app");
-    expect(manifest.dependencies).toEqual({ [MANIFEST.name]: MANIFEST.version });
-    // The TypeScript the programs' editor plugin runs in: the range the package itself takes.
+    // The package at this exact version, and viem, which its TypeScript API is typed in, exactly as
+    // installed beside it: a project's own dependencies, all a non-hoisting package manager
+    // resolves from it.
+    expect(manifest.dependencies).toEqual({ [MANIFEST.name]: MANIFEST.version, viem: VIEM });
+    expect(VIEM).toMatch(/^\d+\.\d+\.\d+$/);
+    // The TypeScript the programs' editor plugin runs in: the range the package itself takes; and
+    // Node's typings, for the skills' runners.
     expect(manifest.devDependencies).toEqual({
       typescript: (MANIFEST as { dependencies?: Record<string, string> }).dependencies?.typescript,
+      "@types/node": "^24.0.0",
     });
     // The programs directory: its own TypeScript project, of SauceScript alone.
     expect(JSON.parse(readFileSync(join(dir, "programs/tsconfig.json"), "utf8"))).toEqual(
@@ -518,6 +565,9 @@ describe("sauce init", () => {
     expect(readFileSync(join(dir, "GEMINI.md"), "utf8")).toBe("@./AGENTS.md\n");
     const agentsMd = readFileSync(join(dir, "AGENTS.md"), "utf8");
     expect(agentsMd).toMatch(/^# AGENTS\.md\n/);
+    // The command is `sauce`, and the instructions say how to get it.
+    expect(agentsMd).toContain(`installed once with\n  \`npm i -g ${MANIFEST.name}\``);
+    expect(agentsMd).not.toMatch(/npx sauce/);
     expect(agentsMd).toContain("<!-- sauce-skills:begin ");
     for (const skills of [".claude/skills", ".agents/skills"]) {
       expect(existsSync(join(dir, skills, "sauce-cli", "SKILL.md"))).toBe(true);
@@ -547,6 +597,7 @@ describe("sauce init", () => {
     expect((await sauce("init", dir, "--force")).code).toBe(0);
     expect(JSON.parse(readFileSync(join(dir, "package.json"), "utf8")).dependencies).toEqual({
       [MANIFEST.name]: MANIFEST.version,
+      viem: VIEM,
     });
   });
 

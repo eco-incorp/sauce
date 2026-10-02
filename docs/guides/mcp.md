@@ -1,6 +1,6 @@
 # The Sauce MCP server
 
-[Documentation](../README.md) · [The sauce command](cli.md) · [Agent skills](cli.md#agent-skills)
+[Documentation](../README.md) · [The sauce command](cli.md) · [Agent skills](skills.md)
 
 `sauce mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server. A coding agent
 gets the building half of the [`sauce` command](cli.md) as tools, and the package's agent skills
@@ -8,10 +8,131 @@ as tools and resources. The server compiles programs and action documents and li
 names. It builds unsigned transactions: the cook, the Pot's deployment, an intent's publish
 transactions and each step of its life after. It also rehearses a cook and takes calls apart.
 
-For the initial release it builds transactions only on **Ethereum**, **Base** and **Solana**. Every
-other chain is a [preview chain](#supported-and-preview-chains): an agent can compile, simulate and
-rehearse any protocol on it, and the tools that would return a transaction there return `refused`
-instead, with how to request the chain.
+## Quick start
+
+You don't run the server yourself. Your coding agent starts it on your machine, as `sauce mcp`,
+from its MCP configuration, whenever it needs it. Install the command once (Node.js 24 or newer):
+
+```sh
+npm i -g @eco-incorp/sauce
+sauce --version
+```
+
+`npm i -g @eco-incorp/sauce@latest` upgrades it. Then add the server to your agent.
+
+### Claude Code
+
+```sh
+claude mcp add sauce -- sauce mcp
+```
+
+This adds it for you, in the current project (stored in `~/.claude.json`). Add `--scope user`
+before `sauce` for every project. `--scope project` writes `.mcp.json` in the project root instead,
+to share through version control; Claude Code asks each person to approve a project's server.
+
+### OpenAI Codex
+
+```sh
+codex mcp add sauce -- sauce mcp
+```
+
+This adds it to `~/.codex/config.toml`, for every project. A project Codex trusts can carry the
+same entry in its own `.codex/config.toml`:
+
+```toml
+[mcp_servers.sauce]
+command = "sauce"
+args = ["mcp"]
+```
+
+### Gemini CLI
+
+```sh
+gemini mcp add sauce sauce mcp
+```
+
+This writes the project's `.gemini/settings.json`; `--scope user` after `add` writes
+`~/.gemini/settings.json`, for every folder. With its Trusted Folders setting on, Gemini CLI ignores
+an untrusted folder's settings.
+
+### Claude Desktop
+
+Open Settings, then Developer, then Edit Config. That opens `claude_desktop_config.json`:
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+Add the server under `mcpServers`, keeping any others there, then quit Claude Desktop and start it
+again:
+
+```json
+{
+  "mcpServers": {
+    "sauce": { "command": "sauce", "args": ["mcp"] }
+  }
+}
+```
+
+### Cursor
+
+The same `mcpServers` entry, in `.cursor/mcp.json` in the project or `~/.cursor/mcp.json` for every
+project.
+
+### VS Code (GitHub Copilot)
+
+```sh
+code --add-mcp "{\"name\":\"sauce\",\"command\":\"sauce\",\"args\":[\"mcp\"]}"
+```
+
+This adds it to your user profile. For one workspace, put it in `.vscode/mcp.json`, under
+`servers`:
+
+```json
+{
+  "servers": {
+    "sauce": { "type": "stdio", "command": "sauce", "args": ["mcp"] }
+  }
+}
+```
+
+### Every project file at once
+
+```sh
+sauce mcp setup
+```
+
+This writes the project file of each agent above that reads one (`.mcp.json`, `.codex/config.toml`,
+`.cursor/mcp.json`, `.vscode/mcp.json` and `.gemini/settings.json`), pinned to the version that
+wrote it, so the files work on any machine that clones the project
+([Project files](#project-files)).
+
+### Check it worked
+
+- **Claude Code:** `claude mcp list` lists `sauce` as connected; inside a session, `/mcp`. A project
+  server stays pending until you approve it in a session.
+- **OpenAI Codex:** `codex mcp list`; in a session, `/mcp`.
+- **Gemini CLI:** `gemini mcp list` lists `sauce` as connected; in a session, `/mcp`.
+- **Claude Desktop:** the "+" button in the message box, then Connectors, lists `sauce`.
+- **VS Code:** the MCP: List Servers command shows its status.
+- **Any agent:** ask it to list the `sauce_` tools. It names `sauce_compile`, `sauce_globals`,
+  `sauce_tx` and the rest.
+
+**If a desktop client cannot start it.** A desktop or GUI client may not see your shell's `PATH`,
+so it may not find a `sauce` installed under nvm or another version manager. Give it the absolute
+path `which sauce` prints as the command, or let it run the package with no install: command `npx`,
+args `["-y", "@eco-incorp/sauce", "mcp"]`.
+
+### No configuration needed
+
+The server reads each chain through built-in public endpoints, so there is nothing to configure.
+Your own endpoint is optional and faster ([Your own endpoints](#your-own-endpoints)).
+
+## Chains and signing
+
+For the initial release the server builds transactions only on **Ethereum**, **Base** and
+**Solana**. Every other chain is a [preview chain](#supported-and-preview-chains): an agent can
+compile, simulate and rehearse any protocol on it, and the tools that would return a transaction
+there return `refused` instead, with how to request the chain.
 
 **The local stdio server signs only with wallets in its wallet directory, unlocked by the password
 source it was started with; the HTTP server never signs.** Neither ever asks for a key or a
@@ -20,51 +141,57 @@ wallet the user holds. That lets the server run anywhere: on the agent's machine
 a host of your own over Streamable HTTP. Transactions it does not send are signed and sent by local
 means: a wallet, `cast send`, or `sauce run` with the user's own keystore.
 
-## Run it
-
-One command, through npx. Node.js 24 or newer:
+## The command
 
 ```sh
-npx -y @eco-incorp/sauce mcp                                   # stdio: what an agent launches
-npx -y @eco-incorp/sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD   # stdio, signing
-npx -y @eco-incorp/sauce mcp --http 3000 --config rpc.json     # self-hosted, Streamable HTTP
+sauce mcp                                                  # stdio: what an agent launches
+sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD   # stdio, signing
+sauce mcp --http 3000                                      # self-hosted, Streamable HTTP
 ```
 
-In a project that depends on the package, `npx sauce mcp` runs the project's own version.
-`npx sauce mcp --help` lists every flag. The server is loaded only when `sauce mcp` runs, so no
-other command pays for it.
+`sauce mcp --help` lists every flag. The server is loaded only when `sauce mcp` runs, so no other
+command pays for it.
 
 Over stdio the server writes nothing but the protocol to stdout. A message larger than `--max-body`
 (2 MiB by default) closes the connection.
 
 ## Endpoints
 
-A tool that reads a chain takes **`rpcUrl`**, an endpoint for that one call. It looks for an
+A tool that reads a chain needs no endpoint from you or the server's operator: it reads the chain
+through a built-in public endpoint — one to three keyless ones per chain, the next taking over when
+one cannot be reached, refuses, rate-limits or fails — and a result read that way says so in its
+`notes`. Public endpoints can be slow or rate-limited. Kava, ZetaChain and Evmos have none.
+
+### Your own endpoints
+
+Optional, and faster. A tool takes **`rpcUrl`**, an endpoint for that one call, and looks for an
 endpoint in this order:
 
 1. the call's own `rpcUrl`;
 2. the server's endpoint for the chain, from `--config <file>` (the
-   [`sauce` command's format](cli.md#endpoints-and-signers)):
+   [`sauce` command's format](cli.md#your-own-endpoints)):
 
    ```json
    { "rpcUrls": { "1": "https://…", "8453": "https://…", "1399811149": "https://…" } }
    ```
 
-3. if neither has one, a plain error naming the chain and saying to pass `rpcUrl`.
+3. the built-in public endpoint for the chain;
+4. if none has one, a plain error naming the chain and saying to pass `rpcUrl`.
 
-The server ships no endpoint and reads no environment variable.
+The server reads no environment variable.
 
-A provider URL usually carries a key, so no URL is ever returned, logged or quoted, from the call
-or from the file. That covers results and errors, including an upstream error that repeats the URL.
-The file's path is never shown either. The file is checked when the server starts: a malformed
-entry, a `<…>` placeholder or a URL that is not http(s) stops it there. `sauce_chains` says which
-chains have a server endpoint.
+A provider URL usually carries a key, so no URL of yours is ever returned, logged or quoted, from
+the call or from the file. That covers results and errors, including an upstream error that
+repeats the URL. The file's path is never shown either. The file is checked when the server
+starts: a malformed entry, a `<…>` placeholder or a URL that is not http(s) stops it there.
+`sauce_chains` says where the server reads each chain: `config`, `public` or `none`.
 
 **A server someone else runs sees every `rpcUrl` you pass it.** Pass only keys you are willing to
-share with its operator. Otherwise run the server yourself with `npx -y @eco-incorp/sauce mcp`,
+share with its operator. Otherwise run the server yourself with `sauce mcp`,
 where your URL never leaves your machine.
 
-What works with no endpoint at all:
+On a chain the server cannot read — no `rpcUrl`, no `--config` entry, no public endpoint — this
+still works:
 
 - compiling a program or an action document;
 - a chain's names and a price conversion;
@@ -72,18 +199,20 @@ What works with no endpoint at all:
 - the Pot's address, and on a supported chain its deployment and an intent's publish transactions;
 - taking calldata apart, and reading the skills.
 
-What needs one: `sauce_simulate`, a publish dry run, anything given a transaction hash, a Solana cook
-(its blockhash and fee), and reading the Kitchen's fee or whether a Pot exists.
+What needs an endpoint: `sauce_simulate`, a publish dry run, anything given a transaction hash, a
+Solana cook (its blockhash and fee), and reading the Kitchen's fee or whether a Pot exists.
 
-## Add it to a coding agent
+## Project files
 
 `sauce mcp setup` writes the project configuration each agent documents. The server it configures
-is launched as `npx -y @eco-incorp/sauce@<this version> mcp`:
+is launched as `npx -y @eco-incorp/sauce@<this version> mcp`, not as `sauce mcp`: a project file is
+shared, so it names no command a machine has to have installed, and it runs the version whose skills
+the project installed.
 
 ```sh
-npx sauce mcp setup                                # every agent below
-npx sauce mcp setup --agent claude,cursor          # only these
-npx sauce mcp setup --config rpc.json              # launch it with --config
+sauce mcp setup                         # every agent below
+sauce mcp setup --agent claude,cursor   # only these
+sauce mcp setup --config rpc.json       # launch it with your own endpoints
 ```
 
 | Agent                    | File                    | Under                 | Documentation                                                                     |
@@ -109,34 +238,9 @@ Each agent asks before it runs a server a project names:
 - VS Code applies Workspace Trust.
 - Gemini CLI, with its Trusted Folders setting on, ignores an untrusted folder's settings.
 
-Or add it by hand, with each agent's own command, per its documentation:
-
-```sh
-claude mcp add --scope project sauce -- npx -y @eco-incorp/sauce mcp
-codex mcp add sauce -- npx -y @eco-incorp/sauce mcp
-copilot mcp add sauce -- npx -y @eco-incorp/sauce mcp
-```
-
-`codex mcp add` and `copilot mcp add` (the Copilot CLI) write the user's configuration, not the
-project's. Cursor has no add command, so write `.cursor/mcp.json`. The entry, for a stdio server:
-
-```json
-{
-  "mcpServers": {
-    "sauce": { "type": "stdio", "command": "npx", "args": ["-y", "@eco-incorp/sauce", "mcp"] }
-  }
-}
-```
-
-```toml
-[mcp_servers.sauce]
-command = "npx"
-args = ["-y", "@eco-incorp/sauce", "mcp"]
-```
-
-VS Code's `.vscode/mcp.json` has the same entry under `servers`. Gemini CLI's
-`.gemini/settings.json` has it under `mcpServers`, without `type`. An agent can also ask the
-server itself: `sauce_install_skills` returns these for the agent it names.
+The GitHub Copilot CLI adds the server to its user configuration with
+`copilot mcp add sauce -- sauce mcp`. An agent can also ask the server itself:
+`sauce_install_skills` returns the commands and the entry for the agent it names.
 
 ### A remote server
 
@@ -168,15 +272,15 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_skill`          | —                      | One skill's `SKILL.md`, or a file under its `references/` or `examples/`; with `section` or `query`, only that part                                                                                                                                                                                        |
 | `sauce_dev`            | —                      | For TypeScript against the SDK: the TypeScript skill and the package's guides, API pages and examples for a topic or a question                                                                                                                                                                            |
 | `sauce_install_skills` | `sauce skills`         | For one agent, pinned to the server's version: the commands that add the package and install, update and check the skills, where it reads them, and its MCP configuration                                                                                                                                  |
-| `sauce_chains`         | —                      | Every chain: slug, id, name, kind, aliases, `support` (`supported` or `preview`) and whether the server has its own endpoint for it; `supported`, the supported slugs; `requestChain`, the chain-support request form                                                                                      |
+| `sauce_chains`         | —                      | Every chain: slug, id, name, kind, aliases, `support` (`supported` or `preview`) and where the server reads it (`endpoint`: `config`, `public` or `none`); `supported`, the supported slugs; `requestChain`, the chain-support request form                                                                |
 | `sauce_globals`        | `sauce globals`        | The chain's token symbols, protocol namespaces and contracts (with `protocol`, its methods), chain names, defines and `@sauce/token` functions; `stocks` and `search` for its tokenized stocks, 200 tokens a page (`offset`)                                                                               |
-| `sauce_price`          | `sauce price`          | A pair's price as the pool's `sqrtPriceX96` (also the swap's limit) and each direction's `minAvgPrice`; from `price`, `sqrtPriceX96` or a `pool` read now; with `slippageBps`, the `limits`                                                                                                                |
-| `sauce_pools`          | `sauce pools`          | Every price-limit pool of a pair on the chain, deepest first: venue, contract, address or V4 key, fee, liquidity, `sqrtPriceX96`, and each direction's price before and with the fee, the distributed swap's `maxPrice` and the depth to a 1% move; `empty`, the pools with no liquidity                   |
+| `sauce_price`          | `sauce price`          | A pair's price as the pool's `sqrtPriceX96` (also the swap's limit) and, each direction, the distributed swap's `maxPrice` and `maxAvgPrice` (input per output) and a single swap's `minAvgPrice` (output per input); from `price`, `sqrtPriceX96` or a `pool` read now; with `slippageBps`, the `limits`  |
+| `sauce_pools`          | `sauce pools`          | A pair's price-limit pools on the chain at one `block`, deepest first: venue, contract, address or V4 key, fee, liquidity, `sqrtPriceX96`, and each direction's price before and with the fee, the distributed swap's `maxPrice` and the depth to a 1% move; `empty`, the pools with no liquidity          |
 | `sauce_compile`        | `sauce compile`        | `bytecode`, `size`, `entryParams`, `entryEncoding`, `entrySchema`, each define it reads and where it came from, the `contracts` it calls, `compiler`, `engine`, on Solana the `manifest`; with `args` the `payload`, and with `rpcUrls` each intent's Pot checked                                          |
 | `sauce_actions`        | `sauce actions`        | An actions document (JSON) compiled for a chain: `sauce_compile`'s report with the generated `source`, its `parameters` and bindings, and, given a Pot, the unsigned cook `transaction` (on a preview chain, `refused` instead)                                                                            |
 | `sauce_tx`             | `sauce tx`             | EVM `{ chainId, to, data, value }`, the cook on the Pot, with `from` (who signs) and the `kitchenFee` read; Solana `{ chain, via, feePayer, pot, fee, maxExecutionFee, transaction }`, base64 and signed by no one                                                                                         |
 | `sauce_pot`            | `sauce pot`            | The Pot's address, its unsigned deployment (EVM `Kitchen.deployPot`; Solana `create_pot`; on a preview chain, `refused` instead), `deployed` (null with no endpoint), and with an endpoint what it holds and the Kitchen's fee                                                                             |
-| `sauce_simulate`       | `sauce simulate`       | `ok`, the `path` taken, gas, what `main` returns, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts                                                                                                                                                                     |
+| `sauce_simulate`       | `sauce simulate`       | `ok`, the `path` taken, each transaction's gas (`transactions`), what `main` returns, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts                                                                                                                                 |
 | `sauce_intent_publish` | `sauce intent publish` | Each fixed intent's `intentHash`, its `vault`, its `record` (what the other intent tools take) and its unsigned `transactions` (transfers into the vault, then `Portal.publish`; with `intentFundVia: "publishAndFund"`, approvals then `Portal.publishAndFund`); with `dryRun`, their status and `funded` |
 | `sauce_intent_fill`    | `sauce intent fill`    | For the solver `from`, its unsigned fill on the destination: approvals, then `fulfillAndProve` (the prover's fee in its value) or `fulfill`; with `dryRun`, the fill rehearsed: the calls and gas, what moved, or the decoded `reason`                                                                     |
 | `sauce_intent_import`  | `sauce intent import`  | The intents a source transaction published, each its `record`, vault, block and whether it was funded                                                                                                                                                                                                      |
@@ -191,11 +295,70 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_wallet_list`    | `sauce wallet list`    | Over stdio with `--wallets` only: each wallet's name, kind, address and policy                                                                                                                                                                                                                             |
 | `sauce_wallet_send`    | —                      | Over stdio with `--wallets` only: another tool's result (or a transaction, or a list) rehearsed, held to the wallet's policy, signed and sent; each one's `hash` and `status`, or the refusal                                                                                                              |
 
+### The command's flags as inputs
+
+A skill or a note may name a `sauce` command line. `sauce <command>` is the tool
+`sauce_<command>` (`sauce intent status` is `sauce_intent_status`); a program file is `source`, its
+text, or over stdio `path`, the file; every result is the command's `--json`; and a tool that reads
+several chains takes `rpcUrls`, one endpoint per chain. Each flag is the input beside it, as the
+server's instructions also list:
+
+| Flag                       | Input                  |
+| -------------------------- | ---------------------- |
+| `--args`, `--args-json`    | `args`                 |
+| `--assume-balance`         | `assumeBalance`        |
+| `--fund-mode`              | `fundMode`             |
+| `--fund`                   | `fund`                 |
+| `--sweep`                  | `sweep`                |
+| `--salt-hex`               | `saltHex`              |
+| `--salt`                   | `salt`                 |
+| `--owner`                  | `owner`                |
+| `--pot`                    | `pot`                  |
+| `--value`                  | `value`                |
+| `--account`                | `accounts`             |
+| `--intent-deadline`        | `intentDeadline`       |
+| `--intent-creator`         | `intentCreator`        |
+| `--intent-execution-fee`   | `intentExecutionFee`   |
+| `--intent-fund-via`        | `intentFundVia`        |
+| `--intent-reward-deadline` | `intentRewardDeadline` |
+| `--intent-prover`          | `intentProver`         |
+| `--no-prove`               | `prove: false`         |
+| `--max-execution-fee`      | `maxExecutionFee`      |
+| `--via`                    | `via`                  |
+| `--compact-args`           | `compactArgs`          |
+| `--chain`                  | `chain`                |
+| `--target`                 | `target`               |
+| `--rpc-url`                | `rpcUrl`               |
+| `--block`                  | `block`                |
+| `--from`, `--solver`       | `from`                 |
+| `--claimant`               | `claimant`             |
+| `--dry-run`                | `dryRun`               |
+| `--pin`                    | `pins`                 |
+| `--engine`                 | `engines`              |
+| `--min-out`                | `minOut`               |
+| `--spl-count`              | `splCount`             |
+| `--protocol`               | `protocol`             |
+| `--stocks`                 | `stocks`               |
+| `--search`                 | `search`               |
+| `--sqrt-price-x96`         | `sqrtPriceX96`         |
+| `--pool`                   | `pool`                 |
+| `--v4-key`                 | `v4Pools`              |
+
+Over stdio, `sauce_compile`, `sauce_simulate` and `sauce_tx` take `path` instead of `source`: a
+program file on the same machine, relative to the directory the server runs in, read with its
+relative imports beside it. A server over HTTP reads no file and refuses `path`. Each of the three
+returns `sourceSha256`, the sha256 of the program's text, which ties a rehearsal to the file it
+came from. `sauce_compile` with `omitBytecode` leaves the bytecode out; `sauce_simulate` with
+`scenarios` rehearses one program with several sets of `args` and `assumeBalance` at one
+block, and with `summary` returns only `ok` or the revert reason, what `main` returned, the balance
+changes, the transfers, each transaction's gas and the block.
+
 ### Supported and preview chains
 
 For the initial release the server builds transactions only on the chains the release supports:
-Ethereum, Base and Solana ([Supported chains](../README.md#supported-chains)). Every other chain is a
-preview chain. `sauce_chains` gives each chain's `support`, `"supported"` or `"preview"`.
+Ethereum, Base and Solana. Every other chain is a preview chain; [Chains](../reference/chains.md) has
+the policy and every chain. `sauce_chains` gives each chain's `support`, `"supported"` or
+`"preview"`.
 
 On a preview chain these work as they do everywhere: `sauce_compile`, `sauce_actions`' report,
 `sauce_simulate`, `sauce_globals`, `sauce_price`, `sauce_pools`, `sauce_inspect`, `sauce_verify`,
@@ -265,16 +428,15 @@ unknown field is refused, which is how a misspelt one is caught.
 
 The compiling tools take the program as text:
 
-| Input                                                   | Meaning                                                                                                                            |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `source`                                                | The program, the whole text of a `.sauce.ts` file (at most 256 KiB)                                                                |
-| `file`                                                  | Its name, for messages and relative imports (default `program.sauce.ts`)                                                           |
-| `modules`                                               | Files it imports by relative path, as path → text from the directory of `file`. Nothing is read from the server's disk             |
-| `chain`, `target`                                       | The chain, by slug, alias or id; or a `// @chain` header line in the program. `target: "svm"` alone is Solana                      |
-| `defines`                                               | Compile-time values by name: an integer in base units (decimal or `0x` hex), an address, `true` or `false`; a base58 key on Solana |
-| `compactArgs`                                           | Encode `main`'s arguments as compact-v1                                                                                            |
-| `intentDeadline`, `intentCreator`, `intentExecutionFee` | For intents the program opens: Unix seconds, a `0x` address, wei                                                                   |
-| `intentFundVia`                                         | How their reward reaches the vault: `transfer` (default: paid into it, then `publish`) or `publishAndFund`                         |
+| Input                                                   | Meaning                                                                                                                |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `source`                                                | The program, the whole text of a `.sauce.ts` file (at most 256 KiB)                                                    |
+| `file`                                                  | Its name, for messages and relative imports (default `program.sauce.ts`)                                               |
+| `modules`                                               | Files it imports by relative path, as path → text from the directory of `file`. Nothing is read from the server's disk |
+| `chain`, `target`                                       | The chain, by slug, alias or id; or a `// @chain` header line in the program. `target: "svm"` alone is Solana          |
+| `compactArgs`                                           | Encode `main`'s arguments as compact-v1                                                                                |
+| `intentDeadline`, `intentCreator`, `intentExecutionFee` | For intents the program opens: Unix seconds, a `0x` address, wei                                                       |
+| `intentFundVia`                                         | How their reward reaches the vault: `transfer` (default: paid into it, then `publish`) or `publishAndFund`             |
 
 `sauce_compile` also takes a cook's `args` and `accounts`, to size the payload and, on Solana, the
 cook's transaction (with `via`, the Kitchen's or the engine's direct one); and `rpcUrls`, each intent destination's endpoint by chain, to check that the
@@ -302,23 +464,26 @@ A cook (`sauce_tx`, `sauce_simulate`, `sauce_actions`) adds these inputs:
 - `fund`, `fundMode` and `sweep`, which rehearse [`sauce run --fund`](cli.md#funding-a-run---fund).
   The Pot is credited what the pulls would bring.
 
-A token amount is whole units (`USDC:1.5`) or base units ending in `n` (`USDC:1500000n`).
+A token amount is in whole tokens: `USDC:1.5` is 1.5 USDC, exact through the token's decimals, and
+`USDC:1500000` is 1.5 million USDC, which the result's `notes` point out. For base units, end it in
+`n`, as a JavaScript bigint is written: `USDC:1500000n` is 1.5 USDC.
 
-`sauce_pot` with an endpoint reads what a cook needs: on an EVM chain the Kitchen's fee (the least
+`sauce_pot` reads what a cook needs: on an EVM chain the Kitchen's fee (the least
 a cook's `value` can be) and the Pot's balance of the native currency and of each token the chain
-registers (`null` where a token cannot be read there); on Solana the Pot's associated token account
-for each registered mint, whether it exists, and its balance. `balances: false` skips those reads.
+registers but its tokenized stocks (`null` where a token cannot be read there); on Solana the Pot's
+associated token account for each registered mint but the tokenized stocks, whether it exists, and
+its balance. `balances: false` skips those reads.
 
 `sauce_price` takes the price one of three ways: `price` (a decimal), `sqrtPriceX96`, or `pool`, a
 Uniswap V3-style pool of the pair read through an endpoint (its `slot0` price, liquidity and fee).
 With `slippageBps`, `limits` gives each direction's `sqrtPriceLimitX96` that far from the price,
 and a `minAvgPrice` that also pays the pool's fee (`feePpm`, or the pool's own). A token the chain
-does not register is `<address>:<decimals>`, or with an endpoint the address alone: its decimals
-are read from the token.
+does not register is `<address>:<decimals>`, or the address alone: its decimals are read from the
+token.
 
 `sauce_pools` takes `chain`, `tokenA` and `tokenB` (each a registered symbol or an address, whose
 decimals and symbol are then read from the token), `v4Pools` (more hookless Uniswap V4 keys to
-try, each `"<fee>:<tickSpacing>"`), and `rpcUrl`; it needs an endpoint. It returns what
+try, each `"<fee>:<tickSpacing>"`), and `rpcUrl`. It returns what
 [`sauce pools --json`](cli.md#sauce-pools) prints: `pools`, the ones with liquidity, deepest first,
 each with two `sides` (paying `tokenA` for `tokenB`, then the reverse); `empty`; and `checked`,
 the tiers, tick spacings and keys each venue was asked for.
@@ -365,9 +530,9 @@ about a minute, before its blockhash expires. `dryRun` rehearses an EVM destinat
 a Solana fill is rehearsed as it is built. Claim and refund stay on the EVM source.
 
 A step that cannot happen yet is a result, `ready: false` with `why`, not an error. Each tool reads
-the chains it needs through `rpcUrls`, each chain's endpoint by slug or id; `rpcUrl` is the endpoint
-of the chain the tool names (the source for import, claim and refund, the destination for fill,
-prove and cancel). The server's own endpoints fill the gaps.
+the chains it needs through the server's endpoints, or through `rpcUrls`, each chain's endpoint by
+slug or id; `rpcUrl` is the endpoint of the chain the tool names (the source for import, claim and
+refund, the destination for fill, prove and cancel). The server's endpoints fill the gaps.
 
 `sauce_actions` takes the document as `program`, an object or its JSON text, validated against the
 [action-program schema](../../actions/action-program.schema.json), also served as
@@ -421,15 +586,8 @@ it to the server in the entry's `env` block, by reference, never by value:
   "mcpServers": {
     "sauce": {
       "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "@eco-incorp/sauce",
-        "mcp",
-        "--wallets",
-        "--password-env",
-        "SAUCE_WALLET_PASSWORD"
-      ],
+      "command": "sauce",
+      "args": ["mcp", "--wallets", "--password-env", "SAUCE_WALLET_PASSWORD"],
       "env": { "SAUCE_WALLET_PASSWORD": "${SAUCE_WALLET_PASSWORD}" }
     }
   }
@@ -468,7 +626,7 @@ the [supported chains](#supported-and-preview-chains) too. Over HTTP there are n
 
 ## Skills, documents and prompts
 
-The [agent skills](cli.md#agent-skills) the package ships are the same files `sauce skills install`
+The [agent skills](skills.md) the package ships are the same files `sauce skills install`
 copies into a project. They are served two ways, because many clients call tools but never read
 resources:
 
@@ -493,7 +651,7 @@ tools, with the skill they start from embedded:
 ## Self-hosting
 
 ```sh
-npx -y @eco-incorp/sauce mcp --http 3000 --config rpc.json
+sauce mcp --http 3000
 ```
 
 This serves Streamable HTTP at `http://127.0.0.1:3000/mcp`. The server is stateless: every POST
@@ -501,7 +659,8 @@ gets a server of its own, answered as JSON, with no session, so any replica can 
 A GET or DELETE is refused (405).
 
 - **No environment, and no key.** The server reads no environment variable. Its RPC endpoints are
-  the `--config` file's alone, and it holds no key: nothing it builds is signed. `--wallets` is
+  the `--config` file's, and the built-in public ones for a chain the file does not name; it holds
+  no key: nothing it builds is signed. `--wallets` is
   refused over HTTP, and the wallet tools are not registered there.
 - **It authenticates no one.** Bound to loopback, the default, it answers only requests whose
   `Host`, and `Origin` when one is sent, is a loopback name. That keeps a web page from reaching it
@@ -511,10 +670,10 @@ A GET or DELETE is refused (405).
   without one. `--allowed-host '*'` answers any `Host`, for a proxy that checks it itself.
 - **Put your own authentication in front.** Use a reverse proxy that checks a token (or OAuth)
   before forwarding to it, and that rate-limits, since every chain read spends your endpoints'
-  quota.
+  quota (and the public endpoints' limits are shared by every caller).
 
 ```sh
-npx -y @eco-incorp/sauce mcp --http 3000 --host 0.0.0.0 --allowed-host mcp.example.com \
+sauce mcp --http 3000 --host 0.0.0.0 --allowed-host mcp.example.com \
   --config rpc.json
 ```
 

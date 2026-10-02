@@ -19,7 +19,7 @@ On Ethereum, `Debridge` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's dlnDestination, `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f`.
-  require(Debridge.DlnDestination != 0n);
+  require(Debridge.DlnDestination != 0);
 }
 ```
 

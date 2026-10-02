@@ -1,20 +1,21 @@
 # Uniswap V3
 
-> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
 
 Concentrated liquidity AMM allowing LPs to allocate capital within custom price ranges for higher capital efficiency. Supports multiple fee tiers per pair and NFT-based liquidity positions.
 
 ## When to use it
 
-- Concentrated-liquidity pools in fee tiers of 0.01%, 0.05%, 0.3% and 1% (`100n`, `500n`,
-  `3000n`, `10000n`): usually the deepest pools for liquid pairs.
-- A Sauce program swaps a pool through the Sauce Router's `swapV3`, with a price limit; the
+- Concentrated-liquidity pools in fee tiers of 0.01%, 0.05%, 0.3% and 1% (`100`, `500`,
+  `3000`, `10000`): usually the deepest pools for liquid pairs.
+- A Sauce program swaps a pool with `@sauce/router`'s `uniswapV3`, with a price limit; the
   Factory finds the pool, the position manager manages liquidity positions.
 
 ## Pitfalls for a program
 
-- A pool pays out first and then calls back for its input: only the Sauce Router can pay that
-  callback from a program, so do not call `pool.swap` yourself.
+- A pool pays out first and then calls back for its input, which a program cannot answer:
+  `uniswapV3` calls the Pot's Router, which pays that callback from the Pot, so do not call
+  `pool.swap` yourself.
 - Each fee tier is a separate pool, with its own price and depth.
 - The price limit bounds the pool's price, not the price paid: the fee comes on top
   (`sauce-swaps`).
@@ -25,23 +26,25 @@ Concentrated liquidity AMM allowing LPs to allocate capital within custom price 
 One guarded swap on the 0.05% WETH/USDC pool:
 
 ```sauce chain=base,arbitrum
-import { ISauceRouter } from "./artifacts/ISauceRouter.json";
+import { uniswapV3 } from "@sauce/router";
 
 function main(amountIn: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256, recipient: Address) {
   const self = ctx.self();
-  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500n);
-  require(pool != 0n, "no WETH/USDC pool at 0.05%");
-  const before = USDC.balanceOf(self);
-  ISauceRouter.at(self).swapV3(pool, WETH, USDC, amountIn, sqrtPriceLimitX96, self, self);
-  const out = USDC.balanceOf(self) - before;
-  require(out >= minOut, "below minOut");
-  USDC.transfer(recipient, out);
-  const unspent = WETH.balanceOf(self);
-  if (unspent > 0n) {
+  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
+  require(pool != 0, "no WETH/USDC pool at 0.05%");
+  require(UniswapV3.Pool(pool).liquidity() > 0, "the pool has no liquidity");
+  const before = WETH.balanceOf(self);
+  uniswapV3(pool, WETH, USDC, amountIn, sqrtPriceLimitX96, minOut, recipient);
+  const unspent = amountIn - (before - WETH.balanceOf(self));
+  if (unspent > 0) {
     WETH.transfer(recipient, unspent);
   }
 }
 ```
+
+`uniswapV3` pays `recipient` and reverts below `minOut`. The pool stops at the price limit, so
+the WETH it did not take goes back to `recipient` too: `amountIn` less what the swap spent, not
+the Pot's whole WETH balance.
 
 ## Category
 
@@ -58,7 +61,7 @@ dex | Chains and addresses: [registry/uniswap-v3.md](registry/uniswap-v3.md)
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### swap
 
@@ -94,7 +97,7 @@ function main(
 - `amountIn`: Exact amount of input token (in wei)
 - `amountOutMin`: Minimum output for slippage protection
 - `recipient`: Address to receive output tokens
-- `sqrtPriceLimitX96`: `0` in this template, no price limit, so `amountOutMin` is the only bound. Through the Sauce Router, set a real limit (`sauce-swaps`)
+- `sqrtPriceLimitX96`: `0` in this template, no price limit, so `amountOutMin` is the only bound. With `@sauce/router`'s `uniswapV3`, set a real limit (`sauce-swaps`)
 
 ### addLiquidity (mint position)
 

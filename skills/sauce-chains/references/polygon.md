@@ -40,7 +40,7 @@ function main() {
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(USDC).balanceOf(ctx.self()) == held);
   // `AaveV2.LendingPool` is Polygon's lendingPool: `0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf`.
-  require(AaveV2.LendingPool != 0n);
+  require(AaveV2.LendingPool != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Polygon.AaveV2.LendingPool == AaveV2.LendingPool);
 }
@@ -51,6 +51,7 @@ function main() {
 | Symbol | Address | Decimals |
 | --- | --- | --- |
 | `USDC` | `0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359` | 6 |
+| `USDT0` | `0xc2132D05D31c914a87C6611C10748AEb04B58e8F` | 6 |
 | `WETH` | `0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619` | 18 |
 | `WPOL` | `0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270` | 18 |
 

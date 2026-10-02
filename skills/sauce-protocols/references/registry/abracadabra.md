@@ -19,7 +19,7 @@ On Ethereum, `Abracadabra` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's degenBox, `0xd96f48665a1410C0cd669A88898ecA36B9Fc2cce`.
-  require(Abracadabra.DegenBox != 0n);
+  require(Abracadabra.DegenBox != 0);
 }
 ```
 

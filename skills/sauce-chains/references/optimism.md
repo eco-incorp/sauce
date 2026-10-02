@@ -40,7 +40,7 @@ function main() {
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(USDC).balanceOf(ctx.self()) == held);
   // `AaveV3.Pool` is Optimism's pool: `0x794a61358D6845594F94dc1DB02A252b5b4814aD`.
-  require(AaveV3.Pool != 0n);
+  require(AaveV3.Pool != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Optimism.AaveV3.Pool == AaveV3.Pool);
 }
@@ -52,6 +52,7 @@ function main() {
 | --- | --- | --- |
 | `USDC` | `0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85` | 6 |
 | `USDT` | `0x94b008aA00579c1307B0EF2c499aD98a8ce58e58` | 6 |
+| `USDT0` | `0x01bFF41798a0BcF287b996046Ca68b395DbC1071` | 6 |
 | `WETH` | `0x4200000000000000000000000000000000000006` | 18 |
 
 ## Protocols

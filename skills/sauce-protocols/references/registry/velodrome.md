@@ -19,7 +19,7 @@ On Optimism, `Velodrome` is a namespace: its contracts need no import.
 ```sauce chain=optimism
 function main() {
   // Optimism's poolFactory, `0xF1046053aa5682b4F9a81b5481394DA16BE5FF5a`.
-  require(Velodrome.PoolFactory != 0n);
+  require(Velodrome.PoolFactory != 0);
 }
 ```
 

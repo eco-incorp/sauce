@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import { address as svmAddress } from "@solana/kit";
+import { findAssociatedTokenPda } from "@solana-program/token";
 import {
   bytesToHex,
   decodeFunctionData,
@@ -32,7 +33,7 @@ import {
   parseSalt,
   UsageError,
 } from "../src/cli/args.js";
-import { awaitPot, caughtUp } from "../src/cli/chain.js";
+import { awaitPot, caughtUp, registeredBalances } from "../src/cli/chain.js";
 import {
   chooseTerminal,
   confirmOn,
@@ -40,7 +41,13 @@ import {
   type TerminalChoice,
 } from "../src/cli/terminal.js";
 import { castSend } from "../src/cli/commands.js";
-import { awaitAccount, failureReason } from "../src/cli/solana.js";
+import { PRICE_UNITS } from "../src/cli/price.js";
+import {
+  awaitAccount,
+  failureReason,
+  parseAccounts,
+  resolveTokenAccounts,
+} from "../src/cli/solana.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import {
   v12DeployedAddresses,
@@ -57,6 +64,8 @@ import * as root from "../src/index.js";
 import * as routes from "../src/routes/index.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
+import { svmTokenRows } from "../src/routes/token-registry.js";
+import { TOKEN_2022_PROGRAM_ID } from "../src/svm/token-program.js";
 import { encodeCompactArguments } from "../src/compact-arguments.js";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
@@ -824,7 +833,7 @@ describe("sauce compile", () => {
     expect(run.stderr).toContain("2 | USDC.transfer(RECIPIENT, AMOUNT);");
     expect(run.stderr).toMatch(/\|\s{15}\^{9}/);
     expect(run.stderr).toContain(
-      "hint: if RECIPIENT is a value you supply, pass --define RECIPIENT=<value>",
+      "hint: if RECIPIENT is a value you supply, make it a parameter of main (`RECIPIENT: Uint256`, or `Address`) and pass it with --args",
     );
     expect(run.stderr).not.toContain("main.js");
   });
@@ -867,6 +876,26 @@ describe("sauce compile", () => {
       "function main() {\n  require(SPCXc.balanceOf(ctx.self()) >= 0n);\n}\n",
     );
     expect((await sauce("compile", fixed, "--chain", "base")).code).toBe(0);
+  });
+
+  it("names a Solana stock mint's symbol in its issuer's case, and an EVM chain's token as one", async () => {
+    const program = (symbol: string) =>
+      file(
+        `stock-${symbol}.sauce.ts`,
+        `function main(account: Account): Uint256 {\n  return balanceOf(${symbol}, account);\n}\n`,
+      );
+    const cased = await sauce("compile", program("tslax"), "--chain", "solana");
+    expect(cased.code).toBe(1);
+    expect(cased.stderr).toContain(
+      "hint: tslax is TSLAx on solana: a token's symbol is case-sensitive",
+    );
+    const evm = await sauce("compile", program("SPCXc"), "--chain", "solana");
+    expect(evm.code).toBe(1);
+    expect(evm.stderr).toContain(
+      "hint: SPCXc is a token on base, not solana: sauce globals --chain solana --search <text> " +
+        "finds the mints it has",
+    );
+    expect((await sauce("compile", program("TSLAx"), "--chain", "solana")).code).toBe(0);
   });
 
   it("needs no fee for --intent-execution-fee auto when no intent runs a program", async () => {
@@ -1335,19 +1364,23 @@ describe("sauce tx", () => {
     );
     expect(run.code).toBe(2);
     expect(run.stderr).toMatch(/rpcUrls\["1"\] is not a URL; replace the placeholder/);
+    // A chain the file has no entry for is read through the built-in endpoints (none here), not
+    // refused: with --value, the cook is built without reading it.
     const other = await sauce(
       "tx",
-      pay(),
+      file("usdc.sauce.ts", "USDC.transfer(RECIPIENT, AMOUNT);\n"),
       "--chain",
       "base",
       "--owner",
       OWNER,
+      ...PAY_DEFINES,
       "--config",
       config,
       "--value",
       "0",
     );
-    expect(other.stderr).toMatch(/has no rpcUrls entry for base \(chain id 8453\)/);
+    expect(other.code).toBe(0);
+    expect(JSON.parse(other.stdout).chainId).toBe(8453);
   });
 });
 
@@ -1442,7 +1475,7 @@ describe("sauce intent publish, offline", () => {
     );
   });
 
-  it("refuses a file with no intent, or with runtime arguments, before any network", async () => {
+  it("refuses a file with no intent, or with main's arguments not given, before any network", async () => {
     const none = await sauce(
       "intent",
       "publish",
@@ -1469,7 +1502,7 @@ describe("sauce intent publish, offline", () => {
     );
     expect(typed.code).toBe(2);
     expect(typed.stderr).toMatch(
-      /takes arguments at run time \(main\(recipient\)\), which only a run has/,
+      /main\(recipient: Address\) takes 1 argument: pass them after --args, in order/,
     );
   });
 
@@ -1531,7 +1564,8 @@ describe("sauce intent publish, offline", () => {
       expect(measured.stderr).toBe(
         "sauce intent publish: the intent to base uses `amount`, which the program measures or computes " +
           "while it runs, so it cannot be built from a wallet: use `sauce run` on a Pot, or make " +
-          "it a literal, a define or a top-level `const` of a literal\n",
+          "it a literal, one of main's arguments (given with --args) or a top-level `const` of a " +
+          "literal\n",
       );
       const computed = await refused(
         `// @chain ethereum\nconst AMOUNT = 1000n * 1000n;\n${body("AMOUNT")}\n`,
@@ -1573,12 +1607,10 @@ describe("sauce intent fill, offline", () => {
   /** An endpoint nothing listens on: every refusal below comes before any request. */
   const NOWHERE = ["--rpc-url", "http://127.0.0.1:9/"];
 
-  it("needs the destination's endpoint", async () => {
+  it("needs the destination's endpoint, where no built-in one reaches it", async () => {
     const run = await sauce("intent", "fill", file("bridge.sauce.ts", INTENT), ...FLAGS);
     expect(run.code).toBe(2);
-    expect(run.stderr).toMatch(
-      /missing --config <file> \(or --rpc-url <url>\): the endpoint of each intent's destination/,
-    );
+    expect(run.stderr).toMatch(/missing --rpc-url <url> \(or --config <file>\): the base endpoint/);
   });
 
   it("refuses a claimant that is neither 20 nor 32 bytes", async () => {
@@ -1811,6 +1843,39 @@ describe("sauce pot", () => {
     const compiled = await sauce("compile", program, "--chain", "base", "--via", "engine");
     expect(compiled.code).toBe(2);
     expect(compiled.stderr).toMatch(/--via chooses how a Solana cook reaches the engine/);
+  });
+
+  it("names a Solana stock mint's accounts by its symbol in any case, under Token-2022", async () => {
+    const solana = requireChain("solana");
+    const owner = svmAddress("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
+    const pot = svmAddress("4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T");
+    const nvda = svmTokenRows(solana).find((row) => row.symbol === "NVDA_US")!;
+    // A stock's symbol can carry a "_", and is found without regard to case.
+    const given = parseAccounts([
+      "source=pot:nvda_us",
+      "mint=mint:NVDA_US",
+      "program=program:tslax",
+    ]);
+    const { accounts } = await resolveTokenAccounts(given, owner, pot, solana);
+    expect(accounts).toEqual({
+      source: (
+        await findAssociatedTokenPda({
+          owner: pot,
+          mint: svmAddress(nvda.mint),
+          tokenProgram: svmAddress(TOKEN_2022_PROGRAM_ID),
+        })
+      )[0],
+      mint: nvda.mint,
+      program: TOKEN_2022_PROGRAM_ID,
+    });
+    // A symbol the cluster does not register names its other mints and counts its stocks.
+    const stocks = svmTokenRows(solana).filter((row) => row.stock !== undefined).length;
+    await expect(
+      resolveTokenAccounts(parseAccounts(["held=pot:SPCXc"]), owner, pot, solana),
+    ).rejects.toThrow(
+      `SPCXc is not a mint solana registers (PYUSD, USDC, USDT, WSOL, and ${stocks} stock ` +
+        "tokens: sauce globals --chain solana --stocks)",
+    );
   });
 
   it("derives a Solana Pot as the Kitchen's PDA over (owner, salt), offline", async () => {
@@ -2161,6 +2226,27 @@ describe("waiting for a deployed Pot", () => {
     );
   });
 
+  it("reads a Pot's registered balances but not its chain's tokenized stocks, one read each", async () => {
+    const read: string[] = [];
+    const client = {
+      getBalance: async () => 7n,
+      readContract: async ({ address }: { address: string }) => {
+        read.push(getAddress(address));
+        return 5n;
+      },
+    } as unknown as PublicClient;
+    const ethereum = requireChain("ethereum");
+    const rows = routes.TOKEN_REGISTRY[ethereum.id]!;
+    const plain = rows.filter((row) => row.stock === undefined);
+    // Ethereum has over a thousand stock tokens: none of them is read.
+    expect(rows.length - plain.length).toBeGreaterThan(1000);
+    const held = await registeredBalances(client, ethereum, POT);
+    expect(read).toHaveLength(plain.length);
+    expect(held.tokens.map((token) => token.symbol)).toEqual(plain.map((row) => row.symbol));
+    expect(held.native).toBe(7n);
+    expect(held.tokens.find((token) => token.symbol === "USDC")).toMatchObject({ balance: 5n });
+  });
+
   it("waits for the endpoint to reach a transaction's block, and gives up quietly", async () => {
     const heights: Array<bigint | Error> = [5n, new Error("timeout"), 6n, 7n];
     let asked = 0;
@@ -2207,7 +2293,7 @@ describe("waiting for a deployed Pot", () => {
 describe("sauce price", () => {
   const WETH_BASE = "0x4200000000000000000000000000000000000006";
 
-  it("prints the pool's sqrtPriceX96 for the chain's token order, and each direction's floor", async () => {
+  it("prints the pool's sqrtPriceX96 for the chain's token order, and each direction's limits", async () => {
     const out = json(await sauce("price", "--chain", "base", "WETH", "USDC", "2700", "--json"));
     // WETH is token0 on Base: the price is the SDK's conversion with WETH as the base.
     const sqrt = root.sqrtPriceX96FromPrice("2700", {
@@ -2230,22 +2316,30 @@ describe("sauce price", () => {
       token0: "WETH",
       token1: "USDC",
       sqrtPriceX96: sqrt.toString(),
-      // Selling WETH: 2700e6 USDC units per 1e18 WETH units, times 1e18.
+      units: PRICE_UNITS,
+      // Selling WETH: as the distributed swap's maxPrice, WETH units paid per USDC unit bought,
+      // 1e18 / 2700e6 times 1e18, rounded down; as minAvgPrice, 2700e6 USDC units per 1e18 WETH
+      // units, times 1e18.
       sell: {
         tokenIn: "WETH",
         tokenOut: "USDC",
         zeroForOne: true,
         sqrtPriceLimitX96: sqrt.toString(),
         limit: "floor",
+        maxPrice: (10n ** 36n / (2700n * 10n ** 6n)).toString(),
+        maxAvgPrice: (10n ** 36n / (2700n * 10n ** 6n)).toString(),
         minAvgPrice: "2700000000",
       },
-      // Buying WETH: 1e18 / 2700e6 WETH units per USDC unit, times 1e18, rounded up.
+      // Buying WETH: maxPrice is USDC units paid per WETH unit, times 1e18 — 2700 x 10^(18 + 6 -
+      // 18) — and minAvgPrice the other way round, WETH units per USDC unit, rounded up.
       buy: {
         tokenIn: "USDC",
         tokenOut: "WETH",
         zeroForOne: false,
         sqrtPriceLimitX96: sqrt.toString(),
         limit: "ceiling",
+        maxPrice: "2700000000",
+        maxAvgPrice: "2700000000",
         minAvgPrice: ((10n ** 36n + 2700n * 10n ** 6n - 1n) / (2700n * 10n ** 6n)).toString(),
       },
     });
@@ -2254,7 +2348,13 @@ describe("sauce price", () => {
       "2700 USDC per WETH on base: 1 WETH = 2700 USDC, 1 USDC = 0.00037037037037037 WETH",
     );
     expect(text.stdout).toContain(`sqrtPriceX96  ${sqrt}`);
-    expect(text.stdout).toMatch(/minAvgPrice +2700000000 +USDC units per WETH unit/);
+    // Each number says which way round it is, and which the distributed swap takes.
+    expect(text.stdout).toMatch(
+      /Buying WETH \(USDC in, WETH out\):\n.*\n {2}maxPrice +2700000000 +USDC units paid per WETH unit bought, times 1e18: the distributed swap's maxPrice\n {2}maxAvgPrice +2700000000 +the same, as its maxAvgPrice/,
+    );
+    expect(text.stdout).toMatch(
+      /minAvgPrice +2700000000 +the other way round, USDC units received per WETH unit, times 1e18: a floor for out \* 1e18 >= minAvgPrice \* spent, never a maxAvgPrice/,
+    );
     // Said in words, the same price: `2700 USDC per WETH`.
     const worded = await sauce("price", "--chain", "base", "2700", "USDC", "per", "WETH");
     expect(worded.stdout).toBe(text.stdout);
@@ -2436,6 +2536,15 @@ describe("sauce price", () => {
       [["--chain", "base", "WETH", "USDC:18", "1"], /USDC has 6 decimals, not 18/],
       [["--chain", "base", "WETH", "WETH", "1"], /WETH is both/],
       [["--chain", "base", "WETH", "USDC", "--sqrt-price-x96", "5"], /outside the range/],
+      [
+        ["--chain", "base", "WETH", "USDC", "1", "--pool", `0x${"12".repeat(20)}`],
+        /give <price>, --sqrt-price-x96 or --pool: one of them/,
+      ],
+      [["--chain", "base", "WETH", "USDC", "--pool", "0x12"], /--pool: '0x12' is not/],
+      [
+        ["--chain", "base", "WETH", "USDC", "--pool", `0x${"12".repeat(20)}`],
+        /missing --rpc-url <url> \(or --config <file>\)/,
+      ],
     ];
     for (const [argv, message] of cases) {
       const run = await sauce("price", ...argv);

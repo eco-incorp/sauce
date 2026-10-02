@@ -8,81 +8,61 @@ tokens and protocols a program calls by name; you write the program, not a contr
 **Routes** are the layer above: a route packages a program as an Eco intent, so it can be executed
 on another chain in exchange for a reward escrowed on this one. Everything cross-chain lives there.
 
-## Supported chains
+For the initial release, Sauce supports transactions on **Ethereum**, **Base** and **Solana**. Every
+other chain is a preview chain, where a program compiles and rehearses but the `sauce` command and
+the MCP server build no transaction; [Chains](reference/chains.md) has the policy, every chain, and
+how to request one.
 
-For the initial release, Sauce supports transactions on three chains: **Ethereum**, **Base** and
-**Solana**.
+Every page of this manual is listed below, once. The agent skills the package ships teach a coding
+agent the same facts, from the same sources: [Agent skills](guides/skills.md).
 
-Every other chain in the registry is a **preview chain**. Programs compile for it, and the
-[`sauce` command](guides/cli.md#supported-and-preview-chains) and the
-[MCP server](guides/mcp.md#supported-and-preview-chains) rehearse and read there as anywhere:
-`sauce simulate`, `sauce intent publish --dry-run`, `sauce intent fill` without `--send`, and every
-read. What they do not do on a preview chain is build or send a transaction. `tx`, `run`,
-`pot --deploy` (and the deployment `pot` prints), `intent publish`, `intent fill --send`, `prove`,
-`claim`, `refund` and `cancel` are refused there before any endpoint is reached or any key is read,
-with the supported chains and a link to request the chain. An intent publishes only when its source
-and every destination it opens are supported; the later levels of a cascade (an intent opened inside
-another's body) are not checked, so keep every level on a supported chain. Each step after
-publishing is refused by the chain it is sent on: a fill, a proof or a cancellation by the
-destination, a claim or a refund by the source.
+## Start
 
-The TypeScript SDK is not gated. Its builders take every registry chain and build its
-transactions, and an integrator who submits one on a preview chain does so at their own risk.
-The MCP server's `sauce_chains` gives each chain's support, and every refusal names the supported
-chains.
+- [Quick start](guides/quick-start.md): install the package and build a first intent, offline.
+- [Examples](examples/README.md): complete programs, typechecked and run on every release.
 
-To ask for a chain, first
-[search the existing requests](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support)
-and add your use case to the one for that chain as a comment. If there is none,
-[open a chain-support request](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml):
-the chain and its id, what you want to run there, the protocols and tokens it needs, the volume you
-expect and from when, and optionally how to reach you. A refusal links both, prefilled for the chain
-it refused.
+## Guides
 
-## First program in five minutes
-
-1. [Install](guides/quick-start.md) the package. The compiler is inside it.
-2. [Build your first intent](guides/quick-start.md#build-your-first-intent) by copying one
-   example. It runs offline.
-3. Put your own calls in its body, naming [tokens and protocols](guides/protocols-and-tokens.md).
-4. [Create an intent from inside the program](guides/intents.md#create-an-intent-from-inside-a-program)
-   when the amount is only known on chain.
-5. [Submit the source reward](guides/intents.md#submit-the-source-reward) with the requests the SDK
-   prepares. A solver then decides whether to fill it.
-
-Complete programs live in the [examples](examples/README.md).
-
-## By task
-
-| You want to                                                     | Guide                                                  |
-| --------------------------------------------------------------- | ------------------------------------------------------ |
-| Call tokens and protocols by name inside a program              | [Protocols and tokens](guides/protocols-and-tokens.md) |
-| Construct, fund, submit and inspect an intent                   | [Create an intent](guides/intents.md)                  |
-| Chain intents — statically, or from an amount measured on chain | [Nested intents](guides/nested-intents.md)             |
-| Compile a standalone program and pass it runtime arguments      | [Compiling programs](guides/compiling.md)              |
-| Compile and run a program file from a terminal                  | [The sauce command](guides/cli.md)                     |
-| Have a coding agent write and run programs                      | [Agent skills](guides/cli.md#agent-skills)             |
-| Give a coding agent Sauce's tools and skills over MCP           | [The MCP server](guides/mcp.md)                        |
-| Give an agent a wallet of its own, with a policy that limits it | [Agent wallets](guides/cli.md#agent-wallets)           |
-| Generate programs from structured data                          | [Builders](guides/builders-and-actions.md)             |
-| Write protocol actions as JSON, then run them or make an intent | [Actions](guides/actions.md)                           |
-| Plan accounts, stage code and execute on Solana                 | [Solana](guides/solana.md)                             |
-| Check what a settlement payload contains                        | [Verification](guides/verification.md)                 |
+- [Protocols and tokens](guides/protocols-and-tokens.md): call tokens and protocols by name inside a
+  program, in SauceScript and in TypeScript.
+- [Create an intent](guides/intents.md): construct, fund, submit and follow an intent to another
+  chain.
+- [Nested intents](guides/nested-intents.md): open an intent inside another's body, from an amount
+  it measured.
+- [Compiling programs](guides/compiling.md): compile a standalone program and pass it runtime
+  arguments.
+- [A distributed swap](guides/distributed-swap.md): one limit order spread over several
+  price-limited pools.
+- [Actions](guides/actions.md): write protocol actions as JSON, then run them or make an intent.
+- [Builders](guides/builders-and-actions.md): generate programs from structured data.
+- [Solana](guides/solana.md): plan accounts, stage code and execute on Solana.
+- [Verification](guides/verification.md): check what a settlement payload contains.
+- [The sauce command](guides/cli.md): compile, rehearse, run and publish from a terminal, with agent
+  wallets and their policies.
+- [The MCP server](guides/mcp.md): give a coding agent Sauce's tools.
+- [Agent skills](guides/skills.md): install the skills that teach a coding agent to write and run
+  programs.
 
 ## Concepts
 
-| Read                                     | To understand                                                                     |
-| ---------------------------------------- | --------------------------------------------------------------------------------- |
-| [Architecture](concepts/architecture.md) | How the package, the compiler and the on-chain engine divide the work             |
-| [SauceScript](concepts/saucescript.md)   | The language: what runs on chain, what the compiler accepts, what values reach it |
+- [Architecture](concepts/architecture.md): how the package, the compiler and the on-chain engine
+  divide the work.
+- [Writing SauceScript](concepts/saucescript.md): what runs on chain, what the compiler accepts,
+  and how values reach a program.
 
 ## Reference
 
-- [API entry points](api/README.md) — every published import and what it contains.
-- [Routes](api/routes.md) — chain entry points, intent options, built intents, nesting.
-- [Contracts and tokens](api/contracts.md) — every protocol namespace and token, in a program and in TypeScript.
-- [SauceScript reference](../skills/sauce-script/references/builtins.md) — every type, builtin, statement and limit, per target.
-- [Compiler](api/compiler.md) — `compile()` options and result, and the compact argument codec.
-- [`@sauce/router`](api/router.md) — the SauceScript swap library: one function per venue.
-- [Coverage](api/coverage.md) — which protocols, tokens and chains are actually registered.
-- [Examples](examples/README.md) — complete programs, and how they are kept working.
+- [Chains](reference/chains.md): every chain, whether the release supports it, its ids, the Sauce
+  and intent deployments, its tokens and every protocol on it.
+- [Protocols](reference/protocols.md): every protocol by category, how to choose between them, and
+  each one's deployments, names in a program and ABI.
+- [Tokens](reference/tokens.md): every chain's tokens and tokenized stocks, and the token functions.
+- [SauceScript reference](reference/saucescript.md): every type, statement, builtin and limit, per
+  target.
+- [API entry points](api/README.md): every published import and what it contains.
+- [Routes](api/routes.md): chain entry points, intent options, built intents, nesting.
+- [Contracts and tokens](api/contracts.md): every protocol namespace and token, in a program and in
+  TypeScript.
+- [Compiler](api/compiler.md): `compile()` options and result, and the compact argument codec.
+- [`@sauce/router`](api/router.md): the SauceScript swap library, one function per venue.
+- [Coverage](api/coverage.md): how the registries differ, and what each answers.

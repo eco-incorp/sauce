@@ -14,7 +14,7 @@ import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/
 import * as z from "zod";
 
 import { shippedSkills, SKILLS_INDEX, type Skill } from "./resources.js";
-import { PACKAGED_SKILLS, skillTargets, UsageError } from "./sdk.js";
+import { installedViem, PACKAGED_SKILLS, skillTargets, UsageError } from "./sdk.js";
 import { packageInfo } from "./server.js";
 import { configSnippet, launch, SETUP_AGENTS, type SetupAgent } from "./setup.js";
 
@@ -134,9 +134,10 @@ export const DEV_TOPICS: ReadonlyArray<{
   },
   {
     topic: "mcp",
-    about: "this MCP server: running it, endpoints, agent setup, self-hosting",
-    keywords: ["mcp", "server", "setup", "agent", "agents", "selfhost", "http", "stdio"],
-    files: ["guides/mcp.md"],
+    about:
+      "this MCP server and the agent skills: running it, endpoints, agent setup, skills, self-hosting",
+    keywords: ["mcp", "server", "setup", "agent", "agents", "selfhost", "http", "stdio", "skills"],
+    files: ["guides/mcp.md", "guides/skills.md"],
   },
 ];
 
@@ -541,8 +542,10 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
     (args) => {
       try {
         const agent = args.agent;
-        // This server's own version, everywhere: the skills it serves describe this package.
+        // This server's own version, everywhere: the skills it serves describe this package. And
+        // viem as installed beside it, which a TypeScript project using the package depends on too.
         const pinned = `${packageName}@${version}`;
+        const viem = installedViem();
         const run = `npx -y ${pinned}`;
         const dir = args.dir === undefined ? "" : ` --dir ${JSON.stringify(args.dir)}`;
         const config = args.config === undefined ? "" : ` --config ${JSON.stringify(args.config)}`;
@@ -563,7 +566,7 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
           version,
           skillsFrom: reads,
           commands: {
-            add: `npm install --save-exact ${pinned}`,
+            add: `npm install --save-exact ${pinned}${viem === undefined ? "" : ` viem@${viem}`}`,
             install: `${run} skills install --agent ${agent}${dir}`,
             update: `${run} skills update --agent ${agent}${dir}`,
             status: `${run} skills status --agent ${agent}${dir}`,
@@ -575,8 +578,11 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
           ...(mcp === undefined ? {} : { mcp: { path: mcp.path, config: mcp.text } }),
           notes: [
             `Every command is pinned to ${pinned}, the version this server carries.`,
-            "add puts the package in an existing project; init scaffolds a new one pinned the " +
-              "same way, with its skills installed.",
+            "add puts the package in an existing project, with viem, which its TypeScript API is " +
+              "typed in and the skills' runners import; init scaffolds a new one pinned the same " +
+              "way, with its skills installed.",
+            `The skills write the command as \`sauce <command>\`, which \`npm i -g ${packageName}\` ` +
+              "installs; these commands run this server's version with no install.",
             "install is the first install, and a no-op on a project already installed: update " +
               "brings installed skills to the version that runs it; status exits 1 while they " +
               "are outdated.",

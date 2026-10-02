@@ -1,6 +1,6 @@
 # 1inch
 
-> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
 
 Leading DEX aggregator that finds optimal swap routes across multiple liquidity sources. Supports limit orders and Fusion mode for gasless swaps.
 
@@ -26,10 +26,10 @@ function main(amountIn: Uint256, minOut: Uint256, call: bytes, recipient: Addres
   const self = ctx.self();
   const before = WETH.balanceOf(self);
   USDC.approve(Oneinch.AggregationRouterV6, amountIn);
-  evm.call(Oneinch.AggregationRouterV6, 0n, call);
+  evm.call(Oneinch.AggregationRouterV6, 0, call);
   const out = WETH.balanceOf(self) - before;
   require(out >= minOut, "below minOut");
-  USDC.approve(Oneinch.AggregationRouterV6, 0n);
+  USDC.approve(Oneinch.AggregationRouterV6, 0);
   WETH.transfer(recipient, out);
 }
 ```
@@ -48,7 +48,7 @@ aggregator | Chains and addresses: [registry/oneinch.md](registry/oneinch.md)
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ```typescript
 // Unoswap (single-source swap)

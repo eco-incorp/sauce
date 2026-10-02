@@ -19,7 +19,7 @@ On Ethereum, `Curve` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's addressProvider, `0x0000000022D53366457F9d5E68Ec105046FC4383`.
-  require(Curve.AddressProvider != 0n);
+  require(Curve.AddressProvider != 0);
 }
 ```
 

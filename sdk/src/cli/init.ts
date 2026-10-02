@@ -1,5 +1,6 @@
 /**
- * `sauce init`: a project that needs nothing but this package — a manifest pinning it, agent
+ * `sauce init`: a project that needs nothing but this package — a manifest pinning it (and viem,
+ * the vocabulary of its TypeScript API, at the exact version installed beside it), agent
  * instructions every coding agent reads, a `.gitignore` for the local config that holds
  * endpoints, a placeholder example of that config, a `programs/` directory whose tsconfig.json
  * gives an editor SauceScript's names (`sauceScriptTsconfig`), and the agent skills (`skills.ts`).
@@ -14,11 +15,13 @@
  * other content is listed and the whole scaffold refused, before anything is written.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { basename, dirname, join, resolve } from "node:path";
 
 import { CliError } from "./args.js";
 import {
   installTarget,
+  sauceScriptTsconfig,
   targetsFor,
   withoutBlock,
   type Agent,
@@ -37,42 +40,26 @@ function packageNameOf(dir: string): string {
   return name === "" ? "sauce-project" : name;
 }
 
+/**
+ * The version of viem this package resolves, as its own `package.json` says: the one installed
+ * beside it, whatever range the package declares. `undefined` where it cannot be read.
+ */
+export function installedViem(): string | undefined {
+  try {
+    const manifest = createRequire(import.meta.url).resolve("viem/package.json");
+
+    return (JSON.parse(readFileSync(manifest, "utf8")) as { version?: string }).version;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The Node.js typings a project `sauce init` writes takes: the runners the skills install are
+ *  Node programs, for the Node.js the manifest's `engines` names. */
+const NODE_TYPES = "^24.0.0";
+
 /** Where `sauce init` puts the project's SauceScript programs: the directory its tsconfig covers. */
 export const PROGRAMS_DIR = "programs";
-
-/**
- * The tsconfig.json of the programs directory: a TypeScript project of SauceScript files alone,
- * with the package's declarations of the language (`<package>/sauce-script`) and its plugin, which
- * drops what TypeScript reports on valid SauceScript (integer indexes, `1` beside `1n`, undeclared
- * UPPER_CASE defines). Its own project, because those declarations name `require`, `crypto` and
- * `eval` as SauceScript has them: kept out of the project's other TypeScript, they cannot change
- * it. An editor takes a file's nearest tsconfig.json, so every program in the directory gets it.
- */
-export function sauceScriptTsconfig(packageName: string): Record<string, unknown> {
-  return {
-    compilerOptions: {
-      target: "ES2022",
-      lib: ["ES2022"],
-      module: "ESNext",
-      moduleResolution: "Bundler",
-      // Each program is a module of its own: two programs' `main` never collide.
-      moduleDetection: "force",
-      // Only SauceScript's names: no Node, no DOM.
-      types: [`${packageName}/sauce-script`],
-      // An unannotated helper parameter is a number in SauceScript, not an error.
-      strict: true,
-      noImplicitAny: false,
-      noEmit: true,
-      allowImportingTsExtensions: true,
-      // A JSON import is a contract binding, which the declarations type, not the file's JSON.
-      resolveJsonModule: false,
-      skipLibCheck: true,
-      // Loaded by an editor running the project's own TypeScript (node_modules/typescript).
-      plugins: [{ name: `${packageName}/sdk/dist/sauce-script/ts-plugin.cjs` }],
-    },
-    include: ["**/*.sauce.ts"],
-  };
-}
 
 /** The files `sauce init` writes for `agents`, by path relative to the project. */
 export function scaffold(
@@ -86,10 +73,19 @@ export function scaffold(
     private: true,
     type: "module",
     engines: { node: ">=24" },
-    // Exactly the version that scaffolded it: the skills installed beside it describe this one.
-    dependencies: { [source.packageName]: source.version },
-    // The TypeScript an editor runs for the programs' plugin: the project's own.
-    devDependencies: { typescript: source.typescript ?? "^5.7.0" },
+    // Exactly the version that scaffolded it: the skills installed beside it describe this one. And
+    // viem, which its TypeScript API is typed in, as installed beside it: a TypeScript project
+    // using the package depends on both, so a package manager that hoists nothing resolves both.
+    dependencies: {
+      [source.packageName]: source.version,
+      ...(source.viem === undefined ? {} : { viem: source.viem }),
+    },
+    // The TypeScript an editor runs for the programs' plugin: the project's own; and Node's
+    // typings, for the skills' runners.
+    devDependencies: {
+      typescript: source.typescript ?? "^5.7.0",
+      "@types/node": NODE_TYPES,
+    },
   };
 
   return {
@@ -99,24 +95,27 @@ export function scaffold(
       "",
       `This project writes Sauce programs with \`${source.packageName}\`, pinned in \`package.json\`.`,
       "",
-      "- Use the agent skills the package installed (`npx sauce skills status` lists them).",
+      "- Use the agent skills the package installed (`sauce skills status` lists them).",
       "  Start with `sauce-overview`, which says what Sauce is and which skill covers a task;",
       "  `sauce-cli` covers compiling a program, rehearsing it and running it on a Pot. They",
       "  describe the pinned version of the package.",
-      "- Run the package's CLI as `npx sauce` (`npx sauce --help`). `sauce simulate` rehearses a",
-      "  program with no key, `sauce run` signs and sends it, and `sauce tx` prints the unsigned",
-      "  transaction for a wallet.",
+      `- Run the package's CLI as \`sauce\` (\`sauce --help\`), installed once with`,
+      `  \`npm i -g ${source.packageName}\`. \`sauce simulate\` rehearses a program with no key,`,
+      "  `sauce run` signs and sends it, and `sauce tx` prints the unsigned transaction for a wallet.",
       `- Write programs in \`${PROGRAMS_DIR}/\`, as \`*.sauce.ts\`. Its \`tsconfig.json\` gives an editor`,
       "  SauceScript's names (its types and builtins, the chains, token symbols, protocol",
       "  namespaces and the package's ABIs) and a TypeScript plugin that drops what TypeScript",
-      "  reports on valid SauceScript: integer indexes, `1` beside `1n`, undeclared UPPER_CASE",
-      "  defines. The plugin loads where the editor runs the project's own TypeScript. The compile",
-      "  (`npx sauce compile <file> --chain <chain>`) is what decides.",
-      "- Keep RPC URLs and keys out of tracked files. RPC URLs go in `sauce.config.json`, which is",
-      "  gitignored (start from `sauce.config.example.json`), and reach the CLI as",
-      "  `--config sauce.config.json`. Sign with a keystore (`--keystore`), not a key on the",
+      "  reports on valid SauceScript: integer indexes, a plain integer beside a `Uint256`,",
+      "  undeclared UPPER_CASE defines. The plugin loads where the editor runs the project's own",
+      "  TypeScript. The compile (`sauce compile <file> --chain <chain>`) is what decides.",
+      "- Write SauceScript's integers plainly (`0`, `3000`, `10 ** 18`): each is a 256-bit",
+      "  integer, and `1n` is the same one.",
+      "- The CLI reads a chain through a built-in public endpoint, which can be slow or",
+      "  rate-limited. For your own, put its URL in `sauce.config.json`, which is gitignored",
+      "  (start from `sauce.config.example.json`), and pass `--config sauce.config.json`. Keep RPC",
+      "  URLs and keys out of tracked files: sign with a keystore (`--keystore`), not a key on the",
       "  command line.",
-      "- After upgrading the package, run `npx sauce skills update`; `npx sauce skills status`",
+      "- After upgrading the package, run `sauce skills update`; `sauce skills status`",
       "  fails while the skills are outdated.",
       "",
     ].join("\n"),

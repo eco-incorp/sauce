@@ -33,6 +33,9 @@ export interface FlagSpec {
   readonly only?: "evm" | "svm";
   /** A string flag that may be given bare: `--wallets` alone is `--wallets=`, its default. */
   readonly optionalValue?: boolean;
+  /** The compiler's own mechanism, kept working but listed last, under its own heading: a
+   *  program's inputs are `main`'s parameters. */
+  readonly lowLevel?: boolean;
 }
 
 export type FlagSpecs = Readonly<Record<string, FlagSpec>>;

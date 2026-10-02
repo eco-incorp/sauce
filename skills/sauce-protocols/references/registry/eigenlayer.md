@@ -19,7 +19,7 @@ On Ethereum, `Eigenlayer` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's cbETHStrategy, `0x54945180dB7943c0ed0FEE7EdaB2Bd24620256bc`.
-  require(Eigenlayer.CbETHStrategy != 0n);
+  require(Eigenlayer.CbETHStrategy != 0);
 }
 ```
 

@@ -19,7 +19,7 @@ On Ethereum, `Arrakis` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's factory, `0xEA1aFf9dbFfD1580F6b81A3ad3589E66652dB7D9`.
-  require(Arrakis.Factory != 0n);
+  require(Arrakis.Factory != 0);
 }
 ```
 

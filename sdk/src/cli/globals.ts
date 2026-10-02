@@ -47,7 +47,7 @@ function searcher(text: string): (token: SourceToken) => boolean {
   const wanted = text.toLowerCase();
   const has = (field: string): boolean => field.toLowerCase().includes(wanted);
   const tickers = new Set(
-    Object.values(TOKEN_REGISTRY).flatMap((rows) =>
+    [...Object.values(TOKEN_REGISTRY), ...Object.values(SVM_TOKEN_REGISTRY)].flatMap((rows) =>
       rows.flatMap((row) =>
         row.stock !== undefined && has(row.stock.name) ? [row.stock.ticker] : [],
       ),
@@ -174,25 +174,46 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
   for (const bound of named?.interfaces ?? []) text.push("", ...interfaceLines(bound, true));
   const svm = chain.kind === "svm";
   // A devnet program compiles for the same chain, so its mints are not what a symbol resolves to:
-  // they are listed for it to pass as defines, which override the registry's.
-  const devnet = svm ? SVM_TOKEN_REGISTRY.devnet : [];
+  // they are listed for it to pass as defines, which override the registry's. It has no stocks.
+  const devnet = !svm || input.stocks === true ? [] : SVM_TOKEN_REGISTRY.devnet;
   if (showTokens && svm) {
-    const rows = [...listed, ...devnet];
+    const devnetListed = search === undefined ? devnet : devnet.filter(searcher(search));
+    const rows = [...listed, ...devnetListed];
     const width = Math.max(0, ...rows.map((token) => token.symbol.length));
     const mintWidth = Math.max(0, ...rows.map((token) => (token.mint ?? "").length));
     // A Token-2022 mint says so: its writes are the checked ones, and its accounts derive under it.
+    // A stock with what it is, so a search for the company finds its token.
     const line = (token: (typeof rows)[number]): string =>
       `${token.symbol.padEnd(width)}  ${(token.mint ?? "").padEnd(mintWidth)}  ${token.address}  ` +
-      `${token.decimals} decimals${token.tokenProgram === TOKEN_2022_PROGRAM_ID ? ", Token-2022" : ""}`;
+      `${token.decimals} decimals${token.tokenProgram === TOKEN_2022_PROGRAM_ID ? ", Token-2022" : ""}` +
+      (token.stock === undefined
+        ? ""
+        : `  ${token.stock.name} (${token.stock.ticker}, ${STOCK_ISSUERS[token.stock.issuer].name})`);
+    const what =
+      search !== undefined
+        ? `Tokens matching '${search}' (${listed.length})`
+        : input.stocks === true
+          ? `Stock tokens (${listed.length}): tokenized stocks, each a Token-2022 mint`
+          : `Tokens (${listed.length})`;
     text.push(
       "",
-      `Tokens (${listed.length}): the symbol is the mint's 32-byte key, a value for the ` +
-        "@sauce/token functions: balanceOf(USDC, account)",
+      `${what}: the symbol is the mint's 32-byte key, a value for the @sauce/token functions: ` +
+        "balanceOf(USDC, account)",
       ...listed.map((token) => `  ${line(token)}`),
-      "  On devnet, pass a mint that differs as a define, which wins (--define USDC=0x…):",
-      ...devnet.map((token) => `    ${line(token)}`),
-      "  Any other mint: --define MINT=<mint, as 32-byte hex>. Token accounts are Account",
-      "  parameters; USDC.transfer(…) and the other token methods are EVM-only.",
+      ...(search === undefined && input.stocks !== true && stocks.length > 0
+        ? [
+            `  And ${stocks.length} stock tokens, named the same way: --stocks lists them, and ` +
+              "--search <text> finds one by symbol, name or ticker",
+          ]
+        : []),
+      ...(devnetListed.length === 0
+        ? []
+        : [
+            "  On devnet a mint differs: take it as an Address argument of main, and pass its key:",
+            ...devnetListed.map((token) => `    ${line(token)}`),
+          ]),
+      "  Any other mint: an Address argument of main, passed as its base58 key. Token accounts",
+      "  are Account parameters; USDC.transfer(…) and the other token methods are EVM-only.",
     );
   } else if (showTokens) {
     const what =
@@ -260,7 +281,9 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
       chain,
       ...(one === undefined ? {} : { protocol: one }),
       ...(showTokens ? { tokens: listed.map(tokenJson) } : {}),
-      ...(showTokens && svm ? { devnetTokens: devnet } : {}),
+      ...(showTokens && svm && input.stocks !== true
+        ? { devnetTokens: search === undefined ? devnet : devnet.filter(searcher(search)) }
+        : {}),
       // The interfaces asked for: every one beside the namespaces, or --protocol's own.
       ...(showProtocols
         ? { protocols: globals.protocols, interfaces: globals.interfaces }

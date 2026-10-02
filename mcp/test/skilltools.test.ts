@@ -5,6 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
@@ -23,6 +24,12 @@ after(async () => {
 });
 
 const skills = shippedSkills();
+/** The viem installed beside the package, read here on its own. */
+const VIEM = (
+  JSON.parse(readFileSync(createRequire(import.meta.url).resolve("viem/package.json"), "utf8")) as {
+    version: string;
+  }
+).version;
 
 describe("sauce_skills", () => {
   it("lists every shipped skill with when to use it, and the package's version", async () => {
@@ -188,9 +195,9 @@ describe("sauce_install_skills", () => {
         notes: string[];
       };
       assert.deepEqual(out.skillsFrom, reads[agent], agent);
-      // Pinned to this server's own version, everywhere.
+      // Pinned to this server's own version, everywhere; viem as installed beside the package.
       const pinned = `@eco-incorp/sauce@${packageInfo().version}`;
-      assert.equal(out.commands.add, `npm install --save-exact ${pinned}`);
+      assert.equal(out.commands.add, `npm install --save-exact ${pinned} viem@${VIEM}`);
       assert.equal(
         out.commands.install,
         `npx -y ${pinned} skills install --agent ${agent} --dir "my app"`,
@@ -206,6 +213,11 @@ describe("sauce_install_skills", () => {
       assert.equal(out.commands.init, `npx -y ${pinned} init "my app" --agent ${agent}`);
       assert.ok(!JSON.stringify(out).includes("@latest"));
       assert.ok(out.notes.some((note) => /no-op on a project already installed/.test(note)));
+      assert.ok(
+        out.notes.some((note) =>
+          note.includes("`sauce <command>`, which `npm i -g @eco-incorp/sauce` installs"),
+        ),
+      );
       if (agent === "agents-md") {
         assert.equal(out.mcp, undefined);
         continue;

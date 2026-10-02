@@ -51,7 +51,7 @@ example program each, is `builtins.json`.
 
 - `Uint256`, `Address`, `number`, `bigint`: A **number**: one unsigned 256-bit integer. An address
   is a number.
-- `bool`, `boolean`: A **bool**: true or false. It is kept apart from numbers, so `flag + 1n` is an
+- `bool`, `boolean`: A **bool**: true or false. It is kept apart from numbers, so `flag + 1` is an
   error. Comparisons produce bools.
 - `bytes`, `string`: A **bytes value**. A `"text"` literal is its UTF-8 bytes.
 - `T[]`: An array whose elements all have type `T`
@@ -86,26 +86,29 @@ usually followed by what to use instead.
 
 ## 2. Literals
 
-| Literal                                                     | Meaning                                                                | Example                                    |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------ |
-| integers: `1n`, `0xffn`, `1_000n`, `1`, `0xff`, `1_000_000` | numbers                                                                | `const ONE_TOKEN = 1000000000000000000n;`  |
-| `true`, `false`                                             | bools                                                                  | `let filled = true;`                       |
-| `"text"`                                                    | bytes (UTF-8)                                                          | `throw "below floor";`                     |
-| `` hex`…` ``                                                | raw bytes: an even number of hex digits, optional `0x`, spaces ignored | ``const selector = hex`a9059cbb`;``        |
-| `[a, b, c]`                                                 | an array; every element has the same type                              | `const amounts = [100n, 200n];`            |
-| `{ a: 1n, b }`                                              | a record; shorthand fields work                                        | `const order = { amount, recipient: to };` |
+| Literal                            | Meaning                                                                | Example                                    |
+| ---------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------ |
+| integers: `1`, `0xff`, `1_000_000` | numbers                                                                | `const ONE_TOKEN = 1000000000000000000;`   |
+| `true`, `false`                    | bools                                                                  | `let filled = true;`                       |
+| `"text"`                           | bytes (UTF-8)                                                          | `throw "below floor";`                     |
+| `` hex`…` ``                       | raw bytes: an even number of hex digits, optional `0x`, spaces ignored | ``const selector = hex`a9059cbb`;``        |
+| `[a, b, c]`                        | an array; every element has the same type                              | `const amounts = [100, 200];`              |
+| `{ a: 1, b }`                      | a record; shorthand fields work                                        | `const order = { amount, recipient: to };` |
+
+Write integers plainly. Each is read from its text as a 256-bit integer, so one past 2^53 is
+exact. TypeScript's bigint spelling, `1n` or `0xffn`, is accepted too and is the same integer.
 
 **Not literals:**
 
 | Rejected                    | Error                                                                                                         | Write instead                           |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| `1e18`                      | "not a valid integer literal"                                                                                 | `10n ** 18n` or `1000000000000000000n`  |
+| `1e18`                      | "not a valid integer literal"                                                                                 | `10 ** 18` or `1000000000000000000`     |
 | `1.5`                       | "`1.5` is not a valid 256-bit literal"                                                                        | integers in the smallest unit           |
-| `null`, `undefined`         | rejected                                                                                                      | `0n` or a flag                          |
+| `null`, `undefined`         | rejected                                                                                                      | `0` or a flag                           |
 | `` `text` ``, `` `a${b}` `` | rejected, with or without `${}`                                                                               | `"text"`, or bytes built with `.concat` |
 | a bad `hex`                 | "`hex`…`` is not a valid hex literal (expected an even number of `[0-9a-fA-F]` digits, optional `0x` prefix)" |                                         |
 | `[]` with no declared type  | "an array literal must have at least one element"                                                             | `let xs: Uint256[] = [];`               |
-| `[1n, true]`                | "every element of an array literal must have the same type — …"                                               |                                         |
+| `[1, true]`                 | "every element of an array literal must have the same type — …"                                               |                                         |
 
 ## 3. Operators
 
@@ -114,10 +117,10 @@ usually followed by what to use instead.
     compile errors: "constant `-` expression overflows 256 bits", "constant `/` expression divides
     by zero".
 - `-x`, on a number → number
-  - Two's-complement negation; it never fails. **Use `-x` for a negative amount.** `~x + 1n` reverts
-    when `x` is `0`, because the `+` is checked. `-1n` is 2²⁵⁶ − 1.
+  - Two's-complement negation; it never fails. **Use `-x` for a negative amount.** `~x + 1` reverts
+    when `x` is `0`, because the `+` is checked. `-1` is 2²⁵⁶ − 1.
 - `~x`, on a number → number
-  - bitwise NOT. `~0n` is the maximum value.
+  - bitwise NOT. `~0` is the maximum value.
 - `& | ^ << >>`, on numbers → number
   - Bitwise. `>>` fills with zeros; use `Math.sShr` for a signed shift.
 - `< <= > >=`, on scalars → bool
@@ -195,7 +198,7 @@ a module-level constant with functions, or to return a value.
 **Module constants and defines**
 
 - A top-level `const` must be a literal or a constant expression over other `const`s.
-- A top-level `const` array, `const FEES = [100n, 500n];`, is a lookup table: it is read only at a literal index,
+- A top-level `const` array, `const FEES = [100, 500];`, is a lookup table: it is read only at a literal index,
   `FEES[0]`. A loop over it, `.length` or a write gives "a module-scope lookup table `<name>` can only be read
   by a literal index or a field name …", and a computed index "a module-scope lookup table can only be indexed by
   a non-negative integer literal or a `const` bound to one …". Declare an array you loop over or index at run
@@ -234,7 +237,7 @@ builtin and cannot be a function name").
   - Types: `data`: bytes
   - Reverts with `data` as the revert data. "`revert` takes at most 1 argument (an optional bytes
     payload), got 2"; "a revert payload requires a bytes value"
-  - Example: `revert(code.toBytesBe(32n));`
+  - Example: `revert(code.toBytesBe(32));`
 - `throw data`
   - Types: `data`: bytes
   - The same as `revert(data)`. "a `throw` payload requires a bytes value".
@@ -245,7 +248,7 @@ builtin and cannot be a function name").
     target; … call log(data) alone and fold any event discriminator into data (concat or abi.encode
     it in front of the fields)". Other errors: "`log` requires a bytes data payload — `log()`
     records nothing"; "`log` carries at most 4 indexed topics after its data payload, got 5".
-  - Example: `log(amount.toBytesLe(8n));`
+  - Example: `log(amount.toBytesLe(8));`
 - `eval(program, ...args)`
   - Types: `program`: compiled Sauce program bytes. Up to 16 scalar `args`. Returns bytes.
   - Runs another program and returns what it returns; `args` become its `main` arguments. If the
@@ -273,11 +276,11 @@ Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a 
   - On SVM: the engine's program id, which owns every Pot account: `pot.owner == ctx.self()`
     holds for a Pot, and for any other account assigned to the engine, so it does not prove an
     account is the Pot; re-deriving the Pot's address does
-  - Example: `log(ctx.self().toBytesBe(32n));`
+  - Example: `log(ctx.self().toBytesBe(32));`
 - `ctx.chainId()` → number, **Both**
   - On EVM: the chain id
   - On SVM: 1399811149 on mainnet, 1399811150 on devnet
-  - Example: `if (ctx.chainId() == 8453n) { … }`
+  - Example: `if (ctx.chainId() == 8453) { … }`
 - `ctx.blockNumber()` → number, **Both**
   - On EVM: the block number
   - On SVM: the **slot**
@@ -312,7 +315,7 @@ Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a 
 - `ctx.codeSize(address)` → number, **EVM**
   - On EVM: the size of `address`'s code
   - On SVM: not available
-  - Example: `require(ctx.codeSize(token) > 0n);`
+  - Example: `require(ctx.codeSize(token) > 0);`
 - `ctx.codeHash(address)` → number, **EVM**
   - On EVM: the hash of `address`'s code
   - On SVM: not available
@@ -337,7 +340,7 @@ Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a 
 - `crypto.keccak256(data)`, **Both**
   - Types: `(bytes) → number`
   - The keccak-256 hash. A number argument gives "keccak256's argument requires a bytes value"; hash
-    a word with `crypto.keccak256(x.toBytesBe(32n))`.
+    a word with `crypto.keccak256(x.toBytesBe(32))`.
   - Example: `const topic = crypto.keccak256("Transfer(address,address,uint256)");`
 - `crypto.ecdsaVerify(hash, signature, signer)`, **Both**
   - Types: `(scalar, bytes, scalar) → bool`. `signature` is the 65-byte `r‖s‖v`.
@@ -370,7 +373,7 @@ These are SauceScript's integer functions, on **Both** targets. They are not Jav
   - Example: `const root = Math.sqrt(k);`
 - `Math.mulDiv(x, y, d)`: ⌊x·y / d⌋, without intermediate overflow
   - Reverts when: `d` is 0, or the result does not fit 256 bits
-  - Example: `const fee = Math.mulDiv(amount, bps, 10000n);`
+  - Example: `const fee = Math.mulDiv(amount, bps, 10000);`
 - `Math.addMod(a, b, n)`: (a + b) mod n
   - Reverts when: `n` is 0
   - Example: `Math.addMod(a, b, P)`
@@ -379,20 +382,20 @@ These are SauceScript's integer functions, on **Both** targets. They are not Jav
   - Example: `Math.mulMod(a, b, P)`
 - `Math.sDiv(a, b)`: signed division
   - Reverts when: `b` is 0
-  - Example: `Math.sDiv(delta, 2n)`
+  - Example: `Math.sDiv(delta, 2)`
 - `Math.sMod(a, b)`: signed remainder
   - Reverts when: `b` is 0
-  - Example: `Math.sMod(delta, 3n)`
+  - Example: `Math.sMod(delta, 3)`
 - `Math.sShr(value, bits)`: signed (arithmetic) right shift
   - Reverts when: never
-  - Example: `Math.sShr(tick, 1n)`
+  - Example: `Math.sShr(tick, 1)`
 - `Math.signExtend(value, byte)`: sign-extends from byte `byte`, where 0 is the lowest byte
   - Reverts when: never
-  - Example: `Math.signExtend(raw, 2n)` for an int24
+  - Example: `Math.signExtend(raw, 2)` for an int24
 - `Math.sLt(a, b)`, `Math.sGt(a, b)`, `Math.sLte(a, b)`, `Math.sGte(a, b)`: signed comparisons,
   giving 1 or 0
   - Reverts when: never
-  - Example: `if (Math.sLt(tick, 0n)) { … }`
+  - Example: `if (Math.sLt(tick, 0)) { … }`
 
 A wrong argument count gives "`Math.sqrt` takes 1 argument(s), but this call passes 2".
 
@@ -441,17 +444,17 @@ equivalent.
   - Example: `evm.delegate(library, data);`
 - `evm.sload(slot)`: `(scalar) → number`
   - Reads the executing contract's storage
-  - Example: `const count = evm.sload(0n);`
+  - Example: `const count = evm.sload(0);`
 - `evm.sstore(slot, value)`: `(scalar, scalar)`, a statement
   - Writes storage. Used as a value: "`evm.sstore` writes storage and produces no value — use it as
     a statement".
-  - Example: `evm.sstore(0n, count + 1n);`
+  - Example: `evm.sstore(0, count + 1);`
 - `evm.tload(key)`: `(scalar) → number`
   - Reads transient storage (EIP-1153), which is cleared after the transaction
   - Example: `const seen = evm.tload(KEY);`
 - `evm.tstore(key, value)`: `(scalar, scalar)`, a statement
   - Writes transient storage
-  - Example: `evm.tstore(KEY, 1n);`
+  - Example: `evm.tstore(KEY, 1);`
 
 - Storage belongs to the executing contract, the Pot.
 - An unknown name gives "`evm.nope` is not an evm builtin; `evm` is a reserved namespace root".
@@ -465,14 +468,14 @@ On EVM every function here gives "`svm.<name>` is not available on the evm targe
   - Reads `length` bytes of the account's data, starting at `offset`. Reading past the end fails the
     transaction, and that failure cannot be caught, so check `acct.dataLen` first. A number instead
     of an account gives "svm.sload's account: expected an account, found a value".
-  - Example: `const amount = svm.sload(tokenAccount, 64n, 8n).toLe();`
+  - Example: `const amount = svm.sload(tokenAccount, 64, 8).toLe();`
 - `svm.sstore(account, offset, data)`: `(Account, scalar, bytes)`, a statement
   - Writes `data` into the account's data at `offset`. A `main` account parameter must be declared
     `Account<Writable, Signer>`: "`state` is not declared writable, so `svm.sstore` may not write it
     — declare it `Account<Writable>` (or `Account<Writable, Signer>`)", then "`state` is not
     declared a signer, so `svm.sstore` may not write it — … declare it `Account<Writable, Signer>`".
     The data must be bytes ("svm.sstore's value requires a bytes value").
-  - Example: `svm.sstore(state, 0n, counter.toBytesLe(8n));`
+  - Example: `svm.sstore(state, 0, counter.toBytesLe(8));`
 - `svm.call(program, accounts, data)`: `(Account, Account[], bytes) → bytes`
   - Invokes another program with the listed accounts and returns the return data. The program is an
     account parameter too ("svm.call's program — declare the callee as an `Account` param: …"). The
@@ -483,7 +486,7 @@ On EVM every function here gives "`svm.<name>` is not available on the evm targe
 - `svm.remainingAccount(i)`: `(number) → Account`
   - The `i`-th account attached after the ones `main` declares. **Only inside `main`.**
     "`svm.remainingAccount` takes one index, got N"
-  - Example: `const extra = svm.remainingAccount(0n);`
+  - Example: `const extra = svm.remainingAccount(0);`
 - `const rest = svm.remainingAccounts()`: `() → Account[]`
   - Every account attached after the declared ones. **Only as a `let`/`const` initializer, and only
     inside `main`:** "svm.remainingAccounts() can only initialize a let/const — bind it first
@@ -501,34 +504,34 @@ An unknown name gives "`svm.rent` is not an svm builtin; `svm` is a reserved nam
   - Covers bytes `start` up to, but not including, `end`. `end < start` reverts. Arrays have no
     `.slice`: "a bytes method's receiver requires a bytes value". "`.slice` takes exactly 2
     arguments (start, end), got N"
-  - Example: `const args = input.slice(4n, 68n);`
+  - Example: `const args = input.slice(4, 68);`
 - `.concat(b1, b2, …)`, on bytes
   - Types: `(...bytes) → bytes`
   - Joins bytes values. "a `.concat` argument requires a bytes value"
-  - Example: `const call = selector.concat(to.toBytesBe(32n), amount.toBytesBe(32n));`
+  - Example: `const call = selector.concat(to.toBytesBe(32), amount.toBytesBe(32));`
 - `.toBe()`, on bytes, at most 32
   - Types: `() → number`
   - Reads the bytes as a big-endian number. Longer input fails when run.
-  - Example: `const word = input.slice(4n, 36n).toBe();`
+  - Example: `const word = input.slice(4, 36).toBe();`
 - `.toLe()`, on bytes, at most 32
   - Types: `() → number`
   - Reads the bytes as a little-endian number (Solana's layout)
-  - Example: `const amount = input.slice(64n, 72n).toLe();`
+  - Example: `const amount = input.slice(64, 72).toLe();`
 - `.toBytesBe(width)`, on a scalar
   - Types: `(scalar) → bytes`
   - The low `width` bytes, big-endian, with `width` from 1 to 32. A constant outside that range
     gives "a `.toBytesBe`/`.toBytesLe` width must be between 1 and 32 bytes, got 33". A computed
     width above 32 reverts, and a computed 0 gives empty bytes.
-  - Example: `log(total.toBytesBe(32n));`
+  - Example: `log(total.toBytesBe(32));`
 - `.toBytesLe(width)`, on a scalar
   - Types: `(scalar) → bytes`
   - The same, little-endian
-  - Example: `const field = amount.toBytesLe(8n);`
+  - Example: `const field = amount.toBytesLe(8);`
 - `.length`, on bytes or an array
   - Types: number
   - The byte count or the element count. On a record, `.length` looks for a field named `length`
     ("`length` is not a field of this tuple — …"). It cannot be assigned.
-  - Example: `for (let i = 0n; i < amounts.length; i++) { … }`
+  - Example: `for (let i = 0; i < amounts.length; i++) { … }`
 
 **Call methods on a variable, not on a literal.** ``hex`a9`.concat(d)`` and `"ab".concat(d)` are rejected
 ("calling anything other than a plain function name …"). Write ``const selector = hex`a9059cbb`; selector.concat(d)``.
@@ -547,7 +550,7 @@ An unknown name gives "`svm.rent` is not an svm builtin; `svm` is a reserved nam
 - `acct.dataLen` → number, **SVM**
   - On SVM: the account's data size, in bytes
   - On EVM: not available
-  - Example: `require(acct.dataLen == 165n);`
+  - Example: `require(acct.dataLen == 165);`
 
 - These properties are read-only: "`.owner` is read-only — …".
 - On SVM, compare accounts with `a == b` or `a != b`; ordering comparisons are rejected.
@@ -576,7 +579,7 @@ An unknown name gives "`svm.rent` is not an svm builtin; `svm` is a reserved nam
   - A method with several outputs returns a record named after the ABI's outputs: read `.amountOut` or `[0]`,
     or destructure it with `const [a, b] = …`.
 - **Every single-value output is typed as a number, `bool` and `address` included.** Write
-  `ERC20.at(t).transfer(to, x) == 1n` if you need a bool. A `: bool` function cannot return the call directly
+  `ERC20.at(t).transfer(to, x) == 1` if you need a bool. A `: bool` function cannot return the call directly
   ("a return value: expected a bool, found a number").
 - **Struct arguments** can be object literals with the fields in any order; they are matched to the ABI by name.
 - **No value.** A bound call never sends value. Use `evm.call(address, value, data)` (§10) when you need to.
@@ -603,10 +606,10 @@ from "@sauce/token"`), which handles tokens that return nothing, such as USDT. A
     one output. A raw `evm.call`, `evm.static` or `evm.delegate` returns bytes, which no constant
     stands in for ("a `.catch()` fallback: expected a bytes value, found a number"); test a raw
     read with the statement form, then read again only when it worked.
-  - Example: `const balance = ERC20.at(t).balanceOf(who).catch(() => { return 0n; });`
+  - Example: `const balance = ERC20.at(t).balanceOf(who).catch(() => { return 0; });`
 - A call to an address with no code does not revert: it succeeds with no return data, so
   `.catch()` never runs, and decoding that nothing reverts the cook. Check
-  `ctx.codeSize(address) > 0n` first when the address may have no code.
+  `ctx.codeSize(address) > 0` first when the address may have no code.
 
 Rules and errors:
 
@@ -640,10 +643,10 @@ Rules and errors:
 | `>>>`, `typeof`, `instanceof`, `in`, `delete`, `void`, unary `+` | `Math.sShr`, or plain values                                                                                      |
 | `>>>=`, `\|\|=`, `&&=`, `??=`                                    | `x = …`                                                                                                           |
 | `a[i] += v`, `t.f += v`, `a[i]++`                                | `a[i] = a[i] + v`                                                                                                 |
-| `i++` used as a value                                            | `i += 1n` on its own line                                                                                         |
+| `i++` used as a value                                            | `i += 1` on its own line                                                                                          |
 | `t[0] = v` on a record                                           | `t.field = v`                                                                                                     |
 | template strings                                                 | `"text"`, or bytes built with `.concat`                                                                           |
-| `1e18`, `1.5`, `null`, `undefined`                               | `10n ** 18n`, integers in the smallest unit, `0n`                                                                 |
+| `1e18`, `1.5`, `null`, `undefined`                               | `10 ** 18`, integers in the smallest unit, `0`                                                                    |
 | `xs.push(v)`, `console.log`, any JavaScript library              | `new Array(n)` with an index; `log(…)`                                                                            |
 | `Math.min`, `max`, `abs`, `pow`                                  | `if` or a ternary; `**`                                                                                           |
 | comparing bytes with `==`                                        | compare `crypto.keccak256` of each                                                                                |

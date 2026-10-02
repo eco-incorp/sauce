@@ -19,7 +19,7 @@ On Ethereum, `RocketPool` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's rETH, `0xae78736Cd615f374D3085123A210448E74Fc6393`.
-  require(RocketPool.RETH != 0n);
+  require(RocketPool.RETH != 0);
 }
 ```
 

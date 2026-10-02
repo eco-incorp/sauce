@@ -9,7 +9,7 @@
 import { requireChain } from "../src/chains/canonical.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
-import { SVM_TOKEN_REGISTRY } from "../src/routes/token-registry.js";
+import { registryTokenAddress, SVM_TOKEN_REGISTRY } from "../src/routes/token-registry.js";
 
 // Base USDC -- pinned fixture, matching src/verify/vectors.ts's own Base USDC constant.
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
@@ -144,6 +144,34 @@ describe("a symbol resolves through the chain's registry", () => {
     );
     expect(bytesOf("ethereum", `USDC.transfer(${TO}, 5n);`)).not.toEqual(
       bytesOf("base", `USDC.transfer(${TO}, 5n);`),
+    );
+  });
+});
+
+describe("USDT0: Tether's token on the chains whose USDT is USDT0", () => {
+  const usdt0Of = (slug: string) =>
+    `0x${registryTokenAddress(requireChain(slug), "USDT0")!.toString(16).padStart(40, "0")}`;
+
+  it.each(["arbitrum", "polygon"])(
+    "on %s, USDT0.transfer is @sauce/token's SafeERC20 transfer of the registry's USDT0",
+    (slug) => {
+      expect(bytesOf(slug, `USDT0.transfer(${TO}, 5n);`)).toEqual(
+        library(slug, "transfer", `transfer(${usdt0Of(slug)}, ${TO}, 5n);`),
+      );
+    },
+  );
+
+  it.each(["arbitrum", "polygon"])("on %s, IERC20.at(USDT0) reads the token", (slug) => {
+    const read = `import { IERC20 } from "./artifacts/IERC20.json";\nfunction main(): Uint256 { return IERC20.at(USDT0).balanceOf(${TO}); }`;
+    expect(bytesOf(slug, read).length).toBeGreaterThan(0);
+  });
+
+  it("is refused by name on a chain that has none, and USDT where the token is USDT0", () => {
+    expect(() => bytesOf("base", `USDT0.transfer(${TO}, 5n);`)).toThrow(
+      /`USDT0` is not a token base registers/,
+    );
+    expect(() => bytesOf("arbitrum", `USDT.transfer(${TO}, 5n);`)).toThrow(
+      /`USDT` is not a token arbitrum registers/,
     );
   });
 });

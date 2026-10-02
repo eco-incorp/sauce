@@ -19,7 +19,7 @@ On Ethereum, `PancakeswapV3` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's factory, `0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865`.
-  require(PancakeswapV3.Factory != 0n);
+  require(PancakeswapV3.Factory != 0);
 }
 ```
 

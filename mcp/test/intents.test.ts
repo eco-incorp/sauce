@@ -13,16 +13,18 @@ const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const RECIPIENT = "0x6666666666666666666666666666666666666666";
 const TX = `0x${"ab".repeat(32)}`;
 
-/** Base USDC to RECIPIENT for Ethereum USDC: an intent fixed when it is built. */
+/** Base USDC to `recipient` for Ethereum USDC: an intent fixed by main's argument. */
 const PROGRAM = {
   source: [
-    "Base.Portal.send([{ token: USDC, amount: 7n }]).receive().then(() => {",
-    "  USDC.transfer(RECIPIENT, 5n);",
-    "});",
+    "function main(recipient: Address) {",
+    "  Base.Portal.send({ token: USDC, amount: 7n }).receive().then(() => {",
+    "    USDC.transfer(recipient, 5n);",
+    "  });",
+    "}",
     "",
   ].join("\n"),
   chain: "ethereum",
-  defines: { RECIPIENT },
+  args: [RECIPIENT],
   intentDeadline: 2_000_000_000,
   intentCreator: OWNER,
 };
@@ -52,6 +54,22 @@ describe("sauce_intent_publish", () => {
     assert.equal(record.schema, "sauce.intent/1");
     assert.deepEqual([record.source.chain, record.destination.chain], ["ethereum", "base"]);
     assert.match(record.intentHash, /^0x[0-9a-f]{64}$/);
+  });
+
+  it("binds main's arguments into the intent: the one a low-level define of the name gives", async () => {
+    const { args: _, ...program } = PROGRAM;
+    const defined = ok(
+      await mcp.call("sauce_intent_publish", {
+        ...program,
+        source: PROGRAM.source.replace("function main(recipient: Address) {", "function main() {"),
+        defines: { recipient: RECIPIENT },
+      }),
+    ) as { intents: Array<{ intentHash: string }> };
+    assert.equal(defined.intents[0]!.intentHash, record.intentHash);
+    assert.match(
+      failed(await mcp.call("sauce_intent_publish", program)),
+      /main\(recipient: Address\) takes 1 argument: pass them as args, in order; the intents/,
+    );
   });
 });
 
@@ -151,6 +169,11 @@ describe("sauce_intent_fill", () => {
     assert.match(
       failed(await mcp.call("sauce_intent_fill", { ...PROGRAM, intent: record, from: OWNER })),
       /name the intents one way/,
+    );
+    const { args: _, ...unbound } = PROGRAM;
+    assert.match(
+      failed(await mcp.call("sauce_intent_fill", { ...unbound, dryRun: true })),
+      /main\(recipient: Address\) takes 1 argument: pass them as args, in order; the intents/,
     );
     assert.match(
       failed(await mcp.call("sauce_intent_fill", { intent: record })),

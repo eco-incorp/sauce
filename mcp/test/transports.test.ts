@@ -59,7 +59,7 @@ describe("stdio: sauce mcp as an agent launches it", () => {
   });
   after(() => rmSync(dir, { recursive: true, force: true }));
 
-  it("serves the tools, resources and prompts, reading chains only from --config", async () => {
+  it("serves the tools, resources and prompts, reading chains from --config first", async () => {
     const config = join(dir, "sauce.config.json");
     writeFileSync(config, JSON.stringify({ rpcUrls: { "8453": `http://127.0.0.1:9/${SECRET}` } }));
     const transport = new StdioClientTransport({
@@ -74,13 +74,32 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     await client.connect(transport);
     try {
       await exercise(client);
+      // Over stdio a program is read from the user's own disk, relative to where it runs.
+      writeFileSync(join(dir, "program.sauce.ts"), PROGRAM);
+      const byPath = structured(
+        await client.callTool({
+          name: "sauce_compile",
+          arguments: { path: "program.sauce.ts", chain: "base" },
+        }),
+      );
+      const bySource = structured(
+        await client.callTool({
+          name: "sauce_compile",
+          arguments: { source: PROGRAM, chain: "base" },
+        }),
+      );
+      assert.equal(byPath.bytecode, bySource.bytecode);
+      assert.equal(byPath.sourceSha256, bySource.sourceSha256);
       const { chains } = structured(await client.callTool({ name: "sauce_chains" })) as {
-        chains: Array<{ slug: string; endpoint: boolean }>;
+        chains: Array<{ slug: string; endpoint: string }>;
       };
+      // The config's chain from it, and every other through the public endpoints the command
+      // hands the server.
       assert.deepEqual(
-        chains.filter((chain) => chain.endpoint).map((chain) => chain.slug),
+        chains.filter((chain) => chain.endpoint === "config").map((chain) => chain.slug),
         ["base"],
       );
+      assert.equal(chains.find((chain) => chain.slug === "ethereum")?.endpoint, "public");
       const failed = (await client.callTool({
         name: "sauce_pot",
         arguments: { chain: "base", owner: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" },
@@ -344,6 +363,14 @@ describe("Streamable HTTP: sauce mcp --http", () => {
       const { tools } = await client.listTools();
       assert.ok(tools.every((tool) => !tool.name.startsWith("sauce_wallet")));
       assert.match(client.getInstructions() ?? "", /NOTHING HERE SIGNS OR SENDS/);
+      // Over HTTP no file is read: path is no input, and a call that gives one is refused.
+      const compile = tools.find((tool) => tool.name === "sauce_compile")!;
+      assert.ok(!("path" in (compile.inputSchema.properties ?? {})));
+      const refused = (await client.callTool({
+        name: "sauce_compile",
+        arguments: { path: "package.json", chain: "base" },
+      })) as CallToolResult;
+      assert.equal(refused.isError, true);
     } finally {
       await client.close();
     }

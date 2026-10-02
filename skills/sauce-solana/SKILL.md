@@ -1,6 +1,6 @@
 ---
 name: sauce-solana
-description: Writing and running Sauce programs on Solana (the SVM target) — declaring every account as an Account parameter with Writable/Signer roles, the account manifest the compile returns, passing accounts by name with --account, the @sauce/token arm for SPL Token and Token-2022 (balanceOf and the other reads, transferChecked and approveChecked for either program, the legacy transfer and approve) and what Token-2022's extensions do to a program (transfer fees, scaled UI amounts, pauses, frozen accounts, transfer hooks), svm.call CPIs and svm.sload byte reads, account .owner and .dataLen checks, a 32-byte key as a define, runtime arguments without Account slots, and how a program runs with sauce run --chain solana, through the Kitchen on the owner's Pot or directly on the engine (--via engine). Use when the user targets Solana, SPL tokens, Token-2022, PYUSD or tokenized stocks on Solana, PDAs or CPIs, account manifests, lamport fees, CPI depth, LiteSVM, or Solana venues such as Raydium, Orca or Meteora.
+description: Writing and running Sauce programs on Solana (the SVM target) — declaring every account as an Account parameter with Writable/Signer roles, the account manifest the compile returns, passing accounts by name with --account, the @sauce/token arm for SPL Token and Token-2022 (balanceOf and the other reads, transferChecked and approveChecked for either program, the legacy transfer and approve) and what Token-2022's extensions do to a program (transfer fees, scaled UI amounts, pauses, frozen accounts, transfer hooks), svm.call CPIs and svm.sload byte reads, account .owner and .dataLen checks, a 32-byte key as an Address argument, runtime arguments without Account slots, and how a program runs with sauce run --chain solana, through the Kitchen on the owner's Pot or directly on the engine (--via engine). Use when the user targets Solana, SPL tokens, Token-2022, PYUSD or tokenized stocks on Solana, PDAs or CPIs, account manifests, lamport fees, CPI depth, LiteSVM, or Solana venues such as Raydium, Orca or Meteora.
 ---
 
 # Sauce on Solana
@@ -14,31 +14,28 @@ and a registered token symbol (`USDC`, `USDT`, `WSOL`, `PYUSD`) is its mint's 32
 they take: `balanceOf(USDC, account)`. `sauce globals --chain solana` lists the mints, devnet's, and
 which are Token-2022 mints.
 
-```sauce chain=solana define=MINT
-const MINT = 0n; // the SPL mint's 32-byte key: a define replaces it
-
+```sauce chain=solana
 function main(
   tokenProgram: Account,
   source: Account<Writable>,
   destination: Account<Writable>,
   authority: Account<Signer>,
+  mint: Address,
   amount: Uint256
 ): Uint256 {
-  require(MINT != 0n, "set MINT");
-  const before = balanceOf(MINT, destination);
-  transfer(MINT, tokenProgram, source, destination, authority, amount);
-  const after = balanceOf(MINT, destination);
+  const before = balanceOf(mint, destination);
+  transfer(mint, tokenProgram, source, destination, authority, amount);
+  const after = balanceOf(mint, destination);
   require(after - before == amount, "destination did not receive the amount");
   return after;
 }
 ```
 
 ```sh
-npx sauce compile solana.sauce.ts --chain solana --define MINT=<mint> --json
-npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypair <keypair> \
-  --define MINT=<mint> --account tokenProgram=<SPL Token program> \
-  --account source=<the Pot's token account> --account destination=<token account> \
-  --account authority=pot --args 400
+sauce compile solana.sauce.ts --chain solana --json
+sauce run solana.sauce.ts --chain solana --keypair <keypair> \
+  --account tokenProgram=<SPL Token program> --account source=<the Pot's token account> \
+  --account destination=<token account> --account authority=pot --args <mint> 400
 ```
 
 ## Accounts
@@ -50,19 +47,17 @@ npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypai
 - Each slot is passed by its name: `--account NAME=<address>`, `NAME=pot` for the Pot, which the
   Kitchen signs for, or `NAME=owner` for the signer. `sauce compile --json` lists the slots in its
   `manifest`, and a missing one is named with the role it needs.
-- An `Account` compares by identity (`tokenProgram == SPL_TOKEN_PROGRAM`, with the SPL Token
-  program `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` as a define, in base58 or as
-  `0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9`) and exposes `.owner` and
-  `.dataLen`. Check the owner before trusting bytes: a hand-made account can carry any layout.
+- An `Account` compares by identity (`tokenProgram.address == splToken`, with the SPL Token program
+  `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` an `Address` argument, or its 32-byte hex
+  `0x06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9` as a literal) and exposes
+  `.owner` and `.dataLen`. Check the owner before trusting bytes: a hand-made account can carry any layout.
 - `svm.sload(account, offset, length)` reads bytes; `.toLe()`/`.toBe()` make a number.
   `svm.call(program, [accounts...], data)` is a CPI to an attached program account.
 - Scalar parameters are runtime arguments (`--args`); `Account` parameters are not encoded. A
-  32-byte key chosen per compile, such as a mint, is a module constant (`const MINT = 0n;`) that
-  `--define MINT=<key>` replaces, the key in base58 or as 32-byte hex. A define also overrides a
-  registered symbol, which is how a devnet program names devnet's USDC; a module `const USDC = …`
-  does not, since the symbol is itself a define and a define wins. A key that changes per call is
-  an `Address` argument of `main`, passed as a base58 public key and encoded as one ABI word (not
-  with `--compact-args`), or an `Account` parameter when the program reads or writes that account.
+  32-byte key the program is given, such as a mint, is an `Address` argument of `main`, passed as a
+  base58 public key and encoded as one ABI word (not with `--compact-args`), or an `Account`
+  parameter when the program reads or writes that account. A registered symbol (`USDC`) is
+  mainnet's mint; for devnet's, pass the key `sauce globals --chain solana` lists as an argument.
 - On Solana `ctx.self()` is the engine's program id, which owns every Pot account, **not the
   Pot**; `ctx.msgSender()` is the first signer among the accounts the engine receives (the Pot,
   when a `pot` slot is attached as the Pot), not proof of who sent the transaction; and
@@ -86,27 +81,26 @@ The Pot is an account the program is given: declare it as `pot: Account<Signer>`
 **To bind the slot to the Pot, re-derive the Pot's address and require the slot to be it.** The Pot
 is the Kitchen's program address for the seeds `"pot"`, its owner and the 32-byte salt (zero unless
 `--salt` names another), and only a Kitchen cook can make that address sign, so a signing slot at
-that address is the Pot. Take the owner as a signer slot of its own (`--account wallet=owner`).
-`KITCHEN` is the Kitchen program, as a define: `--define KITCHEN=SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot`
-(or its 32-byte hex, `0x068ddbf2073c779081c9b11a48aea267e5545cb7f387144de6b7ff8c7138818b`). Bind an
-account's key to a local before calling a method on it.
+that address is the Pot. Take the owner as a signer slot of its own (`--account wallet=owner`). The
+Kitchen program is `SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot`, passed as an argument, and the
+salt is the Pot's (zero unless `--salt` names another). Bind an account's key to a local before
+calling a method on it.
 
-```sauce chain=solana define=KITCHEN
-const SALT = 0n; // the Pot's salt, zero by default
-
-function main(pot: Account<Signer>, wallet: Account<Signer>) {
+```sauce chain=solana
+function main(pot: Account<Signer>, wallet: Account<Signer>, kitchen: Address, salt: Uint256) {
   const owner = wallet.address;
-  const [expected] = crypto.findPDA(KITCHEN, ["pot", owner.toBytesBe(32n), SALT.toBytesBe(32n)]);
+  const [expected] = crypto.findPDA(kitchen, ["pot", owner.toBytesBe(32), salt.toBytesBe(32)]);
   require(pot.address == expected, "pot is not the wallet's Pot");
 }
 ```
 
 ```sh
-npx sauce run pot.sauce.ts --chain solana --config sauce.config.json --keypair <keypair> \
-  --define KITCHEN=SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot --account pot=pot --account wallet=owner
+sauce run pot.sauce.ts --chain solana --keypair <keypair> \
+  --account pot=pot --account wallet=owner --args SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot 0
 ```
 
-A Pot under another salt is the same program with `--define SALT=<the salt, as 32-byte hex>`.
+A Pot under another salt passes that salt, as a 32-byte number, in place of `0`. The Kitchen's key as
+32-byte hex is `0x068ddbf2073c779081c9b11a48aea267e5545cb7f387144de6b7ff8c7138818b`.
 This binding is a Kitchen cook's. A direct cook (`--via engine`) runs as no Pot: nothing signs for
 one, so a slot that must sign cannot be `pot` there.
 
@@ -116,14 +110,14 @@ An SPL token account is 165 bytes, and `acct.owner` is the program that owns it 
 program, or Token-2022), not whose balance it is. A Token-2022 account has the same first 165 bytes,
 then its extensions:
 
-| Bytes   | Field                              | Read                               |
-| ------- | ---------------------------------- | ---------------------------------- |
-| 0–32    | mint                               | `svm.sload(acct, 0n, 32n).toBe()`  |
-| 32–64   | owner: whose balance it is         | `ownerOf(mint, acct)`              |
-| 64–72   | amount (u64, little-endian)        | `svm.sload(acct, 64n, 8n).toLe()`  |
-| 72–76   | delegate tag (u32: 0 none, 1 some) | `svm.sload(acct, 72n, 4n).toLe()`  |
-| 76–108  | delegate                           | `svm.sload(acct, 76n, 32n).toBe()` |
-| 121–129 | delegated amount (u64)             | `svm.sload(acct, 121n, 8n).toLe()` |
+| Bytes   | Field                              | Read                             |
+| ------- | ---------------------------------- | -------------------------------- |
+| 0–32    | mint                               | `svm.sload(acct, 0, 32).toBe()`  |
+| 32–64   | owner: whose balance it is         | `ownerOf(mint, acct)`            |
+| 64–72   | amount (u64, little-endian)        | `svm.sload(acct, 64, 8).toLe()`  |
+| 72–76   | delegate tag (u32: 0 none, 1 some) | `svm.sload(acct, 72, 4).toLe()`  |
+| 76–108  | delegate                           | `svm.sload(acct, 76, 32).toBe()` |
+| 121–129 | delegated amount (u64)             | `svm.sload(acct, 121, 8).toLe()` |
 
 **Check the owner before calling a balance the Pot's**: a transfer with the Pot as `authority` also
 succeeds from an account where the Pot is only a delegate, up to the delegated amount.
@@ -133,20 +127,25 @@ succeeds from an account where the Pot is only a delegate, up to the delegated a
 
 `USDC` on Solana is mainnet's USDC mint, `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`, whose
 32-byte key is `0xc6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61`;
-`balanceOf(USDC, account)` takes it with no define. On devnet USDC is another mint,
-`4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`: pass it as `--define USDC=<key>`, which wins over
-the symbol. The Solana file in `sauce-chains` lists every registered mint, mainnet's and devnet's.
+`balanceOf(USDC, account)` takes it as it is. On devnet USDC is another mint,
+`4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`: a program for devnet takes the mint as an `Address`
+argument and is passed that key. The Solana file in `sauce-chains` lists every registered mint,
+mainnet's and devnet's.
 
 `--account <name>=pot` attaches **the Pot's own account**, not its USDC. The Pot's USDC is a token
 account of its own, so a program reading it takes that account as a parameter and checks whose it
 is:
 
-```sauce chain=solana define=KITCHEN
-const SALT = 0n; // the Pot's salt, zero by default
-
-function main(pot: Account<Signer>, wallet: Account<Signer>, potUsdc: Account): Uint256 {
+```sauce chain=solana
+function main(
+  pot: Account<Signer>,
+  wallet: Account<Signer>,
+  potUsdc: Account,
+  kitchen: Address,
+  salt: Uint256
+): Uint256 {
   const owner = wallet.address;
-  const [expected] = crypto.findPDA(KITCHEN, ["pot", owner.toBytesBe(32n), SALT.toBytesBe(32n)]);
+  const [expected] = crypto.findPDA(kitchen, ["pot", owner.toBytesBe(32), salt.toBytesBe(32)]);
   require(pot.address == expected, "pot is not the wallet's Pot");
   require(ownerOf(USDC, potUsdc) == pot.address, "not the Pot's USDC account");
   return balanceOf(USDC, potUsdc);
@@ -154,13 +153,14 @@ function main(pot: Account<Signer>, wallet: Account<Signer>, potUsdc: Account): 
 ```
 
 run with `--account pot=pot --account wallet=owner`, the Pot's USDC account in the third slot and
-`--define KITCHEN=…` as above: `--account potUsdc=pot:USDC` passes it, the Pot's associated token
+the Kitchen and salt as above (`--args SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot 0`):
+`--account potUsdc=pot:USDC` passes it, the Pot's associated token
 account for the mint (`pot:<mint>` for any mint, `owner:USDC` for the owner's). The first check
 binds `pot` to the wallet's Pot; the second binds the token account to `pot`. Passing the Pot for
 that slot fails the checks with no message (the Pot is not an SPL token account), and so does an
 account that does not exist: **a Pot with no USDC account holds no USDC**. `sauce simulate` names
 a given account the cluster does not have, and
-`sauce pot --chain solana --owner <pubkey> --config sauce.config.json` lists the Pot's account for
+`sauce pot --chain solana --owner <pubkey>` lists the Pot's account for
 each registered mint, whether it exists and what it holds.
 
 The Pot's USDC sits in its associated token account, the ATA of (Pot, mint) under the mint's token
@@ -192,7 +192,9 @@ four accounts. What costs bytes:
 Solana has two token programs, and every mint belongs to one, with every token account of it: the
 SPL Token program (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) or Token-2022
 (`TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`). USDC, USDT and WSOL are SPL Token mints; PYUSD and
-the tokenized stocks are Token-2022 mints. The arm takes the mint first, then the accounts:
+the tokenized stocks (`TSLAx`, `NVDA_US`, `SPACEX`, …, in `sauce-globals`'
+[Tokenized stocks](../sauce-globals/SKILL.md#on-solana)) are Token-2022 mints. The arm takes the
+mint first, then the accounts:
 
 - **Reads, either program:** `balanceOf(mint, account)`, `allowance(mint, account, spender)`,
   `ownerOf(mint, account)`, `totalSupply(mintAccount)`, `decimals(mintAccount)`.
@@ -247,7 +249,7 @@ function main(
 ): Uint256 {
   require(ownerOf(PYUSD, source) == pot.address, "not the Pot's account");
   const before = balanceOf(PYUSD, destination);
-  transferChecked(PYUSD, tokenProgram, source, mint, destination, pot, amount, 6n);
+  transferChecked(PYUSD, tokenProgram, source, mint, destination, pot, amount, 6);
   return balanceOf(PYUSD, destination) - before;
 }
 ```
@@ -259,7 +261,7 @@ cluster. A token account's address derives from its owner, its mint and the mint
 the Pot's PYUSD account is not where an SPL Token derivation puts it:
 
 ```sh
-npx sauce run token-2022.sauce.ts --chain solana --config sauce.config.json --keypair <keypair> \
+sauce run token-2022.sauce.ts --chain solana --keypair <keypair> \
   --account tokenProgram=program:PYUSD --account source=pot:PYUSD --account mint=mint:PYUSD \
   --account destination=<token account> --account pot=pot --args 400
 ```
@@ -270,8 +272,8 @@ Solana is one of the three chains the initial release supports, with Ethereum an
 Pots and intent steps are built and sent there.
 
 - **The Pot** is the Kitchen's address for the owner and salt.
-  `npx sauce pot --chain solana --owner <pubkey>` prints it;
-  `npx sauce pot --deploy --chain solana --config sauce.config.json --keypair <keypair>` creates it.
+  `sauce pot --chain solana --owner <pubkey>` prints it;
+  `sauce pot --deploy --chain solana --keypair <keypair>` creates it.
   A cook names its Pot by `--owner` (and `--salt`), never `--pot`.
 - **The cook** pays the execution fee in lamports, read from the cluster and printed as `fee`, so
   there is no `--value`; `--max-execution-fee <lamports>` refuses a cook whose fee is above it.
@@ -290,10 +292,10 @@ Pots and intent steps are built and sent there.
   calls a program that calls others. Both pay the same fee into the Kitchen's treasury:
 
 ```sh
-npx sauce run solana.sauce.ts --chain solana --config sauce.config.json --keypair <keypair> \
-  --via engine --define MINT=<mint> --account tokenProgram=<SPL Token program> \
+sauce run solana.sauce.ts --chain solana --keypair <keypair> \
+  --via engine --account tokenProgram=<SPL Token program> \
   --account source=<the signer's token account> --account destination=<token account> \
-  --account authority=owner --args 400
+  --account authority=owner --args <mint> 400
 ```
 
 - A program too large for one transaction is staged through the Kitchen by `sauce run`. `simulate`

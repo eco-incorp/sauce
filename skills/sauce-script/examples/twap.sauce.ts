@@ -4,7 +4,7 @@
 // through the program's own ABI beside it, IOracle.json: that one function, with the pool's
 // deployed types. The average tick over the window is (now - then) / window.
 //
-//   sauce simulate twap.sauce.ts --chain <chain> --config sauce.config.json \
+//   sauce simulate twap.sauce.ts --chain <chain> \
 //     --owner <address> --args <tokenA> <tokenB> <fee> <window>
 //
 //   tokenA: Address  one token of the pair
@@ -14,16 +14,16 @@
 //
 // On Base, the WETH/USDC 0.05% pool over 30 minutes:
 //
-//   sauce simulate twap.sauce.ts --chain base --config sauce.config.json \
+//   sauce simulate twap.sauce.ts --chain base \
 //     --owner <address> --args 0x4200000000000000000000000000000000000006 \
 //     0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 500 1800
 import IOracle from "./IOracle.json";
 
 function main(tokenA: Address, tokenB: Address, fee: Uint256, window: Uint256): bytes {
   const pool = UniswapV3.Factory.getPool(tokenA, tokenB, fee);
-  require(pool != 0n, "no pool for that pair and fee");
-  require(UniswapV3.Pool(pool).liquidity() > 0n, "the pool has no liquidity");
+  require(pool != 0, "no pool for that pair and fee");
+  require(UniswapV3.Pool(pool).liquidity() > 0, "the pool has no liquidity");
   // Only what is needed: observe's first result, the tick cumulatives.
-  const [ticks] = IOracle.at(pool).observe([window, 0n]);
+  const [ticks] = IOracle.at(pool).observe([window, 0]);
   return abi.encode(ticks[0], ticks[1]);
 }

@@ -1,16 +1,18 @@
 import { curve, uniswapV2 } from "@sauce/router";
 import { balanceOf } from "@sauce/token";
 
-// Base: sell every WETH the Pot holds on Uniswap V2, then the USDC that returns for crvUSD in
-// Curve's 4pool, and keep it. The amounts are only known when this runs; MIN_OUT is a define.
-function main() {
-  const weth = 0x4200000000000000000000000000000000000006n;
-  const usdc = 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n;
-  const crvusd = 0x417ac0e078398c154edfadd9ef675d30be60af93n;
-  const pair = 0x88a43bbdf9d098eec7bceda4e2494615dfd9bb9cn; // Uniswap V2 WETH/USDC
-  const fourPool = 0xf6c5f01c7f3148891ad0e19df78743d31e390d1fn; // USDC is coin 0, crvUSD 3
-
-  const sold = balanceOf(weth, ctx.self());
-  const received = uniswapV2(pair, weth, usdc, sold, 3000n, 0n, ctx.self());
-  curve(fourPool, usdc, crvusd, received, 0n, 3n, false, MIN_OUT, ctx.self());
+// Ethereum: sell every WETH the Pot holds on Uniswap V2, then the USDC that returns for USDT in
+// Curve's 3pool, and keep it. The tokens, the factory and the pool are the registry's names; the
+// amounts are only known when this runs.
+//
+//   sauce run router-swap.sauce.ts --chain ethereum --keystore <keystore> --args <minOut>
+//
+//   minOut: Uint256   the least USDT to keep, in its smallest units (6 decimals): below it the
+//                     whole transaction reverts
+function main(minOut: Uint256) {
+  const pair = UniswapV2.Factory.getPair(WETH, USDC);
+  const sold = balanceOf(WETH, ctx.self());
+  const received = uniswapV2(pair, WETH, USDC, sold, 3000, 0, ctx.self());
+  // USDC is the 3pool's coin 1 and USDT its coin 2.
+  curve(Curve.ThreePool, USDC, USDT, received, 1, 2, false, minOut, ctx.self());
 }

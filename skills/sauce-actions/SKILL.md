@@ -63,8 +63,8 @@ resolves on the chain the document is compiled for:
 
 | Field takes         | Write                                   | Lists them                                       |
 | ------------------- | --------------------------------------- | ------------------------------------------------ |
-| a token             | its registry symbol: `"USDC"`, `"WETH"` | `npx sauce globals --chain <chain> --tokens`     |
-| a contract          | `"Namespace.Contract"`: `"AaveV3.Pool"` | `npx sauce globals --chain <chain> --protocols`  |
+| a token             | its registry symbol: `"USDC"`, `"WETH"` | `sauce globals --chain <chain> --tokens`         |
+| a contract          | `"Namespace.Contract"`: `"AaveV3.Pool"` | `sauce globals --chain <chain> --protocols`      |
 | the native currency | `"native"`, where the venue trades it   | `uniswapV4Swap`, `ambientSwap`, a Balancer batch |
 | any of these        | an address, `0x` and 40 hex digits      | always accepted                                  |
 
@@ -134,18 +134,18 @@ the bytecode; `--json` adds the document as parsed, the chain, and what `sauce c
 reports. Read the source to check what the document does before it runs.
 
 ```sh
-npx sauce actions swap.json --chain base
-npx sauce actions swap.json --chain base --json
+sauce actions swap.json --chain base
+sauce actions swap.json --chain base --json
 ```
 
 `compile`, `simulate`, `tx` and `run` take the document wherever they take a `.sauce.ts` file, with
 the same flags (`sauce-cli` covers the Pot, endpoints, signers and funding):
 
 ```sh
-npx sauce simulate swap.json --chain base --owner <address> --rpc-url <url> \
+sauce simulate swap.json --chain base --owner <address> \
   --assume-balance USDC:1000 --args 1000000000
-npx sauce tx swap.json --chain base --owner <address> --value 0 --args 1000000000
-npx sauce run swap.json --chain base --rpc-url <url> --keystore <keystore> --args 1000000000
+sauce tx swap.json --chain base --owner <address> --value 0 --args 1000000000
+sauce run swap.json --chain base --keystore <keystore> --args 1000000000
 ```
 
 - `tx` and `run` build and send the cook on a chain the initial release supports: Ethereum or
@@ -153,7 +153,6 @@ npx sauce run swap.json --chain base --rpc-url <url> --keystore <keystore> --arg
   document lowers, compiles and simulates, and `tx` and `run` are refused, naming the supported
   chains and the chain-support request for that chain (`sauce-chains` says how to post it).
 - `--args` gives the `argument` actions, in the order the document declares them.
-- `--define` does not apply: a document's values are its own fields.
 - A document is refused with every problem at once, each on a line of its own with its path, such
   as a pool key without its fee:
 

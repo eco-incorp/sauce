@@ -4,7 +4,17 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -354,12 +364,22 @@ try {
     `${name} ${installedManifest.version}\n`,
     `npx ${name} runs the package's sauce bin`,
   );
-  // The skill's `pay.sauce.ts` names no chain and takes `main(recipient, amount)` at run time.
-  const example = join(installedRoot, "skills/sauce-cli/examples/pay.sauce.ts");
+  // The skill's `buy.sauce.ts` names no chain, starts with a `#!` line, imports `@sauce/router`
+  // and takes `main(token, budget, sqrtPriceLimitX96, minOut, recipient)` at run time.
+  // `--offline`: the bin reads a chain through its built-in public endpoints otherwise, and this
+  // check reaches no network.
+  const example = join(installedRoot, "skills/sauce-cli/examples/buy.sauce.ts");
   const recipient = "0x6666666666666666666666666666666666666666";
   const owner = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
-  const chain = ["--chain", "ethereum"];
-  const args = ["--args", recipient, "1000000"];
+  const chain = ["--chain", "base"];
+  const args = [
+    "--args",
+    "0x4200000000000000000000000000000000000006",
+    "100000000",
+    "4116816085950893928074568",
+    "37000000000000000",
+    recipient,
+  ];
   const bytecode = sauce("compile", example, ...chain).trim();
   assert.match(bytecode, /^0x[0-9a-f]+$/, "sauce compile prints the program as hex");
   const compiled = JSON.parse(sauce("compile", example, ...chain, "--json"));
@@ -367,31 +387,97 @@ try {
     readFileSync(join(work, "node_modules/sauce-compiler/package.json"), "utf8"),
   );
   assert.equal(compiled.bytecode, bytecode);
-  assert.equal(compiled.chain, "ethereum", "--chain chose the chain");
+  assert.equal(compiled.chain, "base", "--chain chose the chain");
   assert.deepEqual(
-    compiled.entryParams,
-    [
-      { name: "recipient", type: "Address" },
-      { name: "amount", type: "Uint256" },
-    ],
+    compiled.entryParams.map((param) => param.name),
+    ["token", "budget", "sqrtPriceLimitX96", "minOut", "recipient"],
     "main's parameters, as --args takes them",
   );
   assert.equal(compiled.compiler.version, installedCompiler.version);
   assert.equal(compiled.engine.release, "v12-evm");
-  const pot = JSON.parse(sauce("pot", "--owner", owner, "--chain", "ethereum"));
+  const pot = JSON.parse(sauce("pot", "--owner", owner, "--chain", "base", "--offline"));
   assert.equal(pot.to, pot.kitchen, "sauce pot prints the Kitchen.deployPot transaction");
-  const tx = JSON.parse(sauce("tx", example, ...chain, "--owner", owner, "--value", "0", ...args));
+  const tx = JSON.parse(
+    sauce("tx", example, ...chain, "--owner", owner, "--value", "0", "--offline", ...args),
+  );
   assert.deepEqual(Object.keys(tx), ["chainId", "to", "data", "value"], "sauce tx prints the tx");
   assert.equal(tx.to, pot.pot, "sauce tx cooks on the Pot sauce pot predicts");
   assert.ok(tx.data.includes(bytecode.slice(2)), "the cook carries the compiled program");
   assert.ok(tx.data.includes(recipient.slice(2)), "and main's arguments after it");
   assert.equal(
-    sauce("tx", example, ...chain, "--owner", owner, "--value", "0", "--format", "cast", ...args),
+    sauce(
+      "tx",
+      example,
+      ...chain,
+      "--owner",
+      owner,
+      "--value",
+      "0",
+      "--offline",
+      "--format",
+      "cast",
+      ...args,
+    ),
     `cast send ${tx.to} ${tx.data} --value 0 --rpc-url <RPC_URL> --private-key <PRIVATE_KEY>\n`,
   );
   console.log(
     `Clean package install: the sauce bin compiles the shipped example (${compiled.size} bytes) ` +
       `and builds its Pot and cook transactions`,
+  );
+
+  // `sauce update` tells a copy's install from its real path. This one is a project's own (the
+  // consumer's node_modules): it prints the project's command and installs nothing. The same
+  // tarball installed globally by npm, under a prefix of its own, is npm's global install there.
+  // Both read the registry's latest; neither installs anything (--check for the global one).
+  const projectUpdate = JSON.parse(sauce("update", "--json"));
+  assert.deepEqual(
+    [projectUpdate.installation.kind, projectUpdate.installation.manager],
+    ["project", "npm"],
+    "sauce update knows a project's own copy",
+  );
+  assert.equal(realpathSync(projectUpdate.installation.project), realpathSync(work));
+  assert.match(projectUpdate.command, /^npm install --save-exact @eco-incorp\/sauce@latest$/);
+  const prefix = mkdtempSync(join(tmpdir(), "sauce-global-"));
+  try {
+    execFileSync(
+      "npm",
+      [
+        "install",
+        "--global",
+        "--prefix",
+        prefix,
+        "--prefer-offline",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        join(work, filename),
+      ],
+      { cwd: work, stdio: ["ignore", "ignore", "inherit"] },
+    );
+    const globalUpdate = JSON.parse(
+      execFileSync(join(prefix, "bin", "sauce"), ["update", "--check", "--json"], {
+        cwd: prefix,
+        encoding: "utf8",
+        env: smokeEnv,
+      }),
+    );
+    assert.deepEqual(
+      [globalUpdate.installation.kind, globalUpdate.installation.manager, globalUpdate.updated],
+      ["global", "npm", false],
+      "sauce update knows npm's global install",
+    );
+    assert.equal(globalUpdate.installation.prefix, realpathSync(prefix));
+    assert.equal(globalUpdate.current, installedManifest.version);
+    assert.match(
+      globalUpdate.command,
+      new RegExp(`^npm install --global --prefix \\S+ @eco-incorp/sauce@${globalUpdate.target}$`),
+    );
+  } finally {
+    rmSync(prefix, { recursive: true, force: true });
+  }
+  console.log(
+    "Clean package install: sauce update knows the project's own copy and npm's global install, " +
+      "and installs nothing to say so",
   );
 
   // `sauce actions` loads the actions package from beside the SDK's build, by a path relative to
@@ -403,9 +489,21 @@ try {
   );
   assert.equal(lowered[0].source, lowered[1].source, "one source for every chain");
   assert.notEqual(lowered[0].bytecode, lowered[1].bytecode, "each chain's own addresses");
-  assert.match(lowered[0].source, /UniswapV3\.Factory\.getPool\(USDC, WETH, 500n\)/);
+  assert.match(lowered[0].source, /UniswapV3\.Factory\.getPool\(USDC, WETH, 500\)/);
   const actionsTx = JSON.parse(
-    sauce("tx", document, ...chain, "--owner", owner, "--value", "0", "--args", "1000000"),
+    sauce(
+      "tx",
+      document,
+      "--chain",
+      "ethereum",
+      "--owner",
+      owner,
+      "--value",
+      "0",
+      "--offline",
+      "--args",
+      "1000000",
+    ),
   );
   assert.ok(
     actionsTx.data.includes(lowered[0].bytecode.slice(2)),
@@ -419,10 +517,17 @@ try {
   const project = join(work, "scaffolded");
   sauce("init", project);
   const scaffoldedManifest = JSON.parse(readFileSync(join(project, "package.json"), "utf8"));
+  // viem as the installed package resolves it: the one its TypeScript API is typed in.
+  const installedViem = JSON.parse(
+    readFileSync(
+      createRequire(join(installedRoot, "package.json")).resolve("viem/package.json"),
+      "utf8",
+    ),
+  ).version;
   assert.deepEqual(
     scaffoldedManifest.dependencies,
-    { [name]: installedManifest.version },
-    "sauce init pins the package to exactly the version that ran it",
+    { [name]: installedManifest.version, viem: installedViem },
+    "sauce init pins the package to exactly the version that ran it, and viem to the one beside it",
   );
   for (const file of [
     "AGENTS.md",
@@ -473,6 +578,12 @@ try {
         `sauce init installs ${file} verbatim into ${dir}`,
       );
     }
+    // And beside them the programs' TypeScript project, as init writes it into programs/.
+    assert.equal(
+      readFileSync(join(project, dir, "tsconfig.json"), "utf8"),
+      readFileSync(join(project, "programs/tsconfig.json"), "utf8"),
+      `sauce init types the skills' programs in ${dir} as it types programs/`,
+    );
   }
   // status exits non-zero on anything outdated, so execFileSync throwing is the failure.
   const status = sauce("skills", "status", "--dir", project);
@@ -485,7 +596,8 @@ try {
 
   // An editor on that project, asked through its own tsserver from the installed TypeScript: the
   // programs in programs/ — an agent's three, as it wrote them, and every one the skills ship —
-  // show no error, a real mistake does, and the project's other TypeScript is untouched.
+  // show no error, a real mistake does, the skills' programs where the init installed them show
+  // none either, and the project's other TypeScript is untouched.
   const { checkEditor } = await import(
     pathToFileURL(join(root, "sdk/scripts/check-editor.mjs")).href
   );
@@ -505,7 +617,8 @@ try {
   });
   console.log(
     `Clean package install: in the project sauce init wrote, an editor's tsserver shows the ` +
-      `${shown} programs in programs/ no error, a mistake one, and a Node file beside them none`,
+      `${shown} programs in programs/ no error, a mistake one, the installed skills' none, and a ` +
+      "Node file beside them none",
   );
 
   // `sauce skills install` on its own, for one agent: only the directory that agent reads, every
@@ -525,7 +638,11 @@ try {
     readFileSync(join(codexProject, ".agents/skills/.sauce-skills.json"), "utf8"),
   );
   assert.equal(record.version, installedManifest.version, "the install records the version");
-  assert.deepEqual(Object.keys(record.files).sort(), shippedSkills, "and every file it wrote");
+  assert.deepEqual(
+    Object.keys(record.files).sort(),
+    [...shippedSkills, "tsconfig.json"].sort(),
+    "and every file it wrote: the skills, and their programs' tsconfig.json",
+  );
   assert.match(
     sauce("skills", "status", "--dir", codexProject),
     /: up to date \(/,
@@ -550,9 +667,78 @@ try {
     "the check leaves the installed skills as they were",
   );
 
-  // `sauce mcp`, from the install, the way the guide launches it — `npx @eco-incorp/sauce mcp`,
-  // here with `--no` so nothing is fetched — over both transports: the tools, a compile, and every
-  // shipped skill file as a resource. Nothing here reaches a chain.
+  // The same runners in a project whose package manager installs a package's own dependencies
+  // beside it rather than at the project's root (pnpm's default): only the project's direct
+  // dependencies resolve from it — what `sauce init` writes: the package, viem and Node's typings
+  // (its TypeScript runs the check) — and the package's own only from beside the package. Outside
+  // `work`, so nothing hoisted there is reached either. Every runner must typecheck there; a probe
+  // that imports one of the package's own dependencies must not.
+  const projectDependencies = [
+    ...Object.keys(scaffoldedManifest.dependencies),
+    ...Object.keys(scaffoldedManifest.devDependencies).filter((each) => each !== "typescript"),
+  ];
+  assert.deepEqual(
+    projectDependencies,
+    [name, "viem", "@types/node"],
+    "what sauce init depends on",
+  );
+  const isolated = mkdtempSync(join(tmpdir(), "sauce-isolated-project-"));
+  try {
+    writeFileSync(
+      join(isolated, "package.json"),
+      JSON.stringify({ private: true, type: "module" }),
+    );
+    for (const dependency of projectDependencies) {
+      const at = join(isolated, "node_modules", dependency);
+      mkdirSync(dirname(at), { recursive: true });
+      symlinkSync(join(work, "node_modules", dependency), at, "dir");
+    }
+    sauce("skills", "install", "--agent", "codex", "--dir", isolated);
+    const installedRunners = shippedSkills
+      .filter((file) => file.endsWith(".mts"))
+      .map((file) => join(isolated, ".agents/skills", file));
+    const probe = join(isolated, ".agents/skills/probe.mts");
+    writeFileSync(probe, 'import { address } from "@solana/kit";\nconsole.log(address);\n');
+    const options = {
+      target: ts.ScriptTarget.ES2022,
+      lib: ["lib.es2023.d.ts"],
+      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      types: ["node"],
+      typeRoots: [join(isolated, "node_modules/@types")],
+      strict: true,
+      noEmit: true,
+      skipLibCheck: true,
+      verbatimModuleSyntax: true,
+      erasableSyntaxOnly: true,
+      allowImportingTsExtensions: true,
+    };
+    const diagnostics = ts.getPreEmitDiagnostics(
+      ts.createProgram([...installedRunners, probe], options),
+    );
+    const where = (d) =>
+      `${d.file === undefined ? "" : `${relative(isolated, d.file.fileName)}: `}` +
+      ts.flattenDiagnosticMessageText(d.messageText, " ");
+    assert.deepEqual(
+      diagnostics.filter((d) => d.file?.fileName !== probe).map(where),
+      [],
+      "every installed runner typechecks with only the project's own dependencies",
+    );
+    assert.ok(
+      diagnostics.some((d) => d.file?.fileName === probe && d.code === 2307),
+      "the project does not resolve the package's own dependencies (@solana/kit)",
+    );
+    console.log(
+      `Clean package install: the ${installedRunners.length} installed runners typecheck in a ` +
+        `project that resolves only what sauce init makes it depend on (${projectDependencies.join(", ")})`,
+    );
+  } finally {
+    rmSync(isolated, { recursive: true, force: true });
+  }
+
+  // `sauce mcp`, from the install, the way `sauce mcp setup` launches it — `npx @eco-incorp/sauce
+  // mcp`, here with `--no` so nothing is fetched — over both transports: the tools, a compile, and
+  // every shipped skill file as a resource. Nothing here reaches a chain.
   const mcpLaunch = ["--no", "--", name, "mcp"];
   const mcpProgram =
     "function main(recipient: Address, amount: Uint256) {\n  USDC.transfer(recipient, amount);\n}\n";

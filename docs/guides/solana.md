@@ -1,6 +1,6 @@
 # Solana programs and execution
 
-[Documentation](../README.md) · [Compiler](../api/compiler.md) · [Coverage](../api/coverage.md)
+[Documentation](../README.md) · [Compiler](../api/compiler.md) · [Solana's tokens and contracts](../reference/chains/solana.md)
 
 Solana execution differs from EVM in one structural way, and everything on this page follows from it: **a Solana program must declare every account it touches, up front.** Those declarations are `Account` parameters on `main`, and the compiler returns them as an account manifest you resolve to real addresses before sending anything.
 
@@ -38,7 +38,7 @@ The account references are names, not addresses. `manifest.accounts` records the
 
 ## `@sauce/token` and Token-2022
 
-A Solana mint belongs to one of two token programs, and so does every token account of it: the SPL Token program (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) or Token-2022 (`TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`). USDC and USDT are SPL Token mints; PYUSD (registered as `PYUSD`) and the tokenized stocks are Token-2022 mints. `@sauce/token`'s SVM arm takes both:
+A Solana mint belongs to one of two token programs, and so does every token account of it: the SPL Token program (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) or Token-2022 (`TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`). USDC and USDT are SPL Token mints; PYUSD (registered as `PYUSD`) and the tokenized stocks are Token-2022 mints. The registry names mainnet-beta's stock mints, each by its issuer's symbol: Backed's xStocks (`TSLAx`), Ondo Global Markets' (`TSLAon`), Backpack Securities' (`NVDA_US`) and PreStocks' (`SPACEX`); [Solana's stock tokens](../reference/chains/solana-stocks.md) lists them, as does `sauce globals --chain solana --stocks`, and [Tokenized stocks](../reference/tokens.md#tokenized-stocks) says what differs about them. `@sauce/token`'s SVM arm takes both programs:
 
 - **Reads**, either program: `balanceOf(mint, account)`, `ownerOf(mint, account)`, `allowance(mint, account, spender)`, `totalSupply(mintAccount)`, `decimals(mintAccount)`. A Token-2022 account or mint is held to its base layout and, where it carries extensions, to its account-type byte.
 - **Checked writes**, either program: `transferChecked(mint, tokenProgram, source, mintAccount, dest, authority, amount, decimals)` and `approveChecked(mint, tokenProgram, source, mintAccount, delegate, authority, amount, decimals)`. `tokenProgram` must be one of the two and own the source, the destination and the mint; `mintAccount` must be `mint`; `decimals` must be the mint's.
@@ -76,7 +76,7 @@ export async function planTransfer(rpcUrl: string, mint: Address, pot: Address, 
 }
 ```
 
-`svmTokenReceived` is the other direction: what a transfer of an amount delivers. Both apply the mint's transfer fee exactly as Token-2022 computes it. On the command line, `--account` names the same accounts by token: `program:PYUSD`, `mint:PYUSD`, `pot:PYUSD` ([CLI guide](cli.md#solana)).
+`svmTokenReceived` is the other direction: what a transfer of an amount delivers. Both apply the mint's transfer fee exactly as Token-2022 computes it. On the command line, `--account` names the same accounts by token: `program:PYUSD`, `mint:PYUSD`, `pot:PYUSD`, and a stock's by its symbol, `pot:TSLAx` ([CLI guide](cli.md#solana)). PreStocks' mints charge a transfer fee, so a program paying one measures what arrived.
 
 ## Two ways to run a program
 

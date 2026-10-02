@@ -19,7 +19,7 @@ On Arbitrum One, `Premia` is a namespace: its contracts need no import.
 ```sauce chain=arbitrum
 function main() {
   // Arbitrum One's poolFactory, `0xAE4fB6622F25f397587F11638dA8CE88C27b5645`.
-  require(Premia.PoolFactory != 0n);
+  require(Premia.PoolFactory != 0);
 }
 ```
 

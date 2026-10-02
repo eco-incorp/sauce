@@ -169,7 +169,7 @@ export async function checkRpcUrl(
     if (why !== undefined) {
       throw new UsageError(
         `rpcUrl's host resolves to an address that ${why}, which this server does not reach. ` +
-          "Pass a public endpoint, or run the server yourself (npx -y @eco-incorp/sauce mcp) to " +
+          "Pass a public endpoint, or run the server yourself (`sauce mcp`) to " +
           "reach a local or private one.",
       );
     }

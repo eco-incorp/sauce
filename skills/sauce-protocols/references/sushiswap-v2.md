@@ -1,6 +1,6 @@
 # SushiSwap V2
 
-> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
 
 Community-driven fork of Uniswap V2 with additional yield farming features and multi-chain deployment. Identical AMM interface to Uniswap V2 (x*y=k constant product) with broader L2 and alt-chain coverage.
 
@@ -11,23 +11,26 @@ Community-driven fork of Uniswap V2 with additional yield farming features and m
 
 ## Pitfalls for a program
 
-- As Uniswap V2: `amountOutMin` is the only bound, approve exactly `amountIn`, pass a deadline.
+- As Uniswap V2: `amountOutMin` is the only bound; through the Router, approve exactly
+  `amountIn` and pass a deadline.
 
 ## In a Sauce program
 
-Sell the Pot's USDC for WETH through the Router:
+Sell the Pot's USDC for WETH at the pair:
 
 ```sauce chain=arbitrum
+import { uniswapV2 } from "@sauce/router";
+
 function main(amountIn: Uint256, minOut: Uint256, recipient: Address) {
-  const self = ctx.self();
-  const before = WETH.balanceOf(self);
-  USDC.approve(SushiswapV2.Router, amountIn);
-  SushiswapV2.Router.swapExactTokensForTokens(amountIn, minOut, [USDC, WETH], self, ctx.timestamp());
-  const out = WETH.balanceOf(self) - before;
-  require(out >= minOut, "below minOut");
-  WETH.transfer(recipient, out);
+  const pair = SushiswapV2.Factory.getPair(USDC, WETH);
+  require(pair != 0, "no USDC/WETH pair");
+  uniswapV2(pair, USDC, WETH, amountIn, 3000, minOut, recipient);
 }
 ```
+
+`uniswapV2` prices the output from the pair's reserves with its 0.3% fee (`3000` ppm), pushes
+`amountIn` to the pair, pays `recipient` and reverts below `minOut`. The pair takes the whole input
+or the program reverts, so no input is left to return.
 
 ## Category
 
@@ -44,7 +47,7 @@ dex | Chains and addresses: [registry/sushiswap-v2.md](registry/sushiswap-v2.md)
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### swap
 
@@ -146,4 +149,4 @@ an ABI import bound to the address), and the ABI functions are generated in
 - SLP tokens can be staked in SushiSwap's MasterChef/MiniChef contracts for SUSHI rewards (not in SDK)
 - Both tokens must be ERC20-approved to the Router before swap/addLiquidity
 - Use SushiSwap when Uniswap V2 is not deployed on the target chain, or when SUSHI farming incentives are active
-- From a Pot program, `@sauce/router` trades a SushiSwap V2 pair directly, with no router and no approval: `uniswapV2(pair, tokenIn, tokenOut, amountIn, 3000n, minOut, recipient)` reads the pair's `getReserves`, prices the output in the program with the pair's fee in parts per million, transfers the input to the pair and calls `pair.swap` with empty `data`, returning the amount out. The direction is the sort order of `tokenIn` and `tokenOut` (`token0` is the lower address), so there is no argument to get wrong. The swap consumes its whole input or reverts; there is no refund path. `tryUniswapV2` takes the same arguments and returns `0n`, moving nothing, when the pair cannot fill the whole input at the floor. The `uniswapV2Swap` action is the same call
+- From a Pot program, `@sauce/router` trades a SushiSwap V2 pair directly, with no router and no approval: `uniswapV2(pair, tokenIn, tokenOut, amountIn, 3000, minOut, recipient)` reads the pair's `getReserves`, prices the output in the program with the pair's fee in parts per million, transfers the input to the pair and calls `pair.swap` with empty `data`, returning the amount out. The direction is the sort order of `tokenIn` and `tokenOut` (`token0` is the lower address), so there is no argument to get wrong. The swap consumes its whole input or reverts; there is no refund path. `tryUniswapV2` takes the same arguments and returns `0`, moving nothing, when the pair cannot fill the whole input at the floor. The `uniswapV2Swap` action is the same call

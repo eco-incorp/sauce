@@ -33,7 +33,7 @@ chain does not have it.
 ```sauce chain=opbnb
 function main() {
   // `PancakeswapV2.Factory` is opBNB's factory: `0x02a84c1b3BBD7401a5f7fa98a384EBC70bB5749E`.
-  require(PancakeswapV2.Factory != 0n);
+  require(PancakeswapV2.Factory != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
   require(Opbnb.PancakeswapV2.Factory == PancakeswapV2.Factory);
 }

@@ -47,7 +47,8 @@ import { parseSauce } from "../routes/parse.js";
 import { blankLiterals } from "../routes/rs-compile.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { CliError, UsageError } from "./args.js";
-import { sendAndWait, type Sent } from "./chain.js";
+import { sendAndWait, type Sent, type TxRequest } from "./chain.js";
+import { wordsOf } from "./effects.js";
 import type { Approver } from "./commands.js";
 
 export const FUND_MODES = ["permit2", "permit", "allowance", "transfer"] as const;
@@ -63,18 +64,20 @@ export interface FundRequest {
   readonly label: string;
   /** Registry decimals for a symbol; `undefined` for an address, read from the token. */
   readonly decimals?: number;
-  /** The amount in base units (`…n`), or as written, in whole units. */
-  readonly amount: { readonly base: bigint } | { readonly units: string };
+  /** The amount: in whole tokens as written (`1.5`), or in base units (`1500000n`). */
+  readonly amount: { readonly units: string } | { readonly base: bigint };
+  /** The flag it was given with, for what is said about it. */
+  readonly flag: string;
 }
 
 const NATIVE = /^(eth|native)$/i;
 
 /**
  * `<TOKEN|address>:<amount>`, as `--fund` and `--assume-balance` take it (`flag` names which, for
- * the error). The amount is in whole units — `USDC:1.5` is 1.5 USDC, by the registry's decimals (or
- * the token's own, for an address) — or, ending in `n`, in base units, as a SauceScript integer is
- * written: `USDC:1500000n`. `ETH:<amount>` (or `native:`) is the chain's native currency, 18
- * decimals.
+ * the error). The amount is in whole tokens — `USDC:1.5` is 1.5 USDC, exact through the registry's
+ * decimals (or the token's own, for an address) — or, with a trailing `n` as a JavaScript bigint
+ * has, a raw integer in base units: `USDC:1500000n`. `ETH:<amount>` (or `native:`) is the chain's
+ * native currency, 18 decimals.
  */
 export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: string): FundRequest {
   // Solana registers mints by symbol too, but nothing here can pull one: say so, not "unknown".
@@ -88,23 +91,38 @@ export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: strin
   const amount = raw.slice(at + 1).trim();
   if (at <= 0 || amount === "") {
     throw new UsageError(
-      `${flag}: expected <TOKEN|address>:<amount>, as USDC:1.5 or USDC:1500000n; got '${raw}'`,
+      `${flag}: expected <TOKEN|address>:<amount>, as USDC:1.5 (whole tokens) or USDC:1500000n ` +
+        `(base units); got '${raw}'`,
     );
   }
-  const parsed = /^\d+n$/.test(amount)
-    ? { base: BigInt(amount.slice(0, -1)) }
-    : /^\d+(\.\d+)?$/.test(amount)
-      ? { units: amount }
-      : undefined;
-  if (parsed === undefined) {
+  const base = /^(\d+)n$/.exec(amount);
+  if (base === null && !/^\d+(\.\d+)?$/.test(amount)) {
     throw new UsageError(
-      `${flag} ${raw}: '${amount}' is not an amount — whole units (1.5) or base units ending in n ` +
+      `${flag} ${raw}: '${amount}' is not an amount — whole tokens (1.5) or base units ending in n ` +
         "(1500000n)",
     );
   }
-  if (NATIVE.test(what)) return { raw, label: what.toUpperCase(), decimals: 18, amount: parsed };
+
+  return tokenRequest(
+    raw,
+    what,
+    chain,
+    flag,
+    base === null ? { units: amount } : { base: BigInt(base[1]!) },
+  );
+}
+
+/** The token `what` names on `chain`, with `amount` as given. */
+function tokenRequest(
+  raw: string,
+  what: string,
+  chain: CanonicalChain,
+  flag: string,
+  amount: FundRequest["amount"],
+): FundRequest {
+  if (NATIVE.test(what)) return { raw, label: what.toUpperCase(), decimals: 18, amount, flag };
   if (isAddress(what, { strict: false })) {
-    return { raw, token: getAddress(what), label: getAddress(what), amount: parsed };
+    return { raw, token: getAddress(what), label: getAddress(what), amount, flag };
   }
   // Without regard to case: a stock's symbol is its issuer's ticker (`TSLAx`), not uppercase.
   const row = (TOKEN_REGISTRY[chain.id] ?? []).find(
@@ -122,7 +140,8 @@ export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: strin
     token: getAddress(row.address),
     label: row.symbol,
     decimals: row.decimals,
-    amount: parsed,
+    amount,
+    flag,
   };
 }
 
@@ -172,6 +191,14 @@ export interface FundingInput {
   readonly approver: Approver;
 }
 
+/** A transaction `sauce run` sends from the owner before the cook, unsent: what a rehearsal runs
+ *  first, in the cook's block. */
+export interface BeforeCook {
+  /** For a person, as `needs` says it: `approve Permit2 for USDC`. */
+  readonly what: string;
+  readonly tx: TxRequest;
+}
+
 export interface Funding {
   /** The program, wrapped: the pulls, the file's own `main`, the sweep. */
   readonly wrap: (text: string) => string;
@@ -183,6 +210,11 @@ export interface Funding {
   readonly notes: readonly string[];
   /** Planned without sending: each approval a run would ask for first (`approve Permit2 for USDC`). */
   readonly needs?: readonly string[];
+  /**
+   * Planned without sending, with the owner's key: the approvals and transfers `run` would send
+   * before the cook, in order, an approval as `forceApprove` sends it. `simulate` runs them first.
+   */
+  readonly beforeCook?: readonly BeforeCook[];
   /** Whether the owner's key signed the pulls (a Permit2 transfer, a permit). */
   readonly signed?: boolean;
   /**
@@ -206,9 +238,18 @@ const read = async <T>(what: string, call: () => Promise<T>): Promise<T> => {
   }
 };
 
-/** A request's amount in base units, a token's decimals read from it when not registered. */
-export async function baseUnits(client: PublicClient, request: FundRequest): Promise<bigint> {
-  if ("base" in request.amount) return request.amount.base;
+/**
+ * A request's amount in base units, a token's decimals read from it when not registered, and a note
+ * when a bare integer of whole tokens reads like base units: at or above 10^decimals (`USDC:1500000`,
+ * 1.5 million USDC), which a program's habit of base units makes easy to write by mistake. A note,
+ * not a refusal: it may be meant, and base units have their own spelling (`1500000n`).
+ */
+export async function baseUnits(
+  client: PublicClient,
+  request: FundRequest,
+): Promise<{ readonly amount: bigint; readonly note?: string }> {
+  if ("base" in request.amount) return { amount: request.amount.base };
+  const units = request.amount.units;
   const decimals =
     request.decimals ??
     Number(
@@ -216,21 +257,34 @@ export async function baseUnits(client: PublicClient, request: FundRequest): Pro
         client.readContract({ address: request.token!, abi: ERC20, functionName: "decimals" }),
       ),
     );
+  const amount = parseUnits(units, decimals);
+  if (units.includes(".") || decimals === 0 || BigInt(units) < 10n ** BigInt(decimals)) {
+    return { amount };
+  }
 
-  return parseUnits(request.amount.units, decimals);
+  return {
+    amount,
+    note:
+      `${request.flag} ${request.raw}: that is ${wordsOf(units)} ${request.label}; for base ` +
+      `units write ${units}n`,
+  };
 }
 
-/** Every request's amount in base units. */
-async function amounts(input: FundingInput): Promise<{ tokens: Funded[]; native: bigint }> {
+/** Every request's amount in base units, and what is said of them. */
+async function amounts(
+  input: FundingInput,
+): Promise<{ tokens: Funded[]; native: bigint; notes: string[] }> {
   const tokens: Funded[] = [];
+  const notes: string[] = [];
   let native = 0n;
   for (const request of input.requests) {
-    const amount = await baseUnits(input.client, request);
+    const { amount, note } = await baseUnits(input.client, request);
+    if (note !== undefined) notes.push(note);
     if (request.token === undefined) native += amount;
     else tokens.push({ request, token: request.token, amount });
   }
 
-  return { tokens, native };
+  return { tokens, native, notes };
 }
 
 /** The registry's Permit2 on `chain`. */
@@ -310,6 +364,29 @@ async function forceApprove(
 
 const encodeApprove = (spender: Address, amount: bigint): Hex =>
   encodeFunctionData({ abi: ERC20, functionName: "approve", args: [spender, amount] });
+
+/** The approvals {@link forceApprove} would send, unsent: a standing allowance reset to zero
+ *  first, then `amount`. */
+function approvalsBefore(
+  funded: Funded,
+  spender: Address,
+  amount: bigint,
+  current: bigint,
+  what: string,
+): BeforeCook[] {
+  const approve = (value: bigint): TxRequest => ({
+    to: funded.token,
+    data: encodeApprove(spender, value),
+    value: 0n,
+  });
+
+  return [
+    ...(current > 0n
+      ? [{ what: `reset ${funded.request.label}'s allowance to ${spender}`, tx: approve(0n) }]
+      : []),
+    { what, tx: approve(amount) },
+  ];
+}
 
 /** SafeERC20 on the client's side: empty returndata or a word equal to 1; `false` is refused. */
 function refuseFalse(label: string, method: string, data: Hex | undefined): void {
@@ -392,9 +469,9 @@ const word = (value: bigint): string => `0x${value.toString(16)}n`;
  * made, and the wrapper that pulls, runs and sweeps.
  */
 export async function planFunding(input: FundingInput): Promise<Funding> {
-  const { tokens, native } = await amounts(input);
-  const notes: string[] = [];
+  const { tokens, native, notes } = await amounts(input);
   const needs: string[] = [];
+  const beforeCook: BeforeCook[] = [];
   const sent: Array<{ what: string; sent: Sent }> = [];
   const pulls: string[] = [];
   const imports = new Set<string>();
@@ -467,10 +544,13 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
       );
       if (allowed < funded.amount) {
         if (!input.send) {
-          needs.push(`approve Permit2 for ${funded.request.label}`);
+          const what = `approve Permit2 for ${funded.request.label}`;
+          needs.push(what);
+          beforeCook.push(...approvalsBefore(funded, permit2, maxUint256, allowed, what));
           notes.push(
-            `${funded.request.label}: Permit2 (${permit2}) may not move your tokens yet; sauce run ` +
-              "would ask to approve it",
+            `${funded.request.label}: Permit2 (${permit2}) may not move your tokens yet: sauce run ` +
+              "asks to approve it first (--auto-approve approves it), and the rehearsal runs that " +
+              "approval before the cook",
           );
         } else {
           await agreed(
@@ -564,9 +644,13 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
       );
       if (allowed < funded.amount) {
         if (!input.send) {
-          needs.push(`approve the Pot for ${funded.amount} ${funded.request.label}`);
+          const what = `approve the Pot for ${funded.amount} ${funded.request.label}`;
+          needs.push(what);
+          beforeCook.push(...approvalsBefore(funded, input.pot, funded.amount, allowed, what));
           notes.push(
-            `${funded.request.label}: the Pot may not pull it yet; sauce run would ask to approve it`,
+            `${funded.request.label}: the Pot may not pull it yet: sauce run asks to approve it ` +
+              "first (--auto-approve approves it), and the rehearsal runs that approval before the " +
+              "cook",
           );
         } else {
           await agreed(
@@ -597,15 +681,22 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
     }
   } else {
     for (const funded of tokens) {
-      if (!input.send) {
-        notes.push(`${funded.request.label}: sauce run would transfer it to the Pot first`);
-        continue;
-      }
       const data = encodeFunctionData({
         abi: ERC20,
         functionName: "transfer",
         args: [input.pot, funded.amount],
       });
+      if (!input.send) {
+        beforeCook.push({
+          what: `transfer ${funded.amount} ${funded.request.label} to the Pot`,
+          tx: { to: funded.token, data, value: 0n },
+        });
+        notes.push(
+          `${funded.request.label}: sauce run transfers it to the Pot first, and the rehearsal ` +
+            "runs that transfer before the cook",
+        );
+        continue;
+      }
       const answer = await read(`a rehearsal of ${funded.request.label}.transfer`, () =>
         input.client.call({ account: owner, to: funded.token, data }),
       );
@@ -636,6 +727,7 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
     sent,
     notes,
     needs,
+    ...(beforeCook.length === 0 ? {} : { beforeCook }),
     signed: tokens.length > 0 && (input.mode === "permit2" || input.mode === "permit"),
   };
 }

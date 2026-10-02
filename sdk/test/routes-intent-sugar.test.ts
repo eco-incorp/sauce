@@ -216,6 +216,49 @@ describe("what the lowering produces", () => {
     });
   });
 
+  // SauceScript writes an integer plainly, and the parser's `number` for one past 2^53 is a rounded
+  // float: a literal is read from its text, as the compiler reads it, and is the integer its `n`
+  // spelling is.
+  describe("a plain integer is exact past 2^53, as its `n` spelling is", () => {
+    const WEI = 1_000_000_000_000_000_000_001n; // 1e21 + 1: no float holds it
+    const lowered = (amount: string, recipient: string, top = "") =>
+      rewriteIntentSugar(
+        `${top}function main() {\n  Arbitrum(() => {\n    USDC.transfer(${recipient}, ${amount});\n` +
+          `  }).reward({ tokens: [{ token: USDC, amount: ${amount} }] });\n}`,
+        context(),
+      ).intents[0]!;
+
+    it("an amount and an address, in the body and the reward", () => {
+      const plain = lowered("1000000000000000000001", RECIPIENT_ADDRESS);
+      const call = decodeFunctionData({ abi: erc20Abi, data: plain.intent.route.calls[0]!.data });
+
+      expect(call.args).toEqual([RECIPIENT_ADDRESS, WEI]);
+      expect(plain.intent.route.tokens[0]!.amount).toBe(WEI);
+      expect(plain.intent.reward.tokens[0]!.amount).toBe(WEI);
+      expect(plain.intent).toEqual(
+        lowered("1000000000000000000001n", `${RECIPIENT_ADDRESS}n`).intent,
+      );
+    });
+
+    it("with separators, and in hex", () => {
+      const expected = lowered("1000000000000000000001n", RECIPIENT_ADDRESS).intent;
+
+      expect(lowered("1_000_000_000_000_000_000_001", RECIPIENT_ADDRESS).intent).toEqual(expected);
+      expect(lowered("0x3635c9adc5dea00001", RECIPIENT_ADDRESS).intent).toEqual(expected);
+    });
+
+    it("as a top-level `const`, baked in", () => {
+      const baked = lowered(
+        "AMOUNT",
+        RECIPIENT_ADDRESS,
+        "const AMOUNT = 1000000000000000000001;\n",
+      );
+
+      expect(baked.captures).toEqual([]);
+      expect(baked.intent.reward.tokens[0]!.amount).toBe(WEI);
+    });
+  });
+
   it("fills the Portal, the prover and the destination from the registry", () => {
     const { intent, destination } = lower(TRANSFER_INTENT).intents[0]!;
 

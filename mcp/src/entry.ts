@@ -3,8 +3,9 @@
  * Streamable HTTP, and `setup`. The `sauce` command has already read the flags; the values are
  * checked here. `mcpEntry` is typed by the CLI's own `McpEntry`, so the two cannot drift.
  *
- * NODE-ONLY, and reached by nothing browser-facing. It reads no environment variable and ships no
- * endpoint: the chains it reads are the `--config` file's. It holds no key unless it serves stdio
+ * NODE-ONLY, and reached by nothing browser-facing. It reads no environment variable: it reads a
+ * chain through the `--config` file's endpoint for it, else the built-in public endpoints the
+ * `sauce` command hands it (`McpServeOptions.publicRpcs`). It holds no key unless it serves stdio
  * with `--wallets`, whose password the `sauce` command has already read from the source it was
  * given; then its wallet tools sign with those wallets alone. Over HTTP it never signs.
  */
@@ -47,7 +48,10 @@ function wholeNumber(flag: string, raw: string, min: number, max: number): numbe
 }
 
 async function serve(options: McpServeOptions): Promise<void> {
-  const endpoints = readConfig(options.config);
+  const endpoints: Endpoints = {
+    ...readConfig(options.config),
+    ...(options.publicRpcs === undefined ? {} : { public: options.publicRpcs }),
+  };
   const maxBody =
     options.maxBody === undefined
       ? DEFAULT_MAX_BODY
@@ -70,9 +74,12 @@ async function serve(options: McpServeOptions): Promise<void> {
             password: options.wallets.password,
             source: options.wallets.source,
           };
-    await createSauceServer({ endpoints, ...(wallets === undefined ? {} : { wallets }) }).connect(
-      new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: maxBody }),
-    );
+    // Its caller's own files: a program may be named by path.
+    await createSauceServer({
+      endpoints,
+      local: true,
+      ...(wallets === undefined ? {} : { wallets }),
+    }).connect(new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: maxBody }));
     if (wallets !== undefined) {
       options.log(`sauce mcp: signing with the wallets in ${wallets.store.dir}\n`);
     }

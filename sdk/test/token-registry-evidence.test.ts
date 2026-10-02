@@ -1,7 +1,10 @@
 /**
  * Every EVM row of the token registry, checked against the chain: code at its address, a
- * `symbol()` that is the row's symbol (a stock's with "." as "_", `stockSymbol`) and a
- * `decimals()` that is the row's decimals.
+ * `symbol()` that is the row's symbol (a stock's with "." as "_", `stockSymbol`; exactly the
+ * row's `onchainSymbol` where it declares one, Tether's "USD₮0") and a `decimals()` that is the
+ * row's decimals. And every Solana mint the registry has on mainnet-beta:
+ * owned by the row's token program, initialized, with the row's decimals, its metadata symbol the
+ * row's, and nothing that would make a checked transfer of it refused.
  *
  * OFFLINE. The evidence is `fixtures/token-registry/evidence.json`, captured by
  * `scripts/capture-token-registry.mjs` at one block per chain, only when asked to (see CLAUDE.md).
@@ -14,7 +17,9 @@ import { fileURLToPath } from "node:url";
 
 import { STOCK_ISSUERS, stockSymbol } from "../src/routes/stock-tokens.js";
 import { STOCK_TOKENS } from "../src/routes/stock-tokens.generated.js";
-import { TOKEN_REGISTRY } from "../src/routes/token-registry.js";
+import type { TokenRegistryRow } from "../src/routes/token-registry.js";
+import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../src/routes/token-registry.js";
+import { TOKEN_2022_PROGRAM_ID } from "../src/svm/token-program.js";
 
 interface Evidence {
   /** Bytes of code at the address; a Base B20 token's account holds the single byte `0xef`. */
@@ -22,6 +27,28 @@ interface Evidence {
   readonly symbol: string | null;
   readonly decimals: number | null;
 }
+
+/** A Solana mint as the cluster had it. */
+interface MintEvidence {
+  /** The program that owns the account, `null` where there is no account. */
+  readonly program: string | null;
+  readonly initialized?: boolean;
+  readonly decimals?: number;
+  /** The mint's own TokenMetadata symbol, else its Metaplex metadata's. */
+  readonly symbol?: string | null;
+  /** Whether any of it is minted: its supply is above zero. */
+  readonly minted?: boolean;
+  /** Whether it charges a transfer fee: a TransferFee schedule above zero. */
+  readonly transferFee?: boolean;
+  /** Why a checked transfer of it is refused (`resolveSvmToken`), `null` where it is no mint. */
+  readonly refusals?: readonly string[] | null;
+}
+
+/** Solana's canonical chain id, under which the evidence holds mainnet-beta's mints. */
+const SOLANA = "1399811149";
+/** A row whose symbol is not its mint's metadata symbol, as the row says: the wrapped native's
+ *  metadata names the coin it wraps. */
+const METADATA_SYMBOL: Readonly<Record<string, string>> = { WSOL: "SOL" };
 
 const FIXTURE = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -35,6 +62,21 @@ const EVIDENCE = JSON.parse(TEXT) as {
     Record<string, { readonly block: number; readonly tokens: Readonly<Record<string, Evidence>> }>
   >;
 };
+const MINTS = (
+  EVIDENCE.chains[SOLANA] as unknown as
+    { readonly slot: number; readonly tokens: Readonly<Record<string, MintEvidence>> } | undefined
+)?.tokens;
+const MAINNET = SVM_TOKEN_REGISTRY["mainnet-beta"];
+
+/**
+ * The `symbol()` the chain answered, as `row` is held to it, beside what the row claims: exactly
+ * its `onchainSymbol` where it declares one, a stock's with "." as "_", and any other row's own
+ * symbol, so no row holds a ticker its contract does not answer.
+ */
+function symbols(row: TokenRegistryRow, answered: string | null): [string | null, string] {
+  if (row.onchainSymbol !== undefined) return [answered, row.onchainSymbol];
+  return [row.stock === undefined ? answered : stockSymbol(answered ?? ""), row.symbol];
+}
 
 const rows = Object.entries(TOKEN_REGISTRY).flatMap(([chainId, list]) =>
   list.map((row) => ({ chainId, row })),
@@ -59,18 +101,86 @@ describe("token registry evidence", () => {
       }
       expect(evidence.code).toBeGreaterThan(0);
       expect(evidence.decimals).toBe(row.decimals);
-      expect(row.stock === undefined ? evidence.symbol : stockSymbol(evidence.symbol ?? "")).toBe(
-        row.symbol,
-      );
+      const [answered, claimed] = symbols(row, evidence.symbol);
+      expect(answered).toBe(claimed);
     },
   );
 
+  describe("a row whose contract's symbol() is no identifier", () => {
+    // Arbitrum's USDT0, whose contract answers "USD₮0".
+    const usdt0 = TOKEN_REGISTRY[42161]!.find((row) => row.symbol === "USDT0")!;
+    const { onchainSymbol: _, ...plain } = usdt0;
+    const held = (row: TokenRegistryRow, answered: string) => {
+      const [actual, claimed] = symbols(row, answered);
+      return actual === claimed;
+    };
+
+    it("declares the string, and is held to exactly that", () => {
+      expect(usdt0.onchainSymbol).toBe("USD₮0");
+      expect(held(usdt0, "USD₮0")).toBe(true);
+      expect(held(usdt0, "USDT0")).toBe(false);
+      expect(held(usdt0, "USDT")).toBe(false);
+    });
+
+    it("without it, is held to its symbol, so no row claims a ticker its contract does not answer", () => {
+      expect(held(plain, "USDT0")).toBe(true);
+      expect(held(plain, "USD₮0")).toBe(false);
+      expect(held({ ...plain, symbol: "USDT" }, "USD₮0")).toBe(false);
+      expect(held({ ...plain, symbol: "USDT" }, "USDT0")).toBe(false);
+    });
+
+    it("is Tether's USDT0 and nothing else", () => {
+      const declared = rows.filter(({ row }) => row.onchainSymbol !== undefined);
+      expect(declared.length).toBeGreaterThan(0);
+      for (const { row } of declared)
+        expect([row.symbol, row.onchainSymbol]).toEqual(["USDT0", "USD₮0"]);
+    });
+  });
+
   it("holds no evidence for a token no row has", () => {
     for (const [chainId, { tokens }] of Object.entries(EVIDENCE.chains)) {
-      const addresses = new Set((TOKEN_REGISTRY[Number(chainId)] ?? []).map((row) => row.address));
-      expect(Object.keys(tokens).filter((address) => !addresses.has(address as never))).toEqual([]);
+      const addresses = new Set<string>(
+        chainId === SOLANA
+          ? MAINNET.map((row) => row.mint)
+          : (TOKEN_REGISTRY[Number(chainId)] ?? []).map((row) => row.address),
+      );
+      expect(Object.keys(tokens).filter((address) => !addresses.has(address))).toEqual([]);
     }
   });
+
+  it("covers Solana's mainnet-beta mints at a slot", () => {
+    expect((EVIDENCE.chains[SOLANA] as unknown as { slot: number }).slot).toBeGreaterThan(0);
+  });
+
+  it.each(MAINNET.map((row) => [`solana:${row.symbol}`, row] as const))(
+    "%s is the mint the cluster has there, and a checked transfer moves it",
+    (_label, row) => {
+      const evidence = MINTS?.[row.mint];
+      if (evidence === undefined) {
+        throw new Error(
+          `no evidence for ${row.symbol} (${row.mint}) on Solana: recapture with ` +
+            `node scripts/capture-token-registry.mjs --recapture --rpc-config <path> --chains ${SOLANA}`,
+        );
+      }
+      expect(evidence.program).toBe(row.tokenProgram);
+      expect(evidence.initialized).toBe(true);
+      expect(evidence.decimals).toBe(row.decimals);
+      // The metadata names the mint as the row does: a stock's with "." as "_", Backpack's by the
+      // bare ticker it lists as "<ticker>.US", the wrapped native's by the coin it wraps.
+      const metadata = evidence.symbol ?? "";
+      if (row.stock?.issuer === "backpack") expect(metadata).toBe(row.stock.ticker);
+      else if (row.stock !== undefined) expect(stockSymbol(metadata)).toBe(row.symbol);
+      else expect(metadata).toBe(METADATA_SYMBOL[row.symbol] ?? row.symbol);
+      // No transfer hook that names a program, no pause, no account that starts frozen.
+      expect(evidence.refusals).toEqual([]);
+      // Backpack lists mints it has not opened: each copied one has been minted.
+      if (row.stock?.issuer === "backpack") expect(evidence.minted).toBe(true);
+      // A fee is its issuer's, as `STOCK_ISSUERS` records it: the references say which charge one.
+      expect(evidence.transferFee).toBe(
+        row.stock !== undefined && STOCK_ISSUERS[row.stock.issuer].transferFee === true,
+      );
+    },
+  );
 
   it("holds no endpoint", () => {
     expect(TEXT).not.toMatch(/https?:|wss?:/);
@@ -79,12 +189,24 @@ describe("token registry evidence", () => {
 
 describe("stock tokens", () => {
   it("give each row its issuer's list as the source", () => {
-    for (const list of Object.values(TOKEN_REGISTRY)) {
+    for (const list of [...Object.values(TOKEN_REGISTRY), MAINNET]) {
       for (const row of list) {
         if (row.stock !== undefined)
           expect(row.source).toBe(STOCK_ISSUERS[row.stock.issuer].source);
       }
     }
+  });
+
+  it("are Token-2022 mints on Solana, from Backed, Ondo, Backpack and PreStocks", () => {
+    const stocks = MAINNET.filter((row) => row.stock !== undefined);
+    expect(stocks.length).toBeGreaterThan(0);
+    for (const row of stocks) expect(row.tokenProgram).toBe(TOKEN_2022_PROGRAM_ID);
+    expect([...new Set(stocks.map((row) => row.stock!.issuer))]).toEqual([
+      "backed",
+      "ondo",
+      "backpack",
+      "prestocks",
+    ]);
   });
 
   it("are Coinbase's B20 precompiles on Base: one byte of code, which no local EVM runs", () => {
@@ -101,5 +223,16 @@ describe("stock tokens", () => {
 
     expect(named(1)).toEqual(["SPCXx", "SPCXon"]);
     expect(named(8453)).toEqual(["SPCXc"]);
+  });
+
+  it("name SpaceX on Solana: by its ticker, and PreStocks' by the company's name", () => {
+    const named = MAINNET.filter((row) => row.stock?.ticker === "SPCX").map((row) => row.symbol);
+
+    expect(named).toEqual(["SPCXx", "SPCXon", "SPCX_US"]);
+    expect(MAINNET.find((row) => row.symbol === "SPACEX")?.stock).toEqual({
+      issuer: "prestocks",
+      name: "SpaceX",
+      ticker: "SPACEX",
+    });
   });
 });

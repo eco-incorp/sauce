@@ -1,6 +1,6 @@
 ---
 name: sauce-script
-description: Writing SauceScript programs (.sauce.ts files) — the checked TypeScript subset Sauce compiles to on-chain bytecode, with a complete reference of its types, operators, statements and builtins (ctx, crypto, Math, abi, evm, svm, value methods, account properties, contract bindings, limits). Covers the two program forms (function main(...) with runtime arguments, and a file of top-level statements whose values are defines, the form for intent files), what compiling a file for a chain adds (its names and token syntax, the source otherwise as written), module constants as overridable defaults, helper functions, what syntax compiles and what to write instead, require/throw and atomic failure, catching a failed external call, and reading compile errors. Use when writing or editing any Sauce program, when a Sauce compile fails ("unsupported construct", "is not a declared variable", "expected a number, found a bool", "Unexpected token"), or when asked what SauceScript can or cannot express.
+description: Writing SauceScript programs (.sauce.ts files) — the checked TypeScript subset Sauce compiles to on-chain bytecode, with a complete reference of its types, operators, statements and builtins (ctx, crypto, Math, abi, evm, svm, value methods, account properties, contract bindings, limits). Covers the two program forms (function main(...), whose parameters are every input a program takes, intent files included, and a file of top-level statements for a program with no inputs), what compiling a file for a chain adds (its names and token syntax, the source otherwise as written), module constants, helper functions, what syntax compiles and what to write instead, require/throw and atomic failure, catching a failed external call, and reading compile errors. Use when writing or editing any Sauce program, when a Sauce compile fails ("unsupported construct", "is not a declared variable", "expected a number, found a bool", "Unexpected token"), or when asked what SauceScript can or cannot express.
 ---
 
 # Writing SauceScript
@@ -21,22 +21,22 @@ for a program to read. The names a chain supplies (`USDC`, `Token(...)`, `Uniswa
 A program lives in a `.sauce.ts` file and is compiled **for a chain** (`--chain`), which decides
 what every registry name means. A file takes one of two forms:
 
-| Form                   | Values                                                                                               | Use it for                                                                                    |
-| ---------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| **`function main(…)`** | `main`'s parameters, passed at run time (`--args`); module constants for choices made per compile    | reusable programs: one bytecode serves every input, such as a swap's tokens, amount and limit |
-| **Top-level script**   | names the file leaves undeclared, each set by a define (`--define NAME=VALUE`); no runtime arguments | intent files (`sauce-intents`), which are only statements, and one-off programs               |
+| Form                   | Inputs                                                   | Use it for                                                                                                                  |
+| ---------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **`function main(…)`** | `main`'s parameters, passed with `--args`                | every program that takes an input: one bytecode serves every value, such as a swap's tokens, amount and limit; intent files |
+| **Top-level script**   | none: each value is written in the file or read on chain | a program with no inputs                                                                                                    |
 
-A program with runtime inputs declares `main`, and may declare helper functions and import ABIs.
+A program with inputs declares `main`, and may declare helper functions and import ABIs.
 (The `chain=…` after an example's opening fence here only says which chains it is checked on; it
 is not part of the file.)
 
 ```sauce chain=base,arbitrum
-// A compile-time choice: a module constant, which a define of the same name replaces.
-const FEE_BPS = 30n;
+// A fixed value of the program: a module constant, folded into the bytecode.
+const FEE_BPS = 30;
 
 // A helper. It returns a value on every path.
 function afterFee(amount: Uint256, bps: Uint256): Uint256 {
-  return amount - (amount * bps) / 10000n;
+  return amount - (amount * bps) / 10000;
 }
 
 // Runtime inputs: main's parameters, passed with the transaction.
@@ -62,29 +62,31 @@ it, rehearsed with `sauce simulate`, prints the answer and sends nothing.
 ```sauce chain=base,arbitrum
 // The Uniswap V3 WETH/USDC pool at the 0.05% tier (500 millionths), or 0 where there is none.
 function main(): Address {
-  return UniswapV3.Factory.getPool(WETH, USDC, 500n);
+  return UniswapV3.Factory.getPool(WETH, USDC, 500);
 }
 ```
 
 A top-level script runs its statements in order, after its imports, and may declare helper
-functions beside them. Every value it does not compute is a define: the name stays undeclared in
-the file, and `--define RECIPIENT=<address> --define FLOOR=1000000` sets it.
+functions beside them. It takes no inputs: every value it uses is written in the file, read on
+chain or a name the chain supplies. A value that changes from one run to the next is a parameter
+of `main`.
 
-```sauce chain=base,arbitrum define=RECIPIENT,FLOOR
+```sauce chain=base,arbitrum
 // A helper takes what it needs as parameters.
 function afterFee(amount: Uint256): Uint256 {
-  return amount - amount / 1000n;
+  return amount - amount / 1000;
 }
 
-require(RECIPIENT != 0n, "set RECIPIENT");
+// Supplies the USDC this Pot holds, less 0.1%, to Aave V3 for the Pot itself.
 const held = USDC.balanceOf(ctx.self());
-require(held >= FLOOR, "below floor");
-USDC.transfer(RECIPIENT, afterFee(held));
+require(held >= 1000000, "below 1 USDC");
+const supplied = afterFee(held);
+USDC.approve(AaveV3.Pool, supplied);
+AaveV3.Pool.supply(USDC, supplied, ctx.self(), 0);
 ```
 
-A `const` at the top of a script is the script's own local: a helper cannot read it (pass it in),
-a define of the same name does not reach it, and the `sauce` command refuses such a define rather
-than ignore it. Declare `main` to share a module constant with helpers, or to return a value.
+A `const` at the top of a script is the script's own local: a helper cannot read it (pass it in).
+Declare `main` to take inputs, to share a module constant with helpers, or to return a value.
 
 ## The file's header
 
@@ -99,12 +101,14 @@ Every program starts with a comment that says how to run it, in this order:
 4. one concrete run on a supported chain with real values: addresses taken from the registry
    (`sauce globals --chain <chain> --tokens`), the developer's own inputs left as `<placeholders>`.
 
-An intent file, which has no `main`, lists its defines and its `--intent-…` flags the same way.
+An intent file is written the same way: its `main` parameters, then its `--intent-…` flags.
+`sauce intent publish <file> --args …` takes the same arguments as `sauce run` and fixes them into
+the intents it publishes (`sauce-intents`).
 
 ```sauce chain=base
 // Pays each of `recipients` `amount` of the chain's USDC, from the Pot.
 //
-//   sauce run payout.sauce.ts --chain <chain> --config sauce.config.json --keystore <keystore> \
+//   sauce run payout.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <recipients> <amount>
 //
 //   recipients: Address[]  who is paid, a JSON array: '["<recipient>","<recipient>"]'
@@ -113,7 +117,7 @@ An intent file, which has no `main`, lists its defines and its `--intent-…` fl
 //
 // On Base, 5 USDC to each of two recipients:
 //
-//   sauce run payout.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+//   sauce run payout.sauce.ts --chain base --keystore <keystore> \
 //     --args '["<recipient>","<recipient>"]' 5000000
 function main(recipients: Address[], amount: Uint256) {
   for (const to of recipients) {
@@ -122,14 +126,14 @@ function main(recipients: Address[], amount: Uint256) {
 }
 ```
 
-## Runtime inputs and compile-time values
+## Inputs and fixed values
 
-| Value                                                                    | Write it as                                                                  | Arrives                                                            |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Anything the caller chooses per run: tokens, amounts, recipients, limits | a **`main(...)` parameter**                                                  | with the transaction (`--args`); one program serves every value    |
-| A choice made per compile: which venues exist on the chain, a fixed fee  | a **module constant** beside `main`, which a **define** of its name replaces | folded into the bytecode; a different value is a different program |
-| A value of a script, or of an intent file                                | an **undeclared name**, set by a define                                      | folded into the bytecode                                           |
-| A value the chain supplies                                               | a global (`sauce-globals`)                                                   | resolved when compiling for that chain                             |
+| Value                                                                    | Write it as                              | Arrives                                                                   |
+| ------------------------------------------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------- |
+| Anything the caller chooses per run: tokens, amounts, recipients, limits | a **`main(...)` parameter**              | with the transaction (`--args`); one program serves every value           |
+| The inputs of intents published from a wallet                            | **`main(...)` parameters**, the same way | fixed into the intents by `sauce intent publish --args` (`sauce-intents`) |
+| A value the program fixes: a fee, a pool's tier                          | a **module constant** beside `main`      | folded into the bytecode                                                  |
+| A value the chain supplies                                               | a global (`sauce-globals`)               | resolved when compiling for that chain                                    |
 
 `main`'s parameters are taken in declaration order, ABI-encoded by default, and appended to the
 program's bytecode: that is the payload a cook runs. `--args` and `--args-json` of `sauce run`,
@@ -146,7 +150,7 @@ for a chain is the language of [references/builtins.md](references/builtins.md),
 removed:
 
 - Annotations go wherever the language takes them: `function half(x: Uint256): Uint256`, and a
-  local's `let total: Uint256 = 0n;`. A parameter with no annotation is a `Uint256`, and a local
+  local's `let total: Uint256 = 0;`. A parameter with no annotation is a `Uint256`, and a local
   without one takes its type from its initializer.
 - A record is an `interface` or an inline object type, `orders: Order[]` or
   `orders: { amount: Uint256, to: Address }[]` (`;` between the fields works too, as a formatter
@@ -155,19 +159,19 @@ removed:
 
 ## Values
 
-- Integers are 256-bit and checked: no floats (`1.5` is rejected), and a constant expression that
-  overflows or underflows (`0n - 1n`, `2n ** 256n - 1n`) is a compile error. Write the maximum as
-  `~0n`, and a negative (two's-complement) amount as **`-x`**, which never fails; `~x + 1n` reverts
-  when `x` is `0`.
+- Integers are 256-bit, written plainly (`3000`, `10 ** 18`), and checked: no floats (`1.5` is
+  rejected), and a constant expression that overflows or underflows (`0 - 1`, `2 ** 256 - 1`) is
+  a compile error. Write the maximum as `~0`, and a negative (two's-complement) amount as
+  **`-x`**, which never fails; `~x + 1` reverts when `x` is `0`.
 - Amounts are in the token's smallest units; nothing scales decimals for you.
 - Addresses are numbers: a `main` parameter, a global such as `USDC`, or a literal taken from the
-  registry, written with an `n` (`0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n`); never an invented
+  registry, written as its hex (`0x833589fcd6edb6e08f4c7c32d4f71b54bda02913`); never an invented
   one.
 - `bytes`: `` hex`a9059cbb` ``, `"text"`, `.concat`, `.slice(a, b)`, `.length`, `b[i]`,
-  `x.toBytesBe(32n)`, `x.toBytesLe(8n)`, `abi.encode`/`abi.decode` (EVM). Bind a literal before
+  `x.toBytesBe(32)`, `x.toBytesLe(8)`, `abi.encode`/`abi.decode` (EVM). Bind a literal before
   calling a method on it: ``const selector = hex`a9059cbb`; selector.concat(data)``. `hex` is the
   only template form: every untagged template literal is rejected, with or without `${}`.
-- Arrays and records: `[a, b]`, `new Array(n)`, `xs[i] = v`, `xs.length`, `{ amount: 1n }`.
+- Arrays and records: `[a, b]`, `new Array(n)`, `xs[i] = v`, `xs.length`, `{ amount: 1 }`.
   Destructuring, `const [a, b] = …`, needs an initializer that produces a record (a multi-output
   call, `abi.decode`); an array is indexed instead.
 - `Account` parameters, with roles such as `Account<Writable>`, are `main`'s alone. On Solana they
@@ -176,7 +180,7 @@ removed:
 - A module-level `let` is scratch, reset on every run. Persistent state is `evm.sstore`/`evm.sload`
   (or `svm.sstore`/`svm.sload`).
 - **At module level, only scalar literals.** A `let` there starts as a number, address or boolean
-  literal; anything else (`[1n, 2n]`, `new Array(n)`, `-1n`, `1n << 160n`, a call) is refused with
+  literal; anything else (`[1, 2]`, `new Array(n)`, `-1`, `1 << 160`, a call) is refused with
   "must be initialized with a literal". A `const` array there is a lookup table, read only at a
   literal index (`FEES[0]`), never looped over. Declare arrays and computed values inside a function.
 
@@ -214,11 +218,11 @@ what you need from a result: `const [sqrtPriceX96] = UniswapV3.Pool(pool).slot0(
 ```sauce chain=base,ethereum
 function main(vault: Address, shares: Uint256): Uint256 {
   // A contract the chain's registry records: its factory, by name.
-  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500n);
-  require(pool != 0n, "no WETH/USDC 0.05% pool");
+  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
+  require(pool != 0, "no WETH/USDC 0.05% pool");
   // Interfaces, called with the address they are at: the pool it returned, and a vault.
   const [sqrtPriceX96] = UniswapV3.Pool(pool).slot0();
-  require(sqrtPriceX96 > 0n, "the pool is not initialized");
+  require(sqrtPriceX96 > 0, "the pool is not initialized");
   return Erc4626.Vault(vault).convertToAssets(shares);
 }
 ```
@@ -265,7 +269,7 @@ function isBetter(price: Uint256, than: Uint256, sellsToken0: bool): bool {
 
 // Fills `best` in place: an array goes to a helper by reference.
 function keepBest(best: Uint256[], price: Uint256, sellsToken0: bool): void {
-  if (best[0] == 0n || isBetter(price, best[0], sellsToken0)) {
+  if (best[0] == 0 || isBetter(price, best[0], sellsToken0)) {
     best[0] = price;
   }
 }
@@ -299,10 +303,10 @@ The full list, with what each rejection says, is section 14 of
 ```sauce fails
 function main(x: Uint256): Uint256 {
   switch (x) {
-    case 1n:
-      return 1n;
+    case 1:
+      return 1;
   }
-  return 0n;
+  return 0;
 }
 ```
 
@@ -341,20 +345,20 @@ that way.
 
 `.catch()` catches a call that reverts, not a call to an address with no code. That call succeeds
 and returns nothing, and decoding nothing reverts the cook, `.catch()` or not. When an address may
-have no code, check `ctx.codeSize(address) > 0n` first:
+have no code, check `ctx.codeSize(address) > 0` first:
 
 ```sauce chain=base,arbitrum
 // One word from a read that may fail, or 0: an address with no code, or a read that reverts.
 function readWord(target: Address, query: bytes): Uint256 {
-  if (ctx.codeSize(target) == 0n) {
-    return 0n;
+  if (ctx.codeSize(target) == 0) {
+    return 0;
   }
   let readable = true;
   evm.static(target, query).catch(() => {
     readable = false;
   });
   if (!readable) {
-    return 0n;
+    return 0;
   }
   return abi.decode(evm.static(target, query), ["Uint256"])[0];
 }
@@ -387,11 +391,24 @@ and bound each loop by its input. The real figure is the rehearsal's:
 Leave headroom when the chain can move between the rehearsal and the send; a swap that crosses more
 ticks spends more.
 
+## In an editor
+
+An editor checks a `.sauce.ts` file as TypeScript, which knows none of SauceScript's names: with
+no project for them, it marks `Token`, `USDC`, `ctx` and every other global as unknown.
+`sauce init <dir> --tsconfig` writes `<dir>/tsconfig.json`, which types every `.sauce.ts` under
+`<dir>` as SauceScript: its types and builtins, each chain's tokens and namespaces, and the ABIs a
+program imports. Keep programs in such a directory (`sauce init` makes `programs/` one); the
+installed skills' examples are typed by the same file beside them. The types come from the package,
+so the project must have it installed, and an editor running the project's own TypeScript also
+drops what TypeScript reports on valid SauceScript (a `bigint` index, a plain integer beside a
+`Uint256`). The compile, not the editor, decides whether a program is valid.
+
 ## Reading a compile error
 
 Compile errors fail the command; there is no warning channel. `sauce compile` points at the file's
-line and column, including on a line the package rewrote, and a `hint:` line names the flag or
-define to add. `X is not a declared variable` usually means a missing define or `main` parameter.
+line and column, including on a line the package rewrote, and a `hint:` line names what to add.
+`X is not a declared variable` usually means a typo, a name the chain does not have
+(`sauce-globals`), or a value the program should take as a `main` parameter.
 `Unexpected token` is a syntax error at the line and column it names.
 `a function argument: expected a number, found a bool` at a call usually means the called
 function's parameter has no annotation, so it is a number: annotate it, `first: bool`. For any

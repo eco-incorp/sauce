@@ -42,6 +42,44 @@ export interface SauceInterface<Methods> extends SauceBinding<Methods> {
  *  `.at(address)` to call another deployment of the same ABI. */
 export type SauceContract<Methods> = bigint & Methods & SauceBinding<Methods>;
 
+/** A token and an amount in an intent a program opens: a token symbol (`USDC`), an address, or a
+ *  value the program measured. */
+export interface SauceIntentTokenAmount {
+  readonly token: bigint | number;
+  readonly amount: bigint | number;
+}
+
+/** What the solver of an intent a program opens brings to its destination, for the body to run
+ *  on: `Base(() => { … }, { tokens })`. A delivery names at least one token. */
+export interface SauceDelivery {
+  readonly tokens: readonly SauceIntentTokenAmount[];
+}
+
+/** An intent's reward, paid on the chain that opens it. The deadlines, the creator and the prover
+ *  are the program's options, shared by every intent it opens. */
+export interface SauceReward {
+  readonly tokens?: readonly SauceIntentTokenAmount[];
+  readonly nativeAmount?: bigint | number;
+}
+
+/** An intent opened in compiled source, waiting for its reward: `Base(() => { … }).reward({ … })`.
+ *  Not a host value: `.reward(...)` returns nothing. */
+export interface SauceIntent {
+  reward(reward: SauceReward): void;
+}
+
+/**
+ * A chain in compiled source, opening an intent whose body runs there:
+ * `Ethereum(() => { ... }, { tokens }).reward({ tokens })`. The one definition of that call: a
+ * `.sauce.ts` file's chains (`sauce-script/index.d.ts`'s `SauceChain`) extend it, and each package
+ * chain export carries it (`chain-exports.generated.ts`), so a typed closure inside
+ * `Base(() => { ... })` opens one with the chain it imports. The body is never invoked: it is compiled
+ * for that chain.
+ */
+export interface SauceIntentChain {
+  (body: () => void, delivery?: SauceDelivery): SauceIntent;
+}
+
 export interface AaveV2LendingPoolMethods {
   "deposit"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
   "withdraw"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
@@ -4116,6 +4154,7 @@ declare global {
   const USDC: bigint & SauceTokenSource;
   const USDEc: bigint & SauceTokenSource;
   const USDT: bigint & SauceTokenSource;
+  const USDT0: bigint & SauceTokenSource;
   const USFDx: bigint & SauceTokenSource;
   const USFRon: bigint & SauceTokenSource;
   const USHYon: bigint & SauceTokenSource;
@@ -4276,8 +4315,86 @@ declare global {
   const bNIU: bigint & SauceTokenSource;
   const bNVDA: bigint & SauceTokenSource;
   const bTSLA: bigint & SauceTokenSource;
+  const AMC_US: bigint;
+  const AMD_US: bigint;
+  const ANDURIL: bigint;
+  const ANTHROPIC: bigint;
+  const ARM_US: bigint;
+  const BABA_US: bigint;
+  const BA_US: bigint;
+  const BB_US: bigint;
+  const BE_US: bigint;
+  const BOT_US: bigint;
+  const BROS_US: bigint;
+  const BULL_US: bigint;
+  const COPX_US: bigint;
+  const COST_US: bigint;
+  const CRWV_US: bigint;
+  const CYPH_US: bigint;
+  const DELL_US: bigint;
+  const DJT_US: bigint;
+  const DKNG_US: bigint;
+  const DNUT_US: bigint;
+  const DRAM_US: bigint;
+  const EWY_US: bigint;
+  const FIGUREAI: bigint;
+  const FLWS_US: bigint;
+  const FLY_US: bigint;
+  const FWDI_US: bigint;
+  const GPRO_US: bigint;
+  const GRND_US: bigint;
+  const HIMS_US: bigint;
+  const HOOD_US: bigint;
+  const HTZ_US: bigint;
+  const IBM_US: bigint;
+  const INTC_US: bigint;
+  const IONQ_US: bigint;
+  const IREN_US: bigint;
+  const JNJ_US: bigint;
+  const KALSHI: bigint;
+  const LLY_US: bigint;
+  const LMT_US: bigint;
+  const LULU_US: bigint;
+  const LUV_US: bigint;
+  const MGM_US: bigint;
+  const MRNA_US: bigint;
+  const MRVL_US: bigint;
+  const MSTR_US: bigint;
+  const MU_US: bigint;
+  const NBIS_US: bigint;
+  const NEURALINK: bigint;
+  const NFLX_US: bigint;
+  const NKE_US: bigint;
+  const NOK_US: bigint;
+  const NVDA_US: bigint;
+  const OPENAI: bigint;
+  const PFE_US: bigint;
+  const POLYMARKET: bigint;
+  const PTN_US: bigint;
   const PYUSD: bigint;
+  const QUBT_US: bigint;
+  const RBLX_US: bigint;
+  const RDDT_US: bigint;
+  const RIVN_US: bigint;
+  const RKLB_US: bigint;
+  const RUM_US: bigint;
+  const SCHH_US: bigint;
+  const SHOP_US: bigint;
+  const SKHY_US: bigint;
+  const SNAP_US: bigint;
+  const SNDK_US: bigint;
+  const SPACEX: bigint;
+  const SPCX_US: bigint;
+  const SPHR_US: bigint;
+  const SQQQ_US: bigint;
+  const TTWO_US: bigint;
+  const UPS_US: bigint;
+  const URA_US: bigint;
+  const USO_US: bigint;
+  const WEN_US: bigint;
   const WSOL: bigint;
+  const WULF_US: bigint;
+  const XAI: bigint;
   /** Destination chain identity supplied by openRoute. */
   const chainId: bigint;
   const CHAIN_ID: bigint;

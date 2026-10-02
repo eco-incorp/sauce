@@ -19,7 +19,7 @@ On Ethereum, `Sommelier` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's cellarRouter, `0x6b7f87279982d919Bbf85182DDeAB179B366d8f2`.
-  require(Sommelier.CellarRouter != 0n);
+  require(Sommelier.CellarRouter != 0);
 }
 ```
 

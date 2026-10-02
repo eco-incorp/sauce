@@ -7,8 +7,9 @@
  * NODE-ONLY, and reached by nothing browser-facing: it is the package's `bin`, not an `exports`
  * entry, and no barrel imports it. It reads the environment once, deliberately, and only the
  * variable `--password-env <NAME>` names (`nodeIo().readEnv`). The network is reached only through
- * `--rpc-url` or a `--config` file named on the command line, and a key only through `--wallet`,
- * `--keystore`, `--private-key` or `--keypair` — and every byte printed passes through
+ * `--rpc-url` or a `--config` file named on the command line, or else through the built-in public
+ * endpoints the process is given (`CliIo.publicRpcs`; none with `--offline`), and a key only through
+ * `--wallet`, `--keystore`, `--private-key` or `--keypair` — and every byte printed passes through
  * `signer.ts#scrub` on the way out.
  */
 import { spawnSync } from "node:child_process";
@@ -41,7 +42,7 @@ import {
   type ParsedArgs,
 } from "./args.js";
 import { actionsCommand, actionsProgram, isActionsDocument, type ActionsInput } from "./actions.js";
-import { chainServedBy, connect, endpointFor, type Sent } from "./chain.js";
+import { chainServedBy, connect, connectAt, endpointFor, type Sent } from "./chain.js";
 import {
   compileCommand,
   pastDeadline,
@@ -87,9 +88,10 @@ import { intentOf, intentRecord } from "./lifecycle.js";
 import type { Ask } from "./prompt.js";
 import { defaultStoreDir, IntentStore } from "./store.js";
 import { globalsCommand } from "./globals.js";
-import { initProject, writeSauceScriptTsconfig } from "./init.js";
+import { initProject, installedViem, writeSauceScriptTsconfig } from "./init.js";
 import {
   assumedBalances,
+  bindMainArguments,
   definesReach,
   fundingFor,
   potTarget,
@@ -107,7 +109,7 @@ import {
 } from "./intents.js";
 import { MCP_FLAGS, mcpCommand } from "./mcp.js";
 import { livePrice, priceCommand, pricedChain, priceGiven, resolvePriceTokens } from "./price.js";
-import { parseV4Key, poolsCommand } from "./pools.js";
+import { parseV4Key, poolsCommand, readPoolAt } from "./pools.js";
 import { publishCommand } from "./publish.js";
 import { simulateCommand } from "./simulate.js";
 import {
@@ -133,6 +135,7 @@ import {
 import type { Address as SvmAddress, KeyPairSigner } from "@solana/kit";
 import type { PrivateKeyAccount } from "viem/accounts";
 import { passwordSource, type CapturedCommand, type PasswordSource } from "./password.js";
+import type { PublicEndpoints } from "./public-endpoints.js";
 import { keystoreAddress, loadSigner, scrub, secret } from "./signer.js";
 import {
   PASSWORD,
@@ -160,6 +163,7 @@ import {
   passwordOn,
   writeToTerminal,
 } from "./terminal.js";
+import { updateCommand, type Updater } from "./update.js";
 import {
   AGENTS,
   describeStatus,
@@ -203,6 +207,18 @@ export interface CliIo extends CliFiles {
   readonly capture: (command: string) => CapturedCommand;
   /** Writes to the terminal itself, past stdout and the scrubbing: `sauce wallet export` only. */
   readonly writeTerminal?: (text: string) => boolean;
+  /**
+   * The built-in public endpoints, which a chain is read through when neither `--rpc-url` nor the
+   * `--config` file gives its endpoint (`public-endpoints.ts`). The executable gives them
+   * (`main.ts`); without them, as in a test, such a chain is not read.
+   */
+  readonly publicRpcs?: PublicEndpoints | undefined;
+  /**
+   * What `sauce update` reaches: this package's directory, the npm registry and the package
+   * managers (`update.ts`). The executable gives it (`main.ts`); without it, as in a test, nothing
+   * is updated.
+   */
+  readonly updater?: Updater | undefined;
 }
 
 /** The real process's streams, filesystem, children and terminal. */
@@ -324,12 +340,14 @@ function packageInfo(): {
 const skillsSource = (): SkillsSource => {
   const { name, version, dependencies } = packageInfo();
   const typescript = dependencies?.typescript;
+  const viem = installedViem();
 
   return {
     dir: PACKAGED_SKILLS,
     packageName: name,
     version,
     ...(typescript === undefined ? {} : { typescript }),
+    ...(viem === undefined ? {} : { viem }),
   };
 };
 
@@ -354,12 +372,14 @@ const PROGRAM: FlagSpecs = {
     type: "string",
     multiple: true,
     value: "NAME=VALUE",
-    help: "A value the program reads by name: integer, 0x hex, true, false; base58 on Solana",
+    help: "A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana",
+    lowLevel: true,
   },
   defines: {
     type: "string",
     value: "<file.json>",
-    help: "Defines from a JSON object of NAME to value; --define wins",
+    help: "Compile-time values from a JSON object of NAME to value; --define wins",
+    lowLevel: true,
   },
   "intent-deadline": {
     type: "string",
@@ -452,12 +472,17 @@ const COOK: FlagSpecs = {
 };
 
 const ENDPOINT: FlagSpecs = {
-  "rpc-url": { type: "string", value: "<url>", help: "The chain's RPC endpoint" },
+  "rpc-url": {
+    type: "string",
+    value: "<url>",
+    help: "Your own RPC endpoint for the chain (default: a built-in public one)",
+  },
   config: {
     type: "string",
     value: "<file>",
-    help: 'Or a file of { "rpcUrls": { "<chain id>": "<url>" } }',
+    help: 'Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }',
   },
+  offline: { type: "boolean", help: "Read no chain: no endpoint, not even a built-in one" },
 };
 
 const SIGNER: FlagSpecs = {
@@ -493,7 +518,7 @@ const FUND: FlagSpecs = {
     type: "string",
     multiple: true,
     value: "<TOKEN:amount>",
-    help: "Pull tokens into the Pot in the cook: USDC:1.5, USDC:1500000n, ETH:0.01",
+    help: "Pull tokens into the Pot in the cook: USDC:1.5 (whole tokens), ETH:0.01",
     only: "evm",
   },
   "fund-mode": {
@@ -565,31 +590,16 @@ function chainOf(
 }
 
 /**
- * The endpoints the command reaches the chains a program's intents go to with: every chain in
- * `--config`'s `rpcUrls`, or with `--rpc-url` only the program's own `source` chain.
+ * The endpoints the command reaches the chains a program's intents go to with: `--rpc-url` for the
+ * program's own `source` chain, and every other chain as {@link sharedEndpoint} finds it.
  */
 function endpointsOf(args: ParsedArgs, io: CliIo, source: CanonicalChain): Endpoints {
   const rpcUrl = stringFlag(args, "rpc-url");
-  const config = stringFlag(args, "config");
-  let urls: Record<string, unknown> | undefined;
 
-  return (chain) => {
-    if (rpcUrl !== undefined) return chain.id === source.id ? endpoint(args, io, chain) : undefined;
-    if (config === undefined) return undefined;
-    urls ??= (() => {
-      try {
-        const parsed = JSON.parse(readInput(io, config)) as { rpcUrls?: unknown } | null;
-
-        return typeof parsed?.rpcUrls === "object" && parsed.rpcUrls !== null
-          ? (parsed.rpcUrls as Record<string, unknown>)
-          : {};
-      } catch {
-        return {};
-      }
-    })();
-    // A chain the file has no entry for is one the command does not reach; a bad entry is named.
-    return Object.hasOwn(urls, String(chain.id)) ? endpoint(args, io, chain) : undefined;
-  };
+  return (chain) =>
+    rpcUrl !== undefined && chain.id !== source.id
+      ? sharedEndpoint(args, io, chain)
+      : endpoint(args, io, chain);
 }
 
 /**
@@ -672,6 +682,9 @@ async function programInput(
   operand: string | ProgramText = fileOperand(args),
   fallback?: CanonicalChain,
   gate?: Gate,
+  /** For a wallet's intents: `main`'s arguments, bound into them (`bindMainArguments`), after
+   *  `before` has refused what no arguments could fix. */
+  bind?: { readonly args?: ArgsInput; readonly before?: (input: ProgramInput) => void },
 ): Promise<ProgramInput> {
   const { file, text, stdin } = programText(io, operand);
   const sourceDir = stringFlag(args, "source-dir");
@@ -696,7 +709,7 @@ async function programInput(
     definesFile === undefined ? undefined : readInput(io, definesFile),
     chain.kind,
   );
-  const input: ProgramInput = {
+  const given: ProgramInput = {
     file,
     text,
     ...(addresses.length === 0 ? {} : { addressDefines: addresses }),
@@ -720,6 +733,8 @@ async function programInput(
       ...(fundVia === undefined ? {} : { fundVia: parseFundVia(fundVia) }),
     },
   };
+  bind?.before?.(given);
+  const input = bind === undefined ? given : bindMainArguments(given, bind.args);
   if (fee !== "auto") return input;
   const executionFee = await autoExecutionFee(input, io, endpointsOf(args, io, chain), gate);
 
@@ -843,31 +858,70 @@ function cookInput(
   };
 }
 
-/** The RPC endpoint for `chain`, from `--rpc-url` or `--config`; `undefined` when neither. */
-function endpoint(args: ParsedArgs, io: CliIo, chain: CanonicalChain): string | undefined {
-  const rpcUrl = stringFlag(args, "rpc-url");
-  const config = stringFlag(args, "config");
-  if (rpcUrl !== undefined && config !== undefined) {
-    throw new UsageError("give --rpc-url or --config, not both");
+/** The chains each command run has said it reads through a public endpoint. */
+const notedPublic = new WeakMap<CliIo, Set<number>>();
+
+/**
+ * `chain`'s built-in public endpoint, if the process has one for it — said on stderr the first
+ * time a command reads the chain through it, with how to give one's own instead.
+ */
+function publicEndpoint(io: CliIo, chain: CanonicalChain): string | undefined {
+  const url = io.publicRpcs?.url(chain);
+  if (url === undefined) return undefined;
+  const noted = notedPublic.get(io) ?? new Set<number>();
+  notedPublic.set(io, noted);
+  if (!noted.has(chain.id)) {
+    noted.add(chain.id);
+    io.stderr(
+      `${chain.slug}: read through a built-in public endpoint, which can be slow or ` +
+        "rate-limited; give your own with --rpc-url <url> or --config <file>\n",
+    );
   }
 
-  const url = endpointFor(
-    chain,
-    rpcUrl,
-    config === undefined ? undefined : { path: config, text: readInput(io, config) },
-  );
+  return url;
+}
+
+/**
+ * `chain`'s endpoint, where `--rpc-url` does not name it: the `--config` file's entry for the
+ * chain, else a built-in public endpoint; `undefined` with `--offline`, or when neither has one.
+ */
+function sharedEndpoint(args: ParsedArgs, io: CliIo, chain: CanonicalChain): string | undefined {
+  if (args.values.offline === true) return undefined;
+  const config = stringFlag(args, "config");
+  const url =
+    config === undefined
+      ? undefined
+      : endpointFor(chain, undefined, { path: config, text: readInput(io, config) });
   // A provider URL often carries a key: whatever reports it — this CLI, viem, the Solana client —
   // it is scrubbed from everything printed.
   if (url !== undefined) secret(url);
 
-  return url;
+  return url ?? publicEndpoint(io, chain);
+}
+
+/**
+ * The RPC endpoint for `chain`: `--rpc-url`, else {@link sharedEndpoint} — the `--config` file's
+ * entry for it, else a built-in public endpoint. `undefined` when none reaches it.
+ */
+function endpoint(args: ParsedArgs, io: CliIo, chain: CanonicalChain): string | undefined {
+  const rpcUrl = stringFlag(args, "rpc-url");
+  if (rpcUrl !== undefined && stringFlag(args, "config") !== undefined) {
+    throw new UsageError("give --rpc-url or --config, not both");
+  }
+  if (rpcUrl === undefined) return sharedEndpoint(args, io, chain);
+  secret(rpcUrl);
+
+  return rpcUrl;
 }
 
 function requiredEndpoint(args: ParsedArgs, io: CliIo, chain: CanonicalChain): string {
   const url = endpoint(args, io, chain);
   if (url === undefined) {
     throw new UsageError(
-      `missing --rpc-url <url> (or --config <file>): the ${chain.slug} endpoint`,
+      args.values.offline === true
+        ? `--offline reads no chain, and this reads ${chain.slug}`
+        : `missing --rpc-url <url> (or --config <file>): the ${chain.slug} endpoint` +
+            (io.publicRpcs === undefined ? "" : ", which has no built-in public one"),
     );
   }
 
@@ -1018,46 +1072,24 @@ const storeOf = (args: ParsedArgs, io: CliIo): IntentStore =>
   new IntentStore(stringFlag(args, "store") ?? io.storeDir ?? defaultStoreDir());
 
 /**
- * The endpoint of each chain a lifecycle command reads, when it has one: `--config`'s entry for it,
- * or `--rpc-url` for the one chain that URL serves (asked once). Unlike `endpoint`, a chain with
- * none is `undefined`, not an error: a command reads what it can, and says what it could not.
+ * The endpoint of each chain a lifecycle command reads, when it has one: `--rpc-url` for the one
+ * chain that URL serves (asked once), and every chain as {@link sharedEndpoint} finds it. Unlike
+ * `endpoint`, a chain with none is `undefined`, not an error: a command reads what it can, and
+ * says what it could not.
  */
 async function endpointLookup(
   args: ParsedArgs,
   io: CliIo,
 ): Promise<(chain: CanonicalChain) => string | undefined> {
   const rpcUrl = stringFlag(args, "rpc-url");
-  const config = stringFlag(args, "config");
-  if (rpcUrl !== undefined && config !== undefined) {
+  if (rpcUrl !== undefined && stringFlag(args, "config") !== undefined) {
     throw new UsageError("give --rpc-url or --config, not both");
   }
-  if (rpcUrl !== undefined) {
-    secret(rpcUrl);
-    const served = await chainServedBy(rpcUrl);
+  if (rpcUrl === undefined) return (chain) => sharedEndpoint(args, io, chain);
+  secret(rpcUrl);
+  const served = await chainServedBy(rpcUrl);
 
-    return (chain) => (chain.id === served.id ? rpcUrl : undefined);
-  }
-  if (config === undefined) return () => undefined;
-  const text = readInput(io, config);
-  let urls: Record<string, unknown> = {};
-  try {
-    urls = ((JSON.parse(text) as { rpcUrls?: Record<string, unknown> }).rpcUrls ?? {}) as Record<
-      string,
-      unknown
-    >;
-  } catch {
-    // `endpointFor` names the problem below, for the first chain asked about.
-  }
-
-  return (chain) =>
-    urls[String(chain.id)] === undefined
-      ? undefined
-      : (() => {
-          const url = endpointFor(chain, undefined, { path: config, text })!;
-          secret(url);
-
-          return url;
-        })();
+  return (chain) => (chain.id === served.id ? rpcUrl : sharedEndpoint(args, io, chain));
 }
 
 /** Records what a sent transaction published in the store, with a note per intent stored. */
@@ -1471,7 +1503,8 @@ function svmCookInput(
 
 /**
  * The endpoint and chain to fetch a transaction from: `--rpc-url` (its chain from `--chain`, else
- * from the endpoint itself) or `--config` with `--chain`; `undefined` when neither is given.
+ * from the endpoint itself), or `--chain`'s endpoint from `--config` or the built-in ones;
+ * `undefined` with neither `--rpc-url` nor `--chain`, or with `--offline`.
  */
 async function transactionEndpoint(
   args: ParsedArgs,
@@ -1479,9 +1512,10 @@ async function transactionEndpoint(
 ): Promise<{ readonly rpcUrl: string; readonly chain: CanonicalChain } | undefined> {
   const rpcUrl = stringFlag(args, "rpc-url");
   const chainFlag = stringFlag(args, "chain");
-  if (rpcUrl === undefined && stringFlag(args, "config") === undefined) return undefined;
+  if (args.values.offline === true) return undefined;
   if (rpcUrl === undefined) {
-    const chain = parseChain(requiredFlag(args, "chain", "<slug|id>"));
+    if (chainFlag === undefined) return undefined;
+    const chain = parseChain(chainFlag);
 
     return { rpcUrl: requiredEndpoint(args, io, chain), chain };
   }
@@ -1545,12 +1579,14 @@ const SUPPORTED_ONLY = (what: string): string[] => [
 const INTENT_VERBS: Readonly<Record<string, Command>> = {
   publish: {
     usage: [
-      "sauce intent publish <file | -> --chain <source> --rpc-url <url> (--keystore <path> | --private-key <hex>) [options]",
+      "sauce intent publish <file | -> --chain <source> (--keystore <path> | --private-key <hex>) [options] [--args <value>…]",
       "sauce intent publish [--source <chain>] [--destination <chain>] [--token <token>] [--amount <n>] …",
     ],
     summary: "Publish a file's fixed intents from a wallet (or make one, step by step)",
+    trailing: "args",
     flags: {
       ...PROGRAM,
+      "args-json": COOK["args-json"]!,
       ...ENDPOINT,
       ...SIGNER,
       ...CREATE,
@@ -1568,7 +1604,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         type: "string",
         multiple: true,
         value: "<TOKEN:amount>",
-        help: "With --dry-run: give the wallet this balance, for the rehearsal only",
+        help: "With --dry-run: give the wallet this balance, in whole tokens, for the rehearsal only",
       },
       format: {
         type: "string",
@@ -1578,11 +1614,12 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       store: LIFECYCLE.store!,
       ...JSON_FLAG,
       ...HELP,
+      ...ARGS,
     },
     details: [
-      "For a file whose intents are fixed when it is built — every amount a literal, a define or a",
-      "top-level `const` of a literal — builds each intent off-chain (the SDK's own lowering) and",
-      "sends the source chain's transactions from the signer's wallet: each reward token",
+      "For a file whose intents are fixed when it is built — every amount a literal, one of main's",
+      "arguments or a top-level `const` of a literal — builds each intent off-chain (the SDK's own",
+      "lowering) and sends the source chain's transactions from the signer's wallet: each reward token",
       "transferred to the intent's vault (and the native amount sent to it), then Portal.publish.",
       "No approval is asked for. The vault is the SDK's offline derivation, which the Portal's own",
       "intentVaultAddress must agree with or nothing is sent; only what the vault does not hold",
@@ -1590,6 +1627,10 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "Prints the intent hashes and the transactions. A file whose intent uses a value the program",
       "measures or computes while it runs, or that does anything besides open its intents, is",
       "refused: use `sauce run` on a Pot.",
+      "",
+      "main's arguments (--args, in order, or --args-json) are the values the intents are built",
+      "with: a wallet publishes what it knows before anything runs, so each is bound into the",
+      "intents as it is. Each is one word: an integer, an address or a bool.",
       "",
       "--intent-fund-via publishAndFund funds it through the Portal instead: each reward token",
       "approved to the Portal (reset to zero first when a smaller allowance stands, as SafeERC20",
@@ -1611,19 +1652,19 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "named). It writes the intent as a .sauce.ts file (--out, default",
       "intent-<source>-to-<destination>-<time>.sauce.ts) to keep and publish again, rehearses",
       "publishing it (--dry-run) and filling it on the destination (`sauce intent fill`), and",
-      "with a signer publishes it once you approve (or with --auto-approve), storing it. --config names",
-      "both chains' endpoints.",
+      "with a signer publishes it once you approve (or with --auto-approve), storing it. It reads",
+      "both chains.",
       ...SUPPORTED_ONLY("Publishes (or prints the transactions)"),
       "",
       "Examples:",
-      "  sauce intent publish bridge.sauce.ts --chain ethereum --rpc-url <url> --keystore ~/.keys/me.json \\",
-      "    --intent-deadline 2000000000 --intent-creator 0x…",
-      "  sauce intent publish --config sauce.config.json --keystore ~/.keys/me.json",
+      "  sauce intent publish bridge.sauce.ts --chain ethereum --keystore ~/.keys/me.json \\",
+      "    --intent-deadline 2000000000 --intent-creator 0x… --args 1000000 0x…",
+      "  sauce intent publish --keystore ~/.keys/me.json",
       "  sauce intent publish --source ethereum --destination base --token USDC --amount 1 \\",
       "    --recipient 0x… --reward-token USDC --reward 1.01 --prover HyperProver \\",
-      "    --fill-deadline +1h --reward-deadline +1d --config sauce.config.json --keystore <path>",
+      "    --fill-deadline +1h --reward-deadline +1d --keystore <path>",
     ].join("\n"),
-    run: async (args, io) => {
+    run: async (args, io, trailing) => {
       if (args.positionals.length === 0) return createAndPublish(args, io);
       const created = Object.keys(CREATE).find((flag) => args.values[flag] !== undefined);
       if (created !== undefined) {
@@ -1635,15 +1676,19 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         args.values["dry-run"] === true && format === undefined
           ? undefined
           : { action: "publishing intents", by: "all" };
-      const program = await programInput(args, io, undefined, undefined, gate);
-      if (program.chain.kind === "svm") {
-        throw new UsageError(
-          "sauce intent publish sends a source chain's Portal transactions from an EVM wallet. " +
-            "Publishing from Solana is not supported: the SDK has no Kitchen-built path for an " +
-            "intent that Solana's Portal runs (docs/guides/solana.md). Open the intent from an " +
-            "EVM chain; its destination may be Solana.",
-        );
-      }
+      const program = await programInput(args, io, undefined, undefined, gate, {
+        ...argsInput(args, io, trailing),
+        // Before main's arguments: no argument makes a Solana file publishable.
+        before: ({ chain }) => {
+          if (chain.kind !== "svm") return;
+          throw new UsageError(
+            "sauce intent publish sends a source chain's Portal transactions from an EVM wallet. " +
+              "Publishing from Solana is not supported: the SDK has no Kitchen-built path for an " +
+              "intent that Solana's Portal runs (docs/guides/solana.md). Open the intent from an " +
+              "EVM chain; its destination may be Solana.",
+          );
+        },
+      });
       if (format !== undefined && format !== "json" && format !== "cast") {
         throw new UsageError(`--format: '${format}' is not json or cast`);
       }
@@ -1700,24 +1745,27 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
   },
   fill: {
     usage: [
-      "sauce intent fill <file | -> --chain <source> (--config <file> | --rpc-url <url>) [options]",
-      "sauce intent fill <intent-hash> (--config <file> | --rpc-url <url>) [options]",
+      "sauce intent fill <file | -> --chain <source> [options] [--args <value>…]",
+      "sauce intent fill <intent-hash> [options]",
       "sauce intent fill <file | intent-hash> … --send (--keystore <path> | --private-key <hex>) [--auto-approve]",
-      "sauce intent fill <intent-hash> --config <file> --claimant <address> --send --keypair <path>   (to Solana)",
+      "sauce intent fill <intent-hash> --claimant <address> --send --keypair <path>   (to Solana)",
     ],
     summary: "Fill a file's (or a stored) intents on their destination: rehearsed, or --send",
+    trailing: "args",
     flags: {
       ...PROGRAM,
+      "args-json": COOK["args-json"]!,
       "rpc-url": {
         type: "string",
         value: "<url>",
-        help: "The destination chain's endpoint (one destination only)",
+        help: "Your own endpoint for the destination chain (one destination only)",
       },
       config: {
         type: "string",
         value: "<file>",
-        help: 'Or a file of { "rpcUrls": { "<chain id>": "<url>" } }: each destination\'s',
+        help: 'Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }',
       },
+      offline: ENDPOINT.offline!,
       solver: {
         type: "string",
         value: "<address|key>",
@@ -1742,6 +1790,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       store: LIFECYCLE.store!,
       ...JSON_FLAG,
       ...HELP,
+      ...ARGS,
     },
     details: [
       "Builds each intent the file opens, as `sauce intent publish` does (or takes the intent the store",
@@ -1772,9 +1821,9 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "decoded reason it reverts (exit 1), a failed route call unwrapped to the program's own",
       "message.",
       "",
-      "The endpoint is the DESTINATION's: --config names each one (and the source's, which checks",
-      "the source prover trusts the destination's), and --rpc-url serves intents that all go to",
-      "one chain. The intent must be fixed when it is built, as for publish: one using a value the",
+      "It runs on the DESTINATION, and reads the source to check the source prover trusts the",
+      "destination's; --rpc-url is the destination's endpoint, for intents that all go to one",
+      "chain. The intent must be fixed when it is built, as for publish: one using a value the",
       "program measures on chain has no route until it runs (name it by the hash `sauce run`",
       "stored). Needs an endpoint that serves eth_simulateV1.",
       "",
@@ -1788,21 +1837,14 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       ...SUPPORTED_ONLY("--send sends a fill"),
       "",
       "Examples:",
-      "  sauce intent fill swap-on-base.sauce.ts --chain ethereum --config sauce.config.json \\",
-      "    --defines swap.defines.json --intent-deadline 2000000000 --intent-creator 0x… \\",
-      "    --intent-execution-fee 1000000000000",
-      "  sauce intent fill 0x<intent hash> --config sauce.config.json --send --keystore ~/.keys/me.json",
+      "  sauce intent fill swap-on-base.sauce.ts --chain ethereum \\",
+      "    --intent-deadline 2000000000 --intent-creator 0x… --intent-execution-fee 1000000000000 \\",
+      "    --args <amountIn> <reward> <sqrtPriceLimitX96> <minOut> <recipient> <refundTo>",
+      "  sauce intent fill 0x<intent hash> --send --keystore ~/.keys/me.json",
     ].join("\n"),
-    run: async (args, io) => {
+    run: async (args, io, trailing) => {
       const store = storeOf(args, io);
       const rpcUrl = stringFlag(args, "rpc-url");
-      const config = stringFlag(args, "config");
-      if (rpcUrl === undefined && config === undefined) {
-        throw new UsageError(
-          "missing --config <file> (or --rpc-url <url>): the endpoint of each intent's " +
-            "destination chain, where the fill runs",
-        );
-      }
       const solver = stringFlag(args, "solver");
       const claimant = stringFlag(args, "claimant");
       if (claimant !== undefined && !/^0x(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/.test(claimant)) {
@@ -1831,6 +1873,11 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         ? { action: "sending a fill", by: "destinations" }
         : undefined;
       if (operands.length > 0 && operands.every(isIntentHash)) {
+        if (argsInput(args, io, trailing).args !== undefined) {
+          throw new UsageError(
+            "--args gives a file's main its arguments; a stored intent is built already",
+          );
+        }
         targets = operands.flatMap((hash) =>
           storedTargets(store, hash as `0x${string}`).map(({ record }) => ({
             intent: intentOf(record),
@@ -1841,7 +1888,14 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         );
         from = operands.length === 1 ? operands[0]! : "the intents named";
       } else {
-        const program = await programInput(args, io, undefined, undefined, gate);
+        const program = await programInput(
+          args,
+          io,
+          undefined,
+          undefined,
+          gate,
+          argsInput(args, io, trailing),
+        );
         // A deadline that has passed is rehearsed anyway, so the Portal's own refusal shows.
         const past = pastDeadline(program);
         if (past !== undefined) io.stderr(`${past}: the rehearsal shows the Portal refusing it\n`);
@@ -1887,7 +1941,8 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         );
       }
       const account = sending ? await signerOf(args, io) : undefined;
-      const lookup = config === undefined ? undefined : await endpointLookup(args, io);
+      // --rpc-url is the destination's alone: the source is read only through the others.
+      const lookup = rpcUrl === undefined ? await endpointLookup(args, io) : undefined;
 
       return fillCommand({
         intents: targets,
@@ -1906,8 +1961,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   prove: {
-    usage:
-      "sauce intent prove <file | intent-hash…> --config <file> [--keystore <path> | --private-key <hex>]",
+    usage: "sauce intent prove <file | intent-hash…> [--keystore <path> | --private-key <hex>]",
     summary: "Send the proof of filled (or cancelled) intents, paying the prover's fee",
     flags: { ...LIFECYCLE, ...JSON_FLAG, ...HELP },
     details: [
@@ -1921,12 +1975,11 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "",
       "The intent is a hash the store holds (`sauce intent publish`, `run`, `fill` and `intents import`",
       "store them), or the file that opens it (with --chain, its source, and the flags it was",
-      "built with). --config names the destination's endpoint, and the source's to skip what is",
-      "proven already.",
+      "built with). It reads the destination, and the source to skip what is proven already.",
       ...SUPPORTED_ONLY("Proves (or prints the transaction)"),
       "",
       "Example:",
-      "  sauce intent prove 0x<intent hash> --config sauce.config.json --keystore ~/.keys/me.json",
+      "  sauce intent prove 0x<intent hash> --keystore ~/.keys/me.json",
     ].join("\n"),
     run: async (args, io) => {
       const { targets, context } = await lifecycleOf(args, io, {
@@ -1938,7 +1991,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   claim: {
-    usage: "sauce intent claim <file | intent-hash…> --chain <source> --config <file> [signer]",
+    usage: "sauce intent claim <file | intent-hash…> --chain <source> [signer]",
     summary: "Withdraw proven intents' rewards to their claimants, on the source",
     flags: { ...LIFECYCLE, ...JSON_FLAG, ...HELP },
     details: [
@@ -1954,8 +2007,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       ...SUPPORTED_ONLY("Claims (or prints the transaction)"),
       "",
       "Example:",
-      "  sauce intent claim 0x<intent hash> --chain ethereum --config sauce.config.json \\",
-      "    --keystore ~/.keys/me.json",
+      "  sauce intent claim 0x<intent hash> --chain ethereum --keystore ~/.keys/me.json",
     ].join("\n"),
     run: async (args, io) => {
       const { targets, context } = await lifecycleOf(args, io, {
@@ -1967,7 +2019,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   refund: {
-    usage: "sauce intent refund <file | intent-hash…> --chain <source> --config <file> [signer]",
+    usage: "sauce intent refund <file | intent-hash…> --chain <source> [signer]",
     summary: "Return unearned rewards from their vaults to their creators, on the source",
     flags: { ...LIFECYCLE, ...JSON_FLAG, ...HELP },
     details: [
@@ -1982,8 +2034,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       ...SUPPORTED_ONLY("Refunds (or prints the transactions)"),
       "",
       "Example:",
-      "  sauce intent refund 0x<intent hash> --chain ethereum --config sauce.config.json \\",
-      "    --keystore ~/.keys/me.json",
+      "  sauce intent refund 0x<intent hash> --chain ethereum --keystore ~/.keys/me.json",
     ].join("\n"),
     run: async (args, io) => {
       const { targets, context } = await lifecycleOf(args, io, {
@@ -1995,7 +2046,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   cancel: {
-    usage: "sauce intent cancel <file | intent-hash…> --config <file> [--and-prove] [signer]",
+    usage: "sauce intent cancel <file | intent-hash…> [--and-prove] [signer]",
     summary: "Cancel unfilled intents after their route's deadline, for an early refund",
     flags: {
       ...LIFECYCLE,
@@ -2015,7 +2066,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "  deadline instead;",
       "  where the SOURCE Portal predates 2.12, which would pay a proven cancellation to an",
       "  address nobody controls, burning the reward: it is checked for the CancelledIntent",
-      "  refusal 2.12 added, so --config needs both chains' endpoints;",
+      "  refusal 2.12 added, so it reads both chains;",
       "  before the route's deadline, after a fill, and when cancelled already.",
       "",
       "eco-routes asks for the proof to wait until the cancel is final on the destination: a",
@@ -2025,7 +2076,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       ...SUPPORTED_ONLY("Cancels (or prints the transaction)"),
       "",
       "Example:",
-      "  sauce intent cancel 0x<intent hash> --config sauce.config.json --keystore ~/.keys/me.json",
+      "  sauce intent cancel 0x<intent hash> --keystore ~/.keys/me.json",
     ].join("\n"),
     run: async (args, io) => {
       const { targets, context } = await lifecycleOf(args, io, {
@@ -2037,13 +2088,13 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   status: {
-    usage: "sauce intent status <file | intent-hash…> --config <file>",
+    usage: "sauce intent status <file | intent-hash…>",
     summary: "Where intents stand on both chains, and what can be done next",
     flags: { ...PROGRAM, ...ENDPOINT, ...API, store: LIFECYCLE.store!, ...JSON_FLAG, ...HELP },
     details: [
       "Reads each intent on its source chain (the reward's status, what its vault holds, the",
       "proof its prover records) and its destination (whether the Portal recorded a fill or a",
-      "cancellation, and whether it can cancel), wherever --config gives an endpoint, and prints",
+      "cancellation, and whether it can cancel), wherever an endpoint reaches, and prints",
       "its state — unfunded, funded, filled, cancelled, proven, cancelProven, claimed or refunded",
       "— its deadlines, and whether it can be filled, proven, claimed, refunded or cancelled now,",
       "with why not and from when. Nothing is sent. --api <url> also asks the Eco API gateway",
@@ -2051,7 +2102,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "the truth; --api-key-file sends a key with it. No URL is built in.",
       "",
       "Example:",
-      "  sauce intent status 0x<intent hash> --config sauce.config.json",
+      "  sauce intent status 0x<intent hash>",
     ].join("\n"),
     run: async (args, io) => {
       const context = await lifecycleContext(args, io);
@@ -2066,8 +2117,8 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   list: {
-    usage: "sauce intent list [--config <file>] [--store <dir>]",
-    summary: "Every intent the store keeps, and with --config where each stands",
+    usage: "sauce intent list [--store <dir>]",
+    summary: "Every intent the store keeps, and where each stands",
     flags: { ...ENDPOINT, store: LIFECYCLE.store!, ...JSON_FLAG, ...HELP },
     details: [
       "The store (--store, default ~/.sauce/intents) keeps every intent `sauce intent publish`,",
@@ -2075,7 +2126,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "one directory per intent hash, its intent.json written once and never changed, and",
       "events.jsonl, one line appended per thing that happened (published, funded, filled,",
       "proving, claimed, refunded, cancelled) with its chain, transaction, block and time. Where",
-      "an intent stands is never stored: with --config it is read from the chains, each time.",
+      "an intent stands is never stored: it is read from the chains, each time (--offline: not).",
     ].join("\n"),
     run: async (args, io) => {
       if (args.positionals.length > 0) {
@@ -2086,12 +2137,12 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   show: {
-    usage: "sauce intent show <intent-hash> [--config <file>] [--store <dir>]",
+    usage: "sauce intent show <intent-hash> [--store <dir>]",
     summary: "One stored intent: its route, reward, deadlines and events, and where it stands",
     flags: { ...ENDPOINT, ...API, store: LIFECYCLE.store!, ...JSON_FLAG, ...HELP },
     details: [
       "Prints the intent the store keeps under that hash — its route and reward, its deadlines,",
-      "its creator and prover, and every event recorded for it — and, with --config, its state on",
+      "its creator and prover, and every event recorded for it — and, read from the chains, its state on",
       "both chains and what can be done next, as `sauce intent status` reads it.",
     ].join("\n"),
     run: async (args, io) => {
@@ -2106,8 +2157,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   import: {
-    usage:
-      "sauce intent import <tx-hash> --chain <source> (--config <file> | --rpc-url <url>) [--index <n>]",
+    usage: "sauce intent import <tx-hash> --chain <source> [--index <n>]",
     summary: "Store the intents a transaction published, rebuilt from its logs",
     flags: {
       chain: PROGRAM.chain!,
@@ -2130,7 +2180,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "the store kept it.",
       "",
       "Example:",
-      "  sauce intent import 0x<tx hash> --chain ethereum --config sauce.config.json",
+      "  sauce intent import 0x<tx hash> --chain ethereum",
     ].join("\n"),
     run: async (args, io) => {
       const [hash, ...more] = args.positionals;
@@ -2323,8 +2373,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "document compiles too (`sauce actions`).",
       "",
       "--json also says what the compile applied and how large the result is:",
-      "  defines    each define the file reads, its value, and where it came from: user (--define,",
-      "             --defines) or chain (a token symbol, a protocol contract, the chain id)",
+      "  defines    each name the chain gave the file (a token symbol, a protocol contract, the",
+      "             chain id) and each low-level --define it read, with its value and source",
       "  contracts  each protocol contract it calls or reads (UniswapV3.Factory), resolved on its",
       "             chain: an intent body's on the intent's own",
       "  size       the program's bytes; payload: the program with main's arguments (--args)",
@@ -2332,13 +2382,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "             with --account where given and a distinct account for each other slot, as",
       "             the Kitchen's cook or, --via engine, the engine's direct one",
       "  intentPots each intent that runs a program on its destination: the Pot it cooks on (the",
-      "             one the destination Portal's Executor owns, salt 0) and, with an endpoint",
-      "             for that chain (--config), whether it is deployed; a missing one is warned",
+      "             one the destination Portal's Executor owns, salt 0) and, read from that",
+      "             chain, whether it is deployed; a missing one is warned",
       "             about, since no solver can fill the intent until it is",
-      "A define the file never reads is named on stderr: it changes nothing.",
+      "A --define the file never reads is named on stderr: it changes nothing.",
       "",
       "Examples:",
-      "  sauce compile pay.sauce.ts --chain base --define RECIPIENT=0x…",
+      "  sauce compile pay.sauce.ts --chain base",
       "  sauce compile split.sauce.ts --chain base --json --args 0x… 1000000",
     ].join("\n"),
     trailing: "args",
@@ -2409,7 +2459,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "",
       "Examples:",
       "  sauce actions swap.json --chain base",
-      "  sauce simulate swap.json --chain base --owner 0x… --rpc-url <url> --args 1000000",
+      "  sauce simulate swap.json --chain base --owner 0x… --args 1000000",
     ].join("\n"),
     run: (args, io) => {
       const { file, text } = programText(io, fileOperand(args));
@@ -2425,8 +2475,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   simulate: {
     usage: [
-      "sauce simulate <file | -> --chain <slug|id> (--owner <address> | --pot <address>) --rpc-url <url> [options]",
-      "sauce simulate <file | -> --chain solana --owner <pubkey> --rpc-url <url> [--account NAME=<value>]… [options]",
+      "sauce simulate <file | -> --chain <slug|id> (--owner <address> | --pot <address>) [options]",
+      "sauce simulate <file | -> --chain solana --owner <pubkey> [--account NAME=<value>]… [options]",
     ],
     summary: "Rehearse the cook from the Pot's owner, with no key: what it did, or why it reverts",
     flags: {
@@ -2437,7 +2487,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         type: "string",
         multiple: true,
         value: "<TOKEN:amount>",
-        help: "Give the Pot this balance, for the rehearsal only: USDC:2, ETH:0.1",
+        help: "Give the Pot this balance, in whole tokens, for the rehearsal only: USDC:2, ETH:0.1",
         only: "evm",
       },
       block: {
@@ -2516,11 +2566,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "bytes to shrink: staging it writes a code buffer on chain, which only `sauce run` does.",
       "",
       "Examples:",
-      "  sauce simulate pay.sauce.ts --chain base --owner 0x… --rpc-url <url> \\",
+      "  sauce simulate pay.sauce.ts --chain base --owner 0x… \\",
       "    --assume-balance USDC:2 --args 0x… 1000000",
-      "  sauce simulate sweep.sauce.ts --chain solana --owner <pubkey> --rpc-url <url> \\",
+      "  sauce simulate sweep.sauce.ts --chain solana --owner <pubkey> \\",
       "    --account source=<token account> --account authority=pot",
-      "  sauce simulate sweep.sauce.ts --chain solana --owner <pubkey> --rpc-url <url> \\",
+      "  sauce simulate sweep.sauce.ts --chain solana --owner <pubkey> \\",
       "    --via engine --account source=<token account> --account authority=owner",
     ].join("\n"),
     trailing: "args",
@@ -2587,8 +2637,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   run: {
     usage: [
-      "sauce run <file | -> --chain <slug|id> --rpc-url <url> (--keystore <path> | --private-key <hex>) [options]",
-      "sauce run <file | -> --chain solana --rpc-url <url> --keypair <path> [--account NAME=<value>]… [options]",
+      "sauce run <file | -> --chain <slug|id> (--keystore <path> | --private-key <hex>) [options]",
+      "sauce run <file | -> --chain solana --keypair <path> [--account NAME=<value>]… [options]",
     ],
     summary: "Compile, sign, send and wait for the cook on your Pot",
     flags: {
@@ -2623,9 +2673,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "",
       "--fund TOKEN:amount gets tokens into the Pot in the same cook: the program is wrapped so",
       "it first pulls each amount from you, then runs, then (--sweep) returns what is left. The",
-      "amount is whole units (USDC:1.5) or base units ending in n (USDC:1500000n); ETH:<amount>",
-      "rides as the cook's value. Every pull is a safeTransferFrom: @sauce/token's SafeERC20",
-      "one, or Permit2's own (Solmate's SafeTransferLib). --fund-mode:",
+      "amount is in whole tokens: USDC:1.5 is 1.5 USDC, and USDC:1500000 is 1.5 million (said",
+      "on stderr); base units end in n, as a bigint is written (USDC:1500000n is 1.5 USDC).",
+      "ETH:<amount> rides as the cook's value. Every pull is a safeTransferFrom: @sauce/token's",
+      "SafeERC20 one, or Permit2's own (Solmate's SafeTransferLib). --fund-mode:",
       "  permit2    (default) you sign a Permit2 transfer of exactly this amount to this Pot, once;",
       "             works for every ERC-20, USDT included, and leaves the Pot no allowance. The",
       "             first time, Permit2 needs your approval for the token: asked for, like the Pot.",
@@ -2652,10 +2703,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       ...SUPPORTED_ONLY("Runs"),
       "",
       "Examples:",
-      "  sauce run pay.sauce.ts --chain base --rpc-url <url> --keystore ~/.keys/me.json",
-      "  sauce run sweep.sauce.ts --chain solana --rpc-url <url> --keypair ~/.config/solana/id.json \\",
+      "  sauce run pay.sauce.ts --chain base --keystore ~/.keys/me.json",
+      "  sauce run sweep.sauce.ts --chain solana --keypair ~/.config/solana/id.json \\",
       "    --account source=<token account> --account authority=pot",
-      "  sauce run sweep.sauce.ts --chain solana --rpc-url <url> --keypair ~/.config/solana/id.json \\",
+      "  sauce run sweep.sauce.ts --chain solana --keypair ~/.config/solana/id.json \\",
       "    --via engine --max-execution-fee 10000 --account authority=owner …",
     ].join("\n"),
     trailing: "args",
@@ -2697,7 +2748,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   intent: {
     usage: [
       "sauce intent <verb> [options]",
-      "sauce intent [--config <file>] [--keystore <path> | --private-key <hex>]",
+      "sauce intent [--keystore <path> | --private-key <hex>]",
     ],
     summary: "Publish, fill, prove, claim, refund and cancel cross-chain intents",
     flags: {
@@ -2717,14 +2768,14 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "An intent is a file that opens one (`Base.Portal.send(…).receive(…).then(() => { … })`),",
       "named with the flags it is built with, or its hash once the store keeps it: `publish`, `fill` and",
       "`import` store every intent they touch (--store, default ~/.sauce/intents), and every verb",
-      "takes the hash. With no verb, at a terminal: a list of the stored intents, read live with",
-      "--config, to pick one from, then a menu that runs these verbs on it, with the same",
+      "takes the hash. With no verb, at a terminal: a list of the stored intents, read live from",
+      "the chains, to pick one from, then a menu that runs these verbs on it, with the same",
       "approvals (with a signer, they send). With no terminal, the plain list.",
       "",
       "Examples:",
       "  sauce intent publish                          (guided, at a terminal)",
-      "  sauce intent fill 0x<intent hash> --config sauce.config.json --send --keystore <path>",
-      "  sauce intent claim 0x<intent hash> --config sauce.config.json --keystore <path>",
+      "  sauce intent fill 0x<intent hash> --send --keystore <path>",
+      "  sauce intent claim 0x<intent hash> --keystore <path>",
     ].join("\n"),
     run: async (args, io) => {
       const [verb] = args.positionals;
@@ -2761,7 +2812,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "local MCP server (sauce mcp --wallets). It is a hot wallet: keep small balances in it.",
       "",
       "A policy limits what a wallet sends: <name>.policy.json beside it, every field optional and",
-      "every amount a string (whole units, or base units ending in n):",
+      'every amount a string in whole tokens ("100" is 100 USDC), or base units ending in n:',
       '  { "chains": ["base"], "to": ["0x…"],',
       '    "native": { "perTransaction": "0.01", "perDay": "0.05" },',
       '    "tokens": { "USDC": { "perTransaction": "100", "perDay": "500" } } }',
@@ -2771,7 +2822,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "",
       "Examples:",
       "  sauce wallet new agent --password-env SAUCE_WALLET_PASSWORD",
-      "  sauce run pay.sauce.ts --chain base --config sauce.config.json --wallet agent \\",
+      "  sauce run pay.sauce.ts --chain base --wallet agent \\",
       "    --password-env SAUCE_WALLET_PASSWORD --args 0x… 1000000",
     ].join("\n"),
     run: (args, io) => {
@@ -2786,25 +2837,26 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   tx: {
     usage: [
       "sauce tx <file | -> --chain <slug|id> (--owner <address> | --pot <address>) [options]",
-      "sauce tx <file | -> --chain solana --owner <pubkey> --rpc-url <url> [--account NAME=<value>]… [options]",
+      "sauce tx <file | -> --chain solana --owner <pubkey> [--account NAME=<value>]… [options]",
     ],
     summary: "Print the unsigned cook transaction, for a wallet to sign",
     flags: { ...PROGRAM, ...COOK, ...ENDPOINT, ...FORMAT, ...HELP, ...ARGS },
     details: [
       "Compiles the file and prints the transaction that runs it, unsigned, as JSON:",
-      "{ chainId, to: the Pot, data: Pot.cook(engine, program ++ arguments), value }. Give the",
-      "value, or an endpoint to read the Kitchen's fee (it also checks the Pot). `--format cast`",
-      "prints the same transaction as a `cast send` line instead. What must be true for it to",
-      "land goes to stderr: the Pot deployed and funded, and sent from its owner.",
+      "{ chainId, to: the Pot, data: Pot.cook(engine, program ++ arguments), value }. The value",
+      "is --value, or else the Kitchen's fee, read from the chain, which also checks the Pot.",
+      "`--format cast` prints the same transaction as a `cast send` line instead. What must be",
+      "true for it to land goes to stderr: the Pot deployed and funded, and sent from its owner.",
       "",
       "On Solana: { chain, via, feePayer, pot, fee, maxExecutionFee, transaction }, the Kitchen",
       "cook as a base64 transaction signed by no one, for --owner to sign — or, --via engine, the",
-      "engine's own paid cook, with no Pot. It needs an endpoint (for the blockhash and the fee),",
+      "engine's own paid cook, with no Pot. It reads the cluster (for the blockhash and the fee),",
       "and the --account flags simulate takes; --max-execution-fee refuses a fee above it.",
       ...SUPPORTED_ONLY("Prints the transaction"),
       "",
       "Example:",
-      "  sauce tx pay.sauce.ts --chain base --owner 0x… --value 0",
+      "  sauce tx pay.sauce.ts --chain base --owner 0x…",
+      "  sauce tx pay.sauce.ts --chain base --owner 0x… --value 0 --offline",
     ].join("\n"),
     trailing: "args",
     run: async (args, io, trailing) => {
@@ -2849,7 +2901,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "zero: the one Pot an owner has by default. With a signer and no --owner, it is the",
       "signer's own Pot, so `sauce pot --chain base --keystore <keystore>` prints your address and",
       "your Pot (the keystore's own address field is read, with no password, where it has one).",
-      "With an endpoint and no --deploy, it also reads",
+      "Without --deploy it also reads",
       "the chain: whether the released engine and Kitchen are there, the Kitchen's fee, and",
       "whether the Pot is deployed and whose it is (under `deployment`, and on stderr).",
       "",
@@ -2860,9 +2912,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "",
       "Examples:",
       "  sauce pot --owner 0x… --chain base",
-      "  sauce pot --deploy --chain base --rpc-url <url> --keystore ~/.keys/me.json --salt treasury",
-      "  sauce pot --deploy --chain base --owner 0x… --config sauce.config.json --keystore <keystore>",
-      "  sauce pot --deploy --chain solana --rpc-url <url> --keypair ~/.config/solana/id.json",
+      "  sauce pot --deploy --chain base --keystore ~/.keys/me.json --salt treasury",
+      "  sauce pot --deploy --chain base --owner 0x… --keystore <keystore>",
+      "  sauce pot --deploy --chain solana --keypair ~/.config/solana/id.json",
     ].join("\n"),
     run: async (args, io) => {
       if (args.positionals.length > 0) {
@@ -2970,9 +3022,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "their addresses and decimals, protocol namespaces with each contract's address (and,",
       "with --protocol, its methods), the chain names that open intents, the defines, and the",
       "zero-import @sauce/token functions. With no filter it lists everything but the chain's",
-      "tokenized stocks, which it counts: Ethereum has over a thousand. A stock token is named",
-      "like any other (SPCXc.balanceOf(...)); --stocks lists them with what each one is, and",
-      "--search finds one by symbol, company name or ticker.",
+      "tokenized stocks, which it counts: Ethereum and Solana have over a thousand each. A stock",
+      "token is named like any other (SPCXc.balanceOf(...), balanceOf(TSLAx, account) on",
+      "Solana); --stocks lists them with what each one is, and --search finds one by symbol,",
+      "company name or ticker.",
       "",
       "Examples:",
       "  sauce globals --chain base",
@@ -2998,16 +3051,22 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   price: {
     usage: [
-      "sauce price --chain <slug|id> <price> <quote> per <base> [--rpc-url <url>] [--json]",
+      "sauce price --chain <slug|id> <price> <quote> per <base> [--offline] [--json]",
       "sauce price --chain <slug|id> <base> <quote> (<price> | --sqrt-price-x96 <value>) [--json]",
+      "sauce price --chain <slug|id> <base> <quote> --pool <address> [--json]",
     ],
-    summary: "Turn a price into a pool's sqrtPriceX96 and a swap's limit and average-price floor",
+    summary: "Turn a price into a pool's sqrtPriceX96 and a swap's limits, maxPrice included",
     flags: {
       chain: { type: "string", value: "<slug|id>", help: "The chain the pool is on" },
       "sqrt-price-x96": {
         type: "string",
         value: "<value>",
         help: "Read a pool's sqrtPriceX96 as a price instead",
+      },
+      pool: {
+        type: "string",
+        value: "<address>",
+        help: "Read the price from this V3-style pool of the pair now (needs an endpoint)",
       },
       ...ENDPOINT,
       ...JSON_FLAG,
@@ -3020,22 +3079,30 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "its decimals (0x…:18); with an endpoint, an address alone, its decimals read from the",
       "token. The first line says what the price means, both ways round",
       "(1 WETH = 2700 USDC, 1 USDC = 0.00037… WETH). Then the pool's sqrtPriceX96 at that price,",
-      "for the pair's order on the chain (token0 is the lower address), and for each direction:",
+      "for the pair's order on the chain (token0 is the lower address), and for each direction",
+      "(selling the base token, then buying it):",
       "  sqrtPriceLimitX96  the same number as a swap's limit: a floor when selling token0, a",
       "                     ceiling when selling token1",
-      "  minAvgPrice        output units per input unit times 1e18, rounded up, for a program's",
-      "                     check out * 1e18 >= minAvgPrice * spent",
+      "  maxPrice           input units paid per output unit bought, times 1e18, rounded down:",
+      "                     the price times 10^(18 + input decimals - output decimals), the",
+      "                     distributed swap's maxPrice, as sauce pools prints it",
+      "  maxAvgPrice        the same number, as the distributed swap's maxAvgPrice",
+      "  minAvgPrice        the other way round, output units received per input unit times",
+      "                     1e18, rounded up, for a check out * 1e18 >= minAvgPrice * spent",
       "Uniswap V3 and V4 and their forks share this price. With --sqrt-price-x96, a pool's",
-      "price is read back the other way.",
+      "price is read back the other way. With --pool, it is read from that pool of the pair now:",
+      "a Uniswap V3, PancakeSwap V3 or Aerodrome Slipstream pool (sauce pools lists them), named",
+      "by its venue when the registry's factory made it.",
       "",
-      "With --rpc-url (or --config), it also reads the pair's price now, from its deepest Uniswap",
-      "V3 pool on the chain, and warns when the price given is 10x or more away from it, saying so",
-      "when the price looks written the wrong way round. Without, nothing reaches a network.",
+      "It also reads the pair's price now, from its deepest Uniswap V3 pool on the chain, and",
+      "warns when the price given is 10x or more away from it, saying so when the price looks",
+      "written the wrong way round. With --offline, nothing reaches a network.",
       "",
       "Examples:",
       "  sauce price --chain base 2700 USDC per WETH",
-      "  sauce price --chain base 2700 USDC per WETH --rpc-url <url>",
+      "  sauce price --chain base 2700 USDC per WETH --offline",
       "  sauce price --chain base WETH USDC --sqrt-price-x96 4116816085950893928074568",
+      "  sauce price --chain base SPCXc USDC --pool 0x0bf58fe0FAc935Ac69595c19B12Ba0d75E3F8c0E",
     ].join("\n"),
     run: async (args, io) => {
       const chain = pricedChain(parseChain(requiredFlag(args, "chain", "<slug|id>")));
@@ -3051,20 +3118,32 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         );
       }
       if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}`);
-      const given = priceGiven(price, sqrt);
+      const poolGiven = stringFlag(args, "pool");
+      if (poolGiven !== undefined && (price !== undefined || sqrt !== undefined)) {
+        throw new UsageError("give <price>, --sqrt-price-x96 or --pool: one of them");
+      }
+      const poolAddress = poolGiven === undefined ? undefined : parseAddress("pool", poolGiven);
+      const given = poolAddress === undefined ? priceGiven(price, sqrt) : undefined;
 
-      const reach =
-        stringFlag(args, "rpc-url") !== undefined || stringFlag(args, "config") !== undefined;
-      const client = reach ? await connect(requiredEndpoint(args, io, chain), chain) : undefined;
+      // A pool is read now, so --pool needs an endpoint; a price reads the pair's now with one.
+      const url =
+        poolAddress === undefined ? endpoint(args, io, chain) : requiredEndpoint(args, io, chain);
+      const reach = url !== undefined;
+      const client = url === undefined ? undefined : await connect(url, chain);
       // A token the chain registers no decimals for has them read from it, with an endpoint.
       const [baseToken, quoteToken] = await resolvePriceTokens([base, quote], chain, client);
       const pair = { base: baseToken!, quote: quoteToken! };
+      if (poolAddress !== undefined) {
+        const pool = await readPoolAt(client!, chain, poolAddress);
+
+        return priceCommand({ chain, ...pair, price: { sqrtPriceX96: pool.sqrtPriceX96 }, pool });
+      }
       const live =
         client === undefined ? undefined : await livePrice(client, chain, pair.base, pair.quote);
       const output = priceCommand({
         chain,
         ...pair,
-        price: given,
+        price: given!,
         ...(live === undefined ? {} : { live }),
       });
 
@@ -3082,7 +3161,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   pools: {
     usage:
-      "sauce pools --chain <slug|id> <token> <token> [--v4-key <fee:spacing>]… (--rpc-url <url> | --config <file>) [--json]",
+      "sauce pools --chain <slug|id> <token> <token> [--v4-key <fee:spacing>]… [--block <number|tag>] [--json]",
     summary: "List a pair's price-limit pools on a chain, deepest first, with their prices",
     flags: {
       chain: { type: "string", value: "<slug|id>", help: "The chain the pools are on" },
@@ -3091,6 +3170,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         multiple: true,
         value: "<fee:spacing>",
         help: "Also try this hookless Uniswap V4 pool key (3000:60)",
+      },
+      block: {
+        type: "string",
+        value: "<number|tag>",
+        help: "Read the pools at this block: a number, or latest, safe, finalized (default: latest)",
       },
       ...ENDPOINT,
       ...JSON_FLAG,
@@ -3115,13 +3199,14 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "through the pool's ticks. Pools with no liquidity at their price are listed after them, as",
       "skipped. Then what was looked at.",
       "",
-      "It reads the chain in five requests, each one eth_call for every read in it, and needs an",
-      "endpoint: --rpc-url, or --config with the chain's entry.",
+      "It reads the chain in five requests, each one eth_call for every read in it, all at one",
+      "block, which it names: --block, or the latest when it starts. Pass that block to sauce",
+      "simulate --block to rehearse on the prices maxPrice was taken from.",
       "",
       "Examples:",
-      "  sauce pools --chain base USDC WETH --config sauce.config.json",
-      "  sauce pools --chain base USDC 0x… --rpc-url <url> --json",
-      "  sauce pools --chain base WETH USDC --v4-key 50:1 --config sauce.config.json",
+      "  sauce pools --chain base USDC WETH",
+      "  sauce pools --chain base USDC 0x… --json",
+      "  sauce pools --chain base WETH USDC --v4-key 50:1",
     ].join("\n"),
     run: async (args, io) => {
       const chain = parseChain(requiredFlag(args, "chain", "<slug|id>"));
@@ -3136,21 +3221,24 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         );
       }
       const v4Keys = repeatedFlag(args, "v4-key").map((raw) => parseV4Key(raw));
-
-      return poolsCommand({
+      // Every read at one block, which the report names.
+      const { client, block } = await connectAt(
+        requiredEndpoint(args, io, chain),
         chain,
-        client: await connect(requiredEndpoint(args, io, chain), chain),
-        tokens: [first, second],
-        v4Keys,
-      });
+        stringFlag(args, "block"),
+      );
+
+      return poolsCommand({ chain, client, tokens: [first, second], v4Keys, block });
     },
   },
   inspect: {
     usage:
-      "sauce inspect <hex | tx-hash | file | -> [--chain <slug|id>] [--source <file | ->] [options]",
+      "sauce inspect <hex | tx-hash | file | -> [--chain <slug|id>] [--source <file | ->] [options] [--args <value>…]",
     summary: "Take a cook, a Portal or Kitchen call, a program or a file apart",
+    trailing: "args",
     flags: {
       ...PROGRAM,
+      "args-json": COOK["args-json"]!,
       source: {
         type: "string",
         value: "<file>",
@@ -3159,23 +3247,26 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       ...ENDPOINT,
       ...JSON_FLAG,
       ...HELP,
+      ...ARGS,
     },
     details: [
       "Reads what a SauceScript author wrote back out of bytes: a Pot.cook (its engine, its",
       "program, the intents the program opens), a Kitchen.deployPot (the Pot it makes), a Portal",
       "publish or publishAndFund (the route and the reward), an ERC-20 call, or a bare program.",
-      "A 32-byte hash with --rpc-url (or --config and --chain) is a transaction, fetched first.",
+      "A 32-byte hash with --chain (or --rpc-url) is a transaction, fetched first.",
       "With --source, a cook's program is checked against that file's and the arguments after it",
       "are decoded against its main. A file operand is compiled and its intents listed, with",
-      "each value it measures at run time named. No opcode listing: programs are reported by",
+      "each value it measures at run time named; with --args, main's arguments are bound into",
+      "them, as `sauce intent publish` binds them. No opcode listing: programs are reported by",
       "size, hash and what they open.",
       "",
       "Examples:",
       "  sauce inspect 0x… --chain base --source split.sauce.ts",
-      "  sauce inspect 0x<tx hash> --rpc-url <url>",
-      "  sauce inspect bridge.sauce.ts --chain arbitrum --intent-deadline 2000000000 --intent-creator 0x…",
+      "  sauce inspect 0x<tx hash> --chain base",
+      "  sauce inspect bridge.sauce.ts --chain arbitrum --intent-deadline 2000000000 --intent-creator 0x… \\",
+      "    --args 1000000 0x…",
     ].join("\n"),
-    run: async (args, io) => {
+    run: async (args, io, trailing) => {
       const [operand, ...extra] = args.positionals;
       // `-`: stdin carries the hex, the hash or the program — whichever it reads as.
       const piped = operand === "-" ? io.readStdin().trim() : undefined;
@@ -3187,13 +3278,22 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         if (stringFlag(args, "source") !== undefined) {
           throw new UsageError("--source goes with hex: a file operand is its own source");
         }
+        const given = argsInput(args, io, trailing);
         const input = await programInput(
           args,
           io,
           piped === undefined ? fileOperand(args) : { file: STDIN, text: piped, stdin: true },
+          undefined,
+          undefined,
+          given.args === undefined ? undefined : given,
         );
 
         return inspectFile(input.file, compileProgram(input, io));
+      }
+      if (argsInput(args, io, trailing).args !== undefined) {
+        throw new UsageError(
+          "--args gives a file's main its arguments; a cook's are decoded from its bytes",
+        );
       }
       const hex =
         piped === undefined
@@ -3206,8 +3306,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       const fetched = TX_HASH.test(hex) ? await transactionEndpoint(args, io) : undefined;
       if (TX_HASH.test(hex) && fetched === undefined) {
         throw new UsageError(
-          "32 bytes of hex is a transaction hash: give --rpc-url <url> (or --config <file> with " +
-            "--chain) to fetch it",
+          args.values.offline === true
+            ? "32 bytes of hex is a transaction hash, to fetch, and --offline reads no chain"
+            : "32 bytes of hex is a transaction hash: give --chain <slug|id> (or --rpc-url " +
+                "<url>) to fetch it",
         );
       }
       const source =
@@ -3232,7 +3334,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   verify: {
     usage:
-      "sauce verify <payload | calldata | tx-hash> [--pin <hash:bytes>]… [--engine <address>]… [--rpc-url <url>]",
+      "sauce verify <payload | calldata | tx-hash> [--pin <hash:bytes>]… [--engine <address>]… [--chain <slug|id>]",
     summary: "Check that a payload, cook or intent runs the audited settle program",
     flags: {
       pin: {
@@ -3264,22 +3366,22 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
     details: [
       "Takes a settle payload, Pot.cook calldata, Portal.publish[AndFund] calldata, or — with an",
-      "endpoint — a transaction hash, and checks the settle it carries with the SDK's",
+      "--chain — a transaction hash, and checks the settle it carries with the SDK's",
       "validateSettleProgram: the program must hash to the current pin (or a --pin), and its",
       "arguments must be the one canonical encoding. Prints tokens, minOut and recipient. A cook",
       "must name the released engine (or an --engine); an intent must carry a settle cook. A",
       "rejection exits 1 with its code: the SDK's SettleFailureCode, or UNKNOWN_ENGINE or",
       "NO_SETTLE.",
       "",
-      "On Solana (--chain solana, a transaction signature and an endpoint): an SVM settle's",
+      "On Solana (--chain solana and a transaction signature): an SVM settle's",
       "floor and split are compiled into it, so give them, --min-out and --spl-count. The",
       "engine invocation the cook made is checked by the SDK's verifySvmSettleExecution against",
       "the settle recompiled for those values; a rejection is NO_SETTLE or NOT_GENUINE.",
       "",
       "Examples:",
       "  sauce verify 0x<payload>",
-      "  sauce verify 0x<tx hash> --rpc-url <url> --pin 0x…:435",
-      "  sauce verify <signature> --chain solana --rpc-url <url> --min-out 0 --spl-count 1",
+      "  sauce verify 0x<tx hash> --chain base --pin 0x…:435",
+      "  sauce verify <signature> --chain solana --min-out 0 --spl-count 1",
     ].join("\n"),
     run: async (args, io) => {
       const chainFlag = stringFlag(args, "chain");
@@ -3336,6 +3438,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "index of the skills into a block of AGENTS.md, for a tool that reads that file but no",
       "skills directory. update and status take the targets installed.",
       "",
+      "Each skills directory also gets tsconfig.json, the SauceScript project sauce init",
+      "<dir> --tsconfig writes, so an editor types the skills' example programs. It is installed,",
+      "updated and reported like a skill file.",
+      "",
       "  install  The first install. Never overwrites: on a project already installed it says",
       "           whether the skills are current, and to run update if not.",
       "  update   Adds new skill files, replaces changed ones, removes retired ones. A file edited",
@@ -3390,6 +3496,52 @@ const COMMANDS: Readonly<Record<string, Command>> = {
               : updateTarget(project, source, target, args.values.force === true)
             ).lines,
         ),
+      );
+    },
+  },
+  update: {
+    usage: "sauce update [--check] [--version <version|tag>] [--json]",
+    summary: "Update this sauce command, the way it was installed",
+    flags: {
+      check: {
+        type: "boolean",
+        help: "Say which version is installed and which an update installs; install nothing",
+      },
+      version: {
+        type: "string",
+        value: "<version|tag>",
+        help: "The version or dist-tag to install (default: latest)",
+      },
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Updates the copy of the package this sauce runs from, the way it was installed, which its",
+      "own path says:",
+      "  a global install    npm, pnpm, yarn or bun installs the version globally again, run with",
+      "                      no shell (npm with the prefix this copy is under), and the command",
+      "                      prints the version before and after",
+      "  a project's copy    the project updates it: the command its package manager takes is",
+      "                      printed, pinned exactly, and nothing runs",
+      "  npx's cache         the npx -y command that runs the latest is printed",
+      "  anything else       refused, with npm's global install of it",
+      "After a global update, skills installed in the current directory (sauce skills status) are",
+      "updated by the NEW sauce, and what changed is printed.",
+      "",
+      "The version comes from the npm registry, read when this command runs and at no other time:",
+      "sauce never checks for updates by itself. --check reads it and installs nothing.",
+      "",
+      "Examples:",
+      "  sauce update --check",
+      "  sauce update",
+      "  sauce update --version 1.2.0",
+    ].join("\n"),
+    run: async (args, io) => {
+      const version = stringFlag(args, "version");
+
+      return updateCommand(
+        { check: args.values.check === true, ...(version === undefined ? {} : { version }) },
+        io.updater,
       );
     },
   },
@@ -3474,7 +3626,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         "Next:",
         ...(dir === "." ? [] : [`  cd ${dir}`]),
         ...(args.values.install === true ? [] : ["  npm install"]),
-        "  npx sauce --help",
+        "  sauce --help",
       ]);
     },
   },
@@ -3495,6 +3647,16 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "sauce_install_skills) and as resources, at sauce://skills/<path>. It takes no key: every",
       "transaction comes back unsigned, for the user's own wallet.",
       "",
+      "A coding agent starts the server itself, from its MCP configuration. Add it once:",
+      "  claude mcp add sauce -- sauce mcp    # Claude Code",
+      "  codex mcp add sauce -- sauce mcp     # OpenAI Codex",
+      "  gemini mcp add sauce sauce mcp       # Gemini CLI",
+      "  sauce mcp setup                      # every project file at once",
+      "Claude Desktop (claude_desktop_config.json) and Cursor (.cursor/mcp.json) take the entry",
+      '  "sauce": { "command": "sauce", "args": ["mcp"] }',
+      "under mcpServers, and VS Code (.vscode/mcp.json) under servers. A desktop client that does",
+      "not find `sauce` on its PATH takes the absolute path `which sauce` prints as the command.",
+      "",
       "Over stdio, --wallets (the wallet directory, default ~/.sauce/wallets) and a password",
       "source add sauce_wallet_create, sauce_wallet_list and sauce_wallet_send: the server then",
       "signs with the wallets of that directory alone, unlocked by that password, which it reads",
@@ -3506,18 +3668,19 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "Over stdio by default, what a coding agent launches. With --http, Streamable HTTP at /mcp,",
       "stateless: on 127.0.0.1 unless --host says otherwise, answering only a loopback Host or an",
       "--allowed-host one. It authenticates no one, so off loopback it needs --allowed-host, and",
-      "goes behind your own authentication. The chains it reads are --config's; it reads no",
-      "environment, and never shows a URL from the file.",
+      "goes behind your own authentication. It reads a chain through a caller's rpcUrl, else",
+      "--config's entry for it, else a built-in public endpoint; it reads no environment, and never",
+      "shows a URL from the file.",
       "",
       "setup adds the server to a project for each agent, in the file its vendor documents:",
       ".mcp.json (claude), .codex/config.toml (codex), .cursor/mcp.json (cursor),",
       ".vscode/mcp.json (copilot) and .gemini/settings.json (gemini), keeping what else each holds.",
       "",
       "Examples:",
-      "  npx -y @eco-incorp/sauce mcp",
-      "  npx -y @eco-incorp/sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD",
-      "  npx -y @eco-incorp/sauce mcp --http 3000 --config sauce.config.json",
-      "  npx sauce mcp setup --agent claude,cursor",
+      "  sauce mcp",
+      "  sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD",
+      "  sauce mcp --http 3000",
+      "  sauce mcp setup --agent claude,cursor",
     ].join("\n"),
     run: (args, io) => mcpCommand(args, io),
   },
@@ -3539,9 +3702,14 @@ function render(command: Command, output: CommandOutput, args: ParsedArgs): stri
     : output.text;
 }
 
-/** The flags of `command` that `only` names (`undefined`: those every chain takes). */
-const flagsFor = (command: Command, only?: "evm" | "svm"): FlagSpecs =>
-  Object.fromEntries(Object.entries(command.flags).filter(([, spec]) => spec.only === only));
+/** The flags of `command` that `only` names (`undefined`: those every chain takes), the low-level
+ *  ones apart. */
+const flagsFor = (command: Command, only?: "evm" | "svm" | "low-level"): FlagSpecs =>
+  Object.fromEntries(
+    Object.entries(command.flags).filter(([, spec]) =>
+      only === "low-level" ? spec.lowLevel === true : spec.only === only && spec.lowLevel !== true,
+    ),
+  );
 
 function commandHelp(command: Command): string {
   const usage = typeof command.usage === "string" ? [command.usage] : command.usage;
@@ -3550,6 +3718,7 @@ function commandHelp(command: Command): string {
       ["Options:", undefined],
       ["EVM chains only:", "evm"],
       ["Solana only:", "svm"],
+      ["Low-level (a program's inputs are main's parameters, given with --args):", "low-level"],
     ] as const
   ).flatMap(([heading, only]) => {
     const flags = flagsFor(command, only);
@@ -3595,9 +3764,10 @@ function mainHelp(): string {
       ([name, command]) => `  ${name.padEnd(width)}  ${command.summary}`,
     ),
     "",
-    "Run `sauce <command> --help` for its options. Nothing reaches a network without --rpc-url",
-    "or --config, and nothing is signed without --wallet, --keystore or --private-key (on",
-    "Solana, --wallet or --keypair). A password is read only from the source named:",
+    "Run `sauce <command> --help` for its options. A command reads a chain through a built-in",
+    "public endpoint, which can be slow or rate-limited, unless --rpc-url or --config gives your",
+    "own (--offline reads none). Nothing is signed without --wallet, --keystore or --private-key",
+    "(on Solana, --wallet or --keypair). A password is read only from the source named:",
     "--password-env NAME (that variable, the one read of the environment), --password-file or",
     "--password-command; else it is asked for.",
     "",
@@ -3699,7 +3869,7 @@ const SIGNING = new Set([
   "private-key",
   "keypair",
 ]);
-const REACHING = new Set(["rpc-url", "config"]);
+const REACHING = new Set(["rpc-url", "config", "offline"]);
 
 /** Why `flag`, which another command takes, is not one of `name`'s (`intent fill`, say). */
 function notTaken(name: string, flag: string): string {
@@ -3787,6 +3957,15 @@ export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<num
     }
     const foreign = Object.keys(args.values).find((flag) => !(flag in command.flags));
     if (foreign !== undefined) throw new UsageError(notTaken(label, foreign));
+    // A command that reads a chain reads it, with no endpoint of the user's, through the built-in
+    // public ones: their forwarder starts before the command asks for one.
+    if ("config" in command.flags) {
+      const own = ["rpc-url", "config"].find((flag) => args.values[flag] !== undefined);
+      if (args.values.offline === true && own !== undefined) {
+        throw new UsageError(`--offline reads no chain: give it without --${own}`);
+      }
+      if (args.values.offline !== true) await io.publicRpcs?.ready();
+    }
     const output = await command.run(args, io, trailing);
     if (output === undefined) return 0;
     for (const note of output.notes ?? []) io.stderr(`${note}\n`);

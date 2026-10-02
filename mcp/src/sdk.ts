@@ -24,6 +24,7 @@ export {
 } from "../../sdk/dist/cli/args.js";
 export {
   connect,
+  connectAt,
   endpointFor,
   kitchenFee,
   potState,
@@ -45,6 +46,7 @@ export {
 export { globalsCommand } from "../../sdk/dist/cli/globals.js";
 export {
   assumedBalances,
+  bindMainArguments,
   definesReach,
   fundingFor,
   potTarget,
@@ -58,7 +60,7 @@ export type {
   McpSetupOptions,
   McpWallets,
 } from "../../sdk/dist/cli/mcp.js";
-export { MAX_V4_KEYS, parseV4Key, poolsCommand } from "../../sdk/dist/cli/pools.js";
+export { MAX_V4_KEYS, parseV4Key, poolsCommand, readPoolAt } from "../../sdk/dist/cli/pools.js";
 export {
   priceCommand,
   pricedChain,
@@ -85,6 +87,7 @@ export {
   intentStatus,
   type IntentRecord,
 } from "../../sdk/dist/cli/lifecycle.js";
+export { publicEndpoints, type PublicEndpoints } from "../../sdk/dist/cli/public-endpoints.js";
 export { publishCommand } from "../../sdk/dist/cli/publish.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";
 export {
@@ -108,6 +111,7 @@ export {
 export { noPolicyNote, PolicyRefusal, readPolicy } from "../../sdk/dist/cli/policy.js";
 export { walletName, WalletStore, type WalletKind } from "../../sdk/dist/cli/wallets.js";
 export { simulateCommand } from "../../sdk/dist/cli/simulate.js";
+export { installedViem } from "../../sdk/dist/cli/init.js";
 export { PACKAGED_SKILLS, targetsFor as skillTargets } from "../../sdk/dist/cli/skills.js";
 export {
   parseAccounts,

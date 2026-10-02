@@ -19,7 +19,7 @@ On Ethereum, `Connext` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's everclearSpoke, `0xa05A3380889115bf313f1Db9d5f335157Be4D816`.
-  require(Connext.EverclearSpoke != 0n);
+  require(Connext.EverclearSpoke != 0);
 }
 ```
 

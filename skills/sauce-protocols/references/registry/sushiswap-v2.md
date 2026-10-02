@@ -19,7 +19,7 @@ On Ethereum, `SushiswapV2` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's factory, `0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac`.
-  require(SushiswapV2.Factory != 0n);
+  require(SushiswapV2.Factory != 0);
 }
 ```
 

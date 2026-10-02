@@ -164,15 +164,16 @@ describe("sourceGlobals: the names a program on a chain may use", () => {
     // Solana: its mints as 32-byte keys, no EVM contracts, the SVM arm's functions.
     const solana = sourceGlobals("solana");
     expect(solana.tokens).toEqual(
-      SVM_TOKEN_REGISTRY["mainnet-beta"].map(
-        ({ symbol, address, decimals, mint, tokenProgram }) => ({
+      SVM_TOKEN_REGISTRY["mainnet-beta"]
+        .map(({ symbol, address, decimals, mint, tokenProgram, stock }) => ({
           symbol,
           address,
           decimals,
           mint,
           tokenProgram,
-        }),
-      ),
+          ...(stock === undefined ? {} : { stock }),
+        }))
+        .sort((a, b) => (a.symbol < b.symbol ? -1 : a.symbol > b.symbol ? 1 : 0)),
     );
     expect(solana.protocols).toEqual([]);
     expect(solana.modules[0]!.functions).toContain(
@@ -214,6 +215,19 @@ describe("sauce globals", () => {
     expect((full.defines as Record<string, unknown>).chainId).toBe("8453");
     expect((full.defines as Record<string, unknown>).USDC).toBe(
       "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    );
+  });
+
+  it("lists Tether's token where it is USDT0 as USDT0, the symbol a program there writes", async () => {
+    const run = await sauce("globals", "--chain", "arbitrum", "--tokens");
+    expect(run.code).toBe(0);
+    expect(run.stdout).toMatch(
+      /^ {2}USDT0 {2}0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9 {2}6 decimals$/m,
+    );
+    expect(run.stdout).not.toMatch(/^ {2}USDT /m);
+    const defines = json(await sauce("globals", "--chain", "polygon", "--json")).defines;
+    expect((defines as Record<string, unknown>).USDT0).toBe(
+      "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
     );
   });
 
@@ -277,6 +291,46 @@ describe("sauce globals", () => {
     });
     expect(out.devnetTokens).toContainEqual(devnet);
     expect((out.defines as Record<string, unknown>).USDC).toBe(usdc.address);
+  });
+
+  it("counts Solana's stock mints, lists them with --stocks and finds one with --search", async () => {
+    const count = SVM_TOKEN_REGISTRY["mainnet-beta"].filter((row) => row.stock).length;
+    const all = await sauce("globals", "--chain", "solana", "--tokens");
+    expect(all.stdout).toContain(
+      `  And ${count} stock tokens, named the same way: --stocks lists them`,
+    );
+    expect(all.stdout).not.toContain("TSLAx");
+    const stocks = await sauce("globals", "--chain", "solana", "--stocks");
+    expect(stocks.stdout).toContain(
+      `Stock tokens (${count}): tokenized stocks, each a Token-2022 mint`,
+    );
+    expect(stocks.stdout).not.toMatch(/^ {2}USDC /m);
+    // A devnet program has no stocks to pass: none are listed for it.
+    expect(stocks.stdout).not.toContain("On devnet");
+    // Found by the company's name, its ticker or the symbol, without regard to case: Backpack's
+    // SpaceX by the ticker the others name it by, PreStocks' by its own symbol.
+    for (const text of ["spacex", "SPCX", "space"]) {
+      const found = await sauce("globals", "--chain", "solana", "--search", text);
+      expect(found.stdout).toMatch(
+        /^ {2}SPCX_US +SPCXxcqXj6e5dJDVNovHN8744zkbhM2bYudU45BimGb +0x[0-9a-f]{64} {2}6 decimals, Token-2022 {2}SpaceX \(SPCX, Backpack Securities\)$/m,
+      );
+    }
+    const out = json(await sauce("globals", "--chain", "solana", "--search", "spacex", "--json"));
+    const tokens = out.tokens as Array<{ symbol: string; stock?: Record<string, string> }>;
+    expect(tokens.map((token) => token.symbol).sort()).toEqual([
+      "SPACEX",
+      "SPCX_US",
+      "SPCXon",
+      "SPCXx",
+    ]);
+    expect(tokens.find((token) => token.symbol === "SPACEX")!.stock).toEqual({
+      issuer: "prestocks",
+      name: "SpaceX",
+      ticker: "SPACEX",
+      issuerName: "PreStocks",
+      source: "https://prestocks.com/products",
+    });
+    expect(out.devnetTokens).toEqual([]);
   });
 
   it("lists the interfaces a program calls with its own address, and their methods", async () => {
@@ -515,7 +569,7 @@ describe("sauce inspect", () => {
   it("asks for an endpoint for a transaction hash, and reads a non-hex operand as a file", async () => {
     const hash = await sauce("inspect", `0x${"ab".repeat(32)}`);
     expect(hash.code).toBe(2);
-    expect(hash.stderr).toMatch(/32 bytes of hex is a transaction hash: give --rpc-url/);
+    expect(hash.stderr).toMatch(/32 bytes of hex is a transaction hash: give --chain <slug\|id>/);
     const missing = await sauce("inspect", join(work, "nope.sauce.ts"), "--chain", "base");
     expect(missing.code).toBe(1);
     expect(missing.stderr).toMatch(/nope\.sauce\.ts: no such file/);

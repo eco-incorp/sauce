@@ -15,7 +15,7 @@
  */
 import { CANONICAL_CHAINS, type CanonicalChain } from "../../sdk/dist/chains/canonical.js";
 import { getChain, nativeErc20 } from "../../sdk/dist/chains/index.js";
-import { sourceGlobals, TOKEN_REGISTRY } from "../../sdk/dist/routes/index.js";
+import { sourceGlobals, SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../../sdk/dist/routes/index.js";
 import { NAMESPACE_KEYS } from "../../sdk/dist/routes/accessor-index.js";
 
 import { ACTION_SPECS, type FieldKind } from "./spec.js";
@@ -35,9 +35,16 @@ export const STOCK_SYMBOL_RE = /^(?=[^A-Z]*[A-Z])[A-Za-z][A-Za-z0-9_]{1,15}$/;
 
 /** Every tokenized stock's symbol the registry has, on any chain: which chain is the compile's. */
 const STOCK_SYMBOLS: ReadonlySet<string> = new Set(
-  Object.values(TOKEN_REGISTRY).flatMap((rows) =>
+  [...Object.values(TOKEN_REGISTRY), SVM_TOKEN_REGISTRY["mainnet-beta"]].flatMap((rows) =>
     rows.filter((row) => row.stock !== undefined).map((row) => row.symbol),
   ),
+);
+
+/** Solana's stock symbols: a document cannot use one, since action programs run on EVM chains. */
+const SOLANA_STOCK_SYMBOLS: ReadonlySet<string> = new Set(
+  SVM_TOKEN_REGISTRY["mainnet-beta"]
+    .filter((row) => row.stock !== undefined)
+    .map((row) => row.symbol),
 );
 
 /** True for a token symbol: the uppercase ticker shape, or a tokenized stock's own symbol. */
@@ -48,7 +55,7 @@ export function isTokenSymbol(value: string): boolean {
 /** The registry's spelling of `value` written in another case (`spcxc` is `SPCXc`), if any. */
 export function registrySpelling(value: string): string | undefined {
   const wanted = value.toUpperCase();
-  for (const rows of Object.values(TOKEN_REGISTRY)) {
+  for (const rows of [...Object.values(TOKEN_REGISTRY), SVM_TOKEN_REGISTRY["mainnet-beta"]]) {
     const row = rows.find((candidate) => candidate.symbol.toUpperCase() === wanted);
     if (row !== undefined) return row.symbol;
   }
@@ -190,16 +197,22 @@ function missingToken(symbol: string, names: ChainNames): string {
     names.tokens.size === 0
       ? "which registers no token symbols"
       : `whose tokens are ${list(known)}${stocks}`;
-  // A stock token is on one chain or two: say which, for a document compiled for another.
-  const on = (CANONICAL_CHAINS as readonly CanonicalChain[]).filter(
-    (chain) =>
-      chain.kind === "evm" && STOCK_SYMBOLS.has(symbol) && chainNames(chain).tokens.has(symbol),
-  );
+  // A stock token is on a chain or a few: say which, for a document compiled for another. Solana's
+  // are named too, though no action program runs there.
+  const on = [
+    ...(CANONICAL_CHAINS as readonly CanonicalChain[])
+      .filter(
+        (chain) =>
+          chain.kind === "evm" && STOCK_SYMBOLS.has(symbol) && chainNames(chain).tokens.has(symbol),
+      )
+      .map((chain) => chain.name),
+    ...(SOLANA_STOCK_SYMBOLS.has(symbol) ? ["Solana, where action programs do not run"] : []),
+  ];
   const hint =
     symbol === "ETH"
       ? '; the native currency is "native" where an action trades it, and wrapped ETH is "WETH"'
       : on.length > 0
-        ? `; ${symbol} is a token on ${on.map((chain) => chain.name).join(" and ")}`
+        ? `; ${symbol} is a token on ${on.join(" and ")}`
         : "";
 
   return (

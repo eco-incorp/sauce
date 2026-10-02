@@ -19,7 +19,7 @@ On Base, `SynthetixV3` is a namespace: its contracts need no import.
 ```sauce chain=base
 function main() {
   // Base's coreProxy, `0x32C222A9A159782aFD7529c87FA34b96CA72C696`.
-  require(SynthetixV3.CoreProxy != 0n);
+  require(SynthetixV3.CoreProxy != 0);
 }
 ```
 

@@ -1,6 +1,6 @@
 # Uniswap V4
 
-> **In a Sauce program**, swap through the Sauce Router wherever it services the pool, with a price limit, a minimum output and the unspent input returned (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
+> **In a Sauce program**, swap with `@sauce/router`'s function for the venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, …; Slipstream, PancakeSwap V3 and Algebra pools through `uniswapV3`), with a minimum output and, where the pool takes one, a price limit (`sauce-swaps`; several pools under one limit, `sauce-distributed-swap`). The templates below call the protocol's own contracts.
 
 Singleton AMM with hooks architecture enabling custom pool logic, flash accounting, and native ETH support. All pools share a single PoolManager contract for gas savings on multi-hop swaps.
 
@@ -9,13 +9,14 @@ Singleton AMM with hooks architecture enabling custom pool logic, flash accounti
 - Every pool lives in one PoolManager, keyed by `(currency0, currency1, fee, tickSpacing,
 hooks)`. A pool can attach a hook contract that runs around swaps and liquidity changes, and a
   currency of `0x0` is the native coin.
-- A Sauce program swaps through the Sauce Router's `swapV4`, with a price limit; no
+- A Sauce program swaps a pool with `@sauce/router`'s `uniswapV4`, with a price limit; no
   UniversalRouter commands are needed.
 
 ## Pitfalls for a program
 
 - Exact input is a **negative** `amountSpecified` (`-amount`), the reverse of V3's pool.
-- A hook can change a pool's behaviour and fee: use hookless keys (`hooks: 0n`) unless you have
+  `uniswapV4` takes a positive `amountIn` and passes `-amountIn` itself.
+- A hook can change a pool's behaviour and fee: use hookless keys (`hooks: 0`) unless you have
   reviewed the hook.
 - A protocol fee can apply on top of the LP fee; both are in the pool's state
   (`sauce-distributed-swap` reads them).
@@ -28,29 +29,22 @@ hooks)`. A pool can attach a hook contract that runs around swaps and liquidity 
 One guarded swap on the hookless 0.05% WETH/USDC pool:
 
 ```sauce chain=base,arbitrum
-import { ISauceRouter } from "./artifacts/ISauceRouter.json";
+import { uniswapV4 } from "@sauce/router";
 
 function main(amountIn: Uint256, sqrtPriceLimitX96: Uint256, minOut: Uint256, recipient: Address) {
   const self = ctx.self();
-  const zeroForOne = WETH < USDC;
-  const key = {
-    currency0: zeroForOne ? WETH : USDC,
-    currency1: zeroForOne ? USDC : WETH,
-    fee: 500n,
-    tickSpacing: 10n,
-    hooks: 0n
-  };
-  const before = USDC.balanceOf(self);
-  ISauceRouter.at(self).swapV4(UniswapV4.PoolManager, key, zeroForOne, -amountIn, sqrtPriceLimitX96, self, self);
-  const out = USDC.balanceOf(self) - before;
-  require(out >= minOut, "below minOut");
-  USDC.transfer(recipient, out);
-  const unspent = WETH.balanceOf(self);
-  if (unspent > 0n) {
+  const before = WETH.balanceOf(self);
+  uniswapV4(UniswapV4.PoolManager, WETH, USDC, amountIn, 500, 10, 0, sqrtPriceLimitX96, minOut, recipient);
+  const unspent = amountIn - (before - WETH.balanceOf(self));
+  if (unspent > 0) {
     WETH.transfer(recipient, unspent);
   }
 }
 ```
+
+`uniswapV4` builds the key from the two tokens in sort order with the fee (`500`), tick spacing
+(`10`) and hooks (`0`, none), pays `recipient` and reverts below `minOut`. The WETH the pool did
+not take before the price limit goes back to `recipient` too.
 
 ## Category
 
@@ -67,7 +61,7 @@ dex | Chains and addresses: [registry/uniswap-v4.md](registry/uniswap-v4.md)
 These import the protocol's ABI from `./abis`, the way the registry compiles them with the raw
 compiler; `sauce compile` has no such module. In a program for a chain, name the contract by its
 namespace, or import its ABI from `./protocols/<slug>/<Export>.json` as the registry file at the
-top of this document shows, and write SauceScript's values (`~0n`, not `type(uint256).max`).
+top of this document shows, and write SauceScript's values (`~0`, not `type(uint256).max`).
 
 ### swap
 
@@ -149,7 +143,6 @@ StateView (v4-periphery `src/lens/StateView.sol`) reads the PoolManager's pool s
 - `amountSpecified`: negative = exact input; positive = exact output (the reverse of Uniswap V3's pool `swap`)
 - Flash accounting: V4 uses transient storage for balance tracking within a transaction, settling at the end
 - Commands/inputs for the UniversalRouter must be constructed off-chain; this is more complex than V3 but more powerful
-- A Sauce program needs no UniversalRouter commands: the Sauce Router's `swapV4(poolManager, key, zeroForOne, -amount, sqrtPriceLimitX96, payer, recipient)` unlocks the PoolManager and settles the swap itself (`sauce-swaps`)
 - V4 is the newest Uniswap version; use it for advanced pool logic (custom hooks) or when gas efficiency on multi-hop matters most
 - From a Pot program, `@sauce/router`'s `uniswapV4(poolManager, tokenIn, tokenOut, amountIn, fee, tickSpacing, hooks, sqrtPriceLimitX96, minOut, recipient)` swaps one pool through the Pot's Sauce Router, which unlocks the PoolManager, swaps, takes the output and settles the input from the Pot — no UniversalRouter and no approval. The pool key is `tokenIn` and `tokenOut` in sort order (native ETH, the zero address, first) with `fee`, `tickSpacing` and `hooks`; the function passes `-amountIn`, exact input, and returns the amount out. The `uniswapV4Swap` action is the same call
 - On Arc (5042) the PositionManager's `WETH9()` is a stub that always reverts with `UnsupportedProtocolError()`. Arc's native coin is USDC at 18 decimals, so a pool keyed on `address(0)` is native USDC, a different currency from the 6-decimal ERC-20 `0x3600000000000000000000000000000000000000` over the same balance

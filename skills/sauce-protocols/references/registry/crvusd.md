@@ -19,7 +19,7 @@ On Ethereum, `Crvusd` is a namespace: its contracts need no import.
 ```sauce chain=ethereum
 function main() {
   // Ethereum's crvusd, `0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E`.
-  require(Crvusd.CrvUSD != 0n);
+  require(Crvusd.CrvUSD != 0);
 }
 ```
 
