@@ -974,9 +974,10 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   ` ```ts ` blocks and runners typechecked, and runners executed with
   `skills-check/offline-guard.mjs` preloaded, importing nothing but the package, viem and `node:*`
   (`RUNNER_PACKAGES`: pnpm does not hoist the package's own dependencies, so a project the skills
-  are installed in resolves no other, which the packed check proves in such a project, with a probe
-  that must not resolve `@solana/kit`; re-export what a runner needs from a subpath, as
-  `svm/kit.ts` does); the globals index fresh, compilable and covering
+  are installed in resolves only its own — `sauce init` writes the package, viem at the version
+  installed beside it, and `@types/node` — which the packed check proves in a project of exactly
+  what `init` wrote, with a probe that must not resolve `@solana/kit`; re-export what a runner
+  needs from a subpath, as `svm/kit.ts` does); the globals index fresh, compilable and covering
   every name a program uses; the SauceScript reference
   (`sauce-script/references/builtins.{md,json}`, with `skills-check/builtins*.mjs`) to the
   compiler; every ```sauce block in a skill's `references/` compiled like its own; every relative
