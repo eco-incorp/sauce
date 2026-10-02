@@ -24,6 +24,7 @@ import {
   getBase58Encoder,
   getBase64EncodedWireTransaction,
   getBase64Encoder,
+  getCompiledTransactionMessageDecoder,
   getSignatureFromTransaction,
   getTransactionDecoder,
   getTransactionSize,
@@ -40,7 +41,6 @@ import {
   type TransactionPartialSigner,
   type TransactionSigner,
 } from "@solana/kit";
-import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 import type { AccountManifest } from "sauce-compiler";
 import { bytesToHex, formatUnits, hexToBytes, type Hex } from "viem";
 
@@ -78,6 +78,10 @@ import {
   GROWTH_STEP,
   MAX_POT_LEN,
   resolveAccounts,
+  resolveTokenProgramByOwner,
+  svmTokenAccount,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
   type AccountResolution,
   type CookVia,
   type EngineFault,
@@ -97,6 +101,7 @@ import {
   type ProgramInput,
 } from "./commands.js";
 import { decodeReturned, returnedLine } from "./returned.js";
+import { guardOf } from "./policy.js";
 import { secret } from "./signer.js";
 import { requireSupported } from "./support.js";
 import {
@@ -282,6 +287,32 @@ function engineReturn(logs: readonly string[]): Uint8Array | undefined {
   return found;
 }
 
+/** The two token programs, whose refusals a program's token writes meet, by the name a person reads. */
+const TOKEN_PROGRAMS: ReadonlyMap<string, string> = new Map([
+  [TOKEN_PROGRAM_ID, "SPL Token"],
+  [TOKEN_2022_PROGRAM_ID, "Token-2022"],
+]);
+
+/**
+ * Why a token program refused, in its own words: the last `Program log:` line it wrote before it
+ * failed, other than the instruction's name. Token-2022 states each refusal so — a paused mint
+ * ("Transferring, minting, and burning is paused on this mint"), a frozen account ("Account is
+ * frozen") — where its error code alone is a number shared with every other program's.
+ */
+function tokenProgramMessage(logs: readonly string[], program: string): string | undefined {
+  let message: string | undefined;
+  for (const line of logs) {
+    if (line.startsWith(`Program ${program} invoke`)) message = undefined;
+    else if (line.startsWith(`Program ${program} failed`)) return message;
+    else {
+      const log = /^Program log: (?:Error: )?(.+)$/.exec(line);
+      if (log !== null && !log[1]!.startsWith("Instruction: ")) message = log[1];
+    }
+  }
+
+  return undefined;
+}
+
 /** What a few of the engine's refusals mean for the cook that met them. */
 const ENGINE_FAULT_HINTS: Partial<Record<EngineFault, string>> = {
   ExecutionFeeExceedsMaximum:
@@ -297,8 +328,8 @@ const ENGINE_FAULT_HINTS: Partial<Record<EngineFault, string>> = {
 
 /**
  * A transaction error, read: the Sauce program's thrown text when the ENGINE failed with its revert
- * code, the engine's or the Kitchen's error by name when either refused, and otherwise the code and
- * the program it came from. Custom codes collide across programs (every Anchor program numbers from
+ * code, the engine's or the Kitchen's error by name when either refused, a token program's refusal
+ * in the words it logged, and otherwise the code and the program it came from. Custom codes collide across programs (every Anchor program numbers from
  * 6000; System and SPL Token both use 0), so a code is named only for the program the logs show
  * failing.
  */
@@ -327,6 +358,11 @@ export function failureReason(
     }
     const named = program === kitchen() ? kitchenErrors().get(code) : undefined;
     if (named !== undefined) return `the Kitchen refused: ${named}`;
+    const tokenProgram = program === undefined ? undefined : TOKEN_PROGRAMS.get(program);
+    const said = tokenProgram === undefined ? undefined : tokenProgramMessage(logs, program!);
+    if (said !== undefined) {
+      return `${tokenProgram} refused: ${said} (custom program error ${code})`;
+    }
     const fault = program === engine() ? engineFaultName(code) : undefined;
     if (fault !== undefined) {
       const hint = ENGINE_FAULT_HINTS[fault];
@@ -379,20 +415,33 @@ async function confirmed(
   throw new CliError(`transaction ${signature} was not confirmed within a minute`);
 }
 
-/** Sends `transaction` and polls until it is confirmed (or fails, or a minute passes). */
+/**
+ * Sends `transaction` and polls until it is confirmed (or fails, or a minute passes). From a wallet
+ * (`--wallet`), the fee payer's, it is held to the wallet's policy first (`policy.ts`).
+ */
 async function sendAndConfirm(rpc: Rpc, url: string, transaction: Transaction): Promise<SvmSent> {
   const signature = getSignatureFromTransaction(transaction);
-  await ask(url, "sending the transaction", () =>
-    rpc
-      .sendTransaction(getBase64EncodedWireTransaction(transaction), {
-        encoding: "base64",
-        // Every transaction here was simulated first; the node need not do it again.
-        skipPreflight: true,
-      })
-      .send(),
-  );
+  const payer = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes)
+    .staticAccounts[0];
+  const reservation = payer === undefined ? undefined : await guardOf(payer)?.svm(rpc, transaction);
+  try {
+    await ask(url, "sending the transaction", () =>
+      rpc
+        .sendTransaction(getBase64EncodedWireTransaction(transaction), {
+          encoding: "base64",
+          // Every transaction here was simulated first; the node need not do it again.
+          skipPreflight: true,
+        })
+        .send(),
+    );
+  } catch (error) {
+    reservation?.released("sending failed");
+    throw error;
+  }
   // The status is the verdict: it is what confirmed, and it carries the error.
   const { err: statusErr, slot } = await confirmed(rpc, url, signature);
+  if (statusErr === null) reservation?.sent(signature);
+  else reservation?.released(`${signature} failed`);
   // The transaction itself — its logs, units and return data — can lag its status on a node.
   let response;
   for (let tries = 0; ; tries++) {
@@ -502,11 +551,15 @@ async function sendInstructions(
 // Accounts, the Pot, the cook
 // ---------------------------------------------------------------------------------------------
 
-/** `pot:<token>` or `owner:<token>`: that one's associated token account for a mint, named by a
- *  registered symbol (`USDC`) or its base58 address. */
-const TOKEN_ACCOUNT = /^(pot|owner):([A-Za-z0-9]+)$/;
+/**
+ * A value that names an account by its token: `pot:<token>` or `owner:<token>`, that one's
+ * associated token account for the mint; `mint:<token>`, the mint itself; `program:<token>`, the
+ * token program that owns the mint. The token is a registered symbol (`USDC`) or a mint's base58
+ * address.
+ */
+const TOKEN_NAMED = /^(pot|owner|mint|program):([A-Za-z0-9]+)$/;
 
-/** `--account name=<pubkey | pot | owner | pot:<token> | owner:<token>>`, parsed. */
+/** `--account name=<pubkey | pot | owner | pot:<token> | owner:<token> | mint:<token> | program:<token>>`, parsed. */
 export function parseAccounts(raws: readonly string[]): Record<string, string> {
   const accounts: Record<string, string> = {};
   for (const raw of raws) {
@@ -519,10 +572,11 @@ export function parseAccounts(raws: readonly string[]): Record<string, string> {
       );
     }
     if (Object.hasOwn(accounts, name)) throw new UsageError(`--account: ${name} given twice`);
-    if (value !== "pot" && value !== "owner" && !isAddress(value) && !TOKEN_ACCOUNT.test(value)) {
+    if (value !== "pot" && value !== "owner" && !isAddress(value) && !TOKEN_NAMED.test(value)) {
       throw new UsageError(
-        `--account ${name}: '${value}' is not an address, pot, owner, or a token account: ` +
-          "pot:USDC is the Pot's own USDC account (pot:<mint> for any mint), owner:USDC the owner's",
+        `--account ${name}: '${value}' is not an address, pot, owner, or a token's account: ` +
+          "pot:USDC is the Pot's own USDC account (pot:<mint> for any mint), owner:USDC the " +
+          "owner's, mint:USDC the mint and program:USDC its token program",
       );
     }
     accounts[name] = value;
@@ -531,17 +585,43 @@ export function parseAccounts(raws: readonly string[]): Record<string, string> {
   return accounts;
 }
 
-/** One `pot:<token>`/`owner:<token>` resolved: the account, and what it is for a person. */
+/** One `<whose>:<token>` resolved: the account, what it is for a person, and which kind it is. */
 interface TokenAccountNamed {
   readonly address: Address;
   readonly label: string;
+  /** A holder's token account, which a transfer can bring into being, or the mint or its program. */
+  readonly kind: "account" | "mint" | "program";
 }
 
+/** The token program that owns a mint the registry does not record, read from the cluster. */
+export type MintProgramOf = (mint: Address) => Promise<Address>;
+
 /**
- * Each `--account` value that names a token account (`pot:USDC`, `owner:<mint>`) as that
- * account: the associated token account of the Pot (or the owner) for the mint, under the classic
- * SPL Token program — the one `@sauce/token` takes. A symbol is one of the cluster's registered
- * mints; any other mint is given by its base58 address. Every other value is left as it is.
+ * A mint's token program read from the account's owner on the cluster `rpcUrl` serves: legacy SPL
+ * Token or Token-2022, and nothing else (`token-program.ts`).
+ */
+const mintProgramOn =
+  (rpc: Rpc, url: string): MintProgramOf =>
+  (mint) =>
+    resolveTokenProgramByOwner(mint, async (key) => {
+      const { value } = await ask(url, `the mint ${key}`, () =>
+        rpc.getAccountInfo(key, { encoding: "base64" }).send(),
+      );
+
+      return value === null ? null : value.owner;
+    });
+
+/** The name a person reads for a token program. */
+const programName = (program: Address): string =>
+  program === TOKEN_2022_PROGRAM_ID ? "Token-2022" : "SPL Token";
+
+/**
+ * Each `--account` value that names an account by its token as that account: `pot:USDC` and
+ * `owner:<mint>` the associated token account of the Pot (or the owner) for the mint, under the
+ * token program that owns the mint; `mint:USDC` the mint; `program:USDC` that token program — the
+ * accounts `@sauce/token`'s writes take. A symbol is one of the cluster's registered mints, whose
+ * row records its program; any other mint is given by its base58 address, and its program is read
+ * with `programOf`. Every other value is left as it is.
  */
 export async function resolveTokenAccounts(
   given: Readonly<Record<string, string>>,
@@ -549,6 +629,7 @@ export async function resolveTokenAccounts(
   pot: Address,
   chain: CanonicalChain,
   via: "kitchen" | "engine" = "kitchen",
+  programOf: MintProgramOf = async () => TOKEN_PROGRAM_ID,
 ): Promise<{
   readonly accounts: Record<string, string>;
   readonly named: ReadonlyMap<string, TokenAccountNamed>;
@@ -557,12 +638,16 @@ export async function resolveTokenAccounts(
   const named = new Map<string, TokenAccountNamed>();
   const rows = svmTokenRows(chain);
   for (const [name, value] of Object.entries(given)) {
-    const match = TOKEN_ACCOUNT.exec(value);
+    const match = TOKEN_NAMED.exec(value);
     if (match === null) {
       accounts[name] = value;
       continue;
     }
-    const [, whose, token] = match as unknown as [string, "pot" | "owner", string];
+    const [, whose, token] = match as unknown as [
+      string,
+      "pot" | "owner" | "mint" | "program",
+      string,
+    ];
     if (whose === "pot" && via === "engine") {
       throw new UsageError(
         `--account ${name}=${value}: --via engine cooks with no Pot, so there is no Pot's token ` +
@@ -579,15 +664,28 @@ export async function resolveTokenAccounts(
       );
     }
     const mint = address(row?.mint ?? token);
-    const [account] = await findAssociatedTokenPda({
-      owner: whose === "pot" ? pot : owner,
-      mint,
-      tokenProgram: TOKEN_PROGRAM_ADDRESS,
-    });
+    const what = row?.symbol ?? `mint ${mint}`;
+    if (whose === "mint") {
+      accounts[name] = mint;
+      named.set(name, { address: mint, label: `the ${what} mint`, kind: "mint" });
+      continue;
+    }
+    const tokenProgram = row?.tokenProgram ?? (await programOf(mint));
+    if (whose === "program") {
+      accounts[name] = tokenProgram;
+      named.set(name, {
+        address: tokenProgram,
+        label: `${what}'s token program, ${programName(tokenProgram)}`,
+        kind: "program",
+      });
+      continue;
+    }
+    const account = await svmTokenAccount({ mint, tokenProgram }, whose === "pot" ? pot : owner);
     accounts[name] = account;
     named.set(name, {
       address: account,
-      label: `${whose === "pot" ? "the Pot" : "the owner"}'s ${row?.symbol ?? `mint ${mint}`} account`,
+      label: `${whose === "pot" ? "the Pot" : "the owner"}'s ${what} account`,
+      kind: "account",
     });
   }
 
@@ -666,7 +764,9 @@ export interface SvmPotTokenAccount {
   readonly symbol: string;
   readonly mint: string;
   readonly decimals: number;
-  /** The associated token account of the Pot for the mint (classic SPL Token). */
+  /** The token program that owns the mint: legacy SPL Token or Token-2022. */
+  readonly tokenProgram: Address;
+  /** The associated token account of the Pot for the mint, under its token program. */
   readonly account: Address;
   readonly exists: boolean;
   /** Base units, as a decimal string; `null` while the account does not exist. */
@@ -674,8 +774,8 @@ export interface SvmPotTokenAccount {
 }
 
 /**
- * The Pot's associated token account for every mint the chain's cluster registers — each one a
- * classic SPL Token mint (the registry's own gate) — whether it exists, and its balance.
+ * The Pot's associated token account for every mint the chain's cluster registers — each under the
+ * token program its row records — whether it exists, and its balance.
  */
 export async function svmPotTokenAccounts(
   target: SvmTarget,
@@ -687,12 +787,15 @@ export async function svmPotTokenAccounts(
 
   return Promise.all(
     svmTokenRows(chain).map(async (row) => {
-      const [account] = await findAssociatedTokenPda({
-        owner: pot,
-        mint: address(row.mint),
-        tokenProgram: TOKEN_PROGRAM_ADDRESS,
-      });
-      const base = { symbol: row.symbol, mint: row.mint, decimals: row.decimals, account };
+      const mint = address(row.mint);
+      const account = await svmTokenAccount({ mint, tokenProgram: row.tokenProgram }, pot);
+      const base = {
+        symbol: row.symbol,
+        mint: row.mint,
+        decimals: row.decimals,
+        tokenProgram: row.tokenProgram,
+        account,
+      };
       if (!(await exists(rpc, rpcUrl, account, `the Pot's ${row.symbol} account`))) {
         return { ...base, exists: false, balance: null };
       }
@@ -748,9 +851,11 @@ async function missingAccounts(rpc: Rpc, url: string, given: Prepared["given"]):
       `--account ${name}: ${value} does not exist on solana` +
         (token === undefined
           ? ""
-          : ` (${token.label}: nothing has created it yet; a wallet's SPL transfer to the ` +
-            "account's owner creates it, or create it with an associated-token-account " +
-            "instruction)"),
+          : token.kind !== "account"
+            ? ` (${token.label})`
+            : ` (${token.label}: nothing has created it yet; a wallet's SPL transfer to the ` +
+              "account's owner creates it, or create it with an associated-token-account " +
+              "instruction)"),
     ];
   });
 }
@@ -897,7 +1002,14 @@ async function prepare(
   const manifest = program.manifest ?? { accounts: [] };
   const rpc = createSolanaRpc(input.rpcUrl);
   const pot = await potOf(input);
-  const given = await resolveTokenAccounts(input.accounts, input.owner, pot, input.chain, via);
+  const given = await resolveTokenAccounts(
+    input.accounts,
+    input.owner,
+    pot,
+    input.chain,
+    via,
+    mintProgramOn(rpc, input.rpcUrl),
+  );
   const accounts = resolution(manifest, given.accounts, input.owner, pot, signer, via);
   const fee = await kitchenFee(rpc, input.rpcUrl);
   if (input.maxExecutionFee !== undefined && fee > input.maxExecutionFee) {
@@ -982,7 +1094,8 @@ export async function svmCookSize(
   const owner = placeholderKey(0);
   const target: SvmTarget = { owner, salt: `0x${"00".repeat(32)}` };
   const pot = await potOf(target);
-  // A token account (`pot:USDC`) is a distinct account of its own, as it is in a real cook.
+  // A token account (`pot:USDC`) is a distinct account of its own, as it is in a real cook. With no
+  // cluster, an unregistered mint's program is taken as legacy SPL Token: a key is a key to the size.
   const accountsGiven = (await resolveTokenAccounts(given, owner, pot, requireChain("solana")))
     .accounts;
   const slots = manifest.accounts.filter((entry) => entry.kind === "slot");

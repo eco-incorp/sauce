@@ -39,30 +39,19 @@
  *   SAUCE_RUST_ENGINE_SO=<v12>/v12-svm/target/deploy/engine.so pnpm --filter './sdk' test
  */
 import { AccountRole, getAddressCodec, lamports } from "@solana/kit";
-import type { Address, Instruction } from "@solana/kit";
-import {
-  buildComputeBudgetPrepend,
-  buildCookInstruction,
-  buildHeapFramePrepend,
-} from "../../../src/svm/index.js";
-import type { ResolvedAccountMeta } from "../../../src/svm/index.js";
-import { compileStdToken } from "./harness.js";
-import type { AccountManifest } from "./harness.js";
+import type { Address } from "@solana/kit";
 import {
   TOKEN_2022_PROGRAM,
   TOKEN_PROGRAM,
-  expectFail,
-  expectOk,
   randomAddress,
-  sendInstructions,
   setTokenAccount,
   startEngine,
   tokenAccountData,
   tokenAmount,
   toBigInt,
-  HARNESS_POT_SALT,
 } from "../../svm/engine-harness.js";
 import type { EngineHarness } from "../../svm/engine-harness.js";
+import { literal, reasonOf, run } from "./svm-cook.js";
 
 /** Multi-byte so a wrong decode cannot pass by coincidence, and `u64` because an SPL amount is one. */
 const TOKEN_BALANCE = 0x0000_00ab_cdef_1234n;
@@ -70,9 +59,6 @@ const TOTAL_SUPPLY = 0x0000_00ff_ee00_1111n;
 const DECIMALS = 6n;
 const DELEGATED = 0x0000_0000_dead_beefn;
 const TRANSFERRED = 0x1234n;
-
-/** Generous, so nothing here ever starves on compute rather than on the behavior under test. */
-const COMPUTE_UNITS = 1_400_000;
 
 /** The `main`-lineage engine these programs target — see the header for why the vendored one won't do. */
 const RUST_ENGINE_SO = process.env.SAUCE_RUST_ENGINE_SO;
@@ -90,88 +76,6 @@ if (!RUST_ENGINE_SO && process.env.CI) {
 }
 
 const codec = getAddressCodec();
-
-/** A pubkey as the SauceScript big-endian bigint literal the library compares `svm.sload(…).toBe()` against. */
-const literal = (address: Address): string =>
-  `0x${Buffer.from(codec.encode(address)).toString("hex")}n`;
-
-const missing = (what: string): never => {
-  throw new Error(`the SVM manifest ${what}`);
-};
-
-/**
- * The attach contract, applied: every manifest slot resolves by NAME from `slots`, in manifest order.
- * This is what an SDK consumer of the Rust compiler does with the manifest, so a wrong order or an
- * unresolved slot fails the transaction rather than a matcher.
- *
- * There is no separate program entry to special-case any more: a CPI callee is an account the caller
- * attaches, so it reaches the manifest as an ordinary named slot and is resolved like the rest — which
- * is why these tests now pass the SPL Token program in `slots` under the name the library declares it
- * with. `remaining` marks where a caller's own variable-length accounts begin; no fixture here uses
- * one, so it is an explicit failure rather than a silently dropped entry.
- */
-const attach = (
-  manifest: AccountManifest | undefined,
-  slots: Record<string, ResolvedAccountMeta>,
-): ResolvedAccountMeta[] =>
-  (manifest ?? missing("is absent — the svm target must emit one")).accounts.map((entry) =>
-    entry.kind === "remaining"
-      ? missing(
-          `asks for a remaining-accounts tail at ${entry.from}, which this suite does not attach`,
-        )
-      : (slots[entry.name] ?? missing(`names a slot the test did not resolve: ${entry.name}`)),
-  );
-
-/** Compile `entry` for the SVM and assemble the transaction that runs it with its manifest-derived accounts. */
-const instructionsFor = (
-  harness: EngineHarness,
-  entry: string,
-  slots: Record<string, ResolvedAccountMeta>,
-): Instruction[] => {
-  const { bytecode, manifest } = compileStdToken(entry, "svm");
-
-  return [
-    ...buildComputeBudgetPrepend({ unitLimit: COMPUTE_UNITS }),
-    buildHeapFramePrepend(),
-    buildCookInstruction({
-      kitchen: harness.kitchen,
-      owner: harness.payer.address,
-      engineProgram: harness.programId,
-      potSalt: HARNESS_POT_SALT,
-      pot: harness.pot,
-      feeConfig: harness.feeConfig,
-      bytecode,
-      maxExecutionFee: 0n,
-      tail: attach(manifest, slots),
-    }),
-  ];
-};
-
-/** Run `entry` and return the engine's output, failing the test if the transaction did not succeed. */
-const run = (
-  harness: EngineHarness,
-  entry: string,
-  slots: Record<string, ResolvedAccountMeta>,
-): Promise<Uint8Array> =>
-  sendInstructions(harness, instructionsFor(harness, entry, slots)).then(
-    (result) => expectOk(result).returnData,
-  );
-
-/**
- * Run `entry`, which must be refused, and return the reason it reverted with: the `require`'s
- * message, which the engine returns as the failed cook's return data. Every check the library makes
- * names what it refused, so each failure below is asserted by WHICH check fired, not merely by the
- * transaction failing — a failure for some other reason (an account the test attached wrongly) would
- * otherwise pass as the refusal under test.
- */
-const reasonOf = (
-  harness: EngineHarness,
-  entry: string,
-  slots: Record<string, ResolvedAccountMeta>,
-): Promise<string> =>
-  sendInstructions(harness, instructionsFor(harness, entry, slots)).then((result) =>
-    new TextDecoder().decode(expectFail(result).revertData),
-  );
 
 /**
  * A real 82-byte SPL `Mint`: `mint_authority` COption::None @0, `supply` u64 LE @36, `decimals` @44,
@@ -274,8 +178,9 @@ describeStdToken("@sauce/token e2e: the SVM arm against real SPL accounts", () =
     expect(await reasonOf(harness, entry, slots)).toBe("wrong mint");
   });
 
-  it("balanceOf refuses a Token-2022 account, as every function here does", async () => {
-    // The same 165-byte layout, of the right mint, owned by Token-2022 rather than legacy SPL Token.
+  it("balanceOf refuses an account no token program owns", async () => {
+    // The genuine 165-byte layout, of the right mint, written into an account another program owns.
+    // (A Token-2022 account is read, as `svm-token-2022.e2e.test.ts` shows.)
     const mint = randomAddress();
     const account = setTokenAccount(
       harness,
@@ -283,7 +188,7 @@ describeStdToken("@sauce/token e2e: the SVM arm against real SPL accounts", () =
       mint,
       harness.payer.address,
       TOKEN_BALANCE,
-      TOKEN_2022_PROGRAM,
+      randomAddress(),
     );
     const entry = `import { balanceOf } from "@sauce/token"; function main(account: Account): Uint256 { return balanceOf(${literal(mint)}, account); }`;
 
@@ -385,7 +290,7 @@ describeStdToken("@sauce/token e2e: the SVM arm against real SPL accounts", () =
     expect(toBigInt(other)).toBe(0n);
   });
 
-  it("allowance refuses an account of another mint, or one SPL Token does not own", async () => {
+  it("allowance refuses an account of another mint, or one no token program owns", async () => {
     const mint = randomAddress();
     const entry = `import { allowance } from "@sauce/token"; function main(account: Account): Uint256 { return allowance(${literal(mint)}, account, ${literal(randomAddress())}); }`;
     const otherMint = setTokenAccount(
@@ -395,18 +300,18 @@ describeStdToken("@sauce/token e2e: the SVM arm against real SPL accounts", () =
       harness.payer.address,
       TOKEN_BALANCE,
     );
-    const token2022 = setTokenAccount(
+    const forged = setTokenAccount(
       harness,
       randomAddress(),
       mint,
       harness.payer.address,
       TOKEN_BALANCE,
-      TOKEN_2022_PROGRAM,
+      randomAddress(),
     );
 
     for (const [address, reason] of [
       [otherMint, "wrong mint"],
-      [token2022, "not a token account"],
+      [forged, "not a token account"],
     ] as const) {
       const slots = { account: { address, role: AccountRole.READONLY } };
       expect(await reasonOf(harness, entry, slots)).toBe(reason);
@@ -454,7 +359,7 @@ describeStdToken("@sauce/token e2e: the SVM arm against real SPL accounts", () =
     expect(toBigInt(returnData)).toBe(BigInt(literal(owner).slice(0, -1)));
   });
 
-  it("ownerOf refuses an account of another mint, or one SPL Token does not own", async () => {
+  it("ownerOf refuses an account of another mint, or one no token program owns", async () => {
     const mint = randomAddress();
     const entry = `import { ownerOf } from "@sauce/token"; function main(account: Account): Address { return ownerOf(${literal(mint)}, account); }`;
     const otherMint = setTokenAccount(

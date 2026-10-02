@@ -1,0 +1,107 @@
+{
+  "abi": [
+    {
+      "name": "getState",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "reserveA",
+              "type": "uint128"
+            },
+            {
+              "name": "reserveB",
+              "type": "uint128"
+            },
+            {
+              "name": "lastTwaD8",
+              "type": "int64"
+            },
+            {
+              "name": "lastLogPriceD8",
+              "type": "int64"
+            },
+            {
+              "name": "lastTimestamp",
+              "type": "uint40"
+            },
+            {
+              "name": "activeTick",
+              "type": "int32"
+            },
+            {
+              "name": "isLocked",
+              "type": "bool"
+            },
+            {
+              "name": "binCounter",
+              "type": "uint32"
+            },
+            {
+              "name": "protocolFeeRatioD3",
+              "type": "uint8"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "fee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "tokenAIn",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "tickSpacing",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "tokenA",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "tokenB",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    }
+  ]
+}

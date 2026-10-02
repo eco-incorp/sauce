@@ -36,7 +36,12 @@ import {
   type ReadonlyUint8Array,
   type Transaction,
 } from "@solana/kit";
-import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
+import {
+  findAssociatedTokenPda,
+  getCreateAssociatedTokenIdempotentInstruction,
+  getMintToCheckedInstruction,
+  TOKEN_PROGRAM_ADDRESS,
+} from "@solana-program/token";
 import { FailedTransactionMetadata } from "litesvm";
 import { bytesToHex, hexToBytes } from "viem";
 
@@ -64,10 +69,18 @@ import {
   setMint,
   setTokenAccount,
   startEngine,
+  TOKEN_2022_PROGRAM,
   TOKEN_PROGRAM,
   tokenAmount,
   type EngineHarness,
 } from "./svm/engine-harness.js";
+
+/** PYUSD's mint as mainnet holds it (`svm/fixtures/token-2022/real-mints.json`). */
+const PYUSD_IMAGE = (
+  JSON.parse(
+    readFileSync(new URL("./svm/fixtures/token-2022/real-mints.json", import.meta.url), "utf8"),
+  ) as { pyusd: { dataBase64: string } }
+).pyusd;
 
 const RPC_URL = "http://127.0.0.1:65535/";
 const FEE = 5_000n;
@@ -662,6 +675,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
           symbol: "USDC",
           mint: usdc!.mint,
           decimals: 6,
+          tokenProgram: TOKEN_PROGRAM,
           account: potUsdc,
           exists: true,
           balance: "1500000",
@@ -670,6 +684,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
           symbol: "USDT",
           mint: usdt!.mint,
           decimals: 6,
+          tokenProgram: TOKEN_PROGRAM,
           account: potUsdt,
           exists: false,
           balance: null,
@@ -718,7 +733,9 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     // A symbol the cluster does not register is refused by name.
     const unknown = await rehearse("pot:USDX");
     expect(unknown.code).toBe(2);
-    expect(unknown.stderr).toContain("USDX is not a mint solana registers (USDC, USDT, WSOL)");
+    expect(unknown.stderr).toContain(
+      "USDX is not a mint solana registers (PYUSD, USDC, USDT, WSOL)",
+    );
     // Cooked directly, there is no Pot, so no Pot's token account either.
     const direct = await sauce(
       ...["simulate", reads, "--chain", "solana", "--owner", owner.signer.address],
@@ -728,6 +745,115 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(direct.stderr).toContain(
       "--account held=pot:USDC: --via engine cooks with no Pot, so there is no Pot's token account",
     );
+  }, 60_000);
+
+  it("moves a Token-2022 mint named by pot:, owner:, mint: and program:, and names a paused mint's refusal", async () => {
+    const salt = "token-2022";
+    const pot = await potOf(hexToBytes(potSalt(salt)));
+    const pyusd = svmTokenRows(requireChain("solana")).find((row) => row.symbol === "PYUSD")!;
+    expect(pyusd.tokenProgram).toBe(TOKEN_2022_PROGRAM);
+    // PYUSD as mainnet holds it, at its address, the harness's payer its mint authority; a second,
+    // unregistered Token-2022 mint with no extensions beside it.
+    const image = new Uint8Array(Buffer.from(PYUSD_IMAGE.dataBase64, "base64"));
+    image.set(getAddressCodec().encode(harness.payer.address), 4);
+    const planted = (key: Address, data: Uint8Array) =>
+      harness.svm.setAccount({
+        address: key,
+        data,
+        executable: false,
+        lamports: lamports(harness.svm.minimumBalanceForRentExemption(BigInt(data.length))),
+        programAddress: TOKEN_2022_PROGRAM,
+        space: BigInt(data.length),
+      });
+    planted(address(pyusd.mint), image);
+    const other = randomAddress();
+    const bare = new Uint8Array(82);
+    bare.set([1, 0, 0, 0], 0);
+    bare.set(getAddressCodec().encode(harness.payer.address), 4);
+    bare[44] = 6;
+    bare[45] = 1;
+    planted(other, bare);
+    // The Pot's and the owner's accounts, as the ATA program makes them under Token-2022.
+    const ata = async (mint: Address, holder: Address, amount: bigint) => {
+      const [account] = await findAssociatedTokenPda({
+        owner: holder,
+        mint,
+        tokenProgram: TOKEN_2022_PROGRAM,
+      });
+      const made = await sendInstructions(harness, [
+        getCreateAssociatedTokenIdempotentInstruction({
+          payer: harness.payer,
+          ata: account,
+          owner: holder,
+          mint,
+          tokenProgram: TOKEN_2022_PROGRAM,
+        }),
+        ...(amount === 0n
+          ? []
+          : [
+              getMintToCheckedInstruction(
+                { mint, token: account, mintAuthority: harness.payer, amount, decimals: 6 },
+                { programAddress: TOKEN_2022_PROGRAM },
+              ),
+            ]),
+      ]);
+      if (!made.ok) throw new Error(`creating ${account} failed: ${made.err}`);
+
+      return account;
+    };
+    const potPyusd = await ata(address(pyusd.mint), pot, 1_000n);
+    const ownerPyusd = await ata(address(pyusd.mint), owner.signer.address, 0n);
+    const potOther = await ata(other, pot, 1_000n);
+    await ata(other, owner.signer.address, 0n);
+
+    const program = join(work, "checked.sauce.ts");
+    writeFileSync(
+      program,
+      "function main(tokenProgram: Account, source: Account<Writable>, mint: Account, dest: Account<Writable>, authority: Account<Signer>, amount: Uint256) {\n" +
+        "  transferChecked(MINT, tokenProgram, source, mint, dest, authority, amount, 6n);\n" +
+        "}\n",
+    );
+    const simulate = (token: string, define: string) =>
+      sauce(
+        ...["simulate", program, "--chain", "solana", "--owner", owner.signer.address],
+        ...["--salt", salt, "--rpc-url", RPC_URL, "--json", "--define", `MINT=${define}`],
+        ...["--account", `tokenProgram=program:${token}`, "--account", `source=pot:${token}`],
+        ...["--account", `mint=mint:${token}`, "--account", `dest=owner:${token}`],
+        ...["--account", "authority=pot", "--args", "400"],
+      );
+    const keyOf = (mint: Address) => bytesToHex(new Uint8Array(getAddressCodec().encode(mint)));
+
+    // By symbol, from the registry's row; by base58, its program read from the cluster.
+    for (const [token, mint, source] of [
+      ["PYUSD", address(pyusd.mint), potPyusd],
+      [other, other, potOther],
+    ] as const) {
+      const out = json(await simulate(token, keyOf(mint)));
+      expect(out).toMatchObject({ ok: true });
+      expect(out.tokenChanges).toEqual(
+        expect.arrayContaining([expect.objectContaining({ account: source, delta: "-400" })]),
+      );
+    }
+    expect(json(await simulate("PYUSD", keyOf(address(pyusd.mint)))).tokenChanges).toContainEqual(
+      expect.objectContaining({ account: ownerPyusd, delta: "400" }),
+    );
+
+    // Paused, Token-2022 refuses the transfer, and the reason is its own.
+    const pausable = harness.svm.getAccount(other);
+    const paused = new Uint8Array(166 + 4 + 33);
+    paused.set(new Uint8Array(pausable.exists ? pausable.data : []).subarray(0, 82), 0);
+    paused[165] = 1;
+    paused.set([26, 0, 33, 0], 166);
+    paused[166 + 4 + 32] = 1;
+    planted(other, paused);
+    const refused = await simulate(other, keyOf(other));
+    expect(refused.code).toBe(1);
+    expect(JSON.parse(refused.stdout)).toMatchObject({
+      ok: false,
+      reason:
+        "Token-2022 refused: Transferring, minting, and burning is paused on this mint " +
+        "(custom program error 67)",
+    });
   }, 60_000);
 
   it("`sauce simulate` reads a revert's message from the engine's return data in the logs", async () => {
@@ -859,8 +985,9 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       "5000",
     );
     expect(failed.code).toBe(1);
+    // The token program's refusal in its own words, from the line it logged.
     expect(failed.stdout).toMatch(
-      /^The cook fails: program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA failed with custom program error 1 \(0x1\)/,
+      /^The cook fails: SPL Token refused: insufficient funds \(custom program error 1\)/,
     );
     expect(failed.stdout).toMatch(/Program logs:\n {2}Program /);
     expect(failed.stdout).toMatch(/insufficient funds/i);
@@ -1302,7 +1429,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
   it("refuses EVM keys, --pot and --value on Solana, and a publish from it", async () => {
     const base = ["run", sweep, "--define", mintDefine, "--rpc-url", RPC_URL];
     expect((await sauce(...base, "--private-key", `0x${"11".repeat(32)}`)).stderr).toMatch(
-      /--keystore and --private-key are EVM keys: on Solana, sign with --keypair/,
+      /--keystore and --private-key are EVM keys: on Solana, sign with --wallet <name> \(a Solana wallet\) or --keypair/,
     );
     expect(
       (await sauce("simulate", sweep, "--pot", owner.signer.address, "--rpc-url", RPC_URL)).stderr,

@@ -46,6 +46,8 @@ export interface SourceToken {
   readonly mint?: string;
   /** A tokenized stock's issuer, name and underlying ticker (`stock-tokens.ts`). */
   readonly stock?: StockToken;
+  /** On Solana, the program that owns the mint, legacy SPL Token or Token-2022, in base58. */
+  readonly tokenProgram?: string;
 }
 
 export interface SourceMethod {
@@ -279,12 +281,15 @@ export function sourceGlobals(chain: ChainRef): SourceGlobals {
           ...(stock === undefined ? {} : { stock }),
         }),
       ),
-      ...svmTokenRows(resolved).map(({ symbol, address, decimals, mint }): SourceToken => ({
-        symbol,
-        address,
-        decimals,
-        mint,
-      })),
+      ...svmTokenRows(resolved).map(
+        ({ symbol, address, decimals, mint, tokenProgram }): SourceToken => ({
+          symbol,
+          address,
+          decimals,
+          mint,
+          tokenProgram,
+        }),
+      ),
     ].sort((a, b) => (a.symbol < b.symbol ? -1 : a.symbol > b.symbol ? 1 : 0)),
     protocols: namespacesOn(resolved),
     interfaces: interfacesOn(resolved),

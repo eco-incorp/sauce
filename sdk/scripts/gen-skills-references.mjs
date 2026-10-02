@@ -76,13 +76,14 @@ export function globalsIndex(sdk, ecoRoutes, support) {
               (token) => token.address.toLowerCase() === native.address.toLowerCase(),
             );
 
-      // Solana's are mints: the base58 address beside the 32-byte key a program holds. A tokenized
-      // stock carries its issuer, name and ticker.
-      const row = ({ symbol, address, decimals, mint, stock }) => ({
+      // Solana's are mints: the base58 address beside the 32-byte key a program holds, and the
+      // token program that owns the mint. A tokenized stock carries its issuer, name and ticker.
+      const row = ({ symbol, address, decimals, mint, tokenProgram, stock }) => ({
         symbol,
         address,
         decimals,
         ...(mint === undefined ? {} : { mint }),
+        ...(tokenProgram === undefined ? {} : { tokenProgram }),
         ...(stock === undefined
           ? {}
           : { stock: { ...stock, issuer: routes.STOCK_ISSUERS[stock.issuer].name } }),
@@ -170,7 +171,7 @@ export function globalsIndex(sdk, ecoRoutes, support) {
   });
 
   // Interfaces: ABIs with no fixed address, the same on every EVM chain. A program binds one to an
-  // address it holds, `Namespace.Contract.at(address).method(...)`. The first method whose inputs
+  // address it holds, `Namespace.Contract(address).method(...)`. The first method whose inputs
   // are all scalars is the one the skills checker compiles a call of.
   const evm = listed.find(({ chain }) => chain.kind === "evm");
   const scalar = /^(address|bool|u?int\d*)$/;
@@ -564,6 +565,11 @@ const addressCode = (kind, value) =>
     ? `${code(base58(value))} (key ${code(value.toLowerCase())})`
     : code(value);
 const kindName = (kind) => (kind === "svm" ? "Solana (SVM)" : "EVM");
+/** A Solana mint's token program, by name and address: what a write's `tokenProgram` account is. */
+const tokenProgramName = (program) =>
+  program === "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+    ? `Token-2022 (\`${program}\`)`
+    : `SPL Token (\`${program}\`)`;
 const categoryName = (category) => CATEGORIES.find(([key]) => key === category)?.[1] ?? category;
 const constName = (role) => role.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase();
 const chainLink = (chain, from) =>
@@ -606,7 +612,9 @@ function renderGlobals(data) {
       "On Solana a symbol is the mint's 32-byte key, a value for the `@sauce/token` functions",
       "(`balanceOf(USDC, account)`); the token accounts are `Account` parameters, and the token",
       "methods (`USDC.transfer(...)`) are EVM-only. Devnet's mints, which differ, are in the Solana",
-      "file in `sauce-chains`, passed as a define that wins over the symbol.",
+      "file in `sauce-chains`, passed as a define that wins over the symbol. That file also names each",
+      "mint's token program: legacy SPL Token, or Token-2022, whose mints a program moves with the",
+      "checked writes (`sauce-solana`).",
     );
   }
   tokens.push(
@@ -651,12 +659,13 @@ function renderGlobals(data) {
     "",
     "An interface is an ABI with no fixed address, the same on every EVM chain: a program binds it to",
     "an address it holds and calls a method in the same expression,",
-    "`Namespace.Contract.at(address).method(...)`, such as a pool its factory returned.",
+    "`Namespace.Contract(address).method(...)` (or `.at(address)`), such as a pool its factory",
+    "returned.",
     "",
   );
   for (const one of globals.interfaces) {
     protocols.push(
-      `- \`${one.name}.at(<address>)\` ([\`${one.protocol}\`](../../sauce-protocols/references/registry/${one.protocol}.md))`,
+      `- \`${one.name}(<address>)\` ([\`${one.protocol}\`](../../sauce-protocols/references/registry/${one.protocol}.md))`,
     );
   }
   protocols.push(
@@ -744,8 +753,9 @@ function chainExample(chain) {
   const namespaced = chain.protocols.flatMap((p) => p.deployed.filter((d) => d.namespace));
   if (chain.tokens.length === 0 && namespaced.length === 0) return [];
   if (chain.kind === "svm") {
-    // A Solana program reads a token account by the mint's key: the symbol is that key.
-    const token = chain.tokens[0];
+    // A Solana program reads a token account by the mint's key: the symbol is that key. USDC where
+    // the chain has it, so the example does not move as mints are added.
+    const token = chain.tokens.find((t) => t.symbol === "USDC") ?? chain.tokens[0];
     if (token === undefined) return [];
 
     return [
@@ -881,11 +891,11 @@ function renderChain(chain, supported) {
     );
   } else if (chain.kind === "svm") {
     const mints = (list) => [
-      "| Symbol | Mint | Key, the value a program holds | Decimals |",
-      "| --- | --- | --- | --- |",
+      "| Symbol | Mint | Key, the value a program holds | Decimals | Token program |",
+      "| --- | --- | --- | --- | --- |",
       ...list.map(
         (t) =>
-          `| \`${t.symbol}\` | \`${t.mint ?? base58(t.address)}\` | \`${t.address}\` | ${t.decimals} |`,
+          `| \`${t.symbol}\` | \`${t.mint ?? base58(t.address)}\` | \`${t.address}\` | ${t.decimals} | ${tokenProgramName(t.tokenProgram)} |`,
       ),
       "",
     ];

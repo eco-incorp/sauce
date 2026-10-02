@@ -16,6 +16,7 @@ import {
 } from "../routes/source-globals.js";
 import { STOCK_ISSUERS } from "../routes/stock-tokens.js";
 import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../routes/token-registry.js";
+import { TOKEN_2022_PROGRAM_ID } from "../svm/token-program.js";
 import { UsageError } from "./args.js";
 import type { CommandOutput } from "./commands.js";
 
@@ -118,7 +119,7 @@ function namespaceNamed(
 /** An interface's lines: how a program binds it, and with `methods` what it can call. */
 function interfaceLines(one: SourceInterface, methods: boolean): string[] {
   return [
-    `${one.namespace}.${one.name}.at(<address>)  interface (${one.protocolName}): no fixed address`,
+    `${one.namespace}.${one.name}(<address>)  interface (${one.protocolName}): no fixed address`,
     ...(methods
       ? one.methods.map((method) => `  ${method.declaration}  ${method.stateMutability}`)
       : []),
@@ -179,9 +180,10 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
     const rows = [...listed, ...devnet];
     const width = Math.max(0, ...rows.map((token) => token.symbol.length));
     const mintWidth = Math.max(0, ...rows.map((token) => (token.mint ?? "").length));
+    // A Token-2022 mint says so: its writes are the checked ones, and its accounts derive under it.
     const line = (token: (typeof rows)[number]): string =>
       `${token.symbol.padEnd(width)}  ${(token.mint ?? "").padEnd(mintWidth)}  ${token.address}  ` +
-      `${token.decimals} decimals`;
+      `${token.decimals} decimals${token.tokenProgram === TOKEN_2022_PROGRAM_ID ? ", Token-2022" : ""}`;
     text.push(
       "",
       `Tokens (${listed.length}): the symbol is the mint's 32-byte key, a value for the ` +
@@ -230,7 +232,7 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
     text.push(
       "",
       `Interfaces (${globals.interfaces.length}): an ABI with no fixed address, bound to one the ` +
-        "program gives: <Namespace>.<Contract>.at(<address>).<method>(…)",
+        "program gives: <Namespace>.<Interface>(<address>).<method>(…)",
       ...globals.interfaces.map(
         (bound) => `  ${bound.namespace}.${bound.name}  (${bound.protocolName})`,
       ),

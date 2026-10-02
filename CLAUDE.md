@@ -25,7 +25,7 @@ everything from one name.
 | ------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `sdk/`       | `@eco-incorp/sauce-source`    | `.` and most subpaths (`/compiler`, `/protocols/*`, `/chains`, `/recipes`, `/skills`, `/svm*`, `/evm/engine`, `/verify`, `/deployments`); bin `sauce` | 135-protocol registry, chains, recipes, SVM/EVM engine clients, the `/skills` loader, the `sauce` command |
 | `actions/`   | `@eco-incorp/sauce-actions`   | `/actions`, `/actions/action-program.schema.json`                                                                                                     | JSON action programs → SauceScript, intents; `sauce actions` lowers them                                  |
-| `mcp/`       | `@eco-incorp/sauce-mcp`       | `sauce mcp` (loaded by the `sauce` bin)                                                                                                               | The Sauce MCP server: the `sauce` command's read-only tools, the agent skills as resources                |
+| `mcp/`       | `@eco-incorp/sauce-mcp`       | `sauce mcp` (loaded by the `sauce` bin)                                                                                                               | The Sauce MCP server: the `sauce` command's building tools (and, over stdio, wallets), the agent skills   |
 | `dev-tools/` | `@eco-incorp/sauce-dev-tools` | not published                                                                                                                                         | Dev harness: compile helpers, local SVM Kitchen runner, legacy recipe runner                              |
 
 This repo was **extracted from the engine repo** (now `eco-incorp/v12`, checked out at `../v12`),
@@ -200,8 +200,9 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   does.** Each `svm/engine-artifacts.ts` resolver takes an optional explicit path
   (`svmEnginePath(cluster, path)`, `svmKitchenPath(path)`, `svmKitchenIdlPath(path)`) and otherwise
   returns the packaged binary; `sdk/test/svm/engine-harness.ts` and `dev-tools/test/svm-local.test.ts`
-  read CI's `SAUCE_*` paths and pass them in. Shipped code reads no environment at all: configuration
-  is passed by the developer, and a browser has no `process.env`. **Nothing about the engine is
+  read CI's `SAUCE_*` paths and pass them in. Shipped code reads no environment — but for the `sauce`
+  command's one deliberate read, of the variable `--password-env <NAME>` names (see "Agent
+  wallets" below): configuration is passed by the developer, and a browser has no `process.env`. **Nothing about the engine is
   source-controlled.**
   There used to be a vendored `artifacts/svm/engine.so` — a `release/beta` build predating every
   v12-svm release, with no `JUMP`/`JUMP_I` — and it was the DEFAULT, so anything with control flow was
@@ -453,20 +454,45 @@ spelling on one behaviour is `test/std/token/evm.e2e.test.ts`, which runs OpenZe
 returns, USDT's standing allowance, honest refusals) and requires identical outcomes, with the raw
 `IERC20.at` binding beside them as the contrast and the plain-transfer recipe executed too.
 CI also pins what a wrong digit would break silently: `test/std/token/compile.test.ts` derives the
-SPL Token program id the SVM arm guards on from its base58 address, and each selector the EVM writes
-spell out by hand from `keccak256` of its signature, and counts them in the emitted bytecode. It has
-two per-target arms (`token.evm.js`, `token.svm.js`) and
+two token program ids the SVM arm guards on (SPL Token and Token-2022) from their base58 addresses,
+and each selector the EVM writes spell out by hand from `keccak256` of its signature, and counts them
+in the emitted bytecode. It has two per-target arms (`token.evm.js`, `token.svm.js`) and
 **deliberately no neutral `token.js`**: a token program is inherently target-specific, and a neutral
 file would turn a missing arm into a confusing missing-EXPORT error instead of a clear failure to
 import the package (`package.json`'s `main` names the neutral BASE the compiler suffixes per target).
 The per-arm signatures genuinely differ where the account models force it — SVM `totalSupply`/
 `decimals` take the mint as an `Account` while the EVM takes an `Address`, and the SVM writes take
-6 args to the EVM's 3–4. Verified in `sdk/test/std/token/`: `compile.test.ts` (both targets, all seven
-shared methods plus the SVM-only `ownerOf`, which reads a token account's owner and has no EVM arm,
-the SVM account manifest, and the no-neutral-arm packaging invariant — always runs, no engine
-needed) plus `svm.e2e.test.ts`/`evm.e2e.test.ts`, which EXECUTE the compiled bytecode against real SPL
-accounts and a real deployed ERC20 — see `SAUCE_RUST_ENGINE_SO`/`SAUCE_V12_RUNTIME_CREATION_HEX` above for why
-those two are gated. `src/std/token` **ships** two ways: embedded in
+6 args to the EVM's 3–4.
+
+**The SVM arm takes SPL Token and Token-2022.** Every read (`balanceOf`, `ownerOf`, `allowance`,
+`totalSupply`, `decimals`) accepts an account owned by either program; a Token-2022 one is held to
+its base layout and, where it carries extensions, its account-type byte (byte 165: 1 mint, 2
+account), never the multisig's 355 bytes. The CHECKED writes, `transferChecked` and `approveChecked`
+(the mint as an `Account` and its decimals; SVM-only, no EVM arm), CPI `TransferChecked`/
+`ApproveChecked` into whichever program owns the source, destination and mint, require it to be one
+of the two, require the mint to be the named token and the decimals the mint's, and refuse
+(`"transfer hook"`) a mint whose TransferHook names a program — its ExtraAccountMetaList accounts
+cannot ride in a fixed account list, and Token-2022 would otherwise fail with an opaque missing
+account. A hook with no program, transfer fees (a program measures balance deltas), scaled UI
+amounts (raw only), pauses and frozen accounts are the token program's to apply. **The legacy
+`transfer`/`transferFrom`/`approve` are unchanged and SPL-Token-only, byte for byte**:
+`compile.test.ts` compiles them against `test/std/token/fixtures/legacy-token.svm.sauce.ts`, the arm
+as it was before, and requires identical bytecode — "you can't break existing sdk". Taking
+Token-2022 grew the reads (a first read is about 260 bytes where it was 135; a program that moves a
+Token-2022 token and measures what arrived needs staging), so mind transaction size when adding a
+check here. The SDK side: `svm/token-accounts.ts` (`resolveSvmToken`: a mint's program by its owner,
+decimals, extensions, transfer refusals; `svmTokenAccount` derives an ATA under the mint's program;
+`svmTokenReceived`/`svmTokenToSend` net fees with `token-extensions.ts`), the registry's per-row
+`tokenProgram`, and the CLI's `program:<token>`/`mint:<token>` account forms.
+
+Verified in `sdk/test/std/token/`: `compile.test.ts` (both targets, all seven shared methods plus
+the SVM-only `ownerOf`, `transferChecked` and `approveChecked`, the SVM account manifest, the legacy
+writes byte for byte, and the no-neutral-arm packaging invariant — always runs, no engine needed)
+plus `svm.e2e.test.ts`/`svm-token-2022.e2e.test.ts`/`evm.e2e.test.ts`, which EXECUTE the compiled
+bytecode against real SPL accounts, real Token-2022 accounts created by the real ATA program (two
+real tokenized-stock mints and PYUSD as mainnet holds them, and a mint per extension), and a real
+deployed ERC20 — see `SAUCE_RUST_ENGINE_SO`/`SAUCE_V12_RUNTIME_CREATION_HEX` above for why those are
+gated. `src/std/token` **ships** two ways: embedded in
 `src/embedded/sources.generated.ts`, which is what the SDK's own compiles resolve (see the next
 paragraph), and as files under `dist/std/token` (`copy-verify-assets.mjs`) for a consumer that
 resolves it off disk.
@@ -631,12 +657,13 @@ quotes and, for the split swap, the same quoter calls as SauceScript over fixed 
 been checked.
 
 **The `sauce` bin** (`sdk/src/cli/`, built to `sdk/dist/cli/main.js`) is the package's one
-executable: `compile`, `actions`, `simulate`, `run`, `intent <verb>`, `tx`, `pot`, `globals`,
-`inspect`, `verify`, `init` and `skills install|update|status`, on EVM chains and (`solana.ts`) Solana.
-`run.ts` dispatches `intent <verb>` (`INTENT_VERBS`: publish, fill, prove, claim, refund, cancel,
-status, list, show, import; no verb at a terminal is the picker, `interactive.ts`) as commands of
-their own, each with its own flags and `--help`; the skills checker reads the verbs from
-`sauce intent --help`. An intent's life after publishing is `lifecycle.ts`: plain-value functions
+executable: `compile`, `actions`, `simulate`, `run`, `intent <verb>`, `wallet <verb>`, `tx`, `pot`,
+`globals`, `inspect`, `verify`, `init` and `skills install|update|status`, on EVM chains and
+(`solana.ts`) Solana. `run.ts` dispatches `intent <verb>` (`INTENT_VERBS`: publish, fill, prove,
+claim, refund, cancel, status, list, show, import; no verb at a terminal is the picker,
+`interactive.ts`) and `wallet <verb>` (`WALLET_VERBS`: new, list, address, import, export) as
+commands of their own (`VERBS`), each with its own flags and `--help`; the skills checker reads the
+verbs from each command's `--help`. An intent's life after publishing is `lifecycle.ts`: plain-value functions
 (`intentStatus`, `buildFill`/`planFill`, `buildProve`, `buildClaim`, `buildRefund`, `buildCancel`,
 `importIntents`) taking an `IntentRecord` and an endpoint per chain and returning unsigned
 transactions as JSON, with no key, store, prompt or environment, which the MCP server calls as they
@@ -673,9 +700,10 @@ an intent the file opens resolves its body on its own chain) — and no encoder 
 `encodeEntryArguments`/`decodeEntryArguments`, names `sourceGlobals`, settles
 `validateSettleProgram`/`verifySvmSettleExecution`, and Solana cooks `createSauceSvmClient`
 (`cookTransaction`). It is Node-only and deliberately in no `exports` entry and no barrel
-(`cli.test.ts` fails if a barrel exports it), reads no environment, reaches a network only through
-`--rpc-url` or a `--config` file, and signs only with `--keystore`, `--private-key` or
-`--keypair`, scrubbing any key it was given from everything it prints. `run --fund` (`funding.ts`)
+(`cli.test.ts` fails if a barrel exports it), reads no environment but the variable `--password-env`
+names, reaches a network only through `--rpc-url` or a `--config` file, and signs only with
+`--wallet`, `--keystore`, `--private-key` or `--keypair`, scrubbing any key or password it was given
+from everything it prints. `run --fund` (`funding.ts`)
 wraps the file's source before that compile — a new `main` with the same signature that pulls
 through `@sauce/token` (`permitTransferFrom`, `permit`, `transferFrom`), calls the original
 renamed, and sweeps; in a script, the pulls after its imports and the sweeps after its last
@@ -697,7 +725,7 @@ of its own, so `npx -y @eco-incorp/sauce mcp` self-hosts it in one command. `sdk
 owns its flags and imports `mcp/dist/entry.js` LAZILY, by a specifier TypeScript does not follow
 (so the SDK builds before `mcp/`), and only when the command runs (so no other command loads the
 MCP SDK); `entry.ts` exports `mcpEntry` typed by the CLI's `McpEntry`, so the two cannot drift.
-Its tools are the `sauce` command's read-only half — `sauce_compile`, `sauce_actions`, `sauce_tx`,
+Its tools are the `sauce` command's building half — `sauce_compile`, `sauce_actions`, `sauce_tx`,
 `sauce_pot`, `sauce_simulate`, `sauce_intent_publish`, `sauce_inspect`, `sauce_verify`, `sauce_globals`,
 `sauce_price`, `sauce_chains` — plus the skills as tools (`sauce_skills`, `sauce_skill`,
 `sauce_dev`, `sauce_install_skills`), because many clients never read resources. Each command tool
@@ -714,8 +742,10 @@ through them on two anvils with eco-routes' Portal and HyperProver (`sdk/test/ec
 signing each unsigned transaction itself; `intents-solana.e2e.test.ts` builds a Solana fill through
 them in LiteSVM behind `sdk/test/svm/rpc-shim.ts`, signs it as the fee payer and lands it.
 
-It never signs and takes no key under any name (`tools.test.ts` fails a tool input that looks like
-one), and reads no environment. A tool reads a chain through the call's own `rpcUrl`, else the
+No tool takes a key or a password under any name (`tools.test.ts` and `wallets.test.ts` fail a tool
+input that looks like one), and the server reads no environment. It signs only over stdio, started
+with `--wallets [dir]` and a password source (`mcp/src/wallets.ts`, see "Agent wallets"); without
+them, and always over HTTP, it never signs. A tool reads a chain through the call's own `rpcUrl`, else the
 `--config` endpoint, else refuses (`reach.ts`); a caller's URL is a secret for that call only, and
 the server's are registered with `signer.ts#secret` at start — all scrubbed from every result,
 error and log (`secrets.test.ts`). Over HTTP a caller's URL goes only through `guard.ts`: https,
@@ -730,6 +760,51 @@ setup` writes each coding agent's documented project config (`.mcp.json`, `.code
 built `sauce mcp`); `chain.e2e.test.ts` runs the tools against an anvil with the released stack
 through `sdk/test/cli-anvil.ts`, gated on `SAUCE_V12_RUNTIME_CREATION_HEX` like the CLI's chain
 suites. The consumer guide is `docs/guides/mcp.md`.
+
+**Agent wallets.** `sauce wallet new|list|address|import|export` and `--wallet <name>` on every
+command that signs (`sdk/src/cli/wallets.ts`, `wallet-commands.ts`, `password.ts`, `policy.ts`,
+`wallet-send.ts`; all CLI, nothing else in `sdk/src` and no package export). A wallet is one file in
+`~/.sauce/wallets` (`--wallets <dir>`; `CliIo.walletsDir` in tests), `<name>.json`, created 0600 by
+a temporary file LINKED into place (never overwritten) in a directory created 0700. An EVM wallet is
+a Web3 Secret Storage v3 keystore exactly as geth and `cast wallet` write it: noble scrypt (geth's
+standard N=2^18, r=8, p=1), AES-128-CTR and a keccak MAC, in `signer.ts#encryptKeystore`. So
+`--keystore` and `cast` read it; `cli-wallet.test.ts` holds it to the definition's scrypt test
+vector byte for byte and decrypts a fresh one with OpenSSL's primitives and with `cast` (present in
+CI). A
+Solana wallet is the same envelope around the keypair's 64 bytes, marked `"kind": "solana"`, which
+`--keystore` refuses. The address is in the clear, so `list`, `address` and `signerAddress` need no
+password. `export` writes the key to `/dev/tty` itself (`terminal.ts#writeToTerminal`), past
+stdout and the scrubbing, after the user types the wallet's name; there is no MCP twin.
+
+A password comes from exactly one source (`password.ts`): `--password-env <NAME>`,
+`--password-file` (refused when its mode lets group or others in: `chmod 600`), `--password-command`
+(run through the shell with no stdin; a failure reports its exit status, never its output), else
+the prompt (asked twice for a new wallet; 8 characters at least). `--keystore` takes the same
+sources, so a password file a test passes must be 0600 (`cli-anvil.ts#KEYSTORE_PASSWORD_FILE` copies
+the committed fixture). There is no `--password <value>`. `--password-env` is THE COMMAND'S ONE READ
+OF THE ENVIRONMENT, `nodeIo().readEnv`, and `no-embedded-rpc.test.ts` allows exactly that line
+(`DELIBERATE_ENV_READ`) and no other; do not add a second.
+
+A wallet unlocked is GUARDED (`policy.ts#guardWallet`, by address): `chain.ts#sendAndWait` and
+`solana.ts`'s `sendAndConfirm` — the two places every send of the command passes — consult
+`guardOf(sender)` before sending. The guard calls the release gate (`requireSupported("sending from
+a wallet", …)`) and, when `<name>.policy.json` exists, MEASURES what the transaction moves out of the
+wallet and the Pot it cooks on — EVM from an `eth_simulateV1` rehearsal's Transfer/Approval logs and
+traced native transfers, Solana from a simulation reporting its writable accounts (`svm-effects.ts`)
+— and holds it to the policy's `chains`, `to`, `native` and `tokens` limits, per transaction and per
+24 hours from `<name>.ledger.jsonl` (reserve, then sent or released, under a lock file). What cannot
+be measured where a limit needs it is refused. The policy file is parsed strictly (an unknown field
+is an error) and refused when others may write it. `sauce mcp --wallets` reads its password once in
+`sdk/src/cli/mcp.ts`, before the server loads, from a source that is not the prompt (stdin is the
+protocol's), and passes it in `McpServeOptions.wallets`; `--wallets` is refused with `--http`, and
+`createSauceServer` registers the wallet tools only when given wallets, which only the stdio path
+gives. `sauce_wallet_send` normalizes another tool's whole result (`plannedTransactions`, in
+`wallet-send.ts`), rehearses an EVM plan in one `eth_simulateV1` block and preflights the policy
+before sending any, then sends each through `sendAndWait`; a Solana one through `sendPlannedSvm`.
+Its output schema is `refusable(...)`, like every tool the release gate can refuse. Tests: `cli-wallet.test.ts`, `cli-policy.test.ts`, `cli-wallet.e2e.test.ts`
+(anvil, released gated stack), `cli-wallet-solana.e2e.test.ts` (LiteSVM), `mcp/test/wallets.test.ts`
+and `wallets.e2e.test.ts`; `transports.test.ts` runs `sauce mcp --wallets` over stdio and checks
+the HTTP server has no wallet tool. Every password and key in them is generated and thrown away.
 
 **Which chains execute.** The `sauce` command's policy, and the CLI's alone: nothing outside
 `sdk/src/cli/` changes for it, and the package exports none of it — the registry keeps every chain

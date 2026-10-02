@@ -27,14 +27,20 @@ export interface SauceBytes extends SauceArray<bigint> {
   toLe(): bigint;
 }
 
-/** A registry ABI with no fixed address: `.at(address)` names the deployment to call. */
-export interface SauceInterface<Methods> {
+/** `.at(address)`: the same ABI at another address. */
+export interface SauceBinding<Methods> {
   at(address: bigint): Methods;
+}
+
+/** A registry ABI with no fixed address: called with the address of a deployment,
+ *  `UniswapV3.Pool(pool).liquidity()`, or `.at(address)`. */
+export interface SauceInterface<Methods> extends SauceBinding<Methods> {
+  (address: bigint): Methods;
 }
 
 /** A deployed registry contract: its address on the destination chain, its methods, and
  *  `.at(address)` to call another deployment of the same ABI. */
-export type SauceContract<Methods> = bigint & Methods & SauceInterface<Methods>;
+export type SauceContract<Methods> = bigint & Methods & SauceBinding<Methods>;
 
 export interface AaveV2LendingPoolMethods {
   "deposit"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): void;
@@ -105,6 +111,15 @@ export interface AerodromeRouterMethods {
   "swapExactTokensForTokens"(arg0: bigint, arg1: bigint, arg2: (readonly ({ "from": bigint; "to": bigint; "stable": boolean; "factory": bigint })[] | SauceArray<{ "from": bigint; "to": bigint; "stable": boolean; "factory": bigint }>), arg3: bigint, arg4: bigint): SauceArray<bigint>;
   "addLiquidity"(arg0: bigint, arg1: bigint, arg2: boolean, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint, arg8: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
   "removeLiquidity"(arg0: bigint, arg1: bigint, arg2: boolean, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
+}
+
+export interface AerodromePoolMethods {
+  "getReserves"(): [bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_blockTimestampLast": bigint };
+  "getAmountOut"(arg0: bigint, arg1: bigint): bigint;
+  "stable"(): boolean;
+  "token0"(): bigint;
+  "token1"(): bigint;
+  "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
 }
 
 export interface AerodromeSlipstreamSlipstreamCLFactoryMethods {
@@ -236,6 +251,31 @@ export interface CamelotV2RouterMethods {
 
 export interface CamelotV3SwapRouterMethods {
   "exactInputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "recipient": bigint; "deadline": bigint; "amountIn": bigint; "amountOutMinimum": bigint; "limitSqrtPrice": bigint }): bigint;
+}
+
+export interface CamelotV2FactoryMethods {
+  "getPair"(arg0: bigint, arg1: bigint): bigint;
+}
+
+export interface CamelotV2PairMethods {
+  "getReserves"(): [bigint, bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_token0FeePercent": bigint; "_token1FeePercent": bigint };
+  "getAmountOut"(arg0: bigint, arg1: bigint): bigint;
+  "stableSwap"(): boolean;
+  "token0"(): bigint;
+  "token1"(): bigint;
+  "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
+}
+
+export interface CamelotV3FactoryMethods {
+  "poolByPair"(arg0: bigint, arg1: bigint): bigint;
+}
+
+export interface CamelotV3PoolMethods {
+  "globalState"(): [bigint, bigint, bigint, bigint, bigint, bigint, bigint, boolean] & { "price": bigint; "tick": bigint; "feeZto": bigint; "feeOtz": bigint; "timepointIndex": bigint; "communityFeeToken0": bigint; "communityFeeToken1": bigint; "unlocked": boolean };
+  "liquidity"(): bigint;
+  "tickSpacing"(): bigint;
+  "token0"(): bigint;
+  "token1"(): bigint;
 }
 
 export interface CbethCbETHMethods {
@@ -775,6 +815,14 @@ export interface MaverickV2RouterMethods {
   "exactOutputSingle"(arg0: bigint, arg1: bigint, arg2: boolean, arg3: bigint, arg4: bigint): [bigint, bigint] & { "amountIn": bigint; "amountOut": bigint };
 }
 
+export interface MaverickV2PoolMethods {
+  "getState"(): { "reserveA": bigint; "reserveB": bigint; "lastTwaD8": bigint; "lastLogPriceD8": bigint; "lastTimestamp": bigint; "activeTick": bigint; "isLocked": boolean; "binCounter": bigint; "protocolFeeRatioD3": bigint };
+  "fee"(arg0: boolean): bigint;
+  "tickSpacing"(): bigint;
+  "tokenA"(): bigint;
+  "tokenB"(): bigint;
+}
+
 export interface MoonwellMTokenMethods {
   "mint"(arg0: bigint): bigint;
   "redeem"(arg0: bigint): bigint;
@@ -851,6 +899,13 @@ export interface PancakeswapV2RouterMethods {
   "getAmountsOut"(arg0: bigint, arg1: (readonly (bigint)[] | SauceArray<bigint>)): SauceArray<bigint>;
 }
 
+export interface PancakeswapV2PairMethods {
+  "getReserves"(): [bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_blockTimestampLast": bigint };
+  "token0"(): bigint;
+  "token1"(): bigint;
+  "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
+}
+
 export interface PancakeswapV3FactoryMethods {
   "getPool"(arg0: bigint, arg1: bigint, arg2: bigint): bigint;
 }
@@ -862,6 +917,15 @@ export interface PancakeswapV3NFPMMethods {
 export interface PancakeswapV3SmartRouterMethods {
   "exactInputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "fee": bigint; "recipient": bigint; "amountIn": bigint; "amountOutMinimum": bigint; "sqrtPriceLimitX96": bigint }): bigint;
   "exactOutputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "fee": bigint; "recipient": bigint; "amountOut": bigint; "amountInMaximum": bigint; "sqrtPriceLimitX96": bigint }): bigint;
+}
+
+export interface PancakeswapV3PoolMethods {
+  "slot0"(): [bigint, bigint, bigint, bigint, bigint, bigint, boolean] & { "sqrtPriceX96": bigint; "tick": bigint; "observationIndex": bigint; "observationCardinality": bigint; "observationCardinalityNext": bigint; "feeProtocol": bigint; "unlocked": boolean };
+  "liquidity"(): bigint;
+  "fee"(): bigint;
+  "tickSpacing"(): bigint;
+  "token0"(): bigint;
+  "token1"(): bigint;
 }
 
 export interface ParaswapAugustusV5Methods {
@@ -929,6 +993,29 @@ export interface QuickswapV2RouterMethods {
 
 export interface QuickswapV3SwapRouterMethods {
   "exactInputSingle"(arg0: { "tokenIn": bigint; "tokenOut": bigint; "recipient": bigint; "deadline": bigint; "amountIn": bigint; "amountOutMinimum": bigint; "limitSqrtPrice": bigint }): bigint;
+}
+
+export interface QuickswapV2FactoryMethods {
+  "getPair"(arg0: bigint, arg1: bigint): bigint;
+}
+
+export interface QuickswapV2PairMethods {
+  "getReserves"(): [bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_blockTimestampLast": bigint };
+  "token0"(): bigint;
+  "token1"(): bigint;
+  "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
+}
+
+export interface QuickswapV3FactoryMethods {
+  "poolByPair"(arg0: bigint, arg1: bigint): bigint;
+}
+
+export interface QuickswapV3PoolMethods {
+  "globalState"(): [bigint, bigint, bigint, bigint, bigint, bigint, boolean] & { "price": bigint; "tick": bigint; "fee": bigint; "timepointIndex": bigint; "communityFeeToken0": bigint; "communityFeeToken1": bigint; "unlocked": boolean };
+  "liquidity"(): bigint;
+  "tickSpacing"(): bigint;
+  "token0"(): bigint;
+  "token1"(): bigint;
 }
 
 export interface RamsesRouterMethods {
@@ -1082,6 +1169,13 @@ export interface SushiswapV2RouterMethods {
   "getAmountsOut"(arg0: bigint, arg1: (readonly (bigint)[] | SauceArray<bigint>)): SauceArray<bigint>;
 }
 
+export interface SushiswapV2PairMethods {
+  "getReserves"(): [bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_blockTimestampLast": bigint };
+  "token0"(): bigint;
+  "token1"(): bigint;
+  "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
+}
+
 export interface SwellRswETHMethods {
   "deposit"(): void;
   "rswETHToETHRate"(): bigint;
@@ -1138,6 +1232,15 @@ export interface SynthraV3NonfungiblePositionManagerMethods {
   "collect"(arg0: { "tokenId": bigint; "recipient": bigint; "amount0Max": bigint; "amount1Max": bigint }): [bigint, bigint] & { "amount0": bigint; "amount1": bigint };
 }
 
+export interface SynthraV3PoolMethods {
+  "slot0"(): [bigint, bigint, bigint, bigint, bigint, bigint, boolean] & { "sqrtPriceX96": bigint; "tick": bigint; "observationIndex": bigint; "observationCardinality": bigint; "observationCardinalityNext": bigint; "feeProtocol": bigint; "unlocked": boolean };
+  "liquidity"(): bigint;
+  "fee"(): bigint;
+  "tickSpacing"(): bigint;
+  "token0"(): bigint;
+  "token1"(): bigint;
+}
+
 export interface ThalesSpeedMarketsAMMMethods {
   "createNewMarket"(arg0: { "user": bigint; "asset": bigint; "strikeTime": bigint; "delta": bigint; "strikePrice": bigint; "strikePricePublishTime": bigint; "oracleSource": bigint; "direction": bigint; "collateral": bigint; "collateralAmount": bigint; "referrer": bigint; "skewImpact": bigint }): bigint;
 }
@@ -1178,6 +1281,19 @@ export interface TraderJoeLBRouterMethods {
   "addLiquidity"(arg0: { "tokenX": bigint; "tokenY": bigint; "binStep": bigint; "amountX": bigint; "amountY": bigint; "amountXMin": bigint; "amountYMin": bigint; "activeIdDesired": bigint; "idSlippage": bigint; "deltaIds": (readonly (bigint)[] | SauceArray<bigint>); "distributionX": (readonly (bigint)[] | SauceArray<bigint>); "distributionY": (readonly (bigint)[] | SauceArray<bigint>); "to": bigint; "refundTo": bigint; "deadline": bigint }): [bigint, bigint, bigint, bigint, SauceArray<bigint>, SauceArray<bigint>] & { "amountXAdded": bigint; "amountYAdded": bigint; "amountXLeft": bigint; "amountYLeft": bigint; "depositIds": SauceArray<bigint>; "liquidityMinted": SauceArray<bigint> };
 }
 
+export interface TraderJoeLBPairMethods {
+  "getTokenX"(): bigint;
+  "getTokenY"(): bigint;
+  "getBinStep"(): bigint;
+  "getActiveId"(): bigint;
+  "getReserves"(): [bigint, bigint] & { "reserveX": bigint; "reserveY": bigint };
+  "getBin"(arg0: bigint): [bigint, bigint] & { "binReserveX": bigint; "binReserveY": bigint };
+  "getPriceFromId"(arg0: bigint): bigint;
+  "getSwapIn"(arg0: bigint, arg1: boolean): [bigint, bigint, bigint] & { "amountIn": bigint; "amountOutLeft": bigint; "fee": bigint };
+  "getSwapOut"(arg0: bigint, arg1: boolean): [bigint, bigint, bigint] & { "amountInLeft": bigint; "amountOut": bigint; "fee": bigint };
+  "swap"(arg0: boolean, arg1: bigint): bigint;
+}
+
 export interface UniswapV2FactoryMethods {
   "getPair"(arg0: bigint, arg1: bigint): bigint;
   "createPair"(arg0: bigint, arg1: bigint): bigint;
@@ -1189,6 +1305,13 @@ export interface UniswapV2RouterMethods {
   "addLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
   "removeLiquidity"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
   "getAmountsOut"(arg0: bigint, arg1: (readonly (bigint)[] | SauceArray<bigint>)): SauceArray<bigint>;
+}
+
+export interface UniswapV2PairMethods {
+  "getReserves"(): [bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_blockTimestampLast": bigint };
+  "token0"(): bigint;
+  "token1"(): bigint;
+  "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
 }
 
 export interface UniswapV3FactoryMethods {
@@ -1276,6 +1399,15 @@ export interface UnitflowV3QuoterMethods {
   "quoteExactInputSingle"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint, arg4: bigint): bigint;
 }
 
+export interface UnitflowV3PoolMethods {
+  "slot0"(): [bigint, bigint, bigint, bigint, bigint, bigint, boolean] & { "sqrtPriceX96": bigint; "tick": bigint; "observationIndex": bigint; "observationCardinality": bigint; "observationCardinalityNext": bigint; "feeProtocol": bigint; "unlocked": boolean };
+  "liquidity"(): bigint;
+  "fee"(): bigint;
+  "tickSpacing"(): bigint;
+  "token0"(): bigint;
+  "token1"(): bigint;
+}
+
 export interface VelodromePoolFactoryMethods {
   "getPool"(arg0: bigint, arg1: bigint, arg2: boolean): bigint;
 }
@@ -1284,6 +1416,15 @@ export interface VelodromeRouterMethods {
   "swapExactTokensForTokens"(arg0: bigint, arg1: bigint, arg2: (readonly ({ "from": bigint; "to": bigint; "stable": boolean; "factory": bigint })[] | SauceArray<{ "from": bigint; "to": bigint; "stable": boolean; "factory": bigint }>), arg3: bigint, arg4: bigint): SauceArray<bigint>;
   "addLiquidity"(arg0: bigint, arg1: bigint, arg2: boolean, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint, arg8: bigint): [bigint, bigint, bigint] & { "amountA": bigint; "amountB": bigint; "liquidity": bigint };
   "removeLiquidity"(arg0: bigint, arg1: bigint, arg2: boolean, arg3: bigint, arg4: bigint, arg5: bigint, arg6: bigint, arg7: bigint): [bigint, bigint] & { "amountA": bigint; "amountB": bigint };
+}
+
+export interface VelodromePoolMethods {
+  "getReserves"(): [bigint, bigint, bigint] & { "_reserve0": bigint; "_reserve1": bigint; "_blockTimestampLast": bigint };
+  "getAmountOut"(arg0: bigint, arg1: bigint): bigint;
+  "stable"(): boolean;
+  "token0"(): bigint;
+  "token1"(): bigint;
+  "swap"(arg0: bigint, arg1: bigint, arg2: bigint, arg3: (string | SauceBytes)): void;
 }
 
 export interface VenusVBNBMethods {
@@ -1403,6 +1544,7 @@ export interface AcrossSource {
 export interface AerodromeSource {
   readonly PoolFactory: SauceContract<AerodromePoolFactoryMethods>;
   readonly Router: SauceContract<AerodromeRouterMethods>;
+  readonly Pool: SauceInterface<AerodromePoolMethods>;
 }
 
 export interface AerodromeSlipstreamSource {
@@ -1474,8 +1616,10 @@ export interface BenqiSource extends BenqiComptrollerMethods {
 export interface CamelotSource {
   readonly V2Router: SauceContract<CamelotV2RouterMethods>;
   readonly V3SwapRouter: SauceContract<CamelotV3SwapRouterMethods>;
-  readonly V2Factory: bigint;
-  readonly V3Factory: bigint;
+  readonly V2Factory: SauceContract<CamelotV2FactoryMethods>;
+  readonly V2Pair: SauceInterface<CamelotV2PairMethods>;
+  readonly V3Factory: SauceContract<CamelotV3FactoryMethods>;
+  readonly V3Pool: SauceInterface<CamelotV3PoolMethods>;
 }
 
 export interface CbethSource extends CbethCbETHMethods {
@@ -1750,6 +1894,7 @@ export interface MantleMethSource {
 export interface MaverickSource {
   readonly V2Factory: SauceContract<MaverickV2FactoryMethods>;
   readonly V2Router: SauceContract<MaverickV2RouterMethods>;
+  readonly V2Pool: SauceInterface<MaverickV2PoolMethods>;
 }
 
 export interface MoonwellSource extends MoonwellComptrollerMethods {
@@ -1794,12 +1939,14 @@ export interface OpynSource extends OpynControllerMethods {
 export interface PancakeswapV2Source {
   readonly Factory: SauceContract<PancakeswapV2FactoryMethods>;
   readonly Router: SauceContract<PancakeswapV2RouterMethods>;
+  readonly Pair: SauceInterface<PancakeswapV2PairMethods>;
 }
 
 export interface PancakeswapV3Source {
   readonly Factory: SauceContract<PancakeswapV3FactoryMethods>;
   readonly NonfungiblePositionManager: SauceContract<PancakeswapV3NFPMMethods>;
   readonly SmartRouter: SauceContract<PancakeswapV3SmartRouterMethods>;
+  readonly Pool: SauceInterface<PancakeswapV3PoolMethods>;
 }
 
 export interface ParaswapSource extends ParaswapAugustusV5Methods {
@@ -1844,8 +1991,10 @@ export interface PythSource extends PythOracleMethods {
 export interface QuickswapSource {
   readonly V2Router: SauceContract<QuickswapV2RouterMethods>;
   readonly V3SwapRouter: SauceContract<QuickswapV3SwapRouterMethods>;
-  readonly V2Factory: bigint;
-  readonly V3Factory: bigint;
+  readonly V2Factory: SauceContract<QuickswapV2FactoryMethods>;
+  readonly V2Pair: SauceInterface<QuickswapV2PairMethods>;
+  readonly V3Factory: SauceContract<QuickswapV3FactoryMethods>;
+  readonly V3Pool: SauceInterface<QuickswapV3PoolMethods>;
 }
 
 export interface RadiantSource {
@@ -1944,6 +2093,7 @@ export interface SuperfluidSource extends SuperfluidCFAForwarderMethods {
 export interface SushiswapV2Source {
   readonly Factory: SauceContract<SushiswapV2FactoryMethods>;
   readonly Router: SauceContract<SushiswapV2RouterMethods>;
+  readonly Pair: SauceInterface<SushiswapV2PairMethods>;
 }
 
 export interface SwellSource {
@@ -1970,6 +2120,7 @@ export interface SynthraV3Source {
   readonly SwapRouter02: SauceContract<SynthraV3SwapRouter02Methods>;
   readonly QuoterV2: SauceContract<SynthraV3QuoterV2Methods>;
   readonly NonfungiblePositionManager: SauceContract<SynthraV3NonfungiblePositionManagerMethods>;
+  readonly Pool: SauceInterface<SynthraV3PoolMethods>;
 }
 
 export interface ThalesSource {
@@ -1996,11 +2147,13 @@ export interface TokemakSource {
 export interface TraderJoeSource {
   readonly LBFactory: SauceContract<TraderJoeLBFactoryMethods>;
   readonly LBRouter: SauceContract<TraderJoeLBRouterMethods>;
+  readonly LBPair: SauceInterface<TraderJoeLBPairMethods>;
 }
 
 export interface UniswapV2Source {
   readonly Factory: SauceContract<UniswapV2FactoryMethods>;
   readonly Router: SauceContract<UniswapV2RouterMethods>;
+  readonly Pair: SauceInterface<UniswapV2PairMethods>;
 }
 
 export interface UniswapV3Source {
@@ -2023,11 +2176,13 @@ export interface UnitflowV3Source {
   readonly Factory: SauceContract<UnitflowV3FactoryMethods>;
   readonly Router: SauceContract<UnitflowV3RouterMethods>;
   readonly Quoter: SauceContract<UnitflowV3QuoterMethods>;
+  readonly Pool: SauceInterface<UnitflowV3PoolMethods>;
 }
 
 export interface VelodromeSource {
   readonly PoolFactory: SauceContract<VelodromePoolFactoryMethods>;
   readonly RouterV2: SauceContract<VelodromeRouterMethods>;
+  readonly Pool: SauceInterface<VelodromePoolMethods>;
 }
 
 export interface VenusSource {
@@ -2125,13 +2280,16 @@ export interface LiquityFamilySource {
 
 export interface PancakeswapFamilySource {
   readonly Router: PancakeswapV2Source["Router"];
+  readonly Pair: PancakeswapV2Source["Pair"];
   readonly NonfungiblePositionManager: PancakeswapV3Source["NonfungiblePositionManager"];
   readonly SmartRouter: PancakeswapV3Source["SmartRouter"];
+  readonly Pool: PancakeswapV3Source["Pool"];
 }
 
 export interface SushiswapFamilySource {
   readonly Factory: SushiswapV2Source["Factory"];
   readonly Router: SushiswapV2Source["Router"];
+  readonly Pair: SushiswapV2Source["Pair"];
 }
 
 export interface SynthetixFamilySource {
@@ -2144,10 +2302,12 @@ export interface SynthraFamilySource {
   readonly SwapRouter02: SynthraV3Source["SwapRouter02"];
   readonly QuoterV2: SynthraV3Source["QuoterV2"];
   readonly NonfungiblePositionManager: SynthraV3Source["NonfungiblePositionManager"];
+  readonly Pool: SynthraV3Source["Pool"];
 }
 
 export interface UniswapFamilySource {
   readonly Router: UniswapV2Source["Router"];
+  readonly Pair: UniswapV2Source["Pair"];
   readonly NonfungiblePositionManager: UniswapV3Source["NonfungiblePositionManager"];
   readonly QuoterV2: UniswapV3Source["QuoterV2"];
   readonly SwapRouter: UniswapV3Source["SwapRouter"];
@@ -2163,6 +2323,7 @@ export interface UnitflowFamilySource {
   readonly Factory: UnitflowV3Source["Factory"];
   readonly Router: UnitflowV3Source["Router"];
   readonly Quoter: UnitflowV3Source["Quoter"];
+  readonly Pool: UnitflowV3Source["Pool"];
 }
 
 export interface YearnFamilySource {
@@ -4115,6 +4276,7 @@ declare global {
   const bNIU: bigint & SauceTokenSource;
   const bNVDA: bigint & SauceTokenSource;
   const bTSLA: bigint & SauceTokenSource;
+  const PYUSD: bigint;
   const WSOL: bigint;
   /** Destination chain identity supplied by openRoute. */
   const chainId: bigint;

@@ -125,7 +125,7 @@ export const Plasma = composedChainGlobal("Plasma") as Composed<"Plasma">;
 /** eco-routes chain accessor for Ink (chain id 57073). */
 export const Ink = composedChainGlobal("Ink") as Composed<"Ink">;
 /** eco-routes chain accessor for Solana (chain id 1399811149). */
-export const Solana = composedChainGlobal("Solana") as Composed<"Solana"> & SvmVenueAccessors & Tokens<"USDC" | "USDT" | "WSOL">;
+export const Solana = composedChainGlobal("Solana") as Composed<"Solana"> & SvmVenueAccessors & Tokens<"PYUSD" | "USDC" | "USDT" | "WSOL">;
 
 /** Runtime-resolved origin: `chain('eth')`, `chain(8453)`. */
 export { chain } from "./accessors.js";
