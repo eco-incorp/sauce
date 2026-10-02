@@ -1,5 +1,5 @@
 {
-  "$comment": "The suites that EXECUTE each skills/*/examples/*.sauce.ts on an engine, beyond skills:check's compile and command lines, and the examples nothing runs yet, with why. skills:check (docs/scripts/executed-examples.mjs) fails an example in neither list, an entry that is not an example, and a suite that does not exist, does not name the example, or is not one CI runs. Kept here, not in skills/, because the skills ship.",
+  "$comment": "The suites that EXECUTE each skills/*/examples/*.sauce.ts on an engine, beyond skills:check's compile and command lines, and the examples nothing runs yet, with why. skills:check (docs/scripts/example-programs.mjs) fails an example in neither list, an entry that is not an example, and a suite that does not exist, does not name the example, or is not one CI runs. Kept here, not in skills/, because the skills ship.",
   "executed": {
     "sauce-cli/examples/pay.sauce.ts": [
       "sdk/test/cli.e2e.test.ts",

@@ -53,7 +53,9 @@
 //  10. the actions reference (sauce-actions/references) is what `gen-skills-actions.mjs` renders
 //      from the actions JSON Schema the package ships;
 //  11. every example program is either executed by a suite CI runs, named in
-//      `skills-check/executed.json`, or listed there as compile-only with the reason.
+//      `skills-check/executed.json`, or listed there as compile-only with the reason;
+//  12. every example program writes what the registry names by its name: no recorded address as
+//      a literal, no hand-built selector of a function a binding declares (LOW_LEVEL_CALLS).
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -78,7 +80,11 @@ import {
   skillsReferences,
 } from "./gen-skills-references.mjs";
 import { checkBuiltins, checkBuiltinsJson } from "./skills-check/builtins.mjs";
-import { executedExamplesProblems } from "../../docs/scripts/executed-examples.mjs";
+import {
+  executedExamplesProblems,
+  namedProgramProblems,
+  registryNames,
+} from "../../docs/scripts/example-programs.mjs";
 
 // ---- Arguments and resolution -------------------------------------------------------------------
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1561,25 +1567,68 @@ else {
     );
 }
 
-// ---- 11. Which example programs a suite executes -----------------------------------------------------------
+// ---- 11. Which example programs a suite executes ----------------------------------------------------------
 // Compiling a program is not running it: `skills-check/executed.json` names the suites that execute
 // each one on an engine, or says why none does yet. The suites are this repository's, so a check of
 // another skills directory (`--skills`) skips it.
+const examplePrograms = walk(SKILLS_DIR, (file) => file.endsWith(".sauce.ts"))
+  .map((file) => relative(SKILLS_DIR, file))
+  .filter((file) => /^[^/]+\/examples\/[^/]+$/.test(file));
 let executedExamples = 0;
 if (skillsFlag < 0) {
-  const programs = walk(SKILLS_DIR, (file) => file.endsWith(".sauce.ts"))
-    .map((file) => relative(SKILLS_DIR, file))
-    .filter((file) => /^[^/]+\/examples\/[^/]+$/.test(file));
   const manifest = join(HERE, "skills-check", "executed.json");
   for (const problem of executedExamplesProblems({
     repository: REPOSITORY,
     examplesRoot: SKILLS_DIR,
-    examples: programs,
+    examples: examplePrograms,
     manifest,
   })) {
     fail(rel(manifest), problem);
   }
   executedExamples = Object.keys(JSON.parse(read(manifest)).executed).length;
+}
+
+// ---- 12. Example programs write what the registry names by its name --------------------------------------
+// No address the registry records as a literal, and no hand-built selector of a function a binding
+// declares (`docs/scripts/example-programs.mjs`). A deliberately low-level call is listed here:
+// example -> selector -> why. An entry nothing needs any more fails.
+const LOW_LEVEL_CALLS = {
+  "sauce-intents/examples/fund-by-transfer.sauce.ts": {
+    "0742ebe4": "until #66 calls EcoRoutes.Portal.intentVaultAddress through its binding",
+    "645c890c": "until #66 calls EcoRoutes.Portal.publish through its binding",
+  },
+};
+{
+  const names = registryNames(
+    sdk,
+    await Promise.all(
+      sdk.listProtocolSlugs().map(async (slug) => [slug, await load(`${PKG}/protocols/${slug}`)]),
+    ),
+  );
+  for (const program of examplePrograms) {
+    const lowLevel = LOW_LEVEL_CALLS[program] ?? {};
+    const used = new Set();
+    for (const problem of namedProgramProblems({
+      where: rel(join(SKILLS_DIR, program)),
+      source: read(join(SKILLS_DIR, program)),
+      names,
+      lowLevel,
+      used,
+    })) {
+      failures.push(problem);
+    }
+    for (const selector of Object.keys(lowLevel)) {
+      if (!used.has(selector))
+        fail(
+          "check-skills.mjs LOW_LEVEL_CALLS",
+          `allows ${selector} in ${program}, which no longer builds it: remove the entry`,
+        );
+    }
+  }
+  for (const program of Object.keys(LOW_LEVEL_CALLS)) {
+    if (!examplePrograms.includes(program))
+      fail("check-skills.mjs LOW_LEVEL_CALLS", `names ${program}, which is not an example program`);
+  }
 }
 
 // ---- Report ----------------------------------------------------------------------------------------------

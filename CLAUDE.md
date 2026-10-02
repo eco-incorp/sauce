@@ -912,9 +912,14 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   compiler; every ```sauce block in a skill's `references/` compiled like its own; every relative
   link resolving to a file inside the skills directory; every example program either executed by a
   suite CI runs or listed as compile-only, with why, in `skills-check/executed.json` (the rules are
-  `docs/scripts/executed-examples.mjs`'s, shared with `docs:check`, which holds
+  `docs/scripts/example-programs.mjs`'s, shared with `docs:check`, which holds
   `docs/examples/executed.json` to them with no compile-only list; both skip on the installed
-  package, where the suites are absent); and the wording rules below. Its exceptions
+  package, where the suites are absent); every example program, in the skills and in
+  `docs/examples`, writing what the registry names by its name — no `0x` literal of a token or
+  contract address `routes.sourceGlobals` names on any EVM chain, and no hand-built `hex` selector
+  of a function a namespace binding, interface or registry ABI declares (comments are exempt, so a
+  usage line may show an address; a deliberately low-level call is a `LOW_LEVEL_CALLS` entry, per
+  example and selector, with its reason); and the wording rules below. Its exceptions
   live in the checker, never as markers in a
   shipped skill (they mean nothing to the agent reading it): a name inline code may use although
   the package never declares it (an external contract's function) is an `UNDECLARED_NAMES` entry,

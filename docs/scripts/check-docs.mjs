@@ -10,9 +10,13 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { executedExamplesProblems } from "./executed-examples.mjs";
+import {
+  executedExamplesProblems,
+  namedProgramProblems,
+  registryNames,
+} from "./example-programs.mjs";
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const packageArgument = process.argv.indexOf("--package-root");
@@ -111,6 +115,29 @@ if (packageArgument < 0) {
   if (problems.length)
     throw new Error(`SauceScript examples not executed:\n${problems.join("\n")}`);
   console.log(`SauceScript examples: ${sauceExamples.length} executed by the suites named`);
+}
+// What the registry names, a program writes by its name: no recorded address as a literal, no
+// selector of a function a binding declares built by hand. None of these examples is low-level.
+{
+  const sdk = await import(pathToFileURL(join(root, "sdk/dist/index.js")).href);
+  const protocols = await Promise.all(
+    sdk
+      .listProtocolSlugs()
+      .map(async (slug) => [
+        slug,
+        await import(pathToFileURL(join(root, "sdk/dist/protocols", slug, "index.js")).href),
+      ]),
+  );
+  const names = registryNames(sdk, protocols);
+  const problems = sauceExamples.flatMap((name) =>
+    namedProgramProblems({
+      where: `docs/examples/${name}`,
+      source: readFileSync(join(examples, name), "utf8"),
+      names,
+    }),
+  );
+  if (problems.length) throw new Error(`SauceScript examples not by name:\n${problems.join("\n")}`);
+  console.log(`SauceScript examples: ${sauceExamples.length} name what the registry records`);
 }
 // Keep examples under the package so Node resolves its public self-reference exports.
 const temporary = mkdtempSync(join(root, ".sauce-doc-examples-"));

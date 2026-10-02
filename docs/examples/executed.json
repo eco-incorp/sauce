@@ -1,5 +1,5 @@
 {
-  "$comment": "The suites that EXECUTE each docs/examples/*.sauce.ts on an engine, beyond docs:check's compile. docs:check (docs/scripts/executed-examples.mjs) fails an example missing here, an entry that is not an example, and a suite that does not exist, does not name the example, or is not one CI runs. There is no compile-only list here: every example the manual ships runs.",
+  "$comment": "The suites that EXECUTE each docs/examples/*.sauce.ts on an engine, beyond docs:check's compile. docs:check (docs/scripts/example-programs.mjs) fails an example missing here, an entry that is not an example, and a suite that does not exist, does not name the example, or is not one CI runs. There is no compile-only list here: every example the manual ships runs.",
   "executed": {
     "cross-chain-cascade.sauce.ts": ["sdk/test/routes-intent-chains.e2e.test.ts"],
     "cross-chain-intent.sauce.ts": [
