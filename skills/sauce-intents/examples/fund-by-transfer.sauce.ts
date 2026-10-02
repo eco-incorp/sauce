@@ -10,7 +10,7 @@
 // same `publish` that `sauce intent publish … --from <address> --format json` prints for an intent
 // file (which already funds that way).
 //
-//   sauce run fund-by-transfer.sauce.ts --chain <chain> --config sauce.config.json \
+//   sauce run fund-by-transfer.sauce.ts --chain <chain> \
 //     --keystore <keystore> --args <destination> <route> <reward>
 //
 //   destination: Uint256  the destination's chain id: 1 is Ethereum
@@ -24,7 +24,7 @@
 //
 // Returns the intent's hash and its vault, as `publish` does. On Base, for an intent to Ethereum:
 //
-//   sauce run fund-by-transfer.sauce.ts --chain base --config sauce.config.json \
+//   sauce run fund-by-transfer.sauce.ts --chain base \
 //     --keystore <keystore> --args 1 <route> <reward>
 function main(
   destination: Uint256,

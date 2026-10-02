@@ -8,7 +8,7 @@
 // `AaveV3.Pool` there are Ethereum's. The gap between what is delivered and the reward is the
 // solver's margin.
 //
-//   sauce run cross-chain.sauce.ts --chain <chain> --config sauce.config.json \
+//   sauce run cross-chain.sauce.ts --chain <chain> \
 //     --keystore <keystore> --define BENEFICIARY=<address> --intent-deadline <unix seconds> \
 //     --intent-creator <address> --intent-execution-fee <Ethereum Kitchen fee in wei>
 //
@@ -16,11 +16,11 @@
 //   --intent-deadline: unix seconds    the last second a solver may fill it
 //   --intent-creator: Address          who may reclaim the reward if no solver earns it
 //   --intent-execution-fee: wei        Ethereum's Kitchen fee for the body's cook; `auto` reads it
-//                                      through --config
+//                                      from Ethereum
 //
 // From Base, with the fee read from Ethereum:
 //
-//   sauce run cross-chain.sauce.ts --chain base --config sauce.config.json \
+//   sauce run cross-chain.sauce.ts --chain base \
 //     --keystore <keystore> --define BENEFICIARY=<address> --intent-deadline <unix seconds> \
 //     --intent-creator <address> --intent-execution-fee auto
 require(BENEFICIARY != 0n, "set BENEFICIARY");

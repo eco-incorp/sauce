@@ -5,8 +5,9 @@
 `@eco-incorp/sauce` installs a `sauce` command. It compiles a program file exactly as the SDK
 compiles a route body, deploys the Pot the program runs on, rehearses the cook, signs it, sends it
 and waits for it — on an EVM chain or on Solana — and takes transactions and programs back apart
-afterwards. It needs no other tool. It reads no environment variables and reaches a network only
-through an endpoint you name on the command line.
+afterwards. It needs no other tool and no configuration: it reads no environment variables, and
+reads a chain through a built-in public endpoint unless you give it
+[your own](#your-own-endpoints).
 
 | Command          | What it does                                                                      |
 | ---------------- | --------------------------------------------------------------------------------- |
@@ -53,11 +54,20 @@ and lists it, unless you pass `--force`. It runs no package manager unless you p
 
 ## Endpoints and signers
 
-Nothing reaches a network without one of these:
+A command that reads a chain needs no endpoint from you: it reads the chain through a built-in
+public endpoint — one to three keyless ones per chain, each checked to serve the chain and state
+overrides, the next taking over when one cannot be reached, refuses, rate-limits or fails — and
+says so on stderr. Public endpoints can be slow or rate-limited; Kava, ZetaChain and Evmos have
+none. `--offline` reads no chain at all: `sauce tx` then needs `--value`, and `sauce pot` only
+predicts.
+
+### Your own endpoints
+
+Optional, and faster:
 
 - `--rpc-url <url>`, the chain's endpoint; or
 - `--config <file>`, a JSON file of endpoints by chain id, used for whichever chain the command is
-  for:
+  for (a chain it does not name is read through the built-in endpoint):
 
   ```json
   { "rpcUrls": { "1": "https://…", "8453": "https://…", "1399811149": "https://…" } }
@@ -66,8 +76,10 @@ Nothing reaches a network without one of these:
   `sauce init` writes `sauce.config.example.json` with `<…>` placeholders; copy it to
   `sauce.config.json`, which its `.gitignore` keeps out of git. A placeholder left in is refused.
 
-The command checks that an EVM endpoint serves the chain you named. It never prints the URL: a
+The command checks that an EVM endpoint serves the chain you named. It never prints your URL: a
 provider URL often carries a key.
+
+### Signers
 
 Nothing is signed without one of these, and the signer is always the Pot's owner (on Solana with
 `--via engine`, which uses no Pot, the signer is the program's authority):
@@ -148,18 +160,18 @@ npx sauce globals --chain base
 npx sauce compile pay.sauce.ts --chain base --define RECIPIENT=0x… --define AMOUNT=1000000
 
 # 3. Deploy your Pot (once). Its address is known before it exists.
-npx sauce pot --deploy --chain base --config sauce.config.json --keystore ~/.keys/me.json
+npx sauce pot --deploy --chain base --keystore ~/.keys/me.json
 
 # 4. Fund the Pot with what the program spends: send its address the tokens, from any wallet —
 #    or let `sauce run --fund` pull them in with the cook (see "Funding a run" below).
 
 # 5. Rehearse the cook from the Pot's owner: no key, nothing sent. It can come first: a Pot not
 #    deployed yet is deployed in the rehearsal, and --assume-balance gives it what it spends.
-npx sauce simulate pay.sauce.ts --chain base --owner 0xYou --config sauce.config.json \
+npx sauce simulate pay.sauce.ts --chain base --owner 0xYou \
   --assume-balance USDC:1 --assume-balance USDT:1 --define RECIPIENT=0x… --define AMOUNT=1000000
 
 # 6. Run it.
-npx sauce run pay.sauce.ts --chain base --config sauce.config.json --keystore ~/.keys/me.json \
+npx sauce run pay.sauce.ts --chain base --keystore ~/.keys/me.json \
   --define RECIPIENT=0x… --define AMOUNT=1000000
 ```
 
@@ -233,7 +245,7 @@ on a stdin that is spent.
 nothing on chain changes. It needs neither a deployed Pot nor the tokens the program spends:
 
 ```sh
-npx sauce simulate pay.sauce.ts --chain base --owner 0xYou --config sauce.config.json \
+npx sauce simulate pay.sauce.ts --chain base --owner 0xYou \
   --assume-balance USDC:2 --assume-balance USDT:2 --define RECIPIENT=0x… --define AMOUNT=1000000
 ```
 
@@ -321,7 +333,7 @@ A program spends what its Pot holds. Instead of sending the Pot tokens first, `s
 them from your wallet in the same transaction as the cook:
 
 ```sh
-npx sauce run pay.sauce.ts --chain base --config sauce.config.json --keystore ~/.keys/me.json \
+npx sauce run pay.sauce.ts --chain base --keystore ~/.keys/me.json \
   --fund USDC:1.5 --sweep --define RECIPIENT=0x… --define AMOUNT=1000000
 ```
 
@@ -418,14 +430,14 @@ With a signer and no `--owner`, `sauce pot` is the signer's own Pot: `sauce pot 
 --keystore ~/.keys/me.json` prints your address and your Pot. A keystore that records its address
 (most wallets write one) is read with no password; one that does not is unlocked to learn it.
 
-Given an endpoint and no `--deploy`, `sauce pot` also reads the chain (or the Solana cluster) and
+Without `--deploy`, `sauce pot` also reads the chain (or the Solana cluster) and
 adds what it found under `deployment`, and in a line on stderr: whether the released engine and
 Kitchen are there, the Kitchen's execution fee, and whether the Pot is deployed and whose it is.
 `--deploy` refuses a chain with no Kitchen rather than send a `deployPot` to an address without
 code, which would succeed and deploy nothing.
 
 ```sh
-npx sauce pot --chain base --owner 0xYou --config sauce.config.json
+npx sauce pot --chain base --owner 0xYou
 ```
 
 `run` and `publish` act for the signer, so the owner is the signer: `--owner` may only restate it,
@@ -444,8 +456,9 @@ prints the cook unsigned, for any wallet to sign from the owner:
 { "chainId": 8453, "to": "0x8a…", "data": "0x…", "value": "1000" }
 ```
 
-Give the value, or an endpoint to read the Kitchen's fee (the endpoint also checks the Pot). What
-must be true for it to land — the Pot deployed and funded, sent from its owner — goes to stderr.
+The value is `--value`, or else the Kitchen's fee, read from the chain, which also checks the Pot.
+What must be true for it to land — the Pot deployed and funded, sent from its owner — goes to
+stderr.
 
 `--format cast` prints the same transaction as a `cast send` line instead, for
 [Foundry](https://getfoundry.sh/cast/overview) users; it is never needed. The line leaves the
@@ -554,7 +567,7 @@ them is still a flag, and `--` before an argument that starts with `--` keeps it
 JSON array with `--args-json '[…]'` (or a file):
 
 ```sh
-npx sauce run split.sauce.ts --chain base --config sauce.config.json --keystore ~/.keys/me.json \
+npx sauce run split.sauce.ts --chain base --keystore ~/.keys/me.json \
   --args 0xToken '["0xA…","0xB…"]' 1000000 true
 ```
 
@@ -590,7 +603,7 @@ A program file may start with a `#!` line that runs it through `sauce simulate`:
 #!/usr/bin/env -S npx -y @eco-incorp/sauce simulate
 ```
 
-After `chmod +x pay.sauce.ts`, `./pay.sauce.ts --chain base --config sauce.config.json --owner
+After `chmod +x pay.sauce.ts`, `./pay.sauce.ts --chain base --owner
 <address> --args <recipient> 1000000` rehearses the cook, exactly as `sauce simulate pay.sauce.ts`
 with those flags does. Running the file never spends: sending it is still `sauce run`. The command
 blanks the line before compiling, so the program and its error positions are the file's own.
@@ -687,9 +700,9 @@ funded with `--fund` if you like. `--define` and `--defines` are refused, becaus
 are its own fields.
 
 ```sh
-npx sauce simulate swap.json --chain base --owner 0xYou --rpc-url <url> \
+npx sauce simulate swap.json --chain base --owner 0xYou \
   --assume-balance USDC:1000 --args 1000000000
-npx sauce run swap.json --chain base --config sauce.config.json --keystore ~/.keys/me.json \
+npx sauce run swap.json --chain base --keystore ~/.keys/me.json \
   --args 1000000000
 ```
 
@@ -703,13 +716,13 @@ refuses a deadline at or before now, which no solver could ever fill (`sauce int
 rehearses one, with a note, to show the Portal's refusal). `--intent-reward-deadline <unix seconds>`
 sets when an unproven reward becomes refundable (the fill deadline by default), and
 `--intent-prover <address>` overrides the prover the registry records for the pair.
-`--intent-execution-fee auto` reads that fee from each destination's Kitchen, through `--config`
-(an `rpcUrls` entry for the destination's chain id), and says what it read.
+`--intent-execution-fee auto` reads that fee from each destination's Kitchen, and says what it
+read.
 
 Every intent whose body runs a program cooks on one Pot on its destination: the one owned by the
 destination Portal's Executor with salt zero, which every intent through that Portal shares. No
 solver can fill the intent until that Pot is deployed. `compile` and `sauce intent publish` check it on the
-destination when `--config` reaches it (`compile --json` reports each under `intentPots`) and warn
+destination (`compile --json` reports each under `intentPots`) and warn
 while it is missing, naming the `sauce pot --deploy --chain <destination> --owner <Executor>` that
 deploys it; any account may send that. `publish` warns before it sends anything, and says how to
 check when it cannot.
@@ -725,7 +738,7 @@ There are two ways to get such a file's intents onto the chain:
   result.
 
   ```sh
-  npx sauce intent publish bridge.sauce.ts --chain ethereum --config sauce.config.json \
+  npx sauce intent publish bridge.sauce.ts --chain ethereum \
     --keystore ~/.keys/me.json --intent-deadline 2000000000 --intent-creator 0xYou
   ```
 
@@ -769,8 +782,7 @@ There are two ways to get such a file's intents onto the chain:
 Publishing from Solana is not supported: see [Solana](#solana).
 
 Everything after publishing is a verb of `sauce intent` too. Each takes the intent's file (with
-`--chain`, its source, and the flags it was built with) or its hash, and `--config` with both
-chains' endpoints:
+`--chain`, its source, and the flags it was built with) or its hash, and reads both chains:
 
 | Verb                   | What it does                                                                 |
 | ---------------------- | ---------------------------------------------------------------------------- |
@@ -798,7 +810,7 @@ also runs with none:
 ```sh
 npx sauce intent publish --source ethereum --destination base --token USDC --amount 1 \
   --recipient 0xYou --reward-token USDC --reward 1.01 --prover HyperProver \
-  --fill-deadline +1h --reward-deadline +1d --config sauce.config.json --keystore ~/.keys/me.json
+  --fill-deadline +1h --reward-deadline +1d --keystore ~/.keys/me.json
 ```
 
 With no terminal, it names every flag still missing; the funding, which has a default, is not one
@@ -825,7 +837,7 @@ nothing. It takes the file and the flags `publish` does (or the intent's hash), 
 destination's endpoint:
 
 ```sh
-npx sauce intent fill swap.sauce.ts --chain ethereum --config sauce.config.json \
+npx sauce intent fill swap.sauce.ts --chain ethereum \
   --defines swap.defines.json --intent-deadline 2000000000 --intent-creator 0xYou \
   --intent-execution-fee 3744785386350 --no-prove
 ```
@@ -845,8 +857,8 @@ rewardHash, claimant, prover, sourceDomain, data)` when the reward's prover is a
    `Portal.fulfill(intentHash, route, rewardHash, claimant)` with the native amount alone.
 
 The prover is the destination's counterpart of the reward's (the registry's address for the same
-role on that chain); it must serve the route's Portal, and with the source chain's endpoint in
-`--config` the command checks the source prover trusts it. The solver is an address nobody holds
+role on that chain); it must serve the route's Portal, and the command checks the source prover
+trusts it. The solver is an address nobody holds
 the key of, or `--solver <address>`, and the claimant is the solver, or
 `--claimant <address | bytes32>`. The solver is given the route's tokens and the value by state
 override, the token's balance word found as `simulate --assume-balance` finds it. On success it
@@ -892,8 +904,8 @@ Portal's own refusals are named: `IntentExpired()` with the deadline, `IntentAlr
 `approvals`, `nativeTransfers`, `balanceChanges`, `otherLogs` and `leftBehind` — or `stage` and
 `reason`.
 
-The endpoint is the destination's: `--config` names one for each destination, and `--rpc-url`
-serves a file whose intents all go to one chain. It needs `eth_simulateV1`, since the deployment,
+It runs on the destination: `--rpc-url` is the destination's endpoint, for a file whose intents
+all go to one chain. It needs `eth_simulateV1`, since the deployment,
 the approvals and the fulfill carry state from one to the next. The intent must be fixed when it is
 built, as for `publish`: an intent that uses a value the program measures on chain has no route
 until the program runs (name it by the hash `sauce run` stored instead). A Solana destination is
@@ -905,7 +917,7 @@ A rehearsal sends nothing, so it runs on a preview chain too. With `--send` and 
 signer is the solver, and the fill is sent — to a supported destination only:
 
 ```sh
-npx sauce intent fill 0x<intent hash> --config sauce.config.json --send --keystore ~/.keys/me.json
+npx sauce intent fill 0x<intent hash> --send --keystore ~/.keys/me.json
 ```
 
 It is rehearsed first exactly as above, but with nothing assumed: on the signer's own balances, so
@@ -921,10 +933,10 @@ travels as (the Hyperlane explorer finds it by that id). The intent and the fill
 ### After the fill: `prove`, `claim`, `refund`, `cancel`
 
 ```sh
-npx sauce intent prove 0x<intent hash> --config sauce.config.json --keystore ~/.keys/me.json
-npx sauce intent claim 0x<intent hash> --chain ethereum --config sauce.config.json --keystore ~/.keys/me.json
-npx sauce intent refund 0x<intent hash> --chain ethereum --config sauce.config.json --keystore ~/.keys/me.json
-npx sauce intent cancel 0x<intent hash> --config sauce.config.json --keystore ~/.keys/me.json
+npx sauce intent prove 0x<intent hash> --keystore ~/.keys/me.json
+npx sauce intent claim 0x<intent hash> --chain ethereum --keystore ~/.keys/me.json
+npx sauce intent refund 0x<intent hash> --chain ethereum --keystore ~/.keys/me.json
+npx sauce intent cancel 0x<intent hash> --keystore ~/.keys/me.json
 ```
 
 - **`prove`** sends `Portal.prove(prover, sourceDomain, [intentHash…], data)` on the destination,
@@ -963,14 +975,15 @@ deposit) is filled, proven and cancelled through Solana's Portal program, and cl
 its source like any other. Store it from the transaction that published it, then:
 
 ```sh
-npx sauce intent import 0x<tx hash> --chain base --config sauce.config.json
-npx sauce intent fill 0x<intent hash> --config sauce.config.json --solver <solana key> --claimant 0xYou
-npx sauce intent fill 0x<intent hash> --config sauce.config.json --claimant 0xYou \
+npx sauce intent import 0x<tx hash> --chain base
+npx sauce intent fill 0x<intent hash> --solver <solana key> --claimant 0xYou
+npx sauce intent fill 0x<intent hash> --claimant 0xYou \
   --send --keypair ~/.config/solana/id.json
-npx sauce intent claim 0x<intent hash> --config sauce.config.json --keystore ~/.keys/me.json
+npx sauce intent claim 0x<intent hash> --keystore ~/.keys/me.json
 ```
 
-- The config names Solana's endpoint under its chain id, `1399811149`, beside the source's.
+- Solana is read as any chain is; a `--config` names its endpoint under its chain id,
+  `1399811149`.
 - **`fill`** sends `Portal.fulfill` from the solver: its token accounts pay the route's tokens into
   the Portal's executor, which runs the route's calls. The rehearsal runs on the accounts as they
   are (Solana's simulation takes no overrides, so `--solver` names a Solana key whose accounts
@@ -1001,11 +1014,11 @@ happened to it (`published`, `funded`, `imported`, `filled`, `proving`, `claimed
 commands at once cannot tear it, and where an intent stands is never stored: it is read from the
 chains each time. No key or endpoint is written there.
 
-`sauce intent import <tx hash> --chain <source> --config sauce.config.json` stores the intents a
+`sauce intent import <tx hash> --chain <source>` stores the intents a
 transaction published — someone else's, say — rebuilt from its `IntentPublished` logs, each checked
 against its hash. `sauce intent list` lists the store, and `sauce intent show <hash>` one intent
 with its events. `sauce intent` alone, at a terminal, lists the stored intents with where each
-stands (read live with `--config`), and on the one you pick runs status, fill, prove, claim, refund
+stands (read live from the chains), and on the one you pick runs status, fill, prove, claim, refund
 or cancel, with the same approvals; with a signer, they send. With no terminal it prints the list.
 
 ## Look up and take apart
@@ -1048,14 +1061,14 @@ and the 32-byte key a program holds; `--stocks` leaves out devnet's mints, which
 ```sh
 npx sauce price --chain base 2700 USDC per WETH                   # the price, in words
 npx sauce price --chain base WETH USDC 2700                       # the same: <base> <quote> <price>
-npx sauce price --chain base 2700 USDC per WETH --config sauce.config.json   # and the pool's now
+npx sauce price --chain base 2700 USDC per WETH --offline         # without the pool's price now
 npx sauce price --chain base WETH USDC --sqrt-price-x96 4116816085950893928074568
 ```
 
 Its first line says what the price means both ways round — `2700 USDC per WETH on base: 1 WETH =
 2700 USDC, 1 USDC = 0.00037037037037037 WETH` (`means` and `inverse` in `--json`) — since a price
-written the wrong way round is off by its own square, a millionfold for WETH and USDC. With
-`--rpc-url` or `--config` it also reads the pair's price now from its deepest Uniswap V3 pool on
+written the wrong way round is off by its own square, a millionfold for WETH and USDC. It also
+reads the pair's price now from its deepest Uniswap V3 pool on
 the chain (`live` in `--json`) and warns on stderr when the price given is 10x or more away from it,
 saying so, with the command that reads it the right way, when it looks written backwards. It
 turns a price, in quote tokens per base token, into the numbers a swap program takes, for the pair's
@@ -1063,19 +1076,19 @@ order on the chain (token0 is the lower address): the `sqrtPriceX96` a Uniswap V
 fork) trades at, which is also the swap's `sqrtPriceLimitX96` — a floor when selling token0, a
 ceiling when selling token1 — and, for selling the base token and for buying it, the `minAvgPrice` a
 program compares a fill against, `out * 1e18 >= minAvgPrice * spent`, rounded up so the check never
-passes a worse average. A token is a symbol the chain registers, or `0x…:<decimals>`, or with an
-endpoint the address alone: its decimals and symbol are read from the token (`readFromChain` in
+passes a worse average. A token is a symbol the chain registers, or `0x…:<decimals>`, or the
+address alone: its decimals and symbol are read from the token (`readFromChain` in
 `--json`). `--sqrt-price-x96` reads a pool's price back. The conversion is the package's
 `sqrtPriceX96FromPrice` and `priceFromSqrtPriceX96`, which a TypeScript program imports from the
-root; without an endpoint, nothing reaches a network.
+root; with `--offline`, nothing reaches a network.
 
 ### `sauce pools`
 
 ```sh
-npx sauce pools --chain base USDC WETH --config sauce.config.json
-npx sauce pools --chain base USDC SPCXc --config sauce.config.json   # a tokenized stock
-npx sauce pools --chain base USDC 0x<token> --config sauce.config.json --json
-npx sauce pools --chain base WETH USDC --v4-key 50:1 --config sauce.config.json
+npx sauce pools --chain base USDC WETH
+npx sauce pools --chain base USDC SPCXc   # a tokenized stock
+npx sauce pools --chain base USDC 0x<token> --json
+npx sauce pools --chain base WETH USDC --v4-key 50:1
 ```
 
 lists every pool of a pair at the price-limit venues the registry records on the chain, read now:
@@ -1084,7 +1097,7 @@ Uniswap V3 and PancakeSwap V3 at each fee tier their factory enables (the tiers 
 its CLFactories enables, and hookless Uniswap V4 pools at the keys `100:1`, `500:10`, `3000:60`
 and `10000:200`, and any `--v4-key <fee>:<tickSpacing>`. A token is a symbol the chain registers,
 a tokenized stock's included (`SPCXc`, in any case), or an address the registry does not know, whose
-decimals and symbol are read from the token (or given, `0x…:8`). It needs an endpoint, and reads
+decimals and symbol are read from the token (or given, `0x…:8`). It reads
 everything in five rounds, each a few `eth_call`s carrying up to 32 reads apiece (Multicall3's
 `aggregate3`, sent deployless, so it needs nothing deployed). It reads on every chain, preview
 chains included.
@@ -1132,7 +1145,7 @@ USDC/SPCXc on base: 3 pools with liquidity, deepest first (by liquidity at the p
 
 ```sh
 npx sauce inspect 0x<calldata> --chain base --source split.sauce.ts
-npx sauce inspect 0x<tx hash> --config sauce.config.json --chain arbitrum
+npx sauce inspect 0x<tx hash> --chain arbitrum
 npx sauce inspect bridge.sauce.ts --intent-deadline 2000000000 --intent-creator 0xYou
 ```
 
@@ -1147,7 +1160,7 @@ takes bytes back apart into what a SauceScript author wrote:
 - a `Kitchen.deployPot` (the Pot it makes), a `Portal.publish` or `publishAndFund` (the route, the
   reward, and the intent's vault — the address a funder's `transfer` pays), an ERC-20 call, or
   bare program bytes;
-- a 32-byte hash with an endpoint: the transaction, fetched — its status, sender, value and call,
+- a 32-byte hash with `--chain`: the transaction, fetched — its status, sender, value and call,
   what it cost (gas, an OP-stack chain's L1 data fee, the value), and the token transfers,
   approvals and net balance changes its receipt's logs record;
 - a file: the program it compiles to, and its intents, with every value it measures at run time
@@ -1161,7 +1174,7 @@ programs are reported by what they are and what they open.
 
 ```sh
 npx sauce verify 0x<settle payload>
-npx sauce verify 0x<tx hash> --config sauce.config.json --chain base --pin 0x…:435
+npx sauce verify 0x<tx hash> --chain base --pin 0x…:435
 ```
 
 checks that a settle payload, a `Pot.cook`, a `Portal.publish[AndFund]` (its route's calls) or a
@@ -1176,7 +1189,7 @@ an intent without a settle cook, `TX_FAILED` or `TX_PENDING`.
 ## Solana
 
 The same commands take `--chain solana`, through the SDK's Solana client
-(`svm.createSauceSvmClient`, with the endpoint you give and the program ids `/deployments` records).
+(`svm.createSauceSvmClient`, with the cluster's endpoint and the program ids `/deployments` records).
 Three things differ, and a fourth is Solana's alone: how the cook reaches the engine.
 
 **Accounts.** A Solana program declares every account it touches as an `Account` parameter of
@@ -1207,7 +1220,7 @@ function main(
 ```
 
 ```sh
-npx sauce run sweep.sauce.ts --config sauce.config.json --keypair ~/.config/solana/id.json \
+npx sauce run sweep.sauce.ts --keypair ~/.config/solana/id.json \
   --define MINT=0x<mint, as 32 bytes of hex> \
   --account tokenProgram=TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA \
   --account source=<the Pot's token account> --account dest=<token account> \
@@ -1216,7 +1229,7 @@ npx sauce run sweep.sauce.ts --config sauce.config.json --keypair ~/.config/sola
 
 **The Pot.** A Pot is the Kitchen's PDA over the owner and the salt. `sauce pot --chain solana
 --owner <pubkey>` prints it and the `create_pot` instruction; `--deploy` with `--keypair` creates
-it. With an endpoint it also lists the Pot's token account for each registered mint but the
+it. It also lists the Pot's token account for each registered mint but the
 tokenized stocks, over a thousand of them: its address, whether it exists and what it holds
 (`tokenAccounts` in its JSON). A stock's is `pot:<symbol>`. A cook names its Pot by `--owner` and `--salt`, never `--pot`, and `run` asks before creating a
 missing one, as on an EVM chain.
@@ -1266,7 +1279,7 @@ transaction }`, for the owner's wallet to sign; its blockhash expires in about a
 The fee is the same either way, read from the Kitchen's config and paid into it.
 
 ```sh
-npx sauce run sweep.sauce.ts --config sauce.config.json --keypair ~/.config/solana/id.json \
+npx sauce run sweep.sauce.ts --keypair ~/.config/solana/id.json \
   --via engine --max-execution-fee 10000 --define MINT=0x<mint, as 32 bytes of hex> \
   --account tokenProgram=TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA \
   --account source=<your token account> --account dest=<token account> \
@@ -1322,7 +1335,7 @@ Every command that signs takes `--wallet <name>` with the same password source: 
 with an EVM wallet on an EVM chain and a Solana wallet on Solana:
 
 ```sh
-npx sauce run pay.sauce.ts --chain base --config sauce.config.json \
+npx sauce run pay.sauce.ts --chain base \
   --wallet agent --password-env SAUCE_WALLET_PASSWORD --args <recipient> 1000000
 ```
 
