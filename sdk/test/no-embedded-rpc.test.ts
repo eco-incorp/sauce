@@ -1,7 +1,8 @@
 /**
- * The SDK ships no RPC endpoints, and shipped code reads nothing from the environment. Anything that
- * needs a network connection takes its URL, or a client, from the developer — as an argument or a
- * config value, never a default, a public fallback or `process.env` (a browser has none).
+ * The SDK ships no RPC endpoints, and shipped code reads nothing from the environment — but for the
+ * `sauce` command's one read of the variable `--password-env` names. Anything that needs a network
+ * connection takes its URL, or a client, from the developer — as an argument or a config value,
+ * never a default, a public fallback or `process.env` (a browser has none).
  *
  * This guard scans the TRACKED source that ships or that a developer copies from — `sdk/src` (the
  * `sauce` command in `sdk/src/cli` included), `sdk/scripts`, `actions/src`, `dev-tools/src`,
@@ -58,6 +59,16 @@ const SKIP = new Set(["pnpm-lock.yaml"]);
 const SHIPPED_ROOTS = ["sdk/src", "actions/src", "dev-tools/src"];
 /** Shipped files the environment scan must include, so a move cannot take the command out of it. */
 const SHIPPED_REQUIRED = ["sdk/src/cli/main.ts", "sdk/src/cli/run.ts", "sdk/src/cli/commands.ts"];
+/**
+ * The `sauce` command's ONE deliberate read of the environment: `--password-env <NAME>`, which
+ * reads the variable the user names and nothing else (`cli/password.ts`), so an agent's password
+ * reaches the process from its `.env` or secret store without ever being an argument. Exactly this
+ * line, in exactly this file: a second read, or this one moved or widened, fails the scan.
+ */
+const DELIBERATE_ENV_READ = {
+  file: "sdk/src/cli/run.ts",
+  line: "readEnv: (name) => process.env[name],",
+};
 
 const URL_PATTERN = /\b(?:https?|wss?):\/\/[^\s"'`<>()[\]{}\\,]+/gi;
 
@@ -192,7 +203,7 @@ describe("the SDK ships no RPC endpoints", () => {
     expect(found).toEqual([]);
   });
 
-  it("shipped code reads nothing from the environment", () => {
+  it("shipped code reads nothing from the environment but the variable --password-env names", () => {
     const shipped = scanned(SHIPPED_ROOTS);
     for (const file of SHIPPED_REQUIRED) expect(shipped.has(file)).toBe(true);
     const found = [...shipped].flatMap(([file, text]) =>
@@ -204,7 +215,13 @@ describe("the SDK ships no RPC endpoints", () => {
             : [],
         ),
     );
-    expect(found).toEqual([]);
+    const deliberate = found.filter(
+      (finding) =>
+        finding.startsWith(`${DELIBERATE_ENV_READ.file}:`) &&
+        finding.endsWith(`: ${DELIBERATE_ENV_READ.line}`),
+    );
+    expect(deliberate).toHaveLength(1);
+    expect(found.filter((finding) => !deliberate.includes(finding))).toEqual([]);
   });
 
   it("the RPC config example holds placeholders only", () => {

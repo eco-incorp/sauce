@@ -1,7 +1,8 @@
 /**
  * The Sauce MCP server: the `sauce` command's read-only tools, the agent skills as resources, and
- * two task prompts. One server per connection — over stdio, one for the process; over Streamable
- * HTTP, one per request, stateless.
+ * two task prompts — and, over stdio with `--wallets`, the wallet tools. One server per connection
+ * — over stdio, one for the process; over Streamable HTTP, one per request, stateless, and never
+ * with wallets.
  */
 import { readFileSync } from "node:fs";
 
@@ -14,7 +15,8 @@ import { registerPrompts } from "./prompts.js";
 import { registerResources, SKILLS_INDEX, WRITE_IT_YOURSELF } from "./resources.js";
 import { registerSkillTools } from "./skilltools.js";
 import { registerIntentTools } from "./intents.js";
-import { registerTools } from "./tools.js";
+import { registerTools, type WalletContext } from "./tools.js";
+import { registerWalletTools } from "./wallets.js";
 
 let manifest: { readonly name: string; readonly version: string } | undefined;
 
@@ -30,7 +32,7 @@ export function packageInfo(): { readonly name: string; readonly version: string
 }
 
 /** What the server tells a client about itself when it connects. */
-export function instructions(endpoints: Endpoints): string {
+export function instructions(endpoints: Endpoints, wallets?: WalletContext): string {
   return [
     "Sauce compiles SauceScript — a checked subset of TypeScript, in .sauce.ts files — into",
     "programs that run atomically in one transaction: on an EVM chain through the owner's Pot",
@@ -64,8 +66,22 @@ export function instructions(endpoints: Endpoints): string {
     "the intent's `record` (sauce_intent_publish and sauce_intent_import return it), or txHash",
     "and its source chain, and rpcUrls with both chains' endpoints.",
     "",
-    "NOTHING HERE SIGNS OR SENDS. Every transaction comes back unsigned, for the user to sign",
-    "with their own wallet; never ask anyone for a private key or a seed phrase.",
+    ...(wallets === undefined
+      ? [
+          "NOTHING HERE SIGNS OR SENDS. Every transaction comes back unsigned, for the user to sign",
+          "with their own wallet; never ask anyone for a private key or a seed phrase.",
+        ]
+      : [
+          "THIS SERVER SIGNS ONLY WITH THE WALLETS IN ITS WALLET DIRECTORY, unlocked by the password",
+          `source it was started with (${wallets.source}). sauce_wallet_list names them;`,
+          "sauce_wallet_create makes one (evm, or solana) and returns its address, never its key.",
+          "Build a transaction for the wallet's address (owner, or from), rehearse it",
+          "(sauce_simulate), then pass the building tool's whole result to sauce_wallet_send, which",
+          "rehearses it again, holds it to the wallet's policy, signs and sends it. Every other",
+          "transaction still comes back unsigned. These are hot wallets: keep small balances in",
+          "them. Never ask anyone for a private key, a seed phrase or the password: no tool takes",
+          "or returns one.",
+        ]),
     "",
     `CHAINS. This release builds transactions only on ${supportedChainNames()}. Every other`,
     "chain is a preview chain (sauce_chains gives each chain's `support`): sauce_compile,",
@@ -93,25 +109,33 @@ export interface SauceServerOptions {
   readonly endpoints: Endpoints;
   /** Over HTTP: the guard every caller's rpcUrl is reached through. */
   readonly guard?: RpcGuard;
+  /** Over stdio with `--wallets`: the wallets it signs with. Never given with `guard` (HTTP). */
+  readonly wallets?: WalletContext;
   /** The skills directory; the package's own by default. */
   readonly skillsDir?: string;
 }
 
 export function createSauceServer(options: SauceServerOptions): McpServer {
   const { name, version } = packageInfo();
+  if (options.wallets !== undefined && options.guard !== undefined) {
+    throw new Error("internal: wallets are served over stdio only, and the guard is HTTP's");
+  }
   const server = new McpServer(
     { name: "sauce", title: `Sauce (${name})`, version },
     {
       capabilities: { tools: {}, resources: {}, prompts: {} },
-      instructions: instructions(options.endpoints),
+      instructions: instructions(options.endpoints, options.wallets),
     },
   );
   const tools = {
     endpoints: options.endpoints,
     ...(options.guard === undefined ? {} : { guard: options.guard }),
+    ...(options.wallets === undefined ? {} : { wallets: options.wallets }),
   };
   registerTools(server, tools);
   registerIntentTools(server, tools);
+  if (options.wallets !== undefined)
+    registerWalletTools(server, { ...tools, wallets: options.wallets });
   registerSkillTools(server, options.skillsDir);
   registerResources(server, options.skillsDir);
   registerPrompts(server, options.skillsDir);
