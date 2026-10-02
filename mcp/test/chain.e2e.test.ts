@@ -214,6 +214,27 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     assert.equal(await local.balanceOf(usdc, RECIPIENT), 0n);
   });
 
+  it("takes amounts in whole tokens only, and says when one reads like base units", async () => {
+    // A base-unit amount is refused, with the whole tokens to write instead.
+    const refused = failed(
+      await mcp.call("sauce_simulate", { ...pay, owner: NOBODY, assumeBalance: ["USDC:2000000n"] }),
+    );
+    assert.match(refused, /USDC:2000000n is 2 USDC: write USDC:2/);
+    // Two million whole USDC may be meant: rehearsed, and said in the notes, in the tool's words.
+    const large = ok(
+      await mcp.call("sauce_simulate", { ...pay, owner: NOBODY, assumeBalance: ["USDC:2000000"] }),
+    );
+    assert.equal(large.ok, true);
+    assert.ok(
+      (large.notes as string[]).some((note) =>
+        note.startsWith(
+          "assumeBalance USDC:2000000: that is 2 million USDC; base units are not taken here",
+        ),
+      ),
+      (large.notes as string[]).join("\n"),
+    );
+  });
+
   it("returns a revert as a result, decoded, and credits what a keyless fund would pull", async () => {
     const reverts = ok(
       await mcp.call("sauce_simulate", {

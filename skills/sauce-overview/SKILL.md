@@ -108,9 +108,8 @@ sauce run payout.sauce.ts --chain base --keystore <keystore> \
 ```
 
 **Units differ by flag.** `--args` and defines take base units: `1000000` is 1 USDC (6
-decimals). `--assume-balance` and `--fund` take whole tokens: `USDC:1` is 1 USDC, not 1 base
-unit. There a base-unit amount takes a trailing `n`: `USDC:1000000n` is the same 1 USDC, while
-`USDC:1000000` would be a million USDC.
+decimals). `--assume-balance` and `--fund` take whole tokens only: `USDC:1` is 1 USDC, not 1
+base unit, and `USDC:1000000` would be a million USDC.
 
 Compiling for a chain produces the program's bytecode; running it is one transaction to the
 owner's Pot, `cook(engine, program)` with `main`'s arguments appended to the program, paying the
