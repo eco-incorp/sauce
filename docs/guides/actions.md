@@ -358,15 +358,15 @@ import { uniswapV3 } from "@sauce/router";
 
 function main(): void {
   // … the wrap, whose output is t_out0 …
-  const pool1 = UniswapV3.Factory.getPool(WETH, USDC, 500n); // the pool, read on chain
-  require(pool1 != 0n, "actions[1]: no pool under that key");
+  const pool1 = UniswapV3.Factory.getPool(WETH, USDC, 500); // the pool, read on chain
+  require(pool1 != 0, "actions[1]: no pool under that key");
   const amt2 = uniswapV3(
     pool1, // pool
     WETH, // tokenIn: the registry's WETH on the chain compiled for
     USDC, // tokenOut
     t_out0, // amountIn: the previous action's output
-    0n, // sqrtPriceLimitX96: none
-    3000000000n, // minOut
+    0, // sqrtPriceLimitX96: none
+    3000000000, // minOut
     ctx.self(), // recipient: the Pot, because a later action spends the output
   );
   let v_usdc = amt2;

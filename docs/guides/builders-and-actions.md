@@ -61,7 +61,7 @@ returns what it received. Write the call into your program:
 import { uniswapV3 } from "@sauce/router";
 
 function main() {
-  uniswapV3(POOL, WETH, USDC, AMOUNT_IN, 0n, MIN_OUT, ctx.self());
+  uniswapV3(POOL, WETH, USDC, AMOUNT_IN, 0, MIN_OUT, ctx.self());
 }
 ```
 

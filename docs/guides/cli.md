@@ -352,9 +352,9 @@ sauce run pay.sauce.ts --chain base --keystore ~/.keys/me.json \
 
 `--fund <TOKEN|address>:<amount>` names a token the chain registers (`sauce globals --tokens`) or
 any ERC-20 by address, and an amount in whole units — `USDC:1.5`, by the registry's decimals or
-the token's own — or in base units ending in `n`, as SauceScript writes an integer:
-`USDC:1500000n`. Repeat it for more tokens. `ETH:<amount>` (or `native:`) is the chain's native
-currency: it rides as the cook's value, on top of the Kitchen's fee.
+the token's own — or in base units ending in `n`: `USDC:1500000n`. Repeat it for more tokens.
+`ETH:<amount>` (or `native:`) is the chain's native currency: it rides as the cook's value, on top
+of the Kitchen's fee.
 
 The command wraps the program: a new `main`, with the same parameters, first pulls each amount from
 you into the Pot, then calls the program's own `main` with the arguments as given, then, with
@@ -513,11 +513,11 @@ chain means `solana`.
 ### Values fixed when it is compiled: defines
 
 ```js
-const RECIPIENT = 0n;
-const AMOUNT = 0n;
+const RECIPIENT = 0;
+const AMOUNT = 0;
 
 function main() {
-  require(RECIPIENT != 0n);
+  require(RECIPIENT != 0);
   USDC.transfer(RECIPIENT, AMOUNT);
 }
 ```

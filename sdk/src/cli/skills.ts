@@ -165,8 +165,8 @@ function filesUnder(dir: string): string[] {
 /**
  * The tsconfig.json of a directory of SauceScript programs: a TypeScript project of SauceScript
  * files alone, with the package's declarations of the language (`<package>/sauce-script`) and its
- * plugin, which drops what TypeScript reports on valid SauceScript (integer indexes, `1` beside
- * `1n`, undeclared UPPER_CASE defines). Its own project, because those declarations name
+ * plugin, which drops what TypeScript reports on valid SauceScript (integer indexes, a plain
+ * integer beside a `Uint256`, undeclared UPPER_CASE defines). Its own project, because those declarations name
  * `require`, `crypto` and `eval` as SauceScript has them: kept out of the project's other
  * TypeScript, they cannot change it. An editor takes a file's nearest tsconfig.json, so every
  * program under the directory gets it. `sauce init` writes it into `programs/` (and with
