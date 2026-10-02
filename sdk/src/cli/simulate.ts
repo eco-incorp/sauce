@@ -41,7 +41,7 @@ import {
   tokenInfo,
   type Effects,
 } from "./effects.js";
-import { baseUnits, type Funding, type FundRequest } from "./funding.js";
+import { baseUnits, type BeforeCook, type Funding, type FundRequest } from "./funding.js";
 import { rehearse, type Rehearsal } from "./rehearse.js";
 import { decodeReturned, returnedLine } from "./returned.js";
 
@@ -165,12 +165,30 @@ function routeLines(
   owner: Address,
   pot: Address,
   deploy: { readonly salt: Hex } | undefined,
+  before: readonly BeforeCook[],
   signed: boolean,
 ): string[] {
-  const gas = (which: "deploy" | "cook"): string =>
-    rehearsal.ok
-      ? `, ${gasText(which === "deploy" ? rehearsal.deployGas : rehearsal.gas, rehearsal.gasKind)}`
-      : "";
+  const gas = (used: bigint | undefined): string =>
+    rehearsal.ok ? `, ${gasText(used, rehearsal.gasKind)}` : "";
+  const steps = [
+    ...(deploy === undefined
+      ? []
+      : [
+          `Kitchen.deployPot(${owner}, ${deploy.salt})${gas(rehearsal.ok ? rehearsal.deployGas : undefined)}: ` +
+            `Pot ${pot} is not deployed on ${chain} yet. Any account may send this; the Pot is the ` +
+            "owner's either way." +
+            (rehearsal.path === "eth_call"
+              ? " The Pot it deploys is put in place by state override."
+              : ""),
+        ]),
+    ...before.map(
+      (each, index) =>
+        `${each.what}, from the owner ${owner}` +
+        gas(rehearsal.ok ? rehearsal.beforeGas[index] : undefined) +
+        ": sauce run sends this before the cook",
+    ),
+    `the cook, from the owner ${owner}${gas(rehearsal.ok ? rehearsal.gas : undefined)}`,
+  ];
 
   return [
     `Rehearsed with ${rehearsal.path} on the state of block ${block}` +
@@ -178,17 +196,7 @@ function routeLines(
       (signed
         ? "; the owner's key signed the pulls, and nothing was sent:"
         : "; nothing was signed or sent:"),
-    ...(deploy === undefined
-      ? []
-      : [
-          `  1. Kitchen.deployPot(${owner}, ${deploy.salt})${gas("deploy")}: Pot ${pot} is not ` +
-            `deployed on ${chain} yet. Any account may send this; the Pot is the owner's either ` +
-            "way." +
-            (rehearsal.path === "eth_call"
-              ? " The Pot it deploys is put in place by state override."
-              : ""),
-        ]),
-    `  ${deploy === undefined ? "" : "2. "}the cook, from the owner ${owner}${gas("cook")}`,
+    ...steps.map((step, index) => `  ${steps.length === 1 ? "" : `${index + 1}. `}${step}`),
   ];
 }
 
@@ -236,11 +244,14 @@ export async function simulateCommand(
     });
   }
 
+  // With the owner's key, the approvals and transfers `sauce run` sends first, in the same block.
+  const before = funding?.beforeCook ?? [];
   const rehearsal = await rehearse(client, {
     owner,
     pot: cook.pot,
     kitchen,
     ...(deploy === undefined ? {} : { deploy }),
+    ...(before.length === 0 ? {} : { before }),
     cook: { to: cook.pot, data: funded.data, value },
     overrides: mergeOverrides(overrides),
   });
@@ -262,6 +273,7 @@ export async function simulateCommand(
     owner,
     cook.pot,
     deploy,
+    before,
     funding?.signed === true,
   );
   const assumedLines =
@@ -323,6 +335,16 @@ export async function simulateCommand(
                     gasKind: rehearsal.gasKind,
                   },
                 ]),
+            // What `sauce run` sends before the cook: each one a transaction of its own to send.
+            ...before.map((each, index) => ({
+              step: "fund",
+              what: each.what,
+              from: owner,
+              to: each.tx.to,
+              data: each.tx.data,
+              gas: rehearsal.beforeGas[index]?.toString() ?? null,
+              gasKind: rehearsal.gasKind,
+            })),
             {
               step: "cook",
               from: owner,
@@ -335,7 +357,11 @@ export async function simulateCommand(
           ...(returnType === undefined ? {} : { returnType, returned: returned ?? null }),
           ...(effects === undefined ? {} : effectsJson(effects)),
         }
-      : { stage: rehearsal.stage, reason: rehearsal.reason }),
+      : {
+          stage: rehearsal.stage,
+          ...(rehearsal.what === undefined ? {} : { what: rehearsal.what }),
+          reason: rehearsal.reason,
+        }),
   };
   const notes = [
     ...priceLimitNotes(input, cook.program.entryParams, input.args),
@@ -348,7 +374,9 @@ export async function simulateCommand(
       text: [
         rehearsal.stage === "deploy"
           ? `Deploying the Pot reverts: ${rehearsal.reason}`
-          : `The cook reverts: ${rehearsal.reason}`,
+          : rehearsal.stage === "before"
+            ? `${rehearsal.what}, which sauce run sends before the cook, fails: ${rehearsal.reason}`
+            : `The cook reverts: ${rehearsal.reason}`,
         ...how,
         ...assumedLines,
       ].join("\n"),
@@ -358,12 +386,18 @@ export async function simulateCommand(
     };
   }
   const gas = gasText(rehearsal.gas, rehearsal.gasKind);
+  // The transactions before the cook, numbered as the route below lists them.
+  const first = before.length + (deploy === undefined ? 0 : 1);
+  const after =
+    first === 0
+      ? ""
+      : before.length === 0
+        ? " for the cook, after the Pot's deploy (1. below)"
+        : ` for the cook, after what it needs sent first (${first === 1 ? "1." : `1. to ${first}.`} below)`;
 
   return {
     text: [
-      `The cook succeeds from ${owner}: ${gas}` +
-        (deploy === undefined ? "" : " for the cook, after the Pot's deploy (1. below)") +
-        `, returns ${rehearsal.returns}`,
+      `The cook succeeds from ${owner}: ${gas}${after}, returns ${rehearsal.returns}`,
       ...(returnType === undefined
         ? []
         : [returnedLine(returnType, rehearsal.returns, input.chain)]),
