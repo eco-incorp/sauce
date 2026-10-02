@@ -364,8 +364,10 @@ sauce run pay.sauce.ts --chain base --keystore ~/.keys/me.json \
 ```
 
 `--fund <TOKEN|address>:<amount>` names a token the chain registers (`sauce globals --tokens`) or
-any ERC-20 by address, and an amount in whole units — `USDC:1.5`, by the registry's decimals or
-the token's own — or in base units ending in `n`: `USDC:1500000n`. Repeat it for more tokens.
+any ERC-20 by address, and an amount in whole tokens — `USDC:1.5`, by the registry's decimals or
+the token's own. A bare integer is whole tokens too: `USDC:1500000` is 1.5 million USDC, which the
+command points out on stderr. For base units, end the amount in `n`, as a JavaScript bigint is
+written: `USDC:1500000n` is 1.5 USDC. Repeat it for more tokens.
 `ETH:<amount>` (or `native:`) is the chain's native currency: it rides as the cook's value, on top
 of the Kitchen's fee.
 
@@ -1373,7 +1375,7 @@ sauce run pay.sauce.ts --chain base \
 ### A wallet's policy
 
 `<name>.policy.json`, beside the wallet, limits what it sends. Every field is optional, and every
-amount is a string, in whole units or in base units ending in `n`, as `--fund` takes them:
+amount is a string in whole tokens (`"1.5"`), or in base units ending in `n`, as `--fund` takes them:
 
 ```json
 {

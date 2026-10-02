@@ -3,7 +3,7 @@
  * the ledger of what it sent, `<name>.ledger.jsonl`. With no policy file a wallet sends anything
  * its signer could, and every result says no limits are set.
  *
- * A policy (every field optional, every amount a string — whole units, `"1.5"`, or base units
+ * A policy (every field optional, every amount a string — whole tokens, `"1.5"`, or base units
  * ending in `n`, `"1500000n"`, as `--fund` takes them):
  *
  *     {
@@ -78,11 +78,11 @@ import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { v12SvmKitchenProgramId } from "../deployments/index.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { v12PotAbi } from "../evm/engine.js";
-import { TOKEN_REGISTRY } from "../routes/token-registry.js";
+import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { derivePotPda } from "../svm/index.js";
 import { CliError, UsageError } from "./args.js";
 import type { TxRequest } from "./chain.js";
-import { nativeSymbol, tokenInfo } from "./effects.js";
+import { nativeSymbol, tokenInfo, wordsOf } from "./effects.js";
 import { requireSupported } from "./support.js";
 import { accountsNow, movedBy, writableAccounts } from "./svm-effects.js";
 import type { WalletInfo } from "./wallets.js";
@@ -93,7 +93,7 @@ type Rpc = ReturnType<typeof createSolanaRpc>;
 // The policy file
 // ---------------------------------------------------------------------------------------------
 
-/** An amount as a policy writes it: whole units, or base units (`…n`). */
+/** An amount as a policy writes it: whole tokens (`"1.5"`), or base units (`"1500000n"`). */
 type Amount = { readonly units: string } | { readonly base: bigint };
 
 interface Limit {
@@ -109,6 +109,8 @@ export interface Policy {
   readonly native?: Limit;
   /** By the key the file names it with: a symbol (uppercase) or an address. */
   readonly tokens: ReadonlyMap<string, Limit>;
+  /** What is said of it: a limit that reads like base units (`"1500000"` USDC, 1.5 million). */
+  readonly notes: readonly string[];
 }
 
 /** A policy refused: which limit, and why, in one sentence. */
@@ -124,18 +126,55 @@ export class PolicyRefusal extends CliError {
 
 const AMOUNT = /^(?:\d+(?:\.\d+)?|\d+n)$/;
 
-function amountOf(raw: unknown, where: string): Amount {
+/**
+ * The decimals a policy's token key has wherever the registry records it — a symbol or an address,
+ * on any chain — when they agree; `undefined` for the native coin (18 on an EVM chain, 9 on Solana)
+ * or a token the registry does not record.
+ */
+function keyDecimals(key: string | undefined): number | undefined {
+  if (key === undefined) return undefined;
+  const named = (row: { readonly symbol: string }) => row.symbol.toUpperCase() === key;
+  const decimals = new Set(
+    [
+      ...Object.values(TOKEN_REGISTRY)
+        .flat()
+        .filter((row) => named(row) || row.address.toLowerCase() === key),
+      ...Object.values(SVM_TOKEN_REGISTRY)
+        .flat()
+        .filter((row) => named(row) || row.mint === key),
+    ].map((row) => row.decimals),
+  );
+
+  return decimals.size === 1 ? [...decimals][0] : undefined;
+}
+
+/**
+ * A limit's amount: whole tokens (`"1.5"`), or base units with a trailing `n` (`"1500000n"`).
+ * `notes` gets what a bare integer of whole tokens that reads like base units says: at or above
+ * 10^decimals, where the registry gives the token's decimals.
+ */
+function amountOf(raw: unknown, where: string, key: string | undefined, notes: string[]): Amount {
   if (typeof raw !== "string" || !AMOUNT.test(raw)) {
     throw new UsageError(
-      `${where} is not an amount: a string of whole units ("1.5") or of base units ending in n ` +
+      `${where} is not an amount: a string of whole tokens ("1.5") or of base units ending in n ` +
         '("1500000n")',
     );
   }
+  if (raw.endsWith("n")) return { base: BigInt(raw.slice(0, -1)) };
+  const decimals = keyDecimals(key);
+  if (
+    !raw.includes(".") &&
+    decimals !== undefined &&
+    decimals > 0 &&
+    BigInt(raw) >= 10n ** BigInt(decimals)
+  ) {
+    notes.push(`${where}: "${raw}" is ${wordsOf(raw)} ${key}; for base units write "${raw}n"`);
+  }
 
-  return raw.endsWith("n") ? { base: BigInt(raw.slice(0, -1)) } : { units: raw };
+  return { units: raw };
 }
 
-function limitOf(raw: unknown, where: string): Limit {
+function limitOf(raw: unknown, where: string, key: string | undefined, notes: string[]): Limit {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
     throw new UsageError(`${where} is not { "perTransaction": …, "perDay": … }`);
   }
@@ -148,8 +187,8 @@ function limitOf(raw: unknown, where: string): Limit {
   return {
     ...(perTransaction === undefined
       ? {}
-      : { perTransaction: amountOf(perTransaction, `${where}.perTransaction`) }),
-    ...(perDay === undefined ? {} : { perDay: amountOf(perDay, `${where}.perDay`) }),
+      : { perTransaction: amountOf(perTransaction, `${where}.perTransaction`, key, notes) }),
+    ...(perDay === undefined ? {} : { perDay: amountOf(perDay, `${where}.perDay`, key, notes) }),
   };
 }
 
@@ -190,6 +229,7 @@ export function parsePolicy(text: string, path: string): Policy {
     if (typeof raw === "string" && isSolanaAddress(raw)) return raw;
     throw new UsageError(`${path}: to names ${JSON.stringify(raw)}, which is not an address`);
   });
+  const notes: string[] = [];
   const tokens = new Map<string, Limit>();
   if (fields.tokens !== undefined) {
     if (
@@ -210,7 +250,7 @@ export function parsePolicy(text: string, path: string): Policy {
       if (named === undefined) {
         throw new UsageError(`${path}: tokens.${key} is neither a token symbol nor an address`);
       }
-      tokens.set(named, limitOf(raw, `${path}: tokens.${key}`));
+      tokens.set(named, limitOf(raw, `${path}: tokens.${key}`, named, notes));
     }
   }
 
@@ -218,8 +258,11 @@ export function parsePolicy(text: string, path: string): Policy {
     path,
     ...(chains === undefined ? {} : { chains }),
     ...(to === undefined ? {} : { to }),
-    ...(fields.native === undefined ? {} : { native: limitOf(fields.native, `${path}: native`) }),
+    ...(fields.native === undefined
+      ? {}
+      : { native: limitOf(fields.native, `${path}: native`, undefined, notes) }),
     tokens,
+    notes,
   };
 }
 

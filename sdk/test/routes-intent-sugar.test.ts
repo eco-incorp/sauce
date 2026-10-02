@@ -404,7 +404,7 @@ describe("what the lowering produces", () => {
     // allowance read -- a `uint256`, always safe to decode -- rather than from a caught revert,
     // because a reverting `evm.call` cannot be caught in a Sauce program the way OZ catches it.
     expect(lines.some((line) => line.includes("dd62ed3e"))).toBe(true);
-    expect(lines.some((line) => line.startsWith("if (") && line.includes("cur > 0n"))).toBe(true);
+    expect(lines.some((line) => line.startsWith("if (") && line.includes("cur > 0)"))).toBe(true);
     // Both writes are judged: empty returndata only from an address with code, anything else true.
     expect(lines.filter((line) => line.includes("ctx.codeSize("))).toHaveLength(2);
     // No vault read: the Portal pulls the reward into the vault it derives itself.

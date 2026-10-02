@@ -84,7 +84,7 @@ describe("split swap — program shape", () => {
       assert.match(text, /function main\(\): void/);
       // Both dispatchers guard idx, so an invalid one reverts instead of landing on the last leg.
       assert.equal(
-        text.match(new RegExp(`if \\(idx >= ${N}n\\) \\{ revert\\(\\); \\}`, "g"))?.length,
+        text.match(new RegExp(`if \\(idx >= ${N}\\) \\{ revert\\(\\); \\}`, "g"))?.length,
         2,
       );
       assert.ok(compiled.bytecode.length > 0);
@@ -95,8 +95,8 @@ describe("split swap — program shape", () => {
   it("the bucket count bounds the greedy loop and nothing else", () => {
     for (const n of [1, 2, 5, 10]) {
       const text = source(swap(3, n));
-      assert.match(text, new RegExp(`for \\(let iter = 0n; iter < ${n}n;`));
-      assert.match(text, /for \(let i = 0n; i < 3n;/);
+      assert.match(text, new RegExp(`for \\(let iter = 0; iter < ${n};`));
+      assert.match(text, /for \(let i = 0; i < 3;/);
     }
   });
 
@@ -109,7 +109,7 @@ describe("split swap — program shape", () => {
     for (let i = 0; i < 4; i++)
       assert.match(quoteAny, new RegExp(`return quote_${i}\\(amount\\);`));
     const swapAny = text.slice(text.indexOf("function swap_any"), text.indexOf("function main"));
-    assert.equal(swapAny.match(/if \(idx == \d+n\) \{/g)?.length, 3);
+    assert.equal(swapAny.match(/if \(idx == \d+\) \{/g)?.length, 3);
     // An else tail: a bare if chain would run the last branch for every idx.
     assert.match(swapAny, /\} else \{/);
   });
@@ -117,16 +117,16 @@ describe("split swap — program shape", () => {
   it("every leg delivers to the Pot, whatever its recipient says", () => {
     const text = source(swap(1, 1, { candidates: [{ ...uniV3(100), recipient: USDT }] }));
     assert.match(text, /uniswapV3\([^;]*, ctx\.self\(\)\);/);
-    assert.doesNotMatch(text, /0xdac17f958d2ee523a2206206994597c13d831ec7n\);/);
+    assert.doesNotMatch(text, /0xdac17f958d2ee523a2206206994597c13d831ec7\);/);
   });
 });
 
 describe("split swap — the aggregate floor", () => {
   it("is checked once, after every leg, over the realized sum", () => {
     const text = source(swap(2, 4, { amountOutMin: "12345" }));
-    assert.match(text, /let totalOut = 0n;/);
+    assert.match(text, /let totalOut = 0;/);
     assert.match(text, /totalOut = totalOut \+ swap_any\(/);
-    assert.equal(text.match(/if \(totalOut < 12345n\) \{ revert\(\); \}/g)?.length, 1);
+    assert.equal(text.match(/if \(totalOut < 12345\) \{ revert\(\); \}/g)?.length, 1);
   });
 
   it('is waived only by "0", which still sums the legs', () => {
@@ -147,9 +147,9 @@ describe("split swap — the aggregate floor", () => {
   it("clamps the next marginal instead of underflowing, and allocates nothing at zero", () => {
     const text = source(swap(2, 4));
     // `-` is checked, so a non-monotone quote would revert the route instead of wrapping.
-    assert.match(text, /nextQuote > running \? nextQuote - running : 0n/);
+    assert.match(text, /nextQuote > running \? nextQuote - running : 0/);
     // Without this, zero marginals leave bestIdx at 0 and send the whole trade to candidate 0.
-    assert.match(text, /if \(bestMarg > 0n\) \{/);
+    assert.match(text, /if \(bestMarg > 0\) \{/);
   });
 });
 
@@ -166,13 +166,13 @@ describe("split swap — approvals and the sweep", () => {
     const text = source(swap(2, 2, { approvals }));
     // One allowance read per approval: the reset `forceApprove` makes when one is standing.
     assert.equal(text.match(/hex`dd62ed3e/g)?.length, 2);
-    assert.ok(text.indexOf("dd62ed3e") < text.indexOf("for (let i = 0n"));
+    assert.ok(text.indexOf("dd62ed3e") < text.indexOf("for (let i = 0"));
   });
 
   it("sweeps the realized total, and without a sweep nothing leaves the Pot", () => {
     const swept = source(swap(2, 1, { sweep: { token: USDT, recipient: USDC } }));
     assert.match(swept, /totalOut\.toBytesBe\(32\)/);
-    assert.match(swept, /evm\.call\(0xdac17f958d2ee523a2206206994597c13d831ec7n, 0n, /);
+    assert.match(swept, /evm\.call\(0xdac17f958d2ee523a2206206994597c13d831ec7, 0, /);
     assert.doesNotMatch(source(swap(2, 1)), /a9059cbb/);
   });
 

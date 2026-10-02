@@ -126,7 +126,8 @@ wallet's file is a standard keystore, so `--keystore` reads it too. `sauce walle
 shows a key only at a terminal, after the user types the wallet's name: never run it for the user.
 
 **A policy limits a wallet.** `<name>.policy.json` beside it, written by the user, sets what it may
-send. Every field is optional, and amounts are strings, in whole units or base units ending in `n`:
+send. Every field is optional, and amounts are strings in whole tokens (`"100"` is 100 USDC), as
+`--fund` takes them:
 
 ```json
 {
@@ -259,8 +260,7 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    Pot. `--salt <label>` names another Pot of the same owner (`--salt-hex <bytes32>` for an exact
    salt); use the same salt in every later command.
 5. **Fund** the Pot with what the program spends: send its address the tokens from any wallet, or
-   pass `--fund USDC:100` (repeatable; `USDC:100000000n` in base units, `ETH:0.01` as value) to
-   `run`, which pulls it from the signer into the Pot in the same cook; `--sweep` returns what is
+   pass `--fund USDC:100`, 100 whole USDC (repeatable; `ETH:0.01` as value) to `run`, which pulls it from the signer into the Pot in the same cook; `--sweep` returns what is
    left. `--fund-mode` picks how:
    - `permit2` (the default) signs a one-time Permit2 transfer; the first time per token it asks to
      approve Permit2, a standing approval to Permit2 (not to the Pot).
@@ -270,12 +270,14 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    - `allowance` approves the Pot for the amount (asking first), and the cook pulls it.
    - `transfer` sends the tokens to the Pot in a transaction of its own before the cook.
 
-   **Units**: `--fund` and `--assume-balance` take whole tokens (`USDC:10` is 10 USDC), or base
-   units ending in `n` (`USDC:10000000n`, the same 10 USDC), and a token the chain does not register
-   as `<address>:<amount>`, in its own decimals. `--args` always takes base units
-   (`10000000` is 10 USDC). `simulate --fund` with the owner's key rehearses it: the pulls
-   signed, and before the cook, in the same block, each approval or transfer `sauce run` would
-   send first, each listed as a transaction of its own with its gas.
+   **Units**: `--fund` and `--assume-balance` take whole tokens: `USDC:10` is 10 USDC, never 10
+   base units, and `USDC:10000000` is ten million USDC (the command says so when a bare integer
+   reads like base units). For base units, end the amount in `n`, as a JavaScript bigint is
+   written: `USDC:10000000n` is the same 10 USDC. A program and `--args` are the other way round:
+   a plain integer in base units (`10000000` is 10 USDC). A token the chain does not register is
+   `<address>:<amount>`, in its own decimals. `simulate --fund` with the owner's key rehearses
+   it: the pulls signed, and before the cook, in the same block, each approval or transfer
+   `sauce run` would send first, each listed as a transaction of its own with its gas.
 
 6. **Run**, from the Pot's owner:
 

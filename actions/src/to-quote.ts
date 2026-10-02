@@ -190,7 +190,7 @@ type QuoterMode = "static" | "call";
 function invoke(mode: QuoterMode, to: Address, cd: Expr): Expr {
   const target = formatBigint(BigInt(to));
 
-  return mode === "static" ? `evm.static(${target}, ${cd})` : `evm.call(${target}, 0n, ${cd})`;
+  return mode === "static" ? `evm.static(${target}, ${cd})` : `evm.call(${target}, 0, ${cd})`;
 }
 
 /**
@@ -231,7 +231,7 @@ function nthWord(index: number): Extract {
 const arrayLast: Extract = (emit, decoded) => {
   const arr = bindConst(emit, "qarr", `${decoded.expr}[0]`);
 
-  return { stmts: [...decoded.stmts, ...arr.stmts], expr: `${arr.expr}[${arr.expr}.length - 1n]` };
+  return { stmts: [...decoded.stmts, ...arr.stmts], expr: `${arr.expr}[${arr.expr}.length - 1]` };
 };
 
 /**
@@ -253,7 +253,7 @@ const ambientFlow: Extract = (emit, decoded) => {
   const sum = bindConst(
     emit,
     "qsum",
-    `(${base.expr} >> 255n) * ${base.expr} + (${quote.expr} >> 255n) * ${quote.expr}`,
+    `(${base.expr} >> 255) * ${base.expr} + (${quote.expr} >> 255) * ${quote.expr}`,
   );
 
   return {
@@ -531,7 +531,7 @@ function quoteUniswapV2(action: UniswapV2SwapAction, amountIn: bigint): QuoteCal
       stmts: [...decoded.stmts, ...inWithFee.stmts],
       expr:
         `Math.mulDiv(${inWithFee.expr}, ${decoded.expr}[${outIndex}], ` +
-        `${decoded.expr}[${inIndex}] * 1000000n + ${inWithFee.expr})`,
+        `${decoded.expr}[${inIndex}] * 1000000 + ${inWithFee.expr})`,
     };
   };
 
@@ -788,7 +788,7 @@ function quoteTraderJoeLB(action: TraderJoeLBSwapAction, amountIn: bigint): Quot
     const left = bindConst(emit, "qleft", `${decoded.expr}[0]`);
     return {
       stmts: [...decoded.stmts, ...left.stmts],
-      expr: `${left.expr} == 0n ? ${decoded.expr}[1] : 0n`,
+      expr: `${left.expr} == 0 ? ${decoded.expr}[1] : 0`,
     };
   };
   return {

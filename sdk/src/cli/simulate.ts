@@ -84,16 +84,19 @@ async function potBalances(
   input: SimulateInput,
   pot: Address,
   credit: NonNullable<Funding["credit"]>,
-): Promise<{ readonly assumed: Assumed[]; readonly overrides: StateOverride[number][] }> {
+): Promise<{
+  readonly assumed: Assumed[];
+  readonly overrides: StateOverride[number][];
+  readonly notes: string[];
+}> {
   const assumed: Assumed[] = [];
   const overrides: StateOverride[number][] = [];
+  const notes: string[] = [];
   const wanted = new Map<string, { request?: FundRequest; amount?: bigint; credit: bigint }>();
   for (const request of input.assume) {
-    wanted.set(request.token ?? "native", {
-      request,
-      amount: await baseUnits(client, request),
-      credit: 0n,
-    });
+    const { amount, note } = await baseUnits(client, request);
+    if (note !== undefined) notes.push(note);
+    wanted.set(request.token ?? "native", { request, amount, credit: 0n });
   }
   for (const funded of credit) {
     const before = wanted.get(funded.token);
@@ -146,7 +149,7 @@ async function potBalances(
     });
   }
 
-  return { assumed, overrides };
+  return { assumed, overrides, notes };
 }
 
 /** A transaction's gas as the rehearsal knows it: used, or estimated. */
@@ -226,7 +229,11 @@ export async function simulateCommand(
   const value =
     valueOf(input.value, await kitchenFee(client, input.chain), input.chain) +
     (funding?.value ?? 0n);
-  const { assumed, overrides } = await potBalances(client, input, cook.pot, funding?.credit ?? []);
+  const {
+    assumed,
+    overrides,
+    notes: amountNotes,
+  } = await potBalances(client, input, cook.pot, funding?.credit ?? []);
   // The owner pays the cook's value. One that holds less is given it for the rehearsal, and told.
   const held = await client.getBalance({ address: owner });
   if (held < value) {
@@ -364,6 +371,7 @@ export async function simulateCommand(
         }),
   };
   const notes = [
+    ...amountNotes,
     ...priceLimitNotes(input, cook.program.entryParams, input.args),
     ...(funding?.notes ?? []),
     ...rehearsal.notes,

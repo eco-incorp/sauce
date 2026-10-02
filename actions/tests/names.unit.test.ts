@@ -182,13 +182,13 @@ describe("names — one document, compiled for each chain", () => {
     assert.equal(compiled[0]!.source, compiled[1]!.source, "the source carries the names");
     assert.notDeepEqual(compiled[0]!.bytecode, compiled[1]!.bytecode, "each chain's addresses");
     for (const program of compiled) assert.deepEqual(program.parameters, ["amount"]);
-    assert.match(compiled[0]!.source, /UniswapV3\.Factory\.getPool\(USDC, WETH, 500n\)/);
+    assert.match(compiled[0]!.source, /UniswapV3\.Factory\.getPool\(USDC, WETH, 500\)/);
     assert.match(compiled[0]!.source, /UniswapV2\.Factory\.getPair\(WETH, USDC\)/);
     assert.match(
       compiled[0]!.source,
-      /require\(pool\d+ != 0n, "actions\[1\]: no pool under that key"\)/,
+      /require\(pool\d+ != 0, "actions\[1\]: no pool under that key"\)/,
     );
-    assert.match(compiled[0]!.source, /uniswapV4\(UniswapV4\.PoolManager, USDC, 0n,/);
+    assert.match(compiled[0]!.source, /uniswapV4\(UniswapV4\.PoolManager, USDC, 0,/);
   });
 
   for (const chain of CHAINS) {
@@ -283,7 +283,7 @@ describe("names — one document, compiled for each chain", () => {
     const { source, contracts } = compileProgram(doc({ ...V3_BY_KEY, factory }), {
       chain: "ethereum",
     });
-    assert.match(source, /IUniswapV3Factory\.at\(0x[0-9a-f]{40}n\)\.getPool\(USDC, WETH, 500n\)/);
+    assert.match(source, /IUniswapV3Factory\.at\(0x[0-9a-f]{40}\)\.getPool\(USDC, WETH, 500\)/);
     assert.ok("IUniswapV3Factory" in contracts);
   });
 
@@ -300,7 +300,7 @@ describe("names — one document, compiled for each chain", () => {
       }),
       { chain: "ethereum" },
     );
-    assert.match(source, /ILBFactory\.at\(0x[0-9a-f]+n\)\.getLBPairInformation\(.*, 20n\)/);
+    assert.match(source, /ILBFactory\.at\(0x[0-9a-f]+\)\.getLBPairInformation\(.*, 20\)/);
     assert.match(source, /const pool\d+ = pool\d+\.LBPair;/);
     assert.match(source, /ILBPair\.at\(pool\d+\)\.getTokenX\(\)/);
   });
@@ -516,7 +516,7 @@ describe("names — native", () => {
         { chain: "ethereum" },
       );
       assert.match(source, /ctx\.selfBalance\(\)/, action.type);
-      assert.doesNotMatch(source, /IErc20\.at\(0n\)/, action.type);
+      assert.doesNotMatch(source, /IErc20\.at\(0\)/, action.type);
     }
   });
 
