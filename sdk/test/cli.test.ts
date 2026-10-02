@@ -1736,6 +1736,30 @@ describe("sauce pot", () => {
     expect(failureReason(at(999), logs([engine, 999]))).toBe(
       `program ${engine} failed with custom program error 999 (0x3e7); the logs say why`,
     );
+    // A token program's refusal is read from the line it logged, for either token program; with
+    // no such line it stays a code, as above.
+    const token2022 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+    const refused = (program: string, said: string, code: number) => [
+      `Program ${kitchen} invoke [1]`,
+      `Program ${engine} invoke [2]`,
+      `Program ${program} invoke [3]`,
+      "Program log: Instruction: TransferChecked",
+      `Program log: ${said}`,
+      `Program ${program} failed: custom program error: 0x${code.toString(16)}`,
+      `Program ${engine} failed: custom program error: 0x${code.toString(16)}`,
+      `Program ${kitchen} failed: custom program error: 0x${code.toString(16)}`,
+    ];
+    expect(
+      failureReason(
+        at(67),
+        refused(token2022, "Transferring, minting, and burning is paused on this mint", 67),
+      ),
+    ).toBe(
+      "Token-2022 refused: Transferring, minting, and burning is paused on this mint (custom program error 67)",
+    );
+    expect(failureReason(at(17), refused(token, "Error: Account is frozen", 17))).toBe(
+      "SPL Token refused: Account is frozen (custom program error 17)",
+    );
   });
 
   it("refuses --via and --max-execution-fee on an EVM chain, whose cook is the Pot's", async () => {

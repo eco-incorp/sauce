@@ -55,4 +55,4 @@ file links its own.
 | [Scroll](scroll.md) | `scroll` | 534352 | EVM | preview | no | — | 0 | 8 |
 | [Zora](zora.md) | `zora` | 7777777 | EVM | preview | no | — | 0 | 2 |
 | [Aurora](aurora.md) | `aurora` | 1313161554 | EVM | preview | no | — | 0 | 0 |
-| [Solana](solana.md) | `solana` | 1399811149 | Solana (SVM) | supported | yes | — | 3 | 0 |
+| [Solana](solana.md) | `solana` | 1399811149 | Solana (SVM) | supported | yes | — | 4 | 0 |

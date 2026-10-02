@@ -454,20 +454,45 @@ spelling on one behaviour is `test/std/token/evm.e2e.test.ts`, which runs OpenZe
 returns, USDT's standing allowance, honest refusals) and requires identical outcomes, with the raw
 `IERC20.at` binding beside them as the contrast and the plain-transfer recipe executed too.
 CI also pins what a wrong digit would break silently: `test/std/token/compile.test.ts` derives the
-SPL Token program id the SVM arm guards on from its base58 address, and each selector the EVM writes
-spell out by hand from `keccak256` of its signature, and counts them in the emitted bytecode. It has
-two per-target arms (`token.evm.js`, `token.svm.js`) and
+two token program ids the SVM arm guards on (SPL Token and Token-2022) from their base58 addresses,
+and each selector the EVM writes spell out by hand from `keccak256` of its signature, and counts them
+in the emitted bytecode. It has two per-target arms (`token.evm.js`, `token.svm.js`) and
 **deliberately no neutral `token.js`**: a token program is inherently target-specific, and a neutral
 file would turn a missing arm into a confusing missing-EXPORT error instead of a clear failure to
 import the package (`package.json`'s `main` names the neutral BASE the compiler suffixes per target).
 The per-arm signatures genuinely differ where the account models force it — SVM `totalSupply`/
 `decimals` take the mint as an `Account` while the EVM takes an `Address`, and the SVM writes take
-6 args to the EVM's 3–4. Verified in `sdk/test/std/token/`: `compile.test.ts` (both targets, all seven
-shared methods plus the SVM-only `ownerOf`, which reads a token account's owner and has no EVM arm,
-the SVM account manifest, and the no-neutral-arm packaging invariant — always runs, no engine
-needed) plus `svm.e2e.test.ts`/`evm.e2e.test.ts`, which EXECUTE the compiled bytecode against real SPL
-accounts and a real deployed ERC20 — see `SAUCE_RUST_ENGINE_SO`/`SAUCE_V12_RUNTIME_CREATION_HEX` above for why
-those two are gated. `src/std/token` **ships** two ways: embedded in
+6 args to the EVM's 3–4.
+
+**The SVM arm takes SPL Token and Token-2022.** Every read (`balanceOf`, `ownerOf`, `allowance`,
+`totalSupply`, `decimals`) accepts an account owned by either program; a Token-2022 one is held to
+its base layout and, where it carries extensions, its account-type byte (byte 165: 1 mint, 2
+account), never the multisig's 355 bytes. The CHECKED writes, `transferChecked` and `approveChecked`
+(the mint as an `Account` and its decimals; SVM-only, no EVM arm), CPI `TransferChecked`/
+`ApproveChecked` into whichever program owns the source, destination and mint, require it to be one
+of the two, require the mint to be the named token and the decimals the mint's, and refuse
+(`"transfer hook"`) a mint whose TransferHook names a program — its ExtraAccountMetaList accounts
+cannot ride in a fixed account list, and Token-2022 would otherwise fail with an opaque missing
+account. A hook with no program, transfer fees (a program measures balance deltas), scaled UI
+amounts (raw only), pauses and frozen accounts are the token program's to apply. **The legacy
+`transfer`/`transferFrom`/`approve` are unchanged and SPL-Token-only, byte for byte**:
+`compile.test.ts` compiles them against `test/std/token/fixtures/legacy-token.svm.sauce.ts`, the arm
+as it was before, and requires identical bytecode — "you can't break existing sdk". Taking
+Token-2022 grew the reads (a first read is about 260 bytes where it was 135; a program that moves a
+Token-2022 token and measures what arrived needs staging), so mind transaction size when adding a
+check here. The SDK side: `svm/token-accounts.ts` (`resolveSvmToken`: a mint's program by its owner,
+decimals, extensions, transfer refusals; `svmTokenAccount` derives an ATA under the mint's program;
+`svmTokenReceived`/`svmTokenToSend` net fees with `token-extensions.ts`), the registry's per-row
+`tokenProgram`, and the CLI's `program:<token>`/`mint:<token>` account forms.
+
+Verified in `sdk/test/std/token/`: `compile.test.ts` (both targets, all seven shared methods plus
+the SVM-only `ownerOf`, `transferChecked` and `approveChecked`, the SVM account manifest, the legacy
+writes byte for byte, and the no-neutral-arm packaging invariant — always runs, no engine needed)
+plus `svm.e2e.test.ts`/`svm-token-2022.e2e.test.ts`/`evm.e2e.test.ts`, which EXECUTE the compiled
+bytecode against real SPL accounts, real Token-2022 accounts created by the real ATA program (two
+real tokenized-stock mints and PYUSD as mainnet holds them, and a mint per extension), and a real
+deployed ERC20 — see `SAUCE_RUST_ENGINE_SO`/`SAUCE_V12_RUNTIME_CREATION_HEX` above for why those are
+gated. `src/std/token` **ships** two ways: embedded in
 `src/embedded/sources.generated.ts`, which is what the SDK's own compiles resolve (see the next
 paragraph), and as files under `dist/std/token` (`copy-verify-assets.mjs`) for a consumer that
 resolves it off disk.

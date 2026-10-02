@@ -4276,6 +4276,7 @@ declare global {
   const bNIU: bigint & SauceTokenSource;
   const bNVDA: bigint & SauceTokenSource;
   const bTSLA: bigint & SauceTokenSource;
+  const PYUSD: bigint;
   const WSOL: bigint;
   /** Destination chain identity supplied by openRoute. */
   const chainId: bigint;
