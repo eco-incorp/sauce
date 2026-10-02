@@ -44,7 +44,11 @@ import {
 } from "./nest-dynamic.js";
 import { resolveIntentPot } from "./intent-pot.js";
 import { normalizeRoute, toBigInt } from "./normalize.js";
-import { ecoRoutesPortal, type EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
+import {
+  ecoRoutesPortal,
+  ecoRoutesProver,
+  type EcoRoutesSelector,
+} from "../protocols/eco-routes/lookup.js";
 import {
   approvalTxs,
   fundTx,
@@ -105,6 +109,11 @@ interface IntentOptionsCommon {
    *  destination chain, so it only has to be supplied for a deployment the registry does not carry.
    *  See `protocols/eco-routes`. */
   portal?: AddressInput;
+  /** The native the solver sends with the fill, which the Portal hands the Executor to pay the
+   *  route's calls. Defaults to exactly what those calls spend: the sum of their `value`s — each
+   *  cook's `execution.value` (the Kitchen fee plus native the program spends), each precall's, each
+   *  nested child's — less what a `fundedByBody` child's program forwards itself. Less leaves a call
+   *  unpaid and the fill reverts; more stays behind in the shared Executor. */
   nativeAmount?: bigint | number | string;
   tokens?: readonly TokenAmountInput[];
   /** Calls spliced BEFORE the compiled Sauce call, in order. */
@@ -112,6 +121,8 @@ interface IntentOptionsCommon {
   /** Reward fallbacks — used only when `.reward(rewardArg)`'s own argument doesn't supply them. */
   source?: ChainRef;
   creator?: AddressInput;
+  /** Defaults, like the reward's own `prover`, to the eco-routes prover recorded for the
+   *  source/destination pair. */
   prover?: AddressInput;
   rewardDeadline?: bigint | number | string;
   /** Caller-supplied token symbol -> address map, folded into the chain-scoped ambient defines
@@ -167,7 +178,12 @@ export interface SauceRewardSpec {
   readonly source?: ChainRef;
   readonly deadline?: bigint | number | string;
   readonly creator?: AddressInput;
+  /** The prover on the source chain that accepts the fill's proof. Defaults to the one the
+   *  eco-routes registry records for the source/destination pair, in the `IntentOptions.ecoRoutes`
+   *  deployment: the first of `ECO_ROUTES_PROVER_PREFERENCE` (the HyperProver first) deployed on
+   *  both chains — what `Chain(() => …).reward(…)` in a program and `sauce intent publish` record. */
   readonly prover?: AddressInput;
+  /** Native coin offered as the reward. Defaults to zero. */
   readonly nativeAmount?: bigint | number | string;
   readonly tokens?: readonly TokenAmountInput[];
 }
@@ -367,10 +383,13 @@ function isTokenAmountArray(value: RewardArg): value is readonly TokenAmountInpu
 
 /** Resolves `.reward(rewardArg)`'s argument against `options`' own fallback fields, into a
  *  fully-formed `(source, RewardInput)` pair -- or throws, naming exactly which required field
- *  (`source`/`creator`/`prover`/`deadline`) is missing from BOTH the reward argument and `options`. */
+ *  (`source`/`creator`/`deadline`) is missing from BOTH the reward argument and `options`. The
+ *  prover alone has a default: the registry's for the pair, and when the registry records none it
+ *  is missing like the others. */
 function resolveReward(
   rewardArg: RewardArg,
   options: IntentOptions | undefined,
+  destination: CanonicalChain,
 ): { readonly source: CanonicalChain; readonly reward: RewardInput } {
   const spec: SauceRewardSpec =
     typeof rewardArg === "bigint"
@@ -396,10 +415,8 @@ function resolveReward(
   if (creator === undefined) {
     missingField("creator", "as `reward.creator` or `IntentOptions.creator`");
   }
-  const prover = spec.prover ?? options?.prover;
-  if (prover === undefined) {
-    missingField("prover", "as `reward.prover` or `IntentOptions.prover`");
-  }
+  const prover =
+    spec.prover ?? options?.prover ?? registryProver(source, destination, options?.ecoRoutes);
 
   return {
     source,
@@ -411,6 +428,26 @@ function resolveReward(
       tokens: spec.tokens,
     },
   };
+}
+
+/** The prover the eco-routes registry records for `source` -> `destination`, the one
+ *  `Chain(() => …).reward(…)` in a program defaults to (`sauce-route.ts`'s `proverFor`). A pair it
+ *  records none for leaves the prover missing, with the registry's reason. */
+function registryProver(
+  source: CanonicalChain,
+  destination: CanonicalChain,
+  ecoRoutes: EcoRoutesSelector | undefined,
+): AddressInput {
+  try {
+    return ecoRoutesProver(source, destination, ecoRoutes);
+  } catch (err) {
+    throw new Error(
+      `openRoute: 'prover' is required for a reward on ${source.slug} for ${destination.slug} — ` +
+        `${err instanceof Error ? err.message : String(err)} Supply it as \`reward.prover\` or ` +
+        "`IntentOptions.prover`.",
+      { cause: err },
+    );
+  }
 }
 
 function missingSourcePortal(): never {
@@ -765,41 +802,7 @@ export function openRoute(
       return pending;
     },
     reward(rewardArg: RewardArg): BuiltIntent {
-      const { source, reward } = resolveReward(rewardArg, options);
-
-      let parentRouteForInvariants: Route | undefined;
-      if (nestedEntries.length > 0) {
-        parentRouteForInvariants = normalizeRoute({
-          deadline: options.deadline,
-          portal: destinationPortal,
-          nativeAmount: options.nativeAmount,
-          tokens: options.tokens,
-          calls: [],
-        });
-        assertNestingInvariants({
-          parentChain: destination,
-          parentRoute: parentRouteForInvariants,
-          children: nestedEntries.map((e) => ({
-            intent: e.built.intent,
-            fundedByBody: e.fundedByBody,
-            via: e.via,
-          })),
-        });
-
-        // T5: a transfer child opting into `fundNativeFromRoute` re-enables a NATIVE-only coverage
-        // check, since that native genuinely comes from this route's own `route.nativeAmount`.
-        const fundNativeFromRouteTotal = nestedEntries
-          .filter((e) => e.via === "transfer" && e.fundNativeFromRoute)
-          .reduce((sum, e) => sum + e.built.intent.reward.nativeAmount, 0n);
-        if (fundNativeFromRouteTotal > parentRouteForInvariants.nativeAmount) {
-          throw new Error(
-            `openRoute: .nest() children opted into fundNativeFromRoute total nativeAmount ` +
-              `(${fundNativeFromRouteTotal}) exceeds this route's own route.nativeAmount ` +
-              `(${parentRouteForInvariants.nativeAmount}) (T5) — the transfer cook's value cannot ` +
-              `exceed what the solver delivered via route.nativeAmount.`,
-          );
-        }
-      }
+      const { source, reward } = resolveReward(rewardArg, options, destination);
 
       /** Resolves a `NestEntry`'s vault-address rung, precedence explicit > predicted > runtime. */
       function resolveVaultResolution(e: NestEntry): ChildVaultResolution {
@@ -975,18 +978,56 @@ export function openRoute(
         ...childCalls("after"),
       ];
 
-      if (nestedEntries.some((entry) => entry.executionFee > 0n)) {
-        const fundedByBodyNative = nestedEntries
-          .filter((entry) => entry.via === "publishAndFund" && entry.fundedByBody)
-          .reduce((sum, entry) => sum + entry.built.intent.reward.nativeAmount, 0n);
-        const requiredNative =
-          calls.reduce((sum, call) => sum + toBigInt(call.value ?? 0n), 0n) - fundedByBodyNative;
-        if (requiredNative > toBigInt(options.nativeAmount ?? 0n)) {
+      // The native the calls spend, which the Executor holds only if the solver sends it: each
+      // call's value, less a `fundedByBody` child's native reward, which the parent's program
+      // forwards itself. That is the default `nativeAmount`, so a route built without one is paid
+      // exactly, and what an explicit one is checked against when a nested cook adds a fee.
+      const fundedByBodyNative = nestedEntries
+        .filter((entry) => entry.via === "publishAndFund" && entry.fundedByBody)
+        .reduce((sum, entry) => sum + entry.built.intent.reward.nativeAmount, 0n);
+      const requiredNative =
+        calls.reduce((sum, call) => sum + toBigInt(call.value ?? 0n), 0n) - fundedByBodyNative;
+      const nativeAmount =
+        options.nativeAmount === undefined ? requiredNative : toBigInt(options.nativeAmount);
+
+      if (nestedEntries.length > 0) {
+        const parentRouteForInvariants: Route = normalizeRoute({
+          deadline: options.deadline,
+          portal: destinationPortal,
+          nativeAmount,
+          tokens: options.tokens,
+          calls: [],
+        });
+        assertNestingInvariants({
+          parentChain: destination,
+          parentRoute: parentRouteForInvariants,
+          children: nestedEntries.map((e) => ({
+            intent: e.built.intent,
+            fundedByBody: e.fundedByBody,
+            via: e.via,
+          })),
+        });
+
+        // T5: a transfer child opting into `fundNativeFromRoute` re-enables a NATIVE-only coverage
+        // check, since that native genuinely comes from this route's own `route.nativeAmount`.
+        const fundNativeFromRouteTotal = nestedEntries
+          .filter((e) => e.via === "transfer" && e.fundNativeFromRoute)
+          .reduce((sum, e) => sum + e.built.intent.reward.nativeAmount, 0n);
+        if (fundNativeFromRouteTotal > parentRouteForInvariants.nativeAmount) {
           throw new Error(
-            `openRoute: route.nativeAmount must cover ${requiredNative} wei for its calls, ` +
-              "including each cook's execution fee and forwarded child rewards",
+            `openRoute: .nest() children opted into fundNativeFromRoute total nativeAmount ` +
+              `(${fundNativeFromRouteTotal}) exceeds this route's own route.nativeAmount ` +
+              `(${parentRouteForInvariants.nativeAmount}) (T5) — the transfer cook's value cannot ` +
+              `exceed what the solver delivered via route.nativeAmount.`,
           );
         }
+      }
+
+      if (nestedEntries.some((entry) => entry.executionFee > 0n) && requiredNative > nativeAmount) {
+        throw new Error(
+          `openRoute: route.nativeAmount must cover ${requiredNative} wei for its calls, ` +
+            "including each cook's execution fee and forwarded child rewards",
+        );
       }
 
       const intent = assembleIntent(
@@ -996,7 +1037,7 @@ export function openRoute(
           salt: options.salt,
           deadline: options.deadline,
           portal: destinationPortal,
-          nativeAmount: options.nativeAmount,
+          nativeAmount,
           tokens: options.tokens,
           calls,
         },
