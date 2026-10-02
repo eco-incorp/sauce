@@ -11,23 +11,26 @@ Community-driven fork of Uniswap V2 with additional yield farming features and m
 
 ## Pitfalls for a program
 
-- As Uniswap V2: `amountOutMin` is the only bound, approve exactly `amountIn`, pass a deadline.
+- As Uniswap V2: `amountOutMin` is the only bound; through the Router, approve exactly
+  `amountIn` and pass a deadline.
 
 ## In a Sauce program
 
-Sell the Pot's USDC for WETH through the Router:
+Sell the Pot's USDC for WETH at the pair:
 
 ```sauce chain=arbitrum
+import { uniswapV2 } from "@sauce/router";
+
 function main(amountIn: Uint256, minOut: Uint256, recipient: Address) {
-  const self = ctx.self();
-  const before = WETH.balanceOf(self);
-  USDC.approve(SushiswapV2.Router, amountIn);
-  SushiswapV2.Router.swapExactTokensForTokens(amountIn, minOut, [USDC, WETH], self, ctx.timestamp());
-  const out = WETH.balanceOf(self) - before;
-  require(out >= minOut, "below minOut");
-  WETH.transfer(recipient, out);
+  const pair = SushiswapV2.Factory.getPair(USDC, WETH);
+  require(pair != 0n, "no USDC/WETH pair");
+  uniswapV2(pair, USDC, WETH, amountIn, 3000n, minOut, recipient);
 }
 ```
+
+`uniswapV2` prices the output from the pair's reserves with its 0.3% fee (`3000n` ppm), pushes
+`amountIn` to the pair, pays `recipient` and reverts below `minOut`. The pair takes the whole input
+or the program reverts, so no input is left to return.
 
 ## Category
 
