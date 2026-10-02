@@ -287,9 +287,10 @@ if (packageArgument < 0) {
   );
 }
 // SauceScript writes its integers plainly, `3000` and never `3000n` (`integer-literals.mjs`): the
-// `.sauce.ts` examples and the manual's SauceScript fences, ```js (and ```sauce). TypeScript — the
-// `.ts` examples and the ```ts fences, closures included — keeps the `n` tsc needs. An exception is
-// INTEGER_EXCEPTIONS's: file -> literal as written -> why; one nothing needs fails.
+// `.sauce.ts` examples and the manual's SauceScript fences, ```js (and ```sauce), and every fence of
+// a page generated from the skills, which renders their SauceScript as ```ts. TypeScript — the `.ts`
+// examples and a written page's ```ts fences, closures included — keeps the `n` tsc needs. An
+// exception is INTEGER_EXCEPTIONS's: file -> literal as written -> why; one nothing needs fails.
 const INTEGER_EXCEPTIONS = {};
 {
   const ts = createRequire(join(root, "package.json"))("typescript");
@@ -309,13 +310,15 @@ const INTEGER_EXCEPTIONS = {};
   for (const path of manual) {
     const file = relative(root, path);
     if (file !== "README.md" && !file.startsWith("docs/")) continue;
-    const lines = readFileSync(path, "utf8").split("\n");
+    const text = readFileSync(path, "utf8");
+    const generated = text.startsWith("<!-- Generated");
+    const lines = text.split("\n");
     for (let i = 0; i < lines.length; i++) {
       const open = /^\s*(```+)(\S*)/.exec(lines[i]);
       if (!open) continue;
       let end = i + 1;
       while (end < lines.length && !lines[end].trimStart().startsWith(open[1])) end++;
-      if (open[2] === "js" || open[2] === "sauce") {
+      if (["js", "sauce"].includes(open[2]) || (generated && /^(ts|typescript)$/.test(open[2]))) {
         fences++;
         hold(file, lines.slice(i + 1, end).join("\n"), i + 2);
       }
