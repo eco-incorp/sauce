@@ -59,6 +59,9 @@
 //  12. every example program writes what the registry names by its name: no recorded address as
 //      a literal, no hand-built selector of a function a binding declares (LOW_LEVEL_CALLS); and
 //      takes its inputs as `main` parameters, never an undeclared define (INPUT_EXCEPTIONS).
+//  13. SauceScript writes its integers plainly, `3000` and never `3000n`: every example program,
+//      ```sauce block and reference program, the protocol documents' templates included
+//      (INTEGER_EXCEPTIONS); TypeScript host code keeps the `n` tsc needs.
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -89,6 +92,7 @@ import {
   namedProgramProblems,
   registryNames,
 } from "../../docs/scripts/example-programs.mjs";
+import { bigintLiteralProblems } from "../../docs/scripts/integer-literals.mjs";
 
 // ---- Arguments and resolution -------------------------------------------------------------------
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -132,6 +136,7 @@ const counts = {
   identifiers: 0,
   addresses: 0,
   refusals: 0,
+  integers: 0,
 };
 
 function walk(dir, predicate, out = []) {
@@ -1750,6 +1755,65 @@ const INPUT_EXCEPTIONS = {
   }
 }
 
+// ---- 13. Integers written plainly ------------------------------------------------------------------------
+// The SauceScript a skill shows writes no `n` on an integer (`docs/scripts/integer-literals.mjs`):
+// its example programs, its ```sauce blocks and its references' (the generated ones included), the
+// programs the SauceScript reference compiles and refuses, and the protocol documents' templates,
+// whose ```typescript blocks are SauceScript. A runner and a ```ts block are TypeScript, and keep the
+// `n` tsc needs. An exception is INTEGER_EXCEPTIONS's: file (in the skills) -> literal as written ->
+// why; one nothing needs fails.
+const INTEGER_EXCEPTIONS = {};
+{
+  const used = new Map();
+  const hold = (file, where, source, line) => {
+    const key = relative(SKILLS_DIR, file);
+    const allowed = INTEGER_EXCEPTIONS[key] ?? {};
+    if (!used.has(key)) used.set(key, new Set());
+    counts.integers++;
+    failures.push(
+      ...bigintLiteralProblems({ where, source, ts, line, allowed, used: used.get(key) }),
+    );
+  };
+  for (const program of examplePrograms) {
+    const file = join(SKILLS_DIR, program);
+    hold(file, rel(file), read(file), 1);
+  }
+  const templates = readdirSync(PROTOCOL_DOCUMENTS)
+    .filter((name) => name.endsWith(".md"))
+    .sort()
+    .flatMap((name) => {
+      const file = join(PROTOCOL_DOCUMENTS, name);
+      return fencedBlocks(read(file), file).filter((block) => block.lang === "typescript");
+    });
+  for (const skill of skills) {
+    for (const block of [
+      ...skill.blocks.filter((b) => b.lang === "sauce"),
+      ...skill.referenceBlocks,
+      ...(skill.dir === "sauce-protocols" ? templates : []),
+    ]) {
+      hold(block.file, rel(block.file), block.body, block.line);
+    }
+  }
+  const reference = join(SKILLS_DIR, "sauce-script", "references", "builtins.json");
+  for (const builtin of JSON.parse(read(reference)).intrinsics) {
+    for (const [target, program] of [
+      ...Object.entries(builtin.example ?? {}),
+      ...Object.entries(builtin.unavailable ?? {}).map(([t, refused]) => [t, refused.program]),
+    ]) {
+      hold(reference, `${rel(reference)} ${builtin.name} (${target})`, program, 1);
+    }
+  }
+  for (const [file, literals] of Object.entries(INTEGER_EXCEPTIONS)) {
+    for (const literal of Object.keys(literals)) {
+      if (!used.get(file)?.has(literal))
+        fail(
+          "check-skills.mjs INTEGER_EXCEPTIONS",
+          `allows ${literal} in ${file}, which no longer writes it: remove the entry`,
+        );
+    }
+  }
+}
+
 // ---- Report ----------------------------------------------------------------------------------------------
 const summary =
   `${counts.skills} skills, ${counts.files} files read; ${counts.programRuns} program runs through sauce ` +
@@ -1759,7 +1823,8 @@ const summary =
   `executed offline; ${counts.indexed} indexed globals compiled on their chains; ${builtinExamples} ` +
   `reference examples compiled and ${builtinRejections} rejections refused; ${counts.subpaths} subpaths, ` +
   `${counts.identifiers} inline identifiers and ${counts.addresses} addresses checked; ` +
-  `${executedExamples} example programs executed by a suite; against ` +
+  `${executedExamples} example programs executed by a suite; ${counts.integers} programs write ` +
+  `their integers plainly; against ` +
   `${PKG}@${sdkPkg.version}`;
 if (failures.length > 0) {
   console.error(
