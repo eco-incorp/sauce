@@ -21,26 +21,26 @@
 function main(recipients: Address[], weights: Uint256[], budget: Uint256): Uint256[] {
   const self = ctx.self();
   const count = recipients.length;
-  require(count > 0n && weights.length == count, "give one weight per recipient");
-  let total = 0n;
-  for (let i = 0n; i < count; i++) {
+  require(count > 0 && weights.length == count, "give one weight per recipient");
+  let total: Uint256 = 0;
+  for (let i = 0; i < count; i++) {
     const to = recipients[i];
-    require(to != 0n && to != self, "a recipient is the zero address or the Pot");
-    for (let j = 0n; j < i; j++) {
+    require(to != 0 && to != self, "a recipient is the zero address or the Pot");
+    for (let j = 0; j < i; j++) {
       require(recipients[j] != to, "a recipient is listed twice");
     }
     total += weights[i];
   }
-  require(total > 0n, "the weights sum to 0");
+  require(total > 0, "the weights sum to 0");
   require(USDC.balanceOf(self) >= budget, "budget is not in the Pot");
 
   const paid: Uint256[] = new Array(count);
   let left = budget;
-  for (let i = 0n; i < count; i++) {
+  for (let i = 0; i < count; i++) {
     const to = recipients[i];
-    const share = i == count - 1n ? left : Math.mulDiv(budget, weights[i], total);
+    const share = i == count - 1 ? left : Math.mulDiv(budget, weights[i], total);
     left -= share;
-    if (share > 0n) {
+    if (share > 0) {
       const before = USDC.balanceOf(to);
       USDC.transfer(to, share);
       paid[i] = USDC.balanceOf(to) - before;

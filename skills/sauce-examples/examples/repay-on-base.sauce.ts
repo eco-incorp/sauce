@@ -37,11 +37,11 @@
 import AaveV3Reads from "./AaveV3Reads.json";
 
 function main(borrower: Address, solverBps: Uint256) {
-  require(borrower != 0n, "borrower is the zero address");
-  require(solverBps < 10000n, "solverBps is 100% or more");
+  require(borrower != 0, "borrower is the zero address");
+  require(solverBps < 10000, "solverBps is 100% or more");
   const amount = USDC.balanceOf(ctx.self());
-  require(amount > 0n, "no USDC in the Pot");
-  const delivered = amount - (amount * solverBps) / 10000n;
+  require(amount > 0, "no USDC in the Pot");
+  const delivered = amount - (amount * solverBps) / 10000;
 
   Base(
     () => {
@@ -50,13 +50,13 @@ function main(borrower: Address, solverBps: Uint256) {
       const debtToken = AaveV3Reads.at(AaveV3.Pool).getReserveVariableDebtToken(USDC);
       const owed = Token(debtToken).balanceOf(borrower);
       const repay = arrived < owed ? arrived : owed;
-      if (repay > 0n) {
+      if (repay > 0) {
         USDC.approve(AaveV3.Pool, repay);
-        AaveV3.Pool.repay(USDC, repay, 2n, borrower);
+        AaveV3.Pool.repay(USDC, repay, 2, borrower);
       }
       const change = USDC.balanceOf(ctx.self());
-      if (change > 0n) {
-        const paid = change - (change * solverBps) / 10000n;
+      if (change > 0) {
+        const paid = change - (change * solverBps) / 10000;
         Ethereum(() => {
           USDC.transfer(borrower, paid); // Ethereum's USDC
         }).reward({ tokens: [{ token: USDC, amount: change }] }); // Base's: it funds this level

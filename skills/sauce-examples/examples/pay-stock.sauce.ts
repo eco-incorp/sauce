@@ -41,6 +41,6 @@ function main(
   require(ownerOf(TSLAx, destination) == payee, "destination is not the payee's TSLAx account");
   require(balanceOf(TSLAx, source) >= amount + keep, "the Pot would keep less than keep");
   const before = balanceOf(TSLAx, destination);
-  transferChecked(TSLAx, tokenProgram, source, mint, destination, pot, amount, 8n);
+  transferChecked(TSLAx, tokenProgram, source, mint, destination, pot, amount, 8);
   return { received: balanceOf(TSLAx, destination) - before, left: balanceOf(TSLAx, source) };
 }

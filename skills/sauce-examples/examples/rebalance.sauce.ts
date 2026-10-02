@@ -22,23 +22,23 @@ import { uniswapV3 } from "@sauce/router";
 
 // USDC base units per WETH at a pool's sqrt price (token1 per token0, times 2^96).
 function priceAt(sqrtPriceX96: Uint256): Uint256 {
-  const ratio = Math.mulDiv(sqrtPriceX96, sqrtPriceX96, 1n << 96n);
+  const ratio = Math.mulDiv(sqrtPriceX96, sqrtPriceX96, 1 << 96);
   return WETH < USDC
-    ? Math.mulDiv(ratio, 10n ** 18n, 1n << 96n)
-    : Math.mulDiv(10n ** 18n, 1n << 96n, ratio);
+    ? Math.mulDiv(ratio, 10 ** 18, 1 << 96)
+    : Math.mulDiv(10 ** 18, 1 << 96, ratio);
 }
 
 // The other way: the pool's sqrt price at `price` USDC base units per WETH.
 function sqrtPriceAt(price: Uint256): Uint256 {
   return WETH < USDC
-    ? Math.sqrt(Math.mulDiv(price, 1n << 192n, 10n ** 18n))
-    : Math.sqrt(Math.mulDiv(1n << 192n, 10n ** 18n, price));
+    ? Math.sqrt(Math.mulDiv(price, 1 << 192, 10 ** 18))
+    : Math.sqrt(Math.mulDiv(1 << 192, 10 ** 18, price));
 }
 
 // WETH's share of the two balances' value at `price`, in hundredths of a percent.
 function wethShare(weth: Uint256, usdc: Uint256, price: Uint256): Uint256 {
-  const wethValue = Math.mulDiv(weth, price, 10n ** 18n);
-  return Math.mulDiv(wethValue, 10000n, wethValue + usdc);
+  const wethValue = Math.mulDiv(weth, price, 10 ** 18);
+  return Math.mulDiv(wethValue, 10000, wethValue + usdc);
 }
 
 function main(
@@ -46,48 +46,48 @@ function main(
   bandBps: Uint256,
   maxSlippageBps: Uint256,
 ): { before: Uint256; after: Uint256; soldWeth: bool; amountIn: Uint256; amountOut: Uint256 } {
-  require(targetBps <= 10000n && maxSlippageBps < 10000n, "a share above 100%");
+  require(targetBps <= 10000 && maxSlippageBps < 10000, "a share above 100%");
   const self = ctx.self();
-  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500n);
-  require(pool != 0n, "no WETH/USDC pool at 0.05%");
+  const pool = UniswapV3.Factory.getPool(WETH, USDC, 500);
+  require(pool != 0, "no WETH/USDC pool at 0.05%");
   const price = priceAt(UniswapV3.Pool(pool).slot0().sqrtPriceX96);
   const weth = WETH.balanceOf(self);
   const usdc = USDC.balanceOf(self);
-  require(weth > 0n || usdc > 0n, "the Pot holds neither");
+  require(weth > 0 || usdc > 0, "the Pot holds neither");
 
   const before = wethShare(weth, usdc, price);
   const soldWeth = before > targetBps;
   if ((soldWeth ? before - targetBps : targetBps - before) <= bandBps) {
-    return { before, after: before, soldWeth, amountIn: 0n, amountOut: 0n };
+    return { before, after: before, soldWeth, amountIn: 0, amountOut: 0 };
   }
   // The value to move, in USDC, to bring WETH to its target share.
-  const wethValue = Math.mulDiv(weth, price, 10n ** 18n);
-  const wanted = Math.mulDiv(wethValue + usdc, targetBps, 10000n);
+  const wethValue = Math.mulDiv(weth, price, 10 ** 18);
+  const wanted = Math.mulDiv(wethValue + usdc, targetBps, 10000);
   const fee = UniswapV3.Pool(pool).fee();
-  let amountOut = 0n;
-  let amountIn = 0n;
+  let amountOut: Uint256 = 0;
+  let amountIn: Uint256 = 0;
   if (soldWeth) {
     // Sell WETH down to `floor`: every unit fetches at least that, less the pool's fee.
-    const floor = Math.mulDiv(price, 10000n - maxSlippageBps, 10000n);
+    const floor = Math.mulDiv(price, 10000 - maxSlippageBps, 10000);
     amountOut = uniswapV3(
       pool,
       WETH,
       USDC,
-      Math.mulDiv(wethValue - wanted, 10n ** 18n, price),
+      Math.mulDiv(wethValue - wanted, 10 ** 18, price),
       sqrtPriceAt(floor),
-      0n,
+      0,
       self,
     );
     amountIn = weth - WETH.balanceOf(self);
-    const least = Math.mulDiv(Math.mulDiv(amountIn, floor, 10n ** 18n), 1000000n - fee, 1000000n);
+    const least = Math.mulDiv(Math.mulDiv(amountIn, floor, 10 ** 18), 1000000 - fee, 1000000);
     require(amountOut >= least, "sold below the floor");
   } else {
     // Buy WETH up to `ceiling`: no unit costs more than that, plus the pool's fee.
-    const ceiling = Math.mulDiv(price, 10000n + maxSlippageBps, 10000n);
-    amountOut = uniswapV3(pool, USDC, WETH, wanted - wethValue, sqrtPriceAt(ceiling), 0n, self);
+    const ceiling = Math.mulDiv(price, 10000 + maxSlippageBps, 10000);
+    amountOut = uniswapV3(pool, USDC, WETH, wanted - wethValue, sqrtPriceAt(ceiling), 0, self);
     amountIn = usdc - USDC.balanceOf(self);
-    const most = Math.mulDiv(Math.mulDiv(amountOut, ceiling, 10n ** 18n), 1000000n, 1000000n - fee);
-    require(amountIn <= most + 1n, "bought above the ceiling");
+    const most = Math.mulDiv(Math.mulDiv(amountOut, ceiling, 10 ** 18), 1000000, 1000000 - fee);
+    require(amountIn <= most + 1, "bought above the ceiling");
   }
   const after = wethShare(
     WETH.balanceOf(self),

@@ -23,20 +23,20 @@ function main(
   trigger: Uint256,
   target: Uint256,
 ): { before: Uint256; after: Uint256; repaid: Uint256 } {
-  require(trigger > 1000000000000000000n && target >= trigger, "need 1 < trigger <= target");
+  require(trigger > 1000000000000000000 && target >= trigger, "need 1 < trigger <= target");
   const self = ctx.self();
   const account = AaveV3.Pool.getUserAccountData(self);
   const before = account.healthFactor;
-  if (account.totalDebtBase == 0n || before >= trigger) {
-    return { before, after: before, repaid: 0n };
+  if (account.totalDebtBase == 0 || before >= trigger) {
+    return { before, after: before, repaid: 0 };
   }
 
   // health factor = collateral × liquidation threshold ÷ debt, in Aave's base currency (USD, 8
   // decimals) with the threshold in hundredths of a percent. The debt that gives `target`:
   const debtAtTarget = Math.mulDiv(
     account.totalCollateralBase * account.currentLiquidationThreshold,
-    1000000000000000000n,
-    target * 10000n,
+    1000000000000000000,
+    target * 10000,
   );
   // The Pot's USDC debt, in USDC base units, and its worth at Aave's price for USDC. Debt in other
   // tokens stays; the USDC debt to keep is what is left of debtAtTarget beside it.
@@ -44,12 +44,21 @@ function main(
   const owed = Token(debtToken).balanceOf(self);
   const oracle = AaveV3Reads.at(AaveV3.PoolAddressesProvider).getPriceOracle();
   const usdcPrice = AaveV3Reads.at(oracle).getAssetPrice(USDC); // base currency per USDC
-  const owedValue = Math.mulDiv(owed, usdcPrice, 1000000n);
-  const other = account.totalDebtBase > owedValue ? account.totalDebtBase - owedValue : 0n;
-  const keep = debtAtTarget > other ? Math.mulDiv(debtAtTarget - other, 1000000n, usdcPrice) : 0n;
+  const owedValue = Math.mulDiv(owed, usdcPrice, 1000000);
+  let other: Uint256 = 0;
+  if (account.totalDebtBase > owedValue) {
+    other = account.totalDebtBase - owedValue;
+  }
+  let keep: Uint256 = 0;
+  if (debtAtTarget > other) {
+    keep = Math.mulDiv(debtAtTarget - other, 1000000, usdcPrice);
+  }
   // One unit more than the difference, for Aave's rounding of the debt it burns; no more than the
   // Pot owes, nor more than it holds.
-  let repay = owed > keep ? owed - keep + 1n : 0n;
+  let repay: Uint256 = 0;
+  if (owed > keep) {
+    repay = owed - keep + 1;
+  }
   if (repay > owed) {
     repay = owed;
   }
@@ -57,8 +66,8 @@ function main(
   if (repay > held) {
     repay = held;
   }
-  require(repay > 0n, "no USDC debt, or no USDC to repay it with");
+  require(repay > 0, "no USDC debt, or no USDC to repay it with");
   USDC.approve(AaveV3.Pool, repay);
-  const repaid = AaveV3.Pool.repay(USDC, repay, 2n, self);
+  const repaid = AaveV3.Pool.repay(USDC, repay, 2, self);
   return { before, after: AaveV3.Pool.getUserAccountData(self).healthFactor, repaid };
 }

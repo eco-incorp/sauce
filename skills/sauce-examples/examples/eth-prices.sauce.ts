@@ -16,18 +16,18 @@
 
 // USDC base units per WETH at a V3-style pool's sqrt price (token1 per token0, times 2^96).
 function v3Price(pool: Address): Uint256 {
-  require(pool != 0n, "no such pool");
-  require(UniswapV3.Pool(pool).liquidity() > 0n, "a pool has no liquidity");
+  require(pool != 0, "no such pool");
+  require(UniswapV3.Pool(pool).liquidity() > 0, "a pool has no liquidity");
   const sqrtPriceX96 = UniswapV3.Pool(pool).slot0().sqrtPriceX96;
-  const ratio = Math.mulDiv(sqrtPriceX96, sqrtPriceX96, 1n << 96n); // token1 per token0, × 2^96
+  const ratio = Math.mulDiv(sqrtPriceX96, sqrtPriceX96, 1 << 96); // token1 per token0, × 2^96
   return WETH < USDC
-    ? Math.mulDiv(ratio, 10n ** 18n, 1n << 96n)
-    : Math.mulDiv(10n ** 18n, 1n << 96n, ratio);
+    ? Math.mulDiv(ratio, 10 ** 18, 1 << 96)
+    : Math.mulDiv(10 ** 18, 1 << 96, ratio);
 }
 
 // The gap between two prices, in hundredths of a percent of the lower.
 function gapBps(a: Uint256, b: Uint256): Uint256 {
-  return a > b ? Math.mulDiv(a - b, 10000n, b) : Math.mulDiv(b - a, 10000n, a);
+  return a > b ? Math.mulDiv(a - b, 10000, b) : Math.mulDiv(b - a, 10000, a);
 }
 
 function main(amount: Uint256): {
@@ -39,23 +39,23 @@ function main(amount: Uint256): {
   spreadBps: Uint256;
   oracleGapBps: Uint256;
 } {
-  require(amount > 0n, "amount is 0");
+  require(amount > 0, "amount is 0");
   const round = Chainlink.EthUsdFeed.latestRoundData();
-  require(round.answer > 0n, "no oracle price");
-  const oracle = round.answer / 100n; // the feed's 8 decimals as USDC's 6
+  require(round.answer > 0, "no oracle price");
+  const oracle = round.answer / 100; // the feed's 8 decimals as USDC's 6
 
-  const v3Fee500 = v3Price(UniswapV3.Factory.getPool(WETH, USDC, 500n));
-  const v3Fee3000 = v3Price(UniswapV3.Factory.getPool(WETH, USDC, 3000n));
+  const v3Fee500 = v3Price(UniswapV3.Factory.getPool(WETH, USDC, 500));
+  const v3Fee3000 = v3Price(UniswapV3.Factory.getPool(WETH, USDC, 3000));
 
   // What the pair pays for `amount` WETH, its 0.3% fee taken, per whole WETH.
   const pair = UniswapV2.Factory.getPair(WETH, USDC);
-  require(pair != 0n, "no WETH/USDC pair");
+  require(pair != 0, "no WETH/USDC pair");
   const reserves = UniswapV2.Pair(pair).getReserves();
   const wethReserve = WETH < USDC ? reserves._reserve0 : reserves._reserve1;
   const usdcReserve = WETH < USDC ? reserves._reserve1 : reserves._reserve0;
-  const afterFee = amount * 997n;
-  const out = Math.mulDiv(afterFee, usdcReserve, wethReserve * 1000n + afterFee);
-  const v2 = Math.mulDiv(out, 10n ** 18n, amount);
+  const afterFee = amount * 997;
+  const out = Math.mulDiv(afterFee, usdcReserve, wethReserve * 1000 + afterFee);
+  const v2 = Math.mulDiv(out, 10 ** 18, amount);
 
   let low = v3Fee500;
   let high = v3Fee500;
