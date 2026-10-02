@@ -1685,7 +1685,7 @@ describe("sauce pot", () => {
     const unnamed = file("unnamed.keystore.json", JSON.stringify({ version: 3, crypto: {} }));
     const locked = await sauce("pot", "--chain", "base", "--keystore", unnamed);
     expect(locked.code).toBe(2);
-    expect(locked.stderr).toMatch(/pass --password-file/);
+    expect(locked.stderr).toMatch(/pass --password-env <NAME>, --password-file <path> or/);
   });
 
   it("refuses a missing owner, and an owner that is not the chain's kind of address", async () => {
@@ -2013,7 +2013,7 @@ describe("a program from stdin", () => {
     expect(both.stderr).toMatch(/stdin carries one thing/);
   });
 
-  it("asks nothing on a spent stdin: a keystore needs --password-file, approvals --auto-approve", async () => {
+  it("asks nothing on a spent stdin: a keystore needs a password source, approvals --auto-approve", async () => {
     // jest's stdin is no terminal and the program used it: no password can be asked for.
     const keystore = await sauceWith(
       piped(PROGRAM),
@@ -2021,7 +2021,9 @@ describe("a program from stdin", () => {
       ...["--keystore", join(SDK, "test/fixtures/cli/anvil-2.keystore.json"), "--args", OWNER],
     );
     expect(keystore.code).toBe(2);
-    expect(keystore.stderr).toMatch(/to ask for the keystore password on: pass --password-file/);
+    expect(keystore.stderr).toMatch(
+      /to ask for the password on: pass --password-env <NAME>, --password-file <path> or/,
+    );
   });
 });
 

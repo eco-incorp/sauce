@@ -1,6 +1,7 @@
 /**
  * Who signs what `sauce run` and `sauce pot --deploy` send: a JSON keystore (v3), or a raw private
- * key. Nothing else — never the environment, never the config file.
+ * key — or a wallet from the wallet directory (`wallets.ts`), whose file is the same keystore. Never
+ * the config file, and the environment only as `--password-env` names it (`password.ts`).
  *
  * KEY MATERIAL NEVER REACHES OUTPUT. Every secret — the key, the password, the keystore's decrypted
  * bytes — is registered with {@link secret} the moment it is read, before anything can fail, and
@@ -8,9 +9,12 @@
  * is how a credential leaked from this repository once; this makes that impossible to repeat by
  * accident rather than by care.
  *
- * The keystore is decrypted with audited primitives: `@noble/hashes` (scrypt, PBKDF2-HMAC-SHA256,
- * keccak-256) and `@noble/ciphers` (AES-128-CTR), both pinned exactly.
+ * The keystore is encrypted and decrypted with audited primitives: `@noble/hashes` (scrypt,
+ * PBKDF2-HMAC-SHA256, keccak-256) and `@noble/ciphers` (AES-128-CTR), both pinned exactly; a new
+ * one's salt, IV and id come from `node:crypto`.
  */
+import { randomBytes, randomUUID } from "node:crypto";
+
 import { ctr } from "@noble/ciphers/aes";
 import { pbkdf2 } from "@noble/hashes/pbkdf2";
 import { scrypt } from "@noble/hashes/scrypt";
@@ -19,8 +23,8 @@ import { keccak_256 } from "@noble/hashes/sha3";
 import { bytesToHex, getAddress, hexToBytes, isAddress, type Address, type Hex } from "viem";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 
-import { UsageError } from "./args.js";
-import { CliError } from "./args.js";
+import { CliError, UsageError } from "./args.js";
+import { describeSource, readPassword, type PasswordIo, type PasswordSource } from "./password.js";
 
 const secrets = new Set<string>();
 
@@ -55,8 +59,15 @@ export function parsePrivateKey(raw: string, from: string): Hex {
   return (key.startsWith("0x") || key.startsWith("0X") ? `0x${key.slice(2)}` : `0x${key}`) as Hex;
 }
 
+/**
+ * A Web3 Secret Storage (v3) file, as geth, `cast wallet` and this command write it. `kind` is this
+ * command's addition, present only on a Solana wallet: the same envelope around a Solana keypair's
+ * 64 bytes (`wallets.ts`). A file without it is an EVM keystore, as every other tool writes one.
+ */
 interface KeystoreV3 {
   version: number;
+  kind?: unknown;
+  address?: unknown;
   crypto?: KeystoreCrypto;
   Crypto?: KeystoreCrypto;
 }
@@ -69,6 +80,9 @@ interface KeystoreCrypto {
   kdfparams: Record<string, unknown>;
   mac: string;
 }
+
+/** What a keystore holds: an EVM private key, or (`kind: "solana"`) a Solana keypair. */
+export type KeystoreKind = "evm" | "solana";
 
 const hex = (value: unknown, what: string): Uint8Array => {
   if (typeof value !== "string" || !/^(?:0x)?(?:[0-9a-fA-F]{2})*$/.test(value)) {
@@ -125,19 +139,20 @@ function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   return diff === 0;
 }
 
-/**
- * The private key in a Web3 Secret Storage (v3) keystore. The MAC is checked before anything is
- * decrypted, so a wrong password is reported as one rather than yielding a wrong key.
- */
+/** The MAC over a derived key and a ciphertext: keccak-256 of the key's second 16 bytes and it. */
+const macOf = (derived: Uint8Array, ciphertext: Uint8Array): Uint8Array =>
+  keccak_256(new Uint8Array([...derived.slice(16, 32), ...ciphertext]));
+
 /**
  * The address a keystore names in the clear — its `address` field, which every v3 keystore a
  * wallet writes carries — so the signer's address is known without its password. `undefined` for a
- * keystore without one, which has to be unlocked to learn it.
+ * keystore without one, which has to be unlocked to learn it, and for a Solana wallet's.
  */
 export function keystoreAddress(json: string): Address | undefined {
   try {
-    const field = (JSON.parse(json) as { address?: unknown }).address;
-    if (typeof field !== "string") return undefined;
+    const parsed = JSON.parse(json) as KeystoreV3;
+    const field = parsed.address;
+    if (parsed.kind !== undefined || typeof field !== "string") return undefined;
     const spelled = field.startsWith("0x") ? field : `0x${field}`;
 
     return isAddress(spelled, { strict: false }) ? getAddress(spelled) : undefined;
@@ -146,7 +161,28 @@ export function keystoreAddress(json: string): Address | undefined {
   }
 }
 
-export function decryptKeystore(json: string, password: string): Hex {
+/** What a keystore's text says it holds, read without its password. */
+export function keystoreKind(json: string): KeystoreKind {
+  let parsed: KeystoreV3;
+  try {
+    parsed = JSON.parse(json) as KeystoreV3;
+  } catch {
+    throw new CliError("the keystore is not JSON");
+  }
+  if (parsed.kind === undefined || parsed.kind === "evm") return "evm";
+  if (parsed.kind === "solana") return "solana";
+  throw new CliError(`the keystore's kind is ${JSON.stringify(parsed.kind)}: evm or solana`);
+}
+
+/**
+ * The secret in a Web3 Secret Storage (v3) envelope, whatever its length, and what the file says it
+ * is. The MAC is checked before anything is decrypted, so a wrong password is reported as one
+ * rather than yielding a wrong secret. The bytes are registered as a secret.
+ */
+export function decryptKeystoreBytes(
+  json: string,
+  password: string,
+): { readonly kind: KeystoreKind; readonly bytes: Uint8Array } {
   secret(password);
   let keystore: KeystoreV3;
   try {
@@ -154,6 +190,7 @@ export function decryptKeystore(json: string, password: string): Hex {
   } catch {
     throw new CliError("the keystore is not JSON");
   }
+  const kind = keystoreKind(json);
   const crypto = keystore.crypto ?? keystore.Crypto;
   if (keystore.version !== 3 || crypto === undefined) {
     throw new CliError("the keystore is not a version 3 Web3 Secret Storage file");
@@ -163,71 +200,137 @@ export function decryptKeystore(json: string, password: string): Hex {
   }
   const derived = deriveKey(crypto, new TextEncoder().encode(password.normalize("NFKC")));
   const ciphertext = hex(crypto.ciphertext, "ciphertext");
-  const mac = keccak_256(new Uint8Array([...derived.slice(16, 32), ...ciphertext]));
-  if (!sameBytes(mac, hex(crypto.mac, "mac"))) {
+  if (!sameBytes(macOf(derived, ciphertext), hex(crypto.mac, "mac"))) {
     throw new CliError("the keystore password is wrong (the keystore's MAC does not match)");
   }
-  const key = ctr(derived.slice(0, 16), hex(crypto.cipherparams.iv, "cipherparams.iv")).decrypt(
+  const bytes = ctr(derived.slice(0, 16), hex(crypto.cipherparams.iv, "cipherparams.iv")).decrypt(
     ciphertext,
   );
-  const privateKey = bytesToHex(key);
-  secret(privateKey);
-  if (key.length !== 32) throw new CliError("the keystore does not hold a 32-byte private key");
+  secret(bytesToHex(bytes));
+
+  return { kind, bytes };
+}
+
+/** The private key in an EVM Web3 Secret Storage (v3) keystore. */
+export function decryptKeystore(json: string, password: string): Hex {
+  const { kind, bytes } = decryptKeystoreBytes(json, password);
+  if (kind === "solana") {
+    throw new CliError(
+      "the keystore holds a Solana keypair (a Solana wallet): an EVM transaction needs an EVM key",
+    );
+  }
+  const privateKey = bytesToHex(bytes);
+  if (bytes.length !== 32) throw new CliError("the keystore does not hold a 32-byte private key");
 
   return privateKey;
 }
 
-/** How the signer is given: exactly one of these. */
+/** The scrypt parameters a new keystore is written with: geth's and Foundry's standard ones. */
+export const SCRYPT = { n: 262_144, r: 8, p: 1 } as const;
+
+export interface EncryptOptions {
+  /** `evm`: a plain v3 keystore. `solana`: the same envelope, marked `kind: "solana"`. */
+  readonly kind: KeystoreKind;
+  /** What the `address` field names: hex without 0x on EVM, as geth writes it; base58 on Solana. */
+  readonly address: string;
+  /** For a test vector only; random otherwise. */
+  readonly salt?: Uint8Array;
+  readonly iv?: Uint8Array;
+  readonly id?: string;
+  readonly scrypt?: { readonly n: number; readonly r: number; readonly p: number };
+}
+
+/**
+ * `secretBytes` in a Web3 Secret Storage (v3) envelope under `password`: scrypt, AES-128-CTR and a
+ * keccak-256 MAC, exactly as the definition and geth write it, so `--keystore`, `cast wallet` and
+ * geth read an EVM one. The salt (32 bytes), the IV (16) and the id (a UUID) are fresh unless a
+ * test vector gives them.
+ */
+export function encryptKeystore(
+  secretBytes: Uint8Array,
+  password: string,
+  options: EncryptOptions,
+): string {
+  secret(password);
+  const salt = options.salt ?? new Uint8Array(randomBytes(32));
+  const iv = options.iv ?? new Uint8Array(randomBytes(16));
+  const params = options.scrypt ?? SCRYPT;
+  const derived = scrypt(new TextEncoder().encode(password.normalize("NFKC")), salt, {
+    N: params.n,
+    r: params.r,
+    p: params.p,
+    dkLen: 32,
+    maxmem: 2 ** 30,
+  });
+  const ciphertext = ctr(derived.slice(0, 16), iv).encrypt(secretBytes);
+  const bare = (bytes: Uint8Array): string => bytesToHex(bytes).slice(2);
+
+  return `${JSON.stringify(
+    {
+      ...(options.kind === "solana" ? { kind: "solana" } : {}),
+      address: options.address,
+      crypto: {
+        cipher: "aes-128-ctr",
+        cipherparams: { iv: bare(iv) },
+        ciphertext: bare(ciphertext),
+        kdf: "scrypt",
+        kdfparams: { dklen: 32, n: params.n, p: params.p, r: params.r, salt: bare(salt) },
+        mac: bare(macOf(derived, ciphertext)),
+      },
+      id: options.id ?? randomUUID(),
+      version: 3,
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+/** How the signer is given: a keystore or a raw key, and where a keystore's password comes from. */
 export interface SignerInput {
   readonly keystore?: string;
-  readonly passwordFile?: string;
   readonly privateKey?: string;
+  /** `password.ts#passwordSource` of the flags; the prompt when none was given. */
+  readonly password: PasswordSource;
 }
 
-/** What the signer needs from the process: files, a warning channel, and a password prompt. */
-export interface SignerIo {
-  readonly readText: (path: string) => string;
+/** What the signer needs from the process: files, a warning channel, and the password sources. */
+export interface SignerIo extends PasswordIo {
   readonly stderr: (text: string) => void;
-  /** Asks for a password without echoing it. Throws where there is no terminal to ask on. */
-  readonly promptPassword: (prompt: string) => Promise<string>;
 }
 
-/** The account `input` names — asking for the keystore's password when no file gives it. */
+/** The account `input` names — reading the keystore's password from its source, or asking. */
 export async function loadSigner(input: SignerInput, io: SignerIo): Promise<PrivateKeyAccount> {
   if (input.keystore !== undefined && input.privateKey !== undefined) {
     throw new UsageError("give --keystore or --private-key, not both");
   }
-  if (input.passwordFile !== undefined && input.keystore === undefined) {
-    throw new UsageError("--password-file goes with --keystore");
+  if (input.password.from !== "prompt" && input.keystore === undefined) {
+    throw new UsageError(`${describeSource(input.password)} goes with --keystore or --wallet`);
   }
   if (input.privateKey !== undefined) {
     const key = parsePrivateKey(input.privateKey, "--private-key");
     io.stderr(
       "warning: --private-key puts the key in your shell history and in the process list; " +
-        "prefer --keystore\n",
+        "prefer --keystore or --wallet\n",
     );
 
     return privateKeyToAccount(key);
   }
   if (input.keystore === undefined) {
     throw new UsageError(
-      "missing a signer: --keystore <path> (with --password-file <path>, or a prompt) or " +
-        "--private-key <hex>",
+      "missing a signer: --wallet <name>, --keystore <path> (each with a password source, or a " +
+        "prompt) or --private-key <hex>",
     );
   }
-  const read = (path: string, what: string): string => {
-    try {
-      return io.readText(path);
-    } catch (error) {
-      const code = (error as { code?: string }).code;
-      throw new CliError(`${what} ${path}: ${code === "ENOENT" ? "no such file" : "unreadable"}`);
-    }
-  };
-  const json = read(input.keystore, "--keystore");
-  const password =
-    input.passwordFile === undefined
-      ? await io.promptPassword(`Password for ${input.keystore}: `)
-      : read(input.passwordFile, "--password-file").replace(/\r?\n$/, "");
+  let json: string;
+  try {
+    json = io.readText(input.keystore);
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    throw new CliError(
+      `--keystore ${input.keystore}: ${code === "ENOENT" ? "no such file" : "unreadable"}`,
+    );
+  }
+  const password = await readPassword(input.password, io, { what: input.keystore });
 
   return privateKeyToAccount(decryptKeystore(json, password));
 }

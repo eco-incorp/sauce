@@ -3,7 +3,7 @@
 [Documentation](../README.md) · [The sauce command](cli.md) · [Agent skills](cli.md#agent-skills)
 
 `sauce mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server. A coding agent
-gets the read-only half of the [`sauce` command](cli.md) as tools, and the package's agent skills
+gets the building half of the [`sauce` command](cli.md) as tools, and the package's agent skills
 as tools and resources. The server compiles programs and action documents and lists a chain's
 names. It builds unsigned transactions: the cook, the Pot's deployment, an intent's publish
 transactions and each step of its life after. It also rehearses a cook and takes calls apart.
@@ -13,10 +13,12 @@ other chain is a [preview chain](#supported-and-preview-chains): an agent can co
 rehearse any protocol on it, and the tools that would return a transaction there return `refused`
 instead, with how to request the chain.
 
-**It never signs, and never asks for a key.** Every transaction comes back unsigned, for a wallet
-the user holds. That lets the server run anywhere: on the agent's machine over stdio, or on a host
-of your own over Streamable HTTP. Either way, transactions are signed and sent by local means: a
-wallet, `cast send`, or `sauce run` with the user's own keystore.
+**The local stdio server signs only with wallets in its wallet directory, unlocked by the password
+source it was started with; the HTTP server never signs.** Neither ever asks for a key or a
+password. Without [agent wallets](#agent-wallets), every transaction comes back unsigned, for a
+wallet the user holds. That lets the server run anywhere: on the agent's machine over stdio, or on
+a host of your own over Streamable HTTP. Transactions it does not send are signed and sent by local
+means: a wallet, `cast send`, or `sauce run` with the user's own keystore.
 
 ## Run it
 
@@ -24,6 +26,7 @@ One command, through npx. Node.js 24 or newer:
 
 ```sh
 npx -y @eco-incorp/sauce mcp                                   # stdio: what an agent launches
+npx -y @eco-incorp/sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD   # stdio, signing
 npx -y @eco-incorp/sauce mcp --http 3000 --config rpc.json     # self-hosted, Streamable HTTP
 ```
 
@@ -183,6 +186,9 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_intent_cancel`  | `sauce intent cancel`  | The unsigned `cancel` (or, with `prove`, `cancelAndProve`) that stops an unfilled intent after its route's deadline                                                                                                                                                                                        |
 | `sauce_inspect`        | `sauce inspect`        | A cook, Kitchen, Portal or ERC-20 call, or a program, taken apart; with `source`, the arguments decoded against `main`                                                                                                                                                                                     |
 | `sauce_verify`         | `sauce verify`         | `valid` with the settle's tokens, `minOut` and recipient, or `valid: false` with the rejection `code`                                                                                                                                                                                                      |
+| `sauce_wallet_create`  | `sauce wallet new`     | Over stdio with `--wallets` only: a new wallet's `name`, `kind` (`evm` or `solana`), `address` and `policy` (null: none), never its key                                                                                                                                                                    |
+| `sauce_wallet_list`    | `sauce wallet list`    | Over stdio with `--wallets` only: each wallet's name, kind, address and policy                                                                                                                                                                                                                             |
+| `sauce_wallet_send`    | —                      | Over stdio with `--wallets` only: another tool's result (or a transaction, or a list) rehearsed, held to the wallet's policy, signed and sent; each one's `hash` and `status`, or the refusal                                                                                                              |
 
 ### Supported and preview chains
 
@@ -365,7 +371,8 @@ tool input (`--salt-hex` as `saltHex`, `--args` as `args`), and a command line a
 
 ### Signing what it builds
 
-The server's transactions are for the user's own wallet. On an EVM chain, `sauce_tx` returns what
+The server's transactions are for the user's own wallet, or, on a server started with
+`--wallets`, for [`sauce_wallet_send`](#agent-wallets). On an EVM chain, `sauce_tx` returns what
 any wallet signs. Send it from the Pot's owner, since `cook()` is the owner's alone. From a terminal:
 
 ```sh
@@ -386,6 +393,69 @@ The other transactions:
 - On Solana, `sauce_tx`'s `transaction` is base64, for the owner to sign and send. Its blockhash
   expires in about a minute.
 
+## Agent wallets
+
+Over stdio, the server can send what it builds, from wallets of its own. Start it with the wallet
+directory, `--wallets [<dir>]` (`~/.sauce/wallets` when no directory is given), and the source of
+their password, as [`sauce wallet`](cli.md#agent-wallets) takes one: `--password-env <NAME>`,
+`--password-file <path>` or `--password-command "<command>"`. There is no prompt: over stdio,
+stdin is the protocol's. The server reads the password once, before it serves anything, so a
+source that does not work stops it at start. The password is never a tool's input and never in a
+result, so it stays out of the model's context.
+
+The agent's password lives in its `.env` or its secret store, and the client's configuration passes
+it to the server in the entry's `env` block, by reference, never by value:
+
+```json
+{
+  "mcpServers": {
+    "sauce": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@eco-incorp/sauce",
+        "mcp",
+        "--wallets",
+        "--password-env",
+        "SAUCE_WALLET_PASSWORD"
+      ],
+      "env": { "SAUCE_WALLET_PASSWORD": "${SAUCE_WALLET_PASSWORD}" }
+    }
+  }
+}
+```
+
+Each client fills that reference its own way: Claude Code expands `${SAUCE_WALLET_PASSWORD}` from
+the environment it runs in, and VS Code also reads an `envFile` (the project's `.env`). Keep the
+`.env` out of git.
+
+The wallet tools, besides every other tool:
+
+- `sauce_wallet_create` `{ name, kind }` makes a wallet (`kind` `evm`, the default, or `solana`),
+  encrypted under the server's password (8 characters at least, as for `sauce wallet new`), and
+  returns its address. Its key never leaves the wallet's file except to sign, in the server's
+  process.
+- `sauce_wallet_list` names each wallet with its kind, address and policy.
+- `sauce_wallet_send` `{ wallet, transaction, chain?, rpcUrl? }` sends. `transaction` is the
+  whole result of `sauce_tx`, `sauce_pot`, `sauce_actions` (with an owner), `sauce_intent_publish`
+  or any `sauce_intent_*` step, or a transaction, or a list of them. It rehearses them first: on an
+  EVM chain all together in one `eth_simulateV1` block from the wallet, on Solana each as signed.
+  If any would revert, it refuses and sends nothing. It holds them to the wallet's
+  [policy](cli.md#a-wallets-policy) and refuses, naming the limit, what the policy does not allow.
+  Then it sends each in order, through the same path `sauce run` uses, and stops at the first that
+  does not succeed. It returns each one's `hash` (on Solana, its signature) and `status`.
+
+So an agent goes: `sauce_wallet_create`, fund the address, build with the wallet's address as
+`owner` or `from` (`sauce_pot`, `sauce_tx`, `sauce_intent_fill`, …), rehearse with
+`sauce_simulate`, and pass the building tool's result to `sauce_wallet_send`. Each tool that builds
+a transaction says, on a server with wallets, that `sauce_wallet_send` sends it. There is no export
+tool: `sauce wallet export` shows a key only at a terminal.
+
+These are hot wallets: keep small balances in them, and give each a policy. Wallet sends hold to
+the [supported chains](#supported-and-preview-chains) too. Over HTTP there are no wallets:
+`--wallets` is refused, and the wallet tools are not registered.
+
 ## Skills, documents and prompts
 
 The [agent skills](cli.md#agent-skills) the package ships are the same files `sauce skills install`
@@ -401,8 +471,8 @@ resources:
   `sauce://skills/<skill>/SKILL.md` is a skill, and its `references/…` and `examples/…` sit beside
   it.
 
-When a client connects, the server's instructions tell it five things: the server never signs,
-start from `sauce_skills`, the steps from `sauce_globals` to `sauce_tx`, which chains it builds
+When a client connects, the server's instructions tell it five things: whether the server signs
+(only with its wallets, over stdio with `--wallets`), start from `sauce_skills`, the steps from `sauce_globals` to `sauce_tx`, which chains it builds
 transactions on and what to do with a refusal, and how `rpcUrl` works. Two prompts walk the main tasks through the
 tools, with the skill they start from embedded:
 
@@ -421,7 +491,8 @@ gets a server of its own, answered as JSON, with no session, so any replica can 
 A GET or DELETE is refused (405).
 
 - **No environment, and no key.** The server reads no environment variable. Its RPC endpoints are
-  the `--config` file's alone, and it holds no key: nothing it builds is signed.
+  the `--config` file's alone, and it holds no key: nothing it builds is signed. `--wallets` is
+  refused over HTTP, and the wallet tools are not registered there.
 - **It authenticates no one.** Bound to loopback, the default, it answers only requests whose
   `Host`, and `Origin` when one is sent, is a loopback name. That keeps a web page from reaching it
   through DNS rebinding.

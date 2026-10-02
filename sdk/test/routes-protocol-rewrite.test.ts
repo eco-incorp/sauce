@@ -489,10 +489,68 @@ describe("rewriteProtocolAccessors: every registry protocol, every contract kind
     ).toThrow(/there is nothing to bind/);
   });
 
-  it("an interface without .at is refused with the spelling that works", () => {
+  it("an interface without an address is refused with the spelling that works", () => {
     expect(() =>
       rewriteProtocolAccessors(`function main() { Erc4626.Vault.deposit(1n, 1n); }`, BASE),
-    ).toThrow(/Erc4626\.Vault\.at\(<address>\)\.<method>\(\.\.\.\)/);
+    ).toThrow(/Erc4626\.Vault\(<address>\)\.<method>\(\.\.\.\)/);
+  });
+
+  it("shape F: an interface called with an address is shape E, byte for byte", () => {
+    const called = `function main(pool: Address): Uint256 { return UniswapV3.Pool(pool).liquidity(); }`;
+    const bound = `function main(pool: Address): Uint256 { return UniswapV3.Pool.at(pool).liquidity(); }`;
+    const viaCall = rewriteProtocolAccessors(called, BASE);
+    const viaAt = rewriteProtocolAccessors(bound, BASE);
+    expect(viaCall.source).toBe(
+      `function main(pool: Address): Uint256 { return IUniswapV3_Pool.view(pool).liquidity(); }`,
+    );
+    expect(viaCall.source).toBe(viaAt.source);
+    expect(Object.keys(viaCall.contracts)).toEqual(["IUniswapV3_Pool"]);
+    expect(compile(viaCall.source, { contracts: viaCall.contracts }).bytecode[0]).toEqual(
+      compile(viaAt.source, { contracts: viaAt.contracts }).bytecode[0],
+    );
+  });
+
+  it("shape F takes a chain qualifier, a family alias, a nonpayable method and one output", () => {
+    expect(
+      rewriteProtocolAccessors(
+        `function main() { return Base.Erc4626.Vault(0x1234n).deposit(1n, ctx.self()); }`,
+        BASE,
+      ).source,
+    ).toBe(`function main() { return IErc4626_Vault.at(0x1234n).deposit(1n, ctx.self()); }`);
+    expect(
+      rewriteProtocolAccessors(`function main() { return Uniswap.Pool(0x1234n).fee(); }`, BASE)
+        .source,
+    ).toBe(`function main() { return IUniswapV3_Pool.view(0x1234n).fee(); }`);
+    const { source, contracts } = rewriteProtocolAccessors(
+      `function main(pool: Address): Uint256 { return AerodromeSlipstream.Pool(pool).slot0().sqrtPriceX96; }`,
+      BASE,
+    );
+    expect(compile(source, { contracts }).bytecode[0]!.length).toBeGreaterThan(0);
+  });
+
+  it("shape F needs a method in the same expression, and one address", () => {
+    expect(() =>
+      rewriteProtocolAccessors(`function main() { const v = UniswapV3.Pool(1n); }`, BASE),
+    ).toThrow(/'UniswapV3\.Pool\(\.\.\.\)' binds a contract to an address, which is not a value/);
+    expect(() =>
+      rewriteProtocolAccessors(`function main() { UniswapV3.Pool(1n, 2n).fee(); }`, BASE),
+    ).toThrow(/takes exactly one argument/);
+  });
+
+  it("a deployed contract's name is never called with an address: .at binds another deployment", () => {
+    expect(() =>
+      rewriteProtocolAccessors(
+        `function main() { return UniswapV3.Factory(0x1234n).getPool(1n, 2n, 500n); }`,
+        BASE,
+      ),
+    ).toThrow(
+      /'UniswapV3\.Factory\(\.\.\.\)' calls a deployed contract's name: .*'UniswapV3\.Factory\.at\(<address>\)\.<method>\(\.\.\.\)'/,
+    );
+  });
+
+  it("a program's own function named like an interface is its own", () => {
+    const source = `function Pool(a: Uint256): Uint256 { return a; }\nfunction main() { return Pool(1n); }`;
+    expect(rewriteProtocolAccessors(source, BASE).rewrote).toBe(false);
   });
 
   it("an address-only contract is its address in value position", () => {

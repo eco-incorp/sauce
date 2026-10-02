@@ -4,8 +4,9 @@
  * checked here. `mcpEntry` is typed by the CLI's own `McpEntry`, so the two cannot drift.
  *
  * NODE-ONLY, and reached by nothing browser-facing. It reads no environment variable and ships no
- * endpoint: the chains it reads are the `--config` file's, and it never holds or asks for a key —
- * every transaction it builds comes back unsigned.
+ * endpoint: the chains it reads are the `--config` file's. It holds no key unless it serves stdio
+ * with `--wallets`, whose password the `sauce` command has already read from the source it was
+ * given; then its wallet tools sign with those wallets alone. Over HTTP it never signs.
  */
 import { readFileSync } from "node:fs";
 
@@ -14,7 +15,13 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { NO_ENDPOINTS, readEndpoints, type Endpoints } from "./config.js";
 import { createRpcGuard } from "./guard.js";
 import { DEFAULT_MAX_BODY, endpointUrl, isLoopback, serveHttp } from "./http.js";
-import { UsageError, type McpEntry, type McpServeOptions, type McpSetupOptions } from "./sdk.js";
+import {
+  UsageError,
+  WalletStore,
+  type McpEntry,
+  type McpServeOptions,
+  type McpSetupOptions,
+} from "./sdk.js";
 import { createSauceServer, packageInfo } from "./server.js";
 import { parseSetupAgents, setupLines, setupProject } from "./setup.js";
 
@@ -55,11 +62,26 @@ async function serve(options: McpServeOptions): Promise<void> {
     }
     // Over stdio the caller is the server's own user, on the same machine: its endpoints, local
     // nodes included, are used as given. A message past the bound closes the connection.
-    await createSauceServer({ endpoints }).connect(
+    const wallets =
+      options.wallets === undefined
+        ? undefined
+        : {
+            store: new WalletStore(options.wallets.dir),
+            password: options.wallets.password,
+            source: options.wallets.source,
+          };
+    await createSauceServer({ endpoints, ...(wallets === undefined ? {} : { wallets }) }).connect(
       new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: maxBody }),
     );
+    if (wallets !== undefined) {
+      options.log(`sauce mcp: signing with the wallets in ${wallets.store.dir}\n`);
+    }
 
     return;
+  }
+  // The HTTP server never signs: it is not given the wallets at all.
+  if (options.wallets !== undefined) {
+    throw new UsageError("--wallets is for stdio: the HTTP server never signs");
   }
   const port = wholeNumber("http", options.http, 0, 65_535);
   const host = options.host ?? "127.0.0.1";

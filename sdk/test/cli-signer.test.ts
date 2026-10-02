@@ -3,7 +3,7 @@
  * vectors, a raw key, and the guarantee that no key or password is ever printed — even when the
  * command fails.
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -93,32 +93,46 @@ describe("loadSigner", () => {
   const io = (password?: string) => ({
     readText: (path: string) => readFileSync(path, "utf8"),
     stderr: () => undefined,
+    readEnv: () => undefined,
+    fileMode: (path: string) => statSync(path).mode,
+    capture: () => ({ status: 1, stdout: "" }),
     promptPassword: async () => {
       if (password === undefined) throw new Error("no prompt expected");
 
       return password;
     },
   });
+  const PROMPT = { from: "prompt" } as const;
 
-  it("reads a keystore's password from a file, or asks for it", async () => {
+  it("reads a keystore's password from a file only its owner can read, or asks for it", async () => {
     const keystore = join(FIXTURES, "anvil-2.keystore.json");
-    const fromFile = await loadSigner(
-      { keystore, passwordFile: join(FIXTURES, "anvil-2.password") },
-      io(),
-    );
-    expect(fromFile.address).toBe(privateKeyToAccount(CAST_KEY).address);
-    const asked = await loadSigner({ keystore }, io(CAST_PASSWORD));
-    expect(asked.address).toBe(fromFile.address);
+    // A checkout writes the committed fixture as git keeps it, readable by all: a copy is 0600.
+    const dir = mkdtempSync(join(tmpdir(), "sauce-signer-"));
+    const passwordFile = join(dir, "anvil-2.password");
+    writeFileSync(passwordFile, readFileSync(join(FIXTURES, "anvil-2.password")), { mode: 0o600 });
+    try {
+      const fromFile = await loadSigner(
+        { keystore, password: { from: "file", path: passwordFile } },
+        io(),
+      );
+      expect(fromFile.address).toBe(privateKeyToAccount(CAST_KEY).address);
+      const asked = await loadSigner({ keystore, password: PROMPT }, io(CAST_PASSWORD));
+      expect(asked.address).toBe(fromFile.address);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("takes exactly one signer", async () => {
-    await expect(loadSigner({}, io())).rejects.toThrow(/missing a signer: --keystore/);
-    await expect(loadSigner({ keystore: "k.json", privateKey: CAST_KEY }, io())).rejects.toThrow(
-      /give --keystore or --private-key, not both/,
+    await expect(loadSigner({ password: PROMPT }, io())).rejects.toThrow(
+      /missing a signer: --wallet <name>, --keystore/,
     );
-    await expect(loadSigner({ privateKey: CAST_KEY, passwordFile: "p" }, io())).rejects.toThrow(
-      /--password-file goes with --keystore/,
-    );
+    await expect(
+      loadSigner({ keystore: "k.json", privateKey: CAST_KEY, password: PROMPT }, io()),
+    ).rejects.toThrow(/give --keystore or --private-key, not both/);
+    await expect(
+      loadSigner({ privateKey: CAST_KEY, password: { from: "file", path: "p" } }, io()),
+    ).rejects.toThrow(/--password-file p goes with --keystore or --wallet/);
   });
 });
 
@@ -191,7 +205,7 @@ describe("no key or password is ever printed", () => {
 
   it("keeps a keystore password out of every message", async () => {
     const wrong = join(work, "wrong.password");
-    writeFileSync(wrong, "hunter2 is not it\n");
+    writeFileSync(wrong, "hunter2 is not it\n", { mode: 0o600 });
     const program = join(work, "noop.sauce.ts");
     writeFileSync(program, "require(chainId == 1n);\n");
     const run = await sauce(
