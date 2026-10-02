@@ -135,19 +135,19 @@ for (const [what, value] of [
   check(swapped.calls.includes(word(value)), `the child uses ${what}`);
 }
 check(swapped.rewarded.join() === word(token("ethereum", "WETH")), "the reward is Ethereum's WETH");
-// The body swaps through @sauce/router and reads a pool's own state by selector, with
-// evm.static. These are the selectors sauce-intents tabulates.
+// The body swaps through @sauce/router and reads each V3 pool through the `UniswapV3.Pool`
+// namespace, whose ABI is the registry's: three view functions the pool dispatches, by these
+// selectors, which the child carries, and no raw selector of its own.
 for (const [signature, selector] of [
-  ["getPool(address,address,uint24)", "1698ee82"],
-  ["getPool(address,address,int24)", "28af8d0b"],
   ["slot0()", "3850c7bd"],
   ["liquidity()", "1a686502"],
   ["fee()", "ddca3f43"],
 ] as const) {
   check(toFunctionSelector(signature) === `0x${selector}`, `${signature} is 0x${selector}`);
+  check(swapped.calls.includes(selector), `the child calls ${signature} on a pool`);
 }
-for (const selector of ["3850c7bd", "1a686502", "ddca3f43"])
-  check(swap.includes(`hex\`${selector}\``), `the body uses 0x${selector}`);
+check(/UniswapV3\.Pool\.at\(pool\)/.test(swap), "the body reads a pool through UniswapV3.Pool");
+check(!/hex`[0-9a-f]{8}`/.test(swap), "and calls no raw selector");
 check(
   /import \{ uniswapV3, uniswapV4 \} from "@sauce\/router"/.test(swap),
   "the body swaps through @sauce/router",

@@ -82,7 +82,7 @@ that lacks it.
 2. Read its document's pitfalls before writing the call.
 3. Write the program, compile it for the chain (`sauce compile <file> --chain <slug>`), and hand the
    cook to any signer as `sauce tx`'s unsigned JSON, `{ chainId, to, data, value }`, or send it with
-   `sauce run` (`sauce-run`). For the initial release that is on Ethereum, Base or Solana: every
+   `sauce run` (`sauce-cli`). For the initial release that is on Ethereum, Base or Solana: every
    protocol on every chain compiles and simulates, but on a preview chain `sauce tx` and `sauce run`
    are refused with the chain-support request for that chain (`sauce-chains`).
 

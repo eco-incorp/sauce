@@ -1,9 +1,9 @@
 ---
-name: sauce-run
-description: Compile a Sauce program file (or a JSON actions document) and run it on a chain with the sauce command — find the names a chain offers, deploy the Pot it runs as, fund it, rehearse the cook with no key, sign and send it, pass arguments to its main, print the unsigned transaction for a wallet, read a transaction back, or publish a file's cross-chain intents from a wallet and fill, prove, claim, refund or cancel them. Transactions are built and sent on Ethereum, Base and Solana, the chains the initial release supports; every other chain is a preview chain, where programs compile and simulate and a transaction is refused with the link to request the chain. Use when asked to compile, simulate, run, execute, test, send or deploy a Sauce program (*.sauce.ts), pass arguments to its main, get its bytecode or unsigned transaction, fund or create a Pot, check what a transaction did, or when a command refuses a preview chain.
+name: sauce-cli
+description: The sauce command line. Compile a Sauce program file (or a JSON actions document) and run it on a chain with the sauce command — find the names a chain offers, deploy the Pot it runs as, fund it, rehearse the cook with no key, sign and send it, pass arguments to its main, print the unsigned transaction for a wallet, read a transaction back, or publish a file's cross-chain intents from a wallet and fill, prove, claim, refund or cancel them. Transactions are built and sent on Ethereum, Base and Solana, the chains the initial release supports; every other chain is a preview chain, where programs compile and simulate and a transaction is refused with the link to request the chain. Use when asked to compile, simulate, run, execute, test, send or deploy a Sauce program (*.sauce.ts), pass arguments to its main, get its bytecode or unsigned transaction, fund or create a Pot, check what a transaction did, or when a command refuses a preview chain.
 ---
 
-# Run a Sauce program
+# The sauce command
 
 A Sauce program is a file of SauceScript that a Sauce engine executes atomically inside one
 transaction. On an EVM chain it runs as a **Pot**: a small contract its owner controls, which holds
@@ -201,13 +201,40 @@ Every value is checked against its declared type before anything is sent: `Addre
   hex.
 - In a project `sauce init` wrote, put programs in `programs/`: its `tsconfig.json` types them as
   SauceScript, so an editor's TypeScript errors there are real ones (with the project's own
-  TypeScript running the editor). Elsewhere a program shows TypeScript errors that the compile
-  does not have; `sauce compile` is what decides.
+  TypeScript running the editor). For programs anywhere else, `npx sauce init <dir> --tsconfig`
+  writes the same `tsconfig.json` into `<dir>` and nothing else. Without one, an editor shows
+  TypeScript errors that the compile does not have; `sauce compile` is what decides.
 - `sauce-script` covers the language and what compiling for a chain adds to it.
 
 [examples/pay.sauce.ts](examples/pay.sauce.ts) pays a recipient in USDC and USDT, on any chain that registers both.
 [examples/split.sauce.ts](examples/split.sauce.ts) takes its token, recipients and amount as
 arguments.
+
+## A program file as a command
+
+A program file whose first line is
+
+```sh
+#!/usr/bin/env -S npx -y @eco-incorp/sauce simulate
+```
+
+runs as a command once it is executable (`chmod +x pay.sauce.ts`):
+
+```sh
+./pay.sauce.ts --chain base --config sauce.config.json --owner <address> --args <recipient> 1000000
+```
+
+is `sauce simulate pay.sauce.ts` with those words after it: the cook rehearsed from the owner's
+Pot, gas and what it moved, or why it reverts. It rehearses only, so running the file never spends;
+sending it is `sauce run` on the same file. The compile ignores the line, and keeps the file's own
+line numbers in its errors:
+
+```sauce chain=base,ethereum
+#!/usr/bin/env -S npx -y @eco-incorp/sauce simulate
+function main(recipient: Address, amount: Uint256) {
+  USDC.transfer(recipient, amount);
+}
+```
 
 ## Actions documents
 
@@ -256,48 +283,11 @@ USDC:<amount>` rehearses it from a wallet that does not hold the reward yet.
 
 ## Without the CLI: the MCP tools
 
-The same steps are tools of the Sauce MCP server, for an agent with no local install but Node.js:
-`npx -y @eco-incorp/sauce mcp` starts it over stdio. A tool takes the program as text (`source`)
-and the command's flags as inputs of the same name in camelCase; `args` is `main`'s arguments as a
-JSON array. A tool that reads a chain takes `rpcUrl`, an endpoint for that one call, which is never
-returned. Nothing signs: the user signs and sends what `sauce_tx`, `sauce_pot` and the
-`sauce_intent_*` tools return, with their own wallet. The server keeps no intents: an intent tool
-takes the intent's `record` (which `sauce_intent_publish` and `sauce_intent_import` return), or the
-transaction that published it with its source chain.
-
-The tools keep the chain rule: `sauce_chains` gives each chain's `support` (`supported` or
-`preview`). `sauce_tx`, `sauce_intent_publish` (without `dryRun`), `sauce_intent_fill` (without
-`dryRun`) and `sauce_intent_prove`, `sauce_intent_claim`, `sauce_intent_refund` and
-`sauce_intent_cancel` on the chain they are sent on return an error whose `refused` holds the
-supported chains and, per preview chain, its `request`: `searchUrl` for an existing request,
-`newIssueUrl` for a prefilled new one, and the `title`, `body` and `comment` to post. `sauce_pot`
-returns a preview chain's Pot with `refused` in place of its deployment, and `sauce_actions` its
-report with `refused` in place of `transaction`.
-
-| Command                | Tool                                                                   |
-| ---------------------- | ---------------------------------------------------------------------- |
-| `sauce globals`        | `sauce_globals`                                                        |
-| `sauce compile`        | `sauce_compile`                                                        |
-| `sauce actions`        | `sauce_actions`, and with owner or pot the cook                        |
-| `sauce pot`            | `sauce_pot`: the address, the deploy, whether it exists, what it holds |
-| `sauce simulate`       | `sauce_simulate`                                                       |
-| `sauce tx`             | `sauce_tx`                                                             |
-| `sauce intent publish` | `sauce_intent_publish`, unsigned or as a dry run                       |
-| `sauce intent fill`    | `sauce_intent_fill`: the solver's fill, unsigned, or rehearsed         |
-| `sauce intent import`  | `sauce_intent_import`                                                  |
-| `sauce intent status`  | `sauce_intent_status`: where it stands, and what can happen next       |
-| `sauce intent prove`   | `sauce_intent_prove`                                                   |
-| `sauce intent claim`   | `sauce_intent_claim`                                                   |
-| `sauce intent refund`  | `sauce_intent_refund`                                                  |
-| `sauce intent cancel`  | `sauce_intent_cancel`                                                  |
-| `sauce inspect`        | `sauce_inspect`                                                        |
-| `sauce verify`         | `sauce_verify`                                                         |
-| `sauce price`          | `sauce_price`, also from a pool read now                               |
-| `sauce pools`          | `sauce_pools`                                                          |
-| `sauce run`            | none: it signs                                                         |
-
-`sauce_skills` and `sauce_skill` read these skills, and `sauce_install_skills` says how to install
-them locally.
+The same commands are tools of the Sauce MCP server (`npx -y @eco-incorp/sauce mcp`), by one rule:
+each `sauce <command>` is the tool `sauce_<command>` (`sauce intent publish` is
+`sauce_intent_publish`), its flags are the tool's inputs in camelCase, the program goes in as
+`source`, and an endpoint is the call's `rpcUrl`. The tools sign nothing, so `sauce run` has none:
+the user signs what they return. Each tool's own description gives its inputs.
 
 ## Rules
 

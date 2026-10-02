@@ -85,8 +85,15 @@ import { intentOf, intentRecord } from "./lifecycle.js";
 import type { Ask } from "./prompt.js";
 import { defaultStoreDir, IntentStore } from "./store.js";
 import { globalsCommand } from "./globals.js";
-import { initProject } from "./init.js";
-import { assumedBalances, definesReach, fundingFor, potTarget, programChain } from "./inputs.js";
+import { initProject, writeSauceScriptTsconfig } from "./init.js";
+import {
+  assumedBalances,
+  definesReach,
+  fundingFor,
+  potTarget,
+  programChain,
+  withoutShebang,
+} from "./inputs.js";
 import { inspectCommand, inspectFile } from "./inspect.js";
 import {
   checkIntentPots,
@@ -589,9 +596,10 @@ interface ProgramText {
 function programText(io: CliIo, operand: string | ProgramText): ProgramText {
   if (typeof operand !== "string") return operand;
 
+  // A `#!` line, which makes the file a command, is blanked: the compile never sees it.
   return operand === "-"
-    ? { file: STDIN, text: io.readStdin(), stdin: true }
-    : { file: operand, text: readInput(io, operand), stdin: false };
+    ? { file: STDIN, text: withoutShebang(io.readStdin()), stdin: true }
+    : { file: operand, text: withoutShebang(readInput(io, operand)), stdin: false };
 }
 
 /**
@@ -3059,7 +3067,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   init: {
-    usage: "sauce init [<dir>] [--agent <agent>,…] [--force] [--install]",
+    usage: [
+      "sauce init [<dir>] [--agent <agent>,…] [--force] [--install]",
+      "sauce init <dir> --tsconfig [--force]",
+    ],
     summary: "Scaffold a project that uses this package",
     flags: {
       agent: {
@@ -3070,6 +3081,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       },
       force: { type: "boolean", help: "Overwrite files that already exist with other content" },
       install: { type: "boolean", help: "Run npm install in the project afterwards" },
+      tsconfig: {
+        type: "boolean",
+        help: "Write only <dir>/tsconfig.json: an editor's SauceScript project for programs there",
+      },
       ...HELP,
     },
     details: [
@@ -3080,10 +3095,38 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "programs there: kept apart from the project's other TypeScript), and then",
       "installs the agent skills (`sauce skills install`), for every agent unless --agent names",
       "some. It runs no package manager unless --install, which runs npm install.",
+      "",
+      "--tsconfig writes only <dir>/tsconfig.json, the same SauceScript project as",
+      "programs/tsconfig.json, for programs in a project init did not write, or in another",
+      "directory: an editor takes a file's nearest tsconfig.json, so every *.sauce.ts under <dir>",
+      "gets SauceScript's names and the plugin. Where the project's own tsconfig.json also covers",
+      'them, add "exclude": ["**/*.sauce.ts"] there, so its TypeScript does not check them too.',
+      "",
+      "Examples:",
+      "  sauce init my-project",
+      "  sauce init programs --tsconfig",
     ].join("\n"),
     run: (args, io) => {
       const [dir = ".", ...rest] = args.positionals;
       if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}: give one <dir>`);
+      if (args.values.tsconfig === true) {
+        for (const flag of ["agent", "install"]) {
+          if (args.values[flag] !== undefined) {
+            throw new UsageError(`--${flag} goes with a whole project: --tsconfig writes one file`);
+          }
+        }
+        const written = writeSauceScriptTsconfig(
+          dir,
+          skillsSource().packageName,
+          args.values.force === true,
+        );
+
+        return lines([
+          `${written.state.padEnd(10)} ${written.path}`,
+          "Every *.sauce.ts under it now has SauceScript's names in an editor. If the project's",
+          'own tsconfig.json covers these files too, add "exclude": ["**/*.sauce.ts"] to it.',
+        ]);
+      }
       const agents = parseAgents(repeatedFlag(args, "agent")) ?? DEFAULT_AGENTS;
       const result = initProject(dir, skillsSource(), agents, args.values.force === true);
       io.stdout(
