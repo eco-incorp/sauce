@@ -19,6 +19,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { CliError } from "./args.js";
 import {
   installTarget,
+  sauceScriptTsconfig,
   targetsFor,
   withoutBlock,
   type Agent,
@@ -39,40 +40,6 @@ function packageNameOf(dir: string): string {
 
 /** Where `sauce init` puts the project's SauceScript programs: the directory its tsconfig covers. */
 export const PROGRAMS_DIR = "programs";
-
-/**
- * The tsconfig.json of the programs directory: a TypeScript project of SauceScript files alone,
- * with the package's declarations of the language (`<package>/sauce-script`) and its plugin, which
- * drops what TypeScript reports on valid SauceScript (integer indexes, `1` beside `1n`, undeclared
- * UPPER_CASE defines). Its own project, because those declarations name `require`, `crypto` and
- * `eval` as SauceScript has them: kept out of the project's other TypeScript, they cannot change
- * it. An editor takes a file's nearest tsconfig.json, so every program in the directory gets it.
- */
-export function sauceScriptTsconfig(packageName: string): Record<string, unknown> {
-  return {
-    compilerOptions: {
-      target: "ES2022",
-      lib: ["ES2022"],
-      module: "ESNext",
-      moduleResolution: "Bundler",
-      // Each program is a module of its own: two programs' `main` never collide.
-      moduleDetection: "force",
-      // Only SauceScript's names: no Node, no DOM.
-      types: [`${packageName}/sauce-script`],
-      // An unannotated helper parameter is a number in SauceScript, not an error.
-      strict: true,
-      noImplicitAny: false,
-      noEmit: true,
-      allowImportingTsExtensions: true,
-      // A JSON import is a contract binding, which the declarations type, not the file's JSON.
-      resolveJsonModule: false,
-      skipLibCheck: true,
-      // Loaded by an editor running the project's own TypeScript (node_modules/typescript).
-      plugins: [{ name: `${packageName}/sdk/dist/sauce-script/ts-plugin.cjs` }],
-    },
-    include: ["**/*.sauce.ts"],
-  };
-}
 
 /** The files `sauce init` writes for `agents`, by path relative to the project. */
 export function scaffold(

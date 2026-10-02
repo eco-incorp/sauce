@@ -73,6 +73,22 @@ the two `settle.sauce.ts` recipes) and captured fixtures. Everything else, Sauce
 formatted; `.prettierrc.json` names the `typescript` parser for `sdk/src/std`, whose `.js` files
 carry type annotations Prettier's default parser rejects.
 
+**SauceScript in an editor.** The root `tsconfig.json` builds nothing: it is the project an editor
+opens every `*.sauce.ts` of the repository in — skills, docs, recipes, fixtures — the project
+`sauce init` writes into `programs/` (`sauceScriptTsconfig` in `sdk/src/cli/skills.ts`), with the
+declarations from `sdk/dist/sauce-script` (so build first) and the plugin from the SDK workspace,
+which pnpm links into `node_modules/.pnpm/node_modules` beside the workspace TypeScript. The plugin
+loads only when the editor runs that TypeScript (VS Code: "Use Workspace Version"); without it the
+types still apply and the false positives it drops show. `sdk/tsconfig.json` excludes
+`src/**/*.sauce.ts`, and tsserver (TypeScript 5.6 and later) goes on up to the root project for a
+file its nearest tsconfig does not include; the runners and the docs' `.ts` examples keep their
+inferred project. `pnpm docs:check` asks tsserver for each tracked program's project and
+diagnostics (`checkRepositoryEditor` in `sdk/scripts/check-editor.mjs`), and
+`sdk/test/sauce-script.test.ts` holds every program the root tsconfig lists to the declarations
+built from source. `sauce skills install` writes the same project, naming the installed package,
+beside the skills (`packaged` in `skills.ts`), and the packed check opens the installed programs
+in tsserver there.
+
 Per-workspace (`--filter`):
 
 ```sh
@@ -107,7 +123,9 @@ actions document through `compile`/`tx` via the built bin's `runCli` (here, not 
 because the command loads `actions/dist`, which CI builds after the SDK's tests).
 `names.mainnet` (`test:mainnet`) executes one chain-agnostic document — symbols, namespaces, pools by
 key — on Ethereum, Base and Avalanche state, against the same trade by address, and through
-`sauce run`.
+`sauce run`. `holdings.mainnet` (`test:mainnet`) runs the `sauce-chains` skill's
+`holdings.sauce.ts` as its header's `sauce simulate` line says, on Ethereum and Base state, and
+holds what it returns to each chain's own pool and the balances the Pot was given.
 After changing an action's fields in `actions/src/spec.ts`, run `pnpm --filter './actions'
 gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.json` is stale.
 
@@ -172,7 +190,8 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   starts reading something new FAILS (a missing slot reads as zero) rather than reaching the
   network. Blob sizes at capture: actions ~680 KB, quote ~270 KB, split-swap ~80 KB, the swap
   venue suites `swap` (Ethereum) ~110 KB, `swap-base` ~90 KB, `swap-avalanche` ~30 KB, and the names
-  suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB.
+  suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB, and
+  `holdings-{ethereum,base}` ~30 KB each.
 
   **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
   pinned block (then recapture every suite on that chain, and revisit every pinned figure: pools,

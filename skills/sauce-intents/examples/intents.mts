@@ -29,6 +29,7 @@ import {
   PortalABI,
 } from "@eco-incorp/sauce/protocols/eco-routes";
 import {
+  bytesToHex,
   decodeAbiParameters,
   decodeFunctionData,
   encodeFunctionData,
@@ -246,9 +247,11 @@ check(rehashed(0n, fee.base) === intentHash, "the same inputs give the same inte
 check(rehashed(1n, fee.base) !== intentHash, "a new deadline is a new intent");
 check(rehashed(0n, fee.base + 1n) !== intentHash, "a new Kitchen fee is a new intent");
 
-// Funding by transfer: the program reads the vault and publishes by the registry's selectors,
-// with the same three arguments, and compiles for a source chain.
+// Funding by transfer: the program reads the vault and publishes through the registry's Portal
+// namespace, with the same three arguments, and compiles for a source chain to those functions.
 const byHand = readFileSync(new URL("./fund-by-transfer.sauce.ts", import.meta.url), "utf8");
+const byHandProgram = routes.compileSauceProgram("base", byHand);
+const byHandBytes = bytesToHex(byHandProgram.bytecode);
 // A function's or error's selector is the hash of its bare signature, `name(types)`.
 type Param = { type: string; components?: readonly Param[] };
 type Entry = { name: string; inputs: readonly Param[] };
@@ -262,8 +265,10 @@ const portalFunction = (name: string): Entry =>
 for (const name of ["intentVaultAddress", "publish"]) {
   const selector = toFunctionSelector(signature(portalFunction(name)));
   check(
-    byHand.includes(`hex\`${selector.slice(2)}\``),
-    `fund-by-transfer calls ${name}, ${selector}`,
+    byHand.includes(`EcoRoutes.Portal.${name}(destination, route, reward)`) &&
+      byHandBytes.includes(selector.slice(2)) &&
+      !byHand.includes(selector.slice(2)),
+    `fund-by-transfer calls EcoRoutes.Portal.${name}, ${selector}, by name`,
   );
 }
 check(
@@ -276,10 +281,9 @@ check(
     JSON.stringify(portalFunction("publish").inputs),
   "publish's arguments are publishAndFund's first three",
 );
-const byHandProgram = routes.compileSauceProgram("base", byHand);
 check(
-  byHandProgram.entryParams.map((param) => param.name).join() === "portal,destination,route,reward",
-  "fund-by-transfer takes the intent as publish's arguments",
+  byHandProgram.entryParams.map((param) => param.name).join() === "destination,route,reward",
+  "fund-by-transfer takes the intent as publish's arguments, and no Portal",
 );
 
 // The Portal reference: every selector and topic it gives for something the registry declares is

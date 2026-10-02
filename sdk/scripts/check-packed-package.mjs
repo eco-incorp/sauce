@@ -500,6 +500,12 @@ try {
         `sauce init installs ${file} verbatim into ${dir}`,
       );
     }
+    // And beside them the programs' TypeScript project, as init writes it into programs/.
+    assert.equal(
+      readFileSync(join(project, dir, "tsconfig.json"), "utf8"),
+      readFileSync(join(project, "programs/tsconfig.json"), "utf8"),
+      `sauce init types the skills' programs in ${dir} as it types programs/`,
+    );
   }
   // status exits non-zero on anything outdated, so execFileSync throwing is the failure.
   const status = sauce("skills", "status", "--dir", project);
@@ -512,7 +518,8 @@ try {
 
   // An editor on that project, asked through its own tsserver from the installed TypeScript: the
   // programs in programs/ — an agent's three, as it wrote them, and every one the skills ship —
-  // show no error, a real mistake does, and the project's other TypeScript is untouched.
+  // show no error, a real mistake does, the skills' programs where the init installed them show
+  // none either, and the project's other TypeScript is untouched.
   const { checkEditor } = await import(
     pathToFileURL(join(root, "sdk/scripts/check-editor.mjs")).href
   );
@@ -532,7 +539,8 @@ try {
   });
   console.log(
     `Clean package install: in the project sauce init wrote, an editor's tsserver shows the ` +
-      `${shown} programs in programs/ no error, a mistake one, and a Node file beside them none`,
+      `${shown} programs in programs/ no error, a mistake one, the installed skills' none, and a ` +
+      "Node file beside them none",
   );
 
   // `sauce skills install` on its own, for one agent: only the directory that agent reads, every
@@ -552,7 +560,11 @@ try {
     readFileSync(join(codexProject, ".agents/skills/.sauce-skills.json"), "utf8"),
   );
   assert.equal(record.version, installedManifest.version, "the install records the version");
-  assert.deepEqual(Object.keys(record.files).sort(), shippedSkills, "and every file it wrote");
+  assert.deepEqual(
+    Object.keys(record.files).sort(),
+    [...shippedSkills, "tsconfig.json"].sort(),
+    "and every file it wrote: the skills, and their programs' tsconfig.json",
+  );
   assert.match(
     sauce("skills", "status", "--dir", codexProject),
     /: up to date \(/,

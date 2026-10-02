@@ -1,10 +1,9 @@
 import { Base, destinationPot, Ethereum, routes, token } from "@eco-incorp/sauce";
 import { toHex } from "viem";
 
-// Offline fixtures. Read the current Kitchen fee before submission.
-const portal = "0x4444444444444444444444444444444444444444";
-// The Pot the route cooks on: the shared one owned by that Portal's Executor. It must already exist.
-const pot = destinationPot(Base.chain, { portal });
+// Offline fixtures. Read the current Kitchen fee before submission: destinationExecutionFee().
+// The Pot the route cooks on: the shared one owned by Base's Portal's Executor. It must already exist.
+const pot = destinationPot(Base.chain);
 const executionFee = 1_000n;
 const baseUsdcValue = routes.registryTokenAddress(Base.chain, "USDC");
 const sourceUsdcValue = routes.registryTokenAddress(Ethereum.chain, "USDC");
@@ -20,10 +19,8 @@ const built = Base(
     USDC.transfer(recipient, amount);
   },
   {
+    // The route's native amount, which the solver sends with the fill, defaults to this fee.
     execution: { value: executionFee },
-    nativeAmount: executionFee,
-    portal,
-    sourcePortal: "0x5555555555555555555555555555555555555555",
     deadline: 2_000_000_000n,
     // Callbacks capture nothing: explicitly supply every external scalar.
     defines: { recipient, amount },
@@ -34,7 +31,6 @@ const built = Base(
 ).reward({
   source: Ethereum.chain,
   creator: "0x6666666666666666666666666666666666666666",
-  prover: "0x7777777777777777777777777777777777777777",
   deadline: 2_000_003_600n,
   tokens: [{ token: sourceUsdc, amount }],
 });

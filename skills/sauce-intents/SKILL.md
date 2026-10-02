@@ -241,19 +241,22 @@ npx sauce run cross-chain.sauce.ts --chain base --keystore <keystore> \
   --intent-execution-fee <wei>
 ```
 
-**(c) Transfer into the vault, by hand.** (a) and (b) do this for every intent a file opens. For an
-intent encoded some other way, do the same in one cook, with the program reading the vault from the
-Portal itself so it cannot be wrong:
-[examples/fund-by-transfer.sauce.ts](examples/fund-by-transfer.sauce.ts) takes the intent as
-`publish`'s three arguments, transfers each reward token to
-`intentVaultAddress(destination, route, reward)` and calls `publish(destination, route, reward)`,
-which returns the intent hash and the vault. For an intent file, those three arguments are the
-arguments of the `publish` that `sauce intent publish … --from <address> --format json` prints; decode them
-with its signature (in [references/portal.md](references/portal.md)).
+**(c) An intent built elsewhere, from a Pot.** (a) and (b) fund by transfer and publish every intent
+a file opens, so an intent you write with `Chain(() => …).reward(…)` needs nothing more. This file
+is only for an intent you did not write: a route and a reward another tool encoded, published from a
+Pot. [examples/fund-by-transfer.sauce.ts](examples/fund-by-transfer.sauce.ts) takes them as
+`publish`'s three arguments and does in one cook what (b) does: it reads the vault with
+`EcoRoutes.Portal.intentVaultAddress(destination, route, reward)`, the registry's Portal on the
+chain it runs on, transfers each reward token there, calls
+`EcoRoutes.Portal.publish(destination, route, reward)` and returns `{ intentHash, vault }`. For an
+intent file, those three arguments are the arguments of the `publish` that
+`sauce intent publish … --from <address> --format json` prints; decode them with its signature (in
+[references/portal.md](references/portal.md)). An intent from a solver's quote is funded with
+`publishAndFund` instead (below).
 
 ```sh
 npx sauce run fund-by-transfer.sauce.ts --chain base \
-  --keystore <keystore> --args <portal> <destination> <route> <reward>
+  --keystore <keystore> --args <destination> <route> <reward>
 ```
 
 - **From a wallet**, it is two transactions: **transfer first, then publish**, so a solver that sees
@@ -376,10 +379,17 @@ above: when the Ethereum level runs, the shared Pot there pays the next level's 
 vault on Ethereum's Portal from what it holds, in Ethereum's USDC, and calls `publish`, so the child
 is published like any other intent and any solver can discover it. Keep every level on a supported
 chain, as here (Base, Ethereum, then Base again): the command checks the first level's chains only.
-Each level's deadline must be no
-earlier than its parent's. (The TypeScript cascade builder, `.nest()` in `sauce-typescript`, also
-funds a child by a transfer into its vault by default, but with no publication of its own, and
-takes `publishAndFund` as an option.)
+
+Every level takes the same `--intent-deadline`, `--intent-reward-deadline`, `--intent-creator` and
+`--intent-execution-fee`; a `.reward(...)` in a program sets only `tokens` and `nativeAmount`. So a
+later level has whatever time the earlier ones leave before that one deadline, the creator reclaims
+each level's unearned reward on the chain that escrowed it, and one fee pays the cook of every body
+that is a program, whatever chain it runs on (`--intent-execution-fee auto` refuses when those
+Kitchens charge different fees). The Portal and the prover are looked up per level, for its own two
+chains. The hash of a level below the first exists only once the level above has run: import it
+from that fill's transaction (`sauce intent import <tx hash> --chain <chain>`), then fill, prove and
+claim it like any other. (The TypeScript builder, `.nest()` in `sauce-typescript`, takes options per
+level, and by default funds a child by a transfer into its vault with no publication of its own.)
 
 ## What the compile supplies, and what you pass
 
@@ -496,8 +506,8 @@ intent from TypeScript around a program it compiles itself (`sauce-typescript`).
 - [examples/swap-on-base.sauce.ts](examples/swap-on-base.sauce.ts) is the distributed swap as the
   body of an intent to Base, opened from Ethereum. Its amounts are defines, so it can be run from a
   Pot or published from a wallet.
-- [examples/fund-by-transfer.sauce.ts](examples/fund-by-transfer.sauce.ts) funds an intent by a
-  transfer into its vault and publishes it, in one cook on a Pot.
+- [examples/fund-by-transfer.sauce.ts](examples/fund-by-transfer.sauce.ts) publishes an intent
+  built elsewhere from a Pot, funded by a transfer into its vault, in one cook.
 - [examples/intents.mts](examples/intents.mts) compiles the intent files, with the deadline, the
   creator, Base's and Ethereum's fees and the recipient as developer inputs, and pins on which chain
   each name resolves, the fee requirement, the token-only case, the pool ABI's selectors, and the
