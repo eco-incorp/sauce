@@ -46,7 +46,7 @@ export const hash: string = built.hash().intentHash;
 
 /** The host form: addresses for tokens, the options beside each step, the intent from `.then`. */
 const HOST = `
-import { Base, type routes } from ${ROOT};
+import { Base, Ethereum, type routes } from ${ROOT};
 
 const usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const built: routes.BuiltIntent = Base.Portal.send(
@@ -60,7 +60,13 @@ const built: routes.BuiltIntent = Base.Portal.send(
 const fromSource: routes.BuiltIntent = Base.Portal.send([], { source: "ethereum" })
   .receive([], { deadline: 1n })
   .then("function main() {}");
-export const all = [built.hash().intentHash, fromSource];
+const nested: routes.BuiltIntent = Base.Portal.send([], { source: "ethereum" })
+  .receive([], { deadline: 1n })
+  .nest((on) => Ethereum.Portal.send([], { source: on }).receive([], { deadline: 1n }).then(""), {
+    executionFee: 1n,
+  })
+  .then("function main() {}");
+export const all = [built.hash().intentHash, fromSource, nested];
 `;
 
 /** Each refusal: no body, no delivery, steps out of order, a result used, and awaited. */

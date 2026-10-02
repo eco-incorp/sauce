@@ -271,6 +271,26 @@ describe("on the host", () => {
     expect(one.intent).toEqual(many.intent);
   });
 
+  it("attaches a child with .nest(), as the route builder does", () => {
+    const program = "function main() { return 1n; }";
+    const child = (on: Parameters<typeof requireChain>[0]) =>
+      Ethereum.Portal.send(delivered, { ...reward, source: on })
+        .receive([], options)
+        .then(program);
+    const nest = { requireCap: true, executionFee: 1_000n } as const;
+    const built = Base.Portal.send(paid, reward)
+      .receive([], options)
+      .nest(child, nest)
+      .then(program);
+    const expected = Base(program, { ...options, tokens: [] })
+      .nest(child, nest)
+      .reward({ ...reward, tokens: [paid] });
+
+    expect(built.children).toHaveLength(1);
+    expect(built.intents()).toEqual(expected.intents());
+    expect(built.encodeEVM()).toEqual(expected.encodeEVM());
+  });
+
   const pending = () => Base.Portal.send(paid, reward).receive(delivered, options);
 
   it("refuses to be awaited: its then is the intent's", async () => {
