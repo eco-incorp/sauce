@@ -189,7 +189,9 @@ sends. Suggest small balances and a policy to the user.
    **Units**: `--fund` and `--assume-balance` take whole tokens (`USDC:10` is 10 USDC), or base
    units ending in `n` (`USDC:10000000n`, the same 10 USDC), and a token the chain does not register
    as `<address>:<amount>`, in its own decimals. `--args` and defines always take base units
-   (`10000000` is 10 USDC). `simulate --fund` with the owner's key rehearses it.
+   (`10000000` is 10 USDC). `simulate --fund` with the owner's key rehearses it: the pulls
+   signed, and before the cook, in the same block, each approval or transfer `sauce run` would
+   send first, each listed as a transaction of its own with its gas.
 
 5. **Rehearse**:
    `sauce simulate pay.sauce.ts --chain ethereum --owner <address> --assume-balance USDC:1 --assume-balance USDT:1 --args <recipient> 1000000`
