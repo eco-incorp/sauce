@@ -1,6 +1,6 @@
 ---
 name: sauce-protocols
-description: Every DeFi protocol a Sauce program can call, from the SDK's registry — an index by category with how to choose between them (a lending market versus another, a concentrated-liquidity pool versus a V2 pair or a stable pool, an aggregator, a bridge), a registry file per protocol (its deployments on every chain, how a program names each contract there, its ABI functions), and a document per protocol (what it is for, its pitfalls, a compiled example, its templates and notes). Covers every protocol as a registry namespace (deployed contracts, address-only contracts, interfaces called with .at(address)), available(...) for a chain that may lack one, ABI imports for unrecorded contracts, factories and pool lookups, and checking a recorded address has code. Use when a program must call a protocol (PancakeSwap V3, Aerodrome Slipstream, Curve, Balancer, Camelot, Lido, …), when the user asks which protocols or pools exist on a chain or which to use, needs a factory or router address, or wants a protocol's pitfalls.
+description: Every DeFi protocol a Sauce program can call, from the SDK's registry — an index by category with how to choose between them (a lending market versus another, a concentrated-liquidity pool versus a V2 pair or a stable pool, an aggregator, a bridge), a registry file per protocol (its deployments on every chain, how a program names each contract there, its ABI functions), and a document per protocol (what it is for, its pitfalls, a compiled example, its templates and notes). Covers every protocol as a registry namespace (deployed contracts, address-only contracts, interfaces called with an address), available(...) for a chain that may lack one, ABI imports for unrecorded contracts, factories and pool lookups, and checking a recorded address has code. Use when a program must call a protocol (PancakeSwap V3, Aerodrome Slipstream, Curve, Balancer, Camelot, Lido, …), when the user asks which protocols or pools exist on a chain or which to use, needs a factory or router address, or wants a protocol's pitfalls.
 ---
 
 # Protocols
@@ -30,9 +30,11 @@ member is one of three kinds:
 | ------------------- | -------------------------------------------------------- | ------------------------------------ |
 | A deployed contract | `PancakeswapV3.Factory`, `AerodromeSlipstream.CLFactory` | its address; `.method(...)` calls it |
 | An address only     | `Camelot.V3Factory` (no ABI the registry has verified)   | its address                          |
-| An interface        | `Erc4626.Vault` (a vault has no one fixed address)       | `.at(address).method(...)`           |
+| An interface        | `Erc4626.Vault` (a vault has no one fixed address)       | `(address).method(...)`              |
 
-`.at(address)` also reaches another deployment of a deployed contract's ABI. A contract the
+An interface is called with the address of a deployment, `Erc4626.Vault(vault).totalAssets()`
+(`.at(vault)` is the same). `.at(address)` also reaches another deployment of a deployed contract's
+ABI; a deployed contract's name is never called with an address. A contract the
 registry does not record at all is called through its ABI, imported from
 `./protocols/<slug>/<Export>.json` and bound with `.at(address)` to an address passed in as a
 `main` input or a define.
@@ -80,7 +82,9 @@ that lacks it.
 2. Read its document's pitfalls before writing the call.
 3. Write the program, compile it for the chain (`sauce compile <file> --chain <slug>`), and hand the
    cook to any signer as `sauce tx`'s unsigned JSON, `{ chainId, to, data, value }`, or send it with
-   `sauce run` (`sauce-run`).
+   `sauce run` (`sauce-cli`). For the initial release that is on Ethereum, Base or Solana: every
+   protocol on every chain compiles and simulates, but on a preview chain `sauce tx` and `sauce run`
+   are refused with the chain-support request for that chain (`sauce-chains`).
 
 ## Common gotchas
 
@@ -103,9 +107,12 @@ that lacks it.
 - [ ] Each contract is named as its registry file says for that chain, or behind `available(...)`.
 - [ ] The document's pitfalls are handled: approvals, balance deltas, minimums.
 - [ ] The program compiles with `--chain`.
+- [ ] Its transaction goes to a supported chain (Ethereum, Base or Solana); a protocol on a preview
+      chain is compiled and simulated, and the chain requested.
 
 ## Example
 
 [examples/protocols.sauce.ts](examples/protocols.sauce.ts) calls Aave and, where the chain has it,
 PancakeSwap V3 through their namespaces; [examples/protocols.mts](examples/protocols.mts) compiles it
-for Base, Arbitrum and Optimism, loads a protocol document, and compiles a protocol template.
+for Base, Arbitrum and Optimism (the last two preview chains, compiled only), loads a protocol
+document, and compiles a protocol template.

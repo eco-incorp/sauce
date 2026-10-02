@@ -1,0 +1,12 @@
+[
+  {
+    "type": "function",
+    "name": "observe",
+    "stateMutability": "view",
+    "inputs": [{ "name": "secondsAgos", "type": "uint32[]" }],
+    "outputs": [
+      { "name": "tickCumulatives", "type": "int56[]" },
+      { "name": "secondsPerLiquidityCumulativeX128s", "type": "uint160[]" }
+    ]
+  }
+]

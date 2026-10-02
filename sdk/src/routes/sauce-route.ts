@@ -29,7 +29,7 @@ import { chainHost, isChainScalar, withHost, type ChainHost } from "./host.js";
 import { registryTokenSymbols, resolveTokenMap } from "./token-registry.js";
 import type { ProtocolNameOptions } from "./protocol-names.js";
 import { pascalOfSlug } from "./accessors.js";
-import { chainAmbient, chainDefines } from "./ambient.js";
+import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
 import type { EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
 import { intentHost, type IntentSugarDefaults, type LoweredIntent } from "./intent-host.js";
@@ -146,7 +146,7 @@ export interface RouteScope {
 
 /** What a nested level resolves its chain-scoped names with: its own chain's registry values and
  *  nothing a caller supplied for another chain. */
-const NESTED_SCOPE: RouteScope = { chainDefines: (chain) => chainDefines(chain) };
+const NESTED_SCOPE: RouteScope = { chainDefines: (chain) => sharedChainDefines(chain) };
 
 /**
  * The options and scope a level on `destination` gets, when a program compiled for `enclosing`
@@ -176,8 +176,8 @@ function levelOn(
   if (destination.id === enclosing.id) return { options, scope };
   const chainScoped = new Set([
     ...Object.keys(scope.chainDefines?.(enclosing) ?? {}),
-    ...Object.keys(chainDefines(enclosing, { tokens: options.tokens })),
-    ...Object.keys(chainDefines(destination)),
+    ...Object.keys(definesOf(enclosing, options.tokens)),
+    ...Object.keys(sharedChainDefines(destination)),
   ]);
   const defines =
     options.defines === undefined
@@ -186,6 +186,14 @@ function levelOn(
           Object.entries(options.defines).filter(([name]) => !chainScoped.has(name)),
         );
   return { options: { ...options, defines, tokens: undefined }, scope: NESTED_SCOPE };
+}
+
+/** A chain's defines with `tokens` over its registry's: the chain's own, built once, with none. */
+function definesOf(
+  chain: ChainRefResolved,
+  tokens: SauceCompileOptions["tokens"],
+): Readonly<Record<string, DefineValue>> {
+  return tokens === undefined ? sharedChainDefines(chain) : chainDefines(chain, { tokens });
 }
 
 /**
@@ -399,7 +407,7 @@ export function compileSauceProgram(
   // and `defines` stays exactly what the caller wrote.
   const ambient = Array.from(new Set([...chainAmbient(resolved), ...(options.ambient ?? [])]));
   const scope: RouteScope = {
-    chainDefines: (on) => chainDefines(on, { tokens: options.tokens }),
+    chainDefines: (on) => definesOf(on, options.tokens),
   };
   const program = compileForChain(
     resolved,

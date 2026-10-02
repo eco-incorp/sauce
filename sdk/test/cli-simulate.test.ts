@@ -143,6 +143,23 @@ describe("--assume-balance: where a token keeps a holder's balance", () => {
   });
 });
 
+describe("--assume-balance on a B20 token", () => {
+  it("refuses it by what it is, before searching its storage", async () => {
+    let calls = 0;
+    const client = {
+      call: async () => {
+        calls++;
+        return { data: word(7n) };
+      },
+      getCode: async () => "0xef",
+    } as unknown as PublicClient;
+    await expect(findBalanceSlot(client, TOKEN, HOLDER, "SPCXc")).rejects.toThrow(
+      `--assume-balance SPCXc: ${TOKEN} is a B20 token, a precompile of the Base node`,
+    );
+    expect(calls).toBe(0);
+  });
+});
+
 describe("state overrides", () => {
   it("merges every override for one account into one entry, the later word winning", () => {
     const merged = mergeOverrides([
@@ -407,7 +424,7 @@ describe("sauce simulate --assume-balance, offline", () => {
 
     return { code: await runCli(argv, io), stderr };
   }
-  const PAY = new URL("../../skills/sauce-run/examples/pay.sauce.ts", import.meta.url).pathname;
+  const PAY = new URL("../../skills/sauce-cli/examples/pay.sauce.ts", import.meta.url).pathname;
 
   it.each([
     [["--assume-balance", "USDC"], "--assume-balance: expected <TOKEN|address>:<amount>"],

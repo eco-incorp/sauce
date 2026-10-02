@@ -32,6 +32,17 @@ function main() {
 
 ## ABI
 
+### `AerodromePoolABI`
+
+`import AerodromePoolABI from "./protocols/aerodrome/AerodromePoolABI.json";`
+
+- `getReserves() view returns (uint256 _reserve0, uint256 _reserve1, uint256 _blockTimestampLast)`
+- `getAmountOut(uint256 amountIn, address tokenIn) view returns (uint256)`
+- `stable() view returns (bool)`
+- `token0() view returns (address)`
+- `token1() view returns (address)`
+- `swap(uint256 amount0Out, uint256 amount1Out, address to, bytes data)`
+
 ### `AerodromePoolFactoryABI`
 
 `import AerodromePoolFactoryABI from "./protocols/aerodrome/AerodromePoolFactoryABI.json";` Speaks for: poolFactory.

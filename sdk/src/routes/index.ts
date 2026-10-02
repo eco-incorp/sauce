@@ -137,10 +137,13 @@ export {
 } from "./token-registry.js";
 export type {
   RegistryToken,
+  StockToken,
   SvmTokenCluster,
   SvmTokenRow,
   TokenRegistryRow,
 } from "./token-registry.js";
+export { STOCK_ISSUERS, stockSymbol } from "./stock-tokens.js";
+export type { StockIssuer } from "./stock-tokens.js";
 export { openRoute } from "./intent-dsl.js";
 export { destinationPot } from "./intent-pot.js";
 export type {

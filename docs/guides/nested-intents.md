@@ -4,6 +4,12 @@
 
 `.nest(...)` adds a child intent whose source is the parent's destination. When the parent fulfills, its route funds the child's reward. A solver can fulfill that child in a later transaction on the child's destination chain. Each leg is a separate intent; a failure on a later chain does not roll back a completed parent.
 
+The examples here hop through Arbitrum and Optimism, which are preview chains for the initial
+release: the SDK builds them as shown, at your own risk, while the `sauce` command and the MCP server
+publish an intent only when its source and destination are Ethereum, Base or Solana
+([Supported chains](../README.md#supported-chains)). They check the first level only, so keep every
+later level of a cascade on a supported chain too.
+
 Use the thunk form to receive the parent's destination as the child's source:
 
 ```ts

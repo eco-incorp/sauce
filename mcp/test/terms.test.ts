@@ -44,6 +44,14 @@ describe("toolTerms", () => {
       ),
       "USDC is not a token base registers (sauce_globals lists them)",
     );
+    assert.equal(
+      toolTerms("SPCXC is not a token: sauce globals --chain base --stocks lists them"),
+      "SPCXC is not a token: sauce_globals lists them",
+    );
+    assert.equal(
+      toolTerms("And 67 stock tokens: --stocks lists them, and --search <text> finds one"),
+      "And 67 stock tokens: stocks lists them, and search <text> finds one",
+    );
     assert.equal(toolTerms("sauce run would refuse it"), "a signed run would refuse it");
     assert.equal(
       toolTerms(
@@ -73,6 +81,11 @@ describe("toolTerms", () => {
       toolTerms("--intent-reward-deadline 1, --no-prove"),
       "intentRewardDeadline 1, prove: false",
     );
+    assert.equal(
+      toolTerms("run sauce pools --chain base --v4-key 50:1 first"),
+      "run sauce_pools first",
+    );
+    assert.equal(toolTerms("--v4-key 3000: not a key"), "v4Pools 3000: not a key");
     assert.equal(toolTerms("no flags, no commands"), "no flags, no commands");
   });
 });

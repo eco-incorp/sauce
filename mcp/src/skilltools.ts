@@ -268,7 +268,9 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
         "before writing a Sauce program: read sauce-overview first, then the skill the task " +
         "needs, with sauce_skill (which can return one section, or the lines matching a term, " +
         "of a large file). A skill with many references (one document per protocol) lists a " +
-        "few and how to name the rest. The same files are resources under sauce://skills/.",
+        "few and how to name the rest. The same files are resources under sauce://skills/. " +
+        "The skills teach SauceScript so you write each program yourself, for the task as " +
+        "asked: their examples show idioms, not templates to copy or choose between.",
       annotations: { title: "List the Sauce agent skills", ...PURE },
       outputSchema: z.looseObject({
         package: z.string(),
@@ -319,8 +321,9 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
         "under references/ or examples/ (paths as sauce_skills lists them, such as " +
         "references/builtins.md). A large file need not come whole: `section` returns the part " +
         "under one heading, `query` the lines that hold a term, with the lines around them. " +
-        "Follow a SKILL.md as written; it says which further files to read. Only the files the " +
-        "package ships are served.",
+        "Follow a SKILL.md as written; it says which further files to read. An example program " +
+        "shows an idiom and the rules a correct program follows: read it for the pattern, then " +
+        "write the program the task needs. Only the files the package ships are served.",
       annotations: { title: "Read a Sauce agent skill", ...PURE },
       inputSchema: z
         .object({
@@ -328,7 +331,7 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
             .string()
             .min(1)
             .max(100)
-            .describe("The skill's name, as sauce_skills lists it: sauce-overview, sauce-run, …"),
+            .describe("The skill's name, as sauce_skills lists it: sauce-overview, sauce-cli, …"),
           path: z
             .string()
             .min(1)

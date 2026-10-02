@@ -25,6 +25,14 @@ derives the destination Pot and engine, and resolves registered token and protoc
 choose the deadlines, creator and prover, read the Kitchen fee, fund the reward and submit. A solver
 then decides whether to fulfill it; the SDK does not price the reward or promise a fill.
 
+The SDK builds an intent between any two registry chains. For the initial release, Sauce supports
+transactions on Ethereum, Base and Solana, and the [`sauce` command](cli.md) and the
+[MCP server](mcp.md) publish an intent only when its source and every destination it opens, nested
+ones included, are among them; each step after publishing is refused on a preview chain by the
+chain it is sent on ([Supported chains](../README.md#supported-chains)). Several examples below
+name Arbitrum or Optimism, which are preview chains: the SDK builds them as shown, and submitting
+one is at your own risk.
+
 ## Source, destination, and funding
 
 An intent has two sides:
@@ -515,7 +523,8 @@ builds the file's intents as `sauce intent publish` does, gives a solver the rou
 state override, runs the deployment, the approvals and the fill in one `eth_simulateV1` block on
 the destination, and prints what moved, what the shared Pot and the Executor were left holding, and
 the decoded reason when it reverts. With `--send` and a signer it then sends them, the signer being
-the solver ([`fill --send`](cli.md#filling-it-for-real-sauce-intent-fill---send)).
+the solver ([`fill --send`](cli.md#filling-it-for-real-sauce-intent-fill---send)), on a supported
+destination only.
 
 ## After the fill: prove, claim, refund, cancel
 
@@ -580,7 +589,7 @@ export function afterTheFill(
 `routes.fulfillAndProveTx(intent, { claimant, ...proof })` is the fill and its proof in one, and
 `routes.cancelAndProveTx(intent, proof)` the cancellation and its. From the command line,
 [`sauce intent prove, claim, refund and cancel`](cli.md#after-the-fill-prove-claim-refund-cancel)
-send them, reading the state first and saying why not, and
+send them on a supported chain, reading the state first and saying why not, and
 [`sauce intent status`](cli.md#after-the-fill-prove-claim-refund-cancel) reads where an intent
 stands on both chains. `routes.intentFromPublished(log, sourceChainId)` rebuilds an intent from its
 `IntentPublished` log, which `sauce intent import` stores.

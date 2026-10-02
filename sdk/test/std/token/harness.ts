@@ -89,6 +89,21 @@ const resolvePackage = (specifier: string): string | undefined =>
 export const compileStdToken = (entry: string, target: SauceTarget): CompileResult =>
   compile({ target, entry: ENTRY, resolve: resolveModule(entry), resolvePackage });
 
+/** Compile `entry` for the SVM against another SVM arm, `arm` the source served as `token.svm.js`. */
+export const compileStdTokenSvmArm = (entry: string, arm: string): CompileResult => {
+  const resolve = resolveModule(entry);
+
+  return compile({
+    target: "svm",
+    entry: ENTRY,
+    resolve: (path) =>
+      path.replace(/^\.\//, "") === `${PACKAGE_ROOT}token.svm.js`
+        ? Buffer.from(arm)
+        : resolve(path),
+    resolvePackage,
+  });
+};
+
 /** Compile against a caller-supplied resolver — for the packaging negative controls. */
 export const compileWith = (options: CompileOptions): CompileResult =>
   compile({ entry: ENTRY, ...options });
@@ -147,11 +162,20 @@ export const CASES: readonly MethodCase[] = [
 /**
  * The methods only one arm has, with the entry that calls them there. `ownerOf` reads a token
  * account's owner@32, which only the SPL account model has: an ERC-20 balance has no account apart
- * from its holder.
+ * from its holder. The checked writes name the mint as an account and carry its decimals, which an
+ * ERC-20 call has no use for.
  */
 export const SVM_ONLY_CASES: readonly Omit<MethodCase, "evm">[] = [
   {
     method: "ownerOf",
     svm: 'import { ownerOf } from "@sauce/token"; function main(token: Address, account: Account): Address { return ownerOf(token, account); }',
+  },
+  {
+    method: "transferChecked",
+    svm: 'import { transferChecked } from "@sauce/token"; function main(token: Address, tokenProgram: Account, source: Account, mint: Account, dest: Account, authority: Account, amount: Uint256, decimals: Uint256): void { transferChecked(token, tokenProgram, source, mint, dest, authority, amount, decimals); }',
+  },
+  {
+    method: "approveChecked",
+    svm: 'import { approveChecked } from "@sauce/token"; function main(token: Address, tokenProgram: Account, source: Account, mint: Account, delegate: Account, authority: Account, amount: Uint256, decimals: Uint256): void { approveChecked(token, tokenProgram, source, mint, delegate, authority, amount, decimals); }',
   },
 ];

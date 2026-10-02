@@ -101,7 +101,7 @@ describe("sauce_skill", () => {
       /no skill named 'sauce-nothing': the skills are sauce-/,
     );
     for (const path of [
-      "../sauce-run/SKILL.md",
+      "../sauce-cli/SKILL.md",
       "../../package.json",
       "/etc/passwd",
       "references/../../../package.json",

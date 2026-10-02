@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { request, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -15,7 +15,10 @@ import { after, before, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import {
+  getDefaultEnvironment,
+  StdioClientTransport,
+} from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
@@ -25,6 +28,7 @@ import { createSauceServer } from "../src/server.js";
 import { INTENT_TOOL_NAMES } from "../src/intents.js";
 import { SKILL_TOOL_NAMES } from "../src/skilltools.js";
 import { TOOL_NAMES } from "../src/tools.js";
+import { WALLET_TOOL_NAMES } from "../src/wallets.js";
 
 const MCP = dirname(dirname(fileURLToPath(import.meta.url)));
 /** `sauce mcp`, from the build: the `sauce` bin, which loads this workspace's `dist/entry.js`. */
@@ -89,6 +93,56 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     assert.ok(!stderr.includes(SECRET), "nor does anything the server logged");
   });
 
+  it("signs with the wallets of --wallets, unlocked by the password source it names", async () => {
+    // A throwaway password, passed as an MCP client's config passes one from an agent's .env.
+    const password = `throwaway-${process.pid}-${Date.now()}`;
+    const wallets = join(dir, "wallets");
+    const transport = new StdioClientTransport({
+      command: BIN[0],
+      args: [
+        ...BIN.slice(1),
+        ...["--wallets", wallets, "--password-env", "SAUCE_TEST_WALLET_PASSWORD"],
+      ],
+      env: { ...getDefaultEnvironment(), SAUCE_TEST_WALLET_PASSWORD: password },
+      cwd: dir,
+      stderr: "pipe",
+    });
+    let stderr = "";
+    transport.stderr?.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
+    const client = new Client({ name: "stdio-wallets", version: "0.0.0" });
+    await client.connect(transport);
+    const received: string[] = [client.getInstructions() ?? ""];
+    try {
+      const { tools } = await client.listTools();
+      assert.deepEqual(
+        tools.map((tool) => tool.name),
+        [...TOOL_NAMES, ...INTENT_TOOL_NAMES, ...WALLET_TOOL_NAMES, ...SKILL_TOOL_NAMES],
+      );
+      assert.match(received[0]!, /THIS SERVER SIGNS ONLY WITH THE WALLETS IN ITS WALLET DIRECTORY/);
+      assert.match(received[0]!, /--password-env SAUCE_TEST_WALLET_PASSWORD/);
+      const created = await client.callTool({
+        name: "sauce_wallet_create",
+        arguments: { name: "agent" },
+      });
+      received.push(JSON.stringify(created));
+      const { address } = structured(created) as { address: string };
+      assert.match(address, /^0x[0-9a-fA-F]{40}$/);
+      const listed = await client.callTool({ name: "sauce_wallet_list" });
+      received.push(JSON.stringify(listed));
+      assert.deepEqual(
+        (structured(listed) as { wallets: Array<{ address: string }> }).wallets.map(
+          (wallet) => wallet.address,
+        ),
+        [address],
+      );
+    } finally {
+      await client.close();
+    }
+    assert.match(stderr, /signing with the wallets in /);
+    assert.equal(statSync(join(wallets, "agent.json")).mode & 0o777, 0o600);
+    for (const text of [...received, stderr]) assert.ok(!text.includes(password));
+  });
+
   it("refuses a config it cannot use before it serves anything, naming no URL", async () => {
     const bad = join(dir, "bad.json");
     writeFileSync(bad, JSON.stringify({ rpcUrls: { base: `http://${SECRET}` } }));
@@ -106,13 +160,22 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     let stdout = "";
     help.stdout.on("data", (chunk: Buffer) => (stdout += chunk.toString()));
     assert.deepEqual(await once(help, "exit"), [0, null]);
-    assert.match(stdout, /^Serve the read-only commands and the agent skills/);
+    assert.match(stdout, /^Serve the commands and the agent skills/);
     assert.match(stdout, /--allowed-host <name>/);
+    assert.match(stdout, /--wallets \[<dir>\]/);
     for (const [argv, message] of [
       [["--agent", "claude"], /--agent goes with sauce mcp setup/],
       [["setup", "--http", "0"], /--http is for serving, not setup/],
       [["--host", "127.0.0.1"], /--host goes with --http/],
       [["--http", "0", "--host", "0.0.0.0"], /beyond loopback: name the host/],
+      // The HTTP server never signs: it takes no wallets, whatever the password source.
+      [
+        ["--http", "0", "--wallets", "--password-env", "SAUCE_TEST_WALLET_PASSWORD"],
+        /--wallets is for stdio: the HTTP server never signs/,
+      ],
+      [["--password-env", "SAUCE_TEST_WALLET_PASSWORD"], /--password-env goes with --wallets/],
+      [["--wallets"], /--wallets needs its password source/],
+      [["setup", "--wallets"], /--wallets is for serving, not setup/],
     ] as const) {
       const child = spawn(BIN[0], [...BIN.slice(1), ...argv], {
         stdio: ["ignore", "ignore", "pipe"],
@@ -272,12 +335,15 @@ describe("Streamable HTTP: sauce mcp --http", () => {
     await exited;
   });
 
-  it("binds loopback by default and serves the same tools", async () => {
+  it("binds loopback by default and serves the same tools, and no wallet tool", async () => {
     assert.match(url, /^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
     const client = new Client({ name: "http-bin-smoke", version: "0.0.0" });
     await client.connect(new StreamableHTTPClientTransport(new URL(url)));
     try {
       await exercise(client);
+      const { tools } = await client.listTools();
+      assert.ok(tools.every((tool) => !tool.name.startsWith("sauce_wallet")));
+      assert.match(client.getInstructions() ?? "", /NOTHING HERE SIGNS OR SENDS/);
     } finally {
       await client.close();
     }

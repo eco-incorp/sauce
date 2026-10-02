@@ -34,6 +34,7 @@ import { NAMESPACE_KEYS, resolveNamespace } from "./accessor-index.js";
 import { chainAmbient, chainDefines } from "./ambient.js";
 import { pascalOfSlug } from "./builder.js";
 import { resolveProtocolContract } from "./protocol-names.js";
+import type { StockToken } from "./token-registry.js";
 import { svmTokenRows, TOKEN_REGISTRY } from "./token-registry.js";
 
 export interface SourceToken {
@@ -43,6 +44,10 @@ export interface SourceToken {
   readonly decimals: number;
   /** On Solana, the mint's base58 address. */
   readonly mint?: string;
+  /** A tokenized stock's issuer, name and underlying ticker (`stock-tokens.ts`). */
+  readonly stock?: StockToken;
+  /** On Solana, the program that owns the mint, legacy SPL Token or Token-2022, in base58. */
+  readonly tokenProgram?: string;
 }
 
 export interface SourceMethod {
@@ -269,14 +274,22 @@ export function sourceGlobals(chain: ChainRef): SourceGlobals {
     chain: chainName(resolved),
     tokens: [
       ...(resolved.kind === "evm" ? (TOKEN_REGISTRY[resolved.id] ?? []) : []).map(
-        ({ symbol, address, decimals }): SourceToken => ({ symbol, address, decimals }),
+        ({ symbol, address, decimals, stock }): SourceToken => ({
+          symbol,
+          address,
+          decimals,
+          ...(stock === undefined ? {} : { stock }),
+        }),
       ),
-      ...svmTokenRows(resolved).map(({ symbol, address, decimals, mint }): SourceToken => ({
-        symbol,
-        address,
-        decimals,
-        mint,
-      })),
+      ...svmTokenRows(resolved).map(
+        ({ symbol, address, decimals, mint, tokenProgram }): SourceToken => ({
+          symbol,
+          address,
+          decimals,
+          mint,
+          tokenProgram,
+        }),
+      ),
     ].sort((a, b) => (a.symbol < b.symbol ? -1 : a.symbol > b.symbol ? 1 : 0)),
     protocols: namespacesOn(resolved),
     interfaces: interfacesOn(resolved),

@@ -7,7 +7,7 @@ description: Write a Sauce program as a JSON actions document instead of SauceSc
 
 An **actions document** is JSON: an ordered list of protocol operations — swap on a pool, approve,
 supply to a lending pool, bridge, wrap, stake — that compiles to one Sauce program. The program
-runs every action in order, atomically, in one transaction on the Pot (`sauce-run`), exactly as a
+runs every action in order, atomically, in one transaction on the Pot (`sauce-cli`), exactly as a
 hand-written SauceScript program would: a swap is the same `@sauce/router` call a program makes.
 
 ```json chain=ethereum,base,arbitrum
@@ -139,7 +139,7 @@ npx sauce actions swap.json --chain base --json
 ```
 
 `compile`, `simulate`, `tx` and `run` take the document wherever they take a `.sauce.ts` file, with
-the same flags (`sauce-run` covers the Pot, endpoints, signers and funding):
+the same flags (`sauce-cli` covers the Pot, endpoints, signers and funding):
 
 ```sh
 npx sauce simulate swap.json --chain base --owner <address> --rpc-url <url> \
@@ -148,6 +148,10 @@ npx sauce tx swap.json --chain base --owner <address> --value 0 --args 100000000
 npx sauce run swap.json --chain base --rpc-url <url> --keystore <keystore> --args 1000000000
 ```
 
+- `tx` and `run` build and send the cook on a chain the initial release supports: Ethereum or
+  Base, the EVM chains among Ethereum, Base and Solana. On any other chain (a preview chain) the
+  document lowers, compiles and simulates, and `tx` and `run` are refused, naming the supported
+  chains and the chain-support request for that chain (`sauce-chains` says how to post it).
 - `--args` gives the `argument` actions, in the order the document declares them.
 - `--define` does not apply: a document's values are its own fields.
 - A document is refused with every problem at once, each on a line of its own with its path, such
@@ -158,4 +162,5 @@ npx sauce run swap.json --chain base --rpc-url <url> --keystore <keystore> --arg
   ```
 
 Through an MCP client, the `sauce_actions` tool takes the same document and chain and returns what
-`sauce actions --json` prints.
+`sauce actions --json` prints; given an owner it adds the cook as `transaction`, and on a preview
+chain `refused` in its place.

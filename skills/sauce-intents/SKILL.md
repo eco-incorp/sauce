@@ -11,13 +11,37 @@ called as a function opens the intent, and every value the file does not compute
 undeclared in the file and set with `--define NAME=VALUE` (`sauce-script`).
 
 ```sauce chain=base define=RECIPIENT,AMOUNT
-Arbitrum(() => {
-  USDC.transfer(RECIPIENT, AMOUNT); // Arbitrum's USDC: the body runs there
+Ethereum(() => {
+  USDC.transfer(RECIPIENT, AMOUNT); // Ethereum's USDC: the body runs there
 }).reward({ tokens: [{ token: USDC, amount: AMOUNT }] }); // the source chain's USDC
 ```
 
 Nothing about the fill is guaranteed: a solver decides whether the reward is worth it, and the
 package prices nothing. Say an intent is _offered_, never that it _will execute_.
+
+## Supported chains
+
+For the initial release, intents are published, and every step of their life sent, only between
+**Ethereum, Base and Solana**, the chains Sauce supports transactions on. Every other chain in the
+registry is a **preview chain**: an intent that involves one still compiles, `sauce inspect` lists
+it, and `sauce intent publish --dry-run` and `sauce intent fill` without `--send` rehearse it, but
+the `sauce` command and its MCP server build and send none of its transactions. They refuse before
+anything is built, signed or sent:
+
+- **Publishing** — `sauce intent publish` (sent, or printed with `--format`), and `sauce run` or
+  `sauce tx` of a file that opens the intent — is refused unless the source and every destination
+  it opens are supported. The later levels of a cascade are not checked: keep every level on a
+  supported chain.
+- **Each later step** is refused by the chain it is sent on: `fill --send`, `prove` and `cancel` by
+  the destination; `claim` and `refund` by the source.
+
+The refusal names the supported chains and links the request for that chain (an MCP tool returns it
+as `refused`, with the issue's title, body and a comment to post). To ask for a chain, find its
+request among the existing ones
+(https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support) and add the use case
+as a comment, or open one from the form
+(https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml): the chain and its id,
+what you want to run there, the protocols and tokens it needs, and the volume expected and when.
 
 ## The lifecycle
 
@@ -106,7 +130,7 @@ npx sauce intent import <tx-hash> --chain <source> --config sauce.config.json
 - `sauce intent` alone, at a terminal, lists the stored intents with where each stands, and runs
   these on the one picked.
 
-**An intent to Solana.** An intent an EVM chain publishes for Solana is filled, proven and
+**An intent to Solana.** An intent Ethereum or Base publishes for Solana is filled, proven and
 cancelled on Solana, through its Portal program, and claimed or refunded on its source as above.
 The config gives Solana's endpoint under its chain id, `1399811149`.
 
@@ -138,12 +162,12 @@ The file is compiled for the **source** chain, the one that pays the reward (`--
   symbol, or a token's address on the source chain as a literal, a define or a top-level `const` of
   a literal. Its amount may be a measured value.
 - **Inside the braces, and in the delivery argument**, the code runs on the destination, and every
-  name a chain supplies resolves there: in an `Arbitrum(...)` body, `USDC` is Arbitrum's USDC,
-  `AaveV3.Pool` is Arbitrum's pool, and `chainId` and a `Namespace_Contract` define are Arbitrum's.
+  name a chain supplies resolves there: in an `Ethereum(...)` body, `USDC` is Ethereum's USDC,
+  `AaveV3.Pool` is Ethereum's pool, and `chainId` and a `Namespace_Contract` define are Ethereum's.
   The tokens a destination has are listed in
   [../sauce-globals/references/tokens.md](../sauce-globals/references/tokens.md), with their
   addresses in the destination's file in `sauce-chains`
-  ([../sauce-chains/references/arbitrum.md](../sauce-chains/references/arbitrum.md) for Arbitrum).
+  ([../sauce-chains/references/ethereum.md](../sauce-chains/references/ethereum.md) for Ethereum).
 - **The rule repeats at every depth.** An intent opened inside a body is funded on that body's
   chain, so its reward resolves there and its own body on its own destination.
 - **Name a token by a symbol, a literal, a define or a top-level `const` of a literal.** Any other
@@ -184,10 +208,10 @@ in the vault: top it up and run it again, or `refund` after the deadline. A seco
 the vault funded only publishes.
 
 ```sh
-npx sauce intent publish pay-on-arbitrum.sauce.ts --chain base --config sauce.config.json \
+npx sauce intent publish pay-on-ethereum.sauce.ts --chain base --config sauce.config.json \
   --from <address> --dry-run --assume-balance USDC:1 --define RECIPIENT=<address> \
   --define AMOUNT=1000000 --intent-deadline <unix seconds> --intent-creator <address>
-npx sauce intent publish pay-on-arbitrum.sauce.ts --chain base --from <address> --format json \
+npx sauce intent publish pay-on-ethereum.sauce.ts --chain base --from <address> --format json \
   --define RECIPIENT=<address> --define AMOUNT=1000000 \
   --intent-deadline <unix seconds> --intent-creator <address>
 ```
@@ -269,7 +293,7 @@ inside it reads what is there, not what must be brought:
 ```sauce chain=base define=BENEFICIARY
 const amount = USDC.balanceOf(ctx.self());
 const delivered = amount - (amount * 10n) / 10000n;
-Arbitrum(
+Ethereum(
   () => {
     USDC.approve(AaveV3.Pool, delivered);
     AaveV3.Pool.supply(USDC, delivered, BENEFICIARY, 0n);
@@ -278,7 +302,7 @@ Arbitrum(
 ).reward({ tokens: [{ token: USDC, amount }] });
 ```
 
-The gap between `delivered` (brought on Arbitrum) and `amount` (paid on Base) is the solver's
+The gap between `delivered` (brought on Ethereum) and `amount` (paid on Base) is the solver's
 margin. Make it worth filling.
 
 ## A whole program as the body
@@ -286,9 +310,9 @@ margin. Make it worth filling.
 The body can be any program for the destination. It is written inside the braces and uses the
 file's defines as values. It may also use what the file declares: its imports (an ABI, a library)
 and its helper functions, each compiled into the body's program for the destination. It calls
-contracts by namespace (`UniswapV3.Factory.getPool(...)`), through an imported binding, or by
-selector, with `evm.static(address, data)` for a read and `evm.call(address, value, data)` for a
-write, `data` being the selector bytes `.concat(abi.encode(...))`. A swap is a `@sauce/router`
+contracts as any program does (`sauce-script`): by namespace (`UniswapV3.Factory.getPool(...)`),
+through a registry ABI import, or through an ABI of the file's own imported at its top. A swap is a
+`@sauce/router`
 call (`sauce-swaps`), imported at the top of the file. Every unsold input and every output leaves the destination Pot
 before the body ends, and a refund the body makes lands on the destination chain. The body runs on
 the shared intent Pot, which holds nothing of anyone's between intents, so it may return a token's
@@ -301,7 +325,7 @@ sold on the Uniswap V3 0.05% pool down to `SQRT_PRICE_LIMIT_X96`, at least `MIN_
 fulfilment, so set it from the limit (`sauce-distributed-swap` has the recipe), never above what the
 pool can pay.
 
-```sauce chain=arbitrum define=AMOUNT_IN,REWARD,SQRT_PRICE_LIMIT_X96,MIN_OUT,RECIPIENT,REFUND_TO
+```sauce chain=ethereum define=AMOUNT_IN,REWARD,SQRT_PRICE_LIMIT_X96,MIN_OUT,RECIPIENT,REFUND_TO
 import { uniswapV3 } from "@sauce/router";
 
 Base(
@@ -322,16 +346,12 @@ Base(
 `REWARD` must exceed what the solver delivers, `AMOUNT_IN`, by what filling costs it (below). To buy
 WETH instead, swap `USDC` for `WETH` and deliver USDC: USDC is token1 on Base, so the limit is then
 a ceiling, the `buy` block of `sauce price`.
-[examples/swap-on-base.sauce.ts](examples/swap-on-base.sauce.ts) is the same with the distributed
-swap (`sauce-distributed-swap`) as the body: every Uniswap V3 and V4 pool with liquidity, best taker
-price first, each up to its own fee-adjusted limit. It swaps through `@sauce/router` and reads each
-pool's own state by selector, which needs no import:
-
-| Call                                                                                | Selector                                 |
-| ----------------------------------------------------------------------------------- | ---------------------------------------- |
-| a V3-style factory's `getPool(address,address,uint24)` (Uniswap V3, PancakeSwap V3) | `0x1698ee82`                             |
-| a Slipstream factory's `getPool(address,address,int24)`                             | `0x28af8d0b`                             |
-| a pool's `slot0()`, `liquidity()`, `fee()`                                          | `0x3850c7bd`, `0x1a686502`, `0xddca3f43` |
+[examples/swap-on-base.sauce.ts](examples/swap-on-base.sauce.ts) is the same with a distributed
+swap as the body (`sauce-distributed-swap`): one pass over every Uniswap V3 and hookless V4 pool of
+the pair, each offered the WETH still unsold up to its own fee-adjusted limit, and skipped when it
+has no liquidity or is past that limit. It swaps through `@sauce/router`, finds each V3 pool with
+`UniswapV3.Factory.getPool` and reads it as `UniswapV3.Pool(pool)`, and reads the V4 pools from
+`UniswapV4.StateView`.
 
 ## Cascades
 
@@ -340,12 +360,12 @@ execution and carried into the level below; no amount past the first exists when
 
 ```sauce chain=base define=RECIPIENT
 const amount = USDC.balanceOf(ctx.self());
-Arbitrum(
+Ethereum(
   () => {
-    const arrived = USDC.balanceOf(ctx.self()); // Arbitrum's USDC
-    Optimism(() => {
-      USDC.transfer(RECIPIENT, arrived); // Optimism's USDC
-    }).reward({ tokens: [{ token: USDC, amount: arrived }] }); // Arbitrum's: it funds this level
+    const arrived = USDC.balanceOf(ctx.self()); // Ethereum's USDC
+    Base(() => {
+      USDC.transfer(RECIPIENT, arrived); // Base's USDC
+    }).reward({ tokens: [{ token: USDC, amount: arrived }] }); // Ethereum's: it funds this level
   },
   { tokens: [{ token: USDC, amount }] },
 ).reward({ tokens: [{ token: USDC, amount }] });
@@ -353,9 +373,11 @@ Arbitrum(
 
 Each level is a separate fulfilment by a solver, later, on its own chain: a failure on a later hop
 does not undo an earlier one. The child is published and funded **by the parent's body**, as (b)
-above: when the Arbitrum level runs, the shared Pot there pays the Optimism level's reward into its
-vault on Arbitrum's Portal from what it holds, in Arbitrum's USDC, and calls `publish`, so the child
-is published like any other intent and any solver can discover it. Each level's deadline must be no
+above: when the Ethereum level runs, the shared Pot there pays the next level's reward into its
+vault on Ethereum's Portal from what it holds, in Ethereum's USDC, and calls `publish`, so the child
+is published like any other intent and any solver can discover it. Keep every level on a supported
+chain, as here (Base, Ethereum, then Base again): the command checks the first level's chains only.
+Each level's deadline must be no
 earlier than its parent's. (The TypeScript cascade builder, `.nest()` in `sauce-typescript`, also
 funds a child by a transfer into its vault by default, but with no publication of its own, and
 takes `publishAndFund` as an option.)
@@ -471,13 +493,13 @@ intent from TypeScript around a program it compiles itself (`sauce-typescript`).
 ## Examples
 
 - [examples/cross-chain.sauce.ts](examples/cross-chain.sauce.ts) forwards the Pot's USDC to Aave on
-  Arbitrum. It measures its amount, so it runs from a Pot.
+  Ethereum. It measures its amount, so it runs from a Pot.
 - [examples/swap-on-base.sauce.ts](examples/swap-on-base.sauce.ts) is the distributed swap as the
-  body of an intent to Base. Its amounts are defines, so it can be run from a Pot or published from a
-  wallet.
+  body of an intent to Base, opened from Ethereum. Its amounts are defines, so it can be run from a
+  Pot or published from a wallet.
 - [examples/fund-by-transfer.sauce.ts](examples/fund-by-transfer.sauce.ts) funds an intent by a
   transfer into its vault and publishes it, in one cook on a Pot.
 - [examples/intents.mts](examples/intents.mts) compiles the intent files, with the deadline, the
-  creator, Base's and Arbitrum's fees and the recipient as developer inputs, and pins on which chain
-  each name resolves, the fee requirement, the token-only case, the selectors above, and the
+  creator, Base's and Ethereum's fees and the recipient as developer inputs, and pins on which chain
+  each name resolves, the fee requirement, the token-only case, the pool ABI's selectors, and the
   rehearsal's transactions: the Pot's deploy and `fulfill` with the fee as its value.

@@ -40,6 +40,17 @@ function main() {
 - `getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)`
 - `feeAmountTickSpacing(uint24 fee) view returns (int24)`
 
+### `UnitFlowV3PoolABI`
+
+`import UnitFlowV3PoolABI from "./protocols/unitflow-v3/UnitFlowV3PoolABI.json";`
+
+- `slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)`
+- `liquidity() view returns (uint128)`
+- `fee() view returns (uint24)`
+- `tickSpacing() view returns (int24)`
+- `token0() view returns (address)`
+- `token1() view returns (address)`
+
 ### `UnitFlowV3QuoterABI`
 
 `import UnitFlowV3QuoterABI from "./protocols/unitflow-v3/UnitFlowV3QuoterABI.json";` Speaks for: quoter.

@@ -19,6 +19,7 @@ import {
   TransactionReceiptNotFoundError,
   type Abi,
   type Address,
+  type ContractFunctionParameters,
   type Hex,
   type PublicClient,
   type TransactionReceipt,
@@ -37,6 +38,7 @@ import { Permit2ABI } from "../protocols/permit2/abis.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { UsageError } from "./args.js";
 import { CliError } from "./args.js";
+import { guardOf } from "./policy.js";
 
 /** A transaction to send or simulate. */
 export interface TxRequest {
@@ -106,6 +108,70 @@ export async function connect(url: string, chain: CanonicalChain): Promise<Publi
   }
 
   return client;
+}
+
+/** One view call for {@link readAll}: a contract, an ABI holding the function, and its arguments. */
+export interface ViewCall {
+  readonly address: Address;
+  readonly abi: Abi;
+  readonly functionName: string;
+  readonly args?: readonly unknown[];
+}
+
+/** What one {@link ViewCall} answered: its decoded result, or why it has none. */
+export type ViewResult =
+  { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly error: string };
+
+/**
+ * How many calls one {@link readAll} `eth_call` carries. A deployless call returns its answers as
+ * the code of a contract it creates, which may not pass 24,576 bytes (EIP-170): about 64 of a V3
+ * pool's eight-word `ticks()`. A Slipstream tick is ten words, so this leaves room.
+ */
+const CALLS_PER_REQUEST = 32;
+
+/**
+ * `calls` through Multicall3's `aggregate3`, sent deployless (the call carries the contract's
+ * code), so nothing needs to be deployed on the chain: one `eth_call` per
+ * {@link CALLS_PER_REQUEST} calls, all sent at once. A call that reverts, or reaches an address
+ * with no code, fails alone; a request that fails fails the command, naming `what` it was reading.
+ */
+export async function readAll(
+  client: PublicClient,
+  what: string,
+  calls: readonly ViewCall[],
+): Promise<ViewResult[]> {
+  const chunks = Array.from({ length: Math.ceil(calls.length / CALLS_PER_REQUEST) }, (_, index) =>
+    calls.slice(index * CALLS_PER_REQUEST, (index + 1) * CALLS_PER_REQUEST),
+  );
+  const answered = await Promise.all(
+    chunks.map(
+      (chunk) =>
+        request(what, () =>
+          client.multicall({
+            contracts: chunk as unknown as ContractFunctionParameters[],
+            allowFailure: true,
+            deployless: true,
+            // The chunk is the batch: viem's own splits by calldata size, not by what comes back.
+            batchSize: 0,
+          }),
+        ) as Promise<
+          ReadonlyArray<
+            | { readonly status: "success"; readonly result: unknown }
+            | { readonly status: "failure"; readonly error: Error }
+          >
+        >,
+    ),
+  );
+
+  return answered.flat().map((result): ViewResult => {
+    if (result.status === "success") return { ok: true, value: result.result };
+    // The aggregate call itself failed — the endpoint, not one of the calls in it.
+    if ((result.error as { functionName?: string }).functionName === "aggregate3") {
+      throw new CliError(`reading ${what} failed: ${reasonOf(result.error)}`);
+    }
+
+    return { ok: false, error: reasonOf(result.error) };
+  });
 }
 
 /** Where each state-reading method takes its block, among its parameters. */
@@ -496,7 +562,9 @@ export interface Sent {
 
 /**
  * Signs `tx` as `account`, sends it through `url`, and waits for its receipt. It is simulated
- * first, so a transaction that would revert is refused with its reason and never sent.
+ * first, so a transaction that would revert is refused with its reason and never sent. From a
+ * wallet (`--wallet`), it is held to the wallet's policy too (`policy.ts`), and what it spends is
+ * reserved in the wallet's ledger before it is sent.
  */
 export async function sendAndWait(
   client: PublicClient,
@@ -506,16 +574,20 @@ export async function sendAndWait(
 ): Promise<Sent> {
   const rehearsal = await simulate(client, account.address, tx);
   if (!rehearsal.ok) throw new CliError(`not sent — it would revert: ${rehearsal.reason}`);
+  const reservation = await guardOf(account.address)?.evm(client, tx);
   const wallet = createWalletClient({ account, transport: http(url) });
   let hash: Hex;
   try {
     hash = await wallet.sendTransaction({ chain: null, ...tx, gas: (rehearsal.gas * 12n) / 10n });
   } catch (error) {
+    reservation?.released("sending failed");
     throw new CliError(`sending failed: ${reasonOf(error)}`);
   }
   const receipt = await request(`the receipt of ${hash}`, () =>
     client.waitForTransactionReceipt({ hash }),
   );
+  if (receipt.status === "success") reservation?.sent(hash);
+  else reservation?.released(`${hash} reverted`);
   const sent = {
     hash,
     status: receipt.status,

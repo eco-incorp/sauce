@@ -72,7 +72,8 @@
     "gen-skills-references": "node scripts/gen-skills-references.mjs",
     "gen-skills-actions": "node scripts/gen-skills-actions.mjs",
     "test": "node scripts/gen-embedded-sources.mjs && NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs",
-    "sync-eco-routes-addresses": "node scripts/sync-eco-routes-addresses.mjs"
+    "sync-eco-routes-addresses": "node scripts/sync-eco-routes-addresses.mjs",
+    "sync-stock-tokens": "node scripts/sync-stock-tokens.mjs"
   },
   "dependencies": {
     "sauce-compiler": "link:/private/tmp/claude-501/-Users-er-Documents-Projects-sauce-sdk/b8103582-3631-4c07-910b-dbccf6c38038/scratchpad/sauce-compiler-local",

@@ -3,15 +3,22 @@
 [Documentation](../README.md) · [The sauce command](cli.md) · [Agent skills](cli.md#agent-skills)
 
 `sauce mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server. A coding agent
-gets the read-only half of the [`sauce` command](cli.md) as tools, and the package's agent skills
+gets the building half of the [`sauce` command](cli.md) as tools, and the package's agent skills
 as tools and resources. The server compiles programs and action documents and lists a chain's
-names. It builds three kinds of unsigned transaction: the cook, the Pot's deployment and an
-intent's publish transactions. It also rehearses a cook and takes calls apart.
+names. It builds unsigned transactions: the cook, the Pot's deployment, an intent's publish
+transactions and each step of its life after. It also rehearses a cook and takes calls apart.
 
-**It never signs, and never asks for a key.** Every transaction comes back unsigned, for a wallet
-the user holds. That lets the server run anywhere: on the agent's machine over stdio, or on a host
-of your own over Streamable HTTP. Either way, transactions are signed and sent by local means: a
-wallet, `cast send`, or `sauce run` with the user's own keystore.
+For the initial release it builds transactions only on **Ethereum**, **Base** and **Solana**. Every
+other chain is a [preview chain](#supported-and-preview-chains): an agent can compile, simulate and
+rehearse any protocol on it, and the tools that would return a transaction there return `refused`
+instead, with how to request the chain.
+
+**The local stdio server signs only with wallets in its wallet directory, unlocked by the password
+source it was started with; the HTTP server never signs.** Neither ever asks for a key or a
+password. Without [agent wallets](#agent-wallets), every transaction comes back unsigned, for a
+wallet the user holds. That lets the server run anywhere: on the agent's machine over stdio, or on
+a host of your own over Streamable HTTP. Transactions it does not send are signed and sent by local
+means: a wallet, `cast send`, or `sauce run` with the user's own keystore.
 
 ## Run it
 
@@ -19,6 +26,7 @@ One command, through npx. Node.js 24 or newer:
 
 ```sh
 npx -y @eco-incorp/sauce mcp                                   # stdio: what an agent launches
+npx -y @eco-incorp/sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD   # stdio, signing
 npx -y @eco-incorp/sauce mcp --http 3000 --config rpc.json     # self-hosted, Streamable HTTP
 ```
 
@@ -60,8 +68,8 @@ What works with no endpoint at all:
 
 - compiling a program or an action document;
 - a chain's names and a price conversion;
-- the EVM cook, given its `value`;
-- the Pot's address and deployment, and an intent's publish transactions;
+- the EVM cook, given its `value`, on a supported chain;
+- the Pot's address, and on a supported chain its deployment and an intent's publish transactions;
 - taking calldata apart, and reading the skills.
 
 What needs one: `sauce_simulate`, a publish dry run, anything given a transaction hash, a Solana cook
@@ -160,13 +168,14 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_skill`          | —                      | One skill's `SKILL.md`, or a file under its `references/` or `examples/`; with `section` or `query`, only that part                                                                                                                                                                                        |
 | `sauce_dev`            | —                      | For TypeScript against the SDK: the TypeScript skill and the package's guides, API pages and examples for a topic or a question                                                                                                                                                                            |
 | `sauce_install_skills` | `sauce skills`         | For one agent, pinned to the server's version: the commands that add the package and install, update and check the skills, where it reads them, and its MCP configuration                                                                                                                                  |
-| `sauce_chains`         | —                      | Every chain: slug, id, name, kind, aliases, and whether the server has its own endpoint for it                                                                                                                                                                                                             |
-| `sauce_globals`        | `sauce globals`        | The chain's token symbols, protocol namespaces and contracts (with `protocol`, its methods), chain names, defines and `@sauce/token` functions                                                                                                                                                             |
+| `sauce_chains`         | —                      | Every chain: slug, id, name, kind, aliases, `support` (`supported` or `preview`) and whether the server has its own endpoint for it; `supported`, the supported slugs; `requestChain`, the chain-support request form                                                                                      |
+| `sauce_globals`        | `sauce globals`        | The chain's token symbols, protocol namespaces and contracts (with `protocol`, its methods), chain names, defines and `@sauce/token` functions; `stocks` and `search` for its tokenized stocks, 200 tokens a page (`offset`)                                                                               |
 | `sauce_price`          | `sauce price`          | A pair's price as the pool's `sqrtPriceX96` (also the swap's limit) and each direction's `minAvgPrice`; from `price`, `sqrtPriceX96` or a `pool` read now; with `slippageBps`, the `limits`                                                                                                                |
+| `sauce_pools`          | `sauce pools`          | Every price-limit pool of a pair on the chain, deepest first: venue, contract, address or V4 key, fee, liquidity, `sqrtPriceX96`, and each direction's price before and with the fee, the distributed swap's `maxPrice` and the depth to a 1% move; `empty`, the pools with no liquidity                   |
 | `sauce_compile`        | `sauce compile`        | `bytecode`, `size`, `entryParams`, `entryEncoding`, `entrySchema`, each define it reads and where it came from, the `contracts` it calls, `compiler`, `engine`, on Solana the `manifest`; with `args` the `payload`, and with `rpcUrls` each intent's Pot checked                                          |
-| `sauce_actions`        | `sauce actions`        | An actions document (JSON) compiled for a chain: `sauce_compile`'s report with the generated `source`, its `parameters` and bindings, and, given a Pot, the unsigned cook `transaction`                                                                                                                    |
+| `sauce_actions`        | `sauce actions`        | An actions document (JSON) compiled for a chain: `sauce_compile`'s report with the generated `source`, its `parameters` and bindings, and, given a Pot, the unsigned cook `transaction` (on a preview chain, `refused` instead)                                                                            |
 | `sauce_tx`             | `sauce tx`             | EVM `{ chainId, to, data, value }`, the cook on the Pot, with `from` (who signs) and the `kitchenFee` read; Solana `{ chain, via, feePayer, pot, fee, maxExecutionFee, transaction }`, base64 and signed by no one                                                                                         |
-| `sauce_pot`            | `sauce pot`            | The Pot's address, its unsigned deployment (EVM `Kitchen.deployPot`; Solana `create_pot`), `deployed` (null with no endpoint), and with an endpoint what it holds and the Kitchen's fee                                                                                                                    |
+| `sauce_pot`            | `sauce pot`            | The Pot's address, its unsigned deployment (EVM `Kitchen.deployPot`; Solana `create_pot`; on a preview chain, `refused` instead), `deployed` (null with no endpoint), and with an endpoint what it holds and the Kitchen's fee                                                                             |
 | `sauce_simulate`       | `sauce simulate`       | `ok`, the `path` taken, gas, what `main` returns, transfers, approvals and net balance changes; or the `stage` and `reason` it reverts                                                                                                                                                                     |
 | `sauce_intent_publish` | `sauce intent publish` | Each fixed intent's `intentHash`, its `vault`, its `record` (what the other intent tools take) and its unsigned `transactions` (transfers into the vault, then `Portal.publish`; with `intentFundVia: "publishAndFund"`, approvals then `Portal.publishAndFund`); with `dryRun`, their status and `funded` |
 | `sauce_intent_fill`    | `sauce intent fill`    | For the solver `from`, its unsigned fill on the destination: approvals, then `fulfillAndProve` (the prover's fee in its value) or `fulfill`; with `dryRun`, the fill rehearsed: the calls and gas, what moved, or the decoded `reason`                                                                     |
@@ -178,6 +187,76 @@ same JSON as text. Where there are `notes`, they say what must be true for a tra
 | `sauce_intent_cancel`  | `sauce intent cancel`  | The unsigned `cancel` (or, with `prove`, `cancelAndProve`) that stops an unfilled intent after its route's deadline                                                                                                                                                                                        |
 | `sauce_inspect`        | `sauce inspect`        | A cook, Kitchen, Portal or ERC-20 call, or a program, taken apart; with `source`, the arguments decoded against `main`                                                                                                                                                                                     |
 | `sauce_verify`         | `sauce verify`         | `valid` with the settle's tokens, `minOut` and recipient, or `valid: false` with the rejection `code`                                                                                                                                                                                                      |
+| `sauce_wallet_create`  | `sauce wallet new`     | Over stdio with `--wallets` only: a new wallet's `name`, `kind` (`evm` or `solana`), `address` and `policy` (null: none), never its key                                                                                                                                                                    |
+| `sauce_wallet_list`    | `sauce wallet list`    | Over stdio with `--wallets` only: each wallet's name, kind, address and policy                                                                                                                                                                                                                             |
+| `sauce_wallet_send`    | —                      | Over stdio with `--wallets` only: another tool's result (or a transaction, or a list) rehearsed, held to the wallet's policy, signed and sent; each one's `hash` and `status`, or the refusal                                                                                                              |
+
+### Supported and preview chains
+
+For the initial release the server builds transactions only on the chains the release supports:
+Ethereum, Base and Solana ([Supported chains](../README.md#supported-chains)). Every other chain is a
+preview chain. `sauce_chains` gives each chain's `support`, `"supported"` or `"preview"`.
+
+On a preview chain these work as they do everywhere: `sauce_compile`, `sauce_actions`' report,
+`sauce_simulate`, `sauce_globals`, `sauce_price`, `sauce_pools`, `sauce_inspect`, `sauce_verify`,
+the dry runs (`sauce_intent_publish` and `sauce_intent_fill` with `dryRun`), `sauce_pot`'s
+prediction and reads, `sauce_intent_status` and `sauce_intent_import`. So an agent can prototype
+any protocol on any chain.
+
+These are refused there, before any endpoint is reached:
+
+- `sauce_tx`, when the program's chain, or the destination of any intent it opens, is a preview
+  chain;
+- `sauce_intent_publish` without `dryRun`, unless its source and every destination it opens are
+  supported (a cascade's later levels are not checked: keep them on supported chains);
+- `sauce_intent_fill` without `dryRun`, `sauce_intent_prove` and `sauce_intent_cancel`, by the
+  intent's destination; `sauce_intent_claim` and `sauce_intent_refund`, by its source. An intent
+  named by `txHash` is read from its source first, then refused by its destination where that is
+  the chain the step is sent on.
+
+A refused call is an error result (`isError: true`) whose structured content is the refusal, also
+given as its text:
+
+```json
+{
+  "refused": {
+    "code": "preview-chain",
+    "action": "building the cook transaction",
+    "message": "building the cook transaction is refused: it involves arbitrum (Arbitrum One, chain id 42161), a preview chain. …",
+    "supportedChains": [
+      { "slug": "ethereum", "id": 1, "name": "Ethereum" },
+      { "slug": "base", "id": 8453, "name": "Base" },
+      { "slug": "solana", "id": 1399811149, "name": "Solana" }
+    ],
+    "previewChains": [
+      {
+        "slug": "arbitrum",
+        "id": 42161,
+        "name": "Arbitrum One",
+        "request": {
+          "chain": { "name": "Arbitrum One", "id": 42161, "slug": "arbitrum" },
+          "title": "Chain support: Arbitrum One (42161)",
+          "searchUrl": "https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Arbitrum+One%22",
+          "newIssueUrl": "https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Arbitrum+One+%2842161%29&chain=Arbitrum+One&chain-id=42161",
+          "body": "### Chain\n\nArbitrum One\n\n### Chain id\n\n42161\n\n### What you want to run there\n\n…",
+          "comment": "Another use case for Arbitrum One (42161):\n\n- What you want to run there: …"
+        }
+      }
+    ]
+  }
+}
+```
+
+`searchUrl` finds the chain-support requests already filed for the chain; `newIssueUrl` opens the
+issue form with its title and chain filled in. `body` is the issue as the form would write it, and
+`comment` adds one use case to an existing request, each with `<placeholders>` for what the agent
+does not know, to post through the user's own GitHub access. The server's instructions tell an
+agent to tell the user, offer to find or open that request, and not to build the transaction
+another way.
+
+`sauce_pot` on a preview chain returns its prediction (and, with an endpoint, its reads) with
+`refused` in place of the deployment's `to`, `data` and `value`. `sauce_actions` given a Pot on a
+preview chain returns its report with `refused` in place of `transaction`. Neither is an error.
 
 A revert and a rejected settle are results (`ok: false`, `valid: false`), not errors. An error is a
 call that could not be answered: a program that does not compile, an input that is wrong, a chain
@@ -233,7 +312,16 @@ for each registered mint, whether it exists, and its balance. `balances: false` 
 `sauce_price` takes the price one of three ways: `price` (a decimal), `sqrtPriceX96`, or `pool`, a
 Uniswap V3-style pool of the pair read through an endpoint (its `slot0` price, liquidity and fee).
 With `slippageBps`, `limits` gives each direction's `sqrtPriceLimitX96` that far from the price,
-and a `minAvgPrice` that also pays the pool's fee (`feePpm`, or the pool's own).
+and a `minAvgPrice` that also pays the pool's fee (`feePpm`, or the pool's own). A token the chain
+does not register is `<address>:<decimals>`, or with an endpoint the address alone: its decimals
+are read from the token.
+
+`sauce_pools` takes `chain`, `tokenA` and `tokenB` (each a registered symbol or an address, whose
+decimals and symbol are then read from the token), `v4Pools` (more hookless Uniswap V4 keys to
+try, each `"<fee>:<tickSpacing>"`), and `rpcUrl`; it needs an endpoint. It returns what
+[`sauce pools --json`](cli.md#sauce-pools) prints: `pools`, the ones with liquidity, deepest first,
+each with two `sides` (paying `tokenA` for `tokenB`, then the reverse); `empty`; and `checked`,
+the tiers, tick spacings and keys each venue was asked for.
 
 `sauce_intent_publish` takes `from` (the wallet that funds the reward), `dryRun`, `assumeBalance`,
 `rpcUrl`, and the program inputs, `intentFundVia` among them. The program inputs also take the
@@ -293,7 +381,8 @@ tool input (`--salt-hex` as `saltHex`, `--args` as `args`), and a command line a
 
 ### Signing what it builds
 
-The server's transactions are for the user's own wallet. On an EVM chain, `sauce_tx` returns what
+The server's transactions are for the user's own wallet, or, on a server started with
+`--wallets`, for [`sauce_wallet_send`](#agent-wallets). On an EVM chain, `sauce_tx` returns what
 any wallet signs. Send it from the Pot's owner, since `cook()` is the owner's alone. From a terminal:
 
 ```sh
@@ -314,6 +403,69 @@ The other transactions:
 - On Solana, `sauce_tx`'s `transaction` is base64, for the owner to sign and send. Its blockhash
   expires in about a minute.
 
+## Agent wallets
+
+Over stdio, the server can send what it builds, from wallets of its own. Start it with the wallet
+directory, `--wallets [<dir>]` (`~/.sauce/wallets` when no directory is given), and the source of
+their password, as [`sauce wallet`](cli.md#agent-wallets) takes one: `--password-env <NAME>`,
+`--password-file <path>` or `--password-command "<command>"`. There is no prompt: over stdio,
+stdin is the protocol's. The server reads the password once, before it serves anything, so a
+source that does not work stops it at start. The password is never a tool's input and never in a
+result, so it stays out of the model's context.
+
+The agent's password lives in its `.env` or its secret store, and the client's configuration passes
+it to the server in the entry's `env` block, by reference, never by value:
+
+```json
+{
+  "mcpServers": {
+    "sauce": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@eco-incorp/sauce",
+        "mcp",
+        "--wallets",
+        "--password-env",
+        "SAUCE_WALLET_PASSWORD"
+      ],
+      "env": { "SAUCE_WALLET_PASSWORD": "${SAUCE_WALLET_PASSWORD}" }
+    }
+  }
+}
+```
+
+Each client fills that reference its own way: Claude Code expands `${SAUCE_WALLET_PASSWORD}` from
+the environment it runs in, and VS Code also reads an `envFile` (the project's `.env`). Keep the
+`.env` out of git.
+
+The wallet tools, besides every other tool:
+
+- `sauce_wallet_create` `{ name, kind }` makes a wallet (`kind` `evm`, the default, or `solana`),
+  encrypted under the server's password (8 characters at least, as for `sauce wallet new`), and
+  returns its address. Its key never leaves the wallet's file except to sign, in the server's
+  process.
+- `sauce_wallet_list` names each wallet with its kind, address and policy.
+- `sauce_wallet_send` `{ wallet, transaction, chain?, rpcUrl? }` sends. `transaction` is the
+  whole result of `sauce_tx`, `sauce_pot`, `sauce_actions` (with an owner), `sauce_intent_publish`
+  or any `sauce_intent_*` step, or a transaction, or a list of them. It rehearses them first: on an
+  EVM chain all together in one `eth_simulateV1` block from the wallet, on Solana each as signed.
+  If any would revert, it refuses and sends nothing. It holds them to the wallet's
+  [policy](cli.md#a-wallets-policy) and refuses, naming the limit, what the policy does not allow.
+  Then it sends each in order, through the same path `sauce run` uses, and stops at the first that
+  does not succeed. It returns each one's `hash` (on Solana, its signature) and `status`.
+
+So an agent goes: `sauce_wallet_create`, fund the address, build with the wallet's address as
+`owner` or `from` (`sauce_pot`, `sauce_tx`, `sauce_intent_fill`, …), rehearse with
+`sauce_simulate`, and pass the building tool's result to `sauce_wallet_send`. Each tool that builds
+a transaction says, on a server with wallets, that `sauce_wallet_send` sends it. There is no export
+tool: `sauce wallet export` shows a key only at a terminal.
+
+These are hot wallets: keep small balances in them, and give each a policy. Wallet sends hold to
+the [supported chains](#supported-and-preview-chains) too. Over HTTP there are no wallets:
+`--wallets` is refused, and the wallet tools are not registered.
+
 ## Skills, documents and prompts
 
 The [agent skills](cli.md#agent-skills) the package ships are the same files `sauce skills install`
@@ -329,8 +481,9 @@ resources:
   `sauce://skills/<skill>/SKILL.md` is a skill, and its `references/…` and `examples/…` sit beside
   it.
 
-When a client connects, the server's instructions tell it four things: the server never signs,
-start from `sauce_skills`, the steps from `sauce_globals` to `sauce_tx`, and how `rpcUrl` works. Two prompts walk the main tasks through the
+When a client connects, the server's instructions tell it five things: whether the server signs
+(only with its wallets, over stdio with `--wallets`), start from `sauce_skills`, the steps from `sauce_globals` to `sauce_tx`, which chains it builds
+transactions on and what to do with a refusal, and how `rpcUrl` works. Two prompts walk the main tasks through the
 tools, with the skill they start from embedded:
 
 - `sauce_write_program` (`task`, `chain`) writes, compiles, rehearses and builds a program.
@@ -348,7 +501,8 @@ gets a server of its own, answered as JSON, with no session, so any replica can 
 A GET or DELETE is refused (405).
 
 - **No environment, and no key.** The server reads no environment variable. Its RPC endpoints are
-  the `--config` file's alone, and it holds no key: nothing it builds is signed.
+  the `--config` file's alone, and it holds no key: nothing it builds is signed. `--wallets` is
+  refused over HTTP, and the wallet tools are not registered there.
 - **It authenticates no one.** Bound to loopback, the default, it answers only requests whose
   `Host`, and `Origin` when one is sent, is a loopback name. That keeps a web page from reaching it
   through DNS rebinding.

@@ -5,14 +5,17 @@
  * over an injected {@link CliIo} so the tests drive it without a child process.
  *
  * NODE-ONLY, and reached by nothing browser-facing: it is the package's `bin`, not an `exports`
- * entry, and no barrel imports it. It reads no environment. The network is reached only through
- * `--rpc-url` or a `--config` file named on the command line, and a key only through `--keystore`
- * or `--private-key` — and every byte printed passes through `signer.ts#scrub` on the way out.
+ * entry, and no barrel imports it. It reads the environment once, deliberately, and only the
+ * variable `--password-env <NAME>` names (`nodeIo().readEnv`). The network is reached only through
+ * `--rpc-url` or a `--config` file named on the command line, and a key only through `--wallet`,
+ * `--keystore`, `--private-key` or `--keypair` — and every byte printed passes through
+ * `signer.ts#scrub` on the way out.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, statSync, writeFileSync } from "node:fs";
 
-import type { CanonicalChain } from "../chains/canonical.js";
+import { requireChain, type CanonicalChain } from "../chains/canonical.js";
+import type { LoweredIntent } from "../routes/intent-host.js";
 import {
   addressDefines,
   CliError,
@@ -44,6 +47,7 @@ import {
   pastDeadline,
   compileProgram,
   potCommand,
+  programChains,
   potDeployCommand,
   potStatusCommand,
   readInput,
@@ -83,8 +87,15 @@ import { intentOf, intentRecord } from "./lifecycle.js";
 import type { Ask } from "./prompt.js";
 import { defaultStoreDir, IntentStore } from "./store.js";
 import { globalsCommand } from "./globals.js";
-import { initProject } from "./init.js";
-import { assumedBalances, definesReach, fundingFor, potTarget, programChain } from "./inputs.js";
+import { initProject, writeSauceScriptTsconfig } from "./init.js";
+import {
+  assumedBalances,
+  definesReach,
+  fundingFor,
+  potTarget,
+  programChain,
+  withoutShebang,
+} from "./inputs.js";
 import { inspectCommand, inspectFile } from "./inspect.js";
 import {
   checkIntentPots,
@@ -95,9 +106,16 @@ import {
   type Endpoints,
 } from "./intents.js";
 import { MCP_FLAGS, mcpCommand } from "./mcp.js";
-import { livePrice, parsePriceToken, priceCommand, pricedChain, priceGiven } from "./price.js";
+import { livePrice, priceCommand, pricedChain, priceGiven, resolvePriceTokens } from "./price.js";
+import { parseV4Key, poolsCommand } from "./pools.js";
 import { publishCommand } from "./publish.js";
 import { simulateCommand } from "./simulate.js";
+import {
+  intentDestinations,
+  previewChainsNote,
+  requireSupported,
+  supportedChainNames,
+} from "./support.js";
 import { parsePin, verifyCommand } from "./verify.js";
 import {
   loadKeypair,
@@ -114,8 +132,34 @@ import {
 } from "./solana.js";
 import type { Address as SvmAddress, KeyPairSigner } from "@solana/kit";
 import type { PrivateKeyAccount } from "viem/accounts";
+import { passwordSource, type CapturedCommand, type PasswordSource } from "./password.js";
 import { keystoreAddress, loadSigner, scrub, secret } from "./signer.js";
-import { askOn, chooseTerminal, confirmOn, controllingTerminal, passwordOn } from "./terminal.js";
+import {
+  PASSWORD,
+  unlockWallet,
+  WALLETS,
+  walletAddressCommand,
+  walletExportCommand,
+  walletImportCommand,
+  walletListCommand,
+  walletNewCommand,
+} from "./wallet-commands.js";
+import {
+  defaultWalletsDir,
+  evmAddressOf,
+  walletName,
+  WalletStore,
+  type Unlocked,
+  type WalletInfo,
+} from "./wallets.js";
+import {
+  askOn,
+  chooseTerminal,
+  confirmOn,
+  controllingTerminal,
+  passwordOn,
+  writeToTerminal,
+} from "./terminal.js";
 import {
   AGENTS,
   describeStatus,
@@ -149,6 +193,16 @@ export interface CliIo extends CliFiles {
   readonly ask?: Ask;
   /** Where the intent store is when `--store` does not say: `~/.sauce/intents` by default. */
   readonly storeDir?: string;
+  /** Where the wallets are when `--wallets` does not say: `~/.sauce/wallets` by default. */
+  readonly walletsDir?: string;
+  /** The variable `--password-env` names: the command's one read of the environment. */
+  readonly readEnv: (name: string) => string | undefined;
+  /** A file's permission bits, for `--password-file`; `undefined` where there are none (Windows). */
+  readonly fileMode: (path: string) => number | undefined;
+  /** Runs `--password-command`'s command through the shell, no stdin, capturing what it prints. */
+  readonly capture: (command: string) => CapturedCommand;
+  /** Writes to the terminal itself, past stdout and the scrubbing: `sauce wallet export` only. */
+  readonly writeTerminal?: (text: string) => boolean;
 }
 
 /** The real process's streams, filesystem, children and terminal. */
@@ -197,7 +251,8 @@ export function nodeIo(): CliIo {
       if (found === undefined) {
         throw new UsageError(
           `${stdinRead ? "stdin carried the program, and there is " : ""}no terminal to ask for ` +
-            "the keystore password on: pass --password-file <path>",
+            "the password on: pass --password-env <NAME>, --password-file <path> or " +
+            "--password-command <command>",
         );
       }
       try {
@@ -206,6 +261,26 @@ export function nodeIo(): CliIo {
         found.close();
       }
     },
+    // The one read of the environment: the variable the user named, and nothing else.
+    readEnv: (name) => process.env[name],
+    fileMode: (path) => (process.platform === "win32" ? undefined : statSync(path).mode),
+    capture: (command) => {
+      const ran = spawnSync(command, {
+        shell: true,
+        stdio: ["ignore", "pipe", "pipe"],
+        encoding: "utf8",
+        timeout: 120_000,
+        maxBuffer: 64 * 1024,
+      });
+      const code = (ran.error as { code?: string } | undefined)?.code;
+
+      return {
+        status: ran.error === undefined ? ran.status : null,
+        stdout: ran.stdout ?? "",
+        ...(code === undefined ? {} : { error: code }),
+      };
+    },
+    writeTerminal: writeToTerminal,
     stdout: (text) => void process.stdout.write(text),
     stderr: (text) => void process.stderr.write(text),
     readText: (path) => readFileSync(path, "utf8"),
@@ -359,7 +434,7 @@ const COOK: FlagSpecs = {
     type: "string",
     multiple: true,
     value: "NAME=<address>",
-    help: "An account main takes, by name: an address, pot, owner, or pot:USDC (the Pot's USDC account)",
+    help: "An account main takes, by name: an address, pot, owner, pot:USDC (the Pot's USDC account), mint:USDC or program:USDC (its token program)",
     only: "svm",
   },
   via: {
@@ -386,16 +461,17 @@ const ENDPOINT: FlagSpecs = {
 };
 
 const SIGNER: FlagSpecs = {
+  wallet: {
+    type: "string",
+    value: "<name>",
+    help: "Sign with a wallet of the wallet directory (sauce wallet), EVM or Solana",
+  },
+  ...WALLETS,
+  ...PASSWORD,
   keystore: {
     type: "string",
     value: "<path>",
-    help: "Sign with a JSON keystore (v3)",
-    only: "evm",
-  },
-  "password-file": {
-    type: "string",
-    value: "<path>",
-    help: "Its password, read from a file (else asked for)",
+    help: "Sign with a JSON keystore (v3), with a password source",
     only: "evm",
   },
   "private-key": {
@@ -525,8 +601,11 @@ async function autoExecutionFee(
   input: ProgramInput,
   io: CliIo,
   endpoints: Endpoints,
+  gate: Gate | undefined,
 ): Promise<bigint | undefined> {
   const probe = compileProgram({ ...input, intents: { ...input.intents, executionFee: 0n } }, io);
+  // Before the fee is read: a command refused on these chains reads nothing for them.
+  if (gate !== undefined) gated(gate, input.chain, probe.intents);
   const cooks = intentCooks(probe.intents);
   if (cooks.length === 0) {
     io.stderr("--intent-execution-fee auto: no intent here runs a program, so none pays a fee\n");
@@ -538,6 +617,29 @@ async function autoExecutionFee(
   io.stderr(`--intent-execution-fee auto: the Kitchen on ${chains} charges ${fee} wei\n`);
 
   return fee;
+}
+
+/**
+ * A command that builds or sends transactions, refused on a preview chain (`support.ts`) before it
+ * reaches a network or a key: its name, as the refusal says it, and the chains it is refused by —
+ * every chain a program and its intents involve (a cook, publishing), the intents' destinations (a
+ * fill, a proof, a cancellation) or their source (a claim, a refund).
+ */
+interface Gate {
+  readonly action: string;
+  readonly by: "all" | "destinations" | "source";
+}
+
+/** Refuses `gate`'s command on a preview chain among `source` and the `intents` it opens. */
+function gated(gate: Gate, source: CanonicalChain, intents: readonly LoweredIntent[] = []): void {
+  requireSupported(
+    gate.action,
+    gate.by === "destinations"
+      ? intents.map((intent) => intent.destination)
+      : gate.by === "source"
+        ? [source]
+        : [source, ...intentDestinations(intents)],
+  );
 }
 
 /** What stdin carried, named in messages. */
@@ -554,9 +656,10 @@ interface ProgramText {
 function programText(io: CliIo, operand: string | ProgramText): ProgramText {
   if (typeof operand !== "string") return operand;
 
+  // A `#!` line, which makes the file a command, is blanked: the compile never sees it.
   return operand === "-"
-    ? { file: STDIN, text: io.readStdin(), stdin: true }
-    : { file: operand, text: readInput(io, operand), stdin: false };
+    ? { file: STDIN, text: withoutShebang(io.readStdin()), stdin: true }
+    : { file: operand, text: withoutShebang(readInput(io, operand)), stdin: false };
 }
 
 /**
@@ -568,10 +671,12 @@ async function programInput(
   io: CliIo,
   operand: string | ProgramText = fileOperand(args),
   fallback?: CanonicalChain,
+  gate?: Gate,
 ): Promise<ProgramInput> {
   const { file, text, stdin } = programText(io, operand);
   const sourceDir = stringFlag(args, "source-dir");
   const chain = chainOf(args, file, text, fallback);
+  if (gate !== undefined && gate.by !== "destinations") gated(gate, chain);
   const definesFile = stringFlag(args, "defines");
   const deadline = stringFlag(args, "intent-deadline");
   const rewardDeadline = stringFlag(args, "intent-reward-deadline");
@@ -616,7 +721,7 @@ async function programInput(
     },
   };
   if (fee !== "auto") return input;
-  const executionFee = await autoExecutionFee(input, io, endpointsOf(args, io, chain));
+  const executionFee = await autoExecutionFee(input, io, endpointsOf(args, io, chain), gate);
 
   return executionFee === undefined
     ? input
@@ -628,13 +733,14 @@ async function programInput(
  * `actions`), which `actions.ts` lowers into the same `ProgramInput` — so its compile, cook, Pot,
  * arguments and funding are every program's.
  */
-async function programOperand(args: ParsedArgs, io: CliIo): Promise<ProgramInput> {
+async function programOperand(args: ParsedArgs, io: CliIo, gate?: Gate): Promise<ProgramInput> {
   // Read once, from the file or stdin (`-`), then told apart.
   const operand = programText(io, fileOperand(args));
+  if (!isActionsDocument(operand.text)) return programInput(args, io, operand, undefined, gate);
+  const program = await actionsProgram(actionsOperand(args, operand.file, operand.text));
+  if (gate !== undefined) gated(gate, program.chain);
 
-  return isActionsDocument(operand.text)
-    ? actionsProgram(actionsOperand(args, operand.file, operand.text))
-    : programInput(args, io, operand);
+  return program;
 }
 
 /** An actions document's input, from the flags a program command takes. */
@@ -768,34 +874,105 @@ function requiredEndpoint(args: ParsedArgs, io: CliIo, chain: CanonicalChain): s
   return url;
 }
 
-const signerOf = (args: ParsedArgs, io: CliIo) => {
-  if (stringFlag(args, "keypair") !== undefined) {
-    throw new UsageError(
-      "--keypair is a Solana keypair; an EVM transaction is signed with --keystore or --private-key",
-    );
+/** The password source the flags name: `--password-env`, `--password-file`, `--password-command`,
+ *  or else the prompt. */
+const passwordOf = (args: ParsedArgs): PasswordSource =>
+  passwordSource({
+    env: stringFlag(args, "password-env"),
+    file: stringFlag(args, "password-file"),
+    command: stringFlag(args, "password-command"),
+  });
+
+/** The wallet directory: `--wallets` (bare, the default), else the one `io` names, else
+ *  `~/.sauce/wallets`. */
+const walletsOf = (args: ParsedArgs, io: CliIo): WalletStore =>
+  new WalletStore(stringFlag(args, "wallets") || io.walletsDir || defaultWalletsDir());
+
+/** `--wallet`'s wallet as its file names it, read with no password: its kind and address. */
+const walletGiven = (args: ParsedArgs, io: CliIo): WalletInfo | undefined => {
+  const name = stringFlag(args, "wallet");
+
+  return name === undefined ? undefined : walletsOf(args, io).info(name);
+};
+
+/** `--wallet`, unlocked with the password source given. */
+const unlockGiven = (args: ParsedArgs, io: CliIo, info: WalletInfo): Promise<Unlocked> =>
+  unlockWallet(walletsOf(args, io), info.name, passwordOf(args), io);
+
+/** Refuses two signers for one kind of chain. */
+function oneSigner(args: ParsedArgs, flags: readonly string[]): void {
+  const given = flags.filter((flag) => stringFlag(args, flag) !== undefined);
+  if (given.length > 1) {
+    throw new UsageError(`give one signer, not ${given.map((flag) => `--${flag}`).join(" and ")}`);
   }
+}
+
+/** The EVM signer the flags give — an EVM `--wallet`, `--keystore` or `--private-key` — if any. */
+async function evmSigner(args: ParsedArgs, io: CliIo): Promise<PrivateKeyAccount | undefined> {
+  const wallet = walletGiven(args, io);
+  if (wallet?.kind === "evm") {
+    oneSigner(args, ["wallet", "keystore", "private-key"]);
+    const unlocked = await unlockGiven(args, io, wallet);
+
+    return unlocked.kind === "evm" ? unlocked.account : undefined;
+  }
+  if (stringFlag(args, "keystore") === undefined && stringFlag(args, "private-key") === undefined) {
+    return undefined;
+  }
+  const keystore = stringFlag(args, "keystore");
+  const privateKey = stringFlag(args, "private-key");
 
   return loadSigner(
     {
-      ...(stringFlag(args, "keystore") === undefined
-        ? {}
-        : { keystore: stringFlag(args, "keystore")! }),
-      ...(stringFlag(args, "password-file") === undefined
-        ? {}
-        : { passwordFile: stringFlag(args, "password-file")! }),
-      ...(stringFlag(args, "private-key") === undefined
-        ? {}
-        : { privateKey: stringFlag(args, "private-key")! }),
+      ...(keystore === undefined ? {} : { keystore }),
+      ...(privateKey === undefined ? {} : { privateKey }),
+      password: passwordOf(args),
     },
     io,
   );
+}
+
+/** The Solana signer the flags give — a Solana `--wallet`, or `--keypair` — if any. */
+async function svmSigner(args: ParsedArgs, io: CliIo): Promise<KeyPairSigner | undefined> {
+  const wallet = walletGiven(args, io);
+  if (wallet?.kind === "solana") {
+    oneSigner(args, ["wallet", "keypair"]);
+    const unlocked = await unlockGiven(args, io, wallet);
+
+    return unlocked.kind === "solana" ? unlocked.signer : undefined;
+  }
+  const keypair = stringFlag(args, "keypair");
+
+  return keypair === undefined ? undefined : loadKeypair(keypair, io);
+}
+
+/** An EVM command's signer, required: never a Solana key. */
+const signerOf = async (args: ParsedArgs, io: CliIo): Promise<PrivateKeyAccount> => {
+  if (stringFlag(args, "keypair") !== undefined) {
+    throw new UsageError(
+      "--keypair is a Solana keypair; an EVM transaction is signed with --wallet, --keystore or " +
+        "--private-key",
+    );
+  }
+  const wallet = walletGiven(args, io);
+  if (wallet !== undefined) evmAddressOf(wallet);
+  const account = await evmSigner(args, io);
+  if (account !== undefined) return account;
+
+  return loadSigner({ password: passwordOf(args) }, io);
 };
 
 /**
- * The EVM signer's address, read with no more than it needs: a raw key's own, a keystore's
- * `address` field (no password), and only for a keystore without one, the keystore unlocked.
+ * The EVM signer's address, read with no more than it needs: a wallet's or a keystore's `address`
+ * field (no password), a raw key's own, and only for a keystore without one, the keystore unlocked.
  */
 async function signerAddress(args: ParsedArgs, io: CliIo): Promise<`0x${string}`> {
+  const wallet = walletGiven(args, io);
+  if (wallet !== undefined) {
+    oneSigner(args, ["wallet", "keystore", "private-key"]);
+
+    return evmAddressOf(wallet);
+  }
   const keystore = stringFlag(args, "keystore");
   if (keystore !== undefined && stringFlag(args, "private-key") === undefined) {
     const named = keystoreAddress(readInput(io, keystore));
@@ -824,9 +1001,15 @@ function approverOf(args: ParsedArgs, io: CliIo): Approver {
   };
 }
 
-/** Whether `simulate` was given a key: it signs `--fund`'s pulls, and nothing else there. */
-const hasSigner = (args: ParsedArgs): boolean =>
-  stringFlag(args, "keystore") !== undefined || stringFlag(args, "private-key") !== undefined;
+/** Whether the flags give an EVM signer: an EVM `--wallet`, `--keystore` or `--private-key`. */
+const hasSigner = (args: ParsedArgs, io: CliIo): boolean =>
+  walletGiven(args, io)?.kind === "evm" ||
+  stringFlag(args, "keystore") !== undefined ||
+  stringFlag(args, "private-key") !== undefined;
+
+/** Whether the flags give a Solana signer: a Solana `--wallet`, or `--keypair`. */
+const hasSvmSigner = (args: ParsedArgs, io: CliIo): boolean =>
+  walletGiven(args, io)?.kind === "solana" || stringFlag(args, "keypair") !== undefined;
 
 // --- The intent lifecycle -------------------------------------------------------------------
 
@@ -897,9 +1080,8 @@ const storing =
 /** What every lifecycle command shares: the store, the endpoints, the signer and the approvals. */
 async function lifecycleContext(args: ParsedArgs, io: CliIo): Promise<LifecycleContext> {
   const endpoint = await endpointLookup(args, io);
-  const account = hasSigner(args) ? await signerOf(args, io) : undefined;
-  const keypair = stringFlag(args, "keypair");
-  const svmSigner = keypair === undefined ? undefined : await loadKeypair(keypair, io);
+  const account = await evmSigner(args, io);
+  const solanaSigner = await svmSigner(args, io);
   const api = stringFlag(args, "api");
   const keyFile = stringFlag(args, "api-key-file");
   if (keyFile !== undefined && api === undefined) {
@@ -913,7 +1095,7 @@ async function lifecycleContext(args: ParsedArgs, io: CliIo): Promise<LifecycleC
     store: storeOf(args, io),
     endpoint,
     ...(account === undefined ? {} : { account }),
-    ...(svmSigner === undefined ? {} : { svmSigner }),
+    ...(solanaSigner === undefined ? {} : { svmSigner: solanaSigner }),
     approver: approverOf(args, io),
     ...(api === undefined ? {} : { api: { url: api, ...(key === undefined ? {} : { key }) } }),
   };
@@ -928,6 +1110,7 @@ async function lifecycleTargets(
   args: ParsedArgs,
   io: CliIo,
   store: IntentStore,
+  gate?: Gate,
 ): Promise<Target[]> {
   const operands = args.positionals;
   if (operands.length === 0) {
@@ -953,7 +1136,28 @@ async function lifecycleTargets(
     throw new UsageError("give one <file>, or one or more intent hashes");
   }
 
-  return fileTargets(await programInput(args, io, operands[0]!), io, store);
+  return fileTargets(await programInput(args, io, operands[0]!, undefined, gate), io, store);
+}
+
+/**
+ * What a lifecycle command that sends (or prints) a transaction acts on: its intents, refused on a
+ * preview chain by `gate` before the context reaches an endpoint or unlocks a key — then the
+ * context.
+ */
+async function lifecycleOf(
+  args: ParsedArgs,
+  io: CliIo,
+  gate: Gate,
+): Promise<{ readonly targets: Target[]; readonly context: LifecycleContext }> {
+  const targets = await lifecycleTargets(args, io, storeOf(args, io), gate);
+  requireSupported(
+    gate.action,
+    targets.map(({ record }) =>
+      requireChain(gate.by === "source" ? record.source.chainId : record.destination.chainId),
+    ),
+  );
+
+  return { targets, context: await lifecycleContext(args, io) };
 }
 
 /** The questions `sauce intent publish` asks with no file, as flags. */
@@ -985,8 +1189,18 @@ const CREATE: FlagSpecs = {
  * `sauce intent publish <file>` with the same flags would.
  */
 async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOutput> {
+  // The chains the flags name are refused here, before an endpoint or a key; one asked for is
+  // refused as soon as it is chosen (`create.ts`), and only supported ones are offered.
+  const named = [
+    stringFlag(args, "source") ?? stringFlag(args, "chain"),
+    stringFlag(args, "destination"),
+  ];
+  requireSupported(
+    "publishing intents",
+    named.flatMap((chain) => (chain === undefined ? [] : [parseChain(chain)])),
+  );
   const lookup = await endpointLookup(args, io);
-  const account = hasSigner(args) ? await signerOf(args, io) : undefined;
+  const account = hasSigner(args, io) ? await signerOf(args, io) : undefined;
   const flag = (name: string) => stringFlag(args, name);
   const given = {
     ...((flag("source") ?? flag("chain")) ? { source: (flag("source") ?? flag("chain"))! } : {}),
@@ -1157,15 +1371,36 @@ function assumedBalancesOf(args: ParsedArgs, chain: CanonicalChain): FundRequest
 
 // --- Solana ----------------------------------------------------------------------------------
 
-/** A Solana command's signer: `--keypair`, never an EVM key. */
+/** A Solana command's signer, required: a Solana `--wallet` or `--keypair`, never an EVM key. */
 async function keypairOf(args: ParsedArgs, io: CliIo): Promise<KeyPairSigner> {
   if (stringFlag(args, "keystore") !== undefined || stringFlag(args, "private-key") !== undefined) {
     throw new UsageError(
-      "--keystore and --private-key are EVM keys: on Solana, sign with --keypair <path>",
+      "--keystore and --private-key are EVM keys: on Solana, sign with --wallet <name> (a " +
+        "Solana wallet) or --keypair <path>",
     );
   }
+  const wallet = walletGiven(args, io);
+  if (wallet?.kind === "evm") {
+    throw new UsageError(
+      `wallet ${wallet.name} is an EVM wallet: on Solana, sign with a Solana wallet ` +
+        "(sauce wallet new <name> --solana) or --keypair <path>",
+    );
+  }
+  const signer = await svmSigner(args, io);
+  if (signer !== undefined) return signer;
+  throw new UsageError("missing a signer: --wallet <name> (a Solana wallet) or --keypair <path>");
+}
 
-  return loadKeypair(requiredFlag(args, "keypair", "<path>"), io);
+/** The Solana signer's address, read with no password where a wallet names it. */
+async function keypairAddress(args: ParsedArgs, io: CliIo): Promise<SvmAddress> {
+  const wallet = walletGiven(args, io);
+  if (wallet?.kind === "solana") {
+    oneSigner(args, ["wallet", "keypair"]);
+
+    return wallet.address as SvmAddress;
+  }
+
+  return (await keypairOf(args, io)).address;
 }
 
 /** The Pot's owner on Solana: the signer when there is one (and `--owner` must agree), else
@@ -1296,6 +1531,17 @@ interface Command {
 
 const lines = (text: readonly string[]): CommandOutput => ({ text: text.join("\n"), json: {} });
 
+/** The paragraph every command that builds or sends a transaction ends its details on. */
+const SUPPORTED_ONLY = (what: string): string[] => [
+  "",
+  ...wrapped(
+    `${what} only on a supported chain: ${supportedChainNames()}, for the initial release. On ` +
+      "any other (a preview chain) it is refused before anything is read or signed, with the " +
+      "supported chains and the GitHub issue to ask for that chain with; compile and simulate " +
+      "work there.",
+  ),
+];
+
 const INTENT_VERBS: Readonly<Record<string, Command>> = {
   publish: {
     usage: [
@@ -1367,12 +1613,13 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "publishing it (--dry-run) and filling it on the destination (`sauce intent fill`), and",
       "with a signer publishes it once you approve (or with --auto-approve), storing it. --config names",
       "both chains' endpoints.",
+      ...SUPPORTED_ONLY("Publishes (or prints the transactions)"),
       "",
       "Examples:",
-      "  sauce intent publish bridge.sauce.ts --chain arbitrum --rpc-url <url> --keystore ~/.keys/me.json \\",
+      "  sauce intent publish bridge.sauce.ts --chain ethereum --rpc-url <url> --keystore ~/.keys/me.json \\",
       "    --intent-deadline 2000000000 --intent-creator 0x…",
       "  sauce intent publish --config sauce.config.json --keystore ~/.keys/me.json",
-      "  sauce intent publish --source arbitrum --destination base --token USDC --amount 1 \\",
+      "  sauce intent publish --source ethereum --destination base --token USDC --amount 1 \\",
       "    --recipient 0x… --reward-token USDC --reward 1.01 --prover HyperProver \\",
       "    --fill-deadline +1h --reward-deadline +1d --config sauce.config.json --keystore <path>",
     ].join("\n"),
@@ -1382,7 +1629,13 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       if (created !== undefined) {
         throw new UsageError(`--${created} makes a new intent: give it with no <file>`);
       }
-      const program = await programInput(args, io);
+      const format = stringFlag(args, "format");
+      // A dry run rehearses on every chain; transactions, printed or sent, need supported ones.
+      const gate: Gate | undefined =
+        args.values["dry-run"] === true && format === undefined
+          ? undefined
+          : { action: "publishing intents", by: "all" };
+      const program = await programInput(args, io, undefined, undefined, gate);
       if (program.chain.kind === "svm") {
         throw new UsageError(
           "sauce intent publish sends a source chain's Portal transactions from an EVM wallet. " +
@@ -1391,13 +1644,13 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
             "EVM chain; its destination may be Solana.",
         );
       }
-      const format = stringFlag(args, "format");
       if (format !== undefined && format !== "json" && format !== "cast") {
         throw new UsageError(`--format: '${format}' is not json or cast`);
       }
-      const signing =
-        stringFlag(args, "keystore") !== undefined || stringFlag(args, "private-key") !== undefined;
-      const account = signing ? await signerOf(args, io) : undefined;
+      // Compiled once: refused before the signer or any endpoint, then the Pots checked.
+      const compiled = compileProgram(program, io);
+      if (gate !== undefined) gated(gate, program.chain, compiled.intents);
+      const account = hasSigner(args, io) ? await signerOf(args, io) : undefined;
       const from = stringFlag(args, "from");
       if (from !== undefined && account !== undefined) {
         throw new UsageError(
@@ -1419,7 +1672,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
 
       // Before anything is sent: an intent whose Pot is not deployed is one no solver can fill.
       const pots = await checkIntentPots(
-        intentCooks(compileProgram(program, io).intents),
+        intentCooks(compiled.intents),
         endpointsOf(args, io, program.chain),
       );
       for (const check of pots) {
@@ -1532,9 +1785,10 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "an address on the source chain, is required: the reward pays it, and a Solana key is none.",
       "With --send and --keypair it is sent, then its proof through the HyperProver, the IGP's gas",
       "paid in the same transaction, each spend approved.",
+      ...SUPPORTED_ONLY("--send sends a fill"),
       "",
       "Examples:",
-      "  sauce intent fill swap-on-base.sauce.ts --chain arbitrum --config sauce.config.json \\",
+      "  sauce intent fill swap-on-base.sauce.ts --chain ethereum --config sauce.config.json \\",
       "    --defines swap.defines.json --intent-deadline 2000000000 --intent-creator 0x… \\",
       "    --intent-execution-fee 1000000000000",
       "  sauce intent fill 0x<intent hash> --config sauce.config.json --send --keystore ~/.keys/me.json",
@@ -1557,7 +1811,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         );
       }
       const sending = args.values.send === true;
-      if (!sending && (hasSigner(args) || stringFlag(args, "keypair") !== undefined)) {
+      if (!sending && (hasSigner(args, io) || hasSvmSigner(args, io))) {
         throw new UsageError(
           "a signer goes with --send: without it, fill rehearses and signs nothing (--solver " +
             "names who it rehearses as)",
@@ -1573,6 +1827,9 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       let targets: readonly FillTarget[];
       let labels: ReadonlyArray<readonly [`0x${string}`, string]> = [];
       let from: string;
+      const gate: Gate | undefined = sending
+        ? { action: "sending a fill", by: "destinations" }
+        : undefined;
       if (operands.length > 0 && operands.every(isIntentHash)) {
         targets = operands.flatMap((hash) =>
           storedTargets(store, hash as `0x${string}`).map(({ record }) => ({
@@ -1584,13 +1841,20 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         );
         from = operands.length === 1 ? operands[0]! : "the intents named";
       } else {
-        const program = await programInput(args, io);
+        const program = await programInput(args, io, undefined, undefined, gate);
         // A deadline that has passed is rehearsed anyway, so the Portal's own refusal shows.
         const past = pastDeadline(program);
         if (past !== undefined) io.stderr(`${past}: the rehearsal shows the Portal refusing it\n`);
         targets = fillTargets(program, io);
         labels = defineLabels(program);
         from = program.file;
+      }
+      // A rehearsal runs on every chain; a fill is sent only to a supported destination.
+      if (gate !== undefined) {
+        requireSupported(
+          gate.action,
+          targets.map((target) => target.destination),
+        );
       }
       const onSolana = targets.filter((target) => target.destination.kind === "svm");
       if (onSolana.length > 0) {
@@ -1659,14 +1923,18 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "store them), or the file that opens it (with --chain, its source, and the flags it was",
       "built with). --config names the destination's endpoint, and the source's to skip what is",
       "proven already.",
+      ...SUPPORTED_ONLY("Proves (or prints the transaction)"),
       "",
       "Example:",
       "  sauce intent prove 0x<intent hash> --config sauce.config.json --keystore ~/.keys/me.json",
     ].join("\n"),
     run: async (args, io) => {
-      const context = await lifecycleContext(args, io);
+      const { targets, context } = await lifecycleOf(args, io, {
+        action: "proving",
+        by: "destinations",
+      });
 
-      return proveCommand(await lifecycleTargets(args, io, context.store), context);
+      return proveCommand(targets, context);
     },
   },
   claim: {
@@ -1683,15 +1951,19 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "While the proof has not arrived it says so (exit 1), with when the store saw the intent",
       "filled and the Hyperlane message its proof travels as, which the Hyperlane explorer shows by",
       "id. A proven CANCELLATION pays no claimant: refund it instead.",
+      ...SUPPORTED_ONLY("Claims (or prints the transaction)"),
       "",
       "Example:",
-      "  sauce intent claim 0x<intent hash> --chain arbitrum --config sauce.config.json \\",
+      "  sauce intent claim 0x<intent hash> --chain ethereum --config sauce.config.json \\",
       "    --keystore ~/.keys/me.json",
     ].join("\n"),
     run: async (args, io) => {
-      const context = await lifecycleContext(args, io);
+      const { targets, context } = await lifecycleOf(args, io, {
+        action: "claiming",
+        by: "source",
+      });
 
-      return claimCommand(await lifecycleTargets(args, io, context.store), context);
+      return claimCommand(targets, context);
     },
   },
   refund: {
@@ -1707,15 +1979,19 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "It reads the status first and says why not, with the time left (exit 1). There is no batch",
       "refund: several intents are refunded one transaction each. With no signer, prints the",
       "unsigned transactions.",
+      ...SUPPORTED_ONLY("Refunds (or prints the transactions)"),
       "",
       "Example:",
-      "  sauce intent refund 0x<intent hash> --chain arbitrum --config sauce.config.json \\",
+      "  sauce intent refund 0x<intent hash> --chain ethereum --config sauce.config.json \\",
       "    --keystore ~/.keys/me.json",
     ].join("\n"),
     run: async (args, io) => {
-      const context = await lifecycleContext(args, io);
+      const { targets, context } = await lifecycleOf(args, io, {
+        action: "refunding",
+        by: "source",
+      });
 
-      return refundCommand(await lifecycleTargets(args, io, context.store), context);
+      return refundCommand(targets, context);
     },
   },
   cancel: {
@@ -1746,16 +2022,18 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "reorg past the deadline that re-includes a fill would leave that solver unpaid. So cancel",
       "sends only the cancel; --and-prove sends cancelAndProve, proving at once, with the fee",
       "approved as for prove. With no signer, prints the unsigned transaction.",
+      ...SUPPORTED_ONLY("Cancels (or prints the transaction)"),
       "",
       "Example:",
       "  sauce intent cancel 0x<intent hash> --config sauce.config.json --keystore ~/.keys/me.json",
     ].join("\n"),
     run: async (args, io) => {
-      const context = await lifecycleContext(args, io);
-
-      return cancelCommand(await lifecycleTargets(args, io, context.store), context, {
-        prove: args.values["and-prove"] === true,
+      const { targets, context } = await lifecycleOf(args, io, {
+        action: "cancelling",
+        by: "destinations",
       });
+
+      return cancelCommand(targets, context, { prove: args.values["and-prove"] === true });
     },
   },
   status: {
@@ -1852,7 +2130,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "the store kept it.",
       "",
       "Example:",
-      "  sauce intent import 0x<tx hash> --chain arbitrum --config sauce.config.json",
+      "  sauce intent import 0x<tx hash> --chain ethereum --config sauce.config.json",
     ].join("\n"),
     run: async (args, io) => {
       const [hash, ...more] = args.positionals;
@@ -1877,6 +2155,137 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
   },
 };
 
+/** The flags every wallet verb that reads or writes a key takes: the directory, and the password. */
+const WALLET_KEY: FlagSpecs = { ...WALLETS, ...PASSWORD };
+
+/** A wallet verb's one `<name>` operand, and any operand after it. */
+function walletOperand(args: ParsedArgs, more = 0): readonly [string, ...string[]] {
+  const [name, ...rest] = args.positionals;
+  if (name === undefined) throw new UsageError("missing <name>: the wallet");
+  if (rest.length > more) throw new UsageError(`unexpected argument ${rest[more]}`);
+
+  return [walletName(name), ...rest];
+}
+
+const WALLET_VERBS: Readonly<Record<string, Command>> = {
+  new: {
+    usage:
+      "sauce wallet new <name> [--solana] [--password-env <NAME> | --password-file <path> | --password-command <command>]",
+    summary: "Create a wallet with a fresh key, encrypted under its password",
+    flags: {
+      solana: { type: "boolean", help: "A Solana keypair (default: an EVM key)" },
+      ...WALLET_KEY,
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Generates a key and keeps it in the wallet directory (--wallets, default ~/.sauce/wallets,",
+      "created 0700) as <name>.json, written once, 0600, never overwritten. An EVM wallet is a",
+      "Web3 Secret Storage keystore (scrypt, AES-128-CTR) that --keystore, cast wallet and geth",
+      'read; a Solana one is the same envelope around its keypair, marked "kind": "solana". Its',
+      "address is in the clear, so list and address need no password. Prints the name, kind,",
+      "address and file.",
+      "",
+      "The password comes from one source: --password-env NAME (that variable, the one the",
+      "command reads from the environment), --password-file (a file only you can read: one",
+      "others can read is refused), --password-command (what the command prints, its output",
+      "never shown), or else a prompt, asked twice. At least 8 characters. An agent keeps it in",
+      "its .env or its secret store and names the source; the password itself is never an",
+      "argument.",
+      "",
+      "Sign with it anywhere a key signs: --wallet <name> with the same password source. Beside",
+      "it, <name>.policy.json limits what it sends (sauce wallet --help). It is a hot wallet:",
+      "keep small balances in it.",
+      "",
+      "Examples:",
+      "  sauce wallet new agent --password-env SAUCE_WALLET_PASSWORD",
+      "  sauce wallet new agent-sol --solana --password-file ~/.config/sauce/password",
+    ].join("\n"),
+    run: async (args, io) => {
+      const [name] = walletOperand(args);
+
+      return walletNewCommand(
+        walletsOf(args, io),
+        { name, kind: args.values.solana === true ? "solana" : "evm", password: passwordOf(args) },
+        io,
+      );
+    },
+  },
+  list: {
+    usage: "sauce wallet list [--wallets <dir>] [--json]",
+    summary: "Every wallet: its name, kind and address",
+    flags: { ...WALLETS, ...JSON_FLAG, ...HELP },
+    details: [
+      "Lists the wallet directory (--wallets, default ~/.sauce/wallets): each wallet's name, kind",
+      "(evm or solana), address, and whether a policy limits it. No password is needed: each",
+      "file names its address in the clear.",
+    ].join("\n"),
+    run: (args, io) => {
+      if (args.positionals.length > 0) {
+        throw new UsageError(`unexpected argument ${args.positionals[0]}`);
+      }
+
+      return walletListCommand(walletsOf(args, io));
+    },
+  },
+  address: {
+    usage: "sauce wallet address <name> [--wallets <dir>] [--json]",
+    summary: "A wallet's address, with no password",
+    flags: { ...WALLETS, ...JSON_FLAG, ...HELP },
+    details: "Prints the wallet's address: a 0x address, or for a Solana wallet a base58 key.",
+    run: (args, io) => walletAddressCommand(walletsOf(args, io), walletOperand(args)[0]),
+  },
+  import: {
+    usage: "sauce wallet import <name> <file | -> [--solana] [password source]",
+    summary: "Keep a key you have as a wallet: a private key, keystore or Solana keypair",
+    flags: {
+      solana: { type: "boolean", help: "Refuse anything but a Solana keypair" },
+      ...WALLET_KEY,
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Reads the key from <file>, or from stdin with -, never from the command line: an EVM",
+      "private key (32 bytes of hex), a Web3 Secret Storage keystore (opened with the password,",
+      "which the wallet keeps), or a Solana keypair (a JSON array of 64 bytes, as solana-keygen",
+      "writes, or its base58). It is stored as `sauce wallet new` stores a fresh one, encrypted",
+      "under the password the source gives.",
+      "",
+      "Example:",
+      "  sauce wallet import treasury key.txt --password-env SAUCE_WALLET_PASSWORD",
+    ].join("\n"),
+    run: (args, io) => {
+      const [name, from] = walletOperand(args, 1);
+      if (from === undefined) {
+        throw new UsageError("missing <file | ->: where the key is (- reads it from stdin)");
+      }
+
+      return walletImportCommand(
+        walletsOf(args, io),
+        { name, from, solana: args.values.solana === true, password: passwordOf(args) },
+        io,
+      );
+    },
+  },
+  export: {
+    usage: "sauce wallet export <name> [password source]",
+    summary: "Show a wallet's key at your terminal, once you confirm",
+    flags: { ...WALLET_KEY, ...HELP },
+    details: [
+      "Shows the wallet's private key (a Solana wallet's keypair, as the JSON array a keypair",
+      "file holds) on the terminal itself, never on stdout, after you type the wallet's name to",
+      "confirm. With no terminal it refuses. It is for moving a key to another wallet: anyone",
+      "who sees it controls the wallet. The MCP server has no tool for it.",
+    ].join("\n"),
+    run: (args, io) =>
+      walletExportCommand(
+        walletsOf(args, io),
+        { name: walletOperand(args)[0], password: passwordOf(args) },
+        io,
+      ),
+  },
+};
+
 const COMMANDS: Readonly<Record<string, Command>> = {
   compile: {
     usage: "sauce compile <file | -> --chain <slug|id> [options]",
@@ -1888,7 +2297,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         type: "string",
         multiple: true,
         value: "NAME=<address>",
-        help: "Solana: an account main takes (an address, pot, owner, pot:USDC), to size the cook",
+        help: "Solana: an account main takes (an address, pot, owner, pot:USDC, mint:USDC, program:USDC), to size the cook",
       },
       via: {
         type: "string",
@@ -2038,13 +2447,19 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         only: "evm",
       },
       ...FUND,
+      wallet: {
+        type: "string",
+        value: "<name>",
+        help: "The owner's wallet: names the owner (and on EVM signs --fund's pulls)",
+      },
+      ...WALLETS,
+      ...PASSWORD,
       keystore: {
         type: "string",
         value: "<path>",
         help: "The owner's keystore: names the owner (and signs --fund's pulls)",
         only: "evm",
       },
-      "password-file": { ...SIGNER["password-file"]!, only: "evm" },
       "private-key": { ...SIGNER["private-key"]!, only: "evm" },
       keypair: {
         type: "string",
@@ -2084,8 +2499,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "On Solana: the Kitchen cook, simulated from --owner with signatures unchecked, with each",
       "account main takes given as --account NAME=<address | pot | owner> and an Address",
       "argument as a base58 public key. `pot:USDC` (or pot:<mint>) is the Pot's own token account",
-      "for that mint, its associated token account; owner:USDC the owner's. An account the",
-      "cluster does not have is named in a note. Where main declares a return type, what it",
+      "for that mint, its associated token account under the mint's token program; owner:USDC the",
+      "owner's; mint:USDC the mint and program:USDC its token program (SPL Token or Token-2022),",
+      "the accounts a checked write takes. An account the cluster does not have is named in a",
+      "note. Where main declares a return type, what it",
       "returned is read as that type. A Pot the Kitchen has not created is created first, in the",
       "same transaction. --via engine rehearses the engine's own paid cook instead: no Kitchen and",
       "no Pot (so no pot or pot:<token> account), --owner signing as the program's authority and",
@@ -2126,24 +2543,21 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           );
         }
 
-        // A keypair names the owner; the rehearsal signs nothing with it.
-        const owner =
-          stringFlag(args, "keypair") === undefined
-            ? undefined
-            : (await keypairOf(args, io)).address;
+        // A keypair or a wallet names the owner; the rehearsal signs nothing with it.
+        const owner = hasSvmSigner(args, io) ? await keypairAddress(args, io) : undefined;
 
         return svmSimulateCommand(svmCookInput(args, io, trailing, program, owner), io);
       }
-      if (stringFlag(args, "keypair") !== undefined) {
+      if (hasSvmSigner(args, io)) {
         throw new UsageError(
-          "--keypair is a Solana keypair; on an EVM chain, name the owner with --keystore or " +
-            "--private-key, or --owner",
+          "a Solana keypair or wallet names no owner on an EVM chain: name the owner with an EVM " +
+            "--wallet, --keystore or --private-key, or --owner",
         );
       }
       // A key names the owner, whose Pot the rehearsal runs on, and signs --fund's pulls if any.
-      const account = funds && hasSigner(args) ? await signerOf(args, io) : undefined;
+      const account = funds && hasSigner(args, io) ? await signerOf(args, io) : undefined;
       const owner =
-        account?.address ?? (hasSigner(args) ? await signerAddress(args, io) : undefined);
+        account?.address ?? (hasSigner(args, io) ? await signerAddress(args, io) : undefined);
       if (owner !== undefined && stringFlag(args, "owner") !== undefined) {
         if (parseAddress("owner", stringFlag(args, "owner")!) !== owner) {
           throw new UsageError(
@@ -2235,6 +2649,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "Both pay the same execution fee into the Kitchen's treasury. The cook signs the fee it read",
       "as its max_execution_fee, so it pays that or fails; --max-execution-fee <lamports> refuses",
       "a fee above it before anything is sent.",
+      ...SUPPORTED_ONLY("Runs"),
       "",
       "Examples:",
       "  sauce run pay.sauce.ts --chain base --rpc-url <url> --keystore ~/.keys/me.json",
@@ -2245,7 +2660,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     ].join("\n"),
     trailing: "args",
     run: async (args, io, trailing) => {
-      const program = await programOperand(args, io);
+      const program = await programOperand(args, io, { action: "sending the cook", by: "all" });
       if (program.chain.kind === "svm") {
         fundingOf(args, io, program.chain, "", true, undefined);
         const signer = await keypairOf(args, io);
@@ -2259,6 +2674,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           io,
         );
       }
+      // Every chain the cook involves, its intents' too, before the key is unlocked.
+      requireSupported("sending the cook", programChains(program, io));
       const account = await signerOf(args, io);
       const input = cookInput(args, io, trailing, account.address, program);
       const rpcUrl = requiredEndpoint(args, io, input.chain);
@@ -2327,6 +2744,45 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       return listCommand(context);
     },
   },
+  wallet: {
+    usage: "sauce wallet <verb> [options]",
+    summary: "Create, list and import the wallets --wallet signs with",
+    flags: { ...WALLETS, ...JSON_FLAG, ...HELP },
+    details: [
+      "Verbs (`sauce wallet <verb> --help` for each):",
+      ...Object.entries(WALLET_VERBS).map(
+        ([verb, command]) => `  ${verb.padEnd(8)}  ${command.summary}`,
+      ),
+      "",
+      "A wallet is a key the sauce command keeps in the wallet directory (--wallets, default",
+      "~/.sauce/wallets), encrypted under a password from the source you name: --password-env",
+      "NAME, --password-file <path>, --password-command <command>, or a prompt. Every command",
+      "that signs takes --wallet <name> with that source, on EVM chains and Solana; so does the",
+      "local MCP server (sauce mcp --wallets). It is a hot wallet: keep small balances in it.",
+      "",
+      "A policy limits what a wallet sends: <name>.policy.json beside it, every field optional and",
+      "every amount a string (whole units, or base units ending in n):",
+      '  { "chains": ["base"], "to": ["0x…"],',
+      '    "native": { "perTransaction": "0.01", "perDay": "0.05" },',
+      '    "tokens": { "USDC": { "perTransaction": "100", "perDay": "500" } } }',
+      "What a transaction moves out of the wallet (and the Pot it cooks on) is measured by",
+      "rehearsing it, and a send that breaks a limit is refused, naming it; the last 24 hours are",
+      "counted from <name>.ledger.jsonl. With no policy, sends work, and say no limits are set.",
+      "",
+      "Examples:",
+      "  sauce wallet new agent --password-env SAUCE_WALLET_PASSWORD",
+      "  sauce run pay.sauce.ts --chain base --config sauce.config.json --wallet agent \\",
+      "    --password-env SAUCE_WALLET_PASSWORD --args 0x… 1000000",
+    ].join("\n"),
+    run: (args, io) => {
+      const [verb] = args.positionals;
+      if (verb !== undefined) {
+        throw new UsageError(`unknown verb '${verb}': ${Object.keys(WALLET_VERBS).join(", ")}`);
+      }
+
+      return walletListCommand(walletsOf(args, io));
+    },
+  },
   tx: {
     usage: [
       "sauce tx <file | -> --chain <slug|id> (--owner <address> | --pot <address>) [options]",
@@ -2345,13 +2801,17 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "cook as a base64 transaction signed by no one, for --owner to sign — or, --via engine, the",
       "engine's own paid cook, with no Pot. It needs an endpoint (for the blockhash and the fee),",
       "and the --account flags simulate takes; --max-execution-fee refuses a fee above it.",
+      ...SUPPORTED_ONLY("Prints the transaction"),
       "",
       "Example:",
       "  sauce tx pay.sauce.ts --chain base --owner 0x… --value 0",
     ].join("\n"),
     trailing: "args",
     run: async (args, io, trailing) => {
-      const program = await programOperand(args, io);
+      const program = await programOperand(args, io, {
+        action: "building the cook transaction",
+        by: "all",
+      });
       if (program.chain.kind === "svm") {
         return svmTxCommand(svmCookInput(args, io, trailing, program), io);
       }
@@ -2396,6 +2856,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "On Solana a Pot is the Kitchen's PDA over (owner, salt): this prints it and the create_pot",
       "instruction; --deploy (with --keypair) creates it. There the owner signs create_pot, so",
       "the signer is the owner.",
+      ...SUPPORTED_ONLY("Deploys (or prints the deployment)"),
       "",
       "Examples:",
       "  sauce pot --owner 0x… --chain base",
@@ -2409,16 +2870,19 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       }
       const chain = potChain(args);
       const owner = stringFlag(args, "owner");
+      // A Pot is predicted on every chain; deployed, or its deployment printed as a cast line,
+      // only on a supported one. (Its JSON on a preview chain leaves the deployment out.)
+      if (args.values.deploy === true) requireSupported("deploying a Pot", [chain]);
+      if (stringFlag(args, "format") === "cast") {
+        requireSupported("building the Pot's deployment", [chain]);
+      }
       if (chain.kind === "svm") {
         if (stringFlag(args, "format") === "cast") {
           throw new UsageError("--format cast prints an EVM transaction; a Solana Pot has none");
         }
         if (args.values.deploy !== true) {
           const rpcUrl = endpoint(args, io, chain);
-          const keyed =
-            stringFlag(args, "keypair") === undefined
-              ? undefined
-              : (await keypairOf(args, io)).address;
+          const keyed = hasSvmSigner(args, io) ? await keypairAddress(args, io) : undefined;
           const target = { owner: svmOwner(args, keyed), ...saltOf(args) };
 
           return rpcUrl === undefined
@@ -2441,14 +2905,16 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       if (args.values.deploy !== true) {
         // A signer, with no --owner, is asking for its own Pot: its address, without unlocking it
         // where the keystore names it.
-        if (owner === undefined && !hasSigner(args)) {
+        if (hasSvmSigner(args, io)) {
           throw new UsageError(
-            "missing --owner <address>: whose Pot (or a signer, --keystore or --private-key, for yours)",
+            "a Solana keypair or wallet names no owner on an EVM chain: an EVM --wallet, " +
+              "--keystore or --private-key",
           );
         }
-        if (stringFlag(args, "keypair") !== undefined) {
+        if (owner === undefined && !hasSigner(args, io)) {
           throw new UsageError(
-            "--keypair is a Solana keypair: on an EVM chain, --keystore or --private-key",
+            "missing --owner <address>: whose Pot (or a signer, --wallet, --keystore or " +
+              "--private-key, for yours)",
           );
         }
         const rpcUrl = endpoint(args, io, chain);
@@ -2476,7 +2942,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   globals: {
-    usage: "sauce globals --chain <slug|id> [--tokens] [--protocols] [--protocol <name>] [--json]",
+    usage:
+      "sauce globals --chain <slug|id> [--tokens] [--protocols] [--protocol <name>] [--stocks] " +
+      "[--search <text>] [--json]",
     summary: "List the tokens, protocols and other names a program on a chain can use",
     flags: {
       chain: { type: "string", value: "<slug|id>", help: "The chain whose names to list" },
@@ -2487,6 +2955,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         value: "<name>",
         help: "One namespace (UniswapV4, or its slug) with its methods",
       },
+      stocks: { type: "boolean", help: "Only the chain's tokenized stocks" },
+      search: {
+        type: "string",
+        value: "<text>",
+        help: "Only the tokens, stocks included, whose symbol, name or ticker contains the text",
+      },
       ...JSON_FLAG,
       ...HELP,
     },
@@ -2495,23 +2969,30 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "registries (routes.sourceGlobals) — the ones the compile resolves: token symbols with",
       "their addresses and decimals, protocol namespaces with each contract's address (and,",
       "with --protocol, its methods), the chain names that open intents, the defines, and the",
-      "zero-import @sauce/token functions. With no filter it lists everything.",
+      "zero-import @sauce/token functions. With no filter it lists everything but the chain's",
+      "tokenized stocks, which it counts: Ethereum has over a thousand. A stock token is named",
+      "like any other (SPCXc.balanceOf(...)); --stocks lists them with what each one is, and",
+      "--search finds one by symbol, company name or ticker.",
       "",
       "Examples:",
       "  sauce globals --chain base",
       "  sauce globals --chain base --protocol UniswapV3 --json",
+      "  sauce globals --chain base --search spacex",
     ].join("\n"),
     run: (args) => {
       if (args.positionals.length > 0) {
         throw new UsageError(`unexpected argument ${args.positionals[0]}`);
       }
       const protocol = stringFlag(args, "protocol");
+      const search = stringFlag(args, "search");
 
       return globalsCommand({
         chain: parseChain(requiredFlag(args, "chain", "<slug|id>")),
         tokens: args.values.tokens === true,
         protocols: args.values.protocols === true,
+        stocks: args.values.stocks === true,
         ...(protocol === undefined ? {} : { protocol }),
+        ...(search === undefined ? {} : { search }),
       });
     },
   },
@@ -2536,7 +3017,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "`2700 USDC per WETH` says it in words: 2,700 USDC for one WETH. The same price is",
       "`WETH USDC 2700`: <base> <quote> <price>, the price how many <quote> tokens one <base> is",
       "worth. A token is a symbol the chain registers (sauce globals --tokens), or an address with",
-      "its decimals (0x…:18). The first line says what the price means, both ways round",
+      "its decimals (0x…:18); with an endpoint, an address alone, its decimals read from the",
+      "token. The first line says what the price means, both ways round",
       "(1 WETH = 2700 USDC, 1 USDC = 0.00037… WETH). Then the pool's sqrtPriceX96 at that price,",
       "for the pair's order on the chain (token0 is the lower address), and for each direction:",
       "  sqrtPriceLimitX96  the same number as a swap's limit: a floor when selling token0, a",
@@ -2571,17 +3053,14 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}`);
       const given = priceGiven(price, sqrt);
 
-      const pair = { base: parsePriceToken(base, chain), quote: parsePriceToken(quote, chain) };
       const reach =
         stringFlag(args, "rpc-url") !== undefined || stringFlag(args, "config") !== undefined;
-      const live = reach
-        ? await livePrice(
-            await connect(requiredEndpoint(args, io, chain), chain),
-            chain,
-            pair.base,
-            pair.quote,
-          )
-        : undefined;
+      const client = reach ? await connect(requiredEndpoint(args, io, chain), chain) : undefined;
+      // A token the chain registers no decimals for has them read from it, with an endpoint.
+      const [baseToken, quoteToken] = await resolvePriceTokens([base, quote], chain, client);
+      const pair = { base: baseToken!, quote: quoteToken! };
+      const live =
+        client === undefined ? undefined : await livePrice(client, chain, pair.base, pair.quote);
       const output = priceCommand({
         chain,
         ...pair,
@@ -2599,6 +3078,71 @@ const COMMANDS: Readonly<Record<string, Command>> = {
             ],
           }
         : output;
+    },
+  },
+  pools: {
+    usage:
+      "sauce pools --chain <slug|id> <token> <token> [--v4-key <fee:spacing>]… (--rpc-url <url> | --config <file>) [--json]",
+    summary: "List a pair's price-limit pools on a chain, deepest first, with their prices",
+    flags: {
+      chain: { type: "string", value: "<slug|id>", help: "The chain the pools are on" },
+      "v4-key": {
+        type: "string",
+        multiple: true,
+        value: "<fee:spacing>",
+        help: "Also try this hookless Uniswap V4 pool key (3000:60)",
+      },
+      ...ENDPOINT,
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Every pool of the pair at the price-limit venues the registry records on the chain:",
+      "Uniswap V3 and PancakeSwap V3 at each fee tier their factory enables, Aerodrome Slipstream",
+      "at each tick spacing of each of its CLFactories, and hookless Uniswap V4 pools at the keys",
+      "100:1, 500:10, 3000:60 and 10000:200, and any --v4-key. A token is a symbol the chain",
+      "registers (sauce globals --tokens), or an address: its decimals and symbol are read from",
+      "the token (or give them, 0x…:8).",
+      "",
+      "Pools with liquidity come first, deepest first: by the liquidity at each pool's price,",
+      "which is in the same units at every venue for one pair. For each: the venue and the",
+      "contract a program finds it through, its address (a V4 pool's id and key), its fee read",
+      "from the pool (a V4 pool's LP fee and protocol fee, from StateView), tick spacing,",
+      "liquidity, tick and sqrtPriceX96, and both ways round: what one token costs in the other",
+      "before and with the fee, the distributed swap's maxPrice at that price (pay base units per",
+      "buy base unit times 1e18: the price times 10^(18 + pay decimals - buy decimals)), and about",
+      "how much of the paid token, fee included, moves the price 1% against the taker, walked",
+      "through the pool's ticks. Pools with no liquidity at their price are listed after them, as",
+      "skipped. Then what was looked at.",
+      "",
+      "It reads the chain in five requests, each one eth_call for every read in it, and needs an",
+      "endpoint: --rpc-url, or --config with the chain's entry.",
+      "",
+      "Examples:",
+      "  sauce pools --chain base USDC WETH --config sauce.config.json",
+      "  sauce pools --chain base USDC 0x… --rpc-url <url> --json",
+      "  sauce pools --chain base WETH USDC --v4-key 50:1 --config sauce.config.json",
+    ].join("\n"),
+    run: async (args, io) => {
+      const chain = parseChain(requiredFlag(args, "chain", "<slug|id>"));
+      const [first, second, ...rest] = args.positionals;
+      if (first === undefined || second === undefined) {
+        throw new UsageError("missing the pair: <token> <token>, as USDC WETH");
+      }
+      if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}`);
+      if (chain.kind !== "evm") {
+        throw new UsageError(
+          `sauce pools lists Uniswap V3- and V4-style pools, on an EVM chain; ${chain.slug} has none`,
+        );
+      }
+      const v4Keys = repeatedFlag(args, "v4-key").map((raw) => parseV4Key(raw));
+
+      return poolsCommand({
+        chain,
+        client: await connect(requiredEndpoint(args, io, chain), chain),
+        tokens: [first, second],
+        v4Keys,
+      });
     },
   },
   inspect: {
@@ -2850,7 +3394,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     },
   },
   init: {
-    usage: "sauce init [<dir>] [--agent <agent>,…] [--force] [--install]",
+    usage: [
+      "sauce init [<dir>] [--agent <agent>,…] [--force] [--install]",
+      "sauce init <dir> --tsconfig [--force]",
+    ],
     summary: "Scaffold a project that uses this package",
     flags: {
       agent: {
@@ -2861,6 +3408,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       },
       force: { type: "boolean", help: "Overwrite files that already exist with other content" },
       install: { type: "boolean", help: "Run npm install in the project afterwards" },
+      tsconfig: {
+        type: "boolean",
+        help: "Write only <dir>/tsconfig.json: an editor's SauceScript project for programs there",
+      },
       ...HELP,
     },
     details: [
@@ -2871,10 +3422,38 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "programs there: kept apart from the project's other TypeScript), and then",
       "installs the agent skills (`sauce skills install`), for every agent unless --agent names",
       "some. It runs no package manager unless --install, which runs npm install.",
+      "",
+      "--tsconfig writes only <dir>/tsconfig.json, the same SauceScript project as",
+      "programs/tsconfig.json, for programs in a project init did not write, or in another",
+      "directory: an editor takes a file's nearest tsconfig.json, so every *.sauce.ts under <dir>",
+      "gets SauceScript's names and the plugin. Where the project's own tsconfig.json also covers",
+      'them, add "exclude": ["**/*.sauce.ts"] there, so its TypeScript does not check them too.',
+      "",
+      "Examples:",
+      "  sauce init my-project",
+      "  sauce init programs --tsconfig",
     ].join("\n"),
     run: (args, io) => {
       const [dir = ".", ...rest] = args.positionals;
       if (rest.length > 0) throw new UsageError(`unexpected argument ${rest[0]}: give one <dir>`);
+      if (args.values.tsconfig === true) {
+        for (const flag of ["agent", "install"]) {
+          if (args.values[flag] !== undefined) {
+            throw new UsageError(`--${flag} goes with a whole project: --tsconfig writes one file`);
+          }
+        }
+        const written = writeSauceScriptTsconfig(
+          dir,
+          skillsSource().packageName,
+          args.values.force === true,
+        );
+
+        return lines([
+          `${written.state.padEnd(10)} ${written.path}`,
+          "Every *.sauce.ts under it now has SauceScript's names in an editor. If the project's",
+          'own tsconfig.json covers these files too, add "exclude": ["**/*.sauce.ts"] to it.',
+        ]);
+      }
       const agents = parseAgents(repeatedFlag(args, "agent")) ?? DEFAULT_AGENTS;
       const result = initProject(dir, skillsSource(), agents, args.values.force === true);
       io.stdout(
@@ -2902,18 +3481,27 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   mcp: {
     usage: [
       "sauce mcp [--config <file>]",
+      "sauce mcp --wallets [<dir>] (--password-env <NAME> | --password-file <path> | --password-command <command>) [--config <file>]",
       "sauce mcp --http <port> [--host <address>] [--allowed-host <name>]… [--config <file>]",
       "sauce mcp setup [--agent <agent>,…] [--dir <project>] [--config <file>] [--force]",
     ],
-    summary: "Serve the read-only commands and the agent skills to coding agents over MCP",
+    summary: "Serve the commands and the agent skills to coding agents over MCP",
     flags: { ...MCP_FLAGS, ...HELP },
     details: [
-      "The Sauce MCP server. Its tools are this command's read-only half — sauce_compile,",
+      "The Sauce MCP server. Its tools are this command's building half — sauce_compile,",
       "sauce_actions, sauce_tx, sauce_pot, sauce_simulate, sauce_intent_publish,",
-      "sauce_intent_fill, sauce_inspect, sauce_verify, sauce_globals, sauce_price and",
-      "sauce_chains — with the agent skills as tools (sauce_skills, sauce_skill, sauce_dev,",
-      "sauce_install_skills) and as resources, at sauce://skills/<path>. Nothing it does signs,",
-      "and it takes no key: every transaction comes back unsigned, for the user's own wallet.",
+      "sauce_intent_fill, sauce_inspect, sauce_verify, sauce_globals, sauce_price, sauce_pools",
+      "and sauce_chains — with the agent skills as tools (sauce_skills, sauce_skill, sauce_dev,",
+      "sauce_install_skills) and as resources, at sauce://skills/<path>. It takes no key: every",
+      "transaction comes back unsigned, for the user's own wallet.",
+      "",
+      "Over stdio, --wallets (the wallet directory, default ~/.sauce/wallets) and a password",
+      "source add sauce_wallet_create, sauce_wallet_list and sauce_wallet_send: the server then",
+      "signs with the wallets of that directory alone, unlocked by that password, which it reads",
+      "once at start (from the variable an MCP client's config passes from the agent's .env, a",
+      "file, or a command) and which no tool takes or returns. sauce_wallet_send rehearses what it",
+      "is given and holds it to the wallet's policy (sauce wallet --help) before it sends.",
+      "The HTTP server never signs: --wallets is refused there, and it has no wallet tools.",
       "",
       "Over stdio by default, what a coding agent launches. With --http, Streamable HTTP at /mcp,",
       "stateless: on 127.0.0.1 unless --host says otherwise, answering only a loopback Host or an",
@@ -2927,6 +3515,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "",
       "Examples:",
       "  npx -y @eco-incorp/sauce mcp",
+      "  npx -y @eco-incorp/sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD",
       "  npx -y @eco-incorp/sauce mcp --http 3000 --config sauce.config.json",
       "  npx sauce mcp setup --agent claude,cursor",
     ].join("\n"),
@@ -2979,6 +3568,20 @@ function commandHelp(command: Command): string {
   ].join("\n");
 }
 
+/** `text` in lines of at most 96 characters, as the help is written. */
+function wrapped(text: string): string[] {
+  const out: string[] = [];
+  let line = "";
+  for (const word of text.split(" ")) {
+    if (line !== "" && line.length + 1 + word.length > 96) {
+      out.push(line);
+      line = word;
+    } else line = line === "" ? word : `${line} ${word}`;
+  }
+
+  return line === "" ? out : [...out, line];
+}
+
 function mainHelp(): string {
   const width = Math.max(...Object.keys(COMMANDS).map((name) => name.length));
 
@@ -2993,14 +3596,18 @@ function mainHelp(): string {
     ),
     "",
     "Run `sauce <command> --help` for its options. Nothing reaches a network without --rpc-url",
-    "or --config, and nothing is signed without --keystore or --private-key (on Solana,",
-    "--keypair).",
+    "or --config, and nothing is signed without --wallet, --keystore or --private-key (on",
+    "Solana, --wallet or --keypair). A password is read only from the source named:",
+    "--password-env NAME (that variable, the one read of the environment), --password-file or",
+    "--password-command; else it is asked for.",
+    "",
+    ...wrapped(previewChainsNote()),
     "",
     "A program file may be `-`, read from stdin (`cat pay.sauce.ts | sauce compile - --chain",
     "base`); it is never read without one. Its relative imports then resolve against the",
     "current directory, or --source-dir. Questions go to the terminal (/dev/tty) instead of",
     "stdin; with no terminal, a run names what it needs approved and sends nothing until",
-    "--auto-approve (and --password-file for a keystore) is given.",
+    "--auto-approve (and a password source for a wallet or keystore) is given.",
     "",
   ].join("\n");
 }
@@ -3010,7 +3617,14 @@ function mainHelp(): string {
 const ALL_COMMANDS: ReadonlyArray<readonly [string, Command]> = [
   ...Object.entries(COMMANDS),
   ...Object.entries(INTENT_VERBS).map(([verb, command]) => [`intent ${verb}`, command] as const),
+  ...Object.entries(WALLET_VERBS).map(([verb, command]) => [`wallet ${verb}`, command] as const),
 ];
+
+/** The commands that take verbs, and their verbs. */
+const VERBS: Readonly<Record<string, Readonly<Record<string, Command>>>> = {
+  intent: INTENT_VERBS,
+  wallet: WALLET_VERBS,
+};
 
 /** The command `words` name — `intent fill` for `intent fill …` — with the words after it. */
 function commandOf(
@@ -3019,8 +3633,9 @@ function commandOf(
   | { readonly label: string; readonly command: Command; readonly rest: readonly string[] }
   | undefined {
   const [name, verb, ...more] = words;
-  if (name === "intent" && verb !== undefined && Object.hasOwn(INTENT_VERBS, verb)) {
-    return { label: `intent ${verb}`, command: INTENT_VERBS[verb]!, rest: more };
+  const verbs = name === undefined || !Object.hasOwn(VERBS, name) ? undefined : VERBS[name]!;
+  if (verbs !== undefined && verb !== undefined && Object.hasOwn(verbs, verb)) {
+    return { label: `${name} ${verb}`, command: verbs[verb]!, rest: more };
   }
   if (name !== undefined && Object.hasOwn(COMMANDS, name)) {
     return { label: name, command: COMMANDS[name]!, rest: words.slice(1) };
@@ -3075,7 +3690,15 @@ function splitArgv(
   return { flags, trailing };
 }
 
-const SIGNING = new Set(["keystore", "password-file", "private-key", "keypair"]);
+const SIGNING = new Set([
+  "wallet",
+  "keystore",
+  "password-env",
+  "password-file",
+  "password-command",
+  "private-key",
+  "keypair",
+]);
 const REACHING = new Set(["rpc-url", "config"]);
 
 /** Why `flag`, which another command takes, is not one of `name`'s (`intent fill`, say). */

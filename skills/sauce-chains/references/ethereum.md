@@ -2,8 +2,13 @@
 
 # Ethereum
 
+**Supported.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana. On
+Ethereum a program compiles and simulates, and the `sauce` command and the MCP server build
+its transactions and send them.
+
 | Fact | Value |
 | --- | --- |
+| Support | supported: transactions are built and sent |
 | Slug (`--chain`) | `ethereum`; also `mainnet`, `eth` |
 | Chain id | 1 |
 | Kind | EVM |
@@ -43,6 +48,9 @@ function main() {
 | `USDC` | `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48` | 6 |
 | `USDT` | `0xdAC17F958D2ee523a2206206994597C13D831ec7` | 6 |
 | `WETH` | `0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2` | 18 |
+
+And 1731 tokenized stocks, each named by its symbol in the same way: they are in
+[ethereum-stocks.md](ethereum-stocks.md), with their addresses.
 
 ## Protocols
 

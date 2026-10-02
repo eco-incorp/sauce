@@ -24,6 +24,18 @@ registered contract address when used as a value, and exposes its ABI methods wh
 target. Amounts are integers in the token's smallest units; the SDK does not infer decimal
 conversions.
 
+### Tokenized stocks
+
+Ethereum and Base also register tokenized stocks, named the same way: `SPCXc.balanceOf(...)` reads
+Coinbase's SpaceX token on Base, and `Base.SPCXc.address` is its address. Ethereum has Backed's
+xStocks (`TSLAx`, `SPCXx`) and bTokens (`bTSLA`), Ondo Global Markets' tokens (`TSLAon`,
+`SPCXon`) and Mt Pelerin's own shares (`MPS`); Base has Coinbase's (`TSLAc`, `SPCXc`) and Backed's bTokens. A symbol is the issuer's
+own ticker for the token, case-sensitive, with a `.` written `_` (`BRK_Bx`). Each row of
+`routes.TOKEN_REGISTRY` that is a stock carries `stock`: its issuer, its name and the underlying's
+ticker. `sauce globals --chain <chain> --stocks` lists a chain's, and `--search <text>` finds one
+by symbol, company name or ticker. [What is registered](../api/coverage.md#tokenized-stocks) counts
+them and says how they differ from a plain ERC-20.
+
 ## Compile a global call
 
 ```ts
@@ -51,12 +63,13 @@ are the contracts the registry evidences against the deployed code, one per cont
 | ------------------- | ---------------------------------------------- | ------------------------------------ | ----------------------------------------------------- |
 | A deployed contract | `PancakeswapV3.Factory`, `UniswapV4.StateView` | its address; `.method(...)` calls it | `.address`, `.available`, `.method(...)` builds calls |
 | An address only     | `AaveV3.PoolAddressesProvider`, `Maker.Dai`    | its address                          | `.address`, `.available`; no methods                  |
-| An interface        | `Erc4626.Vault`, `Curve.StableSwap`            | `.at(address).method(...)`           | `.at(address).method(...)`                            |
+| An interface        | `Erc4626.Vault`, `Curve.StableSwap`            | `(address).method(...)`              | `.at(address).method(...)`                            |
 
 A deployed contract's ABI also reaches another deployment of it with `.at(address)`:
 `UniswapV3.Factory.at(factory).getPool(...)`. An address-only contract is one the registry has an
 address for and no verified ABI. An interface is an ABI the registry has no fixed address for —
-a vault, a pool, a token — so the program or host names the deployment.
+a vault, a pool, a token — so the program or host names the deployment. A program calls it with
+the address, `UniswapV3.Pool(pool).liquidity()`, or binds it with `.at(pool)`, which is the same.
 
 ### Names
 

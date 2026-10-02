@@ -34,6 +34,7 @@ export {
   compileProgram,
   pastDeadline,
   potCommand,
+  programChains,
   txCommand,
   type CliFiles,
   type CommandOutput,
@@ -48,14 +49,22 @@ export {
   fundingFor,
   potTarget,
   programChain,
+  withoutShebang,
 } from "../../sdk/dist/cli/inputs.js";
 export { inspectCommand, inspectFile } from "../../sdk/dist/cli/inspect.js";
-export type { McpEntry, McpServeOptions, McpSetupOptions } from "../../sdk/dist/cli/mcp.js";
+export type {
+  McpEntry,
+  McpServeOptions,
+  McpSetupOptions,
+  McpWallets,
+} from "../../sdk/dist/cli/mcp.js";
+export { MAX_V4_KEYS, parseV4Key, poolsCommand } from "../../sdk/dist/cli/pools.js";
 export {
-  parsePriceToken,
   priceCommand,
   pricedChain,
   priceGiven,
+  resolvePriceTokens,
+  tokenGiven,
 } from "../../sdk/dist/cli/price.js";
 export {
   defineLabels,
@@ -78,6 +87,26 @@ export {
 } from "../../sdk/dist/cli/lifecycle.js";
 export { publishCommand } from "../../sdk/dist/cli/publish.js";
 export { scrub, secret } from "../../sdk/dist/cli/signer.js";
+export {
+  CHAIN_SUPPORT_ISSUES_URL,
+  CHAIN_SUPPORT_NEW_ISSUE_URL,
+  chainSupport,
+  chainSupportRequest,
+  previewRefusal,
+  PreviewChainError,
+  requireSupported,
+  supportedChainNames,
+  type PreviewChainRefusal,
+} from "../../sdk/dist/cli/support.js";
+export { HOT_WALLET, openWallet } from "../../sdk/dist/cli/wallet-commands.js";
+export {
+  checkPlan,
+  planChain,
+  plannedTransactions,
+  sendPlan,
+} from "../../sdk/dist/cli/wallet-send.js";
+export { noPolicyNote, PolicyRefusal, readPolicy } from "../../sdk/dist/cli/policy.js";
+export { walletName, WalletStore, type WalletKind } from "../../sdk/dist/cli/wallets.js";
 export { simulateCommand } from "../../sdk/dist/cli/simulate.js";
 export { PACKAGED_SKILLS, targetsFor as skillTargets } from "../../sdk/dist/cli/skills.js";
 export {

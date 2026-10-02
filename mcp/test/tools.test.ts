@@ -4,6 +4,7 @@
  * the tools are the command's functions, and a tool that drifted from its command would show here.
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { after, before, describe, it } from "node:test";
 
 import { decodeFunctionData, getAddress, type Hex } from "viem";
@@ -49,7 +50,7 @@ const SVM_PAY = [
 ].join("\n");
 
 const INTENT = [
-  "// @chain arbitrum",
+  "// @chain ethereum",
   "Base(() => {",
   "  USDC.transfer(RECIPIENT, 5n);",
   "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
@@ -128,6 +129,64 @@ describe("sauce_globals", () => {
       protocol: Namespace;
     };
     assert.ok(one.protocol.contracts.some((contract) => Array.isArray(contract.methods)));
+  });
+
+  it("counts tokenized stocks out of the default, and says how to list and find them", async () => {
+    const { tools } = await mcp.client.listTools();
+    const description = tools.find((tool) => tool.name === "sauce_globals")!.description ?? "";
+    assert.match(description, /tokenized stocks/);
+    assert.match(description, /`search` finds one by symbol, company name or ticker/);
+    const base = ok(await mcp.call("sauce_globals", { chain: "base", tokens: true })) as {
+      tokens: Array<{ symbol: string }>;
+      page?: unknown;
+    };
+    assert.deepEqual(
+      base.tokens.map((token) => token.symbol),
+      ["USDC", "WETH"],
+    );
+    assert.equal(base.page, undefined);
+  });
+
+  it("finds a stock by the company's name, with its issuer, ticker and source", async () => {
+    const found = ok(await mcp.call("sauce_globals", { chain: "base", search: "spacex" })) as {
+      tokens: Array<{ symbol: string; decimals: number; stock?: Record<string, string> }>;
+    };
+    assert.deepEqual(found.tokens, [
+      {
+        symbol: "SPCXc",
+        address: "0xb2000000000000000000007b9fcbd005511aCBd5",
+        decimals: 8,
+        stock: {
+          issuer: "coinbase",
+          name: "Space Exploration Technologies Corp.",
+          ticker: "SPCX",
+          issuerName: "Coinbase",
+          source: "https://api.coinbase.com/v1/tokenized-stocks",
+        },
+      },
+    ]);
+  });
+
+  it("pages a chain's stock tokens", async () => {
+    type Page = {
+      tokens: Array<{ symbol: string }>;
+      page: { offset: number; total: number; next?: number };
+    };
+    const first = ok(await mcp.call("sauce_globals", { chain: "ethereum", stocks: true })) as Page;
+    assert.equal(first.tokens.length, 200);
+    assert.ok(first.page.total > 1000);
+    assert.equal(first.page.next, 200);
+    const last = ok(
+      await mcp.call("sauce_globals", {
+        chain: "ethereum",
+        stocks: true,
+        offset: first.page.total - 5,
+      }),
+    ) as Page;
+    assert.equal(last.tokens.length, 5);
+    assert.equal(last.page.next, undefined);
+    const symbols = new Set(first.tokens.map((token) => token.symbol));
+    assert.ok(!symbols.has("USDC"), "the stocks alone");
   });
 
   it("names an unknown chain or namespace as the error", async () => {
@@ -210,9 +269,94 @@ describe("sauce_price", () => {
       /solana has none/,
     );
   });
+
+  it("reads an unregistered address's decimals only through an endpoint, and says so", async () => {
+    const message = failed(
+      await mcp.call("sauce_price", {
+        chain: "base",
+        base: `0x${"12".repeat(20)}`,
+        quote: "USDC",
+        price: "1",
+      }),
+    );
+    assert.match(message, /its decimals are not known: give them as 0x[0-9a-fA-F]{40}:<decimals>/);
+    assert.match(message, /or an endpoint \(rpcUrl or --config\) to read them from the token/);
+  });
+});
+
+describe("sauce_pools", () => {
+  it("lists a pair's pools only through an endpoint, and says so without one", async () => {
+    const message = failed(
+      await mcp.call("sauce_pools", { chain: "base", tokenA: "USDC", tokenB: "WETH" }),
+    );
+    assert.match(message, /Listing a pair's pools needs an RPC endpoint for base/);
+    assert.match(message, /Pass rpcUrl with the call/);
+  });
+
+  it("refuses a chain with no such pools, and a V4 key it cannot read, before any endpoint", async () => {
+    assert.match(
+      failed(await mcp.call("sauce_pools", { chain: "solana", tokenA: "USDC", tokenB: "SOL" })),
+      /sauce_pools lists Uniswap V3- and V4-style pools, on an EVM chain; solana has none/,
+    );
+    assert.match(
+      failed(
+        await mcp.call("sauce_pools", {
+          chain: "base",
+          tokenA: "USDC",
+          tokenB: "WETH",
+          v4Pools: ["3000"],
+        }),
+      ),
+      /v4Pools 3000: a hookless V4 pool's key is <fee>:<tickSpacing>/,
+    );
+    assert.equal(
+      (
+        await mcp.call("sauce_pools", {
+          chain: "base",
+          tokenA: "USDC",
+          tokenB: "WETH",
+          v4Pools: Array.from({ length: 33 }, () => "1:1"),
+        })
+      ).isError,
+      true,
+    );
+  });
 });
 
 describe("sauce_compile", () => {
+  it("compiles a program with its own ABI beside it, given in modules", async () => {
+    // The sauce-script skill's example: the factory and the pool namespaces, `observe` through
+    // the program's own ./IOracle.json.
+    const examples = new URL("../../skills/sauce-script/examples/", import.meta.url);
+    const source = readFileSync(new URL("twap.sauce.ts", examples), "utf8");
+    const abi = readFileSync(new URL("IOracle.json", examples), "utf8");
+    const out = ok(
+      await mcp.call("sauce_compile", { source, chain: "base", modules: { "IOracle.json": abi } }),
+    );
+    assert.match(out.bytecode as string, /^0x[0-9a-f]+$/);
+    assert.deepEqual(
+      (out.entryParams as Array<{ name: string }>).map((param) => param.name),
+      ["tokenA", "tokenB", "fee", "window"],
+    );
+    // Without the module, the import has nothing to resolve to.
+    assert.match(
+      failed(await mcp.call("sauce_compile", { source, chain: "base" })),
+      /IOracle\.json/,
+    );
+  });
+
+  it("compiles a program file that starts with a #! line as the file without it", async () => {
+    const program = "function main(to: Address) {\n  USDC.transfer(to, 1n);\n}\n";
+    const plain = ok(await mcp.call("sauce_compile", { source: program, chain: "base" }));
+    const shebang = ok(
+      await mcp.call("sauce_compile", {
+        source: `#!/usr/bin/env -S npx -y @eco-incorp/sauce simulate\n${program}`,
+        chain: "base",
+      }),
+    );
+    assert.equal(shebang.bytecode, plain.bytecode);
+  });
+
   it("compiles for the chain: bytecode, size, main's parameters, defines, compiler, engine", async () => {
     const out = ok(
       await mcp.call("sauce_compile", {
@@ -710,7 +854,7 @@ describe("sauce_intent_publish", () => {
 
   it("builds the unsigned transfer into the vault and publish of a fixed intent", async () => {
     const out = ok(await mcp.call("sauce_intent_publish", args)) as Published;
-    assert.equal(out.chainId, 42161);
+    assert.equal(out.chainId, 1);
     assert.equal(out.intents.length, 1);
     assert.equal(out.intents[0]!.destination, "base");
     assert.match(out.intents[0]!.intentHash, /^0x[0-9a-f]{64}$/);
@@ -743,7 +887,7 @@ describe("sauce_intent_publish", () => {
     );
     assert.match(
       failed(await mcp.call("sauce_intent_publish", { ...args, dryRun: true, from: OWNER })),
-      /A dry run needs an RPC endpoint for arbitrum/,
+      /A dry run needs an RPC endpoint for ethereum/,
     );
     assert.match(
       failed(await mcp.call("sauce_intent_publish", { ...args, assumeBalance: ["USDC:1"] })),

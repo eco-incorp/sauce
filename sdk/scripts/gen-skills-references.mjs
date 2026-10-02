@@ -2,11 +2,14 @@
 // Every generated file of the agent skills, from the SDK's registries — ONE generator, so the
 // three views of the same facts cannot drift from each other or from the registry:
 //
-//   skills/sauce-globals/references/{tokens,protocols,chains}.md   the NAMES a program uses with no
-//                                                                  import (no addresses)
-//   skills/sauce-chains/references/index.md, <chain>.md            per chain: ids, native coin, the
+//   skills/sauce-globals/references/{tokens,stocks,protocols,chains}.md   the NAMES a program uses
+//                                                                  with no import (no addresses)
+//   skills/sauce-chains/references/index.md, <chain>.md            per chain: whether the release
+//                                                                  supports it, ids, native coin, the
 //                                                                  Sauce release, intents, tokens and
 //                                                                  every protocol with its addresses
+//   skills/sauce-chains/references/<chain>-stocks.md               a chain's tokenized stocks, with
+//                                                                  their addresses
 //   skills/sauce-protocols/references/index.md                     every protocol by category, with
 //                                                                  how to choose between them
 //   skills/sauce-protocols/references/registry/<slug>.md           per protocol: its deployments per
@@ -15,7 +18,9 @@
 //
 // ONE SOURCE. Names come from `routes.sourceGlobals(chain)`, the function `sauce globals` prints;
 // protocols, their categories and deployments from `listProtocols()` and each `protocols/<slug>`
-// module; the Sauce release from `/deployments`; intents from the eco-routes registry. Which ABI
+// module; the Sauce release from `/deployments`; intents from the eco-routes registry; which chains
+// the `sauce` command supports, and how to request another, from the command's own
+// `cli/support.js` (the package exports none of it). Which ABI
 // export a deployment role speaks is the registry's own evidence map
 // (`test/fixtures/registry-abi/targets.json`, which `registry-abi.test.ts` holds to the deployed
 // code). The hand-written parts are the prose below: the category guidance and chain notes.
@@ -53,8 +58,9 @@ export const GENERATED_DIRS = ["sauce-chains/references", "sauce-protocols/refer
  * `protocols/eco-routes` module — passed in, so the skills checker can index the SDK it loaded
  * (an installed package, say) rather than this repository's build.
  */
-export function globalsIndex(sdk, ecoRoutes) {
+export function globalsIndex(sdk, ecoRoutes, support) {
   const { routes, CANONICAL_CHAINS, nativeErc20, getChain } = sdk;
+  const { chainSupport } = support;
   const chains = [...CANONICAL_CHAINS].sort((a, b) => a.id - b.id);
   const listed = chains.map((chain) => ({ chain, globals: routes.sourceGlobals(chain.slug) }));
 
@@ -70,12 +76,17 @@ export function globalsIndex(sdk, ecoRoutes) {
               (token) => token.address.toLowerCase() === native.address.toLowerCase(),
             );
 
-      // Solana's are mints: the base58 address beside the 32-byte key a program holds.
-      const row = ({ symbol, address, decimals, mint }) => ({
+      // Solana's are mints: the base58 address beside the 32-byte key a program holds, and the
+      // token program that owns the mint. A tokenized stock carries its issuer, name and ticker.
+      const row = ({ symbol, address, decimals, mint, tokenProgram, stock }) => ({
         symbol,
         address,
         decimals,
         ...(mint === undefined ? {} : { mint }),
+        ...(tokenProgram === undefined ? {} : { tokenProgram }),
+        ...(stock === undefined
+          ? {}
+          : { stock: { ...stock, issuer: routes.STOCK_ISSUERS[stock.issuer].name } }),
       });
 
       return {
@@ -140,7 +151,11 @@ export function globalsIndex(sdk, ecoRoutes) {
   };
   const chainNames = [...listed[0].globals.chains]
     .sort((a, b) => a.id - b.id)
-    .map((chain) => ({ ...chain, intents: intents(chain.slug) }));
+    .map((chain) => ({
+      ...chain,
+      intents: intents(chain.slug),
+      support: chainSupport(chain.slug),
+    }));
 
   // The zero-import functions per target, from the first chain of each kind.
   const functions = ["evm", "svm"].flatMap((kind) => {
@@ -155,9 +170,33 @@ export function globalsIndex(sdk, ecoRoutes) {
         }));
   });
 
+  // Interfaces: ABIs with no fixed address, the same on every EVM chain. A program binds one to an
+  // address it holds, `Namespace.Contract(address).method(...)`. The first method whose inputs
+  // are all scalars is the one the skills checker compiles a call of.
+  const evm = listed.find(({ chain }) => chain.kind === "evm");
+  const scalar = /^(address|bool|u?int\d*)$/;
+  const interfaces = (evm?.globals.interfaces ?? [])
+    .map((one) => {
+      const call = one.methods.find((m) =>
+        /^\w+\((.*)\)$/
+          .exec(m.signature)[1]
+          .split(",")
+          .every((type) => type === "" || scalar.test(type)),
+      );
+      return {
+        name: `${one.namespace}.${one.name}`,
+        protocol: one.protocol,
+        ...(call === undefined
+          ? {}
+          : { call: { name: call.name, inputs: /^\w+\((.*)\)$/.exec(call.signature)[1] } }),
+      };
+    })
+    .sort(byName);
+
   return {
     tokens,
     contracts: [...contracts.values()].sort(byName),
+    interfaces,
     aliases: [...aliases.values()]
       .map(({ name, targets }) => ({
         name,
@@ -201,16 +240,17 @@ const functionText = (f) => {
 
 /**
  * The data every generated file renders. `api` is `{ sdk, ecoRoutes, deployments, cctp, compiler,
- * loadProtocol(slug) }` — modules the caller loaded, so the checker can pass the installed
- * package's — and `documented(slug)` says whether the skill carries that protocol's document.
+ * support, loadProtocol(slug) }` — modules the caller loaded, so the checker can pass the installed
+ * package's; `support` is the `sauce` command's `cli/support.js` — and `documented(slug)` says
+ * whether the skill carries that protocol's document.
  */
 export async function skillsReferences(api, documented) {
-  const { sdk, ecoRoutes, deployments, cctp, compiler, loadProtocol } = api;
+  const { sdk, ecoRoutes, deployments, cctp, compiler, support, loadProtocol } = api;
   // An export a program can import: the compile serves `./protocols/<slug>/<Export>.json`.
   const served = (slug, name) =>
     compiler.resolveSdkModule(`./protocols/${slug}/${name}.json`) !== undefined;
   const targets = JSON.parse(readFileSync(TARGETS, "utf8")).protocols;
-  const globals = globalsIndex(sdk, ecoRoutes);
+  const globals = globalsIndex(sdk, ecoRoutes, support);
   const canonical = [...sdk.CANONICAL_CHAINS].sort((a, b) => a.id - b.id);
   const byId = new Map(canonical.map((chain) => [chain.id, chain]));
   const sourceGlobals = new Map(canonical.map((c) => [c.slug, sdk.routes.sourceGlobals(c.slug)]));
@@ -322,6 +362,8 @@ export async function skillsReferences(api, documented) {
       slug: chain.slug,
       name: chain.name,
       kind: chain.kind,
+      support: support.chainSupport(chain.slug),
+      request: support.chainSupportRequest(chain.slug),
       key: names.chain.key,
       aliases: chain.aliases ?? [],
       coin,
@@ -347,7 +389,17 @@ export async function skillsReferences(api, documented) {
     };
   });
 
-  return { globals, chains, protocols, familyMembers };
+  return {
+    globals,
+    chains,
+    protocols,
+    familyMembers,
+    support: {
+      supported: support.supportedChains().map((chain) => ({ slug: chain.slug, name: chain.name })),
+      newIssue: support.CHAIN_SUPPORT_NEW_ISSUE_URL,
+      issues: support.CHAIN_SUPPORT_ISSUES_URL,
+    },
+  };
 }
 
 // ---- Prose: how to choose within a category, and facts about one chain -------------------------
@@ -493,6 +545,8 @@ const CHAIN_NOTES = {
 // ---- Rendering ------------------------------------------------------------------------------------
 
 const code = (s) => `\`${s}\``;
+/** Text for a table cell: a `|` would end it. */
+const cell = (s) => s.replaceAll("|", "\\|");
 const word = (address) => `${address}n`;
 
 /** A Solana key the registry holds as 32 bytes of hex. */
@@ -511,6 +565,11 @@ const addressCode = (kind, value) =>
     ? `${code(base58(value))} (key ${code(value.toLowerCase())})`
     : code(value);
 const kindName = (kind) => (kind === "svm" ? "Solana (SVM)" : "EVM");
+/** A Solana mint's token program, by name and address: what a write's `tokenProgram` account is. */
+const tokenProgramName = (program) =>
+  program === "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+    ? `Token-2022 (\`${program}\`)`
+    : `SPL Token (\`${program}\`)`;
 const categoryName = (category) => CATEGORIES.find(([key]) => key === category)?.[1] ?? category;
 const constName = (role) => role.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase();
 const chainLink = (chain, from) =>
@@ -537,9 +596,14 @@ function renderGlobals(data) {
     "",
   ];
   for (const entry of globals.tokens) {
+    const stocks = entry.tokens.filter((t) => t.stock).length;
     tokens.push(
       `- **${entry.chain.key}** (\`${entry.chain.slug}\`, [addresses](../../sauce-chains/references/${entry.chain.slug}.md)): ` +
-        entry.tokens.map((t) => `\`${t.symbol}\` (${t.decimals})`).join(", "),
+        entry.tokens
+          .filter((t) => !t.stock)
+          .map((t) => `\`${t.symbol}\` (${t.decimals})`)
+          .join(", ") +
+        (stocks ? `; and ${stocks} tokenized stocks ([stocks](stocks.md))` : ""),
     );
   }
   if (globals.tokens.some((entry) => entry.chain.kind === "svm")) {
@@ -548,7 +612,9 @@ function renderGlobals(data) {
       "On Solana a symbol is the mint's 32-byte key, a value for the `@sauce/token` functions",
       "(`balanceOf(USDC, account)`); the token accounts are `Account` parameters, and the token",
       "methods (`USDC.transfer(...)`) are EVM-only. Devnet's mints, which differ, are in the Solana",
-      "file in `sauce-chains`, passed as a define that wins over the symbol.",
+      "file in `sauce-chains`, passed as a define that wins over the symbol. That file also names each",
+      "mint's token program: legacy SPL Token, or Token-2022, whose mints a program moves with the",
+      "checked writes (`sauce-solana`).",
     );
   }
   tokens.push(
@@ -589,6 +655,21 @@ function renderGlobals(data) {
   }
   protocols.push(
     "",
+    "## Interfaces",
+    "",
+    "An interface is an ABI with no fixed address, the same on every EVM chain: a program binds it to",
+    "an address it holds and calls a method in the same expression,",
+    "`Namespace.Contract(address).method(...)` (or `.at(address)`), such as a pool its factory",
+    "returned.",
+    "",
+  );
+  for (const one of globals.interfaces) {
+    protocols.push(
+      `- \`${one.name}(<address>)\` ([\`${one.protocol}\`](../../sauce-protocols/references/registry/${one.protocol}.md))`,
+    );
+  }
+  protocols.push(
+    "",
     "## Family aliases",
     "",
     "A family names a contract when exactly one of its members has it on the program's chain. Any",
@@ -607,22 +688,61 @@ function renderGlobals(data) {
     "",
     "# Chain globals",
     "",
-    "A chain name opens an intent from inside a program (`Arbitrum(() => { ... }).reward({ ... })`) and",
+    "A chain name opens an intent from inside a program (`Ethereum(() => { ... }).reward({ ... })`) and",
     "qualifies a contract address (`Ethereum.UniswapV4.UniversalRouter`). An intent needs both chains",
-    "to take intents; each line says whether its chain does. Each chain's file in `sauce-chains` has",
-    "the rest.",
+    "to take intents; each line says whether its chain does. Each line also says whether the initial",
+    "release supports the chain: a program compiles and simulates on every chain, and its transactions",
+    "are built and sent only on a supported one; on a preview chain the `sauce` command and the MCP",
+    "server refuse them. Each chain's file in `sauce-chains` has the rest, and how to request a",
+    "preview chain.",
     "",
   ];
   for (const chain of globals.chains) {
     chains.push(
       `- \`${chain.key}\`: \`${chain.slug}\`, ${chain.id}, ${chain.kind.toUpperCase()}, ` +
-        (chain.intents ? "takes intents" : "no intents"),
+        `${chain.intents ? "takes intents" : "no intents"}, ${chain.support}`,
     );
   }
   chains.push("");
 
+  const stocks = [
+    HEADER,
+    "",
+    "# Stock tokens",
+    "",
+    "A tokenized stock is a token like any other: a program compiled for its chain names it by its",
+    "symbol with no import (`SPCXc.balanceOf(ctx.self())` on Base), and amounts are in its smallest",
+    "units (its decimals). The symbol is the issuer's own ticker for the token, with a `.` written",
+    "`_` (`BRK.Bx` is `BRK_Bx`). Their addresses are in the chain's stocks file in `sauce-chains`.",
+    "",
+    "Any contract can hold, receive and send them, a program's Pot included; an issuer can pause its",
+    "token or refuse a sanctioned address. Backed's (its xStocks, and bTokens such as `bTSLA`)",
+    "rebase: a balance can change between transactions, never within one, and a transfer can credit",
+    "one unit less than sent, so paying one into a pool that checks what it received can fail (buying",
+    "one is unaffected). Coinbase's are B20 tokens, built into the Base node: they run on Base, and",
+    "not in a local copy of the chain. The rest is in the skill's",
+    "[Tokenized stocks](../SKILL.md#tokenized-stocks).",
+    "",
+  ];
+  for (const entry of globals.tokens) {
+    const listed = entry.tokens.filter((t) => t.stock);
+    if (listed.length === 0) continue;
+    stocks.push(
+      `## ${entry.chain.key} (\`${entry.chain.slug}\`, [addresses](../../sauce-chains/references/${entry.chain.slug}-stocks.md))`,
+      "",
+      "| Symbol | Token | Ticker | Issuer | Decimals |",
+      "| --- | --- | --- | --- | --- |",
+      ...listed.map(
+        (t) =>
+          `| \`${t.symbol}\` | ${cell(t.stock.name)} | ${cell(t.stock.ticker)} | ${t.stock.issuer} | ${t.decimals} |`,
+      ),
+      "",
+    );
+  }
+
   return {
     "sauce-globals/references/tokens.md": tokens.join("\n"),
+    "sauce-globals/references/stocks.md": stocks.join("\n"),
     "sauce-globals/references/protocols.md": protocols.join("\n"),
     "sauce-globals/references/chains.md": chains.join("\n"),
   };
@@ -633,8 +753,9 @@ function chainExample(chain) {
   const namespaced = chain.protocols.flatMap((p) => p.deployed.filter((d) => d.namespace));
   if (chain.tokens.length === 0 && namespaced.length === 0) return [];
   if (chain.kind === "svm") {
-    // A Solana program reads a token account by the mint's key: the symbol is that key.
-    const token = chain.tokens[0];
+    // A Solana program reads a token account by the mint's key: the symbol is that key. USDC where
+    // the chain has it, so the example does not move as mints are added.
+    const token = chain.tokens.find((t) => t.symbol === "USDC") ?? chain.tokens[0];
     if (token === undefined) return [];
 
     return [
@@ -653,7 +774,8 @@ function chainExample(chain) {
       "",
     ];
   }
-  const token = chain.tokens[0];
+  // A tokenized stock is a token like any other, but not the one a chain's example should show.
+  const token = chain.tokens.find((t) => !t.stock);
   const contract = namespaced[0];
   const body = [];
   if (token) {
@@ -689,11 +811,41 @@ function chainExample(chain) {
   ];
 }
 
-function renderChain(chain) {
-  const lines = [HEADER, "", `# ${chain.name}`, ""];
+/** What a chain's support level means, said at the top of its file. */
+function supportLines(chain, supported) {
+  const names = andList(supported.map((c) => c.name));
+  if (chain.support === "supported") {
+    return [
+      `**Supported.** For the initial release, Sauce supports transactions on ${names}. On`,
+      `${chain.name} a program compiles and simulates, and the \`sauce\` command and the MCP server build`,
+      "its transactions and send them.",
+      "",
+    ];
+  }
+
+  return [
+    `**Preview chain.** For the initial release, Sauce supports transactions on ${names} only.`,
+    `On ${chain.name} a program compiles and simulates (\`sauce compile\`, \`sauce simulate\`, the dry`,
+    "runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,",
+    "`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are",
+    "refused, naming the supported chains and how to request this one.",
+    "",
+    `To request ${chain.name}, look for [its existing request](${chain.request.searchUrl}) and add your`,
+    `use case to it, or [open one](${chain.request.newIssueUrl}) with the chain-support issue form.`,
+    "",
+  ];
+}
+
+/** `["a", "b", "c"]` as "a, b and c". */
+const andList = (words) =>
+  words.length <= 1 ? (words[0] ?? "") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
+
+function renderChain(chain, supported) {
+  const lines = [HEADER, "", `# ${chain.name}`, "", ...supportLines(chain, supported)];
   lines.push(
     "| Fact | Value |",
     "| --- | --- |",
+    `| Support | ${chain.support === "supported" ? "supported: transactions are built and sent" : "preview: compile and simulate; no transaction is built or sent"} |`,
     `| Slug (\`--chain\`) | \`${chain.slug}\`${chain.aliases.length ? `; also ${chain.aliases.map(code).join(", ")}` : ""} |`,
     `| Chain id | ${chain.id} |`,
     `| Kind | ${kindName(chain.kind)} |`,
@@ -739,11 +891,11 @@ function renderChain(chain) {
     );
   } else if (chain.kind === "svm") {
     const mints = (list) => [
-      "| Symbol | Mint | Key, the value a program holds | Decimals |",
-      "| --- | --- | --- | --- |",
+      "| Symbol | Mint | Key, the value a program holds | Decimals | Token program |",
+      "| --- | --- | --- | --- | --- |",
       ...list.map(
         (t) =>
-          `| \`${t.symbol}\` | \`${t.mint ?? base58(t.address)}\` | \`${t.address}\` | ${t.decimals} |`,
+          `| \`${t.symbol}\` | \`${t.mint ?? base58(t.address)}\` | \`${t.address}\` | ${t.decimals} | ${tokenProgramName(t.tokenProgram)} |`,
       ),
       "",
     ];
@@ -757,10 +909,18 @@ function renderChain(chain) {
       );
     }
   } else {
+    const stocks = chain.tokens.filter((t) => t.stock).length;
     lines.push("| Symbol | Address | Decimals |", "| --- | --- | --- |");
-    for (const t of chain.tokens)
+    for (const t of chain.tokens.filter((t) => !t.stock))
       lines.push(`| \`${t.symbol}\` | \`${t.address}\` | ${t.decimals} |`);
     lines.push("");
+    if (stocks) {
+      lines.push(
+        `And ${stocks} tokenized stocks, each named by its symbol in the same way: they are in`,
+        `[${chain.slug}-stocks.md](${chain.slug}-stocks.md), with their addresses.`,
+        "",
+      );
+    }
   }
   lines.push("## Protocols", "");
   if (chain.protocols.length === 0) {
@@ -787,21 +947,51 @@ function renderChain(chain) {
   return lines.join("\n");
 }
 
+function renderChainStocks(chain) {
+  return [
+    HEADER,
+    "",
+    `# ${chain.name} stock tokens`,
+    "",
+    `Every tokenized stock a program compiled for \`${chain.slug}\` names by its symbol, with its`,
+    `address. [${chain.slug}.md](${chain.slug}.md) has the chain's other tokens and its contracts;`,
+    "`sauce-globals` has what a stock token is and how its symbol is spelled.",
+    "",
+    "| Symbol | Token | Issuer | Address | Decimals |",
+    "| --- | --- | --- | --- | --- |",
+    ...chain.tokens
+      .filter((t) => t.stock)
+      .map(
+        (t) =>
+          `| \`${t.symbol}\` | ${cell(t.stock.name)} | ${t.stock.issuer} | \`${t.address}\` | ${t.decimals} |`,
+      ),
+    "",
+  ].join("\n");
+}
+
 function renderChainIndex(data) {
   const lines = [
     HEADER,
     "",
     "# Chains",
     "",
-    "Every chain the SDK knows, with a file each: ids, native coin, the Sauce release, intents, its",
-    "tokens and every protocol recorded there with its addresses.",
+    "Every chain the SDK knows, with a file each: whether the initial release supports it, ids, native",
+    "coin, the Sauce release, intents, its tokens and every protocol recorded there with its addresses.",
     "",
-    "| Chain | Slug | Id | Kind | Intents | CCTP | Tokens | Protocols |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    `For the initial release, Sauce supports transactions on ${andList(data.support.supported.map((c) => c.name))}`,
+    `(${data.support.supported.map((c) => code(c.slug)).join(", ")}). Every other chain is a preview chain: a program`,
+    "compiles and simulates there, but the `sauce` command and the MCP server build and send no",
+    "transaction, and say so with the supported chains and how to request that chain. To request one,",
+    `look among the [existing requests](${data.support.issues}) and add your use case to the chain's,`,
+    `or [open one](${data.support.newIssue}) with the chain-support issue form; each preview chain's`,
+    "file links its own.",
+    "",
+    "| Chain | Slug | Id | Kind | Support | Intents | CCTP | Tokens | Protocols |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
   ];
   for (const chain of data.chains) {
     lines.push(
-      `| [${chain.name}](${chain.slug}.md) | \`${chain.slug}\` | ${chain.id} | ${kindName(chain.kind)} | ${chain.intents ? "yes" : "no"} | ${chain.cctp ?? "—"} | ${chain.tokens.length} | ${chain.protocols.length} |`,
+      `| [${chain.name}](${chain.slug}.md) | \`${chain.slug}\` | ${chain.id} | ${kindName(chain.kind)} | ${chain.support} | ${chain.intents ? "yes" : "no"} | ${chain.cctp ?? "—"} | ${chain.tokens.length} | ${chain.protocols.length} |`,
     );
   }
   lines.push("");
@@ -959,8 +1149,11 @@ export function renderSkillsReferences(data) {
     "sauce-chains/references/index.md": renderChainIndex(data),
     "sauce-protocols/references/index.md": renderProtocolIndex(data),
   };
-  for (const chain of data.chains)
-    files[`sauce-chains/references/${chain.slug}.md`] = renderChain(chain);
+  for (const chain of data.chains) {
+    files[`sauce-chains/references/${chain.slug}.md`] = renderChain(chain, data.support.supported);
+    if (chain.tokens.some((t) => t.stock))
+      files[`sauce-chains/references/${chain.slug}-stocks.md`] = renderChainStocks(chain);
+  }
   for (const p of data.protocols)
     files[`sauce-protocols/references/registry/${p.slug}.md`] = renderProtocolRegistry(p, data);
 
@@ -977,6 +1170,8 @@ export async function loadApi(importFrom) {
     deployments: await importFrom("deployments/index.js"),
     cctp: await importFrom("protocols/cctp/index.js"),
     compiler: await importFrom("compiler.js"),
+    // The `sauce` command's chain support: the CLI's own module, not a package export.
+    support: await importFrom("cli/support.js"),
     loadProtocol: (slug) => importFrom(`protocols/${slug}/index.js`),
   };
 }

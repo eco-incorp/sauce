@@ -237,6 +237,42 @@ describe("sauce (no command)", () => {
   });
 });
 
+describe("a program file that is a command: a leading #! line", () => {
+  const SHEBANG = "#!/usr/bin/env -S npx -y @eco-incorp/sauce simulate";
+  // USDC.transfer lowers to an import the SDK puts above the program, which a #! line has to
+  // precede to be one: the line is blanked, so the import is free to go first.
+  const PROGRAM =
+    "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n";
+
+  it("compiles to the same bytecode as the file without it, from a file or from stdin", async () => {
+    const plain = await sauce("compile", file("plain.sauce.ts", PROGRAM), "--chain", "base");
+    expect(plain.code).toBe(0);
+    const run = await sauce(
+      ...["compile", file("pay.sauce.ts", `${SHEBANG}\n${PROGRAM}`), "--chain", "base"],
+    );
+    expect([run.code, run.stderr]).toEqual([0, ""]);
+    expect(run.stdout).toBe(plain.stdout);
+    const piped = await sauceWith(
+      { readStdin: () => `${SHEBANG}\n${PROGRAM}` },
+      ...["compile", "-", "--chain", "base"],
+    );
+    expect(piped.stdout).toBe(plain.stdout);
+  });
+
+  it("keeps the file's own line numbers in a compile error", async () => {
+    const run = await sauce(
+      ...[
+        "compile",
+        file("broken.sauce.ts", `${SHEBANG}\n${PROGRAM.replace("amount);", "nope);")}`),
+      ],
+      ...["--chain", "base"],
+    );
+    expect(run.code).toBe(1);
+    expect(run.stderr).toMatch(/broken\.sauce\.ts:3:/);
+    expect(run.stderr).toContain("nope");
+  });
+});
+
 describe("sauce compile", () => {
   it("compiles a file byte-for-byte as openRoute compiles the same body", async () => {
     const run = await sauce(
@@ -407,7 +443,7 @@ describe("sauce compile", () => {
     // An intent's limit, named before it is published, whichever way its reward is paid.
     const intent = file(
       "limit-intent.sauce.ts",
-      "// @chain arbitrum\nBase(() => {\n  require(SQRT_PRICE_LIMIT_X96 > 0n);\n" +
+      "// @chain ethereum\nBase(() => {\n  require(SQRT_PRICE_LIMIT_X96 > 0n);\n" +
         "  USDC.transfer(RECIPIENT, 5n);\n}).reward({ tokens: [{ token: USDC, amount: 7n }] });\n",
     );
     const published = await sauce(
@@ -812,8 +848,25 @@ describe("sauce compile", () => {
     );
     expect(run.code).toBe(1);
     expect(run.stderr).toMatch(
-      /hint: USDT is not a registered token on base \(it has USDC, WETH\)/,
+      /hint: USDT is not a registered token on base \(it has USDC, WETH, 67 stock tokens\)/,
     );
+  });
+
+  it("names a stock token's symbol in its issuer's case", async () => {
+    const program = file(
+      "stock.sauce.ts",
+      "function main() {\n  require(SPCXC.balanceOf(ctx.self()) >= 0n);\n}\n",
+    );
+    const run = await sauce("compile", program, "--chain", "base");
+    expect(run.code).toBe(1);
+    expect(run.stderr).toContain(
+      "hint: SPCXC is SPCXc on base: a token's symbol is case-sensitive",
+    );
+    const fixed = file(
+      "stock-fixed.sauce.ts",
+      "function main() {\n  require(SPCXc.balanceOf(ctx.self()) >= 0n);\n}\n",
+    );
+    expect((await sauce("compile", fixed, "--chain", "base")).code).toBe(0);
   });
 
   it("needs no fee for --intent-execution-fee auto when no intent runs a program", async () => {
@@ -1300,7 +1353,7 @@ describe("sauce tx", () => {
 
 describe("sauce intent publish, offline", () => {
   const INTENT = [
-    "// @chain arbitrum",
+    "// @chain ethereum",
     "Base(() => {",
     "  USDC.transfer(RECIPIENT, 5n);",
     "}).reward({ tokens: [{ token: USDC, amount: 7n }] });",
@@ -1329,12 +1382,12 @@ describe("sauce intent publish, offline", () => {
       chainId: number;
       intents: Array<{ intentHash: string; destination: string; transactions: unknown[] }>;
     };
-    const [intent] = compileSauceProgram("arbitrum", INTENT, {
+    const [intent] = compileSauceProgram("ethereum", INTENT, {
       defines: { RECIPIENT: BigInt(RECIPIENT) },
       intents: { deadline: 2_000_000_000n, creator: CREATOR },
     }).intents;
-    expect(out.chainId).toBe(42161);
-    const portal = ecoRoutesPortal("arbitrum");
+    expect(out.chainId).toBe(1);
+    const portal = ecoRoutesPortal("ethereum");
     const vault = routes.predictIntentVault(intent!.intent, { portal });
     expect(out.intents).toEqual([
       {
@@ -1409,7 +1462,7 @@ describe("sauce intent publish, offline", () => {
         "function main(recipient: Address) {\n  Base(() => {\n    USDC.transfer(recipient, 5n);\n  }).reward({ tokens: [{ token: USDC, amount: 7n }] });\n}\n",
       ),
       "--chain",
-      "arbitrum",
+      "ethereum",
       ...FLAGS.slice(2),
       "--format",
       "json",
@@ -1449,7 +1502,7 @@ describe("sauce intent publish, offline", () => {
     it("in a script and in a module, publishing the intent the define would", async () => {
       const defined = await hashes(
         "defined.sauce.ts",
-        `// @chain arbitrum\n${body("AMOUNT")}\n`,
+        `// @chain ethereum\n${body("AMOUNT")}\n`,
         "--define",
         `AMOUNT=${AMOUNT}`,
       );
@@ -1457,13 +1510,13 @@ describe("sauce intent publish, offline", () => {
       expect(
         await hashes(
           "script.sauce.ts",
-          `// @chain arbitrum\nconst AMOUNT = 1_000_000n;\n${body("AMOUNT")}\n`,
+          `// @chain ethereum\nconst AMOUNT = 1_000_000n;\n${body("AMOUNT")}\n`,
         ),
       ).toEqual(defined);
       expect(
         await hashes(
           "module.sauce.ts",
-          `// @chain arbitrum\nconst AMOUNT = 1_000_000n;\nfunction main() {\n${body("AMOUNT")}\n}\n`,
+          `// @chain ethereum\nconst AMOUNT = 1_000_000n;\nfunction main() {\n${body("AMOUNT")}\n}\n`,
         ),
       ).toEqual(defined);
     });
@@ -1472,7 +1525,7 @@ describe("sauce intent publish, offline", () => {
       const refused = (text: string) =>
         sauce("intent", "publish", file("refused.sauce.ts", text), ...FLAGS, "--format", "json");
       const measured = await refused(
-        `// @chain arbitrum\nconst amount = USDC.balanceOf(ctx.self());\n${body("amount")}\n`,
+        `// @chain ethereum\nconst amount = USDC.balanceOf(ctx.self());\n${body("amount")}\n`,
       );
       expect(measured.code).toBe(1);
       expect(measured.stderr).toBe(
@@ -1481,13 +1534,13 @@ describe("sauce intent publish, offline", () => {
           "it a literal, a define or a top-level `const` of a literal\n",
       );
       const computed = await refused(
-        `// @chain arbitrum\nconst AMOUNT = 1000n * 1000n;\n${body("AMOUNT")}\n`,
+        `// @chain ethereum\nconst AMOUNT = 1000n * 1000n;\n${body("AMOUNT")}\n`,
       );
       expect(computed.code).toBe(1);
       expect(computed.stderr).toMatch(/uses `AMOUNT`, which the program measures or computes/);
       // A local of `main` shadows the file's constant, and it is the local the intent reads.
       const shadowed = await refused(
-        `// @chain arbitrum\nconst AMOUNT = 5n;\nfunction main() {\n  const AMOUNT = USDC.balanceOf(ctx.self());\n${body("AMOUNT")}\n}\n`,
+        `// @chain ethereum\nconst AMOUNT = 5n;\nfunction main() {\n  const AMOUNT = USDC.balanceOf(ctx.self());\n${body("AMOUNT")}\n}\n`,
       );
       expect(shadowed.code).toBe(1);
       expect(shadowed.stderr).toMatch(/uses `AMOUNT`, which the program measures or computes/);
@@ -1668,7 +1721,7 @@ describe("sauce pot", () => {
     const unnamed = file("unnamed.keystore.json", JSON.stringify({ version: 3, crypto: {} }));
     const locked = await sauce("pot", "--chain", "base", "--keystore", unnamed);
     expect(locked.code).toBe(2);
-    expect(locked.stderr).toMatch(/pass --password-file/);
+    expect(locked.stderr).toMatch(/pass --password-env <NAME>, --password-file <path> or/);
   });
 
   it("refuses a missing owner, and an owner that is not the chain's kind of address", async () => {
@@ -1718,6 +1771,30 @@ describe("sauce pot", () => {
     // A code the engine does not use stays a code.
     expect(failureReason(at(999), logs([engine, 999]))).toBe(
       `program ${engine} failed with custom program error 999 (0x3e7); the logs say why`,
+    );
+    // A token program's refusal is read from the line it logged, for either token program; with
+    // no such line it stays a code, as above.
+    const token2022 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+    const refused = (program: string, said: string, code: number) => [
+      `Program ${kitchen} invoke [1]`,
+      `Program ${engine} invoke [2]`,
+      `Program ${program} invoke [3]`,
+      "Program log: Instruction: TransferChecked",
+      `Program log: ${said}`,
+      `Program ${program} failed: custom program error: 0x${code.toString(16)}`,
+      `Program ${engine} failed: custom program error: 0x${code.toString(16)}`,
+      `Program ${kitchen} failed: custom program error: 0x${code.toString(16)}`,
+    ];
+    expect(
+      failureReason(
+        at(67),
+        refused(token2022, "Transferring, minting, and burning is paused on this mint", 67),
+      ),
+    ).toBe(
+      "Token-2022 refused: Transferring, minting, and burning is paused on this mint (custom program error 67)",
+    );
+    expect(failureReason(at(17), refused(token, "Error: Account is frozen", 17))).toBe(
+      "SPL Token refused: Account is frozen (custom program error 17)",
     );
   });
 
@@ -1996,7 +2073,7 @@ describe("a program from stdin", () => {
     expect(both.stderr).toMatch(/stdin carries one thing/);
   });
 
-  it("asks nothing on a spent stdin: a keystore needs --password-file, approvals --auto-approve", async () => {
+  it("asks nothing on a spent stdin: a keystore needs a password source, approvals --auto-approve", async () => {
     // jest's stdin is no terminal and the program used it: no password can be asked for.
     const keystore = await sauceWith(
       piped(PROGRAM),
@@ -2004,7 +2081,9 @@ describe("a program from stdin", () => {
       ...["--keystore", join(SDK, "test/fixtures/cli/anvil-2.keystore.json"), "--args", OWNER],
     );
     expect(keystore.code).toBe(2);
-    expect(keystore.stderr).toMatch(/to ask for the keystore password on: pass --password-file/);
+    expect(keystore.stderr).toMatch(
+      /to ask for the password on: pass --password-env <NAME>, --password-file <path> or/,
+    );
   });
 });
 
@@ -2179,6 +2258,23 @@ describe("sauce price", () => {
     // Said in words, the same price: `2700 USDC per WETH`.
     const worded = await sauce("price", "--chain", "base", "2700", "USDC", "per", "WETH");
     expect(worded.stdout).toBe(text.stdout);
+  });
+
+  it("prices a stock token by its registry decimals, its symbol in any case", async () => {
+    const out = json(await sauce("price", "--chain", "base", "spcxc", "USDC", "148.7", "--json"));
+    // USDC sorts below Coinbase's 0xb2… address: SPCXc is token1, with 8 decimals.
+    const sqrt = root.sqrtPriceX96FromPrice("148.7", {
+      baseDecimals: 8,
+      quoteDecimals: 6,
+      baseIsToken0: false,
+    });
+    expect(out).toMatchObject({
+      means: "148.7 USDC per SPCXc",
+      base: { symbol: "SPCXc", address: "0xb2000000000000000000007b9fcbd005511aCBd5", decimals: 8 },
+      token0: "USDC",
+      token1: "SPCXc",
+      sqrtPriceX96: sqrt.toString(),
+    });
   });
 
   /**
@@ -2365,6 +2461,7 @@ describe("the CLI stays out of the browser-facing surface", () => {
       await import("../src/cli/verify.js"),
       await import("../src/cli/solana.js"),
       await import("../src/cli/price.js"),
+      await import("../src/cli/pools.js"),
       await import("../src/cli/report.js"),
       await import("../src/cli/intents.js"),
       await import("../src/cli/receipt.js"),

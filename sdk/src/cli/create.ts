@@ -35,6 +35,7 @@ import { connect, kitchenFee } from "./chain.js";
 import { nativeSymbol, tokenInfo } from "./effects.js";
 import { proverPlan } from "./lifecycle.js";
 import { askChoice, askText, missingFlags, type Ask } from "./prompt.js";
+import { isSupportedChain, requireSupported } from "./support.js";
 import { parseFundVia } from "./args.js";
 import type { IntentFundVia } from "../routes/portal.js";
 
@@ -88,6 +89,9 @@ export const portalChains = (): CanonicalChain[] =>
   CANONICAL_CHAINS.filter(
     (chain) => chain.kind === "evm" && ecoRoutesDeployment(chain)?.Portal !== undefined,
   );
+
+/** The chains creation offers: those with a Portal that the release supports (`support.ts`). */
+export const publishableChains = (): CanonicalChain[] => portalChains().filter(isSupportedChain);
 
 /** A token on `chain`: what the program names it by (a symbol, or its address), and its decimals. */
 interface Token {
@@ -147,9 +151,16 @@ async function tokenOn(
   }
   const [given, decimalsText] = raw.split(":");
   if (given === undefined || !isAddress(given, { strict: false })) {
+    // The chain's tokens by name, less its tokenized stocks: Ethereum has over a thousand.
+    const listed = rows.filter((row) => row.stock === undefined).map((row) => row.symbol);
+    const stocks = rows.length - listed.length;
+    const more =
+      stocks > 0
+        ? `, one of its ${stocks} stock tokens (sauce globals --chain ${chain.slug} --tokens)`
+        : "";
     throw new UsageError(
       `--${flag}: '${raw}' is not a token on ${chain.slug}: one of ` +
-        `${rows.map((row) => row.symbol).join(", ") || "(none recorded)"}, or an address`,
+        `${listed.join(", ") || "(none recorded)"}${more}, or an address`,
     );
   }
   const address = getAddress(given);
@@ -179,7 +190,8 @@ async function tokenOn(
 
 /** Asks which token, from `chain`'s registry or by address. */
 async function askToken(ask: Ask, chain: CanonicalChain, question: string, fallback?: string) {
-  const rows = TOKEN_REGISTRY[chain.id] ?? [];
+  // A tokenized stock is still a choice by address: Ethereum has over a thousand of them.
+  const rows = (TOKEN_REGISTRY[chain.id] ?? []).filter((row) => row.stock === undefined);
   const choices = [
     ...rows.map((row) => ({ label: `${row.symbol} (${row.address})`, value: row.symbol })),
     { label: "another token, by address", value: "" },
@@ -355,7 +367,7 @@ function intentText(options: {
 /** Asks (or reads from flags) everything an intent needs, and writes it as a `.sauce.ts` file. */
 export async function createIntent(input: CreateInput): Promise<Created> {
   const missing: string[] = [];
-  const chains = portalChains();
+  const chains = publishableChains();
   const chainChoices = (exclude?: CanonicalChain) =>
     chains
       .filter((chain) => chain !== exclude)
@@ -373,6 +385,11 @@ export async function createIntent(input: CreateInput): Promise<Created> {
     (ask) => askChoice(ask, "Destination chain (where it is delivered):", chainChoices(source)),
   );
   const destination = destinationRaw === undefined ? undefined : parseChain(destinationRaw);
+  // Before anything is read from either chain: publishing goes only between supported ones.
+  requireSupported(
+    "publishing intents",
+    [source, destination].filter((chain) => chain !== undefined),
+  );
   for (const chain of [source, destination]) {
     if (chain !== undefined && !chains.includes(chain)) {
       throw new UsageError(

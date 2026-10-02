@@ -35,13 +35,47 @@ function defineValue(v: bigint | boolean | number): string {
   return Math.trunc(v).toString();
 }
 
+/** A frozen defines object's pairs, converted once: a chain's own defines are one frozen object on
+ *  every compile. An object that can change is converted each time. */
+const frozenPairs = new WeakMap<object, ReadonlyArray<readonly [string, string]>>();
+/** Each frozen object's values by name, with their converted spelling, for an object spread from it. */
+const frozenValues = new WeakMap<object, ReadonlyMap<string, readonly [unknown, string]>>();
+
+function pairsOf(
+  defines: Readonly<Record<string, bigint | boolean | number>>,
+): ReadonlyArray<readonly [string, string]> {
+  const cached = frozenPairs.get(defines);
+  if (cached !== undefined) return cached;
+  const pairs = Object.entries(defines).map(([name, v]) => [name, defineValue(v)] as const);
+  if (Object.isFrozen(defines)) frozenPairs.set(defines, pairs);
+  return pairs;
+}
+
+/**
+ * `defines` as the compiler's pairs. `base` is the frozen object `defines` is, or was spread from:
+ * a value `defines` still has from it keeps the spelling worked out once for `base`.
+ */
 export function toRsDefines(
-  defines: Record<string, bigint | boolean | number> | undefined,
+  defines: Readonly<Record<string, bigint | boolean | number>> | undefined,
+  base?: Readonly<Record<string, bigint | boolean | number>>,
 ): Array<[string, string]> | undefined {
   if (!defines) return undefined;
-  const entries = Object.entries(defines).map(
-    ([name, v]) => [name, defineValue(v)] as [string, string],
-  );
+  let entries: Array<[string, string]>;
+  if (base === undefined || defines === base || !Object.isFrozen(base)) {
+    entries = pairsOf(defines).map(([name, value]) => [name, value]);
+  } else {
+    let known = frozenValues.get(base);
+    if (known === undefined) {
+      const spelled = new Map(pairsOf(base));
+      known = new Map(Object.entries(base).map(([name, v]) => [name, [v, spelled.get(name)!]]));
+      frozenValues.set(base, known);
+    }
+    const from = known;
+    entries = Object.entries(defines).map(([name, v]) => {
+      const was = from.get(name);
+      return [name, was !== undefined && was[0] === v ? was[1] : defineValue(v)];
+    });
+  }
   return entries.length > 0 ? entries : undefined;
 }
 
@@ -154,7 +188,10 @@ export interface RsCompileInput {
   resolve?: ResolveModule;
   /** The caller's bare-specifier mapping, consulted after the SDK's standard library. */
   resolvePackage?: ResolvePackage;
-  defines?: Record<string, bigint | boolean | number>;
+  defines?: Readonly<Record<string, bigint | boolean | number>>;
+  /** The frozen object `defines` is, or was spread from: the chain's own values, one object compile
+   *  after compile, whose spelling for the compiler is worked out once. */
+  baseDefines?: Readonly<Record<string, bigint | boolean | number>>;
   contracts?: ContractsConfig;
   /** Module specifiers broadcast into every module with no `import` line -- see this file's own
    *  header for why this option only exists here, not on the TS path. */
@@ -195,7 +232,7 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
     resolvePackage: makeResolvePackage(input.resolvePackage),
     inlineContracts: toInlineContracts(input.contracts),
     ambient: input.ambient,
-    defines: toRsDefines(input.defines),
+    defines: toRsDefines(input.defines, input.baseDefines),
     compactArgs: input.compactArgs,
     ...(input.host === undefined
       ? {}

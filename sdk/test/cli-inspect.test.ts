@@ -140,7 +140,12 @@ describe("sourceGlobals: the names a program on a chain may use", () => {
     const globals = sourceGlobals(base);
     expect(globals.tokens).toEqual(
       [...TOKEN_REGISTRY[8453]!]
-        .map(({ symbol, address, decimals }) => ({ symbol, address, decimals }))
+        .map(({ symbol, address, decimals, stock }) => ({
+          symbol,
+          address,
+          decimals,
+          ...(stock === undefined ? {} : { stock }),
+        }))
         .sort((a, b) => (a.symbol < b.symbol ? -1 : 1)),
     );
     expect(globals.defines).toEqual(chainDefines(base));
@@ -159,12 +164,15 @@ describe("sourceGlobals: the names a program on a chain may use", () => {
     // Solana: its mints as 32-byte keys, no EVM contracts, the SVM arm's functions.
     const solana = sourceGlobals("solana");
     expect(solana.tokens).toEqual(
-      SVM_TOKEN_REGISTRY["mainnet-beta"].map(({ symbol, address, decimals, mint }) => ({
-        symbol,
-        address,
-        decimals,
-        mint,
-      })),
+      SVM_TOKEN_REGISTRY["mainnet-beta"].map(
+        ({ symbol, address, decimals, mint, tokenProgram }) => ({
+          symbol,
+          address,
+          decimals,
+          mint,
+          tokenProgram,
+        }),
+      ),
     );
     expect(solana.protocols).toEqual([]);
     expect(solana.modules[0]!.functions).toContain(
@@ -209,6 +217,40 @@ describe("sauce globals", () => {
     );
   });
 
+  it("counts a chain's stock tokens, lists them with --stocks and finds one with --search", async () => {
+    const all = await sauce("globals", "--chain", "base", "--tokens");
+    expect(all.stdout).toMatch(
+      /^ {2}And 67 stock tokens, named the same way: --stocks lists them/m,
+    );
+    expect(all.stdout).not.toContain("SPCXc");
+    const stocks = await sauce("globals", "--chain", "base", "--stocks");
+    expect(stocks.stdout).toMatch(/^Stock tokens \(67\): tokenized stocks/m);
+    expect(stocks.stdout).not.toMatch(/^ {2}USDC /m);
+    // Found by the company's name, its ticker or the symbol, without regard to case.
+    for (const text of ["spacex", "Space Exploration", "SPCX"]) {
+      const found = await sauce("globals", "--chain", "base", "--search", text);
+      expect(found.stdout).toMatch(
+        /^ {2}SPCXc +0xb2000000000000000000007b9fcbd005511aCBd5 {2}8 decimals {2}Space Exploration Technologies Corp\. \(SPCX, Coinbase\)$/m,
+      );
+    }
+    const eth = json(await sauce("globals", "--chain", "ethereum", "--search", "spacex", "--json"));
+    const tokens = eth.tokens as Array<{
+      symbol: string;
+      stock?: { issuer: string; ticker: string; issuerName: string; source: string };
+    }>;
+    expect(tokens.map((token) => token.symbol)).toEqual(
+      expect.arrayContaining(["SPCXon", "SPCXx"]),
+    );
+    expect(tokens.find((token) => token.symbol === "SPCXon")!.stock).toEqual({
+      issuer: "ondo",
+      name: "SpaceX (Ondo Tokenized)",
+      ticker: "SPCX",
+      issuerName: "Ondo Global Markets",
+      source: "https://docs.ondo.finance/partner-docs/tokens",
+    });
+    expect((await sauce("globals", "--chain", "base", "--search", " ")).code).toBe(2);
+  });
+
   it("prints Solana's mints, base58 and as the key a program holds, and devnet's", async () => {
     const usdc = SVM_TOKEN_REGISTRY["mainnet-beta"].find((row) => row.symbol === "USDC")!;
     const devnet = SVM_TOKEN_REGISTRY.devnet.find((row) => row.symbol === "USDC")!;
@@ -216,10 +258,14 @@ describe("sauce globals", () => {
     expect(run.code).toBe(0);
     expect(run.stdout).not.toContain("none by symbol");
     expect(run.stdout).toMatch(
-      new RegExp(`^ {2}USDC {2}${usdc.mint} {2}${usdc.address} {2}6 decimals$`, "m"),
+      new RegExp(`^ {2}USDC +${usdc.mint} {2}${usdc.address} {2}6 decimals$`, "m"),
     );
     expect(run.stdout).toMatch(
-      new RegExp(`^ {4}USDC {2}${devnet.mint} {2}${devnet.address} {2}6 decimals$`, "m"),
+      new RegExp(`^ {4}USDC +${devnet.mint} {2}${devnet.address} {2}6 decimals$`, "m"),
+    );
+    // A Token-2022 mint is named as one.
+    expect(run.stdout).toMatch(
+      /^ {2}PYUSD +2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo .* 6 decimals, Token-2022$/m,
     );
     const out = json(await sauce("globals", "--chain", "solana", "--json"));
     expect(out.tokens).toContainEqual({
@@ -227,12 +273,13 @@ describe("sauce globals", () => {
       address: usdc.address,
       decimals: 6,
       mint: usdc.mint,
+      tokenProgram: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
     });
     expect(out.devnetTokens).toContainEqual(devnet);
     expect((out.defines as Record<string, unknown>).USDC).toBe(usdc.address);
   });
 
-  it("lists the interfaces a program binds to its own address, and their methods", async () => {
+  it("lists the interfaces a program calls with its own address, and their methods", async () => {
     const all = await sauce("globals", "--chain", "base");
     expect(all.stdout).toMatch(/^Interfaces \(\d+\): an ABI with no fixed address/m);
     expect(all.stdout).toMatch(/^ {2}Erc4626\.Vault {2}\(.+\)$/m);
@@ -240,7 +287,7 @@ describe("sauce globals", () => {
     const one = await sauce("globals", "--chain", "base", "--protocol", "Erc4626");
     expect(one.code).toBe(0);
     expect(one.stdout).toMatch(
-      /^Erc4626\.Vault\.at\(<address>\) {2}interface \(.+\): no fixed address$/m,
+      /^Erc4626\.Vault\(<address>\) {2}interface \(.+\): no fixed address$/m,
     );
     expect(one.stdout).toMatch(/^ {2}totalAssets\(\): \(.+\) {2}view$/m);
     const out = json(await sauce("globals", "--chain", "base", "--protocol", "erc4626", "--json"));
@@ -253,7 +300,7 @@ describe("sauce globals", () => {
     expect(vault.methods.map((m) => m.name)).toContain("totalAssets");
     const program = file(
       "vault.sauce.ts",
-      "function main(vault: Address): Uint256 {\n  return Erc4626.Vault.at(vault).totalAssets();\n}\n",
+      "function main(vault: Address): Uint256 {\n  return Erc4626.Vault(vault).totalAssets();\n}\n",
     );
     expect((await sauce("compile", program, "--chain", "base")).code).toBe(0);
     // None on Solana: interfaces are EVM ABIs.
@@ -282,14 +329,14 @@ const SPLIT = [
   "",
 ].join("\n");
 const FIXED = [
-  "// @chain arbitrum",
+  "// @chain ethereum",
   "Base(() => {",
   "  USDC.transfer(RECIPIENT, 1000n);",
   "}).reward({ tokens: [{ token: USDC, amount: 2000n }] });",
   "",
 ].join("\n");
 const MEASURED = [
-  "// @chain arbitrum",
+  "// @chain ethereum",
   "function main(recipient: Address) {",
   "  const amount = USDC.balanceOf(ctx.self());",
   "  Base(() => {",
@@ -358,7 +405,7 @@ describe("sauce inspect", () => {
 
   it("reads a fixed intent out of the program that opens it, hash and all", async () => {
     const fixed = file("fixed.sauce.ts", FIXED);
-    const [lowered] = compileSauceProgram("arbitrum", FIXED, {
+    const [lowered] = compileSauceProgram("ethereum", FIXED, {
       defines: { RECIPIENT: BigInt(RECIPIENT) },
       intents: { deadline: 2_000_000_000n, creator: CREATOR },
     }).intents;
@@ -369,13 +416,13 @@ describe("sauce inspect", () => {
     expect(fromFile.intents).toEqual([expect.objectContaining({ intentHash })]);
     // From the cook's bytes alone, on the chain that publishes it: the same intent.
     const data = await cookOf(fixed, ...defines);
-    const fromBytes = json(await sauce("inspect", data, "--chain", "arbitrum", "--json"));
+    const fromBytes = json(await sauce("inspect", data, "--chain", "ethereum", "--json"));
     const [intent] = (fromBytes.program as { intents: Array<Record<string, unknown>> }).intents;
     expect(intent).toMatchObject({
       destination: { id: "8453", chain: "base" },
       intentHash,
       // The program pays the vault the Portal derives, so that is the one shown: the registry's.
-      vault: predictIntentVault(lowered!.intent, { portal: ecoRoutesPortal("arbitrum") }),
+      vault: predictIntentVault(lowered!.intent, { portal: ecoRoutesPortal("ethereum") }),
       fundVia: "transfer",
       reward: { creator: CREATOR, tokens: [{ amount: "2000" }] },
       route: {
@@ -386,7 +433,7 @@ describe("sauce inspect", () => {
     // Opted out, the program approves and calls publishAndFund, and says so.
     const optedOut = await cookOf(fixed, ...defines, "--intent-fund-via", "publishAndFund");
     const [approved] = (
-      json(await sauce("inspect", optedOut, "--chain", "arbitrum", "--json")).program as {
+      json(await sauce("inspect", optedOut, "--chain", "ethereum", "--json")).program as {
         intents: Array<Record<string, unknown>>;
       }
     ).intents;
@@ -403,11 +450,11 @@ describe("sauce inspect", () => {
     expect(fromFile.stdout).toMatch(/reward: <amount> of 0x/);
     expect(fromFile.stdout).toMatch(/\.transfer\(<recipient>, <amount>\)/);
     const data = await cookOf(measured, ...INTENT_FLAGS, "--args", RECIPIENT);
-    const fromBytes = json(await sauce("inspect", data, "--chain", "arbitrum", "--json"));
+    const fromBytes = json(await sauce("inspect", data, "--chain", "ethereum", "--json"));
     expect((fromBytes.program as { intents: unknown[] }).intents).toEqual([
       { destination: { id: "8453", chain: "base" }, measured: true, fundVia: "transfer" },
     ]);
-    expect((await sauce("inspect", data, "--chain", "arbitrum")).stdout).toContain(
+    expect((await sauce("inspect", data, "--chain", "ethereum")).stdout).toContain(
       "funded: the program pays the reward into the intent's vault, then calls Portal.publish",
     );
     // Given the source, the cook's intents are the compile's, named.
@@ -443,9 +490,9 @@ describe("sauce inspect", () => {
       call: "ERC20.transfer",
       args: { to: vault, amount: "2000" },
     });
-    const text = await sauce("inspect", publish!, "--chain", "arbitrum");
+    const text = await sauce("inspect", publish!, "--chain", "ethereum");
     expect(text.stdout).toContain(`vault: ${vault}, funded once it holds the reward`);
-    expect(json(await sauce("inspect", publish!, "--chain", "arbitrum", "--json"))).toMatchObject({
+    expect(json(await sauce("inspect", publish!, "--chain", "ethereum", "--json"))).toMatchObject({
       call: "Portal.publish",
       intent: { intentHash, vault, destination: { chain: "base" } },
     });
@@ -458,7 +505,7 @@ describe("sauce inspect", () => {
       args: { amount: "2000" },
     });
     expect(
-      json(await sauce("inspect", publishAndFund!, "--chain", "arbitrum", "--json")),
+      json(await sauce("inspect", publishAndFund!, "--chain", "ethereum", "--json")),
     ).toMatchObject({
       call: "Portal.publishAndFund",
       intent: { intentHash, vault, destination: { chain: "base" } },

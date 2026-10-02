@@ -2,8 +2,18 @@
 
 # BNB Chain
 
+**Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
+On BNB Chain a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
+runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,
+`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are
+refused, naming the supported chains and how to request this one.
+
+To request BNB Chain, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22BNB+Chain%22) and add your
+use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+BNB+Chain+%2856%29&chain=BNB+Chain&chain-id=56) with the chain-support issue form.
+
 | Fact | Value |
 | --- | --- |
+| Support | preview: compile and simulate; no transaction is built or sent |
 | Slug (`--chain`) | `bsc`; also `bnb`, `binance-smart-chain`, `bnb-smart-chain` |
 | Chain id | 56 |
 | Kind | EVM |
@@ -72,6 +82,7 @@ address.
 | [SushiSwap V2](../../sauce-protocols/references/registry/sushiswap-v2.md) | factory | `0xc35DADB65012eC5796536bD9864eD8773aBc74C4` | `SushiswapV2.Factory` |
 | [SushiSwap V2](../../sauce-protocols/references/registry/sushiswap-v2.md) | router | `0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506` | `SushiswapV2.Router` |
 | [Thena](../../sauce-protocols/references/registry/thena.md) | routerV2 | `0xd4ae6eCA985340Dd434D38F470aCCce4DC78D109` | `Thena.RouterV2` |
+| [Trader Joe](../../sauce-protocols/references/registry/trader-joe.md) | lbFactory | `0x8e42f2F4101563bF679975178e880FD87d3eFd4e` | `TraderJoe.LBFactory` |
 | [Trader Joe](../../sauce-protocols/references/registry/trader-joe.md) | lbRouter | `0xb4315e873dBcf96Ffd0acd8EA43f689D8c20fB30` | `TraderJoe.LBRouter` |
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | factory | `0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6` | `UniswapV2.Factory` |
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | router | `0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24` | `UniswapV2.Router` |

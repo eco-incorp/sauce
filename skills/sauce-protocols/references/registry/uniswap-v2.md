@@ -57,6 +57,15 @@ function main() {
 - `getPair(address tokenA, address tokenB) view returns (address pair)`
 - `createPair(address tokenA, address tokenB) returns (address pair)`
 
+### `UniswapV2PairABI`
+
+`import UniswapV2PairABI from "./protocols/uniswap-v2/UniswapV2PairABI.json";`
+
+- `getReserves() view returns (uint112 _reserve0, uint112 _reserve1, uint32 _blockTimestampLast)`
+- `token0() view returns (address)`
+- `token1() view returns (address)`
+- `swap(uint256 amount0Out, uint256 amount1Out, address to, bytes data)`
+
 ### `UniswapV2RouterABI`
 
 `import UniswapV2RouterABI from "./protocols/uniswap-v2/UniswapV2RouterABI.json";` Speaks for: router.

@@ -16,7 +16,7 @@
  */
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
-import { chainAmbient, chainDefines } from "./ambient.js";
+import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
 import { isSauceClosure, closureText, type SauceBody } from "./closure.js";
 import {
   encodeRewardEvm,
@@ -566,7 +566,10 @@ export function openRoute(
   // (`sauce-route.ts#levelOn`, which also drops the caller's defines of chain-scoped names there).
   const callerDefines = { ...options.defines, ...options.compile?.defines };
   const scope: RouteScope = {
-    chainDefines: (chain) => chainDefines(chain, { tokens: options.tokenDefines }),
+    chainDefines: (chain) =>
+      options.tokenDefines === undefined
+        ? sharedChainDefines(chain)
+        : chainDefines(chain, { tokens: options.tokenDefines }),
   };
 
   // P7 — the ambient-MODULE half of the chain bundle (`scope.chainDefines` above is the scalar

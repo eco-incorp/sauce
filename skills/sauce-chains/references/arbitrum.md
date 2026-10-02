@@ -2,8 +2,18 @@
 
 # Arbitrum One
 
+**Preview chain.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana only.
+On Arbitrum One a program compiles and simulates (`sauce compile`, `sauce simulate`, the dry
+runs), but the `sauce` command and the MCP server build and send no transaction: `sauce tx`,
+`sauce run`, `sauce pot --deploy`, `sauce intent publish` and the intent steps sent here are
+refused, naming the supported chains and how to request this one.
+
+To request Arbitrum One, look for [its existing request](https://github.com/eco-incorp/sauce/issues?q=is%3Aissue+label%3Achain-support+%22Arbitrum+One%22) and add your
+use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-support.yml&title=Chain+support%3A+Arbitrum+One+%2842161%29&chain=Arbitrum+One&chain-id=42161) with the chain-support issue form.
+
 | Fact | Value |
 | --- | --- |
+| Support | preview: compile and simulate; no transaction is built or sent |
 | Slug (`--chain`) | `arbitrum`; also `arb` |
 | Chain id | 42161 |
 | Kind | EVM |
@@ -100,6 +110,7 @@ address.
 | [Level Finance](../../sauce-protocols/references/registry/level-finance.md) | liquidityPool | `0x32B7bF19cb8b95C27E644183837813d4b595dcc6` | `LevelFinance.LiquidityPool` |
 | [Lido](../../sauce-protocols/references/registry/lido.md) | wstETH | `0x5979D7b546E38E414F7E9822514be443A4800529` | `Lido.WstETH` |
 | [LI.FI](../../sauce-protocols/references/registry/lifi.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond` |
+| [Maverick](../../sauce-protocols/references/registry/maverick.md) | v2Factory | `0x0A7e848Aca42d879EF06507Fca0E7b33A0a63c1e` | `Maverick.V2Factory` |
 | [Maverick](../../sauce-protocols/references/registry/maverick.md) | v2Router | `0x5c3b380e5Aeec389d1014Da3Eb372FA2C9e0fc76` | `Maverick.V2Router` |
 | [MUX Protocol](../../sauce-protocols/references/registry/mux-protocol.md) | liquidityPool | `0x3e0199792Ce69DC29A0a36146bFa68bd7C8D6633` | `MuxProtocol.LiquidityPool` |
 | [MUX Protocol](../../sauce-protocols/references/registry/mux-protocol.md) | orderBook | `0xa19fD5aB6C8DCffa2A295F78a5Bb4aC543AAF5e3` | `MuxProtocol.OrderBook` |
@@ -129,6 +140,7 @@ address.
 | [SushiSwap V2](../../sauce-protocols/references/registry/sushiswap-v2.md) | factory | `0xc35DADB65012eC5796536bD9864eD8773aBc74C4` | `SushiswapV2.Factory` |
 | [SushiSwap V2](../../sauce-protocols/references/registry/sushiswap-v2.md) | router | `0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506` | `SushiswapV2.Router` |
 | [Synapse Protocol](../../sauce-protocols/references/registry/synapse.md) | synapseBridge | `0x6F4e8eba4d337f874AB57478AcC2Cb5BacDc19c9` | `Synapse.SynapseBridge` |
+| [Trader Joe](../../sauce-protocols/references/registry/trader-joe.md) | lbFactory | `0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c` | `TraderJoe.LBFactory` |
 | [Trader Joe](../../sauce-protocols/references/registry/trader-joe.md) | lbRouter | `0x18556da13313f3532c54711497a8fedac273220e` | `TraderJoe.LBRouter` |
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | factory | `0xf1D7CC64Fb4452F05c498126312eBE29f30Fbcf9` | `UniswapV2.Factory` |
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | router | `0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24` | `UniswapV2.Router` |

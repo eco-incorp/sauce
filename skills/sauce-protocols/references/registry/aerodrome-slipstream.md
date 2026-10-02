@@ -45,6 +45,17 @@ function main() {
 
 - `execute(bytes _commands, bytes[] _inputs, uint256 _deadline) payable`
 
+### `AerodromeSlipstreamPoolABI`
+
+`import AerodromeSlipstreamPoolABI from "./protocols/aerodrome-slipstream/AerodromeSlipstreamPoolABI.json";`
+
+- `slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, bool unlocked)`
+- `liquidity() view returns (uint128)`
+- `fee() view returns (uint24)`
+- `tickSpacing() view returns (int24)`
+- `token0() view returns (address)`
+- `token1() view returns (address)`
+
 ### `SlipstreamCLFactoryABI`
 
 `import SlipstreamCLFactoryABI from "./protocols/aerodrome-slipstream/SlipstreamCLFactoryABI.json";` Speaks for: clFactory, clFactoryGaugeCaps, clFactoryGaugesV3.

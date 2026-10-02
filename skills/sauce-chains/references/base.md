@@ -2,8 +2,13 @@
 
 # Base
 
+**Supported.** For the initial release, Sauce supports transactions on Ethereum, Base and Solana. On
+Base a program compiles and simulates, and the `sauce` command and the MCP server build
+its transactions and send them.
+
 | Fact | Value |
 | --- | --- |
+| Support | supported: transactions are built and sent |
 | Slug (`--chain`) | `base` |
 | Chain id | 8453 |
 | Kind | EVM |
@@ -47,6 +52,9 @@ function main() {
 | --- | --- | --- |
 | `USDC` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | 6 |
 | `WETH` | `0x4200000000000000000000000000000000000006` | 18 |
+
+And 67 tokenized stocks, each named by its symbol in the same way: they are in
+[base-stocks.md](base-stocks.md), with their addresses.
 
 ## Protocols
 
@@ -93,6 +101,7 @@ address.
 | [KyberSwap Aggregator](../../sauce-protocols/references/registry/kyberswap-aggregator.md) | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberswapAggregator.MetaAggregationRouter` |
 | [LayerZero](../../sauce-protocols/references/registry/layerzero.md) | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` | `Layerzero.EndpointV2` |
 | [LI.FI](../../sauce-protocols/references/registry/lifi.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond` |
+| [Maverick](../../sauce-protocols/references/registry/maverick.md) | v2Factory | `0x0A7e848Aca42d879EF06507Fca0E7b33A0a63c1e` | `Maverick.V2Factory` |
 | [Maverick](../../sauce-protocols/references/registry/maverick.md) | v2Router | `0x5eDEd0d7E76C563FF081Ca01D9d12D6B404Df527` | `Maverick.V2Router` |
 | [Moonwell](../../sauce-protocols/references/registry/moonwell.md) | comptroller | `0xfBb21d0380beE3312B33c4353c8936a0F13EF26C` | `Moonwell.Comptroller` |
 | [Morpho Blue](../../sauce-protocols/references/registry/morpho-blue.md) | morpho | `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` | `MorphoBlue.Morpho` |

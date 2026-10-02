@@ -132,15 +132,20 @@ describe("sauce mcp, before the server loads", () => {
   }
 
   it("is listed, prints its help, and checks which flags go with which mode", async () => {
-    expect((await sauce("--help")).stdout).toMatch(/\n {2}mcp +Serve the read-only commands/);
+    expect((await sauce("--help")).stdout).toMatch(/\n {2}mcp +Serve the commands and the agent/);
     const help = await sauce("mcp", "--help");
     expect(help.code).toBe(0);
     expect(help.stdout).toMatch(/npx -y @eco-incorp\/sauce mcp --http 3000 --config/);
+    expect(help.stdout).toMatch(/--wallets \[<dir>\] +Over stdio: sign with the wallets/);
     for (const [argv, message] of [
       [["mcp", "--agent", "claude"], /--agent goes with sauce mcp setup/],
       [["mcp", "setup", "--http", "0"], /--http is for serving, not setup/],
       [["mcp", "setup", "--allow-private-rpc"], /--allow-private-rpc is for serving/],
       [["mcp", "serve"], /unexpected argument serve/],
+      // Wallets are stdio's alone, with a password source that is not a prompt.
+      [["mcp", "--http", "0", "--wallets", "--password-env", "X"], /--wallets is for stdio/],
+      [["mcp", "--wallets"], /--wallets needs its password source/],
+      [["mcp", "--password-file", "p"], /--password-file goes with --wallets/],
     ] as const) {
       const run = await sauce(...argv);
       expect(run.code).toBe(2);
