@@ -139,14 +139,19 @@ function otherStatement(file: string, text: string): string | undefined {
 }
 
 /** The intents `input`'s file opens, refusing a file that is not only fixed intents. */
-function fixedIntents(input: ProgramInput, files: CliFiles): readonly LoweredIntent[] {
+function fixedIntents(input: PublishInput, files: CliFiles): readonly LoweredIntent[] {
   if (input.chain.kind !== "evm") {
     throw new UsageError(
       `sauce intent publish sends source-chain Portal transactions, and ${input.chain.slug} is not an ` +
         "EVM chain: the eco-routes Portal this SDK addresses is EVM only.",
     );
   }
-  const program = compileProgram(input, files);
+  // The wallet that publishes them is their creator, unless the flags name one.
+  const creator = input.intents.creator ?? input.account?.address ?? input.from;
+  const program = compileProgram(
+    creator === undefined ? input : { ...input, intents: { ...input.intents, creator } },
+    files,
+  );
   if (program.intents.length === 0) {
     throw new UsageError(
       `${input.file} opens no intent — there is nothing to publish. Run it on a Pot with ` +

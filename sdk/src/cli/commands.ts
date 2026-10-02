@@ -119,10 +119,13 @@ export interface ProgramInput {
     readonly deadline?: bigint;
     /** From when an unproven intent's reward may be refunded; the route's deadline by default. */
     readonly rewardDeadline?: bigint;
+    /** When the program's own intents open, for their default deadlines: now, unless given. */
+    readonly openedAt?: bigint;
     readonly creator?: Address;
     /** The reward's prover; the registry's for the pair by default. */
     readonly prover?: Address;
-    readonly executionFee?: bigint;
+    /** One fee for every destination's Kitchen, or each destination's own (`auto`). */
+    readonly executionFee?: bigint | ((destination: CanonicalChain) => bigint | undefined);
     /** How their reward is funded, by the program a Pot runs or by `sauce intent publish`'s wallet:
      *  `"transfer"` into the vault then `publish` (the default), or `"publishAndFund"`. */
     readonly fundVia?: IntentFundVia;
@@ -207,9 +210,16 @@ function compileOptions(
 ): SauceCompileOptions {
   const dir = sourceDirOf(input);
   const { deadline, rewardDeadline, creator, prover, executionFee, fundVia } = input.intents;
+  // An intent written `Chain.Portal...` with no deadline gets its default counted from now, so it
+  // is fixed when the file compiles, as a wallet that publishes it needs; a level below counts from
+  // when its parent runs.
+  const openedAt =
+    input.intents.openedAt ??
+    (deadline === undefined ? BigInt(Math.floor(Date.now() / 1000)) : undefined);
   const intents = {
     ...(deadline === undefined ? {} : { deadline }),
     ...(rewardDeadline === undefined ? {} : { rewardDeadline }),
+    ...(openedAt === undefined ? {} : { openedAt }),
     ...(creator === undefined ? {} : { creator }),
     ...(prover === undefined ? {} : { prover }),
     ...(executionFee === undefined ? {} : { executionFee }),
@@ -257,17 +267,34 @@ export function compileProgram(
 }
 
 /**
- * The chains a cook of `input` is refused by: its own, and the destination of each intent it opens
- * — what {@link requireSupported} is asked about before anything that publishes them. A fee the
- * intents' cooks are not given yet is zero here: the chains do not depend on it.
+ * What a compile that only looks for the intents a program opens — their chains, the fees their
+ * cooks pay — gives for what the command fills in later: a fee of zero, and a creator standing in
+ * for the wallet that will send. Neither changes which intents there are, or where.
  */
-export function programChains(input: ProgramInput, files: CliFiles): CanonicalChain[] {
-  const probe = compileProgram(
-    { ...input, intents: { ...input.intents, executionFee: input.intents.executionFee ?? 0n } },
+export const PROBE_CREATOR: Address = "0x0000000000000000000000000000000000000001";
+
+/** `input` compiled for the intents it opens, before the command fills in a fee or a creator:
+ *  {@link PROBE_CREATOR}. */
+export function probeProgram(input: ProgramInput, files: CliFiles): CompiledSauceProgram {
+  return compileProgram(
+    {
+      ...input,
+      intents: {
+        ...input.intents,
+        creator: input.intents.creator ?? PROBE_CREATOR,
+        executionFee: input.intents.executionFee ?? 0n,
+      },
+    },
     files,
   );
+}
 
-  return [input.chain, ...intentDestinations(probe.intents)];
+/**
+ * The chains a cook of `input` is refused by: its own, and the destination of each intent it opens
+ * — what {@link requireSupported} is asked about before anything that publishes them.
+ */
+export function programChains(input: ProgramInput, files: CliFiles): CanonicalChain[] {
+  return [input.chain, ...intentDestinations(probeProgram(input, files).intents)];
 }
 
 /** The installed compiler's package name and version, read from its own manifest. */
@@ -547,7 +574,14 @@ export function cookOf(input: CookInput, files: CliFiles): Cook {
   const target = input.target;
   const pot = "pot" in target ? target.pot : (v12PredictPot(target.owner, target.salt) as Address);
   const engine = getAddress(v12EngineAddress());
-  const program = compileProgram(input, files);
+  // The intents the program opens are the owner's, who sends and funds the cook, unless it names
+  // their creator.
+  const program = compileProgram(
+    "owner" in target && input.intents.creator === undefined
+      ? { ...input, intents: { ...input.intents, creator: getAddress(target.owner) } }
+      : input,
+    files,
+  );
   // The cook `compileSauceRoute` would build, over the program with its arguments appended — the
   // way the SDK's own intent children carry theirs.
   const data = buildSauceEvmCall({ pot, engine, program: payloadOf(program, input.args) }).data;

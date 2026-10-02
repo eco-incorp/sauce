@@ -355,8 +355,9 @@ function intentsOf(
   const { intentExecutionFee, intentFundVia } = args;
 
   return {
+    // With no deadline, the intents open now: once, so every compile of the call builds the same.
     ...(intentDeadline === undefined
-      ? {}
+      ? { openedAt: BigInt(Math.floor(Date.now() / 1000)) }
       : {
           deadline: parseUnixSeconds(
             "intent-deadline",
@@ -1827,9 +1828,17 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
-      const program = programOf(args);
-      const chain = program.input.chain;
       const from = args.from === undefined ? undefined : parseAddress("from", args.from);
+      const given = programOf(args);
+      // The wallet that publishes is the intents' creator, unless the call names one.
+      const program =
+        from === undefined || given.input.intents.creator !== undefined
+          ? given
+          : {
+              ...given,
+              input: { ...given.input, intents: { ...given.input.intents, creator: from } },
+            };
+      const chain = program.input.chain;
       const assume = chain.kind === "evm" ? assumedBalances(args.assumeBalance ?? [], chain) : [];
       if (assume.length > 0 && args.dryRun !== true) {
         throw new UsageError(

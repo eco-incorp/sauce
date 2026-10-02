@@ -184,7 +184,7 @@ async function tokenOn(
     ...(read?.symbol === undefined ? {} : { symbol: read.symbol }),
     address,
     decimals,
-    spelled: `Token(${address.toLowerCase()}n)`,
+    spelled: `Token(${address.toLowerCase()})`,
   };
 }
 
@@ -356,14 +356,14 @@ function intentText(options: {
   const accessor = options.destination.name.replace(/[^A-Za-z0-9]/g, "");
   /** A token as a value: its symbol, or its address as a literal. */
   const value = (token: Token): string =>
-    token.spelled === token.symbol ? token.symbol : `${token.address.toLowerCase()}n`;
+    token.spelled === token.symbol ? token.symbol : token.address.toLowerCase();
 
   return [
     ...options.header.map((line) => `// ${line}`),
-    `${accessor}.Portal.send({ token: ${value(options.rewardToken)}, amount: ${options.reward}n })`,
-    `  .receive({ token: ${value(options.delivered)}, amount: ${options.amount}n })`,
+    `${accessor}.Portal.send({ token: ${value(options.rewardToken)}, amount: ${options.reward} })`,
+    `  .receive({ token: ${value(options.delivered)}, amount: ${options.amount} })`,
     "  .then(() => {",
-    `    ${options.delivered.spelled}.transfer(${options.recipient.toLowerCase()}n, ${options.amount}n);`,
+    `    ${options.delivered.spelled}.transfer(${options.recipient.toLowerCase()}, ${options.amount});`,
     "  });",
     "",
   ].join("\n");
@@ -563,7 +563,8 @@ export async function createIntent(input: CreateInput): Promise<Created> {
         "Reward deadline: from when an unproven reward is refundable to you. Leave the solver time\n" +
           "to prove after the fill deadline, and its proof to arrive: a unix second or\n" +
           "+<n>[s|m|h|d] from now",
-        { fallback: "+25h", check: (text) => checkWhen(text, input.now) },
+        // Seven days past an hour's fill deadline: the least Eco's solver takes.
+        { fallback: "+169h", check: (text) => checkWhen(text, input.now) },
       ),
   );
   const rewardDeadline =
