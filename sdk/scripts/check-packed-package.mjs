@@ -280,12 +280,12 @@ try {
       creator: '0x3333333333333333333333333333333333333333' as const,
       prover: '0x4444444444444444444444444444444444444444' as const,
     };
-    const built = Base(() => {
+    const built = Base.Portal.send([], {}).receive([], options).then(() => {
       USDC.approve(Uniswap.UniversalRouter, 1000000n);
       // The language's builtins are declared for a typed closure too (builtins.generated.ts).
       require(ctx.timestamp() > 0n, "stale");
       log(crypto.keccak256(hex\`01\`).toBytesBe(32n));
-    }, options).reward(0n);
+    });
     if (built.compiled.bytecode[0].length === 0) throw new Error('Empty route');
     // The actions declarations reference the SDK's by relative path; this checks they resolve.
     const program: ActionProgram = parseProgram({ version: 1, chainId: 8453, actions: [

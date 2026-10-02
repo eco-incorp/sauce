@@ -44,7 +44,7 @@ export function beforeReady() {
 export async function run(source) {
   await ready(source);
 
-  // The README's route example, verbatim: `Base(() => { USDC.approve(...) }, options).reward(...)`.
+  // The README's route example, verbatim: `Base.Portal.send(...).receive(...).then(() => { ... })`.
   // Imported only now, because building the route compiles it.
   const { built } = await import("./readme-route.mjs");
 
