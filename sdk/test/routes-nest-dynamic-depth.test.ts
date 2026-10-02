@@ -158,7 +158,7 @@ describe("the ceiling", () => {
   // impractical: a `hex` literal is length-encoded with a u16, so one segment cannot exceed 65535
   // bytes. DISCOVERED rather than hardcoded -- the exact depth moves with the per-level byte cost,
   // and a number baked in here would silently become a weaker assertion after any codegen change.
-  const NAMED = /array literal has \d+ elements, beyond the 65535 the engine can encode/;
+  const NAMED = /array literal can have at most 65535 elements, got \d+/;
 
   const compiles = (depth: number): boolean => {
     try {

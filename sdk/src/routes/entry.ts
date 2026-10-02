@@ -71,8 +71,11 @@ function entryTypeOf(param: { readonly type: string; readonly components?: unkno
       .join(", ");
     return `{ ${fields} }`;
   }
+  // The compiler reports an `Address` as `address` on the EVM and as `bytes32` on Solana, where a
+  // public key is the whole word; no other parameter is a `bytes32`.
   const scalar: Readonly<Record<string, string>> = {
     address: "Address",
+    bytes32: "Address",
     bool: "bool",
     bytes: "bytes",
     string: "string",
