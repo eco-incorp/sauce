@@ -14,16 +14,17 @@ import { uniswapV3 } from "@sauce/router";
 //
 // The swap is on Base's Uniswap V3 WETH/USDC pool at the 0.05% tier, looked up where the body runs.
 function main(recipient: Address, delivered: Uint256, reward: Uint256, minOut: Uint256) {
-  Base(
-    () => {
+  Base.Portal.send({ token: USDC, amount: reward })
+    .receive({ token: USDC, amount: delivered })
+    .then(() => {
       const amount = USDC.balanceOf(ctx.self());
       const pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);
       const bought = uniswapV3(pool, USDC, WETH, amount, 0n, minOut, ctx.self());
       const payout = bought - bought / 1000n;
-      Ethereum(() => {
-        WETH.transfer(recipient, payout);
-      }).reward({ tokens: [{ token: WETH, amount: bought }] });
-    },
-    { tokens: [{ token: USDC, amount: delivered }] },
-  ).reward({ tokens: [{ token: USDC, amount: reward }] });
+      Ethereum.Portal.send({ token: WETH, amount: bought })
+        .receive({ token: WETH, amount: payout })
+        .then(() => {
+          WETH.transfer(recipient, payout);
+        });
+    });
 }

@@ -112,11 +112,13 @@ const INTENT = [
 
 /** The same intent, written `Base.Portal.send(reward).receive(delivery).then(body)`. */
 const PORTAL_INTENT = [
-  "Base.Portal.send({ token: USDC, amount: REWARD })",
-  "  .receive({ token: USDC, amount: AMOUNT })",
-  "  .then(() => {",
-  "    USDC.transfer(RECIPIENT, AMOUNT);",
-  "  });",
+  "function main(recipient: Address, amount: Uint256, reward: Uint256) {",
+  "  Base.Portal.send({ token: USDC, amount: reward })",
+  "    .receive({ token: USDC, amount })",
+  "    .then(() => {",
+  "      USDC.transfer(recipient, amount);",
+  "    });",
+  "}",
   "",
 ].join("\n");
 

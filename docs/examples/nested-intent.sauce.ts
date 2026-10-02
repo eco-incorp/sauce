@@ -13,17 +13,19 @@
 // a percent the next solver keeps. Its reward is paid into its vault on Base's Portal, and it is
 // published, in that same fulfilment.
 //
-// Every `USDC` is the USDC of the chain where its part runs: the outer reward's is Ethereum's; the
-// outer body's, its delivery's and the inner reward's are Base's; the inner body's is Ethereum's.
+// Every `USDC` is the USDC of the chain where its part runs: the outer `.send(...)`'s is Ethereum's;
+// the outer `.receive(...)`'s, the outer body's and the inner `.send(...)`'s are Base's; the inner
+// `.receive(...)`'s and the inner body's are Ethereum's.
 function main(recipient: Address, delivered: Uint256, reward: Uint256) {
-  Base(
-    () => {
+  Base.Portal.send({ token: USDC, amount: reward })
+    .receive({ token: USDC, amount: delivered })
+    .then(() => {
       const amount = USDC.balanceOf(ctx.self());
       const payout = amount - amount / 1000n;
-      Ethereum(() => {
-        USDC.transfer(recipient, payout);
-      }).reward({ tokens: [{ token: USDC, amount }] });
-    },
-    { tokens: [{ token: USDC, amount: delivered }] },
-  ).reward({ tokens: [{ token: USDC, amount: reward }] });
+      Ethereum.Portal.send({ token: USDC, amount })
+        .receive({ token: USDC, amount: payout })
+        .then(() => {
+          USDC.transfer(recipient, payout);
+        });
+    });
 }
