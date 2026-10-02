@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Every generated file of the agent skills, from the SDK's registries — ONE generator, so the
-// three views of the same facts cannot drift from each other or from the registry:
+// Every generated file of the agent skills and of the manual's reference, from the SDK's
+// registries — ONE generator, so the views of the same facts cannot drift from each other or from
+// the registry:
 //
 //   skills/sauce-globals/references/{tokens,stocks,protocols,chains}.md   the NAMES a program uses
 //                                                                  with no import (no addresses)
@@ -15,6 +16,23 @@
 //   skills/sauce-protocols/references/registry/<slug>.md           per protocol: its deployments per
 //                                                                  chain, how a program names each,
 //                                                                  and its ABI functions
+//
+// and the same chains and protocols for a human reader, under `docs/reference/`:
+//
+//   chains.md, chains/<chain>.md, chains/<chain>-stocks.md         the chain files, linked as pages
+//   protocols.md, protocols/<slug>.md                              the protocol index, and one page per
+//                                                                  protocol: its registry facts with
+//                                                                  its document folded in
+//   tokens.md                                                      every chain's tokens and stocks
+//   saucescript.md                                                 the SauceScript reference, the
+//                                                                  `sauce-script` skill's file verbatim
+//   ../guides/distributed-swap.md                                  the `sauce-distributed-swap` skill,
+//                                                                  rendered as a guide
+//
+// The two audiences differ only in their links and in how they name what the other has: a skill
+// names another skill (`sauce-swaps`), and a manual page links the page that covers it. The manual
+// never links into `skills/`, and a skill never links the manual, so each stands alone: an agent
+// with only the skills (over MCP, say) and a reader with only the manual both have every fact.
 //
 // ONE SOURCE. Names come from `routes.sourceGlobals(chain)`, the function `sauce globals` prints;
 // protocols, their categories and deployments from `listProtocols()` and each `protocols/<slug>`
@@ -32,8 +50,9 @@
 //   node scripts/gen-skills-references.mjs           write the files
 //   node scripts/gen-skills-references.mjs --check   exit 1, naming each, when a file is stale
 //   import { globalsIndex, skillsReferences, renderSkillsReferences }   for the skills checker
+//   import { freshDocsReference }                                       for the docs checker
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { getAddressDecoder } from "@solana/kit";
@@ -41,7 +60,11 @@ import { getAddressDecoder } from "@solana/kit";
 const SDK = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** The repository's skills directory. */
 export const SKILLS_DIR = join(SDK, "..", "skills");
+/** The manual's generated reference. */
+export const DOCS_REFERENCE_DIR = join(SDK, "..", "docs", "reference");
 const TARGETS = join(SDK, "test", "fixtures", "registry-abi", "targets.json");
+/** The SauceScript reference: hand-written in its skill, and copied into the manual as it is. */
+const BUILTINS = join(SKILLS_DIR, "sauce-script", "references", "builtins.md");
 
 const HEADER = "<!-- Generated from the SDK's registries. Do not edit. -->";
 
@@ -50,6 +73,12 @@ const INTENT_PROTOCOL = "eco-routes";
 
 /** Directories whose every `.md` file this generator owns (stale ones are removed). */
 export const GENERATED_DIRS = ["sauce-chains/references", "sauce-protocols/references/registry"];
+/** The same under the manual's reference, which is generated whole: a page written there by hand
+ *  would be removed, so a hand-written reference page belongs in `docs/api/`. */
+export const DOCS_GENERATED_DIRS = [".", "chains", "protocols"];
+/** The one generated page outside `docs/reference/`: the distributed swap, a guide rendered from
+ *  its skill, by path relative to `docs/reference/`. */
+export const DISTRIBUTED_SWAP_GUIDE = "../guides/distributed-swap.md";
 
 // ---- The names a program uses: sauce globals ----------------------------------------------------
 
@@ -374,6 +403,8 @@ export async function skillsReferences(api, documented) {
       support: support.chainSupport(chain.slug),
       request: support.chainSupportRequest(chain.slug),
       key: names.chain.key,
+      // Whether the package root exports the chain by that name, for TypeScript.
+      exported: sdk[names.chain.key] !== undefined,
       aliases: chain.aliases ?? [],
       coin,
       native: tokens?.native,
@@ -437,17 +468,21 @@ const CATEGORIES = [
 /** "Choosing between them", per category. Facts about the protocols' designs, not rankings. */
 const CHOOSING = {
   dex: [
-    "Inside a Sauce program, swap through the Sauce Router wherever it services the pool",
-    "(`sauce-swaps`): Uniswap V3 and its forks (PancakeSwap V3, Aerodrome Slipstream, Algebra pools,",
-    "Synthra, UnitFlow) and Uniswap V4 through `swapV3`/`swapV4`, and V2-style pairs, Curve, Balancer",
-    "V2, DODO V2, Trader Joe LB and WOOFi through its unified `swap`. Choose by pool type:",
+    "Inside a Sauce program, swap with `@sauce/router`'s function for the venue (`sauce-swaps`), every",
+    "argument a run-time value, each returning what the recipient received and reverting below its",
+    "`minOut`. `uniswapV2` (Uniswap V2 and its forks' pairs), `curve`, `balancerV2`, `dodoV2`,",
+    "`traderJoeLB` and `woofi` pay the pool first and call it directly; `uniswapV3` (Uniswap V3 and its",
+    "forks: PancakeSwap V3, Aerodrome Slipstream, Algebra pools, Synthra, UnitFlow), `uniswapV4` and",
+    "`maverickV2` go through the Pot's Router, which answers the pool's callback. Choose by pool type:",
     "",
-    "- **Concentrated liquidity** (V3-style, V4): the deepest pools for liquid pairs, several fee tiers",
-    "  per pair, and a price limit, so a fill can stop part way and return the rest.",
-    "- **Constant-product pairs** (Uniswap V2 and its forks, Solidly-style volatile pools): one pool per",
-    "  pair, no price limit; a fill is bounded only by the minimum output you check.",
-    "- **Stable pools** (Curve, Solidly-style stable pools): built for assets meant to trade near 1:1,",
-    "  with less price impact there than a constant-product pair.",
+    "- **Concentrated liquidity** (V3-style pools through `uniswapV3`, V4 pools through `uniswapV4`):",
+    "  the deepest pools for liquid pairs, several fee tiers per pair, and a price limit, so a fill can",
+    "  stop part way and leave the rest unspent.",
+    "- **Constant-product pairs** (Uniswap V2 and its forks through `uniswapV2`, Solidly-style volatile",
+    "  pools): one pool per pair, no price limit; a swap consumes its whole input, bounded only by its",
+    "  `minOut`.",
+    "- **Stable pools** (Curve through `curve`, Solidly-style stable pools): built for assets meant to",
+    "  trade near 1:1, with less price impact there than a constant-product pair.",
     "- **One trade across several pools** under one limit: `sauce-distributed-swap`.",
   ],
   aggregator: [
@@ -545,6 +580,32 @@ const CHOOSING = {
 
 /** Chain-specific facts, each from a source the reader can check. */
 const CHAIN_NOTES = {
+  arc: [
+    "Arc pays gas in USDC, and has one USDC balance at two decimal scales: the native coin",
+    "(`msg.value`, `eth_getBalance`, gas) has 18 decimals, and the ERC-20 `USDC` at",
+    "`0x3600000000000000000000000000000000000000` has 6. Sending native value and calling",
+    "`USDC.transfer` move the same money.",
+    "",
+    "- A Pot that spends its whole `USDC` balance and also pays a native fee (a bridge's or a",
+    "  messenger's fee, the Kitchen's execution fee) runs out: the fee comes from the same balance.",
+    "  Leave room for it.",
+    "- `balanceOf` is the native balance divided by 10^12 and rounded down, so less than 10^12 wei",
+    "  reads as 0. Compare a native amount with a token amount only after converting one to the",
+    "  other's scale.",
+    "- Every native amount has 18 decimals: an execution fee, a cook's value, the `nativeAmount` of a",
+    "  route or a reward. `1_000_000n` of native value is 10^-12 USDC, not 1 USDC.",
+    "- The minimum base fee is 20 gwei, and a transaction whose `maxFeePerGas` is below it is dropped",
+    "  silently: no error, and no receipt.",
+    "- There is no canonical wrapped native, and nothing needs wrapping. `WETH` is bridged ETH, with no",
+    "  `deposit()` or `withdraw()`, and Uniswap's Arc periphery reports a `WETH9()` that always",
+    "  reverts, so the ETH paths of its routers revert too. Wrapping, unwrapping and staking the",
+    "  native coin are refused for Arc.",
+    "- Native value sent to the zero address, to or from a blocklisted address, or to a",
+    "  self-destructed account reverts, also when a contract forwards it.",
+    "- An intent's reward offers native value or `USDC`, not both: Arc's Portal takes them for one",
+    "  asset and reverts `RewardTokensNotUnique(USDC)`, so the SDK refuses such a reward when it is",
+    "  built. Fold the two into one amount.",
+  ],
   base: [
     "Base's own documentation: `eth_call` and `eth_estimateGas` against the `pending` block tag see",
     "Flashblocks state, so a read right after a send uses `pending` to see it.",
@@ -582,8 +643,113 @@ const tokenProgramName = (program) =>
 const transferFee = (t) => (t.stock.transferFee ? "yes: the recipient gets less" : "none");
 const categoryName = (category) => CATEGORIES.find(([key]) => key === category)?.[1] ?? category;
 const constName = (role) => role.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase();
-const chainLink = (chain, from) =>
-  `[${chain.name}](${from}sauce-chains/references/${chain.slug}.md)`;
+
+// ---- The two audiences ------------------------------------------------------------------------------
+
+/**
+ * Where an audience's pages live, each path relative to its root (`skills/`, `docs/reference/`),
+ * and how its prose names what the other audience has.
+ */
+const SKILLS_SITE = {
+  chainIndex: "sauce-chains/references/index.md",
+  chain: (slug) => `sauce-chains/references/${slug}.md`,
+  chainStocks: (slug) => `sauce-chains/references/${slug}-stocks.md`,
+  protocolIndex: "sauce-protocols/references/index.md",
+  protocol: (slug) => `sauce-protocols/references/registry/${slug}.md`,
+  /** A protocol's hand-written document, a file of its own beside its registry file. */
+  document: (slug) => `sauce-protocols/references/${slug}.md`,
+  /** A skill names another skill as it is. */
+  prose: (lines) => lines,
+  /** A file a skill links is named by its file name. */
+  label: (file) => posix.basename(file),
+  noun: "file",
+};
+
+/**
+ * What the manual links where a skill names a skill: the page that covers the same ground, by
+ * path relative to `docs/`. A skill with no such page is named as the agent skill it is.
+ */
+const DOCS_FOR_SKILL = {
+  "sauce-overview": ["the documentation", "README.md"],
+  "sauce-script": ["the SauceScript reference", "reference/saucescript.md"],
+  "sauce-globals": ["tokens", "reference/tokens.md"],
+  "sauce-chains": ["chains", "reference/chains.md"],
+  "sauce-protocols": ["protocols", "reference/protocols.md"],
+  "sauce-swaps": ["the `@sauce/router` reference", "api/router.md"],
+  "sauce-intents": ["intents", "guides/intents.md"],
+  "sauce-solana": ["Solana", "guides/solana.md"],
+  "sauce-cli": ["the sauce command", "guides/cli.md"],
+  "sauce-actions": ["actions", "guides/actions.md"],
+  "sauce-typescript": ["the API reference", "api/README.md"],
+  "sauce-examples": ["the examples", "examples/README.md"],
+};
+
+/**
+ * Prose written for the skills, as the manual page at `from` (relative to `docs/reference/`) says
+ * it: each skill name becomes a link to the page covering it. Fenced code is left as it is, but for
+ * its fence: a ```` ```sauce chain=… ```` block, which the skills checker compiles, is TypeScript
+ * syntax to a reader's highlighter.
+ */
+function docsProse(lines, from) {
+  let fenced = false;
+
+  return lines.map((line) => {
+    if (line.startsWith("```")) {
+      fenced = !fenced;
+
+      return line.replace(/^```sauce\b.*$/, "```ts");
+    }
+    if (fenced) return line;
+
+    return line.replace(/`(sauce-[a-z-]+)`/g, (whole, skill) => {
+      const page = DOCS_FOR_SKILL[skill];
+      if (page === undefined) return `the ${whole} agent skill`;
+      const href = posix.relative(posix.dirname(`reference/${from}`), page[1]);
+
+      return `[${page[0]}](${href})`;
+    });
+  });
+}
+
+const DOCS_SITE = {
+  chainIndex: "chains.md",
+  chain: (slug) => `chains/${slug}.md`,
+  chainStocks: (slug) => `chains/${slug}-stocks.md`,
+  protocolIndex: "protocols.md",
+  protocol: (slug) => `protocols/${slug}.md`,
+  /** A protocol's document is folded into its page. */
+  document: undefined,
+  prose: docsProse,
+  /** A page the manual links is named by its title. */
+  label: (_file, title) => title,
+  noun: "page",
+  /** What a reader of the manual also needs about the release's chains. */
+  chainIndexNotes: [
+    "On a preview chain the `sauce` command and the MCP server still rehearse and read:",
+    "`sauce simulate`, `sauce intent publish --dry-run`, `sauce intent fill` without `--send`, and",
+    "every read. What they refuse there, before any endpoint is reached or any key is read, is",
+    "building or sending a transaction; [the command's](../guides/cli.md#supported-and-preview-chains)",
+    "and [the server's](../guides/mcp.md#supported-and-preview-chains) lists name each one. An intent",
+    "publishes only when its source and every destination it opens are supported; the later levels",
+    "of a cascade (an intent opened inside another's body) are not checked, so keep every level on a",
+    "supported chain. Each step after publishing is refused by the chain it is sent on: a fill, a",
+    "proof or a cancellation by the destination, a claim or a refund by the source. Every refusal",
+    "names the supported chains, and the MCP server's `sauce_chains` gives each chain's support.",
+    "",
+    "The TypeScript SDK is not gated: its builders take every chain below and build its",
+    "transactions, and an integrator who submits one on a preview chain does so at their own risk.",
+    "",
+    "A chain-support request gives the chain and its id, what you want to run there, the protocols",
+    "and tokens it needs, the volume you expect and from when, and optionally how to reach you. Where",
+    "a request for the chain exists, add your use case to it as a comment instead of opening another.",
+    "A refusal links both, prefilled for the chain it refused.",
+    "",
+  ],
+};
+
+/** A link from the page at `from` to the page at `to`, both relative to the same root. */
+const href = (from, to) => posix.relative(posix.dirname(from), to);
+const chainLink = (site, from, chain) => `[${chain.name}](${href(from, site.chain(chain.slug))})`;
 
 /** How a program names a deployment: its namespace contract, or its ABI bound to the address. */
 const spelling = (d) =>
@@ -860,7 +1026,8 @@ function supportLines(chain, supported) {
 const andList = (words) =>
   words.length <= 1 ? (words[0] ?? "") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
 
-function renderChain(chain, supported) {
+function renderChain(chain, supported, site) {
+  const path = site.chain(chain.slug);
   const lines = [HEADER, "", `# ${chain.name}`, "", ...supportLines(chain, supported)];
   lines.push(
     "| Fact | Value |",
@@ -870,6 +1037,14 @@ function renderChain(chain, supported) {
     `| Chain id | ${chain.id} |`,
     `| Kind | ${kindName(chain.kind)} |`,
     `| Name in a program | \`${chain.key}\` |`,
+  );
+  // The manual also serves TypeScript: the chain's export carries the same names.
+  if (site === DOCS_SITE && chain.exported) {
+    lines.push(
+      `| In TypeScript | \`import { ${chain.key} } from "@eco-incorp/sauce"\`: its tokens and protocol namespaces are properties of it |`,
+    );
+  }
+  lines.push(
     `| Native coin | ${chain.coin ? `${chain.coin.symbol} (${chain.coin.name}), ${chain.coin.decimals} decimals` : "not recorded"}${
       chain.native
         ? `; also the ERC-20 \`${chain.native.erc20}\` (${chain.native.erc20Decimals} decimals), one balance`
@@ -902,6 +1077,7 @@ function renderChain(chain, supported) {
   if (CHAIN_NOTES[chain.slug]) lines.push("## Notes", "", ...CHAIN_NOTES[chain.slug], "");
   lines.push(...chainExample(chain));
   lines.push("## Tokens", "");
+  const stocksLink = `[${site.label(site.chainStocks(chain.slug), `${chain.name} stock tokens`)}](${href(path, site.chainStocks(chain.slug))})`;
   if (chain.tokens.length === 0) {
     lines.push(
       chain.kind === "svm"
@@ -925,7 +1101,7 @@ function renderChain(chain, supported) {
     if (stocks) {
       lines.push(
         `And ${stocks} tokenized stocks, each a Token-2022 mint named by its symbol in the same way:`,
-        `they are in [${chain.slug}-stocks.md](${chain.slug}-stocks.md), with their mints.`,
+        `they are in ${stocksLink}, with their mints.`,
         "",
       );
     }
@@ -946,7 +1122,7 @@ function renderChain(chain, supported) {
     if (stocks) {
       lines.push(
         `And ${stocks} tokenized stocks, each named by its symbol in the same way: they are in`,
-        `[${chain.slug}-stocks.md](${chain.slug}-stocks.md), with their addresses.`,
+        `${stocksLink}, with their addresses.`,
         "",
       );
     }
@@ -966,20 +1142,22 @@ function renderChain(chain, supported) {
     for (const p of chain.protocols) {
       for (const d of p.deployed) {
         lines.push(
-          `| [${p.name}](../../sauce-protocols/references/registry/${p.slug}.md) | ${d.role} | ${addressCode(chain.kind, d.address)} | ${spelling(d)} |`,
+          `| [${p.name}](${href(path, site.protocol(p.slug))}) | ${d.role} | ${addressCode(chain.kind, d.address)} | ${spelling(d)} |`,
         );
       }
     }
     lines.push("");
   }
 
-  return lines.join("\n");
+  return site.prose(lines, path).join("\n");
 }
 
-function renderChainStocks(chain) {
+function renderChainStocks(chain, site) {
+  const path = site.chainStocks(chain.slug);
+  const chainPage = `[${site.label(site.chain(chain.slug), chain.name)}](${href(path, site.chain(chain.slug))})`;
   const listed = chain.tokens.filter((t) => t.stock);
   if (chain.kind === "svm") {
-    return [
+    const lines = [
       HEADER,
       "",
       `# ${chain.name} stock tokens`,
@@ -987,7 +1165,7 @@ function renderChainStocks(chain) {
       `Every tokenized stock a program compiled for \`${chain.slug}\` names by its symbol, with its`,
       `mint. Each is a Token-2022 mint (${tokenProgramName(listed[0].tokenProgram)}), whose writes`,
       "are the checked ones, and the symbol is the mint's key, the value a program holds.",
-      `[${chain.slug}.md](${chain.slug}.md) has the chain's other mints; \`sauce-globals\` has what a`,
+      `${chainPage} has the chain's other mints; \`sauce-globals\` has what a`,
       "stock token is and how its symbol is spelled. A transfer of a mint with a fee pays it out of",
       "what was sent: the recipient gets less.",
       "",
@@ -998,15 +1176,17 @@ function renderChainStocks(chain) {
           `| \`${t.symbol}\` | ${cell(t.stock.name)} | ${t.stock.issuer} | \`${t.mint}\` | \`${t.address}\` | ${t.decimals} | ${transferFee(t)} |`,
       ),
       "",
-    ].join("\n");
+    ];
+
+    return site.prose(lines, path).join("\n");
   }
-  return [
+  const lines = [
     HEADER,
     "",
     `# ${chain.name} stock tokens`,
     "",
     `Every tokenized stock a program compiled for \`${chain.slug}\` names by its symbol, with its`,
-    `address. [${chain.slug}.md](${chain.slug}.md) has the chain's other tokens and its contracts;`,
+    `address. ${chainPage} has the chain's other tokens and its contracts;`,
     "`sauce-globals` has what a stock token is and how its symbol is spelled.",
     "",
     "| Symbol | Token | Issuer | Address | Decimals |",
@@ -1016,16 +1196,19 @@ function renderChainStocks(chain) {
         `| \`${t.symbol}\` | ${cell(t.stock.name)} | ${t.stock.issuer} | \`${t.address}\` | ${t.decimals} |`,
     ),
     "",
-  ].join("\n");
+  ];
+
+  return site.prose(lines, path).join("\n");
 }
 
-function renderChainIndex(data) {
+function renderChainIndex(data, site) {
+  const path = site.chainIndex;
   const lines = [
     HEADER,
     "",
     "# Chains",
     "",
-    "Every chain the SDK knows, with a file each: whether the initial release supports it, ids, native",
+    `Every chain the SDK knows, with a ${site.noun} each: whether the initial release supports it, ids, native`,
     "coin, the Sauce release, intents, its tokens and every protocol recorded there with its addresses.",
     "",
     `For the initial release, Sauce supports transactions on ${andList(data.support.supported.map((c) => c.name))}`,
@@ -1034,19 +1217,20 @@ function renderChainIndex(data) {
     "transaction, and say so with the supported chains and how to request that chain. To request one,",
     `look among the [existing requests](${data.support.issues}) and add your use case to the chain's,`,
     `or [open one](${data.support.newIssue}) with the chain-support issue form; each preview chain's`,
-    "file links its own.",
+    `${site.noun} links its own.`,
     "",
+    ...(site.chainIndexNotes ?? []),
     "| Chain | Slug | Id | Kind | Support | Intents | CCTP | Tokens | Protocols |",
     "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
   ];
   for (const chain of data.chains) {
     lines.push(
-      `| [${chain.name}](${chain.slug}.md) | \`${chain.slug}\` | ${chain.id} | ${kindName(chain.kind)} | ${chain.support} | ${chain.intents ? "yes" : "no"} | ${chain.cctp ?? "—"} | ${chain.tokens.length} | ${chain.protocols.length} |`,
+      `| [${chain.name}](${href(path, site.chain(chain.slug))}) | \`${chain.slug}\` | ${chain.id} | ${kindName(chain.kind)} | ${chain.support} | ${chain.intents ? "yes" : "no"} | ${chain.cctp ?? "—"} | ${chain.tokens.length} | ${chain.protocols.length} |`,
     );
   }
   lines.push("");
 
-  return lines.join("\n");
+  return site.prose(lines, path).join("\n");
 }
 
 /** A compiled example of how a program names this protocol, on its first chain. */
@@ -1104,9 +1288,70 @@ function protocolExample(p, data) {
   ];
 }
 
-function renderProtocolRegistry(p, data) {
+/** The sections of a protocol's document that its manual page states itself, from the registry. */
+const DOCUMENT_GENERATED_SECTIONS = new Set(["Category", "Deployments and ABI"]);
+
+/**
+ * A protocol's hand-written document as its manual page carries it: `lead`, what precedes its
+ * first section (the swap pointer, the description), and `sections`, each from its `## ` heading.
+ * The title and the sections the page generates are left out, and its links to the registry files
+ * become links to the pages that hold them.
+ */
+function foldDocument(text, slug) {
+  const lines = text.replace(/\n+$/, "").split("\n").slice(1);
+  let fenced = false;
+  const linked = lines.map((line) => {
+    if (line.startsWith("```")) fenced = !fenced;
+    if (fenced) return line;
+
+    return line.replace(/\]\(([^)\s]+)\)/g, (whole, target) => {
+      if (/^[a-z]+:/i.test(target) || target.startsWith("#")) return whole;
+      const page = /^(?:registry\/)?([a-z0-9-]+)\.md(#.*)?$/.exec(target);
+      if (page === null)
+        throw new Error(`${slug}.md links ${target}, which the manual has no page for`);
+
+      return `](${page[1]}.md${page[2] ?? ""})`;
+    });
+  });
+  const lead = [];
+  const sections = [];
+  fenced = false;
+  for (const line of linked) {
+    if (line.startsWith("```")) fenced = !fenced;
+    if (!fenced && line.startsWith("## ")) sections.push({ heading: line.slice(3), lines: [line] });
+    else if (sections.length) sections.at(-1).lines.push(line);
+    else lead.push(line);
+  }
+  const trim = (block) => {
+    const text = block.join("\n").trim();
+
+    return text ? text.split("\n") : [];
+  };
+
+  return {
+    lead: trim(lead),
+    sections: sections
+      .filter((section) => !DOCUMENT_GENERATED_SECTIONS.has(section.heading))
+      .flatMap((section) => [...trim(section.lines), ""]),
+  };
+}
+
+function renderProtocolRegistry(p, data, site, documents = {}) {
+  const path = site.protocol(p.slug);
   const chainsBySlug = new Map(data.chains.map((c) => [c.slug, c]));
-  const lines = [HEADER, "", `# ${p.name} (\`${p.slug}\`)`, "", p.description, ""];
+  // The manual folds the protocol's document into its page; a skill links it as a file of its own.
+  const folded =
+    site.document === undefined && documents[p.slug] !== undefined
+      ? foldDocument(documents[p.slug], p.slug)
+      : undefined;
+  const lines = [
+    HEADER,
+    "",
+    `# ${p.name} (\`${p.slug}\`)`,
+    "",
+    ...(folded?.lead.length ? folded.lead : [p.description]),
+    "",
+  ];
   lines.push(
     "| Fact | Value |",
     "| --- | --- |",
@@ -1114,9 +1359,17 @@ function renderProtocolRegistry(p, data) {
     `| Family | ${p.family ? `\`${p.family}\`: ${data.familyMembers.get(p.family).map(code).join(", ")}` : "none"} |`,
     `| Namespace | ${p.namespace ? `\`${p.namespace.name}\` on ${p.namespace.chains.join(", ")}` : "none: import its ABI"} |`,
     `| Chains | ${p.chains.length ? p.chains.join(", ") : "none recorded"} |`,
-    `| Document | ${p.documented ? `[${p.slug}.md](../${p.slug}.md): what it is for, how to choose it, its pitfalls` : "none"} |`,
+  );
+  if (site.document !== undefined) {
+    lines.push(
+      `| Document | ${p.documented ? `[${p.slug}.md](${href(path, site.document(p.slug))}): what it is for, how to choose it, its pitfalls` : "none"} |`,
+    );
+  }
+  // Beside a document's own "In a Sauce program", the generated section says what it is about.
+  lines.push(
     "",
-    "## In a program",
+    ...(folded?.sections ?? []),
+    folded === undefined ? "## In a program" : "## Its names in a program",
     "",
     ...protocolExample(p, data),
   );
@@ -1129,7 +1382,7 @@ function renderProtocolRegistry(p, data) {
     );
     for (const d of p.deployed) {
       lines.push(
-        `| ${chainLink(chainsBySlug.get(d.chain), "../../../")} | ${d.role} | ${addressCode(chainsBySlug.get(d.chain).kind, d.address)} | ${spelling(d)} |`,
+        `| ${chainLink(site, path, chainsBySlug.get(d.chain))} | ${d.role} | ${addressCode(chainsBySlug.get(d.chain).kind, d.address)} | ${spelling(d)} |`,
       );
     }
     lines.push("");
@@ -1151,22 +1404,30 @@ function renderProtocolRegistry(p, data) {
     }
   }
 
-  return lines.join("\n");
+  return site.prose(lines, path).join("\n");
 }
 
-function renderProtocolIndex(data) {
-  const lines = [
-    HEADER,
-    "",
-    "# Protocol index",
-    "",
-    "Every protocol the SDK registers, by category: how to choose between them, then each one with",
-    "its family, whether a program names it as a namespace (and on which chains), and where it is",
-    "deployed. Each protocol's registry file (`registry/<slug>.md`) has its addresses per chain, how a",
-    "program names each contract, and its ABI functions; its document (`<slug>.md`) says what it is",
-    "for and its pitfalls.",
-    "",
-  ];
+function renderProtocolIndex(data, site) {
+  const path = site.protocolIndex;
+  const lines = [HEADER, "", site === DOCS_SITE ? "# Protocols" : "# Protocol index", ""];
+  if (site === DOCS_SITE) {
+    lines.push(
+      "Every protocol the SDK registers, by category: how to choose between them, then each one with",
+      "its family, whether a program names it as a namespace (and on which chains), and where it is",
+      "deployed. Each protocol's page has what it is for and its pitfalls where the registry documents",
+      "them, its addresses per chain, how a program names each contract, and its ABI functions.",
+      "",
+    );
+  } else {
+    lines.push(
+      "Every protocol the SDK registers, by category: how to choose between them, then each one with",
+      "its family, whether a program names it as a namespace (and on which chains), and where it is",
+      "deployed. Each protocol's registry file (`registry/<slug>.md`) has its addresses per chain, how a",
+      "program names each contract, and its ABI functions; its document (`<slug>.md`) says what it is",
+      "for and its pitfalls.",
+      "",
+    );
+  }
   const named = new Map(CATEGORIES);
   const categories = [
     ...CATEGORIES.map(([category]) => category),
@@ -1179,33 +1440,329 @@ function renderProtocolIndex(data) {
     if (CHOOSING[category]) lines.push("### Choosing between them", "", ...CHOOSING[category], "");
     lines.push("| Protocol | Family | Namespace | Chains |", "| --- | --- | --- | --- |");
     for (const p of members) {
-      const name = p.documented ? `[${p.name}](${p.slug}.md)` : p.name;
+      const name =
+        site.document === undefined
+          ? `[${p.name}](${href(path, site.protocol(p.slug))})`
+          : `${p.documented ? `[${p.name}](${href(path, site.document(p.slug))})` : p.name} ([registry](${href(path, site.protocol(p.slug))}))`;
       lines.push(
-        `| ${name} ([registry](registry/${p.slug}.md)) | ${p.family ? code(p.family) : "—"} | ${
+        `| ${name} | ${p.family ? code(p.family) : "—"} | ${
           p.namespace ? `${code(p.namespace.name)}: ${p.namespace.chains.join(", ")}` : "—"
         } | ${p.chains.length ? p.chains.join(", ") : "none recorded"} |`,
       );
     }
     lines.push("");
   }
+  // The skills list these names in `sauce-globals`; the manual lists them here, beside their protocols.
+  if (site === DOCS_SITE) {
+    const protocolLink = (slug) => `[\`${slug}\`](${href(path, site.protocol(slug))})`;
+    lines.push(
+      "## Family aliases",
+      "",
+      "A slug ending in `-v<N>` also joins the family named by the rest: `Uniswap` covers",
+      "`UniswapV2`, `UniswapV3` and `UniswapV4`. A family names a contract on a chain when exactly one",
+      "of its members has one by that name there; any other name, such as one two members share, is",
+      "ambiguous, and a program names the versioned namespace instead.",
+      "",
+      "| Alias | Resolves to | On |",
+      "| --- | --- | --- |",
+      ...data.globals.aliases.flatMap((alias) =>
+        alias.targets.map(
+          ({ target, chains }) => `| \`${alias.name}\` | \`${target}\` | ${chains.join(", ")} |`,
+        ),
+      ),
+      "",
+      "## Interfaces",
+      "",
+      "An interface is an ABI with no fixed address, the same on every EVM chain: a program binds it to",
+      "an address it holds and calls a method in the same expression,",
+      "`Namespace.Contract(address).method(...)` (or `.at(address)`), such as a pool its factory",
+      "returned.",
+      "",
+      "| Interface | Protocol |",
+      "| --- | --- |",
+      ...data.globals.interfaces.map(
+        (one) => `| \`${one.name}(<address>)\` | ${protocolLink(one.protocol)} |`,
+      ),
+      "",
+    );
+  }
 
-  return lines.join("\n");
+  return site.prose(lines, path).join("\n");
 }
 
 /** Every generated file's text, by path relative to the skills directory. */
 export function renderSkillsReferences(data) {
+  const site = SKILLS_SITE;
   const files = {
     ...renderGlobals(data),
-    "sauce-chains/references/index.md": renderChainIndex(data),
-    "sauce-protocols/references/index.md": renderProtocolIndex(data),
+    [site.chainIndex]: renderChainIndex(data, site),
+    [site.protocolIndex]: renderProtocolIndex(data, site),
   };
   for (const chain of data.chains) {
-    files[`sauce-chains/references/${chain.slug}.md`] = renderChain(chain, data.support.supported);
+    files[site.chain(chain.slug)] = renderChain(chain, data.support.supported, site);
     if (chain.tokens.some((t) => t.stock))
-      files[`sauce-chains/references/${chain.slug}-stocks.md`] = renderChainStocks(chain);
+      files[site.chainStocks(chain.slug)] = renderChainStocks(chain, site);
   }
   for (const p of data.protocols)
-    files[`sauce-protocols/references/registry/${p.slug}.md`] = renderProtocolRegistry(p, data);
+    files[site.protocol(p.slug)] = renderProtocolRegistry(p, data, site);
+
+  return files;
+}
+
+// ---- The manual's reference -------------------------------------------------------------------------
+
+/**
+ * One `## ` section of a skill's hand-written file, below its heading, for a manual page: each of
+ * its links is replaced as `links` says, `[label, href]` by target, and a link `links` does not
+ * name fails, so a new link in the skill cannot leave the manual pointing into `skills/`.
+ */
+function foldSection(text, heading, links, from) {
+  const lines = text.split("\n");
+  const start = lines.indexOf(`## ${heading}`);
+  if (start < 0) throw new Error(`no "## ${heading}" section to copy into docs/reference/${from}`);
+  const section = [];
+  let fenced = false;
+  for (const line of lines.slice(start + 1)) {
+    if (line.startsWith("```")) fenced = !fenced;
+    if (!fenced && line.startsWith("## ")) break;
+    section.push(
+      fenced
+        ? line
+        : line.replace(/\[([^\]]*)\]\(([^)\s]+)\)/g, (whole, _label, target) => {
+            if (/^[a-z]+:/i.test(target)) return whole;
+            if (links[target] === undefined)
+              throw new Error(
+                `"## ${heading}" links ${target}, which docs/reference/${from} cannot`,
+              );
+
+            return `[${links[target][0]}](${links[target][1]})`;
+          }),
+    );
+  }
+
+  return docsProse(section.join("\n").trim().split("\n"), from);
+}
+
+/** Up to three of an issuer's symbols on a chain, the best known first, as examples. */
+const STOCK_EXAMPLES = ["TSLA", "SPCX", "NVDA", "SPY", "COIN", "MSTR"];
+function stockExamples(stocks) {
+  const rank = (t) => {
+    const at = STOCK_EXAMPLES.indexOf(t.stock.ticker.replace(/\.US$/, ""));
+
+    return at < 0 ? STOCK_EXAMPLES.length : at;
+  };
+
+  return [...stocks]
+    .sort((a, b) => rank(a) - rank(b))
+    .slice(0, 3)
+    .map((t) => code(t.symbol));
+}
+
+function renderTokens(data, globalsSkill) {
+  const path = "tokens.md";
+  const { tokens, functions } = data.globals;
+  const chainOf = new Map(data.chains.map((chain) => [chain.slug, chain]));
+  const lines = [
+    HEADER,
+    "",
+    "# Tokens",
+    "",
+    "A program compiled for a chain names that chain's registered tokens by symbol, with no import",
+    "(`USDC.balanceOf(ctx.self())`), and any other ERC-20 as `Token(<address>)`. In TypeScript the",
+    "same token is a property of the chain's export, `Base.USDC`, with its `address`, `decimals` and",
+    "`symbol`. Amounts are integers in the token's smallest units: nothing scales them by decimals.",
+    "",
+    "On Solana a symbol is the mint's 32-byte key, a value for the `@sauce/token` functions",
+    "(`balanceOf(USDC, account)`); the token accounts are `Account` parameters, and the token methods",
+    "(`USDC.transfer(...)`) are EVM-only. Each Solana mint's token program is legacy SPL Token or",
+    "Token-2022, whose mints a program moves with the checked writes.",
+    "",
+    "| Chain | Tokens | Tokenized stocks |",
+    "| --- | --- | --- |",
+  ];
+  for (const entry of tokens) {
+    const chain = chainOf.get(entry.chain.slug);
+    const stocks = entry.tokens.filter((t) => t.stock).length;
+    lines.push(
+      `| ${chainLink(DOCS_SITE, path, chain)} | ${entry.tokens
+        .filter((t) => !t.stock)
+        .map((t) => code(t.symbol))
+        .join(
+          ", ",
+        )} | ${stocks ? `[${stocks}](${href(path, DOCS_SITE.chainStocks(chain.slug))})` : "—"} |`,
+    );
+  }
+  lines.push(
+    "",
+    "Every other chain registers no token: a program there uses `Token(<address>)`.",
+    "",
+  );
+  for (const entry of tokens) {
+    const chain = chainOf.get(entry.chain.slug);
+    const plain = entry.tokens.filter((t) => !t.stock);
+    lines.push(`## ${chain.name}`, "");
+    if (entry.chain.kind === "svm") {
+      lines.push(
+        "| Symbol | Mint | Key, the value a program holds | Decimals | Token program |",
+        "| --- | --- | --- | --- | --- |",
+        ...plain.map(
+          (t) =>
+            `| \`${t.symbol}\` | \`${t.mint ?? base58(t.address)}\` | \`${t.address}\` | ${t.decimals} | ${tokenProgramName(t.tokenProgram)} |`,
+        ),
+      );
+    } else {
+      lines.push(
+        "| Symbol | Address | Decimals |",
+        "| --- | --- | --- |",
+        ...plain.map((t) => `| \`${t.symbol}\` | \`${t.address}\` | ${t.decimals} |`),
+      );
+    }
+    lines.push("");
+    if (entry.native) {
+      lines.push(
+        `The native coin is ${entry.native.coin} (${entry.native.coinDecimals} decimals), and \`${entry.native.erc20}\``,
+        `is its ERC-20 face (${entry.native.erc20Decimals} decimals): one balance, read at two scales.`,
+        `[${chain.name}](${href(path, DOCS_SITE.chain(chain.slug))}) has what that changes.`,
+        "",
+      );
+    }
+    if (entry.devnet?.length) {
+      lines.push(
+        `Devnet's mints differ: [${chain.name}](${href(path, DOCS_SITE.chain(chain.slug))}) lists them.`,
+        "",
+      );
+    }
+  }
+  lines.push(
+    "## Tokenized stocks",
+    "",
+    ...foldSection(
+      globalsSkill,
+      "Tokenized stocks",
+      { "references/stocks.md": ["the stock tokens of each chain", "#stock-tokens-by-issuer"] },
+      path,
+    ),
+    "",
+    "### Stock tokens by issuer",
+    "",
+    "| Chain | Issuer | Tokens | For example |",
+    "| --- | --- | --- | --- |",
+  );
+  for (const entry of tokens) {
+    const chain = chainOf.get(entry.chain.slug);
+    const byIssuer = new Map();
+    for (const t of entry.tokens.filter((t) => t.stock))
+      byIssuer.set(t.stock.issuer, [...(byIssuer.get(t.stock.issuer) ?? []), t]);
+    for (const [issuer, stocks] of byIssuer) {
+      lines.push(
+        `| [${chain.name}](${href(path, DOCS_SITE.chainStocks(chain.slug))}) | ${issuer} | ${stocks.length} | ${stockExamples(stocks).join(", ")} |`,
+      );
+    }
+  }
+  lines.push(
+    "",
+    "## Token functions",
+    "",
+    "Every program can call these `@sauce/token` functions with no import. The EVM writes are",
+    "SafeERC20: a token that returns nothing works, and one that returns `false` reverts.",
+    "",
+  );
+  for (const module of functions) {
+    lines.push(module.kind === "evm" ? "On EVM chains:" : "On Solana:", "");
+    for (const fn of module.functions) lines.push(`- \`${fn}\``);
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * A skill's SKILL.md as a guide in the manual, at `from` (relative to `docs/reference/`): its
+ * frontmatter dropped, the code block that is its example's code shown as the whole example file
+ * (header and all, which the page refers to), each link replaced as `links` says (`[label, href]`,
+ * or `[label]` for no link: a file the manual does not ship), and its skill names linked.
+ */
+function renderSkillGuide(source, skill, example, links, from) {
+  const body = skill.replace(/^---\n[^]*?\n---\n+/, "");
+  const lines = [];
+  let block;
+  for (const line of body.split("\n")) {
+    if (block === undefined && line.startsWith("```")) {
+      block = [line];
+      continue;
+    }
+    if (block !== undefined) {
+      if (!line.startsWith("```")) {
+        block.push(line);
+        continue;
+      }
+      const code = block.slice(1).join("\n");
+      // The example's code, which the skill quotes without its header: the file as it ships.
+      const whole = code.length > 0 && example.trimEnd().endsWith(code);
+      lines.push(block[0], ...(whole ? example.trimEnd().split("\n") : block.slice(1)), line);
+      block = undefined;
+      continue;
+    }
+    lines.push(
+      line.replace(/\[([^\]]*)\]\(([^)\s]+)\)/g, (whole, _label, target) => {
+        if (/^[a-z]+:/i.test(target) || target.startsWith("#")) return whole;
+        if (links[target] === undefined)
+          throw new Error(`the skill links ${target}, which ${from} has no page for`);
+        const [label, to] = links[target];
+
+        return to === undefined ? label : `[${label}](${to})`;
+      }),
+    );
+  }
+
+  return [renderedFrom(source), "", ...docsProse(lines, from)].join("\n");
+}
+
+/** The note a page rendered from a skill opens with: its source, so an edit goes there. */
+const renderedFrom = (file) =>
+  `<!-- Generated from ${relative(join(SDK, ".."), file)} for the manual. Edit that file, not this one. -->`;
+
+/** The note a copied file opens with: where it is copied from, so an edit goes there. */
+const copiedFrom = (file) =>
+  `<!-- Generated: a copy of ${relative(join(SDK, ".."), file)}. Edit that file, not this one. -->`;
+
+/**
+ * Every file of the manual's reference, by path relative to `docs/reference/`. `skillFiles` gives
+ * the hand-written skill files it renders: `documents` (each protocol's document, by slug), `globals`
+ * (`sauce-globals`' SKILL.md) and `builtins` (the SauceScript reference).
+ */
+export function renderDocsReference(data, skillFiles) {
+  const site = DOCS_SITE;
+  const files = {
+    [site.chainIndex]: renderChainIndex(data, site),
+    [site.protocolIndex]: renderProtocolIndex(data, site),
+    "tokens.md": renderTokens(data, skillFiles.globals),
+    // Byte for byte below its note: its anchors are the skill's, and it links nothing outside itself.
+    "saucescript.md": `${copiedFrom(BUILTINS)}\n\n${skillFiles.builtins}`,
+    // A how-to rather than a reference, so it sits among the guides; this generator owns it.
+    [DISTRIBUTED_SWAP_GUIDE]: renderSkillGuide(
+      join(SKILLS_DIR, "sauce-distributed-swap", "SKILL.md"),
+      skillFiles.distributedSwap,
+      skillFiles.distributedSwapExample,
+      {
+        "examples/distributed-swap.sauce.ts": ["`distributed-swap.sauce.ts`"],
+        "examples/distributed-swap.mts": ["`distributed-swap.mts`"],
+        "../sauce-globals/references/tokens.md": ["tokens", "../reference/tokens.md"],
+        "../sauce-globals/references/stocks.md": [
+          "tokenized stocks",
+          "../reference/tokens.md#tokenized-stocks",
+        ],
+      },
+      DISTRIBUTED_SWAP_GUIDE,
+    ),
+  };
+  for (const chain of data.chains) {
+    files[site.chain(chain.slug)] = renderChain(chain, data.support.supported, site);
+    if (chain.tokens.some((t) => t.stock))
+      files[site.chainStocks(chain.slug)] = renderChainStocks(chain, site);
+  }
+  for (const p of data.protocols)
+    files[site.protocol(p.slug)] = renderProtocolRegistry(p, data, site, skillFiles.documents);
 
   return files;
 }
@@ -1226,19 +1783,39 @@ export async function loadApi(importFrom) {
   };
 }
 
-/** Each generated file as this repository's build would write it, whether it is stale, and the
- *  generated files on disk that no longer belong. */
-export async function freshSkillsReferences(dir = SKILLS_DIR, sdkRoot = join(SDK, "dist")) {
+/** The data both renderings read, from a built SDK root, and the skills directory beside it. */
+async function referenceData(dir, sdkRoot) {
   const api = await loadApi((path) => import(pathToFileURL(join(sdkRoot, path)).href));
   const documents = join(dir, "sauce-protocols", "references");
-  const files = renderSkillsReferences(
-    await skillsReferences(api, (slug) => existsSync(join(documents, `${slug}.md`))),
-  );
-  const extra = GENERATED_DIRS.flatMap((sub) =>
+
+  return skillsReferences(api, (slug) => existsSync(join(documents, `${slug}.md`)));
+}
+
+/** The hand-written skill files the manual's reference renders, from the skills directory `dir`. */
+function skillFiles(dir, data) {
+  const read = (...path) => readFileSync(join(dir, ...path), "utf8");
+
+  return {
+    documents: Object.fromEntries(
+      data.protocols
+        .filter((p) => p.documented)
+        .map((p) => [p.slug, read("sauce-protocols", "references", `${p.slug}.md`)]),
+    ),
+    globals: read("sauce-globals", "SKILL.md"),
+    builtins: read(relative(SKILLS_DIR, BUILTINS)),
+    distributedSwap: read("sauce-distributed-swap", "SKILL.md"),
+    distributedSwapExample: read("sauce-distributed-swap", "examples", "distributed-swap.sauce.ts"),
+  };
+}
+
+/** Each rendered file against the one in `dir`, and the files in its generated directories that
+ *  nothing renders any more. */
+function staleness(dir, files, generatedDirs) {
+  const extra = generatedDirs.flatMap((sub) =>
     existsSync(join(dir, sub))
       ? readdirSync(join(dir, sub))
           .filter((name) => name.endsWith(".md"))
-          .map((name) => `${sub}/${name}`)
+          .map((name) => (sub === "." ? name : `${sub}/${name}`))
           .filter((path) => !(path in files))
       : [],
   );
@@ -1253,26 +1830,60 @@ export async function freshSkillsReferences(dir = SKILLS_DIR, sdkRoot = join(SDK
   };
 }
 
+/** Each generated skills file as this repository's build would write it, whether it is stale, and
+ *  the generated files on disk that no longer belong. */
+export async function freshSkillsReferences(dir = SKILLS_DIR, sdkRoot = join(SDK, "dist")) {
+  return staleness(dir, renderSkillsReferences(await referenceData(dir, sdkRoot)), GENERATED_DIRS);
+}
+
+/** The same for the manual's reference, `docs/reference/`, rendered from the skills in `skills`. */
+export async function freshDocsReference(
+  dir = DOCS_REFERENCE_DIR,
+  sdkRoot = join(SDK, "dist"),
+  skills = SKILLS_DIR,
+) {
+  const data = await referenceData(skills, sdkRoot);
+
+  return staleness(dir, renderDocsReference(data, skillFiles(skills, data)), DOCS_GENERATED_DIRS);
+}
+
 if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
-  const { files, extra } = await freshSkillsReferences();
-  const stale = files.filter((file) => file.stale);
+  const data = await referenceData(SKILLS_DIR, join(SDK, "dist"));
+  const outputs = [
+    [SKILLS_DIR, staleness(SKILLS_DIR, renderSkillsReferences(data), GENERATED_DIRS)],
+    [
+      DOCS_REFERENCE_DIR,
+      staleness(
+        DOCS_REFERENCE_DIR,
+        renderDocsReference(data, skillFiles(SKILLS_DIR, data)),
+        DOCS_GENERATED_DIRS,
+      ),
+    ],
+  ];
   if (process.argv.includes("--check")) {
-    if (stale.length > 0 || extra.length > 0) {
+    const stale = outputs.flatMap(([, { files, extra }]) => [
+      ...files.filter((file) => file.stale).map((file) => file.path),
+      ...extra,
+    ]);
+    if (stale.length > 0) {
       console.error(
-        `gen-skills-references: stale ${[...stale.map((f) => f.path), ...extra].map((p) => relative(process.cwd(), p)).join(", ")}` +
+        `gen-skills-references: stale ${stale.map((p) => relative(process.cwd(), p)).join(", ")}` +
           " — rebuild the SDK, or run `node scripts/gen-skills-references.mjs`, and commit the result.",
       );
       process.exit(1);
     }
   } else {
-    for (const file of stale) {
-      mkdirSync(dirname(file.path), { recursive: true });
-      writeFileSync(file.path, file.text);
+    for (const [dir, { files, extra }] of outputs) {
+      const stale = files.filter((file) => file.stale);
+      for (const file of stale) {
+        mkdirSync(dirname(file.path), { recursive: true });
+        writeFileSync(file.path, file.text);
+      }
+      for (const path of extra) rmSync(path);
+      console.log(
+        `gen-skills-references: ${files.length} files under ${relative(process.cwd(), dir)}` +
+          ` (${stale.length} rewritten, ${extra.length} removed)`,
+      );
     }
-    for (const path of extra) rmSync(path);
-    console.log(
-      `gen-skills-references: ${files.length} files under ${relative(process.cwd(), SKILLS_DIR)}` +
-        ` (${stale.length} rewritten, ${extra.length} removed)`,
-    );
   }
 }

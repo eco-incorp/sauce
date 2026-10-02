@@ -55,7 +55,7 @@ pnpm lint           # eslint, whole repo
 pnpm lint:fix       # ...with --fix
 pnpm format         # prettier --write, whole repo
 pnpm format:check   # prettier --check, what CI runs
-pnpm docs:check     # manual links, README snippet, executable examples, executed.json; build first
+pnpm docs:check     # manual links and shape, README snippet, executable examples, executed.json; build first
 pnpm skills:check   # the agent skills: programs, command lines, runners, wording; build first
 ```
 
@@ -135,6 +135,12 @@ own Portal. Importing a runner is why `actions/tsconfig.json` sets
 `rootDir: ".."`: the runners import `@eco-incorp/sauce` by its own name, a self-reference
 TypeScript resolves only with a root; `tsconfig.build.json` pins its own `rootDir` to `src`, so the
 build's output does not move.
+`examples-cookbook.mainnet` (`test:mainnet`) runs every EVM program of the `sauce-examples`
+skill's own cookbook through `sauce simulate` and `sauce run` on Ethereum and Base state, its
+results held to Uniswap's QuoterV2, the feed, Aave's account data and the recipients' balances, and
+its cross-chain cascade filled hop by hop with `sauce intent fill` (Ethereum's eco-routes Portal
+postdates the pinned block, so the v2.12.0 fixture is planted there; Base's is the deployed one).
+The cookbook's Solana program runs in `sdk/test/examples-cookbook-solana.e2e.test.ts`.
 After changing an action's fields in `actions/src/spec.ts`, run `pnpm --filter './actions'
 gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.json` is stale.
 
@@ -201,8 +207,9 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   network. Blob sizes at capture: actions ~680 KB, quote ~270 KB, split-swap ~80 KB, the swap
   venue suites `swap` (Ethereum) ~110 KB, `swap-base` ~90 KB, `swap-avalanche` ~30 KB, and the names
   suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB,
-  `holdings-{ethereum,base}` ~30 KB each, and the docs examples suite's three (`docs-examples`,
-  `-base`, `-optimism`) ~80, ~35 and ~25 KB.
+  `holdings-{ethereum,base}` ~30 KB each, the docs examples suite's three (`docs-examples`,
+  `-base`, `-optimism`) ~80, ~35 and ~25 KB, and the cookbook's two
+  (`cookbook-{ethereum,base}`) ~135 KB each.
 
   **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
   pinned block (then recapture every suite on that chain, and revisit every pinned figure: pools,
@@ -362,7 +369,8 @@ repository's documentation is not an independent correctness check.
 **The language reference is held to the compiler, and there is one.**
 `skills/sauce-script/references/builtins.md` (the SauceScript reference) and its `builtins.json`
 (every builtin, with an example program per target and the error on a target that lacks it) are the
-`sauce-script` skill's reference and the manual's: `docs/` links to them rather than keeping a copy.
+`sauce-script` skill's reference and the manual's: the build renders `builtins.md` byte for byte as
+`docs/reference/saucescript.md` (see "The manual renders the same facts" below), so edit the skill's.
 `pnpm skills:check` (`sdk/scripts/skills-check/builtins.mjs`) holds them: every builtin example
 compiles on each target it lists, every table example compiles on each target its row claims, and
 every error the page quotes (`…` and `N` as wildcards) is produced by a rejected program — a
@@ -885,9 +893,9 @@ beside `refused`, because a client validates an error's structured content too. 
 `.github/ISSUE_TEMPLATE/chain-support.yml`, its field ids held to `CHAIN_SUPPORT_FIELDS` by
 `cli-chain-support.test.ts`; `cli-support.test.ts` and `mcp/test/support.test.ts` hold every gated
 path to its refusal before any request. To support a chain, add its slug, rebuild (the skills'
-chain references regenerate from the list), and update `docs/README.md#supported-chains` and the
-skills that name the three. A test that builds or sends a transaction through the CLI or MCP uses a
-supported chain.
+chain references and the manual's `docs/reference/chains.md` regenerate from the list), and update
+the README, the manual's pages and the skills that name the three (`git grep "Ethereum, Base"`). A
+test that builds or sends a transaction through the CLI or MCP uses a supported chain.
 
 ## Agent skills
 
@@ -924,6 +932,27 @@ them, `references/`.
   carries compiled examples; CI fails when the build changed `skills/`, and `skills:check` fails a
   stale or orphaned generated file, so commit the regenerated files with any registry change
   (`pnpm --filter './sdk' gen-skills-references`). Change their prose in the generator.
+- **The manual renders the same facts, and never links the skills.** The same generator, from the
+  same data, writes `docs/reference/` for a human reader: `chains.md` (the release's support and
+  every chain) and `chains/<chain>.md`/`<chain>-stocks.md`, `protocols.md` (by category, the family
+  aliases, the interfaces) and `protocols/<slug>.md` (the registry facts with the protocol's
+  hand-written document folded in, its `Category` and `Deployments and ABI` sections left out),
+  `tokens.md` (every chain's tokens, `sauce-globals`' "Tokenized stocks" section, the stocks by
+  issuer, the token functions) and `saucescript.md` (`sauce-script/references/builtins.md`, byte for
+  byte); and, outside it, `docs/guides/distributed-swap.md`, the `sauce-distributed-swap` skill
+  rendered as a guide (its example's whole file in place of the code the skill quotes). The two
+  renderings differ only in links: a skill names a skill (`sauce-swaps`), and the
+  manual links the page covering it (`DOCS_FOR_SKILL`), so a fact has one source and a reader is
+  never sent into `skills/`, nor an agent into `docs/`. `docs/reference/` is generated whole (a page
+  written there by hand is removed: hand-written reference pages belong in `docs/api/`), committed,
+  prettier-ignored, and held like the skills' references: CI fails when the build changed it, and
+  `docs:check` when it is stale. `docs:check` also holds the manual's shape: no link or path from the
+  README or `docs/` into `skills/`; every page a list entry of `docs/README.md` (its link, then one line)
+  exactly once (the per-chain and per-protocol pages are reached from their indexes); no page other
+  than an index with more than 3 links per 100 words; and `docs/guides/skills.md`'s table naming
+  exactly the skills on disk. A fact an agent needs goes in a skill (or the generator), and the
+  manual renders it; a fact only a reader of the manual needs (TypeScript, the MCP server's
+  operation) is written once, in the manual.
 - **The actions reference is generated too.** `sdk/scripts/gen-skills-actions.mjs` renders
   `skills/sauce-actions/references/actions.md` (every action and field) from the committed
   `actions/action-program.schema.json`, in the same `build` step; regenerate the schema after a
@@ -932,16 +961,22 @@ them, `references/`.
   first) runs in CI after `docs:check`, and the packed check reruns it (`--skills <dir>`) on the
   copy `sauce skills install` writes into a project from the tarball — a project, because Node does
   not strip TypeScript from a runner under `node_modules`. It holds: the frontmatter to the spec; the `sauce-examples` index
-  to the example files on disk, both ways; every program compiled through the `sauce` bin
-  (in-process `runCli`) on each chain its index row names, running the `//   sauce …` usage line in
-  its header offline (`compile`, then `tx` with `main`'s arguments sampled from its declared types);
+  to the example files on disk, both ways; the `sauce-overview` skill map (one
+  ``### `sauce-<name>` `` entry each under "The skill map") to the skill directories, both ways,
+  so a new or renamed skill fails until the map says what it holds and when to load it; every
+  program compiled through the `sauce` bin (in-process `runCli`) on each chain its index row
+  names, running the `//   sauce …` usage line in its header offline (`compile`, then `tx` with `main`'s arguments sampled from its declared types);
   every actions document (`.json`, no `chainId`) lowered through `sauce actions` on each chain its
   row names, its cook built by `tx`, and ` ```json chain=a,b ` blocks lowered (` ```json fails `
   refused);
   every `sauce …` command line in a skill to the flags that command's `--help` lists; ` ```sauce
 chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refused;
   ` ```ts ` blocks and runners typechecked, and runners executed with
-  `skills-check/offline-guard.mjs` preloaded; the globals index fresh, compilable and covering
+  `skills-check/offline-guard.mjs` preloaded, importing nothing but the package, viem and `node:*`
+  (`RUNNER_PACKAGES`: pnpm does not hoist the package's own dependencies, so a project the skills
+  are installed in resolves no other, which the packed check proves in such a project, with a probe
+  that must not resolve `@solana/kit`; re-export what a runner needs from a subpath, as
+  `svm/kit.ts` does); the globals index fresh, compilable and covering
   every name a program uses; the SauceScript reference
   (`sauce-script/references/builtins.{md,json}`, with `skills-check/builtins*.mjs`) to the
   compiler; every ```sauce block in a skill's `references/` compiled like its own; every relative
@@ -973,8 +1008,8 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   `sauce-intents`; no RPC endpoint; Sauce never described as a multicall; no pointer into the
   package's docs (`node_modules/@eco-incorp/sauce/...`, `docs/guides/...`) outside
   `sauce-typescript`, because a skill carries every fact it needs in its `SKILL.md` and
-  `references/`. The protocol documents are third-party facts and are exempt from the address,
-  Portal and multicall rules only; the generated references are exempt from the Portal rule (a
+  `references/` (an agent may have only the skills, served by the MCP server). The protocol
+  documents are third-party facts and are exempt from the address, Portal and multicall rules only; the generated references are exempt from the Portal rule (a
   chain's file records its eco-routes deployment).
 - **Plain integers, enforced.** SauceScript a reader sees writes `3000`, never `3000n`: the
   compiler reads a literal from its text as a 256-bit integer, so both are the same program

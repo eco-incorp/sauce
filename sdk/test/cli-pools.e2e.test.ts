@@ -74,6 +74,7 @@ interface Listed {
   sides: [Side, Side];
 }
 interface Report {
+  block: string;
   tokens: Array<Record<string, unknown>>;
   sortedBy: string;
   pools: Listed[];
@@ -287,10 +288,10 @@ describeAnvil("sauce pools, against a local Base", () => {
       const url = `http://127.0.0.1:${(proxy.address() as { port: number }).port}`;
       const run = await sauce("pools", "--chain", "base", "USDC", "SPCXc", "--rpc-url", url);
       expect(run.code).toBe(0);
-      // The chain id, then five rounds (the tokens beside the first), each a few calls of up to
-      // 32 reads: nearly 150 reads here.
-      expect(methods[0]).toBe("eth_chainId");
-      expect(methods.slice(1).every((method) => method === "eth_call")).toBe(true);
+      // The chain id and the block every read is at, then five rounds (the tokens beside the
+      // first), each a few calls of up to 32 reads: nearly 150 reads here.
+      expect(methods.slice(0, 2)).toEqual(["eth_chainId", "eth_blockNumber"]);
+      expect(methods.slice(2).every((method) => method === "eth_call")).toBe(true);
       expect(methods.length).toBeLessThanOrEqual(12);
     } finally {
       proxy.close();
@@ -300,8 +301,8 @@ describeAnvil("sauce pools, against a local Base", () => {
   it("prints the same for a person", async () => {
     const run = await sauce("pools", "--chain", "base", "usdc", "spcxc", "--rpc-url", chain.rpcUrl);
     expect(run.code).toBe(0);
-    expect(run.stdout.split("\n")[0]).toBe(
-      "USDC/SPCXc on base: 6 pools with liquidity, deepest first (by liquidity at the pool's price)",
+    expect(run.stdout.split("\n")[0]).toMatch(
+      /^USDC\/SPCXc on base at block \d+: 6 pools with liquidity, deepest first \(by liquidity at the pool's price\)$/,
     );
     expect(run.stdout).toContain(`1. Aerodrome Slipstream ${poolOf("slipstream:10")}`);
     expect(run.stdout).toMatch(/buy SPCXc with USDC {2}400\.2 USDC each, 400 before the fee; /);
@@ -340,6 +341,91 @@ describeAnvil("sauce pools, against a local Base", () => {
     );
     expect(none.code).toBe(2);
     expect(none.stderr).toMatch(/answers no decimals\(\) on base .*: is it a token there\?/);
+  });
+
+  // Last: these move a pool's price in later blocks, and put it back.
+  const pools = async (...flags: string[]) => {
+    const run = await sauce(
+      ...["pools", "--chain", "base", "USDC", "SPCXc", "--rpc-url", chain.rpcUrl, "--json"],
+      ...flags,
+    );
+    if (run.code !== 0) throw new Error(`sauce pools exited ${run.code}: ${run.stderr}`);
+
+    return JSON.parse(run.stdout) as Report;
+  };
+  const sqrtOf = (report: Report, pool: Address) =>
+    report.pools.find((each) => each.pool === pool)!.sqrtPriceX96;
+
+  it("reads every pool at the block --block names, and names the block it read", async () => {
+    const pool = poolOf("v3:500");
+    const before = await pools();
+    const at = BigInt(before.block);
+    // The latest block when it ran (read now, past viem's cache of the block number).
+    expect(before.block).toBe(String(await chain.publicClient.getBlockNumber({ cacheTime: 0 })));
+    // The pool's price moves in a later block: its sqrtPriceX96 is the low 160 bits of slot 0.
+    await chain.testClient.mine({ blocks: 1 });
+    const word = BigInt((await chain.publicClient.getStorageAt({ address: pool, slot: "0x0" }))!);
+    const low = (1n << 160n) - 1n;
+    const moved = ((word & low) * 101n) / 100n;
+    const set = async (value: bigint) => {
+      await chain.testClient.setStorageAt({
+        address: pool,
+        index: "0x0",
+        value: `0x${value.toString(16).padStart(64, "0")}`,
+      });
+      await chain.testClient.mine({ blocks: 1 });
+    };
+    await set((word & ~low) | moved);
+    try {
+      const pinned = await pools("--block", at.toString());
+      expect(pinned.block).toBe(at.toString());
+      expect(sqrtOf(pinned, pool)).toBe(sqrtOf(before, pool));
+      const latest = await pools();
+      expect(BigInt(latest.block) > at).toBe(true);
+      expect(sqrtOf(latest, pool)).toBe(moved.toString());
+      // A tag names its block too.
+      expect((await pools("--block", "latest")).block).toBe(latest.block);
+    } finally {
+      await set(word);
+    }
+  });
+
+  it("prices the pair from a pool of each V3-style venue, naming the venue", async () => {
+    for (const [name, venue, contract, price] of [
+      ["v3:500", "Uniswap V3", "UniswapV3.Factory", "400"],
+      ["pancake:2500", "PancakeSwap V3", "PancakeswapV3.Factory", "399"],
+      ["slipstream:10", "Aerodrome Slipstream", "AerodromeSlipstream.CLFactoryGaugesV3", "400.5"],
+    ] as const) {
+      const run = await sauce(
+        ...["price", "--chain", "base", "SPCXc", "USDC", "--pool", poolOf(name)],
+        ...["--rpc-url", chain.rpcUrl, "--json"],
+      );
+      expect(run.stderr).toBe("");
+      expect(run.code).toBe(0);
+      const out = JSON.parse(run.stdout) as {
+        sqrtPriceX96: string;
+        pool: Record<string, unknown>;
+        buy: { maxPrice: string; maxAvgPrice: string };
+      };
+      expect(out.pool).toMatchObject({ address: poolOf(name), venue, contract, readFrom: "base" });
+      expect(out.sqrtPriceX96).toBe(sqrtAt(price).toString());
+      // Buying SPCXc with USDC: the price x 10^(18 + 6 - 8), as the distributed swap takes it.
+      expect(Number(out.buy.maxPrice) / (Number(price) * 1e16)).toBeCloseTo(1, 12);
+      expect(out.buy.maxAvgPrice).toBe(out.buy.maxPrice);
+    }
+    // A pool of another pair is refused, naming what it trades.
+    const other = await sauce(
+      ...["price", "--chain", "base", "WETH", "USDC", "--pool", poolOf("v3:500")],
+      ...["--rpc-url", chain.rpcUrl],
+    );
+    expect(other.code).toBe(2);
+    expect(other.stderr).toMatch(/trades 0x\w+ and 0x\w+, not WETH and USDC/);
+    // An address with code that is no pool says so.
+    const token = await sauce(
+      ...["price", "--chain", "base", "SPCXc", "USDC", "--pool", USDC, "--rpc-url", chain.rpcUrl],
+    );
+    expect(token.code).toBe(2);
+    expect(token.stderr).toMatch(/answers none of a V3-style pool's reads on base/);
   });
 });
 

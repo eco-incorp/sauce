@@ -1,6 +1,6 @@
 # Contracts and tokens API
 
-[API reference](README.md) · [Protocols and tokens](../guides/protocols-and-tokens.md) · [Coverage](coverage.md)
+[API reference](README.md) · [Protocols and tokens](../guides/protocols-and-tokens.md) · [Protocols](../reference/protocols.md)
 
 Every registry protocol is a namespace and every registered token a name, with the same names in a
 program and in TypeScript. This page lists both surfaces; the
@@ -19,18 +19,12 @@ program and in TypeScript. This page lists both surfaces; the
 
 ## Names
 
-- A namespace is the protocol's registry slug in PascalCase (`aerodrome-slipstream` →
-  `AerodromeSlipstream`).
-- A deployed contract, and an address-only one, is named by its role in the protocol's
-  `addresses.ts`, first letter upper-cased, keeping its ABI name's spelling of the role's leading
-  words (`clFactory` under `SlipstreamCLFactoryABI` → `CLFactory`).
-- An interface is named by its ABI export without `ABI` and the protocol's prefix
-  (`contracts.deriveContractName`), as is a role that runs different ABIs on different chains.
-- A slug ending in `-v<N>` also joins the family `PascalOf(<rest>)`. A family carries a contract
-  only where exactly one member has one by that name; an ambiguous name is absent from its type and
-  throws when read.
-- No protocol, family, token or venue name can collide with a chain export's own `route`, `chain`,
-  or a function property: composing the export refuses it.
+A namespace is its protocol's slug in PascalCase, a contract its role in the protocol's
+`addresses.ts`, an interface its ABI's name, and a family alias groups a protocol's versions:
+[Names](../guides/protocols-and-tokens.md#names) has the rules, and each protocol's page in the
+[reference](../reference/protocols.md) the names they give. `contracts.deriveContractName` derives an
+interface's name from its ABI export. No protocol, family, token or venue name can collide with a
+chain export's own `route`, `chain`, or a function property: composing the export refuses it.
 
 ## TypeScript: chain exports
 

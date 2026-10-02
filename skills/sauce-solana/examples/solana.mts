@@ -13,28 +13,26 @@ import { readFileSync } from "node:fs";
 import { routes } from "@eco-incorp/sauce";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "@eco-incorp/sauce/deployments";
 import {
+  AccountRole,
   POT_SEED,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  TRANSACTION_SIZE_LIMIT,
   USDC_MINT,
+  address,
+  blockhash,
+  buildComputeBudgetPrepend,
   buildCookInstruction,
   buildExecuteTransaction,
   buildHeapFramePrepend,
   createSauceSvmClient,
   deriveExecutionFeeConfigPda,
   derivePotPda,
-  getTransactionSize,
-} from "@eco-incorp/sauce/svm";
-import { getSetComputeUnitLimitInstruction } from "@solana-program/compute-budget";
-import {
-  AccountRole,
-  TRANSACTION_SIZE_LIMIT,
-  address,
-  blockhash,
   generateKeyPairSigner,
   getAddressEncoder,
   getProgramDerivedAddress,
-} from "@solana/kit";
+  getTransactionSize,
+} from "@eco-incorp/sauce/svm";
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`check failed: ${message}`);
@@ -109,7 +107,7 @@ async function cookSize(accounts: number): Promise<number> {
     payer: owner,
     instructions: [
       buildHeapFramePrepend(),
-      getSetComputeUnitLimitInstruction({ units: 1_400_000 }),
+      ...buildComputeBudgetPrepend({ unitLimit: 1_400_000 }),
       buildCookInstruction({
         kitchen,
         owner: owner.address,

@@ -4,14 +4,26 @@
  * ticks; the venues it reads on a chain; and the invocations it refuses. `cli-pools.e2e.test.ts`
  * runs it against real Uniswap V3 pools.
  */
-import { getAddress, type Address } from "viem";
+import { readFileSync } from "node:fs";
+
+import {
+  decodeFunctionResult,
+  getAddress,
+  hexToBigInt,
+  type Abi,
+  type Address,
+  type Hex,
+  type PublicClient,
+} from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
+import { getDescriptor } from "../src/descriptors/query.js";
 import {
   decimalOf,
   depthToMove1Pct,
   parseV4Key,
   poolSides,
+  readPoolAt,
   shortDecimal,
   significant,
   sqrtPriceAtTick,
@@ -20,7 +32,7 @@ import {
   v4SwapFee,
   venuesOn,
 } from "../src/cli/pools.js";
-import type { PriceToken } from "../src/cli/price.js";
+import { priceCommand, tokenGiven, type PriceToken } from "../src/cli/price.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { MAX_SQRT_PRICE_X96, MIN_SQRT_PRICE_X96 } from "../src/price.js";
 
@@ -255,5 +267,203 @@ describe("the venues and the inputs", () => {
     expect(run.stderr).toMatch(
       /give them as 0x[0-9a-fA-F]{40}:<decimals>, or an endpoint \(--rpc-url or --config\) to read them from the token/,
     );
+  });
+});
+
+/** What three Base pools answered, one per V3-style venue (`fixtures/cli/v3-pools-base.json`). */
+interface CapturedPool {
+  readonly venue: string;
+  readonly contract: string;
+  readonly address: Address;
+  readonly answers: Readonly<Record<string, Hex>>;
+  readonly getPool: Hex;
+}
+const CAPTURED = (
+  JSON.parse(
+    readFileSync(new URL("./fixtures/cli/v3-pools-base.json", import.meta.url), "utf8"),
+  ) as { pools: CapturedPool[] }
+).pools;
+const BASE = requireChain("base");
+const word = (data: Hex, index: number): bigint =>
+  hexToBigInt(`0x${data.slice(2 + 64 * index, 2 + 64 * (index + 1))}`);
+
+/**
+ * A client whose `multicall` answers each call with the return data `answers` holds for its
+ * address and function, decoded with the call's own ABI as viem's multicall decodes it: a call with
+ * no answer reverts, and data its ABI cannot decode fails that call alone.
+ */
+function capturedClient(answers: ReadonlyMap<string, Readonly<Record<string, Hex>>>): PublicClient {
+  return {
+    multicall: async ({
+      contracts,
+    }: {
+      contracts: Array<{ address: Address; abi: Abi; functionName: string; args?: unknown[] }>;
+    }) =>
+      contracts.map(({ address, abi, functionName, args }) => {
+        const data = answers.get(getAddress(address))?.[functionName];
+        if (data === undefined) {
+          return { status: "failure", error: { shortMessage: "execution reverted" } };
+        }
+        try {
+          return {
+            status: "success",
+            result: decodeFunctionResult({ abi, functionName, data, args } as never),
+          };
+        } catch (error) {
+          return { status: "failure", error };
+        }
+      }),
+  } as unknown as PublicClient;
+}
+
+/** The answers of `pool` and of its factory, whose getPool returns `getPool`. */
+const answersOf = (pool: CapturedPool, change: Partial<Record<string, Hex | undefined>> = {}) => {
+  const own = Object.fromEntries(
+    Object.entries({ ...pool.answers, ...change }).filter(([, data]) => data !== undefined),
+  ) as Record<string, Hex>;
+  const factory = getAddress(`0x${pool.answers.factory!.slice(-40)}`);
+
+  return new Map([
+    [getAddress(pool.address), own],
+    [factory, { getPool: pool.getPool }],
+  ]);
+};
+
+describe("a pool given by its address (sauce price --pool)", () => {
+  it("reads every V3-style venue's pool as Base's answered, and names its venue", async () => {
+    for (const pool of CAPTURED) {
+      const read = await readPoolAt(capturedClient(answersOf(pool)), BASE, pool.address);
+      const slot0 = pool.answers.slot0!;
+      expect(read).toEqual({
+        pool: getAddress(pool.address),
+        token0: getAddress(`0x${pool.answers.token0!.slice(-40)}`),
+        token1: getAddress(`0x${pool.answers.token1!.slice(-40)}`),
+        sqrtPriceX96: word(slot0, 0),
+        // The tick is the second word, an int24 sign-extended.
+        tick: Number(BigInt.asIntN(24, word(slot0, 1))),
+        liquidity: hexToBigInt(pool.answers.liquidity!),
+        fee: 500,
+        tickSpacing: 10,
+        factory: getAddress(`0x${pool.answers.factory!.slice(-40)}`),
+        venue: { name: pool.venue, contract: pool.contract },
+      });
+      expect(read.tick).toBeLessThan(0);
+    }
+  });
+
+  it("decodes only the price and tick: the venues' slot0s differ after them", () => {
+    const [uniswap, pancake, slipstream] = CAPTURED;
+    // Slipstream's slot0 is six words, which Uniswap V3's seven-output slot0 overruns: what
+    // `sauce_price` with a pool failed on.
+    const uniswapPool = getDescriptor("uniswap-v3", "Pool")!.abi;
+    expect(() =>
+      decodeFunctionResult({
+        abi: uniswapPool,
+        functionName: "slot0",
+        data: slipstream!.answers.slot0!,
+      } as never),
+    ).toThrow(/out of bounds/);
+    expect((slipstream!.answers.slot0!.length - 2) / 64).toBe(6);
+    // PancakeSwap V3's feeProtocol is a uint32 where Uniswap's is a uint8.
+    expect(word(pancake!.answers.slot0!, 5)).toBe(0x0d480d48n);
+    expect(word(uniswap!.answers.slot0!, 5)).toBeLessThan(256n);
+  });
+
+  it("names no venue for a pool no registry factory made", async () => {
+    const pool = CAPTURED[2]!;
+    const stranger = `0x${"00".repeat(12)}${"ab".repeat(20)}` as Hex;
+    const unknown = await readPoolAt(
+      capturedClient(answersOf(pool, { factory: stranger })),
+      BASE,
+      pool.address,
+    );
+    expect(unknown.venue).toBeUndefined();
+    expect(unknown.unrecognized).toMatch(/is none the registry records on base/);
+    // A pool naming a registry factory whose lookup returns another.
+    const claimed = await readPoolAt(
+      capturedClient(
+        new Map([
+          [getAddress(pool.address), pool.answers],
+          [getAddress(`0x${pool.answers.factory!.slice(-40)}`), { getPool: stranger }],
+        ]),
+      ),
+      BASE,
+      pool.address,
+    );
+    expect(claimed.venue).toBeUndefined();
+    expect(claimed.unrecognized).toMatch(
+      /names AerodromeSlipstream\.CLFactoryGaugesV3 as its factory, whose getPool does not return it/,
+    );
+    const anonymous = await readPoolAt(
+      capturedClient(answersOf(pool, { factory: undefined })),
+      BASE,
+      pool.address,
+    );
+    expect(anonymous.unrecognized).toMatch(/answers no factory\(\)/);
+  });
+
+  it("refuses an address that is no V3-style pool, saying what it is not", async () => {
+    const pool = CAPTURED[0]!;
+    await expect(
+      readPoolAt(capturedClient(answersOf(pool, { slot0: undefined })), BASE, pool.address),
+    ).rejects.toThrow(
+      /answers no slot0\(\) on base .*: it is not a V3-style pool \(Uniswap V3, PancakeSwap V3, Aerodrome Slipstream\)\. A Uniswap V4 pool has no address of its own/,
+    );
+    await expect(readPoolAt(capturedClient(new Map()), BASE, pool.address)).rejects.toThrow(
+      /answers none of a V3-style pool's reads on base/,
+    );
+  });
+
+  it("prices the pair from the pool, which must be of the pair", async () => {
+    const pool = CAPTURED[2]!;
+    const read = await readPoolAt(capturedClient(answersOf(pool)), BASE, pool.address);
+    const [spcx, usdc] = [tokenGiven("SPCXc", BASE), tokenGiven("USDC", BASE)] as PriceToken[];
+    const out = priceCommand({
+      chain: BASE,
+      base: spcx!,
+      quote: usdc!,
+      price: { sqrtPriceX96: read.sqrtPriceX96 },
+      pool: read,
+    });
+    expect(out.json.pool).toEqual({
+      address: getAddress(pool.address),
+      venue: "Aerodrome Slipstream",
+      contract: "AerodromeSlipstream.CLFactoryGaugesV3",
+      factory: getAddress(`0x${pool.answers.factory!.slice(-40)}`),
+      sqrtPriceX96: read.sqrtPriceX96.toString(),
+      tick: read.tick,
+      liquidity: read.liquidity.toString(),
+      feePpm: 500,
+      tickSpacing: 10,
+      readFrom: "base",
+    });
+    expect(out.text).toContain(
+      `Pool: Aerodrome Slipstream ${getAddress(pool.address)} ` +
+        "(AerodromeSlipstream.CLFactoryGaugesV3), fee 0.05%, tick spacing 10",
+    );
+    // Buying SPCXc with USDC: the distributed swap's maxPrice is USDC units per SPCXc unit times
+    // 1e18, the price times 10^(18 + 6 - 8), as sauce pools gives each pool's.
+    const buy = out.json.buy as { maxPrice: string; maxAvgPrice: string; minAvgPrice: string };
+    const [usdcPerSpcx] = poolSides(
+      usdc as PriceToken,
+      spcx as PriceToken,
+      { sqrtPriceX96: read.sqrtPriceX96, liquidity: read.liquidity, tick: read.tick },
+      [0, 0],
+    );
+    // sauce pools rounds its taker price up, sauce price its limit down: one unit apart at most.
+    expect(usdcPerSpcx.maxPrice - BigInt(buy.maxPrice)).toBeGreaterThanOrEqual(0n);
+    expect(usdcPerSpcx.maxPrice - BigInt(buy.maxPrice)).toBeLessThanOrEqual(1n);
+    expect(buy.maxAvgPrice).toBe(buy.maxPrice);
+    // minAvgPrice is the other way round: SPCXc units per USDC unit, about 1e36 / maxPrice.
+    expect(BigInt(buy.minAvgPrice) * BigInt(buy.maxPrice)).toBeGreaterThanOrEqual(10n ** 36n);
+    expect(() =>
+      priceCommand({
+        chain: BASE,
+        base: tokenGiven("WETH", BASE) as PriceToken,
+        quote: usdc!,
+        price: { sqrtPriceX96: read.sqrtPriceX96 },
+        pool: read,
+      }),
+    ).toThrow(/trades 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 and 0xb2\w+, not WETH and USDC/);
   });
 });
