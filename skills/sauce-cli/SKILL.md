@@ -191,11 +191,11 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    roles:
 
    ```text
-   The cook succeeds from <owner>: gas used 275051, returns <96 bytes>
+   The cook succeeds from <owner>: gas used 275051 for the cook, after the Pot's deploy (1. below), returns <96 bytes>
    main returns { pool: Address; spent: Uint256; bought: Uint256 }: { pool: <pool>, spent: 100000000, bought: 37716248833222607 }
    Rehearsed with eth_simulateV1 on the state of block <block>; nothing was signed or sent:
-     1. Kitchen.deployPot(<owner>, …): Pot <Pot> is not deployed on base yet. …
-     2. the cook, from the owner <owner>
+     1. Kitchen.deployPot(<owner>, …), gas used 455479: Pot <Pot> is not deployed on base yet. …
+     2. the cook, from the owner <owner>, gas used 275051
    Assumed for this rehearsal only, by state override:
      the Pot holds 100 USDC: --assume-balance (…)
    …
