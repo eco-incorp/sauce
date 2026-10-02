@@ -3,10 +3,10 @@
 //
 //   - An integer index, `xs[i]` with `i` a `bigint` (TS2538). Every SauceScript number is a 256-bit
 //     integer, so every index is a bigint, and TypeScript refuses a bigint index outright.
-//   - A number and a bigint together: `x == 0`, `n + 1`, `f(500)` where a bigint is declared, and a
-//     bigint stored where TypeScript inferred a number (`let pool = 0; pool = f()`) (TS2365, TS2367,
-//     TS2322, TS2345). In SauceScript `1` and `1n` are the same integer, and an account compares as
-//     its address (`program == 0x06dd…`).
+//   - A number and a bigint together: `x == 0`, `n + 1`, `f(500)` where a bigint is declared, a
+//     bigint stored where TypeScript inferred a number (`let pool = 0; pool = f()`), and the
+//     `number | bigint` of `c ? x : 0` (TS2365, TS2367, TS2322, TS2345). In SauceScript `1` and `1n`
+//     are the same integer, and an account compares as its address (`program == 0x06dd…`).
 //   - An undeclared UPPER_CASE name (TS2304, TS2552): a define, which the compile is given
 //     (`--define AMOUNT=5`) and the editor is not. A misspelled one still fails the compile.
 //
@@ -18,26 +18,26 @@
 "use strict";
 
 const DEFINE = /^[A-Z][A-Z0-9_]*$/;
-/** A TypeScript type that is a SauceScript integer: `bigint`, `number`, a literal of either, or an
- *  `Account` (`Account<Writable, Signer>`), which compares as its address. */
-const INT = String.raw`(?:bigint|number|-?\d+n?|SauceInt|Account(?:<[\w, ]*>)?)`;
-const BIGINT = String.raw`(?:bigint|-?\d+n)`;
-const NUMBER = String.raw`(?:number|-?\d+)`;
-/** A number and a bigint, either way round, quoted, with `between` them. */
-const MIXED = (between) =>
-  String.raw`(?:'${NUMBER}'${between}'${BIGINT}'|'${BIGINT}'${between}'${NUMBER}')`;
+/** `one`, or a union of it: `c ? x : 0` is `number | bigint`. */
+const UNION = (one) => String.raw`${one}(?: \| ${one})*`;
+/** A TypeScript type that is a SauceScript number: `bigint`, `number`, a literal of either. */
+const NUMBER = UNION(String.raw`(?:bigint|number|-?\d+n?|SauceInt)`);
+/** ... or an `Account` (`Account<Writable, Signer>`), which compares as its address. */
+const INT = UNION(String.raw`(?:bigint|number|-?\d+n?|SauceInt|Account(?:<[\w, ]*>)?)`);
 
 const PATTERNS = {
   // Type 'bigint' cannot be used as an index type. / Type '0n' cannot be …
-  2538: new RegExp(String.raw`^Type '${BIGINT}' cannot be used as an index type`),
+  2538: new RegExp(String.raw`^Type '${NUMBER}' cannot be used as an index type`),
   // Operator '+' cannot be applied to types 'number' and 'bigint'.
   2365: new RegExp(String.raw`^Operator '[^']+' cannot be applied to types '${INT}' and '${INT}'`),
   // This comparison appears to be unintentional because the types 'bigint' and 'number' have no overlap.
   2367: new RegExp(String.raw`because the types '${INT}' and '${INT}' have no overlap`),
-  // Type 'number' is not assignable to type 'bigint'. / Type 'bigint' is not assignable to type 'number'.
-  2322: new RegExp(`^Type ${MIXED(" is not assignable to type ")}`),
+  // Type 'number' is not assignable to type 'bigint'. / Type 'number | bigint' is not assignable …
+  2322: new RegExp(String.raw`^Type '${NUMBER}' is not assignable to type '${NUMBER}'`),
   // Argument of type '500' is not assignable to parameter of type 'bigint'.
-  2345: new RegExp(`^Argument of type ${MIXED(" is not assignable to parameter of type ")}`),
+  2345: new RegExp(
+    String.raw`^Argument of type '${NUMBER}' is not assignable to parameter of type '${NUMBER}'`,
+  ),
 };
 
 /**
