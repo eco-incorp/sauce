@@ -32,16 +32,14 @@ if (compiled.calls.length !== 1) throw new Error("Expected one cook");
 // Portals, the prover, the Pot, the engine and what the solver sends come from the SDK; the fee is
 // a fixture, which destinationExecutionFee() reads for real.
 const executionFee = 1_000n;
-const built = Base(program, {
-  execution: { value: executionFee },
-  deadline: 2_000_000_000n,
-  defines,
-}).reward({
+const built = Base.Portal.send([], {
   source: "ethereum",
   creator: "0x4444444444444444444444444444444444444444",
   deadline: 2_000_003_600n,
   nativeAmount: executionFee,
-});
+})
+  .receive([], { execution: { value: executionFee }, deadline: 2_000_000_000n, defines })
+  .then(program);
 
 console.log(`@sauce/router swap: ${compiled.compiled.bytecode[0]!.length} bytes`);
 console.log(built.hash().intentHash);

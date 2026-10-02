@@ -14,26 +14,30 @@ const sourceUsdc = toHex(sourceUsdcValue, { size: 20 });
 const recipient = 0x2222222222222222222222222222222222222222n;
 const amount = 1_000_000n;
 
-const built = Base(
-  () => {
-    USDC.transfer(recipient, amount);
-  },
+// What the creator pays on Ethereum, what the solver delivers on Base, and what runs there.
+const built = Base.Portal.send(
+  { token: sourceUsdc, amount },
   {
-    // The route's native amount, which the solver sends with the fill, defaults to this fee.
-    execution: { value: executionFee },
-    deadline: 2_000_000_000n,
-    // Callbacks capture nothing: explicitly supply every external scalar.
-    defines: { recipient, amount },
-    tokens: [{ token: baseUsdc, amount }],
-    // Route assets arrive at the Executor; the Sauce program spends from the Pot.
-    precalls: [token.Token.transfer({ token: baseUsdc, to: pot, amount }).toCall()],
+    source: Ethereum.chain,
+    creator: "0x6666666666666666666666666666666666666666",
+    deadline: 2_000_003_600n,
   },
-).reward({
-  source: Ethereum.chain,
-  creator: "0x6666666666666666666666666666666666666666",
-  deadline: 2_000_003_600n,
-  tokens: [{ token: sourceUsdc, amount }],
-});
+)
+  .receive(
+    { token: baseUsdc, amount },
+    {
+      // The route's native amount, which the solver sends with the fill, defaults to this fee.
+      execution: { value: executionFee },
+      deadline: 2_000_000_000n,
+      // Callbacks capture nothing: explicitly supply every external scalar.
+      defines: { recipient, amount },
+      // Route assets arrive at the Executor; the Sauce program spends from the Pot.
+      precalls: [token.Token.transfer({ token: baseUsdc, to: pot, amount }).toCall()],
+    },
+  )
+  .then(() => {
+    USDC.transfer(recipient, amount);
+  });
 
 // The reward paid into the intent's vault, then `publish`. Pass `{ vault }` as `built.vaultCall()`
 // reads it from the source chain to have it checked against this offline derivation.

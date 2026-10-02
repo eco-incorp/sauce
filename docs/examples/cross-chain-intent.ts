@@ -21,7 +21,7 @@ const program = readFileSync(
 const executionFee = 1_000n;
 const creator = "0x4444444444444444444444444444444444444444";
 
-const options: routes.IntentOptions = {
+const options: routes.PortalReceiveOptions = {
   execution: { value: executionFee },
   deadline: 2_000_000_000n,
   creator,
@@ -35,8 +35,9 @@ const options: routes.IntentOptions = {
 };
 
 // The intent the program creates inherits this one's deadline, creator and eco-routes deployment,
-// so there is nothing extra to configure for it.
-const built = Base(program, options).reward({ deadline: 2_000_003_600n });
+// so there is nothing extra to configure for it. This one's reward is left empty here: `send` names
+// what a solver earns on Ethereum for running the program on Base.
+const built = Base.Portal.send([], { deadline: 2_000_003_600n }).receive([], options).then(program);
 
 console.log(`Cross-chain intent program: ${built.compiled.bytecode[0]!.length} bytes`);
 console.log(built.hash().intentHash);

@@ -181,9 +181,11 @@ _while_ it is running, which is what you want when the amount is the output of t
 ```js
 function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum(() => {
-    USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount })
+    .then(() => {
+      USDC.transfer(RECIPIENT, amount);
+    });
 }
 ```
 
@@ -240,15 +242,14 @@ and the solver's delivery named in the second argument, because it is not derive
 ```js
 function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum(
-    () => {
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount })
+    .then(() => {
       const here = USDC.balanceOf(ctx.self());
       if (here > 0n) {
         USDC.transfer(RECIPIENT, here);
       }
-    },
-    { tokens: [{ token: USDC, amount }] },
-  ).reward({ tokens: [{ token: USDC, amount }] });
+    });
 }
 ```
 
@@ -291,13 +292,12 @@ function fee(amount: Uint256): Uint256 {
 
 function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum(
-    () => {
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount })
+    .then(() => {
       const [held] = abi.decode(abi.encode(balanceOf(USDC, ctx.self())), ["Uint256"]);
       USDC.transfer(RECIPIENT, held - fee(held));
-    },
-    { tokens: [{ token: USDC, amount }] },
-  ).reward({ tokens: [{ token: USDC, amount }] });
+    });
 }
 ```
 

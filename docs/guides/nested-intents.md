@@ -34,9 +34,11 @@ const built = Base(
     const amount = USDC.balanceOf(ctx.self());
     const payout = amount - amount / 1000n;
     // Opened, funded in Base's USDC and published on Base, in that same fill.
-    Ethereum(() => {
-      USDC.transfer(RECIPIENT, payout);
-    }).reward({ tokens: [{ token: USDC, amount }] });
+    Ethereum.Portal.send({ token: USDC, amount })
+      .receive({ token: USDC, amount: payout })
+      .then(() => {
+        USDC.transfer(RECIPIENT, payout);
+      });
   },
   {
     execution: { value: executionFee },
@@ -92,19 +94,21 @@ lowering adds the transfer into the Pot itself:
 // a percent the next solver keeps. Its reward is paid into its vault on Base's Portal, and it is
 // published, in that same fulfilment.
 //
-// Every `USDC` is the USDC of the chain where its part runs: the outer reward's is Ethereum's; the
-// outer body's, its delivery's and the inner reward's are Base's; the inner body's is Ethereum's.
+// Every `USDC` is the USDC of the chain where its part runs: the outer `.send(...)`'s is Ethereum's;
+// the outer `.receive(...)`'s, the outer body's and the inner `.send(...)`'s are Base's; the inner
+// `.receive(...)`'s and the inner body's are Ethereum's.
 function main(recipient: Address, delivered: Uint256, reward: Uint256) {
-  Base(
-    () => {
+  Base.Portal.send({ token: USDC, amount: reward })
+    .receive({ token: USDC, amount: delivered })
+    .then(() => {
       const amount = USDC.balanceOf(ctx.self());
       const payout = amount - amount / 1000n;
-      Ethereum(() => {
-        USDC.transfer(recipient, payout);
-      }).reward({ tokens: [{ token: USDC, amount }] });
-    },
-    { tokens: [{ token: USDC, amount: delivered }] },
-  ).reward({ tokens: [{ token: USDC, amount: reward }] });
+      Ethereum.Portal.send({ token: USDC, amount })
+        .receive({ token: USDC, amount: payout })
+        .then(() => {
+          USDC.transfer(recipient, payout);
+        });
+    });
 }
 ```
 
@@ -191,18 +195,19 @@ import { uniswapV3 } from "@sauce/router";
 //
 // The swap is on Base's Uniswap V3 WETH/USDC pool at the 0.05% tier, looked up where the body runs.
 function main(recipient: Address, delivered: Uint256, reward: Uint256, minOut: Uint256) {
-  Base(
-    () => {
+  Base.Portal.send({ token: USDC, amount: reward })
+    .receive({ token: USDC, amount: delivered })
+    .then(() => {
       const amount = USDC.balanceOf(ctx.self());
       const pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);
       const bought = uniswapV3(pool, USDC, WETH, amount, 0n, minOut, ctx.self());
       const payout = bought - bought / 1000n;
-      Ethereum(() => {
-        WETH.transfer(recipient, payout);
-      }).reward({ tokens: [{ token: WETH, amount: bought }] });
-    },
-    { tokens: [{ token: USDC, amount: delivered }] },
-  ).reward({ tokens: [{ token: USDC, amount: reward }] });
+      Ethereum.Portal.send({ token: WETH, amount: bought })
+        .receive({ token: WETH, amount: payout })
+        .then(() => {
+          WETH.transfer(recipient, payout);
+        });
+    });
 }
 ```
 
@@ -260,28 +265,28 @@ fixed into it ([cross-chain-cascade.ts](../examples/cross-chain-cascade.ts) comp
 // are filled in by the level above it, at that level's own execution time.
 //
 // The first two bodies are more than token writes, so each compiles to a program and runs on its
-// chain's Pot; the second argument of each names what a solver must deliver for it to have
-// something to measure.
+// chain's Pot; each `.receive(...)` names what a solver must deliver for it to have something to
+// measure.
 //
-// Every `USDC` is the USDC of the chain where that part runs. Each body's is its destination's. Each
-// reward is escrowed by the program offering it: the first hop's in Ethereum's USDC, the second's in
-// Base's and the third's in Ethereum's.
+// Every `USDC` is the USDC of the chain where that part runs. Each body's and each delivery's is its
+// destination's. Each reward, in `.send(...)`, is escrowed by the program offering it: the first
+// hop's in Ethereum's USDC, the second's in Base's and the third's in Ethereum's.
 function main(recipient: Address, delivered: Uint256, reward: Uint256) {
-  Base(
-    () => {
+  Base.Portal.send({ token: USDC, amount: reward })
+    .receive({ token: USDC, amount: delivered })
+    .then(() => {
       const amount = USDC.balanceOf(ctx.self());
-      Ethereum(
-        () => {
+      Ethereum.Portal.send({ token: USDC, amount })
+        .receive({ token: USDC, amount })
+        .then(() => {
           const arrived = USDC.balanceOf(ctx.self());
-          Base(() => {
-            USDC.transfer(recipient, arrived);
-          }).reward({ tokens: [{ token: USDC, amount: arrived }] });
-        },
-        { tokens: [{ token: USDC, amount }] },
-      ).reward({ tokens: [{ token: USDC, amount }] });
-    },
-    { tokens: [{ token: USDC, amount: delivered }] },
-  ).reward({ tokens: [{ token: USDC, amount: reward }] });
+          Base.Portal.send({ token: USDC, amount: arrived })
+            .receive({ token: USDC, amount: arrived })
+            .then(() => {
+              USDC.transfer(recipient, arrived);
+            });
+        });
+    });
 }
 ```
 

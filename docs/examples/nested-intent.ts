@@ -25,38 +25,40 @@ const REWARD = 1_010_000n;
 const executionFee = 1_000n; // Fixture: Base's Kitchen fee, read with destinationExecutionFee().
 const creator = "0x4444444444444444444444444444444444444444";
 
-const built = Base(
-  () => {
+const built = Base.Portal.send(
+  { token: usdcOn(Ethereum.chain), amount: REWARD },
+  { source: Ethereum.chain, deadline: 2_000_003_600n },
+)
+  // What the solver brings to Base. It arrives at the Executor; the body measures the Pot.
+  .receive(
+    { token: baseUsdc, amount: AMOUNT },
+    {
+      execution: { value: executionFee },
+      deadline: 2_000_000_000n,
+      rewardDeadline: 2_000_003_600n,
+      // Every intent the body opens takes the deadlines and the creator.
+      creator,
+      defines: { RECIPIENT },
+      precalls: [
+        token.Token.transfer({
+          token: baseUsdc,
+          to: destinationPot(Base.chain),
+          amount: AMOUNT,
+        }).toCall(),
+      ],
+    },
+  )
+  .then(() => {
     // Runs on Base, in the fill of this intent: what the solver delivered, measured there.
     const amount = USDC.balanceOf(ctx.self());
     const payout = amount - amount / 1000n;
     // Opened, funded in Base's USDC and published on Base, in that same fill.
-    Ethereum(() => {
-      USDC.transfer(RECIPIENT, payout);
-    }).reward({ tokens: [{ token: USDC, amount }] });
-  },
-  {
-    execution: { value: executionFee },
-    deadline: 2_000_000_000n,
-    rewardDeadline: 2_000_003_600n,
-    // Every intent the body opens takes the deadlines and the creator.
-    creator,
-    defines: { RECIPIENT },
-    // What the solver brings to Base. It arrives at the Executor; the body measures the Pot.
-    tokens: [{ token: baseUsdc, amount: AMOUNT }],
-    precalls: [
-      token.Token.transfer({
-        token: baseUsdc,
-        to: destinationPot(Base.chain),
-        amount: AMOUNT,
-      }).toCall(),
-    ],
-  },
-).reward({
-  source: Ethereum.chain,
-  deadline: 2_000_003_600n,
-  tokens: [{ token: usdcOn(Ethereum.chain), amount: REWARD }],
-});
+    Ethereum.Portal.send({ token: USDC, amount })
+      .receive({ token: USDC, amount: payout })
+      .then(() => {
+        USDC.transfer(RECIPIENT, payout);
+      });
+  });
 console.log("Ethereum → Base → Ethereum:", built.hash().intentHash);
 
 // The file form, compiled for Ethereum where it opens its intent, with main's arguments fixed into
