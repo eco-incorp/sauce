@@ -3,11 +3,8 @@
   "executed": {
     "sauce-chains/examples/holdings.sauce.ts": ["actions/tests/holdings.mainnet.test.ts"],
     "sauce-chains/examples/payout-solana.sauce.ts": ["sdk/test/cli-solana.e2e.test.ts"],
-    "sauce-cli/examples/pay.sauce.ts": [
-      "sdk/test/cli.e2e.test.ts",
-      "sdk/test/cli-simulate.e2e.test.ts"
-    ],
-    "sauce-cli/examples/split.sauce.ts": ["sdk/test/cli.e2e.test.ts"],
+    "sauce-cli/examples/buy.sauce.ts": ["sdk/test/cli-examples.e2e.test.ts"],
+    "sauce-cli/examples/payout.sauce.ts": ["sdk/test/cli-examples.e2e.test.ts"],
     "sauce-distributed-swap/examples/distributed-swap.sauce.ts": [
       "sdk/test/evm/distributed-swap.e2e.test.ts"
     ],

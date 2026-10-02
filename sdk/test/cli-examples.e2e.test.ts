@@ -61,11 +61,11 @@ import {
 import { FACTORY, freePort, LIQUIDITY, POOL } from "./pools-anvil.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SKILL_DIR = join(HERE, "../../skills/sauce-cli");
+const EXAMPLES = join(HERE, "../../skills/sauce-cli/examples");
 /** The programs, by the path the command prints back: relative, as a reader runs them. */
-const BUY = relative(process.cwd(), join(SKILL_DIR, "examples/buy.sauce.ts"));
-const PAYOUT = relative(process.cwd(), join(SKILL_DIR, "examples/payout.sauce.ts"));
-const SKILL = readFileSync(join(SKILL_DIR, "SKILL.md"), "utf8");
+const BUY = relative(process.cwd(), join(EXAMPLES, "buy.sauce.ts"));
+const PAYOUT = relative(process.cwd(), join(EXAMPLES, "payout.sauce.ts"));
+const SKILL = readFileSync(join(EXAMPLES, "../SKILL.md"), "utf8");
 
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
 const PAYEE_A: Address = "0x7777777777777777777777777777777777777777";
