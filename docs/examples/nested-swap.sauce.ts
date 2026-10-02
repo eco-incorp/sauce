@@ -17,9 +17,9 @@ function main(recipient: Address, delivered: Uint256, reward: Uint256, minOut: U
   Base(
     () => {
       const amount = USDC.balanceOf(ctx.self());
-      const pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);
-      const bought = uniswapV3(pool, USDC, WETH, amount, 0n, minOut, ctx.self());
-      const payout = bought - bought / 1000n;
+      const pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
+      const bought = uniswapV3(pool, USDC, WETH, amount, 0, minOut, ctx.self());
+      const payout = bought - bought / 1000;
       Ethereum(() => {
         WETH.transfer(recipient, payout);
       }).reward({ tokens: [{ token: WETH, amount: bought }] });
