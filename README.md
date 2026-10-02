@@ -122,33 +122,32 @@ every release; [nested intents](docs/guides/nested-intents.md) covers cascades s
 
 Inside a route body the SDK resolves token symbols and protocol contracts against the destination
 chain, so a program reads like the operation it performs. This example builds a complete intent
-offline; the repeated-digit addresses and the fee are fixtures and nothing is sent.
+offline; the creator and the fee are fixtures and nothing is sent.
 
 ```ts
 import { Base } from "@eco-incorp/sauce";
-import type { routes } from "@eco-incorp/sauce";
 
-const executionFee = 1_000n; // Read the destination Kitchen's executionFee() before use.
-const options: routes.IntentOptions = {
-  // No Pot or engine: both are derived. The Pot is the shared one the solver deploys per Portal.
-  execution: { value: executionFee },
-  nativeAmount: executionFee,
-  portal: "0x3333333333333333333333333333333333333333",
-  deadline: 2_000_000_000n,
-};
+const executionFee = 1_000n; // Fixture: read Base's Kitchen fee with destinationExecutionFee().
 
-const built = Base(() => {
-  USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
-}, options).reward({
+const built = Base(
+  () => {
+    USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+  },
+  { execution: { value: executionFee }, deadline: 2_000_000_000n },
+).reward({
   source: "ethereum",
   creator: "0x4444444444444444444444444444444444444444",
-  prover: "0x5555555555555555555555555555555555555555",
   deadline: 2_000_003_600n,
-  nativeAmount: 0n,
 });
 
 console.log(built.hash().intentHash);
 ```
+
+What the snippet leaves out, the SDK fills in from what it records: the eco-routes Portal on both
+chains, the prover for the pair, the destination Pot and engine, and the native amount the solver
+sends, which is the cook's fee. The options take any of them as an override. What stays yours are
+the deadlines, the creator, the reward and the fee, which is on-chain state the destination's
+Kitchen sets: `destinationExecutionFee()` builds the read.
 
 Two kinds of name meet in that snippet. `Base` is a **named export**, one per chain; importing the
 package puts nothing on `globalThis`. `USDC` and `Uniswap` are **program syntax**: the SDK resolves
@@ -185,7 +184,7 @@ coin and per token. These are hot wallets: keep small balances in them.
 | You want to                                         | Start at                                          |
 | --------------------------------------------------- | ------------------------------------------------- |
 | Build, fund and submit an intent                    | [Create an intent](docs/guides/intents.md)        |
-| Chain intents together, statically or at run time   | [Nested intents](docs/guides/nested-intents.md)   |
+| Open an intent from inside another intent's body    | [Nested intents](docs/guides/nested-intents.md)   |
 | Generate programs from data instead of writing them | [Builders](docs/guides/builders-and-actions.md)   |
 | Compile a standalone program with runtime arguments | [Compiling programs](docs/guides/compiling.md)    |
 | Compile and run a program file from a terminal      | [The sauce command](docs/guides/cli.md)           |

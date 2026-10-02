@@ -13,30 +13,23 @@ the package once globally: `npm i -g @eco-incorp/sauce`, then `sauce --version`
 
 ## Build your first intent
 
-This is a complete program. It builds an Eco intent offline: the addresses and the fee are fixtures
+This is a complete program. It builds an Eco intent offline: the creator and the fee are fixtures
 and nothing is sent to a chain.
 
 ```ts
 import { Base } from "@eco-incorp/sauce";
-import type { routes } from "@eco-incorp/sauce";
 
-const executionFee = 1_000n; // Read the destination Kitchen's executionFee() before a real run.
-const options: routes.IntentOptions = {
-  // The Pot and engine are derived. The Pot must exist before fulfilment; the solver deploys it.
-  execution: { value: executionFee },
-  nativeAmount: executionFee,
-  portal: "0x3333333333333333333333333333333333333333",
-  deadline: 2_000_000_000n,
-};
+const executionFee = 1_000n; // Fixture: read Base's Kitchen fee with destinationExecutionFee().
 
-const built = Base(() => {
-  USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
-}, options).reward({
+const built = Base(
+  () => {
+    USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
+  },
+  { execution: { value: executionFee }, deadline: 2_000_000_000n },
+).reward({
   source: "ethereum",
   creator: "0x4444444444444444444444444444444444444444",
-  prover: "0x5555555555555555555555555555555555555555",
   deadline: 2_000_003_600n,
-  nativeAmount: 0n,
 });
 
 console.log(built.hash().intentHash);
@@ -50,10 +43,15 @@ by hand:
 - compiles the body, so there is no contract to write or deploy;
 - derives the Pot and engine, and encodes the `cook(engine, program)` call on that Pot — the shared
   one the solver deploys for that Portal;
+- looks up the eco-routes Portal on both chains, and the prover for the pair;
+- sets the route's native amount, what the solver sends with the fill, to what its calls spend: here
+  the cook's fee;
 - assembles the route and reward, which is all `built.hash()` and the source Portal requests need.
 
-What stays yours: the deadlines, the creator and prover, the Kitchen fee, and a reward that pays a
-solver to fill the intent. The SDK sends nothing, and it does not price the reward.
+Each of those is an option you can override, for a deployment the registry does not carry. What
+stays yours: the deadlines, the creator, the Kitchen fee, and a reward that pays a solver to fill
+the intent. The fee is on-chain state, so the SDK builds its read, `destinationExecutionFee()`, and
+does not guess it. The SDK sends nothing, and it does not price the reward.
 
 Ethereum and Base are two of the three chains the initial release supports, with Solana. Every
 other chain in the registry is a preview chain: the SDK builds for it at your own risk, and the

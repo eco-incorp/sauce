@@ -54,20 +54,20 @@ Complete programs live in the [examples](examples/README.md).
 
 ## By task
 
-| You want to                                                     | Guide                                                  |
-| --------------------------------------------------------------- | ------------------------------------------------------ |
-| Call tokens and protocols by name inside a program              | [Protocols and tokens](guides/protocols-and-tokens.md) |
-| Construct, fund, submit and inspect an intent                   | [Create an intent](guides/intents.md)                  |
-| Chain intents — statically, or from an amount measured on chain | [Nested intents](guides/nested-intents.md)             |
-| Compile a standalone program and pass it runtime arguments      | [Compiling programs](guides/compiling.md)              |
-| Compile and run a program file from a terminal                  | [The sauce command](guides/cli.md)                     |
-| Have a coding agent write and run programs                      | [Agent skills](guides/cli.md#agent-skills)             |
-| Give a coding agent Sauce's tools and skills over MCP           | [The MCP server](guides/mcp.md)                        |
-| Give an agent a wallet of its own, with a policy that limits it | [Agent wallets](guides/cli.md#agent-wallets)           |
-| Generate programs from structured data                          | [Builders](guides/builders-and-actions.md)             |
-| Write protocol actions as JSON, then run them or make an intent | [Actions](guides/actions.md)                           |
-| Plan accounts, stage code and execute on Solana                 | [Solana](guides/solana.md)                             |
-| Check what a settlement payload contains                        | [Verification](guides/verification.md)                 |
+| You want to                                                      | Guide                                                  |
+| ---------------------------------------------------------------- | ------------------------------------------------------ |
+| Call tokens and protocols by name inside a program               | [Protocols and tokens](guides/protocols-and-tokens.md) |
+| Construct, fund, submit and inspect an intent                    | [Create an intent](guides/intents.md)                  |
+| Open an intent inside another's body, from an amount it measured | [Nested intents](guides/nested-intents.md)             |
+| Compile a standalone program and pass it runtime arguments       | [Compiling programs](guides/compiling.md)              |
+| Compile and run a program file from a terminal                   | [The sauce command](guides/cli.md)                     |
+| Have a coding agent write and run programs                       | [Agent skills](guides/cli.md#agent-skills)             |
+| Give a coding agent Sauce's tools and skills over MCP            | [The MCP server](guides/mcp.md)                        |
+| Give an agent a wallet of its own, with a policy that limits it  | [Agent wallets](guides/cli.md#agent-wallets)           |
+| Generate programs from structured data                           | [Builders](guides/builders-and-actions.md)             |
+| Write protocol actions as JSON, then run them or make an intent  | [Actions](guides/actions.md)                           |
+| Plan accounts, stage code and execute on Solana                  | [Solana](guides/solana.md)                             |
+| Check what a settlement payload contains                         | [Verification](guides/verification.md)                 |
 
 ## Concepts
 
