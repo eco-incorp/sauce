@@ -10,7 +10,13 @@ import type { Address } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
-import { entryConstant, mainParams, mainSignature, type EntryValue } from "../routes/entry.js";
+import {
+  bindEntryArguments,
+  mainParams,
+  mainSignature,
+  type BoundEntryArguments,
+  type EntryValue,
+} from "../routes/entry.js";
 import { blankLiterals } from "../routes/rs-compile.js";
 import {
   parseAddress,
@@ -105,12 +111,10 @@ export function definesReach(file: string, text: string, names: readonly string[
 
 /**
  * A program whose intents a wallet publishes, with `main`'s arguments given: the same program with
- * each argument bound as a constant. A wallet publishes an intent from values it knows before
- * anything runs, so `main(amount: Uint256, recipient: Address)` with `--args 1000000 0x…` is
- * compiled as if its body read `amount` and `recipient` as those values: the parameter list is
- * blanked (each character a space, so the compiler's positions stay the file's) and each value
- * becomes the compile-time value of its name. The program keeps its shape, and the intents it
- * opens come out fixed.
+ * each argument bound as a constant (`bindEntryArguments`). A wallet publishes an intent from values
+ * it knows before anything runs, so `main(amount: Uint256, recipient: Address)` with `--args 1000000
+ * 0x…` is compiled as if its body read `amount` and `recipient` as those values. The program keeps
+ * its shape, and the intents it opens come out fixed.
  *
  * Only a single word binds this way: an integer, an address or a `bool`. A program whose `main`
  * takes bytes, a string, an array or a record is refused, naming the parameter: run it on a Pot
@@ -118,66 +122,50 @@ export function definesReach(file: string, text: string, names: readonly string[
  * takes none is returned as it is, and one that takes some is refused, naming them.
  */
 export function bindMainArguments(input: ProgramInput, args: ArgsInput | undefined): ProgramInput {
-  const signature = mainSignature(input.text);
   const params = mainParams(input.text);
+  const shape = `main(${params.map((param) => `${param.name}: ${param.type}`).join(", ")})`;
   if (args === undefined) {
     if (params.length === 0) return input;
     throw new UsageError(
-      `main(${params.map((param) => `${param.name}: ${param.type}`).join(", ")}) takes ` +
-        `${params.length} argument${params.length === 1 ? "" : "s"}: pass them after --args, in ` +
-        "order (or as --args-json), and the intents are built with them",
+      `${shape} takes ${params.length} argument${params.length === 1 ? "" : "s"}: pass them ` +
+        "after --args, in order (or as --args-json), and the intents are built with them",
     );
   }
-  if (signature === undefined || params.length === 0) {
+  if (params.length === 0) {
     throw new UsageError(
       `${args.from} gives main's arguments, and ${input.file} declares no \`main\` with ` +
         "parameters: declare the values it reads as main's parameters, then pass them in order",
     );
   }
-  if (args.values.length !== params.length) {
+  let bound: BoundEntryArguments;
+  try {
+    bound = bindEntryArguments(input.text, args.values as EntryValue[]);
+  } catch (error) {
+    const message = (error as Error).message;
     throw new UsageError(
-      `main(${params.map((param) => `${param.name}: ${param.type}`).join(", ")}) takes ` +
-        `${params.length} argument${params.length === 1 ? "" : "s"}, got ${args.values.length}`,
+      /only one word binds/.test(message)
+        ? `${args.from}: ${message.replace(/: only one word.*$/, "")}: a wallet publishes an ` +
+            "intent from values known before anything runs, each bound into the intent as one " +
+            "word, and this one is not: an integer, an address or a bool binds. Run the program " +
+            "on a Pot instead (sauce run), where it reads its arguments as it runs"
+        : `${args.from}: ${message}`,
     );
   }
-  const bound: Record<string, bigint | boolean> = {};
-  const addresses: string[] = [];
-  params.forEach((param, index) => {
-    const at = `${args.from}: argument ${index + 1} (${param.name}: ${param.type})`;
-    let value: bigint | boolean | undefined;
-    try {
-      value = entryConstant(param.type, args.values[index] as EntryValue, at);
-    } catch (error) {
-      throw new UsageError((error as Error).message);
-    }
-    if (value === undefined) {
+  for (const name of Object.keys(bound.constants)) {
+    if (Object.hasOwn(input.defines, name)) {
       throw new UsageError(
-        `${at}: a wallet publishes an intent from values known before anything runs, each bound ` +
-          "into the intent as one word, and this one is not: an integer, an address or a bool " +
-          "binds. Run the program on a Pot instead (sauce run), where it reads its arguments as " +
-          "it runs",
+        `${name} is main's parameter, given by ${args.from}; it cannot also be a --define`,
       );
     }
-    if (Object.hasOwn(input.defines, param.name)) {
-      throw new UsageError(
-        `${param.name} is main's parameter, given by ${args.from}; it cannot also be a --define`,
-      );
-    }
-    bound[param.name] = value;
-    if (param.type.trim() === "Address") addresses.push(param.name);
-  });
-  const list = input.text.slice(signature.open + 1, signature.close);
+  }
 
   return {
     ...input,
-    text:
-      input.text.slice(0, signature.open + 1) +
-      list.replace(/[^\r\n]/g, " ") +
-      input.text.slice(signature.close),
-    defines: { ...input.defines, ...bound },
-    ...(addresses.length === 0
+    text: bound.source,
+    defines: { ...input.defines, ...bound.constants },
+    ...(bound.addresses.length === 0
       ? {}
-      : { addressDefines: [...(input.addressDefines ?? []), ...addresses] }),
+      : { addressDefines: [...(input.addressDefines ?? []), ...bound.addresses] }),
   };
 }
 

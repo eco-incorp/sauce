@@ -3183,10 +3183,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   inspect: {
     usage:
-      "sauce inspect <hex | tx-hash | file | -> [--chain <slug|id>] [--source <file | ->] [options]",
+      "sauce inspect <hex | tx-hash | file | -> [--chain <slug|id>] [--source <file | ->] [options] [--args <value>…]",
     summary: "Take a cook, a Portal or Kitchen call, a program or a file apart",
+    trailing: "args",
     flags: {
       ...PROGRAM,
+      "args-json": COOK["args-json"]!,
       source: {
         type: "string",
         value: "<file>",
@@ -3195,6 +3197,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       ...ENDPOINT,
       ...JSON_FLAG,
       ...HELP,
+      ...ARGS,
     },
     details: [
       "Reads what a SauceScript author wrote back out of bytes: a Pot.cook (its engine, its",
@@ -3203,15 +3206,17 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "A 32-byte hash with --rpc-url (or --config and --chain) is a transaction, fetched first.",
       "With --source, a cook's program is checked against that file's and the arguments after it",
       "are decoded against its main. A file operand is compiled and its intents listed, with",
-      "each value it measures at run time named. No opcode listing: programs are reported by",
+      "each value it measures at run time named; with --args, main's arguments are bound into",
+      "them, as `sauce intent publish` binds them. No opcode listing: programs are reported by",
       "size, hash and what they open.",
       "",
       "Examples:",
       "  sauce inspect 0x… --chain base --source split.sauce.ts",
       "  sauce inspect 0x<tx hash> --rpc-url <url>",
-      "  sauce inspect bridge.sauce.ts --chain arbitrum --intent-deadline 2000000000 --intent-creator 0x…",
+      "  sauce inspect bridge.sauce.ts --chain arbitrum --intent-deadline 2000000000 --intent-creator 0x… \\",
+      "    --args 1000000 0x…",
     ].join("\n"),
-    run: async (args, io) => {
+    run: async (args, io, trailing) => {
       const [operand, ...extra] = args.positionals;
       // `-`: stdin carries the hex, the hash or the program — whichever it reads as.
       const piped = operand === "-" ? io.readStdin().trim() : undefined;
@@ -3223,13 +3228,22 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         if (stringFlag(args, "source") !== undefined) {
           throw new UsageError("--source goes with hex: a file operand is its own source");
         }
+        const given = argsInput(args, io, trailing);
         const input = await programInput(
           args,
           io,
           piped === undefined ? fileOperand(args) : { file: STDIN, text: piped, stdin: true },
+          undefined,
+          undefined,
+          given.args === undefined ? undefined : given,
         );
 
         return inspectFile(input.file, compileProgram(input, io));
+      }
+      if (argsInput(args, io, trailing).args !== undefined) {
+        throw new UsageError(
+          "--args gives a file's main its arguments; a cook's are decoded from its bytes",
+        );
       }
       const hex =
         piped === undefined
