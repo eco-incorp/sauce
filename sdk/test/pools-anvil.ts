@@ -8,9 +8,10 @@
  * names finds them. Liquidity comes through `fixtures/cli/Pools.sol`'s `PoolsLiquidity`, which also
  * swaps, to hold a reported depth to what the pool really takes. Slipstream's factory and Uniswap
  * V4's StateView cannot run here (they need their voter and PoolManager), so `SlipstreamFactoryStub`
- * (whose pool is a real V3 pool) and `StateViewStub` stand at their registry addresses. The tokens
- * are `PoolsToken`s at Base's USDC address (6 decimals) and at an unregistered address with 8
- * decimals, its symbol `SPCXc`: USDC is token0.
+ * (whose pool is a real V3 pool) and `StateViewStub` stand at their registry addresses. The pair's
+ * tokens are `PoolsToken`s at Base's USDC (6 decimals) and SPCXc (a tokenized stock, 8) addresses:
+ * USDC is token0. Two more stand where the registry knows no token, for an address whose decimals
+ * and symbol are read from the token: `ACME` (8 decimals), and one calling itself `USDC`.
  *
  * Needs `anvil` on PATH; each suite gates on it. Uses no test runner's globals.
  */
@@ -72,11 +73,14 @@ const BASE = requireChain("base");
 const registry = (protocol: string, contract: string): Address =>
   getAddress(addressOn(getDescriptor(protocol, contract)!, BASE)!);
 
-export const USDC = getAddress(
-  `0x${registryTokenAddress(BASE, "USDC")!.toString(16).padStart(40, "0")}`,
-);
-/** An address the registry does not know, where the 8-decimal token stands. */
-export const SPCX = getAddress("0xb2000000000000000000007b9fcbd005511acbd5");
+const registered = (symbol: string): Address =>
+  getAddress(`0x${registryTokenAddress(BASE, symbol)!.toString(16).padStart(40, "0")}`);
+export const USDC = registered("USDC");
+/** Base's SPCXc, a tokenized stock the registry records with 8 decimals. */
+export const SPCX = registered("SPCXc");
+/** Addresses the registry does not know: a token with 8 decimals, and one that calls itself USDC. */
+export const ACME = getAddress("0xace0000000000000000000000000000000000008");
+export const IMPOSTOR = getAddress("0x5eed000000000000000000000000000000000006");
 
 /** Base's venue contracts, where the pools are found. */
 export const VENUES = {
@@ -198,6 +202,8 @@ export async function startPoolsChain(port: number): Promise<PoolsChain> {
   for (const [at, symbol, decimals] of [
     [USDC, "USDC", 6],
     [SPCX, "SPCXc", 8],
+    [ACME, "ACME", 8],
+    [IMPOSTOR, "USDC", 6],
   ] as const) {
     const token = await deploy(
       `${TOKEN.creationCode}${encodeAbiParameters(

@@ -1,10 +1,11 @@
 /**
  * `sauce pools` against a local Base (`pools-anvil.ts`): real Uniswap V3 pools at the registry's
  * Uniswap V3 and PancakeSwap V3 factory addresses, one behind a Slipstream CLFactory's lookup, and
- * V4 pools in a StateView. It must find every pool of the pair, list the empty ones apart, read an
- * unregistered token's decimals from the token, price each pool both ways round as the SDK's own
- * conversion does, and report a depth the pool really takes: a swap to 1% past the price costs
- * what it says. And `sauce price` reads an address's decimals the same way.
+ * V4 pools in a StateView. It must take a tokenized stock by its symbol, find every pool of the
+ * pair, list the empty ones apart, price each pool both ways round as the SDK's own conversion
+ * does, and report a depth the pool really takes: a swap to 1% past the price costs what it says.
+ * An address the registry does not know has its decimals and symbol read from the token, for
+ * `sauce pools` and `sauce price` alike.
  *
  * Needs `anvil` on PATH: skipped without it locally, and a failure in CI, where Foundry is set up.
  */
@@ -17,7 +18,9 @@ import type { Address } from "viem";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { priceFromSqrtPriceX96 } from "../src/price.js";
 import {
+  ACME,
   freePort,
+  IMPOSTOR,
   LIQUIDITY,
   SPCX,
   sqrtAt,
@@ -89,7 +92,7 @@ describeAnvil("sauce pools, against a local Base", () => {
   beforeAll(async () => {
     chain = await startPoolsChain(await freePort());
     const run = await sauce(
-      ...["pools", "--chain", "base", "USDC", SPCX, "--v4-key", "50:1"],
+      ...["pools", "--chain", "base", "USDC", "SPCXc", "--v4-key", "50:1"],
       ...["--rpc-url", chain.rpcUrl, "--json"],
     );
     if (run.code !== 0) throw new Error(`sauce pools exited ${run.code}: ${run.stderr}`);
@@ -102,11 +105,27 @@ describeAnvil("sauce pools, against a local Base", () => {
 
   const poolOf = (name: string) => chain.pools.get(name)!.address;
 
-  it("reads the unregistered token's decimals and symbol from the token", () => {
+  it("takes a tokenized stock by its symbol, as the registry records it", () => {
     expect(report.tokens).toEqual([
       { symbol: "USDC", address: USDC, decimals: 6, position: "token0" },
-      { symbol: "SPCXc", address: SPCX, decimals: 8, readFromChain: true, position: "token1" },
+      { symbol: "SPCXc", address: SPCX, decimals: 8, position: "token1" },
     ]);
+  });
+
+  it("reads an unregistered token's decimals and symbol from the token, and finds no pools", async () => {
+    const run = await sauce(
+      ...["pools", "--chain", "base", "USDC", ACME, "--rpc-url", chain.rpcUrl, "--json"],
+    );
+    expect(run.code).toBe(0);
+    const out = JSON.parse(run.stdout) as Report;
+    expect(out.tokens[1]).toEqual({
+      symbol: "ACME",
+      address: ACME,
+      decimals: 8,
+      readFromChain: true,
+      position: "token1",
+    });
+    expect([out.pools, out.empty]).toEqual([[], []]);
   });
 
   it("finds every pool with liquidity, at every venue, deepest first", () => {
@@ -266,7 +285,7 @@ describeAnvil("sauce pools, against a local Base", () => {
     await once(proxy, "listening");
     try {
       const url = `http://127.0.0.1:${(proxy.address() as { port: number }).port}`;
-      const run = await sauce("pools", "--chain", "base", "USDC", SPCX, "--rpc-url", url);
+      const run = await sauce("pools", "--chain", "base", "USDC", "SPCXc", "--rpc-url", url);
       expect(run.code).toBe(0);
       // The chain id, then five rounds (the tokens beside the first), each a few calls of up to
       // 32 reads: nearly 150 reads here.
@@ -279,7 +298,7 @@ describeAnvil("sauce pools, against a local Base", () => {
   });
 
   it("prints the same for a person", async () => {
-    const run = await sauce("pools", "--chain", "base", "USDC", SPCX, "--rpc-url", chain.rpcUrl);
+    const run = await sauce("pools", "--chain", "base", "usdc", "spcxc", "--rpc-url", chain.rpcUrl);
     expect(run.code).toBe(0);
     expect(run.stdout.split("\n")[0]).toBe(
       "USDC/SPCXc on base: 6 pools with liquidity, deepest first (by liquidity at the pool's price)",
@@ -295,14 +314,26 @@ describeAnvil("sauce pools, against a local Base", () => {
 
   it("sauce price reads an unregistered token's decimals from the token too", async () => {
     const run = await sauce(
-      ...["price", "--chain", "base", SPCX, "USDC", "400"],
+      ...["price", "--chain", "base", ACME, "USDC", "400"],
       ...["--rpc-url", chain.rpcUrl, "--json"],
     );
     expect(run.code).toBe(0);
     const out = JSON.parse(run.stdout) as Record<string, unknown>;
-    expect(out.base).toEqual({ symbol: "SPCXc", address: SPCX, decimals: 8, readFromChain: true });
-    // 400 USDC per SPCXc: a quarter of an SPCXc unit per USDC unit, a sqrt of exactly 2^95.
+    expect(out.base).toEqual({ symbol: "ACME", address: ACME, decimals: 8, readFromChain: true });
+    // 400 USDC per ACME: a quarter of an ACME unit per USDC unit, a sqrt of exactly 2^95.
     expect(out.sqrtPriceX96).toBe((1n << 95n).toString());
+    // A token calling itself by a symbol the registry gives another is shown by its address.
+    const impostor = await sauce(
+      ...["price", "--chain", "base", IMPOSTOR, "WETH", "1"],
+      ...["--rpc-url", chain.rpcUrl, "--json"],
+    );
+    expect(impostor.code).toBe(0);
+    expect((JSON.parse(impostor.stdout) as { base: unknown }).base).toEqual({
+      symbol: IMPOSTOR,
+      address: IMPOSTOR,
+      decimals: 6,
+      readFromChain: true,
+    });
     // An address that is no token is named.
     const none = await sauce(
       ...["price", "--chain", "base", POOL_ADDRESS(chain), "USDC", "1", "--rpc-url", chain.rpcUrl],
