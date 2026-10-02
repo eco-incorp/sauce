@@ -1,0 +1,30 @@
+[
+  {
+    "type": "function",
+    "name": "getReserveAToken",
+    "stateMutability": "view",
+    "inputs": [{ "name": "asset", "type": "address" }],
+    "outputs": [{ "name": "", "type": "address" }]
+  },
+  {
+    "type": "function",
+    "name": "getReserveVariableDebtToken",
+    "stateMutability": "view",
+    "inputs": [{ "name": "asset", "type": "address" }],
+    "outputs": [{ "name": "", "type": "address" }]
+  },
+  {
+    "type": "function",
+    "name": "getPriceOracle",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address" }]
+  },
+  {
+    "type": "function",
+    "name": "getAssetPrice",
+    "stateMutability": "view",
+    "inputs": [{ "name": "asset", "type": "address" }],
+    "outputs": [{ "name": "", "type": "uint256" }]
+  }
+]

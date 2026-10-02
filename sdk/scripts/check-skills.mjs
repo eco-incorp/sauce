@@ -1060,9 +1060,12 @@ async function runUsage(where, file, argv, chain, header = false) {
     return;
   }
   if (!["run", "simulate", "tx"].includes(name)) return;
-  const values = (args ?? []).map((word, i) =>
-    /<[^>]+>/.test(word) ? sample(entryParams[i].type) : word,
-  );
+  // A placeholder is sampled from its type; an array or record given as a value is the JSON
+  // `--args` takes for one, and goes to `--args-json` parsed.
+  const values = (args ?? []).map((word, i) => {
+    if (/<[^>]+>/.test(word)) return sample(entryParams[i].type);
+    return /^\{|\[\]$/.test(entryParams[i].type.trim()) ? JSON.parse(word) : word;
+  });
   await txOn(where, chain, [
     "tx",
     file,
