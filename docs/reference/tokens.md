@@ -112,7 +112,7 @@ The symbol is the issuer's own ticker for the token, in its case: symbols are ca
 `NVDA.US` is `NVDA_US`. PreStocks' symbol is the company's name, `SPACEX`. One company has one token
 per issuer: SpaceX is `SPCXx` and `SPCXon` on Ethereum, `SPCXc` on Base, and `SPCXx`, `SPCXon`,
 `SPCX_US` and `SPACEX` on Solana. Find one by the company's name or ticker with
-`npx sauce globals --chain base --search spacex`, list a chain's with `--stocks`, or read
+`sauce globals --chain base --search spacex`, list a chain's with `--stocks`, or read
 [the stock tokens of each chain](#stock-tokens-by-issuer).
 
 Buying and selling one on a DEX needs no account with its issuer, and any contract can hold it,
