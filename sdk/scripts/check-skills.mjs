@@ -590,10 +590,10 @@ const REFERENCES = await skillsReferences(
   (slug) => existsSync(join(PROTOCOL_DOCUMENTS, `${slug}.md`)),
 );
 const RENDERED = renderSkillsReferences(REFERENCES);
-// The intent syntax names a chain's Portal (`Ethereum.Portal.send(...)`), and every skill may write
-// it: the Portal rule is about the contract, not the syntax.
+// The intent syntax names a chain's Portal (`Ethereum.Portal.send(...)`, or `Chain.Portal` for any
+// chain), and every skill may write it: the Portal rule is about the contract, not the syntax.
 const CHAIN_PORTAL = new RegExp(
-  `\\b(?:${REFERENCES.globals.chains.map((chain) => chain.key).join("|")})\\.Portal\\b`,
+  `(?:<Chain>|\\b(?:Chain|${REFERENCES.globals.chains.map((chain) => chain.key).join("|")}))\\.Portal\\b`,
   "g",
 );
 const GENERATED = new Set(Object.keys(RENDERED).map((name) => join(SKILLS_DIR, name)));

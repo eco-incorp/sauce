@@ -13,7 +13,7 @@ has control flow, reads and checks, and the engine runs it as written: it is not
 it does not use a magic header.
 
 On top of the runtime sit **intents**: an offer of work on another chain, with a reward escrowed on
-this one, written from the chain's Portal: `Ethereum.Portal.send(reward).receive(delivery).then(() => { ... })`.
+this one, written `Ethereum.Portal.send(reward).receive(delivery).then(() => { ... })`.
 A solver decides whether to fill it (`sauce-intents`).
 
 ## You write the program

@@ -440,9 +440,8 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
   more flags to publish or run: each intent's deadlines, its creator (the wallet that publishes, or
   the owner of the Pot that cooks) and the Kitchen fee its body's cook pays (read from the
   destination) default, and the file may set each with a modifier (`sauce-intents`).
-  `--intent-deadline <unix seconds>`, `--intent-reward-deadline <unix seconds>`,
-  `--intent-creator <address>`, `--intent-prover <address>` and `--intent-execution-fee <wei>` set
-  one for every intent that does not set its own. `compile`, which has no wallet, takes
+  `--intent-deadline <unix seconds>`, `--intent-creator <address>`, `--intent-execution-fee <wei>`
+  and the other `--intent-*` flags set one for every intent that does not set its own. `compile`, which has no wallet, takes
   `--intent-creator`, and `--offline` reads no fee: give `--intent-execution-fee`. `compile` and
   `sauce intent publish` warn while the Pot such an intent cooks on
   is not deployed on its destination: no solver can fill it until then, and the warning names the
