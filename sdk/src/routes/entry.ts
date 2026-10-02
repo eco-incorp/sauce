@@ -530,6 +530,26 @@ function decodeAbiEntry(
 }
 
 /**
+ * One of `main`'s arguments as the single word a compile-time value is: an unsigned integer or an
+ * address as a bigint, a `bool` as a boolean. `undefined` for a parameter of any other type (bytes,
+ * a string, an array, a record, an `Account`), which no one word holds. Throws, naming `at`, on a
+ * value that is not of the declared type, as `encodeEntryArguments` does.
+ */
+export function entryConstant(
+  type: string,
+  value: EntryValue,
+  at: string,
+): bigint | boolean | undefined {
+  const parsed = parseEntryType(type);
+  if (parsed.kind !== "uint" && parsed.kind !== "address" && parsed.kind !== "bool") {
+    return undefined;
+  }
+  const normalized = normalize(parsed, value, at, false);
+
+  return typeof normalized === "string" ? BigInt(normalized) : (normalized as bigint | boolean);
+}
+
+/**
  * The encoded entry arguments for `program`: `values` checked against `main`'s declared parameters,
  * in their order, and encoded as the program was compiled to read them. Append them to the program's
  * bytecode; that whole payload is the `program` of `Pot.cook(engine, program)`.

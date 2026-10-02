@@ -10,7 +10,7 @@ import type { Address } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
-import { mainSignature } from "../routes/entry.js";
+import { entryConstant, mainParams, mainSignature, type EntryValue } from "../routes/entry.js";
 import { blankLiterals } from "../routes/rs-compile.js";
 import {
   parseAddress,
@@ -20,7 +20,7 @@ import {
   parseTarget,
   UsageError,
 } from "./args.js";
-import type { Approver, CookInput, PotInput } from "./commands.js";
+import type { Approver, ArgsInput, CookInput, PotInput, ProgramInput } from "./commands.js";
 import {
   FUND_MODES,
   parseFund,
@@ -101,6 +101,84 @@ export function definesReach(file: string, text: string, names: readonly string[
       );
     }
   }
+}
+
+/**
+ * A program whose intents a wallet publishes, with `main`'s arguments given: the same program with
+ * each argument bound as a constant. A wallet publishes an intent from values it knows before
+ * anything runs, so `main(amount: Uint256, recipient: Address)` with `--args 1000000 0x…` is
+ * compiled as if its body read `amount` and `recipient` as those values: the parameter list is
+ * blanked (each character a space, so the compiler's positions stay the file's) and each value
+ * becomes the compile-time value of its name. The program keeps its shape, and the intents it
+ * opens come out fixed.
+ *
+ * Only a single word binds this way: an integer, an address or a `bool`. A program whose `main`
+ * takes bytes, a string, an array or a record is refused, naming the parameter: run it on a Pot
+ * (`sauce run`), where its arguments are read as it runs. With no `args`, a program whose `main`
+ * takes none is returned as it is, and one that takes some is refused, naming them.
+ */
+export function bindMainArguments(input: ProgramInput, args: ArgsInput | undefined): ProgramInput {
+  const signature = mainSignature(input.text);
+  const params = mainParams(input.text);
+  if (args === undefined) {
+    if (params.length === 0) return input;
+    throw new UsageError(
+      `main(${params.map((param) => `${param.name}: ${param.type}`).join(", ")}) takes ` +
+        `${params.length} argument${params.length === 1 ? "" : "s"}: pass them after --args, in ` +
+        "order (or as --args-json), and the intents are built with them",
+    );
+  }
+  if (signature === undefined || params.length === 0) {
+    throw new UsageError(
+      `${args.from} gives main's arguments, and ${input.file} declares no \`main\` with ` +
+        "parameters: declare the values it reads as main's parameters, then pass them in order",
+    );
+  }
+  if (args.values.length !== params.length) {
+    throw new UsageError(
+      `main(${params.map((param) => `${param.name}: ${param.type}`).join(", ")}) takes ` +
+        `${params.length} argument${params.length === 1 ? "" : "s"}, got ${args.values.length}`,
+    );
+  }
+  const bound: Record<string, bigint | boolean> = {};
+  const addresses: string[] = [];
+  params.forEach((param, index) => {
+    const at = `${args.from}: argument ${index + 1} (${param.name}: ${param.type})`;
+    let value: bigint | boolean | undefined;
+    try {
+      value = entryConstant(param.type, args.values[index] as EntryValue, at);
+    } catch (error) {
+      throw new UsageError((error as Error).message);
+    }
+    if (value === undefined) {
+      throw new UsageError(
+        `${at}: a wallet publishes an intent from values known before anything runs, each bound ` +
+          "into the intent as one word, and this one is not: an integer, an address or a bool " +
+          "binds. Run the program on a Pot instead (sauce run), where it reads its arguments as " +
+          "it runs",
+      );
+    }
+    if (Object.hasOwn(input.defines, param.name)) {
+      throw new UsageError(
+        `${param.name} is main's parameter, given by ${args.from}; it cannot also be a --define`,
+      );
+    }
+    bound[param.name] = value;
+    if (param.type.trim() === "Address") addresses.push(param.name);
+  });
+  const list = input.text.slice(signature.open + 1, signature.close);
+
+  return {
+    ...input,
+    text:
+      input.text.slice(0, signature.open + 1) +
+      list.replace(/[^\r\n]/g, " ") +
+      input.text.slice(signature.close),
+    defines: { ...input.defines, ...bound },
+    ...(addresses.length === 0
+      ? {}
+      : { addressDefines: [...(input.addressDefines ?? []), ...addresses] }),
+  };
 }
 
 /** The Pot a cook names: by address, or by its owner and salt. */

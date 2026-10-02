@@ -45,6 +45,7 @@ export {
 export { globalsCommand } from "../../sdk/dist/cli/globals.js";
 export {
   assumedBalances,
+  bindMainArguments,
   definesReach,
   fundingFor,
   potTarget,

@@ -90,6 +90,7 @@ import { globalsCommand } from "./globals.js";
 import { initProject, writeSauceScriptTsconfig } from "./init.js";
 import {
   assumedBalances,
+  bindMainArguments,
   definesReach,
   fundingFor,
   potTarget,
@@ -354,12 +355,14 @@ const PROGRAM: FlagSpecs = {
     type: "string",
     multiple: true,
     value: "NAME=VALUE",
-    help: "A value the program reads by name: integer, 0x hex, true, false; base58 on Solana",
+    help: "A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana",
+    lowLevel: true,
   },
   defines: {
     type: "string",
     value: "<file.json>",
-    help: "Defines from a JSON object of NAME to value; --define wins",
+    help: "Compile-time values from a JSON object of NAME to value; --define wins",
+    lowLevel: true,
   },
   "intent-deadline": {
     type: "string",
@@ -672,6 +675,8 @@ async function programInput(
   operand: string | ProgramText = fileOperand(args),
   fallback?: CanonicalChain,
   gate?: Gate,
+  /** For a wallet's intents: `main`'s arguments, bound into them (`bindMainArguments`). */
+  bind?: { readonly args?: ArgsInput },
 ): Promise<ProgramInput> {
   const { file, text, stdin } = programText(io, operand);
   const sourceDir = stringFlag(args, "source-dir");
@@ -696,7 +701,7 @@ async function programInput(
     definesFile === undefined ? undefined : readInput(io, definesFile),
     chain.kind,
   );
-  const input: ProgramInput = {
+  const given: ProgramInput = {
     file,
     text,
     ...(addresses.length === 0 ? {} : { addressDefines: addresses }),
@@ -720,6 +725,7 @@ async function programInput(
       ...(fundVia === undefined ? {} : { fundVia: parseFundVia(fundVia) }),
     },
   };
+  const input = bind === undefined ? given : bindMainArguments(given, bind.args);
   if (fee !== "auto") return input;
   const executionFee = await autoExecutionFee(input, io, endpointsOf(args, io, chain), gate);
 
@@ -1545,12 +1551,14 @@ const SUPPORTED_ONLY = (what: string): string[] => [
 const INTENT_VERBS: Readonly<Record<string, Command>> = {
   publish: {
     usage: [
-      "sauce intent publish <file | -> --chain <source> --rpc-url <url> (--keystore <path> | --private-key <hex>) [options]",
+      "sauce intent publish <file | -> --chain <source> --rpc-url <url> (--keystore <path> | --private-key <hex>) [options] [--args <value>…]",
       "sauce intent publish [--source <chain>] [--destination <chain>] [--token <token>] [--amount <n>] …",
     ],
     summary: "Publish a file's fixed intents from a wallet (or make one, step by step)",
+    trailing: "args",
     flags: {
       ...PROGRAM,
+      "args-json": COOK["args-json"]!,
       ...ENDPOINT,
       ...SIGNER,
       ...CREATE,
@@ -1578,11 +1586,12 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       store: LIFECYCLE.store!,
       ...JSON_FLAG,
       ...HELP,
+      ...ARGS,
     },
     details: [
-      "For a file whose intents are fixed when it is built — every amount a literal, a define or a",
-      "top-level `const` of a literal — builds each intent off-chain (the SDK's own lowering) and",
-      "sends the source chain's transactions from the signer's wallet: each reward token",
+      "For a file whose intents are fixed when it is built — every amount a literal, one of main's",
+      "arguments or a top-level `const` of a literal — builds each intent off-chain (the SDK's own",
+      "lowering) and sends the source chain's transactions from the signer's wallet: each reward token",
       "transferred to the intent's vault (and the native amount sent to it), then Portal.publish.",
       "No approval is asked for. The vault is the SDK's offline derivation, which the Portal's own",
       "intentVaultAddress must agree with or nothing is sent; only what the vault does not hold",
@@ -1590,6 +1599,10 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "Prints the intent hashes and the transactions. A file whose intent uses a value the program",
       "measures or computes while it runs, or that does anything besides open its intents, is",
       "refused: use `sauce run` on a Pot.",
+      "",
+      "main's arguments (--args, in order, or --args-json) are the values the intents are built",
+      "with: a wallet publishes what it knows before anything runs, so each is bound into the",
+      "intents as it is. Each is one word: an integer, an address or a bool.",
       "",
       "--intent-fund-via publishAndFund funds it through the Portal instead: each reward token",
       "approved to the Portal (reset to zero first when a smaller allowance stands, as SafeERC20",
@@ -1617,13 +1630,13 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "",
       "Examples:",
       "  sauce intent publish bridge.sauce.ts --chain ethereum --rpc-url <url> --keystore ~/.keys/me.json \\",
-      "    --intent-deadline 2000000000 --intent-creator 0x…",
+      "    --intent-deadline 2000000000 --intent-creator 0x… --args 1000000 0x…",
       "  sauce intent publish --config sauce.config.json --keystore ~/.keys/me.json",
       "  sauce intent publish --source ethereum --destination base --token USDC --amount 1 \\",
       "    --recipient 0x… --reward-token USDC --reward 1.01 --prover HyperProver \\",
       "    --fill-deadline +1h --reward-deadline +1d --config sauce.config.json --keystore <path>",
     ].join("\n"),
-    run: async (args, io) => {
+    run: async (args, io, trailing) => {
       if (args.positionals.length === 0) return createAndPublish(args, io);
       const created = Object.keys(CREATE).find((flag) => args.values[flag] !== undefined);
       if (created !== undefined) {
@@ -1635,7 +1648,14 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         args.values["dry-run"] === true && format === undefined
           ? undefined
           : { action: "publishing intents", by: "all" };
-      const program = await programInput(args, io, undefined, undefined, gate);
+      const program = await programInput(
+        args,
+        io,
+        undefined,
+        undefined,
+        gate,
+        argsInput(args, io, trailing),
+      );
       if (program.chain.kind === "svm") {
         throw new UsageError(
           "sauce intent publish sends a source chain's Portal transactions from an EVM wallet. " +
@@ -1700,14 +1720,16 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
   },
   fill: {
     usage: [
-      "sauce intent fill <file | -> --chain <source> (--config <file> | --rpc-url <url>) [options]",
+      "sauce intent fill <file | -> --chain <source> (--config <file> | --rpc-url <url>) [options] [--args <value>…]",
       "sauce intent fill <intent-hash> (--config <file> | --rpc-url <url>) [options]",
       "sauce intent fill <file | intent-hash> … --send (--keystore <path> | --private-key <hex>) [--auto-approve]",
       "sauce intent fill <intent-hash> --config <file> --claimant <address> --send --keypair <path>   (to Solana)",
     ],
     summary: "Fill a file's (or a stored) intents on their destination: rehearsed, or --send",
+    trailing: "args",
     flags: {
       ...PROGRAM,
+      "args-json": COOK["args-json"]!,
       "rpc-url": {
         type: "string",
         value: "<url>",
@@ -1742,6 +1764,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       store: LIFECYCLE.store!,
       ...JSON_FLAG,
       ...HELP,
+      ...ARGS,
     },
     details: [
       "Builds each intent the file opens, as `sauce intent publish` does (or takes the intent the store",
@@ -1789,11 +1812,11 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "",
       "Examples:",
       "  sauce intent fill swap-on-base.sauce.ts --chain ethereum --config sauce.config.json \\",
-      "    --defines swap.defines.json --intent-deadline 2000000000 --intent-creator 0x… \\",
-      "    --intent-execution-fee 1000000000000",
+      "    --intent-deadline 2000000000 --intent-creator 0x… --intent-execution-fee 1000000000000 \\",
+      "    --args <amountIn> <reward> <sqrtPriceLimitX96> <minOut> <recipient> <refundTo>",
       "  sauce intent fill 0x<intent hash> --config sauce.config.json --send --keystore ~/.keys/me.json",
     ].join("\n"),
-    run: async (args, io) => {
+    run: async (args, io, trailing) => {
       const store = storeOf(args, io);
       const rpcUrl = stringFlag(args, "rpc-url");
       const config = stringFlag(args, "config");
@@ -1831,6 +1854,11 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         ? { action: "sending a fill", by: "destinations" }
         : undefined;
       if (operands.length > 0 && operands.every(isIntentHash)) {
+        if (argsInput(args, io, trailing).args !== undefined) {
+          throw new UsageError(
+            "--args gives a file's main its arguments; a stored intent is built already",
+          );
+        }
         targets = operands.flatMap((hash) =>
           storedTargets(store, hash as `0x${string}`).map(({ record }) => ({
             intent: intentOf(record),
@@ -1841,7 +1869,14 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         );
         from = operands.length === 1 ? operands[0]! : "the intents named";
       } else {
-        const program = await programInput(args, io, undefined, undefined, gate);
+        const program = await programInput(
+          args,
+          io,
+          undefined,
+          undefined,
+          gate,
+          argsInput(args, io, trailing),
+        );
         // A deadline that has passed is rehearsed anyway, so the Portal's own refusal shows.
         const past = pastDeadline(program);
         if (past !== undefined) io.stderr(`${past}: the rehearsal shows the Portal refusing it\n`);
@@ -3544,9 +3579,14 @@ function render(command: Command, output: CommandOutput, args: ParsedArgs): stri
     : output.text;
 }
 
-/** The flags of `command` that `only` names (`undefined`: those every chain takes). */
-const flagsFor = (command: Command, only?: "evm" | "svm"): FlagSpecs =>
-  Object.fromEntries(Object.entries(command.flags).filter(([, spec]) => spec.only === only));
+/** The flags of `command` that `only` names (`undefined`: those every chain takes), the low-level
+ *  ones apart. */
+const flagsFor = (command: Command, only?: "evm" | "svm" | "low-level"): FlagSpecs =>
+  Object.fromEntries(
+    Object.entries(command.flags).filter(([, spec]) =>
+      only === "low-level" ? spec.lowLevel === true : spec.only === only && spec.lowLevel !== true,
+    ),
+  );
 
 function commandHelp(command: Command): string {
   const usage = typeof command.usage === "string" ? [command.usage] : command.usage;
@@ -3555,6 +3595,7 @@ function commandHelp(command: Command): string {
       ["Options:", undefined],
       ["EVM chains only:", "evm"],
       ["Solana only:", "svm"],
+      ["Low-level (a program's inputs are main's parameters, given with --args):", "low-level"],
     ] as const
   ).flatMap(([heading, only]) => {
     const flags = flagsFor(command, only);

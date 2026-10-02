@@ -33,6 +33,7 @@ import {
   compileCommand,
   compileProgram,
   connect,
+  bindMainArguments,
   definesReach,
   fillTargets,
   fundingFor,
@@ -176,10 +177,11 @@ export const PROGRAM = {
     )
     .optional()
     .describe(
-      "Compile-time values, by the name the program reads: an integer in base units (decimal " +
-        "or 0x hex; a string past 2^53), an EVM address as 0x hex, a Solana key in base58 " +
-        "(Solana programs), true or false. A define replaces the program's module-level const " +
-        "of that name.",
+      "Low-level: compile-time values for names the program leaves undeclared. A program's " +
+        "inputs are main's parameters, given as args; these are the compiler's own mechanism. " +
+        "Each is an integer in base units (decimal or 0x hex; a string past 2^53), an EVM " +
+        "address as 0x hex, a Solana key in base58 (Solana programs), true or false. A define " +
+        "replaces the program's module-level const of that name.",
     ),
   compactArgs: z
     .boolean()
@@ -1785,6 +1787,17 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         `destination are supported. ${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: {
         ...PROGRAM,
+        args: z
+          .array(z.unknown())
+          .max(LIMITS.entries)
+          .optional()
+          .describe(
+            "main's arguments, in order, as JSON values: the values the intents are built with. " +
+              "A wallet publishes what it knows before anything runs, so each is bound into the " +
+              "intents as it is, and each is one word: an integer in base units as a decimal " +
+              "string (or a number up to 2^53), an address as 0x hex, or a bool. Required " +
+              "exactly when main declares parameters.",
+          ),
         from: z
           .string()
           .max(64)
@@ -1811,7 +1824,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
-      const program = programOf(args);
+      const given = programOf(args);
+      const program = { ...given, input: bindMainArguments(given.input, argsOf(args).args) };
       const chain = program.input.chain;
       const from = args.from === undefined ? undefined : parseAddress("from", args.from);
       const assume = chain.kind === "evm" ? assumedBalances(args.assumeBalance ?? [], chain) : [];
