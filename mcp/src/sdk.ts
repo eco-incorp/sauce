@@ -110,6 +110,7 @@ export {
 export { noPolicyNote, PolicyRefusal, readPolicy } from "../../sdk/dist/cli/policy.js";
 export { walletName, WalletStore, type WalletKind } from "../../sdk/dist/cli/wallets.js";
 export { simulateCommand } from "../../sdk/dist/cli/simulate.js";
+export { installedViem } from "../../sdk/dist/cli/init.js";
 export { PACKAGED_SKILLS, targetsFor as skillTargets } from "../../sdk/dist/cli/skills.js";
 export {
   parseAccounts,

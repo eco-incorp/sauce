@@ -97,6 +97,13 @@ export interface SkillsSource {
   readonly version: string;
   /** The TypeScript range the package itself depends on, for a project `sauce init` writes. */
   readonly typescript?: string;
+  /**
+   * The exact viem version installed beside the package, which its TypeScript API is typed in:
+   * a project `sauce init` writes depends on it directly, so the project resolves it (a package
+   * manager that does not hoist resolves only a project's own dependencies) and gets the same
+   * types the package's functions take.
+   */
+  readonly viem?: string;
 }
 
 /** `--agent`: names, comma-separated or repeated; `all` is `DEFAULT_AGENTS`, and may be joined

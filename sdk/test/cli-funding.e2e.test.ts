@@ -19,9 +19,11 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  createWalletClient,
   encodeAbiParameters,
   encodeFunctionData,
   getAddress,
+  http,
   keccak256,
   maxUint256,
   parseAbi,
@@ -713,26 +715,154 @@ describeEvm(
         expect(await balance(pusdt, RECIPIENT)).toBe(paid);
       }, 60_000);
 
-      it("in allowance mode, says the Pot may not pull yet, and the rehearsal fails there", async () => {
+      /** A rehearsal's transactions, as `--json` lists them: each step, and what a funding one is. */
+      type Step = { step: string; what?: string; from: Address; to: Address; data?: Hex };
+      const stepsOf = (done: Run) =>
+        (JSON.parse(done.stdout) as { transactions: Step[] }).transactions.map((each) => [
+          each.step,
+          each.what ?? null,
+        ]);
+      const approve = (spender: Address, amount: bigint) =>
+        encodeFunctionData({
+          abi: parseAbi(["function approve(address, uint256) returns (bool)"]),
+          functionName: "approve",
+          args: [spender, amount],
+        });
+
+      it("in allowance mode, runs the Pot's approval first in the cook's block, and sends nothing", async () => {
         const done = await simulateWith(
-          ["--fund", "USDC:1", "--fund-mode", "allowance"],
+          ["--fund", "USDC:1", "--fund-mode", "allowance", "--json"],
           [usdc, RECIPIENT, "1"],
         );
-        expect(done.code).toBe(1);
-        expect(done.stdout).toMatch(/^The cook reverts: /);
+        expect(done.code).toBe(0);
+        expect(stepsOf(done)).toEqual([
+          ["fund", "approve the Pot for 1000000 USDC"],
+          ["cook", null],
+        ]);
+        expect((JSON.parse(done.stdout) as { transactions: Step[] }).transactions[0]).toMatchObject(
+          { from: OWNER.address, to: usdc, data: approve(pot, 1_000_000n) },
+        );
         expect(notes(done)).toBe(
-          "USDC: the Pot may not pull it yet; sauce run would ask to approve it\n",
+          "USDC: the Pot may not pull it yet: sauce run asks to approve it first (--auto-approve " +
+            "approves it), and the rehearsal runs that approval before the cook\n",
         );
         expect(await allowance(usdc, pot)).toBe(0n);
       }, 60_000);
 
-      it("in transfer mode, says the run would transfer first, and rehearses the Pot as it is", async () => {
+      it("in transfer mode, runs the transfer to the Pot first, and sends nothing", async () => {
+        const [held, paid] = [await balance(usdc, OWNER.address), await balance(usdc, RECIPIENT)];
         const done = await simulateWith(
-          ["--fund", "USDC:1", "--fund-mode", "transfer"],
-          [usdc, RECIPIENT, "0"],
+          ["--fund", "USDC:1", "--fund-mode", "transfer", "--json"],
+          [usdc, RECIPIENT, "1000000"],
         );
         expect(done.code).toBe(0);
-        expect(notes(done)).toBe("USDC: sauce run would transfer it to the Pot first\n");
+        expect(stepsOf(done)).toEqual([
+          ["fund", "transfer 1000000 USDC to the Pot"],
+          ["cook", null],
+        ]);
+        expect(notes(done)).toBe(
+          "USDC: sauce run transfers it to the Pot first, and the rehearsal runs that transfer " +
+            "before the cook\n",
+        );
+        expect([await balance(usdc, OWNER.address), await balance(usdc, RECIPIENT)]).toEqual([
+          held,
+          paid,
+        ]);
+      }, 60_000);
+
+      /** A signer of its own, with no Pot and no approval of Permit2, holding `tokens`. */
+      const freshSigner = async (...tokens: Address[]) => {
+        const key = generatePrivateKey();
+        const account = privateKeyToAccount(key);
+        await local.testClient.setBalance({ address: account.address, value: 10n ** 20n });
+        for (const token of tokens) await local.mint(token, account.address, 10_000_000n);
+
+        return { key, account };
+      };
+      const allowanceOf = (token: Address, holder: Address, spender: Address) =>
+        local.publicClient.readContract({
+          address: token,
+          abi: erc20,
+          functionName: "allowance",
+          args: [holder, spender],
+        });
+
+      it("with a key, runs the Permit2 approval sauce run would ask for first, and says so", async () => {
+        const { key, account } = await freshSigner(usdc);
+        const signerPot = v12PredictPot(account.address, potSalt("rehearsed")) as Address;
+        const rehearse = (...flags: string[]) =>
+          sauce(
+            ...["simulate", program, "--rpc-url", local.rpcUrl, "--private-key", key],
+            ...["--salt", "rehearsed", "--fund", "USDC:2", ...flags],
+            ...["--args", usdc, RECIPIENT, "2000000"],
+          ).then(record);
+        const done = await rehearse("--json");
+        expect(done.code).toBe(0);
+        const out = JSON.parse(done.stdout) as {
+          ok: boolean;
+          transactions: Step[];
+          transfers: Array<{ from: Address; to: Address; amount: string }>;
+        };
+        expect(out.ok).toBe(true);
+        // The Pot's deployment, the approval sauce run asks for, then the cook, in one block.
+        expect(stepsOf(done)).toEqual([
+          ["deployPot", null],
+          ["fund", "approve Permit2 for USDC"],
+          ["cook", null],
+        ]);
+        expect(out.transactions[1]).toMatchObject({
+          from: account.address,
+          to: usdc,
+          data: approve(permit2, maxUint256),
+        });
+        expect(out.transfers).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ from: account.address, to: signerPot, amount: "2000000" }),
+            expect.objectContaining({ from: signerPot, to: RECIPIENT, amount: "2000000" }),
+          ]),
+        );
+        expect(notes(done)).toContain(
+          `USDC: Permit2 (${permit2}) may not move your tokens yet: sauce run asks to approve it ` +
+            "first (--auto-approve approves it), and the rehearsal runs that approval before the cook",
+        );
+        // A rehearsal: nothing landed.
+        expect(await allowanceOf(usdc, account.address, permit2)).toBe(0n);
+        expect(await local.publicClient.getCode({ address: signerPot })).toBeUndefined();
+        // For a person, each transaction with its own gas, the cook's in the headline.
+        const text = await rehearse();
+        expect(text.code).toBe(0);
+        expect(text.stdout).toMatch(
+          /^The cook succeeds from 0x[0-9a-fA-F]{40}: gas used \d+ for the cook, after what it needs sent first \(1\. to 2\. below\), returns 0x/,
+        );
+        expect(text.stdout).toMatch(
+          new RegExp(
+            `^ {2}2\\. approve Permit2 for USDC, from the owner ${account.address}, gas used \\d+: ` +
+              "sauce run sends this before the cook$",
+            "m",
+          ),
+        );
+      }, 60_000);
+
+      it("resets a smaller standing approval first, as for a USDT-shaped token run does", async () => {
+        const { key, account } = await freshSigner(tether);
+        // Nonzero to nonzero is refused by this token: the rehearsal must reset it first.
+        const wallet = createWalletClient({ account, transport: http(local.rpcUrl) });
+        await local.send(wallet, tether, approve(permit2, 1n));
+        const done = record(
+          await sauce(
+            ...["simulate", program, "--rpc-url", local.rpcUrl, "--private-key", key],
+            ...["--salt", "standing", "--fund", `${tether}:2`, "--json"],
+            ...["--args", tether, RECIPIENT, "2000000"],
+          ),
+        );
+        expect(done.code).toBe(0);
+        expect(stepsOf(done)).toEqual([
+          ["deployPot", null],
+          ["fund", `reset ${tether}'s allowance to ${permit2}`],
+          ["fund", `approve Permit2 for ${tether}`],
+          ["cook", null],
+        ]);
+        expect(await allowanceOf(tether, account.address, permit2)).toBe(1n);
       }, 60_000);
     });
 

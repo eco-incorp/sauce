@@ -60,7 +60,10 @@ npm install
 ```
 
 `sauce init` writes a `package.json` that pins `@eco-incorp/sauce` to exactly the version that ran
-it, an `AGENTS.md` with the project's instructions for coding agents, a `.gitignore` that keeps
+it and `viem` to exactly the version installed beside it (with `@types/node` for the skills'
+TypeScript runners): a TypeScript project using the SDK depends on `@eco-incorp/sauce` and `viem`,
+whose types its API is written in, and a package manager that does not hoist dependencies (pnpm)
+resolves only a project's own. It also writes an `AGENTS.md` with the project's instructions for coding agents, a `.gitignore` that keeps
 local configuration out of git, `sauce.config.example.json`, and `programs/tsconfig.json`
 ([In an editor](#in-an-editor)), and then installs the agent skills ([Agent skills](skills.md)). `init` refuses to overwrite a file that already has other content,
 and lists it, unless you pass `--force`. It runs no package manager unless you pass `--install`.
@@ -270,7 +273,8 @@ The owner is `--owner`, or the owner's key: `--keystore` (or `--private-key`; on
   `balanceOf`. A token whose balance is computed rather than stored (rebasing, shares) is refused.
 - **The cook's value**: an owner holding less than it (the Kitchen's fee, plus whatever `--value`
   or `--fund ETH:` adds) is given it for the rehearsal, and told.
-- **`--fund`**: with the owner's key the rehearsal includes the signed pulls (see
+- **`--fund`**: with the owner's key the rehearsal includes the signed pulls, and before the cook,
+  in the same block, each approval or transfer `run` would send first (see
   [Funding a run](#funding-a-run---fund)). With no key the pulls cannot be signed, so the Pot is
   credited what they would bring — its balance plus each amount, or the amount on top of an
   `--assume-balance` of the same token — `--sweep` still runs, and a shortfall in your wallet is
@@ -411,8 +415,12 @@ Security notes:
 `sauce simulate --fund` rehearses the same wrapped cook, with nothing sent. The pulls carry your
 signature, so give the owner's key (`--keystore` or `--private-key`) to sign them. Without a key
 the Pot is credited what the pulls would bring instead, by state override
-([Rehearsing](#rehearsing-sauce-simulate)). An approval `run` would ask for is reported, not made,
-and `transfer` mode's transfer is not rehearsed.
+([Rehearsing](#rehearsing-sauce-simulate)). With the key, each approval `run` would ask for (a
+standing allowance reset to zero first, as for USDT) and `transfer` mode's transfer runs from your
+wallet before the cook, in the same `eth_simulateV1` block, and nothing of it is sent: each is
+listed as a transaction of its own, with its gas (`transactions` in `--json`, with its `to` and
+`data`), for `run` to send first. An endpoint without `eth_simulateV1` cannot run them ahead of
+the cook, and says so.
 
 ### Pots and salts
 
