@@ -20,10 +20,11 @@ export function buildApprovalIntent(routeOptions: routes.IntentOptions, reward: 
 }
 ```
 
-The SDK builds the intent and the transaction requests, and sends nothing. It looks up the Portals,
-derives the destination Pot and engine, and resolves registered token and protocol addresses. You
-choose the deadlines, creator and prover, read the Kitchen fee, fund the reward and submit. A solver
-then decides whether to fulfill it; the SDK does not price the reward or promise a fill.
+The SDK builds the intent and the transaction requests, and sends nothing. It looks up the Portals
+and the prover, derives the destination Pot and engine, sets the native amount the solver sends to
+what the route's calls spend, and resolves registered token and protocol addresses. You choose the
+deadlines and the creator, read the Kitchen fee, fund the reward and submit. A solver then decides
+whether to fulfill it; the SDK does not price the reward or promise a fill.
 
 The SDK builds an intent between any two registry chains. For the initial release, Sauce supports
 transactions on Ethereum, Base and Solana, and the [`sauce` command](cli.md) and the
@@ -37,20 +38,30 @@ one is at your own risk.
 
 An intent has two sides:
 
-| Field                                    | Meaning                                                           |
-| ---------------------------------------- | ----------------------------------------------------------------- |
-| `Base(...)`                              | Destination chain where the Sauce program executes                |
-| `options.portal`                         | Destination Portal recorded in the route                          |
-| `options.pot`, `options.engine`          | Overrides for the derived destination Pot and released engine     |
-| `options.tokens`, `options.nativeAmount` | Destination assets delivered by the solver to the Portal Executor |
-| `reward.source`                          | Chain where the reward is funded                                  |
-| `options.sourcePortal`                   | Source Portal used by submission and read helpers                 |
-| `reward.tokens`, `reward.nativeAmount`   | Source assets offered as the reward                               |
-| `reward.creator`, `reward.prover`        | Creator and prover recorded in the reward                         |
+| Field                                  | Meaning                                                                            | When you omit it                                     |
+| -------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `Base(...)`                            | Destination chain where the Sauce program executes                                 | Required                                             |
+| `options.portal`                       | Destination Portal recorded in the route                                           | The registry's eco-routes Portal on that chain       |
+| `options.pot`, `options.engine`        | Overrides for the derived destination Pot and released engine                      | Derived: [the destination Pot](#the-destination-pot) |
+| `options.tokens`                       | Destination tokens the solver delivers to the Portal's Executor                    | None                                                 |
+| `options.nativeAmount`                 | Native coin the solver sends with the fill, which the Executor pays the calls from | What the route's calls spend                         |
+| `reward.source`                        | Chain where the reward is funded                                                   | Required (or `options.source`)                       |
+| `options.sourcePortal`                 | Source Portal used by submission and read helpers                                  | The registry's eco-routes Portal on that chain       |
+| `reward.tokens`, `reward.nativeAmount` | Source assets offered as the reward                                                | None, and zero                                       |
+| `reward.creator`                       | Who may reclaim an unearned reward                                                 | Required (or `options.creator`)                      |
+| `reward.prover`                        | The source chain's prover, which accepts the proof of the fill                     | The registry's prover for the pair                   |
+
+The prover is the one `ecoRoutesProver(source, destination)` names: the first of eco-routes'
+provers, the HyperProver first, that the registry records on both chains, in the deployment
+`options.ecoRoutes` selects. An intent a program opens and `sauce intent publish` record the same
+one. A pair the registry has no prover for is refused with the reason, until you pass one. Override
+the Portals and the prover together, and only for a deployment the registry does not carry.
 
 Destination route assets initially arrive in the **Executor**. The Sauce program executes in the **Pot**. For an ERC-20 program that spends solver-delivered assets, prepend a token transfer from the Executor to the Pot. Native value reaches the Pot through `execution.value`; declaring `nativeAmount` alone does not forward it into `cook`.
 
-Every EVM `cook` must receive the Kitchen's current `executionFee()` in native wei, including ERC-20-only programs. Set `execution.value` to **fee + native assets the program needs**, and budget `nativeAmount` for the route's calls. The Pot remits the fee before executing; its existing balance cannot replace this payment. Nested transfer programs add another cook and fee. Read the fee before building; an increase before fulfillment can make the route revert.
+Every EVM `cook` must receive the Kitchen's current `executionFee()` in native wei, including ERC-20-only programs. Set `execution.value` to **fee + native assets the program needs**. The Pot remits the fee before executing; its existing balance cannot replace this payment. Nested transfer programs add another cook and fee. Read the fee before building; an increase before fulfillment can make the route revert.
+
+The Portal hands the Executor the route's `nativeAmount`, and the Executor pays each call its `value` from it, so `nativeAmount` defaults to the sum of the calls' values: each cook's `execution.value`, each precall's, and each nested child's fee and forwarded native reward, less a `fundedByBody` child's, which its parent's program forwards. For one cook that is the fee you read. Set it yourself only to send something else: less leaves a call unpaid and the fill reverts, and more stays behind in the Executor, which every intent through that Portal shares.
 
 On Arc the native coin is USDC, so every one of these native amounts is USDC at **18 decimals**,
 while `tokens` amounts of Arc's `USDC` are 6 decimals — and both draw on one balance. See
@@ -123,30 +134,24 @@ import { Base, destinationPot, token, type routes } from "@eco-incorp/sauce";
 
 interface TransferIntentConfig {
   executionFee: bigint;
-  destinationPortal: routes.AddressInput;
   baseUsdc: routes.AddressInput;
   recipient: routes.AddressInput;
   source: routes.ChainRef;
-  sourcePortal: routes.AddressInput;
   rewardToken: routes.AddressInput;
   rewardAmount: bigint;
   creator: routes.AddressInput;
-  prover: routes.AddressInput;
   routeDeadline: bigint;
   rewardDeadline: bigint;
 }
 
 export function buildBaseTransfer(config: TransferIntentConfig) {
   const amount = 1_000_000n;
-  // The Pot the route cooks on: the shared one for the Portal it records. It must already exist.
-  const pot = destinationPot(Base.chain, { portal: config.destinationPortal });
+  // The Pot the route cooks on: the shared one for Base's Portal. It must already exist.
+  const pot = destinationPot(Base.chain);
   const delivery = token.Token.transfer({ token: config.baseUsdc, to: pot, amount }).toCall();
 
   return Base("USDC.transfer(RECIPIENT, AMOUNT);", {
     execution: { value: config.executionFee },
-    nativeAmount: config.executionFee,
-    portal: config.destinationPortal,
-    sourcePortal: config.sourcePortal,
     deadline: config.routeDeadline,
     tokenDefines: { USDC: config.baseUsdc },
     defines: { RECIPIENT: BigInt(config.recipient), AMOUNT: amount },
@@ -155,7 +160,6 @@ export function buildBaseTransfer(config: TransferIntentConfig) {
   }).reward({
     source: config.source,
     creator: config.creator,
-    prover: config.prover,
     deadline: config.rewardDeadline,
     tokens: [{ token: config.rewardToken, amount: config.rewardAmount }],
   });
@@ -165,7 +169,7 @@ export function buildBaseTransfer(config: TransferIntentConfig) {
 The submission helpers below generate EVM calldata and reject an SVM source, so an intent you submit with them is EVM-sourced. Its **destination** may be Solana — the encoding supports it — but see the [Solana guide](solana.md) for how that execution is actually built.
 
 The route has two calls: the delivery into the Pot, and the cook.
-`executionFee` is the destination Kitchen quote obtained above. The source reward must separately compensate the solver for delivery, fees, and gas; the SDK does not price it.
+`executionFee` is the destination Kitchen quote obtained above, and the route's `nativeAmount`, which the solver sends, is that fee. The source reward must separately compensate the solver for delivery, fees, and gas; the SDK does not price it.
 
 The explicit `tokenDefines` ensures that the token transferred into the Pot matches the token used by the program. To use the SDK's default Base USDC, resolve it with `routes.registryTokenAddress(Base.chain, "USDC")` and check the result before building. That lookup returns a `bigint`; convert it to a 20-byte hex address with Viem's `toHex(value, { size: 20 })` for intent token fields, as in the [complete example](../examples/first-intent.ts).
 
@@ -492,7 +496,7 @@ Each request is `{ to, data, value }`. Send them from the intended funder on `bu
 
 `publishCalldata()` publishes without funding, and `fundCalldata(allowPartial)` funds separately. These methods do no RPC and send no transactions.
 
-Set `sourcePortal` while building, or pass `{ portal: sourcePortal }` to each helper. The destination `portal` is never silently reused as the submission target.
+The helpers address the registry's Portal on the source chain. For a deployment the registry does not carry, set `sourcePortal` while building, or pass `{ portal }` to each helper. The destination `portal` is never silently reused as the submission target.
 
 ## Rehearse the fill on the destination
 
@@ -556,13 +560,15 @@ and what happens when nobody fills, is the Portal's, on eco-routes' own terms:
 
 ```ts
 import { routes } from "@eco-incorp/sauce";
+import { ecoRoutesPortal, ecoRoutesProver } from "@eco-incorp/sauce/protocols/eco-routes";
 
-export function afterTheFill(
-  intent: routes.Intent,
-  sourcePortal: routes.Hex,
-  prover: routes.Hex,
-  fee: bigint,
-) {
+export function afterTheFill(intent: routes.Intent, fee: bigint) {
+  const source = Number(intent.sourceChainId);
+  const destination = Number(intent.destination);
+  // The registry's, as the builder chose them: the source Portal, and the destination's prover of
+  // the pair the reward's prover belongs to. Name your own for a deployment it does not carry.
+  const sourcePortal = ecoRoutesPortal(source);
+  const prover = ecoRoutesProver(destination, source);
   const data = routes.hyperlaneProverData({ sourceProver: intent.reward.prover });
   const proof = { prover, sourceDomain: intent.sourceChainId, data, fee };
 

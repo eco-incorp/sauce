@@ -270,7 +270,7 @@ A program's output is only known once it runs. [Dynamic nesting](nested-intents.
 
 ```ts
 import { programIntent, type ActionProgram } from "@eco-incorp/sauce/actions";
-import { routes } from "@eco-incorp/sauce";
+import { destinationPot, routes } from "@eco-incorp/sauce";
 import { encodeFunctionData, parseAbi, type Address } from "viem";
 
 const { AMOUNT_IN_PLACEHOLDER, AMOUNT_OUT_PLACEHOLDER } = routes;
@@ -279,17 +279,18 @@ export function buildCascade(
   parentProgram: ActionProgram, // e.g. a swap into USDC with "recipient": "self", run on Base
   childProgram: ActionProgram, // e.g. balanceOf "USDC", an approve, then aaveV3Supply, on Arbitrum
   parentOptions: routes.IntentOptions,
-  childOptions: routes.IntentOptions & { pot: Address },
+  childOptions: routes.IntentOptions,
   usdcBase: Address,
   usdcArbitrum: Address,
   parentReward: routes.SauceRewardSpec,
   childReward: Omit<routes.SauceRewardSpec, "tokens">,
 ) {
-  // The Executor receives the child's tokens; move them into the Pot the child program runs in.
+  // The Executor receives the child's tokens; move them into the Pot the child program runs in,
+  // the shared one the SDK derives for Arbitrum's Portal.
   const toPot = encodeFunctionData({
     abi: parseAbi(["function transfer(address,uint256)"]),
     functionName: "transfer",
-    args: [childOptions.pot, AMOUNT_OUT_PLACEHOLDER],
+    args: [destinationPot("arbitrum", childOptions), AMOUNT_OUT_PLACEHOLDER],
   });
   const child = programIntent(childProgram, {
     ...childOptions,

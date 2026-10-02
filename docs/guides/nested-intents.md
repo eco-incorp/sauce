@@ -36,7 +36,7 @@ export function buildCascade(
 }
 ```
 
-The example isolates composition: replace the no-op bodies with your programs. Each options object supplies its deadline and body cook fee, and optionally its Portal; each level's Pot and engine are derived, and each level's Pot must exist before that level is fulfilled. `executionFee` is the Base Kitchen quote for the additional transfer cook; include it in `parentOptions.nativeAmount` alongside the parent body and any native reward forwarding. Configure `childOptions.sourcePortal` as the Portal on Base. Deliver or earn the child's reward assets in the parent fulfillment before the funding step; see [the Executor-to-Pot example](intents.md#build-a-base-usdc-transfer-intent).
+The example isolates composition: replace the no-op bodies with your programs. Each options object supplies its deadline and body cook fee. Each level's Portals, prover, Pot and engine come from the registry — the child's source Portal is the one on Base, its source — and each level's Pot must exist before that level is fulfilled. `executionFee` is the Base Kitchen quote for the additional transfer cook; the parent's `nativeAmount` defaults to every call's value, so it covers the parent body's cook, this one and any native reward forwarding. Deliver or earn the child's reward assets in the parent fulfillment before the funding step; see [the Executor-to-Pot example](intents.md#build-a-base-usdc-transfer-intent).
 
 You can also pass an already built child. The SDK checks that its source matches the parent's destination. Under the two default modes both forms produce static children: reward amounts and other hashed fields are fixed before execution. A runtime balance can determine how much is transferred to a child's vault; it does not rewrite the child's reward or hash. [`via: "dynamic"`](#create-the-child-on-chain-from-a-measured-amount) is the exception, and it changes the child's hash.
 
@@ -55,7 +55,7 @@ The fluent API defaults to `via: "transfer"` and `position: "after"`. After the 
 
 With default `requireCap: false`, a short Pot balance can leave the child underfunded while the parent succeeds. Select `requireCap: true` when full child funding must be a condition of parent fulfillment. With multiple children, transfers consume balances sequentially.
 
-Read the current Kitchen fee and supply `executionFee` for every transfer child. Children merged into one position share one fee and must specify the same value; separate `"before"` and `"after"` cooks each pay. The generated call adds this fee to any `fundNativeFromRoute` reward amounts, so the fee does not reduce the child's funding. Zero works only on a fee-free Kitchen. When a nonzero fee is supplied, the builder checks that `nativeAmount` covers the calls' combined value, excluding publication funding explicitly marked `fundedByBody`.
+Read the current Kitchen fee and supply `executionFee` for every transfer child. Children merged into one position share one fee and must specify the same value; separate `"before"` and `"after"` cooks each pay. The generated call adds this fee to any `fundNativeFromRoute` reward amounts, so the fee does not reduce the child's funding. Zero works only on a fee-free Kitchen. The route's `nativeAmount` defaults to the calls' combined value, excluding publication funding explicitly marked `fundedByBody`; one you set is checked to cover it when a nonzero fee is supplied.
 
 The default vault resolution calls the Portal from the generated program. Alternatively, pass `vault` after verifying it with `child.vaultCall()`, or pass `vaultConfig` for an offline prediction: `routes.ecoRoutesVaultConfig(portal)` is the configuration of an eco-routes Portal, the one `child.predictVault()` uses. Explicit `vault` takes precedence over `vaultConfig`.
 
@@ -63,7 +63,7 @@ Transfer funding does not emit a child `IntentPublished` event. Share the built 
 
 ## Opt in to publication and Portal funding
 
-Use `{ via: "publishAndFund" }` to insert ERC-20 approvals followed by a Portal `publishAndFund` call in the parent route. This mode adds no Sauce cook or Kitchen fee. Those calls run as the Executor, so child reward assets must remain in the Executor or return there from the parent program before publication. `allowPartial` defaults to `false`. Budget the parent's `nativeAmount` for its cook fee, native program spending, and the child's native reward.
+Use `{ via: "publishAndFund" }` to insert ERC-20 approvals followed by a Portal `publishAndFund` call in the parent route. This mode adds no Sauce cook or Kitchen fee. Those calls run as the Executor, so child reward assets must remain in the Executor or return there from the parent program before publication. `allowPartial` defaults to `false`. The parent's `nativeAmount` defaults to what its calls spend, which includes its cook fee, native program spending, and the child's native reward.
 
 The builder checks that declared parent route assets cover child rewards for this mode. Set `fundedByBody: true` only when the parent program actually earns or supplies those assets and makes them available to the Executor. That option skips a static coverage check; it does not move assets.
 
