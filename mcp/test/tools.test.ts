@@ -66,6 +66,19 @@ const INTENT = [
   "",
 ].join("\n");
 
+/** INTENT, written `Base.Portal.send(reward).receive(delivery).then(body)`. */
+const PORTAL_INTENT = [
+  "// @chain ethereum",
+  "function main(recipient: Address) {",
+  "  Base.Portal.send({ token: USDC, amount: 7 })",
+  "    .receive({ token: USDC, amount: 5 })",
+  "    .then(() => {",
+  "      USDC.transfer(recipient, 5);",
+  "    });",
+  "}",
+  "",
+].join("\n");
+
 let mcp: Connected;
 before(async () => {
   mcp = await connect();
@@ -1107,6 +1120,8 @@ describe("sauce_intent_publish", () => {
     args: [RECIPIENT],
     intentDeadline: 2_000_000_000,
     intentCreator: CREATOR,
+    // One salt for every call, so two calls build one intent: each picks a random one otherwise.
+    intentSalt: `0x${"00".repeat(32)}`,
   };
 
   type Published = {
@@ -1136,6 +1151,41 @@ describe("sauce_intent_publish", () => {
     );
     assert.ok(out.notes.some((note) => /Send them in order/.test(note)));
     assert.ok(out.notes.some((note) => /The transfers come first/.test(note)));
+  });
+
+  it("takes the Portal form: the call form's program, intent and transactions", async () => {
+    const portal = { ...args, source: PORTAL_INTENT };
+    // The call form given the reward deadline the Portal form defaults to: seven days past the
+    // route's.
+    const call = { ...args, intentRewardDeadline: args.intentDeadline + 604_800 };
+    // A program a Pot runs names its intent's creator; a wallet publishing one is its creator.
+    const named = PORTAL_INTENT.replace(".receive(", `.creator(${CREATOR})\n    .receive(`);
+    const compiled = ok(await mcp.call("sauce_compile", { ...portal, source: named }));
+    assert.equal(compiled.bytecode, ok(await mcp.call("sauce_compile", call)).bytecode);
+    assert.match(failed(await mcp.call("sauce_compile", portal)), /needs `\.creator\(<address>\)`/);
+    const out = ok(await mcp.call("sauce_intent_publish", portal)) as Published;
+    assert.deepEqual(out, ok(await mcp.call("sauce_intent_publish", call)));
+    assert.equal(out.intents[0]!.destination, "base");
+  });
+
+  it("defaults the Portal form's deadlines from now, and its creator to the wallet", async () => {
+    const before = Math.floor(Date.now() / 1000);
+    const out = ok(
+      await mcp.call("sauce_intent_publish", {
+        source: PORTAL_INTENT,
+        args: [RECIPIENT],
+        from: OWNER,
+      }),
+    ) as Published & {
+      intents: Array<{
+        record: { route: { deadline: string }; reward: { deadline: string; creator: string } };
+      }>;
+    };
+    const after = Math.floor(Date.now() / 1000);
+    const { route, reward } = out.intents[0]!.record;
+    assert.ok(Number(route.deadline) >= before + 300 && Number(route.deadline) <= after + 300);
+    assert.equal(BigInt(reward.deadline), BigInt(route.deadline) + 604_800n);
+    assert.equal(reward.creator.toLowerCase(), OWNER.toLowerCase());
   });
 
   it("builds the approve and publishAndFund instead with intentFundVia publishAndFund", async () => {

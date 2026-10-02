@@ -49,35 +49,96 @@ export interface SauceIntentTokenAmount {
   readonly amount: bigint | number;
 }
 
-/** What the solver of an intent a program opens brings to its destination, for the body to run
- *  on: `Base(() => { … }, { tokens })`. A delivery names at least one token. */
-export interface SauceDelivery {
-  readonly tokens: readonly SauceIntentTokenAmount[];
-}
-
-/** An intent's reward, paid on the chain that opens it. The deadlines, the creator and the prover
- *  are the program's options, shared by every intent it opens. */
-export interface SauceReward {
-  readonly tokens?: readonly SauceIntentTokenAmount[];
-  readonly nativeAmount?: bigint | number;
-}
-
-/** An intent opened in compiled source, waiting for its reward: `Base(() => { … }).reward({ … })`.
- *  Not a host value: `.reward(...)` returns nothing. */
-export interface SauceIntent {
-  reward(reward: SauceReward): void;
+/** Native coin in an intent's reward: `{ native: amount }`. */
+export interface SauceIntentNative {
+  readonly native: bigint | number;
 }
 
 /**
- * A chain in compiled source, opening an intent whose body runs there:
- * `Ethereum(() => { ... }, { tokens }).reward({ tokens })`. The one definition of that call: a
- * `.sauce.ts` file's chains (`sauce-script/index.d.ts`'s `SauceChain`) extend it, and each package
- * chain export carries it (`chain-exports.generated.ts`), so a typed closure inside
- * `Base(() => { ... })` opens one with the chain it imports. The body is never invoked: it is compiled
- * for that chain.
+ * A chain's Portal in compiled source, opening an intent whose body runs on that chain:
+ * `Base.Portal.send({ token, amount }).receive({ token, amount }).then(() => { ... })`. After
+ * `send` come the reward's modifiers, after `receive` the route's, each at most once and in any
+ * order; each left out but the creator has its default.
+ */
+export interface SaucePortal {
+  /**
+   * The reward: what the program pays the solver, escrowed on the chain the program runs on. Each
+   * item an argument, `{ token, amount }` or `{ native: amount }`, or one list of them.
+   */
+  send(...reward: readonly (SauceIntentTokenAmount | SauceIntentNative | readonly (SauceIntentTokenAmount | SauceIntentNative)[])[]): SauceIntentSent;
+}
+
+/** An intent with its reward: the reward's modifiers not given yet, then `receive`. */
+export interface SauceIntentSentSteps<Used extends string> {
+  /**
+   * Who may reclaim an unearned reward: where an unfilled intent's reward is refunded. Required on
+   * every intent a program opens, since the Pot it runs on may be shared; only a top-level intent a
+   * wallet publishes itself defaults to that wallet.
+   */
+  creator(address: bigint): SauceIntentSent<Used | "creator">;
+  /**
+   * From when an unproven reward may be refunded, Unix seconds. Defaults to seven days past the
+   * route's deadline.
+   */
+  deadline(seconds: bigint | number): SauceIntentSent<Used | "deadline">;
+  /** The source chain's prover. Defaults to the registry's for the pair. */
+  prover(address: bigint): SauceIntentSent<Used | "prover">;
+  /**
+   * What the solver delivers on the destination, for the body to run with: each item an argument,
+   * `{ token, amount }`, or one list of them. With none, a body of token writes is delivered what
+   * it moves, and a program nothing.
+   */
+  receive(...delivery: readonly (SauceIntentTokenAmount | readonly SauceIntentTokenAmount[])[]): SauceIntentReceived;
+}
+
+/** SauceIntentSent with the modifiers in `Used` given already. */
+export type SauceIntentSent<Used extends string = never> = Omit<SauceIntentSentSteps<Used>, Used>;
+
+/** An intent waiting for its body: the route's modifiers not given yet, then `then`. */
+export interface SauceIntentReceivedSteps<Used extends string> {
+  /**
+   * The last second the intent may be filled, Unix seconds. Defaults to five minutes past when it
+   * opens.
+   */
+  deadline(seconds: bigint | number): SauceIntentReceived<Used | "deadline">;
+  /** The route's salt. Defaults to 32 random bytes, picked when the intent is built. */
+  salt(salt: bigint | number): SauceIntentReceived<Used | "salt">;
+  /**
+   * The destination Kitchen's fee the body's cook pays, in wei, for a body that is a program: known
+   * when the intent is built. Defaults to what the compile is given for that destination.
+   */
+  fee(wei: bigint | number): SauceIntentReceived<Used | "fee">;
+  /**
+   * The body: runs on the destination with what was received. It is never invoked here: it is
+   * compiled for that chain.
+   */
+  then(body: () => void): SauceIntentOpened;
+}
+
+/** SauceIntentReceived with the modifiers in `Used` given already. */
+export type SauceIntentReceived<Used extends string = never> = Omit<SauceIntentReceivedSteps<Used>, Used>;
+
+/** An opened intent: a statement of its own, or one with a handler for its body. */
+export interface SauceIntentOpened {
+  /**
+   * What runs on the destination in the body's place when the body reverts: everything the body did
+   * is undone, and the fill still succeeds. `e` is what the body reverted with, at most its first
+   * 256 bytes. EVM destinations only.
+   */
+  catch(handler: (e: SauceBytes) => void): void;
+}
+
+/**
+ * A chain in compiled source: its `Portal` opens an intent whose body runs there,
+ * `Ethereum.Portal.send({ token, amount }).receive({ token, amount }).then(() => { ... })`. The one
+ * definition of that SauceScript: a `.sauce.ts` file's chains (`sauce-script/index.d.ts`'s
+ * `SauceChain`) extend it. A package chain export carries the host's `Portal` instead
+ * (`intent-dsl.ts#ChainPortal`), which takes these values as well as its own, so a typed closure
+ * inside `Base.Portal...then(() => { ... })` opens one with the chain it imports.
  */
 export interface SauceIntentChain {
-  (body: () => void, delivery?: SauceDelivery): SauceIntent;
+  /** Opens an intent whose body runs on this chain. */
+  readonly Portal: SaucePortal;
 }
 
 export interface AaveV2LendingPoolMethods {

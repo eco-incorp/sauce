@@ -40,7 +40,7 @@ function recordOf(source: string, chain: string): Record<string, unknown> {
       chain: requireChain(chain),
       compactArgs: false,
       defines: { RECIPIENT: BigInt(RECIPIENT) },
-      intents: { deadline: 2_000_000_000n, creator: OWNER },
+      intents: { deadline: 2_000_000_000n, publisher: OWNER },
     },
     { readText: () => "", readModule: () => undefined },
   );

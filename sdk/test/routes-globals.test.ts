@@ -102,7 +102,7 @@ describe("routes globals: installRouteGlobals installs the composed accessors", 
 
   it("composition never mutates the imported chainAccessors.Base object", () => {
     installRouteGlobals();
-    expect(Object.keys(chainAccessors.Base).sort()).toEqual(["chain", "route"]);
+    expect(Object.keys(chainAccessors.Base).sort()).toEqual(["Portal", "chain", "route"]);
   });
 
   it("contract namespaces install as lazy, memoising getters (not eagerly constructed)", () => {

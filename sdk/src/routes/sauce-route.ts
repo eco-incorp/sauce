@@ -32,12 +32,7 @@ import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
 import type { EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
 import { intentHost, type IntentSugarDefaults, type LoweredIntent } from "./intent-host.js";
-import {
-  bindEntryArguments,
-  entryParamsOf,
-  type EntryParam,
-  type EntryValue,
-} from "./entry.js";
+import { bindEntryArguments, entryParamsOf, type EntryParam, type EntryValue } from "./entry.js";
 import { unknownGlobalError } from "./unknown-global.js";
 import { closureText, isSauceClosure, type SauceBody } from "./closure.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
@@ -83,13 +78,14 @@ export interface SauceCompileOptions {
    */
   ambient?: string[];
   /**
-   * Settings for `Chain.Portal.send({ ... }).receive().then(() => { ... })` written inside the
+   * Settings for `Chain.Portal.send(...).receive(...).then(() => { ... })` written inside the
    * program — creating an intent from a program, rather than compiling a program into one.
-   * Everything the SDK can look up it looks up; these are the fields it cannot, plus overrides. See
-   * `intent-host.ts`.
+   * Everything the SDK can look up it looks up; these are the fields it cannot, plus overrides, for
+   * every intent that does not set its own. See `intent-host.ts`.
    *
-   * Omitted entirely, an intent the source opens still compiles — `deadline` and `creator` have
-   * no safe defaults and are reported by name when missing.
+   * Omitted entirely, an intent still compiles: its deadlines and salt have defaults, and its
+   * creator, which has none, is its own `.creator(...)` — or `publisher`'s, for a top-level intent
+   * a wallet publishes itself.
    */
   intents?: Partial<IntentSugarDefaults> & EcoRoutesSelector;
   /** Compile for compact-v1 entry arguments. */
@@ -241,7 +237,14 @@ function routeHost(
     // one (`levelOn`); its own intents are funded on its chain and lowered by its own host.
     programOn: (destination) => {
       const next = levelOn(chain, destination, options, scope);
-      const child = routeHost(destination, next.options, next.scope, []);
+      // A body's own intents open when it runs, not when the file compiles, and no wallet
+      // publishes them: each names its own creator.
+      const {
+        openedAt: _openedAt,
+        publisher: _publisher,
+        ...inherited
+      } = next.options.intents ?? {};
+      const child = routeHost(destination, { ...next.options, intents: inherited }, next.scope, []);
       return {
         target: destination.kind === "svm" ? "svm" : "evm",
         declare: child.host.declare,

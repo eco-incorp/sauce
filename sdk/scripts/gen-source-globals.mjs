@@ -62,6 +62,65 @@ function fail(message) {
 const { CANONICAL_CHAINS } = load("src/chains/canonical.ts");
 const { listProtocols } = load("src/protocols/index.ts");
 const { TOKEN_REGISTRY, SVM_TOKEN_REGISTRY } = load("src/routes/token-registry.ts");
+const { INTENT_STAGES } = load("src/routes/intent-syntax.ts");
+
+/**
+ * The intent's stages as declarations, from the one table (`src/routes/intent-syntax.ts`) the
+ * lowering and a compiler host read too. A stage with modifiers is a generic `…Steps<Used>`
+ * interface and an `Omit` of the modifiers used so far, so each is given at most once; a step to the
+ * next stage returns that stage afresh.
+ */
+function renderIntentStages() {
+  const typeOf = (stage, used) => {
+    const { ts, methods } = INTENT_STAGES[stage];
+    if (ts === "void") return "void";
+    const modifiers = Object.values(methods).some((m) => m.option !== undefined);
+    return modifiers && used !== undefined ? `${ts}<${used}>` : ts;
+  };
+  const doc = (text, indent) => {
+    const words = text.split(" ");
+    const lines = [];
+    let line = "";
+    for (const word of words) {
+      if (`${indent} * ${line} ${word}`.length > 100 && line !== "") {
+        lines.push(line);
+        line = word;
+      } else line = line === "" ? word : `${line} ${word}`;
+    }
+    lines.push(line);
+    return lines.length === 1 && `${indent}/** ${lines[0]} */`.length <= 100
+      ? `${indent}/** ${lines[0]} */`
+      : [`${indent}/**`, ...lines.map((l) => `${indent} * ${l}`), `${indent} */`].join("\n");
+  };
+  const params = (method) =>
+    method.params
+      .map((p) => (p.rest ? `...${p.name}: readonly (${p.ts})[]` : `${p.name}: ${p.ts}`))
+      .join(", ");
+  const out = [];
+  for (const [stage, spec] of Object.entries(INTENT_STAGES)) {
+    if (spec.ts === "void") continue;
+    const modifiers = Object.values(spec.methods).some((m) => m.option !== undefined);
+    const name = modifiers ? `${spec.ts}Steps<Used extends string>` : spec.ts;
+    out.push(doc(spec.doc, ""));
+    out.push(`export interface ${name} {`);
+    for (const [method, m] of Object.entries(spec.methods)) {
+      out.push(doc(m.doc, "  "));
+      const returns =
+        m.returns === stage ? typeOf(stage, `Used | "${method}"`) : typeOf(m.returns, undefined);
+      out.push(`  ${method}(${params(m)}): ${returns};`);
+    }
+    out.push("}");
+    if (modifiers) {
+      out.push("");
+      out.push(doc(`${spec.ts} with the modifiers in \`Used\` given already.`, ""));
+      out.push(
+        `export type ${spec.ts}<Used extends string = never> = Omit<${spec.ts}Steps<Used>, Used>;`,
+      );
+    }
+    out.push("");
+  }
+  return out.join("\n").trimEnd();
+}
 const targets = JSON.parse(
   readFileSync(resolve(sdk, "test/fixtures/registry-abi/targets.json"), "utf8"),
 ).protocols;
@@ -482,35 +541,24 @@ export interface SauceIntentTokenAmount {
   readonly amount: bigint | number;
 }
 
-/** What the solver of an intent a program opens brings to its destination, for the body to run
- *  on: \`Base(() => { … }, { tokens })\`. A delivery names at least one token. */
-export interface SauceDelivery {
-  readonly tokens: readonly SauceIntentTokenAmount[];
+/** Native coin in an intent's reward: \`{ native: amount }\`. */
+export interface SauceIntentNative {
+  readonly native: bigint | number;
 }
 
-/** An intent's reward, paid on the chain that opens it. The deadlines, the creator and the prover
- *  are the program's options, shared by every intent it opens. */
-export interface SauceReward {
-  readonly tokens?: readonly SauceIntentTokenAmount[];
-  readonly nativeAmount?: bigint | number;
-}
-
-/** An intent opened in compiled source, waiting for its reward: \`Base(() => { … }).reward({ … })\`.
- *  Not a host value: \`.reward(...)\` returns nothing. */
-export interface SauceIntent {
-  reward(reward: SauceReward): void;
-}
+${renderIntentStages()}
 
 /**
- * A chain in compiled source, opening an intent whose body runs there:
- * \`Ethereum(() => { ... }, { tokens }).reward({ tokens })\`. The one definition of that call: a
- * \`.sauce.ts\` file's chains (\`sauce-script/index.d.ts\`'s \`SauceChain\`) extend it, and each package
- * chain export carries it (\`chain-exports.generated.ts\`), so a typed closure inside
- * \`Base(() => { ... })\` opens one with the chain it imports. The body is never invoked: it is compiled
- * for that chain.
+ * A chain in compiled source: its \`Portal\` opens an intent whose body runs there,
+ * \`Ethereum.Portal.send({ token, amount }).receive({ token, amount }).then(() => { ... })\`. The one
+ * definition of that SauceScript: a \`.sauce.ts\` file's chains (\`sauce-script/index.d.ts\`'s
+ * \`SauceChain\`) extend it. A package chain export carries the host's \`Portal\` instead
+ * (\`intent-dsl.ts#ChainPortal\`), which takes these values as well as its own, so a typed closure
+ * inside \`Base.Portal...then(() => { ... })\` opens one with the chain it imports.
  */
 export interface SauceIntentChain {
-  (body: () => void, delivery?: SauceDelivery): SauceIntent;
+  /** Opens an intent whose body runs on this chain. */
+  readonly Portal: SaucePortal;
 }
 
 ${sourceDefinitions.join("\n\n")}

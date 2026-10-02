@@ -196,7 +196,7 @@ describe("the gate", () => {
   it("takes a program's intents by their destinations", () => {
     const { intents } = compileSauceProgram("base", TO_ARBITRUM, {
       defines: { RECIPIENT: BigInt(RECIPIENT) },
-      intents: { deadline: 2_000_000_000n, creator: CREATOR },
+      intents: { deadline: 2_000_000_000n, publisher: CREATOR },
     });
     expect(intentDestinations(intents).map((chain) => chain.slug)).toEqual(["arbitrum"]);
   });

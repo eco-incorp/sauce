@@ -24,7 +24,7 @@ jest.unstable_mockModule("../src/routes/intent-host.js", () => ({
         const receiver = site.receiver;
         const delivery =
           receiver !== undefined && "record" in receiver
-            ? receiver.record.parts.find((part) => part.callee === "Sending.receive")?.args[0]
+            ? receiver.record.parts.find((part) => part.callee === "Sent.receive")?.args[0]
             : undefined;
         if (delivery !== undefined) bound.push(delivery);
         return host.bind(site);
@@ -39,7 +39,6 @@ const { registryTokenAddress } = await import("../src/routes/token-registry.js")
 
 const INTENTS = {
   deadline: 4_000_000_000n,
-  creator: "0x3333333333333333333333333333333333333333",
   executionFee: 0n,
 } as const;
 
@@ -50,7 +49,7 @@ function delivery(defines: Record<string, bigint | boolean | number>): [string, 
     "base",
     `function main() {
   const amount = USDC.balanceOf(self);
-  Arbitrum.Portal.send([{ token: USDC, amount }]).receive([{ token: USDC, amount: chainId }]).then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).creator(0x3333333333333333333333333333333333333333).receive([{ token: USDC, amount: chainId }]).then(() => {
     USDC.transfer(self, amount);
   });
 }`,

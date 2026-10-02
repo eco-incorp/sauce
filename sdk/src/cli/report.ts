@@ -78,18 +78,18 @@ interface IntentPart {
 }
 
 /** The parts of `program` each intent it opens runs on its destination, as the intent lowering
- *  finds them: in `Chain.Portal.send(reward).receive(delivery).then(() => { body })`, the delivery
- *  and the body, the reward left out. */
+ *  finds them: in `Chain.Portal.send(reward).receive(delivery).then(() => { body })`, the delivery,
+ *  the body and a `.catch(...)` handler, the reward and the modifiers left out. */
 function intentParts(program: AstNode): IntentPart[] {
   const chains = chainAccessorNames();
   const parts: IntentPart[] = [];
   walk(program, (node) => {
     if (node.type !== "CallExpression") return;
     const method = portalMethod(node);
-    if (method !== "receive" && method !== "then") return;
+    if (method !== "receive" && method !== "then" && method !== "catch") return;
     const name = portalRoot(node);
     const chain = name === undefined ? undefined : chains.get(name);
-    // `receive` takes any number of items, `then` its body.
+    // `receive` takes any number of items, `then` its body, `catch` the body's handler.
     if (chain === undefined) return;
     for (const part of (node.arguments as AstNode[] | undefined) ?? []) {
       parts.push({ chain, start: part.start, end: part.end });

@@ -55,7 +55,10 @@ const ARBITRUM = requireChain("arbitrum");
 const RECIPIENT = 0x9999999999999999999999999999999999999999n;
 const RECIPIENT_ADDRESS = "0x9999999999999999999999999999999999999999" as const;
 const CREATOR = "0x3333333333333333333333333333333333333333" as const;
-const DEFAULTS = { deadline: 4_000_000_000n, creator: CREATOR };
+/** One salt for every compile here, so two compiles of one intent are one intent: each picks a
+ *  random one otherwise. */
+const SALT = `0x${"5a".repeat(32)}` as const;
+const DEFAULTS = { deadline: 4_000_000_000n, publisher: CREATOR, salt: SALT };
 
 const usdcOf = (slug: string): bigint => registryTokenAddress(requireChain(slug), "USDC")!;
 const word = (value: bigint): Hex => `0x${value.toString(16).padStart(64, "0")}`;
@@ -216,16 +219,14 @@ describe("what the lowering produces", () => {
     });
   });
 
-  // SauceScript writes an integer plainly, and the parser's `number` for one past 2^53 is a rounded
-  // float: a literal is read from its text, as the compiler reads it, and is the integer its `n`
-  // spelling is.
+  // SauceScript writes an integer plainly: the compiler reads a literal from its text, so one past
+  // 2^53 is the integer its `n` spelling is.
   describe("a plain integer is exact past 2^53, as its `n` spelling is", () => {
     const WEI = 1_000_000_000_000_000_000_001n; // 1e21 + 1: no float holds it
     const lowered = (amount: string, recipient: string, top = "") =>
-      rewriteIntentSugar(
-        `${top}function main() {\n  Arbitrum(() => {\n    USDC.transfer(${recipient}, ${amount});\n` +
-          `  }).reward({ tokens: [{ token: USDC, amount: ${amount} }] });\n}`,
-        context(),
+      lower(
+        `${top}function main() {\n  Arbitrum.Portal.send({ token: USDC, amount: ${amount} }).receive().then(() => {\n` +
+          `    USDC.transfer(${recipient}, ${amount});\n  });\n}`,
       ).intents[0]!;
 
     it("an amount and an address, in the body and the reward", () => {
@@ -354,8 +355,8 @@ describe("what the lowering produces", () => {
 
     expect(intents[0]!.fundVia).toBe("publishAndFund");
     // `@sauce/intents#publishAndFund`: no vault read — the Portal pulls the reward into the vault it
-    // derives itself — so four arguments, not five.
-    expect(args).toHaveLength(4);
+    // derives itself — so five arguments, not six.
+    expect(args).toHaveLength(5);
     expect(bytesHex(args![1]!).slice(0, 10)).toBe(selector("publishAndFund"));
     expect(bytesHex(args![2]!).slice(0, 66)).toBe(word(usdcOf("base")));
   });
@@ -412,7 +413,7 @@ describe("a body that is not just token writes becomes a program", () => {
   it("lowers an intent opened inside an intent, each by its own level", () => {
     const source = program(`  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
     const got = USDC.balanceOf(self);
-    Base.Portal.send([{ token: USDC, amount: got }]).receive().then(() => {
+    Base.Portal.send([{ token: USDC, amount: got }]).creator(RECIPIENT).receive().then(() => {
       USDC.transfer(RECIPIENT, got);
     });
   });`);
@@ -516,9 +517,11 @@ describe("what it refuses, and how clearly", () => {
     });
   });
 
-  it("names the deadline and the creator when they are missing", () => {
-    expect(() => lower(TRANSFER_INTENT, {})).toThrow(/needs a `deadline`/);
-    expect(() => lower(TRANSFER_INTENT, { deadline: 1n })).toThrow(/needs a `creator`/);
+  it("names the creator when the intent has none and no wallet publishes it", () => {
+    expect(() => lower(TRANSFER_INTENT, {})).toThrow(/needs `\.creator\(<address>\)`/);
+    expect(() => lower(TRANSFER_INTENT, { deadline: 1n })).toThrow(
+      /needs `\.creator\(<address>\)`/,
+    );
   });
 
   it("says which chain has no eco-routes deployment", () => {

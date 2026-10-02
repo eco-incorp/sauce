@@ -203,8 +203,12 @@ function locate(
 
 /** What to pass the command for a failure whose SDK message names an API option instead. */
 const HINTS: ReadonlyArray<readonly [RegExp, (match: RegExpExecArray) => string]> = [
-  [/needs a `deadline`/, () => "pass --intent-deadline <unix seconds>"],
-  [/needs a `creator`/, () => "pass --intent-creator <address>"],
+  [
+    /needs `\.creator\(<address>\)`/,
+    () =>
+      "write `.creator(<address>)` in the file; only an intent `sauce intent publish` publishes " +
+      "from a wallet takes that wallet (or --intent-creator <address>) instead",
+  ],
   [/`intents\.executionFee`/, () => "pass --intent-execution-fee <wei>"],
   [
     /`([A-Za-z_$][\w$]*)` is not a declared variable/,
@@ -254,11 +258,14 @@ function unregisteredTokens(text: string, chain: CanonicalChain): string[] {
 
 /**
  * On Solana a token is a value (`balanceOf(TSLAx, account)`), so a symbol the cluster does not
- * register fails as an undeclared name. Name the cause: a stock's symbol written in another case,
- * or a token only an EVM chain registers.
+ * register fails as an undeclared name, or, where another chain registers it, as a token this one
+ * does not. Name the cause: a stock's symbol written in another case, or a token only an EVM chain
+ * registers.
  */
 function unregisteredMints(message: string, chain: CanonicalChain): string[] {
-  const name = /`([A-Za-z_$][\w$]*)` is not a declared variable/.exec(message)?.[1];
+  const name = /`([A-Za-z_$][\w$]*)` is not (?:a declared variable|a token \S+ registers)/.exec(
+    message,
+  )?.[1];
   if (chain.kind !== "svm" || name === undefined) return [];
   const cased = svmTokenRows(chain).find((row) => row.symbol.toUpperCase() === name.toUpperCase());
   if (cased !== undefined) {

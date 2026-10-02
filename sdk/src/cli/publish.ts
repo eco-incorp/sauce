@@ -88,11 +88,9 @@ interface Node {
 const isIntentSite = (node: Node): boolean => {
   const call = node.type === "ExpressionStatement" ? (node.expression as Node) : undefined;
 
-  return (
-    call?.type === "CallExpression" &&
-    portalMethod(call as AstNode) === "then" &&
-    portalRoot(call as AstNode) !== undefined
-  );
+  const method = call?.type === "CallExpression" ? portalMethod(call as AstNode) : undefined;
+
+  return (method === "then" || method === "catch") && portalRoot(call as AstNode) !== undefined;
 };
 
 /** True when `node` holds no call: a value fixed at compile time, not something done at run time. */
@@ -134,14 +132,20 @@ function otherStatement(file: string, text: string): string | undefined {
 }
 
 /** The intents `input`'s file opens, refusing a file that is not only fixed intents. */
-function fixedIntents(input: ProgramInput, files: CliFiles): readonly LoweredIntent[] {
+function fixedIntents(input: PublishInput, files: CliFiles): readonly LoweredIntent[] {
   if (input.chain.kind !== "evm") {
     throw new UsageError(
       `sauce intent publish sends source-chain Portal transactions, and ${input.chain.slug} is not an ` +
         "EVM chain: the eco-routes Portal this SDK addresses is EVM only.",
     );
   }
-  const program = compileProgram(input, files);
+  // The wallet that publishes them is the creator of each that names none, unless the flags name
+  // another.
+  const publisher = input.intents.creator ?? input.account?.address ?? input.from;
+  const program = compileProgram(
+    publisher === undefined ? input : { ...input, intents: { ...input.intents, publisher } },
+    files,
+  );
   if (program.intents.length === 0) {
     throw new UsageError(
       `${input.file} opens no intent — there is nothing to publish. Run it on a Pot with ` +

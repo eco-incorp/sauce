@@ -79,48 +79,6 @@ interface SauceBinding {
   readonly [method: string]: (...args: any[]) => any;
 }
 
-/** A token amount an intent names: `{ token: USDC, amount }`. */
-interface SauceTokenAmount {
-  readonly token: SauceInt;
-  readonly amount: SauceInt;
-}
-
-/** One item of an intent's reward, paid on the chain that opens it: a token amount, a list of
- *  them, or the native coin as `{ native: amount }`. */
-type SauceRewardItem =
-  SauceTokenAmount | ReadonlyArray<SauceTokenAmount> | { readonly native: SauceInt };
-
-/** One item of what the solver delivers on the destination for the body to run on: a token
- *  amount, or a list of them. */
-type SauceDeliveryItem = SauceTokenAmount | ReadonlyArray<SauceTokenAmount>;
-
-/** `<Chain>.Portal`: an intent to that chain, opened from a program —
- *  `Base.Portal.send({ … }).receive({ … }).then(() => { … })`. */
-interface SaucePortal {
-  /** The reward, paid here: any number of items, each an argument. */
-  send(...reward: SauceRewardItem[]): SauceSending;
-}
-
-/** An intent with its reward, waiting for what the solver delivers. */
-interface SauceSending {
-  /** What the solver delivers on the destination, named there: any number of items, none with
-   *  `.receive()`. */
-  receive(...delivery: SauceDeliveryItem[]): SauceReceiving;
-}
-
-/** An intent with its reward and delivery: the body is what it needs. */
-interface SauceReceiving {
-  /** What runs on the destination: a program of its own, or token transfers the route makes. */
-  then(body: () => void): SauceOpened;
-}
-
-/** An intent with its body. */
-interface SauceOpened {
-  /** What runs on the destination in the body's place when the body reverts: everything the body
-   *  did is undone, and the fill still succeeds. EVM destinations only. */
-  catch(handler: () => void): void;
-}
-
 /** Context reads: who called, where, when. */
 declare const ctx: {
   /** The account that called: the Pot's owner, on a cook. */

@@ -171,9 +171,9 @@ describe("bindMainArguments: main's arguments, bound into the intents a wallet p
   const RECIPIENT = "0x6666666666666666666666666666666666666666";
   const BRIDGE = [
     "function main(amount: Uint256, reward: Uint256, recipient: Address, sweep: bool) {",
-    "  Base(() => {",
+    "  Base.Portal.send({ token: USDC, amount: reward }).receive().then(() => {",
     "    USDC.transfer(recipient, amount);",
-    "  }).reward({ tokens: [{ token: USDC, amount: reward }] });",
+    "  });",
     "}",
     "",
   ].join("\n");
@@ -212,7 +212,9 @@ describe("bindMainArguments: main's arguments, bound into the intents a wallet p
   });
 
   it("leaves a program whose main takes nothing as it is, and asks for the ones it takes", () => {
-    const fixed = input("Base(() => { USDC.transfer(0x1n, 1n); }).reward({ nativeAmount: 1n });");
+    const fixed = input(
+      "Base.Portal.send({ native: 1 }).receive().then(() => { USDC.transfer(0x1, 1); });",
+    );
     expect(bindMainArguments(fixed, undefined)).toBe(fixed);
     expect(() => bindMainArguments(input(BRIDGE), undefined)).toThrow(
       /main\(amount: Uint256, reward: Uint256, recipient: Address, sweep: bool\) takes 4 arguments: pass them after --args/,
@@ -267,6 +269,8 @@ describe("bindMainArguments: main's arguments, bound into the intents a wallet p
           [
             ...["intent", "publish", file, "--chain", "ethereum", "--format", "json"],
             ...["--from", OWNER, "--intent-deadline", "2000000000", "--intent-creator", OWNER],
+            // One salt for every run: each picks a random one otherwise.
+            ...["--intent-salt", `0x${"5a".repeat(32)}`],
             ...extra,
           ],
           io,

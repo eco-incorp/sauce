@@ -8,26 +8,30 @@
 /**
  * Three hops, Base, then Ethereum, then Base again, each amount measured on arrival: the
  * nested-intents guide's cascade as the body of an intent to Base, before the guide's file opened
- * that intent itself with `main` arguments. `RECIPIENT` is the define its route is compiled with.
+ * that intent itself with `main` arguments. `RECIPIENT` is the define its route is compiled with,
+ * and each level's creator.
  */
 export const CASCADE_BODY = `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Ethereum(
-    () => {
+  Ethereum.Portal.send({ token: USDC, amount })
+    .creator(RECIPIENT)
+    .receive({ token: USDC, amount })
+    .then(() => {
       const arrived = USDC.balanceOf(ctx.self());
-      Base(() => {
-        USDC.transfer(RECIPIENT, arrived);
-      }).reward({ tokens: [{ token: USDC, amount: arrived }] });
-    },
-    { tokens: [{ token: USDC, amount }] },
-  ).reward({ tokens: [{ token: USDC, amount }] });
+      Base.Portal.send({ token: USDC, amount: arrived })
+        .creator(RECIPIENT)
+        .receive()
+        .then(() => {
+          USDC.transfer(RECIPIENT, arrived);
+        });
+    });
 }`;
 
 /**
  * A body that measures what the calls before it left in the Pot and opens a new intent carrying it
  * to Arbitrum: the README's example until that became a program a Pot runs with
  * `main(recipient, minAmount)`. `RECIPIENT` and `MIN_AMOUNT` are the defines its route is compiled
- * with.
+ * with, `RECIPIENT` the intent's creator too.
  */
 export const BODY_TO_ARBITRUM = `function main() {
   const amount = USDC.balanceOf(ctx.self());
@@ -35,7 +39,10 @@ export const BODY_TO_ARBITRUM = `function main() {
     throw "cross-chain-intent: nothing to forward";
   }
 
-  Arbitrum(() => {
-    USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .creator(RECIPIENT)
+    .receive()
+    .then(() => {
+      USDC.transfer(RECIPIENT, amount);
+    });
 }`;

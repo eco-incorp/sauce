@@ -26,7 +26,11 @@ import { venues as svmVenueAccessors } from "../svm/accessors.js";
 import { registryTokens } from "./token-registry.js";
 
 /** What `chainAccessors[name]` is, in the shape this module consumes it. */
-type ChainOrigin = Record<string, unknown> & { chain: CanonicalChain; route: unknown };
+type ChainOrigin = Record<string, unknown> & {
+  chain: CanonicalChain;
+  route: unknown;
+  Portal: unknown;
+};
 
 /** Function intrinsics a contract/venue namespace key must never collide with once composed onto a
  *  CALLABLE accessor -- unlike a plain object, landing on one of these would corrupt the callable
@@ -47,7 +51,7 @@ const FUNCTION_INTRINSIC_DENYLIST: ReadonlySet<string> = new Set([
 /**
  * Composes one chain accessor: a FRESH callable forwarding to `origin.route`
  * (so it stays CALLABLE — a plain object would silently drop that), plus
- * `chain`/`route`, the lazy contract-namespace tree (`Uniswap`,
+ * `chain`/`route`/`Portal`, the lazy contract-namespace tree (`Uniswap`,
  * `UniswapV4`, ...), the chain's registry tokens (`USDC`, ...) and, for an
  * `svm`-kind chain only, the svm venue accessor tree (`RaydiumCpSwap`,
  * `MeteoraDammV2`, ...) — copied via
@@ -55,7 +59,7 @@ const FUNCTION_INTRINSIC_DENYLIST: ReadonlySet<string> = new Set([
  * memoising GETTERS stay lazy — spread would invoke every one of them
  * eagerly at composition time. `origin` itself is never mutated: this returns
  * a fresh function object. Throws on a name collision — a protocol, family,
- * token or venue name literally "route", "chain" or a function intrinsic like
+ * token or venue name literally "route", "chain", "Portal" or a function intrinsic like
  * "call"/"bind", or two of them sharing a name (a token symbol that is also a
  * protocol namespace) — mirroring `createChainGlobals`'s own duplicate-key
  * throw. The `kind === "svm"` gate is registry-derived (from
@@ -84,13 +88,15 @@ function composeChainGlobal(name: string, origin: ChainOrigin): object {
   const merged: PropertyDescriptorMap = {
     chain: { value: origin.chain, enumerable: true, configurable: false, writable: false },
     route: { value: origin.route, enumerable: true, configurable: false, writable: false },
+    Portal: { value: origin.Portal, enumerable: true, configurable: false, writable: false },
   };
   for (const source of sources) {
     for (const key of Object.keys(source)) {
       if (key in merged || FUNCTION_INTRINSIC_DENYLIST.has(key)) {
         throw new Error(
           `routes/composed: '${key}' collides with another name on the '${name}' accessor ` +
-            "(its route, chain, a function intrinsic, or a protocol, token or venue of the same name)",
+            "(its route, chain, Portal, a function intrinsic, or a protocol, token or venue of the " +
+            "same name)",
         );
       }
     }

@@ -80,14 +80,17 @@ describe("compileSauceProgram", () => {
     const body = [
       "function main(recipient: Address) {",
       "  const amount = USDC.balanceOf(ctx.self());",
-      "  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {",
+      "  Arbitrum.Portal.send([{ token: USDC, amount }]).creator(0x3333333333333333333333333333333333333333).receive().then(() => {",
       "    USDC.transfer(recipient, amount);",
       "  });",
       "}",
     ].join("\n");
-    expect(() => compileSauceProgram("base", body)).toThrow(/needs a `deadline`/);
+    // With no deadline the intent opens as the program runs, which writes its deadlines then.
+    expect(compileSauceProgram("base", body).intents[0]!.sentinels.map((s) => s.capture)).toEqual(
+      expect.arrayContaining(["ctx.timestamp() + 300", "the route's deadline + 604800"]),
+    );
     const program = compileSauceProgram("base", body, {
-      intents: { deadline: 2_000_000_000n, creator: CREATOR },
+      intents: { deadline: 2_000_000_000n },
     });
     expect(program.entryParams).toEqual([{ name: "recipient", type: "Address" }]);
     expect(program.bytecode.length).toBeGreaterThan(0);
@@ -95,13 +98,13 @@ describe("compileSauceProgram", () => {
 
   it("compiles an intent every value of which is known now, and reports it fixed", () => {
     const body = [
-      "Base.Portal.send([{ token: USDC, amount: 7n }]).receive().then(() => {",
+      "Base.Portal.send([{ token: USDC, amount: 7n }]).creator(0x3333333333333333333333333333333333333333).receive().then(() => {",
       "  USDC.transfer(RECIPIENT, 5n);",
       "});",
     ].join("\n");
     const program = compileSauceProgram("arbitrum", body, {
       defines: { RECIPIENT: BigInt(RECIPIENT) },
-      intents: { deadline: 2_000_000_000n, creator: CREATOR },
+      intents: { deadline: 2_000_000_000n },
     });
     expect(program.intents).toHaveLength(1);
     const [lowered] = program.intents;
@@ -116,7 +119,7 @@ describe("compileSauceProgram", () => {
     // Opted out, it carries the publishAndFund calldata instead.
     const optedOut = compileSauceProgram("arbitrum", body, {
       defines: { RECIPIENT: BigInt(RECIPIENT) },
-      intents: { deadline: 2_000_000_000n, creator: CREATOR, fundVia: "publishAndFund" },
+      intents: { deadline: 2_000_000_000n, fundVia: "publishAndFund" },
     });
     expect(optedOut.intents[0]!.fundVia).toBe("publishAndFund");
     const publishAndFund = routes.publishAndFundTx(optedOut.intents[0]!.intent, false, target);

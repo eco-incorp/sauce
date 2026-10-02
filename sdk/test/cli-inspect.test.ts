@@ -50,7 +50,10 @@ const OWNER: Address = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
 const CREATOR: Address = "0x3333333333333333333333333333333333333333";
 const ENGINE = getAddress(v12EngineAddress());
-const INTENT_FLAGS = ["--intent-deadline", "2000000000", "--intent-creator", CREATOR];
+const INTENT_FLAGS = [
+  ...["--intent-deadline", "2000000000", "--intent-creator", CREATOR],
+  ...["--intent-salt", `0x${"00".repeat(32)}`],
+];
 
 interface Run {
   readonly code: number;
@@ -384,18 +387,24 @@ const SPLIT = [
 ].join("\n");
 const FIXED = [
   "// @chain ethereum",
-  "Base.Portal.send([{ token: USDC, amount: 2000n }]).receive().then(() => {",
-  "  USDC.transfer(RECIPIENT, 1000n);",
-  "});",
+  "Base.Portal.send([{ token: USDC, amount: 2000 }])",
+  "  .creator(0x3333333333333333333333333333333333333333)",
+  "  .receive()",
+  "  .then(() => {",
+  "    USDC.transfer(RECIPIENT, 1000);",
+  "  });",
   "",
 ].join("\n");
 const MEASURED = [
   "// @chain ethereum",
   "function main(recipient: Address) {",
   "  const amount = USDC.balanceOf(ctx.self());",
-  "  Base.Portal.send([{ token: USDC, amount: amount }]).receive().then(() => {",
-  "    USDC.transfer(recipient, amount);",
-  "  });",
+  "  Base.Portal.send([{ token: USDC, amount: amount }])",
+  "    .creator(0x3333333333333333333333333333333333333333)",
+  "    .receive()",
+  "    .then(() => {",
+  "      USDC.transfer(recipient, amount);",
+  "    });",
   "}",
   "",
 ].join("\n");
@@ -461,7 +470,7 @@ describe("sauce inspect", () => {
     const fixed = file("fixed.sauce.ts", FIXED);
     const [lowered] = compileSauceProgram("ethereum", FIXED, {
       defines: { RECIPIENT: BigInt(RECIPIENT) },
-      intents: { deadline: 2_000_000_000n, creator: CREATOR },
+      intents: { deadline: 2_000_000_000n, salt: `0x${"00".repeat(32)}` },
     }).intents;
     const { intentHash } = hashIntent(lowered!.intent);
     const defines = ["--define", `RECIPIENT=${RECIPIENT}`, ...INTENT_FLAGS];

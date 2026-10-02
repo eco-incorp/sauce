@@ -112,11 +112,12 @@ describe("Solana's stock mints in a program", () => {
   });
 
   it("are refused, by name, on a chain without them, and an EVM chain's on Solana", () => {
+    // Compared with zero, an absent name is zero there; any other use is refused, naming it.
     expect(() =>
-      compileSauceProgram("base", "function main() {\n  require(NVDA_US != 0n);\n}"),
+      compileSauceProgram("base", "function main(): Uint256 {\n  return NVDA_US;\n}"),
     ).toThrow(/NVDA_US/);
     expect(() =>
-      compileSauceProgram("ethereum", "function main() {\n  require(SPACEX != 0n);\n}"),
+      compileSauceProgram("ethereum", "function main(): Uint256 {\n  return SPACEX;\n}"),
     ).toThrow(/SPACEX/);
     expect(() =>
       compileSauceProgram(

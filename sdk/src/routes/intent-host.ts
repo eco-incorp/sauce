@@ -3,47 +3,66 @@
  * program, built on the compiler's host API rather than on the program's text.
  *
  * ```js
- * function main() {
+ * function main(owner: Address) {
  *   const amount = USDC.balanceOf(ctx.self());
  *   Arbitrum.Portal.send({ token: USDC, amount })
- *     .receive({ token: USDC, amount: (amount * 99n) / 100n })
+ *     .creator(owner)
+ *     .receive({ token: USDC, amount: (amount * 99) / 100 })
  *     .then(() => {
- *       USDC.transfer(RECIPIENT, (amount * 99n) / 100n);
+ *       USDC.transfer(RECIPIENT, (amount * 99) / 100);
  *     });
  * }
  * ```
  *
+ * THE SYNTAX IS A TABLE. `intent-syntax.ts#INTENT_STAGES` lists every stage of the chain, the
+ * methods each has, what each takes and returns, and the option a modifier sets; each stage is a
+ * host type of that name here, and each parameter's `kind` is what the compiler is told of it.
+ *
  * WHAT THE COMPILER IS TOLD. `<Chain>.Portal` is a constant of the `Portal` type, its value the
  * destination's chain id. `send` (the reward, paid here) and `receive` (what the solver delivers
  * there) make records, each taking any number of items as arguments of its own (`rest`) — a token
- * amount or a list of them, and for the reward the native coin — so the chain is one record of
- * everything in it, which the compiler shows `nested` and `bind` call by call. `receive`'s items
- * are evaluated here but named on the destination (`scope: "nested"`, its scope picked from the
- * record's chain). `receive` is required, `.receive()` naming nothing. `then` takes a PROGRAM: its
- * closure is compiled as a program of its own in the scope `nested` returns for that chain — the
- * destination's names, its target, its own intents — and what it reads of the enclosing program
- * reaches it as entry arguments. A closure of nothing but token `transfer`/`approve` calls is
- * RECORDED instead: there is no program, only the calls, which become the route's own. The record
- * `then` makes ends the chain: its type's ending is bound at its site, so the compiler hands `bind`
- * what it knows there — the chain, the reward, the delivery, the program or the recorded calls —
- * and calls `@sauce/intents` with what `bind` returns. A chain that stops before `receive` or
- * `then` is refused in this file's words.
+ * amount or a list of them, and for the reward the native coin. After each, its stage's modifiers —
+ * `creator`, `deadline` and `prover` after `send`, `deadline`, `salt` and `fee` after `receive` —
+ * return the record they are called on, so the chain is one record of everything in it, which the
+ * compiler shows `nested` and `bind` call by call, each by its callee (`Sent.deadline` is not
+ * `Received.deadline`). `receive`'s items are evaluated here but named on the destination
+ * (`scope: "nested"`, its scope picked from the record's chain). `receive` is required, `.receive()`
+ * naming nothing. `then` takes a PROGRAM: its closure is compiled as a program of its own in the
+ * scope `nested` returns for that chain — the destination's names, its target, its own intents —
+ * and what it reads of the enclosing program reaches it as entry arguments. A closure of nothing
+ * but token `transfer`/`approve` calls is RECORDED instead: there is no program, only the calls,
+ * which become the route's own. `.catch((e) => { … })` after it HANDLES the body: the compiler
+ * builds the two as one program, `try { <body> } catch (e) { <handler> }`. The chain's last record
+ * is bound at its site, so the compiler hands `bind` what it knows there — the chain, the reward,
+ * the delivery, the modifiers, the program or the recorded calls — and calls `@sauce/intents`
+ * with what `bind` returns. A chain that stops before `receive` or `then` is refused in the
+ * table's words.
  *
- * WHAT `bind` DOES. It builds the intent exactly as before: the route's calls (each recorded write,
- * or the delivered tokens' transfers into the Pot then its `cook`), the reward, the deadlines, the
+ * WHAT `bind` DOES. It builds the intent: the route's calls (each recorded write, or the delivered
+ * tokens' transfers into the Pot then its `cook`), the reward, the deadlines, the creator, the
  * prover, the Portals on both sides. A value known only while the enclosing program runs is a
  * sentinel in the encoding, and each place it lands is a SPLICE, so the program writes the value
  * there when it runs. No source is generated and nothing is parsed.
  *
- * WHICH CHAIN A NAME MEANS. The body and the delivery are the destination's, the reward the
- * enclosing chain's, where it is escrowed. That is the compiler's scoping now: the body compiles in
- * the destination's scope, the delivery is a `nested` value, and the reward an ordinary one.
+ * WHAT IS LEFT OUT, as Eco's Portal app fills it: the route's deadline five minutes past when the
+ * intent opens, the reward's seven days past the route's (`intent-defaults.ts`), the registry's
+ * prover, a random salt. An intent opens when the compile says (`openedAt`), which makes those
+ * deadlines known when it is built; else when the program opening it runs, and `@sauce/intents`
+ * writes them from the block's time (a STAMP). The creator has no default but one: the wallet that
+ * publishes a top-level intent itself (`publisher`). Every intent a program opens names its own,
+ * since the Pot it runs on may be shared and a refund there could go to anyone.
+ *
+ * WHICH CHAIN A NAME MEANS. The body and the delivery are the destination's, the reward and the
+ * modifiers the enclosing chain's, where it is escrowed. That is the compiler's scoping now: the
+ * body compiles in the destination's scope, the delivery is a `nested` value, and the rest
+ * ordinary ones.
  */
 import type {
   BoundArgument,
   CallSite,
   Declaration,
   HostType,
+  Param,
   ProgramOptions,
   ProgramReport,
   ProgramSite,
@@ -71,24 +90,46 @@ import {
   type IntentFundVia,
 } from "./portal.js";
 import { buildSauceEvmCall } from "./sauce-calls.js";
+import { DEFAULT_FILL_WINDOW, DEFAULT_REFUND_WINDOW, randomSalt } from "./intent-defaults.js";
+import {
+  INTENT_STAGES,
+  REWARD_MODIFIERS,
+  ROUTE_MODIFIERS,
+  type IntentMethod,
+  type IntentParam,
+  type IntentStage,
+} from "./intent-syntax.js";
 import type { AddressInput, Intent } from "./types.js";
 
-/** What a caller must supply because the SDK cannot correctly guess it, plus what it may override. */
+/** What every intent a program opens takes when it does not name its own, and what the SDK cannot
+ *  look up. Each modifier an intent is written with wins over its field here. */
 export interface IntentSugarDefaults {
-  /** Absolute Unix seconds. Required: a deadline is a policy decision, and a wrong one either
-   *  strands the reward or makes the intent unfulfillable. */
-  readonly deadline: bigint;
-  /** Defaults to `route.deadline`. */
+  /** The route's deadline, absolute Unix seconds, for every intent the program opens at any depth.
+   *  Left out: {@link DEFAULT_FILL_WINDOW} past when the intent opens. */
+  readonly deadline?: bigint;
+  /** The reward's deadline. Left out: the route's deadline plus {@link DEFAULT_REFUND_WINDOW}. */
   readonly rewardDeadline?: bigint;
-  /** Who may reclaim the reward after `rewardDeadline`. No default: see `requireCreator`. */
-  readonly creator?: AddressInput;
+  /** When the program's own intents open, Unix seconds: the default deadlines count from it, so
+   *  they are fixed when the file compiles, as a wallet that publishes them needs. A level below
+   *  opens when its parent's body runs, at the block's time; so does every level when this is left
+   *  out. */
+  readonly openedAt?: bigint;
+  /**
+   * The wallet that publishes the program's top-level intents itself, as `sauce intent publish`
+   * does: the creator of each one that names none, as Eco's Portal app makes the publishing wallet
+   * the creator. It is never the creator of an intent a body opens, and a level below drops it:
+   * every intent a program opens names its own `.creator(...)`, since the Pot it runs on may be
+   * shared and a refund there could go to anyone.
+   */
+  readonly publisher?: AddressInput;
   /** Defaults to the prover the deployment registry records for this source/destination pair. */
   readonly prover?: AddressInput;
   /** Overrides the source-chain Portal the program publishes through. */
   readonly sourcePortal?: AddressInput;
   /** Overrides the destination-chain Portal recorded in the child's route. */
   readonly destinationPortal?: AddressInput;
-  /** Route salt, defaulting to 32 zero bytes. */
+  /** Route salt, for every intent that names none with `.salt(...)`. Left out: 32 random bytes per
+   *  intent, picked as it is built (`intent-defaults.ts#randomSalt`). */
   readonly salt?: Hex;
   /** How the program funds the reward: `"transfer"` (default) pays the vault then `publish`es;
    *  `"publishAndFund"` approves the Portal and calls `publishAndFund`. */
@@ -99,8 +140,10 @@ export interface IntentSugarDefaults {
   readonly pot?: AddressInput;
   /** The interpreter that Pot cooks on. Defaults to the released engine address. */
   readonly engine?: AddressInput;
-  /** The destination Kitchen's current execution fee, in wei. Required for a cook-based child. */
-  readonly executionFee?: bigint;
+  /** The destination Kitchen's current execution fee, in wei, paid on every cook: one for every
+   *  destination, or each destination's own. Required for a cook-based child, unless it is given
+   *  `.fee(...)`: it is read from the chain and it changes. */
+  readonly executionFee?: bigint | ((destination: CanonicalChain) => bigint | undefined);
 }
 
 export interface LoweredIntent {
@@ -135,14 +178,20 @@ const fail = (message: string): never => {
 
 const INTENTS = "@sauce/intents";
 
-/** The refusal of a chain that stops before saying what runs on the destination. */
-const NEEDS_A_BODY =
-  "an intent needs what runs on its destination: end it with `.then(() => { … })`";
+/** Where a chain of calls stops short, in the table's words. */
+const unfinished = (stage: "Sent" | "Received", written: string): string =>
+  `\`<Chain>.Portal.${written}\` ${INTENT_STAGES[stage].unfinished.replace("{destination}", "its destination")}`;
 
 /** The refusal of a chain that skips what the solver delivers. */
-const NEEDS_A_DELIVERY =
-  "an intent names what the solver delivers before its body: `.receive(…)`, or `.receive()` " +
-  "for nothing, then `.then(() => { … })`";
+const NEEDS_A_DELIVERY = unfinished("Sent", "send(...)");
+
+/** Why an intent with no `.creator(...)` is refused: no default is safe for one a program opens. */
+const UNNAMED_CREATOR =
+  "an intent opened by a program needs `.creator(<address>)` after `.send(...)`: the address an " +
+  "unfilled intent's reward is refunded to. The Pot a program runs on may be shared, so a refund " +
+  "there is one anyone can take: name the owner, or an address the program is given " +
+  "(`.creator(refundTo)`). Only a top-level intent a wallet publishes itself (`sauce intent " +
+  "publish`, or `intents.publisher` in the compile options) takes that wallet as its creator.";
 
 /**
  * One sentinel per run-time value of a site. TWENTY bytes, so the same sentinel is a legal
@@ -152,12 +201,26 @@ const CAPTURE_TAG = "5acecab7";
 const sentinelOf = (id: number): bigint =>
   BigInt(`0x${CAPTURE_TAG}${"00".repeat(14)}${id.toString(16).padStart(4, "0")}`);
 
+/**
+ * The sentinel a deadline occupies, which is a `uint64`: eight bytes, the tag, zeros, an index —
+ * a run-time value's (`runtime`) or a stamp's. In the payload either is one left-padded word, which
+ * is what the splice or the stamp writes.
+ */
+const DEADLINE_TAG = "5aced1";
+const deadlineSentinelOf = (id: number): bigint =>
+  BigInt(`0x${DEADLINE_TAG}${"00".repeat(3)}${id.toString(16).padStart(4, "0")}`);
+
 const addressHex = (value: bigint): Hex => `0x${value.toString(16).padStart(40, "0")}`;
 const wordOf = (value: bigint): Uint8Array =>
   hexToBytes(`0x${value.toString(16).padStart(64, "0")}`);
 
 /** A value of a site: known now, or one of its run-time values. */
 type Value = { readonly literal: bigint } | { readonly runtime: number; readonly name?: string };
+
+/** A deadline: a value, or a STAMP `@sauce/intents` writes as the program runs — the block's time,
+ *  or the route's deadline, plus `seconds`. */
+type Deadline =
+  Value | { readonly stamp: number; readonly from: "now" | "route"; readonly seconds: bigint };
 
 /** The declarations, types and callbacks that open intents from a program on `level.source`. */
 export function intentHost(level: IntentLevel): {
@@ -172,34 +235,7 @@ export function intentHost(level: IntentLevel): {
     module: INTENTS,
     export: fundVia === "transfer" ? "publish" : "publishAndFund",
   };
-  const then: Signature = { params: [{ kind: "program", record: true }], returns: "Opened" };
-  // `send` and `receive` take any number of items, each an argument of its own.
-  const types: Record<string, HostType> = {
-    Portal: {
-      of: "Uint256",
-      methods: { send: { params: [{ kind: "value" }], rest: true, returns: "Sending" } },
-    },
-    Sending: {
-      methods: {
-        receive: {
-          params: [{ kind: "value", scope: "nested" }],
-          rest: true,
-          returns: "Receiving",
-        },
-        // Declared only to be refused in this file's words, where its program would compile.
-        then,
-      },
-      ending: { refused: NEEDS_A_DELIVERY },
-    },
-    Receiving: { methods: { then }, ending: { refused: NEEDS_A_BODY } },
-    // `.catch(() => { … })` handles the body: the compiler builds it as one program,
-    // `try { <body> } catch { <handler> }`, which runs on the destination.
-    Opened: {
-      methods: { catch: { params: [{ kind: "handler" }], returns: "Caught" } },
-      ending: { calls: publish, site: true },
-    },
-    Caught: { ending: { calls: publish, site: true } },
-  };
+  const types = intentTypes(publish);
   const byId = new Map([...level.chains.values()].map((chain) => [BigInt(chain.id), chain]));
 
   const declare = (name: string): Declaration | undefined => {
@@ -221,7 +257,7 @@ export function intentHost(level: IntentLevel): {
   };
 
   const nested = (site: ProgramSite): ProgramOptions =>
-    site.callee === "Sending.then"
+    site.callee === "Sent.then"
       ? fail(NEEDS_A_DELIVERY)
       : level.programOn(destinationOf(site.receiver, `\`${site.callee}\``));
 
@@ -236,8 +272,63 @@ export function intentHost(level: IntentLevel): {
   return { declare, types, hostModules: [INTENTS], nested, bind };
 }
 
+/** What each kind of parameter the table names tells the compiler. */
+function hostParam(param: IntentParam): Param {
+  switch (param.kind) {
+    case "value":
+      return { kind: "value" };
+    case "nested":
+      return { kind: "value", scope: "nested" };
+    case "program":
+      // A body of nothing but token writes is recorded: its calls become the route's own.
+      return { kind: "program", record: true };
+    case "handler":
+      return { kind: "handler" };
+  }
+}
+
+/**
+ * The host types of an intent: one per stage of `INTENT_STAGES`, each method as the table writes
+ * it. An opened intent ends where its publication is called (`publish`), a chain that stops short
+ * is refused in the table's words, and `then` straight after `send` is declared only to be refused
+ * so (`nested`), where the compiler would otherwise call it a method the type does not have.
+ */
+function intentTypes(publish: { readonly module: string; readonly export: string }) {
+  const stages = INTENT_STAGES as unknown as Readonly<
+    Record<IntentStage, { readonly methods: Readonly<Record<string, IntentMethod>> }>
+  >;
+  const methodsOf = (stage: IntentStage): Record<string, Signature> =>
+    Object.fromEntries(
+      Object.entries(stages[stage].methods).map(([name, method]) => [
+        name,
+        {
+          params: method.params.map(hostParam),
+          ...(method.params.some((param) => param.rest === true) ? { rest: true } : {}),
+          returns: method.returns,
+        } satisfies Signature,
+      ]),
+    );
+  const ending = { calls: publish, site: true };
+  const types: Record<string, HostType> = {
+    Portal: { of: "Uint256", methods: methodsOf("Portal") },
+    Sent: {
+      methods: { ...methodsOf("Sent"), then: methodsOf("Received").then! },
+      ending: { refused: NEEDS_A_DELIVERY },
+    },
+    Received: {
+      methods: methodsOf("Received"),
+      ending: { refused: unfinished("Received", "send(...).receive(...)") },
+    },
+    Opened: { methods: methodsOf("Opened"), ending },
+    Caught: { ending },
+  };
+
+  return types;
+}
+
 /** The publication's arguments, for `@sauce/intents#publish` or `#publishAndFund`: the record a
- *  chain built — its `Portal`, the reward, the delivery when it names one, then the body. */
+ *  chain built — its `Portal`, the reward and its modifiers, the delivery and the route's, then the
+ *  body. */
 function bindIntent(
   level: IntentLevel,
   destination: CanonicalChain,
@@ -258,18 +349,54 @@ function bindIntent(
   const sentinelFor = (value: Value): bigint =>
     "literal" in value ? value.literal : sentinelOf(value.runtime);
 
-  // Each call of the chain, by the method that made it, wherever it was written.
+  // Each call of the chain, by its callee: `Sent.deadline` is the reward's, `Received.deadline`
+  // the route's. A modifier is given at most once.
   const { parts } = recordOf(site.receiver, "the intent");
-  const argumentsOf = (method: string) =>
-    parts.find((part) => part.callee.endsWith(`.${method}`))?.args;
-  const body = argumentsOf("then")?.[0];
-  const rewardItems = argumentsOf("send") ?? fail("`.send(...)` names the reward");
+  const argumentsOf = (callee: string) => parts.find((part) => part.callee === callee)?.args;
+  for (const [stage, after, modifiers] of [
+    ["Sent", "send", REWARD_MODIFIERS],
+    ["Received", "receive", ROUTE_MODIFIERS],
+  ] as const) {
+    for (const modifier of modifiers) {
+      const given = parts.filter((part) => part.callee === `${stage}.${modifier}`).length;
+      if (given > 1)
+        fail(`\`.${modifier}(...)\` is given twice after \`.${after}(...)\`: give it once`);
+    }
+  }
+  const modifier = (callee: string, what: string): Value | undefined => {
+    const args = argumentsOf(callee);
+    return args === undefined ? undefined : valueOf(args[0], what);
+  };
+  const body = argumentsOf("Received.then")?.[0];
+  const rewardItems = argumentsOf("Portal.send") ?? fail("`.send(...)` names the reward");
   // `.receive()` names nothing: a token-only body's delivery is then what its transfers move.
-  const deliveryItems = argumentsOf("receive") ?? [];
+  const deliveryItems = argumentsOf("Sent.receive") ?? [];
   const explicitDelivery =
     deliveryItems.length === 0
       ? undefined
       : tokenList(deliveryItems, { part: "delivery", chain: destination }, valueOf).tokens;
+
+  // The reward's creator: named, or, for a top-level intent a wallet publishes itself, that
+  // wallet. Refused before anything is built for the body when it is neither.
+  const creator = modifier("Sent.creator", "`.creator(...)`");
+  if (creator === undefined && defaults.publisher === undefined) fail(UNNAMED_CREATOR);
+  // The Kitchen fee the body's cook pays on this intent's destination: `.fee(...)`, else the
+  // compile's for that destination. A fee is in the route's encoding and in the call's value, so
+  // it is known when the intent is built.
+  const feeValue = modifier("Received.fee", "`.fee(...)`");
+  if (feeValue !== undefined && !("literal" in feeValue)) {
+    fail(
+      "`.fee(...)` is the destination Kitchen's fee, which the intent is built with: a literal or " +
+        "a compile-time value, not a value the program computes as it runs",
+    );
+  }
+  // Asked for only where a cook pays it: a body that is a program.
+  const feeFor = (): bigint | undefined =>
+    feeValue !== undefined && "literal" in feeValue
+      ? feeValue.literal
+      : typeof defaults.executionFee === "function"
+        ? defaults.executionFee(destination)
+        : defaults.executionFee;
 
   const destinationPortal = defaults.destinationPortal ?? ecoRoutesPortal(destination, defaults);
   const calls: { target: Hex; data: Hex; value: bigint }[] = [];
@@ -319,6 +446,7 @@ function bindIntent(
         body.program,
         destinationPortal,
         explicitDelivery,
+        feeFor(),
         sentinelFor,
         runtimes,
       ),
@@ -338,13 +466,47 @@ function bindIntent(
   );
   if (conflict !== undefined) fail(conflict);
 
-  const rewardDeadline = defaults.rewardDeadline ?? requireDeadline(defaults);
+  // The deadlines, as Eco's Portal app fills them when left out: the route's DEFAULT_FILL_WINDOW
+  // past when the intent opens, the reward's DEFAULT_REFUND_WINDOW past the route's. An intent
+  // opens when the compile says (`openedAt`), else as the program opening it runs: a STAMP.
+  let stamps = 0;
+  const stamp = (from: "now" | "route", seconds: bigint): Deadline => ({
+    stamp: stamps++,
+    from,
+    seconds,
+  });
+  const routeDeadline: Deadline =
+    modifier("Received.deadline", "the route's `.deadline(...)`") ??
+    (defaults.deadline !== undefined
+      ? { literal: defaults.deadline }
+      : defaults.openedAt !== undefined
+        ? { literal: defaults.openedAt + DEFAULT_FILL_WINDOW }
+        : stamp("now", DEFAULT_FILL_WINDOW));
+  const rewardDeadline: Deadline =
+    modifier("Sent.deadline", "the reward's `.deadline(...)`") ??
+    (defaults.rewardDeadline !== undefined
+      ? { literal: defaults.rewardDeadline }
+      : "literal" in routeDeadline
+        ? { literal: routeDeadline.literal + DEFAULT_REFUND_WINDOW }
+        : stamp("route", DEFAULT_REFUND_WINDOW));
+  const deadlineFor = (deadline: Deadline): bigint =>
+    "literal" in deadline
+      ? deadline.literal
+      : "runtime" in deadline
+        ? deadlineSentinelOf(deadline.runtime)
+        : deadlineSentinelOf(0x8000 + deadline.stamp);
+  const salt = modifier("Received.salt", "`.salt(...)`");
+  const prover = modifier("Sent.prover", "`.prover(...)`");
+
   const child: Intent = {
     destination: BigInt(destination.id),
     sourceChainId: BigInt(source.id),
     route: normalizeRoute({
-      salt: defaults.salt,
-      deadline: requireDeadline(defaults),
+      salt:
+        salt !== undefined
+          ? (`0x${sentinelFor(salt).toString(16).padStart(64, "0")}` as Hex)
+          : (defaults.salt ?? randomSalt()),
+      deadline: deadlineFor(routeDeadline),
       portal: destinationPortal,
       nativeAmount: calls.reduce((sum, call) => sum + call.value, 0n),
       tokens: (explicitDelivery ?? derivedDelivery).map((t) => ({
@@ -354,9 +516,13 @@ function bindIntent(
       calls,
     }),
     reward: normalizeReward({
-      deadline: rewardDeadline,
-      creator: requireCreator(defaults),
-      prover: defaults.prover ?? ecoRoutesProver(source, destination, defaults),
+      deadline: deadlineFor(rewardDeadline),
+      // Never the executing Pot: see `UNNAMED_CREATOR`.
+      creator: creator !== undefined ? addressHex(sentinelFor(creator)) : defaults.publisher!,
+      prover:
+        prover !== undefined
+          ? addressHex(sentinelFor(prover))
+          : (defaults.prover ?? ecoRoutesProver(source, destination, defaults)),
       nativeAmount:
         rewardSpec.nativeAmount === undefined ? 0n : sentinelFor(rewardSpec.nativeAmount),
       tokens: rewardSpec.tokens.map((t) => ({
@@ -372,7 +538,34 @@ function bindIntent(
       ? publishTx(child, { portal: sourcePortal })
       : publishAndFundTx(child, defaults.allowPartial ?? false, { portal: sourcePortal });
   const data = hexToBytes(tx.data);
-  const dataSplices = splicesIn(data, runtimes);
+  const deadlines = [routeDeadline, rewardDeadline].filter(
+    (deadline): deadline is Extract<Value, { runtime: number }> => "runtime" in deadline,
+  );
+  const dataSplices = splicesIn(data, runtimes, deadlines);
+
+  // Each stamp: where its deadline lands in the publication, where it counts from — the block's
+  // time, or the route deadline's place — and the seconds it adds. 96 bytes each, as
+  // `@sauce/intents` reads them.
+  const placeOf = (deadline: Deadline): number => {
+    const word = wordOf(deadlineFor(deadline));
+    for (let at = 0; at + 32 <= data.length; at++) {
+      if (word.every((byte, k) => data[at + k] === byte)) return at;
+    }
+    return fail("a deadline landed nowhere in the intent's encoding — a bug in the lowering");
+  };
+  const stamped = [routeDeadline, rewardDeadline].filter(
+    (deadline): deadline is Extract<Deadline, { stamp: number }> => "stamp" in deadline,
+  );
+  const stampBytes = new Uint8Array(96 * stamped.length);
+  stamped.forEach((deadline, i) => {
+    stampBytes.set(wordOf(BigInt(placeOf(deadline))), 96 * i);
+    // Zero is the block's time: no deadline sits at the selector.
+    stampBytes.set(
+      wordOf(deadline.from === "now" ? 0n : BigInt(placeOf(routeDeadline))),
+      96 * i + 32,
+    );
+    stampBytes.set(wordOf(deadline.seconds), 96 * i + 64);
+  });
 
   // The reward's entries as `@sauce/intents` reads them: token word, amount word.
   const rewards = new Uint8Array(64 * rewardSpec.tokens.length);
@@ -389,13 +582,37 @@ function bindIntent(
     native !== undefined && "runtime" in native ? [{ offset: 0, runtime: native.runtime }] : [];
 
   const captures = [...new Set([...runtimes].map(([id, name]) => name ?? `#${id}`))];
+  const deadlineNames = new Map(
+    [routeDeadline, rewardDeadline].flatMap((deadline) =>
+      "stamp" in deadline
+        ? [
+            [
+              deadlineSentinelOf(0x8000 + deadline.stamp),
+              deadline.from === "now"
+                ? `ctx.timestamp() + ${DEFAULT_FILL_WINDOW}`
+                : `the route's deadline + ${DEFAULT_REFUND_WINDOW}`,
+            ] as const,
+          ]
+        : "runtime" in deadline
+          ? [
+              [
+                deadlineSentinelOf(deadline.runtime),
+                deadline.name ?? `#${deadline.runtime}`,
+              ] as const,
+            ]
+          : [],
+    ),
+  );
   level.lowered.push({
     intent: child,
     captures,
-    sentinels: [...runtimes].map(([id, name]) => ({
-      sentinel: sentinelOf(id),
-      capture: name ?? `#${id}`,
-    })),
+    sentinels: [
+      ...[...runtimes].map(([id, name]) => ({
+        sentinel: sentinelOf(id),
+        capture: name ?? `#${id}`,
+      })),
+      ...[...deadlineNames].map(([sentinel, capture]) => ({ sentinel, capture })),
+    ],
     destination,
     fundVia,
   });
@@ -405,6 +622,7 @@ function bindIntent(
   const funded = [
     { bytes: rewards, splices: rewardSplices },
     { bytes: nativeWord, splices: nativeSplices },
+    { bytes: stampBytes },
   ];
   if (fundVia === "publishAndFund") return [portal, published, ...funded];
 
@@ -431,6 +649,7 @@ function programCalls(
   program: ProgramReport,
   destinationPortal: AddressInput,
   delivery: readonly { readonly token: bigint; readonly amount: Value }[] | undefined,
+  executionFee: bigint | undefined,
   sentinelFor: (value: Value) => bigint,
   runtimes: Map<number, string | undefined>,
 ): { target: Hex; data: Hex; value: bigint }[] {
@@ -442,10 +661,11 @@ function programCalls(
   }
   const { pot, engine } = resolveIntentPot(destinationPortal, level.defaults);
   const fee =
-    level.defaults.executionFee ??
+    executionFee ??
     fail(
-      "the intent runs a program, so its cook must pay that chain's Kitchen fee — set " +
-        "`intents.executionFee` (`destinationExecutionFee()` reads it)",
+      "the intent runs a program, so its cook must pay that chain's Kitchen fee — give it " +
+        "`.fee(...)` after `.receive(...)`, or set `intents.executionFee` " +
+        "(`destinationExecutionFee()` reads it)",
     );
   const args = program.captures.map((capture) => {
     runtimes.set(capture.runtime!, capture.name);
@@ -474,21 +694,31 @@ function programCalls(
 function splicesIn(
   data: Uint8Array,
   runtimes: ReadonlyMap<number, string | undefined>,
+  deadlines: readonly { readonly runtime: number }[],
 ): { offset: number; runtime: number }[] {
   const splices: { offset: number; runtime: number }[] = [];
-  for (const id of runtimes.keys()) {
-    const word = wordOf(sentinelOf(id));
-    let found = 0;
+  // A deadline's run-time value lands at its own eight-byte sentinel, any other at its twenty; a
+  // value may be both. Each has to land somewhere.
+  const sentinels = [
+    ...[...runtimes.keys()].map((id) => ({ id, sentinel: sentinelOf(id) })),
+    ...deadlines.map((deadline) => ({
+      id: deadline.runtime,
+      sentinel: deadlineSentinelOf(deadline.runtime),
+    })),
+  ];
+  const landed = new Set<number>();
+  for (const { id, sentinel } of sentinels) {
+    const word = wordOf(sentinel);
     for (let at = 0; at + 32 <= data.length; at++) {
       if (word.every((byte, k) => data[at + k] === byte)) {
         splices.push({ offset: at, runtime: id });
-        found++;
+        landed.add(id);
         at += 31;
       }
     }
-    if (found === 0) {
-      fail(`a run-time value of the intent landed nowhere in its encoding — a bug in the lowering`);
-    }
+  }
+  if ([...runtimes.keys()].some((id) => !landed.has(id))) {
+    fail(`a run-time value of the intent landed nowhere in its encoding — a bug in the lowering`);
   }
   if (bytesToHex(data).includes(CAPTURE_TAG) && splices.length === 0) {
     fail("a capture sentinel survived into the encoded intent — a bug in the lowering");
@@ -593,31 +823,6 @@ function requireFundVia(defaults: Partial<IntentSugarDefaults>): IntentFundVia {
   }
 
   return fundVia;
-}
-
-function requireDeadline(defaults: Partial<IntentSugarDefaults>): bigint {
-  if (defaults.deadline === undefined) {
-    return fail(
-      "the intent needs a `deadline` — the absolute Unix second by which it must be fulfilled. Set " +
-        "`IntentOptions.deadline`, or `intents.deadline` in the compile options.",
-    );
-  }
-  return defaults.deadline;
-}
-
-/**
- * The reward's creator — who may reclaim it once `rewardDeadline` passes. There is no correct
- * default: the executing Pot is driven by every solver, so a refund there is one anyone can take.
- */
-function requireCreator(defaults: Partial<IntentSugarDefaults>): AddressInput {
-  if (defaults.creator === undefined) {
-    return fail(
-      "the reward needs a `creator` — the address that can reclaim it after the deadline. It has no " +
-        "safe default: the executing Pot is driven by every solver, so a refund there is a refund " +
-        "anyone can take. Set `IntentOptions.creator`, or `intents.creator` in the compile options.",
-    );
-  }
-  return defaults.creator;
 }
 
 export { SugarError };

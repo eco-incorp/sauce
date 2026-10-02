@@ -7,11 +7,11 @@
  * `--reward-deadline`, `--out`); at a terminal what no flag gave is asked, and with no terminal a
  * missing one is an error naming every flag still needed (`prompt.ts#missingFlags`).
  *
- * The file is an ordinary intent file —
- * `Dest.Portal.send({ token, amount }).receive().then(() => { TOKEN.transfer(RECIPIENT, AMOUNT) })`,
- * a body of plain token transfers, which the Portal's Executor runs with no Pot — and `run.ts` then
- * publishes it exactly as `sauce intent publish <file>` would: rehearsed on the source
- * (`--dry-run`) and on the destination (`fill`), confirmed, sent, stored.
+ * The file is an ordinary intent file — `Dest.Portal.send({ token, amount }).receive({ token,
+ * amount }).then(() => { TOKEN.transfer(RECIPIENT, AMOUNT) })`, a body of plain token transfers,
+ * which the Portal's Executor runs with no Pot — and `run.ts` then publishes it exactly as `sauce intent publish
+ * <file>` would: rehearsed on the source (`--dry-run`) and on the destination (`fill`), confirmed,
+ * sent, stored.
  */
 import {
   formatUnits,
@@ -354,12 +354,17 @@ function intentText(options: {
   readonly header: readonly string[];
 }): string {
   const accessor = options.destination.name.replace(/[^A-Za-z0-9]/g, "");
+  /** A token as a value: its symbol, or its address as a literal. */
+  const value = (token: Token): string =>
+    token.spelled === token.symbol ? token.symbol : token.address.toLowerCase();
 
   return [
     ...options.header.map((line) => `// ${line}`),
-    `${accessor}.Portal.send({ token: ${options.rewardToken.spelled === options.rewardToken.symbol ? options.rewardToken.symbol : options.rewardToken.address.toLowerCase()}, amount: ${options.reward} }).receive().then(() => {`,
-    `  ${options.delivered.spelled}.transfer(${options.recipient.toLowerCase()}, ${options.amount});`,
-    `});`,
+    `${accessor}.Portal.send({ token: ${value(options.rewardToken)}, amount: ${options.reward} })`,
+    `  .receive({ token: ${value(options.delivered)}, amount: ${options.amount} })`,
+    "  .then(() => {",
+    `    ${options.delivered.spelled}.transfer(${options.recipient.toLowerCase()}, ${options.amount});`,
+    "  });",
     "",
   ].join("\n");
 }
@@ -558,7 +563,8 @@ export async function createIntent(input: CreateInput): Promise<Created> {
         "Reward deadline: from when an unproven reward is refundable to you. Leave the solver time\n" +
           "to prove after the fill deadline, and its proof to arrive: a unix second or\n" +
           "+<n>[s|m|h|d] from now",
-        { fallback: "+25h", check: (text) => checkWhen(text, input.now) },
+        // Seven days past an hour's fill deadline: the least Eco's solver takes.
+        { fallback: "+169h", check: (text) => checkWhen(text, input.now) },
       ),
   );
   const rewardDeadline =

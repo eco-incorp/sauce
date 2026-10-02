@@ -145,19 +145,41 @@ export type {
 } from "./token-registry.js";
 export { STOCK_ISSUERS, stockSymbol } from "./stock-tokens.js";
 export type { StockIssuer } from "./stock-tokens.js";
-export { openRoute } from "./intent-dsl.js";
+export { chainPortal, openRoute } from "./intent-dsl.js";
 export { destinationPot } from "./intent-pot.js";
 export type {
   BuiltIntent,
+  ChainPortal,
   IntentEvmExecution,
   IntentOptions,
   NestChildOrThunk,
   NestOptions,
   PendingSauceRoute,
+  PortalAddress,
+  PortalChain,
+  PortalDelivery,
+  PortalOpened,
+  PortalReceived,
+  PortalReceiveSteps,
+  PortalReward,
+  PortalRewardItem,
+  PortalSendSteps,
+  PortalSent,
+  PortalTokenAmount,
   RewardArg,
   SauceBody,
   SauceRewardSpec,
 } from "./intent-dsl.js";
+export { DEFAULT_FILL_WINDOW, DEFAULT_REFUND_WINDOW, randomSalt } from "./intent-defaults.js";
+export {
+  INTENT_STAGES,
+  REWARD_MODIFIERS,
+  ROUTE_MODIFIERS,
+  type IntentMethod,
+  type IntentParam,
+  type IntentStage,
+  type IntentStageSpec,
+} from "./intent-syntax.js";
 
 export {
   approvalTxs,

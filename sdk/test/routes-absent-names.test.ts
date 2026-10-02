@@ -182,12 +182,11 @@ describe("what a chain can lack", () => {
   it("an intent's body decides it for its own chain", () => {
     const intents = {
       deadline: 4_000_000_000n,
-      creator: "0x3333333333333333333333333333333333333333",
       executionFee: 0n,
     } as const;
     const program = (guarded: string) => `function main() {
   const amount = USDC.balanceOf(self);
-  Optimism.Portal.send([{ token: USDC, amount }]).receive().then(() => {
+  Optimism.Portal.send([{ token: USDC, amount }]).creator(0x3333333333333333333333333333333333333333).receive().then(() => {
     ${guarded}
   });
 }`;

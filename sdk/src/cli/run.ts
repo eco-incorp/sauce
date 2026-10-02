@@ -16,6 +16,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
+import { randomSalt } from "../routes/intent-defaults.js";
 import type { LoweredIntent } from "../routes/intent-host.js";
 import {
   addressDefines,
@@ -30,6 +31,7 @@ import {
   parseLamports,
   parseSalt,
   parseTarget,
+  parseIntentSalt,
   parseUnixSeconds,
   parseVia,
   parseWei,
@@ -46,8 +48,11 @@ import { chainServedBy, connect, connectAt, endpointFor, type Sent } from "./cha
 import {
   compileCommand,
   pastDeadline,
+  asPublished,
   compileProgram,
   potCommand,
+  PROBE_CREATOR,
+  probeProgram,
   programChains,
   potDeployCommand,
   potStatusCommand,
@@ -101,7 +106,7 @@ import {
 import { inspectCommand, inspectFile } from "./inspect.js";
 import {
   checkIntentPots,
-  destinationFee,
+  destinationFees,
   intentCooks,
   missingPotNote,
   uncheckedPotNote,
@@ -389,7 +394,7 @@ const PROGRAM: FlagSpecs = {
   "intent-creator": {
     type: "string",
     value: "<address>",
-    help: "…their creator, who may reclaim an unearned reward",
+    help: "…the creator of those a wallet publishes itself, in its place; a program names its own",
   },
   "intent-reward-deadline": {
     type: "string",
@@ -400,6 +405,11 @@ const PROGRAM: FlagSpecs = {
     type: "string",
     value: "<address>",
     help: "…their prover (default: the registry's for the pair)",
+  },
+  "intent-salt": {
+    type: "string",
+    value: "<bytes32>",
+    help: "…their route salt (default: random, picked once per command)",
   },
   "intent-execution-fee": {
     type: "string",
@@ -603,30 +613,58 @@ function endpointsOf(args: ParsedArgs, io: CliIo, source: CanonicalChain): Endpo
 }
 
 /**
- * `--intent-execution-fee auto`: the fee the program's intents' destination Kitchens charge, read
- * from each through `endpoints`. The program is compiled once with a fee of zero to find which
- * intents run a program there; one with none pays no fee.
+ * `--intent-execution-fee auto`, and the default: the fee each destination's Kitchen charges, read
+ * from it through `endpoints`, for the cook of every intent body that is a program, at any depth.
+ * The program is compiled once with a fee of zero to find which destinations' cooks are paid; with
+ * none, nothing is read. `told` says so on stderr, which the default stays quiet about.
  */
 async function autoExecutionFee(
   input: ProgramInput,
   io: CliIo,
   endpoints: Endpoints,
   gate: Gate | undefined,
-): Promise<bigint | undefined> {
-  const probe = compileProgram({ ...input, intents: { ...input.intents, executionFee: 0n } }, io);
-  // Before the fee is read: a command refused on these chains reads nothing for them.
-  if (gate !== undefined) gated(gate, input.chain, probe.intents);
-  const cooks = intentCooks(probe.intents);
-  if (cooks.length === 0) {
-    io.stderr("--intent-execution-fee auto: no intent here runs a program, so none pays a fee\n");
+  told: boolean,
+): Promise<((destination: CanonicalChain) => bigint | undefined) | undefined> {
+  // By default, only where an intent could be opened: an EVM program naming a Portal or a reward.
+  // One that does not compile is left to the compile that follows, whose refusal is the one to see.
+  if (!told && (input.chain.kind !== "evm" || !/\.Portal\b|\.reward\s*\(/.test(input.text))) {
+    return undefined;
+  }
+  const paid = new Map<number, CanonicalChain>();
+  let probe: ReturnType<typeof compileProgram>;
+  try {
+    probe = compileProgram(
+      {
+        ...input,
+        intents: {
+          ...input.intents,
+          publisher: input.intents.publisher ?? input.intents.creator ?? PROBE_CREATOR,
+          executionFee: (destination) => (paid.set(destination.id, destination), 0n),
+        },
+      },
+      io,
+    );
+  } catch (error) {
+    if (told) throw error;
 
     return undefined;
   }
-  const fee = await destinationFee(cooks, endpoints);
-  const chains = [...new Set(cooks.map((cook) => cook.destination.slug))].join(" and ");
-  io.stderr(`--intent-execution-fee auto: the Kitchen on ${chains} charges ${fee} wei\n`);
+  // Before the fee is read: a command refused on these chains reads nothing for them.
+  if (gate !== undefined) gated(gate, input.chain, probe.intents);
+  if (paid.size === 0) {
+    if (told) {
+      io.stderr("--intent-execution-fee auto: no intent here runs a program, so none pays a fee\n");
+    }
 
-  return fee;
+    return undefined;
+  }
+  const fees = await destinationFees([...paid.values()], endpoints);
+  io.stderr(
+    `${told ? "--intent-execution-fee auto" : "the intents' execution fees"}: the Kitchen on ` +
+      `${[...fees].map(([id, fee]) => `${paid.get(id)!.slug} charges ${fee} wei`).join(", on ")}\n`,
+  );
+
+  return (destination) => fees.get(destination.id);
 }
 
 /**
@@ -695,6 +733,7 @@ async function programInput(
   const rewardDeadline = stringFlag(args, "intent-reward-deadline");
   const creator = stringFlag(args, "intent-creator");
   const prover = stringFlag(args, "intent-prover");
+  const salt = stringFlag(args, "intent-salt");
   const fee = stringFlag(args, "intent-execution-fee");
   const fundVia = stringFlag(args, "intent-fund-via");
   const defines = {
@@ -719,14 +758,18 @@ async function programInput(
     compactArgs: args.values["compact-args"] === true,
     defines,
     intents: {
+      // With no deadline, the intents open now: once, so every compile the command makes of the
+      // file builds the same ones.
       ...(deadline === undefined
-        ? {}
+        ? { openedAt: BigInt(Math.floor(Date.now() / 1000)) }
         : { deadline: parseUnixSeconds("intent-deadline", deadline) }),
       ...(rewardDeadline === undefined
         ? {}
         : { rewardDeadline: parseUnixSeconds("intent-reward-deadline", rewardDeadline) }),
       ...(creator === undefined ? {} : { creator: parseAddress("intent-creator", creator) }),
       ...(prover === undefined ? {} : { prover: parseAddress("intent-prover", prover) }),
+      // Random unless given, and picked once, for the same reason as the time the intents open.
+      salt: salt === undefined ? randomSalt() : parseIntentSalt(salt),
       ...(fee === undefined || fee === "auto"
         ? {}
         : { executionFee: parseWei("intent-execution-fee", fee) }),
@@ -735,8 +778,14 @@ async function programInput(
   };
   bind?.before?.(given);
   const input = bind === undefined ? given : bindMainArguments(given, bind.args);
-  if (fee !== "auto") return input;
-  const executionFee = await autoExecutionFee(input, io, endpointsOf(args, io, chain), gate);
+  if (fee !== undefined && fee !== "auto") return input;
+  const executionFee = await autoExecutionFee(
+    input,
+    io,
+    endpointsOf(args, io, chain),
+    gate,
+    fee === "auto",
+  );
 
   return executionFee === undefined
     ? input
@@ -1693,7 +1742,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         throw new UsageError(`--format: '${format}' is not json or cast`);
       }
       // Compiled once: refused before the signer or any endpoint, then the Pots checked.
-      const compiled = compileProgram(program, io);
+      const compiled = probeProgram(program, io);
       if (gate !== undefined) gated(gate, program.chain, compiled.intents);
       const account = hasSigner(args, io) ? await signerOf(args, io) : undefined;
       const from = stringFlag(args, "from");
@@ -3288,7 +3337,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           given.args === undefined ? undefined : given,
         );
 
-        return inspectFile(input.file, compileProgram(input, io));
+        return inspectFile(input.file, compileProgram(asPublished(input), io));
       }
       if (argsInput(args, io, trailing).args !== undefined) {
         throw new UsageError(

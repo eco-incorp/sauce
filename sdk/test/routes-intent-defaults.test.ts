@@ -96,7 +96,9 @@ describe("the reward's prover defaults to the registry's for the pair", () => {
     const parent = openRoute(
       "base",
       `function main() {
-  Arbitrum(() => { USDC.transfer(RECIPIENT, 1n); }).reward({ tokens: [{ token: USDC, amount: 1n }] });
+  Arbitrum.Portal.send({ token: USDC, amount: 1 }).creator(RECIPIENT).receive().then(() => {
+    USDC.transfer(RECIPIENT, 1);
+  });
 }`,
       minimal({ creator: CREATOR, defines: { RECIPIENT: BigInt(CREATOR) }, ecoRoutes: STAGING }),
     ).reward(reward);

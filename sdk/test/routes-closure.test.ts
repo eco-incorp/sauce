@@ -168,6 +168,7 @@ function main() {
       }
       const amount = USDC.balanceOf(0x1234n);
       Arbitrum.Portal.send([{ token: USDC, amount }])
+        .creator(0x3333333333333333333333333333333333333333)
         .receive()
         .then(() => {
           USDC.transfer(RECIPIENT, half(amount));
@@ -177,7 +178,6 @@ function main() {
       defines: { RECIPIENT: 0x99n },
       intents: {
         deadline: 4_000_000_000n,
-        creator: "0x3333333333333333333333333333333333333333",
         executionFee: 0n,
       },
     });

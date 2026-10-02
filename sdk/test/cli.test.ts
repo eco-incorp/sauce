@@ -512,7 +512,7 @@ describe("sauce compile", () => {
     const recipient = "0x6666666666666666666666666666666666666666";
     const mine = "0x7777777777777777777777777777777777777777";
     const text = [
-      "Arbitrum.Portal.send([{ token: USDC, amount: 1n }]).receive().then(() => {",
+      "Arbitrum.Portal.send([{ token: USDC, amount: 1n }]).creator(0x3333333333333333333333333333333333333333).receive().then(() => {",
       "  USDC.transfer(RECIPIENT, 1n);",
       "  require(chainId == 42161n && WETH != 0n);",
       "});",
@@ -591,7 +591,7 @@ describe("sauce compile", () => {
         "  require(UniswapV3_Factory != 0n && PANCAKE != 0n && amount > 0n);",
         "  const pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);",
         "  require(pool != 0n);",
-        "  Arbitrum.Portal.send([{ token: USDC, amount: amount }]).receive().then(() => {",
+        "  Arbitrum.Portal.send([{ token: USDC, amount: amount }]).creator(0x3333333333333333333333333333333333333333).receive().then(() => {",
         "    const there = UniswapV3.Factory.getPool(USDC, 2n, 3n);",
         "    require(there != 0n);",
         "  });",
@@ -902,7 +902,7 @@ describe("sauce compile", () => {
     // A token-only body is calls the Portal's Executor makes itself: no cook, no Kitchen fee.
     const program = file(
       "bridge.sauce.ts",
-      "Base.Portal.send([{ token: USDC, amount: 7n }]).receive().then(() => {\n  USDC.transfer(RECIPIENT, 5n);\n});\n",
+      "Base.Portal.send([{ token: USDC, amount: 7n }]).creator(RECIPIENT).receive().then(() => {\n  USDC.transfer(RECIPIENT, 5n);\n});\n",
     );
     const run = await sauce(
       ...["compile", program, "--chain", "arbitrum", "--define", `RECIPIENT=${RECIPIENT}`],
@@ -914,47 +914,36 @@ describe("sauce compile", () => {
     expect(JSON.parse(run.stdout).intentPots).toBeUndefined();
   });
 
-  it("builds an intent the program opens, naming each setting it lacks", async () => {
-    const body = [
-      "const amount = USDC.balanceOf(ctx.self());",
-      "Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {",
-      "  USDC.transfer(RECIPIENT, amount);",
-      "});",
-      "",
-    ].join("\n");
-    const program = file("intent.sauce.ts", body);
+  it("builds an intent the program opens, naming the creator it lacks", async () => {
+    const body = (creator: string) =>
+      [
+        "const amount = USDC.balanceOf(ctx.self());",
+        `Arbitrum.Portal.send([{ token: USDC, amount }])${creator}.receive().then(() => {`,
+        "  USDC.transfer(RECIPIENT, amount);",
+        "});",
+        "",
+      ].join("\n");
     const recipient = ["--define", `RECIPIENT=${RECIPIENT}`];
-    const noDeadline = await sauce("compile", program, "--chain", "base", ...recipient);
-    expect(noDeadline.code).toBe(1);
-    expect(noDeadline.stderr).toMatch(
-      /needs a `deadline`[^]*hint: pass --intent-deadline <unix seconds>/,
+    // A Pot runs it, and no wallet publishes it: it names its creator.
+    const unnamed = await sauce(
+      ...["compile", file("unnamed.sauce.ts", body("")), "--chain", "base", ...recipient],
     );
-    const noCreator = await sauce(
-      "compile",
-      program,
-      "--chain",
-      "base",
-      ...recipient,
-      "--intent-deadline",
-      "2000000000",
+    expect(unnamed.code).toBe(1);
+    expect(unnamed.stderr).toMatch(
+      /needs `\.creator\(<address>\)`[^]*hint: write `\.creator\(<address>\)` in the file/,
     );
-    expect(noCreator.stderr).toMatch(/hint: pass --intent-creator <address>/);
+    const named = body(`.creator(${CREATOR})`);
+    const salt = `0x${"00".repeat(32)}` as const;
     const built = await sauce(
-      "compile",
-      program,
-      "--chain",
-      "base",
-      ...recipient,
-      "--intent-deadline",
-      "2000000000",
-      "--intent-creator",
-      CREATOR,
+      ...["compile", file("intent.sauce.ts", named), "--chain", "base", ...recipient],
+      ...["--intent-deadline", "2000000000", "--intent-salt", salt],
     );
     expect(built.code).toBe(0);
-    const viaOpenRoute = openRoute("base", body, {
+    const viaOpenRoute = openRoute("base", named, {
       deadline: 2_000_000_000n,
       creator: CREATOR,
       defines: { RECIPIENT: BigInt(RECIPIENT) },
+      compile: { intents: { salt } },
     }).reward({ source: "ethereum", creator: CREATOR, prover: PROVER, nativeAmount: 0n });
     expect(built.stdout).toBe(`${bytesToHex(viaOpenRoute.compiled.bytecode[0]!)}\n`);
   });
@@ -1399,6 +1388,9 @@ describe("sauce intent publish, offline", () => {
     "2000000000",
     "--intent-creator",
     CREATOR,
+    // One salt for every run: the command picks a random one otherwise.
+    "--intent-salt",
+    `0x${"00".repeat(32)}`,
   ];
 
   it("prints each fixed intent's hash and unsigned Portal transactions", async () => {
@@ -1417,7 +1409,7 @@ describe("sauce intent publish, offline", () => {
     };
     const [intent] = compileSauceProgram("ethereum", INTENT, {
       defines: { RECIPIENT: BigInt(RECIPIENT) },
-      intents: { deadline: 2_000_000_000n, creator: CREATOR },
+      intents: { deadline: 2_000_000_000n, publisher: CREATOR, salt: `0x${"00".repeat(32)}` },
     }).intents;
     expect(out.chainId).toBe(1);
     const portal = ecoRoutesPortal("ethereum");

@@ -53,39 +53,30 @@ export function intentCooks(intents: readonly LoweredIntent[]): IntentCook[] {
 /** An endpoint for a chain the command reaches, from `--config` (or `--rpc-url` for its own). */
 export type Endpoints = (chain: CanonicalChain) => string | undefined;
 
-const unique = (cooks: readonly IntentCook[]): CanonicalChain[] => [
-  ...new Map(cooks.map((cook) => [cook.destination.id, cook.destination])).values(),
-];
-
 /**
- * `--intent-execution-fee auto`: the fee the destination Kitchens charge, read from each. One fee
- * pays every intent's cook, so destinations that charge differently are refused, naming each fee.
+ * `--intent-execution-fee auto`, and the default: each destination's Kitchen fee, by chain id, read
+ * through `endpoints`. Each intent's cook pays its own destination's.
  */
-export async function destinationFee(
-  cooks: readonly IntentCook[],
+export async function destinationFees(
+  chains: readonly CanonicalChain[],
   endpoints: Endpoints,
-): Promise<bigint> {
-  const fees: Array<[CanonicalChain, bigint]> = [];
-  for (const chain of unique(cooks)) {
+): Promise<Map<number, bigint>> {
+  const fees = new Map<number, bigint>();
+  for (const chain of chains) {
     const url = endpoints(chain);
     if (url === undefined) {
       throw new UsageError(
-        `--intent-execution-fee auto reads the Kitchen's fee on ${chain.slug}, the intent's ` +
-          `destination: give --config with an rpcUrls entry for chain id ${chain.id}`,
+        `an intent's body runs a program on ${chain.slug}, whose cook pays its Kitchen's fee: the ` +
+          `command reads the Kitchen's fee on ${chain.slug} from the chain, and nothing here reaches ` +
+          `it (--offline, or no endpoint: --config with an rpcUrls entry for chain id ` +
+          `${chain.id}). Give the fee with \`.fee(<wei>)\` after \`.receive(...)\`, or ` +
+          `--intent-execution-fee <wei>`,
       );
     }
-    fees.push([chain, await kitchenFee(await connect(url, chain), chain)]);
-  }
-  const distinct = new Set(fees.map(([, fee]) => fee));
-  if (distinct.size > 1) {
-    throw new CliError(
-      `--intent-execution-fee auto: the destination Kitchens charge different fees (` +
-        `${fees.map(([chain, fee]) => `${chain.slug} ${fee} wei`).join(", ")}), and one fee pays ` +
-        "every intent's cook: open them from separate files, or pass the fee yourself",
-    );
+    fees.set(chain.id, await kitchenFee(await connect(url, chain), chain));
   }
 
-  return fees[0]?.[1] ?? 0n;
+  return fees;
 }
 
 /** Whether each cook's Pot is deployed, where an endpoint for its chain was given. */

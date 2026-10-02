@@ -94,13 +94,13 @@ function main(amount: Uint256): Uint256 {
     const source = `function main(amount: Uint256): void {
   const held: Uint256 = USDC.balanceOf(ctx.self());
   require(held >= amount);
-  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).creator(0x3333333333333333333333333333333333333333).receive().then(() => {
     USDC.transfer(RECIPIENT, amount);
   });
 }`;
     const out = compileSauceRoute("base", source, EXECUTION, {
       defines: { RECIPIENT },
-      intents: { deadline: 4_000_000_000n, creator: "0x3333333333333333333333333333333333333333" },
+      intents: { deadline: 4_000_000_000n },
     });
 
     expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);

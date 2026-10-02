@@ -80,6 +80,9 @@ import {
 import * as gated from "./evm/gated-engine.js";
 
 const HAS_CAST = spawnSync("cast", ["--version"], { stdio: "ignore" }).status === 0;
+/** The salt the SDK compiles an intent written the old way with when none is given; the
+ *  command picks a random one per run unless told. */
+const ZERO_SALT = `0x${"00".repeat(32)}`;
 if (!HAS_CAST && process.env.CI) {
   throw new Error("`cast` is not on PATH in CI: Foundry is installed there, so this is a failure.");
 }
@@ -846,15 +849,17 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     DEADLINE,
     "--intent-creator",
     OWNER.address,
+    "--intent-salt",
+    ZERO_SALT,
   ];
   const DEFINES = definesFor(REWARD);
   let intentFile: string;
 
-  /** The one intent the file opens, as the SDK encodes it for `creator`. */
+  /** The one intent the file opens, as the SDK encodes it when `creator` publishes it. */
   const theIntent = (creator: Address) =>
     compileSauceProgram("ethereum", INTENT, {
       defines: { RECIPIENT: BigInt(RECIPIENT), AMOUNT, REWARD },
-      intents: { deadline: BigInt(DEADLINE), creator },
+      intents: { deadline: BigInt(DEADLINE), publisher: creator, salt: ZERO_SALT },
     }).intents[0]!.intent;
 
   const read = async <T>(call: { to: Hex; data: Hex; decode: (result: Hex) => T }): Promise<T> =>
@@ -1153,7 +1158,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     expect(run.stdout).toMatch(/^publishAndFund 0x[0-9a-f]{64}: success/m);
     const intent = compileSauceProgram("ethereum", INTENT, {
       defines: { RECIPIENT: BigInt(RECIPIENT), AMOUNT, REWARD: other },
-      intents: { deadline: BigInt(DEADLINE), creator: OWNER.address },
+      intents: { deadline: BigInt(DEADLINE), publisher: OWNER.address, salt: ZERO_SALT },
     }).intents[0]!.intent;
     expect(await read(isIntentFundedCall(intent, { portal }))).toBe(true);
     // The Portal pulled it, into the same vault the SDK derives, and recorded it Funded.
@@ -1186,7 +1191,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     const intentOf = (file: string, defines: Record<string, bigint>) =>
       compileSauceProgram("ethereum", readFileSync(file, "utf8"), {
         defines: { RECIPIENT: BigInt(RECIPIENT), AMOUNT, REWARD, ...defines },
-        intents: { deadline: BigInt(DEADLINE), creator: OWNER.address },
+        intents: { deadline: BigInt(DEADLINE), publisher: OWNER.address, salt: ZERO_SALT },
       }).intents[0]!.intent;
 
     it("a USDT-style token, whose transfer returns nothing, funds its vault", async () => {
@@ -1241,13 +1246,17 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     expect(routeTokens).toEqual([baseUsdc]);
   });
 
-  it("runs the same file on a Pot, which publishes and funds it from its own balance", async () => {
+  it("runs the file on a Pot, naming its creator, which publishes and funds it from its own balance", async () => {
     const creator = privateKeyToAccount(OTHER_KEY).address;
     const pot = v12PredictPot(creator, SAUCE_INTENT_POT_SALT) as Address;
     await ethereum.mint(usdc, pot, REWARD);
+    // A Pot may be shared, so an intent a program opens on one names its creator: no wallet does.
+    const potFile = join(work, "on-a-pot.sauce.ts");
+    const named = INTENT.replace(".receive()", `.creator(${creator}).receive()`);
+    writeFileSync(potFile, named);
     const run = await sauce(
       "run",
-      intentFile,
+      potFile,
       "--define",
       `RECIPIENT=${RECIPIENT}`,
       "--define",
@@ -1258,6 +1267,8 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
       DEADLINE,
       "--intent-creator",
       creator,
+      "--intent-salt",
+      ZERO_SALT,
       "--rpc-url",
       ethereum.rpcUrl,
       "--private-key",
@@ -1266,7 +1277,10 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     );
     expect(run.stderr).not.toMatch(/sauce run:/);
     expect(run.code).toBe(0);
-    const intent = theIntent(creator);
+    const intent = compileSauceProgram("ethereum", named, {
+      defines: { RECIPIENT: BigInt(RECIPIENT), AMOUNT, REWARD },
+      intents: { deadline: BigInt(DEADLINE), salt: ZERO_SALT },
+    }).intents[0]!.intent;
     expect(await read(isIntentFundedCall(intent, { portal }))).toBe(true);
     expect(await ethereum.balanceOf(usdc, pot)).toBe(0n);
   }, 60_000);
@@ -1309,7 +1323,7 @@ describeEvm("what is deployed: the released contracts, a Pot, and an intent's de
   // the Pot every intent through Base's Portal shares.
   const INTENT = [
     "// @chain ethereum",
-    "Base.Portal.send([{ token: USDC, amount: REWARD }]).receive().then(() => {",
+    `Base.Portal.send([{ token: USDC, amount: REWARD }]).creator(${OWNER.address}).receive().then(() => {`,
     "  require(AMOUNT > 0n);",
     "  Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, AMOUNT);",
     "});",
@@ -1318,7 +1332,7 @@ describeEvm("what is deployed: the released contracts, a Pot, and an intent's de
   const DEFINES = [
     ...["--define", `RECIPIENT=${RECIPIENT}`, "--define", `AMOUNT=${AMOUNT}`],
     ...["--define", `REWARD=${REWARD}`, "--intent-deadline", "2000000000"],
-    ...["--intent-creator", OWNER.address],
+    ...["--intent-salt", ZERO_SALT],
   ];
   const sharedPot = () =>
     v12PredictPot(

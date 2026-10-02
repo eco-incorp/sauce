@@ -204,7 +204,7 @@ describe("Arc: a reward cannot offer native value and USDC together", () => {
   const program = (destination: string) => `
     function main() {
       const amount = USDC.balanceOf(ctx.self());
-      ${destination}.Portal.send({ token: USDC, amount }, { native: 1n }).receive().then(() => {
+      ${destination}.Portal.send({ token: USDC, amount }, { native: 1n }).creator(0x3333333333333333333333333333333333333333).receive().then(() => {
         USDC.transfer(RECIPIENT, amount);
       });
     }
@@ -217,7 +217,7 @@ describe("Arc: a reward cannot offer native value and USDC together", () => {
       {
         ambient: ["@sauce/token"],
         defines: { RECIPIENT: 0x2222222222222222222222222222222222222222n },
-        intents: { deadline: 2_000_000_000n, creator: CREATOR, executionFee: 1n },
+        intents: { deadline: 2_000_000_000n, executionFee: 1n },
       },
     );
 
