@@ -13,8 +13,9 @@ has control flow, reads and checks, and the engine runs it as written: it is not
 it does not use a magic header.
 
 On top of the runtime sit **intents**: an offer of work on another chain, with a reward escrowed on
-this one, written as a chain name called as a function: `Ethereum(() => { ... }).reward({ ... })`.
-A solver decides whether to fill it (`sauce-intents`).
+this one, written from the destination chain's name:
+`Ethereum.Portal.send({ ... }).then(() => { ... })`. A solver decides whether to fill it
+(`sauce-intents`).
 
 ## You write the program
 

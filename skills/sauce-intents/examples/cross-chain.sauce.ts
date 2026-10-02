@@ -3,8 +3,8 @@
 // run) and opens the intent as it goes. The whole file is the program: top-level statements, no
 // main, and BENEFICIARY a define.
 //
-// `--chain` is the source chain, which funds the reward: `USDC` in `.reward(...)` is its USDC.
-// Inside the braces, and in the delivery argument after them, the code runs on Ethereum: `USDC` and
+// `--chain` is the source chain, which funds the reward: `USDC` in `.send(...)` is its USDC. In
+// `.receive(...)`, and inside `.then(...)`'s braces, the code runs on Ethereum: `USDC` and
 // `AaveV3.Pool` there are Ethereum's. The gap between what is delivered and the reward is the
 // solver's margin.
 //
@@ -28,10 +28,9 @@ const amount = USDC.balanceOf(ctx.self());
 require(amount > 0n, "nothing to forward");
 const delivered = amount - (amount * 10n) / 10000n; // the solver keeps 0.1%
 
-Ethereum(
-  () => {
+Ethereum.Portal.send({ token: USDC, amount })
+  .receive({ token: USDC, amount: delivered })
+  .then(() => {
     USDC.approve(AaveV3.Pool, delivered);
     AaveV3.Pool.supply(USDC, delivered, BENEFICIARY, 0n);
-  },
-  { tokens: [{ token: USDC, amount: delivered }] },
-).reward({ tokens: [{ token: USDC, amount }] });
+  });

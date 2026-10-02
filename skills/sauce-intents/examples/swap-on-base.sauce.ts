@@ -7,8 +7,8 @@
 // main, and every value a define. Nothing is measured on chain, so it can also be published from a
 // wallet (sauce intent publish).
 //
-// `--chain` is the source chain: `WETH` in `.reward(...)` is its WETH. Inside the braces, and in
-// the delivery argument after them, the body runs on Base: `WETH`, `USDC`, `UniswapV3.Factory`,
+// `--chain` is the source chain: `WETH` in `.send(...)` is its WETH. In `.receive(...)`, and inside
+// `.then(...)`'s braces, the body runs on Base: `WETH`, `USDC`, `UniswapV3.Factory`,
 // `UniswapV3.Pool`, `UniswapV4.StateView` and `UniswapV4.PoolManager` there are Base's.
 //
 //   sauce run swap-on-base.sauce.ts --chain <chain> --config sauce.config.json \
@@ -54,8 +54,9 @@ function ownLimit(limit: Uint256, fee: Uint256, sellsToken0: bool): Uint256 {
   return Math.mulDiv(limit, root, 10n ** 18n);
 }
 
-Base(
-  () => {
+Base.Portal.send({ token: WETH, amount: REWARD })
+  .receive({ token: WETH, amount: AMOUNT_IN })
+  .then(() => {
     require(SQRT_PRICE_LIMIT_X96 != 0n && RECIPIENT != 0n && REFUND_TO != 0n, "set the defines");
     const self = ctx.self();
     const sellsToken0 = WETH < USDC;
@@ -130,6 +131,4 @@ Base(
     if (unsold > 0n) {
       WETH.transfer(REFUND_TO, unsold);
     }
-  },
-  { tokens: [{ token: WETH, amount: AMOUNT_IN }] },
-).reward({ tokens: [{ token: WETH, amount: REWARD }] });
+  });

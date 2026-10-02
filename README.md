@@ -47,22 +47,23 @@ an intent carrying it onward.
 // never known in advance — it is whatever the swap, bridge or transfer just before it produced —
 // which is the reason to build the intent here rather than off-chain.
 //
-// `Arbitrum(() => { ... }).reward({ ... })` is the whole of it. `amount` is an ordinary variable of
-// this program, and using it inside the intent is enough: the SDK splices its run-time value into
-// the encoded intent, and fills in the Portal, the prover, the approval and the encoding.
+// `Arbitrum.Portal.send({ ... }).then(() => { ... })` is the whole of it: `send` names the reward,
+// and `then` what runs on Arbitrum. `amount` is an ordinary variable of this program, and using it
+// inside the intent is enough: the SDK splices its run-time value into the encoded intent, and fills
+// in the Portal's address, the prover, the approval and the encoding.
 //
 // RECIPIENT is a compile-time `define` the caller supplies. `USDC` is a registered symbol, and
 // inside the braces it means Arbitrum's USDC, because that is the chain those calls run on. In
-// `.reward(...)` it means the USDC of the chain this program runs on, which escrows the reward.
+// `.send(...)` it means the USDC of the chain this program runs on, which escrows the reward.
 function main() {
   const amount = USDC.balanceOf(ctx.self());
   if (amount < MIN_AMOUNT) {
     throw "cross-chain-intent: nothing to forward";
   }
 
-  Arbitrum(() => {
+  Arbitrum.Portal.send({ token: USDC, amount }).then(() => {
     USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }
 ```
 
@@ -71,7 +72,7 @@ That is the whole program. What you did not have to do:
 - **Write or deploy a contract.** It compiles to bytecode that a Sauce engine runs in the shared
   Pot the solver deploys.
 - **Import anything.** `USDC`, `Arbitrum` and `ctx` need no import line.
-- **Encode the intent.** No Portal, prover, selector, approval or ABI encoding appears. The SDK
+- **Encode the intent.** No Portal address, prover, selector, approval or ABI encoding appears. The SDK
   looks up the Portal and prover in its eco-routes deployment tables and emits the rest.
 - **Know the amount in advance.** `amount` is an ordinary variable, and the published intent
   carries the value the program measured.
@@ -83,7 +84,7 @@ intent around the amount, ask the Portal for its vault, pay the reward into it, 
 a second intent you publish yourself after the first lands and you have read what it produced.
 
 `USDC` is a registered token symbol, and inside the braces it means **Arbitrum's** USDC, because
-that is where those calls run. In `.reward(...)` it means the USDC of the chain the program runs
+that is where those calls run. In `.send(...)` it means the USDC of the chain the program runs
 on — Base, in [the caller](docs/examples/cross-chain-intent.ts) — because the program escrows the
 reward there. `RECIPIENT` and `MIN_AMOUNT` are compile-time `defines`: a program captures nothing
 from the JavaScript around it, so defines are how application values reach one.

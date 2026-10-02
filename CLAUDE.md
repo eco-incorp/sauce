@@ -560,13 +560,16 @@ list must only ever name modules the SDK resolves itself. Two DISTINCT mechanism
 share the word "ambient": ambient **DEFINES** (`chainDefines` — chain-scoped SCALARS: chainId,
 protocol addresses, token symbols) vs ambient **MODULES** (this — whole library exports).
 
-**Chain-scoped names are resolved per level.** In `Chain(() => …).reward(…)` (`intent-host.ts`)
-the body and the delivery argument resolve on the destination and the reward on the enclosing
-chain, which escrows and approves it: each chain's name is a declared function taking a PROGRAM (the
-compiler's program argument, compiled — or recorded — in the scope `nested` returns for that chain,
-`programOn`), the delivery a `scope: "nested"` value, and `.reward(...)` a method the host binds at
-its site (`bind`), which builds the intent with viem and hands `@sauce/intents` its bytes, a run-time
-value spliced in where the program reads one. `sauce-route.ts#levelOn` gives each level on another chain
+**Chain-scoped names are resolved per level.** In `<Chain>.Portal.send(…).receive(…).then(() => …)`
+(`intent-host.ts`) the body (`then`'s closure) and the delivery (`receive`) resolve on the
+destination and the reward (`send`) on the enclosing chain, which escrows it. `<Chain>.Portal` is a
+declared constant of the host type `Portal`, its word the destination's chain id, and each method
+extends one record: `send` a value, `receive` a `scope: "nested"` value, `then` a PROGRAM (the
+compiler's program argument, compiled — or recorded — in the scope `nested` returns for the record's
+chain, `programOn`). `then`'s record type, `Opened`, ends at its site (`bind`), which builds the
+intent with viem and hands `@sauce/intents` its bytes, a run-time value spliced in where the program
+reads one; `Sending` and `Receiving` refuse to end, so an intent that stops before `.then` is a
+compile error in the host's words. The compiler knows none of this shape: it is the host's types. `sauce-route.ts#levelOn` gives each level on another chain
 its own values (`NESTED_SCOPE`, the registry's `chainDefines`) and DROPS every caller `defines`
 entry named like a chain-scoped value of the enclosing chain or the destination, and every `tokens`
 override — by name, not value, so `defines: chainDefines(base)` and a hand-picked `USDC` are
@@ -587,7 +590,7 @@ imports and calls it — and a READ (`balanceOf`, `holder.USDC`) the library's `
 has ONE implementation however it is spelled, and it is the library's SafeERC20 one; a write returns
 nothing, so its result cannot be read. The `Token` type is EVM-only: on Solana a symbol is the mint's
 key, a plain word for the `@sauce/token` SVM functions, whose writes need accounts a symbol does not
-carry. A token-only INTENT body (`Base(() => { USDC.transfer(...) })`, every statement a recordable
+carry. A token-only INTENT body (`Base.Portal.send(…).then(() => { USDC.transfer(...) })`, every statement a recordable
 `transfer`/`approve` on constants and captures) is RECORDED, not compiled: the compiler records it
 in the body's own program — its names and defines that chain's — after checking it as a compiled
 body, and `bind` turns the calls into plain `route.calls` the Portal's Executor runs raw, so they

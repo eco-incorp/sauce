@@ -155,11 +155,11 @@ check(
 
 // ---- A token-only child is plain route calls for the destination's Executor: no Pot, no fee.
 // Inside the body, and in the delivery, a token symbol is the destination's: `USDC` here is
-// Ethereum's, while the one in `.reward(...)` is Base's, which the program escrows.
+// Ethereum's, while the one in `.send(...)` is Base's, which the program escrows.
 const direct = intentOf(
   compileFor(
     "base",
-    "Ethereum(() => { USDC.transfer(RECIPIENT, AMOUNT); }).reward({ tokens: [{ token: USDC, amount: AMOUNT }] });",
+    "Ethereum.Portal.send({ token: USDC, amount: AMOUNT }).then(() => { USDC.transfer(RECIPIENT, AMOUNT); });",
     { RECIPIENT: recipient, AMOUNT: 1_000_000n },
   ),
 );
@@ -170,7 +170,7 @@ check(contracts.on("ethereum").AaveV3.Pool.available, "Ethereum has AaveV3.Pool"
 
 // ---- Inside a body, a decoded result is read by position or destructured, as anywhere else.
 const decodeIn = (statement: string) =>
-  `Base(() => { const d = hex\`3850c7bd\`; ${statement} require(x != 0n); }, { tokens: [{ token: 0x4200000000000000000000000000000000000006n, amount: 1n }] }).reward({ tokens: [{ token: WETH, amount: 1n }] });`;
+  `Base.Portal.send({ token: WETH, amount: 1n }).receive({ token: 0x4200000000000000000000000000000000000006n, amount: 1n }).then(() => { const d = hex\`3850c7bd\`; ${statement} require(x != 0n); });`;
 const refused = (source: string) => {
   try {
     compileFor("ethereum", source, { RECIPIENT: recipient }, fee.base);
@@ -186,6 +186,15 @@ check(
 check(
   refused(decodeIn('const [x] = abi.decode(evm.static(RECIPIENT, d), ["Uint256"]);')) === "",
   "and destructures one, as anywhere else",
+);
+
+// ---- An intent ends with `.then(...)`: one that stops before it does not compile, and says why.
+const unfinished = refused(
+  "Base.Portal.send({ token: USDC, amount: 1n }).receive({ token: USDC, amount: 1n });",
+);
+check(
+  unfinished.includes("end it with `.then(() => { … })`"),
+  `an intent that stops before \`.then\` is refused: ${unfinished}`,
 );
 
 // ---- Rehearsing the swap-on-base body on a fork of Base: what the solver sends there.

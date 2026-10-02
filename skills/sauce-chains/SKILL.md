@@ -113,8 +113,8 @@ function main(fee: Uint256): Address {
   more than `0x`, or on Solana `getAccountInfo` returns an executable account. The Sauce release
   addresses are the same on every EVM chain, and deployed only where the release has been.
 - **A name resolves on the chain where its part runs.** The file's own code and an intent's
-  `.reward(...)` resolve on the chain the file is compiled for; inside an intent's braces, and in
-  its delivery argument, `USDC` and every other chain-supplied name are the destination's
+  `.send(...)` resolve on the chain the file is compiled for; in its `.receive(...)` and inside its
+  `.then(...)`, `USDC` and every other chain-supplied name are the destination's
   (`sauce-intents`).
 - **A chain-qualified name is a contract, not a token.** `Ethereum.UniswapV3.Factory` works from any
   chain; `Ethereum.USDC` does not: use the token's address.

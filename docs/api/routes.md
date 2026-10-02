@@ -134,8 +134,8 @@ statements and merged program the builder generates. Underneath are `splitByPlac
 `renderTemplate` and `emitTemplate` — byte-templating primitives that work against any encoding whose
 fields sit at fixed offsets, not only intents.
 
-A program can also create an intent itself, with `Chain(() => { ... }).reward({ ... })` written in
-its body — see [create an intent](../guides/intents.md#create-an-intent-from-inside-a-program).
+A program can also create an intent itself, with `<Chain>.Portal.send({ ... }).then(() => { ... })`
+written in its body — see [create an intent](../guides/intents.md#create-an-intent-from-inside-a-program).
 `SauceCompileOptions.intents` carries what that lowering cannot look up (a deadline, a creator) and
 what overrides it: `sourcePortal`, `destinationPortal`, `prover`, `salt`, `allowPartial`, and the
 eco-routes `generation`/`environment`. Through `Base(...)` those are inherited from the enclosing

@@ -177,14 +177,19 @@ _while_ it is running, which is what you want when the amount is the output of t
 ```js
 function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum(() => {
+  Arbitrum.Portal.send({ token: USDC, amount }).then(() => {
     USDC.transfer(RECIPIENT, amount);
-  }).reward({ tokens: [{ token: USDC, amount }] });
+  });
 }
 ```
 
-Same shape as the TypeScript builder, written in the program. No Portal, prover, selector, encoding
-or approval appears, because none of them is a decision you are making. The closest TypeScript form
+The destination chain's `Portal` opens the intent. `send` names the reward, which this chain
+escrows; `receive`, when there is one, names what the solver delivers on the destination; and `then`
+holds what runs there. `send` and `receive` each take a token amount, `{ token, amount }`, or a list
+of them, and the reward may also pay the native coin, `{ native: amount }`, or tokens and the native
+coin together, `{ tokens: [...], native: amount }`. An intent always ends with `.then(...)`: one
+that stops before it does not compile. No Portal address, prover, selector, encoding or approval
+appears, because none of them is a decision you are making. The closest TypeScript form
 is a [dynamic nest](nested-intents.md#create-the-child-on-chain-from-a-measured-amount), where you
 build a placeholder child, name the measurement and count each placeholder's occurrences yourself.
 
@@ -229,25 +234,24 @@ For full `SafeERC20` checks, make the body a program by adding any statement tha
 write, such as `const held = USDC.balanceOf(ctx.self());`. A program's token writes are
 [`SafeERC20`](protocols-and-tokens.md#writes-follow-safeerc20), and a `false` return reverts the
 fulfilment. A program needs the destination's Kitchen fee and a deployed Pot, as the table says,
-and the solver's delivery named in the second argument, because it is not derived for a program
-(see below).
+and the solver's delivery named in `.receive(...)`, because it is not derived for a program (see
+below).
 
 ```js
 function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum(
-    () => {
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount })
+    .then(() => {
       const here = USDC.balanceOf(ctx.self());
       if (here > 0n) {
         USDC.transfer(RECIPIENT, here);
       }
-    },
-    { tokens: [{ token: USDC, amount }] },
-  ).reward({ tokens: [{ token: USDC, amount }] });
+    });
 }
 ```
 
-**The second argument names what the solver delivers** so the body has something to work with, and
+**`.receive(...)` names what the solver delivers** so the body has something to work with, and
 the lowering adds the Executor-to-Pot transfer. For the token-only shape it is derived instead — a
 `transfer` of N moves N, so N is what has to arrive. It is _not_ derived for a program, and that is
 a judgement rather than an omission: a program's `balanceOf` reads what is _there_, which may be what
@@ -286,13 +290,12 @@ function fee(amount: Uint256): Uint256 {
 
 function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum(
-    () => {
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount })
+    .then(() => {
       const [held] = abi.decode(abi.encode(balanceOf(USDC, ctx.self())), ["Uint256"]);
       USDC.transfer(RECIPIENT, held - fee(held));
-    },
-    { tokens: [{ token: USDC, amount }] },
-  ).reward({ tokens: [{ token: USDC, amount }] });
+    });
 }
 ```
 
@@ -314,14 +317,14 @@ of hops whose amounts are each measured on arrival is written; see
 
 ### Names resolve per chain
 
-Two chains meet in `Arbitrum(() => { ... }).reward({ ... })`, and each part belongs to one of them.
-A token symbol resolves on the chain where its part runs:
+Two chains meet in `Arbitrum.Portal.send({ ... }).receive({ ... }).then(() => { ... })`, and each
+part belongs to one of them. A token symbol resolves on the chain where its part runs:
 
-| Part                                   | Runs on                       | `USDC` is    |
-| -------------------------------------- | ----------------------------- | ------------ |
-| The braces                             | Arbitrum, the destination     | Arbitrum's   |
-| The second argument, what is delivered | Arbitrum, the destination     | Arbitrum's   |
-| `.reward(...)`                         | The chain the program runs on | That chain's |
+| Part                               | Runs on                       | `USDC` is    |
+| ---------------------------------- | ----------------------------- | ------------ |
+| `.then(...)`'s braces              | Arbitrum, the destination     | Arbitrum's   |
+| `.receive(...)`, what is delivered | Arbitrum, the destination     | Arbitrum's   |
+| `.send(...)`, the reward           | The chain the program runs on | That chain's |
 
 The reward belongs to the enclosing chain because the program escrows it there: it pays the reward
 token into the intent's vault on that chain's Portal and publishes the intent in the same
@@ -442,7 +445,9 @@ rather than the vault's balance. `allowPartial` applies only here.
 Each of these is a compile error naming the construct, never a silently different intent:
 
 - An identifier that is neither a compile-time value nor a variable of the enclosing program.
-- A `.reward(...)` that is not an object, or a token entry missing `token` or `amount`.
+- An intent that stops before `.then(...)`.
+- A `.send(...)` or `.receive(...)` that is not a token amount or a list of them (or, for the reward,
+  a native amount), or a token entry missing `token` or `amount`.
 - A missing `deadline`, a missing `creator`, or a missing `executionFee` for a program body.
 - A chain with no eco-routes deployment, or a pair with no prover deployed on both sides.
 - A program body that calls the function opening it.
