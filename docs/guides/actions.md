@@ -262,7 +262,7 @@ Everything in [creating an intent](intents.md) applies: the Pot must be owned by
 
 ### Fund a child from a measured amount
 
-A program's output is only known once it runs. [Dynamic nesting](nested-intents.md#create-the-child-on-chain-from-a-measured-amount) publishes a child intent funded from what the parent's Pot holds after its program ran, so the pattern is:
+A program's output is only known once it runs. An action program has no action that opens an intent, so it is chained to another with the TypeScript builder's `.nest()`. [Dynamic nesting](../api/routes.md#dynamic-children) publishes a child intent funded from what the parent's Pot holds after its program ran, so the pattern is:
 
 1. The parent program keeps its output in the Pot (`"recipient": "self"`).
 2. `.nest(child, { via: "dynamic", measure: { kind: "erc20Balance", token } })` measures that balance.
@@ -313,7 +313,7 @@ export function buildCascade(
 }
 ```
 
-The measurement is the Pot's balance after the parent program, not the program's own output figure: another action, or a donation, that leaves the same token in the Pot is measured too. The rest of the nested-intents guide — scale, floors, hash recovery — applies unchanged. The route's token amounts and precalls are TypeScript, outside the document, so they take addresses: `Base.USDC.address` and `Arbitrum.USDC.address` from the package root are the same tokens the documents' `"USDC"` names on each chain.
+The measurement is the Pot's balance after the parent program, not the program's own output figure: another action, or a donation, that leaves the same token in the Pot is measured too. The rest of [dynamic children](../api/routes.md#dynamic-children) — scale, floors, hash recovery — applies unchanged. The route's token amounts and precalls are TypeScript, outside the document, so they take addresses: `Base.USDC.address` and `Arbitrum.USDC.address` from the package root are the same tokens the documents' `"USDC"` names on each chain.
 
 ## Runtime amounts
 

@@ -163,7 +163,7 @@ coin and per token. These are hot wallets: keep small balances in them.
 | You want to                                         | Start at                                          |
 | --------------------------------------------------- | ------------------------------------------------- |
 | Build, fund and submit an intent                    | [Create an intent](docs/guides/intents.md)        |
-| Chain intents together, statically or at run time   | [Nested intents](docs/guides/nested-intents.md)   |
+| Open an intent from inside another intent's body    | [Nested intents](docs/guides/nested-intents.md)   |
 | Generate programs from data instead of writing them | [Builders](docs/guides/builders-and-actions.md)   |
 | Compile a standalone program with runtime arguments | [Compiling programs](docs/guides/compiling.md)    |
 | Compile and run a program file from a terminal      | [The sauce command](docs/guides/cli.md)           |

@@ -377,10 +377,17 @@ above: when the Ethereum level runs, the shared Pot there pays the next level's 
 vault on Ethereum's Portal from what it holds, in Ethereum's USDC, and calls `publish`, so the child
 is published like any other intent and any solver can discover it. Keep every level on a supported
 chain, as here (Base, Ethereum, then Base again): the command checks the first level's chains only.
-Each level's deadline must be no
-earlier than its parent's. (The TypeScript cascade builder, `.nest()` in `sauce-typescript`, also
-funds a child by a transfer into its vault by default, but with no publication of its own, and
-takes `publishAndFund` as an option.)
+
+Every level takes the same `--intent-deadline`, `--intent-reward-deadline`, `--intent-creator` and
+`--intent-execution-fee`; a `.reward(...)` in a program sets only `tokens` and `nativeAmount`. So a
+later level has whatever time the earlier ones leave before that one deadline, the creator reclaims
+each level's unearned reward on the chain that escrowed it, and one fee pays the cook of every body
+that is a program, whatever chain it runs on (`--intent-execution-fee auto` refuses when those
+Kitchens charge different fees). The Portal and the prover are looked up per level, for its own two
+chains. The hash of a level below the first exists only once the level above has run: import it
+from that fill's transaction (`sauce intent import <tx hash> --chain <chain>`), then fill, prove and
+claim it like any other. (The TypeScript builder, `.nest()` in `sauce-typescript`, takes options per
+level, and by default funds a child by a transfer into its vault with no publication of its own.)
 
 ## What the compile supplies, and what you pass
 

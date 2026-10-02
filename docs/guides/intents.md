@@ -188,9 +188,10 @@ function main() {
 ```
 
 Same shape as the TypeScript builder, written in the program. No Portal, prover, selector, encoding
-or approval appears, because none of them is a decision you are making. The closest TypeScript form
-is a [dynamic nest](nested-intents.md#create-the-child-on-chain-from-a-measured-amount), where you
-build a placeholder child, name the measurement and count each placeholder's occurrences yourself.
+or approval appears, because none of them is a decision you are making. This is how intents are
+nested: the [nested intents](nested-intents.md) guide opens one inside another's body. The closest
+TypeScript form is a [dynamic nest](../api/routes.md#dynamic-children), where you build a
+placeholder child, name the measurement and count each placeholder's occurrences yourself.
 
 ### The braces are a Sauce program
 
@@ -314,7 +315,7 @@ function that opens it, since that function's program would contain the intent i
 An intent inside an intent is lowered recursively — the child is compiled by re-entering the same
 pipeline, so it gets its own chain's names and this same lowering, at any depth. That is how a chain
 of hops whose amounts are each measured on arrival is written; see
-[nested intents](nested-intents.md#a-cascade-in-native-syntax).
+[nested intents](nested-intents.md#three-levels).
 
 ### Names resolve per chain
 

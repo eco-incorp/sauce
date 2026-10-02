@@ -165,10 +165,13 @@ a recorded address, not proof of live code on the chain.
   `routes.intentVaultAddressCall`: it is checked against `routes.predictIntentVault`, the package's
   own computation. `routes.publishTx`, `routes.publishAndFundTx`, `routes.approvalTxs` and
   `routes.isIntentFundedCall` build the single calls (`{ to, data }`, with `decode` for a read).
-- **Cascades from TypeScript**: `routes.openRoute(chain, body, options).nest(child, { via })`
-  attaches a child intent to a route. By default (`via: "transfer"`) the parent's route funds the
-  child by a transfer into the child's vault, with no publication of its own;
-  `via: "publishAndFund"` publishes and funds it for public discovery instead.
+- **Nested intents** are written in the program: a body that opens the next intent with
+  `Chain(() => { ... }).reward({ ... })` (`sauce-intents`, Cascades). `routes.compileSauceProgram`
+  lists the intents a program opens in `.intents`, and `routes.intentSourceTxs` publishes a fixed
+  one from a wallet. The lower-level builder, `routes.openRoute(chain, body, options).nest(child,
+{ via })`, attaches a child built in TypeScript instead, with options of its own: by default
+  (`via: "transfer"`) the parent's route funds the child by a transfer into its vault, with no
+  publication of its own; `via: "publishAndFund"` publishes and funds it for public discovery.
 
 ## Example
 
