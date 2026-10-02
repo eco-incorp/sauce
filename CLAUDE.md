@@ -595,9 +595,7 @@ Eco's Portal app's where it has one (`intent-portal.ts#DEFAULT_FILL_WINDOW`, 300
 deadline counts from when the intent opens — `intents.openedAt`, which the CLI and MCP set to now
 once per command, else `ctx.timestamp()` as the program runs, which is how every nested level opens
 — the creator is the compile's (`sauce` defaults it to the wallet that publishes or cooks; a
-nested level inherits the level above's `.creator()`: a literal through the child compile's
-options, a computed one as an extra argument of the body's program, `__sauce_creator`, which
-`intent-sugar.ts` gives each intent the body opens without its own), the prover the registry's, the
+nested level inherits a literal `.creator()` from the level above), the prover the registry's, the
 salt zero (not Eco's random one: a file must compile to the same intent each time), and the fee
 `intents.executionFee`, one for every destination or a function of it (`sauce` reads each
 destination's Kitchen when no `--intent-execution-fee` is given). The creator and, for a program

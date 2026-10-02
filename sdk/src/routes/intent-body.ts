@@ -372,8 +372,7 @@ class IntentBodyError extends Error {}
  * compiles to: its captures as `main`'s parameters, and the file's declarations it reaches.
  *
  * `compileTimeNames` are names the child compile resolves itself (its chain's defines): never a
- * capture, even where a local of the same name exists. `handed` are parameters `main` takes after
- * the captures, for values the caller hands down that the body does not read as written.
+ * capture, even where a local of the same name exists.
  */
 export function childProgram(
   source: string,
@@ -383,7 +382,6 @@ export function childProgram(
   body: readonly AstNode[],
   bodyText: string,
   compileTimeNames: ReadonlySet<string>,
-  handed: readonly string[] = [],
 ): ChildProgram {
   const own = bodyLocals(body);
   const locals = enclosingLocals(program, scope, site.start);
@@ -436,10 +434,7 @@ export function childProgram(
     ...reads.filter((name) => locals.has(name) || lets.has(name)),
     ...[...lets].filter((name) => !reads.includes(name)),
   ];
-  const parameters = [
-    ...captures.map((name) => (lets.has(name) ? `__sauce_let_${name}` : name)),
-    ...handed,
-  ];
+  const parameters = captures.map((name) => (lets.has(name) ? `__sauce_let_${name}` : name));
   const prologue = captures
     .filter((name) => lets.has(name))
     .map((name) => `${name} = __sauce_let_${name};\n`)
