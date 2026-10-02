@@ -112,11 +112,13 @@ const INTENT = [
 
 /** The same intent, written `Base.Portal.send(reward).receive(delivery).then(body)`. */
 const PORTAL_INTENT = [
-  "Base.Portal.send({ token: USDC, amount: REWARD })",
-  "  .receive({ token: USDC, amount: AMOUNT })",
-  "  .then(() => {",
-  "    USDC.transfer(RECIPIENT, AMOUNT);",
-  "  });",
+  "function main(recipient: Address, amount: Uint256, reward: Uint256) {",
+  "  Base.Portal.send({ token: USDC, amount: reward })",
+  "    .receive({ token: USDC, amount })",
+  "    .then(() => {",
+  "      USDC.transfer(recipient, amount);",
+  "    });",
+  "}",
   "",
 ].join("\n");
 
@@ -587,8 +589,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     const out = jsonOf(
       await sauce(
         ...["intent", "publish", portalFile, "--chain", "ethereum"],
-        ...["--define", `RECIPIENT=${RECIPIENT}`, "--define", `AMOUNT=${AMOUNT}`],
-        ...["--define", `REWARD=${REWARD}`],
+        ...["--args", RECIPIENT, String(AMOUNT), String(REWARD)],
         ...["--rpc-url", ethereum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
       ),
     );
