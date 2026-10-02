@@ -12,15 +12,17 @@ for and its pitfalls.
 
 ### Choosing between them
 
-Inside a Sauce program, swap through the Sauce Router wherever it services the pool
-(`sauce-swaps`): Uniswap V3 and its forks (PancakeSwap V3, Aerodrome Slipstream, Algebra pools,
-Synthra, UnitFlow) and Uniswap V4 through `swapV3`/`swapV4`, and V2-style pairs, Curve, Balancer
-V2, DODO V2, Trader Joe LB and WOOFi through its unified `swap`. Choose by pool type:
+Inside a Sauce program, swap with `@sauce/router` (`sauce-swaps`): one function per venue, every
+argument a run-time value, each returning what the recipient received and reverting below its
+`minOut`. Uniswap V2 and its forks, Curve, Balancer V2, DODO V2, Trader Joe LB and WOOFi are paid
+first and called directly; Uniswap V3 and its forks (PancakeSwap V3, Aerodrome Slipstream, Algebra
+pools, Synthra, UnitFlow), Uniswap V4 and Maverick V2 call back, and the Pot's Router answers
+them. Choose by pool type:
 
 - **Concentrated liquidity** (V3-style, V4): the deepest pools for liquid pairs, several fee tiers
-  per pair, and a price limit, so a fill can stop part way and return the rest.
+  per pair, and a price limit, so a fill can stop part way and leave the rest unspent.
 - **Constant-product pairs** (Uniswap V2 and its forks, Solidly-style volatile pools): one pool per
-  pair, no price limit; a fill is bounded only by the minimum output you check.
+  pair, no price limit; a swap consumes its whole input, bounded only by its `minOut`.
 - **Stable pools** (Curve, Solidly-style stable pools): built for assets meant to trade near 1:1,
   with less price impact there than a constant-product pair.
 - **One trade across several pools** under one limit: `sauce-distributed-swap`.
