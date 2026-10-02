@@ -1,9 +1,9 @@
 // An Ethereum -> Base intent whose body opens a Base -> Ethereum intent when it runs, written as a
-// closure; then the same intent from nested-intent.sauce.ts, the file `sauce intent publish` opens,
-// which is the same bytes. And nested-swap.sauce.ts, whose inner reward is a swap's output.
+// closure; then the same intent from nested-intent.sauce.ts, the file `sauce intent publish` opens
+// with its `main` arguments, which is the same bytes.
 //
-// Offline: the creator, the recipient, the pool, the amounts and the fee are fixtures and nothing is
-// sent. The Portals, the provers, the Pot, the engine and the native amounts come from the SDK.
+// Offline: the creator, the recipient, the amounts and the fee are fixtures and nothing is sent. The
+// Portals, the provers, the Pot, the engine and the native amounts come from the SDK.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -58,24 +58,16 @@ const built = Base(
 });
 console.log("Ethereum → Base → Ethereum:", built.hash().intentHash);
 
-// The file form, compiled for Ethereum where it opens its intent.
-const source = (name: string) =>
-  readFileSync(join(dirname(fileURLToPath(import.meta.url)), name), "utf8");
-const options = {
-  defines: {
-    AMOUNT,
-    REWARD,
-    RECIPIENT,
-    POOL: 0xd0b53d9277642d899df5c87a3966a349a798f224n, // Base's Uniswap V3 WETH/USDC pool
-    MIN_OUT: 1n,
-  },
+// The file form, compiled for Ethereum where it opens its intent, with main's arguments fixed into
+// it as `sauce intent publish --args <recipient> <delivered> <reward>` fixes them.
+const source = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "nested-intent.sauce.ts"),
+  "utf8",
+);
+const [opened] = routes.compileSauceProgram("ethereum", source, {
+  args: [toHex(RECIPIENT, { size: 20 }), AMOUNT, REWARD],
   intents: { deadline: 2_000_000_000n, rewardDeadline: 2_000_003_600n, creator, executionFee },
-} as const;
-const [opened] = routes.compileSauceProgram(
-  "ethereum",
-  source("nested-intent.sauce.ts"),
-  options,
-).intents;
+}).intents;
 if (
   opened === undefined ||
   routes.hashIntent(opened.intent).intentHash !== built.hash().intentHash
@@ -85,13 +77,3 @@ if (
 // Fixed when it is built, so a wallet publishes it: what `sauce intent publish` sends.
 const transactions = built.sourceTxs();
 console.log(`Published by ${transactions.length} transactions on Ethereum`);
-
-const [swap] = routes.compileSauceProgram(
-  "ethereum",
-  source("nested-swap.sauce.ts"),
-  options,
-).intents;
-if (swap === undefined || swap.captures.length > 0 || swap.intent.route.calls.length !== 2) {
-  throw new Error("Expected nested-swap.sauce.ts to open one fixed intent to Base");
-}
-console.log("The swap variant:", routes.hashIntent(swap.intent).intentHash);

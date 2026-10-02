@@ -99,11 +99,13 @@ const HYPERLANE_FEE = 7_777n;
 const APPROVE = parseAbi(["function approve(address, uint256)"]);
 const TRANSFER = parseAbi(["function transfer(address, uint256)"]);
 
-/** Base USDC to RECIPIENT, for Ethereum USDC: a body of plain transfers, run by the Executor. */
+/** Base USDC to `recipient`, for Ethereum USDC: a body of plain transfers, run by the Executor. */
 const INTENT = [
-  "Base(() => {",
-  "  USDC.transfer(RECIPIENT, AMOUNT);",
-  "}).reward({ tokens: [{ token: USDC, amount: REWARD }] });",
+  "function main(recipient: Address, amount: Uint256, reward: Uint256) {",
+  "  Base(() => {",
+  "    USDC.transfer(recipient, amount);",
+  "  }).reward({ tokens: [{ token: USDC, amount: reward }] });",
+  "}",
   "",
 ].join("\n");
 
@@ -118,12 +120,12 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
   let ethereumMailbox: Address;
   let baseMailbox: Address;
 
-  /** The flags every intent here is built with, its deadlines given. */
+  /** The flags every intent here is built with, its deadlines given, and main's arguments. */
   const intentFlags = (route: bigint, reward: bigint): string[] => [
-    ...["--chain", "ethereum", "--define", `RECIPIENT=${RECIPIENT}`],
-    ...["--define", `AMOUNT=${AMOUNT}`, "--define", `REWARD=${REWARD}`],
+    ...["--chain", "ethereum"],
     ...["--intent-deadline", String(route), "--intent-reward-deadline", String(reward)],
     ...["--intent-creator", OWNER.address],
+    ...["--args", RECIPIENT, String(AMOUNT), String(REWARD)],
   ];
   const now = async (local: LocalChain): Promise<bigint> =>
     (await local.publicClient.getBlock()).timestamp;
@@ -388,7 +390,8 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
   }, 240_000);
 
   it("the nested-intents guide's file: published on Ethereum, its body opens the next on Base", async () => {
-    // docs/examples/nested-intent.sauce.ts, as written: all SauceScript, opened on Ethereum.
+    // docs/examples/nested-intent.sauce.ts, as written: all SauceScript, opened on Ethereum, its
+    // main's arguments given with --args as the guide gives them.
     const nested = fileURLToPath(
       new URL("../../docs/examples/nested-intent.sauce.ts", import.meta.url),
     );
@@ -408,12 +411,11 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     const published = jsonOf(
       await sauce(
         ...["intent", "publish", nested, "--chain", "ethereum"],
-        ...["--define", `AMOUNT=${AMOUNT}`, "--define", `REWARD=${REWARD}`],
-        ...["--define", `RECIPIENT=${RECIPIENT}`, "--intent-creator", OWNER.address],
-        ...["--intent-deadline", String(start + 3600n)],
+        ...["--intent-creator", OWNER.address, "--intent-deadline", String(start + 3600n)],
         ...["--intent-reward-deadline", String(start + 7200n)],
         ...["--intent-execution-fee", String(FEE)],
         ...["--rpc-url", ethereum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
+        ...["--args", RECIPIENT, String(AMOUNT), String(REWARD)],
       ),
     );
     const outer = (published.intents as Array<{ intentHash: Hex }>)[0]!.intentHash;
