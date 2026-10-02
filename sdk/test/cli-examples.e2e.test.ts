@@ -429,17 +429,28 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
     it("`sauce run --fund` pulls the budget from the wallet into its Pot in the same cook", async () => {
       await fresh();
       // Rehearsed with the wallet's key before the first run: the approval of Permit2 that run
-      // will ask for is named, and until it is made the pull cannot succeed.
+      // will ask for runs first, in the cook's block, and the pull with it; nothing is sent.
       const keyed = (): Promise<Run> =>
         sauce(
           ...["simulate", BUY, "--chain", "base", ...rpc(), ...SIGNER],
           ...["--fund", "USDC:100", "--json", ...buyArgs()],
         );
       const unapproved = await keyed();
-      expect(unapproved.code).toBe(1);
+      expect(unapproved.code).toBe(0);
       expect(unapproved.stderr).toContain(
-        "USDC: Permit2 (0x000000000022D473030F116dDEE9F6B43aC78BA3) may not move your tokens yet; sauce run would ask to approve it",
+        "USDC: Permit2 (0x000000000022D473030F116dDEE9F6B43aC78BA3) may not move your tokens yet: " +
+          "sauce run asks to approve it first (--auto-approve approves it), and the rehearsal runs " +
+          "that approval before the cook",
       );
+      expect(
+        (jsonOf(unapproved).transactions as Array<{ step: string; what?: string }>).map(
+          (each) => each.what ?? each.step,
+        ),
+      ).toEqual(["deployPot", "approve Permit2 for USDC", "cook"]);
+      expect(jsonOf(unapproved).transfers).toContainEqual(
+        expect.objectContaining({ token: usdc, from: wallet, to: pot, amount: BUDGET }),
+      );
+      expect(await base.balanceOf(usdc, wallet)).toBe(2_000_000_000n);
       const run = await sauce(
         ...["run", BUY, "--chain", "base", ...rpc(), ...SIGNER, "--fund", "USDC:100"],
         ...buyArgs(),
