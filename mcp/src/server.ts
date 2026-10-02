@@ -33,6 +33,8 @@ export function packageInfo(): { readonly name: string; readonly version: string
 
 /** What the server tells a client about itself when it connects. */
 export function instructions(endpoints: Endpoints, wallets?: WalletContext): string {
+  const { name } = packageInfo();
+
   return [
     "Sauce compiles SauceScript — a checked subset of TypeScript, in .sauce.ts files — into",
     "programs that run atomically in one transaction: on an EVM chain through the owner's Pot",
@@ -42,6 +44,9 @@ export function instructions(endpoints: Endpoints, wallets?: WalletContext): str
     `section of it). Start with sauce-overview. The same files are resources (${SKILLS_INDEX}).`,
     "For TypeScript against the SDK, or the sauce command, sauce_dev returns the package's own",
     "documents. To set a project up for a coding agent, call sauce_install_skills.",
+    "The skills run the sauce command as `npx sauce`, which is this package's command only in a",
+    `project that depends on ${name}. Anywhere else run \`npx -y ${name} <command>\`: a bare`,
+    "`npx sauce` there fetches and runs npm's unrelated `sauce` package.",
     "",
     ...WRITE_IT_YOURSELF,
     "",
