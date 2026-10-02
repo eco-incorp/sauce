@@ -74,6 +74,22 @@ describe("stdio: sauce mcp as an agent launches it", () => {
     await client.connect(transport);
     try {
       await exercise(client);
+      // Over stdio a program is read from the user's own disk, relative to where it runs.
+      writeFileSync(join(dir, "program.sauce.ts"), PROGRAM);
+      const byPath = structured(
+        await client.callTool({
+          name: "sauce_compile",
+          arguments: { path: "program.sauce.ts", chain: "base" },
+        }),
+      );
+      const bySource = structured(
+        await client.callTool({
+          name: "sauce_compile",
+          arguments: { source: PROGRAM, chain: "base" },
+        }),
+      );
+      assert.equal(byPath.bytecode, bySource.bytecode);
+      assert.equal(byPath.sourceSha256, bySource.sourceSha256);
       const { chains } = structured(await client.callTool({ name: "sauce_chains" })) as {
         chains: Array<{ slug: string; endpoint: boolean }>;
       };
@@ -344,6 +360,14 @@ describe("Streamable HTTP: sauce mcp --http", () => {
       const { tools } = await client.listTools();
       assert.ok(tools.every((tool) => !tool.name.startsWith("sauce_wallet")));
       assert.match(client.getInstructions() ?? "", /NOTHING HERE SIGNS OR SENDS/);
+      // Over HTTP no file is read: path is no input, and a call that gives one is refused.
+      const compile = tools.find((tool) => tool.name === "sauce_compile")!;
+      assert.ok(!("path" in (compile.inputSchema.properties ?? {})));
+      const refused = (await client.callTool({
+        name: "sauce_compile",
+        arguments: { path: "package.json", chain: "base" },
+      })) as CallToolResult;
+      assert.equal(refused.isError, true);
     } finally {
       await client.close();
     }

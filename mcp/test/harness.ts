@@ -30,11 +30,14 @@ export async function connect(
   endpoints: Endpoints = NO_ENDPOINTS,
   guard?: RpcGuard,
   wallets?: WalletContext,
+  /** As over stdio: a program may be named by `path`, read from disk. */
+  local = false,
 ): Promise<Connected> {
   const server = createSauceServer({
     endpoints,
     ...(guard === undefined ? {} : { guard }),
     ...(wallets === undefined ? {} : { wallets }),
+    ...(local ? { local: true } : {}),
   });
   const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "sauce-mcp-test", version: "0.0.0" });

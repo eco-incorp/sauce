@@ -70,9 +70,12 @@ async function serve(options: McpServeOptions): Promise<void> {
             password: options.wallets.password,
             source: options.wallets.source,
           };
-    await createSauceServer({ endpoints, ...(wallets === undefined ? {} : { wallets }) }).connect(
-      new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: maxBody }),
-    );
+    // Its caller's own files: a program may be named by path.
+    await createSauceServer({
+      endpoints,
+      local: true,
+      ...(wallets === undefined ? {} : { wallets }),
+    }).connect(new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: maxBody }));
     if (wallets !== undefined) {
       options.log(`sauce mcp: signing with the wallets in ${wallets.store.dir}\n`);
     }
