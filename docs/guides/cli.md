@@ -1175,7 +1175,7 @@ at the package root:
 | `sauce-chains`           | Each chain, generated from the registries: tokens, every protocol with its addresses, intents |
 | `sauce-protocols`        | Every protocol by category: how to choose, its deployments, its pitfalls and how to call it   |
 | `sauce-swaps`            | Swapping through the Router: entry points, price limits, callbacks and the guard on every leg |
-| `sauce-distributed-swap` | One exact-input swap split across every price-limit venue on a chain                          |
+| `sauce-distributed-swap` | One exact-input swap spread over several price-limited pools: a limit order                   |
 | `sauce-intents`          | Cross-chain intents written in Sauce: rewards, cascades, run or publish                       |
 | `sauce-solana`           | Programs for Solana: accounts, the SPL token functions, the Kitchen                           |
 | `sauce-run`              | Everything on this page: compiling, funding, simulating, running and publishing               |
