@@ -54,7 +54,7 @@ Every EVM `cook` must receive the Kitchen's current `executionFee()` in native w
 
 On Arc the native coin is USDC, so every one of these native amounts is USDC at **18 decimals**,
 while `tokens` amounts of Arc's `USDC` are 6 decimals — and both draw on one balance. See
-[Arc: USDC is the native coin](../api/coverage.md#arc-usdc-is-the-native-coin).
+[Arc: USDC is the native coin](../reference/chains/arc.md#notes).
 
 Deadlines are absolute Unix timestamps in seconds. `route.deadline` limits destination fulfillment. `reward.deadline` allows source refunds when no valid proof exists; leave time for fulfillment and proof delivery before it.
 

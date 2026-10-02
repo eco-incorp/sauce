@@ -102,7 +102,12 @@ a plain ERC-20:
 - Ondo's keep their balance: dividends raise the shares each token stands for (Ondo's multiplier),
   so its price follows the stock with dividends reinvested.
 - Coinbase's are B20 tokens, built into the Base node: they run on Base, and not in a local copy of
-  the chain. Rehearse a program that moves one with `sauce simulate` against Base itself.
+  the chain. Rehearse a program that moves one with `sauce simulate` against Base itself; no assumed
+  balance can give a Pot one, since no state override reaches a B20 balance.
+
+Each issuer's list is copied from the issuer's own published list, and every row is checked on
+chain. Backpack lists mints it has not opened yet, and Superstate's can be held only by an
+allowlisted holder: neither is registered.
 
 ```sauce chain=base
 function main(recipient: Address, amount: Uint256) {

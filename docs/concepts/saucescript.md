@@ -75,8 +75,8 @@ the same values. Neither is a drop-in for the other.
 
 ## The language
 
-The [SauceScript reference](../../skills/sauce-script/references/builtins.md) is the complete account of the language, and
-every example and quoted error in it is checked against the compiler this package ships: types,
+The [SauceScript reference](../reference/saucescript.md) is the complete account of the language,
+and every example and quoted error in it is checked against the compiler this package ships: types,
 literals, operators, statements, functions and modules, every builtin on each target, and the
 limits. What most often surprises a TypeScript author:
 
