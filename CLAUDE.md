@@ -286,11 +286,17 @@ compile(options: CompileOptions): CompileResult
 ```
 
 `target` (`'evm' | 'svm'`) and `resolve` are required; `entry` (default `"main.js"`),
-`resolvePackage`, `contracts`, `inlineContracts`, `ambient`, `defines`, `optimize` (default
-`true`), `cache` (default `true`), and `compactArgs` (default `false`) are optional. All four manifests pin the
+`entryKind` (`"module"`, or `"closure"`: the entry is one function expression as
+`Function.prototype.toString` prints it), `resolvePackage`, `contracts`, `inlineContracts`,
+`ambient`, `defines`, `optimize` (default `true`), `cache` (default `true`), `compactArgs` (default
+`false`) and the **host API** — `declare`, `types`, `hostModules`, `nested`, `bind` (see "The
+compiler's host" below) — are optional. All four manifests pin the
 compiler exactly to **2.4.0**, matching the lockfile. `CompileResult` contains `bytecode: Uint8Array`,
 `isaRevision: "stack-compact-v2"`, `entryEncoding: "abi-v1" | "compact-v1"`, optional
-`entrySchema: Uint8Array`, and optional `manifest: AccountManifest`. `manifest` is the SVM account
+`entrySchema: Uint8Array`, optional `manifest: AccountManifest`, `entryParams` (`main`'s
+parameters as an ABI signature; a top-level tuple of fixed size is `indirect`, read behind an
+offset, which `routes/entry.ts`'s encoder writes) and `programs` (every program argument it
+compiled). `manifest` is the SVM account
 contract, absent on EVM. Compile-time values affect bytecode; runtime entry arguments are encoded
 and appended separately. With `compactArgs: true`, pass the returned schema and positional values
 to `encodeCompactArguments` from `@eco-incorp/sauce/compiler`; its strict inverse is
@@ -307,7 +313,7 @@ Compile and resolution failures throw JavaScript errors. Frontend diagnostics us
 locations; resolver and target-capability errors need not contain a source span.
 
 The route adapter is a separate contract: `compileSauceRoute` returns one program in
-`compiled.bytecode: Uint8Array[]`, an empty `warnings` array, rewritten source, and encoded calls.
+`compiled.bytecode: Uint8Array[]`, an empty `warnings` array, the source as written, and encoded calls.
 It does not expose `compactArgs` or retain the raw compiler's metadata/schema/manifest. Use the raw
 `/compiler` export for those. Both `/compiler` and route compilation run in Node and in a browser
 through one code path, `sdk/src/wasm-compiler.ts`: in a browser `await ready()` (from the root or
@@ -345,8 +351,8 @@ those investigations; do not add them back to the public SDK manual.
 
 **`sdk/`** — registries plus executable SDK logic. `src/protocols/<slug>/` holds per-protocol `info`,
 `addresses`, `abis` as-const, and `functions` SauceScript templates; `src/protocols/index.ts` is the
-query registry. `src/routes/` implements namespace rewrites, compiler integration, intents, and
-Portal encoding; token/deposit builders and EVM/SVM clients construct executable programs,
+query registry. `src/routes/` implements the compiler's host (each chain's names, intents),
+compiler integration, and Portal encoding; token/deposit builders and EVM/SVM clients construct executable programs,
 account plans, and transactions. `src/skills/loader.ts` is the `/skills` export, which serves the
 per-protocol documents; those documents are the `sauce-protocols` agent skill's
 `skills/sauce-protocols/references/*.md` (see "Agent skills" below), embedded at build time. `src/chains/`, `src/recipes/`, `src/core/types.ts` hold shared
@@ -355,13 +361,37 @@ chain and recipe definitions. **SDK tests compile every protocol's
 to build first, but the suites that import `./artifacts/*.json` need `sync-engine-artifacts` to have
 run (see the Foundry gotcha above).
 
-**Every route rewrite parses with `src/routes/parse.ts`**: acorn extended by
-`@sveltejs/acorn-typescript`, both pinned exactly (the plugin extends acorn's parser class). A route
-source is SauceScript, annotations included, so the rewrites must take what the compiler takes; a
-JavaScript-only parse rejected every typed helper. `ast-walk.ts#walk` steps over annotations and
-type-only declarations, so no rewrite reads a type name as a value. Do not add a second parser, and
-do not reintroduce a "rewrites cannot parse annotations" workaround: the compile seam's one remaining
-insertion is `ensureVoidMain`.
+**The compiler is given the program as written, and the SDK's names through its host.** Nothing
+rewrites a program's text, with one exception: `available(X)` (`routes/available.ts`) reaches the
+compiler as `(0n !=   X)`, written over `available(` in place, character for character, so every
+position a diagnostic reports is the author's; the compiler decides the comparison (below). That
+pass, the CLI, `routes/entry.ts` and `src/sauce-script/` read SauceScript with `src/routes/parse.ts`: acorn extended by
+`@sveltejs/acorn-typescript`, both pinned exactly (the plugin extends acorn's parser class), and
+`ast-walk.ts#walk` steps over annotations and type-only declarations. Do not add a second parser,
+and do not reintroduce a source rewrite: what a name means is the host's to declare.
+
+**The compiler's host** (the compiler's generic API, `declare`/`types`/`hostModules`/`nested`/`bind`;
+it knows nothing of chains, tokens or intents). `sauce-route.ts#routeHost` builds, for the chain a
+program compiles for, `host.ts#chainHost` — every token symbol as a constant of the `Token` type
+(its `of` an `Address`, its methods `@sauce/token`'s SafeERC20 functions with the token first, its
+property `holder.USDC` the holder's balance), `Token(addr)` as a cast to it, `self` (a getter of
+`@sauce/context`), `chainId`, each protocol contract's address key, and every registry contract by
+the names the registry gives it (`protocol-names.ts`: a family alias, a protocol's one contract,
+`<Chain>.` qualification) as an ABI and that chain's address, an interface as an ABI with none — and
+on an EVM chain `intent-host.ts#intentHost`, the intents a program may open. The compiler asks
+`declare` about each name the program reads and does not bind, once per compile; a program binding
+a name always wins. **A name some chain has and this one lacks is declared as the zero of its type,
+`unusable` with the chain's message**: any use is that message at the use, except an equality
+comparison, which the compiler decides while it compiles — so `if (X != 0n)`, and `available(X)`,
+leave the branch they rule out uncompiled, names and all (a decided `if`, `?:`, `&&`, `||`, and
+the rest of a function after a decided guard that returns). A name no chain has is not declared:
+the compiler's own unknown-name error. An interface is called at an address the program gives it,
+`UniswapV3.Pool(pool).fee()`, exactly `UniswapV3.Pool.at(pool).fee()` — the compiler's own form for a
+contract with no address; a deployed contract's name called with an address is refused, naming `.at`.
+`splitChainDefines` moves a caller's define named like a chain-scoped name into the chain's host
+(`tokens`, `values`), declared for that chain alone: a token must keep its `Token` type, and a
+nested-scope argument (an intent's delivery) is evaluated where the enclosing program's defines
+would otherwise bind first.
 
 **Every registry ABI is pinned against the deployed contract, offline.** `test/registry-abi.test.ts`
 checks each function, event and custom error of each `abis.ts` export against
@@ -529,9 +559,13 @@ list must only ever name modules the SDK resolves itself. Two DISTINCT mechanism
 share the word "ambient": ambient **DEFINES** (`chainDefines` — chain-scoped SCALARS: chainId,
 protocol addresses, token symbols) vs ambient **MODULES** (this — whole library exports).
 
-**Chain-scoped names are resolved per level.** In `Chain(() => …).reward(…)` (`intent-sugar.ts`)
+**Chain-scoped names are resolved per level.** In `Chain(() => …).reward(…)` (`intent-host.ts`)
 the body and the delivery argument resolve on the destination and the reward on the enclosing
-chain, which escrows and approves it. `sauce-route.ts#levelOn` gives each level on another chain
+chain, which escrows and approves it: each chain's name is a declared function taking a PROGRAM (the
+compiler's program argument, compiled — or recorded — in the scope `nested` returns for that chain,
+`programOn`), the delivery a `scope: "nested"` value, and `.reward(...)` a method the host binds at
+its site (`bind`), which builds the intent with viem and hands `@sauce/intents` its bytes, a run-time
+value spliced in where the program reads one. `sauce-route.ts#levelOn` gives each level on another chain
 its own values (`NESTED_SCOPE`, the registry's `chainDefines`) and DROPS every caller `defines`
 entry named like a chain-scoped value of the enclosing chain or the destination, and every `tokens`
 override — by name, not value, so `defines: chainDefines(base)` and a hand-picked `USDC` are
@@ -545,39 +579,25 @@ every level's compile on three paths and decodes each level's `publishAndFund`;
 `routes-intent-chains.e2e.test.ts` runs them on three anvils whose USDC differs. A test that gives a
 symbol one address everywhere (a `tokens` override, a define) cannot see either defect.
 
-The **`Token(addr)` global wrapper** (`Token(addr).approve(spender, amt)` / `const t = Token(addr);
-t.approve(...)`, zero import) and the **`<Sym>.transfer(...)` symbol syntax** are TEXTUAL rewrites in
-`token-rewrite.ts`, run in `compileSauceRoute` before the compiler, and both lower a WRITE
-(`transfer`/`approve`/`transferFrom`) to the `@sauce/token` function of the same name with the
-token first: `USDC.transfer(to, amt)` → `__sauce_transfer(USDC, to, amt)`, with
-`import { transfer as __sauce_transfer } from "@sauce/token"` prepended (`tokenImportLines`). So a
-write has ONE implementation however it is spelled, and it is the library's SafeERC20 one. The import
-is ALIASED (the pinned compiler, 2.3.0 and 2.4.0 alike, accepts `import { a as b }` and emits
-byte-identical code), which is what keeps a program's own `transfer`/`approve` from colliding; the `__sauce_<method>` names are reserved
-and a program declaring one is refused by name. It is an explicit import, not the ambient module,
-because `compileSauceRoute` never merges `chainAmbient()` in. A READ (`balanceOf`, and any other
-method on `Token(...)`) stays on the typed `IERC20.at(...)` binding — a `uint256` is always there.
-A write returns nothing, so one whose result is read (`const ok = USDC.transfer(...)`) is refused,
-and the source-global and `TokenBinding` types declare the writes `void`. A bound `Token(...)` is
-lowered only when the name is declared once in the whole program, never reassigned and only ever
-called as `t.<method>(...)`: the binding then holds the ADDRESS and each call is lowered by name.
-Any other `Token(...)` — an argument, a value, a reassigned or passed binding — is REFUSED with an
-error naming the safe spellings, never passed through as the typed call (which would be the
-unchecked write again). Both rewrites are shadow-safe (a program that binds `Token` or a symbol owns
-the name) and svm-rejected: the SVM arm's writes need SPL account slots the sugar has nowhere to put.
-The compiler therefore never sees a method call on a `Token(...)` result, and no compiler feature is
-needed — the earlier "`Token(addr)` needs a compiler feature" framing only applied to making
-`@sauce/token` _export_ a real `Token` value (blocked by the M1 subset). A token-only INTENT body
-(`Base(() => { USDC.transfer(...) })` inside a program, every statement a `transfer`/`approve` on a
-symbol or literal `Token(...)` — `intent-sugar.ts#isDirectCallBody`) is different again: it lowers
-to plain `route.calls` the Portal's Executor runs raw, not to a Sauce program, so it gets the
-Executor's checks (revert, code) and not SafeERC20's. USDT is supported there: no-return transfers
-work, and every approve is emitted as `approve(spender, 0)` then `approve(spender, amount)` (one
-Executor serves every intent, so a standing allowance is realistic). A `false`-returning token is
-caught only at delivery (the Portal's `safeTransferFrom`); the Executor's own `false` transfer or
-approve fulfils with nothing moved. `routes-nest-dynamic.e2e.test.ts` runs all of that through a
-real Portal and Executor and PINS the gap. Any non-token statement makes the body a program, whose
-writes are SafeERC20 — that is the documented way to get the checks.
+The **`Token(addr)` cast** and the **`<Sym>.transfer(...)` symbol syntax** are host declarations
+(`host.ts`'s `Token` type), not rewrites: a WRITE (`transfer`/`approve`/`transferFrom`) is the
+`@sauce/token` function of the same name with the token first — byte for byte the program that
+imports and calls it — and a READ (`balanceOf`, `holder.USDC`) the library's `balanceOf`. So a write
+has ONE implementation however it is spelled, and it is the library's SafeERC20 one; a write returns
+nothing, so its result cannot be read. The `Token` type is EVM-only: on Solana a symbol is the mint's
+key, a plain word for the `@sauce/token` SVM functions, whose writes need accounts a symbol does not
+carry. A token-only INTENT body (`Base(() => { USDC.transfer(...) })`, every statement a recordable
+`transfer`/`approve` on constants and captures) is RECORDED, not compiled: the compiler records it
+in the body's own program — its names and defines that chain's — after checking it as a compiled
+body, and `bind` turns the calls into plain `route.calls` the Portal's Executor runs raw, so they
+get the Executor's checks (revert, code) and not SafeERC20's. USDT is supported there: no-return
+transfers work, and every approve is emitted as `approve(spender, 0)` then `approve(spender,
+amount)` (one Executor serves every intent, so a standing allowance is realistic). A
+`false`-returning token is caught only at delivery (the Portal's `safeTransferFrom`); the
+Executor's own `false` transfer or approve fulfils with nothing moved.
+`routes-nest-dynamic.e2e.test.ts` runs all of that through a real Portal and Executor and PINS the
+gap. Any non-token statement makes the body a program, whose writes are SafeERC20 — that is the
+documented way to get the checks.
 
 **The host surface and compiled-source declarations are separate — and only one of them is
 global.** The HOST surface is IMPORTS ONLY: `routes/chain-exports.generated.ts` exports one named
