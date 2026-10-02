@@ -67,7 +67,11 @@ const { chainDefines } = await import("../src/routes/ambient.js");
 const HERE = dirname(fileURLToPath(import.meta.url));
 const example = (name: string) =>
   readFileSync(join(HERE, "../../docs/examples", `${name}.sauce.ts`), "utf8");
-const README_EXAMPLE = example("cross-chain-intent");
+/** A body that opens an intent to Arbitrum: the README's example before it took `main` arguments. */
+const BODY_TO_ARBITRUM = readFileSync(
+  join(HERE, "fixtures/routes/body-forwards-to-arbitrum.sauce.ts"),
+  "utf8",
+);
 const CASCADE_EXAMPLE = example("cross-chain-cascade");
 /**
  * The cascade over three DIFFERENT chains. The docs example keeps to the chains the release
@@ -282,9 +286,9 @@ function expectLevel(
 describe.each(PATHS)("through %s", (_name, build) => {
   const callerDefines = { RECIPIENT, MIN_AMOUNT: 1n };
 
-  it("the README example: Base's USDC funds it, Arbitrum's is delivered and transferred", () => {
+  it("a body opening an intent to Arbitrum: Base's USDC funds it, Arbitrum's is delivered and transferred", () => {
     const levels = levelsOf(
-      record(() => build(README_EXAMPLE, callerDefines)),
+      record(() => build(BODY_TO_ARBITRUM, callerDefines)),
       { arbitrum: "base" },
     );
     expect([...levels.keys()]).toEqual(["base->arbitrum"]);
@@ -338,7 +342,7 @@ describe.each(PATHS)("through %s", (_name, build) => {
 
 describe("every path lowers every level to the same source", () => {
   it.each([
-    ["the README example", README_EXAMPLE],
+    ["a body opening an intent to Arbitrum", BODY_TO_ARBITRUM],
     ["the docs cascade", CASCADE_EXAMPLE],
     ["the cascade over three chains", THREE_CHAIN_CASCADE],
   ])("%s", (_name, program) => {
