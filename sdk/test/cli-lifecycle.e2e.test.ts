@@ -34,13 +34,15 @@ import {
   http,
   pad,
   parseAbi,
+  parseEventLogs,
   type Address,
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import { SAUCE_INTENT_POT_SALT } from "../src/deployments/pot.js";
+import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { destinationExecutionFee } from "../src/evm/execution-fee.js";
+import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 import {
   ecoRoutesContract,
   ecoRoutesExecutorOf,
@@ -48,6 +50,7 @@ import {
   ecoRoutesProver,
 } from "../src/protocols/eco-routes/lookup.js";
 import { Base, Ethereum } from "../src/routes/chain-exports.generated.js";
+import { encodeRouteEvm } from "../src/routes/encode.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
@@ -515,6 +518,57 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     );
     expect(claimed.code).toBe(0);
     expect(await base.balanceOf(baseUsdc, SOLVER.address)).toBe(before + AMOUNT);
+  }, 240_000);
+
+  it("sauce-intents' fund-by-transfer publishes an intent built elsewhere, funded from a Pot", async () => {
+    // The skill's file as written: the vault read and the publish go through the registry's Portal
+    // by name, so nothing names the Portal here either.
+    const program = fileURLToPath(
+      new URL("../../skills/sauce-intents/examples/fund-by-transfer.sauce.ts", import.meta.url),
+    );
+    const start = await now(ethereum);
+    // An intent encoded by something other than the program that publishes it.
+    const built = openRoute("base", "function main() { return 1n; }", {
+      execution: { value: FEE },
+      deadline: start + 3600n,
+    }).reward({
+      source: "ethereum",
+      creator: OWNER.address,
+      deadline: start + 7200n,
+      tokens: [{ token: ethereumUsdc, amount: REWARD }],
+    });
+    const { reward } = built.intent;
+    const rewardJson = JSON.stringify({
+      deadline: reward.deadline.toString(),
+      creator: OWNER.address,
+      prover: getAddress(ecoRoutesContract("ethereum", "HyperProver")),
+      nativeAmount: "0",
+      tokens: [{ token: ethereumUsdc, amount: REWARD.toString() }],
+    });
+    // The owner's Pot holds the reward it pays into the vault.
+    const pot = v12PredictPot(OWNER.address, `0x${"00".repeat(32)}`) as Address;
+    await ethereum.mint(ethereumUsdc, pot, REWARD);
+
+    const run = jsonOf(
+      await sauce(
+        ...["run", program, "--chain", "ethereum", "--rpc-url", ethereum.rpcUrl],
+        ...["--private-key", OWNER_KEY, "--auto-approve", "--json"],
+        ...["--args", "8453", encodeRouteEvm(built.intent.route), rewardJson],
+      ),
+    );
+    const { hash } = (run as { cook: { hash: Hex } }).cook;
+    const receipt = await ethereum.publicClient.getTransactionReceipt({ hash });
+    const [published] = parseEventLogs({
+      abi: PortalABI,
+      logs: receipt.logs,
+      eventName: "IntentPublished",
+    });
+    expect(published!.args.intentHash).toBe(built.hash().intentHash);
+    const funded = built.fundedCall();
+    const answer = await ethereum.publicClient.call({ to: funded.to, data: funded.data });
+    expect(funded.decode(answer.data!)).toBe(true);
+    expect(await ethereum.balanceOf(ethereumUsdc, built.predictVault() as Address)).toBe(REWARD);
+    expect(await ethereum.balanceOf(ethereumUsdc, pot)).toBe(0n);
   }, 240_000);
 
   it("publishes through publishAndFund with --intent-fund-via, recorded Funded", async () => {
