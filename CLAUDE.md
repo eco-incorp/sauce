@@ -562,9 +562,23 @@ list must only ever name modules the SDK resolves itself. Two DISTINCT mechanism
 share the word "ambient": ambient **DEFINES** (`chainDefines` — chain-scoped SCALARS: chainId,
 protocol addresses, token symbols) vs ambient **MODULES** (this — whole library exports).
 
-**Chain-scoped names are resolved per level.** In `Chain(() => …).reward(…)` (`intent-sugar.ts`)
-the body and the delivery argument resolve on the destination and the reward on the enclosing
-chain, which escrows and approves it. `sauce-route.ts#levelOn` gives each level on another chain
+**An intent opened in a program** is
+`Chain.Portal.send(reward).receive(delivery).then(() => { body })`: the reward the program pays,
+escrowed on the chain it runs on; what the solver delivers on `Chain`; the body that runs there. Each step takes one `{ token, amount }` or an array, written in
+place, and all three are required in that order (`intent-portal.ts#portalChainProblem` refuses
+anything else by name). An amount may be integer arithmetic (`amount * 99n / 100n`) of literals,
+defines and the program's variables: folded when every operand is known, else computed into a local
+where the intent opens and spliced like any capture. `intent-sugar.ts` lowers it, and still reads the
+old call form, `Chain(() => { body }, { tokens: delivery }).reward({ tokens: reward })`, which means
+exactly the same, until the compiler opens intents itself (#61); document only the Portal form. On the
+host, every chain export's `Portal` (`intent-dsl.ts#chainPortal`) takes each step's options beside it
+(`send(items, rewardOptions)`, `receive(items, routeOptions)`) and `.then(body)` returns the
+`BuiltIntent` of `Chain(body, { ...routeOptions, tokens }).reward({ ...rewardOptions, tokens })`. Its
+`then` is the intent's, not a promise's, so it refuses being awaited.
+
+**Chain-scoped names are resolved per level.** In an intent a program opens (`intent-sugar.ts`) the
+body and the delivery resolve on the destination and the reward on the enclosing chain, which
+escrows and approves it. `sauce-route.ts#levelOn` gives each level on another chain
 its own values (`NESTED_SCOPE`, the registry's `chainDefines`) and DROPS every caller `defines`
 entry named like a chain-scoped value of the enclosing chain or the destination, and every `tokens`
 override — by name, not value, so `defines: chainDefines(base)` and a hand-picked `USDC` are
@@ -601,7 +615,8 @@ the name) and svm-rejected: the SVM arm's writes need SPL account slots the suga
 The compiler therefore never sees a method call on a `Token(...)` result, and no compiler feature is
 needed — the earlier "`Token(addr)` needs a compiler feature" framing only applied to making
 `@sauce/token` _export_ a real `Token` value (blocked by the M1 subset). A token-only INTENT body
-(`Base(() => { USDC.transfer(...) })` inside a program, every statement a `transfer`/`approve` on a
+(`Base.Portal.send(…).receive(…).then(() => { USDC.transfer(...) })` inside a program, every
+statement a `transfer`/`approve` on a
 symbol or literal `Token(...)` — `intent-sugar.ts#isDirectCallBody`) is different again: it lowers
 to plain `route.calls` the Portal's Executor runs raw, not to a Sauce program, so it gets the
 Executor's checks (revert, code) and not SafeERC20's. USDT is supported there: no-return transfers
