@@ -180,7 +180,7 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   network. Blob sizes at capture: actions ~680 KB, quote ~270 KB, split-swap ~80 KB, the swap
   venue suites `swap` (Ethereum) ~110 KB, `swap-base` ~90 KB, `swap-avalanche` ~30 KB, and the names
   suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB, and the
-  docs examples suite's three (`docs-examples`, `-base`, `-optimism`) ~70, ~40 and ~25 KB.
+  docs examples suite's three (`docs-examples`, `-base`, `-optimism`) ~80, ~15 and ~25 KB.
 
   **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
   pinned block (then recapture every suite on that chain, and revisit every pinned figure: pools,

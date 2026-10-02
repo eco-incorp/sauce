@@ -6,10 +6,10 @@
  *
  * `docs:check` compiles each through its runner and holds the manual's quotes to the files; this
  * runs what those runners build — the same bytes, imported from them — and holds every output to
- * the venues' own contracts: Uniswap's quoter and V2 router, Curve's `get_dy` (the 3pool's own
- * `exchange`, which its `get_dy` can overstate by one unit), the Balancer Vault's `queryBatchSwap`,
- * and each pool address to the one its deployer CREATE2s. `docs/examples/executed.json` names this
- * suite as the one that runs them, and `docs:check` fails an example no suite runs.
+ * the venues' own contracts: Uniswap's quoter and V2 router, the 3pool's own `exchange` (its
+ * `get_dy` can overstate it by one unit), the Balancer Vault's `queryBatchSwap`, and each pool
+ * address to the one its deployer CREATE2s. `docs/examples/executed.json` names this suite as the
+ * one that runs them, and `docs:check` fails an example no suite runs.
  */
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -75,7 +75,7 @@ function v3Pool(deployer: Address, initCodeHash: Hex, a: Address, b: Address, fe
   });
 }
 
-describe("router-route on Ethereum state", SUITE, () => {
+describe("router-route and router-swap on Ethereum state", SUITE, () => {
   const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
   const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
   const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
@@ -86,8 +86,9 @@ describe("router-route on Ethereum state", SUITE, () => {
   };
   const UNIV3_USDC_WETH_500 = "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640";
   const CURVE_3POOL = "0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7";
-  /** Uniswap V2's WETH/USDT pair (WETH is token0). */
+  /** Uniswap V2's WETH/USDT pair (WETH is token0), and its USDC/WETH pair (USDC is token0). */
   const UNIV2_WETH_USDT = "0x0d4a11d5EEaaC28EC3F61d100daF4d40471f1852";
+  const UNIV2_USDC_WETH = "0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc";
   const BALANCER_V2_VAULT = "0xBA12222222228d8Ba445958a75a0704d566BF2C8";
   /** Balancer V2's 50/50 USDC/WETH weighted pool. */
   const BALANCER_USDC_WETH_ID =
@@ -301,6 +302,46 @@ describe("router-route on Ethereum state", SUITE, () => {
     assert.equal((await env.cook(hexToBytes(known))).status, "success");
     assert.equal(await balanceOf(env, USDC, env.pot), expected);
   });
+
+  /** router-swap.sauce.ts's two swaps, as legs to quote: Uniswap V2, then Curve's 3pool. */
+  const swapLegs: readonly Leg[] = [
+    leg({ venue: 0n, pool: UNIV2_USDC_WETH, tokenIn: WETH, tokenOut: USDC }),
+    leg({ venue: 3n, pool: CURVE_3POOL, tokenIn: USDC, tokenOut: USDT, i: 1n, j: 2n }),
+  ];
+  /** router-swap.sauce.ts with its floor at `minOut`, compiled as router-swap.ts compiles it. */
+  const withFloor = (minOut: bigint): Uint8Array =>
+    routes.compileSauceRoute(
+      "ethereum",
+      readFileSync(resolve(REPO_ROOT, "docs/examples/router-swap.sauce.ts"), "utf8"),
+      { pot: env.pot, engine: env.engine },
+      { defines: { ...defines, MIN_OUT: minOut } },
+    ).compiled.bytecode[0]!;
+
+  it("router-swap.ts's cook sells every WETH the Pot holds on Uniswap V2 and keeps what the 3pool pays for the USDC", async () => {
+    const expected = await quoteRoute(swapLegs, ONE_ETH);
+    assert.ok(expected >= defines.MIN_OUT, `below the runner's MIN_OUT: ${expected}`);
+    // USDC the Pot held before is not the USDC that returns: it stays.
+    const held = 5_000_000n;
+    await fund(WETH, ONE_ETH);
+    await fund(USDC, held);
+    assert.equal((await env.cook(swapCook.compiled.bytecode[0]!)).status, "success");
+    assert.equal(await balanceOf(env, USDT, env.pot), expected);
+    assert.equal(await balanceOf(env, WETH, env.pot), 0n, "every WETH was sold");
+    assert.equal(await balanceOf(env, USDC, env.pot), held, "every USDC that returned was spent");
+  });
+
+  it("a MIN_OUT one above what the 3pool pays reverts the whole cook; at exactly that, it runs", async () => {
+    const expected = await quoteRoute(swapLegs, ONE_ETH);
+    await fund(WETH, ONE_ETH);
+    assert.equal((await env.cook(withFloor(expected + 1n))).status, "reverted");
+    assert.equal(await balanceOf(env, WETH, env.pot), ONE_ETH, "nothing moved");
+    assert.equal((await env.cook(withFloor(expected))).status, "success");
+    assert.equal(await balanceOf(env, USDT, env.pot), expected);
+  });
+
+  it("the bytes router-swap.ts compiles do not depend on the Pot and engine it names", () => {
+    assert.deepEqual(swapCook.compiled.bytecode[0], withFloor(defines.MIN_OUT));
+  });
 });
 
 const VENUE_PROGRAM = readFileSync(
@@ -370,18 +411,8 @@ async function assertVenuePool(
   assert.ok(((await env.publicClient.getCode({ address: expected })) ?? "0x").length > 2);
 }
 
-describe("router-swap and venue-where-deployed on Base state", SUITE, () => {
-  const WETH = "0x4200000000000000000000000000000000000006";
-  const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-  const CRVUSD = "0x417Ac0e078398C154EdFadD9Ef675d30Be60Af93";
-  const BALANCE: Record<string, BalanceSlot> = { [WETH]: { slot: 3n }, [USDC]: { slot: 9n } };
-  /** Curve's 4pool, where USDC is coin 0 and crvUSD coin 3, and Uniswap V2's Router02 on Base. */
-  const CURVE_4POOL = "0xf6C5F01C7F3148891ad0e19DF78743D31E390D1f";
-  const UNISWAP_V2_ROUTER = "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24";
-  const SOURCE = readFileSync(resolve(REPO_ROOT, "docs/examples/router-swap.sauce.ts"), "utf8");
-
+describe("venue-where-deployed on Base state", SUITE, () => {
   let env: Anvil;
-  let snapshot: Hex;
 
   before(async () => {
     env = await startAnvil({ mainnet: "docs-examples-base", chain: "base" });
@@ -389,69 +420,8 @@ describe("router-swap and venue-where-deployed on Base state", SUITE, () => {
   after(async () => {
     await env?.stop();
   });
-  beforeEach(async () => {
-    snapshot = await env.testClient.snapshot();
-  });
-  afterEach(async () => {
-    await env.testClient.revert({ id: snapshot });
-  });
 
-  const fund = (token: Address, amount: bigint) =>
-    setBalance(env, token, BALANCE[token]!, env.pot, amount);
-
-  /** The crvUSD `sold` WETH buys: Uniswap V2's router, then the 4pool's own `get_dy`. */
-  async function quote(sold: bigint): Promise<bigint> {
-    const [, usdc] = await env.publicClient.readContract({
-      address: UNISWAP_V2_ROUTER,
-      abi: abi.v2Router,
-      functionName: "getAmountsOut",
-      args: [sold, [WETH, USDC]],
-    });
-    return env.publicClient.readContract({
-      address: CURVE_4POOL,
-      abi: abi.curve,
-      functionName: "get_dy",
-      args: [0n, 3n, usdc!],
-    });
-  }
-
-  /** The example with its floor at `minOut`, compiled as router-swap.ts compiles it. */
-  const withFloor = (minOut: bigint): Uint8Array =>
-    routes.compileSauceRoute(
-      "base",
-      SOURCE,
-      { pot: env.pot, engine: env.engine },
-      { defines: { ...defines, MIN_OUT: minOut } },
-    ).compiled.bytecode[0]!;
-
-  it("router-swap.ts's cook sells every WETH the Pot holds and keeps what the 4pool pays for the USDC", async () => {
-    const expected = await quote(ONE_ETH);
-    assert.ok(expected >= defines.MIN_OUT, `below the runner's MIN_OUT: ${expected}`);
-    // USDC the Pot held before is not the USDC that returns: it stays.
-    const held = 5_000_000n;
-    await fund(WETH, ONE_ETH);
-    await fund(USDC, held);
-    const receipt = await env.cook(swapCook.compiled.bytecode[0]!);
-    assert.equal(receipt.status, "success");
-    assert.equal(await balanceOf(env, CRVUSD, env.pot), expected);
-    assert.equal(await balanceOf(env, WETH, env.pot), 0n, "every WETH was sold");
-    assert.equal(await balanceOf(env, USDC, env.pot), held, "every USDC that returned was spent");
-  });
-
-  it("a MIN_OUT one above what the 4pool pays reverts the whole cook; at exactly that, it runs", async () => {
-    const expected = await quote(ONE_ETH);
-    await fund(WETH, ONE_ETH);
-    assert.equal((await env.cook(withFloor(expected + 1n))).status, "reverted");
-    assert.equal(await balanceOf(env, WETH, env.pot), ONE_ETH, "nothing moved");
-    assert.equal((await env.cook(withFloor(expected))).status, "success");
-    assert.equal(await balanceOf(env, CRVUSD, env.pot), expected);
-  });
-
-  it("the bytes router-swap.ts compiles do not depend on the Pot and engine it names", () => {
-    assert.deepEqual(swapCook.compiled.bytecode[0], withFloor(defines.MIN_OUT));
-  });
-
-  it("as registry-names.ts compiles it for Base, venue-where-deployed returns PancakeSwap V3's USDC/WETH 0.05% pool", async () => {
+  it("as registry-names.ts compiles it for Base, it returns PancakeSwap V3's USDC/WETH 0.05% pool", async () => {
     await assertVenuePool(env, "base", onBase.compiled.bytecode[0]!, "pancake");
   });
 });

@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { Base, routes } from "@eco-incorp/sauce";
+import { Ethereum, routes } from "@eco-incorp/sauce";
 
 const program = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "router-swap.sauce.ts"),
@@ -15,16 +15,11 @@ const program = readFileSync(
 );
 
 // The SDK serves @sauce/router — and the @sauce/token and pool ABIs it imports — from memory, so
-// compiling needs no resolver option, and resolves WETH, USDC and UniswapV2.Factory for Base. The
-// defines are what the registry does not record — crvUSD and Curve's 4pool on Base — and MIN_OUT,
-// the floor on the crvUSD the program keeps.
-export const defines = {
-  CRVUSD: 0x417ac0e078398c154edfadd9ef675d30be60af93n,
-  CURVE_4POOL: 0xf6c5f01c7f3148891ad0e19df78743d31e390d1fn,
-  MIN_OUT: 2_500n * 10n ** 18n,
-};
+// compiling needs no resolver option, and it resolves the registry's names for Ethereum. MIN_OUT is
+// the floor on the USDT the program keeps (6 decimals).
+export const defines = { MIN_OUT: 2_500n * 10n ** 6n };
 export const compiled = routes.compileSauceRoute(
-  "base",
+  "ethereum",
   program,
   {
     pot: "0x2222222222222222222222222222222222222222",
@@ -34,15 +29,15 @@ export const compiled = routes.compileSauceRoute(
 );
 if (compiled.calls.length !== 1) throw new Error("Expected one cook");
 
-// The same program as an intent body: a solver runs it on Base for a reward on Ethereum.
+// The same program as an intent body: a solver runs it on Ethereum for a reward on Base.
 const executionFee = 1_000n;
-const built = Base(program, {
+const built = Ethereum(program, {
   execution: { value: executionFee },
   nativeAmount: executionFee,
   deadline: 2_000_000_000n,
   defines,
 }).reward({
-  source: "ethereum",
+  source: "base",
   creator: "0x4444444444444444444444444444444444444444",
   prover: "0x5555555555555555555555555555555555555555",
   deadline: 2_000_003_600n,
