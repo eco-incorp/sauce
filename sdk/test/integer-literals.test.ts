@@ -77,8 +77,10 @@ const PROGRAMS: ReadonlyArray<readonly [string, string, ReadonlyArray<"evm" | "s
   ],
 ];
 
+const BOTH: ReadonlyArray<"evm" | "svm"> = ["evm", "svm"];
+
 describe("a plain integer literal compiles as its `n` spelling does", () => {
-  for (const [name, program, targets = ["evm", "svm"]] of PROGRAMS) {
+  for (const [name, program, targets = BOTH] of PROGRAMS) {
     for (const target of targets) {
       it(`${name}, ${target}`, () => {
         for (const optimize of [true, false]) {
