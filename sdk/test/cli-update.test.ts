@@ -14,6 +14,7 @@ import { INSTALL_RECORD } from "../src/cli/skills.js";
 import {
   globalInstall,
   installationOf,
+  newer,
   PACKAGE,
   type Captured,
   type Installation,
@@ -359,12 +360,29 @@ describe("sauce update", () => {
     });
   });
 
-  it("does nothing when the copy is already the version asked for", async () => {
+  it("does nothing when the copy is already the version asked for, or newer than the latest", async () => {
     const { self, exec } = updater({ version: "1.2.0" });
     const run = await sauce(self);
     expect(run.code).toBe(0);
     expect(run.stdout).toContain("Up to date.");
-    expect(exec).toEqual([]);
+    // A prerelease past the latest is not taken back to it, unless --version says so.
+    const ahead = updater({ version: "1.3.0-beta.1" });
+    expect((await sauce(ahead.self)).stdout).toContain(
+      "Newer than latest: nothing to install (--version 1.2.0 installs it).",
+    );
+    expect([...exec, ...ahead.exec]).toEqual([]);
+    expect((await sauce(ahead.self, "--version", "1.2.0")).code).toBe(0);
+    expect(ahead.exec.map((each) => each.args.at(-1))).toEqual([`${PACKAGE}@1.2.0`]);
+  });
+
+  it("orders versions as semver does", () => {
+    expect(newer("1.10.0", "1.9.9")).toBe(true);
+    expect(newer("1.2.0", "1.2.0-beta.1")).toBe(true);
+    expect(newer("1.3.0-beta.1", "1.2.0")).toBe(true);
+    expect(newer("1.3.0-beta.10", "1.3.0-beta.2")).toBe(true);
+    expect(newer("1.2.0", "1.2.0")).toBe(false);
+    expect(newer("0.99.8", "1.0.0")).toBe(false);
+    expect(newer("unknown", "1.0.0")).toBe(false);
   });
 
   it("updates the skills installed here with the new binary, and says what changed", async () => {

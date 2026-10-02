@@ -241,6 +241,28 @@ const describe = (installation: Installation): string => {
   }
 };
 
+/**
+ * Whether version `a` is newer than `b`, by their numbers and a prerelease below its release;
+ * `false` where either is no version.
+ */
+export function newer(a: string, b: string): boolean {
+  const parse = (text: string) => {
+    const match = /^(\d+)\.(\d+)\.(\d+)(?:-([^+]+))?/.exec(text);
+
+    return match === null
+      ? undefined
+      : { numbers: [1, 2, 3].map((at) => BigInt(match[at]!)), pre: match[4] };
+  };
+  const [x, y] = [parse(a), parse(b)];
+  if (x === undefined || y === undefined) return false;
+  for (let at = 0; at < 3; at++) {
+    if (x.numbers[at] !== y.numbers[at]) return x.numbers[at]! > y.numbers[at]!;
+  }
+  if (x.pre === undefined || y.pre === undefined) return x.pre === undefined && y.pre !== undefined;
+
+  return x.pre.localeCompare(y.pre, "en", { numeric: true }) > 0;
+}
+
 /** The version `wanted` (a version or a dist-tag) names in `packument`. */
 function resolveVersion(packument: Packument, wanted: string): string {
   if (VERSION.test(wanted)) {
@@ -304,7 +326,11 @@ export async function updateCommand(
     current,
     latest: packument?.distTags.latest ?? null,
     target: target ?? null,
-    upToDate: target === undefined ? null : current === target,
+    // Without --version, a copy newer than the latest (a prerelease) is not taken back to it.
+    upToDate:
+      target === undefined
+        ? null
+        : current === target || (input.version === undefined && newer(current, target)),
   };
   const head =
     `${PACKAGE} ${current}, ${describe(installation)}` +
@@ -363,7 +389,14 @@ export async function updateCommand(
   const line = globalInstallLine(installation, spec);
   if (input.check || upToDate) {
     return {
-      text: [head, upToDate ? "Up to date." : `sauce update installs it: ${line}`].join("\n"),
+      text: [
+        head,
+        upToDate
+          ? current === target
+            ? "Up to date."
+            : `Newer than ${wanted}: nothing to install (--version ${target} installs it).`
+          : `sauce update installs it: ${line}`,
+      ].join("\n"),
       json: { ...base, command: line, updated: false },
     };
   }
