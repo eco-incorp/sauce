@@ -15,12 +15,18 @@ Token-2022, whose mints a program moves with the checked writes.
 | Chain | Tokens | Tokenized stocks |
 | --- | --- | --- |
 | [Ethereum](chains/ethereum.md) | `USDC`, `USDT`, `WETH` | [1731](chains/ethereum-stocks.md) |
-| [Optimism](chains/optimism.md) | `USDC`, `USDT`, `WETH` | — |
-| [Polygon](chains/polygon.md) | `USDC`, `WETH`, `WPOL` | — |
-| [Monad](chains/monad.md) | `USDC`, `WMON` | — |
+| [Optimism](chains/optimism.md) | `USDC`, `USDT`, `USDT0`, `WETH` | — |
+| [Unichain](chains/unichain.md) | `USDT0` | — |
+| [Polygon](chains/polygon.md) | `USDC`, `USDT0`, `WETH`, `WPOL` | — |
+| [Monad](chains/monad.md) | `USDC`, `USDT0`, `WMON` | — |
+| [Sei](chains/sei.md) | `USDT0` | — |
+| [Mantle](chains/mantle.md) | `USDT0` | — |
 | [Arc](chains/arc.md) | `EURC`, `USDC`, `USYC`, `WETH` | — |
 | [Base](chains/base.md) | `USDC`, `WETH` | [67](chains/base-stocks.md) |
-| [Arbitrum One](chains/arbitrum.md) | `USDC`, `WETH` | — |
+| [Plasma](chains/plasma.md) | `USDT0` | — |
+| [Arbitrum One](chains/arbitrum.md) | `USDC`, `USDT0`, `WETH` | — |
+| [Ink](chains/ink.md) | `USDT0` | — |
+| [Berachain](chains/berachain.md) | `USDT0` | — |
 | [Solana](chains/solana.md) | `PYUSD`, `USDC`, `USDT`, `WSOL` | [1799](chains/solana-stocks.md) |
 
 Every other chain registers no token: a program there uses `Token(<address>)`.
@@ -39,13 +45,21 @@ Every other chain registers no token: a program there uses `Token(<address>)`.
 | --- | --- | --- |
 | `USDC` | `0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85` | 6 |
 | `USDT` | `0x94b008aA00579c1307B0EF2c499aD98a8ce58e58` | 6 |
+| `USDT0` | `0x01bFF41798a0BcF287b996046Ca68b395DbC1071` | 6 |
 | `WETH` | `0x4200000000000000000000000000000000000006` | 18 |
+
+## Unichain
+
+| Symbol | Address | Decimals |
+| --- | --- | --- |
+| `USDT0` | `0x9151434b16b9763660705744891fA906F660EcC5` | 6 |
 
 ## Polygon
 
 | Symbol | Address | Decimals |
 | --- | --- | --- |
 | `USDC` | `0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359` | 6 |
+| `USDT0` | `0xc2132D05D31c914a87C6611C10748AEb04B58e8F` | 6 |
 | `WETH` | `0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619` | 18 |
 | `WPOL` | `0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270` | 18 |
 
@@ -54,7 +68,20 @@ Every other chain registers no token: a program there uses `Token(<address>)`.
 | Symbol | Address | Decimals |
 | --- | --- | --- |
 | `USDC` | `0x754704Bc059F8C67012fEd69BC8A327a5aafb603` | 6 |
+| `USDT0` | `0xe7cd86e13AC4309349F30B3435a9d337750fC82D` | 6 |
 | `WMON` | `0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A` | 18 |
+
+## Sei
+
+| Symbol | Address | Decimals |
+| --- | --- | --- |
+| `USDT0` | `0x9151434b16b9763660705744891fA906F660EcC5` | 6 |
+
+## Mantle
+
+| Symbol | Address | Decimals |
+| --- | --- | --- |
+| `USDT0` | `0x779Ded0c9e1022225f8E0630b35a9b54bE713736` | 6 |
 
 ## Arc
 
@@ -76,12 +103,31 @@ is its ERC-20 face (6 decimals): one balance, read at two scales.
 | `USDC` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | 6 |
 | `WETH` | `0x4200000000000000000000000000000000000006` | 18 |
 
+## Plasma
+
+| Symbol | Address | Decimals |
+| --- | --- | --- |
+| `USDT0` | `0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb` | 6 |
+
 ## Arbitrum One
 
 | Symbol | Address | Decimals |
 | --- | --- | --- |
 | `USDC` | `0xaf88d065e77c8cC2239327C5EDb3A432268e5831` | 6 |
+| `USDT0` | `0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9` | 6 |
 | `WETH` | `0x82aF49447D8a07e3bd95BD0d56f35241523fBab1` | 18 |
+
+## Ink
+
+| Symbol | Address | Decimals |
+| --- | --- | --- |
+| `USDT0` | `0x0200C29006150606B650577BBE7B6248F58470c1` | 6 |
+
+## Berachain
+
+| Symbol | Address | Decimals |
+| --- | --- | --- |
+| `USDT0` | `0x779Ded0c9e1022225f8E0630b35a9b54bE713736` | 6 |
 
 ## Solana
 

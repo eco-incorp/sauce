@@ -60,7 +60,10 @@ npm install
 ```
 
 `sauce init` writes a `package.json` that pins `@eco-incorp/sauce` to exactly the version that ran
-it, an `AGENTS.md` with the project's instructions for coding agents, a `.gitignore` that keeps
+it and `viem` to exactly the version installed beside it (with `@types/node` for the skills'
+TypeScript runners): a TypeScript project using the SDK depends on `@eco-incorp/sauce` and `viem`,
+whose types its API is written in, and a package manager that does not hoist dependencies (pnpm)
+resolves only a project's own. It also writes an `AGENTS.md` with the project's instructions for coding agents, a `.gitignore` that keeps
 local configuration out of git, `sauce.config.example.json`, and `programs/tsconfig.json`
 ([In an editor](#in-an-editor)), and then installs the agent skills ([Agent skills](skills.md)). `init` refuses to overwrite a file that already has other content,
 and lists it, unless you pass `--force`. It runs no package manager unless you pass `--install`.

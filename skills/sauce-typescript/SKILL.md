@@ -13,6 +13,13 @@ you. Every address comes from the package (`/deployments`, the registries) or fr
 never invent one. The shipped manual starts at `node_modules/@eco-incorp/sauce/docs/README.md`; the
 subpath list is `node_modules/@eco-incorp/sauce/docs/api/README.md`.
 
+**A TypeScript project using the package depends on `@eco-incorp/sauce` and `viem`**, both
+directly: the package's API is typed in viem's types (`Address`, `Hex`, `PublicClient`), and a
+package manager that installs a package's own dependencies beside it (pnpm) resolves only the
+project's. Pin viem to the version the package resolves, so both use the same types; `sauce init`
+writes both pins. Everything else, the Solana kit included, comes from the package's subpaths
+(`@eco-incorp/sauce/svm` re-exports the kit primitives its functions take).
+
 ## Supported chains
 
 For the initial release, Sauce supports transactions on Ethereum, Base and Solana. Every other
