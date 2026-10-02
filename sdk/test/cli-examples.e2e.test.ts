@@ -369,10 +369,8 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
 
     it("--block rehearses an earlier block: before the 0.05% pool reached the limit", async () => {
       await fresh();
-      // The earlier block is one mined after the revert: on CI's anvil, the state of the block a
-      // snapshot was taken at was once missing when read back as history after a revert.
-      await base.testClient.mine({ blocks: 1 });
-      const before = (await base.publicClient.getBlockNumber()).toString();
+      // Uncached: viem serves a block number up to 4 s old, which can predate the suite's setup.
+      const before = (await base.publicClient.getBlockNumber({ cacheTime: 0 })).toString();
       // Someone buys WETH on the 0.05% pool up to 2,700 USDC per WETH.
       await call(liquidity, LIQUIDITY.abi, "swap", [
         pools.get(500),
