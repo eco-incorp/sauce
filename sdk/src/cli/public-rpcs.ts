@@ -13,9 +13,10 @@
  * slot, and the USDC mint reads), that `eth_call` honors a state override of code and storage (a
  * simulation's fallback depends on it: an endpoint that ignores one is left out), and whether
  * `eth_simulateV1` runs with `validation: false` and `traceTransfers`, as `sauce simulate` sends it
- * (`simulateV1`). An endpoint that failed a check is not here, and neither are Kava, ZetaChain and
- * Evmos: no keyless endpoint of theirs honored a state override. `scripts/check-public-rpcs.mjs`
- * checks them all again; it is run by hand, never in CI.
+ * (`simulateV1`: true only where it ran every time; 1rpc's answer varied from one check to the
+ * next). An endpoint that failed a check is not here, and neither are Kava, ZetaChain and Evmos: no
+ * keyless endpoint of theirs honored a state override. `scripts/check-public-rpcs.mjs` checks them
+ * all again; it is run by hand, never in CI.
  *
  * Within a chain the order is the order they are tried: those that run `eth_simulateV1` first
  * (so a simulation and the reads around it go to one endpoint), the chain's own before the others.
@@ -37,13 +38,12 @@ export const PUBLIC_RPCS: Readonly<Record<number, readonly PublicRpc[]>> = {
   1: [
     { url: "https://ethereum-rpc.publicnode.com", simulateV1: true },
     { url: "https://eth.drpc.org", simulateV1: true },
-    { url: "https://1rpc.io/eth", simulateV1: false },
   ],
   // Optimism
   10: [
     { url: "https://mainnet.optimism.io", simulateV1: true },
     { url: "https://optimism-rpc.publicnode.com", simulateV1: true },
-    { url: "https://1rpc.io/op", simulateV1: true },
+    { url: "https://1rpc.io/op", simulateV1: false },
   ],
   // Cronos
   25: [
@@ -55,7 +55,6 @@ export const PUBLIC_RPCS: Readonly<Record<number, readonly PublicRpc[]>> = {
   56: [
     { url: "https://bsc-dataseed.bnbchain.org", simulateV1: true },
     { url: "https://bsc-rpc.publicnode.com", simulateV1: true },
-    { url: "https://1rpc.io/bnb", simulateV1: true },
   ],
   // Gnosis
   100: [
@@ -74,7 +73,7 @@ export const PUBLIC_RPCS: Readonly<Record<number, readonly PublicRpc[]>> = {
   137: [
     { url: "https://polygon-bor-rpc.publicnode.com", simulateV1: true },
     { url: "https://polygon.drpc.org", simulateV1: true },
-    { url: "https://1rpc.io/matic", simulateV1: true },
+    { url: "https://1rpc.io/matic", simulateV1: false },
   ],
   // Monad
   143: [
@@ -86,12 +85,11 @@ export const PUBLIC_RPCS: Readonly<Record<number, readonly PublicRpc[]>> = {
   146: [
     { url: "https://rpc.soniclabs.com", simulateV1: true },
     { url: "https://sonic-rpc.publicnode.com", simulateV1: true },
-    { url: "https://1rpc.io/sonic", simulateV1: true },
   ],
   // Manta Pacific
   169: [
     { url: "https://pacific-rpc.manta.network/http", simulateV1: true },
-    { url: "https://1rpc.io/manta", simulateV1: true },
+    { url: "https://1rpc.io/manta", simulateV1: false },
   ],
   // opBNB
   204: [
@@ -103,7 +101,6 @@ export const PUBLIC_RPCS: Readonly<Record<number, readonly PublicRpc[]>> = {
   250: [
     { url: "https://rpcapi.fantom.network", simulateV1: false },
     { url: "https://fantom.drpc.org", simulateV1: false },
-    { url: "https://1rpc.io/ftm", simulateV1: false },
   ],
   // Boba
   288: [
@@ -130,10 +127,7 @@ export const PUBLIC_RPCS: Readonly<Record<number, readonly PublicRpc[]>> = {
     { url: "https://core.drpc.org", simulateV1: true },
   ],
   // Moonbeam
-  1284: [
-    { url: "https://moonbeam.api.onfinality.io/public", simulateV1: false },
-    { url: "https://moonbeam.unitedbloc.com", simulateV1: false },
-  ],
+  1284: [{ url: "https://moonbeam.api.onfinality.io/public", simulateV1: false }],
   // Sei
   1329: [
     { url: "https://evm-rpc.sei-apis.com", simulateV1: false },
@@ -167,19 +161,19 @@ export const PUBLIC_RPCS: Readonly<Record<number, readonly PublicRpc[]>> = {
   // Mode
   34443: [
     { url: "https://mainnet.mode.network", simulateV1: true },
-    { url: "https://1rpc.io/mode", simulateV1: true },
+    { url: "https://1rpc.io/mode", simulateV1: false },
   ],
   // Arbitrum One
   42161: [
     { url: "https://arb1.arbitrum.io/rpc", simulateV1: true },
     { url: "https://arbitrum-one-rpc.publicnode.com", simulateV1: true },
-    { url: "https://1rpc.io/arb", simulateV1: true },
+    { url: "https://1rpc.io/arb", simulateV1: false },
   ],
   // Celo
   42220: [
     { url: "https://celo-rpc.publicnode.com", simulateV1: true },
-    { url: "https://1rpc.io/celo", simulateV1: true },
     { url: "https://forno.celo.org", simulateV1: false },
+    { url: "https://1rpc.io/celo", simulateV1: false },
   ],
   // Avalanche C-Chain
   43114: [

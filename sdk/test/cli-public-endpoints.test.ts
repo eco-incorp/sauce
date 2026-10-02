@@ -20,8 +20,10 @@ import { CANONICAL_CHAINS } from "../src/chains/canonical.js";
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const BASE = requireChain("base");
 
-/** What a fake endpoint does with a request: answer a result, answer a status, or fail to connect. */
-type Behaviour = { result: (method: string) => unknown } | { status: number } | "unreachable";
+/** What a fake endpoint does with a request: answer a result, answer a status, fail to connect, or
+ *  never answer. */
+type Behaviour =
+  { result: (method: string) => unknown } | { status: number } | "unreachable" | "hangs";
 
 /** A JSON-RPC answer to `body`'s call, with `result`. */
 const answered = (body: string, result: unknown): Response => {
@@ -48,6 +50,11 @@ function fakeFetch(endpoints: Record<string, Behaviour>) {
     calls.push({ url, method: (JSON.parse(body) as { method: string }).method });
     const behaviour = endpoints[url];
     if (behaviour === undefined || behaviour === "unreachable") throw new TypeError("fetch failed");
+    if (behaviour === "hangs") {
+      return new Promise<Response>((_, reject) =>
+        init?.signal?.addEventListener("abort", () => reject(new Error("timed out"))),
+      );
+    }
     if ("status" in behaviour) return new Response("refused", { status: behaviour.status });
 
     return answered(body, behaviour.result(calls.at(-1)!.method));
@@ -72,8 +79,9 @@ const open: PublicEndpoints[] = [];
 async function forwarder(
   rpcs: Readonly<Record<number, readonly PublicRpc[]>>,
   send: typeof fetch,
+  timeoutMs = 2_000,
 ): Promise<PublicEndpoints> {
-  const endpoints = publicEndpoints({ rpcs, fetch: send, timeoutMs: 2_000 });
+  const endpoints = publicEndpoints({ rpcs, fetch: send, timeoutMs });
   open.push(endpoints);
   await endpoints.ready();
 
@@ -132,7 +140,7 @@ describe("the forwarder", () => {
   const C = "https://c.example";
   const three = { [BASE.id]: [{ url: A }, { url: B }, { url: C }] };
 
-  it("falls back on an unreachable endpoint, a rate limit and a 5xx, then keeps to the next", async () => {
+  it("falls back past an unreachable endpoint and a rate limit, then keeps to the one that answered", async () => {
     const fake = fakeFetch({
       [A]: "unreachable",
       [B]: { status: 429 },
@@ -163,6 +171,16 @@ describe("the forwarder", () => {
     const url = (await forwarder({ [BASE.id]: [{ url: A }, { url: B }] }, fake.send)).url(BASE)!;
     expect((await call(url, "eth_chainId")).status).toBe(400);
     expect(fake.calls.map((each) => each.url)).toEqual([A]);
+  });
+
+  it("moves past an endpoint that does not answer in time, for this request and the next", async () => {
+    const fake = fakeFetch({ [A]: "hangs", [B]: { result: evmChain(8453) } });
+    const url = (await forwarder({ [BASE.id]: [{ url: A }, { url: B }] }, fake.send, 50)).url(
+      BASE,
+    )!;
+    expect((await call(url, "eth_chainId")).status).toBe(200);
+    await call(url, "eth_blockNumber");
+    expect(fake.calls.map((each) => each.url)).toEqual([A, B, B]);
   });
 
   it("answers the last refusal when every endpoint refuses, and a 502 when none is reached", async () => {

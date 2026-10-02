@@ -7,8 +7,10 @@
  * (`mcp/src/guard.ts`) forwards a caller's endpoint the same way.
  *
  * It keeps to the endpoint that last answered, so one command's requests go to one node and see one
- * chain until that node fails; and it sends `eth_simulateV1` only to an endpoint that runs it
- * (`simulateV1`), where the chain has one.
+ * chain until that node fails, and moves past one that failed, so a client that gave up waiting and
+ * asks again starts at the next; and it sends `eth_simulateV1` only to an endpoint that runs it
+ * (`simulateV1`), where the chain has one. One endpoint gets 8 seconds, less than viem's own
+ * timeout, so a client still waiting is answered by the next.
  *
  * NODE-ONLY: the `sauce` command and its MCP server use it; nothing browser-facing imports it.
  */
@@ -46,7 +48,8 @@ interface Reply {
   readonly body: Uint8Array;
 }
 
-/** One chain's endpoints, and the one that answered last. */
+/** One chain's endpoints, and the one the next request starts at: the last that answered, or the
+ *  one after the last that failed. */
 interface Route {
   readonly chain: CanonicalChain;
   readonly rpcs: readonly PublicRpc[];
@@ -104,16 +107,16 @@ async function relay(
         type: answer.headers.get("content-type") ?? "application/json",
         body: new Uint8Array(await answer.arrayBuffer()),
       };
-      if (passesOn(reply.status)) {
-        passed = reply;
-        continue;
-      }
-      route.current = index;
+      if (!passesOn(reply.status)) {
+        route.current = index;
 
-      return reply;
+        return reply;
+      }
+      passed = reply;
     } catch {
       // Unreachable, too slow, or cut off mid-answer: the next one.
     }
+    if (route.current === index) route.current = (index + 1) % rpcs.length;
   }
 
   return (
@@ -149,7 +152,7 @@ const answer = (res: ServerResponse, reply: Reply): void => {
 export function publicEndpoints(options: PublicEndpointsOptions = {}): PublicEndpoints {
   const rpcs = options.rpcs ?? PUBLIC_RPCS;
   const send = options.fetch ?? fetch;
-  const timeoutMs = options.timeoutMs ?? 15_000;
+  const timeoutMs = options.timeoutMs ?? 8_000;
   // In every URL: a request without it is not this process's.
   const token = randomBytes(16).toString("hex");
   const routes = new Map<string, Route>();
