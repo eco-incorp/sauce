@@ -582,6 +582,28 @@ list must only ever name modules the SDK resolves itself. Two DISTINCT mechanism
 share the word "ambient": ambient **DEFINES** (`chainDefines` — chain-scoped SCALARS: chainId,
 protocol addresses, token symbols) vs ambient **MODULES** (this — whole library exports).
 
+**The manual and the skills describe the Portal intent syntax AHEAD of the compiler.** They write
+every intent as `Chain.Portal.send(reward).receive(delivery).then(() => { body })`: items as
+arguments (`{ token, amount }`, and in the reward `{ native: amount }`), `.receive` required,
+`.creator()`/`.deadline()`/`.prover()` after `send` and `.deadline()`/`.salt()`/`.fee()` after
+`receive`, a creator named on every intent a program opens, and Eco's Portal app's defaults (a fill
+window of 300 s, a reward 604,800 s past it, the registry's prover, a random salt). They also
+describe the surface that comes with it: `--intent-salt`, `intents.salt`, `intents.publisher`,
+`routes.INTENT_STAGES`, `routes.DEFAULT_FILL_WINDOW`/`DEFAULT_REFUND_WINDOW`, `routes.randomSalt`
+and the host's `Chain.Portal`. **This tree's SDK does not implement any of it yet.** It still lowers
+the old form, `Chain(() => { body }, { tokens }).reward({ tokens })`, which the paragraphs below
+describe. The syntax lands with the compiler host API (v12 #549–#553), lowered compiler-natively by
+SDK #61. That PR takes draft SDK #78 as its specification: the syntax table, its tests, and their
+equivalence to the old form. Until it lands, every example, runner, fenced block and documented
+claim written in the syntax is named in ONE list, `PENDING_INTENT_SYNTAX`
+(`docs/scripts/pending-intent-syntax.json`). `docs:check`, `skills:check` and the editor check read
+it through `docs/scripts/example-programs.mjs`, and the suites that execute those files through
+`sdk/test/pending-intent-syntax.ts`. An entry is exempt from being compiled, typechecked and
+executed, and from nothing else: the wording, link, plain-integer, free-name and no-`--define` rules
+hold it like everything else. Each entry is still tried, and fails as STALE once it compiles (or
+typechecks and runs, or holds), so #61 empties the list and deletes it. Do not exempt the syntax
+any other way, and do not write the old form in a doc or a skill.
+
 **Chain-scoped names are resolved per level.** In `Chain(() => …).reward(…)` (`intent-sugar.ts`)
 the body and the delivery argument resolve on the destination and the reward on the enclosing
 chain, which escrows and approves it. `sauce-route.ts#levelOn` gives each level on another chain
@@ -929,7 +951,11 @@ them, `references/`.
   names it); and `sauce-protocols/references/index.md` (every protocol by category, with the
   hand-written "Choosing between them" prose that lives in the generator) plus
   `sauce-protocols/references/registry/<slug>.md` (deployments per chain, namespace or ABI-import
-  spelling, ABI functions). A deployment role's ABI export comes from the registry's own evidence
+  spelling, ABI functions); and `sauce-intents/references/defaults.md`, the one table of what each
+  intent modifier is when left out, which the manual renders too as
+  `docs/reference/intent-defaults.md` (the windows are stated in the generator until the lowering
+  that lands the Portal syntax exports them). A deployment role's ABI export comes from the
+  registry's own evidence
   map, `test/fixtures/registry-abi/targets.json`, offered only where the compile serves the export
   as `./protocols/<slug>/<Export>.json`. The files are committed and prettier-ignored, and each
   carries compiled examples; CI fails when the build changed `skills/`, and `skills:check` fails a
@@ -1009,7 +1035,8 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   instructions file (the skills reach every agent); no engine internals (opcodes, mnemonics, stack
   effects, bytecode bytes); no placeholder or unrecorded address (every `0x` address must be one the
   SDK records; developer inputs are `<placeholders>`); the Portal and provers only in
-  `sauce-intents`; no RPC endpoint; Sauce never described as a multicall; no pointer into the
+  `sauce-intents`, but for the intent syntax every skill may write (`Base.Portal.send(...)`,
+  `Chain.Portal`, `<Chain>.Portal`: `check-skills.mjs#CHAIN_PORTAL`); no RPC endpoint; Sauce never described as a multicall; no pointer into the
   package's docs (`node_modules/@eco-incorp/sauce/...`, `docs/guides/...`) outside
   `sauce-typescript`, because a skill carries every fact it needs in its `SKILL.md` and
   `references/` (an agent may have only the skills, served by the MCP server). The protocol
