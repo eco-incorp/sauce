@@ -928,10 +928,11 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   example and selector, with its reason); every value an example program reads having a visible
   source — a name it never declares must be the registry's (`routes.sourceGlobals` on any chain),
   the language's (a builtin root from `builtins.json`, or `available`, `Token`, `self`), an import,
-  a local or a parameter, so in a program with a `main` an input is a `main` parameter and never an
-  undeclared define, and an intent file with no `main` shows each UPPER_CASE define it reads as
-  `--define NAME=…` in its header (an exception is an `INPUT_EXCEPTIONS` entry, per example and
-  name, with its reason); and the wording rules below. Its exceptions
+  a local or a parameter, so an input is a `main` parameter given with `--args` and never an
+  undeclared define, which is the SDK's mechanism and not a user's (an exception is an
+  `INPUT_EXCEPTIONS` entry, per example and name, with its reason; the intent files waiting on
+  `sauce intent publish --args` are listed there, and `docs:check`'s `EXECUTION_EXCEPTIONS` excuses
+  the two not yet executed); and the wording rules below. Its exceptions
   live in the checker, never as markers in a
   shipped skill (they mean nothing to the agent reading it): a name inline code may use although
   the package never declares it (an external contract's function) is an `UNDECLARED_NAMES` entry,

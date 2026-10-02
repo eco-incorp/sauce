@@ -103,6 +103,23 @@ for (const name of sauceExamples) {
   }
 }
 console.log(`SauceScript examples: ${sauceExamples.length} quoted verbatim in the manual`);
+// The intent files intent-defaults converts to `main` parameters, with `sauce intent publish
+// --args`, and executes in an eco-routes suite. Each entry fails once its example no longer needs
+// it, which is when that PR removes it.
+const BY_INTENT_DEFAULTS = "converted and executed by intent-defaults' publish --args PR";
+const EXECUTION_EXCEPTIONS = {
+  "nested-intent.sauce.ts": BY_INTENT_DEFAULTS,
+  "nested-swap.sauce.ts": BY_INTENT_DEFAULTS,
+};
+const INPUT_EXCEPTIONS = {
+  "cross-chain-cascade.sauce.ts": { RECIPIENT: BY_INTENT_DEFAULTS },
+  "nested-intent.sauce.ts": Object.fromEntries(
+    ["AMOUNT", "REWARD", "RECIPIENT"].map((name) => [name, BY_INTENT_DEFAULTS]),
+  ),
+  "nested-swap.sauce.ts": Object.fromEntries(
+    ["POOL", "MIN_OUT", "AMOUNT", "REWARD", "RECIPIENT"].map((name) => [name, BY_INTENT_DEFAULTS]),
+  ),
+};
 // Compiled is not run: each example also names, in `executed.json`, the suites that execute it on
 // an engine. Tests do not ship, so the installed package's run skips this.
 if (packageArgument < 0) {
@@ -112,17 +129,21 @@ if (packageArgument < 0) {
     examples: sauceExamples,
     manifest: join(examples, "executed.json"),
     compileOnly: false,
+    pending: EXECUTION_EXCEPTIONS,
   });
   if (problems.length)
     throw new Error(`SauceScript examples not executed:\n${problems.join("\n")}`);
-  console.log(`SauceScript examples: ${sauceExamples.length} executed by the suites named`);
+  const pending = Object.keys(EXECUTION_EXCEPTIONS).length;
+  console.log(
+    `SauceScript examples: ${sauceExamples.length - pending} executed by the suites named, ` +
+      `${pending} pending (EXECUTION_EXCEPTIONS)`,
+  );
 }
 // What the registry names, a program writes by its name: no recorded address as a literal, no
 // selector of a function a binding declares built by hand. None of these examples is low-level.
-// And every value a program reads has a visible source: a `main` parameter, or, in an intent file
-// with no `main`, a `--define` its header shows (`example-programs.mjs`). An exception is
-// INPUT_EXCEPTIONS's: example -> name -> why, and one nothing needs fails.
-const INPUT_EXCEPTIONS = {};
+// And every value a program reads has a visible source: an input is a `main` parameter
+// (`example-programs.mjs`). An exception is INPUT_EXCEPTIONS's, above: example -> name -> why, and
+// one nothing needs fails.
 {
   const sdk = await import(pathToFileURL(join(root, "sdk/dist/index.js")).href);
   const protocols = await Promise.all(

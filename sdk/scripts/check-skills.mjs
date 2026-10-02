@@ -56,8 +56,7 @@
 //      `skills-check/executed.json`, or listed there as compile-only with the reason;
 //  12. every example program writes what the registry names by its name: no recorded address as
 //      a literal, no hand-built selector of a function a binding declares (LOW_LEVEL_CALLS); and
-//      shows its inputs: a `main` parameter, or in an intent file a `--define` its header gives
-//      (INPUT_EXCEPTIONS).
+//      takes its inputs as `main` parameters, never an undeclared define (INPUT_EXCEPTIONS).
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -1609,11 +1608,27 @@ if (skillsFlag < 0) {
 // ---- 12. Example programs write what the registry names by its name, and show their inputs ---------------
 // No address the registry records as a literal, and no hand-built selector of a function a binding
 // declares (`docs/scripts/example-programs.mjs`). A deliberately low-level call is listed here:
-// example -> selector -> why. And every value a program reads has a visible source: a `main`
-// parameter, or, in an intent file with no `main`, a `--define` its header shows; an exception is
-// INPUT_EXCEPTIONS's, example -> name -> why. An entry nothing needs any more fails.
+// example -> selector -> why. And every value a program reads has a visible source: an input is a
+// `main` parameter; an exception is INPUT_EXCEPTIONS's, example -> name -> why. An entry nothing
+// needs any more fails.
 const LOW_LEVEL_CALLS = {};
-const INPUT_EXCEPTIONS = {};
+// The intent files intent-defaults converts to `main` parameters (`sauce intent publish --args`);
+// that PR removes these, which fail once nothing reads them.
+const BY_INTENT_DEFAULTS = "converted by intent-defaults' publish --args PR";
+const INPUT_EXCEPTIONS = {
+  "sauce-intents/examples/cross-chain.sauce.ts": { BENEFICIARY: BY_INTENT_DEFAULTS },
+  "sauce-intents/examples/swap-on-base.sauce.ts": Object.fromEntries(
+    [
+      "AMOUNT_IN",
+      "REWARD",
+      "SQRT_PRICE_LIMIT_X96",
+      "MIN_OUT",
+      "MIN_AVG_PRICE",
+      "RECIPIENT",
+      "REFUND_TO",
+    ].map((name) => [name, BY_INTENT_DEFAULTS]),
+  ),
+};
 {
   const names = registryNames(
     sdk,

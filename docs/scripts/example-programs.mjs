@@ -27,11 +27,9 @@
 // INPUTS IN THE OPEN. A reader must see where every value a program reads comes from. A name the
 // program uses without declaring it must be the registry's (a token, a namespace, a chain, a chain
 // define, an ambient module's function), the language's (a builtin, or the SDK's `available`,
-// `Token` and `self`), an import, or a local or parameter. In a program with a `main`, nothing else:
-// an input is a `main` parameter, given with `--args`, never an undeclared define. A top-level
-// intent file has no `main`, so a define is its only input channel, and each UPPER_CASE one it
-// reads must be given as `--define NAME=…` in its own header. An exception is the owning checker's,
-// per example and name, with its reason.
+// `Token` and `self`), an import, or a local or parameter — nothing else. An input is a `main`
+// parameter, given with `--args`; a compile-time define is the SDK's own mechanism, never a user's
+// input. An exception is the owning checker's, per example and name, with its reason.
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 
@@ -53,6 +51,8 @@ function ranByCi(repository, suite) {
 /**
  * The problems with `manifest` (a path) for the `examples` (paths relative to `examplesRoot`), or
  * none. `compileOnly` false refuses any compile-only entry: every one of these must execute.
+ * `pending` (example -> why), the owning checker's, excuses an example no suite runs yet, and fails
+ * once the manifest names a suite for it.
  */
 export function executedExamplesProblems({
   repository,
@@ -60,6 +60,7 @@ export function executedExamplesProblems({
   examples,
   manifest,
   compileOnly = true,
+  pending = {},
 }) {
   const where = relative(repository, manifest);
   const problems = [];
@@ -69,8 +70,16 @@ export function executedExamplesProblems({
   if (!compileOnly && Object.keys(unexecuted).length > 0) {
     problems.push(`${where}: these examples must be executed, not listed as compile-only`);
   }
+  for (const [example, why] of Object.entries(pending)) {
+    if (!examples.includes(example))
+      problems.push(`${where}: pending ${example} is not an example`);
+    else if (example in executed) {
+      problems.push(`${example}: ${where} names its suite now; remove its pending entry (${why})`);
+    }
+  }
   for (const example of examples) {
     const listed = [example in executed, example in unexecuted].filter(Boolean).length;
+    if (listed === 0 && Object.hasOwn(pending, example)) continue;
     if (listed === 0) {
       problems.push(
         `${example}: no test executes it — run it in a suite and name that suite in ${where}` +
@@ -262,11 +271,6 @@ function freeNames(ts, source) {
  * nothing needs any more.
  */
 export function inputProblems({ where, source, ts, names, allowed = {}, used = new Set() }) {
-  const hasMain = /^(?:export\s+)?function\s+main\s*\(/m.test(source);
-  const header = source
-    .split("\n")
-    .filter((line) => line.startsWith("//"))
-    .join("\n");
   const problems = [];
   for (const name of freeNames(ts, source)) {
     if (names.globals.has(name)) continue;
@@ -274,21 +278,10 @@ export function inputProblems({ where, source, ts, names, allowed = {}, used = n
       used.add(name);
       continue;
     }
-    if (hasMain) {
-      problems.push(
-        `${where}: reads ${name}, which it never declares and the registry does not name: an input ` +
-          "is a `main` parameter, given with --args",
-      );
-    } else if (!/^[A-Z][A-Z0-9_]*$/.test(name)) {
-      problems.push(
-        `${where}: reads ${name}, which it never declares and the registry does not name`,
-      );
-    } else if (!new RegExp(`--define ${name}=`).test(header)) {
-      problems.push(
-        `${where}: reads the define ${name}, which its header never gives: show it as ` +
-          `\`--define ${name}=<…>\` in the usage line`,
-      );
-    }
+    problems.push(
+      `${where}: reads ${name}, which it never declares and the registry does not name: an input ` +
+        "is a `main` parameter, given with --args",
+    );
   }
   return problems;
 }
