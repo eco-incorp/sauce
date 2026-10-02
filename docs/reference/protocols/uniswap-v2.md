@@ -18,32 +18,35 @@ Constant product AMM (x*y=k) with permissionless pair creation. The most forked 
 - Constant-product pairs, one per token pair, with a 0.3% fee. Simple and everywhere, but with
   more price impact than a V3 pool for the same trade.
 - The pair fills in full or reverts, so its Router, with an exact approval and `amountOutMin`,
-  strands nothing. The Sauce Router's unified `swap` also serves V2 pairs.
+  strands nothing. A Sauce program trades the pair itself with `@sauce/router`'s `uniswapV2`, with
+  no Router and no approval.
 
 ## Pitfalls for a program
 
 - `amountOutMin` is the only bound: there is no price limit.
-- Approve the Router for exactly `amountIn`, and give a `deadline` (`ctx.timestamp()` is this
-  block).
+- Through the Router, approve it for exactly `amountIn`, and give a `deadline`
+  (`ctx.timestamp()` is this block). `uniswapV2` needs neither: it pushes the input to the pair.
 - A fee-on-transfer token needs the `...SupportingFeeOnTransferTokens` variants, which the
   registry ABI does not declare.
 - The pair must exist: `Factory.getPair` returns `0` where it does not.
 
 ## In a Sauce program
 
-Sell the Pot's USDC for WETH through the Router:
+Sell the Pot's USDC for WETH at the pair:
 
 ```ts
+import { uniswapV2 } from "@sauce/router";
+
 function main(amountIn: Uint256, minOut: Uint256, recipient: Address) {
-  const self = ctx.self();
-  const before = WETH.balanceOf(self);
-  USDC.approve(UniswapV2.Router, amountIn);
-  UniswapV2.Router.swapExactTokensForTokens(amountIn, minOut, [USDC, WETH], self, ctx.timestamp());
-  const out = WETH.balanceOf(self) - before;
-  require(out >= minOut, "below minOut");
-  WETH.transfer(recipient, out);
+  const pair = UniswapV2.Factory.getPair(USDC, WETH);
+  require(pair != 0n, "no USDC/WETH pair");
+  uniswapV2(pair, USDC, WETH, amountIn, 3000n, minOut, recipient);
 }
 ```
+
+`uniswapV2` prices the output from the pair's reserves with its 0.3% fee (`3000n` ppm), pushes
+`amountIn` to the pair, pays `recipient` and reverts below `minOut`. The pair takes the whole input
+or the program reverts, so no input is left to return.
 
 ## Key Operations
 

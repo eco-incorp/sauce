@@ -77,7 +77,7 @@ function main(
 ```
 
 - No `fee` parameter: QuickSwap V3 uses Algebra protocol with dynamic fees (not fixed fee tiers)
-- `limitSqrtPrice`: `0` in this template, no price limit, so `amountOutMin` is the only bound. QuickSwap V3 is an Algebra pool, which the Sauce Router's `swapV3` drives with a real limit ([`@sauce/router`](../../api/router.md))
+- `limitSqrtPrice`: `0` in this template, no price limit, so `amountOutMin` is the only bound. QuickSwap V3 is an Algebra pool, which `@sauce/router`'s `uniswapV3` drives with a real limit through the Pot's Router ([`@sauce/router`](../../api/router.md))
 
 ### addLiquidity
 
