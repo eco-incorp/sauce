@@ -168,7 +168,7 @@ command-line argument or a tool input, and it never reaches the model's context:
 
 ```sh
 sauce wallet new agent --password-env SAUCE_WALLET_PASSWORD
-sauce run pay.sauce.ts --chain base --config sauce.config.json \
+sauce run pay.sauce.ts --chain base \
   --wallet agent --password-env SAUCE_WALLET_PASSWORD --args <recipient> 1000000
 sauce mcp --wallets --password-env SAUCE_WALLET_PASSWORD
 ```

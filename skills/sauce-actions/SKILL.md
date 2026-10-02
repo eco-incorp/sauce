@@ -142,10 +142,10 @@ sauce actions swap.json --chain base --json
 the same flags (`sauce-cli` covers the Pot, endpoints, signers and funding):
 
 ```sh
-sauce simulate swap.json --chain base --owner <address> --rpc-url <url> \
+sauce simulate swap.json --chain base --owner <address> \
   --assume-balance USDC:1000 --args 1000000000
 sauce tx swap.json --chain base --owner <address> --value 0 --args 1000000000
-sauce run swap.json --chain base --rpc-url <url> --keystore <keystore> --args 1000000000
+sauce run swap.json --chain base --keystore <keystore> --args 1000000000
 ```
 
 - `tx` and `run` build and send the cook on a chain the initial release supports: Ethereum or

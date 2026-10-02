@@ -54,11 +54,11 @@ export function instructions(endpoints: Endpoints, wallets?: WalletContext): str
     "   A fixed sequence of protocol operations can be an actions document in JSON instead:",
     "   sauce_actions (the sauce-actions skill says how).",
     "2. sauce_compile until it compiles; entryParams is what main takes, as args.",
-    "3. sauce_pools with rpcUrl for a pair's pools, their prices and depth, before a swap;",
-    "   sauce_price for a swap's price limits (with pool and rpcUrl, from the pool now).",
-    "4. sauce_pot for the owner's Pot: its address, its unsigned deployment, and, with rpcUrl,",
-    "   whether it exists, the Kitchen's fee and what the Pot holds.",
-    "5. sauce_simulate with rpcUrl: the cook rehearsed (any owner will do; nothing is signed).",
+    "3. sauce_pools for a pair's pools, their prices and depth, before a swap; sauce_price for",
+    "   a swap's price limits (with pool, from the pool now).",
+    "4. sauce_pot for the owner's Pot: its address, its unsigned deployment, whether it exists,",
+    "   the Kitchen's fee and what the Pot holds.",
+    "5. sauce_simulate: the cook rehearsed (any owner will do; nothing is signed).",
     "6. sauce_tx for the unsigned cook, for the owner to sign. An intent fixed when it is built",
     "   publishes from a wallet instead: sauce_intent_publish, and sauce_intent_fill with dryRun",
     "   rehearses a solver filling it on its destination.",
@@ -68,7 +68,7 @@ export function instructions(endpoints: Endpoints, wallets?: WalletContext): str
     "sauce_intent_claim, sauce_intent_refund and sauce_intent_cancel build each step unsigned;",
     "sauce_intent_import reads one back from its transaction. This server keeps no intents: pass",
     "the intent's `record` (sauce_intent_publish and sauce_intent_import return it), or txHash",
-    "and its source chain, and rpcUrls with both chains' endpoints.",
+    "and its source chain.",
     "",
     ...(wallets === undefined
       ? [
@@ -102,10 +102,16 @@ export function instructions(endpoints: Endpoints, wallets?: WalletContext): str
     `Requests: ${CHAIN_SUPPORT_NEW_ISSUE_URL}`,
     "",
     "A tool that reads a chain takes rpcUrl, an endpoint for that call; it is never echoed.",
-    endpoints.chainIds.length === 0
-      ? "This server has no endpoint of its own: without rpcUrl, sauce_simulate, transaction " +
-        "hashes and a Solana sauce_tx are unavailable, and an EVM sauce_tx needs `value`."
-      : `This server has its own endpoints for chains ${endpoints.chainIds.join(", ")}.`,
+    ...(endpoints.chainIds.length === 0
+      ? []
+      : [`This server has its own endpoints for chains ${endpoints.chainIds.join(", ")}.`]),
+    endpoints.public !== undefined
+      ? "Without rpcUrl, a chain is read through a built-in public endpoint, which can be slow or " +
+        "rate-limited (a result's notes say when one was used): rpcUrl is optional."
+      : endpoints.chainIds.length === 0
+        ? "This server has no endpoint of its own: without rpcUrl, sauce_simulate, transaction " +
+          "hashes and a Solana sauce_tx are unavailable, and an EVM sauce_tx needs `value`."
+        : "Without rpcUrl, a chain it has no endpoint for is not read.",
   ].join("\n");
 }
 

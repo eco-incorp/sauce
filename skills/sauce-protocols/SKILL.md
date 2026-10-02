@@ -57,7 +57,7 @@ With that program in `pools.sauce.ts`, a run on Base passes nothing but the fee 
 `500` is the 0.05% tier):
 
 ```sh
-sauce run pools.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+sauce run pools.sauce.ts --chain base --keystore <keystore> \
   --args 500
 ```
 

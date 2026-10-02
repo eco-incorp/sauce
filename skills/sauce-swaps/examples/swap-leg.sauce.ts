@@ -3,7 +3,7 @@
 // below `minOut`. The pool takes only what it can fill before the limit, so the rest of `amountIn`
 // goes back too. Only this trade's tokens move: what else the Pot holds stays there.
 //
-//   sauce run swap-leg.sauce.ts --chain <chain> --config sauce.config.json --keystore <keystore> \
+//   sauce run swap-leg.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <tokenIn> <tokenOut> <fee> <amountIn> <sqrtPriceLimitX96> <minOut> <recipient>
 //
 //   tokenIn: Address            the token sold
@@ -19,7 +19,7 @@
 //
 // On Base, 0.1 WETH sold for USDC on the 0.05% pool, no lower than 2,500 USDC per WETH:
 //
-//   sauce run swap-leg.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+//   sauce run swap-leg.sauce.ts --chain base --keystore <keystore> \
 //     --args 0x4200000000000000000000000000000000000006 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
 //     500 100000000000000000 3961408125713216879677197 249000000 <recipient>
 import { uniswapV3 } from "@sauce/router";

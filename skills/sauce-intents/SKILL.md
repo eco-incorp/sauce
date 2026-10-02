@@ -89,20 +89,20 @@ reward)`, sent by anyone, returns everything the vault holds of the reward to th
 ## Every step from the command line
 
 `sauce intent` drives the whole lifecycle. Each verb takes the intent file (with `--chain`, the
-source, and the flags it was built with) or the intent's hash, and `--config sauce.config.json`
-with both chains' endpoints. Every intent the commands publish, fill or import goes into a local
+source, and the flags it was built with) or the intent's hash, and reads both chains. Every intent
+the commands publish, fill or import goes into a local
 store in your home directory (`--store <dir>` names another), so later steps name it by hash; where it
 stands is read from the chains each time.
 
 ```sh
-sauce intent publish --config sauce.config.json --keystore <keystore>
-sauce intent status <intent-hash> --config sauce.config.json
-sauce intent fill <intent-hash> --config sauce.config.json --send --keystore <keystore>
-sauce intent prove <intent-hash> --config sauce.config.json --keystore <keystore>
-sauce intent claim <intent-hash> --chain <source> --config sauce.config.json --keystore <keystore>
-sauce intent refund <intent-hash> --chain <source> --config sauce.config.json --keystore <keystore>
-sauce intent cancel <intent-hash> --config sauce.config.json --keystore <keystore>
-sauce intent import <tx-hash> --chain <source> --config sauce.config.json
+sauce intent publish --keystore <keystore>
+sauce intent status <intent-hash>
+sauce intent fill <intent-hash> --send --keystore <keystore>
+sauce intent prove <intent-hash> --keystore <keystore>
+sauce intent claim <intent-hash> --chain <source> --keystore <keystore>
+sauce intent refund <intent-hash> --chain <source> --keystore <keystore>
+sauce intent cancel <intent-hash> --keystore <keystore>
+sauce intent import <tx-hash> --chain <source>
 ```
 
 - `publish` with no file asks, at a terminal, for the chains, the token and amount delivered and
@@ -132,13 +132,12 @@ sauce intent import <tx-hash> --chain <source> --config sauce.config.json
 
 **An intent to Solana.** An intent Ethereum or Base publishes for Solana is filled, proven and
 cancelled on Solana, through its Portal program, and claimed or refunded on its source as above.
-The config gives Solana's endpoint under its chain id, `1399811149`.
 
 ```sh
-sauce intent import <tx-hash> --chain <source> --config sauce.config.json
-sauce intent fill <intent-hash> --config sauce.config.json --solver <solana-key> --claimant <address>
-sauce intent fill <intent-hash> --config sauce.config.json --claimant <address> --send --keypair <keypair>
-sauce intent cancel <intent-hash> --config sauce.config.json --keypair <keypair>
+sauce intent import <tx-hash> --chain <source>
+sauce intent fill <intent-hash> --solver <solana-key> --claimant <address>
+sauce intent fill <intent-hash> --claimant <address> --send --keypair <keypair>
+sauce intent cancel <intent-hash> --keypair <keypair>
 ```
 
 - `--claimant` is required: the address on the source chain the reward pays. A Solana key is not
@@ -199,7 +198,7 @@ transfer lands; the intent's status stays Initial (only `publishAndFund` or `fun
 must be a literal, a define or a top-level `const` of a literal, and the file may do nothing but
 open intents (a file with an amount measured or computed on chain is refused, with `sauce run` named
 instead). For each intent it computes the vault from the
-Portal's address and the intent and, with an endpoint, reads it from the Portal's
+Portal's address and the intent and reads it from the Portal's
 `intentVaultAddress`: the two must agree, or nothing is sent. The wallet then transfers each reward
 token to the vault (and sends a native reward to it), only what the vault does not hold yet, and
 calls `publish(destination, route, reward)` once the Portal reports the intent funded. A token whose
@@ -208,7 +207,7 @@ in the vault: top it up and run it again, or `refund` after the deadline. A seco
 the vault funded only publishes.
 
 ```sh
-sauce intent publish pay-on-ethereum.sauce.ts --chain base --config sauce.config.json \
+sauce intent publish pay-on-ethereum.sauce.ts --chain base \
   --from <address> --dry-run --assume-balance USDC:1 --define RECIPIENT=<address> \
   --define AMOUNT=1000000 --intent-deadline <unix seconds> --intent-creator <address>
 sauce intent publish pay-on-ethereum.sauce.ts --chain base --from <address> --format json \
@@ -221,9 +220,9 @@ sauce intent publish pay-on-ethereum.sauce.ts --chain base --from <address> --fo
   gives the wallet the reward for the rehearsal only, so a wallet that does not hold it yet can
   rehearse. Without `--dry-run`, `--keystore <keystore>` in place of `--from` signs and sends them.
 - `--format json` (or `cast`) with `--from` and no signer prints the transactions, unsigned, for that
-  wallet to send in order, transfers first, with each intent's `vault`. With no endpoint the vault
-  is the package's own computation and each transfer is for the whole reward; with one, the vault
-  is also read from the Portal and only what it does not hold yet is transferred. Send `publish`
+  wallet to send in order, transfers first, with each intent's `vault`. The vault is also read
+  from the Portal and only what it does not hold yet is transferred (with `--offline`, the vault is
+  the package's own computation and each transfer is for the whole reward). Send `publish`
   only once the transfers have landed.
 
 **(b) From a Pot.** `sauce run` cooks the file on your Pot, and opening the intent is one of its
@@ -237,7 +236,7 @@ intent with a slot for it, and the program writes the measured value in before i
 one-word value can be carried this way.
 
 ```sh
-sauce run cross-chain.sauce.ts --chain base --config sauce.config.json --keystore <keystore> \
+sauce run cross-chain.sauce.ts --chain base --keystore <keystore> \
   --define BENEFICIARY=<address> --intent-deadline <unix seconds> --intent-creator <address> \
   --intent-execution-fee <wei>
 ```
@@ -256,7 +255,7 @@ intent file, those three arguments are the arguments of the `publish` that
 `publishAndFund` instead (below).
 
 ```sh
-sauce run fund-by-transfer.sauce.ts --chain base --config sauce.config.json \
+sauce run fund-by-transfer.sauce.ts --chain base \
   --keystore <keystore> --args <destination> <route> <reward>
 ```
 
@@ -272,8 +271,8 @@ sauce run fund-by-transfer.sauce.ts --chain base --config sauce.config.json \
 **Quoted intents.** A solver that quoted an intent marks its quote funded when it sees
 `IntentFunded`, which only `publishAndFund` and `fund` emit. For an intent built from a solver's
 quote, fund it with `publishAndFund`: (a) or (b) with `--intent-fund-via publishAndFund`, not by
-transfer. The wallet then approves each reward token to the **Portal** for exactly the reward (with
-an endpoint, a smaller allowance already standing is reset to zero first, as USDT requires), and
+transfer. The wallet then approves each reward token to the **Portal** for exactly the reward (a
+smaller allowance already standing is reset to zero first, as USDT requires), and
 `publishAndFund(destination, route, reward, false)` pulls the reward into the same vault and marks
 the intent Funded; from a Pot, the same happens inside the cook.
 
@@ -405,7 +404,7 @@ developer's:
 - **`--intent-execution-fee <wei>`** for a program body: the destination Kitchen's fee. It is
   mutable on chain and lives on the destination, so read it there just before sending: an
   `eth_call` of `executionFee()` on the destination's Kitchen (its address is in the chain's file in
-  `sauce-chains`), or pass `--intent-execution-fee auto`, which reads it through `--config`. An
+  `sauce-chains`), or pass `--intent-execution-fee auto`, which reads it there. An
   increase before the fill makes the cook, and the fulfilment, revert.
 
 **Units and defines.** Amounts are base units (`AMOUNT=1000000` is 1 USDC); only `--assume-balance`
@@ -423,7 +422,7 @@ prover deployed on both sides.
   owner is the Executor, its salt zero); the destination's file in `sauce-chains` gives the Pot and
   the Executor. **The Pot must exist before any fill**: until it does, every fulfilment of a program
   body reverts (`CallToEOA`). `sauce pot --chain <destination> --owner <Executor>` prints its
-  address and deploy transaction; with `--deploy --config sauce.config.json --keystore <keystore>`
+  address and deploy transaction; with `--deploy --keystore <keystore>`
   any signer deploys it (the Pot is the Executor's either way), and an existing one is reported, not
   redeployed; `sauce intent fill` says whether it is deployed on the destination, and deploys it in its
   rehearsal when it is not. Anything left in the Pot after the program, token or allowance, belongs
@@ -446,7 +445,7 @@ prover deployed on both sides.
   and flags, before publishing; it signs nothing and sends nothing:
 
 ```sh
-sauce intent fill swap-on-base.sauce.ts --chain <chain> --config sauce.config.json \
+sauce intent fill swap-on-base.sauce.ts --chain <chain> \
   --defines <defines.json> --intent-deadline <unix seconds> --intent-creator <address> \
   --intent-execution-fee <Base Kitchen fee in wei>
 ```
@@ -460,8 +459,8 @@ transfer, each address's net change (an address a define holds is named by the d
 the shared Pot and the Executor were left holding, which must be nothing; or why the fill
 reverts, down to the body's own `require` message. It warns when the shared Pot is not deployed,
 and when `--intent-execution-fee` is below the destination Kitchen's fee, naming the fee to pass.
-`--config` must name the destination chain's endpoint (`--rpc-url` works when every intent goes
-to one chain, and is then that chain's endpoint). An intent that uses a value measured on chain
+It reads the destination chain (`--rpc-url`, for an endpoint of your own, works when every intent
+goes to one chain, and is then that chain's). An intent that uses a value measured on chain
 cannot be rehearsed this way: its route exists only once the program runs. Fix what it reports
 and rehearse again before `sauce intent publish` or `sauce run`. With `--send` and a signer,
 `sauce intent fill` then fills it for real (above).
@@ -473,7 +472,7 @@ and rehearse again before `sauce intent publish` or `sauce run`. With `--send` a
 
 ```sh
 sauce simulate one-pool-body.sauce.ts --chain base --owner <address> \
-  --config sauce.config.json --assume-balance WETH:0.001 --define AMOUNT_IN=1000000000000000 \
+  --assume-balance WETH:0.001 --define AMOUNT_IN=1000000000000000 \
   --define SQRT_PRICE_LIMIT_X96=<sqrtPriceX96> --define MIN_OUT=<amount> \
   --define RECIPIENT=<address> --define REFUND_TO=<address>
 ```
