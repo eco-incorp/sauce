@@ -2,7 +2,9 @@
 // sauce-solana skill says about it: the manifest lists the Account parameters in order with their
 // roles, the mint is a module constant a define replaces, only the scalar parameters are
 // arguments, execution needs an rpcUrl the caller supplies, the USDC mint's hex is the skill's, the
-// Pot is the Kitchen's address for its seeds, and a cook's size is what the skill budgets. Offline:
+// Pot is the Kitchen's address for its seeds, and a cook's size is what the skill budgets. Then
+// token-2022.sauce.ts: its accounts, PYUSD's token program, the two programs the skill names, and
+// that moving a Token-2022 token and measuring what arrived is past one transaction. Offline:
 // nothing is sent.
 //
 //   node solana.mts
@@ -12,6 +14,8 @@ import { routes } from "@eco-incorp/sauce";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "@eco-incorp/sauce/deployments";
 import {
   POT_SEED,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
   USDC_MINT,
   buildCookInstruction,
   buildExecuteTransaction,
@@ -131,7 +135,32 @@ const five = await cookSize(5);
 check(four === 538, `with four accounts the cook adds 538 bytes, not ${four}`);
 check(five - four === 33, `an account costs 33 bytes, not ${five - four}`);
 
+// The Token-2022 example: PYUSD is a registered symbol, its row names Token-2022, and the program
+// takes the mint as an account between the source and the destination.
+const checked = routes.compileSauceProgram(
+  "solana",
+  readFileSync(new URL("./token-2022.sauce.ts", import.meta.url), "utf8"),
+);
+check(
+  (checked.manifest?.accounts ?? [])
+    .map((a) => (a.kind === "slot" ? `${a.name}:${a.requires}` : "remaining"))
+    .join() ===
+    "tokenProgram:readonly,source:writable,mint:readonly,destination:writable,pot:readonly_signer",
+  "the Token-2022 example's manifest order and roles",
+);
+const pyusd = routes.SVM_TOKEN_REGISTRY["mainnet-beta"].find((row) => row.symbol === "PYUSD");
+check(pyusd?.tokenProgram === TOKEN_2022_PROGRAM_ID, "PYUSD is a Token-2022 mint");
+for (const id of [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID])
+  check(skill.includes(id), `the skill names the token program ${id}`);
+// Its cook, with five accounts and its argument, does not fit one transaction: `sauce run` stages it.
+const fiveAccounts = await cookSize(5);
+check(
+  checked.bytecode.length + 32 + fiveAccounts > TRANSACTION_SIZE_LIMIT,
+  "a Token-2022 transfer that measures what arrived is past one transaction",
+);
+
 console.log(
   `SVM program ${program.bytecode.length} bytes, ${slots.length} account slots, ${args.length}-byte arguments`,
 );
+console.log(`Token-2022 program ${checked.bytecode.length} bytes`);
 console.log(`released engine ${v12SvmEngineProgramId()}, Kitchen ${v12SvmKitchenProgramId()}`);

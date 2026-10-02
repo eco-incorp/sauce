@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import {
   calcTransferFee,
   getEpochFee,
+  grossTransferAmount,
   netTransferAmount,
   parseMintExtensions,
 } from "../../src/svm/token-extensions.js";
@@ -164,6 +165,38 @@ describe("parseMintExtensions — blocking (genuinely un-routable) extensions", 
   });
 });
 
+describe("parseMintExtensions — Pausable and ScaledUiAmount, the tokenized stocks' extensions", () => {
+  it("blocks a paused mint, and flags an unpaused one as an advisory", () => {
+    const paused = new Uint8Array(33);
+    paused[32] = 1;
+    const pausedExt = parseMintExtensions(t22MintWith(tlvEntry(26, paused)));
+    expect(pausedExt.blocking.some((r) => r.startsWith("Pausable=paused"))).toBe(true);
+
+    const running = parseMintExtensions(t22MintWith(tlvEntry(26, new Uint8Array(33))));
+    expect(running.blocking).toEqual([]);
+    expect(running.advisories.some((r) => r.startsWith("Pausable"))).toBe(true);
+  });
+
+  it("treats ScaledUiAmount as a display multiplier, an advisory", () => {
+    const ext = parseMintExtensions(t22MintWith(tlvEntry(25, new Uint8Array(56))));
+    expect(ext.blocking).toEqual([]);
+    expect(ext.advisories.some((r) => r.startsWith("ScaledUiAmount"))).toBe(true);
+  });
+
+  it("routes every real stock mint (fixtures/token-2022/stock-mints.json)", () => {
+    const { mints } = JSON.parse(
+      readFileSync(join(HERE, "fixtures/token-2022/stock-mints.json"), "utf8"),
+    ) as { mints: Record<string, { dataBase64: string }> };
+    for (const fixture of Object.values(mints)) {
+      const ext = parseMintExtensions(Uint8Array.from(Buffer.from(fixture.dataBase64, "base64")));
+      expect(ext.blocking).toEqual([]);
+      expect(ext.transferFee).toBeUndefined();
+      expect(ext.transferHook).toBeUndefined();
+      expect(ext.advisories.some((r) => r.startsWith("ScaledUiAmount"))).toBe(true);
+    }
+  });
+});
+
 describe("parseMintExtensions — advisories (present-but-routable) do NOT block", () => {
   // PermanentDelegate + ConfidentialTransferMint are carried by the flagship
   // tradeable T22 stablecoins (PYUSD/USDG) yet transfer normally everywhere.
@@ -218,5 +251,32 @@ describe("parseMintExtensions — TransferHook", () => {
 
     const nilHook = parseMintExtensions(t22MintWith(tlvEntry(14, new Uint8Array(64))));
     expect(nilHook.transferHook).toBeUndefined();
+  });
+});
+
+describe("grossTransferAmount — the inverse Token-2022 computes (calculate_pre_fee_amount)", () => {
+  const config = (bps: number, maximumFee: bigint): TransferFeeConfig => ({
+    olderTransferFee: { epoch: 0n, maximumFee, transferFeeBasisPoints: bps },
+    newerTransferFee: { epoch: 0n, maximumFee, transferFeeBasisPoints: bps },
+  });
+
+  it("delivers exactly what was asked, below and at the fee's maximum, at every rate", () => {
+    for (const bps of [1, 7, 150, 2_500, 9_999]) {
+      for (const maximumFee of [1n, 1_000n, 2n ** 64n - 1n]) {
+        const cfg = config(bps, maximumFee);
+        for (const received of [1n, 2n, 99n, 10_000n, 123_456_789n, 10n ** 15n]) {
+          const sent = grossTransferAmount(received, cfg, 0n);
+          expect(netTransferAmount(sent, cfg, 0n)).toBe(received);
+        }
+      }
+    }
+  });
+
+  it("matches the program's edge cases: no fee, nothing sent, and a 100% rate", () => {
+    expect(grossTransferAmount(500n, config(0, 9n), 0n)).toBe(500n);
+    expect(grossTransferAmount(0n, config(150, 9n), 0n)).toBe(0n);
+    expect(grossTransferAmount(500n, config(10_000, 9n), 0n)).toBe(509n);
+    // Below the maximum: ceil(100_000 * 10_000 / 9_850) = 101_523.
+    expect(grossTransferAmount(100_000n, config(150, 9_000n), 0n)).toBe(101_523n);
   });
 });

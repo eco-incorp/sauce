@@ -2,15 +2,18 @@
  * `@sauce/token` compile conformance, from the CONSUMER side: the library at sdk/src/std/token built
  * through the published `@eco-incorp/sauce-compiler`, for both targets.
  *
- * Six things are asserted here and nowhere else in this repo:
+ * Seven things are asserted here and nowhere else in this repo:
  *   1. every exported method compiles on both arms, at the signature each arm actually declares, and
- *      a method only one account model has (`ownerOf`) compiles on its arm and is refused on the other;
- *   2. the SPL Token program id the library pins its `require`s to, counted in the emitted bytecode;
+ *      a method only one account model has (`ownerOf`, the checked writes) compiles on its arm and is
+ *      refused on the other;
+ *   2. the two token program ids (legacy SPL Token and Token-2022) the library pins its `require`s
+ *      to, counted in the emitted bytecode;
  *   3. the reason each of those SPL checks reverts with, counted the same way;
- *   4. the ERC-20 selectors the EVM writes spell out by hand, counted the same way;
- *   5. what the library demands of its caller, which only a compile failure can show — the manifest
+ *   4. that the legacy writes compile to the bytes they compiled to before the arm took Token-2022;
+ *   5. the ERC-20 selectors the EVM writes spell out by hand, counted the same way;
+ *   6. what the library demands of its caller, which only a compile failure can show — the manifest
  *      cannot, being exactly `main`'s own `Account` params;
- *   6. the packaging invariant that there is deliberately NO neutral `token.js`, so a package with no
+ *   7. the packaging invariant that there is deliberately NO neutral `token.js`, so a package with no
  *      arm for the target fails on the IMPORT rather than on a missing export.
  *
  * Execution — the compiled bytecode actually running on a real engine and returning the right value —
@@ -22,11 +25,19 @@
  * engine at all.
  */
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { address, getAddressCodec } from "@solana/kit";
 import { toFunctionSelector } from "viem";
 import { Permit2ABI } from "../../../src/protocols/permit2/abis.js";
-import { CASES, compileStdToken, compileWith, SVM_ONLY_CASES, TOKEN_DIR } from "./harness.js";
+import {
+  CASES,
+  compileStdToken,
+  compileStdTokenSvmArm,
+  compileWith,
+  SVM_ONLY_CASES,
+  TOKEN_DIR,
+} from "./harness.js";
 import type { AccountEntry } from "./harness.js";
 
 // `requires` is the role the slot demands of whatever account is attached there. Every account in
@@ -56,19 +67,21 @@ const manifestOf = (method: string): AccountEntry[] => {
 };
 
 /**
- * The SPL Token program id as hex, derived from the canonical base58 address rather than copied from
- * the library. A copy would agree with the library's constant however wrong that constant was, which
- * is the one thing this must not do.
+ * A token program's id as hex, derived from the canonical base58 address rather than copied from the
+ * library. A copy would agree with the library's constant however wrong that constant was, which is
+ * the one thing this must not do.
  */
-const SPL_TOKEN_PROGRAM = Buffer.from(
-  getAddressCodec().encode(address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")),
-).toString("hex");
+const programId = (base58: string): string =>
+  Buffer.from(getAddressCodec().encode(address(base58))).toString("hex");
 
-/** How many times the compiled program carries the id inline — one per `require` that pins it. */
-const pinnedProgramIds = (method: string): number =>
+const SPL_TOKEN_PROGRAM = programId("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022_PROGRAM = programId("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+
+/** How many times the compiled program carries `id` inline — one per comparison that pins it. */
+const pinned = (method: string, id: string): number =>
   Buffer.from(compileStdToken(svmEntry(method), "svm").bytecode)
     .toString("hex")
-    .split(SPL_TOKEN_PROGRAM).length - 1;
+    .split(id).length - 1;
 
 describe("@sauce/token: every exported method compiles on both targets", () => {
   it.each(CASES)("$method", ({ evm, svm }) => {
@@ -84,8 +97,12 @@ describe("@sauce/token: every exported method compiles on both targets", () => {
 });
 
 describe("@sauce/token: the methods only the SPL arm has", () => {
-  it.each(SVM_ONLY_CASES)("$method compiles for Solana, reading the one account", ({ method }) => {
-    expect(manifestOf(method)).toEqual([slot(0, "account")]);
+  it.each([
+    ["ownerOf", ["account"]],
+    ["transferChecked", ["tokenProgram", "source", "mint", "dest", "authority"]],
+    ["approveChecked", ["tokenProgram", "source", "mint", "delegate", "authority"]],
+  ])("%s compiles for Solana, taking %j", (method, names) => {
+    expect(manifestOf(method)).toEqual(names.map((name, index) => slot(index, name)));
   });
 
   it.each(SVM_ONLY_CASES)("$method is not exported for the EVM", ({ method, svm }) => {
@@ -96,27 +113,32 @@ describe("@sauce/token: the methods only the SPL arm has", () => {
   });
 });
 
-describe("@sauce/token: the SPL Token program id", () => {
-  // Every `require(… == SPL_TOKEN_PROGRAM)` compiles the id inline, so counting occurrences counts the
+describe("@sauce/token: the token program ids", () => {
+  // Every comparison with a program id compiles the id inline, so counting occurrences counts the
   // guards. Nothing else in CI can: the guards only *fire* on an engine, and both e2e suites that own
-  // one are env-gated. Without this, flipping a digit of the constant — or deleting the guards
-  // outright — is green here, which is exactly the failure the library's own comments warn about.
+  // one are env-gated. Without this, flipping a digit of a constant — or deleting a guard outright — is
+  // green here, which is exactly the failure the library's own comments warn about.
   //
-  // A read pins the account's owner. A write pins the owner and, separately, the callee it CPIs into,
-  // so the count also catches losing one of the two. And because an unreachable function is never
-  // emitted, a read's count stays at one: were the library's three writes lowered in too, it would be
-  // five, so this is also where a regression in that pruning would surface.
+  // A read pins the account's owner to either program, once each. A legacy write pins the
+  // source's owner and, separately, the callee it CPIs into, both to legacy SPL Token alone, so the
+  // count also catches losing one of the two; a checked write pins its callee to either program and
+  // compares every account with the callee. And because an unreachable function is never emitted, a
+  // read's counts stay as they are: were the library's writes lowered in too, they would grow, so
+  // this is also where a regression in that pruning would surface.
   it.each([
-    ["balanceOf", 1],
-    ["ownerOf", 1],
-    ["totalSupply", 1],
-    ["decimals", 1],
-    ["allowance", 1],
-    ["transfer", 2],
-    ["transferFrom", 2],
-    ["approve", 2],
-  ])("%s pins it %i time(s)", (method, expected) => {
-    expect(pinnedProgramIds(method)).toBe(expected);
+    ["balanceOf", 1, 1],
+    ["ownerOf", 1, 1],
+    ["totalSupply", 1, 1],
+    ["decimals", 1, 1],
+    ["allowance", 1, 1],
+    ["transfer", 2, 0],
+    ["transferFrom", 2, 0],
+    ["approve", 2, 0],
+    ["transferChecked", 1, 1],
+    ["approveChecked", 1, 1],
+  ])("%s pins SPL Token %i time(s) and Token-2022 %i", (method, spl, token2022) => {
+    expect(pinned(method, SPL_TOKEN_PROGRAM)).toBe(spl);
+    expect(pinned(method, TOKEN_2022_PROGRAM)).toBe(token2022);
   });
 });
 
@@ -134,6 +156,8 @@ describe("@sauce/token: the reason each SPL check reverts with", () => {
     "uninitialized mint",
     "not the token program",
     "amount over u64",
+    "wrong decimals",
+    "transfer hook",
   ];
   const occurrences = (haystack: Buffer, needle: Buffer): number => {
     let count = 0;
@@ -151,9 +175,13 @@ describe("@sauce/token: the reason each SPL check reverts with", () => {
     );
   };
   const TOKEN_ACCOUNT = { "not a token account": 1, "wrong mint": 1 };
-  // The owner and the size check both say "not a mint": either way the account is no legacy mint.
+  // The owner and the size check both say "not a mint": either way the account is no mint.
   const MINT = { "not a mint": 2, "uninitialized mint": 1 };
   const WRITE = { "not the token program": 1, ...TOKEN_ACCOUNT, "amount over u64": 1 };
+  // A checked write also refuses a mint its callee does not own and decimals not the mint's, and a
+  // transfer a hook program.
+  const APPROVE_CHECKED = { ...WRITE, "not a mint": 1, "wrong decimals": 1 };
+  const TRANSFER_CHECKED = { ...APPROVE_CHECKED, "transfer hook": 1 };
 
   it.each([
     ["balanceOf", TOKEN_ACCOUNT],
@@ -164,8 +192,34 @@ describe("@sauce/token: the reason each SPL check reverts with", () => {
     ["transfer", WRITE],
     ["transferFrom", WRITE],
     ["approve", WRITE],
+    ["transferChecked", TRANSFER_CHECKED],
+    ["approveChecked", APPROVE_CHECKED],
   ])("%s", (method, expected) => {
     expect(reasonsIn(method)).toEqual(expected);
+  });
+});
+
+describe("@sauce/token: the legacy writes, byte for byte", () => {
+  // Taking Token-2022 changed what the reads accept, and added the checked writes beside the legacy
+  // ones; it did not touch `transfer`, `transferFrom` or `approve`. The arm as it was is kept as a
+  // fixture, and each legacy write compiles to the same bytes against it as against the library: a
+  // program that moved SPL tokens before compiles to the program it compiled to then.
+  const legacyArm = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "fixtures", "legacy-token.svm.sauce.ts"),
+    "utf8",
+  );
+
+  it.each(["transfer", "transferFrom", "approve"])("%s", (method) => {
+    const entry = caseNamed(method).svm;
+    const now = Buffer.from(compileStdToken(entry, "svm").bytecode).toString("hex");
+
+    expect(now).toBe(Buffer.from(compileStdTokenSvmArm(entry, legacyArm).bytecode).toString("hex"));
+  });
+
+  it("the fixture is the legacy arm, not the library", () => {
+    // Else the comparison above would hold however the library changed.
+    expect(legacyArm).not.toContain("TOKEN_2022_PROGRAM");
+    expect(legacyArm).toContain("export function transfer(");
   });
 });
 
@@ -283,10 +337,10 @@ describe("@sauce/token: what the library demands of its caller", () => {
 
   it("a read demands no program account", () => {
     // The counterpart, and the real content of "a read-only import does not drag the callee in".
-    // Importing the library brings `transfer`/`transferFrom`/`approve` into scope and each CPIs into
-    // the SPL Token program, but an unreachable function is never emitted, so none of them reaches
-    // the bytecode. The counts above are the evidence rather than this comment: a read pins the
-    // program id ONCE, where lowering the three writes in would put it there five times.
+    // Importing the library brings every write into scope and each CPIs into a token program, but an
+    // unreachable function is never emitted, so none of them reaches the bytecode. The counts above
+    // are the evidence rather than this comment: a read pins legacy SPL Token ONCE, where lowering
+    // the writes in would put it there several times over.
     expect(manifestOf("balanceOf")).toEqual([slot(0, "account")]);
   });
 });
@@ -299,6 +353,8 @@ describe("@sauce/token: the attach order the e2e suites resolve by name", () => 
     ["transfer", ["tokenProgram", "source", "dest", "authority"]],
     ["transferFrom", ["tokenProgram", "source", "dest", "authority"]],
     ["approve", ["tokenProgram", "source", "delegate", "authority"]],
+    ["transferChecked", ["tokenProgram", "source", "mint", "dest", "authority"]],
+    ["approveChecked", ["tokenProgram", "source", "mint", "delegate", "authority"]],
   ])("%s", (method, names) => {
     expect(manifestOf(method)).toEqual(names.map((name, index) => slot(index, name)));
   });

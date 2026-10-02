@@ -157,12 +157,15 @@ describe("sourceGlobals: the names a program on a chain may use", () => {
     // Solana: its mints as 32-byte keys, no EVM contracts, the SVM arm's functions.
     const solana = sourceGlobals("solana");
     expect(solana.tokens).toEqual(
-      SVM_TOKEN_REGISTRY["mainnet-beta"].map(({ symbol, address, decimals, mint }) => ({
-        symbol,
-        address,
-        decimals,
-        mint,
-      })),
+      SVM_TOKEN_REGISTRY["mainnet-beta"].map(
+        ({ symbol, address, decimals, mint, tokenProgram }) => ({
+          symbol,
+          address,
+          decimals,
+          mint,
+          tokenProgram,
+        }),
+      ),
     );
     expect(solana.protocols).toEqual([]);
     expect(solana.modules[0]!.functions).toContain(
@@ -248,10 +251,14 @@ describe("sauce globals", () => {
     expect(run.code).toBe(0);
     expect(run.stdout).not.toContain("none by symbol");
     expect(run.stdout).toMatch(
-      new RegExp(`^ {2}USDC {2}${usdc.mint} {2}${usdc.address} {2}6 decimals$`, "m"),
+      new RegExp(`^ {2}USDC +${usdc.mint} {2}${usdc.address} {2}6 decimals$`, "m"),
     );
     expect(run.stdout).toMatch(
-      new RegExp(`^ {4}USDC {2}${devnet.mint} {2}${devnet.address} {2}6 decimals$`, "m"),
+      new RegExp(`^ {4}USDC +${devnet.mint} {2}${devnet.address} {2}6 decimals$`, "m"),
+    );
+    // A Token-2022 mint is named as one.
+    expect(run.stdout).toMatch(
+      /^ {2}PYUSD +2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo .* 6 decimals, Token-2022$/m,
     );
     const out = json(await sauce("globals", "--chain", "solana", "--json"));
     expect(out.tokens).toContainEqual({
@@ -259,6 +266,7 @@ describe("sauce globals", () => {
       address: usdc.address,
       decimals: 6,
       mint: usdc.mint,
+      tokenProgram: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
     });
     expect(out.devnetTokens).toContainEqual(devnet);
     expect((out.defines as Record<string, unknown>).USDC).toBe(usdc.address);
