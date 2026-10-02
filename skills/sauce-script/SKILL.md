@@ -184,16 +184,18 @@ removed:
 
 Call a contract by name, in this order of preference:
 
-1. **A namespace**, for a protocol contract the chain's registry records:
-   `UniswapV3.Factory.getPool(...)`, `AaveV3.Pool.supply(...)`, typed by the registry's ABI, its
-   address the chain's. `.at(address)` calls the same kind of contract at another address: a
-   pool the factory returned is `UniswapV3.Pool.at(pool)`, as in `UniswapV3.Pool.at(pool).slot0()`.
-   The chain's file in `sauce-chains`, or `sauce globals --chain <chain> --protocol <namespace>`,
-   lists each namespace's contracts and methods.
-2. **A registry ABI import**, for a contract the registry has an ABI of but no namespace on the
-   chain, such as any ERC-4626 vault: `import VaultABI from "./protocols/erc4626/VaultABI.json"`,
-   then `VaultABI.at(vault).convertToAssets(shares)`. Each protocol's registry page in
-   `sauce-protocols` gives its import line.
+1. **A namespace**, for a contract the chain's registry records: `UniswapV3.Factory.getPool(...)`,
+   `AaveV3.Pool.supply(...)`, typed by the registry's ABI, its address the chain's. An interface, a
+   registry ABI with no address of its own, is called with the address it is at: a pool the
+   factory returned is `UniswapV3.Pool(pool)`, as in `UniswapV3.Pool(pool).slot0()`, and any
+   ERC-4626 vault `Erc4626.Vault(vault)`. A contract that has its own address takes `.at(address)`
+   to call another deployment of the same ABI: `AaveV3.Pool.at(address)`. The chain's file in
+   `sauce-chains`, or `sauce globals --chain <chain> --protocol <namespace>`, lists each
+   namespace's contracts, interfaces and methods.
+2. **A registry ABI import**, where the chain has no namespace for it: each protocol's registry
+   page in `sauce-protocols` gives the import line, such as
+   `import VaultABI from "./protocols/erc4626/VaultABI.json"`, and the binding takes the address
+   with `.at`: `VaultABI.at(vault).convertToAssets(shares)`.
 3. **The program's own ABI**, for a contract no registry knows, or a function its registry ABI
    does not declare: a JSON ABI file beside the program, holding only the functions the program
    calls, with the deployed contract's types from its verified source, imported by relative path
@@ -206,20 +208,18 @@ Call a contract by name, in this order of preference:
 
 Never call through `evm.static` (or `evm.call`) with a hex selector where one of these is
 possible: the typed call encodes the arguments, decodes the result and names its fields. Take only
-what you need from a result: `const [sqrtPriceX96] = UniswapV3.Pool.at(pool).slot0();` and
-`UniswapV3.Pool.at(pool).slot0().sqrtPriceX96` both read the first field alone.
+what you need from a result: `const [sqrtPriceX96] = UniswapV3.Pool(pool).slot0();` and
+`UniswapV3.Pool(pool).slot0().sqrtPriceX96` both read the first field alone.
 
 ```sauce chain=base,ethereum
-import VaultABI from "./protocols/erc4626/VaultABI.json";
-
 function main(vault: Address, shares: Uint256): Uint256 {
-  // A namespace: the factory the chain's registry records, and a pool it returns.
+  // A contract the chain's registry records: its factory, by name.
   const pool = UniswapV3.Factory.getPool(WETH, USDC, 500n);
   require(pool != 0n, "no WETH/USDC 0.05% pool");
-  const [sqrtPriceX96] = UniswapV3.Pool.at(pool).slot0();
+  // Interfaces, called with the address they are at: the pool it returned, and a vault.
+  const [sqrtPriceX96] = UniswapV3.Pool(pool).slot0();
   require(sqrtPriceX96 > 0n, "the pool is not initialized");
-  // A registry ABI, for a vault the registry does not name.
-  return VaultABI.at(vault).convertToAssets(shares);
+  return Erc4626.Vault(vault).convertToAssets(shares);
 }
 ```
 

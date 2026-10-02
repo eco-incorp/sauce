@@ -350,7 +350,7 @@ a ceiling, the `buy` block of `sauce price`.
 swap as the body (`sauce-distributed-swap`): one pass over every Uniswap V3 and hookless V4 pool of
 the pair, each offered the WETH still unsold up to its own fee-adjusted limit, and skipped when it
 has no liquidity or is past that limit. It swaps through `@sauce/router`, finds each V3 pool with
-`UniswapV3.Factory.getPool` and reads it as `UniswapV3.Pool.at(pool)`, and reads the V4 pools from
+`UniswapV3.Factory.getPool` and reads it as `UniswapV3.Pool(pool)`, and reads the V4 pools from
 `UniswapV4.StateView`.
 
 ## Cascades

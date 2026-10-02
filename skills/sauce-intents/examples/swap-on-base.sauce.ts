@@ -69,9 +69,9 @@ Base(
     for (const tier of [100n, 500n, 3000n, 10000n]) {
       const pool = UniswapV3.Factory.getPool(WETH, USDC, tier);
       if (pool != 0n) {
-        if (UniswapV3.Pool.at(pool).liquidity() > 0n) {
-          const limit = ownLimit(SQRT_PRICE_LIMIT_X96, UniswapV3.Pool.at(pool).fee(), sellsToken0);
-          const price = UniswapV3.Pool.at(pool).slot0().sqrtPriceX96;
+        if (UniswapV3.Pool(pool).liquidity() > 0n) {
+          const limit = ownLimit(SQRT_PRICE_LIMIT_X96, UniswapV3.Pool(pool).fee(), sellsToken0);
+          const price = UniswapV3.Pool(pool).slot0().sqrtPriceX96;
           const unsold = WETH.balanceOf(self);
           if (unsold > 0n && (sellsToken0 ? price > limit : price < limit)) {
             uniswapV3(pool, WETH, USDC, unsold, limit, 0n, self);
