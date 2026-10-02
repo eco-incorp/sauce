@@ -208,7 +208,7 @@ describe("sauce_install_skills", () => {
       assert.ok(out.notes.some((note) => /no-op on a project already installed/.test(note)));
       assert.ok(
         out.notes.some((note) =>
-          note.includes(`\`npx -y ${pinned} <command>\`: a bare \`npx sauce\` fetches`),
+          note.includes("`sauce <command>`, which `npm i -g @eco-incorp/sauce` installs"),
         ),
       );
       if (agent === "agents-md") {

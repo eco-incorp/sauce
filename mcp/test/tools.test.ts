@@ -92,9 +92,10 @@ describe("the tool list", () => {
     assert.match(instructions, /sauce:\/\/skills\/index/);
     assert.match(instructions, /has no endpoint of its own/);
     assert.match(instructions, /rpcUrl/);
-    // An agent with the skills and not the package runs this package's command, not npm's `sauce`.
-    assert.match(instructions, /run `npx -y @eco-incorp\/sauce <command>`/);
-    assert.match(instructions, /npm's unrelated `sauce` package/);
+    // How an agent gets the command the skills write as `sauce …`.
+    assert.match(instructions, /`npm i -g @eco-incorp\/sauce` installs it/);
+    assert.match(instructions, /`npx -y @eco-incorp\/sauce <command>` runs it with no install/);
+    assert.doesNotMatch(instructions, /npx sauce/);
   });
 });
 

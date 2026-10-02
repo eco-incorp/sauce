@@ -246,8 +246,8 @@ function shellWords(text) {
   return words;
 }
 
-/** npx and its options before the command, in either spelling a skill writes: `npx sauce`, in a
- *  project that depends on the package, and `npx -y @eco-incorp/sauce`, anywhere. */
+/** npx and its options before the command: a line is parsed as a command whether it is written
+ *  `sauce …`, `npx sauce …` or `npx -y @eco-incorp/sauce …` (2a fails a bare `npx sauce`). */
 const NPX = String.raw`npx\s+(?:(?:--no\s+--|-y|--yes)\s+)?`;
 /** A command line: `sauce …`, `npx sauce …` or `npx -y @eco-incorp/sauce …`. */
 const INVOCATION = new RegExp(String.raw`^(?:(?:${NPX})?sauce|${NPX}@eco-incorp\/sauce)\s`);

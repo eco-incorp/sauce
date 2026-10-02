@@ -577,10 +577,8 @@ export function registerSkillTools(server: McpServer, root: string = PACKAGED_SK
             `Every command is pinned to ${pinned}, the version this server carries.`,
             "add puts the package in an existing project; init scaffolds a new one pinned the " +
               "same way, with its skills installed.",
-            "Once the package is installed there (add, or init then npm install), `npx sauce " +
-              "<command>`, as the skills write it, runs it in that project. Until then, run it as " +
-              `these commands do, \`npx -y ${pinned} <command>\`: a bare \`npx sauce\` fetches ` +
-              "and runs npm's unrelated `sauce` package.",
+            `The skills write the command as \`sauce <command>\`, which \`npm i -g ${packageName}\` ` +
+              "installs; these commands run this server's version with no install.",
             "install is the first install, and a no-op on a project already installed: update " +
               "brings installed skills to the version that runs it; status exits 1 while they " +
               "are outdated.",

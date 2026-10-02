@@ -2,8 +2,8 @@
  * `sauce mcp`: the Sauce MCP server — this command's read-only half as MCP tools, and the agent
  * skills as resources — over stdio for an agent to launch, or over Streamable HTTP to self-host:
  *
- *     npx -y @eco-incorp/sauce mcp
- *     npx -y @eco-incorp/sauce mcp --http 3000 --config sauce.config.json
+ *     sauce mcp
+ *     sauce mcp --http 3000 --config sauce.config.json
  *
  * The server is the `mcp/` workspace, built to `mcp/dist` beside `sdk/dist` in the package. It is
  * LOADED HERE ONLY WHEN THIS COMMAND RUNS, by a dynamic import of that build, so no other command

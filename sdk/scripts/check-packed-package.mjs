@@ -550,9 +550,9 @@ try {
     "the check leaves the installed skills as they were",
   );
 
-  // `sauce mcp`, from the install, the way the guide launches it — `npx @eco-incorp/sauce mcp`,
-  // here with `--no` so nothing is fetched — over both transports: the tools, a compile, and every
-  // shipped skill file as a resource. Nothing here reaches a chain.
+  // `sauce mcp`, from the install, the way `sauce mcp setup` launches it — `npx @eco-incorp/sauce
+  // mcp`, here with `--no` so nothing is fetched — over both transports: the tools, a compile, and
+  // every shipped skill file as a resource. Nothing here reaches a chain.
   const mcpLaunch = ["--no", "--", name, "mcp"];
   const mcpProgram =
     "function main(recipient: Address, amount: Uint256) {\n  USDC.transfer(recipient, amount);\n}\n";
