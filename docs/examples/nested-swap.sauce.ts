@@ -24,14 +24,14 @@ function main(
   refundTo: Address,
 ) {
   Base.Portal.send({ token: USDC, amount: reward })
-    .creator(refundTo)
+    .refundee(refundTo)
     .receive({ token: USDC, amount: delivered })
     .then(() => {
       const pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
       const bought = uniswapV3(pool, USDC, WETH, delivered, 0, minOut, ctx.self());
       const payout = bought - bought / 1000;
       Ethereum.Portal.send({ token: WETH, amount: bought })
-        .creator(refundTo)
+        .refundee(refundTo)
         .receive({ token: WETH, amount: payout })
         .then(() => {
           WETH.transfer(recipient, payout);

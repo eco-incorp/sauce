@@ -30,7 +30,7 @@ const RECIPIENT = "0x6666666666666666666666666666666666666666";
 const CREATOR = "0x3333333333333333333333333333333333333333" as const;
 const INTENT_FLAGS = [
   ...["--define", `RECIPIENT=${RECIPIENT}`],
-  ...["--intent-deadline", "2000000000", "--intent-creator", CREATOR],
+  ...["--intent-deadline", "2000000000", "--intent-refundee", CREATOR],
 ];
 
 /** An endpoint that answers the reads a rehearsal starts with, and counts every request. */
@@ -350,7 +350,7 @@ describe("refused on a preview chain, before any network call", () => {
       chain: requireChain("base"),
       compactArgs: false,
       defines: { RECIPIENT: BigInt(RECIPIENT) },
-      intents: { deadline: 2_000_000_000n, creator: CREATOR },
+      intents: { deadline: 2_000_000_000n, refundee: CREATOR },
     };
     const [target] = fillTargets(program, nodeIo());
     const record = intentRecord(target!.intent, { sourcePortal: target!.sourcePortal });

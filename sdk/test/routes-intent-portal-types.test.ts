@@ -24,13 +24,13 @@ import { Arbitrum, Base, Ethereum, Optimism } from ${ROOT};
 
 const built = Base.Portal.send({ token: Ethereum.USDC.address, amount: 1_010_000n }, { native: 1n })
   .source(Ethereum)
-  .creator("0x4444444444444444444444444444444444444444")
+  .refundee("0x4444444444444444444444444444444444444444")
   .receive()
   .fee(1_000n)
   .then(() => {
     const amount = USDC.balanceOf(ctx.self());
     Arbitrum.Portal.send([{ token: USDC, amount }])
-      .creator(0x4444444444444444444444444444444444444444n)
+      .refundee(0x4444444444444444444444444444444444444444n)
       .deadline(ctx.timestamp() + 604_800n)
       .prover(0x5555555555555555555555555555555555555555n)
       .receive([{ token: USDC, amount: (amount * 99n) / 100n }])
@@ -40,7 +40,7 @@ const built = Base.Portal.send({ token: Ethereum.USDC.address, amount: 1_010_000
         const arrived = USDC.balanceOf(ctx.self());
         USDC.transfer(0x6666666666666666666666666666666666666666n, arrived / 2n);
         Optimism.Portal.send({ token: USDC, amount: arrived / 2n }, { native: 1n })
-          .creator(0x4444444444444444444444444444444444444444n)
+          .refundee(0x4444444444444444444444444444444444444444n)
           .receive({ token: USDT, amount: arrived / 4n }, { token: USDC, amount: arrived / 4n })
           .fee(7n)
           .then(() => {
@@ -62,7 +62,7 @@ const built: routes.BuiltIntent = Base.Portal.send([
   { token: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", amount: 1_010_000n },
   { native: 1n },
 ])
-  .creator("0x4444444444444444444444444444444444444444")
+  .refundee("0x4444444444444444444444444444444444444444")
   .deadline(2_000_604_800n)
   .source("ethereum")
   .prover("0x5555555555555555555555555555555555555555")
@@ -71,7 +71,7 @@ const built: routes.BuiltIntent = Base.Portal.send([
   .deadline(2_000_000_000n)
   .salt("0x0000000000000000000000000000000000000000000000000000000000000001")
   .nest((on) =>
-    Ethereum.Portal.send([]).source(on).creator("0x44").receive([]).fee(0n).then("function main() {}"),
+    Ethereum.Portal.send([]).source(on).refundee("0x44").receive([]).fee(0n).then("function main() {}"),
   )
   .then("function main() {}");
 export const all = [built.hash().intentHash];
@@ -86,7 +86,7 @@ export function main() {
   Arbitrum.Portal.send({ token: USDC, amount: 1n }).receive({ token: USDC, amount: 1n });
   Arbitrum.Portal.send({ token: USDC, amount: 1n }).then(() => {});
   Arbitrum.Portal.receive({ token: USDC, amount: 1n });
-  Arbitrum.Portal.send({ token: USDC, amount: 1n }).creator(1n).creator(2n);
+  Arbitrum.Portal.send({ token: USDC, amount: 1n }).refundee(1n).refundee(2n);
   Arbitrum.Portal.send({ token: USDC, amount: 1n }).receive([]).deadline(1n).deadline(2n);
   Arbitrum.Portal.send({ token: USDC, amount: 1n }).salt(1n);
   Arbitrum.Portal.send({ token: USDC }).receive({ token: USDC, amount: 1n }).then(() => {});
@@ -94,7 +94,7 @@ export function main() {
 }
 
 export async function awaited() {
-  return await Base.Portal.send([]).source("ethereum").creator("0x44").receive([]).fee(0n);
+  return await Base.Portal.send([]).source("ethereum").refundee("0x44").receive([]).fee(0n);
 }
 `;
 

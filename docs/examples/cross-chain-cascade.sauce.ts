@@ -17,24 +17,24 @@
 // The first two bodies are more than token writes, so each compiles to a program and runs on its
 // chain's Pot, paying that chain's Kitchen fee, read for it; the `.receive(...)` of each names what
 // a solver must deliver to it. Each level's deadlines count from when it opens, and each names its
-// creator, `refundTo`: one a program opens has no default.
+// refundee, `refundTo`: one a program opens has no default.
 //
 // Every `USDC` is the USDC of the chain where that part runs. Each body's is its destination's. Each
 // reward is escrowed by the program offering it: the first hop's in Ethereum's USDC, the second's in
 // Base's and the third's in Ethereum's.
 function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo: Address) {
   Base.Portal.send({ token: USDC, amount: reward })
-    .creator(refundTo)
+    .refundee(refundTo)
     .receive({ token: USDC, amount: delivered })
     .then(() => {
       const second = delivered - delivered / 1000;
       Ethereum.Portal.send({ token: USDC, amount: delivered })
-        .creator(refundTo)
+        .refundee(refundTo)
         .receive({ token: USDC, amount: second })
         .then(() => {
           const third = second - second / 1000;
           Base.Portal.send({ token: USDC, amount: second })
-            .creator(refundTo)
+            .refundee(refundTo)
             .receive({ token: USDC, amount: third })
             .then(() => {
               USDC.transfer(recipient, third);

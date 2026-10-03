@@ -90,7 +90,7 @@ export async function cookTransactions(
 - A Pot swaps through the Router its Kitchen handed it when it was minted. `potRouterUpdate(client,
 pot)` from `/evm/engine` reads both, and returns the `setRouter` call for the Pot's owner to send
   when the Kitchen has a newer one.
-- A program that opens an intent names its creator with `.creator(...)`, always: no option
+- A program that opens an intent names its refundee with `.refundee(...)`, always: no option
   defaults it, but `options.intents.publisher`, the wallet that publishes a top-level intent
   itself. For a body that is a program it also needs `options.intents.executionFee` (one fee, or a
   function of the destination) unless it gives `.fee(...)`. `openedAt` (Unix seconds) makes its
@@ -171,9 +171,9 @@ a recorded address, not proof of live code on the chain.
   `fulfill`), `destinationPot(chain)` the shared Pot and
   `routes.sauceEvmDeployPotCall({ owner: ecoRoutesExecutor(chain), salt: SAUCE_INTENT_POT_SALT })`
   its deploy; the intents runner builds a rehearsal with them. In TypeScript,
-  `Base.Portal.send(reward).source("ethereum").creator(owner).receive(delivery).fee(fee).then(program)`
+  `Base.Portal.send(reward).source("ethereum").refundee(owner).receive(delivery).fee(fee).then(program)`
   builds an intent around a program for the destination, `built`, taking the modifiers a program
-  takes; there `.source`, `.creator` and `.fee` are required, since the host runs on no chain and
+  takes; there `.source`, `.refundee` and `.fee` are required, since the host runs on no chain and
   reads none. For the source side, `built.sourceTxs()` (`routes.intentSourceTxs` for an intent
   built some other way) is the funding and publication in order: a transfer of each reward token to the vault, then `publish`
   (`{ fundVia: "publishAndFund" }` for the approvals and `publishAndFund`). Pass `{ vault }` read with

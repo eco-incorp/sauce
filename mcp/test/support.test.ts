@@ -29,7 +29,7 @@ const PAY = [
 ].join("\n");
 const intentTo = (chain: string): string =>
   `${chain}.Portal.send({ token: USDC, amount: 7n }).receive().then(() => {\n  USDC.transfer(RECIPIENT, 5n);\n});\n`;
-const INTENT = { defines: { RECIPIENT }, intentDeadline: 2_000_000_000, intentCreator: OWNER };
+const INTENT = { defines: { RECIPIENT }, intentDeadline: 2_000_000_000, intentRefundee: OWNER };
 
 /** The record of the one intent `source` opens on `chain`, as sauce_intent_publish returns it. */
 function recordOf(source: string, chain: string): Record<string, unknown> {

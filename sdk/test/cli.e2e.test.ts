@@ -847,7 +847,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     `REWARD=${reward}`,
     "--intent-deadline",
     DEADLINE,
-    "--intent-creator",
+    "--intent-refundee",
     OWNER.address,
     "--intent-salt",
     ZERO_SALT,
@@ -1252,7 +1252,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
     await ethereum.mint(usdc, pot, REWARD);
     // A Pot may be shared, so an intent a program opens on one names its creator: no wallet does.
     const potFile = join(work, "on-a-pot.sauce.ts");
-    const named = INTENT.replace(".receive()", `.creator(${creator}).receive()`);
+    const named = INTENT.replace(".receive()", `.refundee(${creator}).receive()`);
     writeFileSync(potFile, named);
     const run = await sauce(
       "run",
@@ -1265,7 +1265,7 @@ describeEvm("an intent file: published from a wallet, or run on a Pot", () => {
       `REWARD=${REWARD}`,
       "--intent-deadline",
       DEADLINE,
-      "--intent-creator",
+      "--intent-refundee",
       creator,
       "--intent-salt",
       ZERO_SALT,
@@ -1323,7 +1323,7 @@ describeEvm("what is deployed: the released contracts, a Pot, and an intent's de
   // the Pot every intent through Base's Portal shares.
   const INTENT = [
     "// @chain ethereum",
-    `Base.Portal.send([{ token: USDC, amount: REWARD }]).creator(${OWNER.address}).receive().then(() => {`,
+    `Base.Portal.send([{ token: USDC, amount: REWARD }]).refundee(${OWNER.address}).receive().then(() => {`,
     "  require(AMOUNT > 0n);",
     "  Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, AMOUNT);",
     "});",

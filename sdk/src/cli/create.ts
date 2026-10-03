@@ -617,7 +617,7 @@ export async function createIntent(input: CreateInput): Promise<Created> {
     "Written by `sauce intent publish`. Publish it again with the same deadlines and prover:",
     `  sauce intent publish ${out} --chain ${source!.slug} --keystore <path> \\`,
     `    --intent-deadline ${deadline} --intent-reward-deadline ${rewardDeadline} \\`,
-    `    --intent-prover ${prover}${input.signer === undefined ? "" : ` --intent-creator ${input.signer}`}` +
+    `    --intent-prover ${prover}${input.signer === undefined ? "" : ` --intent-refundee ${input.signer}`}` +
       (fundVia === "transfer" ? "" : ` --intent-fund-via ${fundVia}`),
   ];
   const text = intentText({

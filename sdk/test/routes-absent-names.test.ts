@@ -186,7 +186,7 @@ describe("what a chain can lack", () => {
     } as const;
     const program = (guarded: string) => `function main() {
   const amount = USDC.balanceOf(self);
-  Optimism.Portal.send([{ token: USDC, amount }]).creator(0x3333333333333333333333333333333333333333).receive().then(() => {
+  Optimism.Portal.send([{ token: USDC, amount }]).refundee(0x3333333333333333333333333333333333333333).receive().then(() => {
     ${guarded}
   });
 }`;

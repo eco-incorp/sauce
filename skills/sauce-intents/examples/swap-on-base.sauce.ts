@@ -9,8 +9,8 @@
 // `--chain` is the source chain: `WETH` in `.send(...)` is its WETH. In `.receive(...)` and inside
 // the body, the code runs on Base: `WETH`, `USDC`, `UniswapV3.Factory`, `UniswapV3.Pool`,
 // `UniswapV4.StateView` and `UniswapV4.PoolManager` there are Base's. `refundTo` is the intent's
-// creator too, where its reward goes back if no solver fills it; the deadlines, the salt and Base's
-// Kitchen fee take their defaults.
+// refundee too, where its reward goes back if no solver fills it; the deadlines, the salt and
+// Base's Kitchen fee take their defaults.
 //
 //   sauce run swap-on-base.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <amountIn> <reward> <sqrtPriceLimitX96> <minOut> <minAvgPrice> <recipient> <refundTo>
@@ -57,7 +57,7 @@ function main(
   refundTo: Address,
 ) {
   Base.Portal.send({ token: WETH, amount: reward })
-    .creator(refundTo)
+    .refundee(refundTo)
     .receive({ token: WETH, amount: amountIn })
     .then(() => {
       require(sqrtPriceLimitX96 != 0 &&

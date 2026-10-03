@@ -427,12 +427,12 @@ const CHAINS = [base, arbitrum, optimism, ethereum];
 const THREE_CHAIN_CASCADE = `function main() {
   const amount = USDC.balanceOf(ctx.self());
   Arbitrum.Portal.send({ token: USDC, amount })
-    .creator(${CREATOR})
+    .refundee(${CREATOR})
     .receive({ token: USDC, amount })
     .then(() => {
       const swapped = USDC.balanceOf(ctx.self());
       Optimism.Portal.send({ token: USDC, amount: swapped })
-        .creator(${CREATOR})
+        .refundee(${CREATOR})
         .receive()
         .then(() => {
           USDC.transfer(RECIPIENT, swapped);
@@ -451,12 +451,12 @@ const PORTAL_CASCADE = `function main() {
   const amount = USDC.balanceOf(ctx.self());
   const refundTo = ${PORTAL_CREATOR};
   Arbitrum.Portal.send({ token: USDC, amount })
-    .creator(refundTo)
+    .refundee(refundTo)
     .receive({ token: USDC, amount: amount * 99n / 100n })
     .then(() => {
       const arrived = USDC.balanceOf(ctx.self());
       Optimism.Portal.send([{ token: USDC, amount: arrived }])
-        .creator(${PORTAL_CREATOR})
+        .refundee(${PORTAL_CREATOR})
         .receive([{ token: USDC, amount: arrived * 99n / 100n }])
         .then(() => {
           USDC.transfer(RECIPIENT, arrived * 99n / 100n);
@@ -796,7 +796,7 @@ function main() {
   const amount = USDC.balanceOf(ctx.self());
   require(amount >= MIN_AMOUNT);
   Arbitrum.Portal.send({ token: USDC, amount })
-    .creator(${CREATOR})
+    .refundee(${CREATOR})
     .receive({ token: USDC, amount })
     .then(() => {
       const [held] = abi.decode(abi.encode(balanceOf(USDC, ctx.self())), ["Uint256"]);
@@ -836,7 +836,7 @@ function main() {
   total = USDC.balanceOf(ctx.self());
   require(total >= MIN_AMOUNT);
   Arbitrum.Portal.send({ token: USDC, amount: total })
-    .creator(${CREATOR})
+    .refundee(${CREATOR})
     .receive({ token: USDC, amount: total })
     .then(() => {
       USDC.transfer(RECIPIENT, half());
@@ -862,7 +862,7 @@ function main() {
     const program = `function main() {
   const amount = USDC.balanceOf(ctx.self());
   Arbitrum.Portal.send({ token: USDC, amount })
-    .creator(${CREATOR})
+    .refundee(${CREATOR})
     .receive()
     .then(() => {
       USDC.transfer(RECIPIENT, amount);
@@ -918,7 +918,7 @@ function main() {
     const program = `function main() {
   const amount = USDC.balanceOf(ctx.self());
   Arbitrum.Portal.send({ token: ARBITRUM_USDC, amount })
-    .creator(${CREATOR})
+    .refundee(${CREATOR})
     .receive()
     .then(() => {
       USDC.transfer(RECIPIENT, amount);

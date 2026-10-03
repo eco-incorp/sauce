@@ -49,7 +49,7 @@ function delivery(defines: Record<string, bigint | boolean | number>): [string, 
     "base",
     `function main() {
   const amount = USDC.balanceOf(self);
-  Arbitrum.Portal.send([{ token: USDC, amount }]).creator(0x3333333333333333333333333333333333333333).receive([{ token: USDC, amount: chainId }]).then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).refundee(0x3333333333333333333333333333333333333333).receive([{ token: USDC, amount: chainId }]).then(() => {
     USDC.transfer(self, amount);
   });
 }`,

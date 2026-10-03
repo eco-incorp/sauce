@@ -31,7 +31,12 @@ import { pascalOfSlug } from "./accessors.js";
 import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
 import type { EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
-import { intentHost, type IntentSugarDefaults, type LoweredIntent } from "./intent-host.js";
+import {
+  intentHost,
+  intentStepError,
+  type IntentSugarDefaults,
+  type LoweredIntent,
+} from "./intent-host.js";
 import { entryArguments, entryParamsOf, type EntryParam, type EntryValue } from "./entry.js";
 import { chainCalledError, unknownGlobalError } from "./unknown-global.js";
 import { closureText, isSauceClosure, type SauceBody } from "./closure.js";
@@ -84,8 +89,8 @@ export interface SauceCompileOptions {
    * every intent that does not set its own. See `intent-host.ts`.
    *
    * Omitted entirely, an intent still compiles: its deadlines and salt have defaults, and its
-   * creator, which has none, is its own `.creator(...)` — or `publisher`'s, for a top-level intent
-   * a wallet publishes itself.
+   * refundee (the reward's `creator`), which has none, is its own `.refundee(...)` — or
+   * `publisher`'s, for a top-level intent a wallet publishes itself.
    */
   intents?: Partial<IntentSugarDefaults> & EcoRoutesSelector;
   /** Compile for compact-v1 entry arguments. */
@@ -238,7 +243,7 @@ function routeHost(
     programOn: (destination) => {
       const next = levelOn(chain, destination, options, scope);
       // A body's own intents open when it runs, not when the file compiles, and no wallet
-      // publishes them: each names its own creator.
+      // publishes them: each names its own refundee.
       const {
         openedAt: _openedAt,
         publisher: _publisher,
@@ -543,6 +548,7 @@ function compileForChain(
     throw (
       unknownGlobalError(source, "main.js", chain, level.declined, tokens.keys(), error) ??
       chainCalledError(source, "main.js", error) ??
+      intentStepError(error) ??
       error
     );
   }

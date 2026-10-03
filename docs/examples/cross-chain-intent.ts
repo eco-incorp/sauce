@@ -22,8 +22,8 @@ const source = readFileSync(
 const owner = "0x4444444444444444444444444444444444444444";
 const recipient = "0x6666666666666666666666666666666666666666";
 
-// The program names its intent's creator, `refundTo`, from its arguments; the deadlines and the salt
-// take their defaults, as the program runs. The Portal, the prover and the vault are the SDK's.
+// The program names its intent's refundee, `refundTo`, from its arguments; the deadlines and the
+// salt take their defaults, as the program runs. The Portal, the prover and the vault are the SDK's.
 export const program = routes.compileSauceProgram("base", source);
 
 // main(recipient, minAmount, refundTo), encoded as `--args` encodes them and appended to the

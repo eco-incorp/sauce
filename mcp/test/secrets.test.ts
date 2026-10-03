@@ -62,7 +62,7 @@ describe("a server with endpoints", () => {
           chain: "base",
           defines: { R: OWNER },
           intentDeadline: 2000000000,
-          intentCreator: OWNER,
+          intentRefundee: OWNER,
           dryRun: true,
           from: OWNER,
         },

@@ -617,23 +617,23 @@ protocol addresses, token symbols) vs ambient **MODULES** (this — whole librar
 `<Chain>.Portal.send(…).receive(…).then(() => …)` as data: its stages (`Portal`, `Sent`, `Received`,
 `Opened`, `Caught`), each method's parameters — `value`, `nested`, `program` or `handler`, `rest`
 for items as arguments — the stage it returns, and for a MODIFIER the per-level option it sets:
-`creator`, `deadline` (`rewardDeadline`) and `prover` after `send`; `deadline`, `salt` and `fee`
-(`executionFee`) after `receive`. Its three readers each read it, so they cannot drift: the
-editor's declarations (`gen-source-globals.mjs`), the compiler host (`intent-host.ts`, one host type
-per stage) and the TypeScript builder (`intent-dsl.ts#chainPortal`, which adds `.source()`, the
-chain a host intent is published on). A modifier returns its own record, is given at most once, is
-read by its callee (`Sent.deadline` is the reward's, `Received.deadline` the route's) and builds the
-bytes its option builds (`routes-intent-portal.test.ts`). `receive` is required — `.receive()` with
-no items delivers what a body of token writes moves, and a program nothing — and `{ native }` is a
-reward item only. `.catch((e) => { … })` after `then` makes the body and its handler one
-destination program, `try { … } catch (e) { … }`, `e` the body's revert data (at most 256 bytes):
-EVM destinations only, and refused on the host, which builds the body alone. `await` needs no
-entry in the table: the compiler lowers `await x; rest` to `x.then(() => { rest })`, as JavaScript's
-`await` calls a thenable's `then`, for any host type whose `then` takes one `program` parameter, so
-`await` of a `Received` is byte for byte the `.then(() => { … })` written out (no `async`; directly
-in `main`'s body, a script's or a body). In an editor a script's top-level `await` is plain
-TypeScript; one in `main` is TS1308, which the SauceScript plugin (`sauce-script/ts-plugin.cjs`)
-drops only where the compiler takes the `await`.
+`refundee` (the reward's `creator`), `deadline` (`rewardDeadline`) and `prover` after `send`;
+`deadline`, `salt` and `fee` (`executionFee`) after `receive`. Its three readers each read it, so
+they cannot drift: the editor's declarations (`gen-source-globals.mjs`), the compiler host
+(`intent-host.ts`, one host type per stage) and the TypeScript builder (`intent-dsl.ts#chainPortal`,
+which adds `.source()`, the chain a host intent is published on). A modifier returns its own record,
+is given at most once, is read by its callee (`Sent.deadline` is the reward's, `Received.deadline`
+the route's) and builds the bytes its option builds (`routes-intent-portal.test.ts`). `receive` is
+required — `.receive()` with no items delivers what a body of token writes moves, and a program
+nothing — and `{ native }` is a reward item only. `.catch((e) => { … })` after `then` makes the body
+and its handler one destination program, `try { … } catch (e) { … }`, `e` the body's revert data (at
+most 256 bytes): EVM destinations only, and refused on the host, which builds the body alone.
+`await` needs no entry in the table: the compiler lowers `await x; rest` to
+`x.then(() => { rest })`, as JavaScript's `await` calls a thenable's `then`, for any host type whose
+`then` takes one `program` parameter, so `await` of a `Received` is byte for byte the
+`.then(() => { … })` written out (no `async`; directly in `main`'s body, a script's or a body). In
+an editor a script's top-level `await` is plain TypeScript; one in `main` is TS1308, which the
+SauceScript plugin (`sauce-script/ts-plugin.cjs`) drops only where the compiler takes the `await`.
 
 **What an intent leaves out is Eco's default** (`intent-defaults.ts`, which
 `docs/reference/intent-defaults.md` and the `sauce-intents` defaults reference state): the route
@@ -643,10 +643,10 @@ prover. When it opens is the compile's `intents.openedAt` — the CLI sets it, a
 command, so every compile the command makes builds the same intents — else when the program runs:
 each default deadline is then a STAMP, an 8-byte sentinel that `@sauce/intents#stamped` overwrites
 from `ctx.timestamp()` (or the route deadline it wrote) before publishing, and it counts among the
-intent's `captures`, so an intent with none is fixed when built. The creator has one default only:
+intent's `captures`, so an intent with none is fixed when built. The refundee has one default only:
 the wallet that publishes a top-level intent itself (`intents.publisher`: the CLI's wallet, or
-`--intent-creator` through `commands.ts#asPublished` for a command that only names the intents). An
-intent a program opens on a Pot names `.creator(...)` or is refused, since the Pot may be shared; a
+`--intent-refundee` through `commands.ts#asPublished` for a command that only names the intents). An
+intent a program opens on a Pot names `.refundee(...)` or is refused, since the Pot may be shared; a
 body's level drops `publisher` and `openedAt`. A program body's cook fee is `.fee(...)` (a value
 known when the intent is built) or `intents.executionFee`, a bigint or a function of the
 destination; the CLI reads it from each destination's Kitchen only when some body is a program.

@@ -52,7 +52,7 @@ describe("a chain's name is its chain id", () => {
       "base",
       `function main() {
   Ethereum.Portal.send({ token: USDC, amount: 2 })
-    .creator(${RECIPIENT})
+    .refundee(${RECIPIENT})
     .receive({ token: USDC, amount: 1 })
     .then(() => { USDC.transfer(${RECIPIENT}, 1); });
 }`,

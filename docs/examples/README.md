@@ -11,7 +11,7 @@ application calls them.
 | Example                                                        | Shows                                                                                                                                          |
 | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | [cross-chain-intent.sauce.ts](cross-chain-intent.sauce.ts)     | A program that measures its Pot and publishes a new intent carrying what it measured — written in SauceScript                                  |
-| [cross-chain-intent.ts](cross-chain-intent.ts)                 | Compiling that program for Base with its intents' deadline and creator, and building the cook that runs it with `main`'s arguments             |
+| [cross-chain-intent.ts](cross-chain-intent.ts)                 | Compiling that program for Base with its intents' deadline and refundee, and building the cook that runs it with `main`'s arguments            |
 | [nested-intent.sauce.ts](nested-intent.sauce.ts)               | An intent from Ethereum to Base whose body opens the next intent, back to Ethereum, from what it measured — written in SauceScript             |
 | [nested-swap.sauce.ts](nested-swap.sauce.ts)                   | The same with a swap on Base, whose output is the inner intent's reward — written in SauceScript                                               |
 | [nested-intent.ts](nested-intent.ts)                           | Compiling both for Ethereum and building the wallet transactions that publish them                                                             |

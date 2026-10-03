@@ -5,7 +5,7 @@
 // `--chain` is the source chain, which funds the reward: `USDC` in `.send(...)` is its USDC. In
 // `.receive(...)` and inside the body, the code runs on Ethereum: `USDC` and `AaveV3.Pool` there are
 // Ethereum's. The gap between what is delivered and the reward is the solver's margin. The intent
-// names its creator, `refundTo`, where its reward goes back if no solver fills it; the deadlines,
+// names its refundee, `refundTo`, where its reward goes back if no solver fills it; the deadlines,
 // the salt and Ethereum's Kitchen fee take their defaults.
 //
 //   sauce run cross-chain.sauce.ts --chain <chain> --keystore <keystore> \
@@ -26,7 +26,7 @@ function main(beneficiary: Address, refundTo: Address) {
   const delivered = amount - (amount * 10) / 10000; // the solver keeps 0.1%
 
   Ethereum.Portal.send({ token: USDC, amount })
-    .creator(refundTo)
+    .refundee(refundTo)
     .receive({ token: USDC, amount: delivered })
     .then(() => {
       USDC.approve(AaveV3.Pool, delivered);

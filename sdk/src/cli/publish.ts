@@ -141,7 +141,7 @@ function fixedIntents(input: PublishInput, files: CliFiles): readonly LoweredInt
   }
   // The wallet that publishes them is the creator of each that names none, unless the flags name
   // another.
-  const publisher = input.intents.creator ?? input.account?.address ?? input.from;
+  const publisher = input.intents.refundee ?? input.account?.address ?? input.from;
   const program = compileProgram(
     publisher === undefined ? input : { ...input, intents: { ...input.intents, publisher } },
     files,

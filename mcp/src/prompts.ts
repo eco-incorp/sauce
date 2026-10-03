@@ -107,7 +107,7 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
       title: "Open a cross-chain intent",
       description:
         "Walks an agent through a Sauce program that opens a cross-chain intent: read the " +
-        "intents skill, compile with the intent's deadline and creator, and build the unsigned " +
+        "intents skill, compile with the intent's deadline and refundee, and build the unsigned " +
         "transactions that publish and fund it (or the cook that opens it from a Pot).",
       argsSchema: {
         task: z
@@ -142,7 +142,7 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
               "   the destination Kitchen's fee when the body runs a program there (sauce_pot on",
               "   that chain reads it; pass it as intentExecutionFee). sauce_price reads a",
               "   pool's price for a swap in the body.",
-              "3. sauce_compile with intentDeadline (Unix seconds, in the future) and intentCreator",
+              "3. sauce_compile with intentDeadline (Unix seconds, in the future) and intentRefundee",
               "   until it compiles; sauce_inspect with the source and main's arguments as args",
               "   lists each intent's route and reward.",
               "4. For an intent fixed when it is built, rehearse both sides with the same inputs,",

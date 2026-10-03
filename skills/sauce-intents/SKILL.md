@@ -14,7 +14,7 @@ file does not compute is one of `main`'s typed parameters, passed with `--args` 
 ```sauce chain=base
 function main(recipient: Address, amount: Uint256, reward: Uint256, refundTo: Address) {
   Ethereum.Portal.send({ token: USDC, amount: reward }) // Base's USDC, escrowed here
-    .creator(refundTo) // the refund address: an unfilled intent's reward goes back there
+    .refundee(refundTo) // the refund address: an unfilled intent's reward goes back there
     .receive({ token: USDC, amount }) // Ethereum's USDC, brought by the solver
     .then(() => {
       USDC.transfer(recipient, amount); // Ethereum's USDC: the body runs there
@@ -22,7 +22,7 @@ function main(recipient: Address, amount: Uint256, reward: Uint256, refundTo: Ad
 }
 ```
 
-`.creator(...)` names the **refund address**, where an unfilled intent's reward goes back. Every
+`.refundee(...)` names the **refund address**, where an unfilled intent's reward goes back. Every
 intent a program opens names it, at any depth: the Pot a program runs on may be shared, so a
 refund there could go to anyone, and nothing defaults it. The deadlines, the prover, the salt and
 the destination Kitchen's fee have defaults, and each has a modifier to set it (below).
@@ -102,9 +102,9 @@ reward)`, sent by anyone, returns everything the vault holds of the reward to th
    once the cancel is final on the destination: a reorg that let a fill in first would leave that
    solver unpaid.
 
-## Deadlines, creator, prover, salt and fee
+## Deadlines, refundee, prover, salt and fee
 
-Each is a modifier on the step it belongs to. After `.send(...)`, the reward's: `.creator(address)`,
+Each is a modifier on the step it belongs to. After `.send(...)`, the reward's: `.refundee(address)`,
 the refund address, who may reclaim an unearned reward (never a Pot); `.deadline(t)`, from when it
 may be refunded; and `.prover(address)`. After `.receive(...)`, the route's: `.deadline(t)`, the last second the intent
 may be filled; `.salt(s)`; and `.fee(wei)`, the destination Kitchen's fee a program body pays its
@@ -114,7 +114,7 @@ and is required. Deadlines are Unix seconds.
 ```sauce chain=base
 function main(recipient: Address, amount: Uint256, reward: Uint256, refundTo: Address) {
   Ethereum.Portal.send({ token: USDC, amount: reward })
-    .creator(refundTo) // may reclaim the reward if no fill is proven
+    .refundee(refundTo) // may reclaim the reward if no fill is proven
     .deadline(ctx.timestamp() + 86400 * 14) // refundable after two weeks
     .receive({ token: USDC, amount })
     .deadline(ctx.timestamp() + 1800) // filled within half an hour, or never
@@ -127,11 +127,14 @@ function main(recipient: Address, amount: Uint256, reward: Uint256, refundTo: Ad
 Left out, each is what Eco's Portal app gives an intent: the fill deadline 5 minutes after the
 intent opens and the reward's 7 days after that, the prover the registry records on both chains, a
 random salt, and the fee the destination's Kitchen charges, read from it when the intent is built.
-The creator is the exception: a program names it for every intent it opens, at any depth, and
+The refundee is the exception: a program names it for every intent it opens, at any depth, and
 only a top-level intent a wallet publishes itself (`sauce intent publish`) takes that wallet when
 it names none. [references/defaults.md](references/defaults.md) has the table.
 
-- **A value the program computes** works in a deadline, the creator, the prover and the salt, as it
+`.refundee(a)` sets the reward's `creator`: after the deadline a refund goes to `a`, and only `a`
+may send the Portal's `refundTo` to redirect it.
+
+- **A value the program computes** works in a deadline, the refundee, the prover and the salt, as it
   does in an amount: `ctx.timestamp() + 1800` is read when the program opening the intent runs, so
   such a file is run from a Pot (`sauce run`), not published from a wallet. A literal, a top-level
   `const` of one or one of `main`'s arguments works everywhere.
@@ -140,8 +143,8 @@ it names none. [references/defaults.md](references/defaults.md) has the table.
   and the command reads the Kitchen's fee itself.
 - **The `sauce` command's flags** set the same for every intent a file opens that does not set it
   itself: `--intent-deadline`, `--intent-reward-deadline`, `--intent-prover`, `--intent-salt`,
-  `--intent-execution-fee`. `--intent-creator` names the creator only of a top-level intent a wallet
-  publishes, in place of that wallet; it is never the creator of one a program opens.
+  `--intent-execution-fee`. `--intent-refundee` names the refundee only of a top-level intent a wallet
+  publishes, in place of that wallet; it is never the refundee of one a program opens.
 - **Each run is a new intent.** A default deadline counts from when each command builds the intent,
   and each command picks a fresh random salt, so `sauce inspect`, `sauce intent fill` and
   `sauce intent publish` build three intents with three hashes. To rehearse the intent you publish,
@@ -264,8 +267,8 @@ token to the vault (and sends a native reward to it), only what the vault does n
 calls `publish(destination, route, reward)` once the Portal reports the intent funded. A token whose
 transfer returns `false` stops it there, before the intent is published, with what was paid still
 in the vault: top it up and run it again, or `refund` after the deadline. A second run that finds
-the vault funded only publishes. A top-level intent that names no creator takes the wallet (or
-`--intent-creator`); one a body opens names its own. The deadlines left to their defaults run from
+the vault funded only publishes. A top-level intent that names no refundee takes the wallet (or
+`--intent-refundee`); one a body opens names its own. The deadlines left to their defaults run from
 when the command builds the intent.
 
 ```sh
@@ -294,7 +297,7 @@ and a token whose transfer returns `false` reverts it. Values measured while it 
 using it inside the body, in the delivery, in the reward or in a modifier is enough. The package
 encodes the intent with a slot for it, and the program writes the measured value in before it
 publishes. Any one-word value can be carried this way. Every intent the file opens names its
-creator: nothing defaults it to the Pot or its owner. The command reads each destination Kitchen's
+refundee: nothing defaults it to the Pot or its owner. The command reads each destination Kitchen's
 fee for a body that is a program.
 
 ```sh
@@ -361,7 +364,7 @@ function main(beneficiary: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
   const delivered = amount - (amount * 10) / 10000;
   Ethereum.Portal.send({ token: USDC, amount })
-    .creator(refundTo)
+    .refundee(refundTo)
     .receive({ token: USDC, amount: delivered })
     .then(() => {
       USDC.approve(AaveV3.Pool, delivered);
@@ -406,7 +409,7 @@ function main(
   refundTo: Address,
 ) {
   Base.Portal.send({ token: WETH, amount: reward }) // the source chain's WETH
-    .creator(refundTo)
+    .refundee(refundTo)
     .receive({ token: WETH, amount: amountIn }) // Base's WETH
     .then(() => {
       const pool = UniswapV3.Factory.getPool(WETH, USDC, 500); // Base's 0.05% tier
@@ -445,7 +448,7 @@ to the beneficiary:
 function main(beneficiary: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
   Ethereum.Portal.send({ token: USDC, amount })
-    .creator(refundTo)
+    .refundee(refundTo)
     .receive({ token: USDC, amount })
     .then(() => {
       USDC.approve(AaveV3.Pool, amount);
@@ -472,11 +475,11 @@ function main(recipient: Address, refundTo: Address) {
   const onEthereum = amount - amount / 1000; // what the first solver delivers
   const onBase = onEthereum - onEthereum / 1000; // what the second delivers
   Ethereum.Portal.send({ token: USDC, amount })
-    .creator(refundTo)
+    .refundee(refundTo)
     .receive({ token: USDC, amount: onEthereum })
     .then(() => {
       Base.Portal.send({ token: USDC, amount: onEthereum }) // Ethereum's: what this level received
-        .creator(refundTo) // every level names its own
+        .refundee(refundTo) // every level names its own
         .receive({ token: USDC, amount: onBase })
         .then(() => {
           USDC.transfer(recipient, onBase); // Base's USDC
@@ -503,10 +506,10 @@ function main(recipient: Address, refundTo: Address) {
   const onEthereum = amount - amount / 1000;
   const onBase = onEthereum - onEthereum / 1000;
   await Ethereum.Portal.send({ token: USDC, amount })
-    .creator(refundTo)
+    .refundee(refundTo)
     .receive({ token: USDC, amount: onEthereum });
   await Base.Portal.send({ token: USDC, amount: onEthereum }) // Ethereum's USDC: this runs there
-    .creator(refundTo)
+    .refundee(refundTo)
     .receive({ token: USDC, amount: onBase });
   USDC.transfer(recipient, onBase); // Base's USDC
 }
@@ -526,7 +529,7 @@ Each level takes its own modifiers, and each it leaves out takes its default for
   body above it runs: its fill deadline is 5 minutes after that, and its reward's 7 days after the
   fill deadline. A deadline flag (`--intent-deadline`, `--intent-reward-deadline`) is the same
   second for every level that sets none, so a later level has whatever time the earlier ones leave.
-- **The creator** has no default at any level: each names its own, here the same `refundTo`, which
+- **The refundee** has no default at any level: each names its own, here the same `refundTo`, which
   reclaims each level's unearned reward on the chain that escrowed it, so it must be an address its
   owner controls on each of them.
 - **The salt** is random for each level, picked as the level above is built.
@@ -560,7 +563,7 @@ and `--fund` take whole tokens. In `--args-json`, write an address or any value 
 string (`"1000000000000000000"`): a JSON number loses precision.
 
 Refused at compile time, never silently changed: a name the program does not declare, an intent a
-program opens with no `.creator(...)`, a program body's fee nothing supplies (offline with no
+program opens with no `.refundee(...)`, a program body's fee nothing supplies (offline with no
 fee), a modifier given twice or after the wrong step, an intent with no `.receive(...)` or
 `.then(...)`, a chain with no eco-routes deployment, a pair with no prover deployed on both sides.
 
@@ -655,7 +658,7 @@ intent from TypeScript around a program it compiles itself (`sauce-typescript`).
   measured, so it can be run from a Pot or published from a wallet with the same `--args`.
 - [examples/fund-by-transfer.sauce.ts](examples/fund-by-transfer.sauce.ts) publishes an intent
   built elsewhere from a Pot, funded by a transfer into its vault, in one cook.
-- [examples/intents.mts](examples/intents.mts) compiles the intent files, with the creator, Base's
+- [examples/intents.mts](examples/intents.mts) compiles the intent files, with the refundee, Base's
   and Ethereum's fees and the recipient as developer inputs, and pins the defaults, the modifiers
   example, on which chain each name resolves, the fee requirement, the token-only case, the pool
   ABI's selectors, and the rehearsal's transactions: the Pot's deploy and `fulfill` with the fee as

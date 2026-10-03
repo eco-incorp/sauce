@@ -18,7 +18,7 @@ const sourceUsdc = usdcOn(Ethereum.chain);
 // owns, which must already exist. The deadlines take their defaults, counted from now.
 const built = Base.Portal.send({ token: sourceUsdc, amount: 1_010_000n })
   .source("ethereum")
-  .creator("0x6666666666666666666666666666666666666666")
+  .refundee("0x6666666666666666666666666666666666666666")
   .receive({ token: baseUsdc, amount: 1_000_000n })
   .fee(executionFee)
   .then(() => {

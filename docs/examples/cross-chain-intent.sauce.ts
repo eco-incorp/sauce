@@ -9,8 +9,8 @@
 // reward this program escrows, what a solver delivers on Ethereum, and what runs there. `amount` is
 // an ordinary variable of this program and `recipient` one of its parameters, and using them in the
 // intent is enough: the SDK splices their run-time values into the encoded intent, and fills in the
-// Portal, the prover, the vault and the encoding. The intent names its creator, `refundTo`, where
-// its reward goes back if no solver fills it: a program's intent has no default creator. The
+// Portal, the prover, the vault and the encoding. The intent names its refundee, `refundTo`, where
+// its reward goes back if no solver fills it: a program's intent has no default refundee. The
 // deadlines and the salt take their defaults.
 //
 // `USDC` is a registered symbol. In `.receive(...)` and the body it means Ethereum's USDC, because
@@ -29,7 +29,7 @@ function main(recipient: Address, minAmount: Uint256, refundTo: Address) {
   require(amount >= minAmount, "nothing to forward");
 
   Ethereum.Portal.send({ token: USDC, amount })
-    .creator(refundTo)
+    .refundee(refundTo)
     .receive({ token: USDC, amount })
     .then(() => {
       USDC.transfer(recipient, amount);

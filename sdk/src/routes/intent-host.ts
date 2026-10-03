@@ -6,7 +6,7 @@
  * function main(owner: Address) {
  *   const amount = USDC.balanceOf(ctx.self());
  *   Arbitrum.Portal.send({ token: USDC, amount })
- *     .creator(owner)
+ *     .refundee(owner)
  *     .receive({ token: USDC, amount: (amount * 99) / 100 })
  *     .then(() => {
  *       USDC.transfer(RECIPIENT, (amount * 99) / 100);
@@ -22,7 +22,7 @@
  * destination's chain id. `send` (the reward, paid here) and `receive` (what the solver delivers
  * there) make records, each taking any number of items as arguments of its own (`rest`) — a token
  * amount or a list of them, and for the reward the native coin. After each, its stage's modifiers —
- * `creator`, `deadline` and `prover` after `send`, `deadline`, `salt` and `fee` after `receive` —
+ * `refundee`, `deadline` and `prover` after `send`, `deadline`, `salt` and `fee` after `receive` —
  * return the record they are called on, so the chain is one record of everything in it, which the
  * compiler shows `nested` and `bind` call by call, each by its callee (`Sent.deadline` is not
  * `Received.deadline`). `receive`'s items are evaluated here but named on the destination
@@ -48,9 +48,10 @@
  * intent opens, the reward's seven days past the route's (`intent-defaults.ts`), the registry's
  * prover, a random salt. An intent opens when the compile says (`openedAt`), which makes those
  * deadlines known when it is built; else when the program opening it runs, and `@sauce/intents`
- * writes them from the block's time (a STAMP). The creator has no default but one: the wallet that
- * publishes a top-level intent itself (`publisher`). Every intent a program opens names its own,
- * since the Pot it runs on may be shared and a refund there could go to anyone.
+ * writes them from the block's time (a STAMP). The refundee, the reward's `creator`, has no
+ * default but one: the wallet that publishes a top-level intent itself (`publisher`). Every intent
+ * a program opens names its own, since the Pot it runs on may be shared and a refund there could go
+ * to anyone.
  *
  * WHICH CHAIN A NAME MEANS. The body and the delivery are the destination's, the reward and the
  * modifiers the enclosing chain's, where it is escrowed. That is the compiler's scoping now: the
@@ -118,7 +119,7 @@ export interface IntentSugarDefaults {
    * The wallet that publishes the program's top-level intents itself, as `sauce intent publish`
    * does: the creator of each one that names none, as Eco's Portal app makes the publishing wallet
    * the creator. It is never the creator of an intent a body opens, and a level below drops it:
-   * every intent a program opens names its own `.creator(...)`, since the Pot it runs on may be
+   * every intent a program opens names its own `.refundee(...)`, since the Pot it runs on may be
    * shared and a refund there could go to anyone.
    */
   readonly publisher?: AddressInput;
@@ -186,12 +187,13 @@ const unfinished = (stage: "Sent" | "Received", written: string): string =>
 /** The refusal of a chain that skips what the solver delivers. */
 const NEEDS_A_DELIVERY = unfinished("Sent", "send(...)");
 
-/** Why an intent with no `.creator(...)` is refused: no default is safe for one a program opens. */
+/** Why an intent with no `.refundee(...)` is refused: no default is safe for one a program
+ *  opens. */
 const UNNAMED_CREATOR =
-  "an intent opened by a program needs `.creator(<address>)` after `.send(...)`: the address an " +
+  "an intent opened by a program needs `.refundee(<address>)` after `.send(...)`: the address an " +
   "unfilled intent's reward is refunded to. The Pot a program runs on may be shared, so a refund " +
   "there is one anyone can take: name the owner, or an address the program is given " +
-  "(`.creator(refundTo)`). Only a top-level intent a wallet publishes itself (`sauce intent " +
+  "(`.refundee(refundTo)`). Only a top-level intent a wallet publishes itself (`sauce intent " +
   "publish`, or `intents.publisher` in the compile options) takes that wallet as its creator.";
 
 /**
@@ -222,6 +224,51 @@ type Value = { readonly literal: bigint } | { readonly runtime: number; readonly
  *  or the route's deadline, plus `seconds`. */
 type Deadline =
   Value | { readonly stamp: number; readonly from: "now" | "route"; readonly seconds: bigint };
+
+/** Where a stage begins, as a refusal names it: after the step that returns it. */
+function stageEntry(stage: IntentStage): string {
+  for (const spec of Object.values(INTENT_STAGES)) {
+    for (const [name, method] of Object.entries(
+      spec.methods as Readonly<Record<string, IntentMethod>>,
+    )) {
+      if (method.returns === stage && method.option === undefined) return `after \`.${name}(...)\``;
+    }
+  }
+  return "on a chain's `Portal`";
+}
+
+/**
+ * A step an intent's stage does not have — an old name after `send`, say — reported with the
+ * steps that stage takes, from the compiler's own diagnostic (`HostMethodUnknown`, which names the
+ * stage's host type and the method).
+ */
+export function intentStepError(cause: unknown): Error | undefined {
+  const diagnostics =
+    (cause as { diagnostics?: readonly { code?: string; message?: string }[] } | undefined)
+      ?.diagnostics ?? [];
+  for (const { code, message } of diagnostics) {
+    if (code !== "HostMethodUnknown") continue;
+    const [, stage, method] = /^`(\w+)` has no method `(\w+)`$/.exec(message ?? "") ?? [];
+    if (stage === undefined || !Object.hasOwn(INTENT_STAGES, stage)) continue;
+    const steps = Object.keys(INTENT_STAGES[stage as IntentStage].methods).map(
+      (name) => `\`.${name}(...)\``,
+    );
+    const takes =
+      steps.length === 0
+        ? "nothing follows it"
+        : steps.length === 1
+          ? `its one step is ${steps[0]}`
+          : `its steps are ${steps.slice(0, -1).join(", ")} and ${steps.at(-1)}`;
+
+    return new Error(
+      `compileSauceRoute: \`.${method}(...)\` is not a step ${stageEntry(stage as IntentStage)}: ` +
+        `${takes}. The compiler reported: ${message}`,
+      { cause },
+    );
+  }
+
+  return undefined;
+}
 
 /** The declarations, types and callbacks that open intents from a program on `level.source`. */
 export function intentHost(level: IntentLevel): {
@@ -386,7 +433,7 @@ function bindIntent(
 
   // The reward's creator: named, or, for a top-level intent a wallet publishes itself, that
   // wallet. Refused before anything is built for the body when it is neither.
-  const creator = modifier("Sent.creator", "`.creator(...)`");
+  const creator = modifier("Sent.refundee", "`.refundee(...)`");
   if (creator === undefined && defaults.publisher === undefined) fail(UNNAMED_CREATOR);
   // The Kitchen fee the body's cook pays on this intent's destination: `.fee(...)`, else the
   // compile's for that destination. A fee is in the route's encoding and in the call's value, so

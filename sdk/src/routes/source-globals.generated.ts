@@ -58,7 +58,7 @@ export interface SauceIntentNative {
  * A chain's Portal in compiled source, opening an intent whose body runs on that chain:
  * `Base.Portal.send({ token, amount }).receive({ token, amount }).then(() => { ... })`. After
  * `send` come the reward's modifiers, after `receive` the route's, each at most once and in any
- * order; each left out but the creator has its default.
+ * order; each left out but the refundee has its default.
  */
 export interface SaucePortal {
   /**
@@ -72,11 +72,12 @@ export interface SaucePortal {
 /** An intent with its reward: the reward's modifiers not given yet, then `receive`. */
 export interface SauceIntentSentSteps<Used extends string> {
   /**
-   * Who may reclaim an unearned reward: where an unfilled intent's reward is refunded. Required on
+   * Who may reclaim an unearned reward, the reward's `creator` on the Portal: after the deadline a
+   * refund goes to it, and only it may send the Portal's `refundTo` to redirect one. Required on
    * every intent a program opens, since the Pot it runs on may be shared; only a top-level intent a
    * wallet publishes itself defaults to that wallet.
    */
-  creator(address: bigint): SauceIntentSent<Used | "creator">;
+  refundee(address: bigint): SauceIntentSent<Used | "refundee">;
   /**
    * From when an unproven reward may be refunded, Unix seconds. Defaults to seven days past the
    * route's deadline.

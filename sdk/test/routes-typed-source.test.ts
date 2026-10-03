@@ -94,7 +94,7 @@ function main(amount: Uint256): Uint256 {
     const source = `function main(amount: Uint256): void {
   const held: Uint256 = USDC.balanceOf(ctx.self());
   require(held >= amount);
-  Arbitrum.Portal.send([{ token: USDC, amount }]).creator(0x3333333333333333333333333333333333333333).receive().then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).refundee(0x3333333333333333333333333333333333333333).receive().then(() => {
     USDC.transfer(RECIPIENT, amount);
   });
 }`;

@@ -2,7 +2,7 @@
 // for Ethereum, where a wallet publishes its first hop: Base, then Ethereum, then Base again. Its
 // `main` arguments are fixed into the intents, as `sauce intent publish --args` fixes them.
 //
-// Offline: the recipient, the amounts, the creator and the fee are fixtures and nothing is sent. The
+// Offline: the recipient, the amounts, the refundee and the fee are fixtures; nothing is sent. The
 // Portals, the provers, the destination Pots and the routes' native amounts come from the SDK; the
 // execution fee does not, because it is mutable on-chain and lives on each destination — read it
 // with `destinationExecutionFee()`, sent as an `eth_call` to that chain. Each body that is a program
@@ -22,7 +22,7 @@ const recipient = "0x6666666666666666666666666666666666666666";
 // Fixtures: each Kitchen's fee, for the two bodies that are programs.
 const fees: Record<string, bigint> = { base: 1_000n, ethereum: 2_000n };
 
-const refundTo = "0x4444444444444444444444444444444444444444"; // each hop's creator
+const refundTo = "0x4444444444444444444444444444444444444444"; // each hop's refundee
 
 const compiled = routes.compileSauceProgram("ethereum", source, {
   args: [recipient, 1_000_000n, 1_010_000n, refundTo],

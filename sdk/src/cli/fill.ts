@@ -204,7 +204,7 @@ export function fillTargets(input: ProgramInput, files: CliFiles): readonly Fill
         "the eco-routes Portal this SDK publishes through is EVM only",
     );
   }
-  // Built as `sauce intent publish` builds them, `--intent-creator` standing in for its wallet.
+  // Built as `sauce intent publish` builds them, `--intent-refundee` standing in for its wallet.
   const intents = compileProgram(asPublished(input), files).intents;
   if (intents.length === 0) {
     throw new UsageError(`${input.file} opens no intent: there is nothing for a solver to fill`);

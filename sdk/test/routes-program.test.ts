@@ -80,7 +80,7 @@ describe("compileSauceProgram", () => {
     const body = [
       "function main(recipient: Address) {",
       "  const amount = USDC.balanceOf(ctx.self());",
-      "  Arbitrum.Portal.send([{ token: USDC, amount }]).creator(0x3333333333333333333333333333333333333333).receive().then(() => {",
+      "  Arbitrum.Portal.send([{ token: USDC, amount }]).refundee(0x3333333333333333333333333333333333333333).receive().then(() => {",
       "    USDC.transfer(recipient, amount);",
       "  });",
       "}",
@@ -98,7 +98,7 @@ describe("compileSauceProgram", () => {
 
   it("compiles an intent every value of which is known now, and reports it fixed", () => {
     const body = [
-      "Base.Portal.send([{ token: USDC, amount: 7n }]).creator(0x3333333333333333333333333333333333333333).receive().then(() => {",
+      "Base.Portal.send([{ token: USDC, amount: 7n }]).refundee(0x3333333333333333333333333333333333333333).receive().then(() => {",
       "  USDC.transfer(RECIPIENT, 5n);",
       "});",
     ].join("\n");

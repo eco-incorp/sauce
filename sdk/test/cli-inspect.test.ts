@@ -51,7 +51,7 @@ const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
 const CREATOR: Address = "0x3333333333333333333333333333333333333333";
 const ENGINE = getAddress(v12EngineAddress());
 const INTENT_FLAGS = [
-  ...["--intent-deadline", "2000000000", "--intent-creator", CREATOR],
+  ...["--intent-deadline", "2000000000", "--intent-refundee", CREATOR],
   ...["--intent-salt", `0x${"00".repeat(32)}`],
 ];
 
@@ -388,7 +388,7 @@ const SPLIT = [
 const FIXED = [
   "// @chain ethereum",
   "Base.Portal.send([{ token: USDC, amount: 2000 }])",
-  "  .creator(0x3333333333333333333333333333333333333333)",
+  "  .refundee(0x3333333333333333333333333333333333333333)",
   "  .receive()",
   "  .then(() => {",
   "    USDC.transfer(RECIPIENT, 1000);",
@@ -400,7 +400,7 @@ const MEASURED = [
   "function main(recipient: Address) {",
   "  const amount = USDC.balanceOf(ctx.self());",
   "  Base.Portal.send([{ token: USDC, amount: amount }])",
-  "    .creator(0x3333333333333333333333333333333333333333)",
+  "    .refundee(0x3333333333333333333333333333333333333333)",
   "    .receive()",
   "    .then(() => {",
   "      USDC.transfer(recipient, amount);",

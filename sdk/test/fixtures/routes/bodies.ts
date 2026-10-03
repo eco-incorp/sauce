@@ -14,12 +14,12 @@
 export const CASCADE_BODY = `function main() {
   const amount = USDC.balanceOf(ctx.self());
   Ethereum.Portal.send({ token: USDC, amount })
-    .creator(RECIPIENT)
+    .refundee(RECIPIENT)
     .receive({ token: USDC, amount })
     .then(() => {
       const arrived = USDC.balanceOf(ctx.self());
       Base.Portal.send({ token: USDC, amount: arrived })
-        .creator(RECIPIENT)
+        .refundee(RECIPIENT)
         .receive()
         .then(() => {
           USDC.transfer(RECIPIENT, arrived);
@@ -40,7 +40,7 @@ export const BODY_TO_ARBITRUM = `function main() {
   }
 
   Arbitrum.Portal.send({ token: USDC, amount })
-    .creator(RECIPIENT)
+    .refundee(RECIPIENT)
     .receive()
     .then(() => {
       USDC.transfer(RECIPIENT, amount);

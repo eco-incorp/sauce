@@ -42,7 +42,7 @@ once it is given, and the builder refuses a repeat at run time too.
 | ------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------- |
 | `send(...reward)`               | Each `{ token, amount }` or `{ native: amount }` an argument, or one list | Required; `.send()` offers nothing                       |
 | `.source(chain)`                | The source chain: a reference, or a chain export                          | Required                                                 |
-| `.creator(address)`             | The refund address: who may reclaim an unearned reward                    | Required                                                 |
+| `.refundee(address)`            | The refund address: who may reclaim an unearned reward                    | Required                                                 |
 | `.deadline(seconds)`            | The reward's deadline                                                     | The route's deadline plus `routes.DEFAULT_REFUND_WINDOW` |
 | `.prover(address)`              | The reward's prover                                                       | `ecoRoutesProver(source, destination)`                   |
 | `receive(...delivery)`          | Each `{ token, amount }` an argument, or one list                         | Required; `.receive()` delivers nothing                  |
@@ -56,7 +56,7 @@ once it is given, and the builder refuses a repeat at run time too.
 [Intent defaults](../reference/intent-defaults.md) gives each default's reason. The intent is
 `routes.openRoute(chain, body, { deadline, execution: { value: fee }, tokens, precalls, creator, salt }).reward({ source, creator, deadline, prover, tokens, nativeAmount })`,
 its `precalls` moving each delivered token from the Executor into the derived Pot. An intent the
-body opens names its own creator, and takes its own default deadlines, from when it opens.
+body opens names its own refundee, and takes its own default deadlines, from when it opens.
 `INTENT_STAGES` (`routes/intent-syntax.ts`) is the syntax as data — each stage, its methods, what
 each takes and the option a modifier sets — which the declarations a typed closure checks against
 are generated from.
@@ -169,8 +169,8 @@ fee) and what overrides it: `deadline`, `rewardDeadline`, `openedAt` (when the f
 which its default deadlines count from), `sourcePortal`, `destinationPortal`, `prover`, `salt`,
 `fundVia`, `allowPartial`, and the eco-routes `generation`/`environment`. They apply to every
 intent the program opens that does not set its own, at every depth, but for `openedAt`: an intent a
-body opens opens when that body runs. The creator is never among them: every intent a program opens
-names its own `.creator(...)`, since the Pot it runs on may be shared. `publisher` is the one
+body opens opens when that body runs. The refundee is never among them: every intent a program opens
+names its own `.refundee(...)`, since the Pot it runs on may be shared. `publisher` is the one
 stand-in, for a top-level intent a wallet publishes itself (`sauce intent publish` sets it), and no
 level below takes it. Through the Portal form or `openRoute`, `fundVia` and the eco-routes
 selection are inherited from the enclosing intent.

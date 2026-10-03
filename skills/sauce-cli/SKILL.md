@@ -440,10 +440,10 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
 
 ## Intents and Solana
 
-- **A file that opens intents** (`Ethereum.Portal.send(…).creator(refundTo).receive(…).then(() => { … })`)
-  names each intent's creator, the refund address, with `.creator(...)`: an intent a program opens
-  has no default creator, since the Pot it runs on may be shared. Only a top-level intent
-  `sauce intent publish` publishes from a wallet takes that wallet (or `--intent-creator <address>`)
+- **A file that opens intents** (`Ethereum.Portal.send(…).refundee(refundTo).receive(…).then(() => { … })`)
+  names each intent's refundee, the refund address, with `.refundee(...)`: an intent a program opens
+  has no default refundee, since the Pot it runs on may be shared. Only a top-level intent
+  `sauce intent publish` publishes from a wallet takes that wallet (or `--intent-refundee <address>`)
   when it names none. The rest default, and the file may set each with a modifier
   (`sauce-intents`): the deadlines from when the command builds the intents, a random salt picked
   once per run, and the Kitchen fee a body's cook pays, read from the destination.

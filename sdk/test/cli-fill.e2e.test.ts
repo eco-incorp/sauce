@@ -112,7 +112,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
   const fill = (path: string, ...flags: string[]) =>
     sauce(
       ...["intent", "fill", path, "--chain", "arbitrum", "--rpc-url", base.rpcUrl],
-      ...["--intent-deadline", DEADLINE, "--intent-creator", CREATOR],
+      ...["--intent-deadline", DEADLINE, "--intent-refundee", CREATOR],
       ...flags,
     );
   /** What a rehearsal must leave as it found it. */
@@ -261,7 +261,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
     const run = await sauce(
       ...["intent", "fill", file("direct.sauce.ts", DIRECT), "--chain", "arbitrum"],
       ...["--rpc-url", base.rpcUrl, ...defines()],
-      ...["--intent-deadline", "1000", "--intent-creator", CREATOR],
+      ...["--intent-deadline", "1000", "--intent-refundee", CREATOR],
     );
     expect(run.code).toBe(1);
     // fill rehearses it anyway, where compile and publish refuse it, and says so.
@@ -390,7 +390,7 @@ describeEvm("sauce intent fill: a solver's fill, rehearsed on the destination", 
       const run = await sauce(
         ...["intent", "fill", file("cooked.sauce.ts", COOKED), "--chain", "arbitrum"],
         ...["--rpc-url", other.rpcUrl, ...defines()],
-        ...["--intent-deadline", DEADLINE, "--intent-creator", CREATOR],
+        ...["--intent-deadline", DEADLINE, "--intent-refundee", CREATOR],
         ...["--intent-execution-fee", String(FEE)],
       );
       expect(run.code).toBe(1);

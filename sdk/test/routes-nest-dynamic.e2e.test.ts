@@ -1437,7 +1437,7 @@ describeEvm("route nesting, executed", () => {
     }, 180_000);
   });
 
-  describe("`Chain.Portal.send(...).creator(0x3333333333333333333333333333333333333333).receive(...).then(...)` written inside the program", () => {
+  describe("`Chain.Portal.send(...).refundee(0x3333333333333333333333333333333333333333).receive(...).then(...)` written inside the program", () => {
     // The syntax the SDK exists to offer: an intent created from a Sauce program with no Portal,
     // no selector, no offset word and no approve written by the author. Everything below the
     // `PROGRAM` constant is the lowering's output, and none of it appears in the source.
@@ -1450,7 +1450,7 @@ describeEvm("route nesting, executed", () => {
 
     const PROGRAM = `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
-  Base.Portal.send([{ token: TOKEN, amount }]).creator(0x3333333333333333333333333333333333333333).receive().then(() => {
+  Base.Portal.send([{ token: TOKEN, amount }]).refundee(0x3333333333333333333333333333333333333333).receive().then(() => {
     Token(TOKEN).transfer(RECIPIENT, amount);
   });
 }`;
@@ -1602,7 +1602,7 @@ describeEvm("route nesting, executed", () => {
       // publish an intent whose vault is empty.
       const { status } = await runIntentProgram(
         `function main() {
-  Base.Portal.send([{ token: TOKEN, amount: 5n }]).creator(0x3333333333333333333333333333333333333333).receive().then(() => {
+  Base.Portal.send([{ token: TOKEN, amount: 5n }]).refundee(0x3333333333333333333333333333333333333333).receive().then(() => {
     Token(TOKEN).transfer(RECIPIENT, 1n);
   });
 }`,
@@ -1620,7 +1620,7 @@ describeEvm("route nesting, executed", () => {
       const { status, logs } = await runIntentProgram(
         `function main() {
   const native = ctx.selfBalance();
-  Base.Portal.send({ native: native }).creator(0x3333333333333333333333333333333333333333).receive().then(() => {
+  Base.Portal.send({ native: native }).refundee(0x3333333333333333333333333333333333333333).receive().then(() => {
     Token(TOKEN).transfer(RECIPIENT, 1n);
   });
 }`,
@@ -1683,7 +1683,7 @@ describeEvm("route nesting, executed", () => {
         const { status, logs } = await runIntentProgram(
           `function main() {
   const native = ctx.selfBalance();
-  Base.Portal.send({ native: native }).creator(0x3333333333333333333333333333333333333333).receive().then(() => {
+  Base.Portal.send({ native: native }).refundee(0x3333333333333333333333333333333333333333).receive().then(() => {
     Token(TOKEN).transfer(RECIPIENT, 1n);
   });
 }`,
@@ -1732,7 +1732,7 @@ describeEvm("route nesting, executed", () => {
       const reward = await deploy(MOCK_ERC20.creationCode);
       const program = `function main() {
   const amount = Token(REWARD).balanceOf(ctx.self());
-  Base.Portal.send([{ token: REWARD, amount }]).creator(${CREATOR})${delivery}.then(() => {
+  Base.Portal.send([{ token: REWARD, amount }]).refundee(${CREATOR})${delivery}.then(() => {
     ${body}
   });
 }`;
@@ -1964,15 +1964,15 @@ describeEvm("route nesting, executed", () => {
     // The headline case: every hop's amount is only known when that hop runs. The parent measures a
     // balance and offers an intent; fulfilling THAT intent delivers the amount to a Pot, where a
     // program measures it again and offers a third. Nothing below is written by hand -- the program
-    // text is the three `Chain.Portal.send(...).creator(0x3333333333333333333333333333333333333333).receive(...).then(...)` expressions and nothing else.
+    // text is the three `Chain.Portal.send(...).refundee(0x3333333333333333333333333333333333333333).receive(...).then(...)` expressions and nothing else.
     const SEEDED = 7_000_000n;
     const FINAL_RECIPIENT = "0x00000000000000000000000000000000000000c3" as Address;
 
     const THREE_HOP = `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
-  Base.Portal.send([{ token: TOKEN, amount }]).creator(0x3333333333333333333333333333333333333333).receive([{ token: TOKEN, amount }]).then(() => {
+  Base.Portal.send([{ token: TOKEN, amount }]).refundee(0x3333333333333333333333333333333333333333).receive([{ token: TOKEN, amount }]).then(() => {
     const got = Token(TOKEN).balanceOf(ctx.self());
-    Base.Portal.send([{ token: TOKEN, amount: got }]).creator(0x3333333333333333333333333333333333333333).receive().then(() => {
+    Base.Portal.send([{ token: TOKEN, amount: got }]).refundee(0x3333333333333333333333333333333333333333).receive().then(() => {
       Token(TOKEN).transfer(RECIPIENT, got);
     });
   });
@@ -2074,7 +2074,7 @@ describeEvm("route nesting, executed", () => {
       // Control flow in the body, so this takes the program path rather than the direct-call one.
       const WITH_LOGIC = `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
-  Base.Portal.send([{ token: TOKEN, amount }]).creator(0x3333333333333333333333333333333333333333).receive([{ token: TOKEN, amount }]).then(() => {
+  Base.Portal.send([{ token: TOKEN, amount }]).refundee(0x3333333333333333333333333333333333333333).receive([{ token: TOKEN, amount }]).then(() => {
     const here = Token(TOKEN).balanceOf(ctx.self());
     if (here > 0n) {
       Token(TOKEN).transfer(RECIPIENT, here);
@@ -2122,7 +2122,7 @@ describeEvm("route nesting, executed", () => {
     }`;
       const handled = (body: string, handler: string) => `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
-  Base.Portal.send({ token: TOKEN, amount }).creator(0x3333333333333333333333333333333333333333)
+  Base.Portal.send({ token: TOKEN, amount }).refundee(0x3333333333333333333333333333333333333333)
     .receive({ token: TOKEN, amount })
     .then(() => {
       Token(TOKEN).transfer(RECIPIENT, 1n);
@@ -2310,7 +2310,7 @@ describeEvm("route nesting, executed", () => {
         "base",
         `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
-  Base.Portal.send([{ token: TOKEN, amount }]).creator(0x3333333333333333333333333333333333333333).receive([{ token: TOKEN, amount }]).then(() => {
+  Base.Portal.send([{ token: TOKEN, amount }]).refundee(0x3333333333333333333333333333333333333333).receive([{ token: TOKEN, amount }]).then(() => {
     const here = Token(TOKEN).balanceOf(ctx.self());
     if (here > 0n) {
       Token(TOKEN).transfer(RECIPIENT, here);
@@ -2440,12 +2440,12 @@ describeEvm("route nesting, executed", () => {
         );
     };
 
-    describe("inside a program: `Chain.Portal.send(...).creator(0x3333333333333333333333333333333333333333).receive(...).then(...)`", () => {
+    describe("inside a program: `Chain.Portal.send(...).refundee(0x3333333333333333333333333333333333333333).receive(...).then(...)`", () => {
       // Control flow, so the child is a PROGRAM cooked on its destination Pot, not a list of
       // token calls. Base -> Base so this one anvil can fulfil the child too.
       const PROGRAM = `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
-  Base.Portal.send([{ token: TOKEN, amount }]).creator(0x3333333333333333333333333333333333333333).receive([{ token: TOKEN, amount }]).then(() => {
+  Base.Portal.send([{ token: TOKEN, amount }]).refundee(0x3333333333333333333333333333333333333333).receive([{ token: TOKEN, amount }]).then(() => {
     const here = Token(TOKEN).balanceOf(ctx.self());
     if (here > 0n) {
       Token(TOKEN).transfer(RECIPIENT, here);

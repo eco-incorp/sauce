@@ -128,7 +128,7 @@ const PORTAL_PROGRAM = [
   "function main(recipient: Address, refundTo: Address) {",
   "  const amount = USDC.balanceOf(ctx.self());",
   "  Base.Portal.send({ token: USDC, amount })",
-  "    .creator(refundTo)",
+  "    .refundee(refundTo)",
   "    .receive({ token: USDC, amount: amount * 99 / 100 })",
   "    .then(() => {",
   "      USDC.transfer(recipient, amount * 99 / 100);",
@@ -153,7 +153,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
   const intentFlags = (route: bigint, reward: bigint): string[] => [
     ...["--chain", "ethereum"],
     ...["--intent-deadline", String(route), "--intent-reward-deadline", String(reward)],
-    ...["--intent-creator", OWNER.address, "--intent-salt", `0x${"5a".repeat(32)}`],
+    ...["--intent-refundee", OWNER.address, "--intent-salt", `0x${"5a".repeat(32)}`],
     ...["--args", RECIPIENT, String(AMOUNT), String(REWARD)],
   ];
   const now = async (local: LocalChain): Promise<bigint> =>
@@ -440,7 +440,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     const published = jsonOf(
       await sauce(
         ...["intent", "publish", nested, "--chain", "ethereum"],
-        ...["--intent-creator", OWNER.address, "--intent-deadline", String(start + 3600n)],
+        ...["--intent-refundee", OWNER.address, "--intent-deadline", String(start + 3600n)],
         ...["--intent-reward-deadline", String(start + 7200n)],
         ...["--intent-execution-fee", String(FEE), "--intent-salt", `0x${"00".repeat(32)}`],
         ...["--rpc-url", ethereum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
@@ -454,7 +454,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     // level's).
     const closure = Base.Portal.send({ token: ethereumUsdc, amount: REWARD })
       .source("ethereum")
-      .creator(OWNER.address)
+      .refundee(OWNER.address)
       .deadline(start + 7200n)
       .receive({ token: baseUsdc, amount: AMOUNT })
       .fee(FEE)
@@ -464,7 +464,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
         `function main() {
   const payout = ${AMOUNT} - ${AMOUNT} / 1000;
   Ethereum.Portal.send({ token: USDC, amount: ${AMOUNT} })
-    .creator(${OWNER.address})
+    .refundee(${OWNER.address})
     .deadline(${start + 7200n})
     .receive({ token: USDC, amount: payout })
     .deadline(${start + 3600n})
@@ -618,17 +618,17 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     await ethereum.mint(ethereumUsdc, pot, REWARD);
 
     // An intent a program opens names its creator: the Pot may be shared, so nothing defaults
-    // it, the signer and --intent-creator included.
+    // it, the signer and --intent-refundee included.
     const unnamed = join(work, "portal-program-unnamed.sauce.ts");
-    writeFileSync(unnamed, PORTAL_PROGRAM.replace("    .creator(refundTo)\n", ""));
+    writeFileSync(unnamed, PORTAL_PROGRAM.replace("    .refundee(refundTo)\n", ""));
     const refused = await sauce(
       ...["run", unnamed, "--chain", "ethereum", "--rpc-url", ethereum.rpcUrl],
-      ...["--intent-execution-fee", String(FEE), "--intent-creator", OWNER.address],
+      ...["--intent-execution-fee", String(FEE), "--intent-refundee", OWNER.address],
       ...["--private-key", OWNER_KEY, "--auto-approve", "--json"],
       ...["--args", RECIPIENT, OWNER.address],
     );
     expect(refused.code).not.toBe(0);
-    expect(refused.stderr).toMatch(/needs `\.creator\(<address>\)`.*may be shared/);
+    expect(refused.stderr).toMatch(/needs `\.refundee\(<address>\)`.*may be shared/);
 
     // No deadline: the intent opens now. Its creator is `refundTo`, from main's arguments.
     const before = BigInt(Math.floor(Date.now() / 1000));

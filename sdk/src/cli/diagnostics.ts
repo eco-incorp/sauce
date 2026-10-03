@@ -204,10 +204,10 @@ function locate(
 /** What to pass the command for a failure whose SDK message names an API option instead. */
 const HINTS: ReadonlyArray<readonly [RegExp, (match: RegExpExecArray) => string]> = [
   [
-    /needs `\.creator\(<address>\)`/,
+    /needs `\.refundee\(<address>\)`/,
     () =>
-      "write `.creator(<address>)` in the file; only an intent `sauce intent publish` publishes " +
-      "from a wallet takes that wallet (or --intent-creator <address>) instead",
+      "write `.refundee(<address>)` in the file; only an intent `sauce intent publish` publishes " +
+      "from a wallet takes that wallet (or --intent-refundee <address>) instead",
   ],
   [/`intents\.executionFee`/, () => "pass --intent-execution-fee <wei>"],
   [

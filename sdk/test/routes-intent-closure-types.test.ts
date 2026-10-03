@@ -44,7 +44,7 @@ import { Base } from ${ROOT};
 
 Base(
   () => {
-    Ethereum.Portal.send({ token: USDC, amount: 1n }).creator(0x44n).receive().then(() => {});
+    Ethereum.Portal.send({ token: USDC, amount: 1n }).refundee(0x44n).receive().then(() => {});
   },
   { deadline: 1n },
 );

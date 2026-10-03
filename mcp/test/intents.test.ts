@@ -26,7 +26,7 @@ const PROGRAM = {
   chain: "ethereum",
   args: [RECIPIENT],
   intentDeadline: 2_000_000_000,
-  intentCreator: OWNER,
+  intentRefundee: OWNER,
   // One salt for every call, so two calls build one intent: each picks a random one otherwise.
   intentSalt: `0x${"5a".repeat(32)}`,
 };

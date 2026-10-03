@@ -206,14 +206,14 @@ export const PROGRAM = {
   intentDeadline: integer
     .optional()
     .describe("For intents the program opens: their deadline, as Unix seconds."),
-  intentCreator: z
+  intentRefundee: z
     .string()
     .max(64)
     .optional()
     .describe(
       "For intents a wallet publishes itself (sauce_intent_publish, or inspecting such a file): " +
-        "the creator of each top-level one that names none, in place of that wallet (0x address). " +
-        "An intent a program opens on a Pot names its own creator with .creator(<address>).",
+        "the refundee of each top-level one that names none, in place of that wallet (0x address). " +
+        "An intent a program opens on a Pot names its own refundee with .refundee(<address>).",
     ),
   intentRewardDeadline: integer
     .optional()
@@ -465,14 +465,14 @@ function intentsOf(
     ProgramArgs,
     | "intentDeadline"
     | "intentRewardDeadline"
-    | "intentCreator"
+    | "intentRefundee"
     | "intentProver"
     | "intentSalt"
     | "intentExecutionFee"
     | "intentFundVia"
   >,
 ) {
-  const { intentDeadline, intentRewardDeadline, intentCreator, intentProver, intentSalt } = args;
+  const { intentDeadline, intentRewardDeadline, intentRefundee, intentProver, intentSalt } = args;
   const { intentExecutionFee, intentFundVia } = args;
 
   return {
@@ -496,9 +496,9 @@ function intentsOf(
     ...(intentProver === undefined ? {} : { prover: parseAddress("intent-prover", intentProver) }),
     // Random unless given, and picked once, as the command picks it.
     salt: intentSalt === undefined ? randomSalt() : parseIntentSalt(intentSalt),
-    ...(intentCreator === undefined
+    ...(intentRefundee === undefined
       ? {}
-      : { creator: parseAddress("intent-creator", intentCreator) }),
+      : { refundee: parseAddress("intent-refundee", intentRefundee) }),
     ...(intentExecutionFee === undefined
       ? {}
       : {
@@ -2126,7 +2126,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       const given = boundProgram(args);
       // The wallet that publishes is the creator of each top-level intent that names none, unless
       // the call names another.
-      const publisher = given.input.intents.creator ?? from;
+      const publisher = given.input.intents.refundee ?? from;
       const program =
         publisher === undefined
           ? given

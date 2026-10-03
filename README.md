@@ -68,8 +68,8 @@ an intent carrying it onward.
 // reward this program escrows, what a solver delivers on Ethereum, and what runs there. `amount` is
 // an ordinary variable of this program and `recipient` one of its parameters, and using them in the
 // intent is enough: the SDK splices their run-time values into the encoded intent, and fills in the
-// Portal, the prover, the vault and the encoding. The intent names its creator, `refundTo`, where
-// its reward goes back if no solver fills it: a program's intent has no default creator. The
+// Portal, the prover, the vault and the encoding. The intent names its refundee, `refundTo`, where
+// its reward goes back if no solver fills it: a program's intent has no default refundee. The
 // deadlines and the salt take their defaults.
 //
 // `USDC` is a registered symbol. In `.receive(...)` and the body it means Ethereum's USDC, because
@@ -88,7 +88,7 @@ function main(recipient: Address, minAmount: Uint256, refundTo: Address) {
   require(amount >= minAmount, "nothing to forward");
 
   Ethereum.Portal.send({ token: USDC, amount })
-    .creator(refundTo)
+    .refundee(refundTo)
     .receive({ token: USDC, amount })
     .then(() => {
       USDC.transfer(recipient, amount);
@@ -117,7 +117,7 @@ runs on — Base, in the line above — because the program escrows the reward t
 `minAmount` and `refundTo` are `main`'s parameters: they arrive with the transaction (`--args`), so
 one compiled program serves every call.
 
-`.creator(refundTo)` is the refund address: who reclaims the reward if nobody earns it. A program
+`.refundee(refundTo)` is the refund address: who reclaims the reward if nobody earns it. A program
 names it for every intent it opens, since the Pot it runs on may be shared. Everything else has a
 default: the deadlines count from when the intent opens, the salt is random, and Ethereum's
 Kitchen fee, which a body that is a program pays, is read from Ethereum. Each has a modifier to set
@@ -131,7 +131,7 @@ cascades several hops deep.
 
 Inside a route body the SDK resolves token symbols and protocol contracts against the destination
 chain, so a program reads like the operation it performs. This example builds a complete intent
-offline; the creator and the fee are fixtures and nothing is sent.
+offline; the refundee and the fee are fixtures and nothing is sent.
 
 ```ts
 import { Base } from "@eco-incorp/sauce";
@@ -140,7 +140,7 @@ const executionFee = 1_000n; // Fixture: read Base's Kitchen fee with destinatio
 
 const built = Base.Portal.send([])
   .source("ethereum")
-  .creator("0x4444444444444444444444444444444444444444")
+  .refundee("0x4444444444444444444444444444444444444444")
   .receive([])
   .fee(executionFee)
   .then(() => {
@@ -153,7 +153,7 @@ console.log(built.hash().intentHash);
 What the snippet leaves out, the SDK fills in from what it records: the eco-routes Portal on both
 chains, the prover for the pair, the destination Pot and engine, and the native amount the solver
 sends, which is the cook's fee, and the deadlines, counted from now. A modifier sets a deadline, the
-prover or the salt instead. What stays yours are the creator, the reward and the fee, which is
+prover or the salt instead. What stays yours are the refundee, the reward and the fee, which is
 on-chain state the destination's Kitchen sets: `destinationExecutionFee()` builds the read.
 
 Two kinds of name meet in that snippet. `Base` is a **named export**, one per chain; importing the

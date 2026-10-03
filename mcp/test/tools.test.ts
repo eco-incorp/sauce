@@ -534,7 +534,7 @@ describe("sauce_compile", () => {
         source: INTENT,
         args: [RECIPIENT],
         intentDeadline: 1728432000,
-        intentCreator: CREATOR,
+        intentRefundee: CREATOR,
       }),
     );
     assert.match(
@@ -1119,7 +1119,7 @@ describe("sauce_intent_publish", () => {
     source: INTENT,
     args: [RECIPIENT],
     intentDeadline: 2_000_000_000,
-    intentCreator: CREATOR,
+    intentRefundee: CREATOR,
     // One salt for every call, so two calls build one intent: each picks a random one otherwise.
     intentSalt: `0x${"00".repeat(32)}`,
   };
@@ -1158,7 +1158,7 @@ describe("sauce_intent_publish", () => {
     const portal = { ...args, source: PORTAL_INTENT };
     const derived = { ...args, source: INTENT };
     // A program a Pot runs names its intent's creator; a wallet publishing one is its creator.
-    const named = (source: string) => source.replace(".receive(", `.creator(${CREATOR}).receive(`);
+    const named = (source: string) => source.replace(".receive(", `.refundee(${CREATOR}).receive(`);
     const compiled = ok(
       await mcp.call("sauce_compile", { ...portal, source: named(PORTAL_INTENT) }),
     );
@@ -1166,7 +1166,10 @@ describe("sauce_intent_publish", () => {
       compiled.bytecode,
       ok(await mcp.call("sauce_compile", { ...derived, source: named(INTENT) })).bytecode,
     );
-    assert.match(failed(await mcp.call("sauce_compile", portal)), /needs `\.creator\(<address>\)`/);
+    assert.match(
+      failed(await mcp.call("sauce_compile", portal)),
+      /needs `\.refundee\(<address>\)`/,
+    );
     const out = ok(await mcp.call("sauce_intent_publish", portal)) as Published;
     assert.deepEqual(out, ok(await mcp.call("sauce_intent_publish", derived)));
     assert.equal(out.intents[0]!.destination, "base");
@@ -1265,7 +1268,7 @@ describe("sauce_inspect", () => {
         source: INTENT,
         args: [RECIPIENT],
         intentDeadline: "2000000000",
-        intentCreator: CREATOR,
+        intentRefundee: CREATOR,
       }),
     );
     assert.match(JSON.stringify(out), /base/);

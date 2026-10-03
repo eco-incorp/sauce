@@ -29,7 +29,7 @@ const executionFee = 1_000n; // Base's Kitchen fee: read it with destinationExec
 
 const built = Base.Portal.send({ token: usdc(Ethereum.chain), amount: 1_010_000n })
   .source("ethereum")
-  .creator("0x4444444444444444444444444444444444444444")
+  .refundee("0x4444444444444444444444444444444444444444")
   // What the solver brings to Base. It arrives at the Executor, which moves it into the Pot.
   .receive({ token: usdc(Base.chain), amount: 1_000_000n })
   .fee(executionFee)
@@ -38,9 +38,9 @@ const built = Base.Portal.send({ token: usdc(Ethereum.chain), amount: 1_010_000n
     // this intent delivered, never the Pot's whole balance.
     const payout = 1_000_000n - 1_000_000n / 1000n;
     // Opened, funded in Base's USDC and published on Base, in that same fill. Every intent a
-    // program opens names its creator.
+    // program opens names its refundee.
     Ethereum.Portal.send({ token: USDC, amount: 1_000_000n })
-      .creator(0x4444444444444444444444444444444444444444n)
+      .refundee(0x4444444444444444444444444444444444444444n)
       .receive({ token: USDC, amount: payout })
       .then(() => {
         USDC.transfer(0x6666666666666666666666666666666666666666n, payout);
@@ -83,12 +83,12 @@ into the Pot itself:
 // outer body's, its delivery's and the inner reward's are Base's; the inner body's is Ethereum's.
 function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo: Address) {
   Base.Portal.send({ token: USDC, amount: reward })
-    .creator(refundTo)
+    .refundee(refundTo)
     .receive({ token: USDC, amount: delivered })
     .then(() => {
       const payout = delivered - delivered / 1000;
       Ethereum.Portal.send({ token: USDC, amount: delivered })
-        .creator(refundTo) // every intent a program opens names its creator
+        .refundee(refundTo) // every intent a program opens names its refundee
         .receive({ token: USDC, amount: payout })
         .then(() => {
           USDC.transfer(recipient, payout);
@@ -111,7 +111,7 @@ file opens, `main`'s arguments fixed into it as the command fixes them, and
 `routes.intentSourceTxs(intent, { portal })` publishes it from a wallet.
 
 Nothing names a Portal, a prover, a Pot or an encoding: each level's are looked up for its own
-chains. What you supply is what only you know: the amounts, each level's creator, and, where its
+chains. What you supply is what only you know: the amounts, each level's refundee, and, where its
 default does not suit you, a level's deadline or fee.
 
 ## Where each name resolves
@@ -192,14 +192,14 @@ function main(
   refundTo: Address,
 ) {
   Base.Portal.send({ token: USDC, amount: reward })
-    .creator(refundTo)
+    .refundee(refundTo)
     .receive({ token: USDC, amount: delivered })
     .then(() => {
       const pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
       const bought = uniswapV3(pool, USDC, WETH, delivered, 0, minOut, ctx.self());
       const payout = bought - bought / 1000;
       Ethereum.Portal.send({ token: WETH, amount: bought })
-        .creator(refundTo)
+        .refundee(refundTo)
         .receive({ token: WETH, amount: payout })
         .then(() => {
           WETH.transfer(recipient, payout);
@@ -213,7 +213,7 @@ function main(
 in any program. The [`@sauce/router` reference](../api/router.md) lists the swaps and what each
 returns.
 
-## Deadlines, creator and fee: each level its own
+## Deadlines, refundee and fee: each level its own
 
 Every level takes the modifiers any intent takes, written on its own steps, and each one it leaves
 out takes its default for that level ([Intent defaults](../reference/intent-defaults.md)):
@@ -223,7 +223,7 @@ out takes its default for that level ([Intent defaults](../reference/intent-defa
   body above runs, in that fill. So each level has its own five minutes to be filled, and its
   reward its own seven days after that. A level that needs longer says so:
   `.receive(...).deadline(ctx.timestamp() + 3600)` is an hour from when that level opens.
-- **Each level names its creator.** An intent a program opens has no default creator, at any depth:
+- **Each level names its refundee.** An intent a program opens has no default refundee, at any depth:
   the Pot a body runs on is the destination's shared one, so a refund there could go to anyone, and
   nothing is taken from the level above. The files here give every level `refundTo`, one of
   `main`'s parameters, so one address reclaims an unearned reward of every level, each on the
@@ -240,8 +240,8 @@ out takes its default for that level ([Intent defaults](../reference/intent-defa
 A command-line flag (`--intent-deadline`, `--intent-reward-deadline`, `--intent-salt`,
 `--intent-fund-via`, `--intent-execution-fee`) or a field of `compile.intents` sets its value for
 every level that does not set its own. A deadline given that way is one moment for all of them, so
-a later level has whatever time the earlier ones leave. `--intent-creator` is not one of them: it
-names the creator only of a top-level intent a wallet publishes.
+a later level has whatever time the earlier ones leave. `--intent-refundee` is not one of them: it
+names the refundee only of a top-level intent a wallet publishes.
 
 ## Three levels
 
@@ -270,24 +270,24 @@ fixed into it ([cross-chain-cascade.ts](../examples/cross-chain-cascade.ts) comp
 // The first two bodies are more than token writes, so each compiles to a program and runs on its
 // chain's Pot, paying that chain's Kitchen fee, read for it; the `.receive(...)` of each names what
 // a solver must deliver to it. Each level's deadlines count from when it opens, and each names its
-// creator, `refundTo`: one a program opens has no default.
+// refundee, `refundTo`: one a program opens has no default.
 //
 // Every `USDC` is the USDC of the chain where that part runs. Each body's is its destination's. Each
 // reward is escrowed by the program offering it: the first hop's in Ethereum's USDC, the second's in
 // Base's and the third's in Ethereum's.
 function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo: Address) {
   Base.Portal.send({ token: USDC, amount: reward })
-    .creator(refundTo)
+    .refundee(refundTo)
     .receive({ token: USDC, amount: delivered })
     .then(() => {
       const second = delivered - delivered / 1000;
       Ethereum.Portal.send({ token: USDC, amount: delivered })
-        .creator(refundTo)
+        .refundee(refundTo)
         .receive({ token: USDC, amount: second })
         .then(() => {
           const third = second - second / 1000;
           Base.Portal.send({ token: USDC, amount: second })
-            .creator(refundTo)
+            .refundee(refundTo)
             .receive({ token: USDC, amount: third })
             .then(() => {
               USDC.transfer(recipient, third);
@@ -336,14 +336,14 @@ export function attachChild(
 ) {
   return Base.Portal.send(parentReward)
     .source("ethereum")
-    .creator(creator)
+    .refundee(creator)
     .receive([])
     .fee(fees.base)
     .nest(
       (on) =>
         Ethereum.Portal.send(childReward)
           .source(on)
-          .creator(creator)
+          .refundee(creator)
           .receive([])
           .fee(fees.ethereum)
           .then("function main() { return 1; }"),

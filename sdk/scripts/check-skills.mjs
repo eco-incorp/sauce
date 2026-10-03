@@ -1046,7 +1046,7 @@ async function runUsage(where, file, argv, chain, header = false) {
   // run gives the creator a wallet would (there is none to compile for), and the fee the Kitchen
   // would be read for.
   if (OPENS_INTENT.test(read(file))) {
-    if (!kept.includes("--intent-creator")) kept.push("--intent-creator", DEV);
+    if (!kept.includes("--intent-refundee")) kept.push("--intent-refundee", DEV);
     if (!kept.includes("--intent-execution-fee")) kept.push("--intent-execution-fee", "0");
   }
   const compiled = await compileJson(file, chain, kept);
@@ -1254,7 +1254,7 @@ try {
         writeFileSync(file, `${block.body}\n`);
         const intents = OPENS_INTENT.test(block.body)
           ? // Its deadlines default; a creator and the fee are what a wallet and a read would give.
-            ["--intent-creator", DEV, "--intent-execution-fee", "0"]
+            ["--intent-refundee", DEV, "--intent-execution-fee", "0"]
           : [];
         for (const chain of chains) {
           const compiled = await compileJson(file, chain, intents);

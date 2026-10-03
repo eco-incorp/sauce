@@ -65,7 +65,7 @@ export const INTENT_STAGES = {
       "A chain's Portal in compiled source, opening an intent whose body runs on that chain: " +
       "`Base.Portal.send({ token, amount }).receive({ token, amount }).then(() => { ... })`. After " +
       "`send` come the reward's modifiers, after `receive` the route's, each at most once and in " +
-      "any order; each left out but the creator has its default.",
+      "any order; each left out but the refundee has its default.",
     methods: {
       send: {
         doc:
@@ -92,11 +92,12 @@ export const INTENT_STAGES = {
       "{destination}, `.receive({ token, amount })`, or `.receive()` for nothing, then the body " +
       "that runs there with it, `.then(() => { … })`",
     methods: {
-      creator: {
+      refundee: {
         doc:
-          "Who may reclaim an unearned reward: where an unfilled intent's reward is refunded. " +
-          "Required on every intent a program opens, since the Pot it runs on may be shared; only " +
-          "a top-level intent a wallet publishes itself defaults to that wallet.",
+          "Who may reclaim an unearned reward, the reward's `creator` on the Portal: after the " +
+          "deadline a refund goes to it, and only it may send the Portal's `refundTo` to " +
+          "redirect one. Required on every intent a program opens, since the Pot it runs on may " +
+          "be shared; only a top-level intent a wallet publishes itself defaults to that wallet.",
         params: [{ name: "address", ts: "bigint", kind: "value" }],
         returns: "Sent",
         option: "creator",
@@ -208,7 +209,7 @@ const modifiersOf = <S extends IntentStage>(stage: S): readonly ModifiersOf<S>[]
     .filter(([, method]) => method.option !== undefined)
     .map(([name]) => name as ModifiersOf<S>);
 
-/** What follows `send(...)`: the reward's creator, its deadline (from when an unproven reward may
+/** What follows `send(...)`: the reward's refundee, its deadline (from when an unproven reward may
  *  be refunded), and the prover that accepts the proof of the fill. */
 export const REWARD_MODIFIERS: readonly RewardModifier[] = modifiersOf("Sent");
 /** What follows `receive(...)`: the route's deadline (the last second it may be filled), its salt,

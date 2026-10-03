@@ -391,10 +391,10 @@ const PROGRAM: FlagSpecs = {
     value: "<unix seconds>",
     help: "For intents the program opens: their deadline",
   },
-  "intent-creator": {
+  "intent-refundee": {
     type: "string",
     value: "<address>",
-    help: "…the creator of those a wallet publishes itself, in its place; a program names its own",
+    help: "…the refundee of those a wallet publishes itself, in its place; a program names its own",
   },
   "intent-reward-deadline": {
     type: "string",
@@ -638,7 +638,7 @@ async function autoExecutionFee(
         ...input,
         intents: {
           ...input.intents,
-          publisher: input.intents.publisher ?? input.intents.creator ?? PROBE_CREATOR,
+          publisher: input.intents.publisher ?? input.intents.refundee ?? PROBE_CREATOR,
           executionFee: (destination) => (paid.set(destination.id, destination), 0n),
         },
       },
@@ -731,7 +731,7 @@ async function programInput(
   const definesFile = stringFlag(args, "defines");
   const deadline = stringFlag(args, "intent-deadline");
   const rewardDeadline = stringFlag(args, "intent-reward-deadline");
-  const creator = stringFlag(args, "intent-creator");
+  const refundee = stringFlag(args, "intent-refundee");
   const prover = stringFlag(args, "intent-prover");
   const salt = stringFlag(args, "intent-salt");
   const fee = stringFlag(args, "intent-execution-fee");
@@ -766,7 +766,7 @@ async function programInput(
       ...(rewardDeadline === undefined
         ? {}
         : { rewardDeadline: parseUnixSeconds("intent-reward-deadline", rewardDeadline) }),
-      ...(creator === undefined ? {} : { creator: parseAddress("intent-creator", creator) }),
+      ...(refundee === undefined ? {} : { refundee: parseAddress("intent-refundee", refundee) }),
       ...(prover === undefined ? {} : { prover: parseAddress("intent-prover", prover) }),
       // Random unless given, and picked once, for the same reason as the time the intents open.
       salt: salt === undefined ? randomSalt() : parseIntentSalt(salt),
@@ -1307,11 +1307,11 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
     exists: (path) => io.readModule(path) !== undefined,
   });
   io.stderr(`${created.summary.join("\n")}\n\n`);
-  const creator = account?.address ?? (flag("intent-creator") as `0x${string}` | undefined);
+  const creator = account?.address ?? (flag("intent-refundee") as `0x${string}` | undefined);
   if (creator === undefined) {
     throw new UsageError(
-      `${created.file} is written; publishing it needs a signer (the creator), or ` +
-        "--intent-creator with --format json to print the transactions unsigned",
+      `${created.file} is written; publishing it needs a signer (the refundee), or ` +
+        "--intent-refundee with --format json to print the transactions unsigned",
     );
   }
   const program: ProgramInput = {
@@ -1323,7 +1323,7 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
     intents: {
       deadline: created.deadline,
       rewardDeadline: created.rewardDeadline,
-      creator,
+      refundee: creator,
       prover: created.prover,
       fundVia: created.fundVia,
     },
@@ -1707,7 +1707,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "",
       "Examples:",
       "  sauce intent publish bridge.sauce.ts --chain ethereum --keystore ~/.keys/me.json \\",
-      "    --intent-deadline 2000000000 --intent-creator 0x… --args 1000000 0x…",
+      "    --intent-deadline 2000000000 --intent-refundee 0x… --args 1000000 0x…",
       "  sauce intent publish --keystore ~/.keys/me.json",
       "  sauce intent publish --source ethereum --destination base --token USDC --amount 1 \\",
       "    --recipient 0x… --reward-token USDC --reward 1.01 --prover HyperProver \\",
@@ -1887,7 +1887,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "",
       "Examples:",
       "  sauce intent fill swap-on-base.sauce.ts --chain ethereum \\",
-      "    --intent-deadline 2000000000 --intent-creator 0x… --intent-execution-fee 1000000000000 \\",
+      "    --intent-deadline 2000000000 --intent-refundee 0x… --intent-execution-fee 1000000000000 \\",
       "    --args <amountIn> <reward> <sqrtPriceLimitX96> <minOut> <recipient> <refundTo>",
       "  sauce intent fill 0x<intent hash> --send --keystore ~/.keys/me.json",
     ].join("\n"),
@@ -3312,7 +3312,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "Examples:",
       "  sauce inspect 0x… --chain base --source split.sauce.ts",
       "  sauce inspect 0x<tx hash> --chain base",
-      "  sauce inspect bridge.sauce.ts --chain arbitrum --intent-deadline 2000000000 --intent-creator 0x… \\",
+      "  sauce inspect bridge.sauce.ts --chain arbitrum --intent-deadline 2000000000 --intent-refundee 0x… \\",
       "    --args 1000000 0x…",
     ].join("\n"),
     run: async (args, io, trailing) => {

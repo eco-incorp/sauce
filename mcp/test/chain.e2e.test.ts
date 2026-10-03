@@ -86,7 +86,7 @@ function answering(answers: ReadonlyArray<readonly [string, readonly bigint[]]>)
 /** An intent whose body is a program, so it cooks on the destination's shared intent Pot. */
 const COOKED = [
   "Base.Portal.send({ token: USDC, amount: 7n })",
-  `  .creator(${NOBODY})`,
+  `  .refundee(${NOBODY})`,
   "  .receive({ token: 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n, amount: 5n })",
   "  .then(() => {",
   "    const got = Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).balanceOf(ctx.self());",
@@ -525,7 +525,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       chain: "ethereum",
       defines: { RECIPIENT },
       intentDeadline: 2_000_000_000,
-      intentCreator: NOBODY,
+      intentRefundee: NOBODY,
       from: NOBODY,
       dryRun: true,
     };
@@ -565,7 +565,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       chain: "ethereum",
       defines: { RECIPIENT },
       intentDeadline: 2_000_000_000,
-      intentCreator: NOBODY,
+      intentRefundee: NOBODY,
       intentExecutionFee: String(FEE),
     };
     const unchecked = ok(await mcp.call("sauce_compile", args));
@@ -597,7 +597,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       chain: "ethereum",
       defines: { RECIPIENT },
       intentDeadline: 2_000_000_000,
-      intentCreator: NOBODY,
+      intentRefundee: NOBODY,
     };
     const block = await base.publicClient.getBlockNumber();
     for (const reach of [{ rpcUrl: base.rpcUrl }, { rpcUrls: { base: base.rpcUrl } }]) {

@@ -11,7 +11,7 @@
 // opens the second intent itself; with none left there is no second intent. The body never moves
 // the shared Pot's whole balance.
 // `borrower`, `solverBps` and `refundTo` are this program's parameters, and using them inside the
-// braces is enough: their values go into each intent. Each intent names `refundTo` its creator,
+// braces is enough: their values go into each intent. Each intent names `refundTo` its refundee,
 // where its reward goes back if no solver fills it.
 //
 // `USDC` and `AaveV3.Pool` in the braces are Base's; in each `.send(...)`, the chain's that pays
@@ -44,7 +44,7 @@ function main(borrower: Address, solverBps: Uint256, refundTo: Address) {
   const delivered = amount - (amount * solverBps) / 10000;
 
   Base.Portal.send({ token: USDC, amount }) // Ethereum's
-    .creator(refundTo)
+    .refundee(refundTo)
     .receive({ token: USDC, amount: delivered }) // Base's USDC, which the solver delivers
     .then(() => {
       // The Pot is shared by every intent to Base: this body moves only `delivered`.
@@ -62,7 +62,7 @@ function main(borrower: Address, solverBps: Uint256, refundTo: Address) {
       if (change > 0) {
         const paid = change - (change * solverBps) / 10000;
         Ethereum.Portal.send({ token: USDC, amount: change }) // Base's: it funds this level
-          .creator(refundTo)
+          .refundee(refundTo)
           .receive({ token: USDC, amount: paid }) // Ethereum's
           .then(() => {
             USDC.transfer(borrower, paid); // Ethereum's USDC

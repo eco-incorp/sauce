@@ -12,7 +12,7 @@
 //
 //   sauce intent publish programs/intent/usdc-to-weth-on-base.sauce.ts --chain arbitrum \
 //     --config sauce.config.json --keystore <keystore> \
-//     --intent-deadline <unix seconds> --intent-creator <address> \
+//     --intent-deadline <unix seconds> --intent-refundee <address> \
 //     --intent-execution-fee <Base Kitchen fee in wei> \
 //     --args <amountIn> <reward> <sqrtPriceLimitX96> <minOut> <recipient> <refundTo>
 //

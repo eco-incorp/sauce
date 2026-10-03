@@ -624,7 +624,7 @@ export function openRoute(
     ...options.compile,
     // `Chain.Portal.send(...).receive(...).then(...)` written INSIDE the program inherits this
     // intent's own deadlines and eco-routes selection, so the common case needs no second set of
-    // options; each names its own creator. An explicit `compile.intents` field still wins.
+    // options; each names its own refundee. An explicit `compile.intents` field still wins.
     intents: {
       deadline: toBigInt(options.deadline),
       rewardDeadline:
@@ -1099,8 +1099,9 @@ export interface PortalSendSteps<Used extends string> {
   /** The chain the reward is escrowed on, where the intent is published. Required here: a
    *  TypeScript intent runs on no chain to default it to. */
   source(chain: PortalChain): PortalSent<Used | "source">;
-  /** Who may reclaim an unearned reward. Required here: see {@link chainPortal}. */
-  creator(address: PortalAddress): PortalSent<Used | "creator">;
+  /** Who may reclaim an unearned reward, the reward's `creator` on the Portal. Required here: see
+   *  {@link chainPortal}. */
+  refundee(address: PortalAddress): PortalSent<Used | "refundee">;
   /** From when an unproven reward may be refunded, Unix seconds. Defaults to the route's
    *  deadline plus `DEFAULT_REFUND_WINDOW`. */
   deadline(seconds: bigint | number): PortalSent<Used | "deadline">;
@@ -1182,7 +1183,7 @@ const hexAddress = (address: PortalAddress): AddressInput =>
 const nowSeconds = (): bigint => BigInt(Math.floor(Date.now() / 1000));
 
 /**
- * The Portal of `chain`: `send(reward)[.source().creator().deadline().prover()]
+ * The Portal of `chain`: `send(reward)[.source().refundee().deadline().prover()]
  * .receive(delivery)[.deadline().salt().fee().nest()].then(body)` builds the intent that
  * `openRoute(chain, body, { deadline, execution: { value: fee }, tokens: delivery, precalls })
  * .reward({ source, creator, deadline, prover, tokens, nativeAmount })` builds, byte for byte, with:
@@ -1192,11 +1193,11 @@ const nowSeconds = (): bigint => BigInt(Math.floor(Date.now() / 1000));
  *   registry's prover, a random salt;
  * - `precalls` moving what the solver delivers from the Portal's Executor into the Pot the body
  *   runs in, since the body is a program;
- * - the body's own intents opening when it runs, each naming its own creator.
+ * - the body's own intents opening when it runs, each naming its own refundee.
  *
- * The source chain, the creator and the fee have no default here and are refused when left out: a
- * TypeScript intent runs on no chain, so neither the chain nor the wallet that will publish it is
- * known when it is built, and the SDK reads no chain for the Kitchen's fee.
+ * The source chain, the refundee (the reward's `creator`) and the fee have no default here and are
+ * refused when left out: a TypeScript intent runs on no chain, so neither the chain nor the wallet
+ * that will publish it is known when it is built, and the SDK reads no chain for the Kitchen's fee.
  */
 export function chainPortal(chain: ChainRef): ChainPortal {
   const destination = requireChain(chain);
@@ -1213,7 +1214,7 @@ export function chainPortal(chain: ChainRef): ChainPortal {
       const rewardSteps = new Map<string, unknown>();
       const sent = {
         source: (value: PortalChain) => (once(rewardSteps, "source", value, "send"), sent),
-        creator: (value: PortalAddress) => (once(rewardSteps, "creator", value, "send"), sent),
+        refundee: (value: PortalAddress) => (once(rewardSteps, "refundee", value, "send"), sent),
         deadline: (value: bigint | number) => (once(rewardSteps, "deadline", value, "send"), sent),
         prover: (value: PortalAddress) => (once(rewardSteps, "prover", value, "send"), sent),
         receive: (...delivery: readonly PortalDelivery[]) => {
@@ -1310,9 +1311,9 @@ function buildPortalIntent(
       "send",
       "the chain the reward is escrowed on, where the intent is published",
     )) as PortalChain;
-  const creator = (rewardSteps.get("creator") ??
+  const creator = (rewardSteps.get("refundee") ??
     required(
-      "creator",
+      "refundee",
       "send",
       "who may reclaim the reward if no solver earns it. It has no default in TypeScript, where " +
         "the wallet that will publish the intent is not known when it is built",
@@ -1362,7 +1363,7 @@ function buildPortalIntent(
           : typeof salt === "bigint"
             ? (`0x${salt.toString(16).padStart(64, "0")}` as Hex)
             : salt,
-      // The body's own intents name their own creators, and open when it runs.
+      // The body's own intents name their own refundees, and open when it runs.
       compile: { intents: { deadline: undefined, rewardDeadline: undefined } },
     }),
   );

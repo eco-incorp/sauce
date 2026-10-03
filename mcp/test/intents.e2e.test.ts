@@ -135,7 +135,7 @@ describe(
           args: [RECIPIENT, String(AMOUNT), String(REWARD)],
           intentDeadline: String(route),
           intentRewardDeadline: String(reward),
-          intentCreator: OWNER.address,
+          intentRefundee: OWNER.address,
           from: OWNER.address,
           rpcUrl: ethereum.rpcUrl,
           ...(fundVia === undefined ? {} : { intentFundVia: fundVia }),

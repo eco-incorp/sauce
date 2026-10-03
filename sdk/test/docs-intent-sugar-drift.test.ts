@@ -141,9 +141,9 @@ const REFUSALS: readonly {
     message: /has no body\. Finish it with `\.then/,
   },
   {
-    documented: "A missing creator",
+    documented: "A missing refundee",
     trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);"), { deadline: 1n }),
-    message: /needs `\.creator\(<address>\)`.*may be shared/,
+    message: /needs `\.refundee\(<address>\)`.*may be shared/,
   },
   {
     documented: "missing fee for a program body",

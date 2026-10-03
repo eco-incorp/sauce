@@ -458,7 +458,7 @@ describe("sauce compile", () => {
     const published = await sauce(
       ...["intent", "publish", intent, "--define", `SQRT_PRICE_LIMIT_X96=${max}`],
       ...["--define", `RECIPIENT=${RECIPIENT}`, "--intent-deadline", "2000000000"],
-      ...["--intent-creator", CREATOR, "--intent-execution-fee", "0"],
+      ...["--intent-refundee", CREATOR, "--intent-execution-fee", "0"],
       ...["--from", CREATOR, "--format", "json"],
     );
     expect(published.code).toBe(0);
@@ -512,7 +512,7 @@ describe("sauce compile", () => {
     const recipient = "0x6666666666666666666666666666666666666666";
     const mine = "0x7777777777777777777777777777777777777777";
     const text = [
-      "Arbitrum.Portal.send([{ token: USDC, amount: 1n }]).creator(0x3333333333333333333333333333333333333333).receive().then(() => {",
+      "Arbitrum.Portal.send([{ token: USDC, amount: 1n }]).refundee(0x3333333333333333333333333333333333333333).receive().then(() => {",
       "  USDC.transfer(RECIPIENT, 1n);",
       "  require(chainId == 42161n && WETH != 0n);",
       "});",
@@ -567,7 +567,7 @@ describe("sauce compile", () => {
       `WETH=${mine}`,
       "--intent-deadline",
       "2000000000",
-      "--intent-creator",
+      "--intent-refundee",
       CREATOR,
       "--intent-execution-fee",
       "0",
@@ -591,7 +591,7 @@ describe("sauce compile", () => {
         "  require(UniswapV3_Factory != 0n && PANCAKE != 0n && amount > 0n);",
         "  const pool = UniswapV3.Factory.getPool(USDC, WETH, 500n);",
         "  require(pool != 0n);",
-        "  Arbitrum.Portal.send([{ token: USDC, amount: amount }]).creator(0x3333333333333333333333333333333333333333).receive().then(() => {",
+        "  Arbitrum.Portal.send([{ token: USDC, amount: amount }]).refundee(0x3333333333333333333333333333333333333333).receive().then(() => {",
         "    const there = UniswapV3.Factory.getPool(USDC, 2n, 3n);",
         "    require(there != 0n);",
         "  });",
@@ -611,7 +611,7 @@ describe("sauce compile", () => {
       "UNUSED=5",
       "--intent-deadline",
       "2000000000",
-      "--intent-creator",
+      "--intent-refundee",
       CREATOR,
       "--intent-execution-fee",
       "0",
@@ -674,7 +674,7 @@ describe("sauce compile", () => {
           `PANCAKE=${pancake}`,
           "--intent-deadline",
           "2000000000",
-          "--intent-creator",
+          "--intent-refundee",
           CREATOR,
           "--intent-execution-fee",
           "0",
@@ -902,11 +902,11 @@ describe("sauce compile", () => {
     // A token-only body is calls the Portal's Executor makes itself: no cook, no Kitchen fee.
     const program = file(
       "bridge.sauce.ts",
-      "Base.Portal.send([{ token: USDC, amount: 7n }]).creator(RECIPIENT).receive().then(() => {\n  USDC.transfer(RECIPIENT, 5n);\n});\n",
+      "Base.Portal.send([{ token: USDC, amount: 7n }]).refundee(RECIPIENT).receive().then(() => {\n  USDC.transfer(RECIPIENT, 5n);\n});\n",
     );
     const run = await sauce(
       ...["compile", program, "--chain", "arbitrum", "--define", `RECIPIENT=${RECIPIENT}`],
-      ...["--intent-deadline", "2000000000", "--intent-creator", CREATOR],
+      ...["--intent-deadline", "2000000000", "--intent-refundee", CREATOR],
       ...["--intent-execution-fee", "auto", "--json"],
     );
     expect(run.code).toBe(0);
@@ -930,9 +930,9 @@ describe("sauce compile", () => {
     );
     expect(unnamed.code).toBe(1);
     expect(unnamed.stderr).toMatch(
-      /needs `\.creator\(<address>\)`[^]*hint: write `\.creator\(<address>\)` in the file/,
+      /needs `\.refundee\(<address>\)`[^]*hint: write `\.refundee\(<address>\)` in the file/,
     );
-    const named = body(`.creator(${CREATOR})`);
+    const named = body(`.refundee(${CREATOR})`);
     const salt = `0x${"00".repeat(32)}` as const;
     const built = await sauce(
       ...["compile", file("intent.sauce.ts", named), "--chain", "base", ...recipient],
@@ -1386,7 +1386,7 @@ describe("sauce intent publish, offline", () => {
     `RECIPIENT=${RECIPIENT}`,
     "--intent-deadline",
     "2000000000",
-    "--intent-creator",
+    "--intent-refundee",
     CREATOR,
     // One salt for every run: the command picks a random one otherwise.
     "--intent-salt",
@@ -1595,7 +1595,7 @@ describe("sauce intent fill, offline", () => {
     `RECIPIENT=${RECIPIENT}`,
     "--intent-deadline",
     "2000000000",
-    "--intent-creator",
+    "--intent-refundee",
     CREATOR,
   ];
   /** An endpoint nothing listens on: every refusal below comes before any request. */

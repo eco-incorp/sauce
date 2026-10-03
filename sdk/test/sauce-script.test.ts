@@ -165,7 +165,7 @@ describe("SauceScript in an editor", () => {
   it("takes an `await` in main's body or a body a call takes, and nowhere else", () => {
     const file = join(work, "awaited.sauce.ts");
     const opened =
-      "Arbitrum.Portal.send({ token: USDC, amount: 2 }).creator(0x44).receive({ token: USDC, amount: 1 })";
+      "Arbitrum.Portal.send({ token: USDC, amount: 2 }).refundee(0x44).receive({ token: USDC, amount: 1 })";
     const codes = (body: string, withPlugin = true) =>
       service({ [file]: body }, withPlugin)
         .getSemanticDiagnostics(file)

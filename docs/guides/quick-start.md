@@ -13,7 +13,7 @@ the package once globally: `npm i -g @eco-incorp/sauce`, then `sauce --version`
 
 ## Build your first intent
 
-This is a complete program. It builds an Eco intent offline: the creator and the fee are fixtures
+This is a complete program. It builds an Eco intent offline: the refundee and the fee are fixtures
 and nothing is sent to a chain.
 
 ```ts
@@ -23,7 +23,7 @@ const executionFee = 1_000n; // Fixture: read Base's Kitchen fee with destinatio
 
 const built = Base.Portal.send([])
   .source("ethereum")
-  .creator("0x4444444444444444444444444444444444444444")
+  .refundee("0x4444444444444444444444444444444444444444")
   .receive([])
   .fee(executionFee)
   .then(() => {
@@ -48,7 +48,7 @@ otherwise takes by hand:
 - defaults the deadlines, the fill five minutes from now and the reward's seven days after it;
 - assembles the route and reward, which is all `built.hash()` and the source Portal requests need.
 
-What stays yours: the creator, the Kitchen fee, and a reward that pays a solver to fill the intent.
+What stays yours: the refundee, the Kitchen fee, and a reward that pays a solver to fill the intent.
 The fee is on-chain state, so the SDK builds its read, `destinationExecutionFee()`, and does not
 guess it. A modifier sets anything else ([Intent defaults](../reference/intent-defaults.md)). The
 SDK sends nothing, and it does not price the reward.

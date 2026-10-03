@@ -419,7 +419,7 @@ describe("a body that is not just token writes becomes a program", () => {
   it("lowers an intent opened inside an intent, each by its own level", () => {
     const source = program(`  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
     const got = USDC.balanceOf(self);
-    Base.Portal.send([{ token: USDC, amount: got }]).creator(RECIPIENT).receive().then(() => {
+    Base.Portal.send([{ token: USDC, amount: got }]).refundee(RECIPIENT).receive().then(() => {
       USDC.transfer(RECIPIENT, got);
     });
   });`);
@@ -526,9 +526,9 @@ describe("what it refuses, and how clearly", () => {
   });
 
   it("names the creator when the intent has none and no wallet publishes it", () => {
-    expect(() => lower(TRANSFER_INTENT, {})).toThrow(/needs `\.creator\(<address>\)`/);
+    expect(() => lower(TRANSFER_INTENT, {})).toThrow(/needs `\.refundee\(<address>\)`/);
     expect(() => lower(TRANSFER_INTENT, { deadline: 1n })).toThrow(
-      /needs `\.creator\(<address>\)`/,
+      /needs `\.refundee\(<address>\)`/,
     );
   });
 

@@ -717,10 +717,10 @@ sauce run swap.json --chain base --keystore ~/.keys/me.json \
 ## Intents: `sauce run` or `sauce intent`
 
 A program can open an intent on another chain —
-`Base.Portal.send(…).creator(refundTo).receive(…).then(() => { … })`. Every intent a program opens
-names its creator, the refund address, with `.creator(...)`: the Pot it runs on may be shared, so
+`Base.Portal.send(…).refundee(refundTo).receive(…).then(() => { … })`. Every intent a program opens
+names its refundee, the refund address, with `.refundee(...)`: the Pot it runs on may be shared, so
 nothing defaults it. The one exception is a top-level intent `sauce intent publish` publishes from a
-wallet, whose creator is that wallet (or `--intent-creator <address>`) when it names none. The
+wallet, whose refundee is that wallet (or `--intent-refundee <address>`) when it names none. The
 command supplies the rest the file leaves out ([Intent defaults](../reference/intent-defaults.md)):
 the deadlines count from when it builds the intents, the fill five minutes later and the reward's
 seven days after that; the salt is random, picked once per run; and, for an intent whose body
@@ -1179,7 +1179,7 @@ USDC/SPCXc on base at block 36120411: 3 pools with liquidity, deepest first (by 
 ```sh
 sauce inspect 0x<calldata> --chain base --source split.sauce.ts
 sauce inspect 0x<tx hash> --chain arbitrum
-sauce inspect bridge.sauce.ts --intent-deadline 2000000000 --intent-creator 0xYou
+sauce inspect bridge.sauce.ts --intent-deadline 2000000000 --intent-refundee 0xYou
 ```
 
 takes bytes back apart into what a SauceScript author wrote:

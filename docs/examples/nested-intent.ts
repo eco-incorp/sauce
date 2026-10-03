@@ -3,7 +3,7 @@
 // with its `main` arguments, which is the same bytes. And nested-swap.sauce.ts, whose inner reward
 // is a swap's output.
 //
-// Offline: the creator, the recipient, the amounts and the fee are fixtures and nothing is sent. The
+// Offline: the refundee, the recipient, the amounts and the fee are fixtures; nothing is sent. The
 // Portals, the provers, the Pot, the engine and the native amounts come from the SDK.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -32,7 +32,7 @@ const salt = `0x${"5a".repeat(32)}` as const;
 
 const built = Base.Portal.send({ token: usdcOn(Ethereum.chain), amount: REWARD })
   .source("ethereum")
-  .creator(creator)
+  .refundee(creator)
   .receive({ token: baseUsdc, amount: AMOUNT })
   .fee(executionFee)
   .deadline(openedAt + routes.DEFAULT_FILL_WINDOW)
@@ -42,9 +42,9 @@ const built = Base.Portal.send({ token: usdcOn(Ethereum.chain), amount: REWARD }
     // this intent delivered, never the Pot's whole balance.
     const payout = 1_000_000n - 1_000_000n / 1000n;
     // Opened, funded in Base's USDC and published on Base, in that same fill: its deadlines count
-    // from then. Every intent a program opens names its creator.
+    // from then. Every intent a program opens names its refundee.
     Ethereum.Portal.send({ token: USDC, amount: 1_000_000n })
-      .creator(0x4444444444444444444444444444444444444444n)
+      .refundee(0x4444444444444444444444444444444444444444n)
       .receive({ token: USDC, amount: payout })
       .salt(0x5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5an)
       .then(() => {
