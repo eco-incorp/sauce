@@ -293,7 +293,8 @@ The full list, with what each rejection says, is section 14 of
 
 | Rejected                                                                                                           | Write instead                                                                               |
 | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| `switch`, `for...in`, `class`, `enum`, `type` aliases, `await`                                                     | `if` chains, arrays, inline object types, plain functions                                   |
+| `switch`, `for...in`, `class`, `enum`, `type` aliases                                                              | `if` chains, arrays, inline object types, plain functions                                   |
+| `await` used as a value, or of a value with no `then`                                                              | `await x;` alone, which is `x.then(() => { … })` (`sauce-intents`)                          |
 | `throw new Error(...)`, `finally`                                                                                  | `require(cond, "reason")` or `throw "reason"`; to survive one on EVM, `try`/`catch` (below) |
 | arrow functions and nested functions, except an intent's body, `.then(() => { ... })`, and `.catch(() => { ... })` | top-level function declarations                                                             |
 | template literals, comparing bytes with `==`                                                                       | `"text"`, or bytes built with `.concat`; compare `crypto.keccak256` of each                 |

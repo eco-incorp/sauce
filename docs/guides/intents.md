@@ -399,8 +399,9 @@ program, so its cook pays the destination's Kitchen fee.
 
 ### Awaiting the intent
 
-`await` of an intent makes the statements after it the body. This compiles to exactly the first
-program in this section:
+`await` of an intent calls its `then`, as JavaScript's `await` does: `await x; rest` is
+`x.then(() => { rest })`, so the statements after it are the body. This compiles to exactly the
+first program in this section:
 
 ```js
 function main(recipient: Address, refundTo: Address) {
@@ -412,15 +413,17 @@ function main(recipient: Address, refundTo: Address) {
 }
 ```
 
-There is no `async`: the `await` is a statement of `main`'s body, and everything after it is the body
-of the intent, compiled for the destination. Names after it resolve on the destination. Values from
-before it are captured, and the body cannot assign them. A `return` after it is the body's. An
-`await` in the body opens the next hop from the destination, so a cascade reads top to bottom.
+No `async` is needed: the `await` is a statement of `main`'s body, and everything after it is the
+body of the intent, compiled for the destination. Names after it resolve on the destination. Values
+from before it are captured, and the body cannot assign them, nor declare a name again: `main` is
+still one scope. A `return` after it is the body's. An `await` in the body opens the next hop from
+the destination, so a cascade reads top to bottom.
 
 An `await` stands directly in `main`'s body, a script's top level, or a body. It cannot be inside an
 `if`, a loop or a block, in another function, or used as a value; each of these is a compile error
-that names it. An awaited body has no handler: write `.then(() => { ... }).catch((e) => { ... })` for
-one.
+that names it. Start the intent on the `await`'s line: in `main` or a body, as in JavaScript outside
+an `async` function, `await` followed by `(`, `[` or a line break reads as a name, and is refused.
+An awaited body has no handler: write `.then(() => { ... }).catch((e) => { ... })` for one.
 
 In an editor, an `await` at a script's top level is plain TypeScript. One in `main` needs the
 SauceScript plugin that `sauce init` configures, which accepts it where the compiler does.

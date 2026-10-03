@@ -627,12 +627,13 @@ bytes its option builds (`routes-intent-portal.test.ts`). `receive` is required 
 no items delivers what a body of token writes moves, and a program nothing — and `{ native }` is a
 reward item only. `.catch((e) => { … })` after `then` makes the body and its handler one
 destination program, `try { … } catch (e) { … }`, `e` the body's revert data (at most 256 bytes):
-EVM destinations only, and refused on the host, which builds the body alone. `then`'s body is the
-table's one `continuation`: `await` of a `Received` makes the statements after it the body, as the
-compiler lowers JavaScript's `await` of a thenable (no `async`; directly in `main`'s body, a
-script's or a body), byte for byte the `.then(() => { … })` written out. In an editor a script's
-top-level `await` is plain TypeScript; one in `main` is TS1308, which the SauceScript plugin
-(`sauce-script/ts-plugin.cjs`) drops only where the compiler takes the `await`.
+EVM destinations only, and refused on the host, which builds the body alone. `await` needs no
+entry in the table: the compiler lowers `await x; rest` to `x.then(() => { rest })`, as JavaScript's
+`await` calls a thenable's `then`, for any host type whose `then` takes one `program` parameter, so
+`await` of a `Received` is byte for byte the `.then(() => { … })` written out (no `async`; directly
+in `main`'s body, a script's or a body). In an editor a script's top-level `await` is plain
+TypeScript; one in `main` is TS1308, which the SauceScript plugin (`sauce-script/ts-plugin.cjs`)
+drops only where the compiler takes the `await`.
 
 **What an intent leaves out is Eco's default** (`intent-defaults.ts`, which
 `docs/reference/intent-defaults.md` and the `sauce-intents` defaults reference state): the route

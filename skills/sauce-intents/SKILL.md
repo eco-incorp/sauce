@@ -489,7 +489,8 @@ vault on Ethereum's Portal from what it holds, in Ethereum's USDC, and calls `pu
 is published like any other intent and any solver can discover it. Keep every level on a supported
 chain, as here (Base, Ethereum, then Base again): the command checks the first level's chains only.
 
-`await` of an intent makes the statements after it its body, so the same cascade reads top to
+`await` of an intent calls its `then`, as JavaScript's `await` does: `await x; rest` is
+`x.then(() => { rest })`. The statements after it are its body, so the same cascade reads top to
 bottom. It compiles exactly as the program above:
 
 ```sauce chain=base
@@ -506,11 +507,13 @@ function main(recipient: Address, refundTo: Address) {
 }
 ```
 
-There is no `async`. An `await` is a statement directly in `main`'s body, or in the body of an
+No `async` is needed. An `await` is a statement directly in `main`'s body, or in the body of an
 intent. Everything after it, to the end of that body, runs on its destination: names resolve
-there, values from before it are captured and cannot be assigned, and a `return` is the body's. An
-`await` inside an `if`, a loop or a block, in another function, or used as a value is a compile
-error. An awaited body has no handler; for one, write `.then(() => { … }).catch((e) => { … })`.
+there, values from before it are captured and cannot be assigned or declared again, and a `return`
+is the body's. An `await` inside an `if`, a loop or a block, in another function, or used as a value
+is a compile error, and so is `await` followed by `(`, `[` or a line break in `main` or a body,
+where it reads as a name: start the intent on the `await`'s line. An awaited body has no handler;
+for one, write `.then(() => { … }).catch((e) => { … })`.
 
 Each level takes its own modifiers, and each it leaves out takes its default for that level:
 
