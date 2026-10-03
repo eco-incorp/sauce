@@ -8,6 +8,10 @@
 //     `number | bigint` of `c ? x : 0` (TS2365, TS2367, TS2322, TS2345). In SauceScript `1` and `1n`
 //     are the same integer, an account compares as its address (`program == 0x06dd…`), and so does
 //     a token or a contract, which is zero on a chain without it (`UniswapV3.Factory != 0`).
+//   - An `await` that is a statement of `main`'s body, or of a closure's a call takes (TS1308).
+//     SauceScript has no `async`: what follows the `await` is the program its value's `then` takes,
+//     which the compiler builds. An `await` anywhere else is refused by the compile, and TypeScript's
+//     error on it stays.
 //
 // Everything else TypeScript reports stays: a misspelled builtin, a wrong argument count, a method a
 // contract does not have, and a name the program never declares, whatever its case: a program's
@@ -45,12 +49,45 @@ const PATTERNS = {
 
 /**
  * Whether `diagnostic` is one TypeScript reports on valid SauceScript. `flatten` is TypeScript's
- * `flattenDiagnosticMessageText`.
+ * `flattenDiagnosticMessageText`; `ts`, TypeScript itself, reads where an `await` stands.
  */
-function isFalsePositive(diagnostic, flatten) {
+function isFalsePositive(diagnostic, flatten, ts) {
+  if (diagnostic.code === 1308) return ts !== undefined && awaitsInProgram(diagnostic, ts);
   const pattern = PATTERNS[diagnostic.code];
 
   return pattern !== undefined && pattern.test(flatten(diagnostic.messageText, "\n"));
+}
+
+/**
+ * Whether the `await` TypeScript wants an `async` function around (TS1308) is a statement directly
+ * in `main`'s body or in the body of a closure a call takes: where SauceScript takes one.
+ */
+function awaitsInProgram(diagnostic, ts) {
+  const file = diagnostic.file;
+  if (file === undefined || diagnostic.start === undefined) return false;
+  let awaited;
+  const visit = (node) => {
+    if (awaited !== undefined || diagnostic.start < node.pos || diagnostic.start >= node.end) {
+      return;
+    }
+    if (ts.isAwaitExpression(node) && node.getStart(file) === diagnostic.start) {
+      awaited = node;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(file, visit);
+  const statement = awaited?.parent;
+  const body = statement?.parent;
+  const owner = body?.parent;
+  if (owner === undefined || !ts.isExpressionStatement(statement) || !ts.isBlock(body)) {
+    return false;
+  }
+
+  return (
+    (ts.isFunctionDeclaration(owner) && owner.name?.text === "main") ||
+    (ts.isArrowFunction(owner) && ts.isCallExpression(owner.parent))
+  );
 }
 
 const isProgram = (fileName) => /\.sauce\.ts$/.test(fileName);
@@ -71,7 +108,7 @@ function init(modules) {
 
         return isProgram(fileName)
           ? diagnostics.filter(
-              (diagnostic) => !isFalsePositive(diagnostic, ts.flattenDiagnosticMessageText),
+              (diagnostic) => !isFalsePositive(diagnostic, ts.flattenDiagnosticMessageText, ts),
             )
           : diagnostics;
       };

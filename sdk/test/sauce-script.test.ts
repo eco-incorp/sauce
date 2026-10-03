@@ -37,6 +37,7 @@ const plugin = createRequire(import.meta.url)("../sauce-script/ts-plugin.cjs") a
   isFalsePositive(
     diagnostic: ts.Diagnostic,
     flatten: typeof ts.flattenDiagnosticMessageText,
+    typescript?: typeof ts,
   ): boolean;
 };
 
@@ -153,10 +154,38 @@ describe("SauceScript in an editor", () => {
     const bare = service(textOf(CORPUS), false);
     const left = CORPUS.flatMap((file) => bare.getSemanticDiagnostics(file));
     expect(left.length).toBeGreaterThan(0);
-    // Each is a bigint index or a number beside a bigint — and the plugin says so of every one.
+    // Each is a bigint index, a number beside a bigint or an `await` with no `async` — and the
+    // plugin says so of every one.
     for (const diagnostic of left) {
-      expect([2538, 2365, 2367, 2322, 2345]).toContain(diagnostic.code);
-      expect(plugin.isFalsePositive(diagnostic, ts.flattenDiagnosticMessageText)).toBe(true);
+      expect([2538, 2365, 2367, 2322, 2345, 1308]).toContain(diagnostic.code);
+      expect(plugin.isFalsePositive(diagnostic, ts.flattenDiagnosticMessageText, ts)).toBe(true);
+    }
+  });
+
+  it("takes an `await` in main's body or a body a call takes, and nowhere else", () => {
+    const file = join(work, "awaited.sauce.ts");
+    const opened =
+      "Arbitrum.Portal.send({ token: USDC, amount: 2 }).creator(0x44).receive({ token: USDC, amount: 1 })";
+    const codes = (body: string, withPlugin = true) =>
+      service({ [file]: body }, withPlugin)
+        .getSemanticDiagnostics(file)
+        .map((diagnostic) => diagnostic.code);
+    for (const body of [
+      `function main() {\n  await ${opened};\n  USDC.transfer(0x66, 1);\n}\n`,
+      `function main() {\n  ${opened}.then(() => {\n    await ${opened};\n    USDC.transfer(0x66, 1);\n  });\n}\n`,
+    ]) {
+      // TypeScript wants an `async` function around it; SauceScript has none.
+      expect(codes(body, false)).toContain(1308);
+      expect(codes(body)).toEqual([]);
+    }
+    // At a script's top level TypeScript takes it as it is.
+    expect(codes(`await ${opened};\nUSDC.transfer(0x66, 1);\n`, false)).not.toContain(1308);
+    // In another function, or inside an `if`, the compile refuses it, and TypeScript's error stays.
+    for (const body of [
+      `function pay() {\n  await ${opened};\n}\nfunction main() {\n  pay();\n}\n`,
+      `function main() {\n  if (USDC != 0) {\n    await ${opened};\n  }\n}\n`,
+    ]) {
+      expect(codes(body)).toEqual([1308]);
     }
   });
 
