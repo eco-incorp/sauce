@@ -23,6 +23,17 @@ export function portalRoot(call: AstNode): string | undefined {
   return typeof object.name === "string" ? object.name : undefined;
 }
 
+/** The chain accessor an `await` statement's intent opens on, `await Arbitrum.Portal.send(…)
+ *  .receive(…);`, whose body is every statement after it in its block; `undefined` for any other
+ *  statement. */
+export function awaitedPortalRoot(statement: AstNode): string | undefined {
+  const awaited =
+    statement.type === "ExpressionStatement" ? (statement.expression as AstNode) : undefined;
+  const call = awaited?.type === "AwaitExpression" ? (awaited.argument as AstNode) : undefined;
+
+  return call?.type === "CallExpression" ? portalRoot(call) : undefined;
+}
+
 /** The method a call of such a chain calls (`send`, `receive`, `then`). */
 export function portalMethod(call: AstNode): string | undefined {
   const callee = call.callee as AstNode | undefined;

@@ -21,7 +21,7 @@ import type { AccessorTarget } from "../routes/protocol-names.js";
 import { chainAccessorNames } from "../routes/sauce-route.js";
 import { resolveTokenMap } from "../routes/token-registry.js";
 import { pascalOfSlug } from "../routes/builder.js";
-import { portalMethod, portalRoot } from "./intent-calls.js";
+import { awaitedPortalRoot, portalMethod, portalRoot } from "./intent-calls.js";
 import type { DefineValue } from "./args.js";
 
 /** One define the program reads, as the compile applied it. */
@@ -79,11 +79,24 @@ interface IntentPart {
 
 /** The parts of `program` each intent it opens runs on its destination, as the intent lowering
  *  finds them: in `Chain.Portal.send(reward).receive(delivery).then(() => { body })`, the delivery,
- *  the body and a `.catch(...)` handler, the reward and the modifiers left out. */
+ *  the body and a `.catch(...)` handler, the reward and the modifiers left out; and after
+ *  `await Chain.Portal.send(reward).receive(delivery);`, every statement of its block. */
 function intentParts(program: AstNode): IntentPart[] {
   const chains = chainAccessorNames();
   const parts: IntentPart[] = [];
   walk(program, (node) => {
+    const statements =
+      node.type === "BlockStatement" || node.type === "Program" ? node.body : undefined;
+    if (Array.isArray(statements)) {
+      (statements as AstNode[]).forEach((statement, index) => {
+        const name = awaitedPortalRoot(statement);
+        const chain = name === undefined ? undefined : chains.get(name);
+        const rest = (statements as AstNode[]).slice(index + 1);
+        if (chain !== undefined && rest.length > 0) {
+          parts.push({ chain, start: rest[0]!.start, end: rest.at(-1)!.end });
+        }
+      });
+    }
     if (node.type !== "CallExpression") return;
     const method = portalMethod(node);
     if (method !== "receive" && method !== "then" && method !== "catch") return;

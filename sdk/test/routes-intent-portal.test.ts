@@ -28,6 +28,7 @@ import { DEFAULT_FILL_WINDOW, DEFAULT_REFUND_WINDOW } from "../src/routes/intent
 import type { IntentSugarDefaults } from "../src/routes/intent-host.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
 import { publishTx } from "../src/routes/portal.js";
+import type { EntryValue } from "../src/routes/entry.js";
 import { compileSauceProgram, type CompiledSauceProgram } from "../src/routes/sauce-route.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 import { Token } from "../src/token/api.js";
@@ -49,7 +50,7 @@ const INTENTS = {
 const usdcOf = (slug: string): bigint => registryTokenAddress(requireChain(slug), "USDC")!;
 const hex = (value: bigint): Hex => `0x${value.toString(16).padStart(40, "0")}`;
 
-const compile = (program: string, intents: IntentSugarDefaults, args?: readonly bigint[]) =>
+const compile = (program: string, intents: IntentSugarDefaults, args?: readonly EntryValue[]) =>
   compileSauceProgram("base", program, {
     defines: { RECIPIENT },
     intents,
@@ -395,6 +396,11 @@ describe("the intents a program opens", () => {
   USDT.transfer(recipient, amount * 98 / 100 / 2);
 }`;
     expectSame(compile(awaited, INTENTS), compile(NESTED, INTENTS));
+    // And compiled for main's arguments, which reads main's parameters from the awaiting source.
+    expectSame(
+      compile(awaited, INTENTS, [1_000_000n, hex(RECIPIENT)]),
+      compile(NESTED, INTENTS, [1_000_000n, hex(RECIPIENT)]),
+    );
   });
 
   it("names each run-time value by its name, or by what it is in the intent", () => {
@@ -488,7 +494,7 @@ describe("on the host", () => {
       Base.Portal.send(paid).source("ethereum").refundee(CREATOR).receive(delivered).then(program),
     ).toThrow(/give `\.fee\(\.\.\.\)` after `\.receive\(\.\.\.\)`/);
     const sent = Base.Portal.send(paid).refundee(CREATOR) as unknown as {
-      creator(address: string): unknown;
+      refundee(address: string): unknown;
     };
     expect(() => sent.refundee(CREATOR)).toThrow(/`\.refundee\(\.\.\.\)` is given twice/);
   });
