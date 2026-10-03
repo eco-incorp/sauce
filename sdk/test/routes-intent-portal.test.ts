@@ -361,6 +361,39 @@ describe("the intents a program opens", () => {
     expect(opened!.destination.slug).toBe("arbitrum");
   });
 
+  it("an `await` of the intent makes the statements after it its body, byte for byte", () => {
+    const opened = `Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
+    .receive({ token: USDC, amount: 1000000 })`;
+    for (const body of [
+      // Token writes alone: recorded, the route's own calls.
+      "USDC.transfer(RECIPIENT, 1000000);",
+      // A program, measuring what arrived.
+      "const held = USDC.balanceOf(ctx.self()); USDC.transfer(RECIPIENT, held);",
+    ]) {
+      expectSame(
+        compile(`function main() {\n  await ${opened};\n  ${body}\n}`, INTENTS),
+        compile(`function main() {\n  ${opened}\n    .then(() => { ${body} });\n}`, INTENTS),
+      );
+    }
+    // At a script's top level, where a TypeScript editor takes an `await` as it is.
+    expectSame(
+      compile(`await ${opened};\nUSDC.transfer(RECIPIENT, 1000000);`, INTENTS),
+      compile(`${opened}\n  .then(() => { USDC.transfer(RECIPIENT, 1000000); });`, INTENTS),
+    );
+    // Two `await`s are an intent opened in the body of the one before.
+    const awaited = `function main(amount: Uint256, recipient: Address) {
+  await Arbitrum.Portal
+    .send([{ token: USDC, amount }])
+    .receive([{ token: USDC, amount: amount * 99 / 100 }]);
+  USDC.transfer(recipient, amount * 99 / 100 / 2);
+  await Optimism.Portal.send({ token: USDC, amount: amount * 99 / 100 / 2 })
+    .creator(${CREATOR})
+    .receive({ token: USDT, amount: amount * 98 / 100 / 2 });
+  USDT.transfer(recipient, amount * 98 / 100 / 2);
+}`;
+    expectSame(compile(awaited, INTENTS), compile(NESTED, INTENTS));
+  });
+
   it("names each run-time value by its name, or by what it is in the intent", () => {
     const [opened] = compile(NESTED, INTENTS).intents;
     // In the order the intent is built: the delivery, the body's captures, the reward.

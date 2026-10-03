@@ -111,7 +111,7 @@ export interface SauceIntentReceivedSteps<Used extends string> {
   fee(wei: bigint | number): SauceIntentReceived<Used | "fee">;
   /**
    * The body: runs on the destination with what was received. It is never invoked here: it is
-   * compiled for that chain.
+   * compiled for that chain. `await` of the intent makes the statements after it the body.
    */
   then(body: () => void): SauceIntentOpened;
 }
