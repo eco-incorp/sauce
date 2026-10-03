@@ -515,13 +515,43 @@ function main(recipient: Address, refundTo: Address) {
 }
 ```
 
-No `async` is needed. An `await` is a statement directly in `main`'s body, or in the body of an
-intent. Everything after it, to the end of that body, runs on its destination: names resolve
-there, values from before it are captured and cannot be assigned or declared again, and a `return`
-is the body's. An `await` inside an `if`, a loop or a block, in another function, or used as a value
-is a compile error, and so is `await` followed by `(`, `[` or a line break in `main` or a body,
-where it reads as a name: start the intent on the `await`'s line. An awaited body has no handler;
-for one, write `.then(() => { … }).catch((e) => { … })`.
+No `async` is needed. An `await` is a statement directly in `main`'s body, in the body of an
+intent, or in a `try` block there. Everything after it, to the end of that body, runs on its
+destination: names resolve there, values from before it are captured and cannot be assigned or
+declared again, and a `return` is the body's. An `await` inside an `if`, a loop or another block, in
+another function, or used as a value is a compile error, and so is `await` followed by `(`, `[` or a
+line break in `main` or a body, where it reads as a name: start the intent on the `await`'s line.
+
+A `try` around awaited intents handles each body, and what runs before them. The handler runs on
+whichever chain failed and resolves its names there. It is compiled once per chain, and
+`chainId == Ethereum` is decided as it is (a chain's name is its id), so each chain keeps only its
+own branch, which moves only what that chain can account for:
+
+```sauce chain=base
+function main(recipient: Address, refundTo: Address) {
+  const amount = USDC.balanceOf(ctx.self());
+  const delivered = amount - amount / 1000;
+  try {
+    await Ethereum.Portal.send({ token: USDC, amount })
+      .refundee(refundTo)
+      .receive({ token: USDC, amount: delivered });
+    USDC.approve(AaveV3.Pool, delivered);
+    AaveV3.Pool.supply(USDC, delivered, recipient, 0);
+  } catch (e) {
+    if (chainId == Ethereum) {
+      USDC.transfer(refundTo, delivered); // what this intent delivered, from the shared Pot
+    } else {
+      USDC.transfer(refundTo, amount); // on Base, where it opens: this Pot's own
+    }
+  }
+}
+```
+
+`try { S1; await a; S2 } catch (e) { H }` is
+`try { S1; a.then(() => { S2 }).catch((e) => { H }); } catch (e) { H }`, at every `await` in it.
+`chainId` tells chains apart, not hops: a cascade that visits a chain twice runs that chain's branch
+on both visits, so the branch must be right for each of them, such as the smaller amount. Nothing
+may follow such a `try`, and its handler cannot `await`.
 
 Each level takes its own modifiers, and each it leaves out takes its default for that level:
 

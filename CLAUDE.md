@@ -631,7 +631,10 @@ most 256 bytes): EVM destinations only, and refused on the host, which builds th
 `await` needs no entry in the table: the compiler lowers `await x; rest` to
 `x.then(() => { rest })`, as JavaScript's `await` calls a thenable's `then`, for any host type whose
 `then` takes one `program` parameter, so `await` of a `Received` is byte for byte the
-`.then(() => { … })` written out (no `async`; directly in `main`'s body, a script's or a body). In
+`.then(() => { … })` written out (no `async`; directly in `main`'s body, a script's or a body, or in
+a `try` block standing there). In `try { …; await a; … } catch (e) { H }` each awaited intent gets
+`.catch((e) => { H })`, so `H` is compiled in the program of every chain it may run on, and a
+`chainId == Ethereum` branch in it (a chain's name is its id, `host.ts`) folds to that chain's. In
 an editor a script's top-level `await` is plain TypeScript; one in `main` is TS1308, which the
 SauceScript plugin (`sauce-script/ts-plugin.cjs`) drops only where the compiler takes the `await`.
 
