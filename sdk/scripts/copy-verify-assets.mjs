@@ -33,11 +33,12 @@ const ASSETS = [
   // Layer-C plugin manifest, beside its compiled module for tools that read it directly.
   // `loadPlugin()` imports it as JSON.
   { subdir: "plugin", file: "manifest.json" },
-  // `@sauce/token` and `@sauce/router`, the SauceScript stdlib, shipped as files for a consumer
-  // resolving them off disk. The route path serves the embedded copies (`src/embedded/resolve.ts`)
-  // and reads none of these.
+  // `@sauce/token`, `@sauce/router` and `@sauce/swap`, the SauceScript stdlib, shipped as files for
+  // a consumer resolving them off disk. The route path serves the embedded copies
+  // (`src/embedded/resolve.ts`) and reads none of these.
   ...stdPackage("token"),
   ...stdPackage("router"),
+  ...stdPackage("swap"),
 ];
 
 /** Every file of the standard-library package in `src/std/<name>/`. */

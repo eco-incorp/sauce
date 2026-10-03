@@ -24,13 +24,13 @@ import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import { compileWithRs, toRsDefines, type RsCompileResult } from "./rs-compile.js";
-import { chainHost, isChainScalar, withHost, type ChainHost } from "./host.js";
+import { chainHost, compilerBind, isChainScalar, withHost, type ChainHost } from "./host.js";
 import { registryTokenSymbols, resolveTokenMap } from "./token-registry.js";
 import type { ProtocolNameOptions } from "./protocol-names.js";
 import { pascalOfSlug } from "./accessors.js";
 import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
-import type { EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
+import { ecoRoutesPortal, type EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
 import {
   intentHost,
   intentStepError,
@@ -38,6 +38,9 @@ import {
   type LoweredIntent,
 } from "./intent-host.js";
 import { entryArguments, entryParamsOf, type EntryParam, type EntryValue } from "./entry.js";
+import { resolveIntentPot } from "./intent-pot.js";
+import { fetchSwapRoutes, type SwapApis } from "./swap-apis.js";
+import { swapHost, type SwapBindOptions, type SwapSite } from "./swap-host.js";
 import { chainCalledError, unknownGlobalError } from "./unknown-global.js";
 import { closureText, isSauceClosure, type SauceBody } from "./closure.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
@@ -95,7 +98,17 @@ export interface SauceCompileOptions {
   intents?: Partial<IntentSugarDefaults> & EcoRoutesSelector;
   /** Compile for compact-v1 entry arguments. */
   compactArgs?: boolean;
+  /**
+   * `kyberSwap(...)` and `ecoSwap(...)` written in the program: the Pot it runs on, the routes
+   * fetched for its swaps, and the services that build them. `compileSauceProgram` binds `routes`
+   * and refuses a swap that has none; `compileSauceProgramAsync` fetches what is missing from the
+   * services. See `swap-host.ts`.
+   */
+  swap?: SwapCompileOptions;
 }
+
+/** What a program's swaps compile with: where they run, their routes, and who builds them. */
+export interface SwapCompileOptions extends SwapBindOptions, SwapApis {}
 
 export interface SauceEvmExecutionInput {
   /** The Pot contract to `cook()` on — see `sauce-calls.ts#SauceEvmCallParams`, never defaulted. */
@@ -215,6 +228,7 @@ function routeHost(
   options: SauceCompileOptions,
   scope: RouteScope,
   lowered: LoweredIntent[],
+  swaps: { readonly sites: SwapSite[]; readonly pot: () => AddressInput | undefined },
 ): {
   readonly host: ChainHost;
   readonly defines: SauceCompileOptions["defines"];
@@ -233,6 +247,12 @@ function routeHost(
   });
   const names = chainHost(chain, { tokens, values, accessors: options.accessors });
   if (chain.kind !== "evm") return { host: recording(names), defines, declined };
+  const swapping = swapHost({
+    chain,
+    pot: swaps.pot,
+    options: options.swap ?? {},
+    sites: swaps.sites,
+  });
   const intents = intentHost({
     source: chain,
     chains: chainAccessorNames(),
@@ -249,21 +269,37 @@ function routeHost(
         publisher: _publisher,
         ...inherited
       } = next.options.intents ?? {};
-      const child = routeHost(destination, { ...next.options, intents: inherited }, next.scope, []);
+      // A body's swaps run on the destination's shared Pot, the one its cook names.
+      const intentPot = () => {
+        const defaults = options.intents ?? {};
+        return resolveIntentPot(
+          defaults.destinationPortal ?? ecoRoutesPortal(destination, defaults),
+          defaults,
+        ).pot;
+      };
+      const child = routeHost(
+        destination,
+        { ...next.options, intents: inherited },
+        next.scope,
+        [],
+        { sites: swaps.sites, pot: intentPot },
+      );
       return {
         target: destination.kind === "svm" ? "svm" : "evm",
         declare: child.host.declare,
         types: child.host.types,
         hostModules: child.host.hostModules,
         ...(child.host.nested === undefined ? {} : { nested: child.host.nested }),
-        ...(child.host.bind === undefined ? {} : { bind: child.host.bind }),
+        ...(child.host.bind === undefined ? {} : { bind: compilerBind(child.host.bind)! }),
         defines: toRsDefines(child.defines),
         ambient: next.options.ambient,
       };
     },
   });
 
-  return { host: recording(withHost(names, intents)), defines, declined };
+  const host = withHost(withHost(names, { types: {}, ...swapping }), intents);
+
+  return { host: recording(host), defines, declined };
 }
 
 /**
@@ -403,6 +439,9 @@ export interface CompiledSauceProgram {
    * program holds a sentinel where the value will be, which only exists once the program runs.
    */
   readonly intents: readonly LoweredIntent[];
+  /** Each `kyberSwap(...)`/`ecoSwap(...)` the program calls, at any depth, with the route bound
+   *  there — none where a placeholder was (`swap.placeholders`). */
+  readonly swaps: readonly SwapSite[];
   /** The source the compiler was given: the program as written. */
   readonly source: string;
 }
@@ -480,8 +519,39 @@ export function compileSauceProgram(
     entryParams,
     ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
     intents: program.intents,
+    swaps: program.swaps,
     source: program.source,
   };
+}
+
+/**
+ * {@link compileSauceProgram}, with each `kyberSwap(...)`/`ecoSwap(...)` the program calls given its
+ * route by its service. The compiler's callbacks are synchronous, so it compiles twice: once with a
+ * placeholder at each swap, to learn what each asks for, then — after the routes are fetched
+ * (`swap-apis.ts#fetchSwapRoutes`) — with them bound. A program with no swap, or whose routes are all
+ * given in `swap.routes`, compiles once.
+ */
+export async function compileSauceProgramAsync(
+  chain: ChainRef,
+  body: SauceBody,
+  options: SauceProgramOptions = {},
+): Promise<CompiledSauceProgram> {
+  const swap = options.swap ?? {};
+  const probe = compileSauceProgram(chain, body, {
+    ...options,
+    swap: { ...swap, placeholders: true },
+  });
+  const missing = probe.swaps.filter((site) => site.route === undefined);
+  if (missing.length === 0) return probe;
+  const fetched = await fetchSwapRoutes(
+    missing.map((site) => site.request),
+    swap,
+  );
+
+  return compileSauceProgram(chain, body, {
+    ...options,
+    swap: { ...swap, placeholders: false, routes: [...(swap.routes ?? []), ...fetched] },
+  });
 }
 
 /**
@@ -506,6 +576,7 @@ function compileForChain(
   readonly entryEncoding: "abi-v1" | "compact-v1";
   readonly manifest?: AccountManifest;
   readonly intents: readonly LoweredIntent[];
+  readonly swaps: readonly SwapSite[];
 } {
   const chain = requireChain(destination);
   const target = options.target ?? defaultTargetFor(chain.kind);
@@ -526,7 +597,11 @@ function compileForChain(
   const source = sauce;
   const tokens = resolveTokenMap(chain, options.tokens);
   const lowered: LoweredIntent[] = [];
-  const level = routeHost(chain, options, scope, lowered);
+  const swaps: SwapSite[] = [];
+  const level = routeHost(chain, options, scope, lowered, {
+    sites: swaps,
+    pot: () => options.swap?.pot,
+  });
   let rs: RsCompileResult;
   try {
     rs = compileWithRs({
@@ -560,6 +635,6 @@ function compileForChain(
   const intents = lowered;
 
   return manifest === undefined
-    ? { chain, compiled, entryParams, source, entryEncoding, intents }
-    : { chain, compiled, entryParams, source, entryEncoding, manifest, intents };
+    ? { chain, compiled, entryParams, source, entryEncoding, intents, swaps }
+    : { chain, compiled, entryParams, source, entryEncoding, manifest, intents, swaps };
 }

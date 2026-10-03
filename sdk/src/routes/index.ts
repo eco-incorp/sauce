@@ -92,7 +92,7 @@ export type {
 
 // --- cross-chain intent DSL (S1) ---
 
-export { compileSauceProgram, compileSauceRoute } from "./sauce-route.js";
+export { compileSauceProgram, compileSauceProgramAsync, compileSauceRoute } from "./sauce-route.js";
 export type {
   CompiledSauceProgram,
   CompiledSauceRoute,
@@ -100,7 +100,18 @@ export type {
   SauceProgramOptions,
   SauceEvmExecutionInput,
   SauceSvmExecutionInput,
+  SwapCompileOptions,
 } from "./sauce-route.js";
+export { SwapApiError, fetchSwapRoutes } from "./swap-apis.js";
+export type { EcoApi, EcoEmbed, KyberApi, SwapApis } from "./swap-apis.js";
+export type {
+  EcoRoute,
+  KyberRoute,
+  SwapProvider,
+  SwapRequest,
+  SwapRoute,
+  SwapSite,
+} from "./swap-host.js";
 export { decodeEntryArguments, encodeEntryArguments } from "./entry.js";
 export type { EntryParam, EntryValue } from "./entry.js";
 export type { LoweredIntent } from "./intent-host.js";

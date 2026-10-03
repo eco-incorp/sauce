@@ -19,7 +19,7 @@ import type {
 } from "sauce-compiler";
 import { resolveSdkModule, resolveSdkPackage, sdkStdPath } from "../embedded/resolve.js";
 import { compile } from "../wasm-compiler.js";
-import type { ChainHost } from "./host.js";
+import { compilerBind, type ChainHost } from "./host.js";
 
 const ENTRY = "main.js";
 
@@ -245,7 +245,7 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
           types: input.host.types,
           hostModules: input.host.hostModules,
           nested: input.host.nested,
-          bind: input.host.bind,
+          bind: compilerBind(input.host.bind),
         }),
   });
 

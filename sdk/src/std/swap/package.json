@@ -1,0 +1,7 @@
+{
+  "name": "@sauce/swap",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SauceScript swaps whose route a service builds when the program compiles: `kyber` runs KyberSwap's router calldata, `eco` evaluates an eco-swap program. A program writes `kyberSwap(...)`/`ecoSwap(...)`, which the SDK's host lowers to these with the route put in. `main` names the NEUTRAL BASE the compiler suffixes per target (swap.evm.js); there is no SVM arm, because both providers' routes are EVM calls.",
+  "main": "swap.js"
+}

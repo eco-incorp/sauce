@@ -3,8 +3,8 @@
  *
  * A program the SDK emits imports files the SDK ships: the ERC-20 and Sauce Router ABIs
  * (`./artifacts/IERC20.json`, `./artifacts/ISauceRouter.json`), a protocol's ABI twin
- * (`./protocols/<slug>/<Export>.json`), and the `@sauce/token` and `@sauce/router` standard
- * libraries. None of them is read from a filesystem: the ABIs are JSON imports and the rest is
+ * (`./protocols/<slug>/<Export>.json`), and the `@sauce/token`, `@sauce/router` and `@sauce/swap`
+ * standard libraries. None of them is read from a filesystem: the ABIs are JSON imports and the rest is
  * embedded at build time (`sources.generated.ts`), so the same resolution runs in Node and in a
  * browser.
  *
@@ -28,6 +28,7 @@ const STD_PACKAGES: Readonly<Record<string, string>> = {
   "@sauce/router": "router",
   "@sauce/context": "context",
   "@sauce/intents": "intents",
+  "@sauce/swap": "swap",
 };
 
 /** The engine ABIs the SDK's generated programs import, by path under the SDK root. */

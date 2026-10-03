@@ -96,20 +96,36 @@ export interface ChainHost {
   readonly types: Record<string, HostType>;
   readonly hostModules: string[];
   readonly nested?: (site: ProgramSite) => ProgramOptions;
-  readonly bind?: (site: CallSite) => BoundArgument[];
+  /** The arguments of a site-bound call this host declares; `undefined` for another host's. */
+  readonly bind?: (site: CallSite) => BoundArgument[] | undefined;
 }
 
-/** `names`, with `more`'s declarations where `names` has none, and its types, modules and calls. */
+/** `names`, with `more`'s declarations where `names` has none, and its types, modules and calls: a
+ *  site-bound call is `names`'s to bind first, then `more`'s. */
 export function withHost(names: ChainHost, more: ChainHost | undefined): ChainHost {
   if (more === undefined) return names;
+  const first = names.bind;
+  const then = more.bind;
 
   return {
     declare: (name) => names.declare(name) ?? more.declare(name),
     types: { ...names.types, ...more.types },
     hostModules: [...names.hostModules, ...more.hostModules],
     nested: more.nested ?? names.nested,
-    bind: more.bind ?? names.bind,
+    bind:
+      first === undefined || then === undefined
+        ? (then ?? first)
+        : (site) => first(site) ?? then(site),
   };
+}
+
+/** `bind` as the compiler takes it: every site-bound call answered, or refused by name. */
+export function compilerBind(
+  bind: ChainHost["bind"],
+): ((site: CallSite) => BoundArgument[]) | undefined {
+  return bind === undefined
+    ? undefined
+    : (site) => bind(site) ?? fail(`'${site.callee}' is bound by no host`);
 }
 
 class HostNameError extends Error {}
