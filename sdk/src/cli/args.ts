@@ -82,6 +82,9 @@ export function parseFlags(argv: readonly string[], flags: FlagSpecs): ParsedArg
   }
 }
 
+/** Flags the command once took under another name, and the name each has now. */
+const RENAMED_FLAGS: Readonly<Record<string, string>> = { "intent-creator": "intent-refundee" };
+
 /** `parseArgs`'s messages advise on `--` escaping; say what was wrong with the flag instead. */
 function describeParseError(error: unknown, flags: FlagSpecs, argv: readonly string[]): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -100,6 +103,11 @@ function describeParseError(error: unknown, flags: FlagSpecs, argv: readonly str
     );
   }
   if (code === "ERR_PARSE_ARGS_UNKNOWN_OPTION" && flag !== undefined) {
+    const renamed = RENAMED_FLAGS[flag.replace(/^-+/, "").replace(/=.*$/, "")];
+    if (renamed !== undefined && flags[renamed] !== undefined) {
+      return `\`${flag.replace(/=.*$/, "")}\` is now \`--${renamed}\``;
+    }
+
     return `unknown option ${flag}`;
   }
   if (code === "ERR_PARSE_ARGS_INVALID_OPTION_VALUE" && flag !== undefined) {

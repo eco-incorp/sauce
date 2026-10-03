@@ -1967,6 +1967,15 @@ describe("flags in any order", () => {
     expect(escaped.stderr).toMatch(/--args: .*amount/);
   });
 
+  it("names the flag `--intent-creator` became, rather than an unknown option", async () => {
+    const program = file("pay.sauce.ts", PAY);
+    for (const flag of [["--intent-creator", OWNER], [`--intent-creator=${OWNER}`]]) {
+      const run = await sauce("compile", program, "--chain", "base", ...flag);
+      expect(run.code).toBe(2);
+      expect(run.stderr).toContain("`--intent-creator` is now `--intent-refundee`");
+    }
+  });
+
   it("names a flag the command does not take, and why, instead of an unknown option", async () => {
     const program = file("split.sauce.ts", SPLIT);
     const cases: Array<[string[], RegExp]> = [
