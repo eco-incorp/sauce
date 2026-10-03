@@ -417,11 +417,43 @@ from before it are captured, and the body cannot assign them, nor declare a name
 still one scope. A `return` after it is the body's. An `await` in the body opens the next hop from
 the destination, so a cascade reads top to bottom.
 
-An `await` stands directly in `main`'s body, a script's top level, or a body. It cannot be inside an
-`if`, a loop or a block, in another function, or used as a value; each of these is a compile error
-that names it. Start the intent on the `await`'s line: in `main` or a body, as in JavaScript outside
-an `async` function, `await` followed by `(`, `[` or a line break reads as a name, and is refused.
-An awaited body has no handler: write `.then(() => { ... }).catch((e) => { ... })` for one.
+An `await` stands directly in `main`'s body, a script's top level, a body, or a `try` block there
+(below). It cannot be inside an `if`, a loop or another block, in another function, or used as a
+value; each of these is a compile error that names it. Start the intent on the `await`'s line: in
+`main` or a body, as in JavaScript outside an `async` function, `await` followed by `(`, `[` or a
+line break reads as a name, and is refused.
+
+A `try` around awaited intents handles each of their bodies, and what runs before them:
+
+```js
+function main(recipient: Address, refundTo: Address) {
+  const amount = USDC.balanceOf(ctx.self());
+  const delivered = amount - amount / 1000;
+  try {
+    await Ethereum.Portal.send({ token: USDC, amount })
+      .refundee(refundTo)
+      .receive({ token: USDC, amount: delivered });
+    USDC.approve(AaveV3.Pool, delivered);
+    AaveV3.Pool.supply(USDC, delivered, recipient, 0);
+  } catch (e) {
+    if (chainId == Ethereum) {
+      USDC.transfer(refundTo, delivered);
+    } else {
+      USDC.transfer(refundTo, amount);
+    }
+  }
+}
+```
+
+`try { S1; await a; S2 } catch (e) { H }` is
+`try { S1; a.then(() => { S2 }).catch((e) => { H }); } catch (e) { H }`, at every `await` in it:
+the handler runs on whichever chain failed, and resolves its names there. It is compiled once per
+chain, and `chainId == Ethereum` is decided as it is, so each chain keeps only its own branch: a
+supply that fails on Ethereum returns what this intent delivered there, from the Pot every intent to
+Ethereum shares; a failure on Base, where the intent opens, returns `amount` from the program's own
+Pot. `chainId` tells chains apart, not hops: a cascade that visits a chain twice runs that chain's
+branch on both visits, so the branch must be right for each of them, such as the smaller amount.
+Nothing may follow such a `try`, and its handler cannot `await`.
 
 In an editor, an `await` at a script's top level is plain TypeScript. One in `main` needs the
 SauceScript plugin that `sauce init` configures, which accepts it where the compiler does.

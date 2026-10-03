@@ -70,7 +70,7 @@ import {
 } from "./commands.js";
 import { nativeSymbol, tokenInfo } from "./effects.js";
 import { baseUnits, type FundRequest } from "./funding.js";
-import { portalMethod, portalRoot } from "./intent-calls.js";
+import { awaitedPortalRoot, portalMethod, portalRoot } from "./intent-calls.js";
 import { intentDestinations, requireSupported } from "./support.js";
 
 const ERC20 = parseAbi([
@@ -125,9 +125,13 @@ function otherStatement(file: string, text: string): string | undefined {
     main === undefined
       ? program.body.filter((node) => !isDeclaration(node))
       : (((main.body as Node | undefined)?.body as Node[] | undefined) ?? []);
-  const other = statements.find(
-    (node) => !isIntentSite(node) && !(node.type === "VariableDeclaration" && callFree(node)),
-  );
+  // An awaited intent's body is every statement after it.
+  const awaited = statements.findIndex((node) => awaitedPortalRoot(node as AstNode) !== undefined);
+  const other = statements
+    .slice(0, awaited === -1 ? undefined : awaited)
+    .find(
+      (node) => !isIntentSite(node) && !(node.type === "VariableDeclaration" && callFree(node)),
+    );
 
   return other === undefined ? undefined : `${file}:${other.loc!.start.line}`;
 }

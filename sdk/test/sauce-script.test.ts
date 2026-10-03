@@ -162,7 +162,7 @@ describe("SauceScript in an editor", () => {
     }
   });
 
-  it("takes an `await` in main's body or a body a call takes, and nowhere else", () => {
+  it("takes an `await` in main's body, a body a call takes or a `try` there, and nowhere else", () => {
     const file = join(work, "awaited.sauce.ts");
     const opened =
       "Arbitrum.Portal.send({ token: USDC, amount: 2 }).refundee(0x44).receive({ token: USDC, amount: 1 })";
@@ -173,6 +173,7 @@ describe("SauceScript in an editor", () => {
     for (const body of [
       `function main() {\n  await ${opened};\n  USDC.transfer(0x66, 1);\n}\n`,
       `function main() {\n  ${opened}.then(() => {\n    await ${opened};\n    USDC.transfer(0x66, 1);\n  });\n}\n`,
+      `function main() {\n  try {\n    await ${opened};\n    USDC.transfer(0x66, 1);\n  } catch (e) {\n    USDC.transfer(0x44, 1);\n  }\n}\n`,
     ]) {
       // TypeScript wants an `async` function around it; SauceScript has none.
       expect(codes(body, false)).toContain(1308);
@@ -180,10 +181,13 @@ describe("SauceScript in an editor", () => {
     }
     // At a script's top level TypeScript takes it as it is.
     expect(codes(`await ${opened};\nUSDC.transfer(0x66, 1);\n`, false)).not.toContain(1308);
-    // In another function, or inside an `if`, the compile refuses it, and TypeScript's error stays.
+    // In another function, inside an `if`, in a handler or in a nested `try`, the compile refuses
+    // it, and TypeScript's error stays.
     for (const body of [
       `function pay() {\n  await ${opened};\n}\nfunction main() {\n  pay();\n}\n`,
       `function main() {\n  if (USDC != 0) {\n    await ${opened};\n  }\n}\n`,
+      `function main() {\n  try {\n    USDC.transfer(0x66, 1);\n  } catch (e) {\n    await ${opened};\n  }\n}\n`,
+      `function main() {\n  try {\n    try {\n      await ${opened};\n    } catch (e) {}\n  } catch (e) {}\n}\n`,
     ]) {
       expect(codes(body)).toEqual([1308]);
     }

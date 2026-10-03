@@ -8,7 +8,8 @@
 //     `number | bigint` of `c ? x : 0` (TS2365, TS2367, TS2322, TS2345). In SauceScript `1` and `1n`
 //     are the same integer, an account compares as its address (`program == 0x06dd…`), and so does
 //     a token or a contract, which is zero on a chain without it (`UniswapV3.Factory != 0`).
-//   - An `await` that is a statement of `main`'s body, or of a closure's a call takes (TS1308).
+//   - An `await` that is a statement of `main`'s body, or of a closure's a call takes, or of a
+//     `try` block standing in either (TS1308).
 //     SauceScript needs no `async`: `await x; rest` is `x.then(() => { rest })`, as in JavaScript,
 //     and the compiler builds the closure. An `await` anywhere else is refused by the compile, and
 //     TypeScript's error on it stays.
@@ -60,7 +61,8 @@ function isFalsePositive(diagnostic, flatten, ts) {
 
 /**
  * Whether the `await` TypeScript wants an `async` function around (TS1308) is a statement directly
- * in `main`'s body or in the body of a closure a call takes: where SauceScript takes one.
+ * in `main`'s body or in the body of a closure a call takes, or in a `try` block standing there:
+ * where SauceScript takes one.
  */
 function awaitsInProgram(diagnostic, ts) {
   const file = diagnostic.file;
@@ -78,10 +80,16 @@ function awaitsInProgram(diagnostic, ts) {
   };
   ts.forEachChild(file, visit);
   const statement = awaited?.parent;
-  const body = statement?.parent;
-  const owner = body?.parent;
+  let body = statement?.parent;
+  let owner = body?.parent;
   if (owner === undefined || !ts.isExpressionStatement(statement) || !ts.isBlock(body)) {
     return false;
+  }
+  // An `await` in a `try` block stands where the `try` does.
+  if (ts.isTryStatement(owner) && owner.tryBlock === body) {
+    body = owner.parent;
+    owner = body?.parent;
+    if (owner === undefined || !ts.isBlock(body)) return false;
   }
 
   return (

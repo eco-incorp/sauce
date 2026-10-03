@@ -28,6 +28,7 @@ import { DEFAULT_FILL_WINDOW, DEFAULT_REFUND_WINDOW } from "../src/routes/intent
 import type { IntentSugarDefaults } from "../src/routes/intent-host.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
 import { publishTx } from "../src/routes/portal.js";
+import type { EntryValue } from "../src/routes/entry.js";
 import { compileSauceProgram, type CompiledSauceProgram } from "../src/routes/sauce-route.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 import { Token } from "../src/token/api.js";
@@ -49,7 +50,7 @@ const INTENTS = {
 const usdcOf = (slug: string): bigint => registryTokenAddress(requireChain(slug), "USDC")!;
 const hex = (value: bigint): Hex => `0x${value.toString(16).padStart(40, "0")}`;
 
-const compile = (program: string, intents: IntentSugarDefaults, args?: readonly bigint[]) =>
+const compile = (program: string, intents: IntentSugarDefaults, args?: readonly EntryValue[]) =>
   compileSauceProgram("base", program, {
     defines: { RECIPIENT },
     intents,
@@ -395,6 +396,62 @@ describe("the intents a program opens", () => {
   USDT.transfer(recipient, amount * 98 / 100 / 2);
 }`;
     expectSame(compile(awaited, INTENTS), compile(NESTED, INTENTS));
+    // And compiled for main's arguments, which reads main's parameters from the awaiting source.
+    expectSame(
+      compile(awaited, INTENTS, [1_000_000n, hex(RECIPIENT)]),
+      compile(NESTED, INTENTS, [1_000_000n, hex(RECIPIENT)]),
+    );
+  });
+
+  it("`try` around `await`s is each `.then(...)` with the `catch` as its handler, byte for byte", () => {
+    // `try { S1; await a; S2; await b; S3 } catch (e) { H }` is
+    // `try { S1; a.then(() => { S2; b.then(() => { S3 }).catch((e) => { H }); }).catch((e) => { H }); } catch (e) { H }`:
+    // the handler runs on whichever chain failed, its names resolved there.
+    const first = `Arbitrum.Portal.send({ token: USDC, amount })
+      .refundee(${CREATOR})
+      .receive({ token: USDC, amount: amount * 99 / 100 })`;
+    const second = `Optimism.Portal.send({ token: USDC, amount: amount * 99 / 100 / 2 })
+      .refundee(${CREATOR})
+      .receive({ token: USDT, amount: amount * 98 / 100 / 2 })`;
+    // One handler for every chain, each keeping its own branch.
+    const onArbitrum = "USDC.transfer(recipient, 1);";
+    const onOptimism = "USDT.transfer(recipient, 2);";
+    const onBase = "USDC.transfer(recipient, 3);";
+    const handler = `if (chainId == Arbitrum) { ${onArbitrum} } else if (chainId == Optimism) { ${onOptimism} } else { ${onBase} }`;
+    const awaited = `function main(amount: Uint256, recipient: Address) {
+  try {
+    require(amount > 0, "nothing to send");
+    await ${first};
+    USDC.transfer(recipient, amount * 99 / 100 / 2);
+    await ${second};
+    USDT.transfer(recipient, amount * 98 / 100 / 2);
+  } catch (e) {
+    ${handler}
+  }
+}`;
+    const writtenWith = (base: string, arbitrum: string, optimism: string) =>
+      `function main(amount: Uint256, recipient: Address) {
+  try {
+    require(amount > 0, "nothing to send");
+    ${first}
+      .then(() => {
+        USDC.transfer(recipient, amount * 99 / 100 / 2);
+        ${second}
+          .then(() => { USDT.transfer(recipient, amount * 98 / 100 / 2); })
+          .catch((e) => { ${optimism} });
+      })
+      .catch((e) => { ${arbitrum} });
+  } catch (e) {
+    ${base}
+  }
+}`;
+    const written = writtenWith(handler, handler, handler);
+    // Each chain's handler is the one written with only that chain's branch.
+    const folded = writtenWith(onBase, onArbitrum, onOptimism);
+    for (const args of [undefined, [1_000_000n, hex(RECIPIENT)]]) {
+      expectSame(compile(awaited, INTENTS, args), compile(written, INTENTS, args));
+      expectSame(compile(awaited, INTENTS, args), compile(folded, INTENTS, args));
+    }
   });
 
   it("names each run-time value by its name, or by what it is in the intent", () => {
@@ -488,7 +545,7 @@ describe("on the host", () => {
       Base.Portal.send(paid).source("ethereum").refundee(CREATOR).receive(delivered).then(program),
     ).toThrow(/give `\.fee\(\.\.\.\)` after `\.receive\(\.\.\.\)`/);
     const sent = Base.Portal.send(paid).refundee(CREATOR) as unknown as {
-      creator(address: string): unknown;
+      refundee(address: string): unknown;
     };
     expect(() => sent.refundee(CREATOR)).toThrow(/`\.refundee\(\.\.\.\)` is given twice/);
   });

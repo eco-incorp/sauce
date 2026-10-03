@@ -505,6 +505,25 @@ describe("sauce compile", () => {
     }
   });
 
+  it("reads an awaited intent's body on its destination, as its `.then(...)` form", async () => {
+    const { appliedDefines } = await import("../src/cli/report.js");
+    const opened =
+      "Arbitrum.Portal.send([{ token: USDC, amount: 1 }]).refundee(0x3333333333333333333333333333333333333333).receive()";
+    const body = ["USDC.transfer(RECIPIENT, 1);", "require(chainId == 42161 && WETH != 0);"];
+    const user = { RECIPIENT: 0x6666666666666666666666666666666666666666n };
+    const report = (text: string) =>
+      appliedDefines(text, requireChain("base"), user, new Set(["RECIPIENT"]));
+    const awaited = report([`await ${opened};`, ...body, ""].join("\n"));
+    expect(awaited.defines.map((d) => `${d.name}@${d.chain}`)).toEqual([
+      "RECIPIENT@arbitrum",
+      "USDC@arbitrum",
+      "USDC@base",
+      "WETH@arbitrum",
+      "chainId@arbitrum",
+    ]);
+    expect(awaited).toEqual(report([`${opened}.then(() => {`, ...body, "});", ""].join("\n")));
+  });
+
   it("holds a define of a chain-scoped name on its own chain, and any other at every depth", async () => {
     // RECIPIENT is the user's alone, so the intent body reads it too. USDC is a name each chain
     // sets: the user's holds on Base, where the reward reads it, and the body on Arbitrum reads
@@ -1392,6 +1411,35 @@ describe("sauce intent publish, offline", () => {
     "--intent-salt",
     `0x${"00".repeat(32)}`,
   ];
+
+  it("publishes an awaited intent with main's arguments as its `.then(...)` form", async () => {
+    const form = (opened: string, body: string) =>
+      [
+        "function main(recipient: Address, amount: Uint256) {",
+        `  ${opened}`,
+        `  ${body}`,
+        "}",
+        "",
+      ].join("\n");
+    const intent = "Base.Portal.send({ token: USDC, amount }).receive({ token: USDC, amount })";
+    const hashes = async (text: string): Promise<string[]> => {
+      const run = await sauce(
+        ...["intent", "publish", file("awaited.sauce.ts", text), "--chain", "ethereum"],
+        ...FLAGS.slice(2),
+        ...["--args", RECIPIENT, "1000000", "--format", "json"],
+      );
+      expect(run.code).toBe(0);
+
+      return (JSON.parse(run.stdout) as { intents: Array<{ intentHash: string }> }).intents.map(
+        (opened) => opened.intentHash,
+      );
+    };
+    const awaited = await hashes(form(`await ${intent};`, "USDC.transfer(recipient, amount);"));
+    expect(awaited).toHaveLength(1);
+    expect(awaited).toEqual(
+      await hashes(form(`${intent}.then(() => { USDC.transfer(recipient, amount); });`, "")),
+    );
+  });
 
   it("prints each fixed intent's hash and unsigned Portal transactions", async () => {
     const run = await sauce(
