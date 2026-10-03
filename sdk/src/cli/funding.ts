@@ -42,7 +42,7 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { Permit2ABI } from "../protocols/permit2/abis.js";
 import { mainSignature } from "../routes/entry.js";
-import type { AstNode } from "../routes/ast-walk.js";
+import { walk, type AstNode } from "../routes/ast-walk.js";
 import { parseSauce } from "../routes/parse.js";
 import { blankLiterals } from "../routes/rs-compile.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
@@ -776,6 +776,19 @@ export function wrapProgram(
   pulls: readonly string[],
   sweeps: readonly string[],
 ): string {
+  // After an `await` every statement is an intent's body, which runs on its destination: a sweep
+  // appended there would move the destination's shared Pot, and a renamed `main` cannot await.
+  let awaits = false;
+  walk(parseSauce(text), (node) => {
+    awaits ||= node.type === "AwaitExpression";
+  });
+  if (awaits) {
+    throw new UsageError(
+      "--fund wraps the program, pulling before it and sweeping after its last statement, and " +
+        "after an `await` every statement is the intent's body, run on its destination: fund the " +
+        "Pot before running a program that awaits an intent, or open the intent with `.then(...)`",
+    );
+  }
   const head =
     imports.size === 0 ? [] : [`import { ${[...imports].join(", ")} } from "@sauce/token";`];
   const signature = mainSignature(text);
