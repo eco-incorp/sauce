@@ -325,6 +325,7 @@ describe("what a hook refuses", () => {
     ["a read", ".before(() => { USDC.transfer(SPENDER, USDC.balanceOf(HOOK)); })"],
     ["a branch", ".before(() => { if (SPENDER != 0) { USDC.approve(SPENDER, 1); } })"],
     ["a contract's function", ".before(() => { Permit2.approve(USDC, SPENDER, 5, 0); })"],
+    ["a raw call", ".before(() => { evm.call(HOOK, 0, hex`01`); })"],
     ["an empty closure", ".before(() => {})"],
   ])("%s: the compiler could not record it", (_, steps) => {
     expect(() => compile(opened(steps))).toThrow(RECORDS);
