@@ -141,7 +141,7 @@ describe("kyberSwap and ecoSwap through the tools", () => {
     assert.throws(
       () =>
         readEndpoints(JSON.stringify({ rpcUrls: {}, swapApis: { fynd: ECO } }), "test.config.json"),
-      /swapApis.fynd: the providers are kyber and eco/,
+      /swapApis.fynd: the providers are kyber, eco, jupiter/,
     );
   });
 

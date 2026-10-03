@@ -7,13 +7,13 @@
  * package's directory, the npm registry and the package managers.
  */
 import { publicEndpoints } from "./public-endpoints.js";
-import { KYBER_PUBLIC_API } from "./public-swap-apis.js";
+import { JUPITER_PUBLIC_API, KYBER_PUBLIC_API } from "./public-swap-apis.js";
 import { nodeIo, runCli } from "./run.js";
 import { nodeUpdater } from "./update.js";
 
 process.exitCode = await runCli(process.argv.slice(2), {
   ...nodeIo(),
   publicRpcs: publicEndpoints(),
-  swapApis: { kyber: KYBER_PUBLIC_API },
+  swapApis: { kyber: KYBER_PUBLIC_API, jupiter: JUPITER_PUBLIC_API },
   updater: nodeUpdater(),
 });

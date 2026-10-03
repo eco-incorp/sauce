@@ -103,18 +103,18 @@ function readSwapApis(parsed: unknown, path: string): SwapApiUrls | undefined {
       `--config ${path}: expected "swapApis": { "kyber": "<url>", "eco": "<url>" }`,
     );
   }
-  const out: { kyber?: string; eco?: string } = {};
+  const out: { kyber?: string; eco?: string; jupiter?: string } = {};
   for (const [provider, url] of Object.entries(apis as Record<string, unknown>)) {
     if (typeof url === "string") secret(url);
-    if (provider !== "kyber" && provider !== "eco") {
+    if (provider !== "kyber" && provider !== "eco" && provider !== "jupiter") {
       throw new UsageError(
-        `--config ${path}: swapApis.${provider}: the providers are kyber and eco`,
+        `--config ${path}: swapApis.${provider}: the providers are kyber, eco, jupiter`,
       );
     }
     if (typeof url !== "string" || !/^https?:\/\//i.test(url.trim())) {
       throw new UsageError(`--config ${path}: swapApis.${provider} is not an http(s) URL`);
     }
-    out[provider] = url.trim();
+    out[provider as "kyber" | "eco" | "jupiter"] = url.trim();
   }
 
   return out;

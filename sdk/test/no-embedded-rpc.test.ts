@@ -28,9 +28,9 @@
  *
  * The npm registry is the `sauce` command's one other network access, and only `sauce update`
  * (`sdk/src/cli/update.ts`) reaches it, only when it runs: shipped code names it nowhere else. So is
- * KyberSwap's public aggregator API, which `kyberSwap` routes come from when the command is given no
- * other: exactly one file names it, `sdk/src/cli/public-swap-apis.ts`, and nothing a browser loads
- * imports that.
+ * KyberSwap's public aggregator API and Jupiter's public Swap API, which `kyberSwap` and
+ * `jupiterSwap` routes come from when the command is given no other: exactly one file names them,
+ * `sdk/src/cli/public-swap-apis.ts`, and nothing a browser loads imports that.
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -261,13 +261,18 @@ describe("the SDK ships no RPC endpoints", () => {
     expect(naming).toEqual(["sdk/src/cli/update.ts"]);
   });
 
-  it("shipped code names KyberSwap's public API only in the command's list, which no browser loads", () => {
+  it("shipped code names the public swap APIs only in the command's list, which no browser loads", () => {
     const shipped = scanned(SHIPPED_ROOTS);
-    const naming = [...shipped]
-      // As a URL: the registry's provenance comments name the host, which reaches nothing.
-      .filter(([, text]) => /https?:\/\/aggregator-api\.kyberswap\.com/.test(text))
-      .map(([file]) => file);
-    expect(naming).toEqual(["sdk/src/cli/public-swap-apis.ts"]);
+    for (const api of [
+      /https?:\/\/aggregator-api\.kyberswap\.com/,
+      /https?:\/\/(?:lite-)?api\.jup\.ag/,
+    ]) {
+      const naming = [...shipped]
+        // As a URL: the registry's provenance comments name a host, which reaches nothing.
+        .filter(([, text]) => api.test(text))
+        .map(([file]) => file);
+      expect(naming).toEqual(["sdk/src/cli/public-swap-apis.ts"]);
+    }
     const importers = [...shipped]
       .filter(([, text]) => /from\s+["'][^"']*\/public-swap-apis(?:\.js)?["']/.test(text))
       .map(([file]) => file);

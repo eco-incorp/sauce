@@ -71,6 +71,9 @@ import {
   type PotInput,
   type ProgramInput,
   type ProgramSwaps,
+  type SwapApiUrls,
+  parseSwapApi,
+  SWAP_API_PROVIDERS,
 } from "./commands.js";
 import { createIntent } from "./create.js";
 import { defineLabels, fillCommand, fillTargets, type FillTarget } from "./fill.js";
@@ -228,13 +231,7 @@ export interface CliIo extends CliFiles {
    * the `--config` file names one (`public-swap-apis.ts`: KyberSwap's), and how they are reached.
    * The executable gives them (`main.ts`); without them, as in a test, none is asked.
    */
-  readonly swapApis?:
-    | {
-        readonly kyber?: string;
-        readonly eco?: string;
-        readonly fetch?: typeof fetch;
-      }
-    | undefined;
+  readonly swapApis?: (SwapApiUrls & { readonly fetch?: typeof fetch }) | undefined;
   /**
    * What `sauce update` reaches: this package's directory, the npm registry and the package
    * managers (`update.ts`). The executable gives it (`main.ts`); without it, as in a test, nothing
@@ -450,8 +447,8 @@ const PROGRAM: FlagSpecs = {
   "swap-api": {
     type: "string",
     multiple: true,
-    value: "<kyber|eco>=<url>",
-    help: "Where kyberSwap or ecoSwap asks for its route (kyber: KyberSwap's public API by default)",
+    value: "<kyber|eco|jupiter>=<url>",
+    help: "Where a swap asks for its route (KyberSwap's and Jupiter's public APIs by default)",
   },
 };
 
@@ -750,8 +747,8 @@ function programText(io: CliIo, operand: string | ProgramText): ProgramText {
     : { file: operand, text: withoutShebang(readInput(io, operand)), stdin: false };
 }
 
-/** The swap APIs a `--config` file names, `{ "swapApis": { "kyber": "<url>", "eco": "<url>" } }`. */
-function configSwapApis(path: string, text: string): { kyber?: string; eco?: string } {
+/** The swap APIs a `--config` file names, `{ "swapApis": { "<provider>": "<url>" } }`. */
+function configSwapApis(path: string, text: string): SwapApiUrls {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -761,21 +758,19 @@ function configSwapApis(path: string, text: string): { kyber?: string; eco?: str
   const apis = (parsed as { swapApis?: unknown } | null)?.swapApis;
   if (apis === undefined) return {};
   if (apis === null || typeof apis !== "object" || Array.isArray(apis)) {
-    throw new UsageError(
-      `--config ${path}: expected "swapApis": { "kyber": "<url>", "eco": "<url>" }`,
-    );
+    throw new UsageError(`--config ${path}: expected "swapApis": { "<provider>": "<url>" }`);
   }
-  const out: { kyber?: string; eco?: string } = {};
+  const out: { -readonly [K in keyof SwapApiUrls]: SwapApiUrls[K] } = {};
   for (const [provider, url] of Object.entries(apis as Record<string, unknown>)) {
-    if (provider !== "kyber" && provider !== "eco") {
+    if (!(SWAP_API_PROVIDERS as readonly string[]).includes(provider)) {
       throw new UsageError(
-        `--config ${path}: swapApis.${provider}: the providers are kyber and eco`,
+        `--config ${path}: swapApis.${provider}: the providers are ${SWAP_API_PROVIDERS.join(", ")}`,
       );
     }
     if (typeof url !== "string" || !/^https?:\/\//.test(url)) {
       throw new UsageError(`--config ${path}: swapApis.${provider} is not an http(s) URL`);
     }
-    out[provider] = url;
+    out[provider as keyof SwapApiUrls] = url;
   }
 
   return out;
@@ -788,14 +783,11 @@ function configSwapApis(path: string, text: string): { kyber?: string; eco?: str
  */
 function swapsOf(args: ParsedArgs, io: CliIo): ProgramSwaps {
   const offline = args.values.offline === true;
-  const given: { kyber?: string; eco?: string } = {};
+  const given: { -readonly [K in keyof SwapApiUrls]: SwapApiUrls[K] } = {};
   for (const entry of repeatedFlag(args, "swap-api")) {
-    const [, provider, url] = /^(kyber|eco)=(https?:\/\/\S+)$/.exec(entry) ?? [];
-    if (provider === undefined || url === undefined) {
-      throw new UsageError(`--swap-api ${entry}: expected kyber=<url> or eco=<url>, http(s)`);
-    }
+    const [provider, url] = parseSwapApi(entry);
     if (offline) throw new UsageError("--offline asks no service: give it without --swap-api");
-    given[provider as "kyber" | "eco"] = url;
+    given[provider] = url;
   }
   const config = stringFlag(args, "config");
   const configured = config === undefined ? {} : configSwapApis(config, readInput(io, config));
@@ -804,6 +796,7 @@ function swapsOf(args: ParsedArgs, io: CliIo): ProgramSwaps {
     : {
         ...(io.swapApis?.kyber === undefined ? {} : { kyber: io.swapApis.kyber }),
         ...(io.swapApis?.eco === undefined ? {} : { eco: io.swapApis.eco }),
+        ...(io.swapApis?.jupiter === undefined ? {} : { jupiter: io.swapApis.jupiter }),
         ...configured,
         ...given,
       };

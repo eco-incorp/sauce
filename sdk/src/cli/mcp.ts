@@ -25,7 +25,7 @@ import {
   type FlagSpecs,
   type ParsedArgs,
 } from "./args.js";
-import type { CommandOutput } from "./commands.js";
+import { parseSwapApi, type CommandOutput, type SwapApiUrls } from "./commands.js";
 import { describeSource, passwordSource, readPassword, type PasswordIo } from "./password.js";
 import type { PublicEndpoints } from "./public-endpoints.js";
 import { secret } from "./signer.js";
@@ -40,9 +40,9 @@ export interface McpServeOptions {
   readonly publicRpcs?: PublicEndpoints;
   /** Where `kyberSwap`/`ecoSwap` ask for routes: `--swap-api`, over the built-in public one
    *  (KyberSwap's), which the `--config` file's `swapApis` override in turn. */
-  readonly swapApis?: { readonly kyber?: string; readonly eco?: string };
+  readonly swapApis?: SwapApiUrls;
   /** The `--swap-api` URLs alone: over the `--config` file's. */
-  readonly swapApisGiven?: { readonly kyber?: string; readonly eco?: string };
+  readonly swapApisGiven?: SwapApiUrls;
   /** `--http <port>`: Streamable HTTP on this port instead of stdio. */
   readonly http?: string;
   readonly host?: string;
@@ -116,8 +116,8 @@ export const MCP_FLAGS: FlagSpecs = {
   "swap-api": {
     type: "string",
     multiple: true,
-    value: "<kyber|eco>=<url>",
-    help: "Where kyberSwap or ecoSwap asks for its route (kyber: KyberSwap's public API by default)",
+    value: "<kyber|eco|jupiter>=<url>",
+    help: "Where a swap asks for its route (KyberSwap's and Jupiter's public APIs by default)",
   },
   wallets: {
     ...WALLETS.wallets!,
@@ -176,7 +176,7 @@ export async function mcpCommand(
   io: {
     readonly stderr: (text: string) => void;
     readonly publicRpcs?: PublicEndpoints | undefined;
-    readonly swapApis?: { readonly kyber?: string; readonly eco?: string } | undefined;
+    readonly swapApis?: SwapApiUrls | undefined;
   } & PasswordIo,
 ): Promise<CommandOutput | undefined> {
   const [sub, ...rest] = args.positionals;
@@ -204,22 +204,22 @@ export async function mcpCommand(
   const host = stringFlag(args, "host");
   const maxBody = stringFlag(args, "max-body");
   const wallets = await walletsOf(args, io, http !== undefined);
-  const swapApisGiven: { kyber?: string; eco?: string } = {};
+  const swapApisGiven: { -readonly [K in keyof SwapApiUrls]: SwapApiUrls[K] } = {};
   for (const entry of repeatedFlag(args, "swap-api")) {
-    const [, provider, url] = /^(kyber|eco)=(https?:\/\/\S+)$/.exec(entry) ?? [];
-    if (provider === undefined || url === undefined) {
-      throw new UsageError(`--swap-api ${entry}: expected kyber=<url> or eco=<url>, http(s)`);
-    }
+    const [provider, url] = parseSwapApi(entry);
     // An eco-swap endpoint may be a private one: scrubbed from everything the server writes.
     secret(url);
-    swapApisGiven[provider as "kyber" | "eco"] = url;
+    swapApisGiven[provider] = url;
   }
   await (
     await loadMcp()
   ).serve({
     ...(config === undefined ? {} : { config }),
     ...(io.publicRpcs === undefined ? {} : { publicRpcs: io.publicRpcs }),
-    ...(io.swapApis?.kyber === undefined ? {} : { swapApis: { kyber: io.swapApis.kyber } }),
+    swapApis: {
+      ...(io.swapApis?.kyber === undefined ? {} : { kyber: io.swapApis.kyber }),
+      ...(io.swapApis?.jupiter === undefined ? {} : { jupiter: io.swapApis.jupiter }),
+    },
     swapApisGiven,
     ...(http === undefined ? {} : { http }),
     ...(host === undefined ? {} : { host }),

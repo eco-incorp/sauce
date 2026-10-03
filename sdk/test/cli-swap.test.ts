@@ -49,7 +49,10 @@ const file = (name: string, text: string): string => {
 };
 
 /** The command, with the built-in KyberSwap API the executable gives, and the stub behind it. */
-async function sauce(argv: string[], apis: { kyber?: string; eco?: string } = { kyber: KYBER }) {
+async function sauce(
+  argv: string[],
+  apis: { kyber?: string; eco?: string; jupiter?: string } = { kyber: KYBER },
+) {
   let stdout = "";
   let stderr = "";
   const stub = stubSwapFetch({

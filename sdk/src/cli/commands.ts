@@ -157,11 +157,33 @@ export interface ProgramInput {
   readonly swaps?: ProgramSwaps;
 }
 
+/** A URL per swap provider. */
+export interface SwapApiUrls {
+  readonly kyber?: string;
+  readonly eco?: string;
+  readonly jupiter?: string;
+}
+
+/** The providers `--swap-api` and a `--config` file's `swapApis` name. */
+export const SWAP_API_PROVIDERS = ["kyber", "eco", "jupiter"] as const;
+
+/** `--swap-api <provider>=<url>`, read. */
+export function parseSwapApi(entry: string): readonly [keyof SwapApiUrls, string] {
+  const [, provider, url] = /^(kyber|eco|jupiter)=(https?:\/\/\S+)$/.exec(entry) ?? [];
+  if (provider === undefined || url === undefined) {
+    throw new UsageError(
+      `--swap-api ${entry}: expected kyber=<url>, eco=<url> or jupiter=<url>, http(s)`,
+    );
+  }
+
+  return [provider as keyof SwapApiUrls, url];
+}
+
 /** The routes `kyberSwap(...)` and `ecoSwap(...)` are compiled with (`routes/swap-host.ts`). */
 export interface ProgramSwaps {
   /** Each service's URL: `--swap-api`, the `--config` file's `swapApis`, else the built-in public
    *  one (KyberSwap's alone; eco-swap has none). */
-  readonly apis: { readonly kyber?: string; readonly eco?: string; readonly jupiter?: string };
+  readonly apis: SwapApiUrls;
   /** How a service is reached: the global `fetch`, unless a test gives another. */
   readonly fetch?: typeof fetch;
   /** `--offline`: no service is asked, and a program that needs a route is refused. */
@@ -415,6 +437,7 @@ export async function withSwapRoutes<T extends ProgramInput>(
           ? {}
           : { kyber: { url: swaps.apis.kyber, clientId: KYBER_CLIENT_ID } }),
         ...(swaps.apis.eco === undefined ? {} : { eco: { url: swaps.apis.eco } }),
+        ...(swaps.apis.jupiter === undefined ? {} : { jupiter: { url: swaps.apis.jupiter } }),
         ...(swaps.fetch === undefined ? {} : { fetch: swaps.fetch }),
       },
     );
