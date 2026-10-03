@@ -1544,6 +1544,13 @@ describe("sauce intent publish, offline", () => {
           `// @chain ethereum\nconst AMOUNT = 1_000_000n;\nfunction main() {\n${body("AMOUNT")}\n}\n`,
         ),
       ).toEqual(defined);
+      // Computed from constants alone, it is one too: the compiler folds it.
+      expect(
+        await hashes(
+          "computed.sauce.ts",
+          `// @chain ethereum\nconst AMOUNT = 1000n * 1000n;\n${body("AMOUNT")}\n`,
+        ),
+      ).toEqual(defined);
     });
 
     it("still refuses a value the program measures or computes, naming it", async () => {
@@ -1559,11 +1566,6 @@ describe("sauce intent publish, offline", () => {
           "it a literal, one of main's arguments (given with --args) or a top-level `const` of a " +
           "literal\n",
       );
-      const computed = await refused(
-        `// @chain ethereum\nconst AMOUNT = 1000n * 1000n;\n${body("AMOUNT")}\n`,
-      );
-      expect(computed.code).toBe(1);
-      expect(computed.stderr).toMatch(/uses `AMOUNT`, which the program measures or computes/);
       // A local of `main` shadows the file's constant, and it is the local the intent reads.
       const shadowed = await refused(
         `// @chain ethereum\nconst AMOUNT = 5n;\nfunction main() {\n  const AMOUNT = USDC.balanceOf(ctx.self());\n${body("AMOUNT")}\n}\n`,

@@ -260,7 +260,8 @@ export const rejections = [
   {
     quotes: ["`f` does not return on every path"],
     targets: ["evm"],
-    src: "function f(a: Uint256): Uint256 { if (a > 1n) { return 1n; } } function main(): Uint256 { return f(2n); }",
+    // Called with a value known only as it runs: a known one would decide the `if`.
+    src: "function f(a: Uint256): Uint256 { if (a > 1n) { return 1n; } } function main(x: Uint256): Uint256 { return f(x); }",
   },
   {
     quotes: [

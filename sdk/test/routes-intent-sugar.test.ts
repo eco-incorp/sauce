@@ -214,8 +214,14 @@ describe("what the lowering produces", () => {
       ).toEqual({ captures: [], transfer: 9n, delivered: 9n, reward: 9n });
     });
 
-    it("while a computed `const` of a script is still a value of the program", () => {
-      expect(amountsOf(`const AMOUNT = 7n * 1n;\n${site}`).captures).toEqual(["AMOUNT"]);
+    it("and one computed from constants alone, as the compiler folds it", () => {
+      expect(amountsOf(`const AMOUNT = 7n * 1n;\n${site}`)).toEqual(fixed);
+    });
+
+    it("while one the program measures is a value of the program", () => {
+      expect(amountsOf(`const AMOUNT = USDC.balanceOf(self);\n${site}`).captures).toEqual([
+        "AMOUNT",
+      ]);
     });
   });
 

@@ -83,9 +83,11 @@ const CALLS: Record<
       "swap((bytes32,uint8,address,address,uint256,bytes),(address,bool,address,bool),uint256,uint256)",
     ],
   ],
+  // The sample sells the base token: `@sauce/router`'s side is decided while compiling, so its
+  // `sellQuote` arm is not compiled.
   dodoV2Swap: [
     [TARGET, TOKEN, TOKEN_OUT],
-    ["transfer(address,uint256)", "sellBase(address)", "sellQuote(address)"],
+    ["transfer(address,uint256)", "sellBase(address)"],
   ],
   traderJoeLBSwap: [
     [TARGET, TOKEN, TOKEN_OUT],
