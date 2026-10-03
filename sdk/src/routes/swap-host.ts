@@ -5,16 +5,23 @@
  * one falls back to another venue.
  *
  * ```js
- * function main(recipient: Address, amount: Uint256, minOut: Uint256) {
+ * function main(recipient: Address, minOut: Uint256) {
+ *   let filled = true;
  *   try {
  *     const out = kyberSwap(USDC, WETH, 1000000000, minOut);
  *     WETH.transfer(recipient, out);
  *   } catch {
+ *     filled = false;
+ *   }
+ *   if (!filled) {
  *     const out = ecoSwap(USDC, WETH, 1000000000, minOut);
  *     WETH.transfer(recipient, out);
  *   }
  * }
  * ```
+ *
+ * The fallback runs after the `try`, not in its `catch`: a `catch` block holds a few hundred bytes of
+ * compiled code, and a route is bytes put where its call is.
  *
  * WHAT THE COMPILER IS TOLD. Both names are the host's, like `USDC`: functions whose one signature
  * is SITE-BOUND (`Signature.site`), so the compiler hands `bind` what it knows at each call — each

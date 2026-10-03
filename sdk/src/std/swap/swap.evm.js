@@ -2,8 +2,9 @@
 //
 // A program writes `kyberSwap(tokenIn, tokenOut, amountIn, minOut)` or `ecoSwap(...)`. Those names
 // are the SDK's host's (`routes/swap-host.ts`): it asks the provider for a route while the program
-// compiles and lowers each call to one of these functions, with the route's bytes as arguments. They
-// can be called directly too, with a route a program is given.
+// compiles and lowers each call to one of these functions, with the route's bytes as arguments —
+// KyberSwap's router calldata, or an eco-swap program. They can be called directly too, with a route
+// a program is given.
 //
 // Each returns the amount of `tokenOut` the swap delivered to the Pot, measured as the change in the
 // Pot's balance across the call, and reverts below `minOut`. The output stays in the Pot. Neither
@@ -46,9 +47,12 @@ export function kyber(
   return out;
 }
 
-// An eco-swap program, evaluated in the Pot: `program`'s `main(amountIn, minOut)` swaps exactly
-// `amountIn` of `tokenIn` already in the Pot and leaves the output there. What it delivered is
-// measured here, not taken from what it returns, and it may spend no more than `amountIn`.
+// An eco-swap program, run as the Pot: `program`'s `main(amountIn, minOut)` swaps exactly `amountIn`
+// of `tokenIn` already in the Pot and leaves the output there. `eval` would run it as the engine,
+// which holds nothing, so it is delegated into the engine the Pot is running — the one the Pot
+// answers to `inFlightEngine()` — as a `try` block is, with its two arguments appended as words.
+// What it delivered is measured here, not taken from what it returns, and it may spend no more than
+// `amountIn` of `tokenIn`.
 export function eco(
   program: bytes,
   tokenIn: Address,
@@ -59,9 +63,11 @@ export function eco(
   require(tokenIn != tokenOut);
   const amount = amountIn.toBe();
   const floor = minOut.toBe();
+  const [engine] = abi.decode(evm.static(ctx.self(), hex`9fd004e1`), ["Address"]);
+  require(ctx.codeSize(engine) > 0, "ecoSwap: no engine in flight");
   const held = balanceOf(tokenIn, ctx.self());
   const before = balanceOf(tokenOut, ctx.self());
-  eval(program, amount, floor);
+  evm.delegate(engine, program.concat(amount.toBytesBe(32)).concat(floor.toBytesBe(32)));
   const left = balanceOf(tokenIn, ctx.self());
   if (left < held) {
     require(held - left <= amount, "ecoSwap: spent more than amountIn");

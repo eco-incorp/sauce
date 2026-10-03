@@ -38,10 +38,14 @@ const BUILT_AT = 1791063526n;
 
 /** A program that swaps through KyberSwap, and through eco-swap when that reverts. */
 const FALLBACK = `function main(recipient: Address, minOut: Uint256) {
+  let filled = true;
   try {
     const out = kyberSwap(USDC, WETH, 1000000000, minOut);
     WETH.transfer(recipient, out);
   } catch {
+    filled = false;
+  }
+  if (!filled) {
     const out = ecoSwap(USDC, WETH, 1000000000, minOut);
     WETH.transfer(recipient, out);
   }
