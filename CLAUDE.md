@@ -613,16 +613,51 @@ list must only ever name modules the SDK resolves itself. Two DISTINCT mechanism
 share the word "ambient": ambient **DEFINES** (`chainDefines` — chain-scoped SCALARS: chainId,
 protocol addresses, token symbols) vs ambient **MODULES** (this — whole library exports).
 
+**One table is the intent syntax.** `routes/intent-syntax.ts#INTENT_STAGES` holds
+`<Chain>.Portal.send(…).receive(…).then(() => …)` as data: its stages (`Portal`, `Sent`, `Received`,
+`Opened`, `Caught`), each method's parameters — `value`, `nested`, `program` or `handler`, `rest`
+for items as arguments — the stage it returns, and for a MODIFIER the per-level option it sets:
+`creator`, `deadline` (`rewardDeadline`) and `prover` after `send`; `deadline`, `salt` and `fee`
+(`executionFee`) after `receive`. Its three readers each read it, so they cannot drift: the
+editor's declarations (`gen-source-globals.mjs`), the compiler host (`intent-host.ts`, one host type
+per stage) and the TypeScript builder (`intent-dsl.ts#chainPortal`, which adds `.source()`, the
+chain a host intent is published on). A modifier returns its own record, is given at most once, is
+read by its callee (`Sent.deadline` is the reward's, `Received.deadline` the route's) and builds the
+bytes its option builds (`routes-intent-portal.test.ts`). `receive` is required — `.receive()` with
+no items delivers what a body of token writes moves, and a program nothing — and `{ native }` is a
+reward item only. `.catch((e) => { … })` after `then` makes the body and its handler one
+destination program, `try { … } catch (e) { … }`, `e` the body's revert data (at most 256 bytes):
+EVM destinations only, and refused on the host, which builds the body alone.
+
+**What an intent leaves out is Eco's default** (`intent-defaults.ts`, which
+`docs/reference/intent-defaults.md` and the `sauce-intents` defaults reference state): the route
+deadline 300 s past when the intent opens (Eco's solver's fill window), the reward deadline 604800 s
+past the route's (the floor the solver holds a reward to), a random 32-byte salt, the registry's
+prover. When it opens is the compile's `intents.openedAt` — the CLI sets it, and the salt, once per
+command, so every compile the command makes builds the same intents — else when the program runs:
+each default deadline is then a STAMP, an 8-byte sentinel that `@sauce/intents#stamped` overwrites
+from `ctx.timestamp()` (or the route deadline it wrote) before publishing, and it counts among the
+intent's `captures`, so an intent with none is fixed when built. The creator has one default only:
+the wallet that publishes a top-level intent itself (`intents.publisher`: the CLI's wallet, or
+`--intent-creator` through `commands.ts#asPublished` for a command that only names the intents). An
+intent a program opens on a Pot names `.creator(...)` or is refused, since the Pot may be shared; a
+body's level drops `publisher` and `openedAt`. A program body's cook fee is `.fee(...)` (a value
+known when the intent is built) or `intents.executionFee`, a bigint or a function of the
+destination; the CLI reads it from each destination's Kitchen only when some body is a program.
+What the host is shown of a value is the compiler's: a scalar that folds (a define's arithmetic,
+`main`'s bound arguments, `10 ** 18`) is a constant, anything else a run-time leaf spliced in.
+
 **Chain-scoped names are resolved per level.** In `<Chain>.Portal.send(…).receive(…).then(() => …)`
 (`intent-host.ts`) the body (`then`'s closure) and the delivery (`receive`) resolve on the
-destination and the reward (`send`) on the enclosing chain, which escrows it. `<Chain>.Portal` is a
-declared constant of the host type `Portal`, its word the destination's chain id, and each method
-extends one record: `send` a value, `receive` a `scope: "nested"` value, `then` a PROGRAM (the
-compiler's program argument, compiled — or recorded — in the scope `nested` returns for the record's
-chain, `programOn`). `then`'s record type, `Opened`, ends at its site (`bind`), which builds the
-intent with viem and hands `@sauce/intents` its bytes, a run-time value spliced in where the program
-reads one; `Sending` and `Receiving` refuse to end, so an intent that stops before `.then` is a
-compile error in the host's words. The compiler knows none of this shape: it is the host's types. `sauce-route.ts#levelOn` gives each level on another chain
+destination, and the reward (`send`) and every modifier on the enclosing chain, which escrows the
+reward. `<Chain>.Portal` is a declared constant of the host type `Portal`, its word the destination's
+chain id, and each method extends one record: `send` a value, `receive` a `scope: "nested"` value,
+`then` a PROGRAM (the compiler's program argument, compiled — or recorded — in the scope `nested`
+returns for the record's chain, `programOn`). The chain's last record (`Opened`, or `Caught` after
+`.catch`) ends at its site (`bind`), which builds the intent with viem and hands `@sauce/intents` its
+bytes, a run-time value spliced in where the program reads one; `Sent` and `Received` refuse to end,
+so an intent that stops before `.then` is a compile error in the table's words. The compiler knows
+none of this shape: it is the host's types. `sauce-route.ts#levelOn` gives each level on another chain
 its own values (`NESTED_SCOPE`, the registry's `chainDefines`) and DROPS every caller `defines`
 entry named like a chain-scoped value of the enclosing chain or the destination, and every `tokens`
 override — by name, not value, so `defines: chainDefines(base)` and a hand-picked `USDC` are
@@ -1020,7 +1055,7 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   usage line may show an address; a deliberately low-level call is a `LOW_LEVEL_CALLS` entry, per
   example and selector, with its reason); every value an example program reads having a visible
   source — a name it never declares must be the registry's (`routes.sourceGlobals` on any chain),
-  the language's (a builtin root from `builtins.json`, or `available`, `Token`, `self`), an import,
+  the language's (a builtin root from `builtins.json`, or `Token`, `self`), an import,
   a local or a parameter, so an input is a `main` parameter given with `--args` and never an
   undeclared define, which is the SDK's mechanism and not a user's (an exception is an
   `INPUT_EXCEPTIONS` entry, per example and name, with its reason; the intent files waiting on
@@ -1049,9 +1084,9 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   `docs/examples/*.sauce.ts`, the manual's ` ```js ` fences and every fence of a page generated
   from the skills (`docs/reference/`, which renders SauceScript as ` ```ts `). TypeScript host
   code (runners, ` ```ts ` blocks, a closure in a `.ts` file) keeps the `n`: there tsc types the
-  literal. An exception is a checker's `INTEGER_EXCEPTIONS`, with its reason. The SDK folds an
-  intent's literals itself (`intent-body.ts#literalValue`), from the literal's text, so a plain
-  one past 2^53 is exact there too. A quoted compiler message keeps its words
+  literal. An exception is a checker's `INTEGER_EXCEPTIONS`, with its reason. An intent's values
+  are the compiler's, folded from the literals' text, so a plain one past 2^53 is exact there
+  too (`routes-intent-portal.test.ts`). A quoted compiler message keeps its words
   (``write `i += 1n` ``). What the SDK writes for a reader is plain too: the intent file that
   `sauce intent publish` writes, and the lowering `sauce actions` prints (with `token/safe`'s
   checked writes, which the settle recipe quotes). The command's token amounts (`--fund`,
