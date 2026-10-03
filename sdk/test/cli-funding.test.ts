@@ -237,6 +237,19 @@ describe("the funding wrapper", () => {
     expect(compileSauceProgram(base, text, { defines: {} }).bytecode.length).toBeGreaterThan(0);
   };
 
+  it("refuses a program that awaits an intent: its sweep would run in the body, on the destination", () => {
+    const opened =
+      "Arbitrum.Portal.send({ token: USDC, amount: 2 }).refundee(0x66).receive({ token: USDC, amount: 1 })";
+    for (const source of [
+      `await ${opened};\nUSDC.transfer(0x66, 1);\n`,
+      `function main(to: Address) {\n  await ${opened};\n  USDC.transfer(to, 1);\n}\n`,
+    ]) {
+      expect(() => wrapProgram(source, IMPORTS, [PULL], ["// sweep"])).toThrow(
+        /after an `await` every statement is the intent's body, run on its destination/,
+      );
+    }
+  });
+
   it("wraps a script: the pulls run before its statements and the sweeps after them", () => {
     const wrapped = wrapProgram("USDC.transfer(0x2n, 5n);\n", IMPORTS, [PULL], ["// sweep"]);
     expect(wrapped).toBe(
