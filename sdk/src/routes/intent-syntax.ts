@@ -70,12 +70,12 @@ export const INTENT_STAGES = {
       send: {
         doc:
           "The reward: what the program pays the solver, escrowed on the chain the program runs " +
-          "on. Each item an argument, `{ token, amount }` or `{ native: amount }`, or one list " +
-          "of them.",
+          "on. Each item an argument, `{ token, amount }` or `{ native: amount }`, the tokens " +
+          "also as one list of them.",
         params: [
           {
             name: "reward",
-            ts: `${REWARD_ITEM} | readonly (${REWARD_ITEM})[]`,
+            ts: `${REWARD_ITEM} | readonly ${DELIVERY_ITEM}[]`,
             kind: "value",
             rest: true,
           },

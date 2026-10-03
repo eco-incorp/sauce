@@ -1,8 +1,8 @@
 /**
  * An intent written inside a program, EXECUTED on chains whose tokens live at DIFFERENT addresses.
  *
- * `Chain.Portal.send({ ... }).receive({ ... }).then(() => { ... })` names tokens on two chains at once: the body's run on the
- * destination, and the reward's are escrowed — paid into the vault — on the chain the program runs on. The
+ * `Chain.Portal.send(...).receive(...).then(() => { ... })` names tokens on two chains at once: the
+ * body's run on the destination, and the reward's are escrowed — paid into the vault — on the chain the program runs on. The
  * only way to show that a lowering named the right chain's token is to give each chain a different
  * one, and to have every other chain's address be empty there, as it is on a real chain.
  *
@@ -426,15 +426,42 @@ const CHAINS = [base, arbitrum, optimism, ethereum];
  */
 const THREE_CHAIN_CASCADE = `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum(
-    () => {
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .creator(${CREATOR})
+    .receive({ token: USDC, amount })
+    .then(() => {
       const swapped = USDC.balanceOf(ctx.self());
-      Optimism(() => {
-        USDC.transfer(RECIPIENT, swapped);
-      }).reward({ tokens: [{ token: USDC, amount: swapped }] });
-    },
-    { tokens: [{ token: USDC, amount }] },
-  ).reward({ tokens: [{ token: USDC, amount }] });
+      Optimism.Portal.send({ token: USDC, amount: swapped })
+        .creator(${CREATOR})
+        .receive()
+        .then(() => {
+          USDC.transfer(RECIPIENT, swapped);
+        });
+    });
+}`;
+
+/**
+ * The same three chains, written `Chain.Portal.send(reward).receive(delivery).then(body)`, with each
+ * delivery an amount computed where the intent opens (`amount * 99n / 100n`): spliced in at run
+ * time on Base, and again on Arbitrum by the program the outer body compiles to. Each level names
+ * its own creator, one a run-time value: nothing comes from the level above or the options.
+ */
+const PORTAL_CREATOR = "0x4444444444444444444444444444444444444444";
+const PORTAL_CASCADE = `function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  const refundTo = ${PORTAL_CREATOR};
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .creator(refundTo)
+    .receive({ token: USDC, amount: amount * 99n / 100n })
+    .then(() => {
+      const arrived = USDC.balanceOf(ctx.self());
+      Optimism.Portal.send([{ token: USDC, amount: arrived }])
+        .creator(${PORTAL_CREATOR})
+        .receive([{ token: USDC, amount: arrived * 99n / 100n }])
+        .then(() => {
+          USDC.transfer(RECIPIENT, arrived * 99n / 100n);
+        });
+    });
 }`;
 
 describeEvm("an intent created inside a program, across chains with different tokens", () => {
@@ -462,7 +489,6 @@ describeEvm("an intent created inside a program, across chains with different to
   let saltByte = 0x10;
   const intents = () => ({
     deadline: DEADLINE,
-    creator: CREATOR,
     prover: PROVER,
     // Each anvil's Portal, not the registry's mainnet one. Every other address, the tokens
     // included, comes from the SDK's own tables.
@@ -515,13 +541,13 @@ describeEvm("an intent created inside a program, across chains with different to
     [
       "Base(program, options).reward(...)",
       (program: string) => {
-        // The enclosing intent's deadline and creator reach the program's intents on their own;
-        // the rest are this anvil's, as above.
-        const { deadline, creator, ...compileIntents } = intents();
+        // The enclosing intent's deadline reaches the program's intents on its own; the rest are
+        // this anvil's, as above.
+        const { deadline, ...compileIntents } = intents();
         const built = openRoute("base", program, {
           portal: base.portal,
           deadline,
-          creator,
+          creator: CREATOR,
           prover: PROVER,
           source: "ethereum",
           salt: compileIntents.salt,
@@ -643,6 +669,54 @@ describeEvm("an intent created inside a program, across chains with different to
       expect(onOptimism.status).toBe("success");
       expect(await optimism.balanceOf(optimism.usdc, RECIPIENT)).toBe(paid + held);
     }, 300_000);
+
+    it("the Portal form over three chains, each delivery computed where its intent opens", async () => {
+      const { route, rewardHash } = build(PORTAL_CASCADE);
+      await base.mint(base.usdc, base.pot, SEEDED);
+      const held = await base.balanceOf(base.usdc, base.pot);
+      const delivered = (held * 99n) / 100n;
+      const delivered2 = (delivered * 99n) / 100n;
+
+      // ---- hop 1, on Base: the reward is all it holds, in Base's USDC; the delivery 99% of it ----
+      const onBase = await base.fulfil(route, rewardHash);
+      expect(onBase.status).toBe("success");
+      const [toArbitrum] = onBase.published;
+      expect(toArbitrum!.destination).toBe(42_161n);
+      expect(toArbitrum!.rewardTokens.map((t) => [lower(t.token), t.amount])).toEqual([
+        [lower(base.usdc), held],
+      ]);
+      expect(lower(toArbitrum!.creator)).toBe(PORTAL_CREATOR);
+      const second = fulfilmentOf(toArbitrum!);
+      expect(second.route.tokens.map((t) => [lower(t.token), t.amount])).toEqual([
+        [lower(arbitrum.usdc), delivered],
+      ]);
+
+      // ---- hop 2, on Arbitrum: what arrived funds the Optimism intent, in Arbitrum's USDC -------
+      await arbitrum.provide(second.route);
+      const onArbitrum = await arbitrum.fulfil(second.route, second.rewardHash);
+      expect(onArbitrum.status).toBe("success");
+      const [toOptimism] = onArbitrum.published;
+      expect(toOptimism!.destination).toBe(10n);
+      expect(toOptimism!.rewardTokens.map((t) => [lower(t.token), t.amount])).toEqual([
+        [lower(arbitrum.usdc), delivered],
+      ]);
+      // Its own, not the compile's `creator`, which an intent written this way never takes.
+      expect(lower(toOptimism!.creator)).toBe(PORTAL_CREATOR);
+      expect(await arbitrum.isFunded(toOptimism!)).toBe(true);
+      expect(await arbitrum.balanceOf(arbitrum.usdc, arbitrum.pot)).toBe(0n);
+
+      // ---- hop 3, on Optimism: the body pays out what was delivered, in Optimism's USDC ---------
+      const third = fulfilmentOf(toOptimism!);
+      expect(third.route.tokens.map((t) => [lower(t.token), t.amount])).toEqual([
+        [lower(optimism.usdc), delivered2],
+      ]);
+      const paid = await optimism.balanceOf(optimism.usdc, RECIPIENT);
+      await optimism.provide(third.route);
+      const onOptimism = await optimism.fulfil(third.route, third.rewardHash);
+      expect(onOptimism.status).toBe("success");
+      expect(await optimism.balanceOf(optimism.usdc, RECIPIENT)).toBe(paid + delivered2);
+      expect(await optimism.balanceOf(optimism.usdc, optimism.pot)).toBe(0n);
+    }, 300_000);
   });
 
   it("the guide's cascade file, published on Ethereum: Base, Ethereum, then Base again", async () => {
@@ -651,7 +725,7 @@ describeEvm("an intent created inside a program, across chains with different to
     // which a wallet publishes on Ethereum, and the levels below it open as each runs.
     const delivered = 2_000_000n;
     const [first] = compileSauceProgram("ethereum", example("cross-chain-cascade"), {
-      args: [RECIPIENT, delivered, 2_010_000n],
+      args: [RECIPIENT, delivered, 2_010_000n, CREATOR],
       intents: intents(),
     }).intents;
     expect(first!.captures).toEqual([]);
@@ -716,11 +790,14 @@ function sum(parts: Uint256[]): Uint256 {
 function main() {
   const amount = USDC.balanceOf(ctx.self());
   require(amount >= MIN_AMOUNT);
-  Arbitrum.Portal.send([{ token: USDC, amount }]).receive([{ token: USDC, amount }]).then(() => {
-    const [held] = abi.decode(abi.encode(balanceOf(USDC, ctx.self())), ["Uint256"]);
-    const parts: Uint256[] = [held - fee(held), fee(held)];
-    USDC.transfer(RECIPIENT, sum(parts) - fee(held));
-  });
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .creator(${CREATOR})
+    .receive({ token: USDC, amount })
+    .then(() => {
+      const [held] = abi.decode(abi.encode(balanceOf(USDC, ctx.self())), ["Uint256"]);
+      const parts: Uint256[] = [held - fee(held), fee(held)];
+      USDC.transfer(RECIPIENT, sum(parts) - fee(held));
+    });
 }`;
     const { route, rewardHash } = direct(program, {});
     await base.mint(base.usdc, base.pot, SEEDED);
@@ -753,9 +830,12 @@ function half(): Uint256 {
 function main() {
   total = USDC.balanceOf(ctx.self());
   require(total >= MIN_AMOUNT);
-  Arbitrum.Portal.send([{ token: USDC, amount: total }]).receive([{ token: USDC, amount: total }]).then(() => {
-    USDC.transfer(RECIPIENT, half());
-  });
+  Arbitrum.Portal.send({ token: USDC, amount: total })
+    .creator(${CREATOR})
+    .receive({ token: USDC, amount: total })
+    .then(() => {
+      USDC.transfer(RECIPIENT, half());
+    });
 }`;
     const { route, rewardHash } = direct(program, {});
     await base.mint(base.usdc, base.pot, SEEDED);
@@ -771,15 +851,73 @@ function main() {
     expect(await arbitrum.balanceOf(arbitrum.usdc, RECIPIENT)).toBe(paid + held / 2n);
   }, 300_000);
 
+  it("an intent given no deadline opens as its program runs: five minutes to fill, then seven days", async () => {
+    // No `deadline` anywhere: the intent's deadlines are written as the Base program runs, from
+    // the block's time, as Eco's Portal app quotes them.
+    const program = `function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .creator(${CREATOR})
+    .receive()
+    .then(() => {
+      USDC.transfer(RECIPIENT, amount);
+    });
+}`;
+    const { deadline: _deadline, ...options } = intents();
+    const compiled = compileSauceRoute(
+      "base",
+      program,
+      { pot: base.pot, engine: v12EngineAddress() as Hex },
+      { defines: { RECIPIENT: BigInt(RECIPIENT) }, intents: options },
+    );
+    await base.mint(base.usdc, base.pot, SEEDED);
+    const held = await base.balanceOf(base.usdc, base.pot);
+    const call = compiled.calls[0]!;
+    const onBase = await base.fulfil(
+      {
+        salt: options.salt,
+        deadline: DEADLINE,
+        portal: base.portal,
+        nativeAmount: 0n,
+        tokens: [],
+        calls: [
+          {
+            target: denormalizeToEvm(toUniversalAddress(call.target)) as Address,
+            data: call.data,
+            value: 0n,
+          },
+        ],
+      },
+      keccak256("0xbeef"),
+    );
+    expect(onBase.status).toBe("success");
+    const { timestamp } = await base.publicClient.getBlock();
+    const [published] = onBase.published;
+    const child = fulfilmentOf(published!);
+    expect(child.route.deadline).toBe(timestamp + 300n);
+    expect(published!.rewardDeadline).toBe(timestamp + 300n + 604_800n);
+    expect(await base.isFunded(published!)).toBe(true);
+
+    // The intent the Portal logged is the one the program funded and a solver fills.
+    const paid = await arbitrum.balanceOf(arbitrum.usdc, RECIPIENT);
+    await arbitrum.provide(child.route);
+    const onArbitrum = await arbitrum.fulfil(child.route, child.rewardHash);
+    expect(onArbitrum.status).toBe("success");
+    expect(await arbitrum.balanceOf(arbitrum.usdc, RECIPIENT)).toBe(paid + held);
+  }, 300_000);
+
   it("CONTROL: a reward naming the DESTINATION's token reverts the fulfilment where it is funded", async () => {
     // What the lowering used to build for `{ token: USDC }`, written out by hand: the transfer into
     // the vault hits an address with no code on Base, and the whole fulfilment reverts. This is
     // the failure the suite above exists to rule out, shown to be real rather than assumed.
     const program = `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum.Portal.send([{ token: ARBITRUM_USDC, amount }]).receive().then(() => {
-    USDC.transfer(RECIPIENT, amount);
-  });
+  Arbitrum.Portal.send({ token: ARBITRUM_USDC, amount })
+    .creator(${CREATOR})
+    .receive()
+    .then(() => {
+      USDC.transfer(RECIPIENT, amount);
+    });
 }`;
     const compiled = compileSauceRoute(
       "base",

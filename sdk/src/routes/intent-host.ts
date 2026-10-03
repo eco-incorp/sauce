@@ -149,7 +149,8 @@ export interface IntentSugarDefaults {
 export interface LoweredIntent {
   /** The child as encoded, with a sentinel wherever a run-time value belongs. */
   readonly intent: Intent;
-  /** Enclosing locals spliced into it, in first-seen order. */
+  /** What the program supplies as it runs, in first-seen order: each value of the enclosing program
+   *  spliced into it, then a deadline written from the block's time. None: it is fixed now. */
   readonly captures: readonly string[];
   /** Each sentinel the encoded child carries, and the local whose value replaces it on chain. */
   readonly sentinels: readonly { readonly sentinel: bigint; readonly capture: string }[];
@@ -339,10 +340,17 @@ function bindIntent(
   // Every run-time value of the site is one sentinel, wherever it lands.
   const runtimes = new Map<number, string | undefined>();
   const valueOf = (view: View | undefined, what: string): Value => {
+    // Every value of an intent is a word it encodes as a number or an address: a comparison's
+    // `true` is neither.
+    if (view !== undefined && "type" in view && view.type === "bool") {
+      return fail(`${what} is a \`bool\`: an intent's values are amounts, addresses and seconds`);
+    }
     if (view !== undefined && "constant" in view) return { literal: BigInt(view.constant) };
     if (view !== undefined && "runtime" in view) {
-      runtimes.set(view.runtime, view.name);
-      return { runtime: view.runtime, name: view.name };
+      // A local is named by its name; a value computed in place, by what it is in the intent.
+      const name = view.name ?? runtimes.get(view.runtime) ?? what;
+      runtimes.set(view.runtime, name);
+      return { runtime: view.runtime, name };
     }
     return fail(`${what} must be a value: a literal, a define or a variable of the program`);
   };
@@ -581,7 +589,6 @@ function bindIntent(
   const nativeSplices =
     native !== undefined && "runtime" in native ? [{ offset: 0, runtime: native.runtime }] : [];
 
-  const captures = [...new Set([...runtimes].map(([id, name]) => name ?? `#${id}`))];
   const deadlineNames = new Map(
     [routeDeadline, rewardDeadline].flatMap((deadline) =>
       "stamp" in deadline
@@ -603,6 +610,14 @@ function bindIntent(
           : [],
     ),
   );
+  // Every value the program supplies as it runs, a stamped deadline's included: an intent with none
+  // is fixed when it is built.
+  const captures = [
+    ...new Set([
+      ...[...runtimes].map(([id, name]) => name ?? `#${id}`),
+      ...[...deadlineNames.values()],
+    ]),
+  ];
   level.lowered.push({
     intent: child,
     captures,
@@ -727,13 +742,6 @@ function splicesIn(
   return splices;
 }
 
-/** A view's fields by name, refusing anything that is not an object. */
-function fieldsOf(view: View | undefined, what: string): Map<string, View> {
-  if (view === undefined || !("fields" in view)) return fail(`${what} must be an object`);
-
-  return new Map(view.fields);
-}
-
 /** A chain's record: the value its first call was made on, then each call with its arguments. */
 function recordOf(
   view: View | undefined,
@@ -774,7 +782,7 @@ function tokenList(
   const entries = items.flatMap((item) => ("elements" in item ? item.elements : [item]));
   let nativeAmount: Value | undefined;
   const tokens = entries.flatMap((element) => {
-    const entry = fieldsOf(element, amounts);
+    const entry = "fields" in element ? new Map(element.fields) : fail(amounts);
     if (entry.has("native") && entry.size === 1) {
       if (list.part !== "reward") {
         return fail("`.receive(...)` names tokens: the native coin is paid with `.send(...)`");

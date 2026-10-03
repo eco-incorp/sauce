@@ -27,6 +27,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createWalletClient,
+  decodeAbiParameters,
   encodeAbiParameters,
   encodeFunctionData,
   formatEther,
@@ -49,8 +50,8 @@ import {
   ecoRoutesPortal,
   ecoRoutesProver,
 } from "../src/protocols/eco-routes/lookup.js";
-import { Base, Ethereum } from "../src/routes/chain-exports.generated.js";
-import { encodeRouteEvm } from "../src/routes/encode.js";
+import { Base } from "../src/routes/chain-exports.generated.js";
+import { EVM_ROUTE_PARAM, encodeRouteEvm } from "../src/routes/encode.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
@@ -109,6 +110,33 @@ const INTENT = [
   "",
 ].join("\n");
 
+/** The same intent, written `Base.Portal.send(reward).receive(delivery).then(body)`. */
+const PORTAL_INTENT = [
+  "function main(recipient: Address, amount: Uint256, reward: Uint256) {",
+  "  Base.Portal.send({ token: USDC, amount: reward })",
+  "    .receive({ token: USDC, amount })",
+  "    .then(() => {",
+  "      USDC.transfer(recipient, amount);",
+  "    });",
+  "}",
+  "",
+].join("\n");
+
+/** A program a Pot runs on Ethereum: it opens an intent to Base for all the USDC it holds, of which
+ *  the solver delivers 99% there, computed as the intent opens, refunded to `refundTo` unfilled. */
+const PORTAL_PROGRAM = [
+  "function main(recipient: Address, refundTo: Address) {",
+  "  const amount = USDC.balanceOf(ctx.self());",
+  "  Base.Portal.send({ token: USDC, amount })",
+  "    .creator(refundTo)",
+  "    .receive({ token: USDC, amount: amount * 99 / 100 })",
+  "    .then(() => {",
+  "      USDC.transfer(recipient, amount * 99 / 100);",
+  "    });",
+  "}",
+  "",
+].join("\n");
+
 describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cancel", () => {
   let ethereum: LocalChain;
   let base: LocalChain;
@@ -120,11 +148,12 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
   let ethereumMailbox: Address;
   let baseMailbox: Address;
 
-  /** The flags every intent here is built with, its deadlines given, and main's arguments. */
+  /** The flags every intent here is built with, its deadlines and salt given, so each command
+   *  builds the same intent, and main's arguments. */
   const intentFlags = (route: bigint, reward: bigint): string[] => [
     ...["--chain", "ethereum"],
     ...["--intent-deadline", String(route), "--intent-reward-deadline", String(reward)],
-    ...["--intent-creator", OWNER.address],
+    ...["--intent-creator", OWNER.address, "--intent-salt", `0x${"5a".repeat(32)}`],
     ...["--args", RECIPIENT, String(AMOUNT), String(REWARD)],
   ];
   const now = async (local: LocalChain): Promise<bigint> =>
@@ -413,46 +442,39 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
         ...["intent", "publish", nested, "--chain", "ethereum"],
         ...["--intent-creator", OWNER.address, "--intent-deadline", String(start + 3600n)],
         ...["--intent-reward-deadline", String(start + 7200n)],
-        ...["--intent-execution-fee", String(FEE)],
+        ...["--intent-execution-fee", String(FEE), "--intent-salt", `0x${"00".repeat(32)}`],
         ...["--rpc-url", ethereum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
-        ...["--args", RECIPIENT, String(AMOUNT), String(REWARD)],
+        ...["--args", RECIPIENT, String(AMOUNT), String(REWARD), OWNER.address],
       ),
     );
     const outer = (published.intents as Array<{ intentHash: Hex }>)[0]!.intentHash;
 
-    // The guide's closure is the same intent: what the file's braces say, built in TypeScript.
-    const PAYEE = BigInt(RECIPIENT);
-    const closure = Base(
-      () => {
-        const amount = USDC.balanceOf(ctx.self());
-        const payout = amount - amount / 1000n;
-        Ethereum(() => {
-          USDC.transfer(PAYEE, payout);
-        }).reward({ tokens: [{ token: USDC, amount }] });
-      },
-      {
-        execution: { value: FEE },
-        deadline: start + 3600n,
-        rewardDeadline: start + 7200n,
-        creator: OWNER.address,
-        defines: { PAYEE },
-        tokens: [{ token: baseUsdc, amount: AMOUNT }],
-        precalls: [
-          {
-            target: baseUsdc,
-            data: encodeFunctionData({
-              abi: TRANSFER,
-              functionName: "transfer",
-              args: [pot, AMOUNT],
-            }),
-          },
-        ],
-      },
-    ).reward({
-      source: "ethereum",
-      deadline: start + 7200n,
-      tokens: [{ token: ethereumUsdc, amount: REWARD }],
+    // The same intent in TypeScript, in the Portal form: what the file's body says, its values,
+    // deadlines and salt written in, every level's deadlines and salt the flags' (a flag sets every
+    // level's).
+    const closure = Base.Portal.send({ token: ethereumUsdc, amount: REWARD })
+      .source("ethereum")
+      .creator(OWNER.address)
+      .deadline(start + 7200n)
+      .receive({ token: baseUsdc, amount: AMOUNT })
+      .fee(FEE)
+      .deadline(start + 3600n)
+      .salt(0n)
+      .then(
+        `function main() {
+  const amount = USDC.balanceOf(ctx.self());
+  const payout = amount - amount / 1000;
+  Ethereum.Portal.send({ token: USDC, amount })
+    .creator(${OWNER.address})
+    .deadline(${start + 7200n})
+    .receive({ token: USDC, amount: payout })
+    .deadline(${start + 3600n})
+    .salt(0)
+    .then(() => {
+      USDC.transfer(${RECIPIENT}, payout);
     });
+}`,
+      );
     expect(closure.hash().intentHash).toBe(outer);
 
     // ---- Base: a solver fills it; the body measures what arrived and publishes the inner one ---
@@ -481,9 +503,9 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
         };
       };
     }>;
-    // The whole delivery became its reward, in Base's USDC, escrowed on Base. Its deadlines and
-    // creator are the file's, as every level's are; its prover is the registry's for Base to
-    // Ethereum, which is Base's own HyperProver.
+    // The whole delivery became its reward, in Base's USDC, escrowed on Base. Its deadlines are the
+    // flags', as every level's are, and its creator the `refundTo` it names; its prover is the
+    // registry's for Base to Ethereum, which is Base's own HyperProver.
     expect(inner!.record.destination.chainId).toBe(1);
     expect(inner!.record.route.deadline).toBe(String(start + 3600n));
     expect(inner!.record.reward.deadline).toBe(String(start + 7200n));
@@ -520,6 +542,128 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     );
     expect(claimed.code).toBe(0);
     expect(await base.balanceOf(baseUsdc, SOLVER.address)).toBe(before + AMOUNT);
+  }, 240_000);
+
+  it("the Portal form: the call form's intent, published from a wallet and filled", async () => {
+    const store = mkdtempSync(join(work, "store-"));
+    const portalFile = join(work, "portal.sauce.ts");
+    writeFileSync(portalFile, PORTAL_INTENT);
+    const start = await now(base);
+    const flags = intentFlags(start + 3610n, start + 7200n);
+    // The call form's file, printed unsigned: the intent it opens, sent nowhere.
+    const printed = jsonOf(await sauce("intent", "publish", file, ...flags, "--format", "json"));
+    const expected = (printed.intents as Array<{ intentHash: Hex }>)[0]!.intentHash;
+
+    const out = jsonOf(
+      await sauce(
+        ...["intent", "publish", portalFile, ...flags],
+        ...["--rpc-url", ethereum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
+      ),
+    );
+    const hash = (out.intents as Array<{ intentHash: Hex }>)[0]!.intentHash;
+    expect(hash).toBe(expected);
+
+    const paid = await base.balanceOf(baseUsdc, RECIPIENT);
+    const filled = await lifecycle(
+      "fill",
+      hash,
+      store,
+      ...["--send", "--private-key", SOLVER_KEY, "--auto-approve", "--json"],
+    );
+    expect(filled.code).toBe(0);
+    expect(await base.balanceOf(baseUsdc, RECIPIENT)).toBe(paid + AMOUNT);
+  }, 240_000);
+
+  it("the Portal form's defaults: published from a wallet with no intent flag, then filled", async () => {
+    const store = mkdtempSync(join(work, "store-"));
+    const portalFile = join(work, "portal-defaults.sauce.ts");
+    writeFileSync(portalFile, PORTAL_INTENT);
+    const before = BigInt(Math.floor(Date.now() / 1000));
+    const out = jsonOf(
+      await sauce(
+        ...["intent", "publish", portalFile, "--chain", "ethereum"],
+        ...["--args", RECIPIENT, String(AMOUNT), String(REWARD)],
+        ...["--rpc-url", ethereum.rpcUrl, "--private-key", OWNER_KEY, "--store", store, "--json"],
+      ),
+    );
+    const after = BigInt(Math.floor(Date.now() / 1000));
+    const hash = (out.intents as Array<{ intentHash: Hex }>)[0]!.intentHash;
+    const record = JSON.parse(readFileSync(join(store, hash, "intent.json"), "utf8")) as {
+      route: { deadline: string };
+      reward: { deadline: string; creator: string; prover: string };
+    };
+    // Eco's defaults: filled within five minutes, refundable seven days later, created by the
+    // wallet that published it, proven by the registry's prover for the pair.
+    const deadline = BigInt(record.route.deadline);
+    expect(deadline >= before + 300n && deadline <= after + 300n).toBe(true);
+    expect(BigInt(record.reward.deadline)).toBe(deadline + 604_800n);
+    expect(getAddress(record.reward.creator)).toBe(OWNER.address);
+    expect(getAddress(record.reward.prover)).toBe(getAddress(ecoRoutesProver("ethereum", "base")));
+
+    const paid = await base.balanceOf(baseUsdc, RECIPIENT);
+    const filled = await lifecycle(
+      "fill",
+      hash,
+      store,
+      ...["--send", "--private-key", SOLVER_KEY, "--auto-approve", "--json"],
+    );
+    expect(filled.code).toBe(0);
+    expect(await base.balanceOf(baseUsdc, RECIPIENT)).toBe(paid + AMOUNT);
+  }, 240_000);
+
+  it("the Portal form in a program `sauce run` cooks: the Pot opens the intent it measures", async () => {
+    const program = join(work, "portal-program.sauce.ts");
+    writeFileSync(program, PORTAL_PROGRAM);
+    const pot = v12PredictPot(OWNER.address, `0x${"00".repeat(32)}`) as Address;
+    const held = (await ethereum.balanceOf(ethereumUsdc, pot)) + REWARD;
+    await ethereum.mint(ethereumUsdc, pot, REWARD);
+
+    // An intent a program opens names its creator: the Pot may be shared, so nothing defaults
+    // it, the signer and --intent-creator included.
+    const unnamed = join(work, "portal-program-unnamed.sauce.ts");
+    writeFileSync(unnamed, PORTAL_PROGRAM.replace("    .creator(refundTo)\n", ""));
+    const refused = await sauce(
+      ...["run", unnamed, "--chain", "ethereum", "--rpc-url", ethereum.rpcUrl],
+      ...["--intent-execution-fee", String(FEE), "--intent-creator", OWNER.address],
+      ...["--private-key", OWNER_KEY, "--auto-approve", "--json"],
+      ...["--args", RECIPIENT, OWNER.address],
+    );
+    expect(refused.code).not.toBe(0);
+    expect(refused.stderr).toMatch(/needs `\.creator\(<address>\)`.*may be shared/);
+
+    // No deadline: the intent opens now. Its creator is `refundTo`, from main's arguments.
+    const before = BigInt(Math.floor(Date.now() / 1000));
+    const run = jsonOf(
+      await sauce(
+        ...["run", program, "--chain", "ethereum", "--rpc-url", ethereum.rpcUrl],
+        ...["--intent-execution-fee", String(FEE)],
+        ...["--private-key", OWNER_KEY, "--auto-approve", "--json"],
+        ...["--args", RECIPIENT, SOLVER.address],
+      ),
+    );
+    const after = BigInt(Math.floor(Date.now() / 1000));
+    const { hash } = (run as { cook: { hash: Hex } }).cook;
+    const receipt = await ethereum.publicClient.getTransactionReceipt({ hash });
+    const [published] = parseEventLogs({
+      abi: PortalABI,
+      logs: receipt.logs,
+      eventName: "IntentPublished",
+    });
+    expect(published!.args.destination).toBe(8453n);
+    expect(published!.args.rewardTokens.map((t) => [getAddress(t.token), t.amount])).toEqual([
+      [ethereumUsdc, held],
+    ]);
+    const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], published!.args.route) as unknown as [
+      { deadline: bigint; tokens: readonly { token: Hex; amount: bigint }[] },
+    ];
+    expect(route.tokens.map((t) => [getAddress(t.token), t.amount])).toEqual([
+      [baseUsdc, (held * 99n) / 100n],
+    ]);
+    expect(await ethereum.balanceOf(ethereumUsdc, pot)).toBe(0n);
+    // Eco's defaults: filled within five minutes, refundable seven days after that, to `refundTo`.
+    expect(getAddress(published!.args.creator)).toBe(SOLVER.address);
+    expect(route.deadline >= before + 300n && route.deadline <= after + 300n).toBe(true);
+    expect(published!.args.rewardDeadline).toBe(route.deadline + 604_800n);
   }, 240_000);
 
   it("sauce-intents' fund-by-transfer publishes an intent built elsewhere, funded from a Pot", async () => {

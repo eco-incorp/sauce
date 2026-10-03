@@ -300,7 +300,7 @@ const fulfilment = async (args: Args, source = PROGRAM): Promise<{ data: Hex; va
       RECIPIENT,
       REFUND_TO,
     ],
-    intents: { deadline: DEADLINE, creator: CREATOR, executionFee: 0n, destinationPortal: portal },
+    intents: { deadline: DEADLINE, executionFee: 0n, destinationPortal: portal },
   });
   expect(compiled.intents).toHaveLength(1);
   const { intent } = compiled.intents[0]!;
@@ -658,10 +658,9 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     const source = readFileSync(join(HERE, "../../../docs/examples/nested-swap.sauce.ts"), "utf8");
     const delivered = 1_000n * 10n ** 6n; // 1,000 USDC
     const [outer] = compileSauceProgram("ethereum", source, {
-      args: [RECIPIENT, delivered, delivered + 10n ** 6n, 1n],
+      args: [RECIPIENT, delivered, delivered + 10n ** 6n, 1n, CREATOR],
       intents: {
         deadline: DEADLINE,
-        creator: CREATOR,
         executionFee: 0n,
         sourcePortal: portal,
         destinationPortal: portal,

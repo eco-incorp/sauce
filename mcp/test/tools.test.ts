@@ -1153,18 +1153,22 @@ describe("sauce_intent_publish", () => {
     assert.ok(out.notes.some((note) => /The transfers come first/.test(note)));
   });
 
-  it("takes the Portal form: the call form's program, intent and transactions", async () => {
+  it("delivers what `.receive(...)` names, or derives it from a body of token writes", async () => {
+    // INTENT leaves its delivery to its transfer; PORTAL_INTENT names the same.
     const portal = { ...args, source: PORTAL_INTENT };
-    // The call form given the reward deadline the Portal form defaults to: seven days past the
-    // route's.
-    const call = { ...args, intentRewardDeadline: args.intentDeadline + 604_800 };
+    const derived = { ...args, source: INTENT };
     // A program a Pot runs names its intent's creator; a wallet publishing one is its creator.
-    const named = PORTAL_INTENT.replace(".receive(", `.creator(${CREATOR})\n    .receive(`);
-    const compiled = ok(await mcp.call("sauce_compile", { ...portal, source: named }));
-    assert.equal(compiled.bytecode, ok(await mcp.call("sauce_compile", call)).bytecode);
+    const named = (source: string) => source.replace(".receive(", `.creator(${CREATOR}).receive(`);
+    const compiled = ok(
+      await mcp.call("sauce_compile", { ...portal, source: named(PORTAL_INTENT) }),
+    );
+    assert.equal(
+      compiled.bytecode,
+      ok(await mcp.call("sauce_compile", { ...derived, source: named(INTENT) })).bytecode,
+    );
     assert.match(failed(await mcp.call("sauce_compile", portal)), /needs `\.creator\(<address>\)`/);
     const out = ok(await mcp.call("sauce_intent_publish", portal)) as Published;
-    assert.deepEqual(out, ok(await mcp.call("sauce_intent_publish", call)));
+    assert.deepEqual(out, ok(await mcp.call("sauce_intent_publish", derived)));
     assert.equal(out.intents[0]!.destination, "base");
   });
 

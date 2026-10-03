@@ -625,9 +625,9 @@ async function autoExecutionFee(
   gate: Gate | undefined,
   told: boolean,
 ): Promise<((destination: CanonicalChain) => bigint | undefined) | undefined> {
-  // By default, only where an intent could be opened: an EVM program naming a Portal or a reward.
-  // One that does not compile is left to the compile that follows, whose refusal is the one to see.
-  if (!told && (input.chain.kind !== "evm" || !/\.Portal\b|\.reward\s*\(/.test(input.text))) {
+  // By default, only where an intent could be opened: an EVM program naming a Portal. One that does
+  // not compile is left to the compile that follows, whose refusal is the one to see.
+  if (!told && (input.chain.kind !== "evm" || !/\.Portal\b/.test(input.text))) {
     return undefined;
   }
   const paid = new Map<number, CanonicalChain>();

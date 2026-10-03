@@ -86,6 +86,7 @@ function answering(answers: ReadonlyArray<readonly [string, readonly bigint[]]>)
 /** An intent whose body is a program, so it cooks on the destination's shared intent Pot. */
 const COOKED = [
   "Base.Portal.send({ token: USDC, amount: 7n })",
+  `  .creator(${NOBODY})`,
   "  .receive({ token: 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n, amount: 5n })",
   "  .then(() => {",
   "    const got = Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).balanceOf(ctx.self());",

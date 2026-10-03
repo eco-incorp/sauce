@@ -63,9 +63,10 @@ export interface SauceIntentNative {
 export interface SaucePortal {
   /**
    * The reward: what the program pays the solver, escrowed on the chain the program runs on. Each
-   * item an argument, `{ token, amount }` or `{ native: amount }`, or one list of them.
+   * item an argument, `{ token, amount }` or `{ native: amount }`, the tokens also as one list of
+   * them.
    */
-  send(...reward: readonly (SauceIntentTokenAmount | SauceIntentNative | readonly (SauceIntentTokenAmount | SauceIntentNative)[])[]): SauceIntentSent;
+  send(...reward: readonly (SauceIntentTokenAmount | SauceIntentNative | readonly SauceIntentTokenAmount[])[]): SauceIntentSent;
 }
 
 /** An intent with its reward: the reward's modifiers not given yet, then `receive`. */

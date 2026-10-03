@@ -41,7 +41,6 @@ jest.unstable_mockModule("../src/routes/intent-host.js", () => ({
 const { compileSauceProgram } = await import("../src/routes/sauce-route.js");
 
 const RECIPIENT = 0x9999999999999999999999999999999999999999n;
-const CREATOR = "0x3333333333333333333333333333333333333333" as const;
 const INTENTS = { deadline: 4_000_000_000n, executionFee: 0n } as const;
 
 /** `source` compiled for Base, and the captures of the one body program it opens. */

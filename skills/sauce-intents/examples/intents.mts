@@ -398,7 +398,7 @@ check(
   "`.creator(refundTo)` is the creator",
 );
 check(
-  modified!.captures.join() === "ctx.timestamp() + 1800,ctx.timestamp() + 86400 * 14",
+  modified!.captures.join() === "the route's `.deadline(...)`,the reward's `.deadline(...)`",
   "both deadlines are computed as the program runs",
 );
 

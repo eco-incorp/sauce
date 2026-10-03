@@ -1,5 +1,6 @@
 /**
- * The manual's "What is refused" list, pinned to what the lowering actually refuses.
+ * The manual's "What is refused" list, pinned to what compiling an intent in the Portal form
+ * refuses: the compiler's own errors, and the intent host's (`src/routes/intent-host.ts`).
  *
  * This exists because it already went wrong: the docs kept describing refusals — a method other
  * than `transfer`, an intent inside an intent — for three commits after the lowering had stopped
@@ -32,18 +33,27 @@ const GUIDE = readFileSync(
   "utf8",
 );
 
+const BASE = requireChain("base");
 const ARBITRUM = requireChain("arbitrum");
 const CREATOR = "0x3333333333333333333333333333333333333333" as const;
 const RECIPIENT = 0x9999999999999999999999999999999999999999n;
+/** A top-level intent's creator, as a wallet publishing it: each refusal below is reached past it. */
+const PUBLISHED = { deadline: 4_000_000_000n, publisher: CREATOR };
 
-/** `program` compiled for Base, with every intent option a refusal below does not take away. */
+/** `program` compiled for Base: the intents it opens. */
 const lower = (
   program: string,
-  intents: Record<string, unknown> = { deadline: 4_000_000_000n, creator: CREATOR },
-) => compileSauceProgram("base", program, { defines: { RECIPIENT }, intents });
+  intents: Record<string, unknown> = PUBLISHED,
+  defines: Record<string, bigint> = {},
+) => compileSauceProgram("base", program, { defines: { RECIPIENT, ...defines }, intents }).intents;
 
-const wrap = (body: string, reward = "[{ token: USDC, amount }]", chain = "Arbitrum") =>
-  `function main() {\n  const amount = 5n;\n  ${chain}.Portal.send(${reward}).receive().then(() => {\n    ${body}\n  });\n}`;
+const wrap = (
+  body: string,
+  reward = "{ token: USDC, amount }",
+  chain = "Arbitrum",
+  steps = ".receive({ token: USDC, amount })",
+) =>
+  `function main() {\n  const amount = 5;\n  ${chain}.Portal.send(${reward})${steps}.then(() => {\n    ${body}\n  });\n}`;
 
 /** Documented sentence -> the program that must produce it. */
 const REFUSALS: readonly {
@@ -58,28 +68,107 @@ const REFUSALS: readonly {
   },
   {
     documented: "a token entry missing `token` or `amount`",
-    trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);", "[{ token: USDC }]")),
-    message: /takes is `\{ token, amount \}`/,
+    trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);", "{ token: USDC }")),
+    message: /each item `\.send\(\.\.\.\)` takes is `\{ token, amount \}`/,
   },
   {
-    documented: "A missing `deadline`",
-    trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);"), {}),
-    message: /needs a `deadline`/,
+    documented: "item that is not an object written in place",
+    trigger: () =>
+      lower(
+        `function main() {\n  const amount = 5;\n  const items = [{ token: USDC, amount }];\n  Arbitrum.Portal.send(items).receive({ token: USDC, amount }).then(() => {\n    USDC.transfer(RECIPIENT, amount);\n  });\n}`,
+      ),
+    message:
+      /a value the host binds at this site must be a number, an address, a bool or a literal/,
   },
   {
-    documented: "a missing `creator`",
+    documented: "a `{ native }` item in `.receive(...)`",
+    trigger: () =>
+      lower(
+        wrap("USDC.transfer(RECIPIENT, amount);", undefined, "Arbitrum", ".receive({ native: 1 })"),
+      ),
+    message: /`\.receive\(\.\.\.\)` names tokens: the native coin is paid with `\.send\(\.\.\.\)`/,
+  },
+  {
+    documented: "an empty `.send([])`",
+    trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);", "[]")),
+    message: /an array literal must have at least one element/,
+  },
+  {
+    documented: "one used as a value",
+    trigger: () =>
+      lower(
+        `function main() {\n  const opened = Arbitrum.Portal.send({ token: USDC, amount: 1 }).receive({ token: USDC, amount: 1 }).then(() => {\n    USDC.transfer(RECIPIENT, 1);\n  });\n}`,
+      ),
+    message: /produces no value, so its result can't be used as one/,
+  },
+  {
+    documented: "with steps out of order",
+    trigger: () =>
+      lower(
+        wrap(
+          "USDC.transfer(RECIPIENT, amount);",
+          undefined,
+          "Arbitrum",
+          ".salt(1).receive({ token: USDC, amount })",
+        ),
+      ),
+    message: /`Sent` has no method `salt`/,
+  },
+  {
+    documented: "a modifier given twice or after the wrong step",
+    trigger: () =>
+      lower(
+        wrap(
+          "USDC.transfer(RECIPIENT, amount);",
+          undefined,
+          "Arbitrum",
+          ".receive({ token: USDC, amount }).deadline(1).deadline(2)",
+        ),
+      ),
+    message: /`\.deadline\(\.\.\.\)` is given twice after `\.receive\(\.\.\.\)`/,
+  },
+  {
+    documented: "no `.receive(...)`",
+    trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);", undefined, "Arbitrum", "")),
+    message: /stops before `\.receive\(\.\.\.\)`, which every intent has/,
+  },
+  {
+    documented: "or no `.then(() => { ... })`",
+    trigger: () =>
+      lower(
+        `function main() {\n  Arbitrum.Portal.send({ token: USDC, amount: 1 }).receive({ token: USDC, amount: 1 });\n}`,
+      ),
+    message: /has no body\. Finish it with `\.then/,
+  },
+  {
+    documented: "A missing creator",
     trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);"), { deadline: 1n }),
-    message: /needs a `creator`/,
+    message: /needs `\.creator\(<address>\)`.*may be shared/,
+  },
+  {
+    documented: "missing fee for a program body",
+    trigger: () =>
+      lower(wrap("const held = USDC.balanceOf(ctx.self());\n    USDC.transfer(RECIPIENT, held);")),
+    message: /its cook must pay that chain's Kitchen fee/,
+  },
+  {
+    documented: "a `.fee(...)` the program computes",
+    trigger: () =>
+      lower(
+        wrap(
+          "const held = USDC.balanceOf(ctx.self());\n    USDC.transfer(RECIPIENT, held);",
+          undefined,
+          "Arbitrum",
+          ".receive({ token: USDC, amount }).fee(ctx.timestamp())",
+        ),
+      ),
+    message: /`\.fee\(\.\.\.\)` is the destination Kitchen's fee, which the intent is built with/,
   },
   {
     documented: "A chain with no eco-routes deployment",
     trigger: () =>
       lower(
-        wrap(
-          "Token(0x7777777777777777777777777777777777777777).transfer(RECIPIENT, amount);",
-          undefined,
-          "Zora",
-        ),
+        `function main() {\n  Zora.Portal.send({ token: USDC, amount: 5 }).receive().then(() => {\n    Token(0x7777777777777777777777777777777777777777).transfer(RECIPIENT, 5);\n  });\n}`,
       ),
     message: /eco-routes v3 is not deployed on zora/,
   },
@@ -88,16 +177,16 @@ const REFUSALS: readonly {
     trigger: () =>
       lower(
         `function payout(amount: Uint256) {
-  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
-    if (amount > 0n) { payout(amount); }
+  Arbitrum.Portal.send({ token: USDC, amount }).receive({ token: USDC, amount }).then(() => {
+    if (amount > 0) { payout(amount); }
   });
 }
 function main() {
-  payout(5n);
+  payout(5);
 }`,
-        { deadline: 4_000_000_000n, creator: CREATOR, executionFee: 0n },
+        { ...PUBLISHED, executionFee: 0n },
       ),
-    message: /contains itself/,
+    message: /contains itself: a function it calls passes it to `Received\.then` again/,
   },
 ];
 
@@ -105,7 +194,7 @@ describe("the guide's refusal list is the lowering's", () => {
   it.each(REFUSALS.map((r) => [r.documented, r] as const))(
     "the guide documents %s",
     (_name, refusal) => {
-      expect(GUIDE).toContain(refusal.documented);
+      expect(GUIDE.replace(/\s+/g, " ")).toContain(refusal.documented);
     },
   );
 
@@ -124,6 +213,11 @@ describe("the guide's refusal list is the lowering's", () => {
       "there is no child program",
       "An intent opened inside another intent",
       "A statement that is not a call",
+      // Deadlines have defaults since the Portal form.
+      "A missing `deadline`",
+      // The compiler reads a module variable where it lives, however a local of the function
+      // opening the intent is named.
+      "A program body using a module variable that a local of the opening function shadows",
     ]) {
       expect(GUIDE).not.toContain(lifted);
     }
@@ -156,54 +250,46 @@ describe("the guide's refusal list is the lowering's", () => {
 });
 
 describe("the guide's account of which chain a name resolves on is the lowering's", () => {
-  // The real registry, where USDC is a different address on each chain, so each part's chain shows
-  // in the address it names. Executed across three chains in `routes-intent-chains.e2e.test.ts`.
-  const lowered = () =>
-    lower(`function main() {
-  const amount = 5n;
-  Arbitrum.Portal.send([{ token: USDC, amount }]).receive([{ token: USDC, amount }]).then(() => {
-    USDC.transfer(RECIPIENT, amount);
-  });
-}`).intents[0]!.intent;
-  const onChain = (slug: string) =>
-    `0x${"00".repeat(12)}${registryTokenAddress(requireChain(slug), "USDC")!.toString(16).padStart(40, "0")}`;
+  // Base's USDC and Arbitrum's are different addresses, so each part's chain shows in the address
+  // it names. Executed across three chains in `routes-intent-chains.e2e.test.ts`.
+  const PROGRAM = `function main() {
+  const amount = 5;
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount })
+    .then(() => {
+      USDC.transfer(RECIPIENT, amount);
+    });
+}`;
+  const lowered = (defines: Record<string, bigint> = {}) =>
+    lower(PROGRAM, PUBLISHED, defines)[0]!.intent;
+  const word = (address: bigint) => `0x${"00".repeat(12)}${address.toString(16).padStart(40, "0")}`;
+  const onChain = (chain: typeof BASE) => word(registryTokenAddress(chain, "USDC")!);
   const guide = GUIDE.replace(/\s+/g, " ");
 
   const CLAIMS: readonly { readonly documented: string; readonly holds: () => boolean }[] = [
     {
-      documented: "| `.then(...)`'s braces | Arbitrum, the destination | Arbitrum's |",
-      holds: () => lowered().route.calls[0]!.target === onChain(ARBITRUM.slug),
+      documented: "| The body, `.then(() => { ... })` | Arbitrum, the destination | Arbitrum's |",
+      holds: () => lowered().route.calls[0]!.target === onChain(ARBITRUM),
     },
     {
       documented: "| `.receive(...)`, what is delivered | Arbitrum, the destination | Arbitrum's |",
-      holds: () => lowered().route.tokens[0]!.token === onChain(ARBITRUM.slug),
+      holds: () => lowered().route.tokens[0]!.token === onChain(ARBITRUM),
     },
     {
-      documented: "| `.send(...)`, the reward | The chain the program runs on | That chain's |",
-      holds: () => lowered().reward.tokens[0]!.token === onChain("base"),
+      documented:
+        "| `.send(...)` and every modifier | The chain the program runs on | That chain's |",
+      holds: () => lowered().reward.tokens[0]!.token === onChain(BASE),
     },
     {
-      // A caller's `USDC` is Base's: the reward it escrows, while the Arbitrum body keeps Arbitrum's
-      // registry USDC.
+      // A caller's `USDC` is Base's: the reward pays in it, while the Arbitrum body keeps
+      // Arbitrum's registry USDC.
       documented: "is a name on the chain the program is compiled for",
       holds: () => {
         const chosen = 0x7777777777777777777777777777777777777777n;
-        const [intent] = compileSauceProgram(
-          "base",
-          `function main() {
-  const amount = 5n;
-  Arbitrum.Portal.send([{ token: USDC, amount }]).receive().then(() => {
-    USDC.transfer(RECIPIENT, amount);
-  });
-}`,
-          {
-            defines: { USDC: chosen, RECIPIENT: 1n },
-            intents: { deadline: 4_000_000_000n, creator: CREATOR },
-          },
-        ).intents;
+        const intent = lowered({ USDC: chosen });
         return (
-          BigInt(intent!.intent.reward.tokens[0]!.token) === chosen &&
-          intent!.intent.route.calls[0]!.target === onChain(ARBITRUM.slug)
+          intent.reward.tokens[0]!.token === word(chosen) &&
+          intent.route.calls[0]!.target === onChain(ARBITRUM)
         );
       },
     },
@@ -219,26 +305,6 @@ describe("the guide's account of which chain a name resolves on is the lowering'
 
   it("no longer says every name inside the intent is the destination's", () => {
     expect(guide).not.toContain("Resolving it against the enclosing chain would put");
-  });
-
-  it("a body reading a module variable that a local of the opening function shadows compiles", () => {
-    // It used to be refused: the two `total`s are now each read from where they live.
-    expect(() =>
-      lower(
-        `let total = 0n;
-function half(): Uint256 {
-  return total / 2n;
-}
-function main() {
-  const total = 5n;
-  Arbitrum.Portal.send([{ token: USDC, amount: total }]).receive().then(() => {
-    if (half() > 0n) { USDC.transfer(RECIPIENT, total); }
-  });
-}`,
-        { deadline: 4_000_000_000n, creator: CREATOR, executionFee: 0n },
-      ),
-    ).not.toThrow();
-    expect(GUIDE).not.toContain("a local of the opening function shadows");
   });
 });
 
@@ -263,22 +329,20 @@ describe("the guide's account of the destination Pot is the builder's", () => {
     .encodeDeployPot(ecoRoutesExecutorOf(PORTAL), SAUCE_INTENT_POT_SALT)
     .slice(2, 10);
   const programChild = () =>
-    compileSauceProgram(
-      "base",
-      `function main() {
+    JSON.stringify(
+      lower(
+        `function main() {
   const amount = USDC.balanceOf(ctx.self());
-  Arbitrum.Portal.send([{ token: USDC, amount }]).receive([{ token: USDC, amount }]).then(() => {
-    if (amount > 0n) { USDC.transfer(RECIPIENT, amount); }
-  });
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .receive({ token: USDC, amount })
+    .then(() => {
+      if (amount > 0) { USDC.transfer(RECIPIENT, amount); }
+    });
 }`,
-      {
-        defines: { RECIPIENT: 0x9999999999999999999999999999999999999999n },
-        intents: { deadline: 4_000_000_000n, creator: CREATOR, executionFee: 0n },
-      },
-    )
-      .intents[0]!.intent.route.calls.map((call) => call.data)
-      .join("")
-      .toLowerCase();
+        { ...PUBLISHED, executionFee: 0n },
+      )[0]!.intent.route.calls,
+      (_key, value: unknown) => (typeof value === "bigint" ? value.toString() : value),
+    ).toLowerCase();
 
   const CLAIMS: readonly { readonly documented: string; readonly holds: () => boolean }[] = [
     {
@@ -320,7 +384,7 @@ describe("the guide's account of the destination Pot is the builder's", () => {
   ];
 
   it.each(CLAIMS.map((c) => [c.documented, c] as const))("the guide says %s", (_name, claim) => {
-    expect(GUIDE).toContain(claim.documented);
+    expect(GUIDE.replace(/\s+/g, " ")).toContain(claim.documented);
   });
 
   it.each(CLAIMS.map((c) => [c.documented, c] as const))("and it holds: %s", (_name, claim) => {
