@@ -12,7 +12,7 @@
  */
 import type { CanonicalChain } from "../chains/canonical.js";
 import { addressOn } from "../descriptors/query.js";
-import { NAMESPACE_KEYS, resolveNamespace } from "./accessor-index.js";
+import { isChainKey, NAMESPACE_KEYS, resolveNamespace } from "./accessor-index.js";
 import { pascalOfSlug } from "./builder.js";
 
 /** The diagnostics a name nothing declares produces: an unknown value, or a call of one. */
@@ -123,6 +123,28 @@ export function unknownGlobalError(
     `compileSauceRoute: ${notOnChain(name, chain, tokens)}; a contract binding needs its ABI ` +
       "imported, or passed as `contracts`." +
       (compiler === undefined ? "" : ` The compiler reported: ${compiler}`),
+    { cause },
+  );
+}
+
+/**
+ * A chain's name called as a function — `Arbitrum(() => { … }).reward(…)`, the intent form a
+ * program no longer has — reported with the form that replaced it. A chain's name is its chain id,
+ * so the compiler refuses the call (`HostNotCallable`, the span the name).
+ */
+export function chainCalledError(source: string, entry: string, cause: unknown): Error | undefined {
+  const diagnostics =
+    (cause as { diagnostics?: readonly Located[] } | undefined)?.diagnostics ?? [];
+  const name = diagnostics
+    .filter((d) => d.path === entry && d.code === "HostNotCallable")
+    .map((d) => source.slice(d.start.offset, d.end.offset))
+    .find((text) => isChainKey(text));
+  if (name === undefined) return undefined;
+
+  return new Error(
+    `compileSauceRoute: \`${name}\` is a chain id, not a function: an intent opens with ` +
+      `\`${name}.Portal.send(reward).receive(delivery).then(() => { ... })\`. The compiler ` +
+      `reported: ${headline(cause) ?? `\`${name}\` is not a function`}`,
     { cause },
   );
 }

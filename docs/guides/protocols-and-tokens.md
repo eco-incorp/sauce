@@ -317,7 +317,7 @@ reference](../api/contracts.md) lists every property and option.
 
 ## Chain selection and ABI bindings
 
-A bare protocol reference uses the enclosing destination. A qualified reference such as `Ethereum.UniswapV4.UniversalRouter` selects an address from Ethereum's registry. It does **not** move execution to Ethereum: the resulting call still executes on the enclosing route's chain. Use separate intents and [nesting](nested-intents.md) for cross-chain execution. Set `compile.accessors.chainScope` to restrict explicitly qualified chain names when needed.
+A bare protocol reference uses the enclosing destination. A qualified reference such as `Ethereum.UniswapV4.UniversalRouter` selects an address from Ethereum's registry. It does **not** move execution to Ethereum: the resulting call still executes on the enclosing route's chain. Use separate intents and [nesting](nested-intents.md) for cross-chain execution. Set `compile.accessors.chainScope` to restrict explicitly qualified chain names when needed. A chain's name alone is its chain id, as `chainId` is the compiled-for chain's: `if (chainId == Ethereum) { ... } else { ... }` is decided while compiling, and a program compiled for a chain keeps only that chain's branch.
 
 Route rewriting rejects missing methods, ambiguous aliases and missing deployments. Every registry ABI declares its contract's deployed types, so the selectors it computes are the ones the deployed contract dispatches.
 

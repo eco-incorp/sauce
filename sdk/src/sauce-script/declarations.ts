@@ -2,8 +2,8 @@
  * The generated half of the SauceScript declarations an editor loads for a program file
  * (`*.sauce.ts`) — the package's `./sauce-script` types export, `dist/sauce-script/index.d.ts`:
  *
- * - every chain as the function that opens an intent there, with its namespaces
- *   (`Base(() => { … })`, `Base.UniswapV3.Factory`);
+ * - every chain as its chain id, with the `Portal` that opens an intent there and its namespaces
+ *   (`chainId == Base`, `Base.Portal.send(…)`, `Base.UniswapV3.Factory`);
  * - every `<Namespace>_<Contract>` define a chain sets;
  * - every JSON ABI the SDK serves (`./artifacts/IERC20.json`, `./protocols/<slug>/<Export>.json`)
  *   as a module whose contract is typed from its ABI;
@@ -225,7 +225,8 @@ export function sauceScriptDeclarations(): string {
     ...[...namespaces].sort().map((ns) => `  readonly ${ns}: ${sources}.${ns}Source;`),
     "}",
     "",
-    ...chains.map((chain) => `declare const ${chain.key}: SauceChain;`),
+    "/** A chain's name is its chain id, `chainId == Base` decided while compiling, and its members. */",
+    ...chains.map((chain) => `declare const ${chain.key}: bigint & SauceChain;`),
     "",
     "/** A protocol contract's address on the chain a program is compiled for: a define. */",
     ...[...defines]

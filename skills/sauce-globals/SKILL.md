@@ -189,11 +189,13 @@ function main(tokenA: Address, tokenB: Address) {
 
 - **Chain names** (`Base`, `Ethereum`, … in [references/chains.md](references/chains.md)) open an
   intent from inside a program: `Ethereum.Portal.send(reward).receive(delivery).then(() => { ... })`.
-  Every chain's names
+  A chain's name alone is its chain id, so `if (chainId == Ethereum) { … } else { … }` is decided
+  while compiling: a program compiled for a chain keeps only that chain's branch. Every chain's names
   compile; for the initial release its transactions are built and sent only on Ethereum, Base and
   Solana, and [references/chains.md](references/chains.md) marks every other chain a preview chain
   (`sauce-chains` says how to request one).
-- **`chainId`** is the chain the program is compiled for.
+- **`chainId`** is the chain the program is compiled for, a constant like a chain's name;
+  `ctx.chainId()` reads the same id as the program runs, and decides nothing while compiling.
 - **`ctx`**: context reads, each a call. The complete list, with what each returns per target, is
   section 6 of [../sauce-script/references/builtins.md](../sauce-script/references/builtins.md).
 

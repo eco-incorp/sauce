@@ -11,6 +11,9 @@
  *  - `Token(address)`, a cast of any address to that type;
  *  - `self`, the contract running the program;
  *  - `chainId`/`CHAIN_ID` and each protocol contract's address key (`UniswapV3_Factory`);
+ *  - every chain's name, its chain id: `chainId == Ethereum` is decided while compiling, so a
+ *    program keeps only the branch of the chain it is compiled for (`Ethereum.Portal` is a name of
+ *    its own, which opens an intent: `intent-host.ts`);
  *  - every protocol contract, by the names the registry gives it: `UniswapV3.Factory`, a family's
  *    `Uniswap.UniversalRouter`, a protocol's one contract as `Protocol`, an interface as a contract
  *    with no address — which the compiler binds to the one a call gives it, `Erc4626.Vault(vault)`
@@ -256,6 +259,13 @@ export function chainHost(chain: CanonicalChain, options: ChainHostOptions = {})
       }
       if (head === "chainId" || head === "CHAIN_ID") {
         return { kind: "constant", value: String(chain.id) };
+      }
+      if (isChainKey(head)) {
+        return {
+          kind: "constant",
+          value: String(requireChain(chainSlugForKey(head)!).id),
+          type: "Uint256",
+        };
       }
       // The presence check a program once called; a name a chain lacks is now zero there.
       if (head === "available") {

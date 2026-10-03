@@ -33,7 +33,7 @@ import { CANONICAL_CHAINS } from "../chains/canonical.js";
 import type { EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
 import { intentHost, type IntentSugarDefaults, type LoweredIntent } from "./intent-host.js";
 import { entryArguments, entryParamsOf, type EntryParam, type EntryValue } from "./entry.js";
-import { unknownGlobalError } from "./unknown-global.js";
+import { chainCalledError, unknownGlobalError } from "./unknown-global.js";
 import { closureText, isSauceClosure, type SauceBody } from "./closure.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
 
@@ -541,7 +541,9 @@ function compileForChain(
     // A token or protocol name the chain does not have, reported as one rather than as the call
     // the compiler could not lower — from the compiler's own located diagnostics.
     throw (
-      unknownGlobalError(source, "main.js", chain, level.declined, tokens.keys(), error) ?? error
+      unknownGlobalError(source, "main.js", chain, level.declined, tokens.keys(), error) ??
+      chainCalledError(source, "main.js", error) ??
+      error
     );
   }
   const { manifest, entryEncoding, entryParams, ...compiled } = rs;

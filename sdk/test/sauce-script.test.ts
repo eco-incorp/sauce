@@ -189,6 +189,23 @@ describe("SauceScript in an editor", () => {
     }
   });
 
+  it("types a chain's name as its id, beside its Portal and namespaces", () => {
+    const file = join(work, "chains.sauce.ts");
+    const files = {
+      [file]:
+        "function main(): Uint256 {\n" +
+        "  const factory = Ethereum.UniswapV3.Factory;\n" +
+        "  if (chainId == Ethereum) {\n" +
+        "    factory.getPool(Ethereum, Base, 500n);\n" +
+        "    return Ethereum;\n" +
+        "  }\n" +
+        "  return Base;\n" +
+        "}\n",
+    };
+    // Plain TypeScript: a bigint, with members.
+    expect(report(service(files, false), file)).toEqual([]);
+  });
+
   it("takes an account beside a number for its address beside a number", () => {
     const file = join(work, "account.sauce.ts");
     const files = {

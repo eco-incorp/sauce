@@ -2,7 +2,8 @@
 
 # Chain globals
 
-A chain name opens an intent from inside a program
+A chain name is its chain id, so `chainId == Ethereum` is decided while compiling and a program
+keeps only the branch of the chain it is compiled for. It opens an intent from inside a program
 (`Ethereum.Portal.send(reward).receive(delivery).then(() => { ... })`) and qualifies a contract
 address (`Ethereum.UniswapV4.UniversalRouter`). An intent needs both chains
 to take intents; each line says whether its chain does. Each line also says whether the initial
