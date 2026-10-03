@@ -26,9 +26,10 @@ export interface IntentParam {
    * What it is to the compiler: a value computed where the intent opens (`value`); one computed
    * there whose names resolve on the destination, since the solver delivers it there (`nested`);
    * a closure compiled for the destination, the body (`program`); a closure that runs on the
-   * destination in the body's place when the body reverts (`handler`).
+   * destination in the body's place when the body reverts (`handler`); a closure never compiled,
+   * its calls recorded as the route's own, which the Portal's Executor makes (`hook`).
    */
-  readonly kind: "value" | "nested" | "program" | "handler";
+  readonly kind: "value" | "nested" | "program" | "handler" | "hook";
   /** Any number of arguments of this type: `send(a, b)`. One argument that is a list of them is
    *  read the same way, `send([a, b])`. */
   readonly rest?: true;
@@ -42,6 +43,9 @@ export interface IntentMethod {
   readonly returns: IntentStage;
   /** For a modifier: the per-level option it sets (`SauceCompileOptions.intents`' field). */
   readonly option?: string;
+  /** For a step that returns its own stage and may be taken again, each time adding to what the
+   *  ones before added: it returns its stage with itself. */
+  readonly repeats?: true;
 }
 
 /** One stage. */
@@ -65,7 +69,8 @@ export const INTENT_STAGES = {
       "A chain's Portal in compiled source, opening an intent whose body runs on that chain: " +
       "`Base.Portal.send({ token, amount }).receive({ token, amount }).then(() => { ... })`. After " +
       "`send` come the reward's modifiers, after `receive` the route's, each at most once and in " +
-      "any order; each left out but the refundee has its default.",
+      "any order; each left out but the refundee has its default. Among the route's, any number " +
+      "of hooks: `before` and `after`, calls the Portal's Executor makes around the body.",
     methods: {
       send: {
         doc:
@@ -135,7 +140,9 @@ export const INTENT_STAGES = {
   },
   Received: {
     ts: "SauceIntentReceived",
-    doc: "An intent waiting for its body: the route's modifiers not given yet, then `then`.",
+    doc:
+      "An intent waiting for its body: the route's modifiers not given yet, its hooks, then " +
+      "`then`.",
     unfinished:
       "has no body. Finish it with `.then(() => { … })`: the code that runs on {destination} " +
       "with what was received",
@@ -162,6 +169,28 @@ export const INTENT_STAGES = {
         params: [{ name: "wei", ts: "bigint | number", kind: "value" }],
         returns: "Received",
         option: "executionFee",
+      },
+      before: {
+        doc:
+          "Calls the Portal's Executor makes on the destination before the body runs: the " +
+          "closure is never compiled, each statement a call of a token, recorded as a route call " +
+          "of its own. The Executor is the caller; the arguments are fixed when the intent is " +
+          "published. A hook that reverts reverts the fill, `.catch(...)` or not. Any number, in " +
+          "the order written. EVM destinations only.",
+        params: [{ name: "hook", ts: "() => void", kind: "hook" }],
+        returns: "Received",
+        repeats: true,
+      },
+      after: {
+        doc:
+          "Calls the Portal's Executor makes on the destination after the body has run, as " +
+          "`.before(...)` records them: never compiled, the Executor the caller, the arguments " +
+          "fixed when the intent is published, a revert reverting the fill. What the body holds " +
+          "in its Pot is not the Executor's to spend. Any number, in the order written. EVM " +
+          "destinations only.",
+        params: [{ name: "hook", ts: "() => void", kind: "hook" }],
+        returns: "Received",
+        repeats: true,
       },
       then: {
         doc:
@@ -215,3 +244,22 @@ export const REWARD_MODIFIERS: readonly RewardModifier[] = modifiersOf("Sent");
 /** What follows `receive(...)`: the route's deadline (the last second it may be filled), its salt,
  *  and the destination Kitchen's fee its program's cook pays. */
 export const ROUTE_MODIFIERS: readonly RouteModifier[] = modifiersOf("Received");
+
+/** The steps after `receive(...)` that take a hook: calls the Executor makes around the body. */
+export type RouteHook = {
+  [
+    M in keyof (typeof INTENT_STAGES)["Received"]["methods"]
+  ]: (typeof INTENT_STAGES)["Received"]["methods"][M] extends {
+    readonly params: readonly [{ readonly kind: "hook" }];
+  }
+    ? M
+    : never;
+}[keyof (typeof INTENT_STAGES)["Received"]["methods"]];
+
+/** `before` and `after`, in table order: the route's calls are the first's, the body's, the
+ *  second's. */
+export const ROUTE_HOOKS: readonly RouteHook[] = Object.entries(
+  INTENT_STAGES.Received.methods as Readonly<Record<string, IntentMethod>>,
+)
+  .filter(([, method]) => method.params.some((param) => param.kind === "hook"))
+  .map(([name]) => name as RouteHook);

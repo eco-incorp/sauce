@@ -560,6 +560,14 @@ describe("on the host", () => {
     expect(() => built.catch(() => {})).toThrow(TypeError);
   });
 
+  it("refuses a hook: only a program's closure is recorded", () => {
+    const received = Base.Portal.send(paid).source("ethereum").refundee(CREATOR).receive(delivered);
+    expect(() => received.before(() => {})).toThrow(
+      /\.before\(hook\) records the hook's calls inside a program/,
+    );
+    expect(() => received.after(() => {})).toThrow(/\.after\(hook\) records the hook's calls/);
+  });
+
   it("takes a closure that opens the next intent, and items as arguments or one list", () => {
     const one = Ethereum.Portal.send(paid)
       .source("base")

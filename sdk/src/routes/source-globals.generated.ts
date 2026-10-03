@@ -58,7 +58,8 @@ export interface SauceIntentNative {
  * A chain's Portal in compiled source, opening an intent whose body runs on that chain:
  * `Base.Portal.send({ token, amount }).receive({ token, amount }).then(() => { ... })`. After
  * `send` come the reward's modifiers, after `receive` the route's, each at most once and in any
- * order; each left out but the refundee has its default.
+ * order; each left out but the refundee has its default. Among the route's, any number of hooks:
+ * `before` and `after`, calls the Portal's Executor makes around the body.
  */
 export interface SaucePortal {
   /**
@@ -96,7 +97,7 @@ export interface SauceIntentSentSteps<Used extends string> {
 /** SauceIntentSent with the modifiers in `Used` given already. */
 export type SauceIntentSent<Used extends string = never> = Omit<SauceIntentSentSteps<Used>, Used>;
 
-/** An intent waiting for its body: the route's modifiers not given yet, then `then`. */
+/** An intent waiting for its body: the route's modifiers not given yet, its hooks, then `then`. */
 export interface SauceIntentReceivedSteps<Used extends string> {
   /**
    * The last second the intent may be filled, Unix seconds. Defaults to five minutes past when it
@@ -110,6 +111,21 @@ export interface SauceIntentReceivedSteps<Used extends string> {
    * when the intent is built. Defaults to what the compile is given for that destination.
    */
   fee(wei: bigint | number): SauceIntentReceived<Used | "fee">;
+  /**
+   * Calls the Portal's Executor makes on the destination before the body runs: the closure is never
+   * compiled, each statement a call of a token, recorded as a route call of its own. The Executor
+   * is the caller; the arguments are fixed when the intent is published. A hook that reverts
+   * reverts the fill, `.catch(...)` or not. Any number, in the order written. EVM destinations
+   * only.
+   */
+  before(hook: () => void): SauceIntentReceived<Used>;
+  /**
+   * Calls the Portal's Executor makes on the destination after the body has run, as `.before(...)`
+   * records them: never compiled, the Executor the caller, the arguments fixed when the intent is
+   * published, a revert reverting the fill. What the body holds in its Pot is not the Executor's to
+   * spend. Any number, in the order written. EVM destinations only.
+   */
+  after(hook: () => void): SauceIntentReceived<Used>;
   /**
    * The body: runs on the destination with what was received. It is never invoked here: it is
    * compiled for that chain. As in JavaScript, `await x; rest` is `x.then(() => { rest })`.

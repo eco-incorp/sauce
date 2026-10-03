@@ -18,7 +18,8 @@ const SDK = resolve(process.cwd());
 const ROOT = JSON.stringify(resolve(SDK, "src/index.ts"));
 
 /** Three levels, opened inside a host closure: items as arguments, a list, none, arithmetic, a
- *  measured value, modifiers in any order, a handler naming what the body reverted with. */
+ *  measured value, modifiers in any order, hooks among them, a handler naming what the body
+ *  reverted with. */
 const NESTED = `
 import { Arbitrum, Base, Ethereum, Optimism } from ${ROOT};
 
@@ -43,6 +44,15 @@ const built = Base.Portal.send({ token: Ethereum.USDC.address, amount: 1_010_000
           .refundee(0x4444444444444444444444444444444444444444n)
           .receive({ token: USDT, amount: arrived / 4n }, { token: USDC, amount: arrived / 4n })
           .fee(7n)
+          .before(() => {
+            USDT.approve(0x6666666666666666666666666666666666666666n, arrived / 4n);
+          })
+          .after(() => {
+            USDC.transfer(0x6666666666666666666666666666666666666666n, 1n);
+          })
+          .before(() => {
+            USDC.approve(0x7777777777777777777777777777777777777777n, arrived);
+          })
           .then(() => {
             USDT.transfer(0x6666666666666666666666666666666666666666n, arrived / 2n);
           })

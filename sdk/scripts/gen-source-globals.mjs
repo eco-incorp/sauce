@@ -67,8 +67,8 @@ const { INTENT_STAGES } = load("src/routes/intent-syntax.ts");
 /**
  * The intent's stages as declarations, from the one table (`src/routes/intent-syntax.ts`) the
  * lowering and a compiler host read too. A stage with modifiers is a generic `…Steps<Used>`
- * interface and an `Omit` of the modifiers used so far, so each is given at most once; a step to the
- * next stage returns that stage afresh.
+ * interface and an `Omit` of the modifiers used so far, so each is given at most once; a step that
+ * repeats keeps what is used, and a step to the next stage returns that stage afresh.
  */
 function renderIntentStages() {
   const typeOf = (stage, used) => {
@@ -105,8 +105,11 @@ function renderIntentStages() {
     out.push(`export interface ${name} {`);
     for (const [method, m] of Object.entries(spec.methods)) {
       out.push(doc(m.doc, "  "));
+      // A modifier is dropped once given; a step that repeats (a hook) stays.
       const returns =
-        m.returns === stage ? typeOf(stage, `Used | "${method}"`) : typeOf(m.returns, undefined);
+        m.returns !== stage
+          ? typeOf(m.returns, undefined)
+          : typeOf(stage, m.repeats ? "Used" : `Used | "${method}"`);
       out.push(`  ${method}(${params(m)}): ${returns};`);
     }
     out.push("}");

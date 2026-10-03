@@ -31,18 +31,23 @@
  * scope `nested` returns for that chain — the destination's names, its target, its own intents —
  * and what it reads of the enclosing program reaches it as entry arguments. A closure of nothing
  * but token `transfer`/`approve` calls is RECORDED instead: there is no program, only the calls,
- * which become the route's own. `.catch((e) => { … })` after it HANDLES the body: the compiler
- * builds the two as one program, `try { <body> } catch (e) { <handler> }`. The chain's last record
- * is bound at its site, so the compiler hands `bind` what it knows there — the chain, the reward,
- * the delivery, the modifiers, the program or the recorded calls — and calls `@sauce/intents`
- * with what `bind` returns. A chain that stops before `receive` or `then` is refused in the
- * table's words.
+ * which become the route's own. `.before(() => { … })` and `.after(() => { … })`, any number of
+ * each among the route's modifiers, are HOOKS: closures that are only ever recorded, their calls
+ * the route's around the body's, and refused when the compiler had to compile one instead. Each is
+ * a part of the record, so their order survives; their names resolve on the destination, and a
+ * Solana destination is refused before one is read. `.catch((e) => { … })` after it HANDLES the
+ * body: the compiler builds the two as one program, `try { <body> } catch (e) { <handler> }`. The
+ * chain's last record is bound at its site, so the compiler hands `bind` what it knows there — the
+ * chain, the reward, the delivery, the modifiers, the hooks, the program or the recorded calls —
+ * and calls `@sauce/intents` with what `bind` returns. A chain that stops before `receive` or
+ * `then` is refused in the table's words.
  *
- * WHAT `bind` DOES. It builds the intent: the route's calls (each recorded write, or the delivered
- * tokens' transfers into the Pot then its `cook`), the reward, the deadlines, the creator, the
- * prover, the Portals on both sides. A value known only while the enclosing program runs is a
- * sentinel in the encoding, and each place it lands is a SPLICE, so the program writes the value
- * there when it runs. No source is generated and nothing is parsed.
+ * WHAT `bind` DOES. It builds the intent: the route's calls (the `before` hooks' calls, then each
+ * recorded write or the delivered tokens' transfers into the Pot then its `cook`, then the `after`
+ * hooks'), the reward, the deadlines, the creator, the prover, the Portals on both sides. A value
+ * known only while the enclosing program runs is a sentinel in the encoding, and each place it
+ * lands is a SPLICE, so the program writes the value there when it runs. No source is generated
+ * and nothing is parsed.
  *
  * WHAT IS LEFT OUT, as Eco's Portal app fills it: the route's deadline five minutes past when the
  * intent opens, the reward's seven days past the route's (`intent-defaults.ts`), the registry's
@@ -67,6 +72,7 @@ import type {
   ProgramOptions,
   ProgramReport,
   ProgramSite,
+  RecordedCall,
   Signature,
   View,
 } from "sauce-compiler";
@@ -95,10 +101,12 @@ import { DEFAULT_FILL_WINDOW, DEFAULT_REFUND_WINDOW, randomSalt } from "./intent
 import {
   INTENT_STAGES,
   REWARD_MODIFIERS,
+  ROUTE_HOOKS,
   ROUTE_MODIFIERS,
   type IntentMethod,
   type IntentParam,
   type IntentStage,
+  type RouteHook,
 } from "./intent-syntax.js";
 import type { AddressInput, Intent } from "./types.js";
 
@@ -187,6 +195,20 @@ const unfinished = (stage: "Sent" | "Received", written: string): string =>
 /** The refusal of a chain that skips what the solver delivers. */
 const NEEDS_A_DELIVERY = unfinished("Sent", "send(...)");
 
+/** The hook a program argument's site is, `Received.before` or `Received.after`; else nothing. */
+const hookOf = (callee: string): RouteHook | undefined =>
+  ROUTE_HOOKS.find((hook) => callee === `Received.${hook}`);
+
+/** Why a hook the compiler could not record is refused: it is calls, never a program. */
+const hookNotRecorded = (hook: RouteHook): string =>
+  `\`.${hook}(...)\` records calls for the Portal's Executor to make, and is never compiled: ` +
+  "each of its statements must be a call of a token, `USDC.approve(spender, amount)` or " +
+  "`Token(address).transfer(to, amount)`, whose arguments are literals, names or variables of " +
+  "the program. Compute a value before the intent opens, and pass the variable.";
+
+/** One of a route's calls, as the Executor makes it. */
+type RouteCall = { target: Hex; data: Hex; value: bigint };
+
 /** Why an intent with no `.refundee(...)` is refused: no default is safe for one a program
  *  opens. */
 const UNNAMED_CREATOR =
@@ -225,9 +247,11 @@ type Value = { readonly literal: bigint } | { readonly runtime: number; readonly
 type Deadline =
   Value | { readonly stamp: number; readonly from: "now" | "route"; readonly seconds: bigint };
 
-/** Where a stage begins, as a refusal names it: after the step that returns it. */
+/** Where a stage begins, as a refusal names it: after the step of another stage that returns
+ *  it. */
 function stageEntry(stage: IntentStage): string {
-  for (const spec of Object.values(INTENT_STAGES)) {
+  for (const [from, spec] of Object.entries(INTENT_STAGES)) {
+    if (from === stage) continue;
     for (const [name, method] of Object.entries(
       spec.methods as Readonly<Record<string, IntentMethod>>,
     )) {
@@ -304,10 +328,21 @@ export function intentHost(level: IntentLevel): {
     return chain ?? fail(`${what} does not start from a chain's \`Portal\``);
   };
 
-  const nested = (site: ProgramSite): ProgramOptions =>
-    site.callee === "Sent.then"
-      ? fail(NEEDS_A_DELIVERY)
-      : level.programOn(destinationOf(site.receiver, `\`${site.callee}\``));
+  const nested = (site: ProgramSite): ProgramOptions => {
+    if (site.callee === "Sent.then") return fail(NEEDS_A_DELIVERY);
+    const destination = destinationOf(site.receiver, `\`${site.callee}\``);
+    const hook = hookOf(site.callee);
+    // Refused before its closure is read: a Solana route call carries accounts a recorded call
+    // has nowhere to name.
+    if (hook !== undefined && destination.kind !== "evm") {
+      return fail(
+        `\`.${hook}(...)\` adds calls the Portal's Executor makes on an EVM destination; ` +
+          `${destination.slug}'s route calls name their accounts, which a hook has nowhere to give`,
+      );
+    }
+
+    return level.programOn(destination);
+  };
 
   const bind = (site: CallSite): BoundArgument[] => {
     if (site.callee !== "Opened" && site.callee !== "Caught") {
@@ -332,6 +367,9 @@ function hostParam(param: IntentParam): Param {
       return { kind: "program", record: true };
     case "handler":
       return { kind: "handler" };
+    case "hook":
+      // Recorded too, and only that: a hook the compiler had to compile is refused (`bind`).
+      return { kind: "program", record: true };
   }
 }
 
@@ -454,7 +492,6 @@ function bindIntent(
         : defaults.executionFee;
 
   const destinationPortal = defaults.destinationPortal ?? ecoRoutesPortal(destination, defaults);
-  const calls: { target: Hex; data: Hex; value: bigint }[] = [];
   const derivedDelivery: { token: bigint; amount: Value }[] = [];
   const tokenCall = (target: bigint, method: "transfer" | "approve", args: readonly Value[]) => ({
     target: addressHex(target),
@@ -466,12 +503,13 @@ function bindIntent(
     value: 0n,
   });
 
-  if (body !== undefined && "recorded" in body) {
-    // A body of token writes is the route's own calls, run by the Portal's Executor — not a
-    // program, so the Executor's checks rather than SafeERC20's. Every approve is reset to zero
-    // first, for a token (USDT) that refuses to move a standing allowance: one Executor runs every
-    // intent on a chain.
-    for (const call of body.recorded) {
+  // Recorded calls — a body of token writes, or a hook — are the route's own calls, run by the
+  // Portal's Executor: not a program, so the Executor's checks rather than SafeERC20's. Every
+  // approve is reset to zero first, for a token (USDT) that refuses to move a standing allowance:
+  // one Executor runs every intent on a chain. What each transfer moves is the delivery when
+  // `.receive()` names none, since it is the Executor's to spend.
+  const recordedCalls = (recorded: readonly RecordedCall[]): RouteCall[] =>
+    recorded.flatMap((call) => {
       const method = call.callee.split(".")[1];
       if (method !== "transfer" && method !== "approve") {
         return fail(`\`.${method}(...)\` cannot become a route call`);
@@ -489,26 +527,42 @@ function bindIntent(
         derivedDelivery.push({ token: token.literal, amount: args[1]! });
       }
       const amount = args[1]!;
-      if (method === "approve" && !("literal" in amount && amount.literal === 0n)) {
-        calls.push(tokenCall(token.literal, "approve", [args[0]!, { literal: 0n }]));
-      }
-      calls.push(tokenCall(token.literal, method, args));
-    }
+      const reset =
+        method === "approve" && !("literal" in amount && amount.literal === 0n)
+          ? [tokenCall(token.literal, "approve", [args[0]!, { literal: 0n }])]
+          : [];
+
+      return [...reset, tokenCall(token.literal, method, args)];
+    });
+  // Each hook's calls, its closures in the order written: recorded, never compiled.
+  const hookCalls = (hook: RouteHook): RouteCall[] =>
+    parts
+      .filter((part) => part.callee === `Received.${hook}`)
+      .flatMap((part) => {
+        const [closure] = part.args;
+        return closure !== undefined && "recorded" in closure
+          ? recordedCalls(closure.recorded)
+          : fail(hookNotRecorded(hook));
+      });
+
+  const before = hookCalls("before");
+  let bodyCalls: RouteCall[];
+  if (body !== undefined && "recorded" in body) {
+    bodyCalls = recordedCalls(body.recorded);
   } else if (body !== undefined && "program" in body) {
-    calls.push(
-      ...programCalls(
-        level,
-        body.program,
-        destinationPortal,
-        explicitDelivery,
-        feeFor(),
-        sentinelFor,
-        runtimes,
-      ),
+    bodyCalls = programCalls(
+      level,
+      body.program,
+      destinationPortal,
+      explicitDelivery,
+      feeFor(),
+      sentinelFor,
+      runtimes,
     );
   } else {
     return fail("an intent's body must be a closure");
   }
+  const calls = [...before, ...bodyCalls, ...hookCalls("after")];
 
   const rewardSpec = tokenList(rewardItems, { part: "reward", chain: source }, valueOf);
   const offersNative =
@@ -714,7 +768,7 @@ function programCalls(
   executionFee: bigint | undefined,
   sentinelFor: (value: Value) => bigint,
   runtimes: Map<number, string | undefined>,
-): { target: Hex; data: Hex; value: bigint }[] {
+): RouteCall[] {
   if (program.target !== "evm") {
     return fail(
       `an intent body on a Solana destination is a program for its Kitchen, which a route call does ` +

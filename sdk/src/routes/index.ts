@@ -175,6 +175,7 @@ export { DEFAULT_FILL_WINDOW, DEFAULT_REFUND_WINDOW, randomSalt } from "./intent
 export {
   INTENT_STAGES,
   REWARD_MODIFIERS,
+  ROUTE_HOOKS,
   ROUTE_MODIFIERS,
   type IntentMethod,
   type IntentParam,

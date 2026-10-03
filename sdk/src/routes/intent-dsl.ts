@@ -1128,6 +1128,12 @@ export interface PortalReceiveSteps<Used extends string> {
   fee(wei: bigint | number): PortalReceived<Used | "fee">;
   /** Attaches a child intent built in TypeScript, before the body: `PendingSauceRoute.nest`. */
   nest(childOrThunk: NestChildOrThunk, options?: NestOptions): PortalReceived<Used>;
+  /** Calls the Portal's Executor makes before the body, recorded from the closure: written in a
+   *  program, where the compiler records it, any number of times. Refused on the host. */
+  before(hook: () => void): PortalReceived<Used>;
+  /** Calls the Portal's Executor makes after the body, as `before` records them. Refused on the
+   *  host. */
+  after(hook: () => void): PortalReceived<Used>;
   /** The body that runs on the destination, compiled for it: the built intent. */
   then(body: SauceBody): PortalOpened;
 }
@@ -1209,6 +1215,15 @@ export function chainPortal(chain: ChainRef): ChainPortal {
     stage.set(step, value);
   };
 
+  // A hook's closure is recorded by the compiler, call by call, which only a program has.
+  const hookOnHost = (hook: string): never => {
+    throw new TypeError(
+      `${name}...receive(...).${hook}(hook) records the hook's calls inside a program, where the ` +
+        "compiler reads the closure: open the intent in the program a Pot runs. A route built on " +
+        "the host takes its calls as `openRoute`'s `precalls`.",
+    );
+  };
+
   return {
     send: (...reward) => {
       const rewardSteps = new Map<string, unknown>();
@@ -1231,6 +1246,8 @@ export function chainPortal(chain: ChainRef): ChainPortal {
               nested.push([childOrThunk, options]),
               received
             ),
+            before: () => hookOnHost("before"),
+            after: () => hookOnHost("after"),
             // Not `then(body)`: a promise's resolution calls it with two native functions, and that
             // call has to be told apart from the intent's own.
             then(...args: unknown[]): PortalOpened {
