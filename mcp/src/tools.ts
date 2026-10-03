@@ -1029,6 +1029,24 @@ export type ToolRegistrar = <Input extends z.ZodRawShape, Output extends z.ZodRa
  * result. Each call gets its own reach: its rpcUrl, scrubbed from everything it returns, and
  * released after.
  */
+/** Inputs a tool once took under another name, and the name each has now. */
+const RENAMED_INPUTS: Readonly<Record<string, string>> = { intentCreator: "intentRefundee" };
+
+/** A tool's input schema: every field it knows, and a refusal of any other, which names the input
+ *  a renamed one is now. */
+function inputSchemaOf(input: z.ZodRawShape) {
+  return z.strictObject(input, {
+    error: (issue) => {
+      if (issue.code !== "unrecognized_keys") return undefined;
+      const renamed = issue.keys.filter((key) => (RENAMED_INPUTS[key] ?? "") in input);
+
+      return renamed.length === 0
+        ? undefined
+        : renamed.map((key) => `\`${key}\` is now \`${RENAMED_INPUTS[key]}\``).join("; ");
+    },
+  });
+}
+
 export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegistrar {
   const { endpoints, guard } = context;
 
@@ -1045,7 +1063,7 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
         // A tool that takes nothing declares no schema, so a call that sends no arguments is
         // still a call; every other refuses a field it does not know.
         inputSchema:
-          Object.keys(config.input).length === 0 ? undefined : z.object(config.input).strict(),
+          Object.keys(config.input).length === 0 ? undefined : inputSchemaOf(config.input),
         outputSchema: z.looseObject({ ...config.output, notes: notesSchema }),
         annotations: { title: config.title, ...config.annotations },
       },

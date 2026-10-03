@@ -528,6 +528,18 @@ describe("sauce_compile", () => {
     assert.equal((out.compiler as { name: string }).name, "@eco-incorp/sauce-compiler");
   });
 
+  it("names the input `intentCreator` became, rather than an unknown field", async () => {
+    const refused = failed(
+      await mcp.call("sauce_compile", {
+        source: INTENT,
+        args: [RECIPIENT],
+        intentDeadline: 4000000000,
+        intentCreator: CREATOR,
+      }),
+    );
+    assert.match(refused, /`intentCreator` is now `intentRefundee`/);
+  });
+
   it("refuses an intent deadline that has passed, as the command does", async () => {
     const refused = failed(
       await mcp.call("sauce_compile", {
