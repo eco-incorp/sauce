@@ -38,12 +38,12 @@ const built = Base.Portal.send({ token: usdcOn(Ethereum.chain), amount: REWARD }
   .deadline(openedAt + routes.DEFAULT_FILL_WINDOW)
   .salt(salt)
   .then(() => {
-    // Runs on Base, in the fill of this intent: what the solver delivered, measured there.
-    const amount = USDC.balanceOf(ctx.self());
-    const payout = amount - amount / 1000n;
+    // Runs on Base, in the fill of this intent, on a Pot every intent to Base shares: it moves what
+    // this intent delivered, never the Pot's whole balance.
+    const payout = 1_000_000n - 1_000_000n / 1000n;
     // Opened, funded in Base's USDC and published on Base, in that same fill: its deadlines count
     // from then. Every intent a program opens names its creator.
-    Ethereum.Portal.send({ token: USDC, amount })
+    Ethereum.Portal.send({ token: USDC, amount: 1_000_000n })
       .creator(0x4444444444444444444444444444444444444444n)
       .receive({ token: USDC, amount: payout })
       .salt(0x5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5an)

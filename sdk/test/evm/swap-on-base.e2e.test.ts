@@ -23,8 +23,9 @@
  * stops at its own limit, the caller's moved by √(1 − fee) with the fee read from the pool (for V4,
  * this direction's protocol fee composed with the LP fee), so every unit sold pays at least the
  * limit with its fee paid, and the last one pays the limit; the USDC goes to `recipient` and the
- * unsold WETH to `refundTo`, leaving the shared Pot empty; `minOut` and `minAvgPrice` revert the whole
- * fulfilment. And what the fee adjustment is for, by taking it out.
+ * unsold WETH to `refundTo`, leaving the shared Pot as it was, whatever it already held; `minOut`
+ * and `minAvgPrice` revert the whole fulfilment. And what the fee adjustment is for, by taking it
+ * out.
  *
  * The same Base runs the nested-intents guide's swap (`docs/examples/nested-swap.sauce.ts`), opened
  * on Ethereum with its `main` arguments bound: its body buys WETH on the 0.05% pool it looks up and
@@ -605,6 +606,26 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     console.log(
       `partial fill: gas ${receipt.gasUsed}, sold ${sold} of ${amountIn} WETH units for ${bought} USDC units`,
     );
+  });
+
+  it("moves only what this intent delivered: what the shared Pot already held stays there", async () => {
+    // Another intent's WETH and USDC, resting in the Pot every intent to Base shares.
+    const resting = 3n * WETH_UNIT;
+    const restingUsdc = 5_000n * 10n ** 6n;
+    await call(WETH, erc20, "mint", [pot, resting]);
+    await call(USDC, erc20, "mint", [pot, restingUsdc]);
+    const amountIn = WETH_UNIT;
+    const receipt = await fulfil({ amountIn: amountIn, minAvgPrice: 2_695n * 10n ** 6n });
+    expect(receipt.status).toBe("success");
+    const swapped = fills(receipt);
+    expect(swapped.map((fill) => fill.venue)).toEqual(["v3:500", "v3:3000", "v4:500"]);
+    const sold = swapped.reduce((sum, fill) => sum + fill.paid, 0n);
+    const bought = swapped.reduce((sum, fill) => sum + fill.got, 0n);
+    expect(sold).toBeLessThan(amountIn);
+    expect(await balance(USDC, RECIPIENT)).toBe(bought);
+    expect(await balance(WETH, REFUND_TO)).toBe(amountIn - sold);
+    expect(await balance(WETH, pot)).toBe(resting);
+    expect(await balance(USDC, pot)).toBe(restingUsdc);
   });
 
   it("sells a small amount to the first pool, within its limit, and returns nothing", async () => {

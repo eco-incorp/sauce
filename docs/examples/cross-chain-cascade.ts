@@ -1,4 +1,4 @@
-// Compiles cross-chain-cascade.sauce.ts — three hops whose amounts are each measured on arrival —
+// Compiles cross-chain-cascade.sauce.ts — three hops, each paying the next what it was delivered —
 // for Ethereum, where a wallet publishes its first hop: Base, then Ethereum, then Base again. Its
 // `main` arguments are fixed into the intents, as `sauce intent publish --args` fixes them.
 //

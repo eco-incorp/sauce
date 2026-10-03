@@ -242,10 +242,16 @@ describe("the guide's refusal list is the lowering's", () => {
       "A token-only body is not a Sauce program",
       "`approve(spender, 0)` and then `approve(spender, amount)`",
       "A token that returns `false` instead of reverting is not detected",
-      "const held = USDC.balanceOf(ctx.self());",
+      'require(amount > 0, "nothing delivered");',
     ]) {
       expect(GUIDE.replace(/\s+/g, " ")).toContain(claim);
     }
+    // The guide's statement makes the body a program: lowered with no fee, it asks for one.
+    expect(() =>
+      lower(
+        wrap('require(amount > 0, "nothing delivered");\n    USDC.transfer(RECIPIENT, amount);'),
+      ),
+    ).toThrow(/its cook must pay that chain's Kitchen fee/);
   });
 });
 

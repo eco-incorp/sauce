@@ -8,15 +8,16 @@
 //   reward: Uint256     the USDC on Ethereum that pays that solver
 //   refundTo: Address   who reclaims any hop's reward if no solver earns it
 //
-// Only the first hop's amounts exist when this is signed. `amount` is measured on Base, while the
-// first hop is being fulfilled. `arrived` is measured on Ethereum while the second is, by the
-// program the middle body compiled to, and it is the reward of the third. Each level's numbers
-// are filled in by the level above it, at that level's own execution time.
+// Each hop pays the next solver what it was delivered, and asks it for a tenth of a percent less:
+// `second` is what the second hop delivers on Ethereum, `third` what the third delivers on Base.
+// A body runs on a Pot every intent to its chain shares, so it moves only what its own intent
+// delivered, never the Pot's whole balance. Each level is opened and published by the level above
+// it, at that level's own execution time.
 //
 // The first two bodies are more than token writes, so each compiles to a program and runs on its
 // chain's Pot, paying that chain's Kitchen fee, read for it; the `.receive(...)` of each names what
-// a solver must deliver for it to have something to measure. Each level's deadlines count from when
-// it opens, and each names its creator, `refundTo`: one a program opens has no default.
+// a solver must deliver to it. Each level's deadlines count from when it opens, and each names its
+// creator, `refundTo`: one a program opens has no default.
 //
 // Every `USDC` is the USDC of the chain where that part runs. Each body's is its destination's. Each
 // reward is escrowed by the program offering it: the first hop's in Ethereum's USDC, the second's in
@@ -26,17 +27,17 @@ function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo:
     .creator(refundTo)
     .receive({ token: USDC, amount: delivered })
     .then(() => {
-      const amount = USDC.balanceOf(ctx.self());
-      Ethereum.Portal.send({ token: USDC, amount })
+      const second = delivered - delivered / 1000;
+      Ethereum.Portal.send({ token: USDC, amount: delivered })
         .creator(refundTo)
-        .receive({ token: USDC, amount })
+        .receive({ token: USDC, amount: second })
         .then(() => {
-          const arrived = USDC.balanceOf(ctx.self());
-          Base.Portal.send({ token: USDC, amount: arrived })
+          const third = second - second / 1000;
+          Base.Portal.send({ token: USDC, amount: second })
             .creator(refundTo)
-            .receive({ token: USDC, amount: arrived })
+            .receive({ token: USDC, amount: third })
             .then(() => {
-              USDC.transfer(recipient, arrived);
+              USDC.transfer(recipient, third);
             });
         });
     });

@@ -1,13 +1,15 @@
 // Repays an Aave V3 USDC loan on Base with USDC held on Ethereum, and sends the change back to
-// Ethereum: two intents, the second opened by the first one's body, each amount measured where it
+// Ethereum: two intents, the second opened by the first one's body, each amount known where it
 // exists.
 //
 // Here, on Ethereum, on the owner's Pot: the Pot's USDC is measured and offered as the reward to a
-// solver who delivers it on Base, less `solverBps`. In the braces, on Base, on the shared intent
-// Pot: what arrived repays `borrower`'s USDC debt (anyone may repay a debt for its borrower), up to
-// what is owed, and what is left is offered to a solver who pays it, less `solverBps`, to
-// `borrower` on Ethereum. That change exists only once the Base step has run, so the Base step
-// measures it and opens the second intent itself; with none left there is no second intent.
+// solver who delivers it on Base, less `solverBps`. In the braces, on Base, on the intent Pot every
+// intent to Base shares: `delivered`, what this intent delivered, repays `borrower`'s USDC debt
+// (anyone may repay a debt for its borrower), up to what is owed, and what the repayment did not use
+// is offered to a solver who pays it, less `solverBps`, to `borrower` on Ethereum. That change
+// exists only once the Base step has run, so the Base step measures what the repayment took and
+// opens the second intent itself; with none left there is no second intent. The body never moves
+// the shared Pot's whole balance.
 // `borrower`, `solverBps` and `refundTo` are this program's parameters, and using them inside the
 // braces is enough: their values go into each intent. Each intent names `refundTo` its creator,
 // where its reward goes back if no solver fills it.
@@ -45,16 +47,18 @@ function main(borrower: Address, solverBps: Uint256, refundTo: Address) {
     .creator(refundTo)
     .receive({ token: USDC, amount: delivered }) // Base's USDC, which the solver delivers
     .then(() => {
-      // The shared intent Pot holds nothing of anyone's between intents: all of it is this one's.
-      const arrived = USDC.balanceOf(ctx.self());
+      // The Pot is shared by every intent to Base: this body moves only `delivered`.
       const debtToken = AaveV3Reads.at(AaveV3.Pool).getReserveVariableDebtToken(USDC);
       const owed = Token(debtToken).balanceOf(borrower);
-      const repay = arrived < owed ? arrived : owed;
+      const repay = delivered < owed ? delivered : owed;
+      let used = 0;
       if (repay > 0) {
+        const before = USDC.balanceOf(ctx.self());
         USDC.approve(AaveV3.Pool, repay);
         AaveV3.Pool.repay(USDC, repay, 2, borrower);
+        used = before - USDC.balanceOf(ctx.self());
       }
-      const change = USDC.balanceOf(ctx.self());
+      const change = delivered - used;
       if (change > 0) {
         const paid = change - (change * solverBps) / 10000;
         Ethereum.Portal.send({ token: USDC, amount: change }) // Base's: it funds this level

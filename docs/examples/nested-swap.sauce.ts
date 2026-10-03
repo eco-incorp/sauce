@@ -14,6 +14,8 @@ import { uniswapV3 } from "@sauce/router";
 //   refundTo: Address   who reclaims either intent's reward if no solver earns it
 //
 // The swap is on Base's Uniswap V3 WETH/USDC pool at the 0.05% tier, looked up where the body runs.
+// It sells `delivered`, what this intent delivered: the Pot there is shared by every intent to Base,
+// so the body never sells its whole balance.
 function main(
   recipient: Address,
   delivered: Uint256,
@@ -25,9 +27,8 @@ function main(
     .creator(refundTo)
     .receive({ token: USDC, amount: delivered })
     .then(() => {
-      const amount = USDC.balanceOf(ctx.self());
       const pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
-      const bought = uniswapV3(pool, USDC, WETH, amount, 0, minOut, ctx.self());
+      const bought = uniswapV3(pool, USDC, WETH, delivered, 0, minOut, ctx.self());
       const payout = bought - bought / 1000;
       Ethereum.Portal.send({ token: WETH, amount: bought })
         .creator(refundTo)

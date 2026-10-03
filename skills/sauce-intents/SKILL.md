@@ -382,10 +382,10 @@ contracts as any program does (`sauce-script`): by namespace (`UniswapV3.Factory
 through a registry ABI import, or through an ABI of the file's own imported at its top. A swap is a
 `@sauce/router`
 call (`sauce-swaps`), imported at the top of the file. Every unsold input and every output leaves the destination Pot
-before the body ends, and a refund the body makes lands on the destination chain. The body runs on
-the shared intent Pot, which holds nothing of anyone's between intents, so it may return a token's
-whole balance there, as the refunds below do; a program on an owner's Pot returns only what is left
-of its own amount instead (`sauce-distributed-swap`).
+before the body ends, and a refund the body makes lands on the destination chain. On a
+destination the Pot is shared by every intent, so a body moves only amounts it can account for —
+what its intent delivered, what a `@sauce/router` function returns, or a balance's change across one
+step — never the Pot's whole balance: a refund returns what this intent delivered and did not use.
 
 A one-pool swap, with the guard every swap needs (`sauce-swaps`): WETH a solver delivers on Base is
 sold on the Uniswap V3 0.05% pool down to `sqrtPriceLimitX96`, at least `minOut` USDC goes to
@@ -412,8 +412,10 @@ function main(
       const pool = UniswapV3.Factory.getPool(WETH, USDC, 500); // Base's 0.05% tier
       require(pool != 0, "no WETH/USDC pool at 0.05%");
       // Pays the recipient the USDC, and reverts the whole fulfilment below minOut.
+      const before = WETH.balanceOf(ctx.self());
       uniswapV3(pool, WETH, USDC, amountIn, sqrtPriceLimitX96, minOut, recipient);
-      const unsold = WETH.balanceOf(ctx.self()); // the shared Pot: return all of it
+      // What this intent delivered and the pool did not take: never the shared Pot's balance.
+      const unsold = amountIn - (before - WETH.balanceOf(ctx.self()));
       if (unsold > 0) {
         WETH.transfer(refundTo, unsold);
       }
@@ -461,22 +463,23 @@ body is always a program, so its cook pays the destination's Kitchen fee.
 
 ## Cascades
 
-An intent's body can open the next one. Each level's amounts are measured at that level's own
-execution and carried into the level below; no amount past the first exists when the user signs.
+An intent's body can open the next one. Each level pays the next solver what it was delivered, so
+every amount follows from the first, and each solver keeps its margin (0.1% here).
 
 ```sauce chain=base
 function main(recipient: Address, refundTo: Address) {
-  const amount = USDC.balanceOf(ctx.self());
+  const amount = USDC.balanceOf(ctx.self()); // this Pot's own, on Base
+  const onEthereum = amount - amount / 1000; // what the first solver delivers
+  const onBase = onEthereum - onEthereum / 1000; // what the second delivers
   Ethereum.Portal.send({ token: USDC, amount })
     .creator(refundTo)
-    .receive({ token: USDC, amount })
+    .receive({ token: USDC, amount: onEthereum })
     .then(() => {
-      const arrived = USDC.balanceOf(ctx.self()); // Ethereum's USDC
-      Base.Portal.send({ token: USDC, amount: arrived }) // Ethereum's: it funds this level
+      Base.Portal.send({ token: USDC, amount: onEthereum }) // Ethereum's: what this level received
         .creator(refundTo) // every level names its own
-        .receive({ token: USDC, amount: arrived })
+        .receive({ token: USDC, amount: onBase })
         .then(() => {
-          USDC.transfer(recipient, arrived); // Base's USDC
+          USDC.transfer(recipient, onBase); // Base's USDC
         });
     });
 }
@@ -485,9 +488,10 @@ function main(recipient: Address, refundTo: Address) {
 Each level is a separate fulfilment by a solver, later, on its own chain: a failure on a later hop
 does not undo an earlier one. The child is published and funded **by the parent's body**, as (b)
 above: when the Ethereum level runs, the shared Pot there pays the next level's reward into its
-vault on Ethereum's Portal from what it holds, in Ethereum's USDC, and calls `publish`, so the child
-is published like any other intent and any solver can discover it. Keep every level on a supported
-chain, as here (Base, Ethereum, then Base again): the command checks the first level's chains only.
+vault on Ethereum's Portal from what that level was delivered, in Ethereum's USDC, and calls
+`publish`, so the child is published like any other intent and any solver can discover it. Keep
+every level on a supported chain, as here (Base, Ethereum, then Base again): the command checks the
+first level's chains only.
 
 `await` of an intent calls its `then`, as JavaScript's `await` does: `await x; rest` is
 `x.then(() => { rest })`. The statements after it are its body, so the same cascade reads top to
@@ -496,14 +500,15 @@ bottom. It compiles exactly as the program above:
 ```sauce chain=base
 function main(recipient: Address, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
+  const onEthereum = amount - amount / 1000;
+  const onBase = onEthereum - onEthereum / 1000;
   await Ethereum.Portal.send({ token: USDC, amount })
     .creator(refundTo)
-    .receive({ token: USDC, amount });
-  const arrived = USDC.balanceOf(ctx.self()); // Ethereum's USDC: this runs there
-  await Base.Portal.send({ token: USDC, amount: arrived })
+    .receive({ token: USDC, amount: onEthereum });
+  await Base.Portal.send({ token: USDC, amount: onEthereum }) // Ethereum's USDC: this runs there
     .creator(refundTo)
-    .receive({ token: USDC, amount: arrived });
-  USDC.transfer(recipient, arrived); // Base's USDC
+    .receive({ token: USDC, amount: onBase });
+  USDC.transfer(recipient, onBase); // Base's USDC
 }
 ```
 

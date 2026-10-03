@@ -65,8 +65,10 @@ function main(
         refundTo != 0, "give sqrtPriceLimitX96, recipient and refundTo");
       const self = ctx.self();
       const sellsToken0 = WETH < USDC;
-      const wethBefore = WETH.balanceOf(self);
       const usdcBefore = USDC.balanceOf(self);
+      // What this intent delivered and is still unsold. The Pot is shared by every intent to Base,
+      // so the body sells and returns only this, never the Pot's whole balance of WETH.
+      let unsold = amountIn;
 
       // One pass over the pools: each is offered all the WETH still unsold, up to its own limit, and
       // skipped when it is missing, has no liquidity, or is already past that limit. A pool fills
@@ -78,9 +80,10 @@ function main(
           if (UniswapV3.Pool(pool).liquidity() > 0) {
             const limit = ownLimit(sqrtPriceLimitX96, UniswapV3.Pool(pool).fee(), sellsToken0);
             const price = UniswapV3.Pool(pool).slot0().sqrtPriceX96;
-            const unsold = WETH.balanceOf(self);
             if (unsold > 0 && (sellsToken0 ? price > limit : price < limit)) {
+              const before = WETH.balanceOf(self);
               uniswapV3(pool, WETH, USDC, unsold, limit, 0, self);
+              unsold -= before - WETH.balanceOf(self);
             }
           }
         }
@@ -104,11 +107,11 @@ function main(
           }
           const fee = protocolFee + slot0.lpFee - (protocolFee * slot0.lpFee) / 1000000;
           const limit = ownLimit(sqrtPriceLimitX96, fee, sellsToken0);
-          const unsold = WETH.balanceOf(self);
           if (
             unsold > 0 &&
             (sellsToken0 ? slot0.sqrtPriceX96 > limit : slot0.sqrtPriceX96 < limit)
           ) {
+            const before = WETH.balanceOf(self);
             uniswapV4(
               UniswapV4.PoolManager,
               WETH,
@@ -121,14 +124,14 @@ function main(
               0,
               self,
             );
+            unsold -= before - WETH.balanceOf(self);
           }
         }
       }
 
-      // Settle on Base: the checks, the USDC out, and the WETH back. This body runs on the shared
-      // intent Pot, which holds nothing of anyone's between intents, so it returns all the WETH there.
-      const unsold = WETH.balanceOf(self);
-      const spent = wethBefore - unsold;
+      // Settle on Base: the checks, the USDC out, and the WETH this intent delivered and did not sell
+      // back.
+      const spent = amountIn - unsold;
       const out = USDC.balanceOf(self) - usdcBefore;
       require(out >= minOut, "output below minOut");
       require(out * 10 ** 18 >= minAvgPrice * spent, "average price below minAvgPrice");

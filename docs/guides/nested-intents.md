@@ -30,16 +30,16 @@ const executionFee = 1_000n; // Base's Kitchen fee: read it with destinationExec
 const built = Base.Portal.send({ token: usdc(Ethereum.chain), amount: 1_010_000n })
   .source("ethereum")
   .creator("0x4444444444444444444444444444444444444444")
-  // What the solver brings to Base. It arrives at the Executor; the body measures the Pot.
+  // What the solver brings to Base. It arrives at the Executor, which moves it into the Pot.
   .receive({ token: usdc(Base.chain), amount: 1_000_000n })
   .fee(executionFee)
   .then(() => {
-    // Runs on Base, in the fill of this intent: what the solver delivered, measured there.
-    const amount = USDC.balanceOf(ctx.self());
-    const payout = amount - amount / 1000n;
+    // Runs on Base, in the fill of this intent, on a Pot every intent to Base shares: it moves what
+    // this intent delivered, never the Pot's whole balance.
+    const payout = 1_000_000n - 1_000_000n / 1000n;
     // Opened, funded in Base's USDC and published on Base, in that same fill. Every intent a
     // program opens names its creator.
-    Ethereum.Portal.send({ token: USDC, amount })
+    Ethereum.Portal.send({ token: USDC, amount: 1_000_000n })
       .creator(0x4444444444444444444444444444444444444444n)
       .receive({ token: USDC, amount: payout })
       .then(() => {
@@ -74,10 +74,10 @@ into the Pot itself:
 //   reward: Uint256     the USDC on Ethereum that pays that solver
 //   refundTo: Address   who reclaims either intent's reward if no solver earns it
 //
-// The outer body runs on Base, in the fulfilment of the outer intent, so `amount` is measured there:
-// what the solver delivered to the Pot. The inner intent carries it on to Ethereum, less a tenth of
-// a percent the next solver keeps. Its reward is paid into its vault on Base's Portal, and it is
-// published, in that same fulfilment.
+// The outer body runs on Base, in the fulfilment of the outer intent, on a Pot every intent to Base
+// shares: it moves `delivered`, what this intent delivered, never the Pot's whole balance. The inner
+// intent carries it on to Ethereum, less a tenth of a percent the next solver keeps. Its reward is
+// paid into its vault on Base's Portal, and it is published, in that same fulfilment.
 //
 // Every `USDC` is the USDC of the chain where its part runs: the outer reward's is Ethereum's; the
 // outer body's, its delivery's and the inner reward's are Base's; the inner body's is Ethereum's.
@@ -86,9 +86,8 @@ function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo:
     .creator(refundTo)
     .receive({ token: USDC, amount: delivered })
     .then(() => {
-      const amount = USDC.balanceOf(ctx.self());
-      const payout = amount - amount / 1000;
-      Ethereum.Portal.send({ token: USDC, amount })
+      const payout = delivered - delivered / 1000;
+      Ethereum.Portal.send({ token: USDC, amount: delivered })
         .creator(refundTo) // every intent a program opens names its creator
         .receive({ token: USDC, amount: payout })
         .then(() => {
@@ -152,15 +151,17 @@ hold reverts the whole of it ([a throw reverts everything](intents.md#a-throw-re
 the outer intent stays unfilled, and no inner intent exists. Once it lands, the inner intent stands
 on its own.
 
-Its hash exists only once the outer body has run, because its amounts are measured there. Read it
-from the `IntentPublished` event of the outer fill: `sauce intent import <fill tx hash> --chain base`
+Its hash exists only once the outer body has run, because its deadlines count from then and its
+amounts may be computed there. Read it from the `IntentPublished` event of the outer fill: `sauce intent import <fill tx hash> --chain base`
 stores the inner intent, after which `sauce intent status`, `fill`, `prove` and `claim` take it like
 any other.
 
 ## Amounts measured as it runs
 
-Any value the outer body computes can be an amount of the inner intent: a balance, as above, or a
-swap's output, or arithmetic on either. The inner intent is encoded with a placeholder for each such
+Any value the outer body computes can be an amount of the inner intent: a swap's output, a
+balance's change across one step, or arithmetic on either. A body moves only what it can account
+for that way, or what its own intent delivered, never the balance of the Pot it runs on, which every
+intent to that chain shares. The inner intent is encoded with a placeholder for each such
 value, and the program splices the value in before it publishes. Here the inner reward is what a
 swap on Base bought:
 
@@ -181,6 +182,8 @@ import { uniswapV3 } from "@sauce/router";
 //   refundTo: Address   who reclaims either intent's reward if no solver earns it
 //
 // The swap is on Base's Uniswap V3 WETH/USDC pool at the 0.05% tier, looked up where the body runs.
+// It sells `delivered`, what this intent delivered: the Pot there is shared by every intent to Base,
+// so the body never sells its whole balance.
 function main(
   recipient: Address,
   delivered: Uint256,
@@ -192,9 +195,8 @@ function main(
     .creator(refundTo)
     .receive({ token: USDC, amount: delivered })
     .then(() => {
-      const amount = USDC.balanceOf(ctx.self());
       const pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
-      const bought = uniswapV3(pool, USDC, WETH, amount, 0, minOut, ctx.self());
+      const bought = uniswapV3(pool, USDC, WETH, delivered, 0, minOut, ctx.self());
       const payout = bought - bought / 1000;
       Ethereum.Portal.send({ token: WETH, amount: bought })
         .creator(refundTo)
@@ -244,8 +246,8 @@ names the creator only of a top-level intent a wallet publishes.
 ## Three levels
 
 The braces nest as deep as you write them. This file opens an intent to Base whose body opens the
-next level on Ethereum, whose body opens the last, back on Base, each with the amount it measured
-on arrival. It is published like the file above, from a wallet on Ethereum, `main`'s arguments
+next level on Ethereum, whose body opens the last, back on Base, each paying the next what it was
+delivered. It is published like the file above, from a wallet on Ethereum, `main`'s arguments
 fixed into it ([cross-chain-cascade.ts](../examples/cross-chain-cascade.ts) compiles it):
 
 ```js
@@ -259,15 +261,16 @@ fixed into it ([cross-chain-cascade.ts](../examples/cross-chain-cascade.ts) comp
 //   reward: Uint256     the USDC on Ethereum that pays that solver
 //   refundTo: Address   who reclaims any hop's reward if no solver earns it
 //
-// Only the first hop's amounts exist when this is signed. `amount` is measured on Base, while the
-// first hop is being fulfilled. `arrived` is measured on Ethereum while the second is, by the
-// program the middle body compiled to, and it is the reward of the third. Each level's numbers
-// are filled in by the level above it, at that level's own execution time.
+// Each hop pays the next solver what it was delivered, and asks it for a tenth of a percent less:
+// `second` is what the second hop delivers on Ethereum, `third` what the third delivers on Base.
+// A body runs on a Pot every intent to its chain shares, so it moves only what its own intent
+// delivered, never the Pot's whole balance. Each level is opened and published by the level above
+// it, at that level's own execution time.
 //
 // The first two bodies are more than token writes, so each compiles to a program and runs on its
 // chain's Pot, paying that chain's Kitchen fee, read for it; the `.receive(...)` of each names what
-// a solver must deliver for it to have something to measure. Each level's deadlines count from when
-// it opens, and each names its creator, `refundTo`: one a program opens has no default.
+// a solver must deliver to it. Each level's deadlines count from when it opens, and each names its
+// creator, `refundTo`: one a program opens has no default.
 //
 // Every `USDC` is the USDC of the chain where that part runs. Each body's is its destination's. Each
 // reward is escrowed by the program offering it: the first hop's in Ethereum's USDC, the second's in
@@ -277,31 +280,31 @@ function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo:
     .creator(refundTo)
     .receive({ token: USDC, amount: delivered })
     .then(() => {
-      const amount = USDC.balanceOf(ctx.self());
-      Ethereum.Portal.send({ token: USDC, amount })
+      const second = delivered - delivered / 1000;
+      Ethereum.Portal.send({ token: USDC, amount: delivered })
         .creator(refundTo)
-        .receive({ token: USDC, amount })
+        .receive({ token: USDC, amount: second })
         .then(() => {
-          const arrived = USDC.balanceOf(ctx.self());
-          Base.Portal.send({ token: USDC, amount: arrived })
+          const third = second - second / 1000;
+          Base.Portal.send({ token: USDC, amount: second })
             .creator(refundTo)
-            .receive({ token: USDC, amount: arrived })
+            .receive({ token: USDC, amount: third })
             .then(() => {
-              USDC.transfer(recipient, arrived);
+              USDC.transfer(recipient, third);
             });
         });
     });
 }
 ```
 
-No amount below the first exists when this is signed. `amount` is measured on Base. `arrived` is
-measured on Ethereum, while that level is being fulfilled, by the program the middle body compiled
-to, and it is the reward of the third. Each level's numbers are filled in by the level above it, at
-that level's own execution time.
+Every amount follows from the first: each level pays the next solver what it was delivered, and
+asks it for a tenth of a percent less, so `second` is what arrives on Ethereum and `third` what
+arrives back on Base. Each level is opened and published by the level above it, at that level's own
+execution time.
 
-The first two bodies measure and open an intent, so each is a program, cooked on its chain's Pot.
-The `.receive(...)` of each names what the solver of that level delivers, so the program has
-something to measure, and that level's route moves it into the Pot first. Each level is funded on
+The first two bodies open an intent, so each is a program, cooked on its chain's Pot. The
+`.receive(...)` of each names what the solver of that level delivers, and that level's route moves
+it into the Pot first. Each level is funded on
 the chain whose program offers it: the second level's reward in Base's USDC, the third's in
 Ethereum's, out of what the second level's solver delivered there.
 

@@ -252,7 +252,7 @@ returns:
   intent is still fulfilled, with nothing moved.
 
 For full `SafeERC20` checks, make the body a program by adding any statement that is not a token
-write, such as `const held = USDC.balanceOf(ctx.self());`. A program's token writes are
+write, such as `require(amount > 0, "nothing delivered");`. A program's token writes are
 [`SafeERC20`](protocols-and-tokens.md#writes-follow-safeerc20), and a `false` return reverts the
 fulfilment. A program needs the destination's Kitchen fee and a deployed Pot, as the table says.
 
@@ -263,10 +263,8 @@ function main(recipient: Address, refundTo: Address) {
     .creator(refundTo)
     .receive({ token: USDC, amount })
     .then(() => {
-      const here = USDC.balanceOf(ctx.self());
-      if (here > 0) {
-        USDC.transfer(recipient, here);
-      }
+      require(amount > 0, "nothing delivered");
+      USDC.transfer(recipient, amount);
     });
 }
 ```
@@ -303,7 +301,7 @@ imports, its interfaces and its module-level constants. Its program carries the 
 reaches, and the ones those reach, as written, and nothing else:
 
 ```ts
-import { balanceOf } from "@sauce/token";
+import { transfer } from "@sauce/token";
 
 function fee(amount: Uint256): Uint256 {
   return amount / 100;
@@ -315,8 +313,8 @@ function main(recipient: Address, refundTo: Address) {
     .creator(refundTo)
     .receive({ token: USDC, amount })
     .then(() => {
-      const [held] = abi.decode(abi.encode(balanceOf(USDC, ctx.self())), ["Uint256"]);
-      USDC.transfer(recipient, held - fee(held));
+      USDC.transfer(recipient, amount - fee(amount));
+      transfer(USDC, refundTo, fee(amount));
     });
 }
 ```
@@ -334,7 +332,7 @@ function that opens it, since that function's program would contain the intent i
 
 An intent inside an intent is lowered recursively — the child is compiled by re-entering the same
 pipeline, so it gets its own chain's names and this same lowering, at any depth. That is how a chain
-of hops whose amounts are each measured on arrival is written; see
+of hops, each paying the next what it was delivered, is written; see
 [nested intents](nested-intents.md#three-levels).
 
 ### Names resolve per chain
@@ -498,7 +496,9 @@ A Pot you name with `pot` must equally exist already and be owned by that Execut
 
 Because it is shared, **leave nothing in it**. Deliver assets, use them, and move the remainder out
 within the same fulfillment. Anything resting there, or any allowance left standing, belongs to
-whoever drives the Executor next.
+whoever drives the Executor next. On a destination the Pot is shared by every intent, so a body
+moves only amounts it can account for — what its intent delivered, what a `@sauce/router` function
+returns, or a balance's change across one step — never the Pot's whole balance.
 
 ### Overrides
 

@@ -8,10 +8,10 @@
 //   reward: Uint256     the USDC on Ethereum that pays that solver
 //   refundTo: Address   who reclaims either intent's reward if no solver earns it
 //
-// The outer body runs on Base, in the fulfilment of the outer intent, so `amount` is measured there:
-// what the solver delivered to the Pot. The inner intent carries it on to Ethereum, less a tenth of
-// a percent the next solver keeps. Its reward is paid into its vault on Base's Portal, and it is
-// published, in that same fulfilment.
+// The outer body runs on Base, in the fulfilment of the outer intent, on a Pot every intent to Base
+// shares: it moves `delivered`, what this intent delivered, never the Pot's whole balance. The inner
+// intent carries it on to Ethereum, less a tenth of a percent the next solver keeps. Its reward is
+// paid into its vault on Base's Portal, and it is published, in that same fulfilment.
 //
 // Every `USDC` is the USDC of the chain where its part runs: the outer reward's is Ethereum's; the
 // outer body's, its delivery's and the inner reward's are Base's; the inner body's is Ethereum's.
@@ -20,9 +20,8 @@ function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo:
     .creator(refundTo)
     .receive({ token: USDC, amount: delivered })
     .then(() => {
-      const amount = USDC.balanceOf(ctx.self());
-      const payout = amount - amount / 1000;
-      Ethereum.Portal.send({ token: USDC, amount })
+      const payout = delivered - delivered / 1000;
+      Ethereum.Portal.send({ token: USDC, amount: delivered })
         .creator(refundTo) // every intent a program opens names its creator
         .receive({ token: USDC, amount: payout })
         .then(() => {

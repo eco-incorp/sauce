@@ -462,9 +462,8 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
       .salt(0n)
       .then(
         `function main() {
-  const amount = USDC.balanceOf(ctx.self());
-  const payout = amount - amount / 1000;
-  Ethereum.Portal.send({ token: USDC, amount })
+  const payout = ${AMOUNT} - ${AMOUNT} / 1000;
+  Ethereum.Portal.send({ token: USDC, amount: ${AMOUNT} })
     .creator(${OWNER.address})
     .deadline(${start + 7200n})
     .receive({ token: USDC, amount: payout })
@@ -477,7 +476,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
       );
     expect(closure.hash().intentHash).toBe(outer);
 
-    // ---- Base: a solver fills it; the body measures what arrived and publishes the inner one ---
+    // ---- Base: a solver fills it; the body publishes the inner one with what it delivered ------
     await base.mint(baseUsdc, SOLVER.address, AMOUNT);
     const filled = jsonOf(await lifecycle("fill", outer, store, ...send));
     const fulfil = (
