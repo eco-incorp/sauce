@@ -109,8 +109,9 @@ describe("the route a hook adds to", () => {
     const plain = compile(opened(".deadline(2000000600).fee(7)"));
     const hooked = compile(
       opened(
-        ".before(() => { USDC.transfer(HOOK, 1); }).deadline(2000000600)" +
-          ".after(() => { USDC.transfer(HOOK, 2); }).fee(7)",
+        // Approves of zero: no reset, and nothing to deliver.
+        ".before(() => { USDC.approve(HOOK, 0); }).deadline(2000000600)" +
+          ".after(() => { Token(HOOK).approve(SPENDER, 0); }).fee(7)",
       ),
     );
     const [withHooks] = hooked.intents;
@@ -126,7 +127,7 @@ describe("the route a hook adds to", () => {
   it("a body of token writes: the hooks' calls around the body's own, all recorded", () => {
     const program = `function main() {
   Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .receive({ token: USDC, amount: 1000000 })
+    .receive({ token: USDC, amount: 999997 })
     .before(() => { USDC.transfer(HOOK, 1); })
     .after(() => { USDC.transfer(HOOK, 2); })
     .then(() => { USDC.transfer(RECIPIENT, 999997); });
@@ -138,31 +139,56 @@ describe("the route a hook adds to", () => {
     ]);
   });
 
-  it("`.receive()` naming nothing delivers what every recorded transfer moves, the hooks' too", () => {
-    const program = (body: string) => `function main() {
-  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
-    .receive()
+  /** Each token the route delivers, and how much. */
+  const deliveryOf = (program: CompiledSauceProgram) =>
+    program.intents[0]!.intent.route.tokens.map((t) => [denormalizeToEvm(t.token), t.amount]);
+
+  it("delivers what the hooks' transfers move on top of what `.receive(...)` names: it is the body's", () => {
+    const hooks = `
     .before(() => { USDC.transfer(HOOK, 1); USDC.approve(SPENDER, 9); })
-    .after(() => { USDC.transfer(HOOK, 2); })
-    .then(() => { ${body} });
-}`;
-    // A body of token writes: its transfer is delivered between the hooks'.
-    const recorded = compile(program("USDC.transfer(RECIPIENT, 7);")).intents[0]!.intent;
-    expect(recorded.route.tokens.map((t) => [denormalizeToEvm(t.token), t.amount])).toEqual([
+    .after(() => { USDC.transfer(HOOK, 2); })`;
+    // A program: what `.receive(...)` names moves into its Pot whole, and the hooks spend their
+    // own. An approve moves nothing.
+    const compiled = compile(opened(hooks));
+    expect(deliveryOf(compiled)).toEqual([
       [usdc, 1n],
-      [usdc, 7n],
+      [usdc, 1_000_000n],
       [usdc, 2n],
     ]);
-    // A program: the hooks' transfers are delivered to the Executor, and nothing moves into the
-    // Pot.
-    const compiled = compile(program(PROGRAM));
-    expect(compiled.intents[0]!.intent.route.tokens.map((t) => t.amount)).toEqual([1n, 2n]);
     expect(callsOf(compiled)).toEqual([
       write(usdc, "transfer", HOOK, 1n),
       write(usdc, "approve", SPENDER, 0n),
       write(usdc, "approve", SPENDER, 9n),
+      delivered(1_000_000n),
       cook,
       write(usdc, "transfer", HOOK, 2n),
+    ]);
+
+    const named = (receive: string, body: string) => `function main() {
+  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
+    .receive(${receive})${hooks}
+    .then(() => { ${body} });
+}`;
+    // `.receive()` naming nothing: a body of token writes is delivered what it moves, between the
+    // hooks'; a program, nothing, and only the hooks' transfers reach the Executor.
+    expect(deliveryOf(compile(named("", "USDC.transfer(RECIPIENT, 7);")))).toEqual([
+      [usdc, 1n],
+      [usdc, 7n],
+      [usdc, 2n],
+    ]);
+    const nothing = compile(named("", PROGRAM));
+    expect(deliveryOf(nothing)).toEqual([
+      [usdc, 1n],
+      [usdc, 2n],
+    ]);
+    expect(callsOf(nothing)).not.toContainEqual(delivered(1n));
+    // A body of token writes given a delivery takes it as it is.
+    expect(
+      deliveryOf(compile(named("{ token: USDC, amount: 7 }", "USDC.transfer(RECIPIENT, 7);"))),
+    ).toEqual([
+      [usdc, 1n],
+      [usdc, 7n],
+      [usdc, 2n],
     ]);
   });
 

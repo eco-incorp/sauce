@@ -10,6 +10,8 @@
  *  - who calls a hook: a contract that logs its caller with what it was sent sees the Executor;
  *  - the order: the `before` hooks' calls, then the body (a cook, or its recorded writes), then the
  *    `after` hooks', read off the order of the logs in one fill;
+ *  - what a hook's transfer spends is delivered on top of what `.receive(...)` names, which still
+ *    moves into the Pot whole;
  *  - a hook that reverts reverts the fill, its body's `.catch(...)` notwithstanding — the handler
  *    is the body's — while the same handler does catch a reverting body;
  *  - every approve a hook records is reset to zero first: a token that refuses to move a standing
@@ -68,8 +70,10 @@ const PROVER = "0x5555555555555555555555555555555555555555" as const;
 const RECIPIENT = "0x00000000000000000000000000000000000000e1" as Address;
 const FALLBACK = "0x00000000000000000000000000000000000000e2" as Address;
 const SPENDER = "0x00000000000000000000000000000000000000e3" as Address;
-/** What a hook's call carries, to tell the `before` one from the `after` one in the logs. */
-const MARK = "0x00000000000000000000000000000000000000e4" as Address;
+/** What a hook's call carries, to tell the `before` one from the `after` one in the logs. Each is
+ *  an approve of zero, which moves nothing, so asks for no delivery, and is not reset first. */
+const BEFORE = "0x00000000000000000000000000000000000000b4" as Address;
+const AFTER = "0x00000000000000000000000000000000000000a4" as Address;
 /** A contract that logs every call it gets, its caller the one topic and the calldata the data:
  *  CALLDATACOPY(0, 0, CALLDATASIZE), LOG1(0, CALLDATASIZE, CALLER), STOP. */
 const RECORDER_CODE = "0x365f5f3733365fa100" as Hex;
@@ -123,9 +127,16 @@ describeEvm("intent hooks, executed by the Portal's Executor", () => {
   const opened = (program: string, defines: Record<string, Address | bigint>): Intent => {
     const compiled = compileSauceProgram("base", program, {
       defines: Object.fromEntries(
-        Object.entries({ RECIPIENT, FALLBACK, SPENDER, MARK, RECORDER, REVERTER, ...defines }).map(
-          ([name, value]) => [name, BigInt(value)],
-        ),
+        Object.entries({
+          RECIPIENT,
+          FALLBACK,
+          SPENDER,
+          BEFORE,
+          AFTER,
+          RECORDER,
+          REVERTER,
+          ...defines,
+        }).map(([name, value]) => [name, BigInt(value)]),
       ),
       intents: {
         deadline: 4_000_000_000n,
@@ -146,7 +157,12 @@ describeEvm("intent hooks, executed by the Portal's Executor", () => {
    *  the route's native. The receipt, whatever its status. */
   const fulfil = async (intent: Intent) => {
     const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], encodeRouteEvm(intent.route));
+    // A token the route names twice is pulled twice: approve the sum.
+    const owed = new Map<Address, bigint>();
     for (const { token: address, amount } of route.tokens) {
+      owed.set(address, (owed.get(address) ?? 0n) + amount);
+    }
+    for (const [address, amount] of owed) {
       await local.mint(address, DEPLOYER.address, amount);
       await local.send(
         local.deployer,
@@ -171,7 +187,7 @@ describeEvm("intent hooks, executed by the Portal's Executor", () => {
     return local.publicClient.waitForTransactionReceipt({ hash });
   };
 
-  /** The recorder's logs in a fill: who called it, and the `transfer` it was sent. */
+  /** The recorder's logs in a fill: who called it, and whose approve it was sent. */
   const recorded = (logs: readonly Log[]) =>
     logs
       .filter((log) => getAddress(log.address) === getAddress(RECORDER))
@@ -180,7 +196,7 @@ describeEvm("intent hooks, executed by the Portal's Executor", () => {
         return {
           index: log.logIndex!,
           caller: getAddress(`0x${log.topics[0]!.slice(26)}`),
-          amount: (args as readonly [Address, bigint])[1],
+          mark: getAddress((args as readonly [Address, bigint])[0]),
         };
       });
 
@@ -206,8 +222,8 @@ describeEvm("intent hooks, executed by the Portal's Executor", () => {
     });
 
   const HOOKS = `
-    .before(() => { Token(RECORDER).transfer(MARK, 1); })
-    .after(() => { Token(RECORDER).transfer(MARK, 2); })`;
+    .before(() => { Token(RECORDER).approve(BEFORE, 0); })
+    .after(() => { Token(RECORDER).approve(AFTER, 0); })`;
 
   it("a program body: the Executor calls the before hook, cooks, then calls the after hook", async () => {
     const delivered = await token();
@@ -227,7 +243,7 @@ describeEvm("intent hooks, executed by the Portal's Executor", () => {
 
     const [before, after] = recorded(receipt.logs);
     expect([before!.caller, after!.caller]).toEqual([getAddress(executor), getAddress(executor)]);
-    expect([before!.amount, after!.amount]).toEqual([1n, 2n]);
+    expect([before!.mark, after!.mark]).toEqual([getAddress(BEFORE), getAddress(AFTER)]);
     // The body ran in the Pot between the two: its transfer out of the Pot is logged there.
     const body = transferFrom(receipt.logs, delivered, pot);
     expect(before!.index).toBeLessThan(body);
@@ -256,6 +272,27 @@ describeEvm("intent hooks, executed by the Portal's Executor", () => {
     expect(await local.balanceOf(delivered, RECIPIENT)).toBe(AMOUNT);
   }, 300_000);
 
+  it("a hook's transfer is delivered on top of the body's: the Pot gets what `.receive` names", async () => {
+    const delivered = await token();
+    const intent = opened(
+      `function main() {
+  Base.Portal.send({ token: TOKEN, amount: 1 })
+    .receive({ token: TOKEN, amount: ${AMOUNT} })
+    .before(() => { Token(TOKEN).transfer(SPENDER, 7); })
+    .then(() => {
+      const held = Token(TOKEN).balanceOf(ctx.self());
+      Token(TOKEN).transfer(RECIPIENT, held);
+    });
+}`,
+      { TOKEN: delivered },
+    );
+    expect(intent.route.tokens.map((t) => t.amount)).toEqual([7n, AMOUNT]);
+    expect((await fulfil(intent)).status).toBe("success");
+    expect(await local.balanceOf(delivered, SPENDER)).toBe(7n);
+    expect(await local.balanceOf(delivered, RECIPIENT)).toBe(AMOUNT);
+    expect(await local.balanceOf(delivered, executor)).toBe(0n);
+  }, 300_000);
+
   describe("a hook that reverts reverts the fill", () => {
     /** A handled program body, `fails` deciding whether it reverts, with `hooks`. */
     const handled = (hooks: string, fails: boolean) => `function main() {
@@ -277,7 +314,7 @@ describeEvm("intent hooks, executed by the Portal's Executor", () => {
       async (hook) => {
         const delivered = await token();
         const calling = (target: string) =>
-          opened(handled(`.${hook}(() => { Token(${target}).transfer(MARK, 1); })`, false), {
+          opened(handled(`.${hook}(() => { Token(${target}).approve(BEFORE, 0); })`, false), {
             TOKEN: delivered,
           });
         expect((await fulfil(calling("REVERTER"))).status).toBe("reverted");
@@ -294,7 +331,10 @@ describeEvm("intent hooks, executed by the Portal's Executor", () => {
       const delivered = await token();
       const receipt = await fulfil(opened(handled(HOOKS, true), { TOKEN: delivered }));
       expect(receipt.status).toBe("success");
-      expect(recorded(receipt.logs).map((call) => call.amount)).toEqual([1n, 2n]);
+      expect(recorded(receipt.logs).map((call) => call.mark)).toEqual([
+        getAddress(BEFORE),
+        getAddress(AFTER),
+      ]);
       expect(await local.balanceOf(delivered, RECIPIENT)).toBe(0n);
       expect(await local.balanceOf(delivered, FALLBACK)).toBe(AMOUNT);
     }, 300_000);
