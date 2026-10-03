@@ -193,11 +193,11 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    roles:
 
    ```text
-   The cook succeeds from <owner>: gas used 275051 for the cook, after the Pot's deploy (1. below), returns <96 bytes>
+   The cook succeeds from <owner>: gas used 275993 for the cook, after the Pot's deploy (1. below), returns <96 bytes>
    main returns { pool: Address; spent: Uint256; bought: Uint256 }: { pool: <pool>, spent: 100000000, bought: 37716248833222607 }
    Rehearsed with eth_simulateV1 on the state of block <block>; nothing was signed or sent:
      1. Kitchen.deployPot(<owner>, …), gas used 455479: Pot <Pot> is not deployed on base yet. …
-     2. the cook, from the owner <owner>, gas used 275051
+     2. the cook, from the owner <owner>, gas used 275993
    Assumed for this rehearsal only, by state override:
      the Pot holds 100 USDC: --assume-balance (…)
    …
@@ -292,7 +292,7 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    moved:
 
    ```text
-   cook <tx hash>: success, gas used 275051, block <block>
+   cook <tx hash>: success, gas used 275993, block <block>
    cost …
    Token transfers:
      0.037716248833222607 WETH: <pool> -> <Pot> (the Pot)
@@ -316,7 +316,7 @@ to 100 USDC, at no more than 2,700 USDC per WETH and for at least 0.037 WETH.
    every intent it opens:
 
    ```text
-   transaction <tx hash> on base: success, block <block>, gas used 275051
+   transaction <tx hash> on base: success, block <block>, gas used 275993
      from <owner> to <Pot>, value …
    …
        program: 992 bytes, keccak256 …

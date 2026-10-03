@@ -1,39 +1,29 @@
-import { Base, destinationPot, Ethereum, routes, token } from "@eco-incorp/sauce";
+import { Base, Ethereum, routes } from "@eco-incorp/sauce";
 import { toHex } from "viem";
 
 // Offline fixtures. Read the current Kitchen fee before submission: destinationExecutionFee().
-// The Pot the route cooks on: the shared one owned by Base's Portal's Executor. It must already exist.
-const pot = destinationPot(Base.chain);
 const executionFee = 1_000n;
-const baseUsdcValue = routes.registryTokenAddress(Base.chain, "USDC");
-const sourceUsdcValue = routes.registryTokenAddress(Ethereum.chain, "USDC");
-if (baseUsdcValue === undefined || sourceUsdcValue === undefined)
-  throw new Error("Missing USDC registry");
-const baseUsdc = toHex(baseUsdcValue, { size: 20 });
-const sourceUsdc = toHex(sourceUsdcValue, { size: 20 });
-const recipient = 0x2222222222222222222222222222222222222222n;
-const amount = 1_000_000n;
+const usdcOn = (chain: typeof Base.chain) => {
+  const value = routes.registryTokenAddress(chain, "USDC");
+  if (value === undefined) throw new Error("Missing USDC registry");
+  return toHex(value, { size: 20 });
+};
+const baseUsdc = usdcOn(Base.chain);
+const sourceUsdc = usdcOn(Ethereum.chain);
 
-const built = Base(
-  () => {
-    USDC.transfer(recipient, amount);
-  },
-  {
-    // The route's native amount, which the solver sends with the fill, defaults to this fee.
-    execution: { value: executionFee },
-    deadline: 2_000_000_000n,
-    // Callbacks capture nothing: explicitly supply every external scalar.
-    defines: { recipient, amount },
-    tokens: [{ token: baseUsdc, amount }],
-    // Route assets arrive at the Executor; the Sauce program spends from the Pot.
-    precalls: [token.Token.transfer({ token: baseUsdc, to: pot, amount }).toCall()],
-  },
-).reward({
-  source: Ethereum.chain,
-  creator: "0x6666666666666666666666666666666666666666",
-  deadline: 2_000_003_600n,
-  tokens: [{ token: sourceUsdc, amount }],
-});
+// The reward escrowed on Ethereum, what a solver delivers on Base, and the body that runs there with
+// it. The body is SauceScript for Base, read as source and never run here, so it names only what
+// SauceScript knows: Base's `USDC` and literals. The delivered USDC arrives at Base's Portal
+// Executor, and the intent moves it into the Pot the body cooks on: the shared one that Executor
+// owns, which must already exist. The deadlines take their defaults, counted from now.
+const built = Base.Portal.send({ token: sourceUsdc, amount: 1_010_000n })
+  .source("ethereum")
+  .creator("0x6666666666666666666666666666666666666666")
+  .receive({ token: baseUsdc, amount: 1_000_000n })
+  .fee(executionFee)
+  .then(() => {
+    USDC.transfer(0x2222222222222222222222222222222222222222n, 1_000_000n);
+  });
 
 // The reward paid into the intent's vault, then `publish`. Pass `{ vault }` as `built.vaultCall()`
 // reads it from the source chain to have it checked against this offline derivation.

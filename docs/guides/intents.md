@@ -371,6 +371,32 @@ A `throw` or a failed `require` in a program, and every guard the SDK emits, rev
 fulfillment — no earlier route call survives it. A program that refuses to create an intent
 therefore leaves nothing behind, and a measurement below its floor cannot strand funds in the Pot.
 
+### A handler for the body
+
+On an EVM destination, `.catch(...)` after `.then(...)` handles the body. When the body reverts,
+everything it did is undone, the handler runs in its place, and the fill still succeeds. Here a
+supply that fails hands the delivered USDC to the beneficiary instead:
+
+```js
+function main(beneficiary: Address, refundTo: Address) {
+  const amount = USDC.balanceOf(ctx.self());
+  Ethereum.Portal.send({ token: USDC, amount })
+    .creator(refundTo)
+    .receive({ token: USDC, amount })
+    .then(() => {
+      USDC.approve(AaveV3.Pool, amount);
+      AaveV3.Pool.supply(USDC, amount, beneficiary, 0);
+    })
+    .catch((e) => {
+      USDC.transfer(beneficiary, amount);
+    });
+}
+```
+
+`e` is what the body reverted with, as `bytes`: at most its first 256 bytes, the error's selector
+first. Write `.catch(() => { ... })` when the handler does not read it. A handled body is always a
+program, so its cook pays the destination's Kitchen fee.
+
 ### Where each value comes from
 
 | Value              | Comes from                                                                               |
@@ -493,7 +519,6 @@ Each of these is a compile error naming the construct, never a silently differen
   computes.
 - A chain with no eco-routes deployment, or a pair with no prover deployed on both sides.
 - A program body that calls the function opening it.
-- A program body using a module variable that a local of the opening function shadows.
 
 Inside a program body an unknown name is the _compiler's_ error rather than this lowering's, and
 reads the same way: it names the variable that is not declared.

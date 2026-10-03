@@ -13,7 +13,7 @@ execution time, a Solana account manifest, or full control over module resolutio
 
 | Entry point                                                         | You supply                                                  | The SDK supplies                                                                                   |
 | ------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `Base(body, options)` / `routes.openRoute(...)`                     | Body and intent options                                     | Chain defines, the ambient token module, registry rewrites, the EVM Pot and engine, a built intent |
+| `Base.Portal…then(body)` / `routes.openRoute(...)`                  | Body, and the intent's steps or route options               | Chain defines, the ambient token module, registry rewrites, the EVM Pot and engine, a built intent |
 | `routes.compileSauceRoute(destination, source, execution, options)` | Source, destination, execution settings                     | Registry rewrites, token defines, one encoded route call                                           |
 | `compile({ target, resolve, ... })`                                 | All source and dependency resolution, and compiler settings | Nothing — you get the compiler's own result                                                        |
 

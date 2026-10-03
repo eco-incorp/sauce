@@ -493,6 +493,7 @@ describe("venue-where-deployed and cross-chain-intent on Base state", SUITE, () 
         if (word === "<address>") return [env.account.address];
         if (word === "<recipient>") return [RECIPIENT];
         if (word === "<minAmount>") return [`${minAmount}`];
+        if (word === "<refundTo>") return [env.account.address];
         if (word === "--args") {
           return ["--rpc-url", env.rpc, "--salt-hex", POT_SALT, "--json", "--args"];
         }

@@ -1,12 +1,12 @@
 // An intent from Ethereum to Base whose body opens an intent of its own, from Base back to
 // Ethereum. All of it is SauceScript, opened on Ethereum and published from a wallet:
-//   sauce intent publish nested-intent.sauce.ts --chain ethereum \
-//     --intent-deadline … --intent-creator … --intent-execution-fee auto \
-//     --args <recipient> <delivered> <reward>
+//   sauce intent publish nested-intent.sauce.ts --chain ethereum --keystore <keystore> \
+//     --args <recipient> <delivered> <reward> <refundTo>
 //
 //   recipient: Address  who is paid on Ethereum, at the end
 //   delivered: Uint256  the USDC a solver delivers to Base, in base units (6 decimals)
 //   reward: Uint256     the USDC on Ethereum that pays that solver
+//   refundTo: Address   who reclaims either intent's reward if no solver earns it
 //
 // The outer body runs on Base, in the fulfilment of the outer intent, so `amount` is measured there:
 // what the solver delivered to the Pot. The inner intent carries it on to Ethereum, less a tenth of
@@ -15,15 +15,18 @@
 //
 // Every `USDC` is the USDC of the chain where its part runs: the outer reward's is Ethereum's; the
 // outer body's, its delivery's and the inner reward's are Base's; the inner body's is Ethereum's.
-function main(recipient: Address, delivered: Uint256, reward: Uint256) {
-  Base(
-    () => {
+function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo: Address) {
+  Base.Portal.send({ token: USDC, amount: reward })
+    .creator(refundTo)
+    .receive({ token: USDC, amount: delivered })
+    .then(() => {
       const amount = USDC.balanceOf(ctx.self());
       const payout = amount - amount / 1000;
-      Ethereum(() => {
-        USDC.transfer(recipient, payout);
-      }).reward({ tokens: [{ token: USDC, amount }] });
-    },
-    { tokens: [{ token: USDC, amount: delivered }] },
-  ).reward({ tokens: [{ token: USDC, amount: reward }] });
+      Ethereum.Portal.send({ token: USDC, amount })
+        .creator(refundTo) // every intent a program opens names its creator
+        .receive({ token: USDC, amount: payout })
+        .then(() => {
+          USDC.transfer(recipient, payout);
+        });
+    });
 }

@@ -34,6 +34,7 @@ skills/sauce-globals/references/*.md
 skills/sauce-chains/references/*.md
 skills/sauce-protocols/references/index.md
 skills/sauce-protocols/references/registry/*.md
+skills/sauce-intents/references/defaults.md
 # The actions skill's reference, which `sdk/scripts/gen-skills-actions.mjs` renders from the actions
 # JSON Schema on every SDK build, held to the committed copy the same way.
 skills/sauce-actions/references/*.md

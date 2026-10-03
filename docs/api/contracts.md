@@ -32,8 +32,8 @@ chain export's own `route`, `chain`, or a function property: composing the expor
 
 | Property               | What it is                                                                                                                                                                                            |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Base(body, options)`  | Opens an intent on Base; see [routes](routes.md#chain-entry-points)                                                                                                                                   |
-| `Base.chain`, `.route` | The chain record, and the same intent entry point                                                                                                                                                     |
+| `Base.Portal`          | Opens an intent on Base, `Base.Portal.send(...).receive(...).then(body)`; see [routes](routes.md#the-portal-form)                                                                                     |
+| `Base.chain`, `.route` | The chain record, and the lower-level route builder; see [routes](routes.md#chain-entry-points)                                                                                                       |
 | `Base.<Symbol>`        | A registry token: a frozen `{ address, decimals, symbol, chain }` (`routes.RegistryToken`); on `Solana`, a registered mint, its `address` the mint's 32-byte key as hex and `mint` its base58 address |
 | `Base.<Namespace>`     | A protocol or family namespace, typed by the generated `contracts.ChainContracts`                                                                                                                     |
 

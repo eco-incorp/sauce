@@ -18,8 +18,9 @@
 //   2. every file reads the same for every agent and every release: no version numbers or release
 //      talk, no agent's name or install path, no engine internals (opcodes, mnemonics, stack
 //      effects, bytecode bytes), no placeholder or unrecorded address, no Portal or prover outside
-//      the intents skill, no RPC endpoint, no description of Sauce as a multicall, no call to
-//      `available(...)` (a name a chain lacks is zero there: `X != 0n`), and nothing that
+//      the intents skill (but for the intent syntax, `Chain.Portal.send(...)`), no RPC endpoint,
+//      no description of Sauce as a multicall, no call to `available(...)` (a name a chain lacks is
+//      zero there: `X != 0`), and nothing that
 //      tells the reader to copy, adapt or start from an example (the agent writes each program
 //      itself: COPY_FRAMING), no skill named in code (`sauce-<name>`) that the package does not
 //      ship; the command is written `sauce …`, `sauce-cli` says in one paragraph how to get it
@@ -595,6 +596,12 @@ const REFERENCES = await skillsReferences(
   (slug) => existsSync(join(PROTOCOL_DOCUMENTS, `${slug}.md`)),
 );
 const RENDERED = renderSkillsReferences(REFERENCES);
+// The intent syntax names a chain's Portal (`Ethereum.Portal.send(...)`, or `Chain.Portal` for any
+// chain), and every skill may write it: the Portal rule is about the contract, not the syntax.
+const CHAIN_PORTAL = new RegExp(
+  `(?:<Chain>|\\b(?:Chain|${REFERENCES.globals.chains.map((chain) => chain.key).join("|")}))\\.Portal\\b`,
+  "g",
+);
 const GENERATED = new Set(Object.keys(RENDERED).map((name) => join(SKILLS_DIR, name)));
 const isGenerated = (file) => GENERATED.has(file);
 // A heading's anchor, as GitHub and the docs check derive it.
@@ -674,9 +681,7 @@ function wording(skill, file) {
     if (
       skill.dir !== INTENTS_SKILL &&
       !isGenerated(file) &&
-      // A chain's `Portal` is the intent syntax every skill may show (`Base.Portal.send(…)`); what
-      // stays in the intents skill is the Portal contract and its provers.
-      /\b(?:Portal|portal|[Pp]rover)s?\b/.test(line.replace(/(?:\b[A-Z]\w*|<\w+>)\.Portal\b/g, ""))
+      /\b(?:Portal|portal|[Pp]rover)s?\b/.test(line.replace(CHAIN_PORTAL, ""))
     )
       fail(where(i), `names the Portal or a prover outside ${INTENTS_SKILL}`);
     for (const m of line.matchAll(/0x[0-9a-fA-F]{40}(?![0-9a-fA-F])/g)) {
@@ -1037,11 +1042,13 @@ async function runUsage(where, file, argv, chain, header = false) {
     } else if (flag === "--compact-args") kept.push(flag);
     else if (/^--/.test(flag) && value !== undefined && !value.startsWith("-")) i++;
   }
-  if (OPENS_INTENT.test(read(file)) && !kept.includes("--intent-deadline"))
-    fail(
-      where,
-      "opens an intent, so its usage line must give --intent-deadline and --intent-creator",
-    );
+  // An intent's deadlines and creator have defaults, which a usage line need not give: offline, the
+  // run gives the creator a wallet would (there is none to compile for), and the fee the Kitchen
+  // would be read for.
+  if (OPENS_INTENT.test(read(file))) {
+    if (!kept.includes("--intent-creator")) kept.push("--intent-creator", DEV);
+    if (!kept.includes("--intent-execution-fee")) kept.push("--intent-execution-fee", "0");
+  }
   const compiled = await compileJson(file, chain, kept);
   if (compiled.error !== undefined) {
     fail(where, `does not compile for ${chain}: ${compiled.error}`);
@@ -1246,7 +1253,8 @@ try {
         const file = join(SCRATCH, `block-${n++}.sauce.ts`);
         writeFileSync(file, `${block.body}\n`);
         const intents = OPENS_INTENT.test(block.body)
-          ? ["--intent-deadline", DEADLINE, "--intent-creator", DEV, "--intent-execution-fee", "0"]
+          ? // Its deadlines default; a creator and the fee are what a wallet and a read would give.
+            ["--intent-creator", DEV, "--intent-execution-fee", "0"]
           : [];
         for (const chain of chains) {
           const compiled = await compileJson(file, chain, intents);

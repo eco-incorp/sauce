@@ -59,6 +59,8 @@ agent the same facts, from the same sources: [Agent skills](guides/skills.md).
 - [Tokens](reference/tokens.md): every chain's tokens and tokenized stocks, and the token functions.
 - [SauceScript reference](reference/saucescript.md): every type, statement, builtin and limit, per
   target.
+- [Intent defaults](reference/intent-defaults.md): each intent modifier, what it sets, and what it
+  is when left out.
 - [API entry points](api/README.md): every published import and what it contains.
 - [Routes](api/routes.md): chain entry points, intent options, built intents, nesting.
 - [Contracts and tokens](api/contracts.md): every protocol namespace and token, in a program and in

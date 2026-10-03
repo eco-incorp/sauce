@@ -90,8 +90,12 @@ export async function cookTransactions(
 - A Pot swaps through the Router its Kitchen handed it when it was minted. `potRouterUpdate(client,
 pot)` from `/evm/engine` reads both, and returns the `setRouter` call for the Pot's owner to send
   when the Kitchen has a newer one.
-- A program that opens an intent also needs `options.intents`, `{ deadline, creator,
-executionFee }` (`sauce-intents`).
+- A program that opens an intent names its creator with `.creator(...)`, always: no option
+  defaults it, but `options.intents.publisher`, the wallet that publishes a top-level intent
+  itself. For a body that is a program it also needs `options.intents.executionFee` (one fee, or a
+  function of the destination) unless it gives `.fee(...)`. `openedAt` (Unix seconds) makes its
+  default deadlines count from then rather than from when the program runs, and `salt` fixes the
+  salt, random otherwise (`sauce-intents`).
 
 ## The raw compiler
 
@@ -166,17 +170,19 @@ a recorded address, not proof of live code on the chain.
   `routes.encodeRouteEvm(intent.route)` the route bytes (decode with `routes.EVM_ROUTE_PARAM` for
   `fulfill`), `destinationPot(chain)` the shared Pot and
   `routes.sauceEvmDeployPotCall({ owner: ecoRoutesExecutor(chain), salt: SAUCE_INTENT_POT_SALT })`
-  its deploy; the intents runner builds a rehearsal with them. For the source side,
-  `built.sourceTxs()` (`routes.intentSourceTxs` for an intent built some other way) is the
-  funding and publication in order: a transfer of each reward token to the vault, then `publish`
+  its deploy; the intents runner builds a rehearsal with them. In TypeScript,
+  `Base.Portal.send(reward).source("ethereum").creator(owner).receive(delivery).fee(fee).then(program)`
+  builds an intent around a program for the destination, `built`, taking the modifiers a program
+  takes; there `.source`, `.creator` and `.fee` are required, since the host runs on no chain and
+  reads none. For the source side, `built.sourceTxs()` (`routes.intentSourceTxs` for an intent
+  built some other way) is the funding and publication in order: a transfer of each reward token to the vault, then `publish`
   (`{ fundVia: "publishAndFund" }` for the approvals and `publishAndFund`). Pass `{ vault }` read with
   `routes.intentVaultAddressCall`: it is checked against `routes.predictIntentVault`, the package's
   own computation. `routes.publishTx`, `routes.publishAndFundTx`, `routes.approvalTxs` and
   `routes.isIntentFundedCall` build the single calls (`{ to, data }`, with `decode` for a read).
 - **Nested intents** are written in the program: a body that opens the next intent with
-  `Chain(() => { ... }).reward({ ... })` (`sauce-intents`, Cascades). In a typed closure,
-  `Base(() => { ... Ethereum(() => { ... }).reward({ ... }) }, options)`, the inner chain is the
-  imported export, which typechecks there. `routes.compileSauceProgram`
+  `Chain.Portal.send(reward).receive(delivery).then(() => { ... })` (`sauce-intents`, Cascades).
+  In a typed closure the chain is the imported export, which typechecks there, modifiers included. `routes.compileSauceProgram`
   lists the intents a program opens in `.intents`, and `routes.intentSourceTxs` publishes a fixed
   one from a wallet. The lower-level builder, `routes.openRoute(chain, body, options).nest(child,
 { via })`, attaches a child built in TypeScript instead, with options of its own: by default
