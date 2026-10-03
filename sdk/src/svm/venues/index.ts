@@ -335,6 +335,14 @@ export {
   jupiterLendEarn,
 } from "./jupiter-lend-earn/index.js";
 export type { JupiterLendEarnPoolConfig } from "./jupiter-lend-earn/index.js";
+// jupiter-aggregator: the program Jupiter's Swap API routes through (not a pool, no adapter).
+export {
+  JUPITER_AGGREGATOR_PROGRAM_ID,
+  JUPITER_ROUTE_DISCRIMINATOR,
+  JUPITER_SHARED_ACCOUNTS_ROUTE_DISCRIMINATOR,
+  jupiterRouteData,
+} from "./jupiter-aggregator/index.js";
+export type { JupiterRouteAccounts, JupiterRouteData } from "./jupiter-aggregator/index.js";
 export {
   KIPSELI_PROGRAM_ID,
   kipseli,

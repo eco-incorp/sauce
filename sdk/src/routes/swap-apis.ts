@@ -11,21 +11,40 @@
  * asked for decides nothing. RFQ sources are left out unless asked for: their quotes expire within
  * minutes and fill once, and a compiled program may run later than that, or twice.
  *
- * ECO-SWAP. `GET /swap?embed=1&…` answers `{ embed: { … } }`: a program compiled by the compiler this
- * SDK pairs with, whose `main(amountIn, minOut)` swaps exactly `amountIn` already in the Pot, leaves
- * the output there and returns it. The contract is the SDK's (see `EcoEmbed`); eco-swap's current
- * `/swap` answers a whole cook for the old Pot instead, and does not meet it yet.
+ * ECO-SWAP. `GET /swap?embed=1&…` answers `{ embed: { … } }`. On an EVM chain, a program compiled by
+ * the compiler this SDK pairs with, whose `main(amountIn, minOut)` swaps exactly `amountIn` already
+ * in the Pot, leaves the output there and returns it (`EcoEmbed`). On Solana, one instruction into
+ * eco-swap's merge program, the Pot its one signer, with where its amount and floor sit in the data
+ * (`EcoSvmEmbed`). Both contracts are the SDK's; eco-swap's current `/swap` answers a whole cook (on
+ * Solana, a staged program and its execution plan) instead, and meets neither yet.
+ *
+ * JUPITER, on Solana. Its Swap API (v1) in two steps: `GET /swap/v1/quote` finds a route for
+ * `amountIn`, `POST /swap/v1/swap-instructions` builds it for a user — the Pot, which signs as the
+ * transfer authority, its token accounts the Pot's. Only the swap instruction is kept: the program
+ * CPIs it, and the cook creates the Pot's output account itself. The instruction is refused unless
+ * it is Jupiter's aggregator's `route` or `shared_accounts_route` of exactly `amountIn`, with the Pot
+ * its one signer and its token accounts the Pot's associated accounts.
  */
-import { getAddress, type Hex } from "viem";
+import { getAddress, hexToBytes, type Hex } from "viem";
+
+import { address } from "@solana/kit";
 
 import { requireChain } from "../chains/canonical.js";
 import { v12DeployedAddresses } from "../deployments/index.js";
+import { svmTokenAccount } from "../svm/token-accounts.js";
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "../svm/token-program.js";
+import { jupiterRouteData } from "../svm/venues/jupiter-aggregator/index.js";
 import {
   kyberRouterOn,
+  svmRouteError,
   swapRequestKey,
   swapRouteError,
   type EcoRoute,
+  type EcoSvmRoute,
+  type JupiterRoute,
   type KyberRoute,
+  type SvmRouteAccount,
+  type SwapProvider,
   type SwapRequest,
   type SwapRoute,
 } from "./swap-host.js";
@@ -48,10 +67,24 @@ export interface EcoApi {
   readonly url: string;
 }
 
-/** Where `kyberSwap` and `ecoSwap` get their routes. */
+/** Jupiter's Swap API, on Solana. */
+export interface JupiterApi {
+  /** Its base URL. The SDK ships none. */
+  readonly url: string;
+  /** The tolerance Jupiter is asked to quote with, in basis points. Defaults to 50. */
+  readonly slippageBps?: number;
+  /** At most this many accounts in the route, for a cook that has to fit one transaction. */
+  readonly maxAccounts?: number;
+  /** Pool programs to route around, by Jupiter's labels: one that refuses being reached through a
+   *  CPI, or one past the depth a cook's CPIs can go. */
+  readonly excludeDexes?: readonly string[];
+}
+
+/** Where `kyberSwap`, `jupiterSwap` and `ecoSwap` get their routes. */
 export interface SwapApis {
   readonly kyber?: KyberApi;
   readonly eco?: EcoApi;
+  readonly jupiter?: JupiterApi;
   /** Defaults to the global `fetch`. */
   readonly fetch?: typeof fetch;
   /** The time Kyber's deadline counts from, Unix seconds; defaults to the clock. */
@@ -63,7 +96,7 @@ export interface SwapApis {
 /** A provider refused, or could not be reached, or answered with something unusable. */
 export class SwapApiError extends Error {
   constructor(
-    readonly provider: "kyber" | "eco",
+    readonly provider: SwapProvider,
     message: string,
   ) {
     super(message);
@@ -105,9 +138,13 @@ export async function fetchSwapRoutes(
   const unique = new Map(requests.map((request) => [swapRequestKey(request), request]));
 
   return Promise.all(
-    [...unique.values()].map((request) =>
-      request.provider === "kyber" ? kyberRoute(request, apis) : ecoRoute(request, apis),
-    ),
+    [...unique.values()].map((request): Promise<SwapRoute> => {
+      if (request.provider === "kyber") return kyberRoute(request, apis);
+      if (request.provider === "jupiter") return jupiterRoute(request, apis);
+      return requireChain(request.chainId).kind === "svm"
+        ? ecoSvmRoute(request, apis)
+        : ecoRoute(request, apis);
+    }),
   );
 }
 
@@ -117,12 +154,12 @@ const join = (url: string, path: string): string => `${url.replace(/\/+$/, "")}/
 /** A JSON answer, or the provider's refusal. The URL is not repeated in a message: eco-swap's may
  *  be a private one. */
 async function fetchJson(
-  provider: "kyber" | "eco",
+  provider: SwapProvider,
   apis: SwapApis,
   url: string,
   init: RequestInit,
 ): Promise<unknown> {
-  const name = provider === "kyber" ? "KyberSwap" : "eco-swap";
+  const name = SERVICE[provider];
   const fetchOf = apis.fetch ?? globalThis.fetch;
   let response: Response;
   try {
@@ -152,7 +189,14 @@ async function fetchJson(
   return body;
 }
 
-const stringField = (value: unknown, what: string, provider: "kyber" | "eco"): string => {
+/** Each provider's name, as a message says it. */
+const SERVICE: Readonly<Record<SwapProvider, string>> = {
+  kyber: "KyberSwap",
+  eco: "eco-swap",
+  jupiter: "Jupiter",
+};
+
+const stringField = (value: unknown, what: string, provider: SwapProvider): string => {
   if (typeof value !== "string" || value === "") {
     throw new SwapApiError(provider, `the answer has no ${what}`);
   }
@@ -160,7 +204,7 @@ const stringField = (value: unknown, what: string, provider: "kyber" | "eco"): s
   return value;
 };
 
-const integerField = (value: unknown, what: string, provider: "kyber" | "eco"): bigint => {
+const integerField = (value: unknown, what: string, provider: SwapProvider): bigint => {
   const text = stringField(value, what, provider);
   if (!/^\d+$/.test(text)) throw new SwapApiError(provider, `${what} is not an integer: ${text}`);
 
@@ -341,4 +385,220 @@ export async function ecoRoute(request: SwapRequest, apis: SwapApis): Promise<Ec
       ? {}
       : { quotedOut: integerField(embed.amountOut, "amountOut", "eco") }),
   };
+}
+
+/** An instruction's accounts as an API answers them, each checked to be a key and two flags. */
+function routeAccounts(given: unknown, provider: SwapProvider): SvmRouteAccount[] {
+  if (!Array.isArray(given)) throw new SwapApiError(provider, "the answer has no accounts");
+
+  return given.map((account: unknown) => {
+    const { pubkey, isSigner, isWritable } = (account ?? {}) as Record<string, unknown>;
+    if (
+      typeof pubkey !== "string" ||
+      typeof isSigner !== "boolean" ||
+      typeof isWritable !== "boolean"
+    ) {
+      throw new SwapApiError(
+        provider,
+        "an account of the answer is not { pubkey, isSigner, isWritable }",
+      );
+    }
+    address(pubkey);
+
+    return { pubkey, isSigner, isWritable };
+  });
+}
+
+/** Base64 data as `0x` hex. */
+function base64Hex(given: unknown, what: string, provider: SwapProvider): Hex {
+  const text = stringField(given, what, provider);
+  const binary = atob(text);
+  let hex = "0x";
+  for (let i = 0; i < binary.length; i++) hex += binary.charCodeAt(i).toString(16).padStart(2, "0");
+
+  return hex as Hex;
+}
+
+/** Whether `account` is `owner`'s associated account for `mint`, under either token program. */
+async function isAssociatedAccount(account: string, owner: string, mint: string): Promise<boolean> {
+  for (const tokenProgram of [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID]) {
+    if (
+      (await svmTokenAccount({ mint: address(mint), tokenProgram }, address(owner))) === account
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/** Jupiter's route for `request`: quoted, then built for its Pot. */
+export async function jupiterRoute(request: SwapRequest, apis: SwapApis): Promise<JupiterRoute> {
+  const api = apis.jupiter;
+  if (api === undefined) {
+    throw new SwapApiError(
+      "jupiter",
+      "jupiterSwap needs Jupiter's API: give its URL (`swap.jupiter`)",
+    );
+  }
+  if (requireChain(request.chainId).kind !== "svm") {
+    throw new SwapApiError("jupiter", "jupiterSwap swaps on Solana");
+  }
+  if (request.amountIn === undefined || request.pot === undefined) {
+    throw new SwapApiError("jupiter", "a Jupiter route needs its amount and its Pot");
+  }
+  const query = new URLSearchParams({
+    inputMint: request.tokenIn,
+    outputMint: request.tokenOut,
+    amount: request.amountIn.toString(),
+    slippageBps: String(api.slippageBps ?? 50),
+    swapMode: "ExactIn",
+    ...(api.maxAccounts === undefined ? {} : { maxAccounts: String(api.maxAccounts) }),
+    ...(api.excludeDexes === undefined || api.excludeDexes.length === 0
+      ? {}
+      : { excludeDexes: api.excludeDexes.join(",") }),
+  });
+  const quote = (await fetchJson("jupiter", apis, join(api.url, `swap/v1/quote?${query}`), {})) as {
+    outAmount?: unknown;
+    error?: unknown;
+  };
+  const quoted = integerField(quote.outAmount, "outAmount", "jupiter");
+  const built = (await fetchJson("jupiter", apis, join(api.url, "swap/v1/swap-instructions"), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      quoteResponse: quote,
+      userPublicKey: request.pot,
+      // The Pot holds wrapped SOL as a token; nothing here moves native SOL.
+      wrapAndUnwrapSol: false,
+    }),
+  })) as {
+    swapInstruction?: { programId?: unknown; accounts?: unknown; data?: unknown };
+    addressLookupTableAddresses?: unknown;
+  };
+  const instruction = built.swapInstruction;
+  if (instruction === undefined)
+    throw new SwapApiError("jupiter", "the answer has no swap instruction");
+  const lookupTables = Array.isArray(built.addressLookupTableAddresses)
+    ? built.addressLookupTableAddresses.map((table) =>
+        stringField(table, "lookup table", "jupiter"),
+      )
+    : [];
+  const route: JupiterRoute = {
+    provider: "jupiter",
+    request,
+    programId: stringField(instruction.programId, "programId", "jupiter"),
+    accounts: routeAccounts(instruction.accounts, "jupiter"),
+    data: base64Hex(instruction.data, "data", "jupiter"),
+    lookupTables,
+    quotedOut: quoted,
+  };
+  const why = svmRouteError(route, request);
+  if (why !== undefined) throw new SwapApiError("jupiter", `Jupiter's route is refused: ${why}`);
+  // Its token accounts, read off the positions its instruction gives them: the Pot's own.
+  const decoded = jupiterRouteData(hexToBytes(route.data))!;
+  const source = route.accounts[decoded.accounts.source]?.pubkey ?? "";
+  const destination = route.accounts[decoded.accounts.destination]?.pubkey ?? "";
+  if (!(await isAssociatedAccount(source, request.pot, request.tokenIn))) {
+    throw new SwapApiError("jupiter", `Jupiter's route pays from ${source}, not the Pot's account`);
+  }
+  if (!(await isAssociatedAccount(destination, request.pot, request.tokenOut))) {
+    throw new SwapApiError(
+      "jupiter",
+      `Jupiter's route pays into ${destination}, not the Pot's account`,
+    );
+  }
+
+  return route;
+}
+
+/**
+ * What eco-swap answers `GET /swap?embed=1&…` with on Solana, under `embed`: one instruction the
+ * program CPIs, the Pot its only signer.
+ */
+export interface EcoSvmEmbed {
+  /** This contract's version: 1. */
+  readonly version: 1;
+  /** `"instruction"`: one instruction, not a program. */
+  readonly kind: "instruction";
+  readonly chainId: number;
+  readonly tokenIn: string;
+  readonly tokenOut: string;
+  /** eco-swap's merge program. */
+  readonly programId: string;
+  /** Its accounts, in order, with their flags: the Pot is the one signer. */
+  readonly accounts: readonly SvmRouteAccount[];
+  /** The instruction's data, base64. */
+  readonly data: string;
+  /** Byte offsets of the little-endian u64 amount in and floor in `data`, which the program writes
+   *  when it computes them. */
+  readonly offsets: { readonly amountIn: number; readonly minOut: number };
+  /** Address lookup tables the cook needs to fit one transaction. */
+  readonly lookupTables?: readonly string[];
+  /** What the route quotes for `amountIn`, when the request gave one. */
+  readonly amountOut?: string;
+}
+
+/** eco-swap's instruction for `request` on Solana. */
+export async function ecoSvmRoute(request: SwapRequest, apis: SwapApis): Promise<EcoSvmRoute> {
+  const api = apis.eco;
+  if (api === undefined) {
+    throw new SwapApiError("eco", "ecoSwap needs eco-swap's API: give its URL (`swap.eco`)");
+  }
+  if (request.pot === undefined)
+    throw new SwapApiError("eco", "an eco-swap route on Solana needs its Pot");
+  const query = new URLSearchParams({
+    embed: "1",
+    chainId: String(request.chainId),
+    from: request.tokenIn,
+    to: request.tokenOut,
+    ...(request.amountIn === undefined ? {} : { amountIn: request.amountIn.toString() }),
+    ...(request.minOut === undefined ? {} : { minOut: request.minOut.toString() }),
+    pot: request.pot,
+  });
+  const answer = (await fetchJson("eco", apis, join(api.url, `swap?${query}`), {})) as {
+    embed?: Partial<EcoSvmEmbed>;
+  };
+  const embed = answer.embed;
+  if (embed === undefined || embed.version !== 1 || embed.kind !== "instruction") {
+    throw new SwapApiError(
+      "eco",
+      "eco-swap answered no `embed` of kind `instruction`: it does not build routes for another " +
+        "program on Solana yet",
+    );
+  }
+  if (
+    embed.chainId !== request.chainId ||
+    embed.tokenIn !== request.tokenIn ||
+    embed.tokenOut !== request.tokenOut
+  ) {
+    throw new SwapApiError("eco", "eco-swap answered for another chain or pair");
+  }
+  const offsets = embed.offsets;
+  if (
+    offsets === undefined ||
+    typeof offsets.amountIn !== "number" ||
+    typeof offsets.minOut !== "number"
+  ) {
+    throw new SwapApiError(
+      "eco",
+      "eco-swap's instruction does not say where its amount and floor sit",
+    );
+  }
+  const route: EcoSvmRoute = {
+    provider: "eco",
+    request,
+    programId: address(stringField(embed.programId, "programId", "eco")),
+    accounts: routeAccounts(embed.accounts, "eco"),
+    data: base64Hex(embed.data, "data", "eco"),
+    lookupTables: (embed.lookupTables ?? []).map((table) => address(table)),
+    offsets: { amountIn: offsets.amountIn, minOut: offsets.minOut },
+    ...(embed.amountOut === undefined
+      ? {}
+      : { quotedOut: integerField(embed.amountOut, "amountOut", "eco") }),
+  };
+  const why = svmRouteError(route, request);
+  if (why !== undefined) throw new SwapApiError("eco", `eco-swap's route is refused: ${why}`);
+
+  return route;
 }

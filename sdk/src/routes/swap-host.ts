@@ -52,14 +52,18 @@ import { decodeFunctionData, getAddress, hexToBytes, type Hex } from "viem";
 import type { CanonicalChain } from "../chains/canonical.js";
 import { addressOn } from "../descriptors/query.js";
 import { KyberSwapMetaAggregationRouterABI } from "../protocols/kyberswap/abis.js";
+import {
+  JUPITER_AGGREGATOR_PROGRAM_ID,
+  jupiterRouteData,
+} from "../svm/venues/jupiter-aggregator/index.js";
 import { resolveNamespace } from "./accessor-index.js";
 import { pascalOfSlug } from "./builder.js";
 import { denormalizeToEvm } from "./encode.js";
 import { toUniversalAddress } from "./normalize.js";
 import type { AddressInput } from "./types.js";
 
-/** A provider of routes. */
-export type SwapProvider = "kyber" | "eco";
+/** A provider of routes: KyberSwap and eco-swap on EVM chains, Jupiter and eco-swap on Solana. */
+export type SwapProvider = "kyber" | "eco" | "jupiter";
 
 /** The name a program calls each provider by. */
 export const SWAP_FUNCTIONS: Readonly<Record<string, SwapProvider>> = {
@@ -69,18 +73,19 @@ export const SWAP_FUNCTIONS: Readonly<Record<string, SwapProvider>> = {
 
 const SWAP_MODULE = "@sauce/swap";
 
-/** One swap a program makes, as its provider is asked for a route. */
+/** One swap a program makes, as its provider is asked for a route. Tokens and the Pot are
+ *  checksummed `0x` addresses on an EVM chain, base58 keys on Solana. */
 export interface SwapRequest {
   readonly provider: SwapProvider;
   readonly chainId: number;
-  readonly tokenIn: Hex;
-  readonly tokenOut: Hex;
+  readonly tokenIn: string;
+  readonly tokenOut: string;
   /** Known when the program compiles; else it runs with an amount it computes (eco-swap only). */
   readonly amountIn?: bigint;
   /** Known when the program compiles; else a value it computes, checked as it runs. */
   readonly minOut?: bigint;
-  /** The Pot the program runs on. Required for KyberSwap, whose calldata names it. */
-  readonly pot?: Hex;
+  /** The Pot the program runs on. Required for KyberSwap and Jupiter, whose instructions name it. */
+  readonly pot?: string;
 }
 
 /** KyberSwap's route: its router's `swap(...)` calldata, built for the request's Pot. */
@@ -95,7 +100,8 @@ export interface KyberRoute {
   readonly deadline: bigint;
 }
 
-/** eco-swap's route: a program for `main(amountIn, minOut)`, compiled by the SDK's compiler. */
+/** eco-swap's route on an EVM chain: a program for `main(amountIn, minOut)`, compiled by the SDK's
+ *  compiler. */
 export interface EcoRoute {
   readonly provider: "eco";
   readonly request: SwapRequest;
@@ -104,7 +110,42 @@ export interface EcoRoute {
   readonly quotedOut?: bigint;
 }
 
-export type SwapRoute = KyberRoute | EcoRoute;
+/** One account of a Solana instruction, with the role the instruction gives it. */
+export interface SvmRouteAccount {
+  readonly pubkey: string;
+  readonly isSigner: boolean;
+  readonly isWritable: boolean;
+}
+
+/** One instruction a Solana route is: what the program CPIs, the Pot signing as its authority. */
+export interface SvmRouteInstruction {
+  readonly programId: string;
+  readonly accounts: readonly SvmRouteAccount[];
+  readonly data: Hex;
+  /** Address lookup tables the transaction carrying it needs to fit. */
+  readonly lookupTables: readonly string[];
+}
+
+/** Jupiter's route on Solana: its aggregator's `route` or `shared_accounts_route` instruction,
+ *  built for the Pot. */
+export interface JupiterRoute extends SvmRouteInstruction {
+  readonly provider: "jupiter";
+  readonly request: SwapRequest;
+  /** What Jupiter quoted, in `tokenOut`'s base units. */
+  readonly quotedOut: bigint;
+}
+
+/** eco-swap's route on Solana: one instruction into its merge program, the Pot as authority, with
+ *  where the program writes a run-time amount and floor into the data. */
+export interface EcoSvmRoute extends SvmRouteInstruction {
+  readonly provider: "eco";
+  readonly request: SwapRequest;
+  /** Byte offsets of the little-endian u64 `amountIn` and `minOut` in `data`. */
+  readonly offsets: { readonly amountIn: number; readonly minOut: number };
+  readonly quotedOut?: bigint;
+}
+
+export type SwapRoute = KyberRoute | EcoRoute | JupiterRoute | EcoSvmRoute;
 
 /** One call of `kyberSwap`/`ecoSwap` in a compiled program, and the route bound there. */
 export interface SwapSite {
@@ -136,14 +177,17 @@ const fail = (message: string): never => {
 
 /** A request's identity: what its route is found by. */
 export function swapRequestKey(request: SwapRequest): string {
+  // A `0x` address is the same in any case; a base58 key is not.
+  const key = (value: string): string => (value.startsWith("0x") ? value.toLowerCase() : value);
+
   return [
     request.provider,
     request.chainId,
-    request.tokenIn.toLowerCase(),
-    request.tokenOut.toLowerCase(),
+    key(request.tokenIn),
+    key(request.tokenOut),
     request.amountIn ?? "run",
     request.minOut ?? "run",
-    request.pot?.toLowerCase() ?? "-",
+    request.pot === undefined ? "-" : key(request.pot),
   ].join(":");
 }
 
@@ -159,7 +203,14 @@ export function kyberRouterOn(chain: CanonicalChain): Hex | undefined {
 
 /** How a call is named in a refusal: `kyberSwap(USDC → WETH)` reads better than the request. */
 const callOf = (request: SwapRequest): string =>
-  `${request.provider === "kyber" ? "kyberSwap" : "ecoSwap"}(${request.tokenIn} -> ${request.tokenOut})`;
+  `${SWAP_FUNCTION_OF[request.provider]}(${request.tokenIn} -> ${request.tokenOut})`;
+
+/** The function a program calls each provider by. */
+export const SWAP_FUNCTION_OF: Readonly<Record<SwapProvider, string>> = {
+  kyber: "kyberSwap",
+  eco: "ecoSwap",
+  jupiter: "jupiterSwap",
+};
 
 /**
  * Why `route` cannot be bound for `request` on `chain`, or `undefined` when it can: the checks a
@@ -174,6 +225,7 @@ export function swapRouteError(
   if (swapRequestKey(route.request) !== swapRequestKey(request)) {
     return "the route was built for another request";
   }
+  if ("programId" in route) return svmRouteError(route, request);
   if (route.provider === "eco") {
     return /^0x(?:[0-9a-fA-F]{2})+$/.test(route.program) ? undefined : "its program is no bytes";
   }
@@ -203,6 +255,50 @@ export function swapRouteError(
   const floor = kyberFloorOffset(hexToBytes(route.data));
   if (floor === undefined || wordAt(hexToBytes(route.data), floor) !== desc.minReturnAmount) {
     return "its floor (`minReturnAmount`) is not where the router's ABI puts it";
+  }
+
+  return undefined;
+}
+
+/**
+ * What a Solana route's instruction must be, checked from the instruction alone: the Pot its one
+ * signer, as the authority the program signs for, and, for Jupiter, its aggregator's `route` or
+ * `shared_accounts_route` of exactly `amountIn` into `tokenOut`, with no platform fee. That the
+ * token accounts are the Pot's needs their programs, which `swap-apis.ts` reads before it returns a
+ * route.
+ */
+export function svmRouteError(
+  route: JupiterRoute | EcoSvmRoute,
+  request: SwapRequest,
+): string | undefined {
+  if (request.pot === undefined) return "it is not built for a Pot";
+  const signers = route.accounts.filter((account) => account.isSigner);
+  if (signers.length === 0 || signers.some((account) => account.pubkey !== request.pot)) {
+    return `its signers are ${signers.map((account) => account.pubkey).join(", ") || "none"}, not the Pot ${request.pot} alone`;
+  }
+  if (!/^0x(?:[0-9a-fA-F]{2})*$/.test(route.data)) return "its data is not bytes";
+  const data = hexToBytes(route.data);
+  if (route.provider === "eco") {
+    const fits = (at: number) => Number.isSafeInteger(at) && at >= 0 && at + 8 <= data.length;
+    return fits(route.offsets.amountIn) && fits(route.offsets.minOut)
+      ? undefined
+      : "its amount and floor offsets are not inside its data";
+  }
+  if (route.programId !== JUPITER_AGGREGATOR_PROGRAM_ID) {
+    return `its program ${route.programId} is not Jupiter's aggregator, ${JUPITER_AGGREGATOR_PROGRAM_ID}`;
+  }
+  const decoded = jupiterRouteData(data);
+  if (decoded === undefined) return "it is not the aggregator's `route` or `shared_accounts_route`";
+  if (decoded.inAmount !== request.amountIn) {
+    return `it swaps ${decoded.inAmount}, not ${request.amountIn}`;
+  }
+  if (decoded.platformFeeBps !== 0) return "it pays a platform fee";
+  const at = (index: number) => route.accounts[index];
+  if (at(decoded.accounts.authority)?.pubkey !== request.pot) {
+    return "its transfer authority is not the Pot";
+  }
+  if (at(decoded.accounts.destinationMint)?.pubkey !== request.tokenOut) {
+    return `it swaps into ${at(decoded.accounts.destinationMint)?.pubkey}, not ${request.tokenOut}`;
   }
 
   return undefined;

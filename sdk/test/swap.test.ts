@@ -134,6 +134,7 @@ describe("kyberSwap and ecoSwap compile through the host", () => {
           amountIn: 1000000000n,
           pot: POT,
         },
+        path: [],
       },
       {
         request: {
@@ -144,6 +145,7 @@ describe("kyberSwap and ecoSwap compile through the host", () => {
           amountIn: 1000000000n,
           pot: POT,
         },
+        path: [],
       },
     ]);
     // `minOut` is `main`'s: known only as the program runs, so absent from each request.

@@ -42,7 +42,7 @@ import {
   type SauceCompileOptions,
 } from "../routes/sauce-route.js";
 import { fetchSwapRoutes } from "../routes/swap-apis.js";
-import type { SwapRoute, SwapSite } from "../routes/swap-host.js";
+import { SWAP_FUNCTION_OF, type SwapRoute, type SwapSite } from "../routes/swap-host.js";
 import { KYBER_CLIENT_ID } from "./public-swap-apis.js";
 import { CliError, UsageError, type DefineValue, type SaltChoice } from "./args.js";
 import {
@@ -161,7 +161,7 @@ export interface ProgramInput {
 export interface ProgramSwaps {
   /** Each service's URL: `--swap-api`, the `--config` file's `swapApis`, else the built-in public
    *  one (KyberSwap's alone; eco-swap has none). */
-  readonly apis: { readonly kyber?: string; readonly eco?: string };
+  readonly apis: { readonly kyber?: string; readonly eco?: string; readonly jupiter?: string };
   /** How a service is reached: the global `fetch`, unless a test gives another. */
   readonly fetch?: typeof fetch;
   /** `--offline`: no service is asked, and a program that needs a route is refused. */
@@ -353,8 +353,8 @@ export function probeProgram(input: ProgramInput, files: CliFiles): CompiledSauc
 /** A program that names `kyberSwap` or `ecoSwap`, which the command looks into further. */
 export const NAMES_A_SWAP = /\b(?:kyberSwap|ecoSwap)\s*\(/;
 
-const SWAP_SERVICE = { kyber: "KyberSwap", eco: "eco-swap" } as const;
-const SWAP_FUNCTION = { kyber: "kyberSwap", eco: "ecoSwap" } as const;
+const SWAP_SERVICE = { kyber: "KyberSwap", eco: "eco-swap", jupiter: "Jupiter" } as const;
+const SWAP_FUNCTION = SWAP_FUNCTION_OF;
 
 /**
  * `input` with a route for each `kyberSwap(...)`/`ecoSwap(...)` it calls, at any depth, asked of
@@ -467,10 +467,17 @@ export function swapsJson(sites: readonly SwapSite[]): Record<string, unknown>[]
             quotedOut: route.quotedOut.toString(),
             deadline: route.deadline.toString(),
           }
-        : {
-            programSize: (route.program.length - 2) / 2,
-            ...(route.quotedOut === undefined ? {} : { quotedOut: route.quotedOut.toString() }),
-          }),
+        : "programId" in route
+          ? {
+              programId: route.programId,
+              accounts: route.accounts.length,
+              lookupTables: route.lookupTables,
+              ...(route.quotedOut === undefined ? {} : { quotedOut: route.quotedOut.toString() }),
+            }
+          : {
+              programSize: (route.program.length - 2) / 2,
+              ...(route.quotedOut === undefined ? {} : { quotedOut: route.quotedOut.toString() }),
+            }),
   }));
 }
 
