@@ -263,7 +263,7 @@ function unregisteredTokens(text: string, chain: CanonicalChain): string[] {
  * registers.
  */
 function unregisteredMints(message: string, chain: CanonicalChain): string[] {
-  const name = /`([A-Za-z_$][\w$]*)` is not (?:a declared variable|a token \S+ registers)/.exec(
+  const name = /`([A-Za-z_$][\w$]*)` is not (?:a declared variable|a token or protocol on )/.exec(
     message,
   )?.[1];
   if (chain.kind !== "svm" || name === undefined) return [];

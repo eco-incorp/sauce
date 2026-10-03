@@ -80,14 +80,14 @@ function main(recipient: Address, amount: Uint256) {
 
 ```text
 sauce compile: pay.sauce.ts does not compile for base
-compileSauceRoute: `USDT` is not a token or protocol on base. Did you mean `USDC`? A token the registry does not carry is `Token(address)`, …
+error: `USDT` is not a token or protocol on base. Did you mean `USDC`? A token the registry does not carry is `Token(address)`, …
 ```
 
 A contract the chain does not have is refused the same way, naming the chains that do:
 `AerodromeSlipstream.CLFactory` compiled for Ethereum fails with
 `Contract 'CLFactory' (aerodrome-slipstream) is not deployed on 'ethereum' (available: …)`. A
-symbol the chain lacks, used as a value rather than called, is reported as a name the file never
-declared: `return TSLAx;` compiled for Base is refused as `TSLAx` "is not a declared variable".
+symbol the chain lacks is refused the same way wherever it is used: `return TSLAx;` compiled for
+Base is refused as "`TSLAx` is not a token or protocol on base".
 The same company often has a different symbol per issuer and chain: Tesla is `TSLAx` on Ethereum
 and on Solana, but `TSLAc` or `bTSLA` on Base, so search by name or ticker on each chain. Then pick
 a chain that has the name, or, for a token the registry does not carry, use `Token(address)` with

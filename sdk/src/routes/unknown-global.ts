@@ -118,17 +118,28 @@ export function unknownGlobalError(
     .find((root): root is string => root !== undefined);
   if (name === undefined) return undefined;
 
+  const compiler = headline(cause);
+  return new Error(
+    `compileSauceRoute: ${notOnChain(name, chain, tokens)}; a contract binding needs its ABI ` +
+      "imported, or passed as `contracts`." +
+      (compiler === undefined ? "" : ` The compiler reported: ${compiler}`),
+    { cause },
+  );
+}
+
+/**
+ * Why `name`, a token or a protocol, is refused on `chain`: it is neither there, what the chain has
+ * that it is closest to, and how to name a token the registry does not carry.
+ */
+export function notOnChain(name: string, chain: CanonicalChain, tokens: Iterable<string>): string {
   const matches = nearMatches(name, [...tokens, ...protocolsOn(chain)]);
   const suggestion =
     matches.length === 0
       ? ""
       : ` Did you mean ${matches.map((match) => `\`${match}\``).join(" or ")}?`;
-  const compiler = headline(cause);
-  return new Error(
-    `compileSauceRoute: \`${name}\` is not a token or protocol on ${chain.slug}.${suggestion} ` +
-      "A token the registry does not carry is `Token(address)`, or a `tokens` entry in the " +
-      "compile options; a contract binding needs its ABI imported, or passed as `contracts`." +
-      (compiler === undefined ? "" : ` The compiler reported: ${compiler}`),
-    { cause },
+
+  return (
+    `\`${name}\` is not a token or protocol on ${chain.slug}.${suggestion} A token the registry ` +
+    "does not carry is `Token(address)`, or a `tokens` entry in the compile options"
   );
 }

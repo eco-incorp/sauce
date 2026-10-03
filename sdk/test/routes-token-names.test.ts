@@ -134,7 +134,7 @@ describe("a symbol resolves through the chain's registry", () => {
   it("a chain whose registry lacks the symbol refuses it, saying so", () => {
     // Ethereum registers USDT; Base does not.
     expect(() => bytesOf("base", `USDT.transfer(${TO}, 5n);`)).toThrow(
-      /`USDT` is not a token base registers/,
+      /`USDT` is not a token or protocol on base/,
     );
   });
 
@@ -168,10 +168,10 @@ describe("USDT0: Tether's token on the chains whose USDT is USDT0", () => {
 
   it("is refused by name on a chain that has none, and USDT where the token is USDT0", () => {
     expect(() => bytesOf("base", `USDT0.transfer(${TO}, 5n);`)).toThrow(
-      /`USDT0` is not a token base registers/,
+      /`USDT0` is not a token or protocol on base/,
     );
     expect(() => bytesOf("arbitrum", `USDT.transfer(${TO}, 5n);`)).toThrow(
-      /`USDT` is not a token arbitrum registers/,
+      /`USDT` is not a token or protocol on arbitrum/,
     );
   });
 });

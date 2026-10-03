@@ -112,7 +112,10 @@ const tesla = (chain: string) =>
 check(tesla("ethereum").includes("TSLAx") && tesla("solana").includes("TSLAx"), "TSLAx");
 check(tesla("base").join() === "TSLAc,bTSLA", `Tesla on Base is TSLAc or bTSLA: ${tesla("base")}`);
 compile("ethereum", "function main(): Address { return TSLAx; }");
-quoted(refusal("base", "function main(): Address { return TSLAx; }"), "is not a declared variable");
+quoted(
+  refusal("base", "function main(): Address { return TSLAx; }"),
+  "`TSLAx` is not a token or protocol on base",
+);
 
 // Another chain's contract, by its name: its address there, as a value in a program for this one.
 const factoryOnBase = rows.find((row) => row.name === "UniswapV3.Factory")!.on.base;

@@ -82,11 +82,14 @@ check(
 );
 // A namespace absent on the chain is zero there: using it is a compile error, and comparing it with
 // zero rules its branch out. A name no chain has is an error either way.
-check(rejects("linea", "function main() { require(UniswapV3.Factory != 0); }"), "absent namespace");
+check(
+  rejects("linea", "function main() { UniswapV3.Factory.getPool(ctx.self(), ctx.self(), 500); }"),
+  "absent namespace",
+);
 check(
   !rejects(
     "linea",
-    "function main() { if (UniswapV3.Factory != 0) { require(UniswapV3.Factory != 0); } }",
+    "function main() { if (UniswapV3.Factory != 0) { UniswapV3.Factory.getPool(ctx.self(), ctx.self(), 500); } }",
   ),
   "comparing with zero removes the branch where the chain lacks the contract",
 );
@@ -97,7 +100,7 @@ check(
   "USDT != 0 removes the branch on Base",
 );
 check(
-  rejects("base", "function main() { if (UniswapV9.Factory != 0n) { require(false); } }"),
+  rejects("base", "function main() { if (UniswapV9.Factory != 0) { require(false); } }"),
   "a name no chain has is an error",
 );
 // The Pot's own balance of a symbol, and the chain's id.

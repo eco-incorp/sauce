@@ -495,7 +495,9 @@ describe("what it refuses, and how clearly", () => {
     const lowerOne = (source: string) => lower(source, { ...DEFAULTS, executionFee: 0n });
 
     it("a delivery token the destination does not register", () => {
-      expect(() => lowerOne(intent("WPOL"))).toThrow(/`WPOL` is not a token arbitrum registers/);
+      expect(() => lowerOne(intent("WPOL"))).toThrow(
+        /`WPOL` is not a token or protocol on arbitrum/,
+      );
     });
 
     it("a delivery token the program only has while it runs", () => {
@@ -512,7 +514,7 @@ describe("what it refuses, and how clearly", () => {
 
     it("a reward token the enclosing chain does not register", () => {
       expect(() => lowerOne(intent("USDC", "amount", "USDT"))).toThrow(
-        /`USDT` is not a token base registers/,
+        /`USDT` is not a token or protocol on base/,
       );
     });
   });

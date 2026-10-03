@@ -44,6 +44,7 @@ import { chainSlugForKey, isChainKey, resolveNamespace, type Namespace } from ".
 import { pascalOfSlug } from "./builder.js";
 import type { AccessorTarget, ProtocolNameOptions } from "./protocol-names.js";
 import { registryTokenSymbols, resolveTokenMap } from "./token-registry.js";
+import { notOnChain } from "./unknown-global.js";
 import type { AddressInput } from "./types.js";
 
 /** The `@sauce/token` functions the `Token` type's methods call. */
@@ -159,7 +160,7 @@ export function chainHost(chain: CanonicalChain, options: ChainHostOptions = {})
     if (address !== undefined) return { kind: "constant", value: word(address), type };
     if (!registryTokenSymbols().has(symbol) && !(options.tokens ?? {})[symbol]) return undefined;
 
-    return absent(type, `\`${symbol}\` is not a token ${on.slug} registers`);
+    return absent(type, notOnChain(symbol, on, map.keys()));
   };
 
   /** `<Protocol|Family>[.<Contract>]` on `on`, or `undefined` when the path names no contract. */
@@ -276,7 +277,8 @@ export function chainHost(chain: CanonicalChain, options: ChainHostOptions = {})
       return protocolPath(name, segments, chain);
     }
 
-    // `<Chain>.<…>`: a name on another chain — its contract, or its token.
+    // `<Chain>.<…>`: a contract on another chain. A token is never qualified: the symbol is the
+    // chain's own, or an address.
     if (isChainKey(head)) {
       const slug = chainSlugForKey(head)!;
       const on = requireChain(slug);
@@ -285,13 +287,15 @@ export function chainHost(chain: CanonicalChain, options: ChainHostOptions = {})
           `chain '${on.slug}' (referenced as '${head}....') is outside the allowed chainScope`,
         );
       }
-      const rest = segments.slice(1);
-      if (rest.length === 1) {
-        const symbol = tokenDeclaration(rest[0]!, on);
-        if (symbol !== undefined) return symbol;
+      const [, member] = segments;
+      if (segments.length === 2 && registryTokenSymbols().has(member!)) {
+        return fail(
+          `'${member}' is not a known protocol or family alias: a token is never qualified by a ` +
+            `chain. \`${member}\` alone is the chain's own, compiled for it; another is an address.`,
+        );
       }
 
-      return protocolPath(name, rest, on);
+      return protocolPath(name, segments.slice(1), on);
     }
 
     return protocolPath(name, segments, chain);
