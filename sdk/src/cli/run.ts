@@ -131,6 +131,7 @@ import {
   loadKeypair,
   parseAccounts,
   parsePubkey,
+  parseRemaining,
   svmPotCommand,
   svmPotDeployCommand,
   svmPotStatusCommand,
@@ -140,6 +141,7 @@ import {
   svmVerifyCommand,
   type SvmCookInput,
 } from "./solana.js";
+import { isAddress } from "@solana/kit";
 import type { Address as SvmAddress, KeyPairSigner } from "@solana/kit";
 import type { PrivateKeyAccount } from "viem/accounts";
 import { passwordSource, type CapturedCommand, type PasswordSource } from "./password.js";
@@ -492,6 +494,20 @@ const COOK: FlagSpecs = {
     type: "string",
     value: "<kitchen|engine>",
     help: "The Kitchen's cook on the Pot (default), or the engine's own, with no Pot",
+    only: "svm",
+  },
+  remaining: {
+    type: "string",
+    multiple: true,
+    value: "<value>[,writable][,signer]",
+    help: "An account the program reads after its named ones (svm.remainingAccounts()), in order: an address, pot, owner or pot:USDC, with its role",
+    only: "svm",
+  },
+  "lookup-table": {
+    type: "string",
+    multiple: true,
+    value: "<address>",
+    help: "An address lookup table the cook's transaction compresses its accounts with",
     only: "svm",
   },
   "max-execution-fee": {
@@ -977,10 +993,12 @@ function cookInput(
   program: ProgramInput,
 ): CookInput {
   const value = stringFlag(args, "value");
-  if (repeatedFlag(args, "account").length > 0) {
-    throw new UsageError(
-      `--account names a Solana program's accounts; a program on ${program.chain.slug} takes none`,
-    );
+  for (const flag of ["account", "remaining", "lookup-table"]) {
+    if (repeatedFlag(args, flag).length > 0) {
+      throw new UsageError(
+        `--${flag} names a Solana program's accounts; a program on ${program.chain.slug} takes none`,
+      );
+    }
   }
   for (const flag of ["via", "max-execution-fee"]) {
     if (stringFlag(args, flag) !== undefined) {
@@ -1633,6 +1651,11 @@ function svmCookInput(
     owner: svmOwner(args, signer),
     ...saltOf(args),
     accounts: parseAccounts(repeatedFlag(args, "account")),
+    remaining: parseRemaining(repeatedFlag(args, "remaining")),
+    lookupTables: repeatedFlag(args, "lookup-table").map((table) => {
+      if (!isAddress(table)) throw new UsageError(`--lookup-table: '${table}' is not an address`);
+      return table;
+    }),
     ...argsInput(args, io, trailing),
     rpcUrl: requiredEndpoint(args, io, program.chain),
     ...(via === undefined ? {} : { via: parseVia(via) }),

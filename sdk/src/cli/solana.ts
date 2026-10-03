@@ -75,6 +75,7 @@ import {
   deriveExecutionFeeConfigPda,
   derivePotPda,
   engineFaultName,
+  fetchAlt,
   GROWTH_STEP,
   MAX_POT_LEN,
   resolveAccounts,
@@ -85,8 +86,10 @@ import {
   type AccountResolution,
   type CookVia,
   type EngineFault,
+  type RemainingAccount,
   type SauceSvmClient,
   type SimulateExecuteResult,
+  type SimulateOpts,
 } from "../svm/index.js";
 import { CliError, UsageError, type SaltChoice } from "./args.js";
 import {
@@ -585,6 +588,37 @@ export function parseAccounts(raws: readonly string[]): Record<string, string> {
   return accounts;
 }
 
+/** One `--remaining` account, as given: its value, as `--account` takes one, and its role. */
+export interface RemainingGiven {
+  readonly value: string;
+  readonly writable: boolean;
+  readonly signer: boolean;
+}
+
+/**
+ * `--remaining <value>[,writable][,signer]`, in order: the accounts the program reads after its
+ * named ones (`svm.remainingAccounts()`). A value is what `--account` takes; the flags are the role
+ * the program's call gives the account.
+ */
+export function parseRemaining(raws: readonly string[]): RemainingGiven[] {
+  return raws.map((raw) => {
+    const [value = "", ...roles] = raw.split(",").map((part) => part.trim());
+    const unknown = roles.find((role) => role !== "writable" && role !== "signer");
+    if (unknown !== undefined || value === "") {
+      throw new UsageError(
+        `--remaining: expected <address | pot | owner | pot:<token>>[,writable][,signer], got '${raw}'`,
+      );
+    }
+    if (value !== "pot" && value !== "owner" && !isAddress(value) && !TOKEN_NAMED.test(value)) {
+      throw new UsageError(
+        `--remaining: '${value}' is not an address, pot, owner, or a token's account (pot:USDC)`,
+      );
+    }
+
+    return { value, writable: roles.includes("writable"), signer: roles.includes("signer") };
+  });
+}
+
 /** One `<whose>:<token>` resolved: the account, what it is for a person, and which kind it is. */
 interface TokenAccountNamed {
   readonly address: Address;
@@ -713,12 +747,6 @@ function resolution(
   via: CookVia = "kitchen",
 ): AccountResolution {
   const slots = manifest.accounts.filter((entry) => entry.kind === "slot");
-  if (manifest.accounts.some((entry) => entry.kind === "remaining")) {
-    throw new UsageError(
-      "the program takes a variable list of accounts after its named ones, which the CLI cannot " +
-        "attach yet: build that cook with the SDK's Solana client",
-    );
-  }
   const names = slots.map((slot) => slot.name);
   const unknown = Object.keys(given).filter((name) => !names.includes(name));
   if (unknown.length > 0) {
@@ -969,6 +997,11 @@ function svmPayload(program: CompiledSauceProgram, args: ArgsInput | undefined):
 
 export interface SvmCookInput extends ProgramInput, SvmTarget {
   readonly accounts: Readonly<Record<string, string>>;
+  /** `--remaining`: the accounts the program reads after its named ones, in order. */
+  readonly remaining?: readonly RemainingGiven[];
+  /** `--lookup-table`: address lookup tables the cook's transaction compresses its accounts with,
+   *  read from the cluster. */
+  readonly lookupTables?: readonly string[];
   readonly args?: ArgsInput;
   readonly rpcUrl: string;
   /**
@@ -997,6 +1030,9 @@ interface Prepared {
   readonly manifest: AccountManifest;
   /** `--account`'s values with every `pot:<token>` resolved to its account. */
   readonly given: Awaited<ReturnType<typeof resolveTokenAccounts>>;
+  /** What every cook of it carries beyond the manifest's slots: its remaining accounts and the
+   *  lookup tables the transaction uses. */
+  readonly extra: Pick<SimulateOpts, "remaining" | "lookupTables">;
 }
 
 /** Compiles the file, reads the fee, and builds the SDK client that cooks it as `signer`. */
@@ -1021,6 +1057,7 @@ async function prepare(
     mintProgramOn(rpc, input.rpcUrl),
   );
   const accounts = resolution(manifest, given.accounts, input.owner, pot, signer, via);
+  const extra = await cookExtras(input, manifest, rpc, pot, signer, via);
   const fee = await kitchenFee(rpc, input.rpcUrl);
   if (input.maxExecutionFee !== undefined && fee > input.maxExecutionFee) {
     throw new CliError(
@@ -1039,7 +1076,63 @@ async function prepare(
     via,
   });
 
-  return { rpc, via, pot, fee, program, bytecode, client, accounts, manifest, given };
+  return { rpc, via, pot, fee, program, bytecode, client, accounts, manifest, given, extra };
+}
+
+/**
+ * `--remaining` resolved as `--account` is — `pot:<token>` to the Pot's account, `pot` attached
+ * unsigned (the Kitchen signs for it), `owner` signing with `signer` — and each `--lookup-table`
+ * read from the cluster.
+ */
+async function cookExtras(
+  input: SvmCookInput,
+  manifest: AccountManifest,
+  rpc: Rpc,
+  pot: Address,
+  signer: TransactionSigner,
+  via: CookVia,
+): Promise<Prepared["extra"]> {
+  const given = input.remaining ?? [];
+  if (given.length > 0 && !manifest.accounts.some((entry) => entry.kind === "remaining")) {
+    throw new UsageError(
+      "--remaining: the program reads no account after its named ones (`svm.remainingAccounts()`), " +
+        `so the ${given.length} given would reach nothing`,
+    );
+  }
+  const named = await resolveTokenAccounts(
+    Object.fromEntries(given.map((account, index) => [`#${index}`, account.value])),
+    input.owner,
+    pot,
+    input.chain,
+    via,
+    mintProgramOn(rpc, input.rpcUrl),
+  );
+  const remaining: RemainingAccount[] = given.map((account, index) => {
+    const value = named.accounts[`#${index}`]!;
+    if (via === "engine" && value === "pot" && account.signer) {
+      throw new UsageError(
+        "--remaining pot,signer: cooked directly to the engine (--via engine) nothing signs for " +
+          "the Pot; cook --via kitchen, or give owner",
+      );
+    }
+    const at = value === "pot" ? pot : value === "owner" ? input.owner : address(value);
+
+    return {
+      address: at,
+      writable: account.writable,
+      // The Pot signs through the Kitchen's invoke_signed, never the transaction.
+      signer: at === pot ? false : account.signer && at === input.owner ? signer : account.signer,
+    };
+  });
+  const tables: NonNullable<SimulateOpts["lookupTables"]> = {};
+  for (const table of input.lookupTables ?? []) {
+    Object.assign(tables, await fetchAlt(rpc, address(table)));
+  }
+
+  return {
+    ...(remaining.length === 0 ? {} : { remaining }),
+    ...(Object.keys(tables).length === 0 ? {} : { lookupTables: tables }),
+  };
 }
 
 /** A staged cook's options: directly to the engine it is pinned to the staged bytes' digest. */
@@ -1064,7 +1157,7 @@ async function fits(
     prepared.bytecode,
     prepared.manifest,
     prepared.accounts,
-    { computeUnitLimit: 1_400_000, prepends },
+    { computeUnitLimit: 1_400_000, prepends, ...prepared.extra },
   );
   const size = getTransactionSize(transaction);
 
@@ -1269,7 +1362,7 @@ export async function svmSimulateCommand(
     prepared.bytecode,
     prepared.manifest,
     prepared.accounts,
-    { prepends, accounts: tracked },
+    { prepends, accounts: tracked, ...prepared.extra },
   );
   const moved =
     result.ok && result.accounts !== undefined
@@ -1383,7 +1476,7 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
     prepared.bytecode,
     prepared.manifest,
     prepared.accounts,
-    {},
+    prepared.extra,
   );
   const json = {
     chain: "solana",
@@ -1613,7 +1706,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
         prepared.bytecode,
         prepared.manifest,
         prepared.accounts,
-        { computeUnitLimit: "auto" },
+        { computeUnitLimit: "auto", ...prepared.extra },
       );
     } catch (error) {
       return wouldFail(error);
@@ -1625,7 +1718,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
         staged.codeBuffer,
         prepared.manifest,
         prepared.accounts,
-        { computeUnitLimit: "auto", ...stagedPin(prepared, staged) },
+        { computeUnitLimit: "auto", ...stagedPin(prepared, staged), ...prepared.extra },
       );
     } catch (error) {
       return wouldFail(error, staged);
@@ -1687,12 +1780,17 @@ async function rehearsalLogs(
   try {
     const result =
       staged === undefined
-        ? await prepared.client.simulate(prepared.bytecode, prepared.manifest, prepared.accounts)
+        ? await prepared.client.simulate(
+            prepared.bytecode,
+            prepared.manifest,
+            prepared.accounts,
+            prepared.extra,
+          )
         : await prepared.client.simulateStaged(
             staged.codeBuffer,
             prepared.manifest,
             prepared.accounts,
-            stagedPin(prepared, staged),
+            { ...stagedPin(prepared, staged), ...prepared.extra },
           );
 
     return result.ok ? { lines: result.logs } : { reason: simulated(result), lines: result.logs };
