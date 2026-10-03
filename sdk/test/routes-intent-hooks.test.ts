@@ -208,6 +208,36 @@ describe("the route a hook adds to", () => {
     ]);
   });
 
+  it("names its tokens on the destination, at every depth", () => {
+    // Base opens Arbitrum, whose body opens Optimism: each hook's USDC is its own destination's.
+    const program = `function main() {
+  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
+    .receive({ token: USDC, amount: 1000000 })
+    .before(() => { USDC.approve(HOOK, 0); })
+    .then(() => {
+      Optimism.Portal.send({ token: USDC, amount: 1000000 })
+        .refundee(${CREATOR})
+        .receive({ token: USDC, amount: 990000 })
+        .after(() => { USDC.approve(HOOK, 0); })
+        .then(() => { USDC.transfer(RECIPIENT, 990000); });
+    });
+}`;
+    const optimismUsdc = address(registryTokenAddress(requireChain("optimism"), "USDC")!);
+    expect(optimismUsdc).not.toBe(usdc);
+    const word = (value: string | bigint) => BigInt(value).toString(16).padStart(64, "0");
+    // A route call as the route encodes it: target, data's offset, value, then the data.
+    const approveOf = (token: string) =>
+      `${word(token)}${word(0x60n)}${word(0n)}${word(68n)}095ea7b3${word(HOOK)}${word(0n)}`;
+    const [outer] = compile(program).intents;
+    // Arbitrum's hook is a call of Arbitrum's USDC.
+    expect(callsOf(compile(program))[0]).toEqual(write(usdc, "approve", HOOK, 0n));
+    // Optimism's intent is published by the program Arbitrum's Pot runs: its route, in that
+    // program, ends with the hook's call of Optimism's USDC.
+    const cook = outer!.intent.route.calls.at(-1)!.data.toLowerCase();
+    expect(cook).toContain(approveOf(optimismUsdc));
+    expect(cook).not.toContain(approveOf(usdc));
+  });
+
   it("costs the solver no native: a hook's calls send none", () => {
     const [intent] = compile(
       opened(".before(() => { USDC.transfer(HOOK, 5); }).after(() => { USDC.approve(HOOK, 6); })"),
