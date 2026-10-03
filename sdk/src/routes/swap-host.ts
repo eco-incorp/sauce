@@ -109,6 +109,9 @@ export type SwapRoute = KyberRoute | EcoRoute;
 /** One call of `kyberSwap`/`ecoSwap` in a compiled program, and the route bound there. */
 export interface SwapSite {
   readonly request: SwapRequest;
+  /** The program arguments the call is in, outermost first: an intent's body is `Received.then`.
+   *  Empty at the program's own level. */
+  readonly path: readonly string[];
   /** Absent where a placeholder was bound (`placeholders`). */
   readonly route?: SwapRoute;
 }
@@ -372,7 +375,7 @@ export function swapHost(level: SwapLevel): {
       const why = swapRouteError(route, request, chain);
       if (why !== undefined) fail(`${callOf(request)}: the route is refused: ${why}`);
     }
-    level.sites.push({ request, ...(route === undefined ? {} : { route }) });
+    level.sites.push({ request, path: site.path, ...(route === undefined ? {} : { route }) });
 
     const tokens: BoundArgument[] = [
       { value: tokenIn, type: "Address" },

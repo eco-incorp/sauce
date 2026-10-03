@@ -34,8 +34,8 @@ import {
   CHAIN_SUPPORT_NEW_ISSUE_URL,
   chainSupport,
   compileCommand,
-  asPublished,
   compileProgram,
+  intentsOfFile,
   connect,
   bindMainArguments,
   connectAt,
@@ -2265,10 +2265,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
             : boundProgram({ ...args, source: args.source });
 
         return fromCommand(
-          inspectFile(
-            program.input.file,
-            compileProgram(asPublished(program.input), program.files),
-          ),
+          inspectFile(program.input.file, intentsOfFile(program.input, program.files)),
         );
       }
       if (args.args !== undefined) {

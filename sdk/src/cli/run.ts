@@ -47,8 +47,8 @@ import { actionsCommand, actionsProgram, isActionsDocument, type ActionsInput } 
 import { chainServedBy, connect, connectAt, endpointFor, type Sent } from "./chain.js";
 import {
   compileCommand,
+  intentsOfFile,
   pastDeadline,
-  asPublished,
   compileProgram,
   NAMES_A_SWAP,
   potCommand,
@@ -3441,7 +3441,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           given.args === undefined ? undefined : given,
         );
 
-        return inspectFile(input.file, compileProgram(asPublished(input), io));
+        return inspectFile(input.file, intentsOfFile(input, io));
       }
       if (argsInput(args, io, trailing).args !== undefined) {
         throw new UsageError(

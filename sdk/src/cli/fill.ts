@@ -58,8 +58,7 @@ import { CliError, UsageError } from "./args.js";
 import { assumeTokenBalance, mergeOverrides } from "./assume.js";
 import { connect, revertReason, sendAndWait, type Sent } from "./chain.js";
 import {
-  asPublished,
-  compileProgram,
+  intentsOfFile,
   kitchenAddress,
   type CliFiles,
   unapproved,
@@ -205,7 +204,7 @@ export function fillTargets(input: ProgramInput, files: CliFiles): readonly Fill
     );
   }
   // Built as `sauce intent publish` builds them, `--intent-refundee` standing in for its wallet.
-  const intents = compileProgram(asPublished(input), files).intents;
+  const intents = intentsOfFile(input, files).intents;
   if (intents.length === 0) {
     throw new UsageError(`${input.file} opens no intent: there is nothing for a solver to fill`);
   }

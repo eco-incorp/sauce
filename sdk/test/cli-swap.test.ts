@@ -186,3 +186,62 @@ describe("sauce tx builds the route for the cook's Pot", () => {
     expect(builds).toHaveLength(1);
   });
 });
+
+describe("a file whose intent bodies swap is not rebuilt from the file", () => {
+  // The body swaps on Base, in the destination's shared Pot; the program runs on Ethereum.
+  const BODY = `function main(owner: Address) {
+  Base.Portal.send({ token: USDC, amount: 1010000 })
+    .refundee(owner)
+    .receive({ token: USDC, amount: 1000000 })
+    .fee(0)
+    .then(() => {
+      const out = kyberSwap(USDC, WETH, 1000000, 1);
+      WETH.transfer(owner, out);
+    });
+}`;
+
+  it.each([
+    ["inspect", ["inspect"]],
+    ["intent fill", ["intent", "fill"]],
+  ])("%s refuses it, naming the published record, and asks no service", async (_name, verb) => {
+    const run = await sauce([
+      ...verb,
+      file("body.sauce.ts", BODY),
+      "--chain",
+      "ethereum",
+      "--offline",
+      "--args",
+      OWNER,
+    ]);
+    expect(run.code).toBe(1);
+    expect(run.stderr).toMatch(/an intent's body calls kyberSwap, whose route is fetched when/);
+    expect(run.stderr).toMatch(/Name the intent by its published record instead: its hash/);
+    expect(run.asked).toEqual([]);
+  });
+
+  it("inspect reads a file whose swaps are only its own: its intents do not carry them", async () => {
+    const run = await sauce([
+      "inspect",
+      file(
+        "top.sauce.ts",
+        `function main(owner: Address) {
+  const out = ecoSwap(USDC, WETH, 1000000, 0);
+  Base.Portal.send({ token: WETH, amount: 1 })
+    .refundee(owner)
+    .receive({ token: USDC, amount: 1 })
+    .then(() => {
+      USDC.transfer(owner, 1);
+    });
+}`,
+      ),
+      "--chain",
+      "ethereum",
+      "--offline",
+      "--args",
+      OWNER,
+    ]);
+    expect(run.stderr).not.toMatch(/kyberSwap|ecoSwap/);
+    expect(run.code).toBe(0);
+    expect(run.asked).toEqual([]);
+  });
+});

@@ -39,6 +39,7 @@ export {
   potCommand,
   programChains,
   txCommand,
+  intentsOfFile,
   type CliFiles,
   type CommandOutput,
   type CompileInput,

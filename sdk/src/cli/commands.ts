@@ -425,6 +425,30 @@ export async function withSwapRoutes<T extends ProgramInput>(
   return { ...given, swaps: { ...swaps, routes: [...(swaps.routes ?? []), ...routes] } };
 }
 
+/**
+ * The intents `input` opens, built as `sauce intent publish` builds them, for a command that names
+ * intents by their file rather than by their published record (`intent fill`, `status` and the
+ * other verbs, `inspect`). A swap at the program's own level is in none of its intents, and binds a
+ * placeholder here. One in an intent's body is: its route was fetched when the program compiled for
+ * the publish, and compiling the file again fetches another, so the file no longer says what was
+ * published. That is refused, naming the record to use instead.
+ */
+export function intentsOfFile(input: ProgramInput, files: CliFiles): CompiledSauceProgram {
+  const program = compileProgram(asPublished(input), files, undefined, true);
+  const inBody = program.swaps.find((site) => site.path.length > 0);
+  if (inBody !== undefined) {
+    throw new CliError(
+      `${input.file}: an intent's body calls ${SWAP_FUNCTION[inBody.request.provider]}, whose ` +
+        "route is fetched when the program compiles, so compiling the file again builds a " +
+        "different intent from the one published. Name the intent by its published record " +
+        "instead: its hash (`sauce intent <verb> <intent-hash>`), which `sauce intent publish` " +
+        "and `sauce run` stored, or `sauce intent import` of the publishing transaction",
+    );
+  }
+
+  return program;
+}
+
 /** Each swap's route as `--json` reports it: who built it, for what, and what it quoted. */
 export function swapsJson(sites: readonly SwapSite[]): Record<string, unknown>[] {
   return sites.map(({ request, route }) => ({

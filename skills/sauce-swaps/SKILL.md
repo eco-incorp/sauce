@@ -205,7 +205,8 @@ function main(recipient: Address, minOut: Uint256) {
   is built for the Pot the program runs on: the cook's, or an intent body's destination Pot.
 - The calldata expires twenty minutes after it is built, and its quote moves with the market:
   compile close to running, and keep a fallback. Compiling again asks for a new route, so an intent
-  whose body swaps this way is the one its publish built.
+  whose body swaps this way is the one its publish built: `sauce inspect` and the `sauce intent`
+  verbs refuse its file and take the intent's hash instead.
 - The `sauce` command asks each service once per command (`compile`, `tx`, `simulate`, `run`,
   `intent publish`): KyberSwap's public API unless `--swap-api kyber=<url>` names another; eco-swap
   only at `--swap-api eco=<url>`, or `"swapApis"` in the `--config` file. `sauce compile` builds a
