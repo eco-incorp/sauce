@@ -13,13 +13,17 @@ import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-ty
 import type {
   AbiParameter,
   AccountManifest,
+  BoundArgument,
+  CallSite,
   ResolveModule,
   ResolvePackage,
   SauceTarget as RsTarget,
 } from "sauce-compiler";
 import { resolveSdkModule, resolveSdkPackage, sdkStdPath } from "../embedded/resolve.js";
 import { compile } from "../wasm-compiler.js";
-import { compilerBind, type ChainHost } from "./host.js";
+// Type-only: `host.ts` reaches the route compile through the registry's accessors, and a value
+// import here would load it ahead of a test's module mocks.
+import type { ChainHost } from "./host.js";
 
 const ENTRY = "main.js";
 
@@ -215,6 +219,19 @@ export interface RsCompileResult extends CompileResult {
   manifest?: AccountManifest;
   /** `main`'s parameters as the compiler reports them: an ABI signature, `Account`s left out. */
   entryParams: readonly AbiParameter[];
+}
+
+/** A host's `bind` as the compiler takes it: every site-bound call answered, or refused by name. */
+export function compilerBind(
+  bind: ChainHost["bind"],
+): ((site: CallSite) => BoundArgument[]) | undefined {
+  return bind === undefined
+    ? undefined
+    : (site) => {
+        const bound = bind(site);
+        if (bound === undefined) throw new Error(`'${site.callee}' is bound by no host`);
+        return bound;
+      };
 }
 
 /**

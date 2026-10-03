@@ -100,6 +100,7 @@ import {
   type IntentRecord,
   type PreviewChainRefusal,
   type ProgramInput,
+  type ProgramSwaps,
   type SvmCookInput,
   type WalletStore,
 } from "./sdk.js";
@@ -325,8 +326,11 @@ export const INTENT_ARGS = z
   );
 
 /** A program file's `main` arguments with `bindMainArguments`, which a wallet's intents use. */
-export function boundProgram(args: ProgramArgs & { readonly args?: readonly unknown[] }): Program {
-  const given = programOf(args);
+export function boundProgram(
+  args: ProgramArgs & { readonly args?: readonly unknown[] },
+  swaps?: ProgramSwaps,
+): Program {
+  const given = programOf(args, undefined, swaps);
 
   return { ...given, input: bindMainArguments(given.input, argsOf(args).args) };
 }
@@ -443,6 +447,15 @@ export function simulateSummary(json: Record<string, unknown>): Record<string, u
 export type ProgramArgs = z.infer<z.ZodObject<typeof PROGRAM>>;
 type CookArgs = Omit<ProgramArgs, "source"> & z.infer<z.ZodObject<typeof COOK>>;
 
+/** Where a program's `kyberSwap`/`ecoSwap` ask for routes: the server's services, never a caller's. */
+const swapsOf = (endpoints: Endpoints): ProgramSwaps | undefined =>
+  endpoints.swapApis === undefined
+    ? undefined
+    : {
+        apis: endpoints.swapApis,
+        ...(endpoints.swapFetch === undefined ? {} : { fetch: endpoints.swapFetch }),
+      };
+
 /** A program and the files it compiles from: what every compiling tool starts with. */
 export interface Program {
   readonly input: ProgramInput;
@@ -511,11 +524,15 @@ function intentsOf(
   };
 }
 
-export function programOf(given: ProgramArgs, fallback?: CanonicalChain): Program {
+export function programOf(
+  given: ProgramArgs,
+  fallback?: CanonicalChain,
+  swaps?: ProgramSwaps,
+): Program {
   // A `#!` line, as a program file may start with, is blanked as the command blanks it.
   const args = { ...given, source: withoutShebang(given.source) };
 
-  return programWith(args, carried(args), fallback);
+  return programWith(args, carried(args), fallback, swaps);
 }
 
 /** The program and the modules a call carries, served as the commands read files. */
@@ -550,6 +567,7 @@ export function programFrom(
   },
   local: boolean,
   fallback?: CanonicalChain,
+  swaps?: ProgramSwaps,
 ): ProgramFrom {
   const { path, source, ...rest } = given;
   let text: string;
@@ -586,7 +604,7 @@ export function programFrom(
     location = { file: read.file, files: read.files };
   }
   const withDefines = (defines: ProgramArgs["defines"]): Program =>
-    programWith({ ...args, defines }, location, fallback);
+    programWith({ ...args, defines }, location, fallback, swaps);
 
   return { ...withDefines(args.defines), sourceSha256: sourceSha256(text), withDefines };
 }
@@ -596,6 +614,7 @@ function programWith(
   args: ProgramArgs,
   { file, files }: { readonly file: string; readonly files: CliFiles },
   fallback: CanonicalChain | undefined,
+  swaps: ProgramSwaps | undefined,
 ): Program {
   if (Object.keys(args.defines ?? {}).length > LIMITS.entries) {
     throw new UsageError(`defines: at most ${LIMITS.entries}`);
@@ -624,6 +643,8 @@ function programWith(
       ...(addresses.length === 0 ? {} : { addressDefines: addresses }),
       compactArgs: args.compactArgs === true,
       intents: intentsOf(args),
+      // Where `kyberSwap`/`ecoSwap` ask for routes: the server's, never the caller's.
+      ...(swaps === undefined ? {} : { swaps }),
     },
     files,
   };
@@ -1597,7 +1618,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
-      const program = programFrom(args, local);
+      const program = programFrom(args, local, undefined, swapsOf(endpoints));
       if (args.accounts !== undefined && program.input.chain.kind !== "svm") {
         throw new UsageError(
           `accounts names a Solana program's accounts; a program on ${program.input.chain.slug} takes none`,
@@ -1756,7 +1777,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
-      const program = programFrom(args, local);
+      const program = programFrom(args, local, undefined, swapsOf(endpoints));
       // Before any endpoint: the chain, and every chain an intent the program opens goes to.
       requireSupported(
         "building the cook transaction",
@@ -1983,7 +2004,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       annotations: READS_CHAIN,
     },
     async (args, reach) => {
-      const program = programFrom(args, local);
+      const program = programFrom(args, local, undefined, swapsOf(endpoints));
       const chain = program.input.chain;
       const rpcUrl = await reach.require(chain, args.rpcUrl, "Simulating");
       if (args.block !== undefined && chain.kind === "svm") {
@@ -2141,7 +2162,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
     },
     async (args, reach) => {
       const from = args.from === undefined ? undefined : parseAddress("from", args.from);
-      const given = boundProgram(args);
+      const given = boundProgram(args, swapsOf(endpoints));
       // The wallet that publishes is the creator of each top-level intent that names none, unless
       // the call names another.
       const publisher = given.input.intents.refundee ?? from;

@@ -39,14 +39,13 @@ import {
 import type { Abi, Address, Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import { v12DeployedAddresses } from "../../src/deployments/index.js";
-import { KyberSwapMetaAggregationRouterABI } from "../../src/protocols/kyberswap/abis.js";
 import { encodeEntryArguments, type EntryValue } from "../../src/routes/entry.js";
 import {
   compileSauceProgram,
   compileSauceProgramAsync,
   type CompiledSauceProgram,
 } from "../../src/routes/sauce-route.js";
+import { answerSwapApi } from "../swap-stub.js";
 import { startGatedEngine } from "./gated-engine.js";
 import type { GatedEngine } from "./gated-engine.js";
 
@@ -209,102 +208,21 @@ const cook = async (
   return { returned: returned === "0x" ? 0n : hexToBigInt(returned), status };
 };
 
-/** KyberSwap's two calls and eco-swap's embed, answered as each API does. */
+/** KyberSwap's two calls and eco-swap's embed, answered over HTTP as each API does. */
 function stubApi(): Server {
   return createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://stub");
     asked.push(url.pathname);
-    const answer = (body: unknown) => {
-      response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify(body));
-    };
-    if (url.pathname === "/base/api/v1/routes") {
-      return answer({
-        code: 0,
-        message: "successfully",
-        data: {
-          routeSummary: {
-            tokenIn: url.searchParams.get("tokenIn"),
-            amountIn: url.searchParams.get("amountIn"),
-            tokenOut: url.searchParams.get("tokenOut"),
-            amountOut: KYBER_PAYS.toString(),
-            route: [],
-          },
-          routerAddress: ROUTER,
-        },
+    let body = "";
+    request.on("data", (chunk) => (body += chunk));
+    request.on("end", () => {
+      const { status, json } = answerSwapApi(url, body, {
+        kyberQuotes: KYBER_PAYS,
+        ecoProgram: () => ecoProgram,
       });
-    }
-    if (url.pathname === "/base/api/v1/route/build") {
-      let text = "";
-      request.on("data", (chunk) => (text += chunk));
-      request.on("end", () => {
-        const body = JSON.parse(text) as {
-          routeSummary: {
-            tokenIn: Address;
-            tokenOut: Address;
-            amountIn: string;
-            amountOut: string;
-          };
-          recipient: Address;
-          slippageTolerance: number;
-        };
-        const summary = body.routeSummary;
-        const quoted = BigInt(summary.amountOut);
-        const data = encodeFunctionData({
-          abi: KyberSwapMetaAggregationRouterABI,
-          functionName: "swap",
-          args: [
-            {
-              callTarget: ROUTER,
-              approveTarget: "0x0000000000000000000000000000000000000000",
-              targetData: "0x",
-              desc: {
-                srcToken: summary.tokenIn,
-                dstToken: summary.tokenOut,
-                srcReceivers: [ROUTER],
-                srcAmounts: [BigInt(summary.amountIn)],
-                feeReceivers: [],
-                feeAmounts: [],
-                dstReceiver: body.recipient,
-                amount: BigInt(summary.amountIn),
-                minReturnAmount: (quoted * BigInt(10_000 - body.slippageTolerance)) / 10_000n,
-                flags: 0n,
-                permit: "0x",
-              },
-              clientData: "0x",
-            },
-          ],
-        });
-        answer({
-          code: 0,
-          message: "successfully",
-          data: {
-            data,
-            routerAddress: ROUTER,
-            transactionValue: "0",
-            amountOut: summary.amountOut,
-          },
-        });
-      });
-      return;
-    }
-    if (url.pathname === "/swap" && url.searchParams.get("embed") === "1") {
-      return answer({
-        embed: {
-          version: 1,
-          compiler: v12DeployedAddresses().compiler,
-          chainId: Number(url.searchParams.get("chainId")),
-          tokenIn: url.searchParams.get("from"),
-          tokenOut: url.searchParams.get("to"),
-          program: ecoProgram,
-          entryParams: [
-            { name: "amountIn", type: "uint256" },
-            { name: "minOut", type: "uint256" },
-          ],
-        },
-      });
-    }
-    response.writeHead(404).end(JSON.stringify({ error: `unknown route ${url.pathname}` }));
+      response.writeHead(status, { "content-type": "application/json" });
+      response.end(JSON.stringify(json));
+    });
   });
 }
 

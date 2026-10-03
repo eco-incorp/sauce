@@ -119,15 +119,6 @@ export function withHost(names: ChainHost, more: ChainHost | undefined): ChainHo
   };
 }
 
-/** `bind` as the compiler takes it: every site-bound call answered, or refused by name. */
-export function compilerBind(
-  bind: ChainHost["bind"],
-): ((site: CallSite) => BoundArgument[]) | undefined {
-  return bind === undefined
-    ? undefined
-    : (site) => bind(site) ?? fail(`'${site.callee}' is bound by no host`);
-}
-
 class HostNameError extends Error {}
 
 const fail = (message: string): never => {

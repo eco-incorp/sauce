@@ -41,6 +41,9 @@ import {
   type CompiledSauceProgram,
   type SauceCompileOptions,
 } from "../routes/sauce-route.js";
+import { fetchSwapRoutes } from "../routes/swap-apis.js";
+import type { SwapRoute, SwapSite } from "../routes/swap-host.js";
+import { KYBER_CLIENT_ID } from "./public-swap-apis.js";
 import { CliError, UsageError, type DefineValue, type SaltChoice } from "./args.js";
 import {
   awaitPot,
@@ -148,6 +151,25 @@ export interface ProgramInput {
    * (`actions.ts`), whose generated source names `IErc20` and the like. Absent for a file.
    */
   readonly contracts?: SauceCompileOptions["contracts"];
+  /** `kyberSwap(...)`/`ecoSwap(...)` in the program: where their routes come from, and — once the
+   *  command has asked for them ({@link withSwapRoutes}) — the routes, so every compile it makes
+   *  binds the same ones. */
+  readonly swaps?: ProgramSwaps;
+}
+
+/** The routes `kyberSwap(...)` and `ecoSwap(...)` are compiled with (`routes/swap-host.ts`). */
+export interface ProgramSwaps {
+  /** Each service's URL: `--swap-api`, the `--config` file's `swapApis`, else the built-in public
+   *  one (KyberSwap's alone; eco-swap has none). */
+  readonly apis: { readonly kyber?: string; readonly eco?: string };
+  /** How a service is reached: the global `fetch`, unless a test gives another. */
+  readonly fetch?: typeof fetch;
+  /** `--offline`: no service is asked, and a program that needs a route is refused. */
+  readonly offline?: boolean;
+  /** The Pot the program runs on, which a top-level KyberSwap route pays from and to. */
+  readonly pot?: Address;
+  /** The routes asked for, by the request each answers. */
+  readonly routes?: readonly SwapRoute[];
 }
 
 /** Why `--intent-deadline` has passed, or `undefined` while it is still ahead. */
@@ -220,6 +242,7 @@ function compileOptions(
   input: ProgramInput,
   files: CliFiles,
   onContract?: (reference: string, target: AccessorTarget) => void,
+  placeholders = false,
 ): SauceCompileOptions {
   const dir = sourceDirOf(input);
   const { deadline, rewardDeadline, publisher, salt, prover, executionFee, fundVia } =
@@ -248,6 +271,11 @@ function compileOptions(
     // The intents the program opens compile with these options too, so this hears their contracts.
     ...(onContract === undefined ? {} : { accessors: { onContract } }),
     ...(input.contracts === undefined ? {} : { contracts: input.contracts }),
+    swap: {
+      ...(input.swaps?.pot === undefined ? {} : { pot: input.swaps.pot }),
+      ...(input.swaps?.routes === undefined ? {} : { routes: input.swaps.routes }),
+      ...(placeholders ? { placeholders } : {}),
+    },
     resolve: (path) => files.readModule(resolvePath(dir, path)),
   };
 }
@@ -274,10 +302,13 @@ export function compileProgram(
   input: ProgramInput,
   files: CliFiles,
   onContract?: (reference: string, target: AccessorTarget) => void,
+  /** Bind a placeholder where a swap has no route: a compile that only looks at what the program
+   *  opens or asks for. */
+  placeholders = false,
 ): CompiledSauceProgram {
   try {
     return compileSauceProgram(input.chain, input.text, {
-      ...compileOptions(input, files, onContract),
+      ...compileOptions(input, files, onContract, placeholders),
       ...(input.bound === undefined ? {} : { args: input.bound }),
     });
   } catch (error) {
@@ -314,7 +345,110 @@ export function probeProgram(input: ProgramInput, files: CliFiles): CompiledSauc
       },
     },
     files,
+    undefined,
+    true,
   );
+}
+
+/** A program that names `kyberSwap` or `ecoSwap`, which the command looks into further. */
+export const NAMES_A_SWAP = /\b(?:kyberSwap|ecoSwap)\s*\(/;
+
+const SWAP_SERVICE = { kyber: "KyberSwap", eco: "eco-swap" } as const;
+const SWAP_FUNCTION = { kyber: "kyberSwap", eco: "ecoSwap" } as const;
+
+/**
+ * `input` with a route for each `kyberSwap(...)`/`ecoSwap(...)` it calls, at any depth, asked of
+ * its service ONCE, before the command compiles it for real, so every compile the command makes —
+ * the cook, a funding wrapper around it — binds the same calldata. `pot` is the Pot a cook runs on,
+ * which a top-level KyberSwap route pays from and to; an intent body's is its destination's shared
+ * Pot. A program that does not compile is left to the compile that follows, whose refusal is the
+ * one to see.
+ */
+export async function withSwapRoutes<T extends ProgramInput>(
+  input: T,
+  files: CliFiles,
+  pot?: Address,
+): Promise<T> {
+  if (input.chain.kind !== "evm" || !NAMES_A_SWAP.test(input.text)) return input;
+  const swaps: ProgramSwaps = {
+    apis: {},
+    ...input.swaps,
+    ...(pot === undefined ? {} : { pot }),
+  };
+  const given = { ...input, swaps };
+  let probe: CompiledSauceProgram;
+  try {
+    probe = compileProgram(given, files, undefined, true);
+  } catch {
+    return given;
+  }
+  const missing = probe.swaps.filter((site: SwapSite) => site.route === undefined);
+  if (missing.length === 0) return given;
+  const providers = [...new Set(missing.map((site) => site.request.provider))];
+  const named = providers.map((provider) => SWAP_FUNCTION[provider]).join(" and ");
+  if (swaps.offline === true) {
+    throw new UsageError(
+      `--offline: ${input.file} calls ${named}, whose routes are asked of their service while it ` +
+        "compiles",
+    );
+  }
+  for (const provider of providers) {
+    if (swaps.apis[provider] !== undefined) continue;
+    throw new UsageError(
+      `${SWAP_FUNCTION[provider]} asks ${SWAP_SERVICE[provider]}'s API for its route, and none is ` +
+        `given: --swap-api ${provider}=<url>, or "swapApis": { "${provider}": "<url>" } in the ` +
+        "--config file",
+    );
+  }
+  if (missing.some((site) => site.request.provider === "kyber" && site.request.pot === undefined)) {
+    throw new UsageError(
+      "kyberSwap's route is built for the Pot the program runs on, which pays and receives: give " +
+        "--pot or --owner (and --salt), or a signer",
+    );
+  }
+  let routes: SwapRoute[];
+  try {
+    routes = await fetchSwapRoutes(
+      missing.map((site) => site.request),
+      {
+        ...(swaps.apis.kyber === undefined
+          ? {}
+          : { kyber: { url: swaps.apis.kyber, clientId: KYBER_CLIENT_ID } }),
+        ...(swaps.apis.eco === undefined ? {} : { eco: { url: swaps.apis.eco } }),
+        ...(swaps.fetch === undefined ? {} : { fetch: swaps.fetch }),
+      },
+    );
+  } catch (error) {
+    throw new CliError(`${input.file}: ${(error as Error).message}`);
+  }
+
+  return { ...given, swaps: { ...swaps, routes: [...(swaps.routes ?? []), ...routes] } };
+}
+
+/** Each swap's route as `--json` reports it: who built it, for what, and what it quoted. */
+export function swapsJson(sites: readonly SwapSite[]): Record<string, unknown>[] {
+  return sites.map(({ request, route }) => ({
+    function: SWAP_FUNCTION[request.provider],
+    chainId: request.chainId,
+    tokenIn: request.tokenIn,
+    tokenOut: request.tokenOut,
+    amountIn: request.amountIn?.toString() ?? null,
+    minOut: request.minOut?.toString() ?? null,
+    pot: request.pot ?? null,
+    ...(route === undefined
+      ? {}
+      : route.provider === "kyber"
+        ? {
+            router: route.router,
+            quotedOut: route.quotedOut.toString(),
+            routerFloor: route.minReturn.toString(),
+            deadline: route.deadline.toString(),
+          }
+        : {
+            programSize: (route.program.length - 2) / 2,
+            ...(route.quotedOut === undefined ? {} : { quotedOut: route.quotedOut.toString() }),
+          }),
+  }));
 }
 
 /**
@@ -370,8 +504,9 @@ export interface CompileInput extends ProgramInput {
  * came from — and how large it is: the program, the payload with `main`'s arguments, and on Solana
  * the cook's transaction against the one-transaction limit.
  */
-export async function compileCommand(input: CompileInput, files: CliFiles): Promise<CommandOutput> {
-  refusePastDeadline(input);
+export async function compileCommand(given: CompileInput, files: CliFiles): Promise<CommandOutput> {
+  refusePastDeadline(given);
+  const input = await withSwapRoutes(given, files);
   const collected = contractCollector();
   const program = compileProgram(input, files, collected.onContract);
   const bytecode = bytesToHex(program.bytecode);
@@ -437,6 +572,7 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       defines,
       contracts: collected.contracts(),
       ...(pots.length === 0 ? {} : { intentPots: pots.map(potCheckJson) }),
+      ...(program.swaps.length === 0 ? {} : { swaps: swapsJson(program.swaps) }),
       compiler: compilerPackage(),
       engine: pairedEngine(input.chain),
       ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
@@ -599,8 +735,7 @@ export function cookOf(input: CookInput, files: CliFiles): Cook {
     throw new Error(`internal: ${input.chain.slug}'s cook is built by solana.ts`);
   }
   refusePastDeadline(input);
-  const target = input.target;
-  const pot = "pot" in target ? target.pot : (v12PredictPot(target.owner, target.salt) as Address);
+  const pot = potOf(input.target);
   const engine = getAddress(v12EngineAddress());
   // The intents the program opens name their own refundees: the Pot may be shared, so no default
   // is derived from it or its owner.
@@ -611,6 +746,10 @@ export function cookOf(input: CookInput, files: CliFiles): Cook {
 
   return { pot, engine, data, program };
 }
+
+/** The Pot `target` names. */
+export const potOf = (target: PotInput): Address =>
+  "pot" in target ? target.pot : (v12PredictPot(target.owner, target.salt) as Address);
 
 /** The `sauce pot` that deploys `target`'s Pot. */
 function deployHint(chain: CanonicalChain, target: PotInput): string {
@@ -649,9 +788,10 @@ export interface TxInput extends CookInput {
 }
 
 /** `sauce tx`: the unsigned cook transaction, for any wallet to sign. */
-export async function txCommand(input: TxInput, files: CliFiles): Promise<CommandOutput> {
-  if (input.value === undefined && input.rpcUrl === undefined)
-    valueOf(undefined, undefined, input.chain);
+export async function txCommand(given: TxInput, files: CliFiles): Promise<CommandOutput> {
+  if (given.value === undefined && given.rpcUrl === undefined)
+    valueOf(undefined, undefined, given.chain);
+  const input = await withSwapRoutes(given, files, potOf(given.target));
   const cook = cookOf(input, files);
   requireSupported("building the cook transaction", [
     input.chain,
@@ -743,7 +883,8 @@ export interface RunInput extends CookInput, ChainAccess {
 }
 
 /** `sauce run`: compile, sign, send and wait — deploying the Pot first once it is agreed to. */
-export async function runCommand(input: RunInput, files: CliFiles): Promise<CommandOutput> {
+export async function runCommand(given: RunInput, files: CliFiles): Promise<CommandOutput> {
+  const input = await withSwapRoutes(given, files, potOf(given.target));
   const signer = input.account.address;
   const target = input.target;
   if ("owner" in target && getAddress(target.owner) !== signer) {

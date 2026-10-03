@@ -50,7 +50,9 @@ import {
   pastDeadline,
   asPublished,
   compileProgram,
+  NAMES_A_SWAP,
   potCommand,
+  potOf,
   PROBE_CREATOR,
   probeProgram,
   programChains,
@@ -68,6 +70,7 @@ import {
   type CookInput,
   type PotInput,
   type ProgramInput,
+  type ProgramSwaps,
 } from "./commands.js";
 import { createIntent } from "./create.js";
 import { defineLabels, fillCommand, fillTargets, type FillTarget } from "./fill.js";
@@ -218,6 +221,18 @@ export interface CliIo extends CliFiles {
    * (`main.ts`); without them, as in a test, such a chain is not read.
    */
   readonly publicRpcs?: PublicEndpoints | undefined;
+  /**
+   * The built-in swap APIs, which `kyberSwap`/`ecoSwap` ask for routes when neither `--swap-api` nor
+   * the `--config` file names one (`public-swap-apis.ts`: KyberSwap's), and how they are reached.
+   * The executable gives them (`main.ts`); without them, as in a test, none is asked.
+   */
+  readonly swapApis?:
+    | {
+        readonly kyber?: string;
+        readonly eco?: string;
+        readonly fetch?: typeof fetch;
+      }
+    | undefined;
   /**
    * What `sauce update` reaches: this package's directory, the npm registry and the package
    * managers (`update.ts`). The executable gives it (`main.ts`); without it, as in a test, nothing
@@ -429,6 +444,12 @@ const PROGRAM: FlagSpecs = {
     type: "string",
     value: "<dir>",
     help: "Resolve the program's relative imports here (default: beside it; from stdin, .)",
+  },
+  "swap-api": {
+    type: "string",
+    multiple: true,
+    value: "<kyber|eco>=<url>",
+    help: "Where kyberSwap or ecoSwap asks for its route (kyber: KyberSwap's public API by default)",
   },
 };
 
@@ -643,6 +664,9 @@ async function autoExecutionFee(
         },
       },
       io,
+      undefined,
+      // The intents are what it looks for, not the swaps' routes, which are asked for later.
+      true,
     );
   } catch (error) {
     if (told) throw error;
@@ -710,6 +734,72 @@ function programText(io: CliIo, operand: string | ProgramText): ProgramText {
     : { file: operand, text: withoutShebang(readInput(io, operand)), stdin: false };
 }
 
+/** The swap APIs a `--config` file names, `{ "swapApis": { "kyber": "<url>", "eco": "<url>" } }`. */
+function configSwapApis(path: string, text: string): { kyber?: string; eco?: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new UsageError(`--config ${path}: not JSON`);
+  }
+  const apis = (parsed as { swapApis?: unknown } | null)?.swapApis;
+  if (apis === undefined) return {};
+  if (apis === null || typeof apis !== "object" || Array.isArray(apis)) {
+    throw new UsageError(
+      `--config ${path}: expected "swapApis": { "kyber": "<url>", "eco": "<url>" }`,
+    );
+  }
+  const out: { kyber?: string; eco?: string } = {};
+  for (const [provider, url] of Object.entries(apis as Record<string, unknown>)) {
+    if (provider !== "kyber" && provider !== "eco") {
+      throw new UsageError(
+        `--config ${path}: swapApis.${provider}: the providers are kyber and eco`,
+      );
+    }
+    if (typeof url !== "string" || !/^https?:\/\//.test(url)) {
+      throw new UsageError(`--config ${path}: swapApis.${provider} is not an http(s) URL`);
+    }
+    out[provider] = url;
+  }
+
+  return out;
+}
+
+/**
+ * Where `kyberSwap`/`ecoSwap` ask for routes: `--swap-api`, over the `--config` file's `swapApis`,
+ * over the built-in public ones (`CliIo.swapApis`); none with `--offline`, which refuses a program
+ * that needs one. A URL given is a secret: an eco-swap endpoint may be a private one.
+ */
+function swapsOf(args: ParsedArgs, io: CliIo): ProgramSwaps {
+  const offline = args.values.offline === true;
+  const given: { kyber?: string; eco?: string } = {};
+  for (const entry of repeatedFlag(args, "swap-api")) {
+    const [, provider, url] = /^(kyber|eco)=(https?:\/\/\S+)$/.exec(entry) ?? [];
+    if (provider === undefined || url === undefined) {
+      throw new UsageError(`--swap-api ${entry}: expected kyber=<url> or eco=<url>, http(s)`);
+    }
+    if (offline) throw new UsageError("--offline asks no service: give it without --swap-api");
+    given[provider as "kyber" | "eco"] = url;
+  }
+  const config = stringFlag(args, "config");
+  const configured = config === undefined ? {} : configSwapApis(config, readInput(io, config));
+  const apis = offline
+    ? {}
+    : {
+        ...(io.swapApis?.kyber === undefined ? {} : { kyber: io.swapApis.kyber }),
+        ...(io.swapApis?.eco === undefined ? {} : { eco: io.swapApis.eco }),
+        ...configured,
+        ...given,
+      };
+  for (const url of [...Object.values(configured), ...Object.values(given)]) secret(url);
+
+  return {
+    apis,
+    ...(offline ? { offline } : {}),
+    ...(io.swapApis?.fetch === undefined ? {} : { fetch: io.swapApis.fetch }),
+  };
+}
+
 /**
  * A program operand's input — a file, or `-` for stdin — and `fallback` its chain when neither
  * `--chain` nor its header says.
@@ -751,6 +841,8 @@ async function programInput(
   const given: ProgramInput = {
     file,
     text,
+    // Read only for a program that names a swap: no other has a route to ask for.
+    ...(NAMES_A_SWAP.test(text) ? { swaps: swapsOf(args, io) } : {}),
     ...(addresses.length === 0 ? {} : { addressDefines: addresses }),
     ...(stdin ? { stdin } : {}),
     ...(sourceDir === undefined ? {} : { sourceDir }),
@@ -2403,6 +2495,14 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         value: "<kitchen|engine>",
         help: "Solana: size the Kitchen's cook (default) or the engine's direct one",
       },
+      owner: {
+        type: "string",
+        value: "<address>",
+        help: "The Pot's owner, deriving the Pot a kyberSwap route is built for (with the salt)",
+        only: "evm",
+      },
+      pot: { type: "string", value: "<address>", help: "Or that Pot itself", only: "evm" },
+      ...SALT,
       ...ENDPOINT,
       out: { type: "string", value: "<path>", help: "Write the output to a file, not stdout" },
       json: {
@@ -2456,9 +2556,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
             "the Pot's",
         );
       }
+      const named = stringFlag(args, "owner") ?? stringFlag(args, "pot");
       const output = await compileCommand(
         {
           ...program,
+          ...(named === undefined
+            ? {}
+            : { swaps: { apis: {}, ...program.swaps, pot: potOf(potInput(args)) } }),
           ...argsInput(args, io, trailing),
           ...(accounts.length === 0 ? {} : { accounts: parseAccounts(accounts) }),
           ...(via === undefined ? {} : { via: parseVia(via) }),

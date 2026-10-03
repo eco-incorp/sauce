@@ -25,8 +25,10 @@ import { connectAt, kitchenFee, potState } from "./chain.js";
 import {
   cookOf,
   kitchenAddress,
+  potOf,
   priceLimitNotes,
   valueOf,
+  withSwapRoutes,
   type ChainAccess,
   type CliFiles,
   type CommandOutput,
@@ -205,9 +207,10 @@ function routeLines(
 
 /** `sauce simulate`: the cook as a rehearsal from the Pot's owner — no key, nothing sent. */
 export async function simulateCommand(
-  input: SimulateInput,
+  given: SimulateInput,
   files: CliFiles,
 ): Promise<CommandOutput> {
+  const input = await withSwapRoutes(given, files, potOf(given.target));
   const cook = cookOf(input, files);
   // Every read and the rehearsal itself on one block: what it saw is what it says it saw.
   const { client, block } = await connectAt(input.rpcUrl, input.chain, input.block);

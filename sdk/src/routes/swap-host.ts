@@ -306,7 +306,8 @@ export function swapHost(level: SwapLevel): {
       potGiven === undefined
         ? undefined
         : (getAddress(denormalizeToEvm(toUniversalAddress(potGiven))) as Hex);
-    if (provider === "kyber" && pot === undefined) {
+    // A first pass reports the call without one, for its caller to say where the Pot comes from.
+    if (provider === "kyber" && pot === undefined && level.options.placeholders !== true) {
       fail(
         "kyberSwap: KyberSwap builds its calldata for the Pot the program runs on, which pays " +
           "and receives: give the Pot (`swap.pot`; the sauce command's --pot, --owner or signer)",

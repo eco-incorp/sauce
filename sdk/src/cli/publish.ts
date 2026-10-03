@@ -63,6 +63,7 @@ import {
   compileProgram,
   priceLimitNotes,
   refusePastDeadline,
+  withSwapRoutes,
   type CliFiles,
   type CommandOutput,
   type ProgramInput,
@@ -441,10 +442,12 @@ async function fundedNow(client: PublicClient, plan: Plan, portal: Hex): Promise
 }
 
 /** `sauce intent publish`: send, rehearse or print the Portal transactions of a file's fixed intents. */
-export async function publishCommand(input: PublishInput, files: CliFiles): Promise<CommandOutput> {
+export async function publishCommand(given: PublishInput, files: CliFiles): Promise<CommandOutput> {
   // What no funding path can fix, refused or named first, for every front end: a deadline that has
   // passed, and a price limit at a bound, which fills nothing on the destination.
-  refusePastDeadline(input);
+  refusePastDeadline(given);
+  // An intent body's swaps, routed for its destination's shared Pot before the intents are built.
+  const input = await withSwapRoutes(given, files);
   const limits = priceLimitNotes(input, [], undefined);
   const output = await publishIntents(input, files);
 

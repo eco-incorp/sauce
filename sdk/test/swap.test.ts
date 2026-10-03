@@ -263,12 +263,13 @@ describe("what kyberSwap and ecoSwap refuse", () => {
     expect(eco.swaps[0]!.request.amountIn).toBeUndefined();
   });
 
-  it("a KyberSwap route with no Pot to build it for", () => {
-    refused(
-      "function main(): Uint256 { return kyberSwap(USDC, WETH, 1000000, 0); }",
+  it("a KyberSwap route with no Pot to build it for, which a first pass reports", () => {
+    const source = "function main(): Uint256 { return kyberSwap(USDC, WETH, 1000000, 0); }";
+    expect(() => compileSauceProgram("base", source, { swap: { routes: [] } })).toThrow(
       /builds its calldata for the Pot the program runs on/,
-      { placeholders: true } as never,
     );
+    const probe = compileSauceProgram("base", source, { swap: { placeholders: true } });
+    expect(probe.swaps[0]!.request.pot).toBeUndefined();
   });
 
   it("a swap with no route, outside the first pass", () => {

@@ -13,6 +13,7 @@ import {
   secret,
   UsageError,
   type CanonicalChain,
+  type ProgramSwaps,
   type PublicEndpoints,
 } from "./sdk.js";
 
@@ -25,7 +26,16 @@ export interface Endpoints {
   /** The built-in public endpoints, started: a chain's when neither the call nor the operator
    *  gives one. Absent, as in a test, such a chain is not read. */
   readonly public?: PublicEndpoints | undefined;
+  /** Where `kyberSwap`/`ecoSwap` ask for routes: `sauce mcp --swap-api`, the `--config` file's
+   *  `swapApis`, and KyberSwap's public API the `sauce` command hands the server. A call never names
+   *  one. Absent, as in a test, no service is asked. */
+  readonly swapApis?: SwapApiUrls | undefined;
+  /** How those are reached: the global `fetch`, unless a test gives another. */
+  readonly swapFetch?: typeof fetch | undefined;
 }
+
+/** A URL per swap provider. */
+export type SwapApiUrls = ProgramSwaps["apis"];
 
 /** A server with no `--config` and no public endpoints: it reads no chain. */
 export const NO_ENDPOINTS: Endpoints = { chainIds: [], endpoint: () => undefined };
@@ -72,6 +82,7 @@ export function readEndpoints(text: string, path: string): Endpoints {
     }
   }
   const chainIds = entries.map(([id]) => Number(id));
+  const swapApis = readSwapApis(parsed, path);
 
   return {
     chainIds,
@@ -79,7 +90,34 @@ export function readEndpoints(text: string, path: string): Endpoints {
       chainIds.includes(chain.id)
         ? endpointFor(chain, undefined, { path: SHOWN, text })
         : undefined,
+    ...(swapApis === undefined ? {} : { swapApis }),
   };
+}
+
+/** A config file's `"swapApis": { "kyber": "<url>", "eco": "<url>" }`, each a secret. */
+function readSwapApis(parsed: unknown, path: string): SwapApiUrls | undefined {
+  const apis = (parsed as { swapApis?: unknown } | null)?.swapApis;
+  if (apis === undefined) return undefined;
+  if (apis === null || typeof apis !== "object" || Array.isArray(apis)) {
+    throw new UsageError(
+      `--config ${path}: expected "swapApis": { "kyber": "<url>", "eco": "<url>" }`,
+    );
+  }
+  const out: { kyber?: string; eco?: string } = {};
+  for (const [provider, url] of Object.entries(apis as Record<string, unknown>)) {
+    if (typeof url === "string") secret(url);
+    if (provider !== "kyber" && provider !== "eco") {
+      throw new UsageError(
+        `--config ${path}: swapApis.${provider}: the providers are kyber and eco`,
+      );
+    }
+    if (typeof url !== "string" || !/^https?:\/\//i.test(url.trim())) {
+      throw new UsageError(`--config ${path}: swapApis.${provider} is not an http(s) URL`);
+    }
+    out[provider] = url.trim();
+  }
+
+  return out;
 }
 
 /** Why a tool that reads `chain` cannot, said plainly. */
