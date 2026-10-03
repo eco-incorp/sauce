@@ -440,7 +440,8 @@ program opening the intent, exactly as a token-only body is written. Four rules 
 - **It has no access to the Pot's funds.** The body runs in the Pot and a hook on the Executor, so
   `.after(...)` cannot spend what the body holds. What a hook transfers is delivered on top of what
   `.receive(...)` names, which still moves into the Pot whole: the solver above brings
-  `amount + fee`.
+  `amount + fee`. The route names USDC twice, `fee` and `amount`, and the Portal pulls each entry
+  from the solver, so a solver approves the sum for a token named more than once.
 
 Hooks are EVM-only: on a Solana destination they are refused, since a Solana route call names its
 accounts.
