@@ -125,7 +125,8 @@ export const INTENT_STAGES = {
         doc:
           "What the solver delivers on the destination, for the body to run with: each item an " +
           "argument, `{ token, amount }`, or one list of them. With none, a body of token writes " +
-          "is delivered what it moves, and a program nothing.",
+          "is delivered what it moves, and a program nothing. What a hook transfers is delivered " +
+          "on top.",
         params: [
           {
             name: "delivery",
@@ -175,8 +176,9 @@ export const INTENT_STAGES = {
           "Calls the Portal's Executor makes on the destination before the body runs: the " +
           "closure is never compiled, each statement a call of a token, recorded as a route call " +
           "of its own. The Executor is the caller; the arguments are fixed when the intent is " +
-          "published. A hook that reverts reverts the fill, `.catch(...)` or not. Any number, in " +
-          "the order written. EVM destinations only.",
+          "published; what a transfer moves is delivered on top of what `.receive(...)` names. A " +
+          "hook that reverts reverts the fill, `.catch(...)` or not. Any number, in the order " +
+          "written. EVM destinations only.",
         params: [{ name: "hook", ts: "() => void", kind: "hook" }],
         returns: "Received",
         repeats: true,

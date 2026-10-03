@@ -209,6 +209,9 @@ const hookNotRecorded = (hook: RouteHook): string =>
 /** One of a route's calls, as the Executor makes it. */
 type RouteCall = { target: Hex; data: Hex; value: bigint };
 
+/** A token and an amount of it, as an intent carries them. */
+type TokenAmount = { readonly token: bigint; readonly amount: Value };
+
 /** Why an intent with no `.refundee(...)` is refused: no default is safe for one a program
  *  opens. */
 const UNNAMED_CREATOR =
@@ -492,7 +495,6 @@ function bindIntent(
         : defaults.executionFee;
 
   const destinationPortal = defaults.destinationPortal ?? ecoRoutesPortal(destination, defaults);
-  const derivedDelivery: { token: bigint; amount: Value }[] = [];
   const tokenCall = (target: bigint, method: "transfer" | "approve", args: readonly Value[]) => ({
     target: addressHex(target),
     data: encodeFunctionData({
@@ -506,9 +508,12 @@ function bindIntent(
   // Recorded calls — a body of token writes, or a hook — are the route's own calls, run by the
   // Portal's Executor: not a program, so the Executor's checks rather than SafeERC20's. Every
   // approve is reset to zero first, for a token (USDT) that refuses to move a standing allowance:
-  // one Executor runs every intent on a chain. What each transfer moves is the delivery when
-  // `.receive()` names none, since it is the Executor's to spend.
-  const recordedCalls = (recorded: readonly RecordedCall[]): RouteCall[] =>
+  // one Executor runs every intent on a chain. What each transfer moves is the Executor's to spend,
+  // so it is added to `delivered`, when there is one to add to.
+  const recordedCalls = (
+    recorded: readonly RecordedCall[],
+    delivered: TokenAmount[] | undefined,
+  ): RouteCall[] =>
     recorded.flatMap((call) => {
       const method = call.callee.split(".")[1];
       if (method !== "transfer" && method !== "approve") {
@@ -523,9 +528,7 @@ function bindIntent(
       const args = call.args.map((arg, i) =>
         valueOf(arg, `argument ${i + 1} of \`.${method}(...)\``),
       );
-      if (method === "transfer" && explicitDelivery === undefined) {
-        derivedDelivery.push({ token: token.literal, amount: args[1]! });
-      }
+      if (method === "transfer") delivered?.push({ token: token.literal, amount: args[1]! });
       const amount = args[1]!;
       const reset =
         method === "approve" && !("literal" in amount && amount.literal === 0n)
@@ -535,20 +538,29 @@ function bindIntent(
       return [...reset, tokenCall(token.literal, method, args)];
     });
   // Each hook's calls, its closures in the order written: recorded, never compiled.
-  const hookCalls = (hook: RouteHook): RouteCall[] =>
+  const hookCalls = (hook: RouteHook, delivered: TokenAmount[]): RouteCall[] =>
     parts
       .filter((part) => part.callee === `Received.${hook}`)
       .flatMap((part) => {
         const [closure] = part.args;
         return closure !== undefined && "recorded" in closure
-          ? recordedCalls(closure.recorded)
+          ? recordedCalls(closure.recorded, delivered)
           : fail(hookNotRecorded(hook));
       });
 
-  const before = hookCalls("before");
+  // The delivery: what `.receive(...)` names — else, for a body of token writes, what its
+  // transfers move — and, on top of it, what the hooks' transfers move. `.receive(...)` is the
+  // body's, so a program's moves into its Pot whole; the hooks spend what is delivered for them.
+  const beforeDelivery: TokenAmount[] = [];
+  const bodyDelivery: TokenAmount[] = [];
+  const afterDelivery: TokenAmount[] = [];
+  const before = hookCalls("before", beforeDelivery);
   let bodyCalls: RouteCall[];
   if (body !== undefined && "recorded" in body) {
-    bodyCalls = recordedCalls(body.recorded);
+    bodyCalls = recordedCalls(
+      body.recorded,
+      explicitDelivery === undefined ? bodyDelivery : undefined,
+    );
   } else if (body !== undefined && "program" in body) {
     bodyCalls = programCalls(
       level,
@@ -562,7 +574,8 @@ function bindIntent(
   } else {
     return fail("an intent's body must be a closure");
   }
-  const calls = [...before, ...bodyCalls, ...hookCalls("after")];
+  const calls = [...before, ...bodyCalls, ...hookCalls("after", afterDelivery)];
+  const delivery = [...beforeDelivery, ...(explicitDelivery ?? bodyDelivery), ...afterDelivery];
 
   const rewardSpec = tokenList(rewardItems, { part: "reward", chain: source }, valueOf);
   const offersNative =
@@ -618,7 +631,7 @@ function bindIntent(
       deadline: deadlineFor(routeDeadline),
       portal: destinationPortal,
       nativeAmount: calls.reduce((sum, call) => sum + call.value, 0n),
-      tokens: (explicitDelivery ?? derivedDelivery).map((t) => ({
+      tokens: delivery.map((t) => ({
         token: addressHex(t.token),
         amount: sentinelFor(t.amount),
       })),
