@@ -397,6 +397,34 @@ function main(beneficiary: Address, refundTo: Address) {
 first. Write `.catch(() => { ... })` when the handler does not read it. A handled body is always a
 program, so its cook pays the destination's Kitchen fee.
 
+### Awaiting the intent
+
+`await` of an intent makes the statements after it the body. This compiles to exactly the first
+program in this section:
+
+```js
+function main(recipient: Address, refundTo: Address) {
+  const amount = USDC.balanceOf(ctx.self());
+  await Arbitrum.Portal.send({ token: USDC, amount })
+    .creator(refundTo)
+    .receive({ token: USDC, amount });
+  USDC.transfer(recipient, amount);
+}
+```
+
+There is no `async`: the `await` is a statement of `main`'s body, and everything after it is the body
+of the intent, compiled for the destination. Names after it resolve on the destination. Values from
+before it are captured, and the body cannot assign them. A `return` after it is the body's. An
+`await` in the body opens the next hop from the destination, so a cascade reads top to bottom.
+
+An `await` stands directly in `main`'s body, a script's top level, or a body. It cannot be inside an
+`if`, a loop or a block, in another function, or used as a value; each of these is a compile error
+that names it. An awaited body has no handler: write `.then(() => { ... }).catch((e) => { ... })` for
+one.
+
+In an editor, an `await` at a script's top level is plain TypeScript. One in `main` needs the
+SauceScript plugin that `sauce init` configures, which accepts it where the compiler does.
+
 ### Where each value comes from
 
 | Value              | Comes from                                                                               |
