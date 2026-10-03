@@ -228,8 +228,9 @@ calldata fixes; `ecoSwap` also takes an amount the program computes. The fallbac
 `try`, not inside its `catch`, which holds only a few hundred bytes of compiled code.
 
 Each call becomes a call into `@sauce/swap` with the route's bytes as arguments. `kyber` approves
-the registry's KyberSwap router for exactly `amountIn`, runs the calldata, and resets whatever
-approval is left; `eco` runs eco-swap's program in the Pot, and refuses one that spends more than
+the registry's KyberSwap router for exactly `amountIn`, runs the calldata with `minOut` as the
+router's own floor (written into it as the program runs, when the program computes `minOut`), and
+resets whatever approval is left; `eco` runs eco-swap's program in the Pot, and refuses one that spends more than
 `amountIn`. Both measure what reached the Pot, never its whole balance, which on an intent's
 destination every intent shares. A KyberSwap route is refused when the program compiles unless it
 calls the registry's router, swaps exactly `amountIn` and pays the Pot it is built for: the one the

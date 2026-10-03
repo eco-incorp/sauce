@@ -198,8 +198,9 @@ function main(recipient: Address, minOut: Uint256) {
   computes. `minOut` may be either, and the program checks it as it runs.
 - The fallback goes after the `try`, not in its `catch`: a `catch` block holds a few hundred bytes
   of compiled code, and a route is bytes put where its call stands.
-- `kyberSwap` approves the router for exactly `amountIn` and resets whatever approval is left. A
-  route is refused when the program compiles unless it calls the registry's
+- `kyberSwap` approves the router for exactly `amountIn`, makes `minOut` the router's own floor in
+  its calldata (as the program runs, when the program computes it), and resets whatever approval is
+  left. A route is refused when the program compiles unless it calls the registry's
   `Kyberswap.MetaAggregationRouterV2` on that chain, swaps exactly `amountIn` and pays the Pot. It
   is built for the Pot the program runs on: the cook's, or an intent body's destination Pot.
 - The calldata expires twenty minutes after it is built, and its quote moves with the market:

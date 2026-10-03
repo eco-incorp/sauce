@@ -180,6 +180,14 @@ const router = (pay: bigint, take = 0n, refuse = false) =>
     encodeFunctionData({ abi: MOCK_ROUTER.abi, functionName: "set", args: [pay, take, refuse] }),
   );
 
+/** The `minReturnAmount` the mock router last held. */
+const lastFloor = (): Promise<bigint> =>
+  publicClient.readContract({
+    abi: MOCK_ROUTER.abi,
+    address: ROUTER,
+    functionName: "lastFloor",
+  }) as Promise<bigint>;
+
 /** Compiled for Base with the test's tokens, each swap's route fetched from the stub. */
 const compile = (source: string): Promise<CompiledSauceProgram> =>
   compileSauceProgramAsync("base", source, {
@@ -320,6 +328,18 @@ describeEvm("kyberSwap and ecoSwap, executed on the released gated stack", () =>
     expect(await balance(usdc, ROUTER)).toBe(AMOUNT);
     expect(await balance(usdc, sauce.pot)).toBe(held - AMOUNT);
     expect(await allowance(usdc, sauce.pot, ROUTER)).toBe(0n);
+    // The router held the program's minOut, written into its calldata as the program ran.
+    expect(await lastFloor()).toBe(KYBER_PAYS);
+  }, 60_000);
+
+  it("a minOut written in the program is the router's floor as it stands", async () => {
+    await router(KYBER_PAYS);
+    const program = await compile(`function main(): Uint256 {
+  return kyberSwap(USDC, WETH, 1000000000, 371000000000000000);
+}`);
+
+    expect(await cook(program, [])).toEqual({ returned: KYBER_PAYS, status: "success" });
+    expect(await lastFloor()).toBe(371_000_000_000_000_000n);
   }, 60_000);
 
   it("a router that takes less than it was approved for keeps no allowance", async () => {
@@ -347,7 +367,7 @@ describeEvm("kyberSwap and ecoSwap, executed on the released gated stack", () =>
   }, 60_000);
 
   it("KyberSwap below the program's minOut reverts inside the try, and eco-swap fills", async () => {
-    // A floor the program computes: the router gets next to none, and kyber's own check refuses.
+    // A floor the program computes, spliced into the calldata: the router refuses the short fill.
     await router(KYBER_PAYS - 1n);
     const expected = await pairOut(AMOUNT);
 

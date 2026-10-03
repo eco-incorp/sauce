@@ -441,7 +441,6 @@ export function swapsJson(sites: readonly SwapSite[]): Record<string, unknown>[]
         ? {
             router: route.router,
             quotedOut: route.quotedOut.toString(),
-            routerFloor: route.minReturn.toString(),
             deadline: route.deadline.toString(),
           }
         : {

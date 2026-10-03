@@ -17,9 +17,14 @@ import { bytesToHex, decodeFunctionData, getAddress, type Hex } from "viem";
 
 import { v12DeployedAddresses } from "../src/deployments/index.js";
 import { KyberSwapMetaAggregationRouterABI } from "../src/protocols/kyberswap/abis.js";
-import { SwapApiError, fetchSwapRoutes, kyberSlippageBps } from "../src/routes/swap-apis.js";
+import { SwapApiError, fetchSwapRoutes } from "../src/routes/swap-apis.js";
 import type { SwapApis } from "../src/routes/swap-apis.js";
-import { swapRouteError, type KyberRoute, type SwapRequest } from "../src/routes/swap-host.js";
+import {
+  kyberFloorOffset,
+  swapRouteError,
+  type KyberRoute,
+  type SwapRequest,
+} from "../src/routes/swap-host.js";
 import { compileSauceProgram, compileSauceProgramAsync } from "../src/routes/sauce-route.js";
 import { requireChain } from "../src/chains/canonical.js";
 
@@ -152,7 +157,9 @@ describe("kyberSwap and ecoSwap compile through the host", () => {
     });
     const code = bytesToHex(program.bytecode);
     const build = fixture("kyber-base-build.json") as { data: { data: Hex } };
-    expect(code).toContain(build.data.data.slice(2));
+    // Up to its floor, which the program writes as it runs (`minOut` is `main`'s).
+    const floor = kyberFloorOffset(Buffer.from(build.data.data.slice(2), "hex"))!;
+    expect(code).toContain(build.data.data.slice(2, 2 + floor * 2));
     expect(code).toContain("5a".repeat(48));
     expect(program.swaps.map((site) => site.route?.provider)).toEqual(["kyber", "eco"]);
     const kyber = program.swaps[0]!.route as KyberRoute;
@@ -185,9 +192,9 @@ describe("kyberSwap and ecoSwap compile through the host", () => {
     );
     expect(body.sender).toBe(POT);
     expect(body.recipient).toBe(POT);
-    // A run-time minOut: the router gets next to no floor, and the program's own check is the one.
-    expect(body.slippageTolerance).toBe(9999);
-    expect(body.ignoreCappedSlippage).toBe(true);
+    // Whatever floor this tolerance gives is replaced by the program's minOut.
+    expect(body.slippageTolerance).toBe(50);
+    expect(body.ignoreCappedSlippage).toBeUndefined();
     expect(body.deadline).toBe(Number(BUILT_AT + 1200n));
 
     const asked = new URL(eco.url);
@@ -202,18 +209,37 @@ describe("kyberSwap and ecoSwap compile through the host", () => {
     });
   });
 
-  it("derives KyberSwap's tolerance from a minOut the program writes: its floor never above it", () => {
-    const quoted = 372459356364968576n;
-    for (const minOut of [370597059583143732n, 360000000000000000n, 1n, 0n, quoted, quoted + 1n]) {
-      const bps = kyberSlippageBps(quoted, minOut, { url: KYBER });
-      const floor = (quoted * BigInt(10_000 - bps)) / 10_000n;
-      // At or below minOut, but for the one basis point KyberSwap's tolerance cannot go under.
-      expect(floor <= minOut || bps === 0 || floor <= quoted / 10_000n).toBe(true);
-      expect(bps).toBeGreaterThanOrEqual(0);
-      expect(bps).toBeLessThanOrEqual(9999);
-    }
-    expect(kyberSlippageBps(quoted, 370597059583143732n, { url: KYBER })).toBe(51);
-    expect(kyberSlippageBps(quoted, undefined, { url: KYBER, slippageBps: 30 })).toBe(30);
+  it("the router's floor is the program's minOut: written in when known, spliced in when not", async () => {
+    const build = fixture("kyber-base-build.json") as { data: { data: Hex } };
+    const data = Buffer.from(build.data.data.slice(2), "hex");
+    const floor = kyberFloorOffset(data)!;
+    // Where the router's ABI puts `desc.minReturnAmount`: the word KyberSwap wrote there.
+    const decoded = decodeFunctionData({
+      abi: KyberSwapMetaAggregationRouterABI,
+      data: build.data.data,
+    });
+    expect(BigInt(`0x${data.subarray(floor, floor + 32).toString("hex")}`)).toBe(
+      decoded.args[0].desc.minReturnAmount,
+    );
+    const withFloor = (minOut: bigint) =>
+      `${build.data.data.slice(2, 2 + floor * 2)}${minOut.toString(16).padStart(64, "0")}` +
+      build.data.data.slice(2 + floor * 2 + 64);
+
+    const known = await compileSauceProgramAsync(
+      "base",
+      "function main(): Uint256 { return kyberSwap(USDC, WETH, 1000000000, 360000000000000000); }",
+      { swap: { pot: POT, ...apis(serve().fetch) } },
+    );
+    expect(bytesToHex(known.bytecode)).toContain(withFloor(360000000000000000n));
+
+    // A run-time minOut: the calldata goes in with a word the program writes as it runs.
+    const runtime = await compileSauceProgramAsync(
+      "base",
+      "function main(minOut: Uint256): Uint256 { return kyberSwap(USDC, WETH, 1000000000, minOut); }",
+      { swap: { pot: POT, ...apis(serve().fetch) } },
+    );
+    expect(bytesToHex(runtime.bytecode)).not.toContain(build.data.data.slice(2));
+    expect(bytesToHex(runtime.bytecode)).toContain(build.data.data.slice(2, 2 + floor * 2));
   });
 
   it("an intent body's swap is built for the destination's shared Pot", () => {
@@ -308,7 +334,6 @@ describe("what kyberSwap and ecoSwap refuse", () => {
       router: ROUTER,
       data: build.data.data,
       quotedOut: 1n,
-      minReturn: 1n,
       deadline: 1n,
     };
     expect(swapRouteError(route, request, chain)).toBeUndefined();
@@ -319,10 +344,6 @@ describe("what kyberSwap and ecoSwap refuse", () => {
     const more = { ...request, amountIn: 2000000000n };
     expect(swapRouteError({ ...route, request: more }, more, chain)).toMatch(
       /it swaps 1000000000, not 2000000000/,
-    );
-    const floor = { ...request, minOut: 1n };
-    expect(swapRouteError({ ...route, request: floor }, floor, chain)).toMatch(
-      /its floor 370597059583143732 is above the program's minOut 1/,
     );
     // The calldata is the router's `swap`, and pays the Pot.
     const decoded = decodeFunctionData({

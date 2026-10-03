@@ -12,7 +12,7 @@ interface IERC20 {
 ///         reaches it unchanged. It pulls the input from the caller and pays a set amount to
 ///         `desc.dstReceiver`, holding the router's floor (`minReturnAmount`).
 /// @dev `pay` is what a swap pays out, `take` what it pulls (zero: all of `desc.amount`), and
-///      `refuse` makes every swap revert.
+///      `refuse` makes every swap revert. `lastFloor` is the `minReturnAmount` the last swap held.
 contract MockKyberRouter {
     struct SwapDescriptionV2 {
         address srcToken;
@@ -39,6 +39,7 @@ contract MockKyberRouter {
     uint256 public pay;
     uint256 public take;
     bool public refuse;
+    uint256 public lastFloor;
 
     function set(uint256 _pay, uint256 _take, bool _refuse) external {
         pay = _pay;
@@ -56,6 +57,7 @@ contract MockKyberRouter {
         IERC20(desc.srcToken).transferFrom(msg.sender, address(this), take == 0 ? desc.amount : take);
         IERC20(desc.dstToken).transfer(desc.dstReceiver, pay);
         require(pay >= desc.minReturnAmount, "Return amount is not enough");
+        lastFloor = desc.minReturnAmount;
         return (pay, 0);
     }
 }

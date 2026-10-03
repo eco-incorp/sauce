@@ -6,11 +6,10 @@
  *
  * KYBERSWAP. Its aggregator API in two steps: `GET /{chain}/api/v1/routes` finds a route for
  * `amountIn`, `POST /{chain}/api/v1/route/build` encodes it for a sender and a recipient — the Pot,
- * which pays and receives. Its router's own floor comes from `minOut`: as close to it as KyberSwap's
- * basis points allow and never above it, when the program writes `minOut`; nearly none when the
- * program computes it, since then only the program knows it and checks it. RFQ sources are left out
- * unless asked for: their quotes expire within minutes and fill once, and a compiled program may
- * run later than that, or twice.
+ * which pays and receives. The floor KyberSwap writes into the calldata is replaced by the
+ * program's own `minOut` when the route is bound (`swap-host.ts#withFloor`), so the tolerance it is
+ * asked for decides nothing. RFQ sources are left out unless asked for: their quotes expire within
+ * minutes and fill once, and a compiled program may run later than that, or twice.
  *
  * ECO-SWAP. `GET /swap?embed=1&…` answers `{ embed: { … } }`: a program compiled by the compiler this
  * SDK pairs with, whose `main(amountIn, minOut)` swaps exactly `amountIn` already in the Pot, leaves
@@ -37,9 +36,6 @@ export interface KyberApi {
   readonly url: string;
   /** Sent as `x-client-id`, which KyberSwap rate-limits by. */
   readonly clientId?: string;
-  /** The router's own floor when the program computes `minOut`, in basis points below the quote.
-   *  Defaults to 9999: next to none, leaving the floor to the program's own check. */
-  readonly slippageBps?: number;
   /** How long the calldata stays valid, in seconds from when it is built. Defaults to 1200. */
   readonly deadlineSeconds?: number;
   /** Take RFQ sources too, whose quotes expire within minutes and fill once. */
@@ -73,6 +69,9 @@ export class SwapApiError extends Error {
     super(message);
   }
 }
+
+/** The tolerance KyberSwap is asked to build with, in basis points. Its floor is replaced. */
+const KYBER_TOLERANCE_BPS = 50;
 
 /** KyberSwap's slug for each chain its API serves, by chain id. */
 export const KYBER_CHAINS: Readonly<Record<number, string>> = {
@@ -168,20 +167,6 @@ const integerField = (value: unknown, what: string, provider: "kyber" | "eco"): 
   return BigInt(text);
 };
 
-/** The router floor's basis points below `quoted`: at `minOut` or under it, never above. */
-export function kyberSlippageBps(
-  quoted: bigint,
-  minOut: bigint | undefined,
-  api: KyberApi,
-): number {
-  if (minOut === undefined) return api.slippageBps ?? 9999;
-  if (minOut >= quoted) return 0;
-  // Rounded up, so the router's floor, quoted * (10000 - bps) / 10000, is at or below minOut.
-  const bps = ((quoted - minOut) * 10_000n + quoted - 1n) / quoted;
-
-  return Number(bps > 9999n ? 9999n : bps);
-}
-
 /** KyberSwap's route for `request`: found, then built for its Pot. */
 export async function kyberRoute(request: SwapRequest, apis: SwapApis): Promise<KyberRoute> {
   const api = apis.kyber;
@@ -215,7 +200,6 @@ export async function kyberRoute(request: SwapRequest, apis: SwapApis): Promise<
   refuseRouter(found.data?.routerAddress, router, chain.slug);
   const quoted = integerField(summary.amountOut, "amountOut", "kyber");
   if (quoted === 0n) throw new SwapApiError("kyber", "KyberSwap quotes nothing for this swap");
-  const slippage = kyberSlippageBps(quoted, request.minOut, api);
   const now = apis.now?.() ?? BigInt(Math.floor(Date.now() / 1000));
   const deadline = now + BigInt(api.deadlineSeconds ?? 1200);
   const built = (await fetchJson("kyber", apis, join(api.url, `${slug}/api/v1/route/build`), {
@@ -225,9 +209,8 @@ export async function kyberRoute(request: SwapRequest, apis: SwapApis): Promise<
       routeSummary: summary,
       sender: request.pot,
       recipient: request.pot,
-      slippageTolerance: slippage,
-      // Past 20%, KyberSwap caps the tolerance unless told not to.
-      ...(slippage > 2000 ? { ignoreCappedSlippage: true } : {}),
+      // Its floor is replaced by the program's `minOut` when the route is bound.
+      slippageTolerance: KYBER_TOLERANCE_BPS,
       deadline: Number(deadline),
       source: api.clientId ?? "sauce",
     }),
@@ -252,7 +235,6 @@ export async function kyberRoute(request: SwapRequest, apis: SwapApis): Promise<
     router,
     data: calldata,
     quotedOut: quoted,
-    minReturn: (quoted * BigInt(10_000 - slippage)) / 10_000n,
     deadline,
   };
   const why = swapRouteError(route, request, chain);

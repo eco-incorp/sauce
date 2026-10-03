@@ -91,8 +91,6 @@ export interface KyberRoute {
   readonly data: Hex;
   /** What KyberSwap quoted for the route, in `tokenOut`'s base units. */
   readonly quotedOut: bigint;
-  /** The router's own floor, in the calldata: never above a `minOut` known when compiling. */
-  readonly minReturn: bigint;
   /** The last second the router takes the calldata, Unix seconds. */
   readonly deadline: bigint;
 }
@@ -199,18 +197,39 @@ export function swapRouteError(
   }
   if (desc.feeReceivers.length > 0) return "it pays a fee to someone";
   if (desc.permit !== "0x") return "it carries a permit; the program approves the router instead";
-  // KyberSwap's tolerance stops at 9999 basis points, so a floor may sit one basis point of the
-  // quote above a minOut below that, and no higher.
-  const lowest = route.quotedOut / 10_000n;
-  if (
-    request.minOut !== undefined &&
-    desc.minReturnAmount > request.minOut &&
-    desc.minReturnAmount > lowest
-  ) {
-    return `its floor ${desc.minReturnAmount} is above the program's minOut ${request.minOut}`;
+  const floor = kyberFloorOffset(hexToBytes(route.data));
+  if (floor === undefined || wordAt(hexToBytes(route.data), floor) !== desc.minReturnAmount) {
+    return "its floor (`minReturnAmount`) is not where the router's ABI puts it";
   }
 
   return undefined;
+}
+
+/** The 32-byte word at `at` in `data`, or `undefined` past its end. */
+function wordAt(data: Uint8Array, at: number): bigint | undefined {
+  if (!Number.isSafeInteger(at) || at < 0 || at + 32 > data.length) return undefined;
+  let word = 0n;
+  for (let i = at; i < at + 32; i++) word = (word << 8n) | BigInt(data[i]!);
+
+  return word;
+}
+
+/**
+ * Where a KyberSwap `swap(...)` call's floor, `desc.minReturnAmount`, sits in its calldata: the
+ * selector, then the head of the one tuple parameter, then `desc`'s offset as that tuple's fourth
+ * word, then the floor as `desc`'s ninth (`srcToken`, `dstToken`, four list offsets, `dstReceiver`,
+ * `amount`, `minReturnAmount`), as the registry's ABI lays them out. The program writes its own
+ * `minOut` there, so the router holds the same floor it does.
+ */
+export function kyberFloorOffset(data: Uint8Array): number | undefined {
+  const tuple = wordAt(data, 4);
+  if (tuple === undefined || tuple > BigInt(data.length)) return undefined;
+  const start = 4 + Number(tuple);
+  const desc = wordAt(data, start + 3 * 32);
+  if (desc === undefined || desc > BigInt(data.length)) return undefined;
+  const floor = start + Number(desc) + 8 * 32;
+
+  return floor + 32 <= data.length ? floor : undefined;
 }
 
 /** A word as bytes: a constant now, or a run-time value the program writes as it runs. */
@@ -220,6 +239,25 @@ function wordArgument(view: View): BoundArgument {
   }
   if ("constant" in view) {
     return { bytes: hexToBytes(`0x${BigInt(view.constant).toString(16).padStart(64, "0")}`) };
+  }
+
+  return fail("a swap's amounts are numbers");
+}
+
+/**
+ * KyberSwap's calldata with the program's `minOut` as the router's floor: written in when the
+ * program knows it, else spliced in as the program runs. KyberSwap's own floor, from the tolerance
+ * it was asked for, is replaced, so the router and the program refuse the same short fill.
+ */
+function withFloor(route: KyberRoute, minOut: View): BoundArgument {
+  const data = hexToBytes(route.data);
+  const floor = kyberFloorOffset(data)!;
+  if ("runtime" in minOut) {
+    return { bytes: data, splices: [{ offset: floor, runtime: minOut.runtime }] };
+  }
+  if ("constant" in minOut) {
+    data.set(hexToBytes(`0x${BigInt(minOut.constant).toString(16).padStart(64, "0")}`), floor);
+    return { bytes: data };
   }
 
   return fail("a swap's amounts are numbers");
@@ -346,7 +384,7 @@ export function swapHost(level: SwapLevel): {
         { value: kyber?.router ?? kyberRouterOn(chain) ?? "0", type: "Address" },
         ...tokens,
         { value: String(amountIn) },
-        { bytes: kyber === undefined ? new Uint8Array() : hexToBytes(kyber.data) },
+        kyber === undefined ? { bytes: new Uint8Array() } : withFloor(kyber, minOutView!),
         wordArgument(minOutView!),
       ];
     }
