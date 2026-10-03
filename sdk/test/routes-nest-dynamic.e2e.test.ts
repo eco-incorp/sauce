@@ -2116,7 +2116,11 @@ describeEvm("route nesting, executed", () => {
       // The body runs in a frame of its own; when it reverts everything it did is undone, the
       // handler runs in its place, and the fill still succeeds.
       const FALLBACK = "0x0000000000000000000000000000000000000fa1" as Address;
-      const handled = (body: string) => `function main() {
+      const FORWARD = `() => {
+      const here = Token(TOKEN).balanceOf(ctx.self());
+      Token(TOKEN).transfer(FALLBACK, here);
+    }`;
+      const handled = (body: string, handler: string) => `function main() {
   const amount = Token(TOKEN).balanceOf(ctx.self());
   Base.Portal.send({ token: TOKEN, amount }).creator(0x3333333333333333333333333333333333333333)
     .receive({ token: TOKEN, amount })
@@ -2124,29 +2128,44 @@ describeEvm("route nesting, executed", () => {
       Token(TOKEN).transfer(RECIPIENT, 1n);
       ${body}
     })
-    .catch(() => {
-      const here = Token(TOKEN).balanceOf(ctx.self());
-      Token(TOKEN).transfer(FALLBACK, here);
-    });
+    .catch(${handler});
 }`;
 
-      for (const [name, body, toRecipient, toFallback] of [
+      for (const [name, body, handler, toRecipient, toFallback] of [
         [
           "a reverting body is undone, and the handler forwards the delivery",
           'require(false, "no");',
+          FORWARD,
           0n,
           SEEDED,
         ],
-        ["a body that succeeds keeps what it did, and the handler does not run", "", 1n, 0n],
+        [
+          "a body that succeeds keeps what it did, and the handler does not run",
+          "",
+          FORWARD,
+          1n,
+          0n,
+        ],
+        // `require(false, "no")` reverts with its message's bytes, "no", which the handler reads
+        // as a number: 0x6e6f.
+        [
+          "the handler reads what the body reverted with",
+          'require(false, "no");',
+          "(e) => { Token(TOKEN).transfer(FALLBACK, e.toBe()); }",
+          0n,
+          0x6e6fn,
+        ],
       ] as const) {
         it(
           name,
           async () => {
             const token = await deploy(MOCK_ERC20.creationCode);
             const recipient = await balanceOf(token, FINAL_RECIPIENT);
+            // One intent per case.
+            const salt = toFallback === 0n ? "c6" : toFallback === SEEDED ? "c5" : "c7";
             const compiled = compileSauceRoute(
               "base",
-              handled(body),
+              handled(body, handler),
               { pot: executorPot, engine: sauce.engine },
               {
                 defines: {
@@ -2162,7 +2181,7 @@ describeEvm("route nesting, executed", () => {
                   pot: executorPot,
                   engine: sauce.engine,
                   executionFee: 0n,
-                  salt: `0x${(toFallback === 0n ? "c6" : "c5").repeat(32)}` as Hex,
+                  salt: `0x${salt.repeat(32)}` as Hex,
                 },
               },
             );
@@ -2205,8 +2224,11 @@ describeEvm("route nesting, executed", () => {
 
             const fill = await fulfilRoute(route, rewardOf(published!).rewardHash);
             expect(fill.status).toBe("success");
-            expect((await balanceOf(token, FINAL_RECIPIENT)) - recipient).toBe(toRecipient);
-            expect(await balanceOf(token, FALLBACK)).toBe(toFallback);
+            // As strings: a failed bigint comparison cannot cross jest's worker boundary.
+            expect(String((await balanceOf(token, FINAL_RECIPIENT)) - recipient)).toBe(
+              String(toRecipient),
+            );
+            expect(String(await balanceOf(token, FALLBACK))).toBe(String(toFallback));
           },
           300_000,
         );

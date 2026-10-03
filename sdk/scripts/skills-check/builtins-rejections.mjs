@@ -430,14 +430,14 @@ export const rejections = [
     src: "function main(): Uint256 { const t = { a: 1n }; for (const k in t) { } return 0n; }",
   },
   {
-    row: "`try { } catch { }`, `throw new Error(…)`",
-    targets: ["evm"],
-    src: "function main(): void { try { } catch (e) { } }",
-  },
-  {
-    row: "`try { } catch { }`, `throw new Error(…)`",
+    row: "`throw new Error(…)`, `finally`",
     targets: ["evm"],
     src: 'function main(): void { throw new Error("no"); }',
+  },
+  {
+    row: "`throw new Error(…)`, `finally`",
+    targets: ["evm"],
+    src: "function main(): void { try { evm.sstore(1n, 1n); } catch { } finally { } }",
   },
   {
     row: "labeled statements, labeled `break`/`continue`",
@@ -821,10 +821,26 @@ export const rejections = [
     src: "function main(t: Uint256, o: Uint256): Uint256 { return ERC20.at(t).balanceOf(o); }",
   },
   {
-    quotes: ["a `.catch()` handler parameter (the caught error is not supported)"],
+    quotes: ["a `.catch()` handler with more than one parameter …"],
     targets: ["evm"],
     contracts,
-    src: "function main(t: Uint256, s: Uint256): void { ERC20.at(t).approve(s, 5n).catch((e) => { }); }",
+    src: "function main(t: Uint256, s: Uint256): void { ERC20.at(t).approve(s, 5n).catch((e, f) => { }); }",
+  },
+  {
+    quotes: ["a `.catch()` fallback value with a parameter …"],
+    targets: ["evm"],
+    contracts,
+    src: "function main(t: Uint256, o: Uint256): Uint256 { return ERC20.at(t).balanceOf(o).catch((e) => { return 0n; }); }",
+  },
+  {
+    quotes: ["a `try` block runs in a frame of its own, so it cannot assign `…`"],
+    targets: ["evm"],
+    src: "function main(): Uint256 { let n = 0n; try { n = 1n; } catch { } return n; }",
+  },
+  {
+    quotes: ["`try`/`catch` is not available on the svm target"],
+    targets: ["svm"],
+    src: "function main(): void { try { require(false); } catch (e) { } }",
   },
   {
     quotes: ["a `return` in a `.catch()` handler …"],

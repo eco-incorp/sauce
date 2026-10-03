@@ -157,6 +157,7 @@ export type {
   PendingSauceRoute,
   PortalAddress,
   PortalChain,
+  PortalCaughtBytes,
   PortalDelivery,
   PortalOpened,
   PortalReceived,

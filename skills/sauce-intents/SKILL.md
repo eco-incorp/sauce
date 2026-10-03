@@ -431,6 +431,34 @@ has no liquidity or is past that limit. It swaps through `@sauce/router`, finds 
 `UniswapV3.Factory.getPool` and reads it as `UniswapV3.Pool(pool)`, and reads the V4 pools from
 `UniswapV4.StateView`.
 
+## When the body reverts
+
+A body that reverts fails the fill: the solver's transaction reverts, and the reward stays
+escrowed until it is refunded. On an EVM destination, `.catch(...)` after `.then(...)` handles the
+body instead. When the body reverts, everything it did is undone, the handler runs on the
+destination in its place, and the fill succeeds. Here a supply that fails hands the delivered USDC
+to the beneficiary:
+
+```sauce chain=base
+function main(beneficiary: Address, refundTo: Address) {
+  const amount = USDC.balanceOf(ctx.self());
+  Ethereum.Portal.send({ token: USDC, amount })
+    .creator(refundTo)
+    .receive({ token: USDC, amount })
+    .then(() => {
+      USDC.approve(AaveV3.Pool, amount);
+      AaveV3.Pool.supply(USDC, amount, beneficiary, 0);
+    })
+    .catch((e) => {
+      USDC.transfer(beneficiary, amount);
+    });
+}
+```
+
+`e` is what the body reverted with, as `bytes`: at most its first 256 bytes, the error's selector
+first (`e.slice(0, 4)`). Write `.catch(() => { … })` when the handler does not read it. A handled
+body is always a program, so its cook pays the destination's Kitchen fee.
+
 ## Cascades
 
 An intent's body can open the next one. Each level's amounts are measured at that level's own

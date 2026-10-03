@@ -63,11 +63,16 @@ check(
   ),
   "switch",
 );
+// `try`/`catch` on EVM: the block undone together, the revert data named; refused on SVM.
+const tried = build(
+  'function main(x: Uint256): Uint256 { let n = 0; try { evm.sstore(1, x); require(x > 2, "small"); } catch (e) { n = e.length; } return n; }',
+);
+check(tried.bytecode.length > 0, "try/catch compiles on EVM");
 check(
-  /unsupported construct/.test(
-    rejects("function main(): void { try { require(false); } catch (e) {} }"),
+  /not available on the svm target/.test(
+    rejects("function main(): void { try { require(false); } catch (e) {} }", "svm"),
   ),
-  "try/catch",
+  "try/catch is EVM only",
 );
 check(
   /unsupported construct/.test(

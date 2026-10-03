@@ -27,7 +27,7 @@ example program each, is `builtins.json`.
 10. [`evm`](#10-evm-evm) (EVM)
 11. [`svm`](#11-svm-svm) (SVM)
 12. [Methods on values, and account properties](#12-methods-on-values-and-account-properties)
-13. [Contract bindings and `.catch()`](#13-contract-bindings-and-catch-evm) (EVM)
+13. [Contract bindings, `.catch()` and `try`/`catch`](#13-contract-bindings-catch-and-trycatch-evm) (EVM)
 14. [Not supported, and what to write instead](#14-not-supported-and-what-to-write-instead)
 15. [Limits](#15-limits)
 
@@ -558,7 +558,7 @@ An unknown name gives "`svm.rent` is not an svm builtin; `svm` is a reserved nam
   using one where a number is expected, as in arithmetic, gives "…: expected a number, found an account". Use
   `acct.address` when you need its key.
 
-## 13. Contract bindings and `.catch()` (EVM)
+## 13. Contract bindings, `.catch()` and `try`/`catch` (EVM)
 
 **Bind an ABI** with `import ERC20 from "./erc20.abi.json"`, or with the compile option
 `inlineContracts: [["ERC20", abiJson]]`. Then call through it:
@@ -601,6 +601,11 @@ from "@sauce/token"`), which handles tokens that return nothing, such as USDT. A
     assign the enclosing function's variables. Works on bound contract calls and on `evm.call`,
     `evm.static` and `evm.delegate`.
   - Example: `ERC20.at(t).approve(spender, amount).catch(() => { approved = false; });`
+- `<call>.catch((e) => { … });`
+  - The same, with `e` the call's revert data as `bytes`: its first 256 bytes, or all of it when
+    it is shorter. That holds a selector and seven words, or an `Error(string)` whose message is up
+    to 188 bytes; a longer message arrives cut, and decoding it then reverts.
+  - Example: `ERC20.at(t).approve(spender, amount).catch((e) => { log(e); });`
 - `const v = <call>.catch(() => { return <constant>; });`
   - If the call fails, `v` is the constant. The call must return one value: a bound method with
     one output. A raw `evm.call`, `evm.static` or `evm.delegate` returns bytes, which no constant
@@ -613,7 +618,9 @@ from "@sauce/token"`), which handles tokens that return nothing, such as USDT. A
 
 Rules and errors:
 
-- The block takes no parameter: "a `.catch()` handler parameter (the caught error is not supported)".
+- The statement form takes at most one parameter, a plain name, unannotated ("a `.catch()` handler
+  with more than one parameter …"); the value form takes none ("a `.catch()` fallback value with a
+  parameter …").
 - Use a `{ … }` block, not `() => value`. Arrow functions are allowed nowhere else.
 - A `return`, or a `break`/`continue` leaving the block, is not allowed in the statement form ("a `return` in a
   `.catch()` handler …").
@@ -625,6 +632,33 @@ Rules and errors:
 - On anything other than an external EVM call, the compiler rejects it ("a `.catch()` on something other than an
   external contract call …"). On SVM: "`.catch()` is not available on the svm target".
 
+### `try { } catch { }` (EVM)
+
+- `try { <one external call>; } catch { … }` is that call's `.catch(() => { … })`.
+- `try { <statements> } catch { … }` runs the statements in a frame of their own: what they do
+  stands when they finish, and is undone together, every write, when anything in them reverts — a
+  `require`, a `throw`, a call nothing catches. The `catch` block then runs in the function's own
+  frame, where it may read and assign its variables. The `try` block reads the code around it but
+  cannot assign it ("a `try` block runs in a frame of its own, so it cannot assign `…`"), and
+  neither block may `return`, nor `break` or `continue` a loop outside it.
+- `catch (e) { … }` names what the `try` reverted with: `bytes`, at most its first 256 bytes, as
+  for `.catch((e) => { … })`. There is no `finally`.
+
+```sauce chain=base
+function main(x: Uint256): Uint256 {
+  let reason = 0;
+  try {
+    evm.sstore(1, x);
+    require(x > 2, "small");
+  } catch (e) {
+    reason = crypto.keccak256(e);
+  }
+  return reason;
+}
+```
+
+- On SVM: "`try`/`catch` is not available on the svm target".
+
 ## 14. Not supported, and what to write instead
 
 | Not supported                                                    | Write instead                                                                                                     |
@@ -632,7 +666,7 @@ Rules and errors:
 | `switch`                                                         | `if` / `else if` chains                                                                                           |
 | `do { } while (…)`                                               | `while (true) { …; if (!cond) { break; } }`                                                                       |
 | `for (k in obj)`, `for await`                                    | an index loop or `for (const x of array)`                                                                         |
-| `try { } catch { }`, `throw new Error(…)`                        | `require(cond, "reason")`, `throw "reason"`; `.catch()` for a failing EVM call                                    |
+| `throw new Error(…)`, `finally`                                  | `require(cond, "reason")`, `throw "reason"`; `try`/`catch` (§13) for what fails on EVM                            |
 | arrow functions, function expressions, nested functions          | top-level `function` declarations (`.catch(() => { … })` is the one exception)                                    |
 | `class`, `enum`, `type` aliases, generics, `namespace`           | records, `interface`, constants                                                                                   |
 | `async function`, `await`                                        | plain functions. **`async function` and `function*` compile today, but as ordinary functions: don't write them.** |

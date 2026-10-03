@@ -43,7 +43,6 @@ import {
   type PlaceholderSpec,
 } from "./nest-dynamic.js";
 import { destinationPot, resolveIntentPot } from "./intent-pot.js";
-import type { SauceBytes } from "./source-globals.generated.js";
 import { DEFAULT_FILL_WINDOW, DEFAULT_REFUND_WINDOW, randomSalt } from "./intent-defaults.js";
 import { Token } from "../token/api.js";
 import { normalizeRoute, toBigInt } from "./normalize.js";
@@ -1140,8 +1139,20 @@ export interface PortalReceiveSteps<Used extends string> {
 export type PortalOpened = BuiltIntent & {
   /** What runs on the destination in the body's place when the body reverts, `e` what it reverted
    *  with: written in a program, never called on the host. */
-  catch(handler: (e: SauceBytes) => void): void;
+  catch(handler: (e: PortalCaughtBytes) => void): void;
 };
+
+/**
+ * What a handler's `e` is in a typed closure: SauceScript `bytes`, the shape
+ * `source-globals.generated.ts`'s `SauceBytes` has, written out so this module declares no globals.
+ */
+export interface PortalCaughtBytes {
+  readonly length: bigint;
+  [index: number]: bigint;
+  slice(start: bigint, end: bigint): PortalCaughtBytes;
+  toBe(): bigint;
+  toLe(): bigint;
+}
 
 /**
  * An intent waiting for its body: the route's modifiers not given yet, then `then`. Its `then` is
