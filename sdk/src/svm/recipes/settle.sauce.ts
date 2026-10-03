@@ -66,14 +66,7 @@
 const SETTLE_MIN_OUT = 0n;
 const SETTLE_SPL_COUNT = 0n;
 
-function main(
-  tokenProgram0: Account,
-  tokenProgram1: Account,
-  escrow0: Account<Writable>,
-  mint0: Account,
-  dest0: Account<Writable>,
-  owner: Account<Signer>,
-): Uint256 {
+function main(tokenProgram0: Account, tokenProgram1: Account, escrow0: Account<Writable>, mint0: Account, dest0: Account<Writable>, owner: Account<Signer>): Uint256 {
   const floorBal = svm.sload(escrow0, 64, 8).toLe();
   if (SETTLE_MIN_OUT > 0) {
     if (floorBal < SETTLE_MIN_OUT) {
@@ -88,7 +81,7 @@ function main(
   const dec0 = svm.sload(mint0, 44, 1).toLe();
   if (bal0 > 0) {
     const tp0 = 0 < SETTLE_SPL_COUNT ? tokenProgram0 : tokenProgram1;
-    const tag0 = hex`0c`; // TransferChecked
+    const tag0 = hex`0c`;                                   // TransferChecked
     const data0 = tag0.concat(bal0.toBytesLe(8)).concat(dec0.toBytesLe(1));
     svm.call(tp0, [escrow0, mint0, dest0, owner], data0);
   }
