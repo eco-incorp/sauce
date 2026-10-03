@@ -32,7 +32,7 @@ import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
 import type { EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
 import { intentHost, type IntentSugarDefaults, type LoweredIntent } from "./intent-host.js";
-import { bindEntryArguments, entryParamsOf, type EntryParam, type EntryValue } from "./entry.js";
+import { entryArguments, entryParamsOf, type EntryParam, type EntryValue } from "./entry.js";
 import { unknownGlobalError } from "./unknown-global.js";
 import { closureText, isSauceClosure, type SauceBody } from "./closure.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
@@ -405,10 +405,11 @@ export interface CompiledSauceProgram {
 /** {@link compileSauceProgram}'s options: a route's, and `main`'s arguments to bind. */
 export interface SauceProgramOptions extends SauceCompileOptions {
   /**
-   * `main`'s arguments, in order, bound into the program as constants: each must be one word (an
-   * unsigned integer, an address or a `bool`), and the program then takes none at run time. How a
-   * wallet publishes the intents a program opens from values known before anything runs. Leave it
-   * out to compile `main` taking its arguments as it runs.
+   * `main`'s arguments, in order, the program is compiled for: `main` is compiled with each
+   * parameter a constant of its value (the compiler's `args`), so it takes none at run time. Each
+   * must be one word: an unsigned integer, an address or a `bool`. How a wallet publishes the
+   * intents a program opens from values known before anything runs. Leave it out to compile `main`
+   * taking its arguments as it runs.
    */
   readonly args?: readonly EntryValue[];
 }
@@ -438,15 +439,12 @@ export function compileSauceProgram(
   if (args !== undefined && isSauceClosure(body)) {
     throw new RangeError("args binds a module's `main` parameters; a closure takes none");
   }
-  const bound = args === undefined ? undefined : bindEntryArguments(source, args);
-  const taken = Object.keys(bound?.constants ?? {}).find((name) =>
-    Object.hasOwn(given.defines ?? {}, name),
-  );
+  const bound = args === undefined ? undefined : entryArguments(source, args);
+  const taken = (bound?.names ?? []).find((name) => Object.hasOwn(given.defines ?? {}, name));
   if (taken !== undefined) {
     throw new RangeError(`${taken} is main's parameter, given in args; it is not also a define`);
   }
-  const compile: SauceCompileOptions =
-    bound === undefined ? given : { ...given, defines: { ...given.defines, ...bound.constants } };
+  const compile: SauceCompileOptions = given;
   // The bundle `openRoute` compiles a route body with, in the same two halves. The ambient MODULES
   // join the caller's. The chain-scoped NAMES travel as a scope for this program's chain, never in
   // `defines`, so an intent the program opens on another chain gets that chain's own (`levelOn`),
@@ -457,10 +455,11 @@ export function compileSauceProgram(
   };
   const program = compileForChain(
     resolved,
-    bound?.source ?? source,
+    source,
     { ...compile, ambient: ambient.length > 0 ? ambient : compile.ambient },
     scope,
     isSauceClosure(body) ? "closure" : "module",
+    bound?.words,
   );
   // As the compiler reports them: an ABI signature, with no `Account` slot, which the manifest
   // carries. Nothing is read from the source.
@@ -492,6 +491,8 @@ function compileForChain(
   options: SauceCompileOptions,
   scope: RouteScope,
   entryKind: "module" | "closure" = "module",
+  // `main`'s arguments the program is compiled for ([`entryArguments`]).
+  args?: readonly string[],
 ): {
   readonly chain: CanonicalChain;
   readonly compiled: CompileResult;
@@ -533,6 +534,7 @@ function compileForChain(
       contracts: options.contracts,
       ambient: options.ambient,
       compactArgs: options.compactArgs,
+      ...(args === undefined ? {} : { args }),
       host: level.host,
     });
   } catch (error) {

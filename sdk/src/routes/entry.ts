@@ -585,33 +585,28 @@ export function entryConstant(
   return typeof normalized === "string" ? BigInt(normalized) : (normalized as bigint | boolean);
 }
 
-/** {@link bindEntryArguments}'s result. */
-export interface BoundEntryArguments {
-  /** The source with `main`'s parameter list blanked: each of its characters a space, so every
-   *  position after it is the source's own. */
-  readonly source: string;
-  /** Each parameter's value, by its name: the compile-time value the compiler reads it as. */
-  readonly constants: Readonly<Record<string, bigint | boolean>>;
-  /** The parameters declared `Address`. */
-  readonly addresses: readonly string[];
+/** {@link entryArguments}'s result. */
+export interface EntryArguments {
+  /** Each argument as the word the program is compiled for, in order: a decimal integer, `1` or
+   *  `0` for a `bool` — the compiler's `args`. */
+  readonly words: readonly string[];
+  /** `main`'s parameter names, in order. */
+  readonly names: readonly string[];
 }
 
 /**
- * `source` with `main`'s arguments bound into it as constants: `main(amount: Uint256)` given
- * `[1000000n]` compiles as if its body read `amount` as `1000000`. How a wallet publishes the
- * intents a file opens from values known before anything runs, so they come out fixed. Each must be
- * one word: an unsigned integer, an address or a `bool`.
+ * `main`'s arguments as the words a program is compiled for — the compiler's `args`, which compiles
+ * `main(amount: Uint256)` given `[1000000n]` as if its body read `amount` as `1000000`: `main`
+ * specialized on its arguments, which then takes none as it runs. How a wallet publishes the intents
+ * a file opens from values known before anything runs, so they come out fixed. Each must be one
+ * word: an unsigned integer, an address or a `bool`. Nothing about the source is changed.
  *
  * Throws a `RangeError` for a source whose `main` declares no parameters, or a wrong count, and a
  * `TypeError` naming the parameter for a value of the wrong type or a parameter no one word holds.
  */
-export function bindEntryArguments(
-  source: string,
-  values: readonly EntryValue[],
-): BoundEntryArguments {
-  const signature = locateMain(source);
+export function entryArguments(source: string, values: readonly EntryValue[]): EntryArguments {
   const params = mainParams(source);
-  if (signature === undefined || params.length === 0) {
+  if (params.length === 0) {
     throw new RangeError("the program declares no `main` with parameters to bind arguments to");
   }
   const shape = params.map((param) => `${param.name}: ${param.type}`).join(", ");
@@ -621,9 +616,7 @@ export function bindEntryArguments(
         `${values.length}`,
     );
   }
-  const constants: Record<string, bigint | boolean> = {};
-  const addresses: string[] = [];
-  params.forEach((param, index) => {
+  const words = params.map((param, index) => {
     const at = `argument ${index + 1} (${param.name}: ${param.type})`;
     const value = entryConstant(param.type, values[index]!, at);
     if (value === undefined) {
@@ -631,19 +624,11 @@ export function bindEntryArguments(
         `${at}: only one word binds as a constant: an unsigned integer, an address or a bool`,
       );
     }
-    constants[param.name] = value;
-    if (parseEntryType(param.type).kind === "address") addresses.push(param.name);
-  });
-  const list = source.slice(signature.open + 1, signature.close);
 
-  return {
-    source:
-      source.slice(0, signature.open + 1) +
-      list.replace(/[^\r\n]/g, " ") +
-      source.slice(signature.close),
-    constants,
-    addresses,
-  };
+    return typeof value === "boolean" ? (value ? "1" : "0") : value.toString();
+  });
+
+  return { words, names: params.map((param) => param.name) };
 }
 
 /**

@@ -187,28 +187,19 @@ describe("bindMainArguments: main's arguments, bound into the intents a wallet p
   });
   const args = (...values: string[]) => ({ from: "--args" as const, values });
 
-  it("blanks main's parameter list in place and makes each argument its name's value", () => {
-    const bound = bindMainArguments(input(BRIDGE), args("1000000", "1010000", RECIPIENT, "true"));
-    expect(bound.defines).toEqual({
-      amount: 1_000_000n,
-      reward: 1_010_000n,
-      recipient: BigInt(RECIPIENT),
-      sweep: true,
-    });
-    expect(bound.addressDefines).toEqual(["recipient"]);
-    // Same length, same lines: the compiler's positions are still the file's.
-    expect(bound.text).toHaveLength(BRIDGE.length);
-    const list = "amount: Uint256, reward: Uint256, recipient: Address, sweep: bool";
-    expect(bound.text.split("\n")[0]).toBe(`function main(${" ".repeat(list.length)}) {`);
-    expect(bound.text.split("\n").slice(1)).toEqual(BRIDGE.split("\n").slice(1));
+  it("compiles the program, as written, for the arguments given", () => {
+    const values = ["1000000", "1010000", RECIPIENT, "true"];
+    const bound = bindMainArguments(input(BRIDGE), args(...values));
+    // Nothing in the source changes, and nothing becomes a define: the compiler takes them.
+    expect(bound.text).toBe(BRIDGE);
+    expect(bound.defines).toEqual({});
+    expect(bound.bound).toEqual(values);
   });
 
   it("takes --args-json values as they are", () => {
-    const bound = bindMainArguments(input(BRIDGE), {
-      from: "--args-json",
-      values: [1_000_000, "1010000", RECIPIENT, false],
-    });
-    expect(bound.defines).toMatchObject({ amount: 1_000_000n, reward: 1_010_000n, sweep: false });
+    const values = [1_000_000, "1010000", RECIPIENT, false];
+    const bound = bindMainArguments(input(BRIDGE), { from: "--args-json", values });
+    expect(bound.bound).toEqual(values);
   });
 
   it("leaves a program whose main takes nothing as it is, and asks for the ones it takes", () => {

@@ -11,10 +11,10 @@ import type { PrivateKeyAccount } from "viem/accounts";
 
 import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
 import {
-  bindEntryArguments,
+  entryArguments,
   mainParams,
   mainSignature,
-  type BoundEntryArguments,
+  type EntryArguments,
   type EntryValue,
 } from "../routes/entry.js";
 import { blankLiterals } from "../routes/rs-compile.js";
@@ -110,11 +110,11 @@ export function definesReach(file: string, text: string, names: readonly string[
 }
 
 /**
- * A program whose intents a wallet publishes, with `main`'s arguments given: the same program with
- * each argument bound as a constant (`bindEntryArguments`). A wallet publishes an intent from values
- * it knows before anything runs, so `main(amount: Uint256, recipient: Address)` with `--args 1000000
- * 0x…` is compiled as if its body read `amount` and `recipient` as those values. The program keeps
- * its shape, and the intents it opens come out fixed.
+ * A program whose intents a wallet publishes, with `main`'s arguments given: the same program,
+ * compiled for those arguments (`ProgramInput.bound`, the compiler's `args`). A wallet publishes an
+ * intent from values it knows before anything runs, so `main(amount: Uint256, recipient: Address)`
+ * with `--args 1000000 0x…` is compiled as if its body read `amount` and `recipient` as those
+ * values. The program is compiled as written, and the intents it opens come out fixed.
  *
  * Only a single word binds this way: an integer, an address or a `bool`. A program whose `main`
  * takes bytes, a string, an array or a record is refused, naming the parameter: run it on a Pot
@@ -137,9 +137,9 @@ export function bindMainArguments(input: ProgramInput, args: ArgsInput | undefin
         "parameters: declare the values it reads as main's parameters, then pass them in order",
     );
   }
-  let bound: BoundEntryArguments;
+  let bound: EntryArguments;
   try {
-    bound = bindEntryArguments(input.text, args.values as EntryValue[]);
+    bound = entryArguments(input.text, args.values as EntryValue[]);
   } catch (error) {
     const message = (error as Error).message;
     throw new UsageError(
@@ -151,7 +151,7 @@ export function bindMainArguments(input: ProgramInput, args: ArgsInput | undefin
         : `${args.from}: ${message}`,
     );
   }
-  for (const name of Object.keys(bound.constants)) {
+  for (const name of bound.names) {
     if (Object.hasOwn(input.defines, name)) {
       throw new UsageError(
         `${name} is main's parameter, given by ${args.from}; it cannot also be a --define`,
@@ -159,14 +159,7 @@ export function bindMainArguments(input: ProgramInput, args: ArgsInput | undefin
     }
   }
 
-  return {
-    ...input,
-    text: bound.source,
-    defines: { ...input.defines, ...bound.constants },
-    ...(bound.addresses.length === 0
-      ? {}
-      : { addressDefines: [...(input.addressDefines ?? []), ...bound.addresses] }),
-  };
+  return { ...input, bound: args.values as EntryValue[] };
 }
 
 /** The Pot a cook names: by address, or by its owner and salt. */

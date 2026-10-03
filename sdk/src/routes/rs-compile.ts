@@ -198,6 +198,9 @@ export interface RsCompileInput {
   ambient?: string[];
   /** Compile for compact-v1 entry arguments, returning the schema they must be encoded against. */
   compactArgs?: boolean;
+  /** The value of each of `main`'s parameters, as a word, when the program is compiled for them:
+   *  the compiler's `args` (`entry.ts#entryArguments`). */
+  args?: readonly string[];
   /** The names the chain gives the program (`host.ts#chainHost`): asked of, never written in. */
   host?: ChainHost;
   /** `"closure"`: `source` is one function expression as `Function.prototype.toString` prints it,
@@ -234,6 +237,7 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
     ambient: input.ambient,
     defines: toRsDefines(input.defines, input.baseDefines),
     compactArgs: input.compactArgs,
+    ...(input.args === undefined ? {} : { args: [...input.args] }),
     ...(input.host === undefined
       ? {}
       : {

@@ -1108,8 +1108,10 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
 - **Program conventions.** A program names no chain (`--chain <chain>` in its usage line, no
   `// @chain` header), and every input it takes is a typed `main(...)` parameter passed with
   `--args`, an intent file's included: `sauce intent publish`, `intent fill` and `inspect` (and the
-  MCP tools' `args`) bind them into the intents as constants (`inputs.ts#bindMainArguments`, over
-  `routes/entry.ts#bindEntryArguments`; `compileSauceProgram`'s `args`). A compile-time define is
+  MCP tools' `args`) compile the program for them, so its intents come out fixed
+  (`inputs.ts#bindMainArguments`, over `routes/entry.ts#entryArguments`; `compileSauceProgram`'s
+  `args`, the compiler's `args`: `main` specialized on its arguments, with nothing in the source
+  rewritten). A compile-time define is
   the SDK's own mechanism: `--define`/`--defines` stay as the low-level flags `--help` lists apart,
   and no skill, doc, example or usage line teaches them.
 - **They describe this tree, and their runners pin it.** Where the SDK's behaviour shapes how a

@@ -111,6 +111,9 @@ export interface ProgramInput {
   /** The defines whose value was written as an address (`args.ts#addressDefines`), which a
    *  report shows as one. */
   readonly addressDefines?: readonly string[];
+  /** `main`'s arguments the program is compiled for, as a wallet that publishes its intents gives
+   *  them (`inputs.ts#bindMainArguments`): `main` then takes none as it runs. */
+  readonly bound?: readonly EntryValue[];
   /** Compile `main`'s parameters for compact-v1 arguments instead of ABI-v1. */
   readonly compactArgs: boolean;
   /** The intents the program opens (`Chain.Portal.send(…).receive(…).then(…)`): what the SDK
@@ -272,7 +275,10 @@ export function compileProgram(
   onContract?: (reference: string, target: AccessorTarget) => void,
 ): CompiledSauceProgram {
   try {
-    return compileSauceProgram(input.chain, input.text, compileOptions(input, files, onContract));
+    return compileSauceProgram(input.chain, input.text, {
+      ...compileOptions(input, files, onContract),
+      ...(input.bound === undefined ? {} : { args: input.bound }),
+    });
   } catch (error) {
     const described = describeCompileError(error, input.file, input.text, input.chain);
     // A relative import that did not resolve, from a program with no directory of its own.
