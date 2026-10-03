@@ -281,13 +281,8 @@ function hostParam(param: IntentParam): Param {
     case "nested":
       return { kind: "value", scope: "nested" };
     case "program":
-      // A body of nothing but token writes is recorded: its calls become the route's own. The
-      // body also takes what follows an `await` of the intent.
-      return {
-        kind: "program",
-        record: true,
-        ...(param.continuation === true ? { continuation: true } : {}),
-      };
+      // A body of nothing but token writes is recorded: its calls become the route's own.
+      return { kind: "program", record: true };
     case "handler":
       return { kind: "handler" };
   }

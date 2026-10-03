@@ -32,9 +32,6 @@ export interface IntentParam {
   /** Any number of arguments of this type: `send(a, b)`. One argument that is a list of them is
    *  read the same way, `send([a, b])`. */
   readonly rest?: true;
-  /** For a `program`: it also takes what follows an `await` of its stage, `await x; <rest>` being
-   *  `x.then(() => { <rest> })`, as JavaScript's `await` calls a thenable's `then`. */
-  readonly continuation?: true;
 }
 
 /** One method of a stage. */
@@ -168,9 +165,9 @@ export const INTENT_STAGES = {
       then: {
         doc:
           "The body: runs on the destination with what was received. It is never invoked here: " +
-          "it is compiled for that chain. `await` of the intent makes the statements after it " +
-          "the body.",
-        params: [{ name: "body", ts: "() => void", kind: "program", continuation: true }],
+          "it is compiled for that chain. As in JavaScript, `await x; rest` is " +
+          "`x.then(() => { rest })`.",
+        params: [{ name: "body", ts: "() => void", kind: "program" }],
         returns: "Opened",
       },
     },

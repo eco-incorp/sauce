@@ -9,9 +9,9 @@
 //     are the same integer, an account compares as its address (`program == 0x06dd…`), and so does
 //     a token or a contract, which is zero on a chain without it (`UniswapV3.Factory != 0`).
 //   - An `await` that is a statement of `main`'s body, or of a closure's a call takes (TS1308).
-//     SauceScript has no `async`: what follows the `await` is the program its value's `then` takes,
-//     which the compiler builds. An `await` anywhere else is refused by the compile, and TypeScript's
-//     error on it stays.
+//     SauceScript needs no `async`: `await x; rest` is `x.then(() => { rest })`, as in JavaScript,
+//     and the compiler builds the closure. An `await` anywhere else is refused by the compile, and
+//     TypeScript's error on it stays.
 //
 // Everything else TypeScript reports stays: a misspelled builtin, a wrong argument count, a method a
 // contract does not have, and a name the program never declares, whatever its case: a program's
