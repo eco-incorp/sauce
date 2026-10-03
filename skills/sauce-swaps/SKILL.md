@@ -1,6 +1,6 @@
 ---
 name: sauce-swaps
-description: Swapping inside a Sauce program with @sauce/router — one function per venue (uniswapV2, uniswapV3, uniswapV4, curve, balancerV2, dodoV2, traderJoeLB, woofi, maverickV2, and the try forms), every argument a run-time value, each returning what the recipient received and reverting below minOut; which venues are paid first and which call back through the Pot's Router, which pool families the Router's callbacks service (Uniswap V3 and forks, PancakeSwap V3, Algebra, Synthra, UnitFlow, Uniswap V4), exact input only, how a price limit produces a partial fill, the PancakeSwap Infinity entry points on the Router itself, and the guard that stops a leg from stranding input. Use when the user wants a swap, trade, price limit, sqrtPriceLimitX96, min-out or slippage bound, a partial fill, "swap then …", or asks which venues Sauce can swap on.
+description: Swapping inside a Sauce program with @sauce/router — one function per venue (uniswapV2, uniswapV3, uniswapV4, curve, balancerV2, dodoV2, traderJoeLB, woofi, maverickV2, and the try forms), every argument a run-time value, each returning what the recipient received and reverting below minOut; which venues are paid first and which call back through the Pot's Router, which pool families the Router's callbacks service (Uniswap V3 and forks, PancakeSwap V3, Algebra, Synthra, UnitFlow, Uniswap V4), exact input only, how a price limit produces a partial fill, the PancakeSwap Infinity entry points on the Router itself, the guard that stops a leg from stranding input, and kyberSwap and ecoSwap, routes KyberSwap or eco-swap build when the program compiles. Use when the user wants a swap, trade, price limit, sqrtPriceLimitX96, min-out or slippage bound, a partial fill, "swap then …", asks which venues Sauce can swap on, or wants an aggregator's route (KyberSwap).
 ---
 
 # Swaps with `@sauce/router`
@@ -168,6 +168,48 @@ program measures the output and checks its own floor.
 | -------------------------------------------------------------------------------------------------------- | ------------------- |
 | `swapInfinityCL(vault, key, zeroForOne, amountSpecified, sqrtPriceLimitX96, payer, recipient, callback)` | `sqrtPriceLimitX96` |
 | `swapInfinityBin(vault, key, swapForY, amountSpecified, payer, recipient, callback)`                     | none                |
+
+## Routes a service builds: `kyberSwap` and `ecoSwap`
+
+`kyberSwap(tokenIn, tokenOut, amountIn, minOut)` and `ecoSwap(tokenIn, tokenOut, amountIn, minOut)`
+swap along a route a service builds while the program compiles: KyberSwap's aggregator (its
+router's calldata) or eco-swap (a program the Pot runs). They are names the chain gives a program,
+like `USDC`, with no import. Each returns the amount of `tokenOut` that reached the Pot, leaves it
+there, and reverts below `minOut`, so a `try` around one falls back to another venue:
+
+```sauce chain=base
+function main(recipient: Address, minOut: Uint256) {
+  let filled = true;
+  try {
+    const out = kyberSwap(USDC, WETH, 1000000000, minOut);
+    WETH.transfer(recipient, out);
+  } catch {
+    filled = false;
+  }
+  if (!filled) {
+    const out = ecoSwap(USDC, WETH, 1000000000, minOut);
+    WETH.transfer(recipient, out);
+  }
+}
+```
+
+- The tokens are known when the program compiles: symbols, or addresses written in it. So is
+  `kyberSwap`'s `amountIn`, which its calldata fixes; `ecoSwap` also takes an amount the program
+  computes. `minOut` may be either, and the program checks it as it runs.
+- The fallback goes after the `try`, not in its `catch`: a `catch` block holds a few hundred bytes
+  of compiled code, and a route is bytes put where its call stands.
+- `kyberSwap` approves the router for exactly `amountIn` and resets whatever approval is left. A
+  route is refused when the program compiles unless it calls the registry's
+  `Kyberswap.MetaAggregationRouterV2` on that chain, swaps exactly `amountIn` and pays the Pot. It
+  is built for the Pot the program runs on: the cook's, or an intent body's destination Pot.
+- The calldata expires twenty minutes after it is built, and its quote moves with the market:
+  compile close to running, and keep a fallback. Compiling again asks for a new route, so an intent
+  whose body swaps this way is the one its publish built.
+- The `sauce` command asks each service once per command (`compile`, `tx`, `simulate`, `run`,
+  `intent publish`): KyberSwap's public API unless `--swap-api kyber=<url>` names another; eco-swap
+  only at `--swap-api eco=<url>`, or `"swapApis"` in the `--config` file. `sauce compile` builds a
+  KyberSwap route for the Pot `--owner` or `--pot` names. `--offline` refuses a program that needs
+  a route.
 
 ## The guard (required on every leg)
 

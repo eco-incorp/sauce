@@ -91,6 +91,7 @@ import {
   skillsReferences,
 } from "./gen-skills-references.mjs";
 import { checkBuiltins, checkBuiltinsJson } from "./skills-check/builtins.mjs";
+import { swapStub } from "./skills-check/swap-stub.mjs";
 import {
   defineFlagProblems,
   executedExamplesProblems,
@@ -178,6 +179,17 @@ const sdk = await load(PKG);
 const compilerApi = await load(`${PKG}/compiler`);
 const deploymentsApi = await load(`${PKG}/deployments`);
 const ecoRoutes = await load(`${PKG}/protocols/eco-routes`);
+// The services `kyberSwap`/`ecoSwap` ask for routes, stubbed: a program that swaps this way compiles
+// offline, its route built as the real service builds one.
+const SWAP_APIS = {
+  kyber: "https://kyber.invalid",
+  eco: "https://eco.invalid",
+  fetch: swapStub({
+    encodeFunctionData: (await load("viem")).encodeFunctionData,
+    kyberAbi: (await load(`${PKG}/protocols/kyberswap`)).KyberSwapMetaAggregationRouterABI,
+    compiler: deploymentsApi.v12DeployedAddresses().compiler,
+  }),
+};
 const { runCli } = await import(pathToFileURL(join(SDK_DIR, "sdk/dist/cli/run.js")).href);
 // Which chains the command builds transactions on: the CLI's own policy, which the package exports
 // none of, read from the bin's module as `runCli` is.
@@ -226,6 +238,7 @@ async function sauce(argv) {
     },
     promptPassword: () => Promise.reject(new Error("no terminal")),
     confirm: async () => undefined,
+    swapApis: SWAP_APIS,
   };
   const code = await runCli(argv, io);
   return { code, stdout, stderr };
@@ -1252,10 +1265,14 @@ try {
       if (chains !== undefined) {
         const file = join(SCRATCH, `block-${n++}.sauce.ts`);
         writeFileSync(file, `${block.body}\n`);
-        const intents = OPENS_INTENT.test(block.body)
-          ? // Its deadlines default; a creator and the fee are what a wallet and a read would give.
-            ["--intent-refundee", DEV, "--intent-execution-fee", "0"]
-          : [];
+        const intents = [
+          ...(OPENS_INTENT.test(block.body)
+            ? // Its deadlines default; a creator and the fee are what a wallet and a read would give.
+              ["--intent-refundee", DEV, "--intent-execution-fee", "0"]
+            : []),
+          // A KyberSwap route is built for the Pot the program runs on.
+          ...(/\bkyberSwap\s*\(/.test(block.body) ? ["--owner", DEV] : []),
+        ];
         for (const chain of chains) {
           const compiled = await compileJson(file, chain, intents);
           if (compiled.error !== undefined) errors.push(`${chain}: ${compiled.error}`);

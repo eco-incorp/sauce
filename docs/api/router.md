@@ -197,6 +197,62 @@ function main(legs: Leg[], amountIn: Uint256, minOut: Uint256): Uint256 {
 arguments. Nothing about the legs is known to the compiler, so the bytecode — and its hash — is the
 same for every route.
 
+## Routes a service builds
+
+`kyberSwap(tokenIn, tokenOut, amountIn, minOut)` and `ecoSwap(tokenIn, tokenOut, amountIn, minOut)`
+swap along a route a service builds while the program compiles: KyberSwap's aggregator, whose
+router calldata the program calls, or eco-swap, whose program the Pot runs. Each returns the amount
+of `tokenOut` that reached the Pot, leaves it there, and reverts below `minOut`. They are names the
+SDK gives a program, like `USDC`, so there is no import; a failure is caught with `try`, and
+another venue stands in:
+
+```js
+// Base: 1000 USDC for WETH through KyberSwap, or through eco-swap when that reverts.
+function main(recipient: Address, minOut: Uint256) {
+  let filled = true;
+  try {
+    const out = kyberSwap(USDC, WETH, 1000000000, minOut);
+    WETH.transfer(recipient, out);
+  } catch {
+    filled = false;
+  }
+  if (!filled) {
+    const out = ecoSwap(USDC, WETH, 1000000000, minOut);
+    WETH.transfer(recipient, out);
+  }
+}
+```
+
+The tokens are known when the program compiles, and so is `kyberSwap`'s `amountIn`, which its
+calldata fixes; `ecoSwap` also takes an amount the program computes. The fallback goes after the
+`try`, not inside its `catch`, which holds only a few hundred bytes of compiled code.
+
+Each call becomes a call into `@sauce/swap` with the route's bytes as arguments. `kyber` approves
+the registry's KyberSwap router for exactly `amountIn`, runs the calldata, and resets whatever
+approval is left; `eco` runs eco-swap's program in the Pot, and refuses one that spends more than
+`amountIn`. Both measure what reached the Pot, never its whole balance, which on an intent's
+destination every intent shares. A KyberSwap route is refused when the program compiles unless it
+calls the registry's router, swaps exactly `amountIn` and pays the Pot it is built for: the one the
+program runs on, or an intent body's destination Pot.
+
+From TypeScript, `routes.compileSauceProgramAsync` compiles twice: once to learn what each swap
+asks for, then, with every route fetched, for real. The SDK ships no URL, so each service is named:
+
+```ts
+const program = await routes.compileSauceProgramAsync("base", source, {
+  swap: {
+    pot, // the Pot the program runs on: KyberSwap's sender and recipient
+    kyber: { url: kyberApiUrl },
+    eco: { url: ecoApiUrl },
+  },
+});
+```
+
+`program.swaps` lists each call with its request and its route. The `sauce` command asks KyberSwap's
+public API unless `--swap-api kyber=<url>` names another, and eco-swap only at
+`--swap-api eco=<url>`. A route expires twenty minutes after it is built and its quote moves, so
+compile close to running and keep a fallback.
+
 ## From JSON
 
 Each [action](../guides/actions.md#swaps) at these venues is a call into this library with the
