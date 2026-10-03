@@ -464,6 +464,57 @@ function main(beneficiary: Address, refundTo: Address) {
 first (`e.slice(0, 4)`). Write `.catch(() => { … })` when the handler does not read it. A handled
 body is always a program, so its cook pays the destination's Kitchen fee.
 
+## Calls around the body
+
+`.before(() => { … })` and `.after(() => { … })`, after `.receive(...)` and among the route's
+modifiers, add calls the destination Portal's Executor makes before the body runs and after it. Use
+one for a call that must come from the Executor rather than the Pot, and for a call a solver reads
+straight off the route, with no program to simulate. Here a referral fee in the delivered USDC is
+paid before the supply:
+
+```sauce chain=base
+function main(
+  beneficiary: Address,
+  referrer: Address,
+  amount: Uint256,
+  fee: Uint256,
+  reward: Uint256,
+  refundTo: Address,
+) {
+  Ethereum.Portal.send({ token: USDC, amount: reward })
+    .refundee(refundTo)
+    .receive({ token: USDC, amount })
+    .before(() => {
+      USDC.transfer(referrer, fee); // delivered on top of `amount`
+    })
+    .then(() => {
+      USDC.approve(AaveV3.Pool, amount);
+      AaveV3.Pool.supply(USDC, amount, beneficiary, 0);
+    });
+}
+```
+
+The route's calls are every `.before(...)`'s, then the body's (the delivery moved into the Pot and
+the cook, or a token-only body's own calls), then every `.after(...)`'s, each hook in the order
+written; each may be given any number of times. A hook is recorded, never compiled: each statement
+is a `transfer` or `approve` on a symbol or `Token(address)`, each argument a literal or a variable
+of the program opening the intent, as in a token-only body. Anything else in it (a local, a
+computed argument, a read, a protocol call) is refused.
+
+- **The Executor makes the calls**: it is the caller a hook's target sees. One Executor serves every
+  intent on a chain, so every `approve` a hook records is reset to zero first.
+- **A hook is outside `.catch(...)`**: a hook that reverts reverts the whole fill, and the body's
+  handler does not run.
+- **Its arguments are fixed when the intent is published**: a variable of the program opening it is
+  written in as that program runs, as an amount is; nothing the body computes reaches a hook.
+- **It has no access to the Pot's funds**: the body runs in the Pot, a hook on the Executor, so
+  `.after(...)` cannot spend what the body holds. What a hook transfers is delivered on top of what
+  `.receive(...)` names, which still moves into the Pot whole: the solver above brings
+  `amount + fee`.
+
+Hooks are for EVM destinations: on Solana they are refused, since a Solana route call names its
+accounts.
+
 ## Cascades
 
 An intent's body can open the next one. Each level pays the next solver what it was delivered, so

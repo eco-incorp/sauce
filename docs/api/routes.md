@@ -50,9 +50,11 @@ once it is given, and the builder refuses a repeat at run time too.
 | `.deadline(seconds)`            | The route's deadline                                                      | Now plus `routes.DEFAULT_FILL_WINDOW`                    |
 | `.salt(salt)`                   | The route's salt                                                          | 32 random bytes per build (`routes.randomSalt`)          |
 | `.nest(childOrThunk, options?)` | A child intent: [nesting in TypeScript](#nesting-in-typescript)           | None                                                     |
+| `.before(hook)`, `.after(hook)` | Refused here: a hook is recorded in a program (see below)                 | None                                                     |
 | `then(body)`                    | The body; returns the `routes.BuiltIntent`                                | Required                                                 |
 
-`REWARD_MODIFIERS` and `ROUTE_MODIFIERS` list each stage's modifiers, and
+`REWARD_MODIFIERS` and `ROUTE_MODIFIERS` list each stage's modifiers, `ROUTE_HOOKS` the steps that
+take a hook (`before`, `after`), and
 [Intent defaults](../reference/intent-defaults.md) gives each default's reason. The intent is
 `routes.openRoute(chain, body, { deadline, execution: { value: fee }, tokens, precalls, creator, salt }).reward({ source, creator, deadline, prover, tokens, nativeAmount })`,
 its `precalls` moving each delivered token from the Executor into the derived Pot. An intent the
@@ -63,6 +65,12 @@ are generated from.
 
 `then` is the intent's, not a promise's: awaiting a pending intent, or returning one from an async
 function, calls `then(resolve, reject)`, which is refused with a message.
+
+`.before(() => { ... })` and `.after(() => { ... })` are declared so a typed closure that opens an
+intent with hooks typechecks, and refused when called on the host: the compiler records a hook's
+calls from the program it is written in
+([Calls around the body](../guides/intents.md#calls-around-the-body)). On the host, put calls
+ahead of the body with `routes.openRoute`'s `precalls`.
 
 ## Route options
 

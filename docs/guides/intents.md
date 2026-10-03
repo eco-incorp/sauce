@@ -395,6 +395,56 @@ function main(beneficiary: Address, refundTo: Address) {
 first. Write `.catch(() => { ... })` when the handler does not read it. A handled body is always a
 program, so its cook pays the destination's Kitchen fee.
 
+### Calls around the body
+
+`.before(() => { ... })` and `.after(() => { ... })`, written after `.receive(...)` among the route's
+modifiers, add calls the destination Portal's Executor makes before the body runs and after it. A
+hook is for a call that must come from the Executor rather than the Pot, and for a call a solver can
+read straight off the route, with no program to simulate. Here a referral fee in the delivered USDC
+is paid before the supply:
+
+```js
+function main(
+  beneficiary: Address,
+  referrer: Address,
+  amount: Uint256,
+  fee: Uint256,
+  reward: Uint256,
+  refundTo: Address,
+) {
+  Ethereum.Portal.send({ token: USDC, amount: reward })
+    .refundee(refundTo)
+    .receive({ token: USDC, amount })
+    .before(() => {
+      USDC.transfer(referrer, fee);
+    })
+    .then(() => {
+      USDC.approve(AaveV3.Pool, amount);
+      AaveV3.Pool.supply(USDC, amount, beneficiary, 0);
+    });
+}
+```
+
+The route's calls are every `.before(...)`'s, then the body's (the delivery moved into the Pot and
+the cook, or a token-only body's own calls), then every `.after(...)`'s, each hook in the order
+written. A hook is recorded, never compiled: each statement is a `transfer` or `approve` on a token
+symbol or `Token(address)`, each argument a literal, a compile-time value or a variable of the
+program opening the intent, exactly as a token-only body is written. Four rules follow:
+
+- **The Executor makes the calls.** It is the `msg.sender` a hook's target sees. One Executor serves
+  every intent on a chain, so every `approve` a hook records is reset to zero first.
+- **A hook is outside `.catch(...)`.** A hook that reverts reverts the whole fill, and the body's
+  handler does not run in its place.
+- **Its arguments are fixed when the intent is published.** A variable of the program opening the
+  intent is spliced in as a delivery amount is; nothing the body computes reaches a hook.
+- **It has no access to the Pot's funds.** The body runs in the Pot and a hook on the Executor, so
+  `.after(...)` cannot spend what the body holds. What a hook transfers is delivered on top of what
+  `.receive(...)` names, which still moves into the Pot whole: the solver above brings
+  `amount + fee`.
+
+Hooks are EVM-only: on a Solana destination they are refused, since a Solana route call names its
+accounts.
+
 ### Awaiting the intent
 
 `await` of an intent calls its `then`, as JavaScript's `await` does: `await x; rest` is
@@ -585,6 +635,8 @@ Each of these is a compile error naming the construct, never a silently differen
   computes.
 - A chain with no eco-routes deployment, or a pair with no prover deployed on both sides.
 - A program body that calls the function opening it.
+- A hook the compiler could not record: any statement but a token's `transfer` or `approve`, or an
+  argument it computes. A hook on a Solana destination.
 
 Inside a program body an unknown name is the _compiler's_ error rather than this lowering's, and
 reads the same way: it names the variable that is not declared.
