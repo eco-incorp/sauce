@@ -726,15 +726,13 @@ export function rewriteProtocolAccessors(
   const contracts: ContractsConfig = { ...(opts.existingContracts ?? {}) };
   for (const site of resolved) {
     const existing = opts.existingContracts?.[site.bindingName];
-    if (existing !== undefined && existing.abi !== (site.descriptor.abi as unknown)) {
+    if (existing !== undefined && existing.abi !== site.descriptor.abi) {
       fail(
         `synthesized binding name '${site.bindingName}' collides with a caller-supplied ` +
           "compile.contracts entry of the same name but a DIFFERENT abi",
       );
     }
-    contracts[site.bindingName] = {
-      abi: site.descriptor.abi as unknown as ContractsConfig[string]["abi"],
-    };
+    contracts[site.bindingName] = { abi: site.descriptor.abi };
   }
 
   // Binding-name collision with a user identifier anywhere in the program (declared or merely
