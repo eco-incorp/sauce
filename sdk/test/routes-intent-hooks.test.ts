@@ -412,6 +412,42 @@ function main() {
     ]);
   });
 
+  it("fixed-size arrays, nested too, as viem encodes them", () => {
+    const grid = parseAbi(["function set(uint256[2] pair, uint256[2][3] rows, address[2] to)"]);
+    // An ABI the program imports, served as the program's own file.
+    const program = compileSauceProgram(
+      "base",
+      `import Grid from "./Grid.json";\n${opened(
+        ".after(() => { Grid.at(HOOK).set([1, 2], [[3, 4], [5, 6], [7, 8]], [SPENDER, HOOK]); })",
+      )}`,
+      {
+        defines: { SPENDER, RECIPIENT, HOOK },
+        intents: INTENTS,
+        resolve: (path) =>
+          path === "Grid.json" || path === "./Grid.json"
+            ? new TextEncoder().encode(JSON.stringify(grid))
+            : undefined,
+      },
+    );
+    expect(raw(program).at(-1)).toEqual([
+      address(HOOK),
+      encodeFunctionData({
+        abi: grid,
+        functionName: "set",
+        args: [
+          [1n, 2n],
+          [
+            [3n, 4n],
+            [5n, 6n],
+            [7n, 8n],
+          ],
+          [getAddress(address(SPENDER)), getAddress(address(HOOK))],
+        ],
+      }),
+      0n,
+    ]);
+  });
+
   it("an empty hook adds nothing", () => {
     expect(callsOf(compile(opened(".before(() => {}).after(() => {})")))).toEqual([
       delivered(1_000_000n),
@@ -500,7 +536,23 @@ describe("what a hook refuses", () => {
   it.each([
     ["a local declared in it", "const n = 5; USDC.approve(SPENDER, n);", "RecordedCallsStatement"],
     ["a branch", "if (SPENDER != 0) { USDC.approve(SPENDER, 1); }", "RecordedCallsStatement"],
-    ["a read whose result is dropped", "USDC.balanceOf(HOOK);", "RecordedCallsStatement"],
+    ["a token read whose result is dropped", "USDC.balanceOf(HOOK);", "RecordedCallsStatement"],
+    [
+      "a `view` method by namespace",
+      "UniswapV3.Factory.getPool(USDC, HOOK, 500);",
+      "RecordedCallsStatement",
+    ],
+    [
+      "a `view` method at an address",
+      "UniswapV3.Factory.at(HOOK).getPool(USDC, HOOK, 500);",
+      "RecordedCallsStatement",
+    ],
+    [
+      "a `view` method of an interface",
+      "Erc4626.Vault(HOOK).totalAssets();",
+      "RecordedCallsStatement",
+    ],
+    ["`evm.static`", "evm.static(HOOK, hex`01`);", "RecordedCallsStatement"],
     [
       "a value computed as it runs",
       "USDC.approve(SPENDER, ctx.timestamp());",
