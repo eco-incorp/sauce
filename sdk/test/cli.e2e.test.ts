@@ -82,7 +82,7 @@ import * as gated from "./evm/gated-engine.js";
 const HAS_CAST = spawnSync("cast", ["--version"], { stdio: "ignore" }).status === 0;
 /** The salt the SDK compiles an intent written the old way with when none is given; the
  *  command picks a random one per run unless told. */
-const ZERO_SALT = `0x${"00".repeat(32)}`;
+const ZERO_SALT = `0x${"00".repeat(32)}` as const;
 if (!HAS_CAST && process.env.CI) {
   throw new Error("`cast` is not on PATH in CI: Foundry is installed there, so this is a failure.");
 }
