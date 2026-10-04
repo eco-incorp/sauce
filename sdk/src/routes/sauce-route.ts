@@ -40,6 +40,7 @@ import { ecoRoutesPortal, type EcoRoutesSelector } from "../protocols/eco-routes
 import {
   intentHost,
   intentStepError,
+  type IntentLevel,
   type IntentSite,
   type IntentSugarDefaults,
   type LoweredIntent,
@@ -242,6 +243,7 @@ function routeHost(
   scope: RouteScope,
   lowered: LoweredIntent[],
   sites: IntentSite[],
+  recordedBodies: IntentLevel["recordedBodies"],
   swaps: { readonly sites: SwapSite[]; readonly pot: () => AddressInput | string | undefined },
 ): {
   readonly host: ChainHost;
@@ -275,6 +277,7 @@ function routeHost(
     defaults: options.intents ?? {},
     lowered,
     sites,
+    recordedBodies,
     // A body on another chain names that chain's values, and nothing the caller supplied for this
     // one (`levelOn`); its own intents are funded on its chain and lowered by its own host.
     programOn: (destination) => {
@@ -300,6 +303,7 @@ function routeHost(
         next.scope,
         [],
         sites,
+        recordedBodies,
         { sites: swaps.sites, pot: intentPot },
       );
       return {
@@ -473,9 +477,9 @@ export interface CompiledSauceProgram {
 
 /**
  * A part of a program's source that runs on an intent's destination, as the compile reports it:
- * a `body`, the program the compiler compiled for that chain (a closure, or what follows an
- * `await`), spanned as its program; or a `delivery`, whose names resolve there, spanned as the
- * call that takes it (`Base.Portal.send(…).receive(…)`).
+ * a `body`, what the compiler compiled or recorded for that chain (a closure, or what follows an
+ * `await`), spanned as its program or its recorded view; or a `delivery`, whose names resolve
+ * there, spanned as the call that takes it (`Base.Portal.send(…).receive(…)`).
  */
 export interface DestinationPart {
   readonly kind: "body" | "delivery";
@@ -641,8 +645,9 @@ function compileForChain(
   const tokens = resolveTokenMap(chain, options.tokens);
   const lowered: LoweredIntent[] = [];
   const sites: IntentSite[] = [];
+  const recordedBodies: IntentLevel["recordedBodies"] = [];
   const swaps: SwapSite[] = [];
-  const level = routeHost(chain, options, scope, lowered, sites, {
+  const level = routeHost(chain, options, scope, lowered, sites, recordedBodies, {
     sites: swaps,
     pot: () => options.swap?.pot,
   });
@@ -677,15 +682,26 @@ function compileForChain(
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
   }
   const intents = lowered;
-  // Where the source runs on another chain, as the compile places it: each body the compiler
-  // compiled for a destination, by its program's span, and each delivery, by its call's.
-  const elsewhere = sites.map(({ id, callee, span, destination }): DestinationPart => {
-    const program = programs.find((report) => report.id === id);
+  // Where the source runs on another chain, as the compile places it: each body by the span of its
+  // program, or of its view where the compile recorded it, and each delivery by its call's.
+  const elsewhere: DestinationPart[] = [
+    ...sites.flatMap(({ id, callee, span, destination }): DestinationPart[] => {
+      const program = programs.find((report) => report.id === id);
+      if (program !== undefined) {
+        return [{ kind: "body", callee, chain: destination, span: program.span }];
+      }
 
-    return program === undefined
-      ? { kind: "delivery", callee, chain: destination, span }
-      : { kind: "body", callee, chain: destination, span: program.span };
-  });
+      return callee === "Sent.receive"
+        ? [{ kind: "delivery", callee, chain: destination, span }]
+        : [];
+    }),
+    ...recordedBodies.map(({ span, destination }): DestinationPart => ({
+      kind: "body",
+      callee: "Received.then",
+      chain: destination,
+      span,
+    })),
+  ];
   const reported = { entrySignature, elsewhere };
 
   return manifest === undefined

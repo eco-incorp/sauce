@@ -186,6 +186,8 @@ export interface IntentLevel {
   readonly lowered: LoweredIntent[];
   /** Every site the compile asks a destination about, at this level and every level below. */
   readonly sites: IntentSite[];
+  /** Every body the compile records rather than compiles, by the span its view carries. */
+  readonly recordedBodies: { readonly span: SourceSpan; readonly destination: CanonicalChain }[];
 }
 
 class SugarError extends Error {}
@@ -486,6 +488,7 @@ function bindIntent(
   });
 
   if (body !== undefined && "recorded" in body) {
+    level.recordedBodies.push({ span: body.span, destination });
     // A body of token writes is the route's own calls, run by the Portal's Executor — not a
     // program, so the Executor's checks rather than SafeERC20's. Every approve is reset to zero
     // first, for a token (USDT) that refuses to move a standing allowance: one Executor runs every
