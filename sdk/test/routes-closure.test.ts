@@ -6,6 +6,7 @@ import { closureText, isSauceClosure } from "../src/routes/closure.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
 import type { IntentOptions } from "../src/routes/intent-dsl.js";
+import type { SauceIntentChain } from "../src/routes/source-globals.generated.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
 const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
@@ -191,4 +192,4 @@ function main() {
 // capture nothing).
 declare const chainId: bigint;
 declare const RECIPIENT: bigint;
-declare const Arbitrum: { Portal: { send(tokens: unknown): { then(body: () => void): void } } };
+declare const Arbitrum: SauceIntentChain;

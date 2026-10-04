@@ -89,13 +89,11 @@ jobs:
       # -----------------------------------------------------------------------
 
       # ---- SVM engine binary ------------------------------------------------
+      # The tests too: `typecheck` also checks sdk/tsconfig.test.json. sdk/tsconfig.json's `include`
+      # is src-only and ts-jest runs with diagnostics off, which is how a test file that did not
+      # parse once shipped through three green runs.
       - name: SDK — typecheck
         run: pnpm --filter './sdk' typecheck
-
-      # sdk/tsconfig.json's `include` is src-only, so `typecheck` never sees test/. That is how a
-      # test file that does not parse shipped through three green runs. This is the gate for it.
-      - name: SDK — typecheck tests
-        run: pnpm --filter './sdk' typecheck:test
 
       - name: SDK — build
         run: pnpm --filter './sdk' build
@@ -224,6 +222,11 @@ jobs:
 
       - name: MCP — build
         run: pnpm --filter './mcp' build
+
+      # dev-tools reads the SDK's dist/ too, so this comes after the SDK build. Its tests run under
+      # tsx, which strips types without checking them; this is where they are checked.
+      - name: Dev Tools — typecheck
+        run: pnpm --filter './dev-tools' typecheck
 
       # The SDK compiles in a browser. Every browser-facing export is bundled with esbuild for the
       # browser and must reach no Node builtin (and no Node global from the SDK's own modules); then
