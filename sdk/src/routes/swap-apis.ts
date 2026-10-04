@@ -419,17 +419,22 @@ function base64Hex(given: unknown, what: string, provider: SwapProvider): Hex {
   return hex as Hex;
 }
 
-/** Whether `account` is `owner`'s associated account for `mint`, under either token program. */
-async function isAssociatedAccount(account: string, owner: string, mint: string): Promise<boolean> {
+/** The token program under which `account` is `owner`'s associated account for `mint`, or
+ *  `undefined` when it is that under neither. */
+async function associatedUnder(
+  account: string,
+  owner: string,
+  mint: string,
+): Promise<string | undefined> {
   for (const tokenProgram of [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID]) {
     if (
       (await svmTokenAccount({ mint: address(mint), tokenProgram }, address(owner))) === account
     ) {
-      return true;
+      return tokenProgram;
     }
   }
 
-  return false;
+  return undefined;
 }
 
 /** Jupiter's route for `request`: quoted, then built for its Pot. */
@@ -484,25 +489,37 @@ export async function jupiterRoute(request: SwapRequest, apis: SwapApis): Promis
         stringField(table, "lookup table", "jupiter"),
       )
     : [];
+  const programId = stringField(instruction.programId, "programId", "jupiter");
+  const accounts = routeAccounts(instruction.accounts, "jupiter");
+  const data = base64Hex(instruction.data, "data", "jupiter");
+  const decoded = jupiterRouteData(hexToBytes(data));
+  if (decoded === undefined) {
+    throw new SwapApiError(
+      "jupiter",
+      "Jupiter's route is refused: it is not the aggregator's `route` or `shared_accounts_route`",
+    );
+  }
+  // Its token accounts, read off the positions its instruction gives them: the Pot's own.
+  const source = accounts[decoded.accounts.source]?.pubkey ?? "";
+  const destination = accounts[decoded.accounts.destination]?.pubkey ?? "";
   const route: JupiterRoute = {
     provider: "jupiter",
     request,
-    programId: stringField(instruction.programId, "programId", "jupiter"),
-    accounts: routeAccounts(instruction.accounts, "jupiter"),
-    data: base64Hex(instruction.data, "data", "jupiter"),
+    programId,
+    accounts,
+    data,
     lookupTables,
     quotedOut: quoted,
+    programIndex: accounts.findIndex((account) => account.pubkey === programId),
+    outputIndex: decoded.accounts.destination,
+    outputTokenProgram: (await associatedUnder(destination, request.pot, request.tokenOut)) ?? "",
   };
   const why = svmRouteError(route, request);
   if (why !== undefined) throw new SwapApiError("jupiter", `Jupiter's route is refused: ${why}`);
-  // Its token accounts, read off the positions its instruction gives them: the Pot's own.
-  const decoded = jupiterRouteData(hexToBytes(route.data))!;
-  const source = route.accounts[decoded.accounts.source]?.pubkey ?? "";
-  const destination = route.accounts[decoded.accounts.destination]?.pubkey ?? "";
-  if (!(await isAssociatedAccount(source, request.pot, request.tokenIn))) {
+  if ((await associatedUnder(source, request.pot, request.tokenIn)) === undefined) {
     throw new SwapApiError("jupiter", `Jupiter's route pays from ${source}, not the Pot's account`);
   }
-  if (!(await isAssociatedAccount(destination, request.pot, request.tokenOut))) {
+  if (route.outputTokenProgram === "") {
     throw new SwapApiError(
       "jupiter",
       `Jupiter's route pays into ${destination}, not the Pot's account`,
@@ -585,14 +602,29 @@ export async function ecoSvmRoute(request: SwapRequest, apis: SwapApis): Promise
       "eco-swap's instruction does not say where its amount and floor sit",
     );
   }
+  const programId = address(stringField(embed.programId, "programId", "eco"));
+  const accounts = routeAccounts(embed.accounts, "eco");
+  // The Pot's account for the output token, among the instruction's: what the swap pays into.
+  let outputIndex = -1;
+  let outputTokenProgram: string | undefined;
+  for (const [index, account] of accounts.entries()) {
+    outputTokenProgram = await associatedUnder(account.pubkey, request.pot, request.tokenOut);
+    if (outputTokenProgram !== undefined) {
+      outputIndex = index;
+      break;
+    }
+  }
   const route: EcoSvmRoute = {
     provider: "eco",
     request,
-    programId: address(stringField(embed.programId, "programId", "eco")),
-    accounts: routeAccounts(embed.accounts, "eco"),
+    programId,
+    accounts,
     data: base64Hex(embed.data, "data", "eco"),
     lookupTables: (embed.lookupTables ?? []).map((table) => address(table)),
     offsets: { amountIn: offsets.amountIn, minOut: offsets.minOut },
+    programIndex: accounts.findIndex((account) => account.pubkey === programId),
+    outputIndex,
+    outputTokenProgram: outputTokenProgram ?? "",
     ...(embed.amountOut === undefined
       ? {}
       : { quotedOut: integerField(embed.amountOut, "amountOut", "eco") }),

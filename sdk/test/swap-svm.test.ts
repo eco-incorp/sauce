@@ -1,9 +1,9 @@
 /**
  * The Solana half of `@sauce/swap`'s services, without the program: Jupiter's Swap API client and
  * eco-swap's Solana contract (`routes/swap-apis.ts`), and what a route must be
- * (`routes/swap-host.ts#svmRouteError`). The compiler cannot yet hand a route's accounts to a
- * library call (`svm.remainingAccounts()` is `main`'s only), so nothing here compiles a program.
- * No network: every answer is a fixture served by a `fetch` the test passes.
+ * (`routes/swap-host.ts#svmRouteError`); `swap.test.ts` compiles the programs that call them, and
+ * `cli-solana-swap.e2e.test.ts` runs one. No network: every answer is a fixture served by a `fetch`
+ * the test passes.
  *
  * `fixtures/swap/jupiter-solana-{quote,swap-instructions}.json` are Jupiter's public Swap API's
  * (`lite-api.jup.ag/swap/v1`) real answers, fetched once by hand on 2026-10-03: 100 USDC
@@ -29,7 +29,8 @@ import {
   jupiterRoute,
   type SwapApis,
 } from "../src/routes/swap-apis.js";
-import type { SwapRequest } from "../src/routes/swap-host.js";
+import { svmSwapTail, type SwapRequest } from "../src/routes/swap-host.js";
+import { compileSauceProgram, compileSauceProgramAsync } from "../src/routes/sauce-route.js";
 
 const FIXTURES = join(process.cwd(), "test", "fixtures", "swap");
 const fixture = <T = Record<string, unknown>>(name: string): T =>
@@ -225,6 +226,16 @@ describe("jupiterRoute", () => {
 });
 
 describe("ecoSwap on Solana: one instruction into eco-swap's merge program", () => {
+  // Eco-swap's merge program: any program id, as the SDK records none yet.
+  const program = "BPFLoaderUpgradeab1e11111111111111111111111";
+  // The Pot's account for the output token, which the swap pays into.
+  let potWsol = "";
+  beforeAll(async () => {
+    potWsol = await svmTokenAccount(
+      { mint: address(WSOL), tokenProgram: TOKEN_PROGRAM_ID },
+      address(POT),
+    );
+  });
   const embed = (overrides: Record<string, unknown> = {}) => ({
     embed: {
       version: 1,
@@ -232,11 +243,12 @@ describe("ecoSwap on Solana: one instruction into eco-swap's merge program", () 
       chainId: SOLANA,
       tokenIn: USDC,
       tokenOut: WSOL,
-      // Any program id: eco-swap's merge program has none the SDK records yet.
-      programId: "BPFLoaderUpgradeab1e11111111111111111111111",
+      programId: program,
       accounts: [
         { pubkey: POT, isSigner: true, isWritable: false },
         { pubkey: USDC, isSigner: false, isWritable: false },
+        { pubkey: potWsol, isSigner: false, isWritable: true },
+        { pubkey: program, isSigner: false, isWritable: false },
       ],
       data: Buffer.alloc(24).toString("base64"),
       offsets: { amountIn: 8, minOut: 16 },
@@ -264,6 +276,9 @@ describe("ecoSwap on Solana: one instruction into eco-swap's merge program", () 
     expect(route).toMatchObject({
       provider: "eco",
       offsets: { amountIn: 8, minOut: 16 },
+      programIndex: 3,
+      outputIndex: 2,
+      outputTokenProgram: TOKEN_PROGRAM_ID,
       quotedOut: 834000000n,
       lookupTables: ["2Lvj7QkiAWMHziSQbP4yZcoYJPLTESKUWdscnpbj7Ham"],
     });
@@ -289,5 +304,164 @@ describe("ecoSwap on Solana: one instruction into eco-swap's merge program", () 
       /offsets are not inside its data/,
     );
     await expect(attempt(embed({ tokenOut: USDC }))).rejects.toThrow(/another chain or pair/);
+    await expect(
+      attempt(embed({ accounts: [{ pubkey: POT, isSigner: true, isWritable: false }] })),
+    ).rejects.toThrow(/do not include its program/);
+    await expect(
+      attempt(
+        embed({
+          accounts: [
+            { pubkey: POT, isSigner: true, isWritable: false },
+            { pubkey: program, isSigner: false, isWritable: false },
+          ],
+        }),
+      ),
+    ).rejects.toThrow(/output account is not a writable account of the Pot's/);
+  });
+});
+
+describe("jupiterSwap and ecoSwap, compiled for Solana", () => {
+  const options = (fetchFake: typeof fetch) => ({
+    swap: { pot: POT, ...apis(fetchFake) },
+  });
+  const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString("hex");
+  const served = fixture<Instructions>("jupiter-solana-swap-instructions.json");
+  const routeData = Buffer.from(served.swapInstruction.data, "base64");
+  const tail = jupiterRouteData(routeData)!.offsets;
+
+  it("puts Jupiter's instruction in the program with its floor the program's minOut, at no slippage", async () => {
+    const program = await compileSauceProgramAsync(
+      "solana",
+      "function main(): Uint256 { return jupiterSwap(USDC, WSOL, 100000000, 830000000); }",
+      options(serve().fetch),
+    );
+    const bound = Uint8Array.from(routeData);
+    new DataView(bound.buffer).setBigUint64(tail.quotedOutAmount, 830000000n, true);
+    bound.set([0, 0], tail.slippageBps);
+
+    expect(hex(program.bytecode)).toContain(hex(bound));
+    expect(hex(program.bytecode)).not.toContain(hex(routeData));
+    expect(program.swaps).toHaveLength(1);
+    expect(program.swaps[0]!.request).toMatchObject({
+      provider: "jupiter",
+      tokenIn: USDC,
+      tokenOut: WSOL,
+      amountIn: 100000000n,
+      minOut: 830000000n,
+      pot: POT,
+    });
+    // The route's accounts are all the program reads past its own: it names none of its own.
+    expect(program.manifest?.accounts).toEqual([{ kind: "remaining", from: 0 }]);
+  });
+
+  it("splices a floor the program computes into the instruction as it runs", async () => {
+    const program = await compileSauceProgramAsync(
+      "solana",
+      "function main(minOut: Uint256): Uint256 { return jupiterSwap(USDC, WSOL, 100000000, minOut); }",
+      options(serve().fetch),
+    );
+
+    expect(hex(program.bytecode)).toContain(hex(routeData.subarray(0, tail.quotedOutAmount)));
+    expect(program.swaps[0]!.request.minOut).toBeUndefined();
+    expect(program.entryParams.map((param) => param.name)).toEqual(["minOut"]);
+  });
+
+  it("hands the cook the route's accounts, lookup tables and the Pot's output account", async () => {
+    const program = await compileSauceProgramAsync(
+      "solana",
+      "function main(): Uint256 { return jupiterSwap(USDC, WSOL, 100000000, 830000000); }",
+      options(serve().fetch),
+    );
+    const { accounts, lookupTables, outputs } = svmSwapTail(program.swaps);
+    const potWsol = await svmTokenAccount(
+      { mint: address(WSOL), tokenProgram: TOKEN_PROGRAM_ID },
+      address(POT),
+    );
+
+    expect(accounts.map((account) => account.address)).toEqual(
+      served.swapInstruction.accounts.map((account) => account.pubkey),
+    );
+    expect(accounts.map((account) => account.writable)).toEqual(
+      served.swapInstruction.accounts.map((account) => account.isWritable),
+    );
+    expect(lookupTables).toEqual(served.addressLookupTableAddresses);
+    expect(outputs).toEqual([
+      { account: potWsol, owner: POT, mint: WSOL, tokenProgram: TOKEN_PROGRAM_ID },
+    ]);
+  });
+
+  it("writes eco-swap's amount and floor where its contract says, or splices them", async () => {
+    const program = "BPFLoaderUpgradeab1e11111111111111111111111";
+    const potWsol = await svmTokenAccount(
+      { mint: address(WSOL), tokenProgram: TOKEN_PROGRAM_ID },
+      address(POT),
+    );
+    const data = Buffer.alloc(24, 0xab);
+    const eco = {
+      embed: {
+        version: 1,
+        kind: "instruction",
+        chainId: SOLANA,
+        tokenIn: USDC,
+        tokenOut: WSOL,
+        programId: program,
+        accounts: [
+          { pubkey: POT, isSigner: true, isWritable: false },
+          { pubkey: potWsol, isSigner: false, isWritable: true },
+          { pubkey: program, isSigner: false, isWritable: false },
+        ],
+        data: data.toString("base64"),
+        offsets: { amountIn: 0, minOut: 16 },
+      },
+    };
+    const known = await compileSauceProgramAsync(
+      "solana",
+      "function main(): Uint256 { return ecoSwap(USDC, WSOL, 100000000, 830000000); }",
+      options(serve({ eco }).fetch),
+    );
+    const written = Buffer.from(data);
+    written.writeBigUInt64LE(100000000n, 0);
+    written.writeBigUInt64LE(830000000n, 16);
+    expect(hex(known.bytecode)).toContain(written.toString("hex"));
+
+    // An amount the program computes, which only eco-swap takes.
+    const computed = await compileSauceProgramAsync(
+      "solana",
+      "function main(amount: Uint256): Uint256 { return ecoSwap(USDC, WSOL, amount / 2, 830000000); }",
+      options(serve({ eco }).fetch),
+    );
+    expect(computed.swaps[0]!.request.amountIn).toBeUndefined();
+    expect(hex(computed.bytecode)).toContain(data.subarray(8, 16).toString("hex"));
+  });
+
+  it("refuses a second routed swap, the EVM's provider, and a swap with no Pot", async () => {
+    await expect(
+      compileSauceProgramAsync(
+        "solana",
+        `function main(): Uint256 {
+  return jupiterSwap(USDC, WSOL, 100000000, 0) + jupiterSwap(USDC, WSOL, 5, 0);
+}`,
+        options(serve().fetch),
+      ),
+    ).rejects.toThrow(/a program on Solana makes one routed swap/);
+    expect(() =>
+      compileSauceProgram(
+        "solana",
+        "function main(): Uint256 { return kyberSwap(USDC, WSOL, 5, 0); }",
+      ),
+    ).toThrow(/kyberSwap swaps on EVM chains; on solana, jupiterSwap or ecoSwap/);
+    expect(() =>
+      compileSauceProgram(
+        "base",
+        "function main(): Uint256 { return jupiterSwap(USDC, WETH, 5, 0); }",
+      ),
+    ).toThrow(/jupiterSwap swaps on Solana; on base, kyberSwap or ecoSwap/);
+    expect(() =>
+      compileSauceProgram(
+        "solana",
+        "function main(): Uint256 { return ecoSwap(USDC, WSOL, 5, 0); }",
+        { swap: { routes: [] } },
+      ),
+    ).toThrow(/ecoSwap: the route is built for the Pot the program runs on/);
   });
 });

@@ -228,7 +228,7 @@ function routeHost(
   options: SauceCompileOptions,
   scope: RouteScope,
   lowered: LoweredIntent[],
-  swaps: { readonly sites: SwapSite[]; readonly pot: () => AddressInput | undefined },
+  swaps: { readonly sites: SwapSite[]; readonly pot: () => AddressInput | string | undefined },
 ): {
   readonly host: ChainHost;
   readonly defines: SauceCompileOptions["defines"];
@@ -246,13 +246,15 @@ function routeHost(
     },
   });
   const names = chainHost(chain, { tokens, values, accessors: options.accessors });
-  if (chain.kind !== "evm") return { host: recording(names), defines, declined };
   const swapping = swapHost({
     chain,
     pot: swaps.pot,
     options: options.swap ?? {},
     sites: swaps.sites,
   });
+  if (chain.kind !== "evm") {
+    return { host: recording(withHost(names, { types: {}, ...swapping })), defines, declined };
+  }
   const intents = intentHost({
     source: chain,
     chains: chainAccessorNames(),
@@ -439,7 +441,7 @@ export interface CompiledSauceProgram {
    * program holds a sentinel where the value will be, which only exists once the program runs.
    */
   readonly intents: readonly LoweredIntent[];
-  /** Each `kyberSwap(...)`/`ecoSwap(...)` the program calls, at any depth, with the route bound
+  /** Each `kyberSwap(...)`/`jupiterSwap(...)`/`ecoSwap(...)` the program calls, at any depth, with the route bound
    *  there — none where a placeholder was (`swap.placeholders`). */
   readonly swaps: readonly SwapSite[];
   /** The source the compiler was given: the program as written. */
@@ -525,7 +527,7 @@ export function compileSauceProgram(
 }
 
 /**
- * {@link compileSauceProgram}, with each `kyberSwap(...)`/`ecoSwap(...)` the program calls given its
+ * {@link compileSauceProgram}, with each `kyberSwap(...)`/`jupiterSwap(...)`/`ecoSwap(...)` the program calls given its
  * route by its service. The compiler's callbacks are synchronous, so it compiles twice: once with a
  * placeholder at each swap, to learn what each asks for, then — after the routes are fetched
  * (`swap-apis.ts#fetchSwapRoutes`) — with them bound. A program with no swap, or whose routes are all

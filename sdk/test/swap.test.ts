@@ -294,7 +294,7 @@ describe("what kyberSwap and ecoSwap refuse", () => {
   it("a KyberSwap route with no Pot to build it for, which a first pass reports", () => {
     const source = "function main(): Uint256 { return kyberSwap(USDC, WETH, 1000000, 0); }";
     expect(() => compileSauceProgram("base", source, { swap: { routes: [] } })).toThrow(
-      /builds its calldata for the Pot the program runs on/,
+      /kyberSwap: the route is built for the Pot the program runs on/,
     );
     const probe = compileSauceProgram("base", source, { swap: { placeholders: true } });
     expect(probe.swaps[0]!.request.pot).toBeUndefined();

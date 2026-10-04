@@ -1,6 +1,6 @@
 /**
- * `kyberSwap(tokenIn, tokenOut, amountIn, minOut)` and `ecoSwap(...)` — a swap whose route a
- * service builds while the program compiles, put into the program as bytes. Each returns the amount
+ * `kyberSwap(tokenIn, tokenOut, amountIn, minOut)`, `jupiterSwap(...)` and `ecoSwap(...)` — a swap
+ * whose route a service builds while the program compiles, put into the program as bytes. Each returns the amount
  * of `tokenOut` delivered to the Pot and reverts below `minOut`, so a `try { … } catch { … }` around
  * one falls back to another venue.
  *
@@ -42,14 +42,23 @@
  * `amountIn` of `tokenIn` for `tokenOut`, paid to the Pot, with no fee taken; eco-swap's is a
  * program for `main(amountIn, minOut)`.
  *
- * WHICH POT. Kyber's calldata names who pays and who receives: the Pot the program runs on. A
- * top-level program's is the caller's (`swap.pot`); an intent body's is the destination's shared
- * Pot, as `intent-pot.ts` derives it for the intent's cook.
+ * ON SOLANA, a route is one instruction (Jupiter's aggregator `route` or `shared_accounts_route`,
+ * or eco-swap's merge program) whose one signer is the Pot. Its accounts ride as the cook's
+ * remaining accounts, with their flags and lookup tables (`svmSwapTail`), and `@sauce/swap`'s SVM
+ * arm passes the whole tail to the call — so a program on Solana makes one routed swap. What the
+ * library is bound with is the instruction's data, its program's and output account's places in the
+ * tail, and the floor: Jupiter's quoted output is set to `minOut` with no slippage, eco-swap's
+ * amount and floor are written where its contract says, each a little-endian u64.
+ *
+ * WHICH POT. Kyber's calldata and a Solana route's instruction name who pays and who receives:
+ * the Pot the program runs on. A top-level program's is the caller's (`swap.pot`); an intent
+ * body's is the destination's shared Pot, as `intent-pot.ts` derives it for the intent's cook.
  */
 import type { BoundArgument, CallSite, Declaration, View } from "sauce-compiler";
-import { decodeFunctionData, getAddress, hexToBytes, type Hex } from "viem";
+import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
+import { bytesToHex, decodeFunctionData, getAddress, hexToBytes, type Hex } from "viem";
 
-import type { CanonicalChain } from "../chains/canonical.js";
+import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { addressOn } from "../descriptors/query.js";
 import { KyberSwapMetaAggregationRouterABI } from "../protocols/kyberswap/abis.js";
 import {
@@ -69,6 +78,7 @@ export type SwapProvider = "kyber" | "eco" | "jupiter";
 export const SWAP_FUNCTIONS: Readonly<Record<string, SwapProvider>> = {
   kyberSwap: "kyber",
   ecoSwap: "eco",
+  jupiterSwap: "jupiter",
 };
 
 const SWAP_MODULE = "@sauce/swap";
@@ -84,7 +94,8 @@ export interface SwapRequest {
   readonly amountIn?: bigint;
   /** Known when the program compiles; else a value it computes, checked as it runs. */
   readonly minOut?: bigint;
-  /** The Pot the program runs on. Required for KyberSwap and Jupiter, whose instructions name it. */
+  /** The Pot the program runs on. Required for KyberSwap, Jupiter and eco-swap on Solana, whose
+   *  routes name it. */
   readonly pot?: string;
 }
 
@@ -124,6 +135,12 @@ export interface SvmRouteInstruction {
   readonly data: Hex;
   /** Address lookup tables the transaction carrying it needs to fit. */
   readonly lookupTables: readonly string[];
+  /** Where among `accounts` the program the instruction calls is: the CPI's callee. */
+  readonly programIndex: number;
+  /** Where among `accounts` the Pot's token account for `tokenOut` is: what the swap pays. */
+  readonly outputIndex: number;
+  /** That account's token program: SPL Token or Token-2022. */
+  readonly outputTokenProgram: string;
 }
 
 /** Jupiter's route on Solana: its aggregator's `route` or `shared_accounts_route` instruction,
@@ -159,9 +176,9 @@ export interface SwapSite {
 
 /** What a compile's swaps are bound with. */
 export interface SwapBindOptions {
-  /** The Pot the program runs on: KyberSwap's sender and recipient. An intent body's is its
-   *  destination's shared Pot instead. */
-  readonly pot?: AddressInput;
+  /** The Pot the program runs on: a route's payer and recipient (a `0x` address on an EVM chain,
+   *  a base58 key on Solana). An intent body's is its destination's shared Pot instead. */
+  readonly pot?: AddressInput | string;
   /** The routes fetched for this program (`fetchSwapRoutes`), each found by its request. */
   readonly routes?: readonly SwapRoute[];
   /** Bind a placeholder where a route is missing, and report the call, rather than refusing it:
@@ -278,6 +295,13 @@ export function svmRouteError(
   }
   if (!/^0x(?:[0-9a-fA-F]{2})*$/.test(route.data)) return "its data is not bytes";
   const data = hexToBytes(route.data);
+  if (route.accounts[route.programIndex]?.pubkey !== route.programId) {
+    return `its accounts do not include its program ${route.programId}, which the call is made through`;
+  }
+  const output = route.accounts[route.outputIndex];
+  if (output === undefined || !output.isWritable || output.pubkey === request.pot) {
+    return "its output account is not a writable account of the Pot's";
+  }
   if (route.provider === "eco") {
     const fits = (at: number) => Number.isSafeInteger(at) && at >= 0 && at + 8 <= data.length;
     return fits(route.offsets.amountIn) && fits(route.offsets.minOut)
@@ -299,6 +323,9 @@ export function svmRouteError(
   }
   if (at(decoded.accounts.destinationMint)?.pubkey !== request.tokenOut) {
     return `it swaps into ${at(decoded.accounts.destinationMint)?.pubkey}, not ${request.tokenOut}`;
+  }
+  if (route.outputIndex !== decoded.accounts.destination) {
+    return "its output account is not the instruction's destination";
   }
 
   return undefined;
@@ -362,6 +389,50 @@ function withFloor(route: KyberRoute, minOut: View): BoundArgument {
   return fail("a swap's amounts are numbers");
 }
 
+/** A 32-byte key, as Solana writes it: base58. */
+const keyOf = (value: bigint): string =>
+  getAddressDecoder().decode(hexToBytes(`0x${value.toString(16).padStart(64, "0")}`));
+
+/** `value`, which must fit a u64, as 8 little-endian bytes. */
+function u64Le(value: bigint, what: string): Uint8Array {
+  if (value < 0n || value >= 1n << 64n) return fail(`${what} ${value} is past a u64`);
+  const bytes = new Uint8Array(8);
+  new DataView(bytes.buffer).setBigUint64(0, value, true);
+
+  return bytes;
+}
+
+/**
+ * A Solana route's instruction with the program's amounts in it, at the offsets the route gives:
+ * written when the program knows them, spliced in (8 bytes, little-endian) as it runs when it
+ * computes them. Jupiter's floor is its quoted output at no slippage, so its quoted output is set to
+ * the program's `minOut` and its slippage to zero; eco-swap's amount in and floor are its own.
+ */
+function withSvmAmounts(
+  route: JupiterRoute | EcoSvmRoute,
+  amount: View,
+  minOut: View,
+): BoundArgument {
+  const data = hexToBytes(route.data);
+  const splices: { offset: number; runtime: number; width: number; endian: "le" }[] = [];
+  const put = (at: number, view: View, what: string) => {
+    if ("runtime" in view)
+      splices.push({ offset: at, runtime: view.runtime, width: 8, endian: "le" });
+    else if ("constant" in view) data.set(u64Le(BigInt(view.constant), what), at);
+    else fail(`${what} must be a number`);
+  };
+  if (route.provider === "jupiter") {
+    const { offsets } = jupiterRouteData(data)!;
+    put(offsets.quotedOutAmount, minOut, "minOut");
+    data.set([0, 0], offsets.slippageBps);
+  } else {
+    put(route.offsets.amountIn, amount, "amountIn");
+    put(route.offsets.minOut, minOut, "minOut");
+  }
+
+  return splices.length === 0 ? { bytes: data } : { bytes: data, splices };
+}
+
 const addressOf = (value: bigint): Hex =>
   getAddress(`0x${value.toString(16).padStart(40, "0")}`) as Hex;
 
@@ -369,7 +440,7 @@ const addressOf = (value: bigint): Hex =>
 export interface SwapLevel {
   readonly chain: CanonicalChain;
   /** The Pot the level runs on, asked only when a call needs it. */
-  readonly pot: () => AddressInput | undefined;
+  readonly pot: () => AddressInput | string | undefined;
   readonly options: SwapBindOptions;
   /** Every call bound, at every level of the compile, in the order the compiler binds them. */
   readonly sites: SwapSite[];
@@ -385,20 +456,33 @@ export function swapHost(level: SwapLevel): {
   const { chain } = level;
   const value = { kind: "value" } as const;
 
+  const svm = chain.kind === "svm";
+  const signature = (provider: SwapProvider) => ({
+    params: [value, value, value, value],
+    calls: { module: SWAP_MODULE, export: provider },
+    site: true,
+  });
+
   const declare = (name: string): Declaration | undefined => {
     const provider = SWAP_FUNCTIONS[name];
-    if (provider === undefined || chain.kind !== "evm") return undefined;
+    if (provider === undefined) return undefined;
+    // A provider the chain has no route from is declared to be refused by name, where it is used.
+    if (provider === "kyber" && svm) {
+      return {
+        kind: "function",
+        signatures: [signature("eco")],
+        unusable: `kyberSwap swaps on EVM chains; on ${chain.slug}, jupiterSwap or ecoSwap`,
+      };
+    }
+    if (provider === "jupiter" && !svm) {
+      return {
+        kind: "function",
+        signatures: [signature("eco")],
+        unusable: `jupiterSwap swaps on Solana; on ${chain.slug}, kyberSwap or ecoSwap`,
+      };
+    }
 
-    return {
-      kind: "function",
-      signatures: [
-        {
-          params: [value, value, value, value],
-          calls: { module: SWAP_MODULE, export: provider },
-          site: true,
-        },
-      ],
-    };
+    return { kind: "function", signatures: [signature(provider)] };
   };
 
   const bind = (site: CallSite): BoundArgument[] | undefined => {
@@ -415,7 +499,7 @@ export function swapHost(level: SwapLevel): {
 
       return fail(`${name}: ${what} must be a value`);
     };
-    const token = (view: View | undefined, what: string): Hex => {
+    const token = (view: View | undefined, what: string): string => {
       const known = constant(view, what);
       if (known === undefined) {
         return fail(
@@ -424,30 +508,41 @@ export function swapHost(level: SwapLevel): {
         );
       }
 
-      return addressOf(known);
+      return svm ? keyOf(known) : addressOf(known);
     };
     const tokenIn = token(tokenInView, "tokenIn");
     const tokenOut = token(tokenOutView, "tokenOut");
     if (tokenIn === tokenOut) fail(`${name}: tokenIn and tokenOut are the same token`);
     const amountIn = constant(amountView, "amountIn");
     const minOut = constant(minOutView, "minOut");
-    if (provider === "kyber" && amountIn === undefined) {
+    if (provider !== "eco" && amountIn === undefined) {
       fail(
-        "kyberSwap: amountIn must be known when the program compiles, because KyberSwap's " +
-          "calldata fixes the amount it swaps. Write it in the program, or compile it for main's " +
-          "arguments (`--args`); ecoSwap takes an amount the program computes",
+        `${name}: amountIn must be known when the program compiles, because the route fixes the ` +
+          "amount it swaps. Write it in the program, or compile it for main's arguments " +
+          "(`--args`); ecoSwap takes an amount the program computes",
+      );
+    }
+    if (
+      svm &&
+      level.sites.some((earlier) => requireChain(earlier.request.chainId).kind === "svm")
+    ) {
+      fail(
+        `${name}: a program on Solana makes one routed swap: its route's accounts are all the ` +
+          "accounts after the program's own, and a program cannot yet take a share of them",
       );
     }
     const potGiven = level.pot();
     const pot =
       potGiven === undefined
         ? undefined
-        : (getAddress(denormalizeToEvm(toUniversalAddress(potGiven))) as Hex);
+        : svm
+          ? String(potGiven)
+          : (getAddress(denormalizeToEvm(toUniversalAddress(potGiven as AddressInput))) as Hex);
     // A first pass reports the call without one, for its caller to say where the Pot comes from.
-    if (provider === "kyber" && pot === undefined && level.options.placeholders !== true) {
+    if ((provider !== "eco" || svm) && pot === undefined && level.options.placeholders !== true) {
       fail(
-        "kyberSwap: KyberSwap builds its calldata for the Pot the program runs on, which pays " +
-          "and receives: give the Pot (`swap.pot`; the sauce command's --pot, --owner or signer)",
+        `${name}: the route is built for the Pot the program runs on, which pays and receives: ` +
+          "give the Pot (`swap.pot`; the sauce command's --pot, --owner or signer)",
       );
     }
     const request: SwapRequest = {
@@ -473,6 +568,23 @@ export function swapHost(level: SwapLevel): {
     }
     level.sites.push({ request, path: site.path, ...(route === undefined ? {} : { route }) });
 
+    if (svm) {
+      const instruction = route as JupiterRoute | EcoSvmRoute | undefined;
+      return [
+        { value: String(instruction?.programIndex ?? 0) },
+        { value: String(instruction?.outputIndex ?? 0) },
+        {
+          value: BigInt(
+            bytesToHex(new Uint8Array(getAddressEncoder().encode(address(tokenOut)))),
+          ).toString(),
+          type: "Address",
+        },
+        instruction === undefined
+          ? { bytes: new Uint8Array() }
+          : withSvmAmounts(instruction, amountView!, minOutView!),
+        wordArgument(minOutView!),
+      ];
+    }
     const tokens: BoundArgument[] = [
       { value: tokenIn, type: "Address" },
       { value: tokenOut, type: "Address" },
@@ -498,6 +610,41 @@ export function swapHost(level: SwapLevel): {
   };
 
   return { declare, hostModules: [SWAP_MODULE], bind };
+}
+
+/**
+ * What a cook of a Solana program carries for its routed swap, beyond the accounts the program
+ * names: the route's accounts, in the order the program reads them after its own (the Pot attached
+ * unsigned: the Kitchen signs for it), the lookup tables the route needs, and the Pot's account the
+ * swap pays into, which the cook creates when it does not exist yet. Empty for a program with no
+ * Solana route.
+ */
+export function svmSwapTail(sites: readonly SwapSite[]): {
+  readonly accounts: readonly { readonly address: string; readonly writable: boolean }[];
+  readonly lookupTables: readonly string[];
+  readonly outputs: readonly {
+    readonly account: string;
+    readonly owner: string;
+    readonly mint: string;
+    readonly tokenProgram: string;
+  }[];
+} {
+  const routes = sites.flatMap((site) =>
+    site.route !== undefined && "programId" in site.route ? [site.route] : [],
+  );
+
+  return {
+    accounts: routes.flatMap((route) =>
+      route.accounts.map((account) => ({ address: account.pubkey, writable: account.isWritable })),
+    ),
+    lookupTables: [...new Set(routes.flatMap((route) => route.lookupTables))],
+    outputs: routes.map((route) => ({
+      account: route.accounts[route.outputIndex]!.pubkey,
+      owner: route.request.pot!,
+      mint: route.request.tokenOut,
+      tokenProgram: route.outputTokenProgram,
+    })),
+  };
 }
 
 export { SwapError };
