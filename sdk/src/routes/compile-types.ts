@@ -10,23 +10,23 @@
 export interface AbiParameter {
   name?: string;
   type: string;
-  components?: AbiParameter[];
+  components?: readonly AbiParameter[];
   indexed?: boolean;
 }
 
 export interface AbiFunction {
   type: "function";
   name: string;
-  inputs: AbiParameter[];
-  outputs?: AbiParameter[];
+  inputs: readonly AbiParameter[];
+  outputs?: readonly AbiParameter[];
   stateMutability?: "pure" | "view" | "nonpayable" | "payable";
 }
 
 export type AbiItem =
   | AbiFunction
-  | { type: "event"; name: string; inputs: AbiParameter[] }
-  | { type: "error"; name: string; inputs: AbiParameter[] }
-  | { type: "constructor"; inputs: AbiParameter[] }
+  | { type: "event"; name: string; inputs: readonly AbiParameter[] }
+  | { type: "error"; name: string; inputs: readonly AbiParameter[] }
+  | { type: "constructor"; inputs: readonly AbiParameter[] }
   | { type: "fallback" }
   | { type: "receive" };
 
