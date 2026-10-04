@@ -438,11 +438,20 @@ written. A hook is recorded, never compiled. Each statement is one call:
 
 Each argument is a literal, a compile-time value, a variable of the program opening the intent, a
 `hex` literal, or a struct or array of these. Anything else in a hook is a compile error at that
-statement. Four rules follow:
+statement.
 
-- **The Executor makes the calls.** It is the `msg.sender` a hook's target sees, and what a call
-  pulls from its caller comes from the Executor. One Executor serves every intent on a chain, so
-  every token `approve` a hook makes is reset to zero first.
+Hooks are low-level calls the Executor makes exactly as written. The SDK adds nothing: no
+deliveries, no approve resets. What the Executor holds when a hook runs is up to the intent.
+
+- **The Executor is the caller.** It is the `msg.sender` a hook's target sees, and what a call
+  pulls from its caller comes from the Executor. One Executor serves every intent on a chain, so an
+  allowance an earlier intent left may still stand: before approving a token that refuses to change
+  one (USDT), write the reset yourself, `USDT.approve(spender, 0)`.
+- **What a hook spends is the intent's to deliver.** `.receive(...)` and the route's tokens are
+  exactly what the intent names. A body of token writes leaves the delivery with the Executor, for
+  the hooks and the body alike, so `.receive(...)` names what both spend, as above. A program
+  body's delivery moves into its Pot whole, and `.after(...)` cannot spend what the body holds
+  there.
 - **A hook is outside `.catch(...)`.** A hook that reverts reverts the whole fill, and the body's
   handler does not run in its place.
 - **Its arguments are fixed when the intent is published.** A variable of the program opening the
@@ -450,14 +459,6 @@ statement. Four rules follow:
   word: an `address`, a `bytes32`, or an integer of 160 bits or more. A narrower argument, the
   native an `evm.call` sends and its calldata are known when the intent is built. Nothing the body
   computes reaches a hook.
-- **It has no access to the Pot's funds.** The body runs in the Pot and a hook on the Executor, so
-  `.after(...)` cannot spend what the body holds. A body of token writes leaves what `.receive(...)`
-  delivers with the Executor, for the hooks and the body alike, as above; a program body's moves
-  into its Pot whole. What a hook transfers as a token write is delivered on top of what
-  `.receive(...)` names: `.before(() => { USDC.transfer(referrer, fee); })` before a program body
-  that receives `amount` has the solver bring `amount + fee`. The route then names USDC twice, and
-  the Portal pulls each entry from the solver, so a solver approves the sum for a token named more
-  than once.
 
 Hooks are EVM-only: on a Solana destination they are refused, since a Solana route call names its
 accounts.
