@@ -113,8 +113,9 @@ export interface SauceIntentReceivedSteps<Used extends string> {
   fee(wei: bigint | number): SauceIntentReceived<Used | "fee">;
   /**
    * Calls the Portal's Executor makes on the destination before the body runs: the closure is never
-   * compiled, each statement a call of a token, recorded as a route call of its own. The Executor
-   * is the caller; the arguments are fixed when the intent is published; what a transfer moves is
+   * compiled, each statement a call recorded as a route call of its own — a contract's method,
+   * `evm.call(target, value, data)`, or a token's `transfer` or `approve`. The Executor is the
+   * caller; the arguments are fixed when the intent is published; what a token transfer moves is
    * delivered on top of what `.receive(...)` names. A hook that reverts reverts the fill,
    * `.catch(...)` or not. Any number, in the order written. EVM destinations only.
    */

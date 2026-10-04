@@ -32,9 +32,10 @@
  * and what it reads of the enclosing program reaches it as entry arguments. A closure of nothing
  * but token `transfer`/`approve` calls is RECORDED instead: there is no program, only the calls,
  * which become the route's own. `.before(() => { … })` and `.after(() => { … })`, any number of
- * each among the route's modifiers, are HOOKS: closures that are only ever recorded, their calls
- * the route's around the body's, and refused when the compiler had to compile one instead. Each is
- * a part of the record, so their order survives; their names resolve on the destination, and a
+ * each among the route's modifiers, are HOOKS: closures the compiler only ever records, as the
+ * calls they make (`record: "calls"`) — contracts' methods, `evm.call`s and token writes — which
+ * become the route's around the body's; anything else in one is the compiler's located error. Each
+ * is a part of the record, so their order survives; their names resolve on the destination, and a
  * Solana destination is refused before one is read. `.catch((e) => { … })` after it HANDLES the
  * body: the compiler builds the two as one program, `try { <body> } catch (e) { <handler> }`. The
  * chain's last record is bound at its site, so the compiler hands `bind` what it knows there — the
@@ -64,9 +65,11 @@
  * ordinary ones.
  */
 import type {
+  AbiParameter,
   BoundArgument,
   CallSite,
   Declaration,
+  ExternalCall,
   HostType,
   Param,
   ProgramOptions,
@@ -76,7 +79,7 @@ import type {
   Signature,
   View,
 } from "sauce-compiler";
-import { bytesToHex, encodeFunctionData, hexToBytes, type Hex } from "viem";
+import { bytesToHex, encodeFunctionData, hexToBytes, numberToHex, type Hex } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { ERC20ABI } from "../protocols/erc20/abis.js";
@@ -198,13 +201,6 @@ const NEEDS_A_DELIVERY = unfinished("Sent", "send(...)");
 /** The hook a program argument's site is, `Received.before` or `Received.after`; else nothing. */
 const hookOf = (callee: string): RouteHook | undefined =>
   ROUTE_HOOKS.find((hook) => callee === `Received.${hook}`);
-
-/** Why a hook the compiler could not record is refused: it is calls, never a program. */
-const hookNotRecorded = (hook: RouteHook): string =>
-  `\`.${hook}(...)\` records calls for the Portal's Executor to make, and is never compiled: ` +
-  "each of its statements must be a call of a token, `USDC.approve(spender, amount)` or " +
-  "`Token(address).transfer(to, amount)`, whose arguments are literals, names or variables of " +
-  "the program. Compute a value before the intent opens, and pass the variable.";
 
 /** One of a route's calls, as the Executor makes it. */
 type RouteCall = { target: Hex; data: Hex; value: bigint };
@@ -371,8 +367,9 @@ function hostParam(param: IntentParam): Param {
     case "handler":
       return { kind: "handler" };
     case "hook":
-      // Recorded too, and only that: a hook the compiler had to compile is refused (`bind`).
-      return { kind: "program", record: true };
+      // Recorded always, as the calls it makes: anything else in it is the compiler's located
+      // error.
+      return { kind: "program", record: "calls" };
   }
 }
 
@@ -537,15 +534,63 @@ function bindIntent(
 
       return [...reset, tokenCall(token.literal, method, args)];
     });
-  // Each hook's calls, its closures in the order written: recorded, never compiled.
+  // A contract's method a hook calls, or its `evm.call`: the call as written, its run-time values
+  // sentinels the program writes over. A contract method sends nothing; an `evm.call` sends what
+  // it names, which the route's native amount carries, so it is known when the intent is built.
+  const externalCall = (call: ExternalCall, hook: RouteHook): RouteCall => {
+    const what =
+      call.function === undefined ? "`evm.call(...)`" : `\`.${call.function.name}(...)\``;
+    const value = valueOf(call.value, `the value ${what} sends`);
+    if (!("literal" in value)) {
+      return fail(
+        `the value ${what} sends in \`.${hook}(...)\` is native the solver brings, which the ` +
+          "intent names when it is built: a literal or one of main's arguments, not a value the " +
+          "program computes",
+      );
+    }
+    const target = addressHex(sentinelFor(valueOf(call.target, `the address ${what} calls`)));
+    if (call.function === undefined) {
+      const data =
+        call.data !== undefined && "bytes" in call.data
+          ? bytesToHex(call.data.bytes)
+          : fail(
+              `the calldata of \`evm.call(...)\` in \`.${hook}(...)\` is bytes the intent carries, ` +
+                "known when it is built: a `hex` literal",
+            );
+      return { target, data, value: value.literal };
+    }
+    const { function: abiFunction, args = [] } = call;
+    const argument = (view: View, i: number) =>
+      abiArgument(
+        view,
+        abiFunction.inputs[i]!,
+        `argument ${i + 1} of ${what}`,
+        valueOf,
+        sentinelFor,
+      );
+
+    return {
+      target,
+      data: encodeFunctionData({
+        abi: [abiFunction],
+        functionName: abiFunction.name,
+        args: args.map(argument),
+      }),
+      value: value.literal,
+    };
+  };
+  // Each hook's calls, its closures in the order written: recorded as calls, never compiled.
   const hookCalls = (hook: RouteHook, delivered: TokenAmount[]): RouteCall[] =>
     parts
       .filter((part) => part.callee === `Received.${hook}`)
       .flatMap((part) => {
         const [closure] = part.args;
-        return closure !== undefined && "recorded" in closure
-          ? recordedCalls(closure.recorded, delivered)
-          : fail(hookNotRecorded(hook));
+        if (closure === undefined || !("calls" in closure)) {
+          return fail(`\`.${hook}(...)\` reached the lowering unrecorded — a bug in the lowering`);
+        }
+        return closure.calls.flatMap((call) =>
+          "callee" in call ? recordedCalls([call], delivered) : [externalCall(call, hook)],
+        );
       });
 
   // The delivery: what `.receive(...)` names — else, for a body of token writes, what its
@@ -854,6 +899,77 @@ function splicesIn(
   }
 
   return splices;
+}
+
+/**
+ * One argument of a contract method a hook calls, as viem encodes `param`: a constant as its type
+ * reads it (an `intN` above 2^255 negative, a `bytesN` its N bytes at the word's low end), a
+ * tuple's fields in its components' order, an array's elements, literal bytes. A value the program
+ * computes is a sentinel the program writes a whole word over, so only a type that is a whole word
+ * and holds one takes it.
+ */
+function abiArgument(
+  view: View,
+  param: AbiParameter,
+  what: string,
+  valueOf: (view: View | undefined, what: string) => Value,
+  sentinelFor: (value: Value) => bigint,
+): unknown {
+  const array = /^(.*)\[\d*\]$/.exec(param.type);
+  if (array !== null) {
+    if (!("elements" in view)) return fail(`${what} is a \`${param.type}\`: write an array`);
+    return view.elements.map((element, i) =>
+      abiArgument(element, { ...param, type: array[1]! }, `${what}[${i}]`, valueOf, sentinelFor),
+    );
+  }
+  if (param.type === "tuple") {
+    const components = param.components ?? [];
+    if (!("fields" in view) || view.fields.length !== components.length) {
+      return fail(`${what} is a struct of ${components.length} fields: write each`);
+    }
+    return view.fields.map(([, field], i) =>
+      abiArgument(field, components[i]!, `${what}.${components[i]!.name}`, valueOf, sentinelFor),
+    );
+  }
+  if (param.type === "bytes" || param.type === "string") {
+    if (!("bytes" in view)) {
+      return fail(
+        `${what} is a \`${param.type}\` of a length the program would know only as it runs: a ` +
+          "hook's arguments are written into the intent when it is built",
+      );
+    }
+    return param.type === "bytes" ? bytesToHex(view.bytes) : new TextDecoder().decode(view.bytes);
+  }
+
+  // An intent's own values are never `bool`s (`valueOf`), but a hook's argument may be one.
+  if (param.type === "bool" && "constant" in view) return BigInt(view.constant) !== 0n;
+  const value = valueOf(view, what);
+  if (!("literal" in value)) {
+    // A sentinel is twenty bytes: what holds it is a whole word the splice writes.
+    const width = Number(/^u?int(\d+)$/.exec(param.type)?.[1] ?? 0);
+    if (param.type === "address" || param.type === "bytes32" || width >= 160) {
+      const sentinel = sentinelFor(value);
+      return param.type === "address"
+        ? addressHex(sentinel)
+        : param.type === "bytes32"
+          ? numberToHex(sentinel, { size: 32 })
+          : sentinel;
+    }
+    return fail(
+      `${what} is a \`${param.type}\` the program computes: a value written in as the program runs ` +
+        "fills a whole word, an `address`, a `bytes32` or a 160-bit or wider integer. Give it as a " +
+        "literal or one of main's arguments.",
+    );
+  }
+  const word = value.literal;
+  if (param.type === "address") return addressHex(word);
+  if (param.type.startsWith("int")) return word >= 1n << 255n ? word - (1n << 256n) : word;
+  const bytes = /^bytes(\d+)$/.exec(param.type);
+  if (bytes !== null) {
+    const size = Number(bytes[1]);
+    return numberToHex(word & ((1n << BigInt(8 * size)) - 1n), { size });
+  }
+  return word;
 }
 
 /** A chain's record: the value its first call was made on, then each call with its arguments. */
