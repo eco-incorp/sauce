@@ -9,6 +9,6 @@
     "resolveJsonModule": true,
     "noEmit": true
   },
-  "include": ["scripts/**/*"],
+  "include": ["scripts/**/*", "src/**/*", "test/**/*"],
   "exclude": ["node_modules", "**/node_modules"]
 }
