@@ -60,7 +60,10 @@ const compile = (program: string, intents: IntentSugarDefaults, args?: readonly 
 /** The same program: its bytecode, every level's within it, and each intent it opens. */
 function expectSame(a: CompiledSauceProgram, b: CompiledSauceProgram): void {
   expect(bytesToHex(a.bytecode)).toBe(bytesToHex(b.bytecode));
-  expect(a.intents).toEqual(b.intents);
+  // Each intent, but where it is written: two spellings of one program place it differently.
+  const unplaced = (program: CompiledSauceProgram) =>
+    program.intents.map(({ span: _, ...rest }) => rest);
+  expect(unplaced(a)).toEqual(unplaced(b));
 }
 
 /** Base opens Arbitrum, whose body measures what arrived and opens Optimism with it. */

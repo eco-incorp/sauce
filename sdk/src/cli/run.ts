@@ -777,7 +777,7 @@ async function programInput(
     },
   };
   bind?.before?.(given);
-  const input = bind === undefined ? given : bindMainArguments(given, bind.args);
+  const input = bind === undefined ? given : bindMainArguments(given, bind.args, io);
   if (fee !== undefined && fee !== "auto") return input;
   const executionFee = await autoExecutionFee(
     input,

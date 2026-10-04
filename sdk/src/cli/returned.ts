@@ -1,5 +1,5 @@
 /**
- * What a cook returned, read as the type `main` declares (`routes/entry.ts#mainReturnType`).
+ * What a cook returned, read as the type `main` declares (the compile's `entrySignature.returns`).
  *
  * A program's return comes back with no ABI framing: a scalar (`Address`, `Uint256`, `bool`) as one
  * 32-byte word, a record as its fields one word each, an array as its elements one after another

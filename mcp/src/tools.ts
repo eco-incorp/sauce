@@ -328,7 +328,7 @@ export const INTENT_ARGS = z
 export function boundProgram(args: ProgramArgs & { readonly args?: readonly unknown[] }): Program {
   const given = programOf(args);
 
-  return { ...given, input: bindMainArguments(given.input, argsOf(args).args) };
+  return { ...given, input: bindMainArguments(given.input, argsOf(args).args, given.files) };
 }
 
 const COOK = {

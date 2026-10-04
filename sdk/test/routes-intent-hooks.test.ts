@@ -467,7 +467,10 @@ describe("`await` of an intent with hooks", () => {
       const awaited = compile(`function main() {\n  await ${intent};\n  ${body}\n}`);
       const then = compile(`function main() {\n  ${intent}\n    .then(() => { ${body} });\n}`);
       expect(bytesToHex(awaited.bytecode)).toBe(bytesToHex(then.bytecode));
-      expect(awaited.intents).toEqual(then.intents);
+      // Each intent, but where it is written: the two spellings place it differently.
+      const unplaced = (program: CompiledSauceProgram) =>
+        program.intents.map(({ span: _, ...rest }) => rest);
+      expect(unplaced(awaited)).toEqual(unplaced(then));
       expect(awaited.intents[0]!.intent.route.calls.length).toBeGreaterThan(3);
     }
   });

@@ -13,7 +13,11 @@ import {
 } from "viem";
 
 import { encodeCompactArguments } from "../src/compact-arguments.js";
-import { decodeEntryArguments, encodeEntryArguments, mainParams } from "../src/routes/entry.js";
+import {
+  decodeEntryArguments,
+  encodeEntryArguments,
+  type EntryValue,
+} from "../src/routes/entry.js";
 import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import * as routes from "../src/routes/index.js";
@@ -167,13 +171,23 @@ describe("main's signature", () => {
     ]);
   });
 
-  it("reads main's parameters, an unannotated one a Uint256", () => {
-    expect(mainParams("function main(a, b: bool, c: Uint256[]) {}")).toEqual([
-      { name: "a", type: "Uint256" },
-      { name: "b", type: "bool" },
-      { name: "c", type: "Uint256[]" },
-    ]);
-    expect(mainParams("USDC.transfer(x, 1n);")).toEqual([]);
+  it("reports main's signature, an unannotated parameter a Uint256, compiled for its arguments too", () => {
+    const signature = (source: string, args?: readonly EntryValue[]) =>
+      compileSauceProgram("ethereum", source, args === undefined ? {} : { args }).entrySignature;
+    const params = [
+      { name: "a", type: "Uint256", abi: { name: "a", type: "uint256" } },
+      { name: "b", type: "bool", abi: { name: "b", type: "bool" } },
+    ];
+    expect(signature("function main(a, b: bool): Uint256 { return b ? a : 0; }")).toEqual({
+      params,
+      returns: "Uint256",
+    });
+    // The compiler's `entryParams` is empty for a program compiled for its arguments; its
+    // signature is not.
+    expect(
+      signature("function main(a, b: bool): Uint256 { return b ? a : 0; }", [5n, true]),
+    ).toEqual({ params, returns: "Uint256" });
+    expect(signature("USDC.transfer(0x1, 1);")).toEqual({ params: [], returns: "void" });
   });
 
   it("spells out a record an interface names, so a value for it can be encoded", () => {
