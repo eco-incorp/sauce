@@ -10,7 +10,16 @@
  *
  * `routes-intent-hooks.e2e.test.ts` runs the routes against eco-routes' own Portal and Executor.
  */
-import { bytesToHex, decodeFunctionData, erc20Abi, type Hex } from "viem";
+import {
+  bytesToHex,
+  decodeFunctionData,
+  encodeFunctionData,
+  erc20Abi,
+  getAddress,
+  parseAbi,
+  zeroAddress,
+  type Hex,
+} from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
@@ -42,11 +51,14 @@ const address = (value: bigint): string => `0x${value.toString(16).padStart(40, 
 const usdc = address(registryTokenAddress(requireChain("arbitrum"), "USDC")!);
 const pot = destinationPot(requireChain("arbitrum")).toLowerCase();
 
-/** Each route call as `[target, what it does]`: an ERC-20 write with its arguments, or `cook`. */
+/** Each route call as `[target, what it does]`: an ERC-20 write with its arguments, `cook`, or
+ *  any other call's data. */
 function callsOf(program: CompiledSauceProgram, index = 0): [string, string][] {
   return program.intents[index]!.intent.route.calls.map((call) => {
     const target = denormalizeToEvm(call.target).toLowerCase();
     if (target === pot) return [target, `cook ${call.value}`];
+    const selector = call.data.slice(0, 10);
+    if (selector !== "0xa9059cbb" && selector !== "0x095ea7b3") return [target, call.data];
     const { functionName, args } = decodeFunctionData({ abi: erc20Abi, data: call.data });
     const [to, amount] = args as readonly [string, bigint];
     return [target, `${functionName}(${to.toLowerCase()}, ${amount})`];
@@ -267,6 +279,138 @@ describe("the route a hook adds to", () => {
   });
 });
 
+describe("the calls a hook makes", () => {
+  /** Canonical Permit2, the registry's on every chain. */
+  const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3";
+  const POOL_MANAGER = "0x360e68faccca8ca495c1b759fd9eee466db9fb32";
+  const permit2 = parseAbi([
+    "function approve(address token, address spender, uint160 amount, uint48 expiration)",
+  ]);
+  const vault = parseAbi(["function deposit(uint256 assets, address receiver) returns (uint256)"]);
+  const erc20 = parseAbi(["function transfer(address to, uint256 value) returns (bool)"]);
+  const poolManager = parseAbi([
+    "struct PoolKey { address currency0; address currency1; uint24 fee; int24 tickSpacing; address hooks; }",
+    "struct SwapParams { bool zeroForOne; int256 amountSpecified; uint160 sqrtPriceLimitX96; }",
+    "function swap(PoolKey key, SwapParams params, bytes hookData) returns (int256)",
+  ]);
+  /** Each route call as `[target, data, value]`. */
+  const raw = (program: CompiledSauceProgram) =>
+    program.intents[0]!.intent.route.calls.map((call) => [
+      denormalizeToEvm(call.target).toLowerCase(),
+      call.data,
+      call.value,
+    ]);
+
+  it("each kind of call, in the order written, beside token writes", () => {
+    const program = compile(`import IERC20 from "./artifacts/IERC20.json";
+function main() {
+  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
+    .receive({ token: USDC, amount: 1000000 })
+    .before(() => {
+      USDC.approve(SPENDER, 3);
+      Permit2.approve(USDC, SPENDER, 5, 0);
+      Permit2.at(HOOK).approve(USDC, SPENDER, 6, 0);
+      Erc4626.Vault(HOOK).deposit(7, SPENDER);
+      IERC20.at(HOOK).transfer(SPENDER, 8);
+      evm.call(HOOK, 9, hex\`abcd\`);
+    })
+    .then(() => { ${PROGRAM} });
+}`);
+    const approve = (amount: bigint) =>
+      encodeFunctionData({
+        abi: permit2,
+        functionName: "approve",
+        args: [getAddress(usdc), getAddress(address(SPENDER)), amount, 0],
+      });
+    const hook = address(HOOK);
+    expect(raw(program).slice(0, -2)).toEqual([
+      [
+        usdc,
+        encodeFunctionData({
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [getAddress(address(SPENDER)), 0n],
+        }),
+        0n,
+      ],
+      [
+        usdc,
+        encodeFunctionData({
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [getAddress(address(SPENDER)), 3n],
+        }),
+        0n,
+      ],
+      [PERMIT2, approve(5n), 0n],
+      [hook, approve(6n), 0n],
+      [
+        hook,
+        encodeFunctionData({
+          abi: vault,
+          functionName: "deposit",
+          args: [7n, getAddress(address(SPENDER))],
+        }),
+        0n,
+      ],
+      [
+        hook,
+        encodeFunctionData({
+          abi: erc20,
+          functionName: "transfer",
+          args: [getAddress(address(SPENDER)), 8n],
+        }),
+        0n,
+      ],
+      [hook, "0xabcd", 9n],
+    ]);
+    expect(callsOf(program).slice(-2)).toEqual([delivered(1_000_000n), cook]);
+    // The native `evm.call` sends is the solver's to bring, beside the cook's fee. A contract call
+    // moves no token, so it asks for no delivery.
+    const [intent] = program.intents;
+    expect(intent!.intent.route.nativeAmount).toBe(9n + INTENTS.executionFee);
+    expect(intent!.intent.route.tokens.map((t) => t.amount)).toEqual([1_000_000n]);
+  });
+
+  it("a struct, a negative int24 and int256, a bool and bytes, as viem encodes them", () => {
+    const program = compile(
+      opened(`.after(() => {
+      UniswapV4.PoolManager.swap(
+        { currency0: USDC, currency1: HOOK, fee: 500, tickSpacing: -10, hooks: 0 },
+        { zeroForOne: true, amountSpecified: -1000, sqrtPriceLimitX96: 4295128740 },
+        hex\`beef\`,
+      );
+    })`),
+    );
+    expect(raw(program).at(-1)).toEqual([
+      POOL_MANAGER,
+      encodeFunctionData({
+        abi: poolManager,
+        functionName: "swap",
+        args: [
+          {
+            currency0: getAddress(usdc),
+            currency1: getAddress(address(HOOK)),
+            fee: 500,
+            tickSpacing: -10,
+            hooks: zeroAddress,
+          },
+          { zeroForOne: true, amountSpecified: -1000n, sqrtPriceLimitX96: 4295128740n },
+          "0xbeef",
+        ],
+      }),
+      0n,
+    ]);
+  });
+
+  it("an empty hook adds nothing", () => {
+    expect(callsOf(compile(opened(".before(() => {}).after(() => {})")))).toEqual([
+      delivered(1_000_000n),
+      cook,
+    ]);
+  });
+});
+
 describe("a hook's arguments", () => {
   const program = `function main(spender: Address, amount: Uint256) {
   Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
@@ -282,6 +426,20 @@ describe("a hook's arguments", () => {
     const approve = intent!.intent.route.calls[1]!.data;
     for (const { sentinel } of intent!.sentinels) {
       expect(approve.toLowerCase()).toContain(sentinel.toString(16));
+    }
+  });
+
+  it("in a contract's method too, where the type holds a whole word", () => {
+    const [intent] = compile(`function main(spender: Address, amount: Uint256) {
+  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
+    .receive({ token: USDC, amount: 1000000 })
+    .after(() => { Permit2.approve(USDC, spender, amount, 0); })
+    .then(() => { ${PROGRAM} });
+}`).intents;
+    expect(intent!.captures).toEqual(["spender", "amount"]);
+    const approve = intent!.intent.route.calls.at(-1)!.data.toLowerCase();
+    for (const { sentinel } of intent!.sentinels) {
+      expect(approve).toContain(sentinel.toString(16).padStart(64, "0"));
     }
   });
 
@@ -316,25 +474,73 @@ describe("`await` of an intent with hooks", () => {
 });
 
 describe("what a hook refuses", () => {
-  const RECORDS =
-    /`\.before\(\.\.\.\)` records calls for the Portal's Executor to make, and is never compiled/;
+  /** The error compiling `steps` throws: the compiler's, located at the statement. */
+  const refusal = (steps: string) => {
+    try {
+      compile(opened(steps));
+    } catch (error) {
+      return error as Error & {
+        diagnostics?: readonly { code?: string; start: { line: number } }[];
+      };
+    }
+    throw new Error("it compiled");
+  };
 
   it.each([
-    ["a local declared in it", ".before(() => { const n = 5; USDC.approve(SPENDER, n); })"],
-    ["an argument it computes", ".before(() => { USDC.approve(SPENDER, 2 * 3); })"],
-    ["a read", ".before(() => { USDC.transfer(SPENDER, USDC.balanceOf(HOOK)); })"],
-    ["a branch", ".before(() => { if (SPENDER != 0) { USDC.approve(SPENDER, 1); } })"],
-    ["a contract's function", ".before(() => { Permit2.approve(USDC, SPENDER, 5, 0); })"],
-    ["a raw call", ".before(() => { evm.call(HOOK, 0, hex`01`); })"],
-    ["an empty closure", ".before(() => {})"],
-  ])("%s: the compiler could not record it", (_, steps) => {
-    expect(() => compile(opened(steps))).toThrow(RECORDS);
+    ["a local declared in it", "const n = 5; USDC.approve(SPENDER, n);", "RecordedCallsStatement"],
+    ["a branch", "if (SPENDER != 0) { USDC.approve(SPENDER, 1); }", "RecordedCallsStatement"],
+    ["a read whose result is dropped", "USDC.balanceOf(HOOK);", "RecordedCallsStatement"],
+    [
+      "a value computed as it runs",
+      "USDC.approve(SPENDER, ctx.timestamp());",
+      "RecordedCallsValue",
+    ],
+    [
+      "a call in an argument",
+      "USDC.transfer(SPENDER, USDC.balanceOf(HOOK));",
+      "RecordedCallsValue",
+    ],
+  ])("%s: the compiler's error, at the statement", (_, statements, code) => {
+    const error = refusal(`.before(() => { ${statements} })`);
+    expect(error.message).toMatch(/`Received\.before` records/);
+    expect(error.diagnostics?.[0]?.code).toBe(code);
+    // The hook is on the intent's third line.
+    expect(error.diagnostics?.[0]?.start.line).toBe(3);
   });
 
   it("names the hook it is", () => {
+    expect(refusal(".after(() => { const n = 5; USDC.approve(SPENDER, n); })").message).toMatch(
+      /`Received\.after` records each statement of its program as a call/,
+    );
+  });
+
+  it.each([
+    [
+      "native an `evm.call` sends, computed as it runs",
+      "function main(n: Uint256)",
+      "evm.call(HOOK, n, hex`01`);",
+      /the value `evm\.call\(\.\.\.\)` sends in `\.before\(\.\.\.\)` is native the solver brings/,
+    ],
+    [
+      "calldata the program holds, which the compiler refuses to pass on",
+      "function main(d: bytes)",
+      "evm.call(HOOK, 0, d);",
+      /a program can only read a number, an address or a bool from the program passing it/,
+    ],
+    [
+      "a narrower integer computed as it runs",
+      "function main(n: Uint256)",
+      "Permit2.approve(USDC, SPENDER, 5, n);",
+      /argument 4 of `\.approve\(\.\.\.\)` is a `uint48` the program computes/,
+    ],
+  ])("%s: it is written into the intent when it is built", (_, signature, statement, message) => {
     expect(() =>
-      compile(opened(".after(() => { const n = 5; USDC.approve(SPENDER, n); })")),
-    ).toThrow(/`\.after\(\.\.\.\)` records calls for the Portal's Executor to make/);
+      compile(`${signature} {
+  Arbitrum.Portal.send({ token: USDC, amount: 1 }).receive()
+    .before(() => { ${statement} })
+    .then(() => { USDC.transfer(RECIPIENT, 1); });
+}`),
+    ).toThrow(message);
   });
 
   it("a token known only as the program runs", () => {
