@@ -38,8 +38,9 @@ import type { PrivateKeyAccount } from "viem/accounts";
 
 import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm, hashIntent } from "../routes/encode.js";
-import { isTypeDeclaration, type AstNode } from "../routes/ast-walk.js";
+import { isTypeDeclaration } from "../routes/ast-walk.js";
 import type { LoweredIntent } from "../routes/intent-host.js";
+import type { CompiledSauceProgram } from "../routes/sauce-route.js";
 import {
   approvalTxs,
   assertIntentVault,
@@ -69,7 +70,6 @@ import {
 } from "./commands.js";
 import { nativeSymbol, tokenInfo } from "./effects.js";
 import { baseUnits, type FundRequest } from "./funding.js";
-import { awaitedPortalRoot, portalMethod, portalRoot } from "./intent-calls.js";
 import { intentDestinations, requireSupported } from "./support.js";
 
 const ERC20 = parseAbi([
@@ -84,14 +84,6 @@ interface Node {
   readonly loc?: { readonly start: { readonly line: number } };
   readonly [key: string]: unknown;
 }
-
-const isIntentSite = (node: Node): boolean => {
-  const call = node.type === "ExpressionStatement" ? (node.expression as Node) : undefined;
-
-  const method = call?.type === "CallExpression" ? portalMethod(call as AstNode) : undefined;
-
-  return (method === "then" || method === "catch") && portalRoot(call as AstNode) !== undefined;
-};
 
 /** True when `node` holds no call: a value fixed at compile time, not something done at run time. */
 const callFree = (node: unknown): boolean => {
@@ -111,11 +103,26 @@ const isDeclaration = (node: Node): boolean =>
   isTypeDeclaration(node.type);
 
 /**
- * The first statement of `text`'s program that is neither one of its intents nor a declaration of
- * a fixed value, as `file:line`; `undefined` when the program only opens intents. The program's
- * statements are `main`'s body in a module, and the top-level statements of a script.
+ * The first statement of `text`'s program that the compile places in none of the intents it opens
+ * — not the intent's own chain (`LoweredIntent.span`), nor one of their bodies (`elsewhere`) — and
+ * that declares no fixed value, as `file:line`; `undefined` when the program only opens intents.
+ * The program's statements are `main`'s body in a module, and the top-level statements of a
+ * script.
  */
-function otherStatement(file: string, text: string): string | undefined {
+function otherStatement(
+  file: string,
+  text: string,
+  compiled: CompiledSauceProgram,
+): string | undefined {
+  const spans = [
+    ...compiled.intents.map((intent) => intent.span),
+    ...compiled.elsewhere.map((part) => part.span),
+  ];
+  const placed = (node: Node): boolean =>
+    spans.some(
+      ({ start, end }) =>
+        start.offset <= (node.start as number) && (node.start as number) < end.offset,
+    );
   const program = parseSauce(text) as unknown as { body: Node[] };
   const main = program.body.find(
     (node) => node.type === "FunctionDeclaration" && (node.id as Node).name === "main",
@@ -124,13 +131,9 @@ function otherStatement(file: string, text: string): string | undefined {
     main === undefined
       ? program.body.filter((node) => !isDeclaration(node))
       : (((main.body as Node | undefined)?.body as Node[] | undefined) ?? []);
-  // An awaited intent's body is every statement after it.
-  const awaited = statements.findIndex((node) => awaitedPortalRoot(node as AstNode) !== undefined);
-  const other = statements
-    .slice(0, awaited === -1 ? undefined : awaited)
-    .find(
-      (node) => !isIntentSite(node) && !(node.type === "VariableDeclaration" && callFree(node)),
-    );
+  const other = statements.find(
+    (node) => !placed(node) && !(node.type === "VariableDeclaration" && callFree(node)),
+  );
 
   return other === undefined ? undefined : `${file}:${other.loc!.start.line}`;
 }
@@ -172,7 +175,7 @@ function fixedIntents(input: PublishInput, files: CliFiles): readonly LoweredInt
         "with --args) or a top-level `const` of a literal",
     );
   }
-  const other = otherStatement(input.file, input.text);
+  const other = otherStatement(input.file, input.text, program);
   if (other !== undefined) {
     throw new CliError(
       `${other} does something besides open an intent, and publish sends only the intents: ` +
