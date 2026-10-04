@@ -20,6 +20,7 @@ import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-ty
 import type {
   AccountManifest,
   EntrySignature,
+  ProgramReport,
   ResolveModule,
   ResolvePackage,
   SourceSpan,
@@ -432,8 +433,8 @@ export interface CompiledSauceProgram {
    *  before any argument binds it, and the return type (`"void"`, or absent when `main` returns a
    *  value it does not annotate). */
   readonly entrySignature: EntrySignature;
-  /** Where the source runs on another chain, as the compiler places it: each intent's body and
-   *  delivery, at every depth, with the chain it runs on. */
+  /** Where the source runs on another chain, as the compiler places it: each intent's body,
+   *  delivery and handler, at every depth, with the chain it runs on. */
   readonly elsewhere: readonly DestinationPart[];
   /** The source the compiler was given: the program as written. */
   readonly source: string;
@@ -442,15 +443,52 @@ export interface CompiledSauceProgram {
 /**
  * A part of a program's source that runs on an intent's destination, as the compile reports it:
  * a `body`, what the compiler compiled or recorded for that chain (a closure, or what follows an
- * `await`), spanned as its program or its recorded view; or a `delivery`, whose names resolve
- * there, spanned as the call that takes it (`Base.Portal.send(…).receive(…)`).
+ * `await`), spanned as its program or its recorded view; a `delivery`, whose names resolve
+ * there, spanned as the call that takes it (`Base.Portal.send(…).receive(…)`); or a `handler`, what
+ * runs when a body fails, spanned as written (`(e) => { … }`, or a `try`'s `catch (e) { … }`),
+ * once for each chain it runs on, the program's own included where a `try` there handles it.
  */
 export interface DestinationPart {
-  readonly kind: "body" | "delivery";
+  readonly kind: "body" | "delivery" | "handler";
   /** The site's callee, `Type.method`: `Received.then`, `Sent.receive`. */
   readonly callee: string;
   readonly chain: CanonicalChain;
   readonly span: SourceSpan;
+}
+
+/**
+ * Each handler the compile reports (`ProgramReport.handler`), once per chain it runs on: an intent
+ * body's, on that body's chain, and a `try`'s, on the chain of the program the `try` is in — the
+ * innermost body containing it, or the program compiled, `root`.
+ */
+function handlerParts(
+  programs: readonly ProgramReport[],
+  sites: readonly IntentSite[],
+  bodies: readonly DestinationPart[],
+  root: CanonicalChain,
+): DestinationPart[] {
+  const width = (part: DestinationPart): number => part.span.end.offset - part.span.start.offset;
+  const handlers = new Map<string, DestinationPart>();
+  for (const { id, callee, span, handler } of programs) {
+    if (handler === undefined) continue;
+    const within = bodies
+      .filter(
+        (part) =>
+          part.kind === "body" &&
+          part.span.start.offset <= span.start.offset &&
+          span.end.offset <= part.span.end.offset,
+      )
+      .sort((a, b) => width(a) - width(b))[0];
+    const chain = sites.find((site) => site.id === id)?.destination ?? within?.chain ?? root;
+    handlers.set(`${handler.start.offset}:${handler.end.offset}:${chain.id}`, {
+      kind: "handler",
+      callee,
+      chain,
+      span: handler,
+    });
+  }
+
+  return [...handlers.values()];
 }
 
 /** {@link compileSauceProgram}'s options: a route's, and `main`'s arguments to bind. */
@@ -611,17 +649,18 @@ function compileForChain(
   }
   const intents = lowered;
   // Where the source runs on another chain, as the compile places it: each body by the span of its
-  // program, or of its view where the compile recorded it, and each delivery by its call's.
-  const elsewhere: DestinationPart[] = [
+  // program, or of its view where the compile recorded it, each other site by its call's, and each
+  // handler by where it is written, on every chain it runs.
+  const parts: DestinationPart[] = [
     ...sites.flatMap(({ id, callee, span, destination }): DestinationPart[] => {
       const program = programs.find((report) => report.id === id);
       if (program !== undefined) {
         return [{ kind: "body", callee, chain: destination, span: program.span }];
       }
+      // A body the compile recorded is placed by its view's span, below.
+      if (callee === "Received.then") return [];
 
-      return callee === "Sent.receive"
-        ? [{ kind: "delivery", callee, chain: destination, span }]
-        : [];
+      return [{ kind: "delivery", callee, chain: destination, span }];
     }),
     ...recordedBodies.map(({ span, destination }): DestinationPart => ({
       kind: "body",
@@ -630,6 +669,7 @@ function compileForChain(
       span,
     })),
   ];
+  const elsewhere = [...parts, ...handlerParts(programs, sites, parts, chain)];
   const reported = { entrySignature, elsewhere };
 
   return manifest === undefined
