@@ -49,7 +49,7 @@ npm dependency, already built; nothing in this repo builds it.
 ```sh
 pnpm install
 pnpm build          # sdk + actions + mcp
-pnpm typecheck      # all workspaces
+pnpm typecheck      # all workspaces, their tests included (jest and tsx check no types)
 pnpm test           # all workspaces
 pnpm lint           # eslint, whole repo
 pnpm lint:fix       # ...with --fix
