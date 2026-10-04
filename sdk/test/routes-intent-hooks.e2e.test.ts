@@ -7,7 +7,9 @@
  * What it shows, each through `Portal.fulfill` — whose `Inbox._fulfill` rehashes the route, so a
  * route built wrong cannot pass:
  *
- *  - who calls a hook: a contract that logs its caller with what it was sent sees the Executor;
+ *  - who calls a hook: a contract that logs its caller with what it was sent sees the Executor,
+ *    whether a token write reaches it, its namespace (`Permit2`, the recorder standing in at the
+ *    registry's address) or `evm.call`;
  *  - the order: the `before` hooks' calls, then the body (a cook, or its recorded writes), then the
  *    `after` hooks', read off the order of the logs in one fill;
  *  - what a hook's transfer spends is delivered on top of what `.receive(...)` names, which still
@@ -18,21 +20,28 @@
  *    allowance (USDT's shape) takes the second intent's approve through the reset, and refuses the
  *    same route without it.
  *
- * Every intent here is fixed when it is built: no value of the program reaches it at run time, so
- * the route the SDK encoded is the one fulfilled. Where a run-time value lands is
- * `routes-intent-hooks.test.ts`'s.
+ *  - a value the program measures as it runs reaches a contract call's argument: the program runs
+ *    on its owner's Pot and publishes the intent, and the route the Portal logged is fulfilled.
+ *
+ * Every other intent here is fixed when it is built, so the route the SDK encoded is the one
+ * fulfilled.
  *
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX, like every other executing EVM suite. The `.catch(...)`
  * case needs an engine that runs `try`.
  */
 import {
+  bytesToHex,
   decodeAbiParameters,
   decodeFunctionData,
   encodeAbiParameters,
   encodeFunctionData,
+  encodePacked,
   erc20Abi,
   getAddress,
+  keccak256,
   pad,
+  parseAbi,
+  parseEventLogs,
   type Address,
   type Hex,
   type Log,
@@ -40,14 +49,16 @@ import {
 
 import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { PortalABI } from "../src/protocols/eco-routes/abis.js";
+import { v12EngineAddress } from "../src/deployments/index.js";
 import {
+  EVM_REWARD_PARAM,
   EVM_ROUTE_PARAM,
   denormalizeToEvm,
   encodeRouteEvm,
   hashIntent,
 } from "../src/routes/encode.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
-import { sauceEvmDeployPotCall } from "../src/routes/sauce-calls.js";
+import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../src/routes/sauce-calls.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import type { Intent } from "../src/routes/types.js";
 import {
@@ -62,6 +73,20 @@ import {
 } from "./cli-anvil.js";
 import { gateAnchors } from "./evm/gated-engine.js";
 import { freePort } from "./pools-anvil.js";
+
+/** A route as `Portal.fulfill` takes it. */
+type EvmRoute = {
+  readonly salt: Hex;
+  readonly deadline: bigint;
+  readonly portal: Address;
+  readonly nativeAmount: bigint;
+  readonly tokens: readonly { readonly token: Address; readonly amount: bigint }[];
+  readonly calls: readonly {
+    readonly target: Address;
+    readonly data: Hex;
+    readonly value: bigint;
+  }[];
+};
 
 const GAS_LIMIT = 30_000_000n;
 const AMOUNT = 1_000_000n;
@@ -155,8 +180,13 @@ describeEvm("intent hooks, executed by the Portal's Executor", () => {
 
   /** What a solver does: hold the route's tokens, let the Portal pull them, and `fulfill`, paying
    *  the route's native. The receipt, whatever its status. */
-  const fulfil = async (intent: Intent) => {
+  const fulfil = (intent: Intent) => {
     const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], encodeRouteEvm(intent.route));
+    return fulfilRoute(route, hashIntent(intent).rewardHash);
+  };
+  /** `fulfil`, of a route as the Portal takes it and the hash of its reward: one a program
+   *  published, read back from the Portal's log. */
+  const fulfilRoute = async (route: EvmRoute, rewardHash: Hex) => {
     // A token the route names twice is pulled twice: approve the sum.
     const owed = new Map<Address, bigint>();
     for (const { token: address, amount } of route.tokens) {
@@ -170,7 +200,16 @@ describeEvm("intent hooks, executed by the Portal's Executor", () => {
         encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [portal, amount] }),
       );
     }
-    const { intentHash, rewardHash } = hashIntent(intent);
+    const intentHash = keccak256(
+      encodePacked(
+        ["uint64", "bytes32", "bytes32"],
+        [
+          BigInt(local.chain.id),
+          keccak256(encodeAbiParameters([EVM_ROUTE_PARAM], [route])),
+          rewardHash,
+        ],
+      ),
+    );
     const hash = await local.deployer.sendTransaction({
       account: DEPLOYER,
       chain: null,
@@ -292,6 +331,158 @@ describeEvm("intent hooks, executed by the Portal's Executor", () => {
     expect(await local.balanceOf(delivered, RECIPIENT)).toBe(AMOUNT);
     expect(await local.balanceOf(delivered, executor)).toBe(0n);
   }, 300_000);
+
+  describe("a contract a hook calls", () => {
+    /** Canonical Permit2, which the program names `Permit2`: the recorder stands in for it here. */
+    const PERMIT2 = getAddress("0x000000000022D473030F116dDEE9F6B43aC78BA3");
+    const permit2 = parseAbi([
+      "function approve(address token, address spender, uint160 amount, uint48 expiration)",
+    ]);
+    /** Every call a contract at `at` got in a fill: who made it, with what data. */
+    const calledAt = (logs: readonly Log[], at: Address) =>
+      logs
+        .filter((log) => getAddress(log.address) === at)
+        .map((log) => ({
+          index: log.logIndex!,
+          caller: getAddress(`0x${log.topics[0]!.slice(26)}`),
+          data: log.data,
+        }));
+    const approve = (token: Address, amount: bigint) =>
+      encodeFunctionData({
+        abi: permit2,
+        functionName: "approve",
+        args: [getAddress(token), getAddress(SPENDER), amount, 0],
+      });
+
+    beforeAll(async () => {
+      await local.testClient.setCode({ address: PERMIT2, bytecode: RECORDER_CODE });
+    });
+
+    it("by its namespace and by `evm.call`: the Executor calls each, around the cook", async () => {
+      const delivered = await token();
+      const intent = opened(
+        `function main() {
+  Base.Portal.send({ token: TOKEN, amount: 1 })
+    .receive({ token: TOKEN, amount: ${AMOUNT} })
+    .before(() => { Permit2.approve(TOKEN, SPENDER, 5, 0); })
+    .after(() => { evm.call(RECORDER, 0, hex\`abcd\`); })
+    .then(() => {
+      const held = Token(TOKEN).balanceOf(ctx.self());
+      Token(TOKEN).transfer(RECIPIENT, held);
+    });
+}`,
+        { TOKEN: delivered },
+      );
+      const receipt = await fulfil(intent);
+      expect(receipt.status).toBe("success");
+
+      const [byName] = calledAt(receipt.logs, PERMIT2);
+      const [raw] = calledAt(receipt.logs, getAddress(RECORDER));
+      expect(byName).toMatchObject({ caller: getAddress(executor), data: approve(delivered, 5n) });
+      expect(raw).toMatchObject({ caller: getAddress(executor), data: "0xabcd" });
+      const body = transferFrom(receipt.logs, delivered, pot);
+      expect(byName!.index).toBeLessThan(body);
+      expect(body).toBeLessThan(raw!.index);
+      expect(await local.balanceOf(delivered, RECIPIENT)).toBe(AMOUNT);
+    }, 300_000);
+
+    it("a value the program measured, written into a contract call's argument as it runs", async () => {
+      const delivered = await token();
+      const reward = await token();
+      // The program runs on its owner's Pot, measures what it holds, and opens the intent with it.
+      const deploy = sauceEvmDeployPotCall({
+        kitchen: gateAnchors().kitchen,
+        owner: DEPLOYER.address,
+        salt: SAUCE_INTENT_POT_SALT,
+      });
+      const owned = getAddress(v12PredictPot(DEPLOYER.address, SAUCE_INTENT_POT_SALT));
+      if ((await local.publicClient.getCode({ address: owned })) === undefined) {
+        await local.send(
+          local.deployer,
+          denormalizeToEvm(toUniversalAddress(deploy.target)) as Address,
+          deploy.data,
+        );
+      }
+      const MEASURED = 777_777n;
+      await local.mint(reward, owned, MEASURED);
+      const program = compileSauceProgram(
+        "base",
+        `function main() {
+  const amount = Token(REWARD).balanceOf(ctx.self());
+  Base.Portal.send({ token: REWARD, amount })
+    .refundee(${CREATOR})
+    .receive({ token: TOKEN, amount: ${AMOUNT} })
+    .before(() => { Permit2.approve(TOKEN, SPENDER, amount, 0); })
+    .then(() => {
+      const held = Token(TOKEN).balanceOf(ctx.self());
+      Token(TOKEN).transfer(RECIPIENT, held);
+    });
+}`,
+        {
+          defines: {
+            TOKEN: BigInt(delivered),
+            REWARD: BigInt(reward),
+            RECIPIENT: BigInt(RECIPIENT),
+            SPENDER: BigInt(SPENDER),
+          },
+          intents: {
+            deadline: 4_000_000_000n,
+            prover: PROVER,
+            executionFee: FEE,
+            salt: `0x${(saltByte++).toString(16).repeat(32)}` as Hex,
+          },
+        },
+      );
+      // Not known when the intent is built: a sentinel in the hook's call, written over as it runs.
+      expect(program.intents[0]!.captures).toContain("amount");
+      const cook = buildSauceEvmCall({
+        pot: owned,
+        engine: v12EngineAddress() as Hex,
+        program: bytesToHex(program.bytecode),
+        value: FEE,
+      });
+      const hash = await local.deployer.sendTransaction({
+        account: DEPLOYER,
+        chain: null,
+        to: owned,
+        data: cook.data,
+        value: FEE,
+        gas: GAS_LIMIT,
+      });
+      const published = await local.publicClient.waitForTransactionReceipt({ hash });
+      expect(published.status).toBe("success");
+      const [logged] = parseEventLogs({
+        abi: PortalABI,
+        eventName: "IntentPublished",
+        logs: published.logs,
+      });
+      const { args } = logged!;
+      const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], args.route);
+      const rewardHash = keccak256(
+        encodeAbiParameters(
+          [EVM_REWARD_PARAM],
+          [
+            {
+              deadline: args.rewardDeadline,
+              creator: args.creator,
+              prover: args.prover,
+              nativeAmount: args.rewardNativeAmount,
+              tokens: args.rewardTokens,
+            },
+          ],
+        ),
+      );
+
+      const receipt = await fulfilRoute(route, rewardHash);
+      expect(receipt.status).toBe("success");
+      const [byName] = calledAt(receipt.logs, PERMIT2);
+      expect(byName).toMatchObject({
+        caller: getAddress(executor),
+        data: approve(delivered, MEASURED),
+      });
+      expect(await local.balanceOf(delivered, RECIPIENT)).toBe(AMOUNT);
+    }, 300_000);
+  });
 
   describe("a hook that reverts reverts the fill", () => {
     /** A handled program body, `fails` deciding whether it reverts, with `hooks`. */
