@@ -382,6 +382,7 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
     input.chain,
     input.defines,
     new Set(input.addressDefines ?? []),
+    program.elsewhere,
   );
   // The payload is the program with its arguments appended: known once the arguments are.
   const payload =
