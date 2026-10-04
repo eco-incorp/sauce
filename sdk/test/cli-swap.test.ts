@@ -1,7 +1,7 @@
 /**
- * `kyberSwap` and `ecoSwap` through the `sauce` command, in-process (`runCli`): where each asks for
- * its route (`--swap-api`, the `--config` file's `swapApis`, the built-in public one), for which Pot
- * (`--owner`/`--pot`, the cook's), and what `--offline` and a missing service refuse. The services
+ * `kyberSwap`, `jupiterSwap` and `ecoSwap` through the `sauce` command, in-process (`runCli`): where
+ * each asks for its route (`--swap-api`, the `--config` file's `swapApis`, the built-in public one),
+ * for which Pot (`--owner`/`--pot`, the cook's), and what `--offline` and a missing service refuse. The services
  * are `swap-stub.ts`'s, as a `fetch`: nothing reaches a network.
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -162,6 +162,109 @@ describe("sauce compile with kyberSwap and ecoSwap", () => {
     ]);
     expect(run.code).toBe(0);
     expect(run.asked).toEqual([]);
+  });
+});
+
+describe("sauce compile on Solana with jupiterSwap and ecoSwap", () => {
+  /** An owner, and the Kitchen's Pot of it at salt zero, which the routes are built for. */
+  const SOLANA_OWNER = "4wBqpZM9xaSheZzJSMawUKKwhdpChKbZ5eu5ky4Vigw";
+  const SOLANA_POT = "B1NfwC9SGiyCTjTedWhHRgyJ4HAeDw1G1dbFBueHL8dZ";
+  const JUPITER = "https://jupiter.test";
+  const JUPITER_SWAP = `function main(minOut: Uint256): Uint256 {
+  return jupiterSwap(USDC, WSOL, 100000000, minOut);
+}`;
+
+  it("asks Jupiter's API for the instruction of the Pot --owner names", async () => {
+    const run = await sauce(
+      [
+        "compile",
+        file("jupiter.sauce.ts", JUPITER_SWAP),
+        "--chain",
+        "solana",
+        "--owner",
+        SOLANA_OWNER,
+        "--json",
+      ],
+      { jupiter: JUPITER },
+    );
+    expect(run.stderr).toBe("");
+    expect(run.code).toBe(0);
+    expect(JSON.parse(run.stdout).swaps).toEqual([
+      expect.objectContaining({
+        function: "jupiterSwap",
+        amountIn: "100000000",
+        minOut: null,
+        pot: SOLANA_POT,
+        programId: "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+        accounts: 13,
+        lookupTables: [],
+        quotedOut: "834568839",
+      }),
+    ]);
+    expect(run.asked.map((url) => url.pathname)).toEqual([
+      "/swap/v1/quote",
+      "/swap/v1/swap-instructions",
+    ]);
+  });
+
+  it("asks eco-swap for its instruction, with an amount the program computes", async () => {
+    const run = await sauce(
+      [
+        "compile",
+        file(
+          "eco-solana.sauce.ts",
+          "function main(amount: Uint256): Uint256 { return ecoSwap(USDC, WSOL, amount, 0); }",
+        ),
+        "--chain",
+        "solana",
+        "--owner",
+        SOLANA_OWNER,
+        "--swap-api",
+        `eco=${ECO}`,
+        "--json",
+      ],
+      {},
+    );
+    expect(run.stderr).toBe("");
+    expect(JSON.parse(run.stdout).swaps).toEqual([
+      expect.objectContaining({
+        function: "ecoSwap",
+        amountIn: null,
+        pot: SOLANA_POT,
+        accounts: 4,
+      }),
+    ]);
+  });
+
+  it("refuses a route with no Pot to build it for, and kyberSwap on Solana", async () => {
+    const potless = await sauce(
+      ["compile", file("jupiter.sauce.ts", JUPITER_SWAP), "--chain", "solana"],
+      { jupiter: JUPITER },
+    );
+    expect(potless.code).toBe(2);
+    expect(potless.stderr).toMatch(
+      /jupiterSwap's route is built for the Pot the program runs on.*--owner.*--via engine has no Pot/s,
+    );
+    expect(potless.asked).toEqual([]);
+
+    const kyber = await sauce(
+      [
+        "compile",
+        file(
+          "kyber-solana.sauce.ts",
+          "function main(): Uint256 { return kyberSwap(USDC, WSOL, 5, 0); }",
+        ),
+        "--chain",
+        "solana",
+        "--owner",
+        SOLANA_OWNER,
+      ],
+      { kyber: KYBER, jupiter: JUPITER },
+    );
+    expect(kyber.code).not.toBe(0);
+    expect(kyber.stderr).toMatch(
+      /kyberSwap swaps on EVM chains; on solana, jupiterSwap or ecoSwap/,
+    );
   });
 });
 
