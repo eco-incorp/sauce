@@ -18,10 +18,9 @@ import { chainDefines } from "../routes/ambient.js";
 import { walk, type AstNode } from "../routes/ast-walk.js";
 import { parseSauce } from "../routes/parse.js";
 import type { AccessorTarget } from "../routes/protocol-names.js";
-import { chainAccessorNames } from "../routes/sauce-route.js";
+import type { DestinationPart } from "../routes/sauce-route.js";
 import { resolveTokenMap } from "../routes/token-registry.js";
 import { pascalOfSlug } from "../routes/builder.js";
-import { awaitedPortalRoot, portalMethod, portalRoot } from "./intent-calls.js";
 import type { DefineValue } from "./args.js";
 
 /** One define the program reads, as the compile applied it. */
@@ -75,41 +74,34 @@ interface IntentPart {
   readonly chain: CanonicalChain;
   readonly start: number;
   readonly end: number;
+  /** A handler: it runs on `chain` in its program's place, beside wherever else it runs. */
+  readonly handler?: true;
 }
 
-/** The parts of `program` each intent it opens runs on its destination, as the intent lowering
- *  finds them: in `Chain.Portal.send(reward).receive(delivery).then(() => { body })`, the delivery,
- *  the body and a `.catch(...)` handler, the reward and the modifiers left out; and after
- *  `await Chain.Portal.send(reward).receive(delivery);`, every statement of its block. */
-function intentParts(program: AstNode): IntentPart[] {
-  const chains = chainAccessorNames();
-  const parts: IntentPart[] = [];
+/**
+ * The parts of `program` that run on an intent's destination, as the compile places them
+ * (`CompiledSauceProgram.elsewhere`): a body and a handler by their own spans, and a delivery by
+ * the arguments of the call it spans.
+ */
+function intentParts(program: AstNode, elsewhere: readonly DestinationPart[]): IntentPart[] {
+  const calls = new Map<string, AstNode>();
   walk(program, (node) => {
-    const statements =
-      node.type === "BlockStatement" || node.type === "Program" ? node.body : undefined;
-    if (Array.isArray(statements)) {
-      (statements as AstNode[]).forEach((statement, index) => {
-        const name = awaitedPortalRoot(statement);
-        const chain = name === undefined ? undefined : chains.get(name);
-        const rest = (statements as AstNode[]).slice(index + 1);
-        if (chain !== undefined && rest.length > 0) {
-          parts.push({ chain, start: rest[0]!.start, end: rest.at(-1)!.end });
-        }
-      });
-    }
-    if (node.type !== "CallExpression") return;
-    const method = portalMethod(node);
-    if (method !== "receive" && method !== "then" && method !== "catch") return;
-    const name = portalRoot(node);
-    const chain = name === undefined ? undefined : chains.get(name);
-    // `receive` takes any number of items, `then` its body, `catch` the body's handler.
-    if (chain === undefined) return;
-    for (const part of (node.arguments as AstNode[] | undefined) ?? []) {
-      parts.push({ chain, start: part.start, end: part.end });
-    }
+    if (node.type === "CallExpression") calls.set(`${node.start}:${node.end}`, node);
   });
 
-  return parts;
+  return elsewhere.flatMap(({ kind, chain, span }): IntentPart[] => {
+    if (kind === "body") return [{ chain, start: span.start.offset, end: span.end.offset }];
+    if (kind === "handler") {
+      return [{ chain, start: span.start.offset, end: span.end.offset, handler: true }];
+    }
+    const call = calls.get(`${span.start.offset}:${span.end.offset}`);
+
+    return ((call?.arguments as AstNode[] | undefined) ?? []).map((part) => ({
+      chain,
+      start: part.start,
+      end: part.end,
+    }));
+  });
 }
 
 /** A name the file reads, and the chains of the intents it is read inside, outermost first. */
@@ -124,7 +116,11 @@ interface ReadName {
  * compile's rewrites parse it, as written). Each comes with the chains of the intent bodies it is
  * read inside, which decide what it resolves to.
  */
-export function namesRead(text: string): readonly ReadName[] {
+export function namesRead(
+  text: string,
+  chain: CanonicalChain,
+  elsewhere: readonly DestinationPart[],
+): readonly ReadName[] {
   let program: AstNode;
   try {
     program = parseSauce(text);
@@ -132,7 +128,7 @@ export function namesRead(text: string): readonly ReadName[] {
     // The compile reports a file it cannot parse; a report of it has nothing to add.
     return [];
   }
-  const parts = intentParts(program);
+  const parts = intentParts(program, elsewhere);
   const skipped = new Set<AstNode>();
   walk(program, (node) => {
     const at = node as AstNode & Record<string, AstNode | undefined>;
@@ -150,11 +146,24 @@ export function namesRead(text: string): readonly ReadName[] {
   const names: ReadName[] = [];
   walk(program, (node) => {
     if (node.type !== "Identifier" || skipped.has(node)) return;
-    const path = parts
-      .filter((part) => part.start <= node.start && node.end <= part.end)
+    const around = parts.filter((part) => part.start <= node.start && node.end <= part.end);
+    const path = around
+      .filter((part) => part.handler !== true)
       .sort((a, b) => b.end - b.start - (a.end - a.start))
       .map((part) => part.chain);
-    names.push({ name: node.name as string, path });
+    // A handler is read on each chain it runs on, the one the code around it runs on included only
+    // where the compile reports it handling a program there.
+    const handled = new Map(
+      around.filter((part) => part.handler === true).map((part) => [part.chain.id, part.chain]),
+    );
+    if (handled.size === 0) {
+      names.push({ name: node.name as string, path });
+      return;
+    }
+    const enclosing = (path.at(-1) ?? chain).id;
+    for (const on of handled.values()) {
+      names.push({ name: node.name as string, path: on.id === enclosing ? path : [...path, on] });
+    }
   });
 
   return names;
@@ -215,11 +224,12 @@ export function appliedDefines(
   chain: CanonicalChain,
   user: Readonly<Record<string, DefineValue>>,
   addresses: ReadonlySet<string> = new Set(),
+  elsewhere: readonly DestinationPart[] = [],
 ): { readonly defines: readonly AppliedDefine[]; readonly unread: readonly UnreadDefine[] } {
   const applied = new Map<string, AppliedDefine>();
   const used = new Set<string>();
   const readOn = new Map<string, Set<string>>();
-  for (const { name, path } of namesRead(text)) {
+  for (const { name, path } of namesRead(text, chain, elsewhere)) {
     const on = path.at(-1) ?? chain;
     const key = `${on.slug} ${name}`;
     readOn.set(name, (readOn.get(name) ?? new Set()).add(on.slug));

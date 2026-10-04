@@ -511,8 +511,18 @@ describe("sauce compile", () => {
       "Arbitrum.Portal.send([{ token: USDC, amount: 1 }]).refundee(0x3333333333333333333333333333333333333333).receive()";
     const body = ["USDC.transfer(RECIPIENT, 1);", "require(chainId == 42161 && WETH != 0);"];
     const user = { RECIPIENT: 0x6666666666666666666666666666666666666666n };
+    // Where each part runs is the compile's to say.
     const report = (text: string) =>
-      appliedDefines(text, requireChain("base"), user, new Set(["RECIPIENT"]));
+      appliedDefines(
+        text,
+        requireChain("base"),
+        user,
+        new Set(["RECIPIENT"]),
+        compileSauceProgram("base", text, {
+          defines: user,
+          intents: { deadline: 2_000_000_000n, executionFee: 0n },
+        }).elsewhere,
+      );
     const awaited = report([`await ${opened};`, ...body, ""].join("\n"));
     expect(awaited.defines.map((d) => `${d.name}@${d.chain}`)).toEqual([
       "RECIPIENT@arbitrum",
@@ -522,6 +532,50 @@ describe("sauce compile", () => {
       "chainId@arbitrum",
     ]);
     expect(awaited).toEqual(report([`${opened}.then(() => {`, ...body, "});", ""].join("\n")));
+  });
+
+  it("reads a handler on every chain it runs on, as the compile reports it", async () => {
+    const { appliedDefines } = await import("../src/cli/report.js");
+    const opened =
+      "Arbitrum.Portal.send([{ token: USDC, amount: 1 }]).refundee(0x3333333333333333333333333333333333333333).receive()";
+    const user = { RECIPIENT: 0x6666666666666666666666666666666666666666n };
+    const read = (text: string) =>
+      appliedDefines(
+        text,
+        requireChain("base"),
+        user,
+        new Set(["RECIPIENT"]),
+        compileSauceProgram("base", text, {
+          defines: user,
+          intents: { deadline: 2_000_000_000n, executionFee: 0n },
+        }).elsewhere,
+      ).defines.map((d) => `${d.name}@${d.chain}`);
+    // A body's own handler runs on its destination alone.
+    expect(
+      read(
+        `${opened}.then(() => { require(WETH != 0); }).catch((e) => { USDC.transfer(RECIPIENT, 1); });\n`,
+      ),
+    ).toEqual(["RECIPIENT@arbitrum", "USDC@arbitrum", "USDC@base", "WETH@arbitrum"]);
+    // A `try`'s handles the hop it awaits, on its destination, and the program it is written in.
+    expect(
+      read(
+        [
+          "try {",
+          `  await ${opened};`,
+          "  require(WETH != 0);",
+          "} catch (e) {",
+          "  USDC.transfer(RECIPIENT, 1);",
+          "}",
+          "",
+        ].join("\n"),
+      ),
+    ).toEqual([
+      "RECIPIENT@arbitrum",
+      "RECIPIENT@base",
+      "USDC@arbitrum",
+      "USDC@base",
+      "WETH@arbitrum",
+    ]);
   });
 
   it("holds a define of a chain-scoped name on its own chain, and any other at every depth", async () => {
@@ -542,11 +596,16 @@ describe("sauce compile", () => {
     const arbitrum = routes.chainDefines(requireChain("arbitrum"));
     const address = (value: unknown) =>
       getAddress(`0x${(value as bigint).toString(16).padStart(40, "0")}`);
+    const user = { RECIPIENT: BigInt(recipient), USDC: BigInt(mine), WETH: BigInt(mine) };
     const report = appliedDefines(
       text,
       requireChain("base"),
-      { RECIPIENT: BigInt(recipient), USDC: BigInt(mine), WETH: BigInt(mine) },
+      user,
       new Set(["RECIPIENT", "USDC", "WETH"]),
+      compileSauceProgram("base", text, {
+        defines: user,
+        intents: { deadline: 2_000_000_000n, executionFee: 0n },
+      }).elsewhere,
     );
     expect(report.defines).toEqual([
       { name: "RECIPIENT", value: getAddress(recipient), source: "user", chain: "arbitrum" },
