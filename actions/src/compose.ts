@@ -214,7 +214,7 @@ export function compiled(
     chain === undefined
       ? compileEvm(source, contracts, { compactArgs: options.compactArgs })
       : compileSauceProgram(chain, source, {
-          contracts: contracts as unknown as NonNullable<SauceCompileOptions["contracts"]>,
+          contracts,
           ...(options.compactArgs === true ? { compactArgs: true } : {}),
         });
   const { bytecode } = result;
@@ -306,10 +306,7 @@ function withContracts(
 
   return {
     ...compile,
-    contracts: {
-      ...existing,
-      ...(contracts as unknown as NonNullable<SauceCompileOptions["contracts"]>),
-    },
+    contracts: { ...existing, ...contracts },
   };
 }
 
