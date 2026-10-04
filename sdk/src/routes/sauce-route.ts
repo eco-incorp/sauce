@@ -277,9 +277,16 @@ function routeHost(
         sites,
         recordedBodies,
       );
+      // A program argument takes no `inlineContracts` of its own (`ProgramOptions`), so the
+      // caller's ABI bindings reach it as declarations: each a contract with no address, which
+      // the body calls at one (`Grid.at(pool).poke()`), byte for byte as the entry's binding.
+      const contracts = next.options.contracts ?? {};
       return {
         target: destination.kind === "svm" ? "svm" : "evm",
-        declare: child.host.declare,
+        declare: (name) =>
+          Object.hasOwn(contracts, name)
+            ? { kind: "contract", abi: JSON.stringify(contracts[name]!.abi) }
+            : child.host.declare(name),
         types: child.host.types,
         hostModules: child.host.hostModules,
         ...(child.host.nested === undefined ? {} : { nested: child.host.nested }),
