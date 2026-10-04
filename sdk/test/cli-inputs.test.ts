@@ -186,10 +186,12 @@ describe("bindMainArguments: main's arguments, bound into the intents a wallet p
     intents: {},
   });
   const args = (...values: string[]) => ({ from: "--args" as const, values });
+  /** The files a program here reads: none beyond itself. */
+  const FILES = { readText: () => "", readModule: () => undefined };
 
   it("compiles the program, as written, for the arguments given", () => {
     const values = ["1000000", "1010000", RECIPIENT, "true"];
-    const bound = bindMainArguments(input(BRIDGE), args(...values));
+    const bound = bindMainArguments(input(BRIDGE), args(...values), FILES);
     // Nothing in the source changes, and nothing becomes a define: the compiler takes them.
     expect(bound.text).toBe(BRIDGE);
     expect(bound.defines).toEqual({});
@@ -198,7 +200,7 @@ describe("bindMainArguments: main's arguments, bound into the intents a wallet p
 
   it("takes --args-json values as they are", () => {
     const values = [1_000_000, "1010000", RECIPIENT, false];
-    const bound = bindMainArguments(input(BRIDGE), { from: "--args-json", values });
+    const bound = bindMainArguments(input(BRIDGE), { from: "--args-json", values }, FILES);
     expect(bound.bound).toEqual(values);
   });
 
@@ -206,35 +208,36 @@ describe("bindMainArguments: main's arguments, bound into the intents a wallet p
     const fixed = input(
       "Base.Portal.send({ native: 1 }).receive().then(() => { USDC.transfer(0x1, 1); });",
     );
-    expect(bindMainArguments(fixed, undefined)).toBe(fixed);
-    expect(() => bindMainArguments(input(BRIDGE), undefined)).toThrow(
+    expect(bindMainArguments(fixed, undefined, FILES)).toBe(fixed);
+    expect(() => bindMainArguments(input(BRIDGE), undefined, FILES)).toThrow(
       /main\(amount: Uint256, reward: Uint256, recipient: Address, sweep: bool\) takes 4 arguments: pass them after --args/,
     );
   });
 
   it("refuses arguments for a file with no parameters, a wrong count, and a wrong value", () => {
-    expect(() => bindMainArguments(input("function main() {}"), args("1"))).toThrow(
-      /declares no `main` with parameters/,
+    expect(() => bindMainArguments(input("function main() {}"), args("1"), FILES)).toThrow(
+      "--args: the program is compiled for 1 argument(s), and `main` takes 0",
     );
-    expect(() => bindMainArguments(input(BRIDGE), args("1", "2"))).toThrow(
-      /takes 4 arguments, got 2/,
+    expect(() => bindMainArguments(input(BRIDGE), args("1", "2"), FILES)).toThrow(
+      "--args: the program is compiled for 2 argument(s), and `main` takes 4",
     );
     expect(() =>
-      bindMainArguments(input(BRIDGE), args("1", "2", "not an address", "true")),
-    ).toThrow(/argument 3 \(recipient: Address\).*is not an address/);
+      bindMainArguments(input(BRIDGE), args("1", "2", "not an address", "true"), FILES),
+    ).toThrow(/--args: argument 3 \(recipient: Address\).*is not an address/);
   });
 
   it("refuses a parameter no one word holds, and a --define of a parameter's name", () => {
     const list = input("function main(path: Address[]) { }");
-    expect(() => bindMainArguments(list, args('["0x1"]'))).toThrow(
-      /argument 1 \(path: Address\[\]\): a wallet publishes .*\(sauce run\)/,
+    expect(() => bindMainArguments(list, args('["0x1"]'), FILES)).toThrow(
+      /--args: `path` is an array of number: a wallet publishes .*\(sauce run\)/,
     );
     expect(() =>
       bindMainArguments(
         input(BRIDGE, { amount: 5n }),
         args("1000000", "1010000", RECIPIENT, "true"),
+        FILES,
       ),
-    ).toThrow(/amount is main's parameter, given by --args; it cannot also be a --define/);
+    ).toThrow("--args: amount is main's parameter, given in args; it is not also a define");
   });
 
   it("publishes the intent the same program would with each value written in", async () => {

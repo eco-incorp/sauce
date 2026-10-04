@@ -17,7 +17,13 @@
  * by the released engine. See `docs/guides/solana.md` for the execution boundary.
  */
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
-import type { AccountManifest, ResolveModule, ResolvePackage } from "sauce-compiler";
+import type {
+  AccountManifest,
+  EntrySignature,
+  ResolveModule,
+  ResolvePackage,
+  SourceSpan,
+} from "sauce-compiler";
 import { bytesToHex } from "viem";
 
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
@@ -34,10 +40,17 @@ import { ecoRoutesPortal, type EcoRoutesSelector } from "../protocols/eco-routes
 import {
   intentHost,
   intentStepError,
+  type IntentSite,
   type IntentSugarDefaults,
   type LoweredIntent,
 } from "./intent-host.js";
-import { entryArguments, entryParamsOf, type EntryParam, type EntryValue } from "./entry.js";
+import {
+  checkEntryArguments,
+  entryArguments,
+  entryParamsOf,
+  type EntryParam,
+  type EntryValue,
+} from "./entry.js";
 import { resolveIntentPot } from "./intent-pot.js";
 import { fetchSwapRoutes, type SwapApis } from "./swap-apis.js";
 import { swapHost, type SwapBindOptions, type SwapSite } from "./swap-host.js";
@@ -228,6 +241,7 @@ function routeHost(
   options: SauceCompileOptions,
   scope: RouteScope,
   lowered: LoweredIntent[],
+  sites: IntentSite[],
   swaps: { readonly sites: SwapSite[]; readonly pot: () => AddressInput | string | undefined },
 ): {
   readonly host: ChainHost;
@@ -260,6 +274,7 @@ function routeHost(
     chains: chainAccessorNames(),
     defaults: options.intents ?? {},
     lowered,
+    sites,
     // A body on another chain names that chain's values, and nothing the caller supplied for this
     // one (`levelOn`); its own intents are funded on its chain and lowered by its own host.
     programOn: (destination) => {
@@ -284,6 +299,7 @@ function routeHost(
         { ...next.options, intents: inherited },
         next.scope,
         [],
+        sites,
         { sites: swaps.sites, pot: intentPot },
       );
       return {
@@ -441,11 +457,32 @@ export interface CompiledSauceProgram {
    * program holds a sentinel where the value will be, which only exists once the program runs.
    */
   readonly intents: readonly LoweredIntent[];
-  /** Each `kyberSwap(...)`/`jupiterSwap(...)`/`ecoSwap(...)` the program calls, at any depth, with the route bound
-   *  there — none where a placeholder was (`swap.placeholders`). */
+  /** Each `kyberSwap(...)`/`jupiterSwap(...)`/`ecoSwap(...)` the program calls, at any depth,
+   *  with the route bound there — none where a placeholder was (`swap.placeholders`). */
   readonly swaps: readonly SwapSite[];
+  /** `main`'s signature as the program declares it, as the compiler reports it: every parameter,
+   *  before any argument binds it, and the return type (`"void"`, or absent when `main` returns a
+   *  value it does not annotate). */
+  readonly entrySignature: EntrySignature;
+  /** Where the source runs on another chain, as the compiler places it: each intent's body and
+   *  delivery, at every depth, with the chain it runs on. */
+  readonly elsewhere: readonly DestinationPart[];
   /** The source the compiler was given: the program as written. */
   readonly source: string;
+}
+
+/**
+ * A part of a program's source that runs on an intent's destination, as the compile reports it:
+ * a `body`, the program the compiler compiled for that chain (a closure, or what follows an
+ * `await`), spanned as its program; or a `delivery`, whose names resolve there, spanned as the
+ * call that takes it (`Base.Portal.send(…).receive(…)`).
+ */
+export interface DestinationPart {
+  readonly kind: "body" | "delivery";
+  /** The site's callee, `Type.method`: `Received.then`, `Sent.receive`. */
+  readonly callee: string;
+  readonly chain: CanonicalChain;
+  readonly span: SourceSpan;
 }
 
 /** {@link compileSauceProgram}'s options: a route's, and `main`'s arguments to bind. */
@@ -485,11 +522,7 @@ export function compileSauceProgram(
   if (args !== undefined && isSauceClosure(body)) {
     throw new RangeError("args binds a module's `main` parameters; a closure takes none");
   }
-  const bound = args === undefined ? undefined : entryArguments(source, args);
-  const taken = (bound?.names ?? []).find((name) => Object.hasOwn(given.defines ?? {}, name));
-  if (taken !== undefined) {
-    throw new RangeError(`${taken} is main's parameter, given in args; it is not also a define`);
-  }
+  const words = args === undefined ? undefined : entryArguments(args);
   const compile: SauceCompileOptions = given;
   // The bundle `openRoute` compiles a route body with, in the same two halves. The ambient MODULES
   // join the caller's. The chain-scoped NAMES travel as a scope for this program's chain, never in
@@ -505,8 +538,12 @@ export function compileSauceProgram(
     { ...compile, ambient: ambient.length > 0 ? ambient : compile.ambient },
     scope,
     isSauceClosure(body) ? "closure" : "module",
-    bound?.words,
+    words,
   );
+  if (args !== undefined) {
+    // Held to `main` as the compile reports it, which a compile for its arguments still does.
+    checkEntryArguments(program.entrySignature, args, given.defines);
+  }
   // As the compiler reports them: an ABI signature, with no `Account` slot, which the manifest
   // carries. Nothing is read from the source.
   const entryParams = entryParamsOf(program.entryParams);
@@ -522,6 +559,8 @@ export function compileSauceProgram(
     ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
     intents: program.intents,
     swaps: program.swaps,
+    entrySignature: program.entrySignature,
+    elsewhere: program.elsewhere,
     source: program.source,
   };
 }
@@ -579,6 +618,8 @@ function compileForChain(
   readonly manifest?: AccountManifest;
   readonly intents: readonly LoweredIntent[];
   readonly swaps: readonly SwapSite[];
+  readonly entrySignature: EntrySignature;
+  readonly elsewhere: readonly DestinationPart[];
 } {
   const chain = requireChain(destination);
   const target = options.target ?? defaultTargetFor(chain.kind);
@@ -599,8 +640,9 @@ function compileForChain(
   const source = sauce;
   const tokens = resolveTokenMap(chain, options.tokens);
   const lowered: LoweredIntent[] = [];
+  const sites: IntentSite[] = [];
   const swaps: SwapSite[] = [];
-  const level = routeHost(chain, options, scope, lowered, {
+  const level = routeHost(chain, options, scope, lowered, sites, {
     sites: swaps,
     pot: () => options.swap?.pot,
   });
@@ -629,14 +671,34 @@ function compileForChain(
       error
     );
   }
-  const { manifest, entryEncoding, entryParams, ...compiled } = rs;
+  const { manifest, entryEncoding, entryParams, entrySignature, programs, ...compiled } = rs;
 
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
   }
   const intents = lowered;
+  // Where the source runs on another chain, as the compile places it: each body the compiler
+  // compiled for a destination, by its program's span, and each delivery, by its call's.
+  const elsewhere = sites.map(({ id, callee, span, destination }): DestinationPart => {
+    const program = programs.find((report) => report.id === id);
+
+    return program === undefined
+      ? { kind: "delivery", callee, chain: destination, span }
+      : { kind: "body", callee, chain: destination, span: program.span };
+  });
+  const reported = { entrySignature, elsewhere };
 
   return manifest === undefined
-    ? { chain, compiled, entryParams, source, entryEncoding, intents, swaps }
-    : { chain, compiled, entryParams, source, entryEncoding, manifest, intents, swaps };
+    ? { chain, compiled, entryParams, source, entryEncoding, intents, swaps, ...reported }
+    : {
+        chain,
+        compiled,
+        entryParams,
+        source,
+        entryEncoding,
+        manifest,
+        intents,
+        swaps,
+        ...reported,
+      };
 }

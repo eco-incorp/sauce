@@ -19,7 +19,7 @@ import {
 
 import { v12EngineAddress } from "../deployments/index.js";
 import { CliError } from "./args.js";
-import { mainReturnType } from "../routes/entry.js";
+import { entryReturnType } from "../routes/entry.js";
 import { assumeTokenBalance, mergeOverrides } from "./assume.js";
 import { connectAt, kitchenFee, potState } from "./chain.js";
 import {
@@ -300,7 +300,7 @@ export async function simulateCommand(
           ),
         ];
   // What main returned, read as the type it declares.
-  const returnType = mainReturnType(input.text);
+  const returnType = entryReturnType(cook.program.entrySignature);
   const returned =
     rehearsal.ok && returnType !== undefined
       ? decodeReturned(returnType, rehearsal.returns, input.chain)

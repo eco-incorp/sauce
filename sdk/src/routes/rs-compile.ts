@@ -15,6 +15,8 @@ import type {
   AccountManifest,
   BoundArgument,
   CallSite,
+  EntrySignature,
+  ProgramReport,
   ResolveModule,
   ResolvePackage,
   SauceTarget as RsTarget,
@@ -219,6 +221,10 @@ export interface RsCompileResult extends CompileResult {
   manifest?: AccountManifest;
   /** `main`'s parameters as the compiler reports them: an ABI signature, `Account`s left out. */
   entryParams: readonly AbiParameter[];
+  /** `main`'s signature as the program declares it, from every compile, one for `args` included. */
+  entrySignature: EntrySignature;
+  /** Every program argument the compile compiled, each with where it is written. */
+  programs: readonly ProgramReport[];
 }
 
 /** A host's `bind` as the compiler takes it: every site-bound call answered, or refused by name. */
@@ -272,6 +278,8 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
     entrySchema: result.entrySchema,
     entryEncoding: result.entryEncoding,
     entryParams: result.entryParams,
+    entrySignature: result.entrySignature,
+    programs: result.programs,
   };
   if (result.manifest !== undefined) compiled.manifest = result.manifest;
 

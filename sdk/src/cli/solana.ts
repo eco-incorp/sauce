@@ -47,7 +47,7 @@ import { bytesToHex, formatUnits, hexToBytes, type Hex } from "viem";
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
 import {
-  mainReturnType,
+  entryReturnType,
   parseEntryType,
   type EntryType,
   type EntryValue,
@@ -1433,7 +1433,7 @@ export async function svmSimulateCommand(
   const missing = await missingAccounts(prepared.rpc, input.rpcUrl, prepared.given);
   // What main returned: the engine's return data, read as the type main declares.
   const returns = result.ok ? bytesToHex(result.returnData ?? new Uint8Array()) : undefined;
-  const returnType = mainReturnType(input.text);
+  const returnType = entryReturnType(prepared.program.entrySignature);
   const json = {
     ok: result.ok,
     chain: "solana",

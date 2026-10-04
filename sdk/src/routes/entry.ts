@@ -1,9 +1,10 @@
 /**
- * A program's `main(...)` parameters on the route path: reading its signature, and encoding the
- * values a caller passes for it.
+ * A program's `main(...)` parameters on the route path: the words a program is compiled for, and
+ * encoding the values a caller passes for it.
  *
- * The SDK's passes parse SauceScript with its annotations (`parse.ts`), so a typed `main` reaches
- * the compiler exactly as written; this only reads it.
+ * `main`'s signature is the compiler's: `entryParams` (an ABI signature) and `entrySignature` (the
+ * declared types and the return type, from every compile, one for `args` included). Only
+ * `mainSignature` reads the source, for the `--fund` wrapper, which writes around it.
  *
  * ENTRY ARGUMENTS. A value for a parameter arrives at run time, appended to the program: ABI-v1
  * (`abi.encode` of the parameters in order, no selector, except that a tuple parameter is always
@@ -34,8 +35,8 @@ import {
   encodeCompactArguments,
   type CompactValue,
 } from "../compact-arguments.js";
-import type { AstNode } from "./ast-walk.js";
-import { parseSauce } from "./parse.js";
+import type { EntrySignature } from "sauce-compiler";
+
 import { blankLiterals } from "./rs-compile.js";
 import type { CompiledSauceProgram } from "./sauce-route.js";
 
@@ -243,70 +244,6 @@ export function mainSignature(source: string): MainSignatureText | undefined {
         ? brace >= 0 && bodyReturnsValue(code, brace)
         : !/^:\s*void$/.test(returns.trim()),
   };
-}
-
-/**
- * `main`'s parameters as `source` declares them — every one, `Account` slots included. A record
- * type named by an `interface` the file declares is spelled out inline (`{ amount: Uint256 }`),
- * since that is what a value for it is encoded against.
- */
-export function mainParams(source: string): EntryParam[] {
-  const main = locateMain(source);
-  if (main === undefined) return [];
-  const params = splitTopLevel(source.slice(main.open + 1, main.close)).map(splitParam);
-  const records = params.some((param) => param.type !== undefined) ? interfaces(source) : new Map();
-
-  return params.map(({ name, type }) => ({
-    name,
-    type: type === undefined ? "Uint256" : inlineRecords(type, records),
-  }));
-}
-
-/**
- * The type `main` declares it returns (`Address`, `Uint256[]`, `{ out: Uint256 }`), with a record an
- * `interface` names spelled out inline as `mainParams` does — `undefined` when `main` declares none
- * or `void`, or there is no `main`.
- */
-export function mainReturnType(source: string): string | undefined {
-  const main = locateMain(source);
-  if (main === undefined) return undefined;
-  const annotation = source
-    .slice(main.close + 1, main.returnEnd)
-    .replace(/^\s*:/, "")
-    .trim();
-  if (annotation === "" || annotation === "void") return undefined;
-
-  return inlineRecords(annotation, interfaces(source));
-}
-
-/** Each `interface` the module declares, as the inline object type it names. */
-function interfaces(source: string): ReadonlyMap<string, string> {
-  const records = new Map<string, string>();
-  for (const node of (parseSauce(source) as unknown as { body: AstNode[] }).body) {
-    const declaration =
-      node.type === "ExportNamedDeclaration" ? (node.declaration as AstNode | null) : node;
-    if (declaration?.type !== "TSInterfaceDeclaration") continue;
-    const members = (declaration.body as { body: AstNode[] }).body.map((member) => {
-      const key = member.key as AstNode & { name: string };
-      const annotation = (member.typeAnnotation as { typeAnnotation: AstNode }).typeAnnotation;
-
-      return `${key.name}: ${source.slice(annotation.start, annotation.end)}`;
-    });
-    records.set((declaration.id as { name: string }).name, `{ ${members.join(", ")} }`);
-  }
-
-  return records;
-}
-
-/** `type` with every interface name in it replaced by its inline object type, recursively. */
-function inlineRecords(type: string, records: ReadonlyMap<string, string>, depth = 0): string {
-  if (records.size === 0 || depth > 16) return type;
-
-  return type.replace(/[A-Za-z_$][\w$]*/g, (name) => {
-    const record = records.get(name);
-
-    return record === undefined ? name : inlineRecords(record, records, depth + 1);
-  });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -585,50 +522,75 @@ export function entryConstant(
   return typeof normalized === "string" ? BigInt(normalized) : (normalized as bigint | boolean);
 }
 
-/** {@link entryArguments}'s result. */
-export interface EntryArguments {
-  /** Each argument as the word the program is compiled for, in order: a decimal integer, `1` or
-   *  `0` for a `bool` — the compiler's `args`. */
-  readonly words: readonly string[];
-  /** `main`'s parameter names, in order. */
-  readonly names: readonly string[];
+/** `main`'s declared return type, as the compiler reports it (`entrySignature.returns`):
+ *  `undefined` when it returns nothing, or a value it does not annotate. */
+export function entryReturnType(signature: EntrySignature): string | undefined {
+  return signature.returns === undefined || signature.returns === "void"
+    ? undefined
+    : signature.returns;
 }
+
+/** An argument a program is compiled for that is not one of `main`'s parameters' kinds. */
+export class EntryArgumentError extends TypeError {}
 
 /**
  * `main`'s arguments as the words a program is compiled for — the compiler's `args`, which compiles
  * `main(amount: Uint256)` given `[1000000n]` as if its body read `amount` as `1000000`: `main`
  * specialized on its arguments, which then takes none as it runs. How a wallet publishes the intents
- * a file opens from values known before anything runs, so they come out fixed. Each must be one
- * word: an unsigned integer, an address or a `bool`. Nothing about the source is changed.
+ * a file opens from values known before anything runs, so they come out fixed.
  *
- * Throws a `RangeError` for a source whose `main` declares no parameters, or a wrong count, and a
- * `TypeError` naming the parameter for a value of the wrong type or a parameter no one word holds.
+ * Each is one word, read from the value alone: an integer (a bigint, a safe integer, or its decimal
+ * or `0x` digits), `0x` hex, or a `bool` (a boolean, `true` or `false`). A value that is none of them
+ * stands as `0` here: the compiler holds each word to its parameter, and {@link checkEntryArguments}
+ * holds each value to its declared type once the compile has reported it, naming the parameter.
+ * Nothing about the source is read or changed.
  */
-export function entryArguments(source: string, values: readonly EntryValue[]): EntryArguments {
-  const params = mainParams(source);
-  if (params.length === 0) {
-    throw new RangeError("the program declares no `main` with parameters to bind arguments to");
-  }
-  const shape = params.map((param) => `${param.name}: ${param.type}`).join(", ");
-  if (values.length !== params.length) {
-    throw new RangeError(
-      `main(${shape}) takes ${params.length} argument${params.length === 1 ? "" : "s"}, got ` +
-        `${values.length}`,
+export function entryArguments(values: readonly EntryValue[]): readonly string[] {
+  return values.map((value) => {
+    if (typeof value === "bigint" && value >= 0n) return value.toString();
+    if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
+      return String(value);
+    }
+    if (typeof value === "boolean") return value ? "1" : "0";
+    if (typeof value === "string" && /^(?:\d+|0x[0-9a-fA-F]+)$/.test(value)) return value;
+    if (value === "true" || value === "false") return value === "true" ? "1" : "0";
+
+    return "0";
+  });
+}
+
+/**
+ * `values`, the arguments a program was compiled for, held to `main`'s parameters as the compile
+ * reports them: each value of its parameter's declared type, as `encodeEntryArguments` holds one.
+ * The compiler has checked the count and that each fits its parameter's word. A define named like a
+ * parameter is refused too: the argument is what the program reads.
+ */
+export function checkEntryArguments(
+  signature: EntrySignature,
+  values: readonly EntryValue[],
+  defines: Readonly<Record<string, unknown>> = {},
+): void {
+  const taken = signature.params.find(({ name }) => Object.hasOwn(defines, name));
+  if (taken !== undefined) {
+    throw new EntryArgumentError(
+      `${taken.name} is main's parameter, given in args; it is not also a define`,
     );
   }
-  const words = params.map((param, index) => {
+  signature.params.forEach((param, index) => {
+    if (index >= values.length) return;
     const at = `argument ${index + 1} (${param.name}: ${param.type})`;
-    const value = entryConstant(param.type, values[index]!, at);
-    if (value === undefined) {
-      throw new TypeError(
+    let constant: ReturnType<typeof entryConstant>;
+    try {
+      constant = entryConstant(param.type, values[index]!, at);
+    } catch (error) {
+      throw new EntryArgumentError((error as Error).message);
+    }
+    if (constant === undefined) {
+      throw new EntryArgumentError(
         `${at}: only one word binds as a constant: an unsigned integer, an address or a bool`,
       );
     }
-
-    return typeof value === "boolean" ? (value ? "1" : "0") : value.toString();
   });
-
-  return { words, names: params.map((param) => param.name) };
 }
 
 /**

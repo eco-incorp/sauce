@@ -332,7 +332,7 @@ export function boundProgram(
 ): Program {
   const given = programOf(args, undefined, swaps);
 
-  return { ...given, input: bindMainArguments(given.input, argsOf(args).args) };
+  return { ...given, input: bindMainArguments(given.input, argsOf(args).args, given.files) };
 }
 
 const COOK = {
