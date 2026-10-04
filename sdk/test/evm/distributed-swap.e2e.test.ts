@@ -662,7 +662,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
       /^The cook succeeds from 0x[0-9a-fA-F]{40}: gas used \d+( for the cook, after the Pot's deploy \(1\. below\))?, returns 0x/,
     );
     expect(stdout).toContain(
-      `main returns { spent: Uint256; bought: Uint256; unspent: Uint256 }: ` +
+      `main returns { spent: Uint256, bought: Uint256, unspent: Uint256 }: ` +
         `{ spent: ${spent}, bought: ${bought}, unspent: ${unspent} }`,
     );
     console.log(stdout);

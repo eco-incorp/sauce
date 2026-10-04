@@ -13,6 +13,8 @@ import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-ty
 import type {
   AbiParameter,
   AccountManifest,
+  EntrySignature,
+  ProgramReport,
   ResolveModule,
   ResolvePackage,
   SauceTarget as RsTarget,
@@ -215,6 +217,10 @@ export interface RsCompileResult extends CompileResult {
   manifest?: AccountManifest;
   /** `main`'s parameters as the compiler reports them: an ABI signature, `Account`s left out. */
   entryParams: readonly AbiParameter[];
+  /** `main`'s signature as the program declares it, from every compile, one for `args` included. */
+  entrySignature: EntrySignature;
+  /** Every program argument the compile compiled, each with where it is written. */
+  programs: readonly ProgramReport[];
 }
 
 /**
@@ -255,6 +261,8 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
     entrySchema: result.entrySchema,
     entryEncoding: result.entryEncoding,
     entryParams: result.entryParams,
+    entrySignature: result.entrySignature,
+    programs: result.programs,
   };
   if (result.manifest !== undefined) compiled.manifest = result.manifest;
 

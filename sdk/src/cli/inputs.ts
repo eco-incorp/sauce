@@ -10,13 +10,7 @@ import type { Address } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
-import {
-  entryArguments,
-  mainParams,
-  mainSignature,
-  type EntryArguments,
-  type EntryValue,
-} from "../routes/entry.js";
+import { mainSignature, type EntryValue } from "../routes/entry.js";
 import { blankLiterals } from "../routes/rs-compile.js";
 import {
   parseAddress,
@@ -26,7 +20,15 @@ import {
   parseTarget,
   UsageError,
 } from "./args.js";
-import type { Approver, ArgsInput, CookInput, PotInput, ProgramInput } from "./commands.js";
+import {
+  probeProgram,
+  type Approver,
+  type ArgsInput,
+  type CliFiles,
+  type CookInput,
+  type PotInput,
+  type ProgramInput,
+} from "./commands.js";
 import {
   FUND_MODES,
   parseFund,
@@ -116,50 +118,59 @@ export function definesReach(file: string, text: string, names: readonly string[
  * with `--args 1000000 0x…` is compiled as if its body read `amount` and `recipient` as those
  * values. The program is compiled as written, and the intents it opens come out fixed.
  *
- * Only a single word binds this way: an integer, an address or a `bool`. A program whose `main`
- * takes bytes, a string, an array or a record is refused, naming the parameter: run it on a Pot
- * (`sauce run`), where its arguments are read as it runs. With no `args`, a program whose `main`
- * takes none is returned as it is, and one that takes some is refused, naming them.
+ * `main`'s signature is the compile's (`entrySignature`), read off one compile for the arguments
+ * given, never off the source. Only a single word binds this way: an integer, an address or a
+ * `bool`. A program whose `main` takes bytes, a string, an array or a record is refused, naming the
+ * parameter: run it on a Pot (`sauce run`), where its arguments are read as it runs. With no
+ * `args`, a program whose `main` takes none is returned as it is, and one that takes some is
+ * refused, naming them.
  */
-export function bindMainArguments(input: ProgramInput, args: ArgsInput | undefined): ProgramInput {
-  const params = mainParams(input.text);
-  const shape = `main(${params.map((param) => `${param.name}: ${param.type}`).join(", ")})`;
+export function bindMainArguments(
+  input: ProgramInput,
+  args: ArgsInput | undefined,
+  files: CliFiles,
+): ProgramInput {
+  const bound = args === undefined ? input : { ...input, bound: args.values as EntryValue[] };
+  let params: readonly { readonly name: string; readonly type: string }[];
+  try {
+    params = probeProgram(bound, files).entrySignature.params;
+  } catch (error) {
+    const message = (error as Error).message;
+    if (args === undefined) throw error;
+    // A count `main` does not take, as the compiler says it.
+    const count = /the program is compiled for \d+ argument\(s\), and `main` takes \d+/.exec(
+      message,
+    );
+    if (count !== null) {
+      throw new UsageError(`${args.from}: ${count[0]}: pass each of its parameters, in order`);
+    }
+    // A parameter no one word holds, as the compiler names it.
+    const notWord = /`(\w+)` is (.+?), and an argument the program is compiled for is a word/.exec(
+      message,
+    );
+    if (notWord !== null) {
+      throw new UsageError(
+        `${args.from}: \`${notWord[1]}\` is ${notWord[2]}: a wallet publishes an intent from ` +
+          "values known before anything runs, each bound into the intent as one word, and this " +
+          "one is not: an integer, an address or a bool binds. Run the program on a Pot instead " +
+          "(sauce run), where it reads its arguments as it runs",
+      );
+    }
+    if (error instanceof UsageError) {
+      throw new UsageError(message.replace(/^--args: /, `${args.from}: `));
+    }
+    throw error;
+  }
   if (args === undefined) {
     if (params.length === 0) return input;
+    const shape = `main(${params.map((param) => `${param.name}: ${param.type}`).join(", ")})`;
     throw new UsageError(
       `${shape} takes ${params.length} argument${params.length === 1 ? "" : "s"}: pass them ` +
         "after --args, in order, or as --args-json; the intents are built with them",
     );
   }
-  if (params.length === 0) {
-    throw new UsageError(
-      `${args.from} gives main's arguments, and ${input.file} declares no \`main\` with ` +
-        "parameters: declare the values it reads as main's parameters, then pass them in order",
-    );
-  }
-  let bound: EntryArguments;
-  try {
-    bound = entryArguments(input.text, args.values as EntryValue[]);
-  } catch (error) {
-    const message = (error as Error).message;
-    throw new UsageError(
-      /only one word binds/.test(message)
-        ? `${args.from}: ${message.replace(/: only one word.*$/, "")}: a wallet publishes an ` +
-            "intent from values known before anything runs, each bound into the intent as one " +
-            "word, and this one is not: an integer, an address or a bool binds. Run the program " +
-            "on a Pot instead (sauce run), where it reads its arguments as it runs"
-        : `${args.from}: ${message}`,
-    );
-  }
-  for (const name of bound.names) {
-    if (Object.hasOwn(input.defines, name)) {
-      throw new UsageError(
-        `${name} is main's parameter, given by ${args.from}; it cannot also be a --define`,
-      );
-    }
-  }
 
-  return { ...input, bound: args.values as EntryValue[] };
+  return bound;
 }
 
 /** The Pot a cook names: by address, or by its owner and salt. */

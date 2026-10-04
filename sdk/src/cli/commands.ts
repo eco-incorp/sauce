@@ -64,7 +64,7 @@ import {
 } from "./intents.js";
 import { costJson, costLine, costOf, receiptEffects, receiptReport } from "./receipt.js";
 import { appliedDefines, contractCollector } from "./report.js";
-import { mainReturnType } from "../routes/entry.js";
+import { EntryArgumentError, entryReturnType } from "../routes/entry.js";
 import type { CookVia } from "../svm/client.js";
 import { svmCookSize } from "./solana.js";
 import type { Funding } from "./funding.js";
@@ -281,6 +281,8 @@ export function compileProgram(
       ...(input.bound === undefined ? {} : { args: input.bound }),
     });
   } catch (error) {
+    // A value for one of `main`'s parameters, given with --args, that is not of its type.
+    if (error instanceof EntryArgumentError) throw new UsageError(`--args: ${error.message}`);
     const described = describeCompileError(error, input.file, input.text, input.chain);
     // A relative import that did not resolve, from a program with no directory of its own.
     const imports = input.stdin === true && /import|resolv|\.\//i.test(String(error));
@@ -433,7 +435,7 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       entryParams: program.entryParams,
       entrySchema: program.entrySchema === undefined ? null : bytesToHex(program.entrySchema),
       // What main returns, as it declares it: `simulate` reads the cook's return data as this.
-      returnType: mainReturnType(input.text) ?? null,
+      returnType: entryReturnType(program.entrySignature) ?? null,
       defines,
       contracts: collected.contracts(),
       ...(pots.length === 0 ? {} : { intentPots: pots.map(potCheckJson) }),

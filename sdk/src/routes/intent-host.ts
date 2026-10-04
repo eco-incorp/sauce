@@ -68,6 +68,7 @@ import type {
   ProgramReport,
   ProgramSite,
   Signature,
+  SourceSpan,
   View,
 } from "sauce-compiler";
 import { bytesToHex, encodeFunctionData, hexToBytes, type Hex } from "viem";
@@ -158,6 +159,19 @@ export interface LoweredIntent {
   readonly destination: CanonicalChain;
   /** How the program funds it: by transfer to its vault then `publish`, or `publishAndFund`. */
   readonly fundVia: IntentFundVia;
+  /** Where the program opens it, as the compiler places the chain: `Base.Portal.send(…)` to the
+   *  end of its last call, or the `await` of it. */
+  readonly span: SourceSpan;
+}
+
+/** A site the compiler asked an intent's destination about: a body it compiles there (`Received
+ *  .then`), or a delivery whose names resolve there (`Sent.receive`). `id` is the compiler's own,
+ *  which a compiled body's `ProgramReport` shares. */
+export interface IntentSite {
+  readonly id: number;
+  readonly callee: string;
+  readonly span: SourceSpan;
+  readonly destination: CanonicalChain;
 }
 
 /** One level of intents: a program on `source`, opening intents to other chains. */
@@ -170,6 +184,8 @@ export interface IntentLevel {
   readonly programOn: (destination: CanonicalChain) => ProgramOptions;
   /** Every intent this level lowers, in the order the compiler binds them. */
   readonly lowered: LoweredIntent[];
+  /** Every site the compile asks a destination about, at this level and every level below. */
+  readonly sites: IntentSite[];
 }
 
 class SugarError extends Error {}
@@ -304,10 +320,13 @@ export function intentHost(level: IntentLevel): {
     return chain ?? fail(`${what} does not start from a chain's \`Portal\``);
   };
 
-  const nested = (site: ProgramSite): ProgramOptions =>
-    site.callee === "Sent.then"
-      ? fail(NEEDS_A_DELIVERY)
-      : level.programOn(destinationOf(site.receiver, `\`${site.callee}\``));
+  const nested = (site: ProgramSite): ProgramOptions => {
+    if (site.callee === "Sent.then") fail(NEEDS_A_DELIVERY);
+    const destination = destinationOf(site.receiver, `\`${site.callee}\``);
+    level.sites.push({ id: site.id, callee: site.callee, span: site.span, destination });
+
+    return level.programOn(destination);
+  };
 
   const bind = (site: CallSite): BoundArgument[] => {
     if (site.callee !== "Opened" && site.callee !== "Caught") {
@@ -677,6 +696,7 @@ function bindIntent(
     ],
     destination,
     fundVia,
+    span: site.span,
   });
 
   const portal = { value: denormalizeToEvm(toUniversalAddress(sourcePortal)), type: "Address" };
