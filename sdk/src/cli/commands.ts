@@ -188,8 +188,9 @@ export interface ProgramSwaps {
   readonly fetch?: typeof fetch;
   /** `--offline`: no service is asked, and a program that needs a route is refused. */
   readonly offline?: boolean;
-  /** The Pot the program runs on, which a top-level KyberSwap route pays from and to. */
-  readonly pot?: Address;
+  /** The Pot the program runs on, which a top-level route pays from and to: a `0x` address on an
+   *  EVM chain, a base58 key on Solana. */
+  readonly pot?: string;
   /** The routes asked for, by the request each answers. */
   readonly routes?: readonly SwapRoute[];
 }
@@ -373,7 +374,7 @@ export function probeProgram(input: ProgramInput, files: CliFiles): CompiledSauc
 }
 
 /** A program that names `kyberSwap` or `ecoSwap`, which the command looks into further. */
-export const NAMES_A_SWAP = /\b(?:kyberSwap|ecoSwap)\s*\(/;
+export const NAMES_A_SWAP = /\b(?:kyberSwap|ecoSwap|jupiterSwap)\s*\(/;
 
 const SWAP_SERVICE = { kyber: "KyberSwap", eco: "eco-swap", jupiter: "Jupiter" } as const;
 const SWAP_FUNCTION = SWAP_FUNCTION_OF;
@@ -389,9 +390,9 @@ const SWAP_FUNCTION = SWAP_FUNCTION_OF;
 export async function withSwapRoutes<T extends ProgramInput>(
   input: T,
   files: CliFiles,
-  pot?: Address,
+  pot?: string,
 ): Promise<T> {
-  if (input.chain.kind !== "evm" || !NAMES_A_SWAP.test(input.text)) return input;
+  if (!NAMES_A_SWAP.test(input.text)) return input;
   const swaps: ProgramSwaps = {
     apis: {},
     ...input.swaps,
@@ -422,10 +423,12 @@ export async function withSwapRoutes<T extends ProgramInput>(
         "--config file",
     );
   }
-  if (missing.some((site) => site.request.provider === "kyber" && site.request.pot === undefined)) {
+  const potless = missing.find((site) => site.request.pot === undefined);
+  if (potless !== undefined && (potless.request.provider !== "eco" || input.chain.kind === "svm")) {
     throw new UsageError(
-      "kyberSwap's route is built for the Pot the program runs on, which pays and receives: give " +
-        "--pot or --owner (and --salt), or a signer",
+      `${SWAP_FUNCTION[potless.request.provider]}'s route is built for the Pot the program runs ` +
+        "on, which pays and receives: give --owner (and --salt), or a signer" +
+        (input.chain.kind === "svm" ? "; a cook --via engine has no Pot to sign it" : ", or --pot"),
     );
   }
   let routes: SwapRoute[];

@@ -135,6 +135,7 @@ import {
   parseAccounts,
   parsePubkey,
   parseRemaining,
+  svmPotAddress,
   svmPotCommand,
   svmPotDeployCommand,
   svmPotStatusCommand,
@@ -2514,8 +2515,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       owner: {
         type: "string",
         value: "<address>",
-        help: "The Pot's owner, deriving the Pot a kyberSwap route is built for (with the salt)",
-        only: "evm",
+        help: "The Pot's owner, deriving the Pot a routed swap is built for (with the salt)",
       },
       pot: { type: "string", value: "<address>", help: "Or that Pot itself", only: "evm" },
       ...SALT,
@@ -2573,12 +2573,17 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         );
       }
       const named = stringFlag(args, "owner") ?? stringFlag(args, "pot");
+      // The Pot a routed swap is built for: on Solana the Kitchen's for the owner and salt.
+      const swapPot =
+        named === undefined
+          ? undefined
+          : program.chain.kind === "svm"
+            ? await svmPotAddress({ owner: svmOwner(args), ...saltOf(args) })
+            : potOf(potInput(args));
       const output = await compileCommand(
         {
           ...program,
-          ...(named === undefined
-            ? {}
-            : { swaps: { apis: {}, ...program.swaps, pot: potOf(potInput(args)) } }),
+          ...(swapPot === undefined ? {} : { swaps: { apis: {}, ...program.swaps, pot: swapPot } }),
           ...argsInput(args, io, trailing),
           ...(accounts.length === 0 ? {} : { accounts: parseAccounts(accounts) }),
           ...(via === undefined ? {} : { via: parseVia(via) }),
