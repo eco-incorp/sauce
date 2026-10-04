@@ -250,6 +250,21 @@ describe("the route a hook adds to", () => {
     expect(cook).not.toContain(approveOf(usdc));
   });
 
+  it("is reported as a part of the source that runs on the destination: a hook", () => {
+    const source = opened(".before(() => { USDC.transfer(HOOK, 1); })");
+    const parts = compile(source).elsewhere.map(({ kind, callee, chain, span }) => ({
+      kind,
+      callee,
+      chain: chain.slug,
+      text: source.slice(span.start.offset, span.end.offset),
+    }));
+    expect(parts).toContainEqual(
+      expect.objectContaining({ kind: "hook", callee: "Received.before", chain: "arbitrum" }),
+    );
+    const hook = parts.find((part) => part.kind === "hook")!;
+    expect(hook.text).toContain(".before(() => { USDC.transfer(HOOK, 1); })");
+  });
+
   it("costs the solver no native: a hook's calls send none", () => {
     const [intent] = compile(
       opened(".before(() => { USDC.transfer(HOOK, 5); }).after(() => { USDC.approve(HOOK, 6); })"),

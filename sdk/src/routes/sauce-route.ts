@@ -38,6 +38,7 @@ import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
 import type { EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
 import {
+  hookOf,
   intentHost,
   intentStepError,
   type IntentSite,
@@ -428,8 +429,8 @@ export interface CompiledSauceProgram {
    *  before any argument binds it, and the return type (`"void"`, or absent when `main` returns a
    *  value it does not annotate). */
   readonly entrySignature: EntrySignature;
-  /** Where the source runs on another chain, as the compiler places it: each intent's body and
-   *  delivery, at every depth, with the chain it runs on. */
+  /** Where the source runs on another chain, as the compiler places it: each intent's body,
+   *  delivery and hooks, at every depth, with the chain it runs on. */
   readonly elsewhere: readonly DestinationPart[];
   /** The source the compiler was given: the program as written. */
   readonly source: string;
@@ -438,12 +439,13 @@ export interface CompiledSauceProgram {
 /**
  * A part of a program's source that runs on an intent's destination, as the compile reports it:
  * a `body`, the program the compiler compiled for that chain (a closure, or what follows an
- * `await`), spanned as its program; or a `delivery`, whose names resolve there, spanned as the
- * call that takes it (`Base.Portal.send(…).receive(…)`).
+ * `await`), spanned as its program; a `delivery`, whose names resolve there, spanned as the
+ * call that takes it (`Base.Portal.send(…).receive(…)`); or a `hook`, calls the Portal's Executor
+ * makes there, spanned as the call that takes it (`….before(() => { … })`).
  */
 export interface DestinationPart {
-  readonly kind: "body" | "delivery";
-  /** The site's callee, `Type.method`: `Received.then`, `Sent.receive`. */
+  readonly kind: "body" | "delivery" | "hook";
+  /** The site's callee, `Type.method`: `Received.then`, `Sent.receive`, `Received.before`. */
   readonly callee: string;
   readonly chain: CanonicalChain;
   readonly span: SourceSpan;
@@ -606,13 +608,18 @@ function compileForChain(
   }
   const intents = lowered;
   // Where the source runs on another chain, as the compile places it: each body the compiler
-  // compiled for a destination, by its program's span, and each delivery, by its call's.
+  // compiled for a destination, by its program's span, and each delivery and hook, by its call's.
   const elsewhere = sites.map(({ id, callee, span, destination }): DestinationPart => {
     const program = programs.find((report) => report.id === id);
 
-    return program === undefined
-      ? { kind: "delivery", callee, chain: destination, span }
-      : { kind: "body", callee, chain: destination, span: program.span };
+    return program !== undefined
+      ? { kind: "body", callee, chain: destination, span: program.span }
+      : {
+          kind: hookOf(callee) === undefined ? "delivery" : "hook",
+          callee,
+          chain: destination,
+          span,
+        };
   });
   const reported = { entrySignature, elsewhere };
 

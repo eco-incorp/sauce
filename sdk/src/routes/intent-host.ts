@@ -176,8 +176,9 @@ export interface LoweredIntent {
 }
 
 /** A site the compiler asked an intent's destination about: a body it compiles there (`Received
- *  .then`), or a delivery whose names resolve there (`Sent.receive`). `id` is the compiler's own,
- *  which a compiled body's `ProgramReport` shares. */
+ *  .then`), a delivery whose names resolve there (`Sent.receive`), or a hook it records there
+ *  (`Received.before`, `Received.after`). `id` is the compiler's own, which a compiled body's
+ *  `ProgramReport` shares. */
 export interface IntentSite {
   readonly id: number;
   readonly callee: string;
@@ -215,7 +216,7 @@ const unfinished = (stage: "Sent" | "Received", written: string): string =>
 const NEEDS_A_DELIVERY = unfinished("Sent", "send(...)");
 
 /** The hook a program argument's site is, `Received.before` or `Received.after`; else nothing. */
-const hookOf = (callee: string): RouteHook | undefined =>
+export const hookOf = (callee: string): RouteHook | undefined =>
   ROUTE_HOOKS.find((hook) => callee === `Received.${hook}`);
 
 /** One of a route's calls, as the Executor makes it. */
