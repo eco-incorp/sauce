@@ -24,7 +24,6 @@ import {
 import { requireChain } from "../src/chains/canonical.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
 import { denormalizeToEvm } from "../src/routes/encode.js";
-import type { Abi } from "../src/routes/compile-types.js";
 import type { EntryValue } from "../src/routes/entry.js";
 import type { IntentSugarDefaults } from "../src/routes/intent-host.js";
 import { compileSauceProgram, type CompiledSauceProgram } from "../src/routes/sauce-route.js";
@@ -450,18 +449,7 @@ function main() {
   });
 
   it("an ABI given in `contracts`, at every depth the hook is", () => {
-    const grid: Abi = [
-      {
-        type: "function",
-        name: "set",
-        stateMutability: "nonpayable",
-        inputs: [
-          { name: "pair", type: "uint256[2]" },
-          { name: "to", type: "address" },
-        ],
-        outputs: [],
-      },
-    ];
+    const grid = parseAbi(["function set(uint256[2] pair, address to)"]);
     const hook = ".after(() => { Grid.at(HOOK).set([1, 2], SPENDER); })";
     const expected = encodeFunctionData({
       abi: grid,
