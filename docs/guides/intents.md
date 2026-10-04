@@ -438,7 +438,8 @@ written. A hook is recorded, never compiled. Each statement is one call:
 
 Each argument is a literal, a compile-time value, a variable of the program opening the intent, a
 `hex` literal, or a struct or array of these. Anything else in a hook is a compile error at that
-statement.
+statement, a read included: a `view` or `pure` method, in either spelling, and `evm.static`. A
+hook's calls are made for what they change.
 
 Hooks are low-level calls the Executor makes exactly as written. The SDK adds nothing: no
 deliveries, no approve resets. What the Executor holds when a hook runs is up to the intent.
@@ -653,9 +654,10 @@ Each of these is a compile error naming the construct, never a silently differen
   computes.
 - A chain with no eco-routes deployment, or a pair with no prover deployed on both sides.
 - A program body that calls the function opening it.
-- In a hook, any statement but a call, or an argument it computes (the compiler's error, at the
-  statement); a narrower-than-a-word argument, an `evm.call`'s native or calldata, known only as the
-  program runs. A hook on a Solana destination.
+- In a hook, any statement but a call, a read (a `view` or `pure` method, `evm.static`), or an
+  argument it computes (the compiler's error, at the statement); a narrower-than-a-word argument,
+  an `evm.call`'s native or calldata, known only as the program runs. A hook on a Solana
+  destination.
 
 Inside a program body an unknown name is the _compiler's_ error rather than this lowering's, and
 reads the same way: it names the variable that is not declared.

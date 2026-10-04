@@ -506,8 +506,9 @@ statements is one call:
 - a token's `transfer` or `approve`, on a symbol or `Token(address)`.
 
 Each argument is a literal, a variable of the program opening the intent, a `hex` literal, or a
-struct or array of these. Anything else in a hook (a local, a condition, a read, a computed
-argument) is a compile error at that statement.
+struct or array of these. Anything else in a hook (a local, a condition, a computed argument, a
+read: a `view` or `pure` method in either spelling, or `evm.static`) is a compile error at that
+statement. A hook's calls are made for what they change.
 
 Hooks are low-level calls the Executor makes exactly as written. The SDK adds nothing: no
 deliveries, no approve resets. What the Executor holds when a hook runs is up to the intent.
