@@ -486,12 +486,12 @@ On EVM every function here gives "`svm.<name>` is not available on the evm targe
     transaction.**
   - Example: `svm.call(tokenProgram, [source, destination, owner], instruction);`
 - `svm.remainingAccount(i)`: `(number) → Account`
-  - The `i`-th account attached after the ones `main` declares. **Only inside `main`.**
+  - The `i`-th account attached after the ones `main` declares, in any function.
     "`svm.remainingAccount` takes one index, got N"
   - Example: `const extra = svm.remainingAccount(0);`
 - `const rest = svm.remainingAccounts()`: `() → Account[]`
-  - Every account attached after the declared ones. **Only as a `let`/`const` initializer, and only
-    inside `main`:** "svm.remainingAccounts() can only initialize a let/const — bind it first
+  - Every account attached after the declared ones, in any function. **Only as a `let`/`const`
+    initializer:** "svm.remainingAccounts() can only initialize a let/const — bind it first
     (const rest = svm.remainingAccounts();), then use the binding".
   - Example: `const rest = svm.remainingAccounts(); svm.call(router, rest, data);`
 

@@ -103,6 +103,7 @@ export type {
   SwapCompileOptions,
 } from "./sauce-route.js";
 export { SwapApiError, fetchSwapRoutes } from "./swap-apis.js";
+export { svmSwapTail } from "./swap-host.js";
 export type { EcoApi, EcoEmbed, EcoSvmEmbed, JupiterApi, KyberApi, SwapApis } from "./swap-apis.js";
 export type {
   EcoRoute,

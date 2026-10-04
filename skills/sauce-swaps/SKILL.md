@@ -1,6 +1,6 @@
 ---
 name: sauce-swaps
-description: Swapping inside a Sauce program with @sauce/router — one function per venue (uniswapV2, uniswapV3, uniswapV4, curve, balancerV2, dodoV2, traderJoeLB, woofi, maverickV2, and the try forms), every argument a run-time value, each returning what the recipient received and reverting below minOut; which venues are paid first and which call back through the Pot's Router, which pool families the Router's callbacks service (Uniswap V3 and forks, PancakeSwap V3, Algebra, Synthra, UnitFlow, Uniswap V4), exact input only, how a price limit produces a partial fill, the PancakeSwap Infinity entry points on the Router itself, the guard that stops a leg from stranding input, and kyberSwap and ecoSwap, routes KyberSwap or eco-swap build when the program compiles. Use when the user wants a swap, trade, price limit, sqrtPriceLimitX96, min-out or slippage bound, a partial fill, "swap then …", asks which venues Sauce can swap on, or wants an aggregator's route (KyberSwap).
+description: Swapping inside a Sauce program with @sauce/router — one function per venue (uniswapV2, uniswapV3, uniswapV4, curve, balancerV2, dodoV2, traderJoeLB, woofi, maverickV2, and the try forms), every argument a run-time value, each returning what the recipient received and reverting below minOut; which venues are paid first and which call back through the Pot's Router, which pool families the Router's callbacks service (Uniswap V3 and forks, PancakeSwap V3, Algebra, Synthra, UnitFlow, Uniswap V4), exact input only, how a price limit produces a partial fill, the PancakeSwap Infinity entry points on the Router itself, the guard that stops a leg from stranding input, and kyberSwap, jupiterSwap (Solana) and ecoSwap, routes an aggregator builds when the program compiles. Use when the user wants a swap, trade, price limit, sqrtPriceLimitX96, min-out or slippage bound, a partial fill, "swap then …", asks which venues Sauce can swap on, or wants an aggregator's route (KyberSwap, Jupiter).
 ---
 
 # Swaps with `@sauce/router`
@@ -169,7 +169,7 @@ program measures the output and checks its own floor.
 | `swapInfinityCL(vault, key, zeroForOne, amountSpecified, sqrtPriceLimitX96, payer, recipient, callback)` | `sqrtPriceLimitX96` |
 | `swapInfinityBin(vault, key, swapForY, amountSpecified, payer, recipient, callback)`                     | none                |
 
-## Routes a service builds: `kyberSwap` and `ecoSwap`
+## Routes a service builds: `kyberSwap`, `jupiterSwap` and `ecoSwap`
 
 `kyberSwap(tokenIn, tokenOut, amountIn, minOut)` and `ecoSwap(tokenIn, tokenOut, amountIn, minOut)`
 swap along a route a service builds while the program compiles: KyberSwap's aggregator (its
@@ -208,10 +208,45 @@ function main(recipient: Address, minOut: Uint256) {
   whose body swaps this way is the one its publish built: `sauce inspect` and the `sauce intent`
   verbs refuse its file and take the intent's hash instead.
 - The `sauce` command asks each service once per command (`compile`, `tx`, `simulate`, `run`,
-  `intent publish`): KyberSwap's public API unless `--swap-api kyber=<url>` names another; eco-swap
-  only at `--swap-api eco=<url>`, or `"swapApis"` in the `--config` file. `sauce compile` builds a
-  KyberSwap route for the Pot `--owner` or `--pot` names. `--offline` refuses a program that needs
-  a route.
+  `intent publish`): KyberSwap's and Jupiter's public APIs unless `--swap-api kyber=<url>` or
+  `--swap-api jupiter=<url>` names another; eco-swap only at `--swap-api eco=<url>`, or
+  `"swapApis"` in the `--config` file. `sauce compile` builds a KyberSwap route for the Pot
+  `--owner` or `--pot` names, and a route on Solana for the Pot of `--owner` (and `--salt`).
+  `--offline` refuses a program that needs a route.
+
+### On Solana: `jupiterSwap` and `ecoSwap`
+
+`kyberSwap` swaps on EVM chains and `jupiterSwap` on Solana; each is refused on the other when the
+program compiles. On Solana a route is one instruction built for the Pot: Jupiter's aggregator's,
+or eco-swap's. The Pot signs it as the swap's authority, and the instruction's accounts ride after
+the program's own, with the lookup tables the route names:
+
+```sauce chain=solana
+function main(minOut: Uint256): Uint256 {
+  return jupiterSwap(USDC, WSOL, 100000000, minOut);
+}
+```
+
+```sh
+sauce run swap.sauce.ts --chain solana --keypair <keypair.json> --args <minOut>
+```
+
+- It returns the amount of `tokenOut` that reached the Pot's account and leaves it there, and
+  reverts below `minOut`. Jupiter's own floor is the program's `minOut`: the route's quoted output
+  is set to `minOut` with no slippage, written into the instruction as the program runs when the
+  program computes it, so the aggregator refuses a short fill before the program does.
+- `jupiterSwap`'s `amountIn` is known when the program compiles; `ecoSwap` also takes an amount the
+  program computes, which it writes into eco-swap's instruction.
+- A program on Solana makes one such swap: its route takes every account after the program's own,
+  so the program names none there itself (no `--remaining`).
+- The cook creates the Pot's account for `tokenOut` when it does not exist yet, the signer paying
+  its rent. The Pot's account for `tokenIn` must hold `amountIn`.
+- A route fills Solana's whole call depth: the Kitchen's instruction calls the engine, the engine
+  the aggregator, the aggregator the pool and the pool the token program, five levels, the most
+  Solana allows today. A route whose pool calls one program further (a Token-2022 transfer hook, a
+  pool that trades through another) fails. A transaction also locks at most 64 accounts and runs at most
+  1.4 million compute units, and a route's accounts and work count against both; its lookup tables
+  are what fit its accounts into the transaction.
 
 ## The guard (required on every leg)
 

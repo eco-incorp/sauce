@@ -243,6 +243,20 @@ export async function directCook(
 }
 ```
 
+## Swap through Jupiter
+
+`jupiterSwap(tokenIn, tokenOut, amountIn, minOut)` and `ecoSwap(...)` swap along a route Jupiter or
+eco-swap builds while the program compiles, for the Pot the cook runs on. The route's accounts are
+attached after the program's own, with the lookup tables it names, and the Pot signs it through
+the Kitchen:
+
+```sh
+sauce run swap.sauce.ts --chain solana --keypair ./owner.json --args 830000000
+```
+
+[Routes a service builds](../api/router.md#on-solana) covers what the route must be, the floor and
+the limits it runs into.
+
 ## Stage a larger program
 
 Staging belongs to the Kitchen, whichever way the program then runs. There is no `client.stageBuffer()` convenience method. Build and submit Kitchen instructions in this order:

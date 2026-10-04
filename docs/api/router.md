@@ -250,9 +250,44 @@ const program = await routes.compileSauceProgramAsync("base", source, {
 ```
 
 `program.swaps` lists each call with its request and its route. The `sauce` command asks KyberSwap's
-public API unless `--swap-api kyber=<url>` names another, and eco-swap only at
-`--swap-api eco=<url>`. A route expires twenty minutes after it is built and its quote moves, so
-compile close to running and keep a fallback.
+and Jupiter's public APIs unless `--swap-api kyber=<url>` or `--swap-api jupiter=<url>` names
+another, and eco-swap only at `--swap-api eco=<url>`. A route expires twenty minutes after it is
+built and its quote moves, so compile close to running and keep a fallback.
+
+### On Solana
+
+`jupiterSwap(tokenIn, tokenOut, amountIn, minOut)` swaps along a route Jupiter's aggregator
+builds, and `ecoSwap` along eco-swap's. `kyberSwap` is refused on Solana and `jupiterSwap` on an
+EVM chain when the program compiles. A Solana route is one instruction, built for the Pot, which
+the Pot signs as the swap's authority through the Kitchen:
+
+```js
+// Solana: 100 USDC for wrapped SOL through Jupiter.
+function main(minOut: Uint256): Uint256 {
+  return jupiterSwap(USDC, WSOL, 100000000, minOut);
+}
+```
+
+Each call becomes `@sauce/swap`'s `jupiter` or `eco` with the instruction's data as an argument.
+The instruction's accounts are not arguments: they are the accounts the cook attaches after the
+program's own, in order, so a program on Solana makes one such swap. Jupiter's own floor is the
+program's: the route's quoted output is set to `minOut` with no slippage, written into the
+instruction as the program runs when the program computes `minOut`. eco-swap's amount and floor go
+where its instruction says, so `ecoSwap` also takes an amount the program computes. The library
+measures what reached the Pot's account for `tokenOut` and refuses less than `minOut`.
+
+From TypeScript, name Jupiter's API (`jupiter: { url }`) and the Pot's key in `swap`.
+`routes.svmSwapTail(program.swaps)` lists what the cook needs beyond the program: the route's
+accounts with their flags (the client's `remaining`, the Pot unsigned), the lookup tables to read
+(its `lookupTables`) and the Pot's account for the output, which must exist before the swap pays
+into it. The `sauce` command attaches them, reads the tables and creates that account ahead of the
+cook.
+
+A route fills Solana's whole call depth: the Kitchen's instruction calls the engine, the engine the
+aggregator, the aggregator a pool and the pool the token program, five levels, the most a
+transaction allows until SIMD-0268 raises it to nine. A route whose pool calls further, such as a
+Token-2022 transfer hook, fails. A route's accounts also count against the 64 a transaction can
+lock, and its work against 1.4 million compute units.
 
 ## From JSON
 
