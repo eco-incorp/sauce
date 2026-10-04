@@ -468,50 +468,65 @@ body is always a program, so its cook pays the destination's Kitchen fee.
 
 `.before(() => { … })` and `.after(() => { … })`, after `.receive(...)` and among the route's
 modifiers, add calls the destination Portal's Executor makes before the body runs and after it. Use
-one for a call that must come from the Executor rather than the Pot, and for a call a solver reads
-straight off the route, with no program to simulate. Here a referral fee in the delivered USDC is
-paid before the supply:
+one for a call that must come from the Executor rather than the Pot, for calldata built elsewhere,
+and for calls a solver reads straight off the route, with no program to simulate. Here the whole
+intent is such calls: the hook supplies the delivered USDC to Aave for the beneficiary, and a body
+of one token write pays the referrer, so there is no program, no Pot and no Kitchen fee:
 
 ```sauce chain=base
 function main(
   beneficiary: Address,
   referrer: Address,
   amount: Uint256,
-  fee: Uint256,
+  tip: Uint256,
   reward: Uint256,
   refundTo: Address,
 ) {
   Ethereum.Portal.send({ token: USDC, amount: reward })
     .refundee(refundTo)
-    .receive({ token: USDC, amount })
+    .receive({ token: USDC, amount: amount + tip })
     .before(() => {
-      USDC.transfer(referrer, fee); // delivered on top of `amount`
-    })
-    .then(() => {
       USDC.approve(AaveV3.Pool, amount);
       AaveV3.Pool.supply(USDC, amount, beneficiary, 0);
+    })
+    .then(() => {
+      USDC.transfer(referrer, tip);
     });
 }
 ```
 
 The route's calls are every `.before(...)`'s, then the body's (the delivery moved into the Pot and
 the cook, or a token-only body's own calls), then every `.after(...)`'s, each hook in the order
-written; each may be given any number of times. A hook is recorded, never compiled: each statement
-is a `transfer` or `approve` on a symbol or `Token(address)`, each argument a literal or a variable
-of the program opening the intent, as in a token-only body. Anything else in it (a local, a
-computed argument, a read, a protocol call) is refused.
+written; each may be given any number of times. A hook is recorded, never compiled, and each of its
+statements is one call:
 
-- **The Executor makes the calls**: it is the caller a hook's target sees. One Executor serves every
-  intent on a chain, so every `approve` a hook records is reset to zero first.
+- a contract's method, through its namespace (`AaveV3.Pool.supply(...)`), `.at(address)`, an
+  interface (`Erc4626.Vault(vault).deposit(...)`) or an imported ABI;
+- `evm.call(target, value, data)`, the calldata a `hex` literal;
+- a token's `transfer` or `approve`, on a symbol or `Token(address)`.
+
+Each argument is a literal, a variable of the program opening the intent, a `hex` literal, or a
+struct or array of these. Anything else in a hook (a local, a condition, a read, a computed
+argument) is a compile error at that statement.
+
+- **The Executor makes the calls**: it is the caller a hook's target sees, and what a call pulls
+  from its caller comes from the Executor. One Executor serves every intent on a chain, so every
+  token `approve` a hook makes is reset to zero first.
 - **A hook is outside `.catch(...)`**: a hook that reverts reverts the whole fill, and the body's
   handler does not run.
 - **Its arguments are fixed when the intent is published**: a variable of the program opening it is
-  written in as that program runs, as an amount is; nothing the body computes reaches a hook.
+  written in as that program runs, as an amount is, where the argument is a whole word (an
+  `address`, a `bytes32`, or an integer of 160 bits or more). A narrower argument, the native an
+  `evm.call` sends and its calldata are known when the intent is built. Nothing the body computes
+  reaches a hook.
 - **It has no access to the Pot's funds**: the body runs in the Pot, a hook on the Executor, so
-  `.after(...)` cannot spend what the body holds. What a hook transfers is delivered on top of what
-  `.receive(...)` names, which still moves into the Pot whole: the solver above brings
-  `amount + fee`. The route names USDC twice, `fee` and `amount`, and the Portal pulls each entry
-  from the solver, so a solver approves the sum for a token named more than once.
+  `.after(...)` cannot spend what the body holds. A body of token writes leaves what `.receive(...)`
+  delivers with the Executor, for the hooks and the body alike, as above; a program body's moves
+  into its Pot whole. What a hook transfers as a token write is delivered on top of what
+  `.receive(...)` names: `.before(() => { USDC.transfer(referrer, fee); })` before a program body
+  that receives `amount` has the solver bring `amount + fee`. The route then names USDC twice, and
+  the Portal pulls each entry from the solver, so a solver approves the sum for a token named more
+  than once.
 
 Hooks are for EVM destinations: on Solana they are refused, since a Solana route call names its
 accounts.
