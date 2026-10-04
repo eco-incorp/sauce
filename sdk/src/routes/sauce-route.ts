@@ -41,6 +41,7 @@ import {
   hookOf,
   intentHost,
   intentStepError,
+  type IntentLevel,
   type IntentSite,
   type IntentSugarDefaults,
   type LoweredIntent,
@@ -230,6 +231,7 @@ function routeHost(
   scope: RouteScope,
   lowered: LoweredIntent[],
   sites: IntentSite[],
+  recordedBodies: IntentLevel["recordedBodies"],
 ): {
   readonly host: ChainHost;
   readonly defines: SauceCompileOptions["defines"];
@@ -254,6 +256,7 @@ function routeHost(
     defaults: options.intents ?? {},
     lowered,
     sites,
+    recordedBodies,
     // A body on another chain names that chain's values, and nothing the caller supplied for this
     // one (`levelOn`); its own intents are funded on its chain and lowered by its own host.
     programOn: (destination) => {
@@ -271,6 +274,7 @@ function routeHost(
         next.scope,
         [],
         sites,
+        recordedBodies,
       );
       return {
         target: destination.kind === "svm" ? "svm" : "evm",
@@ -438,10 +442,10 @@ export interface CompiledSauceProgram {
 
 /**
  * A part of a program's source that runs on an intent's destination, as the compile reports it:
- * a `body`, the program the compiler compiled for that chain (a closure, or what follows an
- * `await`), spanned as its program; a `delivery`, whose names resolve there, spanned as the
- * call that takes it (`Base.Portal.send(…).receive(…)`); or a `hook`, calls the Portal's Executor
- * makes there, spanned as the call that takes it (`….before(() => { … })`).
+ * a `body`, what the compiler compiled or recorded for that chain (a closure, or what follows an
+ * `await`), spanned as its program or its recorded view; a `delivery`, whose names resolve there,
+ * spanned as the call that takes it (`Base.Portal.send(…).receive(…)`); or a `hook`, calls the
+ * Portal's Executor makes there, spanned as the call that takes it (`….before(() => { … })`).
  */
 export interface DestinationPart {
   readonly kind: "body" | "delivery" | "hook";
@@ -575,7 +579,8 @@ function compileForChain(
   const tokens = resolveTokenMap(chain, options.tokens);
   const lowered: LoweredIntent[] = [];
   const sites: IntentSite[] = [];
-  const level = routeHost(chain, options, scope, lowered, sites);
+  const recordedBodies: IntentLevel["recordedBodies"] = [];
+  const level = routeHost(chain, options, scope, lowered, sites, recordedBodies);
   let rs: RsCompileResult;
   try {
     rs = compileWithRs({
@@ -607,20 +612,28 @@ function compileForChain(
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
   }
   const intents = lowered;
-  // Where the source runs on another chain, as the compile places it: each body the compiler
-  // compiled for a destination, by its program's span, and each delivery and hook, by its call's.
-  const elsewhere = sites.map(({ id, callee, span, destination }): DestinationPart => {
-    const program = programs.find((report) => report.id === id);
+  // Where the source runs on another chain, as the compile places it: each body by the span of its
+  // program, or of its view where the compile recorded it, and each delivery and hook by its call's.
+  const elsewhere: DestinationPart[] = [
+    ...sites.flatMap(({ id, callee, span, destination }): DestinationPart[] => {
+      const program = programs.find((report) => report.id === id);
+      if (program !== undefined) {
+        return [{ kind: "body", callee, chain: destination, span: program.span }];
+      }
 
-    return program !== undefined
-      ? { kind: "body", callee, chain: destination, span: program.span }
-      : {
-          kind: hookOf(callee) === undefined ? "delivery" : "hook",
-          callee,
-          chain: destination,
-          span,
-        };
-  });
+      return callee === "Sent.receive"
+        ? [{ kind: "delivery", callee, chain: destination, span }]
+        : hookOf(callee) !== undefined
+          ? [{ kind: "hook", callee, chain: destination, span }]
+          : [];
+    }),
+    ...recordedBodies.map(({ span, destination }): DestinationPart => ({
+      kind: "body",
+      callee: "Received.then",
+      chain: destination,
+      span,
+    })),
+  ];
   const reported = { entrySignature, elsewhere };
 
   return manifest === undefined

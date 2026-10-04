@@ -198,6 +198,8 @@ export interface IntentLevel {
   readonly lowered: LoweredIntent[];
   /** Every site the compile asks a destination about, at this level and every level below. */
   readonly sites: IntentSite[];
+  /** Every body the compile records rather than compiles, by the span its view carries. */
+  readonly recordedBodies: { readonly span: SourceSpan; readonly destination: CanonicalChain }[];
 }
 
 class SugarError extends Error {}
@@ -620,6 +622,7 @@ function bindIntent(
   const before = hookCalls("before", beforeDelivery);
   let bodyCalls: RouteCall[];
   if (body !== undefined && "recorded" in body) {
+    level.recordedBodies.push({ span: body.span, destination });
     bodyCalls = recordedCalls(
       body.recorded,
       explicitDelivery === undefined ? bodyDelivery : undefined,
