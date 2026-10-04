@@ -25,7 +25,7 @@ import type { Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { execSync, spawn } from "child_process";
 
 import { createRequire } from "node:module";
@@ -281,6 +281,7 @@ async function deployBytecode(
   chain: ReturnType<typeof defineChain>,
 ): Promise<Hex> {
   const account = privateKeyToAccount(ACCOUNT0_KEY);
+  // @ts-expect-error - viem types require kzg for blob transactions, but we're not using blobs
   const hash = await walletClient.sendTransaction({
     data: bytecode,
     chain,
@@ -415,6 +416,7 @@ async function v12Send(
   });
 
   // Execute the actual transaction
+  // @ts-expect-error - viem types require kzg for blob transactions, but we're not using blobs
   const hash = await client.walletClient.sendTransaction({
     to: erc20,
     data: calldata,
