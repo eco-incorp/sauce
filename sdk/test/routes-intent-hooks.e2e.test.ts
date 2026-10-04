@@ -12,14 +12,12 @@
  *    registry's address) or `evm.call`;
  *  - the order: the `before` hooks' calls, then the body (a cook, or its recorded writes), then the
  *    `after` hooks', read off the order of the logs in one fill;
- *  - what a hook's transfer spends is delivered on top of what `.receive(...)` names, which still
- *    moves into the Pot whole;
+ *  - a hook is made exactly as written: what it spends is the intent's to deliver (a transfer
+ *    the delivery does not cover reverts the fill; named in `.receive(...)`, it is made), and its
+ *    approve is that one call (USDT's shape refuses it over a standing allowance, and takes it
+ *    after the reset the writer writes);
  *  - a hook that reverts reverts the fill, its body's `.catch(...)` notwithstanding — the handler
  *    is the body's — while the same handler does catch a reverting body;
- *  - every approve a hook records is reset to zero first: a token that refuses to move a standing
- *    allowance (USDT's shape) takes the second intent's approve through the reset, and refuses the
- *    same route without it.
- *
  *  - a value the program measures as it runs reaches a contract call's argument: the program runs
  *    on its owner's Pot and publishes the intent, and the route the Portal logged is fulfilled.
  *
@@ -311,22 +309,23 @@ describeEvm("intent hooks, executed by the Portal's Executor", () => {
     expect(await local.balanceOf(delivered, RECIPIENT)).toBe(AMOUNT);
   }, 300_000);
 
-  it("a hook's transfer is delivered on top of the body's: the Pot gets what `.receive` names", async () => {
+  it("a hook spends what the intent delivers: nothing is delivered for it", async () => {
     const delivered = await token();
-    const intent = opened(
-      `function main() {
+    const program = (received: bigint) => `function main() {
   Base.Portal.send({ token: TOKEN, amount: 1 })
-    .receive({ token: TOKEN, amount: ${AMOUNT} })
+    .receive({ token: TOKEN, amount: ${received} })
     .before(() => { Token(TOKEN).transfer(SPENDER, 7); })
-    .then(() => {
-      const held = Token(TOKEN).balanceOf(ctx.self());
-      Token(TOKEN).transfer(RECIPIENT, held);
-    });
-}`,
-      { TOKEN: delivered },
-    );
-    expect(intent.route.tokens.map((t) => t.amount)).toEqual([7n, AMOUNT]);
-    expect((await fulfil(intent)).status).toBe("success");
+    .then(() => { Token(TOKEN).transfer(RECIPIENT, ${AMOUNT}); });
+}`;
+    // The route delivers what the intent names, and only that: the hook's 7 come out of it, so
+    // the body's transfer finds too little.
+    const short = opened(program(AMOUNT), { TOKEN: delivered });
+    expect(short.route.tokens.map((t) => t.amount)).toEqual([AMOUNT]);
+    expect((await fulfil(short)).status).toBe("reverted");
+    // The writer names what the hook spends too, and the fill makes both.
+    const named = opened(program(AMOUNT + 7n), { TOKEN: delivered });
+    expect(named.route.tokens.map((t) => t.amount)).toEqual([AMOUNT + 7n]);
+    expect((await fulfil(named)).status).toBe("success");
     expect(await local.balanceOf(delivered, SPENDER)).toBe(7n);
     expect(await local.balanceOf(delivered, RECIPIENT)).toBe(AMOUNT);
     expect(await local.balanceOf(delivered, executor)).toBe(0n);
@@ -531,44 +530,43 @@ describeEvm("intent hooks, executed by the Portal's Executor", () => {
     }, 300_000);
   });
 
-  describe("a recorded approve is reset to zero first", () => {
-    /** An intent whose before hook approves `amount` of `approved` to the spender. */
-    const approving = (approved: Address, delivered: Address, amount: bigint) =>
+  describe("a hook's approve is the one call written", () => {
+    /** An intent whose before hook makes `approvals` of `APPROVED`. */
+    const approving = (approved: Address, delivered: Address, approvals: string) =>
       opened(
         `function main() {
   Base.Portal.send({ token: TOKEN, amount: 1 })
     .receive({ token: TOKEN, amount: 1 })
-    .before(() => { Token(APPROVED).approve(SPENDER, ${amount}); })
+    .before(() => { ${approvals} })
     .then(() => { Token(TOKEN).transfer(RECIPIENT, 1); });
 }`,
         { TOKEN: delivered, APPROVED: approved },
       );
 
-    it("so a USDT-style token takes an approve over the allowance an earlier intent left", async () => {
+    it("so a USDT-style token refuses it over a standing allowance, unless the writer resets it", async () => {
       const usdt = await usdtLike();
       const delivered = await token();
-      expect((await fulfil(approving(usdt, delivered, 7n))).status).toBe("success");
+      const first = approving(usdt, delivered, "Token(APPROVED).approve(SPENDER, 7);");
+      // The approve, then the body's transfer: nothing added.
+      expect(first.route.calls).toHaveLength(2);
+      expect((await fulfil(first)).status).toBe("success");
       expect(await allowance(usdt)).toBe(7n);
 
-      const second = approving(usdt, delivered, 9n);
-      // The reset, then the approve: two calls of the token, before the body's transfer.
-      expect(second.route.calls).toHaveLength(3);
-      expect((await fulfil(second)).status).toBe("success");
+      // The allowance the first intent left stands, and USDT will not move it to another.
+      const over = approving(usdt, delivered, "Token(APPROVED).approve(SPENDER, 9);");
+      expect(over.route.calls).toHaveLength(2);
+      expect((await fulfil(over)).status).toBe("reverted");
+      expect(await allowance(usdt)).toBe(7n);
+
+      // The writer's own reset, written in the hook, is made as written.
+      const reset = approving(
+        usdt,
+        delivered,
+        "Token(APPROVED).approve(SPENDER, 0); Token(APPROVED).approve(SPENDER, 9);",
+      );
+      expect(reset.route.calls).toHaveLength(3);
+      expect((await fulfil(reset)).status).toBe("success");
       expect(await allowance(usdt)).toBe(9n);
-    }, 300_000);
-
-    it("FAILING-FIRST CONTROL: the same route without the reset is refused", async () => {
-      const usdt = await usdtLike();
-      const delivered = await token();
-      expect((await fulfil(approving(usdt, delivered, 7n))).status).toBe("success");
-
-      const second = approving(usdt, delivered, 9n);
-      const unreset: Intent = {
-        ...second,
-        route: { ...second.route, calls: second.route.calls.slice(1) },
-      };
-      expect((await fulfil(unreset)).status).toBe("reverted");
-      expect(await allowance(usdt)).toBe(7n);
     }, 300_000);
   });
 });

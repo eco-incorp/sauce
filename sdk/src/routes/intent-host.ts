@@ -34,14 +34,15 @@
  * which become the route's own. `.before(() => { … })` and `.after(() => { … })`, any number of
  * each among the route's modifiers, are HOOKS: closures the compiler only ever records, as the
  * calls they make (`record: "calls"`) — contracts' methods, `evm.call`s and token writes — which
- * become the route's around the body's; anything else in one is the compiler's located error. Each
- * is a part of the record, so their order survives; their names resolve on the destination, and a
- * Solana destination is refused before one is read. `.catch((e) => { … })` after it HANDLES the
- * body: the compiler builds the two as one program, `try { <body> } catch (e) { <handler> }`. The
- * chain's last record is bound at its site, so the compiler hands `bind` what it knows there — the
- * chain, the reward, the delivery, the modifiers, the hooks, the program or the recorded calls —
- * and calls `@sauce/intents` with what `bind` returns. A chain that stops before `receive` or
- * `then` is refused in the table's words.
+ * become the route's around the body's exactly as written, nothing delivered for them and no
+ * approve reset; anything else in one is the compiler's located error. Each is a part of the
+ * record, so their order survives; their names resolve on the destination, and a Solana
+ * destination is refused before one is read. `.catch((e) => { … })` after it HANDLES the body: the
+ * compiler builds the two as one program, `try { <body> } catch (e) { <handler> }`. The chain's
+ * last record is bound at its site, so the compiler hands `bind` what it knows there — the chain,
+ * the reward, the delivery, the modifiers, the hooks, the program or the recorded calls — and
+ * calls `@sauce/intents` with what `bind` returns. A chain that stops before `receive` or `then` is
+ * refused in the table's words.
  *
  * WHAT `bind` DOES. It builds the intent: the route's calls (the `before` hooks' calls, then each
  * recorded write or the delivered tokens' transfers into the Pot then its `cook`, then the `after`
@@ -522,37 +523,42 @@ function bindIntent(
     value: 0n,
   });
 
-  // Recorded calls — a body of token writes, or a hook — are the route's own calls, run by the
-  // Portal's Executor: not a program, so the Executor's checks rather than SafeERC20's. Every
-  // approve is reset to zero first, for a token (USDT) that refuses to move a standing allowance:
-  // one Executor runs every intent on a chain. What each transfer moves is the Executor's to spend,
-  // so it is added to `delivered`, when there is one to add to.
-  const recordedCalls = (
-    recorded: readonly RecordedCall[],
-    delivered: TokenAmount[] | undefined,
-  ): RouteCall[] =>
-    recorded.flatMap((call) => {
-      const method = call.callee.split(".")[1];
-      if (method !== "transfer" && method !== "approve") {
-        return fail(`\`.${method}(...)\` cannot become a route call`);
-      }
-      const token = valueOf(call.receiver, "a token");
-      if (!("literal" in token)) {
-        return fail(
-          "a token address must be known when the intent is built, not captured at run time",
-        );
-      }
-      const args = call.args.map((arg, i) =>
-        valueOf(arg, `argument ${i + 1} of \`.${method}(...)\``),
+  // A recorded token write — of a body of token writes, or of a hook — as the call it is: its
+  // token, known when the intent is built, and its arguments.
+  const tokenWrite = (
+    call: RecordedCall,
+  ): { method: "transfer" | "approve"; token: bigint; args: Value[] } => {
+    const method = call.callee.split(".")[1];
+    if (method !== "transfer" && method !== "approve") {
+      return fail(`\`.${method}(...)\` cannot become a route call`);
+    }
+    const token = valueOf(call.receiver, "a token");
+    if (!("literal" in token)) {
+      return fail(
+        "a token address must be known when the intent is built, not captured at run time",
       );
-      if (method === "transfer") delivered?.push({ token: token.literal, amount: args[1]! });
+    }
+    const args = call.args.map((arg, i) =>
+      valueOf(arg, `argument ${i + 1} of \`.${method}(...)\``),
+    );
+
+    return { method, token: token.literal, args };
+  };
+  // A body of token writes is the route's own calls, run by the Portal's Executor — not a program,
+  // so the Executor's checks rather than SafeERC20's. Every approve is reset to zero first, for a
+  // token (USDT) that refuses to move a standing allowance: one Executor runs every intent on a
+  // chain. What each transfer moves is the delivery when `.receive()` names none.
+  const recordedBody = (recorded: readonly RecordedCall[], delivered: TokenAmount[] | undefined) =>
+    recorded.flatMap((call): RouteCall[] => {
+      const { method, token, args } = tokenWrite(call);
+      if (method === "transfer") delivered?.push({ token, amount: args[1]! });
       const amount = args[1]!;
       const reset =
         method === "approve" && !("literal" in amount && amount.literal === 0n)
-          ? [tokenCall(token.literal, "approve", [args[0]!, { literal: 0n }])]
+          ? [tokenCall(token, "approve", [args[0]!, { literal: 0n }])]
           : [];
 
-      return [...reset, tokenCall(token.literal, method, args)];
+      return [...reset, tokenCall(token, method, args)];
     });
   // A contract's method a hook calls, or its `evm.call`: the call as written, its run-time values
   // sentinels the program writes over. A contract method sends nothing; an `evm.call` sends what
@@ -599,8 +605,10 @@ function bindIntent(
       value: value.literal,
     };
   };
-  // Each hook's calls, its closures in the order written: recorded as calls, never compiled.
-  const hookCalls = (hook: RouteHook, delivered: TokenAmount[]): RouteCall[] =>
+  // Each hook's calls, its closures in the order written: recorded as calls, never compiled, and
+  // each made exactly as written. A hook is low-level: nothing is delivered for it and no approve
+  // is reset, so what the Executor holds when it runs is the intent's to arrange.
+  const hookCalls = (hook: RouteHook): RouteCall[] =>
     parts
       .filter((part) => part.callee === `Received.${hook}`)
       .flatMap((part) => {
@@ -608,22 +616,21 @@ function bindIntent(
         if (closure === undefined || !("calls" in closure)) {
           return fail(`\`.${hook}(...)\` reached the lowering unrecorded — a bug in the lowering`);
         }
-        return closure.calls.flatMap((call) =>
-          "callee" in call ? recordedCalls([call], delivered) : [externalCall(call, hook)],
-        );
+        return closure.calls.map((call) => {
+          if (!("callee" in call)) return externalCall(call, hook);
+          const { method, token, args } = tokenWrite(call);
+          return tokenCall(token, method, args);
+        });
       });
 
-  // The delivery: what `.receive(...)` names — else, for a body of token writes, what its
-  // transfers move — and, on top of it, what the hooks' transfers move. `.receive(...)` is the
-  // body's, so a program's moves into its Pot whole; the hooks spend what is delivered for them.
-  const beforeDelivery: TokenAmount[] = [];
+  // The delivery: what `.receive(...)` names, else, for a body of token writes, what its
+  // transfers move.
   const bodyDelivery: TokenAmount[] = [];
-  const afterDelivery: TokenAmount[] = [];
-  const before = hookCalls("before", beforeDelivery);
+  const before = hookCalls("before");
   let bodyCalls: RouteCall[];
   if (body !== undefined && "recorded" in body) {
     level.recordedBodies.push({ span: body.span, destination });
-    bodyCalls = recordedCalls(
+    bodyCalls = recordedBody(
       body.recorded,
       explicitDelivery === undefined ? bodyDelivery : undefined,
     );
@@ -640,8 +647,8 @@ function bindIntent(
   } else {
     return fail("an intent's body must be a closure");
   }
-  const calls = [...before, ...bodyCalls, ...hookCalls("after", afterDelivery)];
-  const delivery = [...beforeDelivery, ...(explicitDelivery ?? bodyDelivery), ...afterDelivery];
+  const calls = [...before, ...bodyCalls, ...hookCalls("after")];
+  const delivery = explicitDelivery ?? bodyDelivery;
 
   const rewardSpec = tokenList(rewardItems, { part: "reward", chain: source }, valueOf);
   const offersNative =

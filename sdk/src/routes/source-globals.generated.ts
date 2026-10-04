@@ -89,7 +89,7 @@ export interface SauceIntentSentSteps<Used extends string> {
   /**
    * What the solver delivers on the destination, for the body to run with: each item an argument,
    * `{ token, amount }`, or one list of them. With none, a body of token writes is delivered what
-   * it moves, and a program nothing. What a hook transfers is delivered on top.
+   * it moves, and a program nothing.
    */
   receive(...delivery: readonly (SauceIntentTokenAmount | readonly SauceIntentTokenAmount[])[]): SauceIntentReceived;
 }
@@ -112,19 +112,20 @@ export interface SauceIntentReceivedSteps<Used extends string> {
    */
   fee(wei: bigint | number): SauceIntentReceived<Used | "fee">;
   /**
-   * Calls the Portal's Executor makes on the destination before the body runs: the closure is never
-   * compiled, each statement a call recorded as a route call of its own — a contract's method,
-   * `evm.call(target, value, data)`, or a token's `transfer` or `approve`. The Executor is the
-   * caller; the arguments are fixed when the intent is published; what a token transfer moves is
-   * delivered on top of what `.receive(...)` names. A hook that reverts reverts the fill,
-   * `.catch(...)` or not. Any number, in the order written. EVM destinations only.
+   * Calls the Portal's Executor makes on the destination before the body runs, exactly as written:
+   * the closure is never compiled, each statement a call recorded as a route call of its own — a
+   * contract's method, `evm.call(target, value, data)`, or a token's `transfer` or `approve`.
+   * Low-level: nothing is added, no delivery and no approve reset, so what the Executor holds when
+   * it runs is the intent's to arrange. The arguments are fixed when the intent is published. A
+   * hook that reverts reverts the fill, `.catch(...)` or not. Any number, in the order written. EVM
+   * destinations only.
    */
   before(hook: () => void): SauceIntentReceived<Used>;
   /**
    * Calls the Portal's Executor makes on the destination after the body has run, as `.before(...)`
-   * records them: never compiled, the Executor the caller, the arguments fixed when the intent is
-   * published, a revert reverting the fill. What the body holds in its Pot is not the Executor's to
-   * spend. Any number, in the order written. EVM destinations only.
+   * records them: exactly as written, nothing added, the Executor the caller, the arguments fixed
+   * when the intent is published, a revert reverting the fill. What the body holds in its Pot is
+   * not the Executor's to spend. Any number, in the order written. EVM destinations only.
    */
   after(hook: () => void): SauceIntentReceived<Used>;
   /**

@@ -3,8 +3,8 @@
  * Executor makes around an intent's body, recorded from the closure and never compiled. What is
  * asserted is the route each builds, call by call: its order (`[before…, the delivery moved into
  * the Pot, the cook, after…]`, or `[before…, the body's calls…, after…]` for a body of token
- * writes), each call's encoding, the reset in front of every approve, where a value the program
- * computes lands, and what is refused — a closure the compiler could not record, a Solana
+ * writes), each call's encoding — exactly as written, with no call added and the delivery
+ * untouched — where a value the program computes lands, and what is refused — a closure the compiler could not record, a Solana
  * destination, a hook out of place. And `await` of an intent with hooks is its `.then`, byte for
  * byte.
  *
@@ -155,68 +155,71 @@ describe("the route a hook adds to", () => {
   const deliveryOf = (program: CompiledSauceProgram) =>
     program.intents[0]!.intent.route.tokens.map((t) => [denormalizeToEvm(t.token), t.amount]);
 
-  it("delivers what the hooks' transfers move on top of what `.receive(...)` names: it is the body's", () => {
+  it("emits a hook's token writes exactly as written: nothing delivered, no approve reset", () => {
     const hooks = `
     .before(() => { USDC.transfer(HOOK, 1); USDC.approve(SPENDER, 9); })
     .after(() => { USDC.transfer(HOOK, 2); })`;
-    // A program: what `.receive(...)` names moves into its Pot whole, and the hooks spend their
-    // own. An approve moves nothing.
-    const compiled = compile(opened(hooks));
-    expect(deliveryOf(compiled)).toEqual([
-      [usdc, 1n],
-      [usdc, 1_000_000n],
-      [usdc, 2n],
-    ]);
-    expect(callsOf(compiled)).toEqual([
-      write(usdc, "transfer", HOOK, 1n),
-      write(usdc, "approve", SPENDER, 0n),
-      write(usdc, "approve", SPENDER, 9n),
-      delivered(1_000_000n),
-      cook,
-      write(usdc, "transfer", HOOK, 2n),
-    ]);
-
     const named = (receive: string, body: string) => `function main() {
   Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
     .receive(${receive})${hooks}
     .then(() => { ${body} });
 }`;
-    // `.receive()` naming nothing: a body of token writes is delivered what it moves, between the
-    // hooks'; a program, nothing, and only the hooks' transfers reach the Executor.
-    expect(deliveryOf(compile(named("", "USDC.transfer(RECIPIENT, 7);")))).toEqual([
-      [usdc, 1n],
-      [usdc, 7n],
-      [usdc, 2n],
-    ]);
-    const nothing = compile(named("", PROGRAM));
-    expect(deliveryOf(nothing)).toEqual([
-      [usdc, 1n],
-      [usdc, 2n],
-    ]);
-    expect(callsOf(nothing)).not.toContainEqual(delivered(1n));
-    // A body of token writes given a delivery takes it as it is.
-    expect(
-      deliveryOf(compile(named("{ token: USDC, amount: 7 }", "USDC.transfer(RECIPIENT, 7);"))),
-    ).toEqual([
-      [usdc, 1n],
-      [usdc, 7n],
-      [usdc, 2n],
-    ]);
+    const without = (receive: string, body: string) => named(receive, body).replace(hooks, "");
+    for (const [receive, body] of [
+      ["{ token: USDC, amount: 1000000 }", PROGRAM],
+      ["", PROGRAM],
+      ["", "USDC.transfer(RECIPIENT, 7);"],
+      ["{ token: USDC, amount: 7 }", "USDC.transfer(RECIPIENT, 7);"],
+    ] as const) {
+      const hooked = compile(named(receive, body));
+      // What the intent declares, and only that: the hooks' transfers add nothing to it.
+      expect(deliveryOf(hooked)).toEqual(deliveryOf(compile(without(receive, body))));
+      // The hooks' three calls, one each, around the body's.
+      const calls = callsOf(hooked);
+      expect(calls.slice(0, 2)).toEqual([
+        write(usdc, "transfer", HOOK, 1n),
+        write(usdc, "approve", SPENDER, 9n),
+      ]);
+      expect(calls.at(-1)).toEqual(write(usdc, "transfer", HOOK, 2n));
+      expect(calls.slice(2, -1)).toEqual(callsOf(compile(without(receive, body))));
+    }
+    // `.receive()` naming nothing, a program body: nothing is delivered at all.
+    expect(deliveryOf(compile(named("", PROGRAM)))).toEqual([]);
   });
 
-  it("resets every approve to zero first, as the Executor's other approves are; not one of zero", () => {
+  it("an approve is one call; a writer who needs a reset (USDT) writes it", () => {
     expect(
       callsOf(
         compile(
-          opened(".before(() => { USDC.approve(SPENDER, 5); Token(HOOK).approve(SPENDER, 0); })"),
+          opened(
+            ".before(() => { USDC.approve(SPENDER, 5); USDC.approve(HOOK, 0); USDC.approve(HOOK, 6); })",
+          ),
         ),
       ),
     ).toEqual([
-      write(usdc, "approve", SPENDER, 0n),
       write(usdc, "approve", SPENDER, 5n),
-      write(address(HOOK), "approve", SPENDER, 0n),
+      write(usdc, "approve", HOOK, 0n),
+      write(usdc, "approve", HOOK, 6n),
       delivered(1_000_000n),
       cook,
+    ]);
+  });
+
+  it("leaves a body of token writes as it was: its approves still reset, its transfers delivered", () => {
+    expect(
+      callsOf(
+        compile(`function main() {
+  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
+    .receive()
+    .before(() => { USDC.approve(SPENDER, 1); })
+    .then(() => { USDC.approve(HOOK, 2); USDC.transfer(RECIPIENT, 3); });
+}`),
+      ),
+    ).toEqual([
+      write(usdc, "approve", SPENDER, 1n),
+      write(usdc, "approve", HOOK, 0n),
+      write(usdc, "approve", HOOK, 2n),
+      write(usdc, "transfer", RECIPIENT, 3n),
     ]);
   });
 
@@ -344,15 +347,6 @@ function main() {
         encodeFunctionData({
           abi: erc20Abi,
           functionName: "approve",
-          args: [getAddress(address(SPENDER)), 0n],
-        }),
-        0n,
-      ],
-      [
-        usdc,
-        encodeFunctionData({
-          abi: erc20Abi,
-          functionName: "approve",
           args: [getAddress(address(SPENDER)), 3n],
         }),
         0n,
@@ -438,7 +432,7 @@ describe("a hook's arguments", () => {
     const [intent] = compile(program).intents;
     // Not known when the intent is built: two run-time values of the publication.
     expect(intent!.captures).toEqual(["spender", "amount"]);
-    const approve = intent!.intent.route.calls[1]!.data;
+    const approve = intent!.intent.route.calls[0]!.data;
     for (const { sentinel } of intent!.sentinels) {
       expect(approve.toLowerCase()).toContain(sentinel.toString(16));
     }
@@ -462,7 +456,6 @@ describe("a hook's arguments", () => {
     const [intent] = compile(program, [address(SPENDER) as Hex, 5n]).intents;
     expect(intent!.captures).toEqual([]);
     expect(callsOf(compile(program, [address(SPENDER) as Hex, 5n]))).toEqual([
-      write(usdc, "approve", SPENDER, 0n),
       write(usdc, "approve", SPENDER, 5n),
       delivered(1_000_000n),
       cook,
