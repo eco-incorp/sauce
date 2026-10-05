@@ -11,6 +11,14 @@ else to install and no compiler checkout to keep in sync. For [the `sauce` comma
 the package once globally: `npm i -g @eco-incorp/sauce`, then `sauce --version`
 (`npm i -g @eco-incorp/sauce@latest` upgrades it).
 
+## Where a program runs
+
+A compiled program runs in a **cook**: one transaction to a **Pot**, the contract that holds what the
+program spends and makes its calls. Every cook pays a flat fee to the **Kitchen**, the contract that
+creates Pots. Your own programs run on your Pot, which only you can cook on. The intent below runs
+its body on another Pot, the one the destination chain's intent contracts own and every solver's
+fulfillment cooks on. [Kitchen, Pot and cook](../concepts/kitchen-pot-cook.md) explains the three.
+
 ## Build your first intent
 
 This is a complete program. It builds an Eco intent offline: the creator and the fee are fixtures
