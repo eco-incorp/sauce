@@ -1462,6 +1462,18 @@ for (const file of [
 ].filter(existsSync)) {
   for (const m of read(file).matchAll(/[A-Za-z_$][\w$]*/g)) KNOWN.add(m[0]);
 }
+// The deployments file's keys, which a skill names (`svm.kitchen.programId`) to send its reader there.
+{
+  const keys = (node) => {
+    if (node === null || typeof node !== "object") return;
+    for (const [key, value] of Object.entries(node)) {
+      KNOWN.add(key);
+      keys(value);
+    }
+  };
+  const file = join(SKILLS_DIR, "sauce-chains", "references", "deployments.json");
+  if (existsSync(file)) keys(JSON.parse(read(file)));
+}
 // SauceScript keywords and builtins, JavaScript keywords, and tool names.
 for (const word of `main require throw ctx evm svm abi hex Math self catch at owner dataLen Uint256
   Address Account Writable Signer bytes bool string void true false null undefined bigint number
