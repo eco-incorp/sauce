@@ -45,11 +45,11 @@
  * quoting needs no Vault-account read for the swap MATH (only for the CPI's
  * account list: `withdrawAuthority`/`authorityBump`/`beneficiary`).
  */
-import { address, getAddressDecoder, getAddressEncoder, isOffCurveAddress } from "@solana/kit";
+import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import { sha256, utf8Bytes } from "../../bytes.js";
+import { utf8Bytes } from "../../bytes.js";
 import { readUintLE } from "./math.js";
-import { memoizedGetProgramDerivedAddress } from "./pda-memo.js";
+import { memoizedCreateProgramAddress, memoizedGetProgramDerivedAddress } from "./pda-memo.js";
 
 export const STABLE_SWAP_PROGRAM_ID = address("swapNyd8XiQwJ6ianp9snpu4brUqFxadzvHebnAXjJZ");
 export const WEIGHTED_SWAP_PROGRAM_ID = address("swapFpHZwjELNnjvThjajtiVmkz3yPQEHjLtka2fwHW");
@@ -232,32 +232,23 @@ export function decodeStabblePoolCommon(
 }
 
 /**
- * sha256(seeds... || programId || "ProgramDerivedAddress") — the raw
- * create_program_address with a KNOWN bump (never find_program_address:
- * would be wrong if the stored bump isn't the canonical one, and here it's
- * always read straight off the Vault account, never searched).
+ * vault_authority = create_program_address(["vault_authority", vault, [bump]], VAULT_PROGRAM_ID) —
+ * verified against live mainnet vaults. A KNOWN bump, read straight off the Vault account (never
+ * find_program_address: that would be wrong if the stored bump isn't the canonical one).
  */
-export function createProgramAddress(seeds: Uint8Array[], programId: Address): Address {
-  const encoder = getAddressEncoder();
-  const digest = sha256(...seeds, encoder.encode(programId) as Uint8Array, "ProgramDerivedAddress");
-  const decoded = getAddressDecoder().decode(digest);
-  if (!isOffCurveAddress(decoded)) {
-    throw new Error(`stabble PDA seeds derive an on-curve address under ${programId}`);
-  }
-  return decoded;
-}
-
-/** vault_authority = create_program_address(["vault_authority", vault, [bump]], VAULT_PROGRAM_ID) — verified against live mainnet vaults. */
 export function deriveStabbleVaultAuthority(vault: Address, authorityBump: number): Address {
   const encoder = getAddressEncoder();
-  return createProgramAddress(
-    [
-      utf8Bytes("vault_authority"),
-      encoder.encode(vault) as Uint8Array,
-      Uint8Array.of(authorityBump),
-    ],
-    STABBLE_VAULT_PROGRAM_ID,
-  );
+  const { address: authority, offCurve } = memoizedCreateProgramAddress(STABBLE_VAULT_PROGRAM_ID, [
+    utf8Bytes("vault_authority"),
+    encoder.encode(vault),
+    Uint8Array.of(authorityBump),
+  ]);
+  if (!offCurve) {
+    throw new Error(
+      `stabble PDA seeds derive an on-curve address under ${STABBLE_VAULT_PROGRAM_ID}`,
+    );
+  }
+  return authority;
 }
 
 /** Canonical ATA(owner, mint) under the classic SPL Token program — a real find_program_address (off-curve search), needed once per pool at fetch time. */

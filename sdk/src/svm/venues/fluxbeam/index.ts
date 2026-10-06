@@ -105,8 +105,8 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import { sha256 } from "../../../bytes.js";
 import { readUintLE } from "../math.js";
+import { memoizedCreateProgramAddress } from "../pda-memo.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
 
 const SLUG = "fluxbeam";
@@ -189,15 +189,10 @@ function getAddressEncoded(value: Address): Uint8Array {
  * `CZEZDGDkzsn4zTfdw6XRm4U1o6GatotMhhRmVEzdwGS3`, bump 255).
  */
 function deriveSwapAuthority(pool: Address, bumpSeed: number): Address {
-  const codec = getAddressCodec();
-  return codec.decode(
-    sha256(
-      getAddressEncoded(pool),
-      Uint8Array.of(bumpSeed),
-      getAddressEncoded(FLUXBEAM_PROGRAM_ID),
-      "ProgramDerivedAddress",
-    ),
-  ) as Address;
+  return memoizedCreateProgramAddress(FLUXBEAM_PROGRAM_ID, [
+    getAddressEncoded(pool),
+    Uint8Array.of(bumpSeed),
+  ]).address;
 }
 
 /**

@@ -32,12 +32,7 @@
  * id it bakes in, and pays the fee into it. One fee and one treasury, whichever way a program runs;
  * `fetchExecutionFee` reads it for either.
  */
-import {
-  getAddressEncoder,
-  getBase64Encoder,
-  getProgramDerivedAddress,
-  AccountRole,
-} from "@solana/kit";
+import { getAddressEncoder, getBase64Encoder, AccountRole } from "@solana/kit";
 import type {
   AccountLookupMeta,
   AccountMeta,
@@ -47,6 +42,7 @@ import type {
   Rpc,
 } from "@solana/kit";
 
+import { memoizedGetProgramDerivedAddressWithBump } from "./venues/pda-memo.js";
 import { assertEngineRunsCompiler } from "../deployments/releases.js";
 
 /** One entry of a program's own account tail, in the shape a kit `Instruction` carries. */
@@ -168,10 +164,11 @@ export async function derivePotPda(
   salt: Uint8Array,
 ): Promise<KitchenPda> {
   assertLength(salt, SALT_BYTES, "a pot salt");
-  const [address, bump] = await getProgramDerivedAddress({
-    programAddress: kitchen,
-    seeds: [POT_SEED, getAddressEncoder().encode(owner), salt],
-  });
+  const [address, bump] = await memoizedGetProgramDerivedAddressWithBump(kitchen, [
+    utf8(POT_SEED),
+    getAddressEncoder().encode(owner),
+    salt,
+  ]);
 
   return { address, bump };
 }
@@ -183,10 +180,9 @@ export async function derivePotPda(
  * it writable even when the configured fee is zero.
  */
 export async function deriveExecutionFeeConfigPda(kitchen: Address): Promise<KitchenPda> {
-  const [address, bump] = await getProgramDerivedAddress({
-    programAddress: kitchen,
-    seeds: [EXECUTION_FEE_SEED],
-  });
+  const [address, bump] = await memoizedGetProgramDerivedAddressWithBump(kitchen, [
+    utf8(EXECUTION_FEE_SEED),
+  ]);
 
   return { address, bump };
 }
@@ -252,10 +248,9 @@ export async function fetchExecutionFee(
  * key, so whoever can upgrade the kitchen is whoever can price it.
  */
 export async function deriveProgramDataPda(program: Address): Promise<KitchenPda> {
-  const [address, bump] = await getProgramDerivedAddress({
-    programAddress: BPF_LOADER_UPGRADEABLE,
-    seeds: [getAddressEncoder().encode(program)],
-  });
+  const [address, bump] = await memoizedGetProgramDerivedAddressWithBump(BPF_LOADER_UPGRADEABLE, [
+    getAddressEncoder().encode(program),
+  ]);
 
   return { address, bump };
 }
@@ -266,10 +261,11 @@ export async function deriveCodeBufferPda(
   owner: Address,
   nonce: bigint,
 ): Promise<KitchenPda> {
-  const [address, bump] = await getProgramDerivedAddress({
-    programAddress: kitchen,
-    seeds: [CODE_BUFFER_SEED, getAddressEncoder().encode(owner), u64(nonce)],
-  });
+  const [address, bump] = await memoizedGetProgramDerivedAddressWithBump(kitchen, [
+    utf8(CODE_BUFFER_SEED),
+    getAddressEncoder().encode(owner),
+    u64(nonce),
+  ]);
 
   return { address, bump };
 }
@@ -281,13 +277,16 @@ export async function deriveCodeBufferPda(
  * store a pointer to the other for the kitchen to validate.
  */
 export async function deriveCodePda(kitchen: Address, codeBuffer: Address): Promise<KitchenPda> {
-  const [address, bump] = await getProgramDerivedAddress({
-    programAddress: kitchen,
-    seeds: [CODE_SEED, getAddressEncoder().encode(codeBuffer)],
-  });
+  const [address, bump] = await memoizedGetProgramDerivedAddressWithBump(kitchen, [
+    utf8(CODE_SEED),
+    getAddressEncoder().encode(codeBuffer),
+  ]);
 
   return { address, bump };
 }
+
+/** Seeds reach the memo as bytes only (no string/byte aliasing); kit encodes a string seed as UTF-8. */
+const utf8 = (seed: string): Uint8Array => new TextEncoder().encode(seed);
 
 // --- Pot lifecycle ----------------------------------------------------------
 

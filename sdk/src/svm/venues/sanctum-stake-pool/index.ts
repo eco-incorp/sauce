@@ -143,7 +143,8 @@
  */
 import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import { sha256 } from "../../../bytes.js";
+import { utf8Bytes } from "../../../bytes.js";
+import { memoizedCreateProgramAddress } from "../pda-memo.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
@@ -229,26 +230,13 @@ export interface SanctumStakePoolConfig extends PoolConfig {
   direction: "solToLst";
 }
 
+/** create_program_address(seeds=[pool, "withdraw", [bump]], programId), with no on-curve check. */
 function withdrawAuthorityAddress(programId: Address, pool: Address, bump: number): Address {
-  const decoder = getAddressDecoder();
-  // create_program_address(seeds=[pool, "withdraw", [bump]], programId):
-  // sha256(seed_1 || ... || programId || "ProgramDerivedAddress").
-  return decoder.decode(
-    sha256(
-      getPubkeyBytes(pool),
-      "withdraw",
-      Uint8Array.of(bump),
-      getPubkeyBytes(programId),
-      "ProgramDerivedAddress",
-    ),
-  );
-}
-
-// @solana/kit's Address is a branded base58 string; decoding it back to raw
-// bytes for the PDA hash needs the matching encoder — the only place in the
-// adapter that needs raw pubkey bytes rather than an opaque Address.
-function getPubkeyBytes(addr: Address): Uint8Array {
-  return Uint8Array.from(getAddressEncoder().encode(addr));
+  return memoizedCreateProgramAddress(programId, [
+    getAddressEncoder().encode(pool),
+    utf8Bytes("withdraw"),
+    Uint8Array.of(bump),
+  ]).address;
 }
 
 async function fetchSanctumStakePoolConfig(

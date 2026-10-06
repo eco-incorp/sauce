@@ -1,4 +1,4 @@
-import { isSignerRole } from "@solana/kit";
+import { getAddressEncoder, getU64Encoder, isSignerRole } from "@solana/kit";
 import type {
   Address,
   AddressesByLookupTableAddress,
@@ -10,14 +10,15 @@ import type {
   TransactionSigner,
 } from "@solana/kit";
 import {
+  ADDRESS_LOOKUP_TABLE_PROGRAM_ADDRESS,
   fetchAddressLookupTable,
-  findAddressLookupTablePda,
-  getCreateLookupTableInstructionAsync,
+  getCreateLookupTableInstruction,
   getExtendLookupTableInstruction,
 } from "@solana-program/address-lookup-table";
 import type { ResolvedAccountMeta } from "./resolve.js";
 import { buildExecuteTransaction } from "./transaction.js";
 import type { SignedExecuteTransaction } from "./transaction.js";
+import { memoizedGetProgramDerivedAddressWithBump } from "./venues/pda-memo.js";
 
 /**
  * Max addresses per extend instruction — keeps each extend transaction inside
@@ -101,10 +102,18 @@ export async function createAltWithAddresses({
   }
 
   const recentSlot = await rpc.getSlot({ commitment: "finalized" }).send();
-  const [createInstruction, [lookupTableAddress]] = await Promise.all([
-    getCreateLookupTableInstructionAsync({ authority: authority.address, payer, recentSlot }),
-    findAddressLookupTablePda({ authority: authority.address, recentSlot }),
-  ]);
+  // The table's PDA, `[authority, recentSlot]`: what the async instruction builder would derive.
+  const lookupTable = await memoizedGetProgramDerivedAddressWithBump(
+    ADDRESS_LOOKUP_TABLE_PROGRAM_ADDRESS,
+    [getAddressEncoder().encode(authority.address), getU64Encoder().encode(recentSlot)],
+  );
+  const [lookupTableAddress] = lookupTable;
+  const createInstruction = getCreateLookupTableInstruction({
+    address: lookupTable,
+    authority: authority.address,
+    payer,
+    recentSlot,
+  });
 
   const chunkSize = extendChunkSize(payer.address, authority.address);
   const batches: Instruction[][] = [[createInstruction]];

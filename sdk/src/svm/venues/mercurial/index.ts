@@ -113,10 +113,10 @@
  * fragment re-checks it live every trade (a disabled pool quotes 0 and never
  * pays its CPI, the same self-drop-by-zero-quote convention Saber uses).
  */
-import { address, getAddressDecoder, getAddressEncoder, isOffCurveAddress } from "@solana/kit";
+import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import { sha256 } from "../../../bytes.js";
 import { readUintLE } from "../math.js";
+import { memoizedCreateProgramAddress } from "../pda-memo.js";
 import type { AccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
 import { parseMintExtensions } from "../../token-extensions.js";
@@ -157,14 +157,11 @@ export interface MercurialPoolConfig extends PoolConfig {
  */
 async function deriveMercurialAuthority(pool: Address, nonce: number): Promise<Address> {
   const encoder = getAddressEncoder();
-  const digest = sha256(
-    encoder.encode(pool) as Uint8Array,
+  const { address: authority, offCurve } = memoizedCreateProgramAddress(MERCURIAL_PROGRAM_ID, [
+    encoder.encode(pool),
     Uint8Array.of(nonce),
-    encoder.encode(MERCURIAL_PROGRAM_ID) as Uint8Array,
-    "ProgramDerivedAddress",
-  );
-  const authority = getAddressDecoder().decode(digest);
-  if (!isOffCurveAddress(authority)) {
+  ]);
+  if (!offCurve) {
     throw new Error(`${SLUG} pool ${pool} nonce ${nonce} derives an on-curve swap authority`);
   }
   return authority;
