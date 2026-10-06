@@ -21,8 +21,8 @@ import { parseSauce } from "../routes/parse.js";
 import { resolveContractReference } from "../routes/protocol-names.js";
 import { resolveNamespace } from "../routes/accessor-index.js";
 import { addressOn } from "../descriptors/query.js";
-import { chainSlugForKey, isChainKey } from "../routes/accessor-index.js";
-import { requireChain } from "../chains/canonical.js";
+import { intentParts } from "../routes/intent-parts.js";
+import { isChainKey } from "../routes/accessor-index.js";
 import { resolveTokenMap } from "../routes/token-registry.js";
 import { pascalOfSlug } from "../routes/builder.js";
 import type { DefineValue } from "./args.js";
@@ -73,62 +73,6 @@ export function shownValue(
     : getAddress(numberToHex(word, { size: 20 }));
 }
 
-/** A source range that runs on another chain: an intent's body or its delivery argument. */
-interface IntentPart {
-  readonly chain: CanonicalChain;
-  readonly start: number;
-  readonly end: number;
-  /** A handler: it runs on `chain` in its program's place, beside wherever else it runs. */
-  readonly handler?: true;
-}
-
-/**
- * The parts of `program` that run on an intent's destination: each `.then(...)` body of an intent
- * opened on a chain's `Portal` (`Arbitrum.Portal.send(…)…then(() => { … })`), and the items of its
- * `.receive(...)`, which name the destination's tokens.
- */
-function intentParts(program: AstNode): IntentPart[] {
-  const parts: IntentPart[] = [];
-  walk(program, (node) => {
-    if (node.type !== "CallExpression") return;
-    const callee = node.callee as AstNode;
-    if (callee.type !== "MemberExpression") return;
-    const method = (callee.property as AstNode | undefined)?.name;
-    if (method !== "then" && method !== "receive") return;
-    const chain = portalChain(callee.object as AstNode);
-    if (chain === undefined) return;
-    for (const part of (node.arguments as AstNode[] | undefined) ?? []) {
-      parts.push({ chain, start: part.start, end: part.end });
-    }
-  });
-
-  return parts;
-}
-
-/** The chain whose `Portal` a chain of calls starts from, or `undefined`. */
-function portalChain(node: AstNode): CanonicalChain | undefined {
-  let at: AstNode | undefined = node;
-  while (at !== undefined) {
-    if (at.type === "CallExpression") {
-      at = at.callee as AstNode;
-    } else if (at.type === "MemberExpression") {
-      const object = at.object as AstNode;
-      const property = (at.property as AstNode | undefined)?.name;
-      if (
-        property === "Portal" &&
-        object.type === "Identifier" &&
-        isChainKey(object.name as string)
-      ) {
-        return requireChain(chainSlugForKey(object.name as string)!);
-      }
-      at = object;
-    } else {
-      return undefined;
-    }
-  }
-  return undefined;
-}
-
 /** A name the file reads, and the chains of the intents it is read inside, outermost first. */
 interface ReadName {
   readonly name: string;
@@ -167,24 +111,11 @@ export function namesRead(text: string, chain: CanonicalChain): readonly ReadNam
   const names: ReadName[] = [];
   walk(program, (node) => {
     if (node.type !== "Identifier" || skipped.has(node)) return;
-    const around = parts.filter((part) => part.start <= node.start && node.end <= part.end);
-    const path = around
-      .filter((part) => part.handler !== true)
+    const path = parts
+      .filter((part) => part.start <= node.start && node.end <= part.end)
       .sort((a, b) => b.end - b.start - (a.end - a.start))
       .map((part) => part.chain);
-    // A handler is read on each chain it runs on, the one the code around it runs on included only
-    // where the compile reports it handling a program there.
-    const handled = new Map(
-      around.filter((part) => part.handler === true).map((part) => [part.chain.id, part.chain]),
-    );
-    if (handled.size === 0) {
-      names.push({ name: node.name as string, path });
-      return;
-    }
-    const enclosing = (path.at(-1) ?? chain).id;
-    for (const on of handled.values()) {
-      names.push({ name: node.name as string, path: on.id === enclosing ? path : [...path, on] });
-    }
+    names.push({ name: node.name as string, path });
   });
 
   return names;

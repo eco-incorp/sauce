@@ -5,7 +5,6 @@
  * ```js
  * export const chainId = 8453;
  * export const USDC = new TokenOf("USDC", 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913, 6);
- * export const WBTC = new Absent("`WBTC` is not a token or protocol on base. …", "WBTC");
  * export const UniswapV3 = new NsUniswapV3({ Factory: ABI_3.at(0x33128a8f…), Pool: (address) => ABI_4.at(address) });
  * export const Arbitrum = new OnArbitrum(); // its chain id, its `Portal`, its contracts
  * ```
@@ -14,8 +13,8 @@
  * (`descriptors/`), chains and eco-routes' deployments — and nothing is enumerated by the program:
  * the compiler makes a module constant only when a program reads it, so Ethereum's two thousand
  * names cost a program its parsing and nothing else. The classes are `@sauce/names`' (`Token`,
- * `Absent`, `Refused`, `Holding`) and `@sauce/intents`' (`Portal`, `Level`), and the ones written
- * here: a class per protocol namespace and per chain.
+ * `Holding`) and `@sauce/intents`' (`Portal`, `Level`), and the ones written here: a class per
+ * protocol namespace and per chain.
  *
  * WHAT A CHAIN'S MODULE EXPORTS:
  *  - `chainId`/`CHAIN_ID`, and each protocol contract's address key (`UniswapV3_Factory`);
@@ -29,8 +28,11 @@
  *  - every chain's name: its chain id where it is compared (`chainId == Ethereum`), its `Portal`,
  *    which opens an intent whose body runs there, and its contracts (`Base.UniswapV3.Factory`),
  *    whose addresses a program passes across chains.
- * A name some chain has and this one lacks is an `Absent`: it compares as zero, so `if (X != 0)` is
- * decided while compiling, and any other use is a compile error saying why.
+ * A module exports only what its chain has. A dotted name the chain lacks (`PancakeswapV3.Factory`,
+ * `Base.AaveV3.Pool`) is the compiler's to fold: it compares as zero, so `if (X != 0)` is decided
+ * while compiling, and the compile reports each such path (`absentPaths`), which the SDK holds to the
+ * registry so a typo is refused (`unknown-global.ts`). Any other use of a name the chain lacks is a
+ * compile error, which the SDK words for the chain.
  *
  * WHAT DEPENDS ON THE COMPILE. A `tokens` override and a chain value chosen by the caller change
  * this chain's names; the intent defaults (`intents`) and each destination's Kitchen fee change its
@@ -61,9 +63,9 @@ import type { IntentDefaults } from "./intent-defaults.js";
 import { resolveIntentPot } from "./intent-pot.js";
 import { toUniversalAddress } from "./normalize.js";
 import type { ProtocolNameOptions } from "./protocol-names.js";
-import { registryTokenSymbols, registryTokens, resolveTokenMap } from "./token-registry.js";
+import { registryTokens, resolveTokenMap } from "./token-registry.js";
 import type { AddressInput } from "./types.js";
-import { nearMatches, protocolsOn } from "./unknown-global.js";
+import { notDeployed } from "./unknown-global.js";
 
 /** What a chain's module is written with beyond the chain itself. */
 export interface ChainModuleOptions {
@@ -142,16 +144,6 @@ class Imports {
     return [...this.names].map(([path, name]) => `import ${name} from "./${path}";`);
   }
 }
-
-/** Why a contract is absent on `chain`, as the compile says it. */
-const notDeployed = (descriptor: ContractDescriptor, chain: CanonicalChain): string =>
-  `Contract '${descriptor.contract}' (${descriptor.protocol}) is not deployed on '${chain.slug}'` +
-  ` (available: ${descriptor.chains.length > 0 ? descriptor.chains.join(", ") : "(none)"})`;
-
-/** Why a contract is absent where a chain-qualified name names it: not on that chain. */
-const notDeployedThere = (descriptor: ContractDescriptor): string =>
-  `Contract '${descriptor.contract}' (${descriptor.protocol}) is not deployed on the chain that ` +
-  `qualifies it (available: ${descriptor.chains.length > 0 ? descriptor.chains.join(", ") : "(none)"})`;
 
 const widened = (descriptor: ContractDescriptor): string =>
   `${descriptor.protocol}.${descriptor.contract}'s vendored ABI is "widened" (computed selectors ` +
@@ -300,7 +292,8 @@ function namespaceClass(key: string, namespace: Namespace): string {
 
   return [
     `class Ns${key} {`,
-    `  constructor(c, address, reason) { ${fields.map((name) => `this.${name} = c.${name};`).join(" ")} this.address = address; this.reason = reason; }`,
+    // A contract the chain lacks is left unset, so a comparison with it is the compiler's to decide.
+    `  constructor(c, address, reason) { ${fields.map((name) => `if (c.${name} !== undefined) this.${name} = c.${name};`).join(" ")} this.address = address; this.reason = reason; }`,
     conversion,
     "  toString() { return this.reason; }",
     ...methods,
@@ -308,115 +301,57 @@ function namespaceClass(key: string, namespace: Namespace): string {
   ].join("\n");
 }
 
-/** One module's namespaces: what each chain's holds, and the absent names they share. */
+/** One module's namespaces: what each chain's holds of each. */
 class Namespaces {
-  readonly lines: string[] = [];
-  private readonly shares = new Map<string, string>();
-
-  /** `svm`: a Solana chain, which no EVM contract is on — every contract absent there. */
   constructor(
     private readonly imports: Imports,
     private readonly allowWidened: boolean,
-    private readonly svm: CanonicalChain | undefined,
   ) {}
 
-  /** A module constant of `value`, made once and named by `key`. */
-  private shared(key: string, value: () => string): string {
-    let name = this.shares.get(key);
-    if (name === undefined) {
-      name = `A_${this.shares.size}`;
-      this.shares.set(key, name);
-      this.lines.push(`const ${name} = ${value()};`);
-    }
-    return name;
-  }
-
-  /** One contract on `chain`, as a namespace holds it: bound at its address, an interface as a
-   *  function of an address, an address-only contract as its address, or absent. */
-  private contract(descriptor: ContractDescriptor, chain: CanonicalChain, own: boolean): string {
-    if (this.svm !== undefined) {
-      const reason = `\`${pascalOfSlug(descriptor.protocol)}.${descriptor.contract}\` is an EVM contract; ${this.svm.slug} has none`;
-      return this.shared(`svm ${reason}`, () => `new Absent(${str(reason)})`);
-    }
-    const address = addressOn(descriptor, chain);
+  /** One contract on `chain`, as a namespace holds it — bound at its address, an interface as a
+   *  function of an address, an address-only contract as its address — or `undefined` where the
+   *  chain has none to give: not deployed there, or its ABI widened. */
+  private contract(descriptor: ContractDescriptor, chain: CanonicalChain): string | undefined {
     if (descriptor.kind === "interface") {
       return `(address) => ${this.imports.abiOf(descriptor)}.at(address)`;
     }
-    if (address === undefined) {
-      return own
-        ? `new Absent(${str(notDeployed(descriptor, chain))})`
-        : this.shared(
-            `${descriptor.protocol}/${descriptor.contract}`,
-            () => `new Absent(${str(notDeployedThere(descriptor))})`,
-          );
-    }
+    const address = addressOn(descriptor, chain);
+    if (address === undefined) return undefined;
     if (descriptor.kind === "address-only") return word(address);
-    if (descriptor.coverage.typeFidelity === "widened" && !this.allowWidened) {
-      return this.shared(
-        `widened ${descriptor.protocol}/${descriptor.contract}`,
-        () => `new Absent(${str(widened(descriptor))})`,
-      );
-    }
+    if (descriptor.coverage.typeFidelity === "widened" && !this.allowWidened) return undefined;
 
     return `${this.imports.abiOf(descriptor)}.at(${word(address)})`;
   }
 
-  /** The namespace `key` on `chain`: on the program's own chain (`own`), or another's. */
-  value(key: string, namespace: Namespace, chain: CanonicalChain, own: boolean): string {
-    const contracts = namespaceContracts(namespace);
-    const deployedThere = contracts.some(
-      ([, found]) =>
-        !("ambiguous" in found) &&
-        found.kind !== "interface" &&
-        addressOn(found, chain) !== undefined,
-    );
-    if (this.svm !== undefined) {
-      return `new Ns${key}({ ${contracts
-        .map(
-          ([name, found]) =>
-            `${name}: ${"ambiguous" in found ? `new Absent(${str(found.ambiguous)})` : this.contract(found, chain, own)}`,
-        )
-        .join(
-          ", ",
-        )} }, undefined, ${str(`\`${key}\` is an EVM contract; ${this.svm.slug} has none`)})`;
-    }
-    const make = (reasonOf: (chosen: string) => string): string => {
-      const fields = contracts.map(([name, found]) =>
-        "ambiguous" in found
-          ? `${name}: ${this.shared(`ambiguous ${key}.${name}`, () => `new Refused(${str(found.ambiguous)})`)}`
-          : `${name}: ${this.contract(found, chain, own)}`,
-      );
-      const main =
-        namespace.kind === "protocol" && namespace.defaultContract !== undefined
-          ? namespace.contracts.get(namespace.defaultContract)
-          : undefined;
-      let address: string | undefined;
-      let reason: string;
-      if (main === undefined) {
-        reason = namesNoSingle(key, namespace);
+  /** The namespace `key` on `chain`, or `undefined` where the chain has none of it: its contracts
+   *  there, and for a protocol whose one contract stands for it, that contract's address or why it
+   *  has none. */
+  value(key: string, namespace: Namespace, chain: CanonicalChain): string | undefined {
+    const fields = namespaceContracts(namespace).flatMap(([name, found]) => {
+      if ("ambiguous" in found) return [];
+      const value = this.contract(found, chain);
+      return value === undefined ? [] : [`${name}: ${value}`];
+    });
+    if (fields.length === 0) return undefined;
+    const main =
+      namespace.kind === "protocol" && namespace.defaultContract !== undefined
+        ? namespace.contracts.get(namespace.defaultContract)
+        : undefined;
+    let address: string | undefined;
+    let reason: string;
+    if (main === undefined) {
+      reason = namesNoSingle(key, namespace);
+    } else {
+      const there = addressOn(main, chain);
+      if (there !== undefined && (main.coverage.typeFidelity !== "widened" || this.allowWidened)) {
+        address = word(there);
+        reason = `'${key}' is ${main.protocol}.${main.contract}`;
       } else {
-        const deployed = addressOn(main, chain);
-        if (
-          deployed !== undefined &&
-          (main.coverage.typeFidelity !== "widened" || this.allowWidened)
-        ) {
-          address = word(deployed);
-          reason = `'${key}' is ${main.protocol}.${main.contract}`;
-        } else if (deployed !== undefined) {
-          reason = widened(main);
-        } else {
-          reason = own ? notDeployed(main, chain) : notDeployedThere(main);
-        }
+        reason = there === undefined ? notDeployed(main, chain) : widened(main);
       }
-
-      return `new Ns${key}({ ${fields.join(", ")} }, ${address ?? "undefined"}, ${str(reasonOf(reason))})`;
-    };
-    // Another chain's namespace with nothing of it deployed there is the same on every such chain.
-    if (!own && !deployedThere) {
-      return this.shared(`none ${key}`, () => make(() => namesNoneThere(key, namespace)));
     }
 
-    return make((reason) => reason);
+    return `new Ns${key}({ ${fields.join(", ")} }, ${address ?? "undefined"}, ${str(reason)})`;
   }
 }
 
@@ -449,10 +384,11 @@ function registryPart(chain: CanonicalChain, options: ChainModuleOptions): Regis
   const evm = chain.kind === "evm";
   const imports = new Imports();
   const policy = typeof options.accessors === "object" ? options.accessors : {};
+  // No EVM contract is on a Solana chain: its module names none.
   const namespaces =
-    options.accessors === false
+    options.accessors === false || !evm
       ? undefined
-      : new Namespaces(imports, policy.allowWidenedSelectors === true, evm ? undefined : chain);
+      : new Namespaces(imports, policy.allowWidenedSelectors === true);
   const lines: string[] = [];
   const exported = new Set<string>(RESERVED);
   const add = (name: string, value: string): void => {
@@ -470,7 +406,7 @@ function registryPart(chain: CanonicalChain, options: ChainModuleOptions): Regis
     'export const available = (name) => { throw new Error("`available(X)` is removed: compare the name with zero, `X != 0`"); };',
   );
 
-  // The tokens: this chain's, then every symbol another chain has, absent here.
+  // The chain's tokens.
   const tokens = resolveTokenMap(chain, options.tokens);
   const registered = registryTokens(chain);
   const held: string[] = [];
@@ -486,17 +422,6 @@ function registryPart(chain: CanonicalChain, options: ChainModuleOptions): Regis
     } else {
       add(symbol, `0x${address.toString(16).padStart(64, "0")}`);
     }
-  }
-  const candidates = [...new Set([...tokens.keys(), ...protocolsOn(chain)])];
-  for (const symbol of registryTokenSymbols()) {
-    if (tokens.has(symbol)) continue;
-    const matches = nearMatches(symbol, candidates);
-    const reason =
-      `\`${symbol}\` is not a token or protocol on ${chain.slug}.` +
-      (matches.length === 0
-        ? ""
-        : ` Did you mean ${matches.map((match) => `\`${match}\``).join(" or ")}?`);
-    add(symbol, `new Absent(${str(reason)}, ${str(symbol)})`);
   }
   // `self`: the contract running the program; on an EVM chain `self.USDC` is its balance.
   lines.push(
@@ -514,14 +439,7 @@ function registryPart(chain: CanonicalChain, options: ChainModuleOptions): Regis
     for (const [key, perChain] of protocolAddressKeys()) {
       const chosen = values[key];
       const address = perChain[chain.id];
-      add(
-        key,
-        chosen !== undefined
-          ? word(chosen)
-          : address === undefined
-            ? `new Absent(${str(`\`${key}\` has no deployment on ${chain.slug}`)})`
-            : word(address),
-      );
+      if (chosen !== undefined || address !== undefined) add(key, word(chosen ?? address!));
     }
   }
 
@@ -531,7 +449,8 @@ function registryPart(chain: CanonicalChain, options: ChainModuleOptions): Regis
     for (const key of NAMESPACE_KEYS) {
       const namespace = resolveNamespace(key)!;
       classes.push(namespaceClass(key, namespace));
-      add(key, namespaces.value(key, namespace, chain, true));
+      const value = namespaces.value(key, namespace, chain);
+      if (value !== undefined) add(key, value);
     }
   }
 
@@ -672,32 +591,24 @@ function chainsPart(
     if (scope !== undefined && !scope.has(other.id)) {
       explain = `chain '${other.slug}' (referenced as '${key}....') is outside the allowed chainScope`;
     } else {
+      // Its `Portal`, from here: or, where there is none, why — what a use of it says.
       if (chain.kind !== "evm") {
-        fields.push(
-          `this.Portal = new Absent(${str(`a program on ${chain.slug} opens no intent: the Portals a program publishes through are EVM contracts`)});`,
-        );
+        explain = `a program on ${chain.slug} opens no intent: the Portals a program publishes through are EVM contracts`;
       } else if (level === undefined) {
-        fields.push(
-          `this.Portal = new Absent(${str(`eco-routes has no Portal on ${chain.slug}, so a program there opens no intent`)});`,
-        );
+        explain = `eco-routes has no Portal on ${chain.slug}, so a program there opens no intent`;
       } else {
         const destination = destinationOf(chain, other, defaults);
-        fields.push(
-          typeof destination === "string"
-            ? `this.Portal = new Portal(${destination}, HERE);`
-            : `this.Portal = new Absent(${str(destination.absent)});`,
-        );
+        if (typeof destination === "string") {
+          fields.push(`this.Portal = new Portal(${destination}, HERE);`);
+        } else {
+          explain = destination.absent;
+        }
       }
       // Another chain's contracts, as that chain deploys them: addresses to pass across chains.
       if (namespaces !== undefined && chain.kind === "evm" && other.kind === "evm") {
         for (const namespaceKey of NAMESPACE_KEYS) {
-          const value = namespaces.value(
-            namespaceKey,
-            resolveNamespace(namespaceKey)!,
-            other,
-            other.id === chain.id,
-          );
-          fields.push(`this.${namespaceKey} = ${value};`);
+          const value = namespaces.value(namespaceKey, resolveNamespace(namespaceKey)!, other);
+          if (value !== undefined) fields.push(`this.${namespaceKey} = ${value};`);
         }
       }
     }
@@ -730,14 +641,14 @@ export function chainModuleSource(
   const evm = chain.kind === "evm";
   const header = [
     "// GENERATED by the SDK for one compile (routes/chain-module.ts) from its registries.",
-    evm
-      ? `import { Token as TokenOf, Absent, Refused, Holding } from "${NAMES}";`
-      : `import { Absent, Refused } from "${NAMES}";`,
-    ...(evm ? [`import { Portal, Level } from "${INTENTS}";`] : []),
+    ...(evm
+      ? [
+          `import { Token as TokenOf, Holding } from "${NAMES}";`,
+          `import { Portal, Level } from "${INTENTS}";`,
+        ]
+      : []),
     ...registry.imports.lines(),
   ];
 
-  return [...header, ...registry.lines, ...(registry.namespaces?.lines ?? []), ...chains, ""].join(
-    "\n",
-  );
+  return [...header, ...registry.lines, ...chains, ""].join("\n");
 }

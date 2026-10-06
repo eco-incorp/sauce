@@ -12,12 +12,22 @@
  * the compiler accepts is never refused here, and the name is the text the compiler pointed at.
  */
 import type { CanonicalChain } from "../chains/canonical.js";
+import type { ContractDescriptor } from "../descriptors/types.js";
 import { addressOn } from "../descriptors/query.js";
-import { isChainKey, NAMESPACE_KEYS, resolveNamespace } from "./accessor-index.js";
+import { chainSlugForKey, isChainKey, NAMESPACE_KEYS, resolveNamespace } from "./accessor-index.js";
+import { requireChain } from "../chains/canonical.js";
+import { registryTokenSymbols, resolveTokenMap } from "./token-registry.js";
+import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
+import { chainAt } from "./intent-parts.js";
 import { pascalOfSlug } from "./builder.js";
 
 /** The diagnostics a name nothing declares produces: an unknown value, or a call of one. */
-const UNKNOWN_CODES: ReadonlySet<string> = new Set(["UnknownIdentifier", "UnresolvedCall"]);
+const UNKNOWN_CODES: ReadonlySet<string> = new Set([
+  "UnknownIdentifier",
+  "UnresolvedCall",
+  "UnknownMember",
+  "StaticAtRunTime",
+]);
 
 /** The part of a diagnostic this reads. */
 interface Located {
@@ -103,9 +113,9 @@ function headline(error: unknown): string | undefined {
 
 /**
  * For a compile of `source` (the entry, at `entry`) that failed with `cause`: an error naming the
- * first name the compiler could not resolve whose root is a dotted member (`X.y`, `X.y(...)`), with
- * the chain's near matches among `tokens` and its protocols. `undefined` when there is none, and the
- * compiler's error stands.
+ * first name of the chain's registry the compiler could not resolve or use — a token or protocol the
+ * chain lacks, a contract it does not deploy, a typo of one — in the chain's words, with its near
+ * matches. `undefined` when there is none, and the compiler's error stands.
  */
 export function unknownGlobalError(
   source: string,
@@ -113,31 +123,163 @@ export function unknownGlobalError(
   chain: CanonicalChain,
   tokens: Iterable<string>,
   cause: unknown,
+  options: NameOptions = {},
 ): Error | undefined {
   const diagnostics =
     (cause as { diagnostics?: readonly Located[] } | undefined)?.diagnostics ?? [];
-  const name = diagnostics
+  const tokenList = [...tokens];
+  const refusal = diagnostics
     .filter((d) => d.path === entry && d.code !== undefined && UNKNOWN_CODES.has(d.code))
-    // The name as written, when it is the root of a member access: the span is the access, or
-    // the root alone with a `.` after it.
     .map((d) => {
-      const text = source.slice(d.start.offset, d.end.offset);
-      const root = /^[A-Za-z_$][\w$]*/.exec(text)?.[0];
-      const member =
-        root !== undefined &&
-        (text[root.length] === "." || (text === root && source[d.end.offset] === "."));
-      return root !== undefined && member ? root : undefined;
+      // The name as written, from where the span starts: a dotted path, the root alone included.
+      const dotted = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*/.exec(
+        source.slice(d.start.offset),
+      )?.[0];
+      // Worded for the chain the code it is in runs on: an intent's body is its destination's.
+      const on = chainAt(source, d.start.offset, chain);
+      return dotted === undefined
+        ? undefined
+        : absentNameError(dotted, on, on.id === chain.id ? tokenList : undefined, options);
     })
-    .find((root): root is string => root !== undefined);
-  if (name === undefined) return undefined;
+    .find((message): message is string => message !== undefined);
+  if (refusal === undefined) return undefined;
 
   const compiler = headline(cause);
+  const stop = /[.?!]$/.test(refusal) ? "" : ".";
   return new Error(
-    `compileSauceRoute: ${notOnChain(name, chain, tokens)}; a contract binding needs its ABI ` +
-      "imported, or passed as `contracts`." +
+    `compileSauceRoute: ${refusal}${stop}` +
       (compiler === undefined ? "" : ` The compiler reported: ${compiler}`),
     { cause },
   );
+}
+
+/** Why a contract is absent on `chain`, in the chain's words. */
+export const notDeployed = (descriptor: ContractDescriptor, chain: CanonicalChain): string =>
+  `Contract '${descriptor.contract}' (${descriptor.protocol}) is not deployed on '${chain.slug}'` +
+  ` (available: ${descriptor.chains.length > 0 ? descriptor.chains.join(", ") : "(none)"})`;
+
+/**
+ * Why `name`, a name or dotted path a program wrote, is not on `chain` — a token or protocol it
+ * lacks, a contract it does not deploy, a contract a namespace does not have, an ambiguous family
+ * name, a token qualified by a chain — or `undefined` when `name` is not a registry name at all (a
+ * program's own), or one `chain` has.
+ */
+/** How a compile treats the registry's names, as far as wording a refusal goes. */
+export interface NameOptions {
+  /** Whether a contract whose vendored ABI is widened is used anyway. */
+  readonly allowWidenedSelectors?: boolean;
+}
+
+export function absentNameError(
+  name: string,
+  chain: CanonicalChain,
+  tokens: Iterable<string> = resolveTokenMap(chain).keys(),
+  options: NameOptions = {},
+): string | undefined {
+  const segments = name.split(".");
+  let on = chain;
+  let rest = segments;
+  if (isChainKey(segments[0]!)) {
+    on = requireChain(chainSlugForKey(segments[0]!)!);
+    rest = segments.slice(1);
+    if (rest[0] === undefined) return undefined;
+    if (rest[0] === "Portal") return portalAbsence(chain, on);
+    if (registryTokenSymbols().has(rest[0])) {
+      return (
+        `'${rest[0]}' is not a known protocol or family alias: a token is never qualified by a ` +
+        `chain. \`${rest[0]}\` alone is the chain's own, compiled for it; another is an address`
+      );
+    }
+    tokens = resolveTokenMap(on).keys();
+  }
+  const [head, contract] = rest as [string, ...string[]];
+  const namespace = resolveNamespace(head);
+  const own = [...tokens];
+  if (namespace === undefined) {
+    // A token the chain has, or a program's own name, is not the registry's to refuse.
+    if (own.includes(head) || isChainKey(head)) return undefined;
+    const known = registryTokenSymbols().has(head) || rest.length > 1;
+    return known ? notOnChain(head, on, own) : undefined;
+  }
+  if (contract === undefined) {
+    return protocolsOn(on).includes(head) ? undefined : notOnChain(head, on, own);
+  }
+  let descriptor: ContractDescriptor | undefined;
+  if (namespace.kind === "family") {
+    const owners = namespace.contractOwners.get(contract);
+    if (owners !== undefined && owners.length > 1) {
+      const candidates = owners.map((slug) => `${pascalOfSlug(slug)}.${contract}`).join(" or ");
+      return (
+        `"${contract}" is ambiguous under ${namespace.familyKey} (${owners.join(", ")}) — use ` +
+        candidates
+      );
+    }
+    const member = owners === undefined ? undefined : resolveNamespace(pascalOfSlug(owners[0]!));
+    descriptor = member?.kind === "protocol" ? member.contracts.get(contract) : undefined;
+  } else {
+    descriptor =
+      namespace.contracts.get(contract) ??
+      (namespace.defaultContract === undefined
+        ? undefined
+        : namespace.contracts.get(namespace.defaultContract));
+  }
+  if (descriptor === undefined) {
+    const known =
+      namespace.kind === "protocol"
+        ? [...namespace.contracts.keys()]
+        : [...namespace.contractOwners.keys()];
+    const matches = nearMatches(contract, known);
+    return (
+      `\`${head}.${contract}\` names no contract of ${head}: it has ${known.join(", ")}` +
+      (matches.length === 0 ? "" : `. Did you mean \`${head}.${matches[0]}\`?`)
+    );
+  }
+  if (descriptor.kind === "interface") return undefined;
+  if (addressOn(descriptor, on) === undefined) return notDeployed(descriptor, on);
+  if (descriptor.coverage.typeFidelity === "widened" && options.allowWidenedSelectors !== true) {
+    return (
+      `${descriptor.protocol}.${descriptor.contract}'s vendored ABI is "widened" (computed ` +
+      `selectors do NOT match the deployed contract) — ${descriptor.coverage.caveats.join("; ")} — ` +
+      "pass accessors: { allowWidenedSelectors: true } to use it anyway"
+    );
+  }
+
+  return undefined;
+}
+
+/**
+ * Why a dotted path a comparison read as 0 is refused — a typo, an ambiguous family name, a token
+ * qualified by a chain — or `undefined` when it names something the registry has and `chain` lacks:
+ * a real absence, which the comparison decides (`if (UniswapV3.Factory != 0) { … }`).
+ */
+export function absentPathError(name: string, chain: CanonicalChain): string | undefined {
+  // A chain with no Portal from here, or a contract the chain lacks, is what a comparison with zero
+  // is for.
+  if (name.split(".")[1] === "Portal") return undefined;
+  const refusal = absentNameError(name, chain);
+  return refusal === undefined || refusal.startsWith("Contract '") ? undefined : refusal;
+}
+
+/** Why a program on `source` has no `Portal` of `destination` to open an intent with, or
+ *  `undefined` when it has one. */
+function portalAbsence(source: CanonicalChain, destination: CanonicalChain): string | undefined {
+  if (source.kind !== "evm") {
+    return `a program on ${source.slug} opens no intent: the Portals a program publishes through are EVM contracts`;
+  }
+  if (destination.kind !== "evm") {
+    return (
+      `an intent a program opens runs its body on an EVM chain: ${destination.slug} runs ` +
+      "programs for its Kitchen, which a route call does not issue from here yet"
+    );
+  }
+  for (const chain of [source, destination]) {
+    try {
+      ecoRoutesPortal(chain);
+    } catch (error) {
+      return (error as Error).message;
+    }
+  }
+  return undefined;
 }
 
 /**

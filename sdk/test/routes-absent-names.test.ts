@@ -134,10 +134,12 @@ describe("a name the chain lacks is zero: one program, the venue only where the 
 });
 
 describe("what a chain can lack", () => {
-  it("a token symbol, by the chain's token map: the registry and the caller's tokens", () => {
+  it("a token symbol is a bare name: one the chain lacks is refused, guarded or not", () => {
     const usdt = "return USDT != 0n ? USDT.balanceOf(self) : 0n;";
     expect(build("ethereum", usdt)).toEqual(build("ethereum", "return USDT.balanceOf(self);"));
-    expect(build("base", usdt)).toEqual(build("base", "return 0n;"));
+    expect(() => build("base", usdt)).toThrow(
+      /`USDT` is not a token or protocol on base\. Did you mean `USDC`\?/,
+    );
     const tokens = { USDT: "0x2222222222222222222222222222222222222222" } as const;
     expect(build("base", usdt, tokens)).toEqual(
       build("base", "return USDT.balanceOf(self);", tokens),
@@ -169,9 +171,7 @@ describe("what a chain can lack", () => {
     expect(() => build("base", `return ${check};`)).toThrow(error);
   });
 
-  // Pending the compiler: a member nothing set reads as `undefined`, which compares unequal to
-  // zero rather than being refused.
-  it.failing("refuses a contract the protocol does not have where it is compiled", () => {
+  it("refuses a contract the protocol does not have where it is compiled", () => {
     expect(() => build("base", "return UniswapV3.Factroy != 0n;")).toThrow(/Factroy/);
   });
 
@@ -259,12 +259,6 @@ const ON_MAIN: readonly { source: string; chain: string; bytecode: string }[] = 
       "function main(): Uint256 { const both = USDT != 0n && UniswapV3.Factory != 0n; return both ? 1n : 2n; }",
     chain: "ethereum",
     bytecode: "010101208ae1d1890520000000003100",
-  },
-  {
-    source:
-      "function main(): Uint256 { const both = USDT != 0n && UniswapV3.Factory != 0n; return both ? 1n : 2n; }",
-    chain: "base",
-    bytecode: "010201208ae1d1890520000000003100",
   },
   {
     // main: if (!available(PancakeswapV3.Factory)) { return 0n; }, in a function main calls

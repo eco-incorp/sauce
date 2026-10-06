@@ -382,14 +382,14 @@ describeEvm("the intents a program publishes", () => {
   Arbitrum.Portal.send(${send})
     .refundee(${CREATOR})
     .receive(${receive})
-    .then(() => { USDC.transfer(RECIPIENT, 1000000); USDT0.transfer(RECIPIENT, 5); });
+    .then(() => { USDC.transfer(RECIPIENT, 1000000); WETH.transfer(RECIPIENT, 5); });
 }`,
             INTENTS,
           ),
         )
       )[0]!;
     const paid = "{ token: USDC, amount: 1010000 }, { token: WETH, amount: 5 }";
-    const delivered = "{ token: USDC, amount: 1000000 }, { token: USDT0, amount: 5 }";
+    const delivered = "{ token: USDC, amount: 1000000 }, { token: WETH, amount: 5 }";
     const asArguments = await opened(`${paid}, { native: 5 }`, delivered);
     expect(asArguments).toEqual(await opened(`[${paid}], { native: 5 }`, `[${delivered}]`));
     expect(asArguments).toEqual(await opened(`[${paid}, { native: 5 }]`, `[${delivered}]`));
@@ -777,8 +777,7 @@ describe("what the lowering refuses", () => {
     );
   });
 
-  // Pending the compiler: a `.catch()` handler's `(e)`.
-  it.failing("refuses a second `.catch(...)`", () => {
+  it("refuses a second `.catch(...)`", () => {
     expect(
       refused(
         `Arbitrum.Portal.send(${item}).receive(${item})${then}.catch((e) => {}).catch((e) => {});`,
@@ -869,7 +868,7 @@ describe("what the lowering refuses", () => {
     ],
     [
       `Arbitrum.Portal.send(${item}).receive({ token: USDT, amount: 1 })${then};`,
-      /a token `\.receive\(\.\.\.\)` names is arbitrum's of the same symbol, and arbitrum registers no token of that symbol/,
+      /`USDT` is not a token or protocol on arbitrum\. Did you mean `USDC` or `USDT0`\?/,
     ],
     [
       `Arbitrum.Portal.send({ token: USDC, amount: 1 - 2 }).receive(${item})${then};`,

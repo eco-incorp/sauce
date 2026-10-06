@@ -116,9 +116,7 @@ describe("Solana's stock mints in a program", () => {
     }
   });
 
-  // Pending the compiler: an absent name passed to a function compiled for run time is not converted
-  // at the call, so the library's own `==` reads it as zero rather than refusing it.
-  it.failing("are refused, by name, on a chain without them, and an EVM chain's on Solana", () => {
+  it("are refused, by name, on a chain without them, and an EVM chain's on Solana", () => {
     // Compared with zero, an absent name is zero there; any other use is refused, naming it.
     expect(() =>
       compileSauceProgram("base", "function main(): Uint256 {\n  return NVDA_US;\n}"),

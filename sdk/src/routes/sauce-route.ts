@@ -24,6 +24,7 @@
  */
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
 import type {
+  AbsentPath,
   AccountManifest,
   ProgramOptions,
   ProgramScope,
@@ -46,7 +47,7 @@ import type { EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
 import { randomSalt, type IntentDefaults } from "./intent-defaults.js";
 import { INTENT_FUND_VIA } from "./portal.js";
 import { entryParamsOf, type EntryParam, type EntrySignature, type EntryValue } from "./entry.js";
-import { chainCalledError, unknownGlobalError } from "./unknown-global.js";
+import { absentPathError, chainCalledError, unknownGlobalError } from "./unknown-global.js";
 import { closureText, isSauceClosure, type SauceBody } from "./closure.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
 
@@ -508,12 +509,42 @@ function compileForChain(
     // A token or protocol name the chain does not have, reported as one rather than as the call
     // the compiler could not lower — from the compiler's own located diagnostics.
     throw (
-      unknownGlobalError(source, "main.js", chain, tokens.keys(), error) ??
+      unknownGlobalError(source, "main.js", chain, tokens.keys(), error, {
+        allowWidenedSelectors:
+          typeof options.accessors === "object" && options.accessors.allowWidenedSelectors === true,
+      }) ??
       chainCalledError(error) ??
       error
     );
   }
-  const { manifest, entryEncoding, entryParams, entrySignature, programs, ...compiled } = rs;
+  const {
+    manifest,
+    entryEncoding,
+    entryParams,
+    entrySignature,
+    programs,
+    absentPaths,
+    ...compiled
+  } = rs;
+  // Every name a comparison read as 0, held to the registry: a name some chain has and this one
+  // lacks is decided; anything else — a typo — is refused, on the chain the part naming it runs on.
+  const reports: { readonly chain: CanonicalChain; readonly paths: readonly AbsentPath[] }[] = [
+    { chain, paths: absentPaths },
+    ...programs.flatMap((report) => {
+      const on = typeof report.scope === "bigint" ? chainById(Number(report.scope)) : undefined;
+      return on === undefined ? [] : [{ chain: on, paths: report.absentPaths }];
+    }),
+  ];
+  for (const { chain: on, paths } of reports) {
+    for (const path of paths) {
+      const refusal = absentPathError(path.name, on);
+      if (refusal !== undefined) {
+        throw new Error(
+          `compileSauceRoute: ${refusal} (${path.path}:${path.start.line}:${path.start.column + 1})`,
+        );
+      }
+    }
+  }
 
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
