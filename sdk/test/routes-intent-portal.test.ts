@@ -98,9 +98,7 @@ describe("the intents a program opens, as compiled", () => {
     );
   });
 
-  // Pending the compiler: `openedAt + 300`, read from the compile's defaults, is not folded to the
-  // literal the same sum written as a modifier is.
-  it.failing("defaults the deadlines from when the intent opens, as the compile says", () => {
+  it("defaults the deadlines from when the intent opens, as the compile says", () => {
     const openedAt = 1_900_000_000n;
     const program = (modifiers: [string, string]) => `function main() {
   Arbitrum.Portal.send({ token: USDC, amount: 1010000 })${modifiers[0]}

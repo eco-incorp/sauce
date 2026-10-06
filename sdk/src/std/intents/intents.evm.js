@@ -21,10 +21,13 @@
 // registry's prover, and the destination's Kitchen fee. The refundee has no default but the wallet
 // publishing a top-level intent itself: the Pot a program runs on may be shared, so a refund there
 // could go to anyone.
+//
+// The calls are written out, selector and arguments, as the Portal's ABI encodes them:
+// `publish(uint64,bytes,(uint64,address,address,uint256,(address,uint256)[]))` and
+// `publishAndFund(…,bool)` send the intent, `intentVaultAddress(…)` reads its vault, a route call
+// moves a delivered token with ERC-20's `transfer(address,uint256)` and cooks the body with the Pot's
+// `cook(address,bytes)`. `test/std/intents/compile.test.ts` holds each selector to the registry's ABI.
 import { approve, transfer } from "@sauce/token";
-// The Portal's `publish`, `publishAndFund` and `intentVaultAddress`, as the registry declares them
-// (`test/std/intents/compile.test.ts` holds this file to the registry's ABI).
-import PORTAL from "./portal.abi.json";
 
 // What `.send(...)` lists, recorded as it is given, and what a list of them becomes.
 class Items {
@@ -400,15 +403,16 @@ class Intent {
         calls: calls.value(),
       },
     });
+    const prover = this.proverAddress === undefined ? this.destination.prover : this.proverAddress;
+    if (prover === undefined) throw new Error(this.destination.unproven);
     const reward = {
       deadline: rewardDeadline,
       creator,
-      prover: this.proverAddress === undefined ? this.destination.prover : this.proverAddress,
+      prover,
       nativeAmount,
       tokens: rewardTokens.value(),
     };
 
-    const portal = PORTAL.at(this.here.portal);
     if (this.here.fundVia == "publishAndFund") {
       // The Portal pulls the reward into the vault itself. `approve` resets a standing allowance
       // first: one Pot publishes every intent on a chain.
@@ -420,12 +424,15 @@ class Intent {
     } else {
       // Pay the vault, then publish: the vault is read from the Portal over the very intent
       // published.
-      const vault = portal.intentVaultAddress(this.destination.chainId, route, reward);
+      const intent = abi.encode(this.destination.chainId, route, reward);
+      const [vault] = abi.decode(evm.static(this.here.portal, hex`0742ebe4`.concat(intent)), [
+        "Address",
+      ]);
       for (const fund of funds.list) {
         if (fund.amount > 0) transfer(fund.token, vault, fund.amount);
       }
       if (nativeAmount > 0) evm.call(vault, nativeAmount, hex``);
-      portal.publish(this.destination.chainId, route, reward);
+      evm.call(this.here.portal, 0, hex`645c890c`.concat(intent));
     }
   }
 

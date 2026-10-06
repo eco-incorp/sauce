@@ -20,7 +20,7 @@ export const CASCADE_BODY = `function main() {
       const arrived = USDC.balanceOf(ctx.self());
       Base.Portal.send({ token: USDC, amount: arrived })
         .refundee(RECIPIENT)
-        .receive()
+        .receive({ token: USDC, amount: arrived })
         .then(() => {
           USDC.transfer(RECIPIENT, arrived);
         });
@@ -41,7 +41,7 @@ export const BODY_TO_ARBITRUM = `function main() {
 
   Arbitrum.Portal.send({ token: USDC, amount })
     .refundee(RECIPIENT)
-    .receive()
+    .receive({ token: USDC, amount })
     .then(() => {
       USDC.transfer(RECIPIENT, amount);
     });
