@@ -22,7 +22,12 @@ import {
   deriveProgramDataPda,
 } from "../../src/svm/kitchen.js";
 import { buildAtaPrepend } from "../../src/svm/prepends.js";
-import { __pdaMemoStats, __resetPdaMemoForTest } from "../../src/svm/venues/pda-memo.js";
+import {
+  __pdaMemoStats,
+  __resetPdaMemoForTest,
+  memoizedGetProgramDerivedAddress,
+  memoizedGetProgramDerivedAddressWithBump,
+} from "../../src/svm/venues/pda-memo.js";
 
 const KITCHEN = address("SauceYSPMs8xQnDxqmhmSYfKArxRmpnSeEMHUfhoP5g");
 const OWNER = address("58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2");
@@ -30,6 +35,7 @@ const OTHER = address("9tXiuRRw7kbejLhZXtxDxYs2REe43uH2e7k1kocgdM9B");
 const MINT = address("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 const SALT = new Uint8Array(32).fill(7);
 const enc = getAddressEncoder();
+const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s);
 const le64 = (n: bigint): Uint8Array => {
   const out = new Uint8Array(8);
   new DataView(out.buffer).setBigUint64(0, n, true);
@@ -122,5 +128,29 @@ describe("buildAtaPrepend uses the shared PDA memo", () => {
     expect(first.ata).toBe(expected);
     await buildAtaPrepend({ payer, owner: OWNER, mint: MINT });
     expect(__pdaMemoStats().misses).toBe(1);
+  });
+});
+
+describe("memo key is injective over the seed list", () => {
+  // Seeds are bytes only here (hex-encoded, `|`-joined), so a seed's content can never contain the
+  // separator; these cases pin that boundaries, empty seeds and byte-vs-concatenation never alias.
+  const lists: Uint8Array[][] = [
+    [new Uint8Array([1, 2])],
+    [new Uint8Array([1]), new Uint8Array([2])],
+    [new Uint8Array([1]), new Uint8Array([2]), new Uint8Array([])],
+    [new Uint8Array([]), new Uint8Array([1, 2])],
+    [],
+    [new Uint8Array([])],
+    [utf8("a|s:b")],
+    [utf8("a"), utf8("b")],
+  ];
+
+  it("every distinct seed list matches a direct derive (address and bump), with and without bump", async () => {
+    __resetPdaMemoForTest();
+    for (const seeds of lists) {
+      const direct = await getProgramDerivedAddress({ programAddress: KITCHEN, seeds });
+      expect(await memoizedGetProgramDerivedAddressWithBump(KITCHEN, seeds)).toEqual(direct);
+      expect(await memoizedGetProgramDerivedAddress(KITCHEN, seeds)).toBe(direct[0]);
+    }
   });
 });
