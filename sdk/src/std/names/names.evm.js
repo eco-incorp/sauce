@@ -20,26 +20,18 @@ export class Token {
   valueOf() {
     return this.address;
   }
+  // A missing argument is the compiler's own error ("`amount` is `undefined`, so it has no run-time
+  // value here"): no guard here, so each method is the library call, byte for byte.
   transfer(to, amount) {
-    if (amount === undefined)
-      throw new Error("`.transfer(to, amount)` takes the recipient and the amount");
     transfer(this.address, to, amount);
   }
   approve(spender, amount) {
-    if (amount === undefined)
-      throw new Error("`.approve(spender, amount)` takes the spender and the amount");
     approve(this.address, spender, amount);
   }
   transferFrom(from, to, amount) {
-    if (amount === undefined) {
-      throw new Error(
-        "`.transferFrom(from, to, amount)` takes the holder, the recipient and the amount",
-      );
-    }
     transferFrom(this.address, from, to, amount);
   }
   balanceOf(holder) {
-    if (holder === undefined) throw new Error("`.balanceOf(holder)` takes the holder");
     return balanceOf(this.address, holder);
   }
 }

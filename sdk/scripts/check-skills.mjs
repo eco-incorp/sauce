@@ -1922,11 +1922,6 @@ const PENDING = [
       /\.catch\(\) handler parameter|"a `\.catch\(\)`|"a `try` block|"`try`\/`catch` is not available/,
     waits: "the compiler's try/catch and catch (e) (v12 #552, #553)",
   },
-  {
-    file: "skills/sauce-globals/examples/globals.mts",
-    match: /a bound Token's transferFrom/,
-    waits: "a Token method forwarding a computed argument byte for byte (v12 #555)",
-  },
 ];
 const pending = [];
 for (const entry of PENDING) {

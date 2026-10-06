@@ -48,7 +48,10 @@ const rejects = (slug: string, body: string) => {
 };
 // A write returns nothing.
 check(
-  rejects("ethereum", "function main(to: Address) { const ok = USDT.transfer(to, 1); }"),
+  rejects(
+    "ethereum",
+    "function main(to: Address) { const ok = USDT.transfer(to, 1); require(ok); }",
+  ),
   "no bool to read",
 );
 // IERC20 is imported, never ambient, and under its own name it collides with the binding a token
