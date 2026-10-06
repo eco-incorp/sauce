@@ -64,7 +64,9 @@
 //      ```sauce block and reference program, the protocol documents' templates included
 //      (INTEGER_EXCEPTIONS); TypeScript host code keeps the `n` tsc needs;
 //  14. no skill file names `--define` or `--defines`, the command's low-level flags, or compiles a
-//      ```sauce fence with `define=`.
+//      ```sauce fence with `define=`;
+//  15. no skill file but `sauce-chains/references/deployments.json` names a Sauce release address,
+//      runners and comments included: the release is the same on every chain, written once.
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -97,6 +99,11 @@ import {
   registryNames,
 } from "../../docs/scripts/example-programs.mjs";
 import { bigintLiteralProblems } from "../../docs/scripts/integer-literals.mjs";
+import {
+  DEPLOYMENTS_FILE,
+  releaseAddresses,
+  releaseAddressProblems,
+} from "../../docs/scripts/release-addresses.mjs";
 
 // ---- Arguments and resolution -------------------------------------------------------------------
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -681,6 +688,22 @@ for (const skill of skills) {
   )) {
     counts.files++;
     wording(skill, file);
+  }
+}
+// The release's addresses are the same on every chain, so the skills write them in one generated
+// file and point at it everywhere else, runners and their comments included
+// (`release-addresses.mjs`).
+{
+  const addresses = releaseAddresses({ sdk, deployments: deploymentsApi });
+  const home = join(SKILLS_DIR, DEPLOYMENTS_FILE);
+  for (const file of walk(SKILLS_DIR, (path) => path !== home)) {
+    for (const problem of releaseAddressProblems({
+      where: rel(file),
+      text: read(file),
+      addresses,
+      home: DEPLOYMENTS_FILE,
+    }))
+      failures.push(problem);
   }
 }
 for (const [dir, why] of Object.entries(COPY_FRAMING_EXEMPT)) {
@@ -1471,7 +1494,7 @@ for (const file of [
       keys(value);
     }
   };
-  const file = join(SKILLS_DIR, "sauce-chains", "references", "deployments.json");
+  const file = join(SKILLS_DIR, DEPLOYMENTS_FILE);
   if (existsSync(file)) keys(JSON.parse(read(file)));
 }
 // SauceScript keywords and builtins, JavaScript keywords, and tool names.
