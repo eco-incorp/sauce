@@ -179,12 +179,7 @@
  * the IDL fixes it to the classic Token program unconditionally (LP shares
  * are never Token-2022).
  */
-import {
-  address,
-  getAddressDecoder,
-  getAddressEncoder,
-  getProgramDerivedAddress,
-} from "@solana/kit";
+import { address, getAddressDecoder, getAddressEncoder } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import type { AccountLoader, PoolConfig } from "../types.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
@@ -229,15 +224,8 @@ function readAddress(data: Uint8Array, offset: number): Address {
   return ADDRESS_DECODER.decode(data.subarray(offset, offset + 32));
 }
 
-let cachedProtocolPda: Promise<Address> | undefined;
 function protocolPda(): Promise<Address> {
-  if (cachedProtocolPda === undefined) {
-    cachedProtocolPda = getProgramDerivedAddress({
-      programAddress: VOLTR_PROGRAM_ID,
-      seeds: [new TextEncoder().encode("protocol")],
-    }).then(([pda]) => pda);
-  }
-  return cachedProtocolPda;
+  return memoizedGetProgramDerivedAddress(VOLTR_PROGRAM_ID, [new TextEncoder().encode("protocol")]);
 }
 
 /**
