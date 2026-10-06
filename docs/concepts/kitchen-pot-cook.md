@@ -21,6 +21,13 @@ released one.
 Up to [On Solana](#on-solana), this page describes an EVM chain. Solana has the same three roles,
 and that section gives its details.
 
+The SDK's convenience helpers use **private Pots**. Kitchen 1.2.0 also exposes
+`deployPot(owner, salt, true)` for a private Pot with an immutable Router, and
+`deploySharedPot(salt)` for an ownerless **Shared Pot** whose Router is always immutable. Anyone
+can cook on an ownerless Shared Pot and spend its funds; fund and consume it within one transaction.
+Use `v12KitchenAbi` for these variants. The lifecycle and permissions below describe the default
+private Pot. An intent's executor-owned Pot is private even though several intents share it.
+
 ## A Pot's life
 
 1. **Its address comes first.** A Pot's address follows from the Kitchen, its owner and a salt, so
@@ -79,12 +86,12 @@ Pot hands that callback to its Router: [A Pot's Router](architecture.md#a-pots-r
 
 ## Who can do what
 
-|                     | Can                                                | Cannot                                                                 |
-| ------------------- | -------------------------------------------------- | ---------------------------------------------------------------------- |
-| The Pot's owner     | Cook any program on it; point it at another Router | Hand it to another owner: the owner is fixed when the Pot is created   |
-| Anyone else         | Deploy a Pot for any owner; send a Pot tokens      | Cook on it, or move anything it holds                                  |
-| The Kitchen's owner | Set the fee; choose the Router new Pots start on   | Change an existing Pot, its owner or its Router, or move what it holds |
-| The engine          | Run a program inside a Pot its Kitchen created     | Run anywhere else: called directly, it refuses                         |
+|                     | Can                                              | Cannot                                                                 |
+| ------------------- | ------------------------------------------------ | ---------------------------------------------------------------------- |
+| The Pot's owner     | Cook any program on it; change an unfixed Router | Hand it to another owner: the owner is fixed when the Pot is created   |
+| Anyone else         | Deploy a Pot for any owner; send a Pot tokens    | Cook on it, or move anything it holds                                  |
+| The Kitchen's owner | Set the fee; choose the Router new Pots start on | Change an existing Pot, its owner or its Router, or move what it holds |
+| The engine          | Run a program inside a Pot its Kitchen created   | Run anywhere else: called directly, it refuses                         |
 
 A Pot's code never changes once it is deployed: it is not a proxy, and nothing upgrades it. To give
 what a Pot holds to someone else, cook a program that transfers it to them, or to their own Pot.

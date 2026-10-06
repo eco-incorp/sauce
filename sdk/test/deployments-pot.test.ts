@@ -4,7 +4,7 @@
  * The solver deploys one Pot per Portal: owner = `Portal.executor()`, salt zero, through the
  * released Kitchen. An SDK route cooking anywhere else would cook on a Pot nothing deploys or
  * funds. The Executor address was read on-chain (`executor()` on every chain the Portal is deployed
- * on); Pot addresses use Kitchen 1.1.0 release initcode. These predictions require that Kitchen
+ * on); Pot addresses use Kitchen 1.2.0 release initcode. These predictions require that Kitchen
  * implementation and are not claims of live deployment.
  *
  * Each pinned Pot is checked twice: `v12PredictPot` derives it from the init-code hash
@@ -21,7 +21,7 @@ import { potFromReleasedBytecode } from "./evm/pot-address.js";
 /** eco-routes 2.12.0, the Portal `@eco-foundation/routes-ts` 3.2.24 records on every EVM chain. */
 const PROD_PORTAL = "0xEC000769A73b70e16f361a442292500b3BCf4A85";
 const PROD_EXECUTOR = "0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082";
-const SHARED_POT = "0xDd330394620fBFF4D0AdcfA33B0D7b3622Db15B0";
+const SHARED_POT = "0x6340080a1967a03cAAD490a170828d4C59EE5983";
 
 describe("the intent Pot is the solver's shared Pot", () => {
   it("uses salt zero", () => {

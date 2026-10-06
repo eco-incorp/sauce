@@ -27,7 +27,6 @@ import {
   printMeasurements,
   REVERTING_CODE,
   routerProgram,
-  routerSource,
   runtimeCall,
   setBalance,
   type Arg,
@@ -109,7 +108,7 @@ describe("@sauce/router on Avalanche state", { skip: skipReason(), timeout: 600_
   const cookCall = (name: string, args: readonly Typed[]) =>
     cook(routerProgram([call(name, values(args))]));
 
-  /** The library call, literal and run-time, the action and the Router: one amount, all of it spent. */
+  /** The library call, literal and run-time, and the action: one amount, all of it spent. */
   async function everyWay(
     venue: string,
     tokenIn: keyof typeof BALANCE,
@@ -122,14 +121,6 @@ describe("@sauce/router on Avalanche state", { skip: skipReason(), timeout: 600_
       ["library", libraryCall(env, CHAIN, "traderJoeLB", values(args))],
       ["runtime", runtimeCall("traderJoeLB", args)],
       ["action", actionProgram(43114, [lbAction(tokenIn as Hex, tokenOut as Hex, amountIn)])],
-      [
-        "router",
-        compileSource(
-          env,
-          CHAIN,
-          routerSource({ poolType: 6, pool: LB_DEEP, tokenIn, tokenOut, amountIn }),
-        ),
-      ],
     ];
     const outs: bigint[] = [];
     for (const [path, program] of programs) {
@@ -155,7 +146,7 @@ describe("@sauce/router on Avalanche state", { skip: skipReason(), timeout: 600_
     return decode(result!);
   }
 
-  it("WAVAX -> USDC (swapForY): every spelling, and the Router, deliver the action's quote", async () => {
+  it("WAVAX -> USDC (swapForY): every spelling delivers the action's quote", async () => {
     const quote = await quoted(WAVAX, USDC, ONE_AVAX);
     const out = await everyWay("TraderJoeLB WAVAX->USDC, 1 WAVAX", WAVAX, USDC, ONE_AVAX);
     assert.equal(out, quote);

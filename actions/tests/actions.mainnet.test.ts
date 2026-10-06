@@ -755,9 +755,9 @@ describe("every action, on mainnet state", { skip: skipReason(), timeout: 600_00
       assert.equal(await balance(USDT, RECEIVER), viaAction);
     });
 
-    it("a pool the Router finds does not hold tokenIn and tokenOut reverts the cook", async () => {
+    it("a pool the library finds does not hold tokenIn and tokenOut reverts the cook", async () => {
       await fund(USDC, USDC_100);
-      // The USDC/USDT pool, asked for WETH: the Router checks the pool's own tokens first.
+      // The USDC/USDT pool, asked for WETH: the library checks the pool's own tokens first.
       const receipt = await env.cook(
         compileSource(
           env,

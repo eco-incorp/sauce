@@ -4,9 +4,8 @@
  * Kitchen, Pot and Router. No RPC is reached.
  *
  * The same checks as the Ethereum suite, on the venues Base has, and the `woofiSwap` action, which
- * only this suite can execute. `woofi` pushes to the WooPPV2 itself; the Router's WOOFi handler
- * only approves, which drives WooRouterV2 but not the pool, so the Router comparison here is the
- * WooRouterV2 one, and the swap is also held to the pool's own `query` — which is `quoteAction`'s.
+ * only this suite can execute. `woofi` pushes to WooPPV2 itself, and the swap is held to the pool's
+ * own `query`, which is `quoteAction`'s.
  */
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -27,11 +26,9 @@ import {
   printMeasurements,
   REVERTING_CODE,
   routerProgram,
-  routerSource,
   runtimeCall,
   setBalance,
   type Arg,
-  type RouterLeg,
 } from "./swap-venues.js";
 
 const CHAIN = "base";
@@ -45,9 +42,8 @@ const BALANCE = { [WETH]: { slot: 3n }, [USDC]: { slot: 9n } } as const;
 const UNIV2_WETH_USDC = "0x88A43bbDF9D098eEC7bCEda4e2494615dfD9bB9C";
 /** Curve's 4pool: USDC, USDbC, axlUSDC, crvUSD — StableSwap-NG, int128 indices. */
 const CURVE_4POOL = "0xf6C5F01C7F3148891ad0e19DF78743D31E390D1f";
-/** WOOFi's WooPPV2 (quote token USDC), and the WooRouterV2 in front of it. */
+/** WOOFi's WooPPV2 (quote token USDC). */
 const WOO_PP = "0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4";
-const WOO_ROUTER = "0x4c4AF8DBc524681930a27b2F1Af5bcC8062E6fB7";
 
 const WETH_IN = 10n ** 17n;
 const USDC_IN = 1_000_000_000n;
@@ -144,7 +140,7 @@ describe("@sauce/router on Base state", { skip: skipReason(), timeout: 600_000 }
       args: [token as Address],
     });
 
-  /** The library call, literal and run-time, the action and the Router: one amount, all of it spent. */
+  /** The library call, literal and run-time, and the action: one amount, all of it spent. */
   async function everyWay(
     venue: string,
     name: string,
@@ -152,7 +148,6 @@ describe("@sauce/router on Base state", { skip: skipReason(), timeout: 600_000 }
     funding: [keyof typeof BALANCE, bigint],
     tokenOut: string,
     action?: Parameters<typeof actionProgram>[1][number],
-    router?: RouterLeg,
   ): Promise<bigint> {
     const delivered = () => balanceOf(env, tokenOut, env.pot);
     const programs: Array<[Parameters<typeof measure>[2], Uint8Array]> = [
@@ -160,7 +155,6 @@ describe("@sauce/router on Base state", { skip: skipReason(), timeout: 600_000 }
       ["runtime", runtimeCall(name, args)],
     ];
     if (action) programs.push(["action", actionProgram(8453, [action])]);
-    if (router) programs.push(["router", compileSource(env, CHAIN, routerSource(router))]);
 
     const outs: bigint[] = [];
     for (const [path, program] of programs) {
@@ -180,20 +174,19 @@ describe("@sauce/router on Base state", { skip: skipReason(), timeout: 600_000 }
 
   // WOOFi first: its oracle goes stale 120 seconds after its last post, and every test mines blocks.
   describe("WOOFi (WooPPV2)", () => {
-    it("WETH -> USDC delivers the pool's own quote, the action's, and what WooRouterV2 delivers", async () => {
+    it("WETH -> USDC delivers the pool's own quote, the action's, and the library's", async () => {
       const quoted = await query(WETH, USDC, WETH_IN);
       // quoteAction prices the action with the pool's own query.
       const { to, data, decode } = quoteAction(woofiAction(WETH_IN, 1n));
       const { data: result } = await env.publicClient.call({ to, data });
       assert.equal(decode(result!), quoted);
       const out = await everyWay(
-        "WOOFi WETH->USDC, 0.1 WETH (Router via WooRouterV2)",
+        "WOOFi WETH->USDC, 0.1 WETH (pool query)",
         "woofi",
         woofi(WETH, USDC, WETH_IN, 1n),
         [WETH, WETH_IN],
         USDC,
         woofiAction(WETH_IN, 1n),
-        { poolType: 8, pool: WOO_ROUTER, tokenIn: WETH, tokenOut: USDC, amountIn: WETH_IN },
       );
       assert.equal(out, quoted);
     });
@@ -210,19 +203,6 @@ describe("@sauce/router on Base state", { skip: skipReason(), timeout: 600_000 }
       );
       assert.equal(out, quoted);
       assert.equal(await balanceOf(env, USDC, env.pot), 0n);
-    });
-
-    it("the Router's WOOFi handler cannot drive the WooPPV2: it approves, and the pool wants a push", async () => {
-      await fund(WETH, WETH_IN);
-      const router = routerSource({
-        poolType: 8,
-        pool: WOO_PP,
-        tokenIn: WETH,
-        tokenOut: USDC,
-        amountIn: WETH_IN,
-      });
-      assert.equal((await cook(router)).status, "reverted");
-      assert.equal(await balanceOf(env, WETH, env.pot), WETH_IN);
     });
 
     it("the pool books exactly what was pushed: nothing is left beside its reserve", async () => {
@@ -263,7 +243,7 @@ describe("@sauce/router on Base state", { skip: skipReason(), timeout: 600_000 }
   });
 
   describe("Uniswap V2", () => {
-    it("WETH -> USDC (WETH is token0): every spelling, and the Router, deliver the same", async () => {
+    it("WETH -> USDC (WETH is token0): every spelling delivers the same", async () => {
       await everyWay(
         "UniV2 WETH->USDC, 0.1 WETH",
         "uniswapV2",
@@ -271,7 +251,6 @@ describe("@sauce/router on Base state", { skip: skipReason(), timeout: 600_000 }
         [WETH, WETH_IN],
         USDC,
         undefined,
-        { poolType: 0, pool: UNIV2_WETH_USDC, tokenIn: WETH, tokenOut: USDC, amountIn: WETH_IN },
       );
     });
 
@@ -283,13 +262,12 @@ describe("@sauce/router on Base state", { skip: skipReason(), timeout: 600_000 }
         [USDC, USDC_IN],
         WETH,
         undefined,
-        { poolType: 0, pool: UNIV2_WETH_USDC, tokenIn: USDC, tokenOut: WETH, amountIn: USDC_IN },
       );
     });
   });
 
   describe("Curve 4pool (StableSwap-NG)", () => {
-    it("USDC -> crvUSD: every spelling, and the Router, deliver the same, approval ending at zero", async () => {
+    it("USDC -> crvUSD: every spelling delivers the same, approval ending at zero", async () => {
       await everyWay(
         "Curve 4pool USDC->crvUSD, 1000 USDC",
         "curve",
@@ -297,7 +275,6 @@ describe("@sauce/router on Base state", { skip: skipReason(), timeout: 600_000 }
         [USDC, USDC_IN],
         CRVUSD,
         undefined,
-        { poolType: 3, pool: CURVE_4POOL, tokenIn: USDC, tokenOut: CRVUSD, amountIn: USDC_IN },
       );
       assert.equal(await allowance(env, USDC, env.pot, CURVE_4POOL), 0n);
     });

@@ -52,7 +52,7 @@ export const SETTLE_WIRE = {
    *  be swept; and nothing checked the `bool`, so a token answering `false` read as swept.
    *
    *  Compiler 2.4.0 keeps the length at 435 bytes but changes the ABI encoding instructions
-   *  and therefore the program hash.
+   *  and therefore the program hash. Compiler 2.5.0 leaves both unchanged.
    *
    *  Pins that shipped before this one, for `validateSettleProgram`'s `accepted` list so payloads
    *  built against them stay readable:
@@ -62,7 +62,7 @@ export const SETTLE_WIRE = {
    *      (0.99.2 – 0.99.4)
    *    - `{ hash: "0x2da5c63da0ed3e934f4bb09985a38723de1f2a8e9a9a97ef3993e526cb649d11", bytes: 362 }`
    *      (0.99.0 – 0.99.1) */
-  PROGRAM_COMPILER: "@eco-incorp/sauce-compiler@2.4.0",
+  PROGRAM_COMPILER: "@eco-incorp/sauce-compiler@2.5.0",
   /** `keccak256` of those `PROGRAM_BYTES` bytes — the authenticity pin `validateSettleProgram`
    *  enforces, and the reason a matching payload runs the audited program and nothing else.
    *  Whole-program, not a body slice: program and arguments are disjoint byte regions on this wire.

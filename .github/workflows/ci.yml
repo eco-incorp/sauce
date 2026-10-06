@@ -71,21 +71,16 @@ jobs:
           # dist/artifacts is BUILD OUTPUT (git-ignored, nothing committed): five ABIs from the
           # release's abis.json, IERC20 declared in the script, IUniswapV3Pool from @uniswap/v3-core,
           # V12RuntimeBytecode from the release's creation code, V12EngineGate and V12Deployments. Assert
-          # all 10 exist, so a broken generation (a missing node_modules entry, an unreachable release)
+          # all 11 exist, so a broken generation (a missing node_modules entry, an unreachable release)
           # fails CI here instead of shipping an empty dir — the exact regression that broke 0.7.0.
-          for a in IERC20 ISauceRouter IUniswapV3Pool Router V12Kitchen V12KitchenProxy V12Pot V12RuntimeBytecode V12EngineGate V12Deployments; do
+          for a in IERC20 ISauceRouter IUniswapV3Pool Router V12QuoteRouter V12Kitchen V12KitchenProxy V12Pot V12RuntimeBytecode V12EngineGate V12Deployments; do
             test -s "sdk/dist/artifacts/$a.json" || { echo "::error::sync did not produce sdk/dist/artifacts/$a.json"; exit 1; }
           done
 
       # No runtime DERIVATION step any more, and its absence is the point.
       #
-      # The EVM suites used to etch deployed runtime at a fixed address, which meant deploying the
-      # release's creation code on a throwaway anvil just to read the code back. They now deploy the
-      # creation code directly, because the gated engine forces it: `Runtime.huff`'s constructor
-      # appends the engine's own address as a trailing code word and `EVAL` staticcalls it, so an
-      # etched copy carries whichever address it was first deployed at and `EVAL` reaches a codeless
-      # account — which succeeds with empty returndata rather than reverting. `SAUCE_V12_RUNTIME_
-      # CREATION_HEX` is already exported by the sync step above; the suites read it directly.
+      # The EVM suites deploy creation code at its release address: the constructor binds the
+      # engine identity used by the Pot EVAL relay. SAUCE_V12_RUNTIME_CREATION_HEX comes from sync.
       # -----------------------------------------------------------------------
 
       # ---- SVM engine binary ------------------------------------------------

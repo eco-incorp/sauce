@@ -1,12 +1,12 @@
 /**
- * The generation-3 Router and the Pot's own Router, EXECUTED on a local anvil: the released stack
+ * The generation-4 Router and the Pot's own Router, EXECUTED on a local anvil: the released stack
  * deployed from creation code at its release addresses (`gated-engine.ts`), nothing forked.
  *
  *   1. `potRouterUpdate` — a Pot left on an old Router gets the `setRouter` call back, only its owner
  *      can make it, and afterwards the Pot is current. The Kitchen cannot move an existing Pot.
  *   2. A Synthra-V3-style swap through `@sauce/router`'s `uniswapV3` — a pool that re-enters under
- *      `synthraV3SwapCallback` is paid by the generation-3 Router, a callback name the Router does
- *      not answer reverts (what a pre-generation-3 Router does with Synthra's), and a pool asking
+ *      `synthraV3SwapCallback` is paid by the generation-4 Router, a callback name the Router does
+ *      not answer reverts (what a pre-generation-4 Router does with Synthra's), and a pool asking
  *      for more than the exact input is refused with `InputExceedsAuthorized`.
  *
  * The pool is v12's own `test/mocks/MockV3Pool.sol` (copied into `fixtures/`, built by forge from
@@ -145,7 +145,7 @@ const potRouter = (pot: Address): Promise<Address> =>
 let anvil: ChildProcess;
 let sauce: GatedEngine;
 
-describeEvm("the Pot's Router, and swaps a generation-3 Router pays", () => {
+describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
   beforeAll(async () => {
     anvil = spawn("anvil", ["--port", String(PORT), "--silent"], { stdio: "ignore" });
     await waitForRpc(Date.now() + 20_000);
@@ -265,7 +265,7 @@ describeEvm("the Pot's Router, and swaps a generation-3 Router pays", () => {
     });
   });
 
-  describe("a Synthra V3 pool through the generation-3 Router", () => {
+  describe("a Synthra V3 pool through the generation-4 Router", () => {
     const AMOUNT_IN = 1_000n;
     const RATE = 2n * 10n ** 18n; // token0 -> token1 at 2x
     let token0: Address;
@@ -325,8 +325,8 @@ describeEvm("the Pot's Router, and swaps a generation-3 Router pays", () => {
       );
     });
 
-    it("is the release's generation-3 Router, and it answers both renamed callbacks", () => {
-      expect(v12RouterGeneration()).toBe(3);
+    it("is the release's generation-4 Router, and it answers both renamed callbacks", () => {
+      expect(v12RouterGeneration()).toBe(4);
       const answered = ISAUCE_ROUTER.abi
         .filter((item) => item.type === "function")
         .map((item) => (item as { name: string }).name);

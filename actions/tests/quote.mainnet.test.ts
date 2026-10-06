@@ -120,7 +120,7 @@ describe("quoteAction, on mainnet state", { skip: skipReason(), timeout: 300_000
 
   before(async () => {
     env = await startAnvil({ mainnet: "quote" });
-    quoters = { ...QUOTERS, router: env.router };
+    quoters = { ...QUOTERS, router: env.quoteRouter };
     const base = http(env.rpc)({ chain: undefined, retryCount: 0, timeout: 30_000 });
     // Every eth_call gets 15M gas, so a quoter that meters gas sees the same budget every run.
     client = createPublicClient({
@@ -136,6 +136,26 @@ describe("quoteAction, on mainnet state", { skip: skipReason(), timeout: 300_000
   });
   after(async () => {
     await env?.stop();
+  });
+
+  it("refuses generation 4 as a quote service before issuing a call", () => {
+    assert.notEqual(env.router, env.quoteRouter);
+    assert.throws(
+      () =>
+        quoteAction(
+          {
+            type: "uniswapV3Swap",
+            pool: UNIV3_USDC_WETH_500,
+            tokenIn: USDC,
+            tokenOut: WETH,
+            amount: "1000000",
+            amountOutMin: "0",
+            recipient: "self",
+          },
+          { router: env.router },
+        ),
+      /generation 4 has no quote method; use v12QuoteRouterAddress/,
+    );
   });
 
   /** The quote, sent as its `eth_call` (from the zero address) and decoded by its own decoder. */

@@ -1,0 +1,29 @@
+{
+  "$comment": "Uniswap V3 token getters, from protocols/uniswap-v3/UniswapV3PoolABI.json.",
+  "abi": [
+    {
+      "name": "token0",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "token1",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    }
+  ]
+}

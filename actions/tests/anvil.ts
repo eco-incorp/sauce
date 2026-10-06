@@ -139,6 +139,18 @@ export async function startAnvil(options: { mainnet?: string; chain?: ChainName 
     creation,
   );
 
+  // Generation 4 executes swaps; the separately pinned generation 3 service quotes them.
+  const quoteArtifact = JSON.parse(
+    readFileSync(resolve(REPO_ROOT, "sdk/src/artifacts/V12QuoteRouter.json"), "utf8"),
+  ) as { bytecode: Hex; address: Address };
+  const quoteDeployment = await walletClient.sendTransaction({ data: quoteArtifact.bytecode });
+  const quoteReceipt = await publicClient.waitForTransactionReceipt({ hash: quoteDeployment });
+  if (quoteReceipt.status !== "success" || !quoteReceipt.contractAddress) {
+    throw new Error("the quote service deployment failed");
+  }
+  const quoteCode = await publicClient.getCode({ address: quoteReceipt.contractAddress });
+  await testClient.setCode({ address: quoteArtifact.address, bytecode: quoteCode! });
+
   /** Sends `program` through the Pot's `cook`. Resolves to the receipt, reverted or not. */
   const cook = async (
     program: Uint8Array,
@@ -189,6 +201,7 @@ export async function startAnvil(options: { mainnet?: string; chain?: ChainName 
     walletClient,
     engine,
     router,
+    quoteRouter: quoteArtifact.address,
     pot,
     cook,
     returned,
