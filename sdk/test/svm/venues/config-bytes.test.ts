@@ -38,15 +38,17 @@ for (const pool of [
   kit.address("2uF4Xh61rDwxnG9woyxsVQP7zuA6kLFpb3NvnRQeoiSd"),
   kit.address("GseMAnNDvntR5uFePZ51yZBXzNSn7GdFPkfHwfr6d77J"),
 ])
-  test(`Pumpswap bytes input preserves all config fields and avoids re-encoding account keys: ${pool}`, async () => {
-    const expected = await pump.pumpswapAdapter.fetchPoolConfig(pumpLoad, pool);
-    const bytes = poolBytes(pool);
-    encodes = 0;
-    const actual = await pump.fetchPumpswapConfigBytes(pumpLoad, bytes);
-    expect(actual).toEqual(expected);
-    // Only the derived creator-vault authority crosses back into bytes for its ATA.
-    expect(encodes).toBe(1);
-  });
+  for (const primed of [false, true])
+    test(`Pumpswap bytes input preserves all config fields and avoids re-encoding account keys: ${pool}, primed=${primed}`, async () => {
+      const expected = await pump.pumpswapAdapter.fetchPoolConfig(pumpLoad, pool);
+      const bytes = poolBytes(pool);
+      if (!primed) __resetPdaMemoForTest();
+      encodes = 0;
+      const actual = await pump.fetchPumpswapConfigBytes(pumpLoad, bytes);
+      expect(actual).toEqual(expected);
+      // Only the derived creator-vault authority crosses back into bytes for its ATA.
+      expect(encodes).toBe(1);
+    });
 
 test("DLMM bytes input preserves both windows without re-encoding the pair for seven PDA seeds", async () => {
   const expected = await dlmm.fetchMeteoraDlmmConfig(dlmmLoad, pair);
@@ -128,4 +130,22 @@ test("DLMM live active-id changes derive the new window despite a warm PDA memo"
   expect(moved).toEqual(await dlmm.fetchMeteoraDlmmConfig(movedLoad, pair));
   expect(moved.windows.xToY.arrayIndexes).not.toEqual(original.windows.xToY.arrayIndexes);
   expect(moved.windows.xToY.binArrays).not.toEqual(original.windows.xToY.binArrays);
+});
+
+for (const length of [8, 88, 674])
+  test(`Pumpswap bytes fetch refuses truncated global config (${length} bytes)`, async () => {
+    const pool = kit.address("2uF4Xh61rDwxnG9woyxsVQP7zuA6kLFpb3NvnRQeoiSd");
+    const load = async (key: Address) => {
+      const data = await pumpLoad(key);
+      return key === "ADyA8hdefvWN2dbGGWFotbzWxrAvLW83WG6QCVXvJKqw" && data
+        ? data.slice(0, length)
+        : data;
+    };
+    await expect(pump.fetchPumpswapConfigBytes(load, poolBytes(pool))).rejects.toThrow();
+  });
+
+test("bytes fetchers are available from the public SVM barrel", async () => {
+  const svm = await import("../../../src/svm/index.js");
+  expect(svm.fetchPumpswapConfigBytes).toBe(pump.fetchPumpswapConfigBytes);
+  expect(svm.fetchMeteoraDlmmConfigBytes).toBe(dlmm.fetchMeteoraDlmmConfigBytes);
 });

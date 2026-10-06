@@ -383,8 +383,12 @@ export const pumpswapAdapter = {
     }
     if (coinCreator === DEFAULT_PUBKEY) creatorFeeBps = 0n;
 
-    const protocolFeeRecipient = pubkeyAt(globalConfigData, 57);
-    const buybackFeeRecipient = pubkeyAt(globalConfigData, 643);
+    const protocolFeeRecipientBytes = globalConfigData.slice(57, 89);
+    const buybackFeeRecipientBytes = globalConfigData.slice(643, 675);
+    // Decode the exact seed buffers: the decoder rejects truncated keys, and
+    // later awaits cannot make the validated strings disagree with their seeds.
+    const protocolFeeRecipient = getAddressDecoder().decode(protocolFeeRecipientBytes);
+    const buybackFeeRecipient = getAddressDecoder().decode(buybackFeeRecipientBytes);
     const coinCreatorVaultAuthority = await pda(
       ["creator_vault", coinCreatorBytes],
       PUMPSWAP_PROGRAM_ID,
@@ -397,13 +401,13 @@ export const pumpswapAdapter = {
       buybackFeeRecipientTokenAccount,
       poolV2,
     ] = await Promise.all([
-      ata(globalConfigData.slice(57, 89), quoteMintBytes, quoteTokenProgramBytes),
+      ata(protocolFeeRecipientBytes, quoteMintBytes, quoteTokenProgramBytes),
       ata(
         new Uint8Array(encoder.encode(coinCreatorVaultAuthority)),
         quoteMintBytes,
         quoteTokenProgramBytes,
       ),
-      ata(globalConfigData.slice(643, 675), quoteMintBytes, quoteTokenProgramBytes),
+      ata(buybackFeeRecipientBytes, quoteMintBytes, quoteTokenProgramBytes),
       coinCreator === DEFAULT_PUBKEY
         ? Promise.resolve(undefined)
         : pda(["pool-v2", baseMintBytes], PUMPSWAP_PROGRAM_ID),
