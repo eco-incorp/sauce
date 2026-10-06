@@ -33,7 +33,7 @@ import {
   type CanonicalChain,
   type ChainRef,
 } from "../chains/canonical.js";
-import type { LoweredIntent } from "../routes/intent-host.js";
+import type { CompiledBody } from "../routes/sauce-route.js";
 import { CliError } from "./args.js";
 
 /** `supported`: the release builds and sends transactions there. `preview`: compile and simulate. */
@@ -311,10 +311,10 @@ export function requireSupported(action: string, chains: readonly CanonicalChain
 }
 
 /**
- * The chain each of `intents` delivers to: what a cook or a publish that opens them is refused by,
- * beside its own. An intent its body opens on the destination in turn (a cascade) is not among
- * them: the lowering reports the intents a program opens itself, and no more.
+ * The chain each intent a program opens delivers to — its body's: what a cook or a publish that
+ * opens them is refused by, beside its own. An intent its body opens on the destination in turn (a
+ * cascade) is not among them: a cascade's later levels are each sent on their own chain.
  */
-export function intentDestinations(intents: readonly LoweredIntent[]): CanonicalChain[] {
-  return intents.map((intent) => intent.destination);
+export function intentDestinations(bodies: readonly CompiledBody[]): CanonicalChain[] {
+  return bodies.filter((body) => body.path.length === 0).map((body) => body.destination);
 }

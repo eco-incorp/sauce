@@ -17,7 +17,7 @@ import { readFileSync, statSync, writeFileSync } from "node:fs";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { randomSalt } from "../routes/intent-defaults.js";
-import type { LoweredIntent } from "../routes/intent-host.js";
+import type { CompiledBody } from "../routes/sauce-route.js";
 import {
   addressDefines,
   CliError,
@@ -650,7 +650,7 @@ async function autoExecutionFee(
     return undefined;
   }
   // Before the fee is read: a command refused on these chains reads nothing for them.
-  if (gate !== undefined) gated(gate, input.chain, probe.intents);
+  if (gate !== undefined) gated(gate, input.chain, probe.bodies);
   if (paid.size === 0) {
     if (told) {
       io.stderr("--intent-execution-fee auto: no intent here runs a program, so none pays a fee\n");
@@ -679,14 +679,14 @@ interface Gate {
 }
 
 /** Refuses `gate`'s command on a preview chain among `source` and the `intents` it opens. */
-function gated(gate: Gate, source: CanonicalChain, intents: readonly LoweredIntent[] = []): void {
+function gated(gate: Gate, source: CanonicalChain, bodies: readonly CompiledBody[] = []): void {
   requireSupported(
     gate.action,
     gate.by === "destinations"
-      ? intents.map((intent) => intent.destination)
+      ? intentDestinations(bodies)
       : gate.by === "source"
         ? [source]
-        : [source, ...intentDestinations(intents)],
+        : [source, ...intentDestinations(bodies)],
   );
 }
 
@@ -1743,7 +1743,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       }
       // Compiled once: refused before the signer or any endpoint, then the Pots checked.
       const compiled = probeProgram(program, io);
-      if (gate !== undefined) gated(gate, program.chain, compiled.intents);
+      if (gate !== undefined) gated(gate, program.chain, compiled.bodies);
       const account = hasSigner(args, io) ? await signerOf(args, io) : undefined;
       const from = stringFlag(args, "from");
       if (from !== undefined && account !== undefined) {
@@ -1766,7 +1766,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
 
       // Before anything is sent: an intent whose Pot is not deployed is one no solver can fill.
       const pots = await checkIntentPots(
-        intentCooks(compiled.intents),
+        intentCooks(compiled.bodies, program.intents),
         endpointsOf(args, io, program.chain),
       );
       for (const check of pots) {

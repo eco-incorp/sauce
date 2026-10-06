@@ -38,6 +38,7 @@ import type { Reward, Route, UniversalAddress } from "../routes/types.js";
 import { ecoRoutesVaultConfig, predictVaultAddress } from "../routes/vault.js";
 import { validateSettleProgram } from "../verify/decode.js";
 import { CliError } from "./args.js";
+import { fileIntents } from "./file-intents.js";
 import { connect, receiptOf } from "./chain.js";
 import type { CommandOutput } from "./commands.js";
 import { costJson, costLine, costOf, receiptEffects, receiptReport } from "./receipt.js";
@@ -576,7 +577,7 @@ function named(
 
 /** The intents a compiled program opens, from the compile itself: each measured value named. */
 function sourceIntents(program: CompiledSauceProgram): Part[] {
-  return program.intents.map((lowered) =>
+  return (program.bodies.length === 0 ? [] : fileIntents(program, "sauce inspect")).map((lowered) =>
     fundedBy(
       named(
         intentPart(

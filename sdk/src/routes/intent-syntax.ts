@@ -3,11 +3,11 @@
  * its stages, the methods each stage has, what each takes and returns, and the per-level option a
  * modifier sets.
  *
- * One table, read by everything that has to agree on the syntax: the generator that writes the
- * editor's declarations (`scripts/gen-source-globals.mjs`, `SaucePortal` and the stages after it),
- * the compiler host that opens intents (`intent-host.ts`), which declares each stage as a host type
- * of that name and maps each parameter's `kind` to what it tells the compiler, and the TypeScript
- * builder (`intent-dsl.ts#chainPortal`). A change here is a change to all of them.
+ * One table, read by everything on the host that has to agree on the syntax: the generator that
+ * writes the editor's declarations (`scripts/gen-source-globals.mjs`, `SaucePortal` and the stages
+ * after it) and the TypeScript builder (`intent-dsl.ts#chainPortal`). In a program the syntax is
+ * `@sauce/intents`' classes (`std/intents/intents.evm.js`), whose methods and refusals this table's
+ * names and words follow; `routes-intent-portal.test.ts` holds the two to each other.
  *
  * Data only: no import, so a generator can load it from source.
  */
@@ -22,13 +22,6 @@ export interface IntentParam {
   readonly name: string;
   /** Its TypeScript type in the declarations; with `rest`, the type of each argument. */
   readonly ts: string;
-  /**
-   * What it is to the compiler: a value computed where the intent opens (`value`); one computed
-   * there whose names resolve on the destination, since the solver delivers it there (`nested`);
-   * a closure compiled for the destination, the body (`program`); a closure that runs on the
-   * destination in the body's place when the body reverts (`handler`).
-   */
-  readonly kind: "value" | "nested" | "program" | "handler";
   /** Any number of arguments of this type: `send(a, b)`. One argument that is a list of them is
    *  read the same way, `send([a, b])`. */
   readonly rest?: true;
@@ -76,7 +69,6 @@ export const INTENT_STAGES = {
           {
             name: "reward",
             ts: `${REWARD_ITEM} | readonly ${DELIVERY_ITEM}[]`,
-            kind: "value",
             rest: true,
           },
         ],
@@ -98,7 +90,7 @@ export const INTENT_STAGES = {
           "deadline a refund goes to it, and only it may send the Portal's `refundTo` to " +
           "redirect one. Required on every intent a program opens, since the Pot it runs on may " +
           "be shared; only a top-level intent a wallet publishes itself defaults to that wallet.",
-        params: [{ name: "address", ts: "bigint", kind: "value" }],
+        params: [{ name: "address", ts: "bigint" }],
         returns: "Sent",
         option: "creator",
       },
@@ -106,13 +98,13 @@ export const INTENT_STAGES = {
         doc:
           "From when an unproven reward may be refunded, Unix seconds. Defaults to seven days " +
           "past the route's deadline.",
-        params: [{ name: "seconds", ts: "bigint | number", kind: "value" }],
+        params: [{ name: "seconds", ts: "bigint | number" }],
         returns: "Sent",
         option: "rewardDeadline",
       },
       prover: {
         doc: "The source chain's prover. Defaults to the registry's for the pair.",
-        params: [{ name: "address", ts: "bigint", kind: "value" }],
+        params: [{ name: "address", ts: "bigint" }],
         returns: "Sent",
         option: "prover",
       },
@@ -125,7 +117,6 @@ export const INTENT_STAGES = {
           {
             name: "delivery",
             ts: `${DELIVERY_ITEM} | readonly ${DELIVERY_ITEM}[]`,
-            kind: "nested",
             rest: true,
           },
         ],
@@ -144,13 +135,13 @@ export const INTENT_STAGES = {
         doc:
           "The last second the intent may be filled, Unix seconds. Defaults to five minutes past " +
           "when it opens.",
-        params: [{ name: "seconds", ts: "bigint | number", kind: "value" }],
+        params: [{ name: "seconds", ts: "bigint | number" }],
         returns: "Received",
         option: "deadline",
       },
       salt: {
         doc: "The route's salt. Defaults to 32 random bytes, picked when the intent is built.",
-        params: [{ name: "salt", ts: "bigint | number", kind: "value" }],
+        params: [{ name: "salt", ts: "bigint | number" }],
         returns: "Received",
         option: "salt",
       },
@@ -159,7 +150,7 @@ export const INTENT_STAGES = {
           "The destination Kitchen's fee the body's cook pays, in wei, for a body that is a " +
           "program: known when the intent is built. Defaults to what the compile is given for " +
           "that destination.",
-        params: [{ name: "wei", ts: "bigint | number", kind: "value" }],
+        params: [{ name: "wei", ts: "bigint | number" }],
         returns: "Received",
         option: "executionFee",
       },
@@ -168,7 +159,7 @@ export const INTENT_STAGES = {
           "The body: runs on the destination with what was received. It is never invoked here: " +
           "it is compiled for that chain. As in JavaScript, `await x; rest` is " +
           "`x.then(() => { rest })`.",
-        params: [{ name: "body", ts: "() => void", kind: "program" }],
+        params: [{ name: "body", ts: "() => void" }],
         returns: "Opened",
       },
     },
@@ -182,7 +173,7 @@ export const INTENT_STAGES = {
           "What runs on the destination in the body's place when the body reverts: everything " +
           "the body did is undone, and the fill still succeeds. `e` is what the body reverted " +
           "with, at most its first 256 bytes. EVM destinations only.",
-        params: [{ name: "handler", ts: "(e: SauceBytes) => void", kind: "handler" }],
+        params: [{ name: "handler", ts: "(e: SauceBytes) => void" }],
         returns: "Caught",
       },
     },

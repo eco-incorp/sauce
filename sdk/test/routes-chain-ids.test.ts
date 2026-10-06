@@ -56,9 +56,9 @@ describe("a chain's name is its chain id", () => {
     .receive({ token: USDC, amount: 1 })
     .then(() => { USDC.transfer(${RECIPIENT}, 1); });
 }`,
-      { intents: { deadline: 2_000_000_000n, salt: `0x${"5a".repeat(32)}` } },
-    ).intents;
-    expect(opened.map((intent) => intent.destination.slug)).toEqual(["ethereum"]);
+      { intents: { deadline: 2_000_000_000n, salt: `0x${"5a".repeat(32)}`, executionFee: 1n } },
+    ).bodies;
+    expect(opened.map((body) => body.destination.slug)).toEqual(["ethereum"]);
   });
 
   it("refuses the old intent form, a chain's name called, naming the Portal form", () => {

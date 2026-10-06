@@ -25,12 +25,6 @@ export interface ProtocolNameOptions {
   /** Restricts a chain-QUALIFIED name (`Arbitrum.UniswapV3.Factory`) to a named allowlist. Default:
    *  any canonical chain. */
   chainScope?: readonly ChainRef[];
-  /**
-   * Told each contract a compile resolved — a call (`UniswapV3.Factory.getPool(…)`) or a value
-   * (`Cctp.TokenMessenger`) — with the name as written and what it resolved to: which chain's
-   * deployment, and its address. Intent bodies' names are reported too, for their own chains.
-   */
-  onContract?: (reference: string, target: AccessorTarget) => void;
 }
 
 function fail(message: string): never {

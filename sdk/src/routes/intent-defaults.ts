@@ -1,3 +1,8 @@
+import type { CanonicalChain } from "../chains/canonical.js";
+import type { EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
+import type { IntentFundVia } from "./portal.js";
+import type { AddressInput } from "./types.js";
+
 /**
  * What an intent a program opens takes when it does not say: Eco's own defaults, as its solver
  * quotes an intent and its Portal app publishes one.
@@ -29,3 +34,54 @@ export function randomSalt(): `0x${string}` {
 
   return `0x${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }
+
+/**
+ * What every intent a program opens takes when it does not name its own, and what the SDK cannot
+ * look up: the defaults a compile hands `@sauce/intents` (`SauceCompileOptions.intents`). Each
+ * modifier an intent is written with wins over its field here.
+ */
+export interface IntentDefaults extends EcoRoutesSelector {
+  /** The route's deadline, absolute Unix seconds, for every intent the program opens at any depth.
+   *  Left out: {@link DEFAULT_FILL_WINDOW} past when the intent opens. */
+  readonly deadline?: bigint;
+  /** The reward's deadline. Left out: the route's deadline plus {@link DEFAULT_REFUND_WINDOW}. */
+  readonly rewardDeadline?: bigint;
+  /** When the program's own intents open, Unix seconds: the default deadlines count from it, so
+   *  they are fixed when the file compiles, as a wallet that publishes them needs. A level below
+   *  opens when its parent's body runs, at the block's time; so does every level when this is left
+   *  out. */
+  readonly openedAt?: bigint;
+  /**
+   * The wallet that publishes the program's top-level intents itself, as `sauce intent publish`
+   * does: the creator of each one that names none, as Eco's Portal app makes the publishing wallet
+   * the creator. It is never the creator of an intent a body opens, and a level below drops it:
+   * every intent a program opens names its own `.refundee(...)`, since the Pot it runs on may be
+   * shared and a refund there could go to anyone.
+   */
+  readonly publisher?: AddressInput;
+  /** Defaults to the prover the deployment registry records for this source/destination pair. */
+  readonly prover?: AddressInput;
+  /** Overrides the source-chain Portal the program publishes through. */
+  readonly sourcePortal?: AddressInput;
+  /** Overrides the destination-chain Portal recorded in the child's route. */
+  readonly destinationPortal?: AddressInput;
+  /** Route salt, for every intent that names none with `.salt(...)`. Left out: 32 random bytes,
+   *  picked once per compile ({@link randomSalt}). */
+  readonly salt?: `0x${string}`;
+  /** How the program funds the reward: `"transfer"` (default) pays the vault then `publish`es;
+   *  `"publishAndFund"` approves the Portal and calls `publishAndFund`. */
+  readonly fundVia?: IntentFundVia;
+  /** Passed to `publishAndFund` (`fundVia: "publishAndFund"` only). Default `false`. */
+  readonly allowPartial?: boolean;
+  /** Overrides the destination Pot a body cooks on. */
+  readonly pot?: AddressInput;
+  /** The interpreter that Pot cooks on. Defaults to the released engine address. */
+  readonly engine?: AddressInput;
+  /** The destination Kitchen's current execution fee, in wei, paid on every cook: one for every
+   *  destination, or each destination's own. Required for an intent whose body is a program, unless
+   *  it is given `.fee(...)`: it is read from the chain and it changes. */
+  readonly executionFee?: bigint | ((destination: CanonicalChain) => bigint | undefined);
+}
+
+/** {@link IntentDefaults}, by its earlier name. */
+export type IntentSugarDefaults = IntentDefaults;

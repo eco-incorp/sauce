@@ -13,15 +13,17 @@ import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-ty
 import type {
   AbiParameter,
   AccountManifest,
-  EntrySignature,
+  ProgramOptions,
   ProgramReport,
+  ProgramScope,
   ResolveModule,
   ResolvePackage,
   SauceTarget as RsTarget,
 } from "sauce-compiler";
 import { resolveSdkModule, resolveSdkPackage, sdkStdPath } from "../embedded/resolve.js";
 import { compile } from "../wasm-compiler.js";
-import type { ChainHost } from "./host.js";
+import { CHAIN_MODULE_ROOT, chainModuleAbi } from "./chain-module.js";
+import { entrySignatureOf, type EntrySignature } from "./entry.js";
 
 const ENTRY = "main.js";
 
@@ -108,11 +110,18 @@ function toInlineContracts(
  * resolves to the SDK's copy whatever the caller supplies. Every other path reaches the caller's
  * `resolve` before the SDK's embedded ABIs, so a caller can serve its own `./artifacts/IERC20.json`.
  */
-function makeResolve(source: string, own: ResolveModule | undefined): ResolveModule {
+function makeResolve(
+  source: string,
+  own: ResolveModule | undefined,
+  modules: ReadonlyMap<string, string> | undefined,
+): ResolveModule {
   const entryBytes = new TextEncoder().encode(source);
+  const utf8 = new TextEncoder();
 
   return (path) => {
     if (path === ENTRY) return entryBytes;
+    const generated = generatedModule(path, modules);
+    if (generated !== undefined) return utf8.encode(generated);
     if (own !== undefined && sdkStdPath(path) === undefined) {
       const bytes = own(path);
       if (bytes !== undefined && bytes !== null) return bytes;
@@ -122,10 +131,36 @@ function makeResolve(source: string, own: ResolveModule | undefined): ResolveMod
   };
 }
 
-/** Bare specifiers: the SDK's standard library first, then the caller's `resolvePackage`. */
-function makeResolvePackage(own: ResolvePackage | undefined): ResolvePackage {
+/** The bare specifier a generated module is imported by, `@sauce/chain-<name>`, and back. */
+const GENERATED = "@sauce/chain-";
+
+/** The text of a generated module or of an ABI one imports, at `path`. */
+function generatedModule(
+  path: string,
+  modules: ReadonlyMap<string, string> | undefined,
+): string | undefined {
+  const absolute = path.startsWith(`.${CHAIN_MODULE_ROOT}/`) ? path.slice(1) : path;
+  if (!absolute.startsWith(`${CHAIN_MODULE_ROOT}/`)) return undefined;
+  const rest = absolute.slice(CHAIN_MODULE_ROOT.length + 1);
+  if (rest.startsWith("abi/")) return chainModuleAbi(rest);
+  const name = /^([\w-]+)\.js$/.exec(rest)?.[1];
+
+  return name === undefined ? undefined : modules?.get(`${GENERATED}${name}`);
+}
+
+/** Bare specifiers: a generated module, the SDK's standard library, then the caller's
+ *  `resolvePackage`. */
+function makeResolvePackage(
+  own: ResolvePackage | undefined,
+  modules: ReadonlyMap<string, string> | undefined,
+): ResolvePackage {
   return (specifier, importer) =>
-    resolveSdkPackage(specifier) ?? own?.(specifier, importer) ?? undefined;
+    (modules?.has(specifier) === true
+      ? `${CHAIN_MODULE_ROOT}/${specifier.slice(GENERATED.length)}.js`
+      : undefined) ??
+    resolveSdkPackage(specifier) ??
+    own?.(specifier, importer) ??
+    undefined;
 }
 
 /**
@@ -200,11 +235,12 @@ export interface RsCompileInput {
   ambient?: string[];
   /** Compile for compact-v1 entry arguments, returning the schema they must be encoded against. */
   compactArgs?: boolean;
-  /** The value of each of `main`'s parameters, as a word, when the program is compiled for them:
-   *  the compiler's `args` (`entry.ts#entryArguments`). */
-  args?: readonly string[];
-  /** The names the chain gives the program (`host.ts#chainHost`): asked of, never written in. */
-  host?: ChainHost;
+  /** Modules the SDK wrote for this compile, by the bare specifier a program or `ambient` names
+   *  them with (`@sauce/chain-<name>`): each chain's names (`chain-module.ts`). Read as the compile
+   *  asks, so a module added while it runs — a destination's, for a body — is served too. */
+  modules?: ReadonlyMap<string, string>;
+  /** The options of each closure compiled as a program of its own, `program(closure, scope)`. */
+  programOptions?: (scope: ProgramScope) => ProgramOptions | undefined;
   /** `"closure"`: `source` is one function expression as `Function.prototype.toString` prints it,
    *  compiled as the entry as it stands. Default `"module"`. */
   entryKind?: "module" | "closure";
@@ -217,9 +253,9 @@ export interface RsCompileResult extends CompileResult {
   manifest?: AccountManifest;
   /** `main`'s parameters as the compiler reports them: an ABI signature, `Account`s left out. */
   entryParams: readonly AbiParameter[];
-  /** `main`'s signature as the program declares it, from every compile, one for `args` included. */
+  /** `main`'s signature, as far as the compile reports it. */
   entrySignature: EntrySignature;
-  /** Every program argument the compile compiled, each with where it is written. */
+  /** Every closure the compile compiled as a program of its own (`program(closure, scope)`). */
   programs: readonly ProgramReport[];
 }
 
@@ -237,22 +273,13 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
     target: mapTarget(input.target),
     entry: ENTRY,
     entryKind: input.entryKind ?? "module",
-    resolve: makeResolve(input.source, input.resolve),
-    resolvePackage: makeResolvePackage(input.resolvePackage),
+    resolve: makeResolve(input.source, input.resolve, input.modules),
+    resolvePackage: makeResolvePackage(input.resolvePackage, input.modules),
     inlineContracts: toInlineContracts(input.contracts),
     ambient: input.ambient,
     defines: toRsDefines(input.defines, input.baseDefines),
     compactArgs: input.compactArgs,
-    ...(input.args === undefined ? {} : { args: [...input.args] }),
-    ...(input.host === undefined
-      ? {}
-      : {
-          declare: input.host.declare,
-          types: input.host.types,
-          hostModules: input.host.hostModules,
-          nested: input.host.nested,
-          bind: input.host.bind,
-        }),
+    ...(input.programOptions === undefined ? {} : { programOptions: input.programOptions }),
   });
 
   const compiled: RsCompileResult = {
@@ -261,7 +288,7 @@ export function compileWithRs(input: RsCompileInput): RsCompileResult {
     entrySchema: result.entrySchema,
     entryEncoding: result.entryEncoding,
     entryParams: result.entryParams,
-    entrySignature: result.entrySignature,
+    entrySignature: entrySignatureOf(result.entryParams),
     programs: result.programs,
   };
   if (result.manifest !== undefined) compiled.manifest = result.manifest;

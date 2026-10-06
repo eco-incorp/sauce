@@ -5,10 +5,11 @@
  * resolved on their chain.
  *
  * Nothing here decides anything the compile does not. The defines follow the compile's own rule
- * (`sauce-route.ts#levelOn`): each part of the program reads its own chain's values — an intent's
- * body and delivery the destination's, its reward the enclosing chain's — and a user define named
- * like a chain-scoped value stays on the chain it was given for, while any other holds at every
- * depth. The contracts are the ones the protocol rewrite resolved (`accessors.onContract`).
+ * (`sauce-route.ts#chainModules`): each part of the program reads its own chain's values — an
+ * intent's body and delivery the destination's, its reward the enclosing chain's — and a user
+ * define named like a chain-scoped value stays on the chain it was given for, while any other holds
+ * at every depth. The contracts are the registry names the file writes, resolved by the same rules
+ * the chain's module of names is written by (`protocol-names.ts`).
  */
 import { getAddressDecoder } from "@solana/kit";
 import { getAddress, hexToBytes, numberToHex } from "viem";
@@ -17,8 +18,11 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { chainDefines } from "../routes/ambient.js";
 import { walk, type AstNode } from "../routes/ast-walk.js";
 import { parseSauce } from "../routes/parse.js";
-import type { AccessorTarget } from "../routes/protocol-names.js";
-import type { DestinationPart } from "../routes/sauce-route.js";
+import { resolveContractReference } from "../routes/protocol-names.js";
+import { resolveNamespace } from "../routes/accessor-index.js";
+import { addressOn } from "../descriptors/query.js";
+import { chainSlugForKey, isChainKey } from "../routes/accessor-index.js";
+import { requireChain } from "../chains/canonical.js";
 import { resolveTokenMap } from "../routes/token-registry.js";
 import { pascalOfSlug } from "../routes/builder.js";
 import type { DefineValue } from "./args.js";
@@ -79,29 +83,50 @@ interface IntentPart {
 }
 
 /**
- * The parts of `program` that run on an intent's destination, as the compile places them
- * (`CompiledSauceProgram.elsewhere`): a body and a handler by their own spans, and a delivery by
- * the arguments of the call it spans.
+ * The parts of `program` that run on an intent's destination: each `.then(...)` body of an intent
+ * opened on a chain's `Portal` (`Arbitrum.Portal.send(…)…then(() => { … })`), and the items of its
+ * `.receive(...)`, which name the destination's tokens.
  */
-function intentParts(program: AstNode, elsewhere: readonly DestinationPart[]): IntentPart[] {
-  const calls = new Map<string, AstNode>();
+function intentParts(program: AstNode): IntentPart[] {
+  const parts: IntentPart[] = [];
   walk(program, (node) => {
-    if (node.type === "CallExpression") calls.set(`${node.start}:${node.end}`, node);
-  });
-
-  return elsewhere.flatMap(({ kind, chain, span }): IntentPart[] => {
-    if (kind === "body") return [{ chain, start: span.start.offset, end: span.end.offset }];
-    if (kind === "handler") {
-      return [{ chain, start: span.start.offset, end: span.end.offset, handler: true }];
+    if (node.type !== "CallExpression") return;
+    const callee = node.callee as AstNode;
+    if (callee.type !== "MemberExpression") return;
+    const method = (callee.property as AstNode | undefined)?.name;
+    if (method !== "then" && method !== "receive") return;
+    const chain = portalChain(callee.object as AstNode);
+    if (chain === undefined) return;
+    for (const part of (node.arguments as AstNode[] | undefined) ?? []) {
+      parts.push({ chain, start: part.start, end: part.end });
     }
-    const call = calls.get(`${span.start.offset}:${span.end.offset}`);
-
-    return ((call?.arguments as AstNode[] | undefined) ?? []).map((part) => ({
-      chain,
-      start: part.start,
-      end: part.end,
-    }));
   });
+
+  return parts;
+}
+
+/** The chain whose `Portal` a chain of calls starts from, or `undefined`. */
+function portalChain(node: AstNode): CanonicalChain | undefined {
+  let at: AstNode | undefined = node;
+  while (at !== undefined) {
+    if (at.type === "CallExpression") {
+      at = at.callee as AstNode;
+    } else if (at.type === "MemberExpression") {
+      const object = at.object as AstNode;
+      const property = (at.property as AstNode | undefined)?.name;
+      if (
+        property === "Portal" &&
+        object.type === "Identifier" &&
+        isChainKey(object.name as string)
+      ) {
+        return requireChain(chainSlugForKey(object.name as string)!);
+      }
+      at = object;
+    } else {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 /** A name the file reads, and the chains of the intents it is read inside, outermost first. */
@@ -116,11 +141,7 @@ interface ReadName {
  * compile's rewrites parse it, as written). Each comes with the chains of the intent bodies it is
  * read inside, which decide what it resolves to.
  */
-export function namesRead(
-  text: string,
-  chain: CanonicalChain,
-  elsewhere: readonly DestinationPart[],
-): readonly ReadName[] {
+export function namesRead(text: string, chain: CanonicalChain): readonly ReadName[] {
   let program: AstNode;
   try {
     program = parseSauce(text);
@@ -128,7 +149,7 @@ export function namesRead(
     // The compile reports a file it cannot parse; a report of it has nothing to add.
     return [];
   }
-  const parts = intentParts(program, elsewhere);
+  const parts = intentParts(program);
   const skipped = new Set<AstNode>();
   walk(program, (node) => {
     const at = node as AstNode & Record<string, AstNode | undefined>;
@@ -224,12 +245,11 @@ export function appliedDefines(
   chain: CanonicalChain,
   user: Readonly<Record<string, DefineValue>>,
   addresses: ReadonlySet<string> = new Set(),
-  elsewhere: readonly DestinationPart[] = [],
 ): { readonly defines: readonly AppliedDefine[]; readonly unread: readonly UnreadDefine[] } {
   const applied = new Map<string, AppliedDefine>();
   const used = new Set<string>();
   const readOn = new Map<string, Set<string>>();
-  for (const { name, path } of namesRead(text, chain, elsewhere)) {
+  for (const { name, path } of namesRead(text, chain)) {
     const on = path.at(-1) ?? chain;
     const key = `${on.slug} ${name}`;
     readOn.set(name, (readOn.get(name) ?? new Set()).add(on.slug));
@@ -274,26 +294,70 @@ export function appliedDefines(
   };
 }
 
-/** Collects the contracts a compile resolves, through `accessors.onContract`. */
-export function contractCollector(): {
-  readonly onContract: (reference: string, target: AccessorTarget) => void;
-  readonly contracts: () => readonly UsedContract[];
-} {
+/**
+ * The protocol contracts `text` names, each resolved on the chain the part naming it runs on — an
+ * intent's body on its destination, the rest on `chain` — or on the chain a qualified name names:
+ * `UniswapV3.Factory`, a family's `Uniswap.UniversalRouter`, a protocol's one contract `AaveV3`, and
+ * `Ethereum.AaveV3.Pool`. A name the chain does not deploy is left out, as the compile refuses it.
+ */
+export function usedContracts(text: string, chain: CanonicalChain): readonly UsedContract[] {
+  let program: AstNode;
+  try {
+    program = parseSauce(text);
+  } catch {
+    return [];
+  }
+  const parts = intentParts(program);
   const seen = new Map<string, UsedContract>();
+  const inner = new Set<AstNode>();
+  walk(program, (node) => {
+    if (node.type === "MemberExpression") inner.add(node.object as AstNode);
+  });
+  walk(program, (node) => {
+    if (node.type !== "MemberExpression" || inner.has(node)) return;
+    const path: string[] = [];
+    let at: AstNode = node;
+    while (at.type === "MemberExpression" && at.computed !== true) {
+      path.unshift((at.property as AstNode).name as string);
+      at = at.object as AstNode;
+    }
+    if (at.type !== "Identifier") return;
+    const head = at.name as string;
+    const around = parts
+      .filter((part) => part.start <= node.start && node.end <= part.end)
+      .sort((a, b) => a.end - a.start - (b.end - b.start))[0];
+    const on = around?.chain ?? chain;
+    const qualified = isChainKey(head);
+    const rest = qualified ? path : [head, ...path];
+    if (rest.length === 0 || resolveNamespace(rest[0]!) === undefined) return;
+    for (const take of [2, 1]) {
+      if (rest.length < take) continue;
+      try {
+        const found = resolveContractReference(
+          qualified ? head : rest[0]!,
+          qualified ? rest.slice(0, take) : rest.slice(1, take),
+          on,
+          undefined,
+          "",
+          "",
+        );
+        const address = addressOn(found.descriptor, found.chain);
+        if (address === undefined) return;
+        const reference = [...(qualified ? [head] : []), ...rest.slice(0, take)].join(".");
+        seen.set(`${found.chain.slug} ${reference}`, {
+          reference,
+          contract: `${pascalOfSlug(found.protocol)}.${found.contract}`,
+          chain: found.chain.slug,
+          address: getAddress(address),
+        });
+        return;
+      } catch {
+        // Not a contract with that many segments: try fewer.
+      }
+    }
+  });
 
-  return {
-    onContract: (reference, target) => {
-      const used: UsedContract = {
-        reference,
-        contract: `${pascalOfSlug(target.protocol)}.${target.contract}`,
-        chain: target.chain.slug,
-        address: getAddress(target.address),
-      };
-      seen.set(`${used.chain} ${reference}`, used);
-    },
-    contracts: () =>
-      [...seen.values()].sort(
-        (a, b) => a.chain.localeCompare(b.chain) || (a.reference < b.reference ? -1 : 1),
-      ),
-  };
+  return [...seen.values()].sort(
+    (a, b) => a.chain.localeCompare(b.chain) || (a.reference < b.reference ? -1 : 1),
+  );
 }

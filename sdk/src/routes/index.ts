@@ -94,6 +94,7 @@ export type {
 
 export { compileSauceProgram, compileSauceRoute } from "./sauce-route.js";
 export type {
+  CompiledBody,
   CompiledSauceProgram,
   CompiledSauceRoute,
   SauceCompileOptions,
@@ -103,7 +104,6 @@ export type {
 } from "./sauce-route.js";
 export { decodeEntryArguments, encodeEntryArguments } from "./entry.js";
 export type { EntryParam, EntryValue } from "./entry.js";
-export type { LoweredIntent } from "./intent-host.js";
 
 export {
   ECO_ROUTES_VAULT_PROXY_CREATION_CODE,
@@ -171,7 +171,12 @@ export type {
   SauceBody,
   SauceRewardSpec,
 } from "./intent-dsl.js";
-export { DEFAULT_FILL_WINDOW, DEFAULT_REFUND_WINDOW, randomSalt } from "./intent-defaults.js";
+export {
+  DEFAULT_FILL_WINDOW,
+  DEFAULT_REFUND_WINDOW,
+  randomSalt,
+  type IntentDefaults,
+} from "./intent-defaults.js";
 export {
   INTENT_STAGES,
   REWARD_MODIFIERS,

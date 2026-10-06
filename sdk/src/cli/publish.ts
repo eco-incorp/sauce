@@ -39,7 +39,7 @@ import type { PrivateKeyAccount } from "viem/accounts";
 import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm, hashIntent } from "../routes/encode.js";
 import { isTypeDeclaration } from "../routes/ast-walk.js";
-import type { LoweredIntent } from "../routes/intent-host.js";
+import { fileIntents, type FileIntent as LoweredIntent } from "./file-intents.js";
 import type { CompiledSauceProgram } from "../routes/sauce-route.js";
 import {
   approvalTxs,
@@ -70,7 +70,7 @@ import {
 } from "./commands.js";
 import { nativeSymbol, tokenInfo } from "./effects.js";
 import { baseUnits, type FundRequest } from "./funding.js";
-import { intentDestinations, requireSupported } from "./support.js";
+import { requireSupported } from "./support.js";
 
 const ERC20 = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
@@ -114,10 +114,7 @@ function otherStatement(
   text: string,
   compiled: CompiledSauceProgram,
 ): string | undefined {
-  const spans = [
-    ...compiled.intents.map((intent) => intent.span),
-    ...compiled.elsewhere.map((part) => part.span),
-  ];
+  const spans: { start: { offset: number }; end: { offset: number } }[] = [];
   const placed = (node: Node): boolean =>
     spans.some(
       ({ start, end }) =>
@@ -153,7 +150,7 @@ function fixedIntents(input: PublishInput, files: CliFiles): readonly LoweredInt
     publisher === undefined ? input : { ...input, intents: { ...input.intents, publisher } },
     files,
   );
-  if (program.intents.length === 0) {
+  if (program.bodies.length === 0) {
     throw new UsageError(
       `${input.file} opens no intent — there is nothing to publish. Run it on a Pot with ` +
         "`sauce run` instead.",
@@ -166,7 +163,8 @@ function fixedIntents(input: PublishInput, files: CliFiles): readonly LoweredInt
         "`sauce run`",
     );
   }
-  const measured = program.intents.find((intent) => intent.captures.length > 0);
+  const intents = fileIntents(program, "sauce intent publish");
+  const measured = intents.find((intent) => intent.captures.length > 0);
   if (measured !== undefined) {
     throw new CliError(
       `the intent to ${measured.destination.slug} uses ${measured.captures.map((name) => `\`${name}\``).join(", ")}, ` +
@@ -183,7 +181,7 @@ function fixedIntents(input: PublishInput, files: CliFiles): readonly LoweredInt
     );
   }
 
-  return program.intents;
+  return intents;
 }
 
 /** One transaction of the plan, and what it is for. */
@@ -464,7 +462,10 @@ async function publishIntents(input: PublishInput, files: CliFiles): Promise<Com
   // A dry run only rehearses; the transactions, printed or sent, go only where every chain is
   // supported.
   if (input.format !== undefined || !input.dryRun) {
-    requireSupported("publishing intents", [input.chain, ...intentDestinations(intents)]);
+    requireSupported("publishing intents", [
+      input.chain,
+      ...intents.map((intent) => intent.destination),
+    ]);
   }
   const portal = ecoRoutesPortal(input.chain);
   const from = input.account?.address ?? input.from;

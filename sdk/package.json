@@ -75,7 +75,7 @@
     "sync-stock-tokens": "node scripts/sync-stock-tokens.mjs"
   },
   "dependencies": {
-    "sauce-compiler": "link:/private/tmp/claude-501/-Users-er-Documents-Projects-sauce-sdk/b8103582-3631-4c07-910b-dbccf6c38038/scratchpad/sauce-compiler-local",
+    "sauce-compiler": "link:/Users/er/Documents/Projects/v12-class/sauce-compiler-local",
     "@noble/ciphers": "1.3.0",
     "@noble/hashes": "1.8.0",
     "@solana-program/address-lookup-table": "^0.12.1",

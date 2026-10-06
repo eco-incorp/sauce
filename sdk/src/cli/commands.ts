@@ -34,7 +34,6 @@ export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
 import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
 import { MAX_SQRT_PRICE_X96, MIN_SQRT_PRICE_X96 } from "../price.js";
 import type { IntentFundVia } from "../routes/portal.js";
-import type { AccessorTarget } from "../routes/protocol-names.js";
 import { buildSauceEvmCall, sauceEvmDeployPotCall } from "../routes/sauce-calls.js";
 import {
   compileSauceProgram,
@@ -63,7 +62,7 @@ import {
   type Endpoints,
 } from "./intents.js";
 import { costJson, costLine, costOf, receiptEffects, receiptReport } from "./receipt.js";
-import { appliedDefines, contractCollector } from "./report.js";
+import { appliedDefines, usedContracts } from "./report.js";
 import { EntryArgumentError, entryReturnType } from "../routes/entry.js";
 import type { CookVia } from "../svm/client.js";
 import { svmCookSize } from "./solana.js";
@@ -216,11 +215,7 @@ export function castSend(to: Address, data: Hex, value?: bigint): string {
  * `compileSauceProgram` adds itself: the defines, the intent settings, the argument encoding, and a
  * resolver that serves the program's own relative imports from beside the file.
  */
-function compileOptions(
-  input: ProgramInput,
-  files: CliFiles,
-  onContract?: (reference: string, target: AccessorTarget) => void,
-): SauceCompileOptions {
+function compileOptions(input: ProgramInput, files: CliFiles): SauceCompileOptions {
   const dir = sourceDirOf(input);
   const { deadline, rewardDeadline, publisher, salt, prover, executionFee, fundVia } =
     input.intents;
@@ -245,8 +240,6 @@ function compileOptions(
     defines: input.defines,
     ...(Object.keys(intents).length === 0 ? {} : { intents }),
     ...(input.compactArgs ? { compactArgs: true } : {}),
-    // The intents the program opens compile with these options too, so this hears their contracts.
-    ...(onContract === undefined ? {} : { accessors: { onContract } }),
     ...(input.contracts === undefined ? {} : { contracts: input.contracts }),
     resolve: (path) => files.readModule(resolvePath(dir, path)),
   };
@@ -266,18 +259,11 @@ export const asPublished = (input: ProgramInput): ProgramInput =>
 export const sourceDirOf = (input: ProgramInput): string =>
   resolvePath(input.sourceDir ?? (input.stdin === true ? "." : dirname(resolvePath(input.file))));
 
-/**
- * Compiles the file as a standalone program, turning a failure into one message about the file.
- * `onContract` is told each protocol contract the compile resolves.
- */
-export function compileProgram(
-  input: ProgramInput,
-  files: CliFiles,
-  onContract?: (reference: string, target: AccessorTarget) => void,
-): CompiledSauceProgram {
+/** Compiles the file as a standalone program, turning a failure into one message about the file. */
+export function compileProgram(input: ProgramInput, files: CliFiles): CompiledSauceProgram {
   try {
     return compileSauceProgram(input.chain, input.text, {
-      ...compileOptions(input, files, onContract),
+      ...compileOptions(input, files),
       ...(input.bound === undefined ? {} : { args: input.bound }),
     });
   } catch (error) {
@@ -324,7 +310,7 @@ export function probeProgram(input: ProgramInput, files: CliFiles): CompiledSauc
  * — what {@link requireSupported} is asked about before anything that publishes them.
  */
 export function programChains(input: ProgramInput, files: CliFiles): CanonicalChain[] {
-  return [input.chain, ...intentDestinations(probeProgram(input, files).intents)];
+  return [input.chain, ...intentDestinations(probeProgram(input, files).bodies)];
 }
 
 /** The installed compiler's package name and version, read from its own manifest. */
@@ -374,15 +360,13 @@ export interface CompileInput extends ProgramInput {
  */
 export async function compileCommand(input: CompileInput, files: CliFiles): Promise<CommandOutput> {
   refusePastDeadline(input);
-  const collected = contractCollector();
-  const program = compileProgram(input, files, collected.onContract);
+  const program = compileProgram(input, files);
   const bytecode = bytesToHex(program.bytecode);
   const { defines, unread } = appliedDefines(
     input.text,
     input.chain,
     input.defines,
     new Set(input.addressDefines ?? []),
-    program.elsewhere,
   );
   // The payload is the program with its arguments appended: known once the arguments are.
   const payload =
@@ -398,7 +382,7 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
           input.via,
         )
       : undefined;
-  const cooks = intentCooks(program.intents);
+  const cooks = intentCooks(program.bodies, input.intents);
   const pots: readonly PotCheck[] =
     input.endpoints === undefined ? cooks : await checkIntentPots(cooks, input.endpoints);
   const notes = [
@@ -438,7 +422,7 @@ export async function compileCommand(input: CompileInput, files: CliFiles): Prom
       // What main returns, as it declares it: `simulate` reads the cook's return data as this.
       returnType: entryReturnType(program.entrySignature) ?? null,
       defines,
-      contracts: collected.contracts(),
+      contracts: usedContracts(input.text, input.chain),
       ...(pots.length === 0 ? {} : { intentPots: pots.map(potCheckJson) }),
       compiler: compilerPackage(),
       engine: pairedEngine(input.chain),
@@ -658,7 +642,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
   const cook = cookOf(input, files);
   requireSupported("building the cook transaction", [
     input.chain,
-    ...intentDestinations(cook.program.intents),
+    ...intentDestinations(cook.program.bodies),
   ]);
   const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, input.chain);
   const fee = client === undefined ? undefined : await kitchenFee(client, input.chain);
@@ -756,7 +740,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
     );
   }
   const cook = cookOf(input, files);
-  requireSupported("sending the cook", [input.chain, ...intentDestinations(cook.program.intents)]);
+  requireSupported("sending the cook", [input.chain, ...intentDestinations(cook.program.bodies)]);
   const client = await connect(input.rpcUrl, input.chain);
   const state = await potState(client, cook.pot);
   const deployAction = `deploy Pot ${cook.pot}`;

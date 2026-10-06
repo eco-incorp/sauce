@@ -55,6 +55,7 @@ import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm } from "../routes/encode.js";
 import type { Intent } from "../routes/types.js";
 import { CliError, UsageError } from "./args.js";
+import { fileIntents } from "./file-intents.js";
 import { assumeTokenBalance, mergeOverrides } from "./assume.js";
 import { connect, revertReason, sendAndWait, type Sent } from "./chain.js";
 import {
@@ -205,7 +206,7 @@ export function fillTargets(input: ProgramInput, files: CliFiles): readonly Fill
     );
   }
   // Built as `sauce intent publish` builds them, `--intent-refundee` standing in for its wallet.
-  const intents = compileProgram(asPublished(input), files).intents;
+  const intents = fileIntents(compileProgram(asPublished(input), files), "sauce intent fill");
   if (intents.length === 0) {
     throw new UsageError(`${input.file} opens no intent: there is nothing for a solver to fill`);
   }

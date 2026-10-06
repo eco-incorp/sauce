@@ -7,20 +7,17 @@
  * Every address here is the SDK's: the Pot is the cook's own target in the route the lowering
  * built, the Executor `ecoRoutesExecutorOf` the route's Portal. Only the reads are this module's.
  */
-import { getAddress, slice, toFunctionSelector, type Address } from "viem";
+import { getAddress, type Address } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
-import { v12PotAbi } from "../evm/engine.js";
-import { ecoRoutesExecutorOf } from "../protocols/eco-routes/lookup.js";
+import { ecoRoutesExecutorOf, ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm } from "../routes/encode.js";
-import type { LoweredIntent } from "../routes/intent-host.js";
+import type { IntentDefaults } from "../routes/intent-defaults.js";
+import { resolveIntentPot } from "../routes/intent-pot.js";
+import { toUniversalAddress } from "../routes/normalize.js";
+import type { CompiledBody } from "../routes/sauce-route.js";
 import { UsageError } from "./args.js";
 import { connect, kitchenFee, potState } from "./chain.js";
-
-type PotFunction = Extract<(typeof v12PotAbi)[number], { type: "function" }>;
-const COOK = toFunctionSelector(
-  v12PotAbi.find((item): item is PotFunction => item.type === "function" && item.name === "cook")!,
-);
 
 /** An intent whose route runs a program: the cook its route calls, and on what. */
 export interface IntentCook {
@@ -31,20 +28,29 @@ export interface IntentCook {
   readonly executor: Address;
 }
 
-/** The cooks the intents' routes call — one per intent whose body runs a program. */
-export function intentCooks(intents: readonly LoweredIntent[]): IntentCook[] {
-  return intents.flatMap((lowered) => {
-    const { route } = lowered.intent;
-    const cook = route.calls.find(
-      (call) => call.data.length >= 10 && slice(call.data, 0, 4) === COOK,
+/** The cooks the intents' routes call — one per body, every body being a program, on the Pot of
+ *  its destination's Portal (or the one `defaults` names). */
+export function intentCooks(
+  bodies: readonly CompiledBody[],
+  defaults: IntentDefaults = {},
+): IntentCook[] {
+  const seen = new Set<number>();
+  return bodies.flatMap((body) => {
+    const { destination } = body;
+    if (destination.kind !== "evm" || seen.has(destination.id)) return [];
+    seen.add(destination.id);
+    const portal = getAddress(
+      denormalizeToEvm(
+        toUniversalAddress(defaults.destinationPortal ?? ecoRoutesPortal(destination, defaults)),
+      ),
     );
-    if (cook === undefined || lowered.destination.kind !== "evm") return [];
+    const { pot } = resolveIntentPot(portal, defaults);
 
     return [
       {
-        destination: lowered.destination,
-        pot: getAddress(denormalizeToEvm(cook.target)),
-        executor: getAddress(ecoRoutesExecutorOf(getAddress(denormalizeToEvm(route.portal)))),
+        destination,
+        pot: getAddress(denormalizeToEvm(toUniversalAddress(pot))),
+        executor: getAddress(ecoRoutesExecutorOf(portal)),
       },
     ];
   });

@@ -3,9 +3,15 @@
  *
  * `compileSauceRoute` selects the target from the destination chain, compiles the program as
  * written through the published compiler dependency — the chain's names (tokens, protocols, `self`,
- * intents) are the compiler's HOST's to declare (`host.ts`, `intent-host.ts`), never rewritten into
- * the text — and delegates call encoding to `buildSauceEvmCall` or `buildSauceSvmCall`. One body
- * produces one bytecode segment and one call.
+ * chains and their `Portal`s) are a SauceScript module the SDK writes from its registries and hands
+ * the compiler as an ambient module (`chain-module.ts`), never rewritten into the text — and
+ * delegates call encoding to `buildSauceEvmCall` or `buildSauceSvmCall`. One body produces one
+ * bytecode segment and one call.
+ *
+ * An intent a program opens (`Arbitrum.Portal.send(…).receive(…).then(() => { … })`) is
+ * `@sauce/intents`' classes, which the compiler runs while it compiles. Its body is compiled as a
+ * program of its own, `program(body, chainId)`, with the options `programOptions` gives that chain:
+ * its own module of names, its target, and the caller's defines.
  *
  * EVM calls carry the program bytes and invoke the supplied Pot with the supplied engine.
  * SVM calls name a finalized CODE account through `execution.code`; this module does not stage
@@ -19,40 +25,26 @@
 import type { CompileResult, CompileTarget, ContractsConfig } from "./compile-types.js";
 import type {
   AccountManifest,
-  EntrySignature,
-  ProgramReport,
+  ProgramOptions,
+  ProgramScope,
   ResolveModule,
   ResolvePackage,
-  SourceSpan,
 } from "sauce-compiler";
 import { bytesToHex } from "viem";
 
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
-import { requireChain } from "../chains/canonical.js";
+import { chainById, requireChain } from "../chains/canonical.js";
 import { buildSauceEvmCall, buildSauceSvmCall, type SauceSvmCallParams } from "./sauce-calls.js";
 import { compileWithRs, toRsDefines, type RsCompileResult } from "./rs-compile.js";
-import { chainHost, isChainScalar, withHost, type ChainHost } from "./host.js";
+import { chainModuleSource, isChainScalar, type ChainModuleOptions } from "./chain-module.js";
 import { registryTokenSymbols, resolveTokenMap } from "./token-registry.js";
 import type { ProtocolNameOptions } from "./protocol-names.js";
 import { pascalOfSlug } from "./accessors.js";
-import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
+import { chainAmbient } from "./ambient.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
 import type { EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
-import {
-  intentHost,
-  intentStepError,
-  type IntentLevel,
-  type IntentSite,
-  type IntentSugarDefaults,
-  type LoweredIntent,
-} from "./intent-host.js";
-import {
-  checkEntryArguments,
-  entryArguments,
-  entryParamsOf,
-  type EntryParam,
-  type EntryValue,
-} from "./entry.js";
+import { randomSalt, type IntentDefaults } from "./intent-defaults.js";
+import { entryParamsOf, type EntryParam, type EntrySignature, type EntryValue } from "./entry.js";
 import { chainCalledError, unknownGlobalError } from "./unknown-global.js";
 import { closureText, isSauceClosure, type SauceBody } from "./closure.js";
 import type { AddressInput, CallInput, Hex } from "./types.js";
@@ -101,13 +93,13 @@ export interface SauceCompileOptions {
    * Settings for `Chain.Portal.send(...).receive(...).then(() => { ... })` written inside the
    * program — creating an intent from a program, rather than compiling a program into one.
    * Everything the SDK can look up it looks up; these are the fields it cannot, plus overrides, for
-   * every intent that does not set its own. See `intent-host.ts`.
+   * every intent that does not set its own. See `@sauce/intents`.
    *
    * Omitted entirely, an intent still compiles: its deadlines and salt have defaults, and its
    * refundee (the reward's `creator`), which has none, is its own `.refundee(...)` — or
    * `publisher`'s, for a top-level intent a wallet publishes itself.
    */
-  intents?: Partial<IntentSugarDefaults> & EcoRoutesSelector;
+  intents?: IntentDefaults & EcoRoutesSelector;
   /** Compile for compact-v1 entry arguments. */
   compactArgs?: boolean;
 }
@@ -151,171 +143,16 @@ type ChainRefResolved = ReturnType<typeof requireChain>;
 type DefineValue = bigint | boolean | number;
 
 /**
- * The chain-scoped values a compile gets beyond the caller's options. Internal to the SDK — passed
- * beside the options rather than inside them, so the public option surface stays what
- * `compileSauceRoute` documents. `openRoute` supplies one for the program it compiles; every nested
- * level gets {@link NESTED_SCOPE}.
- */
-export interface RouteScope {
-  /**
-   * The compile-time values that belong to ONE chain: `chainId`, its protocol contracts and its
-   * token symbols (`ambient.ts#chainDefines`). A function rather than values because the values
-   * differ per chain, and a program names more than one chain as soon as it opens an intent.
-   */
-  readonly chainDefines?: (chain: ChainRefResolved) => Readonly<Record<string, DefineValue>>;
-}
-
-/** What a nested level resolves its chain-scoped names with: its own chain's registry values and
- *  nothing a caller supplied for another chain. */
-const NESTED_SCOPE: RouteScope = { chainDefines: (chain) => sharedChainDefines(chain) };
-
-/**
- * The options and scope a level on `destination` gets, when a program compiled for `enclosing`
- * names it: an intent's body there, its delivery, and the program that body compiles to.
- *
- * NAMES ARE SCOPED PER CHAIN, the way protocol accessors already are (they fold in each chain's own
- * literal address). A token symbol, `chainId` or a protocol define means the chain its part runs on.
- * So everything the caller supplied under a chain-scoped name — a `defines` entry named like one of
- * the enclosing chain's values or the destination's, and every `tokens` override — belongs to the
- * program it was supplied for, and is dropped for the level on another chain. That level takes its
- * own chain's values instead. What the caller named that no chain uses (`RECIPIENT`) holds at every
- * depth.
- *
- * Name-based, not value-based: it does not matter whether a `USDC` define came from
- * `chainDefines(base)` or was chosen by hand. It was a Base name in either case. This is what closes
- * both ways Base's USDC reached an Arbitrum body: `openRoute` folding its chain's values into
- * `defines`, and a direct caller passing them there itself.
- *
- * A level on the SAME chain keeps the enclosing options: its names are the ones they were given for.
- */
-function levelOn(
-  enclosing: ChainRefResolved,
-  destination: ChainRefResolved,
-  options: SauceCompileOptions,
-  scope: RouteScope,
-): { readonly options: SauceCompileOptions; readonly scope: RouteScope } {
-  if (destination.id === enclosing.id) return { options, scope };
-  const chainScoped = new Set([
-    ...Object.keys(scope.chainDefines?.(enclosing) ?? {}),
-    ...Object.keys(definesOf(enclosing, options.tokens)),
-    ...Object.keys(sharedChainDefines(destination)),
-  ]);
-  const defines =
-    options.defines === undefined
-      ? undefined
-      : Object.fromEntries(
-          Object.entries(options.defines).filter(([name]) => !chainScoped.has(name)),
-        );
-  return { options: { ...options, defines, tokens: undefined }, scope: NESTED_SCOPE };
-}
-
-/** A chain's defines with `tokens` over its registry's: the chain's own, built once, with none. */
-function definesOf(
-  chain: ChainRefResolved,
-  tokens: SauceCompileOptions["tokens"],
-): Readonly<Record<string, DefineValue>> {
-  return tokens === undefined ? sharedChainDefines(chain) : chainDefines(chain, { tokens });
-}
-
-/**
- * What a program compiled for `chain` is given: the chain's HOST (`host.ts`) — every chain-scoped
- * name, a token symbol, `chainId`, a protocol contract, `self`, `Token(...)` — which the compiler
- * asks about each name the program reads and does not bind, and on an EVM chain the intents a
- * program there may open (`intent-host.ts`), each body compiled through the host this builds for
- * its own chain. Only the caller's own compile-time values travel as defines: a define named like
- * a chain-scoped name is the host's (`splitChainDefines`).
- */
-function routeHost(
-  chain: ChainRefResolved,
-  options: SauceCompileOptions,
-  scope: RouteScope,
-  lowered: LoweredIntent[],
-  sites: IntentSite[],
-  recordedBodies: IntentLevel["recordedBodies"],
-): {
-  readonly host: ChainHost;
-  readonly defines: SauceCompileOptions["defines"];
-  /** Every name the compiler asked about that the host does not declare. */
-  readonly declined: ReadonlySet<string>;
-} {
-  const { defines, tokens, values } = splitChainDefines(options.defines, options.tokens);
-  const declined = new Set<string>();
-  const recording = (host: ChainHost): ChainHost => ({
-    ...host,
-    declare: (name) => {
-      const declaration = host.declare(name);
-      if (declaration === undefined) declined.add(name);
-      return declaration;
-    },
-  });
-  const names = chainHost(chain, { tokens, values, accessors: options.accessors });
-  if (chain.kind !== "evm") return { host: recording(names), defines, declined };
-  const intents = intentHost({
-    source: chain,
-    chains: chainAccessorNames(),
-    defaults: options.intents ?? {},
-    lowered,
-    sites,
-    recordedBodies,
-    // A body on another chain names that chain's values, and nothing the caller supplied for this
-    // one (`levelOn`); its own intents are funded on its chain and lowered by its own host.
-    programOn: (destination) => {
-      const next = levelOn(chain, destination, options, scope);
-      // A body's own intents open when it runs, not when the file compiles, and no wallet
-      // publishes them: each names its own refundee.
-      const {
-        openedAt: _openedAt,
-        publisher: _publisher,
-        ...inherited
-      } = next.options.intents ?? {};
-      const child = routeHost(
-        destination,
-        { ...next.options, intents: inherited },
-        next.scope,
-        [],
-        sites,
-        recordedBodies,
-      );
-      // A program argument takes no `inlineContracts` of its own (`ProgramOptions`), so the
-      // caller's ABI bindings reach it as declarations: each a contract with no address, which
-      // the body calls at one (`Grid.at(pool).poke()`), byte for byte as the entry's binding.
-      const contracts = next.options.contracts ?? {};
-      return {
-        target: destination.kind === "svm" ? "svm" : "evm",
-        declare: (name) =>
-          Object.hasOwn(contracts, name)
-            ? { kind: "contract", abi: JSON.stringify(contracts[name]!.abi) }
-            : child.host.declare(name),
-        types: child.host.types,
-        hostModules: child.host.hostModules,
-        ...(child.host.nested === undefined ? {} : { nested: child.host.nested }),
-        ...(child.host.bind === undefined ? {} : { bind: child.host.bind }),
-        defines: toRsDefines(child.defines),
-        ambient: next.options.ambient,
-      };
-    },
-  });
-
-  return { host: recording(withHost(names, intents)), defines, declined };
-}
-
-/**
  * `defines` split by what each name is. One named like a chain-scoped name — a registered token
  * symbol, `chainId`, a protocol contract's address key — is the caller choosing that chain's value
- * for it, so it goes to the chain's host (`tokens`, `values`), which declares it for this chain
- * alone; a body on another chain names its own. The rest are the caller's own compile-time values.
+ * for it, so it goes into the chain's module (`tokens`, `values`) for this chain alone; a body on
+ * another chain names its own. The rest are the caller's own compile-time values, which hold at
+ * every depth.
  *
- * WHY NOT LEAVE THEM DEFINES. A define binds a name before the compiler asks the host about it, so
- * it would win over the host's declaration wherever the program reads the name:
- *  - a `USDC` define would be a plain number in place of the host's `Token`-typed `USDC`, and
- *    `USDC.transfer(...)` would stop compiling, in the program it was given for;
- *  - an intent's delivery (`Chain.Portal.send(…).receive({ token: USDC, … })`) is a `scope: "nested"`
- *    argument, evaluated in the enclosing program's frame with the destination's names — where the
- *    enclosing program's `USDC` or `chainId` define would bind first, and the delivery would name
- *    the enclosing chain's value on the destination.
- * An intent's body needs none of this: the compiler resolves it in its own program, compiled or
- * recorded, with the defines `levelOn` gives it. Both halves still serve the frames above, so the
- * split stays whole.
+ * WHY NOT LEAVE THEM DEFINES. A define replaces a module's `const` of that name in EVERY module, the
+ * chain's module included: a `USDC` define would put a plain number where the module has the
+ * `Token` `USDC`, and `USDC.transfer(...)` would stop compiling — in the program it was given for,
+ * and in every body, where it would name this chain's value on another.
  */
 function splitChainDefines(
   defines: SauceCompileOptions["defines"],
@@ -346,6 +183,92 @@ function defaultTargetFor(kind: "evm" | "svm"): CompileTarget {
 }
 
 /**
+ * The bare specifier a chain's generated module is named by in one compile: `@sauce/chain-base`
+ * for the program's own chain, `@sauce/chain-base-body` for the module every body on Base compiles
+ * with, whose intents open when that body runs and are published by no wallet.
+ */
+const moduleSpecifier = (chain: CanonicalChain, body: boolean): string =>
+  `@sauce/chain-${chain.slug}${body ? "-body" : ""}`;
+
+/**
+ * What a compile for `chain` hands the compiler beyond the program: the chain's module of names, the
+ * modules of every chain an intent's body runs on (written as the compiler asks for them), the
+ * options each body compiles with, and the caller's own defines.
+ *
+ * NAMES ARE SCOPED PER CHAIN. A token symbol, `chainId` or a protocol name means the chain its part
+ * runs on: a body's are its destination's, from that chain's module. So every `tokens` override and
+ * every chain value the caller chose belongs to the program it was given for, and a body on another
+ * chain takes its own chain's registry values instead; the caller's other defines (`RECIPIENT`)
+ * hold at every depth. A body's own intents open when it runs, not when the file compiles, and no
+ * wallet publishes them: each names its own refundee.
+ */
+function chainModules(
+  chain: CanonicalChain,
+  options: SauceCompileOptions,
+): {
+  readonly modules: Map<string, string>;
+  readonly ambient: string[];
+  readonly defines: SauceCompileOptions["defines"];
+  readonly programOptions: (scope: ProgramScope) => ProgramOptions;
+  readonly bodies: Map<number, CanonicalChain>;
+} {
+  const { defines, tokens, values } = splitChainDefines(options.defines, options.tokens);
+  const salt = options.intents?.salt ?? randomSalt();
+  const moduleOptions: ChainModuleOptions = {
+    tokens,
+    values,
+    accessors: options.accessors,
+    intents: options.intents ?? {},
+  };
+  const own = moduleSpecifier(chain, false);
+  const modules = new Map([[own, chainModuleSource(chain, moduleOptions, salt)]]);
+  const { openedAt: _openedAt, publisher: _publisher, ...inherited } = options.intents ?? {};
+  const bodies = new Map<number, CanonicalChain>();
+
+  const programOptions = (scope: ProgramScope): ProgramOptions => {
+    const id = typeof scope === "bigint" ? Number(scope) : NaN;
+    const destination = chainById(id);
+    if (destination === undefined) {
+      throw new Error(
+        `program(closure, scope): the SDK compiles a closure for the chain whose id \`scope\` is; ` +
+          `${String(scope)} is no chain it knows`,
+      );
+    }
+    bodies.set(id, destination);
+    const specifier = moduleSpecifier(destination, true);
+    if (!modules.has(specifier)) {
+      modules.set(
+        specifier,
+        chainModuleSource(
+          destination,
+          {
+            accessors: options.accessors,
+            intents: inherited,
+            // A body on this same chain keeps the caller's names for it.
+            ...(destination.id === chain.id ? { tokens, values } : {}),
+          },
+          salt,
+        ),
+      );
+    }
+
+    return {
+      target: destination.kind === "svm" ? "svm" : "evm",
+      ambient: [...new Set([...chainAmbient(destination), ...(options.ambient ?? []), specifier])],
+      defines: toRsDefines(defines) ?? [],
+    };
+  };
+
+  return {
+    modules,
+    ambient: [...new Set([...(options.ambient ?? []), own])],
+    defines,
+    programOptions,
+    bodies,
+  };
+}
+
+/**
  * Compiles `sauce` for `destination`'s `ChainKind`, and slots the result into exactly one
  * `CallInput` via the existing `buildSauceEvmCall`/`buildSauceSvmCall` fork — never a new encoder.
  *
@@ -361,29 +284,22 @@ export function compileSauceRoute(
   options: SauceCompileOptions = {},
 ): CompiledSauceRoute {
   return isSauceClosure(sauce)
-    ? compileScopedRoute(destination, closureText(sauce), execution, options, {}, "closure")
-    : compileScopedRoute(destination, sauce, execution, options, {});
+    ? compileScopedRoute(destination, closureText(sauce), execution, options, "closure")
+    : compileScopedRoute(destination, sauce, execution, options);
 }
 
 /**
- * {@link compileSauceRoute} with a {@link RouteScope} — `openRoute`'s entry, and every nested
- * intent's. Not exported from the package.
+ * {@link compileSauceRoute} on a program's text, a module's or a closure's — `openRoute`'s entry.
+ * Not exported from the package.
  */
 export function compileScopedRoute(
   destination: ChainRef,
   sauce: string,
   execution: SauceEvmExecutionInput | SauceSvmExecutionInput,
   options: SauceCompileOptions,
-  scope: RouteScope,
   entryKind: "module" | "closure" = "module",
 ): CompiledSauceRoute {
-  const { chain, compiled, source } = compileForChain(
-    destination,
-    sauce,
-    options,
-    scope,
-    entryKind,
-  );
+  const { chain, compiled, source } = compileForChain(destination, sauce, options, entryKind);
   const bytecodeHex = bytesToHex(compiled.bytecode[0]!);
 
   if (chain.kind === "svm") {
@@ -414,6 +330,20 @@ export function compileScopedRoute(
   return { calls: [call], compiled, source };
 }
 
+/** A body the compile compiled for another chain: an intent's, cooked on that chain's shared Pot. */
+export interface CompiledBody {
+  /** The compiler's number for it, in the order it met the `program` calls. */
+  readonly id: number;
+  /** The bodies it is nested in, by number, outermost first: empty for the program's own intents. */
+  readonly path: readonly number[];
+  /** The chain it runs on. */
+  readonly destination: CanonicalChain;
+  readonly bytecode: Uint8Array;
+  /** What it reads of the program around it, by name: each a word appended to its bytecode as the
+   *  program opening the intent runs. None: the body is fixed now. */
+  readonly captures: readonly string[];
+}
+
 /** A standalone program, compiled for one chain: {@link compileSauceProgram}'s result. */
 export interface CompiledSauceProgram {
   readonly chain: CanonicalChain;
@@ -428,84 +358,23 @@ export interface CompiledSauceProgram {
   readonly entryParams: readonly EntryParam[];
   /** The SVM account manifest: the accounts to attach, in order. Absent on the EVM. */
   readonly manifest?: AccountManifest;
-  /**
-   * The intents the program itself publishes
-   * (`Arbitrum.Portal.send({ ... }).receive().then(() => { ... })`), in source order, each as the
-   * lowering encoded it. One with no `captures` is fixed now: its hash, and the Portal transactions
-   * that publish it, can be built without running the program. One that captures a local of the
-   * program holds a sentinel where the value will be, which only exists once the program runs.
-   */
-  readonly intents: readonly LoweredIntent[];
-  /** `main`'s signature as the program declares it, as the compiler reports it: every parameter,
-   *  before any argument binds it, and the return type (`"void"`, or absent when `main` returns a
-   *  value it does not annotate). */
+  /** The body of every intent the program opens, at any depth
+   *  (`Arbitrum.Portal.send({ ... }).receive().then(() => { ... })`), as compiled for its chain. */
+  readonly bodies: readonly CompiledBody[];
+  /** `main`'s signature as the compile reports it. */
   readonly entrySignature: EntrySignature;
-  /** Where the source runs on another chain, as the compiler places it: each intent's body,
-   *  delivery and handler, at every depth, with the chain it runs on. */
-  readonly elsewhere: readonly DestinationPart[];
   /** The source the compiler was given: the program as written. */
   readonly source: string;
-}
-
-/**
- * A part of a program's source that runs on an intent's destination, as the compile reports it:
- * a `body`, what the compiler compiled or recorded for that chain (a closure, or what follows an
- * `await`), spanned as its program or its recorded view; a `delivery`, whose names resolve
- * there, spanned as the call that takes it (`Base.Portal.send(…).receive(…)`); or a `handler`, what
- * runs when a body fails, spanned as written (`(e) => { … }`, or a `try`'s `catch (e) { … }`),
- * once for each chain it runs on, the program's own included where a `try` there handles it.
- */
-export interface DestinationPart {
-  readonly kind: "body" | "delivery" | "handler";
-  /** The site's callee, `Type.method`: `Received.then`, `Sent.receive`. */
-  readonly callee: string;
-  readonly chain: CanonicalChain;
-  readonly span: SourceSpan;
-}
-
-/**
- * Each handler the compile reports (`ProgramReport.handler`), once per chain it runs on: an intent
- * body's, on that body's chain, and a `try`'s, on the chain of the program the `try` is in — the
- * innermost body containing it, or the program compiled, `root`.
- */
-function handlerParts(
-  programs: readonly ProgramReport[],
-  sites: readonly IntentSite[],
-  bodies: readonly DestinationPart[],
-  root: CanonicalChain,
-): DestinationPart[] {
-  const width = (part: DestinationPart): number => part.span.end.offset - part.span.start.offset;
-  const handlers = new Map<string, DestinationPart>();
-  for (const { id, callee, span, handler } of programs) {
-    if (handler === undefined) continue;
-    const within = bodies
-      .filter(
-        (part) =>
-          part.kind === "body" &&
-          part.span.start.offset <= span.start.offset &&
-          span.end.offset <= part.span.end.offset,
-      )
-      .sort((a, b) => width(a) - width(b))[0];
-    const chain = sites.find((site) => site.id === id)?.destination ?? within?.chain ?? root;
-    handlers.set(`${handler.start.offset}:${handler.end.offset}:${chain.id}`, {
-      kind: "handler",
-      callee,
-      chain,
-      span: handler,
-    });
-  }
-
-  return [...handlers.values()];
 }
 
 /** {@link compileSauceProgram}'s options: a route's, and `main`'s arguments to bind. */
 export interface SauceProgramOptions extends SauceCompileOptions {
   /**
    * `main`'s arguments, in order, the program is compiled for: `main` is compiled with each
-   * parameter a constant of its value (the compiler's `args`), so it takes none at run time. Each
-   * must be one word: an unsigned integer, an address or a `bool`. How a wallet publishes the
-   * intents a program opens from values known before anything runs. Leave it out to compile `main`
-   * taking its arguments as it runs.
+   * parameter a constant of its value, so it takes none at run time. Each must be one word: an
+   * unsigned integer, an address or a `bool`. How a wallet publishes the intents a program opens
+   * from values known before anything runs. Leave it out to compile `main` taking its arguments as
+   * it runs.
    */
   readonly args?: readonly EntryValue[];
 }
@@ -514,15 +383,13 @@ export interface SauceProgramOptions extends SauceCompileOptions {
  * Compiles a standalone program for `chain`: a program that runs directly on a Pot, rather than
  * the destination half of an intent.
  *
- * It gets everything `openRoute` gives a route body except the intent around it: the chain's
- * ambient bundle (`chainId`, protocol addresses and token symbols as compile-time values scoped to
- * this chain, and the `@sauce/token` functions with no import), the token and protocol syntax, and
- * intents the program itself opens (`Arbitrum.Portal.send({ ... }).receive().then(() => { ... })`,
- * which take their deadline and creator from `options.intents`). So one source compiles, unchanged,
- * for any chain whose names it uses. `main` may declare typed runtime parameters; `entryParams`
- * reports them and `encodeEntryArguments` encodes values for them. Or `options.args` binds them into
- * the program as it compiles, as `sauce intent publish --args` does: then the intents it opens are
- * fixed, and a wallet can publish them (`intentSourceTxs`).
+ * It gets everything `openRoute` gives a route body except the intent around it: the chain's names
+ * (tokens, protocols, `self`, chains and their `Portal`s) and the `@sauce/token` functions with no
+ * import, and intents the program itself opens
+ * (`Arbitrum.Portal.send({ ... }).receive().then(() => { ... })`), which take their deadline and
+ * creator from `options.intents`. So one source compiles, unchanged, for any chain whose names it
+ * uses. `main` may declare typed runtime parameters; `entryParams` reports them and
+ * `encodeEntryArguments` encodes values for them.
  */
 export function compileSauceProgram(
   chain: ChainRef,
@@ -532,31 +399,19 @@ export function compileSauceProgram(
   const source = isSauceClosure(body) ? closureText(body) : body;
   const resolved = requireChain(chain);
   const { args, ...given } = options;
-  if (args !== undefined && isSauceClosure(body)) {
-    throw new RangeError("args binds a module's `main` parameters; a closure takes none");
+  if (args !== undefined) {
+    throw new RangeError(
+      "args: this compiler does not compile `main` for its arguments yet; pass them as the program " +
+        "runs (`encodeEntryArguments`)",
+    );
   }
-  const words = args === undefined ? undefined : entryArguments(args);
-  const compile: SauceCompileOptions = given;
-  // The bundle `openRoute` compiles a route body with, in the same two halves. The ambient MODULES
-  // join the caller's. The chain-scoped NAMES travel as a scope for this program's chain, never in
-  // `defines`, so an intent the program opens on another chain gets that chain's own (`levelOn`),
-  // and `defines` stays exactly what the caller wrote.
-  const ambient = Array.from(new Set([...chainAmbient(resolved), ...(compile.ambient ?? [])]));
-  const scope: RouteScope = {
-    chainDefines: (on) => definesOf(on, compile.tokens),
-  };
+  const ambient = Array.from(new Set([...chainAmbient(resolved), ...(given.ambient ?? [])]));
   const program = compileForChain(
     resolved,
     source,
-    { ...compile, ambient: ambient.length > 0 ? ambient : compile.ambient },
-    scope,
+    { ...given, ambient: ambient.length > 0 ? ambient : given.ambient },
     isSauceClosure(body) ? "closure" : "module",
-    words,
   );
-  if (args !== undefined) {
-    // Held to `main` as the compile reports it, which a compile for its arguments still does.
-    checkEntryArguments(program.entrySignature, args, given.defines);
-  }
   // As the compiler reports them: an ABI signature, with no `Account` slot, which the manifest
   // carries. Nothing is read from the source.
   const entryParams = entryParamsOf(program.entryParams);
@@ -570,27 +425,22 @@ export function compileSauceProgram(
       : { entrySchema: program.compiled.entrySchema }),
     entryParams,
     ...(program.manifest === undefined ? {} : { manifest: program.manifest }),
-    intents: program.intents,
+    bodies: program.bodies,
     entrySignature: program.entrySignature,
-    elsewhere: program.elsewhere,
     source: program.source,
   };
 }
 
 /**
  * The compile half of {@link compileSauceRoute} and {@link compileSauceProgram}: the compile, with
- * the chain's host, for `destination`, with no execution — no Pot, engine or staged code account,
- * because the bytecode depends on none of them — and none of the chain's ambient bundle beyond what
- * `scope` supplies, which `compileSauceRoute` deliberately leaves to its caller.
+ * the chain's names, for `destination`, with no execution — no Pot, engine or staged code account,
+ * because the bytecode depends on none of them.
  */
 function compileForChain(
   destination: ChainRef,
   sauce: string,
   options: SauceCompileOptions,
-  scope: RouteScope,
   entryKind: "module" | "closure" = "module",
-  // `main`'s arguments the program is compiled for ([`entryArguments`]).
-  args?: readonly string[],
 ): {
   readonly chain: CanonicalChain;
   readonly compiled: CompileResult;
@@ -598,9 +448,8 @@ function compileForChain(
   readonly source: string;
   readonly entryEncoding: "abi-v1" | "compact-v1";
   readonly manifest?: AccountManifest;
-  readonly intents: readonly LoweredIntent[];
+  readonly bodies: readonly CompiledBody[];
   readonly entrySignature: EntrySignature;
-  readonly elsewhere: readonly DestinationPart[];
 } {
   const chain = requireChain(destination);
   const target = options.target ?? defaultTargetFor(chain.kind);
@@ -620,10 +469,7 @@ function compileForChain(
   // statements are the entry. Nothing here reads or rewrites it.
   const source = sauce;
   const tokens = resolveTokenMap(chain, options.tokens);
-  const lowered: LoweredIntent[] = [];
-  const sites: IntentSite[] = [];
-  const recordedBodies: IntentLevel["recordedBodies"] = [];
-  const level = routeHost(chain, options, scope, lowered, sites, recordedBodies);
+  const names = chainModules(chain, options);
   let rs: RsCompileResult;
   try {
     rs = compileWithRs({
@@ -632,20 +478,19 @@ function compileForChain(
       entryKind,
       resolve: options.resolve,
       resolvePackage: options.resolvePackage,
-      defines: level.defines,
+      defines: names.defines,
       contracts: options.contracts,
-      ambient: options.ambient,
+      ambient: names.ambient,
       compactArgs: options.compactArgs,
-      ...(args === undefined ? {} : { args }),
-      host: level.host,
+      modules: names.modules,
+      programOptions: names.programOptions,
     });
   } catch (error) {
     // A token or protocol name the chain does not have, reported as one rather than as the call
     // the compiler could not lower — from the compiler's own located diagnostics.
     throw (
-      unknownGlobalError(source, "main.js", chain, level.declined, tokens.keys(), error) ??
-      chainCalledError(source, "main.js", error) ??
-      intentStepError(error) ??
+      unknownGlobalError(source, "main.js", chain, tokens.keys(), error) ??
+      chainCalledError(error) ??
       error
     );
   }
@@ -654,32 +499,22 @@ function compileForChain(
   if (compiled.bytecode.length === 0) {
     throw new Error("compileSauceRoute: compile() produced zero bytecode segments");
   }
-  const intents = lowered;
-  // Where the source runs on another chain, as the compile places it: each body by the span of its
-  // program, or of its view where the compile recorded it, each other site by its call's, and each
-  // handler by where it is written, on every chain it runs.
-  const parts: DestinationPart[] = [
-    ...sites.flatMap(({ id, callee, span, destination }): DestinationPart[] => {
-      const program = programs.find((report) => report.id === id);
-      if (program !== undefined) {
-        return [{ kind: "body", callee, chain: destination, span: program.span }];
-      }
-      // A body the compile recorded is placed by its view's span, below.
-      if (callee === "Received.then") return [];
-
-      return [{ kind: "delivery", callee, chain: destination, span }];
-    }),
-    ...recordedBodies.map(({ span, destination }): DestinationPart => ({
-      kind: "body",
-      callee: "Received.then",
-      chain: destination,
-      span,
-    })),
-  ];
-  const elsewhere = [...parts, ...handlerParts(programs, sites, parts, chain)];
-  const reported = { entrySignature, elsewhere };
+  const bodies = programs.flatMap((report): CompiledBody[] => {
+    const on = typeof report.scope === "bigint" ? chainById(Number(report.scope)) : undefined;
+    return on === undefined
+      ? []
+      : [
+          {
+            id: report.id,
+            path: report.path,
+            destination: on,
+            bytecode: report.bytecode,
+            captures: report.captures,
+          },
+        ];
+  });
 
   return manifest === undefined
-    ? { chain, compiled, entryParams, source, entryEncoding, intents, ...reported }
-    : { chain, compiled, entryParams, source, entryEncoding, manifest, intents, ...reported };
+    ? { chain, compiled, entryParams, source, entryEncoding, bodies, entrySignature }
+    : { chain, compiled, entryParams, source, entryEncoding, manifest, bodies, entrySignature };
 }

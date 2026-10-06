@@ -1,0 +1,185 @@
+[
+  {
+    "type": "function",
+    "name": "publish",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      {
+        "name": "destination",
+        "type": "uint64"
+      },
+      {
+        "name": "route",
+        "type": "bytes"
+      },
+      {
+        "name": "reward",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "deadline",
+            "type": "uint64"
+          },
+          {
+            "name": "creator",
+            "type": "address"
+          },
+          {
+            "name": "prover",
+            "type": "address"
+          },
+          {
+            "name": "nativeAmount",
+            "type": "uint256"
+          },
+          {
+            "name": "tokens",
+            "type": "tuple[]",
+            "components": [
+              {
+                "name": "token",
+                "type": "address"
+              },
+              {
+                "name": "amount",
+                "type": "uint256"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "intentHash",
+        "type": "bytes32"
+      },
+      {
+        "name": "vault",
+        "type": "address"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "publishAndFund",
+    "stateMutability": "payable",
+    "inputs": [
+      {
+        "name": "destination",
+        "type": "uint64"
+      },
+      {
+        "name": "route",
+        "type": "bytes"
+      },
+      {
+        "name": "reward",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "deadline",
+            "type": "uint64"
+          },
+          {
+            "name": "creator",
+            "type": "address"
+          },
+          {
+            "name": "prover",
+            "type": "address"
+          },
+          {
+            "name": "nativeAmount",
+            "type": "uint256"
+          },
+          {
+            "name": "tokens",
+            "type": "tuple[]",
+            "components": [
+              {
+                "name": "token",
+                "type": "address"
+              },
+              {
+                "name": "amount",
+                "type": "uint256"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "allowPartial",
+        "type": "bool"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "intentHash",
+        "type": "bytes32"
+      },
+      {
+        "name": "vault",
+        "type": "address"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "intentVaultAddress",
+    "stateMutability": "view",
+    "inputs": [
+      {
+        "name": "destination",
+        "type": "uint64"
+      },
+      {
+        "name": "route",
+        "type": "bytes"
+      },
+      {
+        "name": "reward",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "deadline",
+            "type": "uint64"
+          },
+          {
+            "name": "creator",
+            "type": "address"
+          },
+          {
+            "name": "prover",
+            "type": "address"
+          },
+          {
+            "name": "nativeAmount",
+            "type": "uint256"
+          },
+          {
+            "name": "tokens",
+            "type": "tuple[]",
+            "components": [
+              {
+                "name": "token",
+                "type": "address"
+              },
+              {
+                "name": "amount",
+                "type": "uint256"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address"
+      }
+    ]
+  }
+]

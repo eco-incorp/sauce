@@ -16,7 +16,7 @@
  */
 import type { CanonicalChain, ChainRef } from "../chains/canonical.js";
 import { requireChain } from "../chains/canonical.js";
-import { chainAmbient, chainDefines, sharedChainDefines } from "./ambient.js";
+import { chainAmbient } from "./ambient.js";
 import { isSauceClosure, closureText, type SauceBody } from "./closure.js";
 import {
   encodeRewardEvm,
@@ -70,7 +70,6 @@ import {
   compileSauceRoute,
   compileScopedRoute,
   type CompiledSauceRoute,
-  type RouteScope,
   type SauceCompileOptions,
   type SauceEvmExecutionInput,
   type SauceSvmExecutionInput,
@@ -595,25 +594,15 @@ export function openRoute(
   const closure = isSauceClosure(sauce);
   const sauceSource = closure ? closureText(sauce) : sauce;
 
-  // Chain-scoped ambient defines (chainId, protocol/contract addresses, caller token symbols) sit
-  // UNDERNEATH the caller's own IntentOptions.defines, which sits underneath the most-specific
+  // The caller's own IntentOptions.defines sit underneath the most-specific
   // IntentOptions.compile.defines -- caller always wins on a key collision; a user-declared local
-  // inside the body wins over all of this via the compiler's own getConstant/getVar precedence.
-  //
-  // The two travel SEPARATELY, so `defines` stays exactly what the caller wrote. The chain-scoped
-  // ones belong to one chain: they reach the compile as a scope for this program's chain, and a
-  // level on another chain — an intent's body written in the program — gets that chain's own
-  // (`sauce-route.ts#levelOn`, which also drops the caller's defines of chain-scoped names there).
+  // inside the body wins over both via the compiler's own precedence. The chain's names (chainId,
+  // protocol contracts, token symbols, `tokenDefines` over the registry's) are its module's
+  // (`chain-module.ts`), never defines, so an intent's body on another chain gets that chain's own.
   const callerDefines = { ...options.defines, ...options.compile?.defines };
-  const scope: RouteScope = {
-    chainDefines: (chain) =>
-      options.tokenDefines === undefined
-        ? sharedChainDefines(chain)
-        : chainDefines(chain, { tokens: options.tokenDefines }),
-  };
 
-  // P7 — the ambient-MODULE half of the chain bundle (`scope.chainDefines` above is the scalar
-  // half). `chainAmbient(destination)` is the plugin's chain-scoped ambient module list
+  // The ambient-MODULE half of the chain bundle. `chainAmbient(destination)` is the plugin's
+  // chain-scoped ambient module list
   // (`["@sauce/token"]` by default, see `ambient.ts#chainAmbient`/`plugin/index.ts`'s own notes);
   // merged with any caller-supplied `options.compile.ambient` (deduped -- either side may
   // legitimately name the same module).
@@ -645,7 +634,6 @@ export function openRoute(
       sauceSource,
       execution,
       compileOptions,
-      scope,
       closure ? "closure" : "module",
     );
   } catch (err) {

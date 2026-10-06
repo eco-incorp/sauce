@@ -1,7 +1,0 @@
-{
-  "name": "@sauce/context",
-  "version": "0.0.0",
-  "private": true,
-  "description": "SauceScript reads of the context a route body runs in: `self`, the Pot running the program. Target-neutral.",
-  "main": "context.js"
-}

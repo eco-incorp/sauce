@@ -35,10 +35,22 @@ import {
   encodeCompactArguments,
   type CompactValue,
 } from "../compact-arguments.js";
-import type { EntrySignature } from "sauce-compiler";
 
 import { blankLiterals } from "./rs-compile.js";
 import type { CompiledSauceProgram } from "./sauce-route.js";
+
+/** `main`'s signature: every runtime parameter and, where the compile reports it, the return type
+ *  (`"void"` for a `main` that returns nothing). */
+export interface EntrySignature {
+  readonly params: readonly EntryParam[];
+  readonly returns?: string;
+}
+
+/** `main`'s signature from what the compile reports, `entryParams`. The return type is left out
+ *  until the compiler reports it. */
+export function entrySignatureOf(params: Parameters<typeof entryParamsOf>[0]): EntrySignature {
+  return { params: entryParamsOf(params) };
+}
 
 /** One of `main`'s runtime parameters, as the program declares it. */
 export interface EntryParam {

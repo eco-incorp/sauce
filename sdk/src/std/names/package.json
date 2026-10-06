@@ -1,0 +1,7 @@
+{
+  "name": "@sauce/names",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The classes a chain's names are instances of: a token, a name the chain lacks, the running contract. The SDK writes one module per chain from its registry whose exports are instances of these, and hands it to every program compiled for that chain as an ambient module. `main` names the NEUTRAL BASE the compiler suffixes per target (names.evm.js / names.svm.js): a Solana token is a mint's key, with no token methods.",
+  "main": "names.js"
+}

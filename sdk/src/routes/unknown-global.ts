@@ -2,10 +2,11 @@
  * A name used as a token or a protocol that the destination does not have, reported as that.
  *
  * `DAIX.balanceOf(x)` and `Uniswapp.UniversalRouter` name nothing: not a registered token, not a
- * protocol, not a declaration of the program and not a builtin. The chain's host (`host.ts`)
- * declares nothing for them, so the compiler refuses the program and says where — a structured
- * diagnostic with a `code` and the span of the name. The route compiler knows what the chain has,
- * so it says which name, on which chain, and what it probably meant.
+ * protocol, not a declaration of the program and not a builtin. The chain's module of names
+ * (`chain-module.ts`) exports nothing for them — it exports every name some chain has, absent where
+ * this one lacks it — so the compiler refuses the program and says where: a structured diagnostic
+ * with a `code` and the span of the name. The route compiler knows what the chain has, so it says
+ * which name, on which chain, and what it probably meant.
  *
  * Consulted only once the compiler has refused the program, on the diagnostics it threw: a program
  * the compiler accepts is never refused here, and the name is the text the compiler pointed at.
@@ -26,26 +27,40 @@ interface Located {
   readonly end: { readonly offset: number };
 }
 
-/** Optimal string alignment distance: edits, with an adjacent swap counting as one. */
+/** Optimal string alignment distance: edits, with an adjacent swap counting as one. Three rolling
+ *  rows, since a whole chain's names are matched at once. */
 function distance(a: string, b: string): number {
-  const rows = Array.from({ length: a.length + 1 }, (_, i) =>
-    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
-  );
+  let before = new Uint16Array(b.length + 1);
+  let previous = Uint16Array.from({ length: b.length + 1 }, (_, j) => j);
+  let row = new Uint16Array(b.length + 1);
   for (let i = 1; i <= a.length; i++) {
+    row[0] = i;
     for (let j = 1; j <= b.length; j++) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      let best = Math.min(rows[i - 1]![j]! + 1, rows[i]![j - 1]! + 1, rows[i - 1]![j - 1]! + cost);
+      let best = Math.min(previous[j]! + 1, row[j - 1]! + 1, previous[j - 1]! + cost);
       if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
-        best = Math.min(best, rows[i - 2]![j - 2]! + 1);
+        best = Math.min(best, before[j - 2]! + 1);
       }
-      rows[i]![j] = best;
+      row[j] = best;
     }
+    [before, previous, row] = [previous, row, before];
   }
-  return rows[a.length]![b.length]!;
+  return previous[b.length]!;
 }
 
-/** The protocol namespaces with at least one contract deployed on `chain`. */
-function protocolsOn(chain: CanonicalChain): string[] {
+/** The protocol namespaces with at least one contract deployed on `chain`, worked out once per
+ *  chain. */
+const protocolsByChain = new Map<number, readonly string[]>();
+export function protocolsOn(chain: CanonicalChain): readonly string[] {
+  let found = protocolsByChain.get(chain.id);
+  if (found === undefined) {
+    found = deployedProtocols(chain);
+    protocolsByChain.set(chain.id, found);
+  }
+  return found;
+}
+
+function deployedProtocols(chain: CanonicalChain): string[] {
   const deployed = (key: string): boolean => {
     const namespace = resolveNamespace(key);
     if (namespace === undefined) return false;
@@ -58,9 +73,11 @@ function protocolsOn(chain: CanonicalChain): string[] {
 }
 
 /** The `candidates` nearest `name`, if any is close enough to be what was meant — at most three. */
-function nearMatches(name: string, candidates: Iterable<string>): string[] {
+export function nearMatches(name: string, candidates: Iterable<string>): string[] {
   const allowed = name.length <= 4 ? 1 : 2;
   const scored = [...new Set(candidates)]
+    // A length further off than the edits allowed cannot be within them.
+    .filter((candidate) => Math.abs(candidate.length - name.length) <= allowed)
     .map((candidate) => ({
       candidate,
       cost: candidate.toLowerCase() === name.toLowerCase() ? 0 : distance(name, candidate),
@@ -86,8 +103,7 @@ function headline(error: unknown): string | undefined {
 
 /**
  * For a compile of `source` (the entry, at `entry`) that failed with `cause`: an error naming the
- * first name the compiler could not resolve whose root is a dotted member (`X.y`, `X.y(...)`) and
- * one the chain's host `declined` when the compiler asked about it, with
+ * first name the compiler could not resolve whose root is a dotted member (`X.y`, `X.y(...)`), with
  * the chain's near matches among `tokens` and its protocols. `undefined` when there is none, and the
  * compiler's error stands.
  */
@@ -95,7 +111,6 @@ export function unknownGlobalError(
   source: string,
   entry: string,
   chain: CanonicalChain,
-  declined: ReadonlySet<string>,
   tokens: Iterable<string>,
   cause: unknown,
 ): Error | undefined {
@@ -111,9 +126,7 @@ export function unknownGlobalError(
       const member =
         root !== undefined &&
         (text[root.length] === "." || (text === root && source[d.end.offset] === "."));
-      // Only a name the chain's host was asked about and does not declare: a name the program
-      // binds — a local, an import — is never asked about.
-      return root !== undefined && member && declined.has(root) ? root : undefined;
+      return root !== undefined && member ? root : undefined;
     })
     .find((root): root is string => root !== undefined);
   if (name === undefined) return undefined;
@@ -129,17 +142,13 @@ export function unknownGlobalError(
 
 /**
  * A chain's name called as a function — `Arbitrum(() => { … }).reward(…)`, the intent form a
- * program no longer has — reported with the form that replaced it. A chain's name is its chain id,
- * so the compiler refuses the call (`HostNotCallable`, the span the name).
+ * program no longer has — reported with the form that replaced it. A chain's name is an instance
+ * of its chain's class (`chain-module.ts`), which the compiler refuses to call.
  */
-export function chainCalledError(source: string, entry: string, cause: unknown): Error | undefined {
-  const diagnostics =
-    (cause as { diagnostics?: readonly Located[] } | undefined)?.diagnostics ?? [];
-  const name = diagnostics
-    .filter((d) => d.path === entry && d.code === "HostNotCallable")
-    .map((d) => source.slice(d.start.offset, d.end.offset))
-    .find((text) => isChainKey(text));
-  if (name === undefined) return undefined;
+export function chainCalledError(cause: unknown): Error | undefined {
+  const message = String((cause as Error | undefined)?.message ?? cause);
+  const name = /an instance of `On(\w+)` is not a function/.exec(message)?.[1];
+  if (name === undefined || !isChainKey(name)) return undefined;
 
   return new Error(
     `compileSauceRoute: \`${name}\` is a chain id, not a function: an intent opens with ` +
@@ -154,7 +163,16 @@ export function chainCalledError(source: string, entry: string, cause: unknown):
  * that it is closest to, and how to name a token the registry does not carry.
  */
 export function notOnChain(name: string, chain: CanonicalChain, tokens: Iterable<string>): string {
-  const matches = nearMatches(name, [...tokens, ...protocolsOn(chain)]);
+  return notOnChainAmong(name, chain, [...new Set([...tokens, ...protocolsOn(chain)])]);
+}
+
+/** {@link notOnChain}, with the chain's names to match against given: for many names at once. */
+export function notOnChainAmong(
+  name: string,
+  chain: CanonicalChain,
+  candidates: readonly string[],
+): string {
+  const matches = nearMatches(name, candidates);
   const suggestion =
     matches.length === 0
       ? ""
