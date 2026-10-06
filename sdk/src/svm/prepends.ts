@@ -6,9 +6,9 @@ import {
   getSetComputeUnitPriceInstruction,
 } from "@solana-program/compute-budget";
 import { HEAP_FRAME_BYTES } from "./engine.js";
+import { memoizedFindAssociatedTokenPda } from "./venues/pda-memo.js";
 import {
   TOKEN_PROGRAM_ADDRESS,
-  findAssociatedTokenPda,
   getCreateAssociatedTokenIdempotentInstruction,
   getSyncNativeInstruction,
 } from "@solana-program/token";
@@ -63,7 +63,7 @@ export async function buildAtaPrepend({
   tokenProgram,
 }: AtaPrependInput): Promise<{ ata: Address; instruction: Instruction }> {
   const program = tokenProgram ?? TOKEN_PROGRAM_ADDRESS;
-  const [ata] = await findAssociatedTokenPda({ owner, mint, tokenProgram: program });
+  const ata = await memoizedFindAssociatedTokenPda({ owner, mint, tokenProgram: program });
   const instruction = getCreateAssociatedTokenIdempotentInstruction({
     payer,
     ata,

@@ -38,7 +38,7 @@
  * part of the key by construction, not by caller discipline.
  */
 import { getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
-import type { Address } from "@solana/kit";
+import type { Address, ProgramDerivedAddress, ReadonlyUint8Array } from "@solana/kit";
 import { ASSOCIATED_TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 
 export interface PdaMemoStats {
@@ -59,12 +59,14 @@ export const DEFAULT_PDA_MEMO_MAX_ENTRIES = 100_000;
 let maxEntries = DEFAULT_PDA_MEMO_MAX_ENTRIES;
 
 const memo = new Map<string, Address>();
+/** `[address, bump]` tuples for callers that need the bump too (the Kitchen PDAs). Same key. */
+const bumpMemo = new Map<string, ProgramDerivedAddress>();
 let hits = 0;
 let misses = 0;
 
 const HEX_TABLE = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, "0"));
 
-function toHex(bytes: Uint8Array): string {
+function toHex(bytes: ReadonlyUint8Array): string {
   let out = "";
   for (let i = 0; i < bytes.length; i++) out += HEX_TABLE[bytes[i]];
   return out;
@@ -81,7 +83,7 @@ function toHex(bytes: Uint8Array): string {
  * occur). No caller ever supplies or influences the key, so no venue can
  * accidentally alias another venue's cached address.
  */
-function memoKey(programAddress: Address, seeds: readonly Uint8Array[]): string {
+function memoKey(programAddress: Address, seeds: readonly ReadonlyUint8Array[]): string {
   let key = programAddress as string;
   for (const seed of seeds) {
     key += "|";
@@ -135,6 +137,36 @@ export interface AssociatedTokenSeeds {
   owner: Address;
   mint: Address;
   tokenProgram: Address;
+}
+
+/**
+ * {@link memoizedGetProgramDerivedAddress} for callers that also need the bump (the Kitchen PDA
+ * helpers return it). The bump is a pure function of the same `(programAddress, seeds)` key as the
+ * address, so the full `[address, bump]` tuple is cached under that key; same LRU cap and counters.
+ */
+export async function memoizedGetProgramDerivedAddressWithBump(
+  programAddress: Address,
+  seeds: readonly ReadonlyUint8Array[],
+): Promise<ProgramDerivedAddress> {
+  const key = memoKey(programAddress, seeds);
+  const cached = bumpMemo.get(key);
+  if (cached !== undefined) {
+    hits += 1;
+    bumpMemo.delete(key);
+    bumpMemo.set(key, cached);
+    return cached;
+  }
+  misses += 1;
+  const derived = await getProgramDerivedAddress({
+    programAddress,
+    seeds: seeds as ReadonlyUint8Array[],
+  });
+  if (bumpMemo.size >= maxEntries) {
+    const oldest = bumpMemo.keys().next().value;
+    if (oldest !== undefined) bumpMemo.delete(oldest);
+  }
+  bumpMemo.set(key, derived);
+  return derived;
 }
 
 /**
@@ -219,6 +251,7 @@ export function getPdaMemoMaxEntries(): number {
 /** TEST SEAM: drop the memo, zero the counters, and restore the default cap. */
 export function __resetPdaMemoForTest(): void {
   memo.clear();
+  bumpMemo.clear();
   hits = 0;
   misses = 0;
   maxEntries = DEFAULT_PDA_MEMO_MAX_ENTRIES;
