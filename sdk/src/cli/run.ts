@@ -948,6 +948,21 @@ function endpoint(args: ParsedArgs, io: CliIo, chain: CanonicalChain): string | 
   return rpcUrl;
 }
 
+/**
+ * `sauce intent fill`'s endpoint for a destination: `--rpc-url`, which is the destination's alone,
+ * else {@link sharedEndpoint}. Beside it `--config` names the others, the source among them.
+ */
+function destinationEndpoint(args: ParsedArgs, io: CliIo, chain: CanonicalChain): string {
+  const rpcUrl = stringFlag(args, "rpc-url");
+  if (rpcUrl !== undefined) {
+    secret(rpcUrl);
+
+    return rpcUrl;
+  }
+
+  return requiredEndpoint(args, io, chain);
+}
+
 function requiredEndpoint(args: ParsedArgs, io: CliIo, chain: CanonicalChain): string {
   const url = endpoint(args, io, chain);
   if (url === undefined) {
@@ -2019,7 +2034,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
           );
         }
         // Each destination's endpoint, which the fill needs, then the source's for the rehearsal.
-        for (const chain of destinations) requiredEndpoint(args, io, chain);
+        for (const chain of destinations) destinationEndpoint(args, io, chain);
         // --rpc-url is the destination's: the source is read only through the others.
         const source =
           rpcUrl === undefined
@@ -2078,14 +2093,17 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       }
       const account = sending ? await signerOf(args, io) : undefined;
       // --rpc-url is the destination's alone: the source is read only through the others.
-      const lookup = rpcUrl === undefined ? await endpointLookup(args, io) : undefined;
+      const lookup =
+        rpcUrl === undefined
+          ? await endpointLookup(args, io)
+          : (chain: CanonicalChain) => sharedEndpoint(args, io, chain);
 
       return fillCommand({
         intents: targets,
         from,
         labels,
-        endpointOf: (chain) => requiredEndpoint(args, io, chain),
-        ...(lookup === undefined ? {} : { sourceEndpointOf: lookup }),
+        endpointOf: (chain) => destinationEndpoint(args, io, chain),
+        sourceEndpointOf: lookup,
         endpointFlag: rpcUrl === undefined ? "--config" : "--rpc-url",
         ...(solver === undefined ? {} : { solver: parseAddress("solver", solver) }),
         ...(claimant === undefined ? {} : { claimant: claimant as `0x${string}` }),
