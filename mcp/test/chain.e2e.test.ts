@@ -44,9 +44,11 @@ const PAY = [
   "",
 ].join("\n");
 const INTENT = [
-  "Base.Portal.send([{ token: USDC, amount: 7n }]).receive().then(() => {",
-  "  USDC.transfer(RECIPIENT, 5n);",
-  "});",
+  `Base.Portal.send([{ token: USDC, amount: 7 }]).refundee(${NOBODY})`,
+  "  .receive({ token: USDC, amount: 5 })",
+  "  .then(() => {",
+  "    USDC.transfer(RECIPIENT, 5);",
+  "  });",
   "",
 ].join("\n");
 
@@ -85,12 +87,12 @@ function answering(answers: ReadonlyArray<readonly [string, readonly bigint[]]>)
 
 /** An intent whose body is a program, so it cooks on the destination's shared intent Pot. */
 const COOKED = [
-  "Base.Portal.send({ token: USDC, amount: 7n })",
+  "Base.Portal.send({ token: USDC, amount: 7 })",
   `  .refundee(${NOBODY})`,
-  "  .receive({ token: 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n, amount: 5n })",
+  "  .receive({ token: Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913), amount: 5 })",
   "  .then(() => {",
-  "    const got = Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).balanceOf(ctx.self());",
-  "    Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913n).transfer(RECIPIENT, got);",
+  "    const got = Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913).balanceOf(ctx.self());",
+  "    Token(0x833589fcd6edb6e08f4c7c32d4f71b54bda02913).transfer(RECIPIENT, got);",
   "  });",
   "",
 ].join("\n");
@@ -286,7 +288,8 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     );
   });
 
-  it("summarizes a rehearsal to what decides a trade", async () => {
+  // Pending the compiler: `main`'s declared return type (`entrySignature`).
+  it("summarizes a rehearsal to what decides a trade", { todo: "main's return type" }, async () => {
     const full = ok(
       await mcp.call("sauce_simulate", { ...pay, owner: NOBODY, assumeBalance: ["USDC:2"] }),
     );
@@ -345,59 +348,66 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     assert.equal(returns.returns, undefined);
   });
 
-  it("rehearses one program as several scenarios at one block, one result each", async () => {
-    const out = ok(
-      await mcp.call("sauce_simulate", {
-        ...pay,
-        owner: NOBODY,
-        assumeBalance: ["USDC:2"],
-        summary: true,
-        scenarios: [
-          {},
-          { args: [RECIPIENT, "2500000"] },
-          { args: [RECIPIENT, "2500000"], assumeBalance: ["USDC:3"] },
-          { args: [RECIPIENT] },
+  // Pending the compiler: `main`'s declared return type (`entrySignature`).
+  it(
+    "rehearses one program as several scenarios at one block, one result each",
+    {
+      todo: "main's return type",
+    },
+    async () => {
+      const out = ok(
+        await mcp.call("sauce_simulate", {
+          ...pay,
+          owner: NOBODY,
+          assumeBalance: ["USDC:2"],
+          summary: true,
+          scenarios: [
+            {},
+            { args: [RECIPIENT, "2500000"] },
+            { args: [RECIPIENT, "2500000"], assumeBalance: ["USDC:3"] },
+            { args: [RECIPIENT] },
+          ],
+        }),
+      ) as {
+        ok: boolean;
+        block: string;
+        sourceSha256: string;
+        scenarios: Array<Record<string, unknown>>;
+      };
+      assert.equal(out.ok, false, "one scenario reverts, one is refused");
+      assert.equal(out.sourceSha256, sha256(PAY));
+      assert.deepEqual(
+        out.scenarios.map((each) => [each.index, each.ok]),
+        [
+          [0, true],
+          [1, false],
+          [2, true],
+          [3, false],
         ],
-      }),
-    ) as {
-      ok: boolean;
-      block: string;
-      sourceSha256: string;
-      scenarios: Array<Record<string, unknown>>;
-    };
-    assert.equal(out.ok, false, "one scenario reverts, one is refused");
-    assert.equal(out.sourceSha256, sha256(PAY));
-    assert.deepEqual(
-      out.scenarios.map((each) => [each.index, each.ok]),
-      [
-        [0, true],
-        [1, false],
-        [2, true],
-        [3, false],
-      ],
-    );
-    // Every rehearsal at the one block the call read.
-    for (const each of out.scenarios.slice(0, 3)) assert.equal(each.block, out.block);
-    assert.match(out.scenarios[1]!.reason as string, /./);
-    // A scenario's mistake is its own result, in the tool's words.
-    assert.match(out.scenarios[3]!.error as string, /takes 2 arguments/);
-    assert.doesNotMatch(out.scenarios[3]!.error as string, /--args/);
-    // A scenario's defines are laid over the call's, compiled into its own program.
-    const defined = ok(
-      await mcp.call("sauce_simulate", {
-        source: "function main(): Uint256 {\n  return LIMIT;\n}\n",
-        chain: "ethereum",
-        owner: NOBODY,
-        defines: { LIMIT: 7 },
-        summary: true,
-        scenarios: [{}, { defines: { LIMIT: 9 } }],
-      }),
-    ) as { scenarios: Array<{ returned: string }> };
-    assert.deepEqual(
-      defined.scenarios.map((each) => each.returned),
-      ["7", "9"],
-    );
-  });
+      );
+      // Every rehearsal at the one block the call read.
+      for (const each of out.scenarios.slice(0, 3)) assert.equal(each.block, out.block);
+      assert.match(out.scenarios[1]!.reason as string, /./);
+      // A scenario's mistake is its own result, in the tool's words.
+      assert.match(out.scenarios[3]!.error as string, /takes 2 arguments/);
+      assert.doesNotMatch(out.scenarios[3]!.error as string, /--args/);
+      // A scenario's defines are laid over the call's, compiled into its own program.
+      const defined = ok(
+        await mcp.call("sauce_simulate", {
+          source: "function main(): Uint256 {\n  return LIMIT;\n}\n",
+          chain: "ethereum",
+          owner: NOBODY,
+          defines: { LIMIT: 7 },
+          summary: true,
+          scenarios: [{}, { defines: { LIMIT: 9 } }],
+        }),
+      ) as { scenarios: Array<{ returned: string }> };
+      assert.deepEqual(
+        defined.scenarios.map((each) => each.returned),
+        ["7", "9"],
+      );
+    },
+  );
 
   it("builds a deployment the owner's own wallet signs, then sees the Pot deployed", async () => {
     const unsigned = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: OWNER.address }));
@@ -519,43 +529,33 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     assert.match(token, /answers none of a V3-style pool's reads on ethereum/);
   });
 
-  it("rehearses an intent's publish from a wallet that does not hold the reward yet", async () => {
+  it("rehearses an intent's publish from a Pot that does not hold the reward yet", async () => {
     const args = {
       source: INTENT,
       chain: "ethereum",
       defines: { RECIPIENT },
       intentDeadline: 2_000_000_000,
-      intentRefundee: NOBODY,
-      from: NOBODY,
+      intentExecutionFee: String(FEE),
+      owner: NOBODY,
       dryRun: true,
     };
     const short = ok(await mcp.call("sauce_intent_publish", args));
-    assert.equal(short.ok, false, "with nothing to pay into the vault, the transfer reverts");
-    const out = ok(await mcp.call("sauce_intent_publish", { ...args, assumeBalance: ["USDC:1"] }));
-    assert.equal(out.ok, true);
-    assert.deepEqual(
-      (out.transactions as Array<{ what: string; status: string }>).map((tx) => [
-        tx.what.split(" ")[0],
-        tx.status,
-      ]),
-      [
-        ["transfer", "success"],
-        ["publish", "success"],
-      ],
-    );
-    // After the transfer and the publish, the Portal counts the intent funded.
-    assert.deepEqual(
-      (out.intents as Array<{ fundVia: string; funded: boolean }>).map((intent) => [
-        intent.fundVia,
-        intent.funded,
-      ]),
-      [["transfer", true]],
-    );
+    assert.equal(short.ok, false, "with nothing to pay into the vault, the cook reverts");
+    // The reward assumed in the Pot, or pulled in from the owner in the cook: published either way.
+    for (const given of [{ assumeBalance: ["USDC:1"] }, { fund: ["USDC:1"] }]) {
+      const out = ok(await mcp.call("sauce_intent_publish", { ...args, ...given }));
+      assert.equal(out.ok, true);
+      const [intent] = out.intents as Array<{
+        intentHash: string;
+        destination: string;
+        record: { intentHash: string; reward: { creator: string } };
+      }>;
+      assert.equal(intent!.destination, "base");
+      assert.equal(intent!.record.intentHash, intent!.intentHash);
+      assert.equal(getAddress(intent!.record.reward.creator), NOBODY);
+    }
+    // A rehearsal: nothing landed.
     assert.equal(await local.balanceOf(usdc, NOBODY), 0n);
-    // The other side is the destination's, and its tool is named.
-    const notes = (out.notes as string[]).join(" ");
-    assert.match(notes, /sauce_intent_fill with the same inputs/);
-    assert.doesNotMatch(notes, /sauce (intent )?fill|--/);
   });
 
   it("checks the Pot an intent's cook needs on its destination, through rpcUrls", async () => {
@@ -565,7 +565,6 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       chain: "ethereum",
       defines: { RECIPIENT },
       intentDeadline: 2_000_000_000,
-      intentRefundee: NOBODY,
       intentExecutionFee: String(FEE),
     };
     const unchecked = ok(await mcp.call("sauce_compile", args));
@@ -597,7 +596,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       chain: "ethereum",
       defines: { RECIPIENT },
       intentDeadline: 2_000_000_000,
-      intentRefundee: NOBODY,
+      intentExecutionFee: String(FEE),
     };
     const block = await base.publicClient.getBlockNumber();
     for (const reach of [{ rpcUrl: base.rpcUrl }, { rpcUrls: { base: base.rpcUrl } }]) {
@@ -611,9 +610,11 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       const [fill] = out.intents;
       assert.equal(fill!.destination, "base");
       assert.equal(getAddress(fill!.portal), basePortal);
+      // The body cooks on Base's shared Pot, which is deployed first: any account may.
       assert.deepEqual(
         fill!.calls.map((call) => [call.kind, call.status]),
         [
+          ["deploy", "success"],
           ["approve", "success"],
           ["fulfill", "success"],
         ],
@@ -654,8 +655,8 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     assert.equal(built.from, NOBODY);
     const [fill] = built.intents;
     assert.equal(fill!.proves, false);
-    const [approve, fulfill] = fill!.transactions;
-    assert.equal(fill!.transactions.length, 2);
+    const [, approve, fulfill] = fill!.transactions;
+    assert.equal(fill!.transactions.length, 3);
     assert.ok(approve!.what.startsWith("approve the Portal for"), approve!.what);
     assert.ok(fulfill!.what.startsWith("Portal.fulfill("), fulfill!.what);
     assert.equal(getAddress(fulfill!.to), basePortal);

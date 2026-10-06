@@ -57,14 +57,13 @@ describe("a server with endpoints", () => {
       [
         "sauce_intent_publish",
         {
-          source:
-            "Arbitrum.Portal.send([{ token: USDC, amount: 7n }]).receive().then(() => {\n  USDC.transfer(R, 5n);\n});\n",
+          source: `Arbitrum.Portal.send([{ token: USDC, amount: 7 }]).refundee(${OWNER}).receive().then(() => {\n  USDC.transfer(R, 5);\n});\n`,
           chain: "base",
           defines: { R: OWNER },
           intentDeadline: 2000000000,
-          intentRefundee: OWNER,
+          intentExecutionFee: 0,
           dryRun: true,
-          from: OWNER,
+          owner: OWNER,
         },
       ],
       [

@@ -7,27 +7,30 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 
+import { requireChain } from "../../sdk/dist/chains/canonical.js";
+import { intentRecord } from "../../sdk/dist/cli/lifecycle.js";
+import { ecoRoutesPortal, ecoRoutesProver } from "../../sdk/dist/protocols/eco-routes/lookup.js";
+import { assembleIntent } from "../../sdk/dist/routes/intent.js";
 import { connect, failed, ok, type Connected } from "./harness.js";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const RECIPIENT = "0x6666666666666666666666666666666666666666";
 const TX = `0x${"ab".repeat(32)}`;
 
-/** Base USDC to `recipient` for Ethereum USDC: an intent fixed by main's argument. */
+/** Base USDC to `recipient` for Ethereum USDC, its refundee one of main's arguments. */
 const PROGRAM = {
   source: [
-    "function main(recipient: Address) {",
-    "  Base.Portal.send({ token: USDC, amount: 7n }).receive().then(() => {",
-    "    USDC.transfer(recipient, 5n);",
+    "function main(recipient: Address, refundTo: Address) {",
+    "  Base.Portal.send({ token: USDC, amount: 7 }).refundee(refundTo).receive().then(() => {",
+    "    USDC.transfer(recipient, 5);",
     "  });",
     "}",
     "",
   ].join("\n"),
   chain: "ethereum",
-  args: [RECIPIENT],
+  args: [RECIPIENT, OWNER],
   intentDeadline: 2_000_000_000,
-  intentRefundee: OWNER,
-  // One salt for every call, so two calls build one intent: each picks a random one otherwise.
+  intentExecutionFee: 0,
   intentSalt: `0x${"5a".repeat(32)}`,
 };
 
@@ -40,37 +43,73 @@ type IntentJson = {
 };
 
 let mcp: Connected;
+/** A record as sauce_intent_publish's dry run and sauce_intent_import return one. */
 let record: IntentJson;
 
 before(async () => {
   mcp = await connect();
-  const published = ok(await mcp.call("sauce_intent_publish", PROGRAM)) as {
-    intents: Array<{ intentHash: string; record: IntentJson }>;
-  };
-  record = published.intents[0]!.record;
+  const intent = assembleIntent(
+    requireChain("ethereum"),
+    requireChain("base"),
+    {
+      salt: `0x${"5a".repeat(32)}`,
+      deadline: 2_000_000_000n,
+      portal: ecoRoutesPortal("base"),
+      tokens: [],
+      calls: [],
+    },
+    {
+      deadline: 2_000_000_000n,
+      creator: OWNER,
+      prover: ecoRoutesProver("ethereum", "base"),
+      // Ethereum's USDC.
+      tokens: [{ token: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", amount: 7n }],
+    },
+  );
+  record = intentRecord(intent, {
+    sourcePortal: ecoRoutesPortal("ethereum"),
+  }) as unknown as IntentJson;
 });
 after(() => mcp.close());
 
 describe("sauce_intent_publish", () => {
-  it("returns each intent's record, the input every intent tool takes", () => {
-    assert.equal(record.schema, "sauce.intent/1");
-    assert.deepEqual([record.source.chain, record.destination.chain], ["ethereum", "base"]);
-    assert.match(record.intentHash, /^0x[0-9a-f]{64}$/);
+  it("returns the unsigned cook on the owner's Pot, which publishes the intent", async () => {
+    const cook = ok(
+      await mcp.call("sauce_intent_publish", { ...PROGRAM, owner: OWNER, value: "0" }),
+    ) as { chainId: number; to: string; data: string; value: string };
+    assert.equal(cook.chainId, 1);
+    assert.match(cook.data, /^0x[0-9a-f]+$/);
+    assert.equal(cook.value, "0");
+    // The cook sauce_tx builds for the same program and Pot.
+    const tx = ok(await mcp.call("sauce_tx", { ...PROGRAM, owner: OWNER, value: "0" }));
+    assert.deepEqual([cook.to, cook.data, cook.value], [tx.to, tx.data, tx.value]);
   });
 
-  it("binds main's arguments into the intent: the one a low-level define of the name gives", async () => {
-    const { args: _, ...program } = PROGRAM;
-    const defined = ok(
-      await mcp.call("sauce_intent_publish", {
-        ...program,
-        source: PROGRAM.source.replace("function main(recipient: Address) {", "function main() {"),
-        defines: { recipient: RECIPIENT },
-      }),
-    ) as { intents: Array<{ intentHash: string }> };
-    assert.equal(defined.intents[0]!.intentHash, record.intentHash);
+  it("refuses what it cannot do unsigned, and the refundee's old input", async () => {
     assert.match(
-      failed(await mcp.call("sauce_intent_publish", program)),
-      /main\(recipient: Address\) takes 1 argument: pass them as args, in order; the intents/,
+      failed(
+        await mcp.call("sauce_intent_publish", { ...PROGRAM, owner: OWNER, fund: ["USDC:1"] }),
+      ),
+      /fund pulls tokens into the Pot with what the owner signs first/,
+    );
+    assert.match(
+      failed(
+        await mcp.call("sauce_intent_publish", { ...PROGRAM, owner: OWNER, intentRefundee: OWNER }),
+      ),
+      /`intentRefundee` is gone: an intent names its refundee in the program/,
+    );
+    assert.match(
+      failed(
+        await mcp.call("sauce_intent_publish", {
+          source: "Base.Portal.send({ token: USDC, amount: 7 }).receive().then(() => {});\n",
+          chain: "ethereum",
+          intentDeadline: 2_000_000_000,
+          intentExecutionFee: 0,
+          owner: OWNER,
+          value: "0",
+        }),
+      ),
+      /an intent needs `\.refundee\(<address>\)`/,
     );
   });
 });
@@ -153,7 +192,8 @@ describe("with no endpoint", () => {
       [
         "sauce_intent_fill",
         { ...PROGRAM, dryRun: true },
-        /Rehearsing a fill needs an RPC endpoint for base \(chain id 8453\)/,
+        // A program's intents are read from a rehearsal of publishing them, on the source.
+        /Reading the intents the program opens needs an RPC endpoint for ethereum \(chain id 1\)/,
       ],
     ];
     for (const [tool, args, message] of expected) {
@@ -171,11 +211,6 @@ describe("sauce_intent_fill", () => {
     assert.match(
       failed(await mcp.call("sauce_intent_fill", { ...PROGRAM, intent: record, from: OWNER })),
       /name the intents one way/,
-    );
-    const { args: _, ...unbound } = PROGRAM;
-    assert.match(
-      failed(await mcp.call("sauce_intent_fill", { ...unbound, dryRun: true })),
-      /main\(recipient: Address\) takes 1 argument: pass them as args, in order; the intents/,
     );
     assert.match(
       failed(await mcp.call("sauce_intent_fill", { intent: record })),

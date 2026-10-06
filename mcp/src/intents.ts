@@ -33,6 +33,8 @@ import {
   parseChain,
   parsePubkey,
   pastDeadline,
+  probeProgram,
+  intentDestinations,
   requireChain,
   requireSupported,
   UsageError,
@@ -42,12 +44,13 @@ import {
 } from "./sdk.js";
 import { noEndpoint } from "./config.js";
 import {
-  boundProgram,
+  argsOf,
+  programOf,
   CLAIMANT,
   chainRef,
   endpointsByChain,
   fromCommand,
-  INTENT_ARGS,
+  RUN_ARGS,
   LIMITS,
   PROGRAM,
   READS_CHAIN,
@@ -489,9 +492,18 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
           .optional()
           .describe(
             "Or the SauceScript program that opens the intents, as sauce_intent_publish takes " +
-              "it: every intent it opens, fixed when it is built.",
+              "it: each intent it opens is read from a rehearsal of publishing it on the source " +
+              "chain (its rewards unpaid), rebuilt from the Portal's IntentPublished.",
           ),
-        args: INTENT_ARGS,
+        args: RUN_ARGS,
+        owner: z
+          .string()
+          .max(64)
+          .optional()
+          .describe(
+            "With source: whose Pot publishes its intents in the rehearsal that reads them " +
+              "(default: an account nobody holds the key of).",
+          ),
         chain: chainRef
           .optional()
           .describe(
@@ -560,9 +572,28 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
       const gate: Gate | undefined =
         args.dryRun === true ? undefined : { action: "building a fill", side: "destination" };
       if (args.source !== undefined) {
-        const program = boundProgram(args as ProgramArgs & { readonly args?: readonly unknown[] });
+        const program = programOf(args as ProgramArgs);
         past = pastDeadline(program.input);
-        const targets = fillTargets(program.input, program.files);
+        // Refused by the chains the program's intents go to before the rehearsal reads any.
+        if (gate !== undefined) {
+          requireSupported(
+            gate.action,
+            intentDestinations(probeProgram(program.input, program.files).bodies),
+          );
+        }
+        // Read from a rehearsal of publishing them, on the source chain.
+        const chain = program.input.chain;
+        const sourceUrl =
+          (await endpointsByChain(args.rpcUrls, reach)).get(chain.id) ??
+          (await reach.require(chain, undefined, "Reading the intents the program opens"));
+        const targets = await fillTargets(
+          { ...program.input, ...argsOf(args as ProgramArgs & { readonly args?: unknown[] }) },
+          program.files,
+          {
+            rpcUrl: sourceUrl,
+            ...(args.owner === undefined ? {} : { owner: parseAddress("owner", args.owner) }),
+          },
+        );
         records = targets.map((target) =>
           intentRecord(target.intent, { sourcePortal: target.sourcePortal }),
         );

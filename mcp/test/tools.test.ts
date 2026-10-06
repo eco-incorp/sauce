@@ -59,22 +59,9 @@ const SVM_PAY = [
 const INTENT = [
   "// @chain ethereum",
   "function main(recipient: Address) {",
-  "  Base.Portal.send({ token: USDC, amount: 7n }).receive().then(() => {",
-  "    USDC.transfer(recipient, 5n);",
+  `  Base.Portal.send({ token: USDC, amount: 7 }).refundee(${CREATOR}).receive().then(() => {`,
+  "    USDC.transfer(recipient, 5);",
   "  });",
-  "}",
-  "",
-].join("\n");
-
-/** INTENT, written `Base.Portal.send(reward).receive(delivery).then(body)`. */
-const PORTAL_INTENT = [
-  "// @chain ethereum",
-  "function main(recipient: Address) {",
-  "  Base.Portal.send({ token: USDC, amount: 7 })",
-  "    .receive({ token: USDC, amount: 5 })",
-  "    .then(() => {",
-  "      USDC.transfer(recipient, 5);",
-  "    });",
   "}",
   "",
 ].join("\n");
@@ -528,16 +515,21 @@ describe("sauce_compile", () => {
     assert.equal((out.compiler as { name: string }).name, "@eco-incorp/sauce-compiler");
   });
 
-  it("names the input `intentCreator` became, rather than an unknown field", async () => {
-    const refused = failed(
-      await mcp.call("sauce_compile", {
-        source: INTENT,
-        args: [RECIPIENT],
-        intentDeadline: 4000000000,
-        intentCreator: CREATOR,
-      }),
-    );
-    assert.match(refused, /`intentCreator` is now `intentRefundee`/);
+  it("says what does a retired input's work, rather than an unknown field", async () => {
+    for (const retired of ["intentCreator", "intentRefundee"]) {
+      const refused = failed(
+        await mcp.call("sauce_compile", {
+          source: INTENT,
+          args: [RECIPIENT],
+          intentDeadline: 4000000000,
+          [retired]: CREATOR,
+        }),
+      );
+      assert.match(
+        refused,
+        new RegExp(`\`${retired}\` is gone: an intent names its refundee in the program`),
+      );
+    }
   });
 
   it("refuses an intent deadline that has passed, as the command does", async () => {
@@ -546,7 +538,6 @@ describe("sauce_compile", () => {
         source: INTENT,
         args: [RECIPIENT],
         intentDeadline: 1728432000,
-        intentRefundee: CREATOR,
       }),
     );
     assert.match(
@@ -1131,115 +1122,49 @@ describe("sauce_intent_publish", () => {
     source: INTENT,
     args: [RECIPIENT],
     intentDeadline: 2_000_000_000,
-    intentRefundee: CREATOR,
+    intentExecutionFee: 0,
     // One salt for every call, so two calls build one intent: each picks a random one otherwise.
     intentSalt: `0x${"00".repeat(32)}`,
   };
+  /** Printed with no endpoint: the cook's value is given. */
+  const unsigned = { ...args, owner: OWNER, value: 0 };
 
-  type Published = {
-    chainId: number;
-    intents: Array<{
-      intentHash: string;
-      destination: string;
-      fundVia: string;
-      vault: string;
-      transactions: Array<{ what: string; to: string; data: string; value: string }>;
-    }>;
-    notes: string[];
-  };
-
-  it("builds the unsigned transfer into the vault and publish of a fixed intent", async () => {
-    const out = ok(await mcp.call("sauce_intent_publish", args)) as Published;
+  it("builds the unsigned cook on the owner's Pot that publishes the intent", async () => {
+    const out = ok(await mcp.call("sauce_intent_publish", unsigned));
     assert.equal(out.chainId, 1);
-    assert.equal(out.intents.length, 1);
-    assert.equal(out.intents[0]!.destination, "base");
-    assert.match(out.intents[0]!.intentHash, /^0x[0-9a-f]{64}$/);
-    assert.equal(out.intents[0]!.fundVia, "transfer");
-    assert.match(out.intents[0]!.vault, /^0x[0-9a-fA-F]{40}$/);
-    // The transfer first, then the publication: the vault is paid before the intent is announced.
-    assert.deepEqual(
-      out.intents[0]!.transactions.map((tx) => tx.what.split(" ")[0]),
-      ["transfer", "publish"],
+    const tx = ok(await mcp.call("sauce_tx", unsigned));
+    assert.deepEqual([out.to, out.data, out.value], [tx.to, tx.data, tx.value]);
+    // Funded through the Portal instead, the program approves it and calls publishAndFund.
+    const viaPortal = ok(
+      await mcp.call("sauce_intent_publish", { ...unsigned, intentFundVia: "publishAndFund" }),
     );
-    assert.ok(out.notes.some((note) => /Send them in order/.test(note)));
-    assert.ok(out.notes.some((note) => /The transfers come first/.test(note)));
+    assert.notEqual(viaPortal.data, out.data);
   });
 
-  it("delivers what `.receive(...)` names, or derives it from a body of token writes", async () => {
-    // INTENT leaves its delivery to its transfer; PORTAL_INTENT names the same.
-    const portal = { ...args, source: PORTAL_INTENT };
-    const derived = { ...args, source: INTENT };
-    // A program a Pot runs names its intent's creator; a wallet publishing one is its creator.
-    const named = (source: string) => source.replace(".receive(", `.refundee(${CREATOR}).receive(`);
-    const compiled = ok(
-      await mcp.call("sauce_compile", { ...portal, source: named(PORTAL_INTENT) }),
-    );
-    assert.equal(
-      compiled.bytecode,
-      ok(await mcp.call("sauce_compile", { ...derived, source: named(INTENT) })).bytecode,
-    );
-    assert.match(
-      failed(await mcp.call("sauce_compile", portal)),
-      /needs `\.refundee\(<address>\)`/,
-    );
-    const out = ok(await mcp.call("sauce_intent_publish", portal)) as Published;
-    assert.deepEqual(out, ok(await mcp.call("sauce_intent_publish", derived)));
-    assert.equal(out.intents[0]!.destination, "base");
-  });
-
-  it("defaults the Portal form's deadlines from now, and its creator to the wallet", async () => {
-    const before = Math.floor(Date.now() / 1000);
-    const out = ok(
-      await mcp.call("sauce_intent_publish", {
-        source: PORTAL_INTENT,
-        args: [RECIPIENT],
-        from: OWNER,
-      }),
-    ) as Published & {
-      intents: Array<{
-        record: { route: { deadline: string }; reward: { deadline: string; creator: string } };
-      }>;
-    };
-    const after = Math.floor(Date.now() / 1000);
-    const { route, reward } = out.intents[0]!.record;
-    assert.ok(Number(route.deadline) >= before + 300 && Number(route.deadline) <= after + 300);
-    assert.equal(BigInt(reward.deadline), BigInt(route.deadline) + 604_800n);
-    assert.equal(reward.creator.toLowerCase(), OWNER.toLowerCase());
-  });
-
-  it("builds the approve and publishAndFund instead with intentFundVia publishAndFund", async () => {
-    const out = ok(
-      await mcp.call("sauce_intent_publish", { ...args, intentFundVia: "publishAndFund" }),
-    ) as Published;
-    assert.equal(out.intents[0]!.fundVia, "publishAndFund");
-    assert.deepEqual(
-      out.intents[0]!.transactions.map((tx) => tx.what.split(" ")[0]),
-      ["approve", "publishAndFund"],
-    );
-  });
-
-  it("needs a wallet and an endpoint for a dry run, and dryRun for assumed balances", async () => {
+  it("needs an owner and an endpoint for a dry run, and dryRun for assumed balances", async () => {
     assert.match(
       failed(await mcp.call("sauce_intent_publish", { ...args, dryRun: true })),
-      /needs whose wallet/,
+      /give owner/,
     );
     assert.match(
-      failed(await mcp.call("sauce_intent_publish", { ...args, dryRun: true, from: OWNER })),
+      failed(await mcp.call("sauce_intent_publish", { ...args, dryRun: true, owner: OWNER })),
       /A dry run needs an RPC endpoint for ethereum/,
     );
     assert.match(
-      failed(await mcp.call("sauce_intent_publish", { ...args, assumeBalance: ["USDC:1"] })),
+      failed(await mcp.call("sauce_intent_publish", { ...unsigned, assumeBalance: ["USDC:1"] })),
       /goes with dryRun/,
     );
   });
 
-  it("refuses a program that does more than open fixed intents", async () => {
+  it("refuses a program that opens no intent", async () => {
     assert.match(
       failed(
         await mcp.call("sauce_intent_publish", {
           source: PAY,
           chain: "base",
           args: [RECIPIENT, "1"],
+          owner: OWNER,
+          value: 0,
         }),
       ),
       /opens no intent/,
@@ -1278,15 +1203,15 @@ describe("sauce_inspect", () => {
     const out = ok(
       await mcp.call("sauce_inspect", {
         source: INTENT,
-        args: [RECIPIENT],
         intentDeadline: "2000000000",
-        intentRefundee: CREATOR,
+        intentExecutionFee: 0,
       }),
     );
-    assert.match(JSON.stringify(out), /base/);
-    assert.match(
-      failed(await mcp.call("sauce_inspect", { hex: "0x00", args: [RECIPIENT] })),
-      /a cook's are decoded from its hex/,
+    assert.deepEqual(
+      (out.intents as Array<{ destination: { chain: string } }>).map(
+        (intent) => intent.destination.chain,
+      ),
+      ["base"],
     );
   });
 

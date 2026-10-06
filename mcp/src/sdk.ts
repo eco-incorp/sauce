@@ -32,11 +32,11 @@ export {
   registeredBalances,
 } from "../../sdk/dist/cli/chain.js";
 export {
-  asPublished,
   compileCommand,
   compileProgram,
   pastDeadline,
   potCommand,
+  probeProgram,
   programChains,
   txCommand,
   type CliFiles,
@@ -49,7 +49,6 @@ export { globalsCommand } from "../../sdk/dist/cli/globals.js";
 export { randomSalt } from "../../sdk/dist/routes/intent-defaults.js";
 export {
   assumedBalances,
-  bindMainArguments,
   definesReach,
   fundingFor,
   potTarget,
@@ -98,6 +97,7 @@ export {
   CHAIN_SUPPORT_NEW_ISSUE_URL,
   chainSupport,
   chainSupportRequest,
+  intentDestinations,
   previewRefusal,
   PreviewChainError,
   requireSupported,

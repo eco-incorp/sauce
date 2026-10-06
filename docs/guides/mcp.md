@@ -317,7 +317,6 @@ server's instructions also list:
 | `--value`                  | `value`                |
 | `--account`                | `accounts`             |
 | `--intent-deadline`        | `intentDeadline`       |
-| `--intent-refundee`        | `intentRefundee`       |
 | `--intent-execution-fee`   | `intentExecutionFee`   |
 | `--intent-fund-via`        | `intentFundVia`        |
 | `--intent-reward-deadline` | `intentRewardDeadline` |
@@ -429,15 +428,15 @@ unknown field is refused, which is how a misspelt one is caught.
 
 The compiling tools take the program as text:
 
-| Input                                                    | Meaning                                                                                                                |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `source`                                                 | The program, the whole text of a `.sauce.ts` file (at most 256 KiB)                                                    |
-| `file`                                                   | Its name, for messages and relative imports (default `program.sauce.ts`)                                               |
-| `modules`                                                | Files it imports by relative path, as path → text from the directory of `file`. Nothing is read from the server's disk |
-| `chain`, `target`                                        | The chain, by slug, alias or id; or a `// @chain` header line in the program. `target: "svm"` alone is Solana          |
-| `compactArgs`                                            | Encode `main`'s arguments as compact-v1                                                                                |
-| `intentDeadline`, `intentRefundee`, `intentExecutionFee` | For intents the program opens: Unix seconds, a `0x` address, wei                                                       |
-| `intentFundVia`                                          | How their reward reaches the vault: `transfer` (default: paid into it, then `publish`) or `publishAndFund`             |
+| Input                                  | Meaning                                                                                                                |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `source`                               | The program, the whole text of a `.sauce.ts` file (at most 256 KiB)                                                    |
+| `file`                                 | Its name, for messages and relative imports (default `program.sauce.ts`)                                               |
+| `modules`                              | Files it imports by relative path, as path → text from the directory of `file`. Nothing is read from the server's disk |
+| `chain`, `target`                      | The chain, by slug, alias or id; or a `// @chain` header line in the program. `target: "svm"` alone is Solana          |
+| `compactArgs`                          | Encode `main`'s arguments as compact-v1                                                                                |
+| `intentDeadline`, `intentExecutionFee` | For intents the program opens: Unix seconds, wei                                                                       |
+| `intentFundVia`                        | How their reward reaches the vault: `transfer` (default: paid into it, then `publish`) or `publishAndFund`             |
 
 `sauce_compile` also takes a cook's `args` and `accounts`, to size the payload and, on Solana, the
 cook's transaction (with `via`, the Kitchen's or the engine's direct one); and `rpcUrls`, each intent destination's endpoint by chain, to check that the

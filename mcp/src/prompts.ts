@@ -107,8 +107,8 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
       title: "Open a cross-chain intent",
       description:
         "Walks an agent through a Sauce program that opens a cross-chain intent: read the " +
-        "intents skill, compile with the intent's deadline and refundee, and build the unsigned " +
-        "transactions that publish and fund it (or the cook that opens it from a Pot).",
+        "intents skill, compile it, rehearse publishing it from a Pot and filling it, and build " +
+        "the unsigned cook that publishes it.",
       argsSchema: {
         task: z
           .string()
@@ -142,20 +142,19 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
               "   the destination Kitchen's fee when the body runs a program there (sauce_pot on",
               "   that chain reads it; pass it as intentExecutionFee). sauce_price reads a",
               "   pool's price for a swap in the body.",
-              "3. sauce_compile with intentDeadline (Unix seconds, in the future) and intentRefundee",
-              "   until it compiles; sauce_inspect with the source and main's arguments as args",
-              "   lists each intent's route and reward.",
-              "4. For an intent fixed when it is built, rehearse both sides with the same inputs,",
-              "   main's arguments (its inputs: recipient, amounts, limits) as args:",
-              "   sauce_intent_publish with dryRun and from (the source, from the wallet that",
-              "   funds the reward) and sauce_intent_fill with dryRun (a solver's fill, on the",
+              "3. Every intent names its refundee, `.refundee(<address>)` (a main parameter, so it",
+              "   is given with args). sauce_compile with intentDeadline (Unix seconds, in the",
+              "   future) until it compiles; sauce_inspect with the source lists each intent's",
+              "   destination and the body it cooks there.",
+              "4. Rehearse both sides with the same inputs, main's arguments (its inputs: recipient,",
+              "   amounts, limits, the refundee) as args: sauce_intent_publish with dryRun and owner",
+              "   (whose Pot publishes it; fund pulls the reward in from the owner), which returns",
+              "   each intent's `record`, and sauce_intent_fill with dryRun (a solver's fill, on the",
               "   destination, where the body runs).",
-              "5. sauce_intent_publish for the unsigned transfers of the reward into the intent's",
-              "   vault and then Portal.publish, from the wallet that funds the reward: send the",
-              "   transfers first, and publish once they have landed (intentFundVia publishAndFund",
-              "   gives approvals and Portal.publishAndFund instead, for an intent built from a",
-              "   solver's quote). Keep each intent's `record`. For an intent that measures a value",
-              "   on chain: run the program on a Pot with sauce_tx.",
+              "5. sauce_intent_publish for the unsigned cook that publishes it from the owner's Pot,",
+              "   which must hold the reward when it lands (intentFundVia publishAndFund funds the",
+              "   vault through the Portal instead). Once it has landed, sauce_intent_import with",
+              "   its txHash returns each intent's `record`.",
               "6. Once published: sauce_intent_status (with the record)",
               "   says where it stands and what can happen next. If no solver fills it before its",
               "   deadline, sauce_intent_refund (from the reward's deadline) or sauce_intent_cancel",
@@ -164,7 +163,7 @@ export function registerPrompts(server: McpServer, root: string = PACKAGED_SKILL
               "supports: an intent that involves a preview chain compiles and rehearses, and the",
               "tools that build its transactions return `refused` with the chain-support request to",
               "offer the user instead.",
-              "Nothing here signs: hand the wallet's owner the unsigned transactions, in order, and",
+              "Nothing here signs: hand the wallet's owner the unsigned cook, and",
               "never ask for a private key.",
             ].join("\n"),
           },

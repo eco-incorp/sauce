@@ -13,7 +13,8 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import { requireChain } from "../../sdk/dist/chains/canonical.js";
 import { chainSupportRequest } from "../../sdk/dist/cli/support.js";
-import { fillTargets } from "../../sdk/dist/cli/fill.js";
+import { ecoRoutesPortal, ecoRoutesProver } from "../../sdk/dist/protocols/eco-routes/lookup.js";
+import { assembleIntent } from "../../sdk/dist/routes/intent.js";
 import { intentRecord } from "../../sdk/dist/cli/lifecycle.js";
 import { connect, ok, textOf, type Connected } from "./harness.js";
 
@@ -28,24 +29,30 @@ const PAY = [
   "",
 ].join("\n");
 const intentTo = (chain: string): string =>
-  `${chain}.Portal.send({ token: USDC, amount: 7n }).receive().then(() => {\n  USDC.transfer(RECIPIENT, 5n);\n});\n`;
-const INTENT = { defines: { RECIPIENT }, intentDeadline: 2_000_000_000, intentRefundee: OWNER };
+  `${chain}.Portal.send({ token: USDC, amount: 7 }).refundee(${OWNER}).receive().then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`;
+const INTENT = { defines: { RECIPIENT }, intentDeadline: 2_000_000_000, intentExecutionFee: 0 };
 
-/** The record of the one intent `source` opens on `chain`, as sauce_intent_publish returns it. */
-function recordOf(source: string, chain: string): Record<string, unknown> {
-  const [target] = fillTargets(
+/** The record of an intent from `source` to `destination`, as sauce_intent_publish returns one. */
+function recordOf(destination: string, source: string): Record<string, unknown> {
+  const intent = assembleIntent(
+    requireChain(source),
+    requireChain(destination),
     {
-      file: "intent.sauce.ts",
-      text: source,
-      chain: requireChain(chain),
-      compactArgs: false,
-      defines: { RECIPIENT: BigInt(RECIPIENT) },
-      intents: { deadline: 2_000_000_000n, publisher: OWNER },
+      salt: `0x${"00".repeat(32)}`,
+      deadline: 2_000_000_000n,
+      portal: ecoRoutesPortal(destination),
+      tokens: [],
+      calls: [],
     },
-    { readText: () => "", readModule: () => undefined },
+    {
+      deadline: 2_000_000_000n,
+      creator: OWNER,
+      prover: ecoRoutesProver(source, destination),
+      nativeAmount: 7n,
+    },
   );
 
-  return intentRecord(target!.intent, { sourcePortal: target!.sourcePortal }) as unknown as Record<
+  return intentRecord(intent, { sourcePortal: ecoRoutesPortal(source) }) as unknown as Record<
     string,
     unknown
   >;
@@ -157,7 +164,7 @@ describe("refused on a preview chain, before the call's endpoint", () => {
     const toArbitrum = { source: intentTo("Arbitrum"), chain: "base", ...INTENT };
     refused(await mcp.call("sauce_intent_publish", toArbitrum), "arbitrum");
     refused(
-      await mcp.call("sauce_intent_publish", { ...toArbitrum, from: OWNER, rpcUrl: url }),
+      await mcp.call("sauce_intent_publish", { ...toArbitrum, owner: OWNER, rpcUrl: url }),
       "arbitrum",
     );
     refused(
@@ -173,7 +180,7 @@ describe("refused on a preview chain, before the call's endpoint", () => {
     const dry = await mcp.call("sauce_intent_publish", {
       ...toArbitrum,
       dryRun: true,
-      from: OWNER,
+      owner: OWNER,
       rpcUrl: url,
     });
     assert.doesNotMatch(textOf(dry), /preview-chain/);
@@ -181,8 +188,8 @@ describe("refused on a preview chain, before the call's endpoint", () => {
   });
 
   it("each intent step, by the chain it is sent on", async () => {
-    const toArbitrum = recordOf(intentTo("Arbitrum"), "base");
-    const fromArbitrum = recordOf(intentTo("Base"), "arbitrum");
+    const toArbitrum = recordOf("arbitrum", "base");
+    const fromArbitrum = recordOf("base", "arbitrum");
     const rpcUrls = { base: url, arbitrum: url };
     // The destination's: a fill, a proof, a cancellation.
     refused(

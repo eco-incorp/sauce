@@ -1,7 +1,8 @@
 /**
  * An intent's whole life through the intent tools, on two anvils standing in for Ethereum (the
  * source) and Base (the destination), with every transaction built by the server UNSIGNED and
- * signed and sent here, by a key the server never sees: published and funded on Ethereum, read
+ * signed and sent here, by a key the server never sees: published and funded on Ethereum by a cook
+ * on the creator's Pot, its record read from the dry run and again from the transaction, read
  * back from its transaction, filled and proven on Base, the proof carried back, claimed; refunded
  * after the reward's deadline and not before; cancelled after the route's deadline, the
  * cancellation proven and refunded before the reward's.
@@ -22,7 +23,14 @@ import { after, before, describe, it } from "node:test";
 import { createWalletClient, getAddress, http, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
+import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../../sdk/dist/deployments/pot.js";
 import {
+  ecoRoutesExecutorOf,
+  ecoRoutesPortal,
+} from "../../sdk/dist/protocols/eco-routes/lookup.js";
+import { sauceEvmDeployPotCall } from "../../sdk/dist/routes/sauce-calls.js";
+import {
+  FEE,
   fixture,
   OWNER,
   registered,
@@ -48,12 +56,15 @@ const REWARD = 1_050_000n;
 /** What the Mailbox charges per message: the prover's quoted fee. */
 const HYPERLANE_FEE = 7_777n;
 
-/** Base USDC to `recipient`, for Ethereum USDC: a body of plain transfers. */
+/** Base USDC to `recipient`, for Ethereum USDC, refunded to `refundTo` unfilled. */
 const INTENT = [
-  "function main(recipient: Address, amount: Uint256, reward: Uint256) {",
-  "  Base.Portal.send({ token: USDC, amount: reward }).receive().then(() => {",
-  "    USDC.transfer(recipient, amount);",
-  "  });",
+  "function main(recipient: Address, amount: Uint256, reward: Uint256, refundTo: Address) {",
+  "  Base.Portal.send({ token: USDC, amount: reward })",
+  "    .refundee(refundTo)",
+  "    .receive({ token: USDC, amount })",
+  "    .then(() => {",
+  "      USDC.transfer(recipient, amount);",
+  "    });",
   "}",
   "",
 ].join("\n");
@@ -122,33 +133,44 @@ describe(
       return hashes;
     };
 
-    /** Publishes the intent from the creator through sauce_intent_publish; its record and tx. */
+    /** The creator's Pot on Ethereum, which publishes: deployed before the suite. */
+    const pot = v12PredictPot(OWNER.address, SAUCE_INTENT_POT_SALT) as Address;
+    let salts = 0;
+    /**
+     * Publishes the intent from the creator's Pot through sauce_intent_publish: rehearsed first,
+     * which reads its record from the Portal's log, then the unsigned cook, sent here. The Pot is
+     * given the reward first.
+     */
     const publish = async (
       route: bigint,
       reward: bigint,
       fundVia?: "transfer" | "publishAndFund",
-    ): Promise<{ record: IntentRecord; tx: Hex; steps: string[] }> => {
-      const out = ok(
-        await mcp.call("sauce_intent_publish", {
-          source: INTENT,
-          chain: "ethereum",
-          args: [RECIPIENT, String(AMOUNT), String(REWARD)],
-          intentDeadline: String(route),
-          intentRewardDeadline: String(reward),
-          intentRefundee: OWNER.address,
-          from: OWNER.address,
-          rpcUrl: ethereum.rpcUrl,
-          ...(fundVia === undefined ? {} : { intentFundVia: fundVia }),
-        }),
-      ) as { intents: Array<{ record: IntentRecord; transactions: Tx[] }> };
-      const [intent] = out.intents;
-      const hashes = await sendAll(ethereum, ethereum.owner, intent!.transactions);
-
-      return {
-        record: intent!.record,
-        tx: hashes.at(-1)!,
-        steps: intent!.transactions.map((each) => each.what.split(" ")[0]!),
+    ): Promise<{ record: IntentRecord; tx: Hex }> => {
+      const program = {
+        source: INTENT,
+        chain: "ethereum",
+        args: [RECIPIENT, String(AMOUNT), String(REWARD), OWNER.address],
+        intentDeadline: String(route),
+        intentRewardDeadline: String(reward),
+        intentExecutionFee: String(FEE),
+        // One salt for the rehearsal and the cook: each call picks a random one otherwise.
+        intentSalt: `0x${(++salts).toString(16).padStart(64, "0")}`,
+        owner: OWNER.address,
+        rpcUrl: ethereum.rpcUrl,
+        ...(fundVia === undefined ? {} : { intentFundVia: fundVia }),
       };
+      await ethereum.mint(ethereumUsdc, pot, REWARD);
+      const rehearsed = ok(
+        await mcp.call("sauce_intent_publish", { ...program, dryRun: true }),
+      ) as {
+        ok: boolean;
+        intents: Array<{ record: IntentRecord }>;
+      };
+      assert.equal(rehearsed.ok, true);
+      const cook = ok(await mcp.call("sauce_intent_publish", program)) as unknown as Tx;
+      const [tx] = await sendAll(ethereum, ethereum.owner, [{ ...cook, what: "the cook" }]);
+
+      return { record: rehearsed.intents[0]!.record, tx: tx! };
     };
     /** A tool's result, with both chains' endpoints given by the call. */
     const call = async (tool: string, args: Record<string, unknown>): Promise<unknown> =>
@@ -166,6 +188,14 @@ describe(
       baseMailbox = await deployMailbox(base, HYPERLANE_FEE);
       await plantHyperProver(ethereum, ethereumMailbox);
       await plantHyperProver(base, baseMailbox);
+      // The creator's Pot, which publishes, and Base's shared intent Pot, where the body cooks.
+      for (const [local, owner] of [
+        [ethereum, OWNER.address],
+        [base, ecoRoutesExecutorOf(ecoRoutesPortal("base"))],
+      ] as const) {
+        const deploy = sauceEvmDeployPotCall({ owner, salt: SAUCE_INTENT_POT_SALT });
+        await local.send(local.deployer, deploy.to, deploy.data);
+      }
       await ethereum.mint(ethereumUsdc, OWNER.address, 10n * REWARD);
       await base.mint(baseUsdc, SOLVER.address, 10n * AMOUNT);
       // The solver pays the proof's fee on Base, and gas on both chains.
@@ -187,9 +217,7 @@ describe(
 
     it("publishes, reads back, fills and proves, carries the proof, and claims", async () => {
       const start = await now(base);
-      const { record, tx, steps } = await publish(start + 3600n, start + 7200n);
-      // Funded by a transfer into its vault, then published: the default.
-      assert.deepEqual(steps, ["transfer", "publish"]);
+      const { record, tx } = await publish(start + 3600n, start + 7200n);
 
       // The same intent, read back from its transaction alone.
       const imported = (await call("sauce_intent_import", { txHash: tx, chain: "ethereum" })) as {
@@ -222,7 +250,8 @@ describe(
         built!.transactions.map((each) => each.what.split(" ")[0]),
         ["approve", "Portal.fulfillAndProve(" + record.intentHash + ","],
       );
-      assert.equal(built!.transactions[1]!.value, String(HYPERLANE_FEE));
+      // The route's native amount, the Kitchen's fee its cook pays, and the proof's fee.
+      assert.equal(built!.transactions[1]!.value, String(HYPERLANE_FEE + FEE));
       const sent = await sendAll(base, solverOn(base), built!.transactions);
       assert.equal(await base.balanceOf(baseUsdc, RECIPIENT), AMOUNT);
       const filled = (await call("sauce_intent_status", { intent: record })) as { state: string };
@@ -256,8 +285,7 @@ describe(
       const start = await now(base);
       // Deadlines of its own: the first test's intent, the same one, is published already.
       const deadlines = [start + 3700n, start + 7300n] as const;
-      const { record, tx, steps } = await publish(...deadlines, "publishAndFund");
-      assert.deepEqual(steps, ["approve", "publishAndFund"]);
+      const { record, tx } = await publish(...deadlines, "publishAndFund");
       const imported = (await call("sauce_intent_import", { txHash: tx, chain: "ethereum" })) as {
         intents: Array<{ funded: boolean }>;
       };
