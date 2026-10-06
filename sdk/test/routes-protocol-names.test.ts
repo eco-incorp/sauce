@@ -78,15 +78,13 @@ describe("a protocol name is the contract on the chain the program is compiled f
     expect(built.intent.route.calls).toHaveLength(1);
   });
 
-  // Pending the compiler: a compile-time method copies a called argument (`ctx.self()`) before its
-  // body runs, so the forwarding namespace differs from the direct call by a byte.
-  it.failing("<Protocol>.<method> is the protocol's one contract", () => {
+  it("<Protocol>.<method> is the protocol's one contract", () => {
     expect(bytesOf("base", "function main() { AaveV3.getUserAccountData(ctx.self()); }")).toEqual(
       bytesOf("base", "function main() { AaveV3.Pool.getUserAccountData(ctx.self()); }"),
     );
   });
 
-  it.failing("the same name is a different address on Base and on Ethereum", () => {
+  it("the same name is a different address on Base and on Ethereum", () => {
     const source = "function main() { AaveV3.getUserAccountData(ctx.self()); }";
     expect(bytesOf("base", source)).toEqual(
       bound(
@@ -406,8 +404,7 @@ describe("every registry protocol, every contract kind", () => {
     );
   });
 
-  // Pending the compiler: `.at(address)` on a binding does not rebind it.
-  it.failing("a deployed contract's ABI reaches another deployment", () => {
+  it("a deployed contract's ABI reaches another deployment", () => {
     expect(
       bytesOf(
         "base",

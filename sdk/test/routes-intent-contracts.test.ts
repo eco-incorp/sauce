@@ -26,12 +26,12 @@ const INTENTS = {
 } as const;
 const opened = `Arbitrum.Portal.send({ token: USDC, amount: 2 }).refundee(${AT}).receive({ token: USDC, amount: 1 })`;
 
-/** The program and every intent it opens, but where each is written. */
+/** The program and the body it compiles for each intent it opens. */
 const same = (a: CompiledSauceProgram, b: CompiledSauceProgram): void => {
   expect(bytesToHex(a.bytecode)).toBe(bytesToHex(b.bytecode));
-  const unplaced = (program: CompiledSauceProgram) =>
-    program.intents.map(({ span: _, ...rest }) => rest);
-  expect(unplaced(a)).toEqual(unplaced(b));
+  const bodies = (program: CompiledSauceProgram) =>
+    program.bodies.map((body) => [body.destination.slug, bytesToHex(body.bytecode)]);
+  expect(bodies(a)).toEqual(bodies(b));
 };
 
 describe("an ABI binding given in `contracts`", () => {
@@ -51,14 +51,12 @@ describe("an ABI binding given in `contracts`", () => {
       },
     );
 
-  // Pending the compiler: a closure compiled as a program of its own does not see the entry's
-  // `inlineContracts`, as it sees an import of the same ABI.
-  it.failing("reaches a `.then(...)` body, as an import of the same ABI does", () => {
+  it("reaches a `.then(...)` body, as an import of the same ABI does", () => {
     const body = `${opened}.then(() => { Grid.at(${AT}).poke(1); });`;
     same(given(body), imported(body));
   });
 
-  // Pending the compiler, as above, and `await x;` as `x.then(() => { … })`.
+  // Pending the compiler: `await x;` as `x.then(() => { … })`.
   it.failing("reaches what follows an `await`, and a body nested in a body", () => {
     same(
       given(`await ${opened};\n  Grid.at(${AT}).poke(1);`),

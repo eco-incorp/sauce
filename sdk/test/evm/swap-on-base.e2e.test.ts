@@ -1,8 +1,11 @@
 /**
  * The `sauce-intents` skill's swap-on-base intent, its body EXECUTED on Base: the file the skill
- * teaches, compiled from Ethereum as `sauce run --chain ethereum` compiles it, and the route it
- * opens fulfilled through eco-routes' real Portal, whose Executor delivers the WETH into the shared
- * intent Pot and cooks the body there on the released gated engine (`gated-engine.ts`).
+ * teaches, compiled from Ethereum as `sauce intent publish --chain ethereum` compiles it and
+ * published by a cook on an Ethereum anvil (`intent-anvil.ts`), which reads the intent back from
+ * the Portal's `IntentPublished`; the route it opens is then fulfilled on Base through eco-routes'
+ * real Portal, whose Executor delivers the WETH into the shared intent Pot and cooks the body there
+ * on the released gated engine (`gated-engine.ts`). Base's Portal is put at the registry's address
+ * as `cli-anvil.ts#placePortal` puts it, so no address is overridden.
  *
  * Nothing is forked. The V3 pools are Uniswap's own `UniswapV3Factory` and `UniswapV3Pool`
  * bytecode from `@uniswap/v3-core`, created by a factory whose code and storage are then replayed
@@ -28,8 +31,8 @@
  * out.
  *
  * The same Base runs the nested-intents guide's swap (`docs/examples/nested-swap.sauce.ts`), opened
- * on Ethereum with its `main` arguments bound: its body buys WETH on the 0.05% pool it looks up and
- * pays what it bought into the next intent's vault on this Portal, publishing it for Ethereum.
+ * on Ethereum with its `main` arguments: its body buys WETH on the 0.05% pool it looks up and pays
+ * what it bought into the next intent's vault on this Portal, publishing it for Ethereum.
  *
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite, and a hard failure
  * without it in CI.
@@ -68,8 +71,16 @@ import { v12Kitchen } from "../../src/evm/engine.js";
 import { Base } from "../../src/index.js";
 import { sqrtPriceX96FromPrice } from "../../src/price.js";
 import { PortalABI } from "../../src/protocols/eco-routes/abis.js";
+import {
+  ecoRoutesExecutorOf,
+  ecoRoutesPortal,
+  ecoRoutesVaultImplementationOf,
+} from "../../src/protocols/eco-routes/lookup.js";
 import { EVM_ROUTE_PARAM, encodeRouteEvm, hashIntent } from "../../src/routes/encode.js";
+import { encodeEntryArguments, type EntryValue } from "../../src/routes/entry.js";
 import { compileSauceProgram } from "../../src/routes/sauce-route.js";
+import type { Intent } from "../../src/routes/types.js";
+import { startIntentChain, type IntentChain } from "../intent-anvil.js";
 import { gateAnchors, startGatedEngine } from "./gated-engine.js";
 
 const RUNTIME_HEX_PATH =
@@ -248,6 +259,8 @@ const replay = async (from: Address, to: Address, code?: Hex) => {
 };
 
 let anvil: ChildProcess;
+/** The source: an Ethereum anvil whose Pot publishes each intent, the reward its WETH. */
+let ethereum: IntentChain;
 let portal: Address;
 /** The Pot the Portal's Executor cooks the body on: the shared intent Pot, salt zero. */
 let pot: Address;
@@ -284,27 +297,41 @@ interface Args {
 }
 
 /**
- * The fulfilment of the intent the file opens, built as `sauce intent publish --chain ethereum
- * --args …` builds it — main's arguments bound into it (`compileSauceProgram`'s `args`) — with this
- * anvil's Portal as the destination Portal its route records (every other address, the tokens and
- * pools included, is the SDK's own for Base): the solver's side on Base, after it holds the
- * delivery and lets the Portal pull it.
+ * The intent `source` opens, published as `sauce intent publish --chain ethereum --args …`
+ * publishes it: compiled for Ethereum, cooked on the Ethereum anvil's Pot with `main`'s `values`,
+ * and read back from the Portal's `IntentPublished`.
+ */
+const publishedIntent = async (source: string, values: readonly EntryValue[]): Promise<Intent> => {
+  const compiled = compileSauceProgram("ethereum", source, {
+    intents: { deadline: DEADLINE, executionFee: 0n },
+  });
+  const intents = await ethereum.publish(
+    compiled,
+    `0x${Buffer.from(encodeEntryArguments(compiled, values)).toString("hex")}`,
+  );
+  expect(intents).toHaveLength(1);
+  return intents[0]!.intent;
+};
+
+/**
+ * The fulfilment of the intent the file opens, as published on Ethereum: the solver's side on
+ * Base, after it holds the delivery and lets the Portal pull it.
  */
 const fulfilment = async (args: Args, source = PROGRAM): Promise<{ data: Hex; value: bigint }> => {
-  const compiled = compileSauceProgram("ethereum", source, {
-    args: [
-      args.amountIn,
-      args.amountIn + 10n ** 15n,
-      args.sqrtPriceLimitX96 ?? LIMIT,
-      args.minOut ?? 1n,
-      args.minAvgPrice ?? 0n,
-      RECIPIENT,
-      REFUND_TO,
-    ],
-    intents: { deadline: DEADLINE, executionFee: 0n, destinationPortal: portal },
-  });
-  expect(compiled.intents).toHaveLength(1);
-  const { intent } = compiled.intents[0]!;
+  const intent = await publishedIntent(source, [
+    args.amountIn,
+    args.amountIn + 10n ** 15n,
+    args.sqrtPriceLimitX96 ?? LIMIT,
+    args.minOut ?? 1n,
+    args.minAvgPrice ?? 0n,
+    RECIPIENT,
+    REFUND_TO,
+  ]);
+  return fulfilOf(intent);
+};
+
+/** `fulfill` of `intent` on this Base, from the solver, once it holds the delivery. */
+const fulfilOf = async (intent: Intent): Promise<{ data: Hex; value: bigint }> => {
   const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], encodeRouteEvm(intent.route));
   for (const { token, amount } of route.tokens) {
     await call(token, erc20, "mint", [OWNER.address, amount]);
@@ -439,18 +466,47 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     const creationCode = readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex;
     await startGatedEngine({ publicClient, testClient, walletClient }, OWNER.address, creationCode);
 
-    // eco-routes' Portal, and the shared Pot its Executor cooks on, minted by the Kitchen.
-    portal = await deployWith(PORTAL.creationCode, "0x0000000000000000000000000000000000000000");
-    const executor = await publicClient.readContract({
-      abi: executorAbi,
-      address: portal,
-      functionName: "executor",
-    });
-    const deployed = await send(
+    // eco-routes' Portal at Base's registry address, with its vault implementation and Executor
+    // where a Portal deployed there puts them, each one's references to the others rewritten; and
+    // the shared Pot its Executor cooks on, minted by the Kitchen.
+    const deployed = await deployWith(
+      PORTAL.creationCode,
+      "0x0000000000000000000000000000000000000000",
+    );
+    portal = getAddress(ecoRoutesPortal("base"));
+    const moves = [
+      [deployed, portal],
+      [
+        getAddress(ecoRoutesVaultImplementationOf(deployed)),
+        getAddress(ecoRoutesVaultImplementationOf(portal)),
+      ],
+      [
+        getAddress(
+          await publicClient.readContract({
+            abi: executorAbi,
+            address: deployed,
+            functionName: "executor",
+          }),
+        ),
+        getAddress(ecoRoutesExecutorOf(portal)),
+      ],
+    ] as const;
+    for (const [from, to] of moves) {
+      const code = (await publicClient.getCode({ address: from }))!.toLowerCase();
+      await testClient.setCode({
+        address: to,
+        bytecode: moves.reduce(
+          (text, [a, b]) => text.split(a.slice(2).toLowerCase()).join(b.slice(2).toLowerCase()),
+          code,
+        ) as Hex,
+      });
+    }
+    const executor = getAddress(ecoRoutesExecutorOf(portal));
+    const minted = await send(
       gateAnchors().kitchen,
       v12Kitchen.encodeDeployPot(executor, SAUCE_INTENT_POT_SALT),
     );
-    expect(deployed.status).toBe("success");
+    expect(minted.status).toBe("success");
     pot = getAddress(v12PredictPot(executor as Hex));
 
     // The tokens, at Base's WETH and USDC addresses.
@@ -525,6 +581,8 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     // The V3 factory's code and state onto Base's factory address, where the body looks.
     await replay(factory, getAddress(Base.UniswapV3.Factory.address!));
 
+    ethereum = await startIntentChain("ethereum", PORT + 50, ["WETH"]);
+
     snapshot = await testClient.snapshot();
   }, 180_000);
 
@@ -534,6 +592,7 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
   });
 
   afterAll(async () => {
+    await ethereum?.stop();
     if (anvil && anvil.exitCode === null) {
       const exited = once(anvil, "exit");
       anvil.kill();
@@ -678,32 +737,24 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     // 0.05% one, which the body finds through Base's factory.
     const source = readFileSync(join(HERE, "../../../docs/examples/nested-swap.sauce.ts"), "utf8");
     const delivered = 1_000n * 10n ** 6n; // 1,000 USDC
-    const [outer] = compileSauceProgram("ethereum", source, {
-      args: [RECIPIENT, delivered, delivered + 10n ** 6n, 1n, CREATOR],
-      intents: {
-        deadline: DEADLINE,
-        executionFee: 0n,
-        sourcePortal: portal,
-        destinationPortal: portal,
-      },
-    }).intents;
-    expect(outer!.captures).toEqual([]);
-    const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], encodeRouteEvm(outer!.intent.route));
-    expect(route.tokens).toEqual([{ token: USDC, amount: delivered }]);
-    for (const { token, amount } of route.tokens) {
-      await call(token, erc20, "mint", [OWNER.address, amount]);
-      await call(token, erc20, "approve", [portal, amount]);
-    }
-    const { intentHash, rewardHash } = hashIntent(outer!.intent);
-    const claimant = pad(OWNER.address, { size: 32 });
-    const receipt = await send(
-      portal,
-      encodeFunctionData({
-        abi: PortalABI,
-        functionName: "fulfill",
-        args: [intentHash, route, rewardHash, claimant],
-      }),
+    // Its reward is Ethereum's USDC, which the source's Pot pays into the vault.
+    await ethereum.local.plant(
+      JSON.parse(readFileSync(join(HERE, "../std/token/fixtures/MockERC20.json"), "utf8"))
+        .creationCode as Hex,
+      ethereum.token("USDC"),
     );
+    await ethereum.local.mint(ethereum.token("USDC"), ethereum.pot, 10n ** 12n);
+    const outer = await publishedIntent(source, [
+      RECIPIENT,
+      delivered,
+      delivered + 10n ** 6n,
+      1n,
+      CREATOR,
+    ]);
+    const [route] = decodeAbiParameters([EVM_ROUTE_PARAM], encodeRouteEvm(outer.route));
+    expect(route.tokens).toEqual([{ token: USDC, amount: delivered }]);
+    const { data } = await fulfilOf(outer);
+    const receipt = await send(portal, data);
     expect(receipt.status).toBe("success");
 
     // The swap ran on the 0.05% pool, and what it bought is the inner intent's reward, in Base's
@@ -735,15 +786,19 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
       args: [inner.destination, inner.route, reward],
     });
     expect(funded).toBe(true);
-    // Its route pays the recipient on Ethereum what was bought, less the next solver's tenth of a
-    // percent: one WETH transfer, to Ethereum's WETH.
+    // Its route delivers on Ethereum what was bought, less the next solver's tenth of a percent,
+    // in Ethereum's WETH, moved into Ethereum's shared Pot, whose cook pays the recipient.
     const [next] = decodeAbiParameters([EVM_ROUTE_PARAM], inner.route);
-    expect(next.calls).toHaveLength(1);
+    expect(next.tokens.map((token) => token.amount)).toEqual([bought - bought / 1000n]);
+    expect(next.calls).toHaveLength(2);
     expect(next.calls[0]!.data).toBe(
       encodeFunctionData({
         abi: parseAbi(["function transfer(address to, uint256 amount)"]),
         functionName: "transfer",
-        args: [RECIPIENT, bought - bought / 1000n],
+        args: [
+          getAddress(v12PredictPot(ecoRoutesExecutorOf(ecoRoutesPortal("ethereum")))),
+          bought - bought / 1000n,
+        ],
       }),
     );
     // The shared Pot keeps nothing: the USDC went into the pool, the WETH into the vault.

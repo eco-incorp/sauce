@@ -189,9 +189,7 @@ describe("self.USDC is the running contract's balance", () => {
     );
   });
 
-  // Pending the compiler: an instance passed to a function compiled for run time (`self` to
-  // `balanceOf`) makes the compiler run the function in place rather than call it.
-  it.failing("USDC.balanceOf(self) is the same read", () => {
+  it("USDC.balanceOf(self) is the same read", () => {
     expect(bytesOf("base", "function main(): Uint256 { return self.USDC; }")).toEqual(
       bytesOf("base", "function main(): Uint256 { return USDC.balanceOf(self); }"),
     );
@@ -215,8 +213,7 @@ describe("Token(address) is any address as a token", () => {
     );
   });
 
-  // Pending the compiler, as `USDC.balanceOf(self)` above: the token passed as an address.
-  it.failing("Token(USDC) of a symbol is the symbol", () => {
+  it("Token(USDC) of a symbol is the symbol", () => {
     expect(bytesOf("base", `Token(USDC).transfer(${TO}, 5n);`)).toEqual(
       bytesOf("base", `USDC.transfer(${TO}, 5n);`),
     );

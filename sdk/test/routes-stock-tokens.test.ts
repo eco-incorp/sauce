@@ -23,8 +23,8 @@ const RECIPIENT = "0x00000000000000000000000000000000000000aA";
 const TSLAX_KEY = "0x07e83582411fea1482f0994b80aa512a97c94f25df283bec5a67a381fc862b4a";
 
 describe("stock tokens in a program", () => {
-  // Pending the compiler: a compile-time method copies a called argument (`ctx.self()`) before its
-  // body runs, and runs `@sauce/token`'s function in place when an argument is an instance.
+  // Pending the compiler: a method the compiler runs copies a called argument (`ctx.self()`)
+  // before its body reads it, one byte more than the direct call.
   it.failing(
     "compile on Base as a value and with the token methods, the writes through @sauce/token",
     () => {
