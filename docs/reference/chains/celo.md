@@ -20,9 +20,7 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 | Name in a program | `Celo` |
 | In TypeScript | `import { Celo } from "@eco-incorp/sauce"`: its tokens and protocol namespaces are properties of it |
 | Native coin | CELO (CELO), 18 decimals |
-| Sauce engine | `0xcF7A92abCC7Ede43277AcCBAfda910b8829bF9AD` |
-| Sauce Kitchen | `0x19845b22989150E6B09dE55a661295Dd9188506b` |
-| Sauce Router | `0x9201aF06536Cb4819cf1F08aE7063c5997D87459` |
+| Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [Deployments](../deployments.md) |
 | Intents (eco-routes) | none recorded |
 
 ## In a program
