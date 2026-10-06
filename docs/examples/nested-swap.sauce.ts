@@ -2,10 +2,10 @@ import { uniswapV3 } from "@sauce/router";
 
 // The nested intent with a swap in the middle: buy WETH on Base with the USDC delivered there, and
 // send the WETH bought on to Ethereum. `bought` is the swap's output, known only when the outer body
-// runs, and it is the inner intent's reward as it is. Opened on Ethereum and published from a
-// wallet:
+// runs, and it is the inner intent's reward as it is. Opened on Ethereum and published by a cook
+// on your Pot:
 //   sauce intent publish nested-swap.sauce.ts --chain ethereum --keystore <keystore> \
-//     --args <recipient> <delivered> <reward> <minOut> <refundTo>
+//     --fund USDC:<amount> --args <recipient> <delivered> <reward> <minOut> <refundTo>
 //
 //   recipient: Address  who is paid the WETH on Ethereum, at the end
 //   delivered: Uint256  the USDC a solver delivers to Base, in base units (6 decimals)

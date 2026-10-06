@@ -24,7 +24,10 @@ const recipient = "0x6666666666666666666666666666666666666666";
 
 // The program names its intent's refundee, `refundTo`, from its arguments; the deadlines and the
 // salt take their defaults, as the program runs. The Portal, the prover and the vault are the SDK's.
-export const program = routes.compileSauceProgram("base", source);
+// Ethereum's Kitchen fee, which the body's cook pays, is read there; a fixture here.
+export const program = routes.compileSauceProgram("base", source, {
+  intents: { executionFee: 1_234n },
+});
 
 // main(recipient, minAmount, refundTo), encoded as `--args` encodes them and appended to the
 // program: forward whatever the Pot holds once it is at least 1 USDC, refundable to the owner.

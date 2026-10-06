@@ -717,15 +717,14 @@ sauce run swap.json --chain base --keystore ~/.keys/me.json \
 ## Intents: `sauce run` or `sauce intent`
 
 A program can open an intent on another chain —
-`Base.Portal.send(…).refundee(refundTo).receive(…).then(() => { … })`. Every intent a program opens
-names its refundee, the refund address, with `.refundee(...)`: the Pot it runs on may be shared, so
-nothing defaults it. The one exception is a top-level intent `sauce intent publish` publishes from a
-wallet, whose refundee is that wallet (or `--intent-refundee <address>`) when it names none. The
+`Base.Portal.send(…).refundee(refundTo).receive(…).then(() => { … })`. Every intent names its
+refundee, the refund address, with `.refundee(...)`: it is published by a program a Pot runs, and
+the Pot may be shared, so nothing defaults it, not even the wallet that sends the cook. The
 command supplies the rest the file leaves out ([Intent defaults](../reference/intent-defaults.md)):
 the deadlines count from when it builds the intents, the fill five minutes later and the reward's
-seven days after that; the salt is random, picked once per run; and, for an intent whose body
-compiles to a program of its own, the fee is read from the destination Kitchen, a separate read for
-each destination, which the command reports. A modifier in the file sets any of them for its
+seven days after that; the salt is random, picked once per run; and the fee the body's cook pays is
+read from the destination Kitchen, a separate read for each destination, which the command
+reports. A modifier in the file sets any of them for its
 intent. A flag sets one for every intent that does not set its own: `--intent-deadline <unix
 seconds>`, `--intent-reward-deadline <unix seconds>`, `--intent-salt <bytes32>`,
 `--intent-prover <address>` (instead of the prover the registry records for the pair), and
@@ -733,9 +732,9 @@ seconds>`, `--intent-reward-deadline <unix seconds>`, `--intent-salt <bytes32>`,
 command refuses a deadline at or before now, which no solver could ever fill (`sauce intent fill`
 still rehearses one, with a note, to show the Portal's refusal). Each run builds new intents, its
 deadlines counted from then and its salt fresh: give `--intent-deadline` and `--intent-salt` to
-rehearse, inspect and publish the same one.
+rehearse and publish the same one.
 
-Every intent whose body runs a program cooks on one Pot on its destination: the one owned by the
+Every intent's body is a program that cooks on one Pot on its destination: the one owned by the
 destination Portal's Executor with salt zero, which every intent through that Portal shares. No
 solver can fill the intent until that Pot is deployed. `compile` and `sauce intent publish` check it on the
 destination (`compile --json` reports each under `intentPots`) and warn
@@ -743,79 +742,66 @@ while it is missing, naming the `sauce pot --deploy --chain <destination> --owne
 deploys it; any account may send that. `publish` warns before it sends anything, and says how to
 check when it cannot.
 
-There are two ways to get such a file's intents onto the chain:
+Every intent is published by a cook: the file run on a Pot, which reads each intent's vault from
+the Portal, pays the reward into it from its own balance, and publishes the intent, all in one
+transaction, so the intent may use a value the program measures as it runs — a balance, a swap's
+output. Each intent's hash and record are read from the Portal's `IntentPublished` log in the
+receipt, which the command prints and stores. Two commands send it:
 
-- **`sauce run`** cooks the file on your Pot. Inside one transaction the Pot reads each intent's
-  vault from the Portal, pays the reward into it from its own balance, and publishes the intent,
-  so the intent may use a value the program measures as it runs — a balance, a swap's output.
-- **`sauce intent publish`** sends the source chain's transactions from your **wallet**, with no Pot: for
-  each reward token a `transfer` to the intent's vault (and, for a native reward, a plain send to
-  it), then `Portal.publish`. It prints each intent's hash, its vault and each transaction's
-  result.
+- **`sauce intent publish`** cooks the file on your own Pot (`--salt` names another of yours), and
+  is for a file that opens intents. `--fund USDC:1.01` pulls the reward from your wallet into the
+  Pot in the same cook, exactly as `sauce run --fund` does ([Funding a run](#funding-a-run---fund)):
+  Permit2 by default, `--fund-mode` for another way, `--sweep` to return what is left. Without
+  `--fund` the Pot must hold the reward already.
 
   ```sh
   sauce intent publish bridge.sauce.ts --chain ethereum \
-    --keystore ~/.keys/me.json --args 0xRecipient 1000000
+    --keystore ~/.keys/me.json --fund USDC:1.01 --args 0xRecipient 1000000 0xYou
   ```
 
-  The file's `main` arguments go after `--args`, as for `sauce run`: the command fixes each into
-  the intents, which is what lets a wallet publish them. So only a file whose intents are fixed
-  when it is built qualifies: every amount a literal, a `main` argument or a `const` of them, and
-  nothing but intents. A file whose intent uses a value measured or computed on chain is refused,
-  naming the value and pointing at `sauce run`, and so is one that does anything else. An argument
-  must be one word to be fixed (an address, an unsigned integer or a `bool`); an array, a record,
-  bytes or a string is refused.
-  `--dry-run` rehearses the transactions together (`eth_simulateV1`) and sends nothing, from the
-  signer's wallet or `--from <address>`'s, printing each one's gas or revert (`gasUsed` and
-  `reason` in `--json`); `--assume-balance USDC:2` (repeatable, `ETH:` for the
-  native currency) gives that wallet the reward for the rehearsal only, by state override, as
-  `simulate` gives a Pot one. `--format json` (or `cast`) prints the transactions unsigned, with
-  `--from <address>` when there is no signer. Publishing, sent or printed, needs a supported source
-  and supported destinations ([Supported and preview chains](#supported-and-preview-chains)); a
-  dry run rehearses on any chain.
+  The file's `main` arguments go after `--args`, as for `sauce run`: they are the cook's, read as
+  it runs. `--dry-run` rehearses the cook from the Pot's owner, the signer or `--from <address>`
+  with no key, as `simulate` does, and prints each intent it publishes, read from the Portal's log
+  (`intents` in `--json`, each with its `record`), sending nothing; `--assume-balance USDC:2`
+  (repeatable, `ETH:` for the native currency) gives the Pot the reward for the rehearsal only, and
+  `--fund` with no key credits it what the pull would bring. `--format json` (or `cast`) prints the
+  cook unsigned, as `tx` does, with `--from <address>` when there is no signer; its intents are
+  known once it lands (`sauce intent import <tx hash> --chain <source>`). Publishing, sent or
+  printed, needs a supported source and supported destinations
+  ([Supported and preview chains](#supported-and-preview-chains)); a dry run rehearses on any chain.
 
-  The Portal counts an intent funded when its vault holds the reward (`isIntentFunded`), which is
-  what a solver checks once it sees `IntentPublished`, so paying the vault directly needs no
-  approval at all: nothing is left standing, and a USDT-style token needs no reset. The vault is
-  the SDK's own derivation for the Portal's address. With an endpoint it is also read from the
-  Portal (`intentVaultAddress`), and when the two disagree nothing is sent: the command says which
-  address each reported. Only what the vault does not hold yet is transferred, so running the
-  command again publishes alone. The transfers go first and `publish` is sent only once the Portal
-  counts the intent funded. A token whose `transfer` returns `false`, or keeps a fee, stops the
-  command before the intent is announced, with what was paid still in the vault: top it up and run
-  it again, or refund it after the reward deadline. A `--dry-run` reports `Portal.isIntentFunded`
-  after the rehearsed transactions, and `--format` prints each intent's `vault`, `vaultFrom` (`read`
-  when the Portal agreed, `derived` with no endpoint) and `fundVia`.
+- **`sauce run`** sends the same cook for any program: opening its intents is one of its steps.
 
-  `--intent-fund-via publishAndFund` (also taken by `run`, `tx`, `simulate`, `compile` and
-  `inspect`, for intents a program opens) funds through the Portal instead: for each reward token
-  an `approve` to the Portal (reset to zero first when a smaller allowance stands, as SafeERC20
-  does; skipped when the allowance already covers it), then `publishAndFund`, which pulls the
-  reward into the same vault, records the intent `Funded` and emits `IntentFunded`. Choose it when
-  something you rely on reads that event or status rather than the vault's balance. Neither mode
-  goes through Permit2: the Portal's Permit2 path (`publishAndFundFor` with Permit2 as its permit
-  contract) pulls through a Permit2 _allowance_ to the intent's vault, which takes an on-chain
-  `Permit2.approve` per intent — the same number of transactions, plus a standing approval of
-  Permit2.
+The Portal counts an intent funded when its vault holds the reward (`isIntentFunded`), which is
+what a solver checks once it sees `IntentPublished`, so paying the vault directly needs no approval:
+nothing is left standing, and a USDT-style token needs no reset. The vault is read from the Portal
+(`intentVaultAddress`) over the very bytes the Pot then publishes. A token whose `transfer` returns
+`false` reverts the cook, so no intent is announced with an empty vault.
+
+`--intent-fund-via publishAndFund` (taken by `intent publish`, `run`, `tx`, `simulate`, `compile`
+and `inspect`) funds through the Portal instead: for each reward token an `approve` to the Portal
+(reset to zero first when a smaller allowance stands, as SafeERC20 does), then `publishAndFund`,
+which pulls the reward into the same vault, records the intent `Funded` and emits `IntentFunded`.
+Choose it when something you rely on reads that event or status rather than the vault's balance.
 
 Publishing from Solana is not supported: see [Solana](#solana).
 
 Everything after publishing is a verb of `sauce intent` too. Each takes the intent's file (with
 `--chain`, its source, and the flags it was built with) or its hash, and reads both chains:
 
-| Verb                   | What it does                                                                 |
-| ---------------------- | ---------------------------------------------------------------------------- |
-| `sauce intent publish` | Publish a file's fixed intents from your wallet — or, with no file, make one |
-| `sauce intent fill`    | Rehearse a solver's fill on the destination; with `--send`, send it          |
-| `sauce intent prove`   | Send the proof of a filled (or cancelled) intent, paying the prover's fee    |
-| `sauce intent claim`   | Withdraw a proven intent's reward to its claimant, on the source             |
-| `sauce intent refund`  | Return an unearned reward to its creator, once the Portal allows it          |
-| `sauce intent cancel`  | Cancel an unfilled intent after its fill deadline, for an earlier refund     |
-| `sauce intent status`  | Where an intent stands on both chains, and what can be done next             |
-| `sauce intent list`    | Every intent the store keeps                                                 |
-| `sauce intent show`    | One stored intent: its route, reward, deadlines and events                   |
-| `sauce intent import`  | Store the intents a transaction published, rebuilt from its logs             |
-| `sauce intent`         | At a terminal: pick a stored intent and act on it                            |
+| Verb                   | What it does                                                              |
+| ---------------------- | ------------------------------------------------------------------------- |
+| `sauce intent publish` | Publish a file's intents from your Pot — or, with no file, make one       |
+| `sauce intent fill`    | Rehearse a solver's fill on the destination; with `--send`, send it       |
+| `sauce intent prove`   | Send the proof of a filled (or cancelled) intent, paying the prover's fee |
+| `sauce intent claim`   | Withdraw a proven intent's reward to its claimant, on the source          |
+| `sauce intent refund`  | Return an unearned reward to its creator, once the Portal allows it       |
+| `sauce intent cancel`  | Cancel an unfilled intent after its fill deadline, for an earlier refund  |
+| `sauce intent status`  | Where an intent stands on both chains, and what can be done next          |
+| `sauce intent list`    | Every intent the store keeps                                              |
+| `sauce intent show`    | One stored intent: its route, reward, deadlines and events                |
+| `sauce intent import`  | Store the intents a transaction published, rebuilt from its logs          |
+| `sauce intent`         | At a terminal: pick a stored intent and act on it                         |
 
 ### Making one: `sauce intent publish` with no file
 
@@ -835,7 +821,7 @@ sauce intent publish --source ethereum --destination base --token USDC --amount 
 With no terminal, it names every flag still missing; the funding, which has a default, is not one
 (`--intent-fund-via publishAndFund` chooses the Portal's pull). The reward it suggests is what is delivered
 plus a margin over what a solver spends on the destination — the gas of a fill, the prover's fee
-(quoted from the destination's prover) and a Kitchen fee where the body cooks — priced in the
+(quoted from the destination's prover) and the Kitchen fee the body's cook pays — priced in the
 reward token through a Uniswap V3 pool of the destination's wrapped native token, and doubled so a
 fill is worth a solver's while; it shows how it got there, and you can change it. Deadlines are
 unix seconds or `+30m`, `+2h`, `+1d` from now. The fill deadline is the last second a solver may
@@ -843,25 +829,30 @@ fill; the reward deadline, when an unproven reward becomes refundable, must leav
 the fill to be proven.
 
 It writes the intent as a `.sauce.ts` file (`--out`, else
-`intent-<source>-to-<destination>-<time>.sauce.ts`), headed by the command that publishes it again,
-shows it, rehearses publishing it and filling it on the destination, and with a signer publishes it
-once you approve (or with `--auto-approve`), storing it.
+`intent-<source>-to-<destination>-<time>.sauce.ts`), naming you (the signer, or `--from`) as its
+refundee and headed by the command that publishes it again, shows it, rehearses publishing it and
+filling it on the destination, and with a signer publishes it once you approve (or with
+`--auto-approve`): a cook on your Pot, the reward pulled in from your wallet with `--fund`. It
+stores it.
 
 ### Rehearsing the fill: `sauce intent fill`
 
-`publish --dry-run` rehearses the source side: the reward paid into the vault and `publish`. What the intent
-does — the swap, the minimum it checks, the refund — runs on the destination, when a solver fills
-it, and that is where it fails. `sauce intent fill` rehearses that fill with no key and sends
-nothing. It takes the file and the flags `publish` does (or the intent's hash), and the
-destination's endpoint:
+`publish --dry-run` rehearses the source side: the cook that pays the vault and publishes. What the
+intent does — the swap, the minimum it checks, the refund — runs on the destination, when a solver
+fills it, and that is where it fails. `sauce intent fill` rehearses that fill with no key and sends
+nothing. It takes the file and the flags `publish` does (or the intent's hash), and reads both
+chains:
 
 ```sh
 sauce intent fill swap.sauce.ts --chain ethereum \
   --intent-deadline 2000000000 --no-prove --args-json swap.args.json
 ```
 
-For each intent the file opens it runs one `eth_simulateV1` block on the intent's destination,
-every call from a solver:
+It first reads the file's intents from a rehearsal of publishing them on the source chain: the file
+cooked on `--owner <address>`'s Pot (by default an account nobody holds the key of) with the
+rewards left unpaid, each intent rebuilt from the Portal's log; a value the program measures is
+measured on that Pot as it stands. Then for each intent it runs one `eth_simulateV1` block on the
+intent's destination, every call from a solver:
 
 1. `Kitchen.deployPot(executor, 0)`, when the route cooks on the destination's shared intent Pot
    and it is not deployed yet. Any account may send it, and the Pot is the Executor's either way.
@@ -922,12 +913,10 @@ Portal's own refusals are named: `IntentExpired()` with the deadline, `IntentAlr
 `approvals`, `nativeTransfers`, `balanceChanges`, `otherLogs` and `leftBehind` — or `stage` and
 `reason`.
 
-It runs on the destination: `--rpc-url` is the destination's endpoint, for a file whose intents
-all go to one chain. It needs `eth_simulateV1`, since the deployment,
-the approvals and the fulfill carry state from one to the next. The intent must be fixed when it is
-built, as for `publish`: an intent that uses a value the program measures on chain has no route
-until the program runs (name it by the hash `sauce run` stored instead). A Solana destination is
-not filled.
+`--rpc-url` is the destination's endpoint, for a file whose intents all go to one chain; the source
+is read through `--config` or the built-in endpoints. It needs `eth_simulateV1` on both, since the
+deployment, the approvals and the fulfill carry state from one to the next. A Solana destination
+is not filled.
 
 ### Filling it for real: `sauce intent fill --send`
 
@@ -1179,15 +1168,15 @@ USDC/SPCXc on base at block 36120411: 3 pools with liquidity, deepest first (by 
 ```sh
 sauce inspect 0x<calldata> --chain base --source split.sauce.ts
 sauce inspect 0x<tx hash> --chain arbitrum
-sauce inspect bridge.sauce.ts --intent-deadline 2000000000 --intent-refundee 0xYou
+sauce inspect bridge.sauce.ts --chain ethereum
 ```
 
 takes bytes back apart into what a SauceScript author wrote:
 
 - a `Pot.cook`: the engine (and whether it is the released one) and the program — its size, hash,
-  and every intent it opens, with the route's calls, the reward, the intent hash, the vault the
-  reward is escrowed in, and how the program funds it (`fundVia`: paid into the vault then
-  `publish`, or `publishAndFund`);
+  and each intent it publishes, with how it funds it (`fundVia`: paid into the vault then
+  `publish`, or `publishAndFund`). The program encodes an intent as it runs, so its route and
+  reward are read from the Portal's log, which `simulate` and `intent publish --dry-run` print;
 - with `--source <file>`: whether the program is that file's, and the arguments the cook appends,
   decoded against its `main`;
 - a `Kitchen.deployPot` (the Pot it makes), a `Portal.publish` or `publishAndFund` (the route, the
@@ -1196,12 +1185,12 @@ takes bytes back apart into what a SauceScript author wrote:
 - a 32-byte hash with `--chain`: the transaction, fetched — its status, sender, value and call,
   what it cost (gas, an OP-stack chain's L1 data fee, the value), and the token transfers,
   approvals and net balance changes its receipt's logs record;
-- a file: the program it compiles to, and its intents, with every value it measures at run time
-  named (`reward: <amount> of 0x…`).
+- a file, offline: the program it compiles to, and its intents, each one's destination and the
+  body it cooks there, with what the program gives the body as it runs.
 
-An intent whose values the program measures at run time is only partly readable from the bytes: its
-destination, and that the rest is filled in on chain. There is no opcode listing or disassembly:
-programs are reported by what they are and what they open.
+An intent's route and reward are encoded as the program runs, so neither the bytes nor the file
+give them: `simulate` and `intent publish --dry-run` read them from the Portal's log. There is no
+opcode listing or disassembly: programs are reported by what they are and what they open.
 
 ### `sauce verify`
 

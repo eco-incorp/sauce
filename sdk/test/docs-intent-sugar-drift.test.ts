@@ -1,6 +1,8 @@
 /**
  * The manual's "What is refused" list, pinned to what compiling an intent in the Portal form
- * refuses: the compiler's own errors, and the intent host's (`src/routes/intent-host.ts`).
+ * refuses: the compiler's own errors, and `@sauce/intents`' (`src/std/intents/intents.evm.js`).
+ * And its account of which chain each name resolves on, and of the destination Pot, held to what the
+ * compile builds: the program, and the body it compiles for each destination, carry the addresses.
  *
  * This exists because it already went wrong: the docs kept describing refusals — a method other
  * than `transfer`, an intent inside an intent — for three commits after the lowering had stopped
@@ -37,21 +39,21 @@ const BASE = requireChain("base");
 const ARBITRUM = requireChain("arbitrum");
 const CREATOR = "0x3333333333333333333333333333333333333333" as const;
 const RECIPIENT = 0x9999999999999999999999999999999999999999n;
-/** A top-level intent's creator, as a wallet publishing it: each refusal below is reached past it. */
-const PUBLISHED = { deadline: 4_000_000_000n, publisher: CREATOR };
+/** The intents' deadline and fee: each refusal below is reached past them. */
+const INTENTS = { deadline: 4_000_000_000n, executionFee: 0n };
 
-/** `program` compiled for Base: the intents it opens. */
+/** `program` compiled for Base. */
 const lower = (
   program: string,
-  intents: Record<string, unknown> = PUBLISHED,
+  intents: Record<string, unknown> = INTENTS,
   defines: Record<string, bigint> = {},
-) => compileSauceProgram("base", program, { defines: { RECIPIENT, ...defines }, intents }).intents;
+) => compileSauceProgram("base", program, { defines: { RECIPIENT, ...defines }, intents });
 
 const wrap = (
   body: string,
   reward = "{ token: USDC, amount }",
   chain = "Arbitrum",
-  steps = ".receive({ token: USDC, amount })",
+  steps = `.refundee(${CREATOR}).receive({ token: USDC, amount })`,
 ) =>
   `function main() {\n  const amount = 5;\n  ${chain}.Portal.send(${reward})${steps}.then(() => {\n    ${body}\n  });\n}`;
 
@@ -72,34 +74,22 @@ const REFUSALS: readonly {
     message: /each item `\.send\(\.\.\.\)` takes is `\{ token, amount \}`/,
   },
   {
-    documented: "item that is not an object written in place",
-    trigger: () =>
-      lower(
-        `function main() {\n  const amount = 5;\n  const items = [{ token: USDC, amount }];\n  Arbitrum.Portal.send(items).receive({ token: USDC, amount }).then(() => {\n    USDC.transfer(RECIPIENT, amount);\n  });\n}`,
-      ),
-    message:
-      /a value the host binds at this site must be a number, an address, a bool or a literal/,
-  },
-  {
     documented: "a `{ native }` item in `.receive(...)`",
     trigger: () =>
       lower(
-        wrap("USDC.transfer(RECIPIENT, amount);", undefined, "Arbitrum", ".receive({ native: 1 })"),
+        wrap(
+          "USDC.transfer(RECIPIENT, amount);",
+          undefined,
+          "Arbitrum",
+          `.refundee(${CREATOR}).receive({ native: 1 })`,
+        ),
       ),
     message: /`\.receive\(\.\.\.\)` names tokens: the native coin is paid with `\.send\(\.\.\.\)`/,
   },
   {
     documented: "an empty `.send([])`",
     trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);", "[]")),
-    message: /an array literal must have at least one element/,
-  },
-  {
-    documented: "one used as a value",
-    trigger: () =>
-      lower(
-        `function main() {\n  const opened = Arbitrum.Portal.send({ token: USDC, amount: 1 }).receive({ token: USDC, amount: 1 }).then(() => {\n    USDC.transfer(RECIPIENT, 1);\n  });\n}`,
-      ),
-    message: /produces no value, so its result can't be used as one/,
+    message: /`\.send\(\.\.\.\)` must offer something/,
   },
   {
     documented: "with steps out of order",
@@ -109,10 +99,10 @@ const REFUSALS: readonly {
           "USDC.transfer(RECIPIENT, amount);",
           undefined,
           "Arbitrum",
-          ".salt(1).receive({ token: USDC, amount })",
+          `.refundee(${CREATOR}).salt(1).receive({ token: USDC, amount })`,
         ),
       ),
-    message: /`Sent` has no method `salt`/,
+    message: /`\.salt\(\.\.\.\)` is not a step after `\.send\(\.\.\.\)`/,
   },
   {
     documented: "a modifier given twice or after the wrong step",
@@ -142,27 +132,24 @@ const REFUSALS: readonly {
   },
   {
     documented: "A missing refundee",
-    trigger: () => lower(wrap("USDC.transfer(RECIPIENT, amount);"), { deadline: 1n }),
+    trigger: () =>
+      lower(
+        wrap(
+          "USDC.transfer(RECIPIENT, amount);",
+          undefined,
+          "Arbitrum",
+          ".receive({ token: USDC, amount }).fee(1)",
+        ),
+      ),
     message: /needs `\.refundee\(<address>\)`.*may be shared/,
   },
   {
     documented: "missing fee for a program body",
     trigger: () =>
-      lower(wrap("const held = USDC.balanceOf(ctx.self());\n    USDC.transfer(RECIPIENT, held);")),
+      lower(wrap("const held = USDC.balanceOf(ctx.self());\n    USDC.transfer(RECIPIENT, held);"), {
+        deadline: INTENTS.deadline,
+      }),
     message: /its cook must pay that chain's Kitchen fee/,
-  },
-  {
-    documented: "a `.fee(...)` the program computes",
-    trigger: () =>
-      lower(
-        wrap(
-          "const held = USDC.balanceOf(ctx.self());\n    USDC.transfer(RECIPIENT, held);",
-          undefined,
-          "Arbitrum",
-          ".receive({ token: USDC, amount }).fee(ctx.timestamp())",
-        ),
-      ),
-    message: /`\.fee\(\.\.\.\)` is the destination Kitchen's fee, which the intent is built with/,
   },
   {
     documented: "A chain with no eco-routes deployment",
@@ -177,16 +164,16 @@ const REFUSALS: readonly {
     trigger: () =>
       lower(
         `function payout(amount: Uint256) {
-  Arbitrum.Portal.send({ token: USDC, amount }).receive({ token: USDC, amount }).then(() => {
+  Arbitrum.Portal.send({ token: USDC, amount }).refundee(${CREATOR}).receive({ token: USDC, amount }).then(() => {
     if (amount > 0) { payout(amount); }
   });
 }
 function main() {
   payout(5);
 }`,
-        { ...PUBLISHED, executionFee: 0n },
+        INTENTS,
       ),
-    message: /contains itself: a function it calls passes it to `Received\.then` again/,
+    message: /contains itself: a function it calls compiles the same closure again/,
   },
 ];
 
@@ -223,35 +210,31 @@ describe("the guide's refusal list is the lowering's", () => {
     }
   });
 
-  it("documents the two lowerings and what the general one costs", () => {
+  it("documents that every body is a program, and what it costs", () => {
     for (const claim of [
-      "only token `transfer`/`approve`",
       "a program compiled for the destination",
       "destinationExecutionFee",
       "one shared Pot per Executor",
       "leave nothing in it",
-    ]) {
-      expect(GUIDE).toContain(claim);
-    }
-  });
-
-  it("documents what the Executor path does with USDT and with a `false` return", () => {
-    // The lowering's reset and the gap it leaves are unit-tested in `routes-intent-sugar.test.ts`
-    // and executed through a real Executor in `routes-nest-dynamic.e2e.test.ts`.
-    for (const claim of [
-      "A token-only body is not a Sauce program",
-      "`approve(spender, 0)` and then `approve(spender, amount)`",
-      "A token that returns `false` instead of reverting is not detected",
-      'require(amount > 0, "nothing delivered");',
+      "a token transfer alone included",
     ]) {
       expect(GUIDE.replace(/\s+/g, " ")).toContain(claim);
     }
-    // The guide's statement makes the body a program: lowered with no fee, it asks for one.
+    // A body of one transfer is a program too: lowered with no fee, it asks for one.
     expect(() =>
-      lower(
-        wrap('require(amount > 0, "nothing delivered");\n    USDC.transfer(RECIPIENT, amount);'),
-      ),
+      lower(wrap("USDC.transfer(RECIPIENT, amount);"), { deadline: INTENTS.deadline }),
     ).toThrow(/its cook must pay that chain's Kitchen fee/);
+  });
+
+  it("no longer documents a body the Executor runs without a Pot", () => {
+    for (const retired of [
+      "A token-only body is not a Sauce program",
+      "only token `transfer`/`approve`",
+      "Token-only bodies run on the Executor",
+      "`publisher`",
+    ]) {
+      expect(GUIDE).not.toContain(retired);
+    }
   });
 });
 
@@ -261,30 +244,41 @@ describe("the guide's account of which chain a name resolves on is the lowering'
   const PROGRAM = `function main() {
   const amount = 5;
   Arbitrum.Portal.send({ token: USDC, amount })
+    .refundee(${CREATOR})
     .receive({ token: USDC, amount })
     .then(() => {
       USDC.transfer(RECIPIENT, amount);
     });
 }`;
   const lowered = (defines: Record<string, bigint> = {}) =>
-    lower(PROGRAM, PUBLISHED, defines)[0]!.intent;
-  const word = (address: bigint) => `0x${"00".repeat(12)}${address.toString(16).padStart(40, "0")}`;
-  const onChain = (chain: typeof BASE) => word(registryTokenAddress(chain, "USDC")!);
+    lower(PROGRAM, { ...INTENTS, executionFee: 0n }, defines);
+  /** Whether `bytes` carry `address`. */
+  const carries = (bytes: Uint8Array, address: bigint) =>
+    Buffer.from(bytes).toString("hex").includes(address.toString(16).padStart(40, "0"));
+  const usdc = (chain: typeof BASE) => registryTokenAddress(chain, "USDC")!;
   const guide = GUIDE.replace(/\s+/g, " ");
 
   const CLAIMS: readonly { readonly documented: string; readonly holds: () => boolean }[] = [
     {
       documented: "| The body, `.then(() => { ... })` | Arbitrum, the destination | Arbitrum's |",
-      holds: () => lowered().route.calls[0]!.target === onChain(ARBITRUM),
+      holds: () => {
+        const [body] = lowered().bodies;
+        return (
+          body?.destination.slug === "arbitrum" &&
+          carries(body.bytecode, usdc(ARBITRUM)) &&
+          !carries(body.bytecode, usdc(BASE))
+        );
+      },
     },
     {
+      // The route delivers Arbitrum's USDC: the program encodes it, and moves it into the Pot.
       documented: "| `.receive(...)`, what is delivered | Arbitrum, the destination | Arbitrum's |",
-      holds: () => lowered().route.tokens[0]!.token === onChain(ARBITRUM),
+      holds: () => carries(lowered().bytecode, usdc(ARBITRUM)),
     },
     {
       documented:
         "| `.send(...)` and every modifier | The chain the program runs on | That chain's |",
-      holds: () => lowered().reward.tokens[0]!.token === onChain(BASE),
+      holds: () => carries(lowered().bytecode, usdc(BASE)),
     },
     {
       // A caller's `USDC` is Base's: the reward pays in it, while the Arbitrum body keeps
@@ -292,10 +286,11 @@ describe("the guide's account of which chain a name resolves on is the lowering'
       documented: "is a name on the chain the program is compiled for",
       holds: () => {
         const chosen = 0x7777777777777777777777777777777777777777n;
-        const intent = lowered({ USDC: chosen });
+        const program = lowered({ USDC: chosen });
         return (
-          intent.reward.tokens[0]!.token === word(chosen) &&
-          intent.route.calls[0]!.target === onChain(ARBITRUM)
+          carries(program.bytecode, chosen) &&
+          !carries(program.bytecode, usdc(BASE)) &&
+          carries(program.bodies[0]!.bytecode, usdc(ARBITRUM))
         );
       },
     },
@@ -335,20 +330,20 @@ describe("the guide's account of the destination Pot is the builder's", () => {
     .encodeDeployPot(ecoRoutesExecutorOf(PORTAL), SAUCE_INTENT_POT_SALT)
     .slice(2, 10);
   const programChild = () =>
-    JSON.stringify(
+    Buffer.from(
       lower(
         `function main() {
   const amount = USDC.balanceOf(ctx.self());
   Arbitrum.Portal.send({ token: USDC, amount })
+    .refundee(${CREATOR})
     .receive({ token: USDC, amount })
     .then(() => {
       if (amount > 0) { USDC.transfer(RECIPIENT, amount); }
     });
 }`,
-        { ...PUBLISHED, executionFee: 0n },
-      )[0]!.intent.route.calls,
-      (_key, value: unknown) => (typeof value === "bigint" ? value.toString() : value),
-    ).toLowerCase();
+        { ...INTENTS, executionFee: 0n },
+      ).bytecode,
+    ).toString("hex");
 
   const CLAIMS: readonly { readonly documented: string; readonly holds: () => boolean }[] = [
     {

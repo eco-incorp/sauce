@@ -169,15 +169,18 @@ fee) and what overrides it: `deadline`, `rewardDeadline`, `openedAt` (when the f
 which its default deadlines count from), `sourcePortal`, `destinationPortal`, `prover`, `salt`,
 `fundVia`, `allowPartial`, and the eco-routes `generation`/`environment`. They apply to every
 intent the program opens that does not set its own, at every depth, but for `openedAt`: an intent a
-body opens opens when that body runs. The refundee is never among them: every intent a program opens
-names its own `.refundee(...)`, since the Pot it runs on may be shared. `publisher` is the one
-stand-in, for a top-level intent a wallet publishes itself (`sauce intent publish` sets it), and no
-level below takes it. Through the Portal form or `openRoute`, `fundVia` and the eco-routes
-selection are inherited from the enclosing intent.
+body opens opens when that body runs. `fund: false` publishes each top-level intent without paying
+its reward, for a rehearsal that reads the intents from the Portal's log: the intents are the same,
+and no level below takes it. The refundee is never among them: every intent names its own
+`.refundee(...)`, since the Pot it is published from may be shared. Through the Portal form or
+`openRoute`, `fundVia` and the eco-routes selection are inherited from the enclosing intent.
 
-`compileSauceProgram(chain, source, options).intents` lists the intents a program opens, each as
-the lowering encoded it (`LoweredIntent`): one with no `captures` is fixed when it is built, so
-`intentSourceTxs(intent, { portal })` publishes it from a wallet, as `sauce intent publish` does.
+`compileSauceProgram(chain, source, options).bodies` lists the program each intent's body compiles
+to (`CompiledBody`: its destination, its bytecode, and the values the enclosing program gives it as
+it runs, `captures`). The intents themselves are `@sauce/intents`' classes, which the compiler runs:
+each is built while the file compiles and encoded as the program runs, so it is published by a cook
+and read from the Portal's `IntentPublished` in its receipt or rehearsal
+(`intentFromPublished(log, sourceChainId)`), as `sauce intent publish` reads it.
 
 ## Nesting in TypeScript
 

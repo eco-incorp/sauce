@@ -67,8 +67,8 @@ and within the route's, modifiers come in any order, each at most once; `.then(.
 | `.then(body)`                       | The body: a closure or a source string                                         | Required                                                                      |
 
 [Intent defaults](../reference/intent-defaults.md) gives each default and why it is Eco's.
-TypeScript builds the intent where no wallet publishes it and no chain is read, so the source, the
-refundee and the fee have no default there. Overriding what the registry derives — the destination
+TypeScript builds the intent where no chain is read, so the source and the fee have no default
+there; the refundee has none anywhere. Overriding what the registry derives — the destination
 Portal, the Pot, the engine, the route's native amount, the source Portal — is the lower-level
 builder's, `routes.openRoute(chain, body, options)` ([Routes API](../api/routes.md)).
 
@@ -209,7 +209,7 @@ Same shape as the TypeScript builder, written in the program, where the chain it
 source. No Portal, prover, selector, encoding or approval appears, because none of them is a
 decision you are making. The modifiers are the same, and so are their
 [defaults](../reference/intent-defaults.md); a modifier's value may be one the program computes, such
-as `.deadline(ctx.timestamp() + 3600)`, except the fee, which is known when the intent is built. This is how intents are
+as `.deadline(ctx.timestamp() + 3600)`. This is how intents are
 nested: the [nested intents](nested-intents.md) guide opens one inside another's body. The closest
 TypeScript form is a [dynamic nest](../api/routes.md#dynamic-children), where you build a
 placeholder child, name the measurement and count each placeholder's occurrences yourself.
@@ -217,82 +217,44 @@ placeholder child, name the measurement and count each placeholder's occurrences
 ### The body is a Sauce program
 
 Anything a route body can do belongs in there: protocol calls, control flow, locals, and an intent
-of its own. There are two lowerings and the SDK picks between them, which matters to you because
-they cost different things.
+of its own. Whatever it holds, the body is a program compiled for the destination and cooked on the
+destination's shared Pot, a token transfer alone included:
 
-| The body is…                    | Becomes…                                               | Needs                   |
-| ------------------------------- | ------------------------------------------------------ | ----------------------- |
-| only token `transfer`/`approve` | plain `route.calls` the Portal's Executor runs         | nothing further         |
-| anything else                   | a program compiled for the destination, run on its Pot | a Pot and a Kitchen fee |
+| The body is…  | Becomes…                                               | Needs                   |
+| ------------- | ------------------------------------------------------ | ----------------------- |
+| any statement | a program compiled for the destination, run on its Pot | a Pot and a Kitchen fee |
 
-The first shape is free: a route already _is_ a list of calls, so a cook would only add a fee. The
-second is strictly more general.
+The route the Portal's Executor runs is two kinds of call: a transfer of each token `.receive(...)`
+names from the Executor into the Pot, then the cook. The cook pays the destination Kitchen's fee,
+which becomes the route's native amount the solver sends. The program's token writes are
+[`SafeERC20`](protocols-and-tokens.md#writes-follow-safeerc20): USDT works, and a token that
+returns `false` reverts the fulfilment.
 
-A body takes the first shape only when **every** statement in it is a
-`transfer(to, amount)` or `approve(spender, amount)` call, on a registered token symbol such as
-`USDC` or on `Token(address)` with a literal or compile-time address, and each argument is a
-literal, a compile-time define, or a variable of the enclosing program. A single statement of any
-other kind — a local, a balance read, a condition, a loop, a `transferFrom`, a protocol call, an
-intent of its own — makes the whole body a program.
-
-#### Token-only bodies run on the Executor
-
-A token-only body is not a Sauce program. The Portal's Executor runs each call itself, and checks
-only that the call did not revert and that the target has code. It does not decode what a token
-returns:
-
-- **USDT is fully supported.** A token that returns nothing from `transfer` or `approve` works.
-  Every `approve` becomes two calls, `approve(spender, 0)` and then `approve(spender, amount)`,
-  because USDT refuses to change one non-zero allowance to another and one Executor runs every
-  intent on a chain, so an earlier intent's allowance may still be standing. A transfer stays one
-  call. The reset adds about 8,000 gas per approve.
-- **A token that returns `false` instead of reverting is not detected.** The tokens the solver
-  delivers are pulled by the Portal with OpenZeppelin's `safeTransferFrom`, so one that returns
-  `false` fails delivery. But when the Executor's own `transfer` or `approve` returns `false`, the
-  intent is still fulfilled, with nothing moved.
-
-For full `SafeERC20` checks, make the body a program by adding any statement that is not a token
-write, such as `require(amount > 0, "nothing delivered");`. A program's token writes are
-[`SafeERC20`](protocols-and-tokens.md#writes-follow-safeerc20), and a `false` return reverts the
-fulfilment. A program needs the destination's Kitchen fee and a deployed Pot, as the table says.
-
-```js
-function main(recipient: Address, refundTo: Address) {
-  const amount = USDC.balanceOf(ctx.self());
-  Arbitrum.Portal.send({ token: USDC, amount })
-    .refundee(refundTo)
-    .receive({ token: USDC, amount })
-    .then(() => {
-      require(amount > 0, "nothing delivered");
-      USDC.transfer(recipient, amount);
-    });
-}
-```
-
-**`.receive(...)` names what the solver delivers** so the body has something to work with, and for a
-program the lowering adds the Executor-to-Pot transfer. It is never inferred from the body, and that
-is a judgement rather than an omission: a program's `balanceOf` reads what is _there_, which may be
+**`.receive(...)` names what the solver delivers** so the body has something to work with, and the
+route moves it from the Executor into the Pot. It is never inferred from the body, and that is a
+judgement rather than an omission: a program's `balanceOf` reads what is _there_, which may be
 what an earlier call in the same route produced rather than what a solver must bring. Inferring an
 obligation from it would silently under- or over-state what the intent asks for, and an intent that
-asks for the wrong delivery is unfulfillable or overfunded.
+asks for the wrong delivery is unfulfillable or overfunded. `.receive()` delivers nothing.
 
 ### Captured variables
 
-`amount` is a local of the enclosing program, so its value does not exist when the intent is
-encoded. It is encoded with a sentinel in its place and the program splices the real value in as it
-runs. Any scalar works — an amount, an address, a deadline, anything one 256-bit word wide. A
-computed amount or modifier, `amount * 99 / 100`, is folded when every operand is known and
-otherwise computed into a local where the intent opens.
+`amount` is a local of the enclosing program, so its value does not exist until the program runs.
+The intent is built while the file compiles, as one value with a place for each such variable, and
+the program encodes it as it runs, with the variable's value written in. Any scalar works — an
+amount, an address, a deadline, anything one 256-bit word wide. A computed amount or modifier,
+`amount * 99 / 100`, is folded when every operand is known and otherwise computed where the intent
+opens.
 
 A variable can arrive two ways, and the same variable can do both:
 
-- **Into the encoded intent** — a route call's argument, a reward amount, a delivery amount. One
-  slot per variable, however many of those it fills, so they are the same number by construction
-  rather than by several encodings agreeing.
-- **Into the child program** — it becomes one of that program's entry arguments, encoded at a
-  declared width so its offset does not move, and spliced into the cook's calldata.
+- **Into the encoded intent** — a reward amount, a delivery amount, a modifier: written where the
+  intent puts it.
+- **Into the body's program** — it becomes one of that program's arguments, appended to the
+  program in the cook's calldata, which the route records.
 
-Used both ways, a variable gets a slot in each: they are different offsets carrying the same value.
+So an intent that uses one is known once the program has run: its hash and record are read from
+the Portal's `IntentPublished` log.
 
 ### The file's functions, imports and constants
 
@@ -356,6 +318,11 @@ The rule repeats at every depth. An intent opened inside a body is funded on tha
 its reward resolves there and its own body on its own destination. The same holds for the other
 values that belong to a chain, `chainId` and protocol addresses such as `UniswapV4_UniversalRouter`:
 a body on another chain sees that chain's own.
+
+A token in `.receive(...)` is written on the enclosing chain, where the program runs, and delivered
+on the destination, so a symbol there is looked up again on the destination by its name: `USDC`
+delivers Arbitrum's USDC. A token the enclosing chain has no symbol for is written
+`Token(<address on the destination>)`, which is used as written.
 
 A literal address means that address wherever it appears, and so does a compile-time define whose
 name no chain uses, such as `RECIPIENT`. A define or a `tokens` override under a chain-scoped name —
@@ -482,11 +449,9 @@ when that body runs.
 The **refundee** is the refund address: who may reclaim the reward if nobody earns it. The
 executing Pot is the obvious default and the wrong one: it is owned by the Portal's Executor, which
 every solver can drive, so a refund landing there is a refund anyone can take, and a Pot an owner
-runs may be shared too. So every intent a program opens, at any depth, gives `.refundee(address)`,
-usually from one of `main`'s parameters (`.refundee(refundTo)`), and nothing is taken from the
-level above or the Pot. The one exception is a top-level intent a wallet publishes itself, which
-Eco's Portal app makes that wallet's: `compile.intents.publisher` names it, and
-`sauce intent publish` sets it to the wallet that publishes.
+runs may be shared too. So every intent, at any depth, gives `.refundee(address)`, usually from one
+of `main`'s parameters (`.refundee(refundTo)`), and nothing is taken from the level above, the Pot
+or the wallet that sends the cook.
 
 `.refundee(a)` sets the reward's `creator`: after the deadline a refund goes to `a`, and only `a`
 may send the Portal's `refundTo` to redirect it.
@@ -525,7 +490,7 @@ and salt, so whoever calls `deployPot(executor, 0)` creates that same Pot, owned
 
 Deriving an address is not deploying a contract, and the lowering deploys nothing. **The Pot must
 exist before the child intent is fulfilled** — the solver deploys it — or the fulfilment reverts
-when the Executor calls an address without code. A token-only body cooks nothing, so it needs no Pot.
+when the Executor calls an address without code.
 
 A Pot you name with `pot` must equally exist already and be owned by that Executor.
 
@@ -544,13 +509,14 @@ that does not set it with a modifier:
 | ---------------------------- | -------------------------------------------------------------------- |
 | `deadline`, `rewardDeadline` | The route and reward deadlines                                       |
 | `openedAt`                   | When the first level opens, which its default deadlines count from   |
-| `publisher`, `prover`        | A top-level intent's refundee when a wallet publishes it; the prover |
+| `prover`                     | The reward's prover                                                  |
 | `sourcePortal`               | Where the intent is published                                        |
 | `destinationPortal`          | The Portal recorded in the child's route                             |
 | `pot`, `engine`              | Where a program body cooks, and on what; a named Pot is not deployed |
 | `executionFee`               | The cook's value: one fee, or a function of the destination          |
 | `fundVia`                    | How the reward is funded — see below                                 |
 | `salt`, `allowPartial`       | The route salt, and partial funding (`publishAndFund` only)          |
+| `fund`                       | `false` publishes each top-level intent without paying its reward    |
 | `generation`, `environment`  | Which eco-routes deployment to address                               |
 
 ### How the reward is funded
@@ -576,13 +542,12 @@ rather than the vault's balance. `allowPartial` applies only here.
 Each of these is a compile error naming the construct, never a silently different intent:
 
 - An identifier that is neither a compile-time value nor a variable of the enclosing program.
-- A `<Chain>.Portal` that does not open an intent: one used as a value, with steps out of order, a
-  modifier given twice or after the wrong step, no `.receive(...)`, or no `.then(() => { ... })`.
-- A `.send(...)` or `.receive(...)` item that is not an object written in place, a token entry
-  missing `token` or `amount`, a `{ native }` item in `.receive(...)`, or an empty `.send([])`.
-- A missing refundee: an intent a program opens names its own, and only `publisher` stands in for a
-  top-level one. A missing fee for a program body that nothing supplies; a `.fee(...)` the program
-  computes.
+- A `<Chain>.Portal` that does not open an intent: with steps out of order, a modifier given twice
+  or after the wrong step, no `.receive(...)`, or no `.then(() => { ... })`.
+- In `.send(...)` or `.receive(...)`, a token entry missing `token` or `amount`; a `{ native }`
+  item in `.receive(...)`; an empty `.send([])`.
+- A missing refundee: every intent names its own. A missing fee for a program body that nothing
+  supplies.
 - A chain with no eco-routes deployment, or a pair with no prover deployed on both sides.
 - A program body that calls the function opening it.
 
@@ -624,7 +589,9 @@ Each request is `{ to, data, value }`. Send them from the intended funder on `bu
 
 **Pass the vault you read.** `vault` is checked against `predictVault()`, the SDK's own derivation, and a mismatch throws `IntentVaultMismatchError` before anything is built: a transfer is final, so an address two sources disagree on is not paid. Without `vault`, the derivation alone is used. It is held to the `intentVaultAddress` of every eco-routes Portal the SDK records.
 
-**Send the transfers first, and publish once they have landed.** The solver then sees `IntentPublished` with the vault already funded. If `publish` fails, the reward stays in the vault: publish again later, or refund it after the reward deadline. A token whose `transfer` returns `false` instead of reverting leaves the vault short, so check `fundedCall()` before sending `publish`. [`sauce intent publish`](cli.md#intents-sauce-run-or-sauce-intent) does all of this for you.
+**Send the transfers first, and publish once they have landed.** The solver then sees `IntentPublished` with the vault already funded. If `publish` fails, the reward stays in the vault: publish again later, or refund it after the reward deadline. A token whose `transfer` returns `false` instead of reverting leaves the vault short, so check `fundedCall()` before sending `publish`. An intent file is published another way:
+[`sauce intent publish`](cli.md#intents-sauce-run-or-sauce-intent) cooks it on your Pot, which pays
+each reward into its vault and publishes it in one transaction.
 
 `sourceTxs({ fundVia: "publishAndFund" })` returns `[...approvals(), publishAndFundCalldata(allowPartial)]` instead. ERC-20 approvals authorize the **source Portal**, which pulls tokens into the vault, records the intent `Funded` and emits `IntentFunded`. Native rewards are included as transaction `value`. Wait for successful approvals before funding. `allowPartial` defaults to `false`; use partial funding only when the application deliberately supports it. Choose this mode when something you rely on reads the `IntentFunded` event or the `Funded` status rather than the vault's balance.
 
@@ -658,8 +625,8 @@ Rehearse them before publishing. A route that cooks needs the shared Pot deploye
 rehearsal on a chain where nobody has deployed it yet puts `Kitchen.deployPot(executor, 0)` ahead
 of the fill, in the same simulated block. From the command line,
 [`sauce intent fill`](cli.md#rehearsing-the-fill-sauce-intent-fill) does all of it with no key: it
-builds the file's intents as `sauce intent publish` does, gives a solver the route's tokens by
-state override, runs the deployment, the approvals and the fill in one `eth_simulateV1` block on
+reads the file's intents from a rehearsal of publishing them on the source chain, gives a solver
+the route's tokens by state override, runs the deployment, the approvals and the fill in one `eth_simulateV1` block on
 the destination, and prints what moved, what the shared Pot and the Executor were left holding, and
 the decoded reason when it reverts. With `--send` and a signer it then sends them, the signer being
 the solver ([`fill --send`](cli.md#filling-it-for-real-sauce-intent-fill---send)), on a supported

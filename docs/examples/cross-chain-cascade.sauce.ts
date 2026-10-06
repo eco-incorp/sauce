@@ -1,7 +1,7 @@
 // Three hops, written as three intents opening one another: Base, then Ethereum, then Base again.
-// All of it is SauceScript, opened on Ethereum and published from a wallet:
+// All of it is SauceScript, opened on Ethereum and published by a cook on your Pot:
 //   sauce intent publish cross-chain-cascade.sauce.ts --chain ethereum --keystore <keystore> \
-//     --args <recipient> <delivered> <reward> <refundTo>
+//     --fund USDC:<amount> --args <recipient> <delivered> <reward> <refundTo>
 //
 //   recipient: Address  who is paid on Base, at the end
 //   delivered: Uint256  the USDC a solver delivers to Base for the first hop, in base units
@@ -14,10 +14,10 @@
 // delivered, never the Pot's whole balance. Each level is opened and published by the level above
 // it, at that level's own execution time.
 //
-// The first two bodies are more than token writes, so each compiles to a program and runs on its
-// chain's Pot, paying that chain's Kitchen fee, read for it; the `.receive(...)` of each names what
-// a solver must deliver to it. Each level's deadlines count from when it opens, and each names its
-// refundee, `refundTo`: one a program opens has no default.
+// Each body compiles to a program and runs on its chain's Pot, paying that chain's Kitchen fee,
+// read for it; the `.receive(...)` of each names what a solver must deliver to it. Each level's
+// deadlines count from when it opens, and each names its refundee, `refundTo`: no intent has a
+// default one.
 //
 // Every `USDC` is the USDC of the chain where that part runs. Each body's is its destination's. Each
 // reward is escrowed by the program offering it: the first hop's in Ethereum's USDC, the second's in

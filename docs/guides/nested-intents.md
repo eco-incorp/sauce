@@ -59,15 +59,15 @@ breaks it ([callbacks are compiled source](intents.md#callbacks-are-compiled-sou
 `built.sourceTxs()` is the wallet's funding and publication on Ethereum.
 
 The same intent can be a file, all of it SauceScript, and the CLI opens it on the chain that pays
-the outer reward. Its inputs are `main`'s parameters, and `sauce intent publish --args` fixes them
-into the intents it publishes. The delivery is `.receive(...)`, and the lowering adds the transfer
+the outer reward. Its inputs are `main`'s parameters, which `sauce intent publish --args` passes to
+the cook that publishes it. The delivery is `.receive(...)`, and the lowering adds the transfer
 into the Pot itself:
 
 ```js
 // An intent from Ethereum to Base whose body opens an intent of its own, from Base back to
-// Ethereum. All of it is SauceScript, opened on Ethereum and published from a wallet:
+// Ethereum. All of it is SauceScript, opened on Ethereum and published by a cook on your Pot:
 //   sauce intent publish nested-intent.sauce.ts --chain ethereum --keystore <keystore> \
-//     --args <recipient> <delivered> <reward> <refundTo>
+//     --fund USDC:<amount> --args <recipient> <delivered> <reward> <refundTo>
 //
 //   recipient: Address  who is paid on Ethereum, at the end
 //   delivered: Uint256  the USDC a solver delivers to Base, in base units (6 decimals)
@@ -102,13 +102,13 @@ sauce intent publish nested-intent.sauce.ts --chain ethereum --keystore <keystor
   --args <recipient> 1000000 1010000 <refundTo>
 ```
 
-The command reads the fee from Base's Kitchen, since the outer body is a program and its cook pays
-it, and counts the first level's deadlines from when it builds the intent, with a random salt.
-Built with the same values, the two are the same intent, byte for byte:
-[nested-intent.ts](../examples/nested-intent.ts) builds both and checks it. From TypeScript,
-`routes.compileSauceProgram("ethereum", source, { args, intents }).intents` holds the intent the
-file opens, `main`'s arguments fixed into it as the command fixes them, and
-`routes.intentSourceTxs(intent, { portal })` publishes it from a wallet.
+The command reads each fee from its destination's Kitchen, Base's and Ethereum's, since every body
+is a program whose cook pays it, and counts the first level's deadlines from when it builds the
+intent, with a random salt. [nested-intent.ts](../examples/nested-intent.ts) builds the closure
+form and compiles the file. From TypeScript, `routes.compileSauceProgram("ethereum", source, {
+intents })` compiles the file, its `.bodies` holding the program it compiles for each destination;
+the intents themselves are encoded as the program runs, and read from the Portal's
+`IntentPublished` once a cook publishes them.
 
 Nothing names a Portal, a prover, a Pot or an encoding: each level's are looked up for its own
 chains. What you supply is what only you know: the amounts, each level's refundee, and, where its
@@ -133,7 +133,7 @@ taken from the other chain.
 
 ## How the inner intent is funded
 
-The outer body is more than token writes, so it is a program, run on Base's shared Pot. Its route
+The outer body is a program, as every body is, run on Base's shared Pot. Its route
 first moves the delivered USDC from the Portal's Executor into the Pot (the lowering adds that
 transfer, from `.receive(...)`), then cooks the program, with Base's Kitchen fee as the call's
 value; the route's native amount is that fee, which the solver sends.
@@ -161,8 +161,8 @@ any other.
 Any value the outer body computes can be an amount of the inner intent: a swap's output, a
 balance's change across one step, or arithmetic on either. A body moves only what it can account
 for that way, or what its own intent delivered, never the balance of the Pot it runs on, which every
-intent to that chain shares. The inner intent is encoded with a placeholder for each such
-value, and the program splices the value in before it publishes. Here the inner reward is what a
+intent to that chain shares. The program encodes the inner intent as it runs, each such value
+written in, before it publishes. Here the inner reward is what a
 swap on Base bought:
 
 ```js
@@ -170,10 +170,10 @@ import { uniswapV3 } from "@sauce/router";
 
 // The nested intent with a swap in the middle: buy WETH on Base with the USDC delivered there, and
 // send the WETH bought on to Ethereum. `bought` is the swap's output, known only when the outer body
-// runs, and it is the inner intent's reward as it is. Opened on Ethereum and published from a
-// wallet:
+// runs, and it is the inner intent's reward as it is. Opened on Ethereum and published by a cook
+// on your Pot:
 //   sauce intent publish nested-swap.sauce.ts --chain ethereum --keystore <keystore> \
-//     --args <recipient> <delivered> <reward> <minOut> <refundTo>
+//     --fund USDC:<amount> --args <recipient> <delivered> <reward> <minOut> <refundTo>
 //
 //   recipient: Address  who is paid the WETH on Ethereum, at the end
 //   delivered: Uint256  the USDC a solver delivers to Base, in base units (6 decimals)
@@ -232,7 +232,7 @@ out takes its default for that level ([Intent defaults](../reference/intent-defa
 - **Each program body pays its own chain's Kitchen fee.** The `sauce` command reads the Kitchen of
   every chain a level's program runs on; `.fee(wei)` on a level gives that level's, and
   `compile.intents.executionFee` may be a function from the destination chain to its fee. In the
-  two-level file only the outer body is a program, so only Base's fee is paid.
+  two-level file both bodies are programs, so Base's fee and Ethereum's are each paid.
 - **The Portal and the prover are per level.** Each is looked up for that level's own chains: the
   inner intent above is published on Base's Portal, its route names Ethereum's, and its reward names
   the prover for Base to Ethereum. An override in `compile.intents` applies to every level alike.
@@ -240,21 +240,21 @@ out takes its default for that level ([Intent defaults](../reference/intent-defa
 A command-line flag (`--intent-deadline`, `--intent-reward-deadline`, `--intent-salt`,
 `--intent-fund-via`, `--intent-execution-fee`) or a field of `compile.intents` sets its value for
 every level that does not set its own. A deadline given that way is one moment for all of them, so
-a later level has whatever time the earlier ones leave. `--intent-refundee` is not one of them: it
-names the refundee only of a top-level intent a wallet publishes.
+a later level has whatever time the earlier ones leave. The refundee has no flag: every level names
+its own.
 
 ## Three levels
 
 The braces nest as deep as you write them. This file opens an intent to Base whose body opens the
 next level on Ethereum, whose body opens the last, back on Base, each paying the next what it was
-delivered. It is published like the file above, from a wallet on Ethereum, `main`'s arguments
-fixed into it ([cross-chain-cascade.ts](../examples/cross-chain-cascade.ts) compiles it):
+delivered. It is published like the file above, by a cook on your Pot on Ethereum
+([cross-chain-cascade.ts](../examples/cross-chain-cascade.ts) compiles it):
 
 ```js
 // Three hops, written as three intents opening one another: Base, then Ethereum, then Base again.
-// All of it is SauceScript, opened on Ethereum and published from a wallet:
+// All of it is SauceScript, opened on Ethereum and published by a cook on your Pot:
 //   sauce intent publish cross-chain-cascade.sauce.ts --chain ethereum --keystore <keystore> \
-//     --args <recipient> <delivered> <reward> <refundTo>
+//     --fund USDC:<amount> --args <recipient> <delivered> <reward> <refundTo>
 //
 //   recipient: Address  who is paid on Base, at the end
 //   delivered: Uint256  the USDC a solver delivers to Base for the first hop, in base units
@@ -267,10 +267,10 @@ fixed into it ([cross-chain-cascade.ts](../examples/cross-chain-cascade.ts) comp
 // delivered, never the Pot's whole balance. Each level is opened and published by the level above
 // it, at that level's own execution time.
 //
-// The first two bodies are more than token writes, so each compiles to a program and runs on its
-// chain's Pot, paying that chain's Kitchen fee, read for it; the `.receive(...)` of each names what
-// a solver must deliver to it. Each level's deadlines count from when it opens, and each names its
-// refundee, `refundTo`: one a program opens has no default.
+// Each body compiles to a program and runs on its chain's Pot, paying that chain's Kitchen fee,
+// read for it; the `.receive(...)` of each names what a solver must deliver to it. Each level's
+// deadlines count from when it opens, and each names its refundee, `refundTo`: no intent has a
+// default one.
 //
 // Every `USDC` is the USDC of the chain where that part runs. Each body's is its destination's. Each
 // reward is escrowed by the program offering it: the first hop's in Ethereum's USDC, the second's in
@@ -302,7 +302,7 @@ asks it for a tenth of a percent less, so `second` is what arrives on Ethereum a
 arrives back on Base. Each level is opened and published by the level above it, at that level's own
 execution time.
 
-The first two bodies open an intent, so each is a program, cooked on its chain's Pot. The
+Each body is a program, cooked on its chain's Pot, and the first two open an intent. The
 `.receive(...)` of each names what the solver of that level delivers, and that level's route moves
 it into the Pot first. Each level is funded on
 the chain whose program offers it: the second level's reward in Base's USDC, the third's in
@@ -313,8 +313,8 @@ each; `.fee(wei)` on a level gives that level's instead.
 
 Nesting is recursive rather than special-cased: the middle body is compiled by re-entering the same
 pipeline, so the same lowering runs inside it at any depth. [Create an intent from inside a
-program](intents.md#create-an-intent-from-inside-a-program) covers what may be captured, which bodies
-are programs and which are plain token calls, and the functions and imports a body may use. The
+program](intents.md#create-an-intent-from-inside-a-program) covers what may be captured, how a body
+is compiled, and the functions and imports a body may use. The
 hashes follow one level at a time: each level's is in the `IntentPublished` event of the fill above
 it.
 

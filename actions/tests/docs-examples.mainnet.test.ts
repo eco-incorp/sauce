@@ -30,7 +30,7 @@ import {
 } from "viem";
 
 import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
-import { canonicalChains, routes } from "../../sdk/dist/index.js";
+import { canonicalChains, destinationPot, routes } from "../../sdk/dist/index.js";
 import { POT_SALT } from "../../sdk/test/evm/gated-engine.js";
 import { legs, program, routeProgram, type Leg } from "../../docs/examples/router-route.js";
 import { minOut as swapFloor, payload as swapPayload } from "../../docs/examples/router-swap.js";
@@ -458,6 +458,8 @@ describe("venue-where-deployed and cross-chain-intent on Base state", SUITE, () 
   const CROSS_CHAIN = resolve(REPO_ROOT, "docs/examples/cross-chain-intent.sauce.ts");
   const RECIPIENT = "0x000000000000000000000000000000000000c0DE";
   const HELD = 12_345_678n;
+  /** A fixture: Ethereum's Kitchen fee, which the body's cook pays. */
+  const ETHEREUM_FEE = 1_234n;
 
   let env: Anvil;
   let snapshot: Hex;
@@ -495,7 +497,10 @@ describe("venue-where-deployed and cross-chain-intent on Base state", SUITE, () 
         if (word === "<minAmount>") return [`${minAmount}`];
         if (word === "<refundTo>") return [env.account.address];
         if (word === "--args") {
-          return ["--rpc-url", env.rpc, "--salt-hex", POT_SALT, "--json", "--args"];
+          // Ethereum's Kitchen fee, which the line leaves the command to read on Ethereum: the
+          // replay is Base alone.
+          const fee = ["--intent-execution-fee", String(ETHEREUM_FEE)];
+          return ["--rpc-url", env.rpc, "--salt-hex", POT_SALT, ...fee, "--json", "--args"];
         }
         return [word];
       }),
@@ -524,16 +529,25 @@ describe("venue-where-deployed and cross-chain-intent on Base state", SUITE, () 
     const vault = routes.predictIntentVault(intent, { portal });
     assert.equal(await balanceOf(env, USDC, vault), HELD);
     assert.equal(await balanceOf(env, USDC, env.pot), 0n);
-    // The body: Ethereum's USDC, transferred to the `recipient` given on the command line.
+    // Delivered: Ethereum's USDC, moved into Ethereum's shared Pot, whose cook runs the body with
+    // the `recipient` given on the command line, paying Ethereum's Kitchen fee.
+    const pot = getAddress(destinationPot("ethereum"));
     assert.deepEqual(
-      intent.route.calls.map((c) => [denormalize(c.target), c.data]),
+      intent.route.tokens.map((t) => [denormalize(t.token), t.amount]),
+      [[getAddress(ETHEREUM_USDC), HELD]],
+    );
+    assert.equal(intent.route.nativeAmount, ETHEREUM_FEE);
+    const [moved, cooked] = intent.route.calls;
+    assert.deepEqual(
+      [denormalize(moved!.target), moved!.data, moved!.value],
       [
-        [
-          getAddress(ETHEREUM_USDC),
-          encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [RECIPIENT, HELD] }),
-        ],
+        getAddress(ETHEREUM_USDC),
+        encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [pot, HELD] }),
+        0n,
       ],
     );
+    assert.deepEqual([denormalize(cooked!.target), cooked!.value], [pot, ETHEREUM_FEE]);
+    assert.ok(cooked!.data.toLowerCase().includes(RECIPIENT.slice(2).toLowerCase()));
   });
 
   it("below `minAmount` the whole transaction reverts and nothing is published", async () => {

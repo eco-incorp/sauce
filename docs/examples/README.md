@@ -14,9 +14,9 @@ application calls them.
 | [cross-chain-intent.ts](cross-chain-intent.ts)                 | Compiling that program for Base with its intents' deadline and refundee, and building the cook that runs it with `main`'s arguments            |
 | [nested-intent.sauce.ts](nested-intent.sauce.ts)               | An intent from Ethereum to Base whose body opens the next intent, back to Ethereum, from what it measured — written in SauceScript             |
 | [nested-swap.sauce.ts](nested-swap.sauce.ts)                   | The same with a swap on Base, whose output is the inner intent's reward — written in SauceScript                                               |
-| [nested-intent.ts](nested-intent.ts)                           | Compiling both for Ethereum and building the wallet transactions that publish them                                                             |
+| [nested-intent.ts](nested-intent.ts)                           | The intent built in TypeScript, and both files compiled for Ethereum                                                                           |
 | [cross-chain-cascade.sauce.ts](cross-chain-cascade.sauce.ts)   | Three levels, Base, Ethereum and Base again, each amount measured on arrival — written in SauceScript                                          |
-| [cross-chain-cascade.ts](cross-chain-cascade.ts)               | Compiling that cascade for Ethereum, where a wallet publishes its first hop                                                                    |
+| [cross-chain-cascade.ts](cross-chain-cascade.ts)               | Compiling that cascade for Ethereum, where a cook on your Pot publishes its first hop                                                          |
 | [protocol-approval.ts](protocol-approval.ts)                   | A typed `Base.Portal…then(() => ...)` body calling `USDC.approve(Uniswap.UniversalRouter, ...)`                                                |
 | [venue-where-deployed.sauce.ts](venue-where-deployed.sauce.ts) | One program for every chain, using PancakeSwap V3 only where the chain has it — written in SauceScript                                         |
 | [registry-names.ts](registry-names.ts)                         | That program compiled for two chains, and the same registry names from TypeScript: `Base.USDC`, a typed call, `.read(client)`                  |

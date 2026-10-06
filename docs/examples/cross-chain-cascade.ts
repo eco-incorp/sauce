@@ -1,12 +1,14 @@
 // Compiles cross-chain-cascade.sauce.ts — three hops, each paying the next what it was delivered —
-// for Ethereum, where a wallet publishes its first hop: Base, then Ethereum, then Base again. Its
-// `main` arguments are fixed into the intents, as `sauce intent publish --args` fixes them.
+// for Ethereum, where `sauce intent publish` cooks it on your Pot to publish its first hop: Base,
+// then Ethereum, then Base again. `main`'s arguments are the cook's, read as it runs.
 //
-// Offline: the recipient, the amounts, the refundee and the fee are fixtures; nothing is sent. The
-// Portals, the provers, the destination Pots and the routes' native amounts come from the SDK; the
-// execution fee does not, because it is mutable on-chain and lives on each destination — read it
-// with `destinationExecutionFee()`, sent as an `eth_call` to that chain. Each body that is a program
-// pays its own chain's: here Base's (the first hop) and Ethereum's (the second).
+// Offline: the fee is a fixture, and nothing is sent, so no intent is published: each one is
+// encoded as the program runs and read from the Portal's `IntentPublished` log
+// (`routes.intentFromPublished`), and this prints the program and the body it compiled for each
+// hop. The Portals, the provers, the destination Pots and the routes' native amounts come from the
+// SDK; the execution fee does not, because it is mutable on-chain and lives on each destination —
+// read it with `destinationExecutionFee()`, sent as an `eth_call` to that chain. Each body pays its
+// own chain's.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,14 +20,10 @@ const source = readFileSync(
   "utf8",
 );
 
-const recipient = "0x6666666666666666666666666666666666666666";
-// Fixtures: each Kitchen's fee, for the two bodies that are programs.
+// Fixtures: each Kitchen's fee, for each hop's body.
 const fees: Record<string, bigint> = { base: 1_000n, ethereum: 2_000n };
 
-const refundTo = "0x4444444444444444444444444444444444444444"; // each hop's refundee
-
 const compiled = routes.compileSauceProgram("ethereum", source, {
-  args: [recipient, 1_000_000n, 1_010_000n, refundTo],
   intents: {
     // When the first hop opens, which its default deadlines count from: `sauce` uses the moment it
     // builds it. Each later hop opens when the body above it runs.
@@ -33,11 +31,15 @@ const compiled = routes.compileSauceProgram("ethereum", source, {
     executionFee: (destination) => fees[destination.slug],
   },
 });
-const [first] = compiled.intents;
-if (first === undefined || compiled.intents.length !== 1 || first.captures.length > 0) {
-  throw new Error("Expected the cascade to open one intent to Base, fixed when it is built");
+const hops = compiled.bodies.map((body) => body.destination.slug).sort();
+if (hops.join() !== "base,base,ethereum") {
+  throw new Error(`Expected a body on Base, on Ethereum and on Base again, not ${hops}`);
 }
 
-console.log(`Cascade program: ${compiled.bytecode.length} bytes`);
+console.log(
+  `Cascade program: ${compiled.bytecode.length} bytes, main(${compiled.entryParams.map((param) => param.name).join(", ")})`,
+);
+for (const body of compiled.bodies) {
+  console.log(`  a body for ${body.destination.slug}: ${body.bytecode.length} bytes`);
+}
 console.log(`Fees are read from each chain's Kitchen, ${destinationExecutionFee().to}`);
-console.log(routes.hashIntent(first.intent).intentHash);

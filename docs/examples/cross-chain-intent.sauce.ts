@@ -8,10 +8,11 @@
 // `Ethereum.Portal.send(reward).receive(delivery).then(() => { ... })` is the whole of it: the
 // reward this program escrows, what a solver delivers on Ethereum, and what runs there. `amount` is
 // an ordinary variable of this program and `recipient` one of its parameters, and using them in the
-// intent is enough: the SDK splices their run-time values into the encoded intent, and fills in the
-// Portal, the prover, the vault and the encoding. The intent names its refundee, `refundTo`, where
-// its reward goes back if no solver fills it: a program's intent has no default refundee. The
-// deadlines and the salt take their defaults.
+// intent is enough: the program encodes the intent as it runs, with their values, and the SDK fills
+// in the Portal, the prover, the vault and the encoding. The intent names its refundee, `refundTo`,
+// where its reward goes back if no solver fills it: no intent has a default refundee. The body runs
+// on Ethereum as a program, on the Pot every intent there shares, and its cook pays Ethereum's
+// Kitchen fee, which the command reads there. The deadlines and the salt take their defaults.
 //
 // `USDC` is a registered symbol. In `.receive(...)` and the body it means Ethereum's USDC, because
 // that is the chain they run on. In `.send(...)` it means the USDC of the chain this program runs

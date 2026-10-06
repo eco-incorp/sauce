@@ -1,7 +1,7 @@
 // An intent from Ethereum to Base whose body opens an intent of its own, from Base back to
-// Ethereum. All of it is SauceScript, opened on Ethereum and published from a wallet:
+// Ethereum. All of it is SauceScript, opened on Ethereum and published by a cook on your Pot:
 //   sauce intent publish nested-intent.sauce.ts --chain ethereum --keystore <keystore> \
-//     --args <recipient> <delivered> <reward> <refundTo>
+//     --fund USDC:<amount> --args <recipient> <delivered> <reward> <refundTo>
 //
 //   recipient: Address  who is paid on Ethereum, at the end
 //   delivered: Uint256  the USDC a solver delivers to Base, in base units (6 decimals)
