@@ -540,7 +540,7 @@ spelling on one behaviour is `test/std/token/evm.e2e.test.ts`, which runs OpenZe
 `SafeERC20`, this library, `safe.ts` and the three route-body spellings (each through
 `compileSauceRoute`) over one matrix of tokens (false, empty, no code, a word of 2, 1/31/64-byte
 returns, USDT's standing allowance, honest refusals) and requires identical outcomes, with the raw
-`IERC20.at` binding beside them as the contrast and the plain-transfer recipe executed too.
+`IERC20.at` binding beside them as the contrast and a registry `USDC.transfer` executed too.
 CI also pins what a wrong digit would break silently: `test/std/token/compile.test.ts` derives the
 two token program ids the SVM arm guards on (SPL Token and Token-2022) from their base58 addresses,
 and each selector the EVM writes spell out by hand from `keccak256` of its signature, and counts them
@@ -678,12 +678,9 @@ statement a program opens that intent with, compiles it for the source chain wit
 cook runs on a Pot on the source chain, and `intents(logs)` reads each published intent from the
 Portal's `IntentPublished` (`routes/published.ts#loggedIntents`, which the CLI's
 `logged-intents.ts` uses too). There is no offline hash and no `.nest()`. The old route-then-reward
-form — `Base(body, options).reward(...)`, `Base.route`, `routes.openRoute`, the nesting exports,
-actions' `programIntent` — is removed from the public surface: a chain export is a namespace
-(`chain`, `Portal`, contracts, tokens), not a function. `intent-dsl.ts#openRoute` stays INTERNAL for
-the CCTP recipe builders (`recipes/cctp-transfer.ts`), and `.nest()` with `nest.ts` and
-`nest-dynamic.ts` survive only beneath it, reached by no shipped path; their suites
-(`routes-nest-*`, `routes-intent-dsl`) import the module directly.
+form — `Base(body, options).reward(...)`, `Base.route`, `openRoute`, `.nest()` and its transfer
+and dynamic modes, the CCTP recipe builders, actions' `programIntent` — is deleted: a chain export
+is a namespace (`chain`, `Portal`, contracts, tokens), not a function.
 `intent-syntax.ts#INTENT_STAGES` is the syntax as data for the editor's declarations
 (`gen-source-globals.mjs`: `Portal`, `Sent`, `Received`, `Opened`, `Caught`); the class is what
 compiles, so change them together; `routes-intent-portal.test.ts` holds the bytes each modifier
@@ -695,7 +692,7 @@ first, and a READ (`balanceOf`, `holder.USDC`) the library's `balanceOf`. So a w
 implementation however it is spelled, the library's SafeERC20 one, and returns nothing. `Token` is
 EVM-only: on Solana a symbol is the mint's key, a plain word for the `@sauce/token` SVM functions,
 whose writes need accounts a symbol does not carry. A body's writes are SafeERC20 too, since every
-body is a program; `routes-nest-dynamic.e2e.test.ts` runs bodies through a real Portal and Executor,
+body is a program; `routes-intent-bodies.e2e.test.ts` runs bodies through a real Portal and Executor,
 USDT among the tokens.
 
 **The host surface and compiled-source declarations are separate — and only one of them is

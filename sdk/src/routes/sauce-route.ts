@@ -68,7 +68,7 @@ export interface SauceCompileOptions {
    * Compile-time parameters, injected into every module as a module-scope `const` — a define
    * REPLACES the module's own `const` of that name and is constant-folded, so a given set of values
    * yields fixed bytecode. This is how a standalone `.sauce.ts` asset (e.g.
-   * `recipes/cctp-split.sauce.ts`) is specialized for one intent. A value is one 256-bit word, so an
+   * a recipe's program) is specialized for one use. A value is one 256-bit word, so an
    * array or a lookup table cannot be supplied this way — a program needing a variable-length list
    * generates one declaration per element instead (see `svm/recipes/index.ts`).
    */

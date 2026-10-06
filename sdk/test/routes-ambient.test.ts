@@ -3,26 +3,8 @@
  */
 import { requireChain } from "../src/chains/canonical.js";
 import { chainDefines } from "../src/routes/index.js";
-import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
+import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { getDescriptor, addressOn } from "../src/descriptors/query.js";
-
-const POT = "0x1111111111111111111111111111111111111111" as const;
-const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
-const PORTAL = "0x2222222222222222222222222222222222222222" as const;
-
-function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
-  return {
-    pot: POT,
-    engine: ENGINE,
-    deadline: 2000n,
-    portal: PORTAL,
-    source: "base",
-    creator: "0x3333333333333333333333333333333333333333",
-    prover: "0x4444444444444444444444444444444444444444",
-    rewardDeadline: 1000n,
-    ...overrides,
-  };
-}
 
 describe("chainDefines", () => {
   it("contains chainId === 8453n for base", () => {
@@ -75,70 +57,42 @@ describe("chainDefines", () => {
   });
 });
 
-describe("openRoute: ambient defines threading", () => {
-  it("Base(() => { return chainId; }, opts) compiles and its bytecode equals the explicit defines map form", () => {
-    const viaAmbient = openRoute(
-      "ethereum",
-      "function main() { return chainId; }",
-      evmOptions(),
-    ).reward(0n);
-    const viaExplicit = openRoute(
-      "ethereum",
-      "function main() { return chainId; }",
-      evmOptions({ defines: { chainId: 1n } }),
-    ).reward(0n);
-    expect(viaAmbient.compiled.bytecode).toEqual(viaExplicit.compiled.bytecode);
+describe("a program compile: the chain's names", () => {
+  it("`chainId` compiles to the chain's id, the same program as a define of it", () => {
+    const viaAmbient = compileSauceProgram("ethereum", "function main() { return chainId; }");
+    const viaExplicit = compileSauceProgram("ethereum", "function main() { return chainId; }", {
+      defines: { chainId: 1n },
+    });
+    expect(viaAmbient.bytecode).toEqual(viaExplicit.bytecode);
   });
 
-  it("caller options.defines OVERRIDE a chain-derived key of the same name", () => {
-    const built = openRoute(
-      "ethereum",
-      "function main() { return chainId; }",
-      evmOptions({ defines: { chainId: 999n } }),
-    ).reward(0n);
-    const explicit999 = openRoute(
-      "ethereum",
-      "function main() { return 999n; }",
-      evmOptions(),
-    ).reward(0n);
-    expect(built.compiled.bytecode).toEqual(explicit999.compiled.bytecode);
+  it("a caller define OVERRIDES a chain-scoped name of the same name", () => {
+    const built = compileSauceProgram("ethereum", "function main() { return chainId; }", {
+      defines: { chainId: 999n },
+    });
+    const explicit999 = compileSauceProgram("ethereum", "function main() { return 999n; }");
+    expect(built.bytecode).toEqual(explicit999.bytecode);
   });
 
   it("a user `let chainId = 7n;` inside the body shadows the ambient define (proven by a differing program)", () => {
-    const shadowed = openRoute(
+    const shadowed = compileSauceProgram(
       "ethereum",
       "function main() { let chainId = 7n; return chainId; }",
-      evmOptions(),
-    ).reward(0n);
-    const unshadowed = openRoute(
-      "ethereum",
-      "function main() { return chainId; }",
-      evmOptions(),
-    ).reward(0n);
-    expect(shadowed.compiled.bytecode).not.toEqual(unshadowed.compiled.bytecode);
+    );
+    const unshadowed = compileSauceProgram("ethereum", "function main() { return chainId; }");
+    expect(shadowed.bytecode).not.toEqual(unshadowed.bytecode);
     // the shadowed program compiles a local write+read, not the folded ambient literal --
     // distinct in shape from a program returning the ambient value directly.
-    const ambientLiteral = openRoute(
-      "ethereum",
-      "function main() { return 1n; }",
-      evmOptions(),
-    ).reward(0n);
-    expect(shadowed.compiled.bytecode).not.toEqual(ambientLiteral.compiled.bytecode);
+    const ambientLiteral = compileSauceProgram("ethereum", "function main() { return 1n; }");
+    expect(shadowed.bytecode).not.toEqual(ambientLiteral.bytecode);
   });
 
-  it("an svm destination gets chainId and the caller token map, and compiles on target 'svm'", () => {
+  it("an svm chain gets chainId and the caller token map, and compiles on target 'svm'", () => {
     const USDC = "0x5555555555555555555555555555555555555555" as const;
-    const built = openRoute("solana", "function main() { return chainId; }", {
-      execution: { code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", accounts: [] },
-      deadline: 2000n,
-      portal: PORTAL,
-      source: "base",
-      creator: "0x3333333333333333333333333333333333333333",
-      prover: "0x4444444444444444444444444444444444444444",
-      rewardDeadline: 1000n,
-      tokenDefines: { USDC },
-    }).reward(0n);
-    expect(built.intent.route.calls).toHaveLength(1);
+    const built = compileSauceProgram("solana", "function main() { return chainId; }", {
+      tokens: { USDC },
+    });
+    expect(built.bytecode.length).toBeGreaterThan(0);
 
     const defines = chainDefines(requireChain("solana"), { tokens: { USDC } });
     expect(defines.chainId).toBe(BigInt(requireChain("solana").id));

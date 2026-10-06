@@ -8,7 +8,6 @@
  */
 import { requireChain } from "../src/chains/canonical.js";
 import { getDescriptor } from "../src/descriptors/query.js";
-import { openRoute } from "../src/routes/intent-dsl.js";
 import { forgetChainModules } from "../src/routes/chain-module.js";
 import { compileSauceRoute, type SauceCompileOptions } from "../src/routes/sauce-route.js";
 
@@ -19,19 +18,9 @@ const BASE_CCTP_TOKEN_MESSENGER = 2324100832287900483395044497639621188922413423
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
 const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
-const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 
-function evmOptions() {
-  return {
-    pot: POT,
-    engine: ENGINE,
-    deadline: 2000n,
-    portal: PORTAL,
-    source: "base" as const,
-    creator: "0x3333333333333333333333333333333333333333" as const,
-    prover: "0x4444444444444444444444444444444444444444" as const,
-    rewardDeadline: 1000n,
-  };
+function execution() {
+  return { pot: POT, engine: ENGINE };
 }
 
 const bytesOf = (chain: string, source: string, options: SauceCompileOptions = {}): number[] =>
@@ -69,13 +58,13 @@ describe("a protocol name is the contract on the chain the program is compiled f
     );
   });
 
-  it("openRoute end to end: one cook() call", () => {
-    const built = openRoute(
+  it("a route end to end: one cook() call", () => {
+    const route = compileSauceRoute(
       "base",
       `Uniswap.UniversalRouter.execute("0x0a", ["0x00"], 0n);`,
-      evmOptions(),
-    ).reward(0n);
-    expect(built.intent.route.calls).toHaveLength(1);
+      execution(),
+    );
+    expect(route.calls).toHaveLength(1);
   });
 
   it("<Protocol>.<method> is the protocol's one contract", () => {
@@ -158,13 +147,13 @@ describe("a protocol name as a value is its address", () => {
     ).toEqual(bytesOf("base", `function main(): Address { return ${decimal(provider)}; }`));
   });
 
-  it("USDC.approve(Cctp.TokenMessenger, x) compiles through openRoute", () => {
-    const built = openRoute(
+  it("USDC.approve(Cctp.TokenMessenger, x) compiles as a route", () => {
+    const route = compileSauceRoute(
       "base",
       "function main() { USDC.approve(Cctp.TokenMessenger, 1000000n); }",
-      evmOptions(),
-    ).reward(0n);
-    expect(built.intent.route.calls).toHaveLength(1);
+      execution(),
+    );
+    expect(route.calls).toHaveLength(1);
   });
 });
 

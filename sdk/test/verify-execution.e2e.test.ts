@@ -80,7 +80,7 @@ const NO_RETURN_ERC20 = JSON.parse(
 ) as { abi: unknown[]; creationCode: Hex };
 
 /** A token whose `transfer` returns `false` and moves nothing — the case `SafeERC20` exists for. The
- *  same vendored fixture `routes-nest-dynamic.e2e.test.ts` runs `token/safe.ts` against. */
+ *  same vendored fixture `routes-intent-bodies.e2e.test.ts` runs `token/safe.ts` against. */
 const FALSE_RETURN_ERC20 = JSON.parse(
   readFileSync(
     join(

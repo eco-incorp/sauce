@@ -17,7 +17,7 @@
  * anvil is fulfilled on the next from the bytes that anvil's Portal logged. The guide's two-level
  * file is opened from a wallet, which `cli-lifecycle.e2e.test.ts` runs through `sauce intent`.
  *
- * WHY `routes-nest-dynamic.e2e.test.ts` MISSED THIS. It runs ONE anvil, as Base, and named every
+ * WHY `routes-intent-bodies.e2e.test.ts` MISSED THIS. It runs ONE anvil, as Base, and named every
  * token through a define or — in its README test, until this suite was written — a
  * `tokens: { USDC }` override. Both give a symbol one address on every chain, so a reward resolved
  * against the destination was the same address as one resolved against the source, and no intent it
@@ -58,20 +58,13 @@ import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js"
 import { v12EngineAddress } from "../src/deployments/index.js";
 import { v12Kitchen } from "../src/evm/engine.js";
 import { PortalABI } from "../src/protocols/eco-routes/abis.js";
-import {
-  EVM_REWARD_PARAM,
-  EVM_ROUTE_PARAM,
-  denormalizeToEvm,
-  encodeRouteEvm,
-} from "../src/routes/encode.js";
+import { EVM_REWARD_PARAM, EVM_ROUTE_PARAM, denormalizeToEvm } from "../src/routes/encode.js";
 import { chainDefines } from "../src/routes/ambient.js";
-import { openRoute } from "../src/routes/intent-dsl.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
 import { encodeEntryArguments } from "../src/routes/entry.js";
 import { buildSauceEvmCall } from "../src/routes/sauce-calls.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
-import type { Intent } from "../src/routes/types.js";
 import { gateAnchors, startGatedEngine, type GatedEngine } from "./evm/gated-engine.js";
 import { BODY_TO_ARBITRUM, CASCADE_BODY } from "./fixtures/routes/bodies.js";
 
@@ -404,15 +397,6 @@ const fulfilmentOf = (published: Published) => {
   return { route, rewardHash: keccak256(encodeAbiParameters([EVM_REWARD_PARAM], [reward])) };
 };
 
-/** An SDK route in the tuple shape `Portal.fulfill` takes. */
-const evmRoute = (intent: Intent): EvmRoute => {
-  const [route] = decodeAbiParameters(
-    [EVM_ROUTE_PARAM],
-    encodeRouteEvm(intent.route),
-  ) as unknown as [EvmRoute];
-  return route;
-};
-
 const lower = (address: string) => address.toLowerCase();
 
 const worker = Number(process.env.JEST_WORKER_ID ?? "1") % 100;
@@ -501,8 +485,6 @@ describeEvm("an intent created inside a program, across chains with different to
     salt: `0x${(saltByte++).toString(16).repeat(32)}` as Hex,
   });
 
-  /** The two ways to build the program's own intent: straight through the route compiler, and from
-   *  TypeScript with the builder the docs examples use. Each returns the Base route to fulfil. */
   /** `compileSauceRoute` on Base, with `defines` on top of the program's own two. */
   const direct = (program: string, defines: Record<string, bigint | boolean | number>) => {
     const options = intents();
@@ -540,25 +522,6 @@ describeEvm("an intent created inside a program, across chains with different to
       // chain's.
       "compileSauceRoute, handed chainDefines(base) as its defines",
       (program: string) => direct(program, chainDefines(requireChain("base"))),
-    ],
-    [
-      "Base(program, options).reward(...)",
-      (program: string) => {
-        // The enclosing intent's deadline reaches the program's intents on its own; the rest are
-        // this anvil's, as above.
-        const { deadline, ...compileIntents } = intents();
-        const built = openRoute("base", program, {
-          portal: base.portal,
-          deadline,
-          creator: CREATOR,
-          prover: PROVER,
-          source: "ethereum",
-          salt: compileIntents.salt,
-          defines: { RECIPIENT: BigInt(RECIPIENT), MIN_AMOUNT: 1n },
-          compile: { intents: compileIntents },
-        }).reward({ deadline: DEADLINE, nativeAmount: 0n });
-        return { route: evmRoute(built.intent), rewardHash: built.hash().rewardHash };
-      },
     ],
   ] as const;
 

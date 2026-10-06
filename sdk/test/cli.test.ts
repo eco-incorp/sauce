@@ -1,6 +1,6 @@
 /**
  * The `sauce` command, in process: its flags, what each command prints, and that it compiles a
- * file exactly as `openRoute` compiles a route body. Executing what it prints is `cli.e2e.test.ts`.
+ * file exactly as `compileSauceProgram` compiles it. Executing what it prints is `cli.e2e.test.ts`.
  */
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { PassThrough } from "node:stream";
@@ -61,7 +61,6 @@ import { potSalt, SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployment
 import { v12Kitchen, v12Pot } from "../src/evm/engine.js";
 import * as root from "../src/index.js";
 import * as routes from "../src/routes/index.js";
-import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import { svmTokenRows } from "../src/routes/token-registry.js";
 import { TOKEN_2022_PROGRAM_ID } from "../src/svm/token-program.js";
@@ -72,7 +71,6 @@ const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const OWNER_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
 const RECIPIENT = "0x6666666666666666666666666666666666666666";
 const CREATOR = "0x3333333333333333333333333333333333333333";
-const PROVER = "0x4444444444444444444444444444444444444444";
 
 const SDK = join(dirname(fileURLToPath(import.meta.url)), "..");
 const MANIFEST = JSON.parse(readFileSync(join(SDK, "..", "package.json"), "utf8")) as {
@@ -284,7 +282,7 @@ describe("a program file that is a command: a leading #! line", () => {
 });
 
 describe("sauce compile", () => {
-  it("compiles a file byte-for-byte as openRoute compiles the same body", async () => {
+  it("compiles a file byte-for-byte as compileSauceProgram compiles it", async () => {
     const run = await sauce(
       "compile",
       file("pay.sauce.ts", PAY),
@@ -293,11 +291,10 @@ describe("sauce compile", () => {
       ...PAY_DEFINES,
     );
     expect(run.code).toBe(0);
-    const built = openRoute("ethereum", PAY, {
-      deadline: 2_000_000_000n,
+    const built = compileSauceProgram("ethereum", PAY, {
       defines: { RECIPIENT: BigInt(RECIPIENT), AMOUNT: 1000n },
-    }).reward({ source: "base", creator: CREATOR, prover: PROVER, nativeAmount: 0n });
-    expect(run.stdout).toBe(`${bytesToHex(built.compiled.bytecode[0]!)}\n`);
+    });
+    expect(run.stdout).toBe(`${bytesToHex(built.bytecode)}\n`);
   });
 
   it("has the chain's ambient names a bare compileSauceRoute does not: chainId and @sauce/token", async () => {
@@ -1006,13 +1003,11 @@ describe("sauce compile", () => {
       ...["--intent-execution-fee", "0"],
     );
     expect(built.code).toBe(0);
-    const viaOpenRoute = openRoute("base", named, {
-      deadline: 2_000_000_000n,
-      creator: CREATOR,
+    const program = compileSauceProgram("base", named, {
       defines: { RECIPIENT: BigInt(RECIPIENT) },
-      compile: { intents: { salt, executionFee: 0n } },
-    }).reward({ source: "ethereum", creator: CREATOR, prover: PROVER, nativeAmount: 0n });
-    expect(built.stdout).toBe(`${bytesToHex(viaOpenRoute.compiled.bytecode[0]!)}\n`);
+      intents: { deadline: 2_000_000_000n, salt, executionFee: 0n },
+    });
+    expect(built.stdout).toBe(`${bytesToHex(program.bytecode)}\n`);
   });
 
   it("names what is wrong with the invocation, exiting 2", async () => {

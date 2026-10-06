@@ -171,7 +171,6 @@ export type {
   PotTarget,
 } from "./host-intent.js";
 export type { SauceBody } from "./closure.js";
-export type { BuiltIntent, RewardArg } from "./intent-dsl.js";
 export {
   DEFAULT_FILL_WINDOW,
   DEFAULT_REFUND_WINDOW,

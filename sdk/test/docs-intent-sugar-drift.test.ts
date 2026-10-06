@@ -24,8 +24,6 @@ import { v12KitchenAddress } from "../src/deployments/index.js";
 import { SAUCE_INTENT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { v12Kitchen } from "../src/evm/engine.js";
 import { ecoRoutesExecutorOf } from "../src/protocols/eco-routes/lookup.js";
-import { denormalizeToEvm } from "../src/routes/encode.js";
-import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
@@ -272,7 +270,8 @@ describe("the guide's account of which chain a name resolves on is the lowering'
     },
     {
       // The route delivers Arbitrum's USDC: the program encodes it, and moves it into the Pot.
-      documented: "| `.receive(...)`, what is delivered | Arbitrum, the destination | Arbitrum's |",
+      documented:
+        "| `.receive(...)`, what is delivered | The chain the program runs on | Arbitrum's: a token is looked up again |",
       holds: () => carries(lowered().bytecode, usdc(ARBITRUM)),
     },
     {
@@ -312,24 +311,14 @@ describe("the guide's account of which chain a name resolves on is the lowering'
 describe("the guide's account of the destination Pot is the builder's", () => {
   // Each claim is a sentence the guide must contain and a check on what the SDK builds. What the
   // chain does with it -- a missing Pot reverts, a present one cooks -- is executed in
-  // `routes-nest-dynamic.e2e.test.ts`.
+  // `routes-intent-bodies.e2e.test.ts`.
   const PORTAL = "0x2222222222222222222222222222222222222222" as const;
-  const options = (extra: Partial<IntentOptions> = {}): IntentOptions => ({
-    deadline: 2000n,
-    portal: PORTAL,
-    source: "base",
-    creator: CREATOR,
-    prover: CREATOR,
-    ...extra,
-  });
-  const calls = (extra: Partial<IntentOptions> = {}) =>
-    openRoute("ethereum", "function main() { return 1n; }", options(extra)).reward(0n).intent.route
-      .calls;
+  const NAMED = "0x7777777777777777777777777777777777777777" as const;
   const sharedPot = v12PredictPot(ecoRoutesExecutorOf(PORTAL));
   const deploySelector = v12Kitchen
     .encodeDeployPot(ecoRoutesExecutorOf(PORTAL), SAUCE_INTENT_POT_SALT)
     .slice(2, 10);
-  const programChild = () =>
+  const programChild = (intents: Record<string, unknown> = {}) =>
     Buffer.from(
       lower(
         `function main() {
@@ -341,21 +330,17 @@ describe("the guide's account of the destination Pot is the builder's", () => {
       if (amount > 0) { USDC.transfer(RECIPIENT, amount); }
     });
 }`,
-        { ...INTENTS, executionFee: 0n },
+        { ...INTENTS, executionFee: 0n, destinationPortal: PORTAL, ...intents },
       ).bytecode,
     ).toString("hex");
+  const carries = (hex: string, address: string) => hex.includes(address.slice(2).toLowerCase());
 
   const CLAIMS: readonly { readonly documented: string; readonly holds: () => boolean }[] = [
     {
-      // The TypeScript builder: the cook, and nothing that deploys.
+      // The route the program writes: the delivery and the cook, and nothing that deploys.
       documented: "**The destination Pot must exist before the intent is fulfilled.**",
       holds: () =>
-        calls().length === 1 &&
-        calls().every(
-          (c) =>
-            denormalizeToEvm(c.target) !== v12KitchenAddress().toLowerCase() &&
-            !c.data.startsWith(`0x${deploySelector}`),
-        ),
+        !programChild().includes(deploySelector) && !carries(programChild(), v12KitchenAddress()),
     },
     {
       // The native syntax: the child's encoded route carries no deployment either.
@@ -365,7 +350,7 @@ describe("the guide's account of the destination Pot is the builder's", () => {
     {
       // The owner is the RECORDED Portal's Executor.
       documented: "**`executor()` of the Portal the route records**",
-      holds: () => getAddress(denormalizeToEvm(calls()[0]!.target)) === sharedPot,
+      holds: () => carries(programChild(), getAddress(sharedPot)),
     },
     {
       // The solver's own Pot: one per Portal, salt zero.
@@ -379,8 +364,8 @@ describe("the guide's account of the destination Pot is the builder's", () => {
     {
       documented: "instead must also exist, and be owned by that Executor",
       holds: () =>
-        calls({ pot: PORTAL }).length === 1 &&
-        denormalizeToEvm(calls({ pot: PORTAL })[0]!.target) === PORTAL,
+        carries(programChild({ pot: NAMED }), NAMED) &&
+        !carries(programChild({ pot: NAMED }), getAddress(sharedPot)),
     },
   ];
 

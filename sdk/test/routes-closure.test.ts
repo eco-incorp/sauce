@@ -1,31 +1,14 @@
 /**
  * Closure route bodies: the closure's own text is the compiler's `"closure"` entry, as it stands —
- * nothing extracts, wraps or cuts it — and through `openRoute` end to end.
+ * nothing extracts, wraps or cuts it — and as a route end to end.
  */
 import { closureText, isSauceClosure } from "../src/routes/closure.js";
-import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
-import type { IntentOptions } from "../src/routes/intent-dsl.js";
 import type { SauceIntentChain } from "../src/routes/source-globals.generated.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
 const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
-const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 const execution = { pot: POT, engine: ENGINE };
-
-function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
-  return {
-    pot: POT,
-    engine: ENGINE,
-    deadline: 2000n,
-    portal: PORTAL,
-    source: "base",
-    creator: "0x3333333333333333333333333333333333333333",
-    prover: "0x4444444444444444444444444444444444444444",
-    rewardDeadline: 1000n,
-    ...overrides,
-  };
-}
 
 const bytecodeOf = (body: string | (() => unknown), options = {}): number[] =>
   Array.from(compileSauceRoute("base", body, execution, options).compiled.bytecode[0]!);
@@ -74,52 +57,42 @@ describe("isSauceClosure", () => {
   });
 });
 
-describe("openRoute: closure bodies end to end", () => {
-  it("a genuine capture throws the WRAPPED capture error naming the free identifier", () => {
+describe("closure bodies as routes, end to end", () => {
+  it("a genuine capture is refused, naming the free identifier", () => {
     const outer = 5n;
     expect(() =>
-      openRoute(
+      compileSauceRoute(
         "ethereum",
         () => {
           return outer + 1n;
         },
-        evmOptions(),
+        execution,
       ),
     ).toThrow(/outer/);
-    expect(() =>
-      openRoute(
-        "ethereum",
-        () => {
-          return outer + 1n;
-        },
-        evmOptions(),
-      ),
-    ).toThrow(/defines/);
   });
 
-  it("Base(() => { return 1n; }, opts).reward(...) equals Base('function main(){ return 1n; }', opts).reward(...) at the Intent level", () => {
-    const viaClosure = openRoute(
+  it("a closure compiles to the route its text written as a program compiles to", () => {
+    const viaClosure = compileSauceRoute(
       "ethereum",
       () => {
         return 1n;
       },
-      evmOptions(),
-    ).reward(0n);
-    const viaString = openRoute("ethereum", "function main(){ return 1n; }", evmOptions()).reward(
-      0n,
+      execution,
     );
-    expect(viaClosure.intent).toEqual(viaString.intent);
+    const viaString = compileSauceRoute("ethereum", "function main(){ return 1n; }", execution);
+    expect(viaClosure.calls).toEqual(viaString.calls);
   });
 
-  it("a compile()-level define resolves a free identifier that would otherwise be a capture", () => {
-    const built = openRoute(
+  it("a define resolves a free identifier that would otherwise be a capture", () => {
+    const route = compileSauceRoute(
       "ethereum",
       () => {
-        return chainId;
+        return RECIPIENT;
       },
-      evmOptions({ compile: { defines: { chainId: 1n } } }),
-    ).reward(0n);
-    expect(built.intent.route.calls).toHaveLength(1);
+      execution,
+      { defines: { RECIPIENT: 1n } },
+    );
+    expect(route.calls).toHaveLength(1);
   });
 });
 
@@ -188,8 +161,7 @@ function main() {
 });
 
 // Ambient declared only for the type-checker inside the closure fixtures above -- the compiler
-// resolves them through the chain's host or `options.defines`, never via JS scope (closures
+// resolves them through the chain's module or `options.defines`, never via JS scope (closures
 // capture nothing).
-declare const chainId: bigint;
 declare const RECIPIENT: bigint;
 declare const Arbitrum: SauceIntentChain;

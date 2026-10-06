@@ -18,11 +18,10 @@ import {
   encodeEntryArguments,
   type EntryValue,
 } from "../src/routes/entry.js";
-import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import * as routes from "../src/routes/index.js";
 
-const RECIPIENT = "0x6666666666666666666666666666666666666666";
+const RECIPIENT = "0x6666666666666666666666666666666666666666" as const;
 const CREATOR = "0x3333333333333333333333333333333333333333";
 const PROVER = "0x4444444444444444444444444444444444444444";
 
@@ -63,21 +62,18 @@ describe("compileSauceProgram", () => {
     ]);
   });
 
-  it("gives a program the ambient openRoute gives a route body, with no intent around it", () => {
+  it("gives a program the default ambient token module, which compileSauceRoute adds only when asked", () => {
     const body = "require(chainId == 8453n);\ntransfer(USDC, RECIPIENT, 5n);\n";
     const defines = { RECIPIENT: BigInt(RECIPIENT) };
+    const execution = { pot: RECIPIENT, engine: RECIPIENT };
     const program = compileSauceProgram("base", body, { defines });
-    const built = openRoute("base", body, { deadline: 2_000_000_000n, defines }).reward({
-      source: "ethereum",
-      creator: CREATOR,
-      prover: PROVER,
-      nativeAmount: 0n,
+    const route = compileSauceRoute("base", body, execution, {
+      defines,
+      ambient: ["@sauce/token"],
     });
-    expect(program.bytecode).toEqual(built.compiled.bytecode[0]);
-    // compileSauceRoute adds none of it, deliberately: chainId and `transfer` are undeclared there.
-    expect(() =>
-      compileSauceRoute("base", body, { pot: RECIPIENT, engine: RECIPIENT }, { defines }),
-    ).toThrow();
+    expect(program.bytecode).toEqual(route.compiled.bytecode[0]);
+    // Not asked, compileSauceRoute adds none of it: `transfer` is undeclared there.
+    expect(() => compileSauceRoute("base", body, execution, { defines })).toThrow();
   });
 
   it("builds an intent the program opens", () => {

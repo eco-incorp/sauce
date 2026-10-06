@@ -1,12 +1,9 @@
 /**
  * Byte TEMPLATING — a precompiled payload with runtime-computed values spliced into it.
  *
- * This is the mechanism that makes an intent whose amounts are only known DURING execution
- * expressible at all. `nest.ts` can only build a STATIC child: its `publishAndFund` is fully
- * pre-encoded off-chain, which is impossible for an amount nobody has measured yet (the output of a
- * swap that runs in the same fulfillment, say). The fix is not to encode the child on-chain — a
- * Sauce program has no ABI encoder for an arbitrary struct — but to encode it off-chain ONCE with
- * placeholders, cut the result at the placeholder boundaries, and have the program re-CONCATENATE
+ * A payload whose amounts are only known DURING execution (the output of a swap that runs in the
+ * same transaction, say) cannot be pre-encoded off-chain. This encodes it off-chain ONCE with
+ * placeholders, cuts the result at the placeholder boundaries, and has the program re-CONCATENATE
  * literal byte runs around values it computes:
  *
  * ```
@@ -27,14 +24,12 @@
  * its own length and offset words which an AMOUNT never appears in. So writing a different 32-byte
  * word over an amount changes no offset, no length, and no other field. (Borsh is the same for a
  * FIXED-width integer field — a `u64` amount is 8 bytes wherever it sits — which is why `width`/
- * `littleEndian` exist here rather than 32-byte-big-endian being hardcoded; see `nest-dynamic.ts`
- * for the SVM-destination child that needs them.) The one encoding this CANNOT template is the
+ * `littleEndian` exist here rather than 32-byte-big-endian being hardcoded.) The one encoding this CANNOT template is the
  * compiler's own `compact-v1` argument payload, whose scalars are minimally encoded so both the
  * width and the length prefix move with the value — see `../compact-arguments.ts`'s `scalarWidth`
  * option, which exists precisely to give that format a fixed-offset form too.
  *
- * Pure: no compiler import, no chain knowledge, no `Intent` knowledge — matching `nest.ts`'s
- * posture. `nest-dynamic.ts` is the layer that knows what a child intent is.
+ * Pure: no compiler import, no chain knowledge, no `Intent` knowledge.
  */
 import { bytesToHex, hexToBytes, type Hex } from "viem";
 
@@ -57,10 +52,9 @@ export type AmountSource = "amountIn" | "amountOut";
 /**
  * Which runtime value a slot renders, named rather than enumerated.
  *
- * `"amountIn"`/`"amountOut"` are the two the MEASUREMENT path uses (`nest-dynamic.ts`). A
- * capture-lowered intent (`intent-sugar.ts`) names a SauceScript local of the enclosing program
- * instead, one name per captured variable, so the same splice machinery serves both without either
- * knowing about the other. A name is opaque here: `emitTemplate` is told which local holds each one.
+ * `"amountIn"`/`"amountOut"` name a measured amount and what it scales to; any other name is a
+ * SauceScript local of the enclosing program. A name is opaque here: `emitTemplate` is told which
+ * local holds each one.
  */
 export type SlotSource = AmountSource | (string & {});
 
@@ -171,8 +165,7 @@ function slotOf(spec: PlaceholderSpec): TemplateSlot {
   if (spec.value === 0n) {
     throw new Error(
       "splitByPlaceholders: a zero placeholder value cannot work — zero bytes are what ABI padding is " +
-        "made of, so it would match everywhere. Use a distinctive sentinel (see nest-dynamic.ts's " +
-        "AMOUNT_IN_PLACEHOLDER).",
+        "made of, so it would match everywhere. Use a distinctive sentinel.",
     );
   }
   return {
@@ -360,7 +353,7 @@ function assertShape(template: ByteTemplate, helper: string): void {
 
 export interface TemplateEmitOptions {
   /** Namespaces every local this template declares, so several templates merge into ONE program
-   *  scope without colliding (same discipline as `nest.ts`'s `n<index>_` prefixes). */
+   *  scope without colliding. */
   readonly prefix: string;
   /** The SauceScript local already holding the raw runtime measurement. */
   readonly amountInVar?: string;
@@ -376,9 +369,9 @@ export interface TemplateEmitResult {
   /** The local the statements leave the rendered payload in. */
   readonly dataVar: string;
   /** The local holding each slot's rendered value, index-parallel to `template.slots`. Exposed so a
-   *  caller can reuse a value it also needs OUTSIDE the payload — `nest-dynamic.ts`'s `approve` and
-   *  its `evm.call` value both name the same amount the reward tuple carries, and re-deriving it
-   *  into a second local would be a second chance to disagree with the bytes actually sent. */
+   *  caller can reuse a value it also needs OUTSIDE the payload — an approval of the same amount,
+   *  say — rather than re-derive it into a second local, a second chance to disagree with the bytes
+   *  actually sent. */
   readonly slotVars: readonly string[];
 }
 
@@ -401,7 +394,7 @@ function literal(value: bigint): string {
  *
  * Each segment is bound to its own `const` before `.concat` is called on it: a method call directly
  * on a `hex` literal is outside the compiler's M1 subset (the same reason
- * `deposit/templates.ts#calldataLines` and `nest.ts`'s native leg bind theirs). An EMPTY segment
+ * `deposit/templates.ts#calldataLines` binds its own). An EMPTY segment
  * contributes nothing to the concatenation and is skipped entirely rather than bound and appended —
  * except at index 0, which is the chain's base and must exist even when empty.
  */

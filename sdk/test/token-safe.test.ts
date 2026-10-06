@@ -5,7 +5,7 @@
  * Two properties, and neither is visible in an assertion about a well-behaved token. The write must
  * carry no DECLARED OUTPUT, because the compiler decodes one even when nothing reads it and a
  * no-return token sends none. And the result must then be CHECKED, because skipping the decode
- * accepts a `false` return and a call to an address with no code. `routes-nest-dynamic.e2e.test.ts`
+ * accepts a `false` return and a call to an address with no code. `routes-intent-bodies.e2e.test.ts`
  * runs both against real tokens; this suite is what still runs with no engine.
  */
 import { encodeFunctionData, type Hex } from "viem";
@@ -13,12 +13,6 @@ import { encodeFunctionData, type Hex } from "viem";
 import { compileProgram as compile } from "./helpers";
 import { ERC20ABI } from "../src/protocols/erc20/abis.js";
 import { safeApproveStatements, safeTransferStatements } from "../src/token/safe.js";
-import { nestedTransferStatements } from "../src/routes/nest.js";
-import { dynamicChildStatements } from "../src/routes/nest-dynamic.js";
-import { AMOUNT_IN_PLACEHOLDER, AMOUNT_OUT_PLACEHOLDER } from "../src/routes/nest-dynamic.js";
-import { normalizeReward, normalizeRoute } from "../src/routes/normalize.js";
-import { requireChain } from "../src/chains/canonical.js";
-import type { Intent } from "../src/routes/types.js";
 
 const TOKEN = 0x7777777777777777777777777777777777777777n;
 const SPENDER = 0x2222222222222222222222222222222222222222n;
@@ -171,62 +165,5 @@ describe("every emitted write carries the SafeERC20 check", () => {
     expect(text).toContain("if (a_cur > 0) {");
     // Reset, then set: two writes, each with its own check.
     expect(text.match(/require\(ctx\.codeSize/g)).toHaveLength(2);
-  });
-});
-
-describe("neither nesting emitter can go back to a bool-returning binding", () => {
-  const BASE = requireChain("base");
-  const ARBITRUM = requireChain("arbitrum");
-  const PORTAL = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
-
-  const child = (amount: bigint): Intent => ({
-    destination: BigInt(ARBITRUM.id),
-    sourceChainId: BigInt(BASE.id),
-    route: normalizeRoute({
-      salt: `0x${"01".repeat(32)}` as Hex,
-      deadline: 2000n,
-      portal: PORTAL,
-      tokens: [{ token: addr(RECIPIENT), amount: AMOUNT_OUT_PLACEHOLDER }],
-      calls: [],
-    }),
-    reward: normalizeReward({
-      deadline: 2000n,
-      creator: addr(SPENDER),
-      prover: addr(RECIPIENT),
-      tokens: [{ token: addr(TOKEN), amount }],
-    }),
-  });
-
-  it("the DYNAMIC approve is an evm.call, and balanceOf keeps its binding", () => {
-    const statements = dynamicChildStatements(child(AMOUNT_IN_PLACEHOLDER), 0, {
-      portal: PORTAL,
-      measure: { kind: "erc20Balance", token: addr(TOKEN) },
-      placeholders: [
-        { value: AMOUNT_IN_PLACEHOLDER, source: "amountIn", occurrences: 1 },
-        { value: AMOUNT_OUT_PLACEHOLDER, source: "amountOut", occurrences: 1 },
-      ],
-    });
-
-    expect(statements.some((s) => s.includes(".approve("))).toBe(false);
-    // The approve's write and the publish; the allowance read is an `evm.static`.
-    expect(statements.filter((s) => s.includes("evm.call("))).toHaveLength(3);
-    expect(statements.some((s) => s.includes("evm.static("))).toBe(true);
-    // A `uint256` return is always present, so the read keeps the typed binding.
-    expect(statements[0]).toContain("IERC20.at(");
-    expect(statements[0]).toContain(".balanceOf(ctx.self())");
-  });
-
-  it("the TRANSFER-mode transfer is an evm.call inside the zero guard", () => {
-    const statements = nestedTransferStatements(child(500n), 0, {
-      vaultResolution: { mode: "explicit", vault: addr(RECIPIENT) },
-    });
-
-    expect(statements.some((s) => s.includes(".transfer("))).toBe(false);
-    // The call AND its check sit inside the zero guard: checking a call that never ran would read a
-    // stale result.
-    expect(
-      statements.some((s) => /^if \(\w+ > 0n\) \{ const \w+ = evm\.call\(.*require\(/.test(s)),
-    ).toBe(true);
-    expect(statements.some((s) => s.includes(".balanceOf(ctx.self())"))).toBe(true);
   });
 });

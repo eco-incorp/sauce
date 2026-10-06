@@ -69,6 +69,6 @@ sdk/test/fixtures/sauce-script
 # `recipes-assets.test.ts` ("settleSource() returns the exact on-disk settle.sauce.ts") and
 # `svm-settle.compile.test.ts` ("svmSettleSource(1) returns ..."). Formatting one side diverges it
 # from the other; the generator's own alignment is what ships. Every OTHER `.sauce.ts` here is
-# hand-written (e.g. `cctp-split.sauce.ts`, a standalone asset read off disk) and IS formatted.
+# hand-written (a standalone asset read off disk) and IS formatted.
 sdk/src/recipes/settle.sauce.ts
 sdk/src/svm/recipes/settle.sauce.ts

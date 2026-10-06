@@ -7,7 +7,6 @@
  * hand compile to.
  */
 import { requireChain } from "../src/chains/canonical.js";
-import { openRoute } from "../src/routes/intent-dsl.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import { registryTokenAddress, SVM_TOKEN_REGISTRY } from "../src/routes/token-registry.js";
 
@@ -16,7 +15,6 @@ const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 const ETHEREUM_USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as const;
 const POT = "0x1111111111111111111111111111111111111111" as const;
 const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
-const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 const TO = "0x6666666666666666666666666666666666666666" as const;
 const HOLDER = "0x1111111111111111111111111111111111111122" as const;
 
@@ -29,17 +27,8 @@ const bytesOf = (chain: string, source: string, options = {}): number[] =>
 const library = (chain: string, imports: string, body: string): number[] =>
   bytesOf(chain, `import { ${imports} } from "@sauce/token";\nfunction main() { ${body} }`);
 
-function evmOptions() {
-  return {
-    pot: POT,
-    engine: ENGINE,
-    deadline: 2000n,
-    portal: PORTAL,
-    source: "base" as const,
-    creator: "0x3333333333333333333333333333333333333333" as const,
-    prover: "0x4444444444444444444444444444444444444444" as const,
-    rewardDeadline: 1000n,
-  };
+function execution() {
+  return { pot: POT, engine: ENGINE };
 }
 
 describe("a token symbol's writes are @sauce/token's, the token first", () => {
@@ -122,9 +111,9 @@ describe("a token symbol's writes are @sauce/token's, the token first", () => {
 });
 
 describe("a symbol resolves through the chain's registry", () => {
-  it("compiles USDC.transfer(...) through openRoute with one cook() call", () => {
-    const built = openRoute("base", `USDC.transfer(${TO}, 5n);`, evmOptions()).reward(0n);
-    expect(built.intent.route.calls).toHaveLength(1);
+  it("compiles USDC.transfer(...) as a route with one cook() call", () => {
+    const route = compileSauceRoute("base", `USDC.transfer(${TO}, 5n);`, execution());
+    expect(route.calls).toHaveLength(1);
   });
 
   it("options.tokens OVERRIDES the registry, per key", () => {

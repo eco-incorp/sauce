@@ -51,8 +51,8 @@ import {
   ecoRoutesPortal,
   ecoRoutesProver,
 } from "../src/protocols/eco-routes/lookup.js";
-import { EVM_ROUTE_PARAM, encodeRouteEvm } from "../src/routes/encode.js";
-import { openRoute } from "../src/routes/intent-dsl.js";
+import { EVM_ROUTE_PARAM, encodeRouteEvm, hashIntent } from "../src/routes/encode.js";
+import { assembleIntent } from "../src/routes/intent.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
 import {
@@ -60,12 +60,18 @@ import {
   fulfillAndProveTx,
   fulfillApprovalTxs,
   hyperlaneProverData,
+  isIntentFundedCall,
+  predictIntentVault,
   proverFeeCall,
   provenIntentCall,
   withdrawTx,
   type PortalTx,
 } from "../src/routes/portal.js";
 import { sauceEvmDeployPotCall } from "../src/routes/sauce-calls.js";
+import { compileSauceRoute } from "../src/routes/sauce-route.js";
+import { requireChain } from "../src/chains/canonical.js";
+import { v12EngineAddress } from "../src/deployments/index.js";
+import { Base, Ethereum } from "../src/index.js";
 import {
   describeEvm,
   FEE,
@@ -98,7 +104,6 @@ const REWARD = 1_050_000n;
 const HYPERLANE_FEE = 7_777n;
 
 const APPROVE = parseAbi(["function approve(address, uint256)"]);
-const TRANSFER = parseAbi(["function transfer(address, uint256)"]);
 
 /** Base USDC to `recipient`, for Ethereum USDC, refunded to `refundTo` unfilled: its body cooks on
  *  Base's shared Pot, paying the Kitchen's fee. */
@@ -343,68 +348,62 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     expect(fee).toBe(FEE);
 
     const start = [await now(base), await now(ethereum)].reduce((a, b) => (a > b ? a : b));
-    const options = {
-      execution: { value: fee },
-      deadline: start + 3600n,
-      defines: { RECIPIENT: BigInt(RECIPIENT) },
-      // Delivered to the Executor; the program spends from the Pot, so the first call moves it.
-      tokens: [{ token: baseUsdc, amount: AMOUNT }],
-      precalls: [
-        {
-          target: baseUsdc,
-          data: encodeFunctionData({
-            abi: TRANSFER,
-            functionName: "transfer",
-            args: [pot, AMOUNT],
-          }),
-        },
-      ],
-    };
-    const reward = {
-      source: "ethereum",
-      creator: OWNER.address,
-      deadline: start + 7200n,
-      tokens: [{ token: ethereumUsdc, amount: REWARD }],
-    } as const;
-    // A program, not a token-only body: it cooks on the Pot and pays the Kitchen's fee.
-    const body = "const held = USDC.balanceOf(ctx.self()); USDC.transfer(RECIPIENT, held);";
-    const built = openRoute("base", body, options).reward(reward);
+    // A program, not a transfer alone: it cooks on the Pot and pays the Kitchen's fee.
+    const built = Base.Portal.send({ token: ethereumUsdc, amount: REWARD })
+      .source(Ethereum, {
+        defines: { RECIPIENT: BigInt(RECIPIENT) },
+        intents: { deadline: start + 3600n, rewardDeadline: start + 7200n },
+      })
+      .refundee(OWNER.address)
+      .receive({ token: baseUsdc, amount: AMOUNT })
+      .fee(fee)
+      .then("const held = USDC.balanceOf(ctx.self()); USDC.transfer(RECIPIENT, held);");
 
-    expect(built.intent.route.portal).toBe(toUniversalAddress(ecoRoutesPortal("base")));
-    expect(built.intent.reward.prover).toBe(
+    // ---- Ethereum: the creator's Pot pays the reward into the vault and publishes -------------
+    const zero = `0x${"00".repeat(32)}` as Hex;
+    const ownPot = v12PredictPot(OWNER.address, zero) as Address;
+    const deployPot = sauceEvmDeployPotCall({ owner: OWNER.address, salt: zero });
+    await ethereum.send(ethereum.owner, deployPot.to, deployPot.data);
+    await ethereum.mint(ethereumUsdc, ownPot, REWARD);
+    const cook = built.cook(ownPot, FEE);
+    const published = await ethereum.send(ethereum.owner, cook.to, cook.data, cook.value);
+    const [opened] = built.intents(
+      (await ethereum.publicClient.getTransactionReceipt({ hash: published })).logs,
+    );
+    const intent = opened!.intent;
+    expect(intent.route.portal).toBe(toUniversalAddress(ecoRoutesPortal("base")));
+    expect(intent.reward.prover).toBe(
       toUniversalAddress(ecoRoutesContract("ethereum", "HyperProver")),
     );
-    expect(built.intent.route.calls.map((call) => call.value)).toEqual([0n, FEE]);
-    expect(built.intent.route.nativeAmount).toBe(FEE);
-
-    // ---- Ethereum: the creator pays the reward into the vault and publishes --------------------
-    await ethereum.mint(ethereumUsdc, OWNER.address, REWARD);
-    await sendAll(ethereum, ethereum.owner, built.sourceTxs());
-    expect(await read(ethereum, built.fundedCall())).toBe(true);
+    expect(intent.route.calls.map((call) => call.value)).toEqual([0n, FEE]);
+    expect(intent.route.nativeAmount).toBe(FEE);
+    expect(
+      await read(ethereum, isIntentFundedCall(intent, { portal: ecoRoutesPortal("ethereum") })),
+    ).toBe(true);
 
     // ---- Base: the solver fills and proves -----------------------------------------------------
     await base.mint(baseUsdc, SOLVER.address, AMOUNT);
-    await sendAll(base, solverOn(base), fulfillApprovalTxs(built.intent));
+    await sendAll(base, solverOn(base), fulfillApprovalTxs(intent));
     const prover = ecoRoutesProver("base", "ethereum");
-    const data = hyperlaneProverData({ sourceProver: built.intent.reward.prover });
-    const proof = { prover, sourceDomain: built.intent.sourceChainId, data };
+    const data = hyperlaneProverData({ sourceProver: intent.reward.prover });
+    const proof = { prover, sourceDomain: intent.sourceChainId, data };
     const proverFee = await read(
       base,
       proverFeeCall({
         ...proof,
-        destinationChainId: built.intent.destination,
-        pairs: [{ intentHash: built.hash().intentHash, claimant: SOLVER.address }],
+        destinationChainId: intent.destination,
+        pairs: [{ intentHash: opened!.intentHash, claimant: SOLVER.address }],
       }),
     );
-    const fill = fulfillAndProveTx(built.intent, {
+    const fill = fulfillAndProveTx(intent, {
       claimant: SOLVER.address,
       ...proof,
       fee: proverFee,
     });
 
     // CONTROL: the same intent with no native amount cannot pay its cook's fee, so its fill
-    // reverts, in the same state where the defaulted one's goes through.
-    const unpaid = openRoute("base", body, { ...options, nativeAmount: 0n }).reward(reward);
+    // reverts, in the same state where the published one's goes through.
+    const unpaid = { ...intent, route: { ...intent.route, nativeAmount: 0n } };
     const rehearse = (tx: PortalTx) =>
       base.publicClient.call({
         account: SOLVER.address,
@@ -413,9 +412,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
         value: tx.value,
       });
     await expect(
-      rehearse(
-        fulfillAndProveTx(unpaid.intent, { claimant: SOLVER.address, ...proof, fee: proverFee }),
-      ),
+      rehearse(fulfillAndProveTx(unpaid, { claimant: SOLVER.address, ...proof, fee: proverFee })),
     ).rejects.toThrow();
     await expect(rehearse(fill)).resolves.toBeDefined();
 
@@ -428,12 +425,12 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
 
     // ---- The proof reaches Ethereum's HyperProver, the reward's prover; the solver claims ------
     expect(await relay(base, baseMailbox, filled!, ethereum, ethereumMailbox)).toBe(1);
-    expect(getAddress((await read(ethereum, provenIntentCall(built.intent))).claimant)).toBe(
+    expect(getAddress((await read(ethereum, provenIntentCall(intent))).claimant)).toBe(
       SOLVER.address,
     );
     const before = await ethereum.balanceOf(ethereumUsdc, SOLVER.address);
     await sendAll(ethereum, solverOn(ethereum), [
-      withdrawTx(built.intent, { portal: ecoRoutesPortal("ethereum") }),
+      withdrawTx(intent, { portal: ecoRoutesPortal("ethereum") }),
     ]);
     expect(await ethereum.balanceOf(ethereumUsdc, SOLVER.address)).toBe(before + REWARD);
   }, 240_000);
@@ -670,16 +667,30 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
     );
     const start = await now(ethereum);
     // An intent encoded by something other than the program that publishes it.
-    const built = openRoute("base", "function main() { return 1n; }", {
-      execution: { value: FEE },
-      deadline: start + 3600n,
-    }).reward({
-      source: "ethereum",
-      creator: OWNER.address,
-      deadline: start + 7200n,
-      tokens: [{ token: ethereumUsdc, amount: REWARD }],
+    const { calls } = compileSauceRoute("base", "function main() { return 1n; }", {
+      pot: destinationPot("base"),
+      engine: v12EngineAddress() as Hex,
+      value: FEE,
     });
-    const { reward } = built.intent;
+    const intent = assembleIntent(
+      requireChain("ethereum"),
+      requireChain("base"),
+      {
+        salt: `0x${"f0".repeat(32)}`,
+        deadline: start + 3600n,
+        portal: ecoRoutesPortal("base"),
+        nativeAmount: FEE,
+        tokens: [],
+        calls,
+      },
+      {
+        deadline: start + 7200n,
+        creator: OWNER.address,
+        prover: ecoRoutesContract("ethereum", "HyperProver"),
+        tokens: [{ token: ethereumUsdc, amount: REWARD }],
+      },
+    );
+    const { reward } = intent;
     const rewardJson = JSON.stringify({
       deadline: reward.deadline.toString(),
       creator: OWNER.address,
@@ -695,7 +706,7 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
       await sauce(
         ...["run", program, "--chain", "ethereum", "--rpc-url", ethereum.rpcUrl],
         ...["--private-key", OWNER_KEY, "--auto-approve", "--json"],
-        ...["--args", "8453", encodeRouteEvm(built.intent.route), rewardJson],
+        ...["--args", "8453", encodeRouteEvm(intent.route), rewardJson],
       ),
     );
     const { hash } = (run as { cook: { hash: Hex } }).cook;
@@ -705,11 +716,13 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
       logs: receipt.logs,
       eventName: "IntentPublished",
     });
-    expect(published!.args.intentHash).toBe(built.hash().intentHash);
-    const funded = built.fundedCall();
+    expect(published!.args.intentHash).toBe(hashIntent(intent).intentHash);
+    const portal = { portal: ecoRoutesPortal("ethereum") };
+    const funded = isIntentFundedCall(intent, portal);
     const answer = await ethereum.publicClient.call({ to: funded.to, data: funded.data });
     expect(funded.decode(answer.data!)).toBe(true);
-    expect(await ethereum.balanceOf(ethereumUsdc, built.predictVault() as Address)).toBe(REWARD);
+    const vault = predictIntentVault(intent, portal) as Address;
+    expect(await ethereum.balanceOf(ethereumUsdc, vault)).toBe(REWARD);
     expect(await ethereum.balanceOf(ethereumUsdc, pot)).toBe(0n);
   }, 240_000);
 

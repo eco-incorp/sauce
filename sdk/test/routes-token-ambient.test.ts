@@ -1,82 +1,37 @@
 /**
- * `@sauce/token` as the DEFAULT ambient MODULE on the route path: its exported functions (`approve`,
- * `transfer`, `balanceOf`, ...) are callable in ANY route body with NO import line and NO opts,
- * resolved from the SDK's own vendored `std/token` copy via `rs-compile.ts`'s `SDK_STD_PACKAGES`
- * (never a `node_modules` install). This is the "ambient MODULE" half of the DSL -- distinct from
- * the "ambient DEFINES" half (`chainDefines`, covered in `routes-ambient.test.ts`).
- *
- * This file covers the FUNCTION form (`approve(token, spender, amount)`), which the ambient module
- * exports directly. The `Token(addr).approve(...)` WRAPPER is a separate mechanism with its own
- * suite (`routes-token-factory.test.ts`): a textual rewrite to `IERC20.at(addr)` that runs before
- * the compiler, so it needs no compiler feature even though the M1 subset rejects a method call on
- * a call result.
+ * `@sauce/token` as the DEFAULT ambient MODULE of a program compile: its exported functions
+ * (`approve`, `transfer`, `balanceOf`, ...) are callable in any program with NO import line and NO
+ * options, resolved from the SDK's own embedded `std/token`. This is the "ambient MODULE" half --
+ * distinct from the "ambient DEFINES" half (`chainDefines`, covered in `routes-ambient.test.ts`).
  */
-import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
+import { compileSauceProgram } from "../src/routes/sauce-route.js";
 
-const POT = "0x1111111111111111111111111111111111111111" as const;
-const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
-const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 const SPENDER = "0x2626664c2603336E57B271c5C0b26F421741e481" as const;
 
-function evmOptions(overrides: Partial<IntentOptions> = {}): IntentOptions {
-  return {
-    pot: POT,
-    engine: ENGINE,
-    deadline: 2000n,
-    portal: PORTAL,
-    source: "base",
-    creator: "0x3333333333333333333333333333333333333333",
-    prover: "0x4444444444444444444444444444444444444444",
-    rewardDeadline: 1000n,
-    ...overrides,
-  };
-}
-
-const SVM_BUFFER = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb" as const;
 const MINT = "0x0000000000000000000000000000000000000000000000000000000000000abc";
-
-function svmOptions(): IntentOptions {
-  return {
-    execution: { code: SVM_BUFFER, accounts: [] },
-    deadline: 2000n,
-    portal: PORTAL,
-    source: "base",
-    creator: "0x3333333333333333333333333333333333333333",
-    prover: "0x4444444444444444444444444444444444444444",
-    rewardDeadline: 1000n,
-  } as IntentOptions;
-}
 
 describe("@sauce/token as the default ambient module", () => {
   it("approve(USDC, spender, amount) compiles with zero import AND zero opts (default ambient)", () => {
-    const built = openRoute(
+    const built = compileSauceProgram(
       "base",
       `function main() { approve(USDC, ${BigInt(SPENDER)}n, 5n); return 0n; }`,
-      evmOptions(),
-    ).reward(0n);
-    expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+    );
+    expect(built.bytecode.length).toBeGreaterThan(0);
   });
 
   it("the whole function surface is broadcast by default: transfer + balanceOf resolve too", () => {
-    const built = openRoute(
+    const built = compileSauceProgram(
       "base",
       `function main() { transfer(USDC, ${BigInt(SPENDER)}n, 5n); return balanceOf(USDC, ctx.self()); }`,
-      evmOptions(),
-    ).reward(0n);
-    expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+    );
+    expect(built.bytecode.length).toBeGreaterThan(0);
   });
 
   it("explicitly opting @sauce/token in via compile.ambient is idempotent with the default", () => {
     const body = `function main() { approve(USDC, ${BigInt(SPENDER)}n, 5n); return 0n; }`;
-    const viaDefault = openRoute("base", body, evmOptions()).reward(0n);
-    const viaExplicit = openRoute(
-      "base",
-      body,
-      evmOptions({ compile: { ambient: ["@sauce/token"] } }),
-    ).reward(0n);
-    expect(Array.from(viaDefault.compiled.bytecode[0]!)).toEqual(
-      Array.from(viaExplicit.compiled.bytecode[0]!),
-    );
+    const viaDefault = compileSauceProgram("base", body);
+    const viaExplicit = compileSauceProgram("base", body, { ambient: ["@sauce/token"] });
+    expect(Array.from(viaDefault.bytecode)).toEqual(Array.from(viaExplicit.bytecode));
   });
 
   // --- the SVM arm ---
@@ -88,12 +43,11 @@ describe("@sauce/token as the default ambient module", () => {
   // carry one since the rewrites parse TypeScript (`routes/parse.ts`), so the arm is called below;
   // executing it is `test/std/token/svm.e2e.test.ts`'s.
   it("calls the SVM arm with zero import, from a body that annotates its Account", () => {
-    const built = openRoute(
+    const built = compileSauceProgram(
       "solana",
       `function main(account: Account): Uint256 { return balanceOf(${BigInt(MINT)}n, account); }`,
-      svmOptions(),
-    ).reward(0n);
-    expect(built.compiled.bytecode[0]!.length).toBeGreaterThan(0);
+    );
+    expect(built.bytecode.length).toBeGreaterThan(0);
   });
 
   // And that the module RESOLVES on an SVM compile even where the call is malformed. The tell is
@@ -104,11 +58,10 @@ describe("@sauce/token as the default ambient module", () => {
     // it is what this asserts does NOT happen: the SVM arm was found and read.
     let message: string;
     try {
-      openRoute(
+      compileSauceProgram(
         "solana",
         `function main(account) { return balanceOf(${BigInt(MINT)}n, account); }`,
-        svmOptions(),
-      ).reward(0n);
+      );
       throw new Error("expected the malformed call to fail the compile");
     } catch (error) {
       message = (error as Error).message;
@@ -121,18 +74,15 @@ describe("@sauce/token as the default ambient module", () => {
     // The other side of the assertion above — proves `failed to import module` is reachable on this
     // path at all, so the `not.toMatch` is a real check rather than a string that never appears.
     expect(() =>
-      openRoute("solana", "function main() { return chainId; }", {
-        ...svmOptions(),
-        compile: { ambient: ["@sauce/definitely-not-a-real-module"] },
-      }).reward(0n),
+      compileSauceProgram("solana", "function main() { return chainId; }", {
+        ambient: ["@sauce/definitely-not-a-real-module"],
+      }),
     ).toThrow(/failed to import module/);
   });
 
   it("negative control: a genuinely undeclared name is still a compile error (ambient is not a catch-all)", () => {
     expect(() =>
-      openRoute("base", `function main() { return notARealAmbientName(1n); }`, evmOptions()).reward(
-        0n,
-      ),
+      compileSauceProgram("base", `function main() { return notARealAmbientName(1n); }`),
     ).toThrow();
   });
 });

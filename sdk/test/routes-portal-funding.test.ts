@@ -2,7 +2,7 @@
  * routes/portal.ts — how an intent's reward reaches its vault from a wallet: by transfer, then
  * `publish` (the default), or approvals then `publishAndFund` (the opt-in).
  *
- * Pure: hand-built `Intent`s, no compiler, no network. `routes-nest-dynamic.e2e.test.ts` and
+ * Pure: hand-built `Intent`s, no compiler, no network. `routes-intent-bodies.e2e.test.ts` and
  * `cli.e2e.test.ts` run both against the real Portal and check `isIntentFunded`.
  */
 import { readFileSync } from "node:fs";
@@ -19,11 +19,10 @@ import {
   type Hex,
 } from "viem";
 
-import { requireChain } from "../src/chains/canonical.js";
 import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 import { ecoRoutesPortal } from "../src/protocols/eco-routes/lookup.js";
 import { hashIntent } from "../src/routes/encode.js";
-import { openRoute } from "../src/routes/intent-dsl.js";
+import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { normalizeReward, normalizeRoute } from "../src/routes/normalize.js";
 import {
   approvalTxs,
@@ -227,42 +226,8 @@ describe("intentSourceTxs: approvals then publishAndFund (the opt-in)", () => {
   });
 });
 
-describe("BuiltIntent.sourceTxs and predictVault", () => {
-  const OPTIONS = {
-    deadline: 1_893_456_000n,
-    creator: "0x5555555555555555555555555555555555555555",
-    prover: "0x6666666666666666666666666666666666666666",
-    source: requireChain("base"),
-  } as const;
-  const build = (fundVia?: "transfer" | "publishAndFund") =>
-    openRoute(
-      "optimism",
-      `function main() {\n  const x = 1n;\n}`,
-      fundVia === undefined ? OPTIONS : { ...OPTIONS, fundVia },
-    ).reward({ tokens: [{ token: TOKEN_A, amount: 9n }] });
-
-  it("defaults to transfer, into the vault predictVault() derives for the source Portal", () => {
-    const built = build();
-    const vault = built.predictVault();
-
-    expect(vault).toBe(predictIntentVault(built.intent, { portal: PORTAL }));
-    expect(built.sourceTxs()).toEqual(intentSourceTxs(built.intent, { portal: PORTAL }));
-    expect(transferOf(built.sourceTxs()[0]!.data)).toEqual([vault, 9n]);
-  });
-
-  it("takes IntentOptions.fundVia as its default, and an explicit option over it", () => {
-    const optedOut = build("publishAndFund");
-
-    expect(optedOut.sourceTxs()).toEqual([
-      ...optedOut.approvals(),
-      optedOut.publishAndFundCalldata(false),
-    ]);
-    expect(optedOut.sourceTxs({ fundVia: "transfer" })).toEqual(
-      intentSourceTxs(optedOut.intent, { portal: PORTAL }),
-    );
-  });
-
-  it("hands IntentOptions.fundVia to the intents the route's own program opens", () => {
+describe("intents.fundVia, in the program that opens the intent", () => {
+  it("funds by transfer into the vault by default, and through publishAndFund when told", () => {
     const body = `function main() {
   const amount = USDC.balanceOf(ctx.self());
   Base.Portal.send([{ token: USDC, amount }]).refundee(0x3333333333333333333333333333333333333333).receive().then(() => {
@@ -271,12 +236,10 @@ describe("BuiltIntent.sourceTxs and predictVault", () => {
 }`;
     const programOf = (fundVia?: "publishAndFund") =>
       bytesToHex(
-        openRoute("optimism", body, {
-          ...OPTIONS,
-          defines: { RECIPIENT: BigInt(OPTIONS.creator) },
-          compile: { intents: { executionFee: 0n } },
-          ...(fundVia === undefined ? {} : { fundVia }),
-        }).reward({ tokens: [{ token: TOKEN_A, amount: 9n }] }).compiled.bytecode[0]!,
+        compileSauceProgram("optimism", body, {
+          defines: { RECIPIENT: 0x5555555555555555555555555555555555555555n },
+          intents: { executionFee: 0n, ...(fundVia === undefined ? {} : { fundVia }) },
+        }).bytecode,
       );
     const selectorOf = (name: string) =>
       toFunctionSelector(
@@ -287,13 +250,5 @@ describe("BuiltIntent.sourceTxs and predictVault", () => {
     expect(programOf()).not.toContain(selectorOf("publishAndFund"));
     expect(programOf("publishAndFund")).toContain(selectorOf("publishAndFund"));
     expect(programOf("publishAndFund")).not.toContain(selectorOf("intentVaultAddress"));
-  });
-
-  it("still takes an explicit vault config", () => {
-    const built = build();
-    const config = { portal: PORTAL, vaultInitCodeHash: `0x${"ab".repeat(32)}` as Hex };
-
-    expect(built.predictVault(config)).toBe(predictVaultAddress(built.hash().intentHash, config));
-    expect(built.vault()).toBe(built.predictVault());
   });
 });
