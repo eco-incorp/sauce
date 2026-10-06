@@ -93,18 +93,18 @@ export const rejections = [
   },
   {
     quotes: ["not a valid integer literal"],
-    row: "`1e18`, `1.5`, `null`, `undefined`",
+    row: "`1e18`, `1.5`, `null`",
     targets: ["evm"],
     src: "function main(): Uint256 { return 1e18; }",
   },
   {
     quotes: ["`1.5` is not a valid 256-bit literal"],
-    row: "`1e18`, `1.5`, `null`, `undefined`",
+    row: "`1e18`, `1.5`, `null`",
     targets: ["evm"],
     src: "function main(): Uint256 { return 1.5; }",
   },
   {
-    row: "`1e18`, `1.5`, `null`, `undefined`",
+    row: "`1e18`, `1.5`, `null`",
     targets: ["evm"],
     src: "function main(): Uint256 { const x = null; return 0n; }",
   },
@@ -118,7 +118,14 @@ export const rejections = [
   {
     quotes: ["an array literal must have at least one element"],
     targets: ["evm"],
-    src: "function main(): Uint256 { const xs = []; return 0n; }",
+    src: "function main(): Uint256 { let xs = []; return 0n; }",
+  },
+  {
+    quotes: [
+      "`undefined` exists only while the program compiles, so it has no run-time value here",
+    ],
+    targets: ["evm"],
+    src: "function main(): Uint256 { return undefined; }",
   },
   {
     quotes: ["every element of an array literal must have the same type — …"],
@@ -362,32 +369,27 @@ export const rejections = [
     src: "function main(): Uint256 { const a = [1n]; const b = [...a]; return b[0]; }",
   },
   {
-    row: "arrow functions, function expressions, nested functions",
-    targets: ["evm"],
-    src: "function main(): Uint256 { const f = () => 1n; return 1n; }",
-  },
-  {
-    row: "arrow functions, function expressions, nested functions",
+    row: "function expressions, nested `function` declarations",
     targets: ["evm"],
     src: "function main(): Uint256 { function g(): Uint256 { return 1n; } return g(); }",
   },
   {
-    row: "`class`, `enum`, `type` aliases, generics, `namespace`",
+    row: "function expressions, nested `function` declarations",
     targets: ["evm"],
-    src: "class C { } function main(): Uint256 { return 0n; }",
+    src: "function main(): Uint256 { const g = function (): Uint256 { return 1n; }; return g(); }",
   },
   {
-    row: "`class`, `enum`, `type` aliases, generics, `namespace`",
+    row: "`enum`, `type` aliases, generics, `namespace`",
     targets: ["evm"],
     src: "enum E { A } function main(): Uint256 { return 0n; }",
   },
   {
-    row: "`class`, `enum`, `type` aliases, generics, `namespace`",
+    row: "`enum`, `type` aliases, generics, `namespace`",
     targets: ["evm"],
     src: "type T = Uint256; function main(): Uint256 { return 0n; }",
   },
   {
-    row: "`class`, `enum`, `type` aliases, generics, `namespace`",
+    row: "`enum`, `type` aliases, generics, `namespace`",
     targets: ["evm"],
     src: "function f<T>(a: Uint256): Uint256 { return a; } function main(): Uint256 { return 0n; }",
   },
@@ -431,12 +433,7 @@ export const rejections = [
     src: "function main(): Uint256 { const t = { a: 1n }; for (const k in t) { } return 0n; }",
   },
   {
-    row: "`throw new Error(…)`, `finally`",
-    targets: ["evm"],
-    src: 'function main(): void { throw new Error("no"); }',
-  },
-  {
-    row: "`throw new Error(…)`, `finally`",
+    row: "`finally`",
     targets: ["evm"],
     src: "function main(): void { try { evm.sstore(1n, 1n); } catch { } finally { } }",
   },
@@ -731,7 +728,7 @@ export const rejections = [
   {
     quotes: ["a bytes method's receiver requires a bytes value"],
     targets: ["evm"],
-    src: "function main(): Uint256 { const xs = [1n, 2n]; const ys = xs.slice(0n, 1n); return 0n; }",
+    src: "function main(): Uint256 { let xs = [1n, 2n]; const ys = xs.slice(0n, 1n); return 0n; }",
   },
   {
     quotes: ["`.slice` takes exactly 2 arguments (start, end), got N"],
@@ -751,13 +748,7 @@ export const rejections = [
   {
     quotes: ["`length` is not a field of this tuple — …"],
     targets: ["evm"],
-    src: "function main(): Uint256 { const t = { a: 1n }; return t.length; }",
-  },
-  {
-    quotes: ["calling anything other than a plain function name …"],
-    row: "a method on a literal (``hex`…`.concat(d)``)",
-    targets: ["evm"],
-    src: "function main(d: bytes): bytes { return hex`a9`.concat(d); }",
+    src: "function main(): Uint256 { let t = { a: 1n }; return t.length; }",
   },
   {
     quotes: [

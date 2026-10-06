@@ -106,10 +106,10 @@ exact. TypeScript's bigint spelling, `1n` or `0xffn`, is accepted too and is the
 | --------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
 | `1e18`                      | "not a valid integer literal"                                                                                 | `10 ** 18` or `1000000000000000000`     |
 | `1.5`                       | "`1.5` is not a valid 256-bit literal"                                                                        | integers in the smallest unit           |
-| `null`, `undefined`         | rejected                                                                                                      | `0` or a flag                           |
+| `null`                      | rejected                                                                                                      | `0` or a flag                           |
 | `` `text` ``, `` `a${b}` `` | rejected, with or without `${}`                                                                               | `"text"`, or bytes built with `.concat` |
 | a bad `hex`                 | "`hex`…`` is not a valid hex literal (expected an even number of `[0-9a-fA-F]` digits, optional `0x` prefix)" |                                         |
-| `[]` with no declared type  | "an array literal must have at least one element"                                                             | `let xs: Uint256[] = [];`               |
+| `let xs = [];`              | "an array literal must have at least one element"                                                             | `let xs: Uint256[] = [];`               |
 | `[1, true]`                 | "every element of an array literal must have the same type — …"                                               |                                         |
 
 ## 3. Operators
@@ -183,6 +183,21 @@ Accounts compare only with `==` and `!=`: "accounts compare for identity only �
   by value. A helper cannot replace an array parameter with a new array: "`<name>` cannot be reassigned a value
   of a different type — expected an element count known only at run time, found N element(s)".
 
+**Values that exist only while compiling**
+
+- A `class`, an instance of one (`new C(…)`), an arrow function, `undefined`, and a `const` bound to an
+  object or array literal are values the compiler holds. A call on one runs while the program compiles:
+  only what it does at run time, such as a contract call, a storage write or a revert, reaches the program,
+  where the call stands.
+- An arrow function is called in place (`const twice = (x) => x * 2; twice(a)`), in the function it was
+  written in. A nested `function` declaration is not supported.
+- A field nothing has set, and an argument left out, is `undefined`, and `x === undefined` is decided while
+  compiling. Where a run-time value is needed it is an error: "`undefined` exists only while the program
+  compiles, so it has no run-time value here".
+- `const xs = []` is an empty array of this kind; an empty array in a `let` needs a declared type (§2).
+- A `throw` reached unconditionally in code the compiler runs is a compile error with the thrown message.
+- A class cannot extend another, and getters, setters, private members and static fields are not supported.
+
 **`main`'s arguments**
 
 - `main`'s parameters are the program's runtime inputs. One compiled program serves every argument value.
@@ -240,7 +255,7 @@ builtin and cannot be a function name").
   - Reverts with `data` as the revert data. "`revert` takes at most 1 argument (an optional bytes
     payload), got 2"; "a revert payload requires a bytes value"
   - Example: `revert(code.toBytesBe(32));`
-- `throw data`
+- `throw data`, `throw new Error(data)`
   - Types: `data`: bytes
   - The same as `revert(data)`. "a `throw` payload requires a bytes value".
   - Example: `throw "below floor";`
@@ -535,9 +550,6 @@ An unknown name gives "`svm.rent` is not an svm builtin; `svm` is a reserved nam
     ("`length` is not a field of this tuple — …"). It cannot be assigned.
   - Example: `for (let i = 0; i < amounts.length; i++) { … }`
 
-**Call methods on a variable, not on a literal.** ``hex`a9`.concat(d)`` and `"ab".concat(d)` are rejected
-("calling anything other than a plain function name …"). Write ``const selector = hex`a9059cbb`; selector.concat(d)``.
-
 ### Account properties
 
 - `acct.address` → number, **Both**
@@ -668,9 +680,9 @@ function main(x: Uint256): Uint256 {
 | `switch`                                                         | `if` / `else if` chains                                                                                           |
 | `do { } while (…)`                                               | `while (true) { …; if (!cond) { break; } }`                                                                       |
 | `for (k in obj)`, `for await`                                    | an index loop or `for (const x of array)`                                                                         |
-| `throw new Error(…)`, `finally`                                  | `require(cond, "reason")`, `throw "reason"`; `try`/`catch` (§13) for what fails on EVM                            |
-| arrow functions, function expressions, nested functions          | top-level `function` declarations (`.catch(() => { … })` is the one exception)                                    |
-| `class`, `enum`, `type` aliases, generics, `namespace`           | records, `interface`, constants                                                                                   |
+| `finally`                                                        | `try`/`catch` (§13) for what fails on EVM, and the code after it                                                  |
+| function expressions, nested `function` declarations             | top-level `function` declarations, or an arrow function (§4)                                                      |
+| `enum`, `type` aliases, generics, `namespace`                    | records, `interface`, constants                                                                                   |
 | `async function`, `await` used as a value                        | plain functions. **`async function` and `function*` compile today, but as ordinary functions: don't write them.** |
 | default parameters, rest parameters, destructuring parameters    | plain parameters                                                                                                  |
 | object destructuring `const { a } = t`                           | `const a = t.a;`                                                                                                  |
@@ -682,12 +694,11 @@ function main(x: Uint256): Uint256 {
 | `i++` used as a value                                            | `i += 1` on its own line                                                                                          |
 | `t[0] = v` on a record                                           | `t.field = v`                                                                                                     |
 | template strings                                                 | `"text"`, or bytes built with `.concat`                                                                           |
-| `1e18`, `1.5`, `null`, `undefined`                               | `10 ** 18`, integers in the smallest unit, `0`                                                                    |
+| `1e18`, `1.5`, `null`                                            | `10 ** 18`, integers in the smallest unit, `0`                                                                    |
 | `xs.push(v)`, `console.log`, any JavaScript library              | `new Array(n)` with an index; `log(…)`                                                                            |
 | `Math.min`, `max`, `abs`, `pow`                                  | `if` or a ternary; `**`                                                                                           |
 | comparing bytes with `==`                                        | compare `crypto.keccak256` of each                                                                                |
 | `export default`, `export { … }`, `import * as X`                | `export function` / `export const`; named imports                                                                 |
-| a method on a literal (``hex`…`.concat(d)``)                     | bind the literal to a `const` first                                                                               |
 | sending value through a bound call                               | `evm.call(address, value, data)`                                                                                  |
 | labeled statements, labeled `break`/`continue`                   | a flag variable                                                                                                   |
 | computed object keys, object methods                             | plain named fields                                                                                                |
