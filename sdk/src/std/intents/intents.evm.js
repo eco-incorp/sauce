@@ -29,6 +29,11 @@
 import { Token } from "@sauce/names";
 import { approve, transfer } from "@sauce/token";
 
+// The transient-storage slot (EIP-1153) counting the intents a transaction has opened:
+// keccak256("sauce.intents.nonce"). Transient, so it starts at zero in every transaction and
+// survives a `try` block, which runs as a program of its own.
+const SAUCE_INTENTS_NONCE = 0x91da66d2ed07997bae5bcd0c9e8b6e7824eb17d69e494553b5ad7ec46532b578;
+
 // What `.send(...)` lists, recorded as it is given, and what a list of them becomes.
 class Items {
   constructor() {
@@ -401,7 +406,7 @@ class Intent {
 
     const route = abi.encode({
       route: {
-        salt: this._salt === undefined ? this._here.salt : this._salt,
+        salt: this._salt === undefined ? this._defaultSalt() : this._salt,
         deadline: routeDeadline,
         portal: this._destination.portal,
         nativeAmount: fee,
@@ -447,6 +452,15 @@ class Intent {
       if (nativeAmount > 0) evm.call(vault, nativeAmount, hex``);
       evm.call(this._here.portal, 0, hex`645c890c`.concat(intent));
     }
+  }
+
+  // A salt the intent was not given: the compile's, mixed with how many intents this transaction
+  // has opened, counting this one, so two intents built alike — twice in a program, or in a loop —
+  // are two intents with two hashes. A salt given (`.salt(x)`) is used as written.
+  _defaultSalt() {
+    const opened = evm.tload(SAUCE_INTENTS_NONCE) + 1;
+    evm.tstore(SAUCE_INTENTS_NONCE, opened);
+    return crypto.keccak256(abi.encode(this._here.salt, opened));
   }
 
   _rewardItem(item, tokens, funds, native) {

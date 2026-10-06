@@ -23,7 +23,14 @@
  * modifiers out of place or repeated, native coin delivered, a creator nobody named, a token the
  * destination lacks; and an amount's arithmetic that would revert.
  */
-import { bytesToHex, decodeFunctionData, encodeAbiParameters, parseAbi, type Hex } from "viem";
+import {
+  bytesToHex,
+  decodeFunctionData,
+  encodeAbiParameters,
+  keccak256,
+  parseAbi,
+  type Hex,
+} from "viem";
 
 import { requireChain, type CanonicalChain } from "../src/chains/canonical.js";
 import { Arbitrum, Base, Ethereum } from "../src/index.js";
@@ -35,6 +42,7 @@ import {
 } from "../src/protocols/eco-routes/lookup.js";
 import { DEFAULT_FILL_WINDOW, DEFAULT_REFUND_WINDOW } from "../src/routes/intent-defaults.js";
 import type { IntentDefaults } from "../src/routes/intent-defaults.js";
+import { hashIntent } from "../src/routes/encode.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
 import { predictIntentVault } from "../src/routes/portal.js";
 import type { EntryValue } from "../src/routes/entry.js";
@@ -69,6 +77,13 @@ const compile = (program: string, intents: IntentDefaults, args?: readonly Entry
     ...(args === undefined ? {} : { args }),
   });
 
+/** The salt an intent given none takes: the compile's, mixed with the count of intents the
+ *  transaction has opened, this one included. */
+const defaultSalt = (base: Hex, opened: bigint): Hex =>
+  keccak256(
+    encodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], [BigInt(base), opened]),
+  );
+
 /** The same program: its bytecode, which carries every intent it opens and every body's. */
 function expectSame(a: CompiledSauceProgram, b: CompiledSauceProgram): void {
   expect(bytesToHex(a.bytecode)).toBe(bytesToHex(b.bytecode));
@@ -98,8 +113,10 @@ describe("the intents a program opens, as compiled", () => {
     .fee(1000)
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`;
+    // The salt is not among them: an option's is a default, which each intent mixes with how many
+    // the transaction has opened, while a modifier's is used as written.
     expectSame(
-      compile(program(`\n    .deadline(${DEADLINE})\n    .salt(${SALT})`), {}),
+      compile(program(`\n    .deadline(${DEADLINE})`), { salt: SALT }),
       compile(program(""), { deadline: DEADLINE, salt: SALT }),
     );
   });
@@ -268,13 +285,13 @@ describeEvm("the intents a program publishes", () => {
   Arbitrum.Portal.send({ token: USDC, amount: 1010000 }, { native: 5 })
     .refundee(0x7777777777777777777777777777777777777777)
     .receive({ token: USDC, amount: 1000000 })
+    .salt(0x1234)
     .then(() => ${body});
 }`,
         {
           deadline: 2_000_000_600n,
           rewardDeadline: 2_000_700_000n,
           prover: "0x8888888888888888888888888888888888888888",
-          salt: `0x${"1234".padStart(64, "0")}`,
           executionFee: 7n,
         },
       ),
@@ -286,7 +303,8 @@ describeEvm("the intents a program publishes", () => {
     // The second keeps the options it was compiled with.
     expect(rest!.route.deadline).toBe(DEADLINE);
     expect(rest!.reward.deadline).toBe(REWARD_DEADLINE);
-    expect(rest!.route.salt).toBe(SALT);
+    // The first intent was given its salt, so the second is the transaction's first default one.
+    expect(rest!.route.salt).toBe(defaultSalt(SALT, 1n));
     expect(low(rest!.reward.creator)).toBe(CREATOR.slice(2));
     expect(rest!.route.calls.at(-1)!.value).toBe(1_000n);
   }, 120_000);
@@ -407,7 +425,7 @@ describeEvm("the intents a program publishes", () => {
     expect(unfunded).toEqual(funded);
   }, 120_000);
 
-  it("takes the salt the compile was given, and a `.salt(...)` over it", async () => {
+  it("mixes the compile's salt with the intents the transaction opened; a `.salt(...)` is as written", async () => {
     const program = `function main() {
   Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
     .refundee(${CREATOR})
@@ -415,11 +433,34 @@ describeEvm("the intents a program publishes", () => {
     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
 }`;
     const [given] = await published(compile(program, INTENTS));
-    expect(given!.route.salt).toBe(SALT);
+    expect(given!.route.salt).toBe(defaultSalt(SALT, 1n));
     const [salted] = await published(
       compile(program.replace(".then(", ".salt(0x1234)\n    .then("), INTENTS),
     );
     expect(salted!.route.salt).toBe(`0x${"1234".padStart(64, "0")}`);
+  }, 120_000);
+
+  it("two intents built alike are two intents, in sequence or in a loop", async () => {
+    const intent = `Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
+    .refundee(${CREATOR})
+    .receive({ token: USDC, amount: 1000000 })
+    .then(() => { USDC.transfer(RECIPIENT, 1000000); });`;
+    const twice = await published(
+      compile(`function main() {\n  ${intent}\n  ${intent}\n}`, INTENTS),
+    );
+    const looped = await published(
+      compile(
+        `function main() {\n  for (let i = 0; i < 2; i += 1) {\n    ${intent}\n  }\n}`,
+        INTENTS,
+      ),
+    );
+    for (const [one, two] of [twice, looped]) {
+      expect([one!.route.salt, two!.route.salt]).toEqual([
+        defaultSalt(SALT, 1n),
+        defaultSalt(SALT, 2n),
+      ]);
+      expect(hashIntent(one!).intentHash).not.toBe(hashIntent(two!).intentHash);
+    }
   }, 120_000);
 
   it("takes each item as an argument, as one list", async () => {

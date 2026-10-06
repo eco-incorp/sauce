@@ -36,18 +36,18 @@ reward's modifiers, `receive`, the route's modifiers, `then` — and the modifie
 order, each at most once; the types (`routes.PortalSent`, `routes.PortalReceived`) drop a modifier
 once it is given, and the builder refuses a repeat at run time too.
 
-| Step                       | Takes                                                                     | Omitted                                                     |
-| -------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `send(...reward)`          | Each `{ token, amount }` or `{ native: amount }` an argument, or one list | Required; it must offer something                           |
-| `.source(chain, options?)` | The source chain, a reference or a chain export; its compile's options    | Required                                                    |
-| `.refundee(address)`       | The refund address: who may reclaim an unearned reward                    | Required                                                    |
-| `.deadline(seconds)`       | The reward's deadline                                                     | The route's deadline plus `routes.DEFAULT_REFUND_WINDOW`    |
-| `.prover(address)`         | The reward's prover                                                       | `ecoRoutesProver(source, destination)`                      |
-| `receive(...delivery)`     | Each `{ token, amount }` an argument, or one list                         | Required; `.receive()` delivers nothing                     |
-| `.fee(wei)`                | The destination Kitchen's fee the body's cook pays                        | `intents.executionFee` in `.source`'s options; else refused |
-| `.deadline(seconds)`       | The route's deadline                                                      | When the cook runs, plus `routes.DEFAULT_FILL_WINDOW`       |
-| `.salt(salt)`              | The route's salt                                                          | 32 random bytes per compile (`routes.randomSalt`)           |
-| `then(body)`               | The body; returns the `routes.HostIntent`                                 | Required                                                    |
+| Step                       | Takes                                                                     | Omitted                                                                    |
+| -------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `send(...reward)`          | Each `{ token, amount }` or `{ native: amount }` an argument, or one list | Required; it must offer something                                          |
+| `.source(chain, options?)` | The source chain, a reference or a chain export; its compile's options    | Required                                                                   |
+| `.refundee(address)`       | The refund address: who may reclaim an unearned reward                    | Required                                                                   |
+| `.deadline(seconds)`       | The reward's deadline                                                     | The route's deadline plus `routes.DEFAULT_REFUND_WINDOW`                   |
+| `.prover(address)`         | The reward's prover                                                       | `ecoRoutesProver(source, destination)`                                     |
+| `receive(...delivery)`     | Each `{ token, amount }` an argument, or one list                         | Required; `.receive()` delivers nothing                                    |
+| `.fee(wei)`                | The destination Kitchen's fee the body's cook pays                        | `intents.executionFee` in `.source`'s options; else refused                |
+| `.deadline(seconds)`       | The route's deadline                                                      | When the cook runs, plus `routes.DEFAULT_FILL_WINDOW`                      |
+| `.salt(salt)`              | The route's salt                                                          | 32 random bytes per compile, mixed with the transaction's count of intents |
+| `then(body)`               | The body; returns the `routes.HostIntent`                                 | Required                                                                   |
 
 `REWARD_MODIFIERS` and `ROUTE_MODIFIERS` list each stage's modifiers, and
 [Intent defaults](../reference/intent-defaults.md) gives each default's reason. `.then(body)` writes

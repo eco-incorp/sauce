@@ -57,8 +57,10 @@ export interface IntentDefaults extends EcoRoutesSelector {
   readonly sourcePortal?: AddressInput;
   /** Overrides the destination-chain Portal recorded in the child's route. */
   readonly destinationPortal?: AddressInput;
-  /** Route salt, for every intent that names none with `.salt(...)`. Left out: 32 random bytes,
-   *  picked once per compile ({@link randomSalt}). */
+  /** The base of the route salt of every intent that names none with `.salt(...)`, which each such
+   *  intent mixes, as it opens, with how many intents the transaction has opened (transient
+   *  storage), so two built alike are two. Left out: 32 random bytes, picked once per compile
+   *  ({@link randomSalt}). */
   readonly salt?: `0x${string}`;
   /** How the program funds the reward: `"transfer"` (default) pays the vault then `publish`es;
    *  `"publishAndFund"` approves the Portal and calls `publishAndFund`. */

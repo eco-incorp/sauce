@@ -13,7 +13,7 @@ app gives an intent:
 | `.deadline(t)` after `.receive` | The last second the intent may be filled, Unix seconds | 300 seconds (5 minutes) after the intent opens, the window Eco's solver quotes |
 | `.deadline(t)` after `.send` | From when an unproven reward may be refunded to the creator | 604800 seconds (7 days) after the fill deadline: Eco's solver fills no intent whose reward is refundable sooner |
 | `.prover(p)` after `.send` | The source chain's prover, which accepts the proof of the fill | The one the registry records on both chains, the HyperProver first |
-| `.salt(s)` after `.receive` | The route's salt: two otherwise identical intents differ by it | 32 random bytes, as Eco's app picks, so publishing the same intent twice gives two |
+| `.salt(s)` after `.receive` | The route's salt: two otherwise identical intents differ by it | 32 random bytes, as Eco's app picks, mixed with how many intents the transaction has opened, so two intents built alike are two, in one program or in two |
 | `.fee(f)` after `.receive` | The destination Kitchen's fee, in wei, that the body's cook pays | That Kitchen's fee, read from it when the intent is built, for each destination |
 | `{ native: amount }` in `.send` | Native coin in the reward, in wei | None |
 

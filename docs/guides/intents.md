@@ -460,9 +460,11 @@ or the wallet that sends the cook.
 `.refundee(a)` sets the reward's `creator`: after the deadline a refund goes to `a`, and only `a`
 may send the Portal's `refundTo` to redirect it.
 
-The **salt** makes two otherwise identical intents two hashes. Left out, it is 32 random bytes
-picked when the intent is built; `compile.intents.salt` fixes it for every intent that gives none,
-and the `sauce` command picks one per run (`--intent-salt` to choose it).
+The **salt** makes two otherwise identical intents two hashes. Left out, it is 32 random bytes picked
+when the program compiles (`compile.intents.salt` fixes them, and the `sauce` command picks them
+once per run, `--intent-salt` to choose), mixed as the intent opens with how many intents the
+transaction has opened, kept in transient storage: two intents built alike in one program, or in a
+loop, are two intents. A salt an intent gives, `.salt(s)`, is used as written.
 
 The **execution fee** is the one value that cannot be derived. It is mutable on-chain, and it lives
 on the destination, which the source chain cannot read while it executes. Read it at build time and
