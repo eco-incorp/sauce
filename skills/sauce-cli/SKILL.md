@@ -441,33 +441,33 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
 ## Intents and Solana
 
 - **A file that opens intents** (`Ethereum.Portal.send(…).refundee(refundTo).receive(…).then(() => { … })`)
-  names each intent's refundee, the refund address, with `.refundee(...)`: an intent a program opens
-  has no default refundee, since the Pot it runs on may be shared. Only a top-level intent
-  `sauce intent publish` publishes from a wallet takes that wallet (or `--intent-refundee <address>`)
-  when it names none. The rest default, and the file may set each with a modifier
-  (`sauce-intents`): the deadlines from when the command builds the intents, a random salt picked
-  once per run, and the Kitchen fee a body's cook pays, read from the destination.
-  `--intent-deadline <unix seconds>`, `--intent-salt <bytes32>`, `--intent-execution-fee <wei>` and
-  the other `--intent-*` flags set one for every intent that does not set its own; `--offline`
-  reads no fee, so give `--intent-execution-fee`. `compile` and
-  `sauce intent publish` warn while the Pot such an intent cooks on
-  is not deployed on its destination: no solver can fill it until then, and the warning names the
-  `sauce pot --deploy` that deploys it. `sauce run` opens them from the Pot, which is the way when
-  an amount is measured on chain. `sauce intent publish` opens them from a wallet with no Pot: it
-  takes `main`'s arguments with `--args`, as `sauce run` does, and fixes them into the intents, and
-  `sauce intent publish <file> --chain <chain> --from <address> --args <arguments> --format json` prints its unsigned
-  transfers and `publish` for any wallet to send, in that order. Both fund each reward by a transfer
-  into the intent's vault, then `publish`: no approval. `--intent-fund-via publishAndFund` switches
-  either to an approve and `publishAndFund`. `sauce intent publish … --dry-run --assume-balance
-USDC:<amount>` rehearses it from a wallet that does not hold the reward yet.
+  names each intent's refundee, the refund address, with `.refundee(...)`: no intent has a default
+  refundee, since the Pot it is published from may be shared. The rest default, and the file may
+  set each with a modifier (`sauce-intents`): the deadlines from when the command builds the
+  intents, a random salt picked once per run, and the Kitchen fee a body's cook pays, read from the
+  destination. `--intent-deadline <unix seconds>`, `--intent-salt <bytes32>`,
+  `--intent-execution-fee <wei>` and the other `--intent-*` flags set one for every intent that
+  does not set its own; `--offline` reads no fee, so give `--intent-execution-fee`. `compile` and
+  `sauce intent publish` warn while the Pot such an intent cooks on is not deployed on its
+  destination: no solver can fill it until then, and the warning names the `sauce pot --deploy`
+  that deploys it. Every intent is published by a cook: `sauce intent publish <file> --chain
+<chain> --keystore <keystore> --fund USDC:<amount> --args <arguments>` runs the file on your own
+  Pot, `--fund` pulling the reward in from your wallet as `sauce run --fund` does, and the Pot pays
+  each reward into its intent's vault and publishes it; it prints each intent's hash and record,
+  read from the cook's own logs, and stores it. `sauce run` does the same for any program.
+  `--intent-fund-via publishAndFund` switches either to an approve and `publishAndFund`.
+  `sauce intent publish … --from <address> --dry-run --assume-balance USDC:<amount>` rehearses it
+  for a Pot that does not hold the reward yet and prints the intents it would publish, and
+  `--format json` prints the cook, unsigned, as `sauce tx` does.
   `sauce intent fill <file> --chain <chain> --args <arguments>` rehearses each intent where its
-  body runs: on its destination chain, as the solver who fills it, with no key and nothing sent.
-  `publish --dry-run` covers only the source chain. `fill` prints what the body moved, what it left
-  in the shared Pot, and why it reverts.
+  body runs: on its destination chain, as the solver who fills it, with no key and nothing sent,
+  having read the intent from a rehearsal of publishing it on the source. `publish --dry-run`
+  covers only the source chain. `fill` prints what the body moved, what it left in the shared Pot,
+  and why it reverts.
   `sauce-intents` covers writing, publishing, funding (including a transfer into the intent's
   vault), rehearsing them, and every later step (`sauce intent fill --send`, `prove`, `claim`,
-  `refund`, `cancel`, `status`, `import`). Publishing, from a wallet or a Pot, needs every chain the
-  intent involves supported; the rehearsals run on any chain.
+  `refund`, `cancel`, `status`, `import`). Publishing needs every chain the intent involves
+  supported; the rehearsals run on any chain.
 - **On Solana** (`--chain solana`) a program declares every account it touches, a cook signs with
   `--keypair`, and the execution fee is read from the cluster and printed as `fee`, with no
   `--value`; `--max-execution-fee <lamports>` refuses a cook whose fee is above it. `--via kitchen`,

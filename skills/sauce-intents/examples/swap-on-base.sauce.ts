@@ -3,8 +3,8 @@
 // over every Uniswap V3 pool and hookless Uniswap V4 pool of the pair, and sells to each with
 // liquidity the WETH still unsold, up to its own limit (the price paid, fee included, never below
 // `sqrtPriceLimitX96`), then pays the USDC to `recipient` and returns the unsold WETH to `refundTo`
-// on Base. The solver earns `reward` of WETH. Nothing is measured on chain, so it can also be
-// published from a wallet (sauce intent publish, with the same --args).
+// on Base. The solver earns `reward` of WETH, which `sauce intent publish --fund` pulls into your
+// Pot as it publishes (with the same --args).
 //
 // `--chain` is the source chain: `WETH` in `.send(...)` is its WETH. In `.receive(...)` and inside
 // the body, the code runs on Base: `WETH`, `USDC`, `UniswapV3.Factory`, `UniswapV3.Pool`,

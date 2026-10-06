@@ -35,10 +35,8 @@ and add the use case, or
 ## Compile a program for a chain, and cook it
 
 `routes.compileSauceProgram(chain, source, options)` is what `sauce compile` runs: the chain's
-names and `@sauce/token`, with `options.intents` for the intents it opens, and `options.args` to fix
-`main`'s arguments into the program, as `sauce intent publish --args` does for intents published
-from a wallet. Without `args`, the result carries `main`'s declared
-parameters (`entryParams`); `routes.encodeEntryArguments` encodes values for them as `--args` does,
+names and `@sauce/token`, with `options.intents` for the intents it opens. The result carries
+`main`'s declared parameters (`entryParams`); `routes.encodeEntryArguments` encodes values for them as `--args` does,
 and program plus arguments is the `program` of the owner's `Pot.cook(engine, program)`.
 
 ```ts
@@ -91,9 +89,8 @@ export async function cookTransactions(
 pot)` from `/evm/engine` reads both, and returns the `setRouter` call for the Pot's owner to send
   when the Kitchen has a newer one.
 - A program that opens an intent names its refundee with `.refundee(...)`, always: no option
-  defaults it, but `options.intents.publisher`, the wallet that publishes a top-level intent
-  itself. For a body that is a program it also needs `options.intents.executionFee` (one fee, or a
-  function of the destination) unless it gives `.fee(...)`. `openedAt` (Unix seconds) makes its
+  defaults it. Its body's cook also needs `options.intents.executionFee` (one fee, or a function of
+  the destination) unless it gives `.fee(...)`. `openedAt` (Unix seconds) makes its
   default deadlines count from then rather than from when the program runs, and `salt` fixes the
   salt, random otherwise (`sauce-intents`).
 
@@ -183,8 +180,9 @@ a recorded address, not proof of live code on the chain.
 - **Nested intents** are written in the program: a body that opens the next intent with
   `Chain.Portal.send(reward).receive(delivery).then(() => { ... })` (`sauce-intents`, Cascades).
   In a typed closure the chain is the imported export, which typechecks there, modifiers included. `routes.compileSauceProgram`
-  lists the intents a program opens in `.intents`, and `routes.intentSourceTxs` publishes a fixed
-  one from a wallet. The lower-level builder, `routes.openRoute(chain, body, options).nest(child,
+  lists each intent's body in `.bodies`, its destination and its program. The intents themselves
+  are encoded as the program runs, so every one is published by a cook, and read back from the
+  cook's logs, in its receipt or rehearsal (`routes.intentFromPublished`). The lower-level builder, `routes.openRoute(chain, body, options).nest(child,
 { via })`, attaches a child built in TypeScript instead, with options of its own: by default
   (`via: "transfer"`) the parent's route funds the child by a transfer into its vault, with no
   publication of its own; `via: "publishAndFund"` publishes and funds it for public discovery.

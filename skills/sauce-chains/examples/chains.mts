@@ -1,6 +1,6 @@
 // Compiles holdings.sauce.ts for Ethereum and for Base the way `sauce compile` does, and holds the
 // sauce-chains skill to what that resolves: each name in the skill's table is, on each chain, the
-// address the compile resolves, the one the chain's reference file records and the one the
+// address `sauce globals` lists, the one the chain's reference file records and the one the
 // compiled program carries, and `chainId` is the chain's id. A name the chain lacks is refused with
 // the words the skill quotes; a chain-qualified contract is that chain's address, called or not,
 // and a chain-qualified token is refused. Then payout-solana.sauce.ts: its accounts in order with their
@@ -21,17 +21,13 @@ const skill = read("../SKILL.md");
 const holdings = read("./holdings.sauce.ts");
 const CHAINS = ["ethereum", "base"] as const;
 
-/** Compiles `source` for `chain`, with each contract reference the compile resolved. */
+/** Compiles `source` for `chain`: the program, and its bytes as hex. */
 function compile(chain: string, source: string) {
-  const contracts = new Map<string, { chain: string; address: string }>();
-  const program = routes.compileSauceProgram(chain, source, {
-    accessors: {
-      onContract: (reference, target) =>
-        contracts.set(reference, { chain: target.chain.slug, address: target.address }),
-    },
-  });
-  return { program, contracts, hex: Buffer.from(program.bytecode).toString("hex") };
+  const program = routes.compileSauceProgram(chain, source);
+  return { program, hex: Buffer.from(program.bytecode).toString("hex") };
 }
+/** Whether `hex` carries `address`. */
+const carries = (hex: string, address: string) => hex.includes(address.slice(2).toLowerCase());
 
 /** The message `source` is refused with on `chain`. */
 function refusal(chain: string, source: string): string {
@@ -55,7 +51,7 @@ check(
   `the table names USDC, WETH, bCSPX, UniswapV3.Factory and chainId, not ${rows.map((r) => r.name)}`,
 );
 for (const chain of CHAINS) {
-  const { contracts, hex } = compile(chain, holdings);
+  const { hex } = compile(chain, holdings);
   const globals = routes.sourceGlobals(chain);
   const recorded = read(`../references/${chain}.md`) + read(`../references/${chain}-stocks.md`);
   for (const { name, on } of rows) {
@@ -72,16 +68,11 @@ for (const chain of CHAINS) {
         .find((one) => one.namespace === namespace)
         ?.contracts.find((one) => one.name === contract)?.address;
       check(listed === cell, `sauce globals lists ${name} on ${chain} at ${cell}, not ${listed}`);
-      const resolved = contracts.get(name);
-      check(
-        resolved?.chain === chain && resolved.address === cell,
-        `${name} compiles to ${cell} on ${chain}`,
-      );
     } else {
       const listed = globals.tokens.find((one) => one.symbol === name)?.address;
       check(listed === cell, `sauce globals lists ${name} on ${chain} at ${cell}, not ${listed}`);
-      check(hex.includes(cell.slice(2).toLowerCase()), `${name} compiles to ${cell} on ${chain}`);
     }
+    check(carries(hex, cell), `${name} compiles to ${cell} on ${chain}`);
   }
   console.log(`holdings.sauce.ts on ${chain}: ${rows.map((row) => row.on[chain]).join(", ")}`);
 }
@@ -124,7 +115,7 @@ const qualified = compile(
   "function main(): Address { return Base.UniswapV3.Factory; }",
 );
 check(
-  qualified.contracts.get("Base.UniswapV3.Factory")?.address === factoryOnBase,
+  carries(qualified.hex, factoryOnBase),
   "Base.UniswapV3.Factory is Base's factory in a program for Ethereum",
 );
 // Called, it is still that address: a program for Ethereum calls Base's address on Ethereum.
@@ -133,8 +124,7 @@ const called = compile(
   "function main(): Address { return Base.UniswapV3.Factory.getPool(USDC, WETH, 500); }",
 );
 check(
-  called.contracts.get("Base.UniswapV3.Factory")?.address === factoryOnBase &&
-    called.hex.includes(factoryOnBase.slice(2).toLowerCase()),
+  carries(called.hex, factoryOnBase),
   "a call on Base.UniswapV3.Factory, compiled for Ethereum, goes to Base's address",
 );
 check(skill.includes("calls that address on Ethereum"), "the skill says where the call goes");

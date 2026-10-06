@@ -1042,11 +1042,9 @@ async function runUsage(where, file, argv, chain, header = false) {
     } else if (flag === "--compact-args") kept.push(flag);
     else if (/^--/.test(flag) && value !== undefined && !value.startsWith("-")) i++;
   }
-  // An intent's deadlines and creator have defaults, which a usage line need not give: offline, the
-  // run gives the creator a wallet would (there is none to compile for), and the fee the Kitchen
-  // would be read for.
+  // An intent's deadlines have defaults, which a usage line need not give, and its refundee is the
+  // file's: offline, the run gives the fee the Kitchen would be read for.
   if (OPENS_INTENT.test(read(file))) {
-    if (!kept.includes("--intent-refundee")) kept.push("--intent-refundee", DEV);
     if (!kept.includes("--intent-execution-fee")) kept.push("--intent-execution-fee", "0");
   }
   const compiled = await compileJson(file, chain, kept);
@@ -1253,8 +1251,8 @@ try {
         const file = join(SCRATCH, `block-${n++}.sauce.ts`);
         writeFileSync(file, `${block.body}\n`);
         const intents = OPENS_INTENT.test(block.body)
-          ? // Its deadlines default; a creator and the fee are what a wallet and a read would give.
-            ["--intent-refundee", DEV, "--intent-execution-fee", "0"]
+          ? // Its deadlines default and its refundee is the block's; the fee is what a read gives.
+            ["--intent-execution-fee", "0"]
           : [];
         for (const chain of chains) {
           const compiled = await compileJson(file, chain, intents);

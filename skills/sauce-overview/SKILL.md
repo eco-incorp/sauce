@@ -266,8 +266,9 @@ pools by their factory's key, so one document serves every chain that has its na
 Work continued on another chain: an intent file (`Base.Portal.send(...).receive(...).then(...)`
 in `main`, its inputs `main`'s parameters, the refundee named, the deadlines, salt and fee defaulted
 or set by modifiers), its life (fund, publish, fill, prove, claim, refund
-or cancel, a `sauce intent` command each), every way to publish and fund one, token-only bodies
-and program bodies, cascades, on which chain each name resolves, and rehearsing both sides.
+or cancel, a `sauce intent` command each), every way to publish and fund one (a cook on your
+Pot), the body (a program cooked on the destination's shared Pot), cascades, on which chain each
+name resolves, and rehearsing both sides.
 
 - **Holds** a reference of the intent contract's functions, events and errors, and examples that
   forward USDC to Aave on another chain, run a distributed swap as the body, and fund an intent by
