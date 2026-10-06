@@ -574,8 +574,9 @@ describe("venue-where-deployed on OP Mainnet state", SUITE, () => {
 });
 
 describe("venue-where-deployed on every EVM chain", SUITE, () => {
-  // A chain with neither venue, or without one of the tokens, gets a program that reads nothing, so
-  // an empty anvil runs it as well as that chain would.
+  // A chain with neither venue gets a program that reads nothing, so an empty anvil runs it as well
+  // as that chain would; a chain with a venue but without USDC or WETH refuses the program, naming
+  // the token, which only a compiled branch resolves.
   let env: Anvil;
 
   before(async () => {
@@ -585,18 +586,25 @@ describe("venue-where-deployed on every EVM chain", SUITE, () => {
     await env?.stop();
   });
 
-  it("compiles for every EVM chain: the venue's lookup where it has one, and a program returning 0 where it has none", async () => {
+  it("compiles for every EVM chain: the venue's lookup where it has one and both tokens, and a program returning 0 where it has no venue", async () => {
     const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString("hex");
     const evm = canonicalChains.filter((chain) => chain.kind === "evm");
     let looksUp = 0;
     let returnsZero = 0;
+    let refused = 0;
     for (const { slug } of evm) {
-      const bytecode = routes.compileSauceRoute(slug, VENUE_PROGRAM, {
-        pot: env.pot,
-        engine: env.engine,
-      }).compiled.bytecode[0]!;
+      const compile = () =>
+        routes.compileSauceRoute(slug, VENUE_PROGRAM, { pot: env.pot, engine: env.engine }).compiled
+          .bytecode[0]!;
       const names = venueNames(slug);
-      const factory = names.usdc && names.weth ? (names.pancake ?? names.uniswap) : undefined;
+      const factory = names.pancake ?? names.uniswap;
+      if (factory !== undefined && (names.usdc === undefined || names.weth === undefined)) {
+        const missing = names.usdc === undefined ? "USDC" : "WETH";
+        assert.throws(compile, new RegExp(`\`${missing}\` is not a token or protocol on ${slug}`));
+        refused++;
+        continue;
+      }
+      const bytecode = compile();
       if (factory !== undefined) {
         assert.ok(
           hex(bytecode).includes(factory.slice(2).toLowerCase()),
@@ -609,8 +617,8 @@ describe("venue-where-deployed on every EVM chain", SUITE, () => {
       }
     }
     assert.ok(
-      looksUp >= 3 && returnsZero >= 3,
-      `${looksUp} look a pool up, ${returnsZero} return 0`,
+      looksUp >= 3 && returnsZero >= 1 && refused >= 1,
+      `${looksUp} look a pool up, ${returnsZero} return 0, ${refused} refuse it`,
     );
   });
 });

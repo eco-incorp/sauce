@@ -170,11 +170,13 @@ function main(
 **A venue a chain may not have** is zero on that chain, and a program compares it with zero: the
 comparison is decided when the program is compiled for a chain, so
 `if (UniswapV3.Factory != 0) { ... }` keeps its branch where the chain has the contract, and leaves
-it out, names and all, where it does not. A contract and a token symbol (`USDT != 0`) both compare
-this way; it folds `if`/`else`, `?:`, `&&`, `||` and `!`; and a guard
-`if (UniswapV3.Factory == 0) { return 0; }` drops the rest of its function. Any other use of an
-absent name is a compile error saying the chain does not have it, and a name no chain has is an
-unknown name rather than zero, so a typo cannot quietly drop a branch.
+it out, names and all, where it does not. The comparison folds `if`/`else`, `?:`, `&&`, `||` and
+`!`, and a guard `if (UniswapV3.Factory == 0) { return 0; }` drops the rest of its function. Any
+other use of an absent contract is a compile error saying the chain does not have it, and a name no
+chain has is an unknown name rather than zero, so a typo cannot quietly drop a branch. A token
+symbol does not compare this way: it is a bare name, and one the chain lacks is refused wherever it
+appears, guarded or not. Write a token some of your chains lack as `Token(<address>)`, or take its
+address as a `main` parameter.
 
 ```sauce chain=base,linea
 function main(tokenA: Address, tokenB: Address) {

@@ -98,18 +98,18 @@ alias resolves to where, and `contracts.listContracts(slug)` a protocol's contra
 
 ## Use a venue only where the chain has it
 
-A contract or token the chain a program is compiled for does not have is zero there, and comparing
-it with zero is decided when the program is compiled. A branch that comparison rules out is never
-compiled, so nothing in it is resolved, and one program can name a venue some of its chains lack:
+A contract the chain a program is compiled for does not have is zero there, and comparing it with
+zero is decided when the program is compiled. A branch that comparison rules out is never compiled,
+so nothing in it is resolved, and one program can name a venue some of its chains lack:
 
 ```js
-// One program for every chain: the USDC/WETH 0.05% pool from PancakeSwap V3 where the chain has it,
-// from Uniswap V3 where it does not, and nothing where it has neither venue or lacks either token.
+// One program for every chain: the USDC/WETH 0.05% pool from PancakeSwap V3 where the chain has
+// it, from Uniswap V3 where it does not, and nothing where it has neither venue.
 //
 // A contract the chain lacks is zero there, and comparing it with zero is decided when the program
-// is compiled, for the chain it is compiled for: a branch it rules out is never compiled.
+// is compiled, for the chain it is compiled for: a branch it rules out is never compiled. A token is
+// a bare name: a chain with a venue but without USDC or WETH refuses the program, naming the token.
 function main() {
-  if (USDC == 0 || WETH == 0) return 0;
   let pool = 0;
   if (PancakeswapV3.Factory != 0) {
     pool = PancakeswapV3.Factory.getPool(USDC, WETH, 500);
@@ -124,11 +124,12 @@ Compiled for Base this calls PancakeSwap V3's factory; compiled for Optimism, wh
 PancakeSwap V3, it compiles to the Uniswap V3 lookup alone. [registry-names.ts](../examples/registry-names.ts)
 compiles it for both.
 
-- Any registry name compares this way: a contract — `UniswapV3.Factory`, `Uniswap.UniversalRouter`,
-  or one on a named chain, `Arbitrum.UniswapV3.Factory` — or a token symbol, `USDT`. A token is
-  there where the chain's token map has it, which includes the `tokens` you pass.
-- `==`, `!=`, `===` and `!==` are the only uses of an absent name; any other use is a compile error
-  saying the chain does not have it. The comparison folds `if`/`else`, `?:`, `&&`, `||` and `!`, and
+- Any registry contract compares this way: `UniswapV3.Factory`, `Uniswap.UniversalRouter`, or one
+  on a named chain, `Arbitrum.UniswapV3.Factory`. A token symbol does not: it is a bare name, and
+  one the chain's token map lacks (the registry's, plus the `tokens` you pass) is refused wherever
+  it appears, guarded or not. Write a token some of your chains lack as `Token(<address>)`.
+- `==` and `!=` (and `===` and `!==` against a number) are the only uses of an absent contract; any
+  other use is a compile error saying the chain does not have it. The comparison folds `if`/`else`, `?:`, `&&`, `||` and `!`, and
   a guard that returns, `if (UniswapV3.Factory == 0) return 0;`, drops the rest of its block where
   the contract is absent.
 - A branch that depends on it only through a runtime value

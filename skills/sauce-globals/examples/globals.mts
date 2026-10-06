@@ -93,11 +93,11 @@ check(
   ),
   "comparing with zero removes the branch where the chain lacks the contract",
 );
-// A token symbol too: Base registers no USDT, so the guarded transfer is removed there.
+// A token symbol is a bare name: Base registers no USDT, so it is refused there, guarded or not.
 check(rejects("base", "function main() { USDT.transfer(ctx.self(), 1); }"), "no USDT on Base");
 check(
-  !rejects("base", "function main() { if (USDT != 0) { USDT.transfer(ctx.self(), 1); } }"),
-  "USDT != 0 removes the branch on Base",
+  rejects("base", "function main() { if (USDT != 0) { USDT.transfer(ctx.self(), 1); } }"),
+  "a guard does not make USDT a name on Base",
 );
 check(
   rejects("base", "function main() { if (UniswapV9.Factory != 0) { require(false); } }"),
