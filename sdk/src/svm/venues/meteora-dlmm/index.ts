@@ -190,12 +190,12 @@ function getAddressEncoded(value: Address): Uint8Array {
   return new Uint8Array(getAddressCodec().encode(value));
 }
 
-async function deriveBinArrayPda(pair: Address, index: number): Promise<Address> {
+async function deriveBinArrayPda(pair: Uint8Array, index: number): Promise<Address> {
   const le = new Uint8Array(8);
   new DataView(le.buffer).setBigInt64(0, BigInt(index), true); // bin_array_index.to_le_bytes()
   return memoizedGetProgramDerivedAddress(METEORA_DLMM_PROGRAM_ID, [
     new TextEncoder().encode("bin_array"),
-    getAddressEncoded(pair),
+    pair,
     le,
   ]);
 }
@@ -232,7 +232,7 @@ function isSupportLimitOrder(data: Uint8Array): boolean {
  */
 async function resolveWindow(
   load: AccountLoader,
-  pair: Address,
+  pair: Uint8Array,
   activeId: number,
   binStep: number,
   swapForY: boolean,
@@ -298,6 +298,25 @@ async function resolveWindow(
 export async function fetchMeteoraDlmmConfig(
   load: AccountLoader,
   pair: Address,
+): Promise<MeteoraDlmmPoolConfig> {
+  return fetchMeteoraDlmmConfigInternal(load, pair, getAddressEncoded(pair));
+}
+
+/** Fetch from a 32-byte pair key, reusing its bytes for every bin-array and bitmap PDA seed. */
+export async function fetchMeteoraDlmmConfigBytes(
+  load: AccountLoader,
+  pair: Uint8Array,
+): Promise<MeteoraDlmmPoolConfig> {
+  if (pair.length !== 32) throw new Error(`${SLUG}: pair key must be 32 bytes, got ${pair.length}`);
+  // Callers may reuse or mutate their buffer while the loader is awaiting RPC.
+  const pairBytes = new Uint8Array(pair);
+  return fetchMeteoraDlmmConfigInternal(load, getAddressCodec().decode(pairBytes), pairBytes);
+}
+
+async function fetchMeteoraDlmmConfigInternal(
+  load: AccountLoader,
+  pair: Address,
+  pairBytes: Uint8Array,
 ): Promise<MeteoraDlmmPoolConfig> {
   const data = await load(pair);
   if (data === null) throw new Error(`${SLUG}: pair account ${pair} not found`);
@@ -366,11 +385,11 @@ export async function fetchMeteoraDlmmConfig(
   const binStep = Number(readUintLE(data, OFF_BIN_STEP, 2));
   const activeId = readI32(data, OFF_ACTIVE_ID);
   const [xToY, yToX, bitmapExtension] = await Promise.all([
-    resolveWindow(load, pair, activeId, binStep, true),
-    resolveWindow(load, pair, activeId, binStep, false),
+    resolveWindow(load, pairBytes, activeId, binStep, true),
+    resolveWindow(load, pairBytes, activeId, binStep, false),
     memoizedGetProgramDerivedAddress(METEORA_DLMM_PROGRAM_ID, [
       new TextEncoder().encode("bitmap"),
-      getAddressEncoded(pair),
+      pairBytes,
     ]),
   ]);
   // The bitmap extension exists only for pairs whose liquidity leaves the
@@ -409,4 +428,5 @@ export const meteoraDlmm = {
   programId: METEORA_DLMM_PROGRAM_ID,
   tokenProgram: TOKEN_PROGRAM,
   fetchPoolConfig: fetchMeteoraDlmmConfig,
+  fetchPoolConfigBytes: fetchMeteoraDlmmConfigBytes,
 };
