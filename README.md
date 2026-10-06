@@ -73,9 +73,10 @@ an intent carrying it onward.
 // on Ethereum as a program, on the Pot every intent there shares, and its cook pays Ethereum's
 // Kitchen fee, which the command reads there. The deadlines and the salt take their defaults.
 //
-// `USDC` is a registered symbol. In `.receive(...)` and the body it means Ethereum's USDC, because
-// that is the chain they run on. In `.send(...)` it means the USDC of the chain this program runs
-// on, which escrows the reward.
+// `USDC` is a registered symbol. In the body it means Ethereum's USDC, the chain the body runs on,
+// and so it does in `.receive(...)`, whose tokens are looked up again on Ethereum by symbol (its
+// amounts are computed here). In `.send(...)` it means the USDC of the chain this program runs on,
+// which escrows the reward.
 //
 //   sauce run cross-chain-intent.sauce.ts --chain base --keystore <keystore> \
 //     --args <recipient> <minAmount> <refundTo>
@@ -112,9 +113,11 @@ Without Sauce, this step is either a contract you write and deploy (read the bal
 intent around the amount, ask the Portal for its vault, pay the reward into it, call `publish`) or
 a second transaction you build yourself after reading what the first produced.
 
-`USDC` is a registered token symbol, and in `.receive(...)` and the body it means **Ethereum's**
-USDC, because that is where those run. In `.send(...)` it means the USDC of the chain the program
-runs on — Base, in the line above — because the program escrows the reward there. `recipient`,
+`USDC` is a registered token symbol. In the body it means **Ethereum's** USDC, because that is where
+the body runs, and in `.receive(...)` only the tokens are Ethereum's, looked up again there by
+symbol, while every other value, an amount included, is computed where the intent opens. In
+`.send(...)` it means the USDC of the chain the program runs on — Base, in the line above — because
+the program escrows the reward there. `recipient`,
 `minAmount` and `refundTo` are `main`'s parameters: they arrive with the transaction (`--args`), so
 one compiled program serves every call.
 

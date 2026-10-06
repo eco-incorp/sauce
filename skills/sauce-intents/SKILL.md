@@ -226,19 +226,21 @@ The file is compiled for the **source** chain, the one that pays the reward (`--
   reward: `USDC` there is the source chain's USDC. A reward token must be known when the file is
   compiled: a symbol, or `Token(<address on the source chain>)`. Its amount may be a measured
   value. The route's modifiers are computed on the source chain too, where the intent is built.
-- **In `.receive(...)` and inside the body**, the code runs on the destination, and every name a
-  chain supplies resolves there: in an `Ethereum.Portal` intent, `USDC` is Ethereum's USDC,
-  `AaveV3.Pool` is Ethereum's pool, and `chainId` and a `Namespace_Contract` name are Ethereum's.
+- **Inside the body**, the code runs on the destination, and every name a chain supplies resolves
+  there: in an `Ethereum.Portal` intent, `USDC` is Ethereum's USDC, `AaveV3.Pool` is Ethereum's
+  pool, and `chainId` and a `Namespace_Contract` name are Ethereum's.
   The tokens a destination has are listed in
   [../sauce-globals/references/tokens.md](../sauce-globals/references/tokens.md), with their
   addresses in the destination's file in `sauce-chains`
   ([../sauce-chains/references/ethereum.md](../sauce-chains/references/ethereum.md) for Ethereum).
 - **The rule repeats at every depth.** An intent opened inside a body is funded on that body's
   chain, so its reward resolves there and its own body on its own destination.
-- **A token in `.receive(...)` is named on the source and delivered on the destination.** A symbol
-  is looked up again on the destination, so `USDC` delivers the destination's USDC; a token the
-  source chain has no symbol for is written `Token(<address on the destination>)`, which is used as
-  written. A token in the reward is the source chain's, by symbol or by `Token(<address>)`.
+- **In `.receive(...)` only the tokens are the destination's, each symbol looked up again there by
+  its name; every other value in it, an amount included, is computed on the source chain, where
+  the intent opens.** So `USDC` delivers the destination's USDC, while `chainId` in an amount is
+  the source's; a token the source chain has no symbol for is written
+  `Token(<address on the destination>)`, which is used as written. A token in the reward is the
+  source chain's, by symbol or by `Token(<address>)`.
 
 ## Publishing and funding
 

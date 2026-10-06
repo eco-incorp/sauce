@@ -305,11 +305,11 @@ of hops, each paying the next what it was delivered, is written; see
 Two chains meet in `Arbitrum.Portal.send(...).receive(...).then(() => { ... })`, and each part
 belongs to one of them. A token symbol resolves on the chain where its part runs:
 
-| Part                               | Runs on                       | `USDC` is    |
-| ---------------------------------- | ----------------------------- | ------------ |
-| The body, `.then(() => { ... })`   | Arbitrum, the destination     | Arbitrum's   |
-| `.receive(...)`, what is delivered | Arbitrum, the destination     | Arbitrum's   |
-| `.send(...)` and every modifier    | The chain the program runs on | That chain's |
+| Part                               | Computed on                   | `USDC` is                              |
+| ---------------------------------- | ----------------------------- | -------------------------------------- |
+| The body, `.then(() => { ... })`   | Arbitrum, the destination     | Arbitrum's                             |
+| `.receive(...)`, what is delivered | The chain the program runs on | Arbitrum's: a token is looked up again |
+| `.send(...)` and every modifier    | The chain the program runs on | That chain's                           |
 
 The reward belongs to the enclosing chain because the program escrows it there: it pays the reward
 token into the intent's vault on that chain's Portal and publishes the intent in the same
@@ -322,9 +322,10 @@ its reward resolves there and its own body on its own destination. The same hold
 values that belong to a chain, `chainId` and protocol addresses such as `UniswapV4_UniversalRouter`:
 a body on another chain sees that chain's own.
 
-A token in `.receive(...)` is written on the enclosing chain, where the program runs, and delivered
-on the destination, so a symbol there is looked up again on the destination by its name: `USDC`
-delivers Arbitrum's USDC. A token the enclosing chain has no symbol for is written
+In `.receive(...)` only the tokens are the destination's, each symbol looked up again there by its
+name; every other value in it, an amount included, is computed on the chain the program runs on,
+where the intent opens. So `USDC` delivers Arbitrum's USDC, and `chainId` in an amount is the
+enclosing chain's. A token the enclosing chain has no symbol for is written
 `Token(<address on the destination>)`, which is used as written.
 
 A literal address means that address wherever it appears, and so does a compile-time define whose

@@ -14,9 +14,10 @@
 // on Ethereum as a program, on the Pot every intent there shares, and its cook pays Ethereum's
 // Kitchen fee, which the command reads there. The deadlines and the salt take their defaults.
 //
-// `USDC` is a registered symbol. In `.receive(...)` and the body it means Ethereum's USDC, because
-// that is the chain they run on. In `.send(...)` it means the USDC of the chain this program runs
-// on, which escrows the reward.
+// `USDC` is a registered symbol. In the body it means Ethereum's USDC, the chain the body runs on,
+// and so it does in `.receive(...)`, whose tokens are looked up again on Ethereum by symbol (its
+// amounts are computed here). In `.send(...)` it means the USDC of the chain this program runs on,
+// which escrows the reward.
 //
 //   sauce run cross-chain-intent.sauce.ts --chain base --keystore <keystore> \
 //     --args <recipient> <minAmount> <refundTo>
