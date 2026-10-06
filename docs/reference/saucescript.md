@@ -185,18 +185,34 @@ Accounts compare only with `==` and `!=`: "accounts compare for identity only �
 
 **Values that exist only while compiling**
 
-- A `class`, an instance of one (`new C(…)`), an arrow function, `undefined`, and a `const` bound to an
-  object or array literal are values the compiler holds. A call on one runs while the program compiles:
-  only what it does at run time, such as a contract call, a storage write or a revert, reaches the program,
-  where the call stands.
-- An arrow function is called in place (`const twice = (x) => x * 2; twice(a)`), in the function it was
-  written in. A nested `function` declaration is not supported.
-- A field nothing has set, and an argument left out, is `undefined`, and `x === undefined` is decided while
-  compiling. Where a run-time value is needed it is an error: "`undefined` exists only while the program
-  compiles, so it has no run-time value here".
+A `class`, an instance of one (`new C(…)`), an arrow function, `undefined`, and a `const` bound to an
+object or array literal are values the compiler holds. A call on one runs while the program
+compiles: only what it does at run time, such as a contract call, a storage write or a revert,
+reaches the program, where the call stands. This is how a library writes a builder as a class; a
+program rarely needs to.
+
+- A class is declared at the top level, `export`ed or not, with fields (an initializer each, or
+  none), a `constructor`, methods and `static` methods; `this` is the instance in a method and the
+  class in a `static` one, and a method that returns `this` chains. It cannot extend another class,
+  and getters, setters, private members and `static` fields are not supported.
+- An arrow function is called in place (`const twice = (x) => x * 2; twice(a)`), in the function it
+  was written in. A nested `function` declaration is not supported.
+- A method may take a rest parameter (`add(...items)`), filled only by a call the compiler runs:
+  `main` cannot take one. A `for (const x of items)` over such a list unrolls while compiling.
+- A field nothing has set, and an argument left out, is `undefined`, and `x === undefined` is decided
+  while compiling, as is `x instanceof C` (false for any run-time value). Where a run-time value is
+  needed `undefined` is an error: "`undefined` exists only while the program compiles, so it has no
+  run-time value here". `this.b || this.a` is `this.a` while `this.b` is unset.
+- An instance has a run-time value only through its class: its `valueOf()`, or its
+  `[Symbol.toPrimitive]` method, run while compiling with the hint `"default"` under `==`/`!=` and
+  `"number"` elsewhere. A class's `[Symbol.dispose]()` runs when the statement that made the
+  instance ends (a `const` holding one, at the end of its block).
+- A dotted path to nothing, `Monkey.Jump` with `Monkey` undeclared or a member a static object lacks,
+  reads as `0` under `==` and `!=`, so `if (Monkey.Jump != 0) { … }` is decided while compiling and
+  its other arm is never compiled; any other use is an error. A bare unknown name is always one.
 - `const xs = []` is an empty array of this kind; an empty array in a `let` needs a declared type (§2).
-- A `throw` reached unconditionally in code the compiler runs is a compile error with the thrown message.
-- A class cannot extend another, and getters, setters, private members and static fields are not supported.
+- A `throw` reached unconditionally in code the compiler runs is a compile error with the thrown
+  message.
 
 **`main`'s arguments**
 
