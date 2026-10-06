@@ -1,0 +1,29 @@
+{
+  "$comment": "Maverick V2 token getters, from protocols/maverick/MaverickV2PoolABI.json.",
+  "abi": [
+    {
+      "name": "tokenA",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "tokenB",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    }
+  ]
+}

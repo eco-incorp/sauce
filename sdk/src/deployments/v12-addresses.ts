@@ -66,6 +66,8 @@ export interface V12DeployedAddresses {
       engine: V12EvmContractRef;
       /** Swap surface every Pot's fallback delegatecalls into. */
       router: V12EvmContractRef;
+      /** Generation-3 token-free quote service, independent of the Pot's execution Router. */
+      quoteRouter: V12EvmContractRef;
       /** The UUPS Kitchen proxy — mints Pots and gates every cook. */
       kitchen: V12EvmContractRef;
       /** The Kitchen implementation behind the proxy. */
@@ -98,13 +100,16 @@ export const v12EngineAddress = (): string => v12DeployedAddresses().evm.contrac
 /** The current EVM Router address. */
 export const v12RouterAddress = (): string => v12DeployedAddresses().evm.contracts.router.address;
 
+/** Generation-3 quote service; generation 4's execution Router has no quote entry point. */
+export const v12QuoteRouterAddress = (): string =>
+  v12DeployedAddresses().evm.contracts.quoteRouter.address;
+
 /**
  * The pinned Kitchen's Router generation — the Router every Pot minted from it starts on.
  *
  * A Pot minted earlier keeps its own Router until its owner moves it, so this is a Pot's generation
- * only once `potRouterUpdate(client, pot)` returns nothing. The generation decides which pools'
- * callbacks a Pot's Router answers: a `@sauce/router` swap on a Synthra V3 or UnitFlow V3 pool needs
- * generation 3, and reverts on an earlier one.
+ * only once `potRouterUpdate(client, pot)` returns nothing. This SDK's callback-venue swaps require
+ * generation 4's exact-input ABI; generation 3 remains available only for quoting.
  */
 export function v12RouterGeneration(): number {
   const { generation } = v12DeployedAddresses().evm.contracts.router;

@@ -158,12 +158,11 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   shared commit is not a property to rely on even while all four happen to share one after a
   coordinated re-release. **`releases.json` has one row per COMPILER version**, naming the four
   releases that compiler's output pairs with: compiler output and engines are compatible by exact
-  package version in both directions (2.4.0 needs v12-evm 1.1.0 / v12-svm 1.3.0; 2.3.0 output must
-  not reach them), and the SVM ISA revision does not move between them, so nothing else can tell
+  package version (2.5.0 uses v12-evm 1.2.0 / v12-svm 1.3.0; 2.4.0 shares SVM 1.3.0 but uses EVM 1.1.0; 2.3.0 output must not reach them), and the SVM ISA revision does not move between them, so nothing else can tell
   them apart. `sync-engine-artifacts.mjs` syncs the row of the INSTALLED compiler and records it as
   `V12Deployments.json`'s `compiler`; `deployments/releases.ts#assertEngineRunsCompiler` reads the
   same rows, and every SDK builder that names an engine (`v12Pot.encodeCook`, the SVM engine and
-  Kitchen cook instructions) refuses an engine another row names. To bump: edit the row's versions,
+  Kitchen cook instructions) refuses an engine no row explicitly pairs with that compiler. To bump: edit the row's versions,
   run the sync, paste the digests and engine ids it reports — a row with a `null` digest or engine id
   is a release not out yet, and the sync refuses it and writes nothing.
   **Fetching needs no PAT.** Each release publishes its assets as a PRIVATE npm package on GitHub
@@ -326,7 +325,7 @@ compile(options: CompileOptions): CompileResult
 `target` (`'evm' | 'svm'`) and `resolve` are required; `entry` (default `"main.js"`),
 `resolvePackage`, `contracts`, `inlineContracts`, `ambient`, `defines`, `optimize` (default
 `true`), `cache` (default `true`), and `compactArgs` (default `false`) are optional. All four manifests pin the
-compiler exactly to **2.4.0**, matching the lockfile. `CompileResult` contains `bytecode: Uint8Array`,
+compiler exactly to **2.5.0**, matching the lockfile. `CompileResult` contains `bytecode: Uint8Array`,
 `isaRevision: "stack-compact-v2"`, `entryEncoding: "abi-v1" | "compact-v1"`, optional
 `entrySchema: Uint8Array`, and optional `manifest: AccountManifest`. `manifest` is the SVM account
 contract, absent on EVM. Compile-time values affect bytecode; runtime entry arguments are encoded
@@ -605,7 +604,7 @@ t.approve(...)`, zero import) and the **`<Sym>.transfer(...)` symbol syntax** ar
 token first: `USDC.transfer(to, amt)` → `__sauce_transfer(USDC, to, amt)`, with
 `import { transfer as __sauce_transfer } from "@sauce/token"` prepended (`tokenImportLines`). So a
 write has ONE implementation however it is spelled, and it is the library's SafeERC20 one. The import
-is ALIASED (the pinned compiler, 2.3.0 and 2.4.0 alike, accepts `import { a as b }` and emits
+is ALIASED (the pinned compiler, 2.3.0 through 2.5.0, accepts `import { a as b }` and emits
 byte-identical code), which is what keeps a program's own `transfer`/`approve` from colliding; the `__sauce_<method>` names are reserved
 and a program declaring one is refused by name. It is an explicit import, not the ambient module,
 because `compileSauceRoute` never merges `chainAmbient()` in. A READ (`balanceOf`, and any other
@@ -1086,80 +1085,23 @@ gitignored build output, copied from `sdk/src/artifacts/` by
 publishes it, which is what blocks `dev-tools/scripts/deploy.ts` and `dev-tools/test/e2e.test.ts`
 (see their headers).
 
-**Entry points** (all the `swap*` ones are `onlySelf` — callable only via `cook()` from the same
-contract, so a recipe calls them as `ISauceRouter.at(address.self).swapX(...)`):
+**Generation 4 (Kitchen 1.2.0)** has one exact-input method per callback venue family:
+`swapV3`, `swapV4`, `swapMaverickV2`, `swapInfinityCL`, `swapInfinityBin`. All take unsigned
+`amountIn`, pay from the Pot, and return `(amountInUsed, amountOut)`. There is no payer argument,
+unified `swap`, exact-output mode, or quote method. `flash(callback, swap)` wraps the calldata of
+one of those five methods to execute a program during its authenticated callback.
 
-- `swap(SwapParams)` — unified swap; dispatches on `params.poolType` to `_swapV2/_swapV3/_swapV4/
-_swapCurve/_swapBalancerV2/_swapDODOV2/_swapTraderJoeLB/_swapMaverickV2/_swapWOOFi` (`@sauce/router`
-  calls it only for Maverick V2; see below).
-  `SwapParams` embeds a `PoolKey` struct (`currency0,currency1,fee,tickSpacing,hooks`) used by V4 and,
-  for its `fee` field only, by V2 (the pair's LP fee in ppm); ignored for V3. Calling this from
-  SauceScript requires the compiler to order object-literal
-  struct fields by the ABI's declared component order at the call boundary (recursively for nested
-  tuples); sorting them alphabetically scrambles the nested `PoolKey` into an empty revert. The
-  current compiler does: `@sauce/router`'s `maverickV2` and the `swap*.mainnet` suites' Router
-  comparisons execute it on real pools.
-- `swapV3(pool, tokenIn, tokenOut, amountSpecified, sqrtPriceLimitX96, payer, recipient)` and
-  `swapV4(...)` — **flat** methods (no nested struct); `@sauce/router`'s `uniswapV3`/`uniswapV4` call
-  them, and they return the pool's signed deltas, which the library turns into the amount received.
-- `quote(QuoteParams)` — simulation: performs the swap, reverts it internally with
-  `QuoteRevert(amountIn, amountOut, sqrtPriceAfter, gas)` and returns the decoded result; not
-  `onlySelf`, so an `eth_call` to the Router's own address works. Token-free for V3 and V4 only (the
-  other venues' simulation pays from the caller). `actions/src/to-quote.ts` quotes `uniswapV3Swap` and
-  `uniswapV4Swap` through it (`QuoteOptions.router`), in-program too for the split swap; every other
-  venue's quote is its own contract's.
+`@sauce/router` keeps its source-level API; its V3/V4/Maverick functions call the new signatures.
+The library checks V3 and Maverick token pairs before the swap. V4 builds the sorted pool key and
+passes the input token explicitly. V2, Curve, Balancer V2, DODO V2, Trader Joe LB and WOOFi are
+paid first and called directly by the program; their paths do not call the Router.
 
-**`amountSpecified` sign is inconsistent by path** (this bit us): the flat `swapV3` passes through to
-Uniswap, where **positive = exact input** (verified on fork). The V4 path takes Uniswap V4's sign,
-**negative = exact input**, which `@sauce/router`'s `uniswapV4` passes as unary `-amountIn` (never
-`0n - x`, which the engine's checked subtraction reverts, nor `~x + 1n`). For the flat `swapV3`, pass a
-**positive** amount.
-
-**`SwapPoolType` enum** (`engine/src/interfaces/IRouter.sol`, must match recipe constants; the SDK
-no longer exports it — sauce-recipes keeps its own):
-`UniV2=0, UniV3=1, UniV4=2, Curve=3, BalancerV2=4, DODOV2=5, TraderJoeLB=6, MaverickV2=7, WOOFi=8,
-PancakeInfinityCL=9, PancakeInfinityBin=10`. The last two are **flat-method only**
-(`swapInfinityCL`/`swapInfinityBin`) — `SwapParams` can't carry the 6-field `InfinityPoolKey`, so
-unified `swap()` does not dispatch them.
-
-**Callbacks vs callback-free** — the key architectural split for "where does swap logic live":
-
-- **V3/V4 (and Maverick)** use _callbacks_: the pool re-enters the contract mid-swap
-  (`uniswapV3SwapCallback`/`pancakeV3SwapCallback`/`unlockCallback`/`maverickV2SwapCallback`) to pull
-  input, reading transient-storage context set by `_swapV3`. A reentrant call during `cook()` hits the
-  contract's Solidity dispatcher, **not** the paused bytecode interpreter — so callbacks can only be
-  serviced by the router's compiled code. These swaps **must** go through the router (`swapV3`/`swapV4`,
-  or unified `swap()` for a flash `callback` fragment). Maverick stays on the Router even though its pool
-  has a pre-pay mode: the Router pays exactly what the pool asks for, so a partial fill strands nothing.
-- **UniV2 (0), Curve (3), BalancerV2 (4), DODOV2 (5), TraderJoeLB (6), WOOFi (8)** are
-  _callback-free_: the pool is paid first — transferred to (V2, DODO, LB, WooPPV2) or approved for
-  (Curve, the Balancer Vault) — and never calls back. **`@sauce/router` calls these pools directly**
-  (`sdk/src/std/router/router.evm.js`, the one implementation; actions call it too), so they do not
-  depend on which Router the Pot runs — a suite swaps every one with the Pot's Router code replaced by
-  a revert. Each keeps the Router's rules: `@sauce/token` for every transfer and approval, approvals
-  for exactly the input, V2 priced in-program from `getReserves` with the Router's fee math (`feePpm`
-  in ppm; `0` = 3000, `>= 1_000_000` reverts), empty V2 `data`. **Invariant: a pay-first swap
-  consumes its whole input or reverts; there is no refund path.** Each of these pools books all it is
-  paid or reverts (V2/DODO book their whole balance, LB reverts `LBPair__OutOfLiquidity`, WooPPV2
-  books exactly `fromAmount`, which is exactly the push), so no function catches its pool after paying
-  it — the `try` forms check capacity first (V2 reserves, LB `getSwapOut`) or catch only a PULL (Curve,
-  Balancer) and reset the approval. The DODO trap (push base, call `sellQuote`) and a reversed V2 lane
-  both donate silently; the library takes the side from its arguments and reverts on a contradiction,
-  and `actions/tests/swap*.mainnet.test.ts` shows both traps in a hand-written program. The facts
-  themselves (DODO base/quote, LB X/Y) are the caller's, like the pool address. The Router's own Curve
-  handler cannot trade a 3pool-era pool (it decodes a `uint256` `exchange` does not return) or a
-  uint256-index pool, and its WOOFi handler only approves, which drives WooRouterV2 but not the
-  WooPPV2 the library pushes to.
-
-**Gas, library against an inline lowering** (the TS builder that emitted each swap as statements
-with its constants folded in, measured before it was replaced, on the same captured state): a call
-costs ~5–22k gas more per swap (Balancer ~+5.5k, V2/DODO/LB/WOOFi ~+9–15k, Curve ~+21k because it
-always measures the output it returns). The cause is the engine, not the venue: a function frame
-with run-time parameters (~3k, nothing folds), `@sauce/token`'s run-time calldata building and
-nested `checked` call (~3k per write against calldata folded at build time). The fixes, in order of
-reach: compiler inlining of a library call whose arguments are constants (with constant propagation
-into `@sauce/token`), then folding `checked` into each `@sauce/token` write and building its
-calldata with `abi.encode` (~2k per write, measured).
+**Quoting remains on generation 3**, pinned separately as `quoteRouter` in `releases.json` and
+synced from the private kitchen-evm 1.1.0 package into `V12QuoteRouter.json`. Actions' existing
+`QuoteOptions.router` accepts `v12QuoteRouterAddress()`, never `v12RouterAddress()` (generation 4).
+The old service simulates and reverts V3/V4 swaps without funds, so it does not depend on the Pot's
+engine or execution Router. Captured-mainnet tests compare its quotes against swaps on generation 4.
+No chain deployment is implied by these release addresses.
 
 ## Publishing
 

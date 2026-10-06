@@ -233,7 +233,7 @@ Swaps through WOOFi's WooPPV2, paid by a push. Calls @sauce/router woofi: an ERC
 
 ### maverickV2Swap
 
-Swaps through one Maverick V2 pool, through the Pot's Router, which pays what the pool asks for. Calls @sauce/router maverickV2: Router.swap.
+Swaps through one Maverick V2 pool, through the Pot's Router, which pays what the pool asks for. Calls @sauce/router maverickV2: Router.swapMaverickV2.
 
 | Field | Value | Required | Meaning |
 | --- | --- | --- | --- |

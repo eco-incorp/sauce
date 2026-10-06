@@ -76,7 +76,7 @@ It services these callbacks:
 - `unlockCallback`: Uniswap V4.
 
 So `uniswapV3` drives every one of those V3-style pools. Each callback is authenticated to the pool
-being swapped (`InvalidPool` for a pool that is not the requested pair), pays **once**, and pays only
+being swapped, pays **once**, and pays only
 the input the pool asks for, never more than `amountIn` (`InputExceedsAuthorized`).
 
 Every token write is `@sauce/token`'s SafeERC20: a token that returns nothing (USDT) works, one that
@@ -84,8 +84,8 @@ returns `false` reverts the program.
 
 **Direction is checked from the arguments.** A V2 pair's and a V4 pool's direction is the sort order
 of `tokenIn` and `tokenOut`; `dodoV2` takes the pool's base and quote tokens and `traderJoeLB` its X
-and Y tokens, and each reverts unless `tokenIn` and `tokenOut` are those two; the Router checks a V3
-pool's tokens itself. Take these facts from the pool, as you take the pool itself.
+and Y tokens, and each reverts unless `tokenIn` and `tokenOut` are those two; the library checks a V3
+pool's tokens. Take these facts from the pool, as you take the pool itself.
 
 ## Price limits and partial fills
 
@@ -150,7 +150,7 @@ A V3-style pool reverts with a short string, and the Router with a custom error:
 | `LOK`                                    | the pool   | the pool is not initialized (or is mid-swap)                                                    |
 | `IIA`                                    | the pool   | its callback paid less input than it asked for                                                  |
 | `TF`                                     | the pool   | its transfer of the output token failed                                                         |
-| `InvalidPool()`, `0x2083cd40`            | the Router | the pool's `token0`/`token1` are not the pair passed                                            |
+| `InputTokenMismatch()`                   | the Router | the input token does not match the pool key and direction                                       |
 | `InputExceedsAuthorized()`, `0x510db218` | the Router | the pool asked for more input than the exact input offered                                      |
 
 A revert inside the program (a `require`, the library's `minOut` check) is the program's own; the
@@ -161,13 +161,13 @@ cook reverts as a whole either way.
 PancakeSwap Infinity pools are not in the library: the Router's own entry points swap them, called
 through the Pot with the Router ABI the package serves (`import { ISauceRouter } from
 "./artifacts/ISauceRouter.json"`, then `ISauceRouter.at(ctx.self())`). Their exact input is a
-negative amount (`-amount`), and they return the pool's signed deltas, not a received amount: the
-program measures the output and checks its own floor.
+positive unsigned amount, and they return `(amountInUsed, amountOut)`. Check the output against
+your floor. These signatures require generation 4.
 
-| Entry point                                                                                              | Price bound         |
-| -------------------------------------------------------------------------------------------------------- | ------------------- |
-| `swapInfinityCL(vault, key, zeroForOne, amountSpecified, sqrtPriceLimitX96, payer, recipient, callback)` | `sqrtPriceLimitX96` |
-| `swapInfinityBin(vault, key, swapForY, amountSpecified, payer, recipient, callback)`                     | none                |
+| Entry point                                                                               | Price bound         |
+| ----------------------------------------------------------------------------------------- | ------------------- |
+| `swapInfinityCL(vault, key, tokenIn, zeroForOne, amountIn, sqrtPriceLimitX96, recipient)` | `sqrtPriceLimitX96` |
+| `swapInfinityBin(vault, key, tokenIn, swapForY, amountIn, recipient)`                     | none                |
 
 ## The guard (required on every leg)
 

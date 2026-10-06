@@ -140,7 +140,7 @@ describe("@sauce/router: every fragment it calls is pinned", () => {
       }
     ).abi.filter((item) => item.type === "function");
     const ours = fragments("sauce-router.abi.json");
-    expect(ours.map((f) => f.name)).toEqual(["swapV3", "swapV4", "swap"]);
+    expect(ours.map((f) => f.name)).toEqual(["swapV3", "swapV4", "swapMaverickV2"]);
     for (const fn of ours) {
       const theirs = released.find((item) => item.name === fn.name);
       expect(theirs).toBeDefined();

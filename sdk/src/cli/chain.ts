@@ -450,7 +450,7 @@ const PAIR_REVERTS: Readonly<Record<string, string>> = {
 
 /** What the Pot's Router's own errors mean. */
 const ROUTER_REVERTS: Readonly<Record<string, string>> = {
-  InvalidPool: "the Router's check that the pool's token0 and token1 are the pair passed",
+  InputTokenMismatch: "the input token does not match the pool key and swap direction",
   InputExceedsAuthorized: "the pool asked the Router for more input than the exact input offered",
 };
 
