@@ -327,14 +327,14 @@ compile(options: CompileOptions): CompileResult
 `entryKind` (`"module"`, or `"closure"`: the entry is one function expression as
 `Function.prototype.toString` prints it), `resolvePackage`, `contracts`, `inlineContracts`,
 `ambient`, `defines`, `optimize` (default `true`), `cache` (default `true`), `compactArgs` (default
-`false`) and the **host API** — `declare`, `types`, `hostModules`, `nested`, `bind` (see "The
-compiler's host" below) — are optional. All four manifests pin the
+`false`) and `programOptions` (the options each `program(closure, scope)` compiles with, which the
+SDK answers per chain; see "Intents are a SauceScript class library" below) are optional. All four manifests pin the
 compiler exactly to **2.4.0**, matching the lockfile. `CompileResult` contains `bytecode: Uint8Array`,
 `isaRevision: "stack-compact-v2"`, `entryEncoding: "abi-v1" | "compact-v1"`, optional
 `entrySchema: Uint8Array`, optional `manifest: AccountManifest`, `entryParams` (`main`'s
 parameters as an ABI signature; a top-level tuple of fixed size is `indirect`, read behind an
-offset, which `routes/entry.ts`'s encoder writes) and `programs` (every program argument it
-compiled). `manifest` is the SVM account
+offset, which `routes/entry.ts`'s encoder writes), `programs` (every closure it compiled as a program)
+and `absentPaths` (every dotted path a comparison read as 0). `manifest` is the SVM account
 contract, absent on EVM. Compile-time values affect bytecode; runtime entry arguments are encoded
 and appended separately. With `compactArgs: true`, pass the returned schema and positional values
 to `encodeCompactArguments` from `@eco-incorp/sauce/compiler`; its strict inverse is
@@ -400,38 +400,42 @@ chain and recipe definitions. **SDK tests compile every protocol's
 to build first, but the suites that import `./artifacts/*.json` need `sync-engine-artifacts` to have
 run (see the Foundry gotcha above).
 
-**The compiler is given the program as written, and the SDK's names through its host.** Nothing
+**The compiler is given the program as written, and the SDK's names as a module.** Nothing
 rewrites a program's text, so every position a diagnostic reports is the author's. The CLI,
 `routes/entry.ts` and `src/sauce-script/` read SauceScript with `src/routes/parse.ts`: acorn extended by
 `@sveltejs/acorn-typescript`, both pinned exactly (the plugin extends acorn's parser class), and
 `ast-walk.ts#walk` steps over annotations and type-only declarations. Do not add a second parser,
-and do not reintroduce a source rewrite: what a name means is the host's to declare.
+and do not reintroduce a source rewrite: what a name means is the chain's module's to say.
 
-**The compiler's host** (the compiler's generic API, `declare`/`types`/`hostModules`/`nested`/`bind`;
-it knows nothing of chains, tokens or intents). `sauce-route.ts#routeHost` builds, for the chain a
-program compiles for, `host.ts#chainHost` — every token symbol as a constant of the `Token` type
-(its `of` an `Address`, its methods `@sauce/token`'s SafeERC20 functions with the token first, its
-property `holder.USDC` the holder's balance), `Token(addr)` as a cast to it, `self` (a getter of
-`@sauce/context`), `chainId`, each protocol contract's address key, and every registry contract by
-the names the registry gives it (`protocol-names.ts`: a family alias, a protocol's one contract,
-`<Chain>.` qualification) as an ABI and that chain's address, an interface as an ABI with none — and
-on an EVM chain `intent-host.ts#intentHost`, the intents a program may open. The compiler asks
-`declare` about each name the program reads and does not bind, once per compile; a program binding
-a name always wins. **A name some chain has and this one lacks is declared as the zero of its type,
-`unusable` with the chain's message**: any use is that message at the use, except an equality
-comparison, which the compiler decides while it compiles — so `if (X != 0n)` leaves the branch it
-rules out uncompiled, names and all (a decided `if`, `?:`, `&&`, `||`, and
-the rest of a function after a decided guard that returns). A name no chain has is not declared:
-the compiler's own unknown-name error. An interface is called at an address the program gives it,
-`UniswapV3.Pool(pool).fee()`, exactly `UniswapV3.Pool.at(pool).fee()` — the compiler's own form for a
-contract with no address; a deployed contract's name called with an address is refused, naming `.at`.
-`splitChainDefines` moves a caller's define named like a chain-scoped name into the chain's host
-(`tokens`, `values`), declared for that chain alone, because a define binds before the host is
-asked: a `USDC` define would shadow the host's `Token`-typed `USDC`, and an intent's delivery, a
-nested-scope argument, is evaluated in the enclosing program's frame, where its `USDC` or `chainId`
-define would bind first (`routes-chain-defines.test.ts` pins both halves). An intent's body needs
-none of it — the compiler resolves it in its own program, recorded or compiled — so keep it for
-those two frames, not as a body workaround.
+**A chain's names are a SauceScript module the SDK writes** (`routes/chain-module.ts`) and hands the
+compiler as an AMBIENT module, `@sauce/chain-<slug>`, so its exports are the program's globals, used
+with no `import`. The compiler holds no SDK vocabulary — no chains, tokens, intents or registry —
+only generic features: static values and classes it runs while it compiles, ambient modules,
+`program(closure, scope)`, `[Symbol.dispose]`. The module exports `chainId` and each protocol
+contract's address key (`UniswapV3_Factory`); `self` (`self.USDC` the running contract's balance)
+and, on an EVM chain, `Token(address)`; every token symbol, an instance of `@sauce/names`' `Token`
+(`src/std/names`), whose writes are `@sauce/token`'s SafeERC20 functions with the token first —
+byte for byte the program that imports and calls them — and whose `valueOf()` is its address (on
+Solana a symbol is the mint's key); every protocol namespace, a static object holding contract
+bindings at this chain's addresses by the names the registry gives them (`protocol-names.ts`: a
+family alias, a protocol's one contract), an interface a function of an address
+(`UniswapV3.Pool(pool)`, exactly `.at(pool)`); and every chain's name — its id where compared
+(`chainId == Ethereum` folds), its `Portal`, its contracts (`Base.UniswapV3.Factory`). The compiler
+evaluates a module constant only when a program reads it, so Ethereum's two thousand names cost a
+program its parsing and nothing else.
+
+**A module exports only what its chain has.** A dotted path the chain lacks
+(`PancakeswapV3.Factory`) is the compiler's to fold: it reads as 0 only as an operand of `==`/`!=`
+(and `===`/`!==` against a number), so `if (X != 0)` leaves the branch it rules out uncompiled,
+names and all, and the compile reports each folded path (`absentPaths`), which `unknown-global.ts`
+holds to the registry — a path no chain has is a typo and refused, and any other use of an absent
+one is worded for the chain. A BARE name the chain lacks, a token symbol, stays the compiler's
+unknown name, guarded or not (user, 2026-10-06), worded "`USDT` is not a token or protocol on
+base"; a token some chains lack is `Token(<address>)`. `sauce-route.ts#splitChainDefines` moves a
+caller's define named like a chain-scoped name (a token symbol, `chainId`, an address key) into the
+chain's module (`tokens`, `values`) for that chain alone: a define replaces a module `const` of its
+name in EVERY module, so a `USDC` define would put a number where the module has the `Token`, and
+name this chain's value in a body on another (`routes-chain-defines.test.ts`).
 
 **Every registry ABI is pinned against the deployed contract, offline.** `test/registry-abi.test.ts`
 checks each function, event and custom error of each `abis.ts` export against
@@ -507,10 +511,10 @@ page. Backpack's symbol is `NVDA_US` while the mint's metadata says `NVDA` (the 
 the evidence checks); PreStocks' mints charge a transfer fee. Superstate is left out (allowlisted
 holders only). `sauce globals` and `sauce_globals` count a chain's stocks by default;
 `--stocks`/`stocks` lists them and `--search`/`search` finds one. `sauce pot` on Solana reads the
-Pot's account for every registered mint but the stocks. Every compile hands the chain's token map to
-the compiler as defines, so a chain with a thousand stocks costs about 2 ms more per compile (Ethereum
-and Solana alike); that goes away with the compiler's lazy `declare` (v12 #550), and the SDK does not
-scan program text to trim it.
+Pot's account for every registered mint but the stocks. Every compile hands the chain's tokens to
+the compiler in the chain's module, each a constant the compiler evaluates only when a program reads
+it, so a chain's stocks cost a compile the module's parsing, and the SDK does not scan program text
+to trim it.
 
 `src/std/` is the SauceScript **standard library** — source shipped for the compiler to consume, not
 TypeScript. `src/std/token/` is `@sauce/token` (an ERC20/SPL token interface behind one import), and
@@ -601,105 +605,86 @@ a program-wide define would replace it. Keep its functions FLAT: an internal hel
 frame (measured ~1–4k gas each on the engine), so each exported function is self-contained. EVM only:
 there is no `router.js` and no SVM arm, so an SVM import fails at the import.
 
-`@sauce/token` is the **default ambient MODULE** on the route path. `manifest.json`'s `ambient`
-list (`["@sauce/token"]`) is handed by `chainAmbient()` to every `openRoute` compile, so its
-exported functions (`approve`/`transfer`/`balanceOf`/…) are callable in any route body opened that
-way with **zero import**. `openRoute` and no further: `chainAmbient` has exactly one call site
-(`intent-dsl.ts`), and `compileSauceRoute` passes its caller's `ambient` straight through without
-merging this list in — so a direct `compileSauceRoute(..., {})` gets no ambient module at all. This resolves because `embedded/resolve.ts`'s `resolveSdkPackage` maps the bare
-`@sauce/token` specifier to the embedded copy of `src/std/token`, ahead of any caller
-`resolvePackage` — an ambient module the compile can't resolve makes EVERY route throw, so that
-list must only ever name modules the SDK resolves itself. Two DISTINCT mechanisms
-share the word "ambient": ambient **DEFINES** (`chainDefines` — chain-scoped SCALARS: chainId,
-protocol addresses, token symbols) vs ambient **MODULES** (this — whole library exports).
+`@sauce/token` is the **default ambient MODULE**: `manifest.json`'s `ambient` list
+(`["@sauce/token"]`), which `ambient.ts#chainAmbient()` returns, is added by `compileSauceProgram`,
+by every intent body's options (`programOptions`) and by `openRoute`, so its exported functions
+(`approve`/`transfer`/`balanceOf`/…) are callable there with **zero import**. `compileSauceRoute`
+adds only the chain's module to its caller's `ambient`, so a direct `compileSauceRoute(..., {})`
+reaches `@sauce/token` only through `Token`. These resolve because `embedded/resolve.ts`'s
+`resolveSdkPackage` maps the bare `@sauce/token`, `@sauce/names`, `@sauce/intents` and
+`@sauce/router` specifiers to the embedded copies of `src/std`, and the chain modules to the text
+`chain-module.ts` wrote, ahead of any caller `resolvePackage` — an ambient module the compile can't
+resolve makes EVERY compile throw, so that list must only ever name modules the SDK resolves itself.
+Two DISTINCT mechanisms share the word "ambient": ambient **DEFINES** (`chainDefines` — chain-scoped
+SCALARS, still exported for a caller compiling a standalone asset) vs ambient **MODULES** (whole
+library exports, the chain's names among them).
 
-**One table is the intent syntax.** `routes/intent-syntax.ts#INTENT_STAGES` holds
-`<Chain>.Portal.send(…).receive(…).then(() => …)` as data: its stages (`Portal`, `Sent`, `Received`,
-`Opened`, `Caught`), each method's parameters — `value`, `nested`, `program` or `handler`, `rest`
-for items as arguments — the stage it returns, and for a MODIFIER the per-level option it sets:
-`refundee` (the reward's `creator`), `deadline` (`rewardDeadline`) and `prover` after `send`;
-`deadline`, `salt` and `fee` (`executionFee`) after `receive`. Its three readers each read it, so
-they cannot drift: the editor's declarations (`gen-source-globals.mjs`), the compiler host
-(`intent-host.ts`, one host type per stage) and the TypeScript builder (`intent-dsl.ts#chainPortal`,
-which adds `.source()`, the chain a host intent is published on). A modifier returns its own record,
-is given at most once, is read by its callee (`Sent.deadline` is the reward's, `Received.deadline`
-the route's) and builds the bytes its option builds (`routes-intent-portal.test.ts`). `receive` is
-required — `.receive()` with no items delivers what a body of token writes moves, and a program
-nothing — and `{ native }` is a reward item only. `.catch((e) => { … })` after `then` makes the body
-and its handler one destination program, `try { … } catch (e) { … }`, `e` the body's revert data (at
-most 256 bytes): EVM destinations only, and refused on the host, which builds the body alone.
-`await` needs no entry in the table: the compiler lowers `await x; rest` to
-`x.then(() => { rest })`, as JavaScript's `await` calls a thenable's `then`, for any host type whose
-`then` takes one `program` parameter, so `await` of a `Received` is byte for byte the
-`.then(() => { … })` written out (no `async`; directly in `main`'s body, a script's or a body, or in
-a `try` block standing there). In `try { …; await a; … } catch (e) { H }` each awaited intent gets
-`.catch((e) => { H })`, so `H` is compiled in the program of every chain it may run on, and a
-`chainId == Ethereum` branch in it (a chain's name is its id, `host.ts`) folds to that chain's. In
-an editor a script's top-level `await` is plain TypeScript; one in `main` is TS1308, which the
-SauceScript plugin (`sauce-script/ts-plugin.cjs`) drops only where the compiler takes the `await`.
+**Intents are a SauceScript class library, `@sauce/intents`** (`src/std/intents/intents.evm.js`),
+which the compiler runs while it compiles. `<Chain>.Portal` is a `Portal` in the chain's module,
+holding the destination's chain id and this level's defaults (`intents`, the registry's source and
+destination Portal and prover, the destination Pot, its Kitchen fee). `send(...items)` returns an
+`Intent`, whose methods set fields and return it: `refundee`, `deadline` (the reward's) and `prover`
+after `send`; `receive(...items)`; `deadline` (the route's), `salt` and `fee` after `receive`;
+`then(body)`; `catch((e) => …)`. A modifier is given at most once and refuses the wrong stage in
+the class's words. Nothing is emitted until the statement ends: the compiler calls
+`[Symbol.dispose]()` on an expression statement's static object (and on a `const` holding one, at
+the end of its block), which builds the intent as ONE inline literal — encoded by the engine's
+ABI_ENCODE as the program runs, a run-time value a hole in it — and publishes it (`publish` after a
+transfer into the vault, or `publishAndFund`, `intents.fundVia`). An intent missing `.then` is a
+compile-time `throw` with the class's message. **`.refundee(<address>)` is REQUIRED on every
+intent, with no default — not the signer's, not the Pot's** (user, 2026-10-06). `{ native }` is a
+reward item only. A computed `.fee(...)`, a `const` holding an intent and a non-literal item list
+compile like any other value.
+
+**Every body is a program cooked on the destination's shared Pot, and pays the Kitchen fee** (user,
+2026-10-06), transfer-only bodies included: there is no Executor-only `route.calls` path. `then`'s
+closure is `program(body, destination.chainId)`: the compiler compiles it as a program of its own
+with the options `sauce-route.ts#chainModules`' `programOptions` returns for that chain — its
+target, `chainAmbient`, its BODY module `@sauce/chain-<slug>-body` (whose intents open when the body
+runs, with no `openedAt`, and are funded whatever the root does), the caller's defines — and returns
+`{ code, args }`, each value the closure captures from where it was written a run-time argument.
+The route moves the delivery's tokens to the Pot and calls `cook(engine, code ‖ args)` with the
+destination Kitchen's fee as `route.nativeAmount` (`.fee(...)`, else `intents.executionFee`, a
+bigint or a function of the destination; the CLI reads each destination's Kitchen). `.receive()`
+delivers nothing; `.receive({ token: USDC, amount })` is the destination's token of THAT SYMBOL,
+re-resolved there, and a token only the destination has is written `Token(0x…)` until the
+compiler can hand a call it runs an unknown bare name. `.catch((e) => { … })` makes the body and its
+handler one destination program, `try { … } catch (e) { … }` (EVM only; it compiles once the
+compiler's try/catch lands), and `await x; rest` is the compiler's `x.then(() => { rest })` (once its
+`await` lands).
 
 **What an intent leaves out is Eco's default** (`intent-defaults.ts`, which
 `docs/reference/intent-defaults.md` and the `sauce-intents` defaults reference state): the route
 deadline 300 s past when the intent opens (Eco's solver's fill window), the reward deadline 604800 s
 past the route's (the floor the solver holds a reward to), a random 32-byte salt, the registry's
 prover. When it opens is the compile's `intents.openedAt` — the CLI sets it, and the salt, once per
-command, so every compile the command makes builds the same intents — else when the program runs:
-each default deadline is then a STAMP, an 8-byte sentinel that `@sauce/intents#stamped` overwrites
-from `ctx.timestamp()` (or the route deadline it wrote) before publishing, and it counts among the
-intent's `captures`, so an intent with none is fixed when built. The refundee has one default only:
-the wallet that publishes a top-level intent itself (`intents.publisher`: the CLI's wallet, or
-`--intent-refundee` through `commands.ts#asPublished` for a command that only names the intents). An
-intent a program opens on a Pot names `.refundee(...)` or is refused, since the Pot may be shared; a
-body's level drops `publisher` and `openedAt`. A program body's cook fee is `.fee(...)` (a value
-known when the intent is built) or `intents.executionFee`, a bigint or a function of the
-destination; the CLI reads it from each destination's Kitchen only when some body is a program.
-What the host is shown of a value is the compiler's: a scalar that folds (a define's arithmetic,
-`main`'s bound arguments, `10 ** 18`) is a constant, anything else a run-time leaf spliced in.
+command, so every compile the command makes builds the same intents — else when the program runs
+(`ctx.timestamp()`). `intents.fund: false` publishes without paying the rewards, the rehearsal that
+reads a file's intents (below); nothing else about them changes.
 
-**Chain-scoped names are resolved per level.** In `<Chain>.Portal.send(…).receive(…).then(() => …)`
-(`intent-host.ts`) the body (`then`'s closure) and the delivery (`receive`) resolve on the
-destination, and the reward (`send`) and every modifier on the enclosing chain, which escrows the
-reward. `<Chain>.Portal` is a declared constant of the host type `Portal`, its word the destination's
-chain id, and each method extends one record: `send` a value, `receive` a `scope: "nested"` value,
-`then` a PROGRAM (the compiler's program argument, compiled — or recorded — in the scope `nested`
-returns for the record's chain, `programOn`). The chain's last record (`Opened`, or `Caught` after
-`.catch`) ends at its site (`bind`), which builds the intent with viem and hands `@sauce/intents` its
-bytes, a run-time value spliced in where the program reads one; `Sent` and `Received` refuse to end,
-so an intent that stops before `.then` is a compile error in the table's words. The compiler knows
-none of this shape: it is the host's types. `sauce-route.ts#levelOn` gives each level on another chain
-its own values (`NESTED_SCOPE`, the registry's `chainDefines`) and DROPS every caller `defines`
-entry named like a chain-scoped value of the enclosing chain or the destination, and every `tokens`
-override — by name, not value, so `defines: chainDefines(base)` and a hand-picked `USDC` are
-treated alike. Caller names no chain uses (`RECIPIENT`) hold at every depth. Protocol accessors
-never had the problem: they fold each chain's literal address in. `openRoute` passes its own
-chain's ambient defines as `RouteScope.chainDefines` beside the options rather than in
-`compile.defines`, so its `defines` stay the caller's; `compileScopedRoute` takes the scope and
-`compileSauceRoute` is that with an empty one. Two defects came from mixing these up (Arbitrum's
-USDC as a reward on Base, Base's in an Arbitrum body). `routes-intent-reward-chain.test.ts` records
-every level's compile on three paths and decodes each level's `publishAndFund`;
-`routes-intent-chains.e2e.test.ts` runs them on three anvils whose USDC differs. A test that gives a
-symbol one address everywhere (a `tokens` override, a define) cannot see either defect.
+**Chain-scoped names are resolved per level.** The body and the delivery resolve on the
+destination, and the reward and every modifier on the enclosing chain, which escrows the reward.
+Every `tokens` override and every chain value the caller chose belongs to the program it was given
+for: a body on another chain takes its own chain's registry values, and only the caller's other
+defines (`RECIPIENT`) hold at every depth. Two defects came from mixing these up (Arbitrum's USDC as
+a reward on Base, Base's in an Arbitrum body). `routes-intent-chains.e2e.test.ts` runs bodies and
+cascades on three anvils whose USDC differs; a test that gives a symbol one address everywhere (a
+`tokens` override, a define) cannot see either defect.
 
-The **`Token(addr)` cast** and the **`<Sym>.transfer(...)` symbol syntax** are host declarations
-(`host.ts`'s `Token` type), not rewrites: a WRITE (`transfer`/`approve`/`transferFrom`) is the
-`@sauce/token` function of the same name with the token first — byte for byte the program that
-imports and calls it — and a READ (`balanceOf`, `holder.USDC`) the library's `balanceOf`. So a write
-has ONE implementation however it is spelled, and it is the library's SafeERC20 one; a write returns
-nothing, so its result cannot be read. The `Token` type is EVM-only: on Solana a symbol is the
-mint's key, a plain word for the `@sauce/token` SVM functions, whose writes need accounts a symbol
-does not carry. A token-only INTENT body
-(`Base.Portal.send(…).receive().then(() => { USDC.transfer(...) })`, every statement a recordable
-`transfer`/`approve` on constants and captures) is RECORDED, not compiled: the compiler records it
-in the body's own program — its names and defines that chain's — after checking it as a compiled
-body, and `bind` turns the calls into plain `route.calls` the Portal's Executor runs raw, so they
-get the Executor's checks (revert, code) and not SafeERC20's. USDT is supported there: no-return
-transfers work, and every approve is emitted as `approve(spender, 0)` then
-`approve(spender, amount)` (one Executor serves every intent, so a standing allowance is realistic).
-A `false`-returning token is caught only at delivery (the Portal's `safeTransferFrom`); the
-Executor's own `false` transfer or approve fulfils with nothing moved.
-`routes-nest-dynamic.e2e.test.ts` runs all of that through a real Portal and Executor and PINS the
-gap. Any non-token statement makes the body a program, whose writes are SafeERC20 — that is the
-documented way to get the checks.
+**`intent-syntax.ts#INTENT_STAGES` is the syntax as data** for the editor's declarations
+(`gen-source-globals.mjs`: `Portal`, `Sent`, `Received`, `Opened`, `Caught`) and the TypeScript
+builder (`intent-dsl.ts#openRoute`, which still assembles an intent host-side with viem and is to
+return the cook instead). The class is what compiles, so change them together;
+`routes-intent-portal.test.ts` holds the bytes each modifier builds.
+
+**`Token(addr)` and `<Sym>.transfer(...)` are `@sauce/names`' `Token`**, not rewrites: a WRITE
+(`transfer`/`approve`/`transferFrom`) is the `@sauce/token` function of the same name with the token
+first, and a READ (`balanceOf`, `holder.USDC`) the library's `balanceOf`. So a write has ONE
+implementation however it is spelled, the library's SafeERC20 one, and returns nothing. `Token` is
+EVM-only: on Solana a symbol is the mint's key, a plain word for the `@sauce/token` SVM functions,
+whose writes need accounts a symbol does not carry. A body's writes are SafeERC20 too, since every
+body is a program; `routes-nest-dynamic.e2e.test.ts` runs bodies through a real Portal and Executor,
+USDT among the tokens.
 
 **The host surface and compiled-source declarations are separate — and only one of them is
 global.** The HOST surface is IMPORTS ONLY: `routes/chain-exports.generated.ts` exports one named
@@ -785,7 +770,25 @@ executable: `compile`, `actions`, `simulate`, `run`, `intent <verb>`, `wallet <v
 claim, refund, cancel, status, list, show, import; no verb at a terminal is the picker,
 `interactive.ts`) and `wallet <verb>` (`WALLET_VERBS`: new, list, address, import, export) as
 commands of their own (`VERBS`), each with its own flags and `--help`; the skills checker reads the
-verbs from each command's `--help`. An intent's life after publishing is `lifecycle.ts`: plain-value functions
+verbs from each command's `--help`.
+
+**Every publish is a cook** (user, 2026-10-06): `sauce intent publish <file>`
+(`publish.ts#publishCommand`) is `sauce run` on the signer's own Pot — `simulate` with `--dry-run`,
+`tx` with `--format` — for a file that opens at least one intent, the reward pulled into the Pot by
+`--fund` (`funding.ts`); with no file it is the guided create (`create.ts`), which writes a file
+naming the signer as `.refundee(...)` and publishes it the same way. Publishing from Solana is
+refused. There is no offline intent hash and no second encoder: each intent's hash and record come
+from the Portal's `IntentPublished` (`logged-intents.ts#loggedIntents`, the chain's registry Portal's
+logs, each rebuilt by `portal.ts#intentFromPublished`), the rehearsal's and then the receipt's, which
+the store keeps; `sauce run` and `simulate` report what a cook published too. `sauce intent fill
+<file>` and the lifecycle verbs given a file read its intents the same way
+(`file-intents.ts#fileIntents`): the file cooked with `intents.fund: false` on `--owner`'s Pot
+(`REHEARSAL_OWNER`, an address nobody holds, by default) in an `eth_simulateV1` rehearsal, so an
+endpoint without `eth_simulateV1` is refused there; a value the program measures is measured on that
+Pot as it stands. The off-chain intent a solver API would take with no publish is future work (the
+compiler reporting folded static values).
+
+An intent's life after publishing is `lifecycle.ts`: plain-value functions
 (`intentStatus`, `buildFill`/`planFill`, `buildProve`, `buildClaim`, `buildRefund`, `buildCancel`,
 `importIntents`) taking an `IntentRecord` and an endpoint per chain and returning unsigned
 transactions as JSON, with no key, store, prompt or environment, which the MCP server calls as they
@@ -815,9 +818,9 @@ to, and `compile`/`tx`/`simulate`/`run` accept one wherever they take a file, as
 `actions/dist/compose.js` at run time by a path relative to itself — the SDK builds first, so it
 cannot import a package not yet built — and `actionsCommand` is also what the MCP server's
 `sauce_actions` tool calls. It adds no
-compile path of its own — `compileSauceProgram` (the compile half of `compileSauceRoute`, with the
-chain bundle `openRoute` uses: `chainAmbient`'s modules and the chain's names as a `RouteScope`, so
-an intent the file opens resolves its body on its own chain) — and no encoder or decoder: the cook is
+compile path of its own — `compileSauceProgram` (the compile half of `compileSauceRoute`, with
+`chainAmbient`'s modules and the chain's module of names, so an intent the file opens compiles its
+body for its destination) — and no encoder or decoder: the cook is
 `buildSauceEvmCall`, the Pot `v12PredictPot`/`potSalt`/`sauceEvmDeployPotCall`, arguments
 `encodeEntryArguments`/`decodeEntryArguments`, names `sourceGlobals`, settles
 `validateSettleProgram`/`verifySvmSettleExecution`, and Solana cooks `createSauceSvmClient`
@@ -873,8 +876,8 @@ in `mcp/`; do not reimplement command logic there. `sauce_actions` calls `action
 use. The intent tools (`mcp/src/intents.ts`: `sauce_intent_import`, `sauce_intent_status`,
 `sauce_intent_fill`, `sauce_intent_prove`, `sauce_intent_claim`, `sauce_intent_refund`,
 `sauce_intent_cancel`) call `lifecycle.ts` as it is and keep no store: a call names its intent by
-its `record` (which `sauce_intent_publish` returns per intent) or by `txHash` and its source
-`chain`, and gives each chain's endpoint in `rpcUrls`. `intents.e2e.test.ts` runs a whole intent
+its `record` (which `sauce_intent_publish`'s dry run returns per intent) or by the publishing
+cook's `txHash` and its source `chain`, and gives each chain's endpoint in `rpcUrls`. `intents.e2e.test.ts` runs a whole intent
 through them on two anvils with eco-routes' Portal and HyperProver (`sdk/test/eco-routes-anvil.ts`),
 signing each unsigned transaction itself; `intents-solana.e2e.test.ts` builds a Solana fill through
 them in LiteSVM behind `sdk/test/svm/rpc-shim.ts`, signs it as the fee payer and lands it.
@@ -1067,9 +1070,8 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   the language's (a builtin root from `builtins.json`, or `Token`, `self`), an import,
   a local or a parameter, so an input is a `main` parameter given with `--args` and never an
   undeclared define, which is the SDK's mechanism and not a user's (an exception is an
-  `INPUT_EXCEPTIONS` entry, per example and name, with its reason; the intent files waiting on
-  `sauce intent publish --args` are listed there, and `docs:check`'s `EXECUTION_EXCEPTIONS` excuses
-  the two not yet executed); and the wording rules below. Its exceptions
+  `INPUT_EXCEPTIONS` entry, per example and name, with its reason; it holds none, nor does
+  `docs:check`'s `EXECUTION_EXCEPTIONS`); and the wording rules below. Its exceptions
   live in the checker, never as markers in a
   shipped skill (they mean nothing to the agent reading it): a name inline code may use although
   the package never declares it (an external contract's function) is an `UNDECLARED_NAMES` entry,
@@ -1111,11 +1113,10 @@ chain=a,b [define=X,Y] ` blocks compiled the same way, ` ```sauce fails ` refuse
   the `SKILL.md` must not depend on them.
 - **Program conventions.** A program names no chain (`--chain <chain>` in its usage line, no
   `// @chain` header), and every input it takes is a typed `main(...)` parameter passed with
-  `--args`, an intent file's included: `sauce intent publish`, `intent fill` and `inspect` (and the
-  MCP tools' `args`) compile the program for them, so its intents come out fixed
-  (`inputs.ts#bindMainArguments`, over `routes/entry.ts#entryArguments`; `compileSauceProgram`'s
-  `args`, the compiler's `args`: `main` specialized on its arguments, with nothing in the source
-  rewritten). A compile-time define is
+  `--args`, an intent file's included: `sauce intent publish` and `intent fill` (and the MCP tools'
+  `args`) cook the file with them as it runs, so an intent built from one is built as the program
+  runs and read back from `IntentPublished`; `inspect`, which runs nothing, refuses `--args` for a
+  file. A compile-time define is
   the SDK's own mechanism: `--define`/`--defines` stay as the low-level flags `--help` lists apart,
   and no skill, doc, example or usage line teaches them.
 - **They describe this tree, and their runners pin it.** Where the SDK's behaviour shapes how a

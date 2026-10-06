@@ -76,8 +76,9 @@ export interface IntentDefaults extends EcoRoutesSelector {
   /** The interpreter that Pot cooks on. Defaults to the released engine address. */
   readonly engine?: AddressInput;
   /** The destination Kitchen's current execution fee, in wei, paid on every cook: one for every
-   *  destination, or each destination's own. Required for an intent whose body is a program, unless
-   *  it is given `.fee(...)`: it is read from the chain and it changes. */
+   *  destination, or each destination's own. Every body is a program cooked on the destination's
+   *  Pot, so every intent needs it unless it is given `.fee(...)`: it is read from the chain and it
+   *  changes. */
   readonly executionFee?: bigint | ((destination: CanonicalChain) => bigint | undefined);
 }
 
