@@ -42,6 +42,23 @@ Cursor and VS Code, and how to check that it worked.
 [Documentation](docs/README.md) · [Quick start](docs/guides/quick-start.md) ·
 [Examples](docs/examples/README.md) · [API reference](docs/api/README.md)
 
+## Kitchen, Pot and cook
+
+Three words name where a program runs, and every guide uses them:
+
+- **Pot**: your account on chain, a small contract the Kitchen creates for you. It holds the tokens
+  your programs spend, every call a program makes comes from it, and only you can run programs on
+  it. Its address follows from yours, so it is known before it exists.
+- **Cook**: the transaction that runs one program on your Pot, `cook(engine, program)` sent to the
+  Pot. The engine executes the program as the Pot, every step or none, and `ctx.self()` in the
+  program is the Pot.
+- **Kitchen**: the contract that creates Pots and sets the flat fee every cook pays, in the chain's
+  native coin.
+
+`sauce pot --deploy` creates your Pot, you fund it like any address, and `sauce run` sends a cook.
+[Kitchen, Pot and cook](docs/concepts/kitchen-pot-cook.md) explains each, who may do what with a
+Pot, and the shared Pot an intent's body runs on.
+
 ## Supported chains
 
 For the initial release, Sauce supports transactions on **Ethereum**, **Base** and **Solana**.

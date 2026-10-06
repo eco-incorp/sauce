@@ -1,6 +1,6 @@
 ---
 name: sauce-overview
-description: Start here for any Sauce task — what Sauce is (a programmable-transaction runtime whose programs, written in SauceScript as .sauce.ts files, run atomically on EVM chains and Solana), the path from a program file to an executed transaction with the sauce command, the rules every program follows, and a map of every Sauce skill (what each teaches and holds, when to load it rather than its neighbour, the skills to read in order for common tasks, and how to read them over MCP). Use when the user mentions Sauce, SauceScript, a .sauce or .sauce.ts file, @eco-incorp/sauce, the sauce command, a Pot, Kitchen, cook or engine, Eco intents, or asks to "write a Sauce program", "do this atomically on chain", or "swap/bridge/lend with Sauce".
+description: Start here for any Sauce task — what Sauce is (a programmable-transaction runtime whose programs, written in SauceScript as .sauce.ts files, run atomically on EVM chains and Solana), what a Pot, a cook and the Kitchen are and who may do what with each, the path from a program file to an executed transaction with the sauce command, the rules every program follows, and a map of every Sauce skill (what each teaches and holds, when to load it rather than its neighbour, the skills to read in order for common tasks, and how to read them over MCP). Use when the user mentions Sauce, SauceScript, a .sauce or .sauce.ts file, @eco-incorp/sauce, the sauce command, a Pot, Kitchen, cook or engine, Eco intents, or asks to "write a Sauce program", "do this atomically on chain", or "swap/bridge/lend with Sauce".
 ---
 
 # Sauce
@@ -15,6 +15,35 @@ it does not use a magic header.
 On top of the runtime sit **intents**: an offer of work on another chain, with a reward escrowed on
 this one, written as a chain name called as a function: `Ethereum(() => { ... }).reward({ ... })`.
 A solver decides whether to fill it (`sauce-intents`).
+
+## Kitchen, Pot and cook
+
+Three words name where a program runs. Use them as defined here, and explain them this way to a
+developer who meets them for the first time.
+
+- **Pot**: an owner's account on chain, a small contract the Kitchen creates. It holds the tokens
+  a program spends, and every call a program makes comes from it. Only its owner can run programs
+  on it. Its address follows from the owner and a salt (zero unless `--salt` names another), so it
+  is known before it exists: `sauce pot --chain <chain> --owner <address>` prints it. Anyone may
+  deploy an owner's Pot (`sauce pot --deploy`), and it is the owner's whoever sends that. It is
+  funded by sending tokens to its address, and what it holds leaves only through a program its
+  owner runs on it: a Pot has no withdraw function.
+- **Cook**: the transaction that runs one program: `cook(engine, program)`, sent by the owner to
+  the Pot, with `main`'s arguments appended to the program and the Kitchen's fee as its value. The
+  engine runs the program as the Pot, every step or none: a failed `require` reverts the whole
+  cook, the fee with it, and nothing moves.
+- **Kitchen**: the contract that creates Pots and sets the flat fee every cook pays in the chain's
+  native coin. Its owner sets that fee and the Router new Pots start on, and cannot change an
+  existing Pot or move what it holds.
+
+The **engine** is the interpreter that executes the bytecode. A cook names it, and on an EVM chain
+it runs only inside a Pot the Kitchen created; the `sauce` command names the released one.
+
+An intent's body runs as a cook too, on the destination chain, but on a Pot that is not the
+user's: the one Pot every intent to that chain shares, which every solver drives (`sauce-intents`).
+On Solana the Kitchen is a program, the Pot is its account for the owner and salt, which a program
+is given as an account, and a cook is the Kitchen's `cook` instruction, signed by the owner
+(`sauce-solana`).
 
 ## You write the program
 
@@ -80,10 +109,8 @@ included, is an `Account` parameter attached with `--account`, never an `Address
 (`sauce-solana`).
 
 On an EVM chain the executing contract, `ctx.self()`, is the **Pot**: it holds the tokens and
-makes the calls. A Pot belongs to one owner, its address follows from the owner
-(`sauce pot --owner <address>`), and only the owner can run a program on it. Token writes are
-SafeERC20 however they are spelled, so USDT works. On Solana the Pot is the Kitchen's account for
-the owner, which the program is given as an account; `ctx.self()` there is the program's id.
+makes the calls. Token writes are SafeERC20 however they are spelled, so USDT works. On Solana the
+Pot is an account the program is given, and `ctx.self()` there is the engine's program id.
 
 Two references hold what a program can name. The language (types, operators, statements, and the
 `ctx`, `crypto`, `Math`, `abi`, `evm` and `svm` builtins) is
