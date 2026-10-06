@@ -26,6 +26,7 @@
 // `publishAndFund(…,bool)` send the intent, `intentVaultAddress(…)` reads its vault, a route call
 // moves a delivered token with ERC-20's `transfer(address,uint256)` and cooks the body with the Pot's
 // `cook(address,bytes)`. `test/std/intents/compile.test.ts` holds each selector to the registry's ABI.
+import { Token } from "@sauce/names";
 import { approve, transfer } from "@sauce/token";
 
 // What `.send(...)` lists, recorded as it is given, and what a list of them becomes.
@@ -115,6 +116,10 @@ class Intent {
     this._reward = reward;
     // 1 after `send`, 2 after `receive`, 3 after `then`, 4 after `catch`.
     this._stage = 1;
+    // Raw route calls the Executor makes before the delivered tokens move into the Pot, and after
+    // the cook, as written. None yet: a step that adds them is a later one.
+    this._before = Lists.empty();
+    this._after = Lists.empty();
   }
 
   // Who may reclaim an unearned reward: the reward's `creator` on the Portal.
@@ -362,6 +367,7 @@ class Intent {
     }
     const body = program(this._body, this._destination.chainId);
     const calls = new Items();
+    for (const call of this._before) calls.add(call);
     for (const delivered of deliveryTokens.list) {
       calls.add({
         target: delivered.token,
@@ -374,6 +380,7 @@ class Intent {
       data: hex`b38dbf14`.concat(abi.encode(this._destination.engine, body.code.concat(body.args))),
       value: fee,
     });
+    for (const call of this._after) calls.add(call);
 
     // The deadlines: the route's 300 seconds after the intent opens — when the compile says, else
     // as the program runs — and the reward's seven days after the route's.
@@ -468,7 +475,9 @@ class Intent {
         "each item `.receive(...)` takes is `{ token, amount }`, or a list of token amounts",
       );
     }
-    if (item.token.symbol === undefined) {
+    // An address, or a `Token(address)`, is used as written; a token the registry names is the
+    // destination's token of its symbol.
+    if (!(item.token instanceof Token) || item.token.symbol === undefined) {
       tokens.add({ token: item.token, amount: item.amount });
       return;
     }

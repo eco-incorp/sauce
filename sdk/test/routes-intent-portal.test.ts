@@ -155,6 +155,20 @@ describe("the intents a program opens, as compiled", () => {
     expect(bytes(INTENTS)).toBe(bytes(INTENTS));
   });
 
+  // Pending the compiler's bare names passed to a call it runs (the v12 #557 port): Base has no
+  // USDT0, and the class reads the symbol on the destination, where `Token(<address>)` works today.
+  it.failing("a delivery token only the destination has, by its bare symbol", () => {
+    const usdt0 = hex(registryTokenAddress(requireChain("arbitrum"), "USDT0")!);
+    const program = (token: string) => `function main(amount: Uint256) {
+  Arbitrum.Portal.send({ token: USDC, amount })
+    .refundee(${CREATOR})
+    .receive({ token: ${token}, amount })
+    .fee(0)
+    .then(() => { USDT0.transfer(RECIPIENT, amount); });
+}`;
+    expectSame(compile(program("USDT0"), INTENTS), compile(program(`Token(${usdt0})`), INTENTS));
+  });
+
   it("compiles each body for its chain, and names what it reads of the program around it", () => {
     const { bodies } = compile(NESTED, INTENTS);
     expect(bodies.map((body) => [body.destination.slug, body.path.length])).toEqual([
