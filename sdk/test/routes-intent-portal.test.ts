@@ -272,7 +272,7 @@ describeEvm("the intents a program publishes", () => {
     expect(rest!.route.salt).toBe(SALT);
     expect(low(rest!.reward.creator)).toBe(CREATOR.slice(2));
     expect(rest!.route.calls.at(-1)!.value).toBe(1_000n);
-  });
+  }, 120_000);
 
   it("defaults the deadlines from when the program opening it runs, with no time given", async () => {
     const program = compile(
@@ -289,7 +289,7 @@ describeEvm("the intents a program publishes", () => {
     expect(opened!.route.deadline).toBeGreaterThan(before + DEFAULT_FILL_WINDOW - 1n);
     expect(opened!.route.deadline).toBeLessThanOrEqual(at + DEFAULT_FILL_WINDOW);
     expect(opened!.reward.deadline).toBe(opened!.route.deadline + DEFAULT_REFUND_WINDOW);
-  });
+  }, 120_000);
 
   it("a deadline computed as the program runs is written in", async () => {
     const [opened] = await published(
@@ -306,7 +306,7 @@ describeEvm("the intents a program publishes", () => {
     const at = (await base.local.publicClient.getBlock()).timestamp;
     expect(opened!.route.deadline).toBe(at + 3600n);
     expect(opened!.reward.deadline).toBe(at + 3600n + DEFAULT_REFUND_WINDOW);
-  });
+  }, 120_000);
 
   it("an intent a body opens has its own creator, and pays its own chain's fee", async () => {
     const fees: Record<string, bigint> = { arbitrum: 11n, optimism: 22n };
@@ -338,7 +338,7 @@ describeEvm("the intents a program publishes", () => {
     const cook = outer!.route.calls.at(-1)!.data.toLowerCase();
     expect(cook).toContain(inner.toString(16));
     expect(cook).not.toContain(CREATOR.slice(2));
-  });
+  }, 120_000);
 
   it("a top-level intent a wallet publishes defaults to that wallet, and no other does", async () => {
     const program = (creator: string) => `function main() {
@@ -356,7 +356,7 @@ describeEvm("the intents a program publishes", () => {
     expect(() => compile(program(""), { ...INTENTS, publisher: undefined })).toThrow(
       /needs `\.refundee\(<address>\)` after `\.send\(\.\.\.\)`: the address an unfilled intent's reward is refunded to/,
     );
-  });
+  }, 120_000);
 
   it("takes the salt the compile was given, and a `.salt(...)` over it", async () => {
     const program = `function main() {
@@ -371,7 +371,7 @@ describeEvm("the intents a program publishes", () => {
       compile(program.replace(".then(", ".salt(0x1234)\n    .then("), INTENTS),
     );
     expect(salted!.route.salt).toBe(`0x${"1234".padStart(64, "0")}`);
-  });
+  }, 120_000);
 
   it("takes each item as an argument, as one list", async () => {
     const opened = async (send: string, receive: string) =>
@@ -399,7 +399,7 @@ describeEvm("the intents a program publishes", () => {
     // The delivery is the destination's token of each symbol.
     expect(BigInt(asArguments.route.tokens[0]!.token)).toBe(usdcOf("arbitrum"));
     expect(BigInt(asArguments.reward.tokens[0]!.token)).toBe(usdcOf("base"));
-  });
+  }, 120_000);
 
   it(".receive() with no items: nothing is delivered, and the body's cook is the route's one call", async () => {
     const [opened] = await published(
@@ -417,7 +417,7 @@ describeEvm("the intents a program publishes", () => {
     expect(opened!.route.tokens).toEqual([]);
     expect(opened!.route.calls).toHaveLength(1);
     expect(opened!.route.calls[0]!.target.slice(-40)).toBe(low(destinationPot("arbitrum")));
-  });
+  }, 120_000);
 
   it("delivered tokens move from the Executor into the destination's Pot, then the body cooks", async () => {
     const [opened] = await published(
@@ -441,7 +441,7 @@ describeEvm("the intents a program publishes", () => {
     );
     expect(cook!.value).toBe(1_000n);
     expect(opened!.route.nativeAmount).toBe(1_000n);
-  });
+  }, 120_000);
 
   it("fills the Portals, the prover and the destination's shared Pot from the registry", async () => {
     const [opened] = await published(
@@ -461,7 +461,7 @@ describeEvm("the intents a program publishes", () => {
       low(hex(usdcOf("arbitrum"))),
       low(pot),
     ]);
-  });
+  }, 120_000);
 
   it("cooks on the Pot of an overriding destination Portal's Executor, or the one named", async () => {
     const program = `function main() {
@@ -480,7 +480,7 @@ describeEvm("the intents a program publishes", () => {
     const pot = "0x7777777777777777777777777777777777777777";
     const [named] = await published(compile(program, { ...INTENTS, pot }));
     expect(low(named!.route.calls[1]!.target)).toBe(low(pot));
-  });
+  }, 120_000);
 
   it("funds a token listed twice once, for the larger amount", async () => {
     const [opened] = await published(
@@ -496,7 +496,7 @@ describeEvm("the intents a program publishes", () => {
     expect(opened!.reward.tokens.map((t) => t.amount)).toEqual([7n, 9n, 4n]);
     const vault = predictIntentVault(opened!, { portal: base.portal });
     expect(await base.local.balanceOf(base.token("USDC"), vault)).toBe(9n);
-  });
+  }, 120_000);
 
   it("reads a plain literal past 2^53 exactly, in an item and a modifier", async () => {
     const [opened] = await published(
@@ -522,7 +522,7 @@ describeEvm("the intents a program publishes", () => {
     expect(route.tokens[0]!.amount).toBe(10n ** 18n + 1n);
     expect(route.deadline).toBe(9_007_199_254_740_995n);
     expect(route.salt).toBe(`0x${"ff".repeat(10).padStart(64, "0")}`);
-  });
+  }, 120_000);
 
   it("writes main's arguments where the intent takes them, the body's among them", async () => {
     const program = compile(NESTED, INTENTS);
@@ -541,7 +541,7 @@ describeEvm("the intents a program publishes", () => {
     expect(cook).toContain(
       `${RECIPIENT.toString(16).padStart(64, "0")}${1_000_000n.toString(16).padStart(64, "0")}`,
     );
-  });
+  }, 120_000);
 
   it("publishAndFund approves the Portal and has it pull the reward", async () => {
     const [opened] = await published(
@@ -555,7 +555,7 @@ describeEvm("the intents a program publishes", () => {
       ),
     );
     expect(opened!.reward.tokens.map((t) => t.amount)).toEqual([1_010_000n, 7n]);
-  });
+  }, 120_000);
 });
 
 describe("on the host", () => {

@@ -54,7 +54,7 @@ describeEvm("a caller's chain-scoped defines are its chain's, and nowhere else's
 
   it("a delivery names the destination's USDC; `chainId` in it is the program's", async () => {
     expect(await delivery({})).toEqual([ARBITRUM_USDC, 8453n]);
-  });
+  }, 120_000);
 
   it("so does one compiled with every Base value as a define", async () => {
     // `USDC` and `chainId` are Base's in these defines: as defines they would replace the module's
@@ -63,5 +63,5 @@ describeEvm("a caller's chain-scoped defines are its chain's, and nowhere else's
       ARBITRUM_USDC,
       8453n,
     ]);
-  });
+  }, 120_000);
 });

@@ -615,8 +615,8 @@ function endpointsOf(args: ParsedArgs, io: CliIo, source: CanonicalChain): Endpo
 /**
  * `--intent-execution-fee auto`, and the default: the fee each destination's Kitchen charges, read
  * from it through `endpoints`, for the cook of every intent body that is a program, at any depth.
- * The program is compiled once with a fee of zero to find which destinations' cooks are paid; with
- * none, nothing is read. `told` says so on stderr, which the default stays quiet about.
+ * The program is compiled once with a fee of zero to find the destination of every body it compiles,
+ * whose cooks are paid; with none, nothing is read. `told` says so on stderr, which the default stays quiet about.
  */
 async function autoExecutionFee(
   input: ProgramInput,
@@ -630,7 +630,6 @@ async function autoExecutionFee(
   if (!told && (input.chain.kind !== "evm" || !/\.Portal\b/.test(input.text))) {
     return undefined;
   }
-  const paid = new Map<number, CanonicalChain>();
   let probe: ReturnType<typeof compileProgram>;
   try {
     probe = compileProgram(
@@ -639,7 +638,7 @@ async function autoExecutionFee(
         intents: {
           ...input.intents,
           publisher: input.intents.publisher ?? input.intents.refundee ?? PROBE_CREATOR,
-          executionFee: (destination) => (paid.set(destination.id, destination), 0n),
+          executionFee: 0n,
         },
       },
       io,
@@ -649,6 +648,8 @@ async function autoExecutionFee(
 
     return undefined;
   }
+  // Every body is a program its destination's Kitchen charges for, at any depth.
+  const paid = new Map(probe.bodies.map((body) => [body.destination.id, body.destination]));
   // Before the fee is read: a command refused on these chains reads nothing for them.
   if (gate !== undefined) gated(gate, input.chain, probe.bodies);
   if (paid.size === 0) {

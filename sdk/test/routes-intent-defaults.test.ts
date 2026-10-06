@@ -90,9 +90,10 @@ describe("the reward's prover defaults to the registry's for the pair", () => {
   });
 
   it("is what an intent opened inside a program records, through the same lookup", () => {
-    // `sauce-route.ts` hands the in-program lowering `ecoRoutesProver` as its `proverFor`, which is
-    // also what `sauce intent publish` compiles through. Staging's provers differ from production's,
-    // so the child's publication, carried in the parent's cook, shows which deployment it used.
+    // The chain's module of names gives each Portal the prover `ecoRoutesProver` finds for its pair,
+    // which is also what `sauce intent publish` compiles through. Staging's provers differ from
+    // production's, so the child's publication, carried in the parent's cook, shows which
+    // deployment it used.
     const parent = openRoute(
       "base",
       `function main() {
@@ -100,10 +101,16 @@ describe("the reward's prover defaults to the registry's for the pair", () => {
     USDC.transfer(RECIPIENT, 1);
   });
 }`,
-      minimal({ creator: CREATOR, defines: { RECIPIENT: BigInt(CREATOR) }, ecoRoutes: STAGING }),
+      minimal({
+        creator: CREATOR,
+        defines: { RECIPIENT: BigInt(CREATOR) },
+        ecoRoutes: STAGING,
+        compile: { intents: { executionFee: 0n } },
+      }),
     ).reward(reward);
     const cook = parent.intent.route.calls[0]!.data.toLowerCase();
-    const word = (prover: Hex) => universal(prover).slice(2);
+    // The program encodes the child as it runs: the prover is in it as the address it pushes.
+    const word = (prover: Hex) => prover.slice(2).toLowerCase();
 
     expect(parent.intent.reward.prover).toBe(
       universal(ecoRoutesProver("ethereum", "base", STAGING)),

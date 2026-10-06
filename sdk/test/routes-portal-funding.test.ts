@@ -274,6 +274,7 @@ describe("BuiltIntent.sourceTxs and predictVault", () => {
         openRoute("optimism", body, {
           ...OPTIONS,
           defines: { RECIPIENT: BigInt(OPTIONS.creator) },
+          compile: { intents: { executionFee: 0n } },
           ...(fundVia === undefined ? {} : { fundVia }),
         }).reward({ tokens: [{ token: TOKEN_A, amount: 9n }] }).compiled.bytecode[0]!,
       );

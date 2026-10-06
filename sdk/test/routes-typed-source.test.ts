@@ -59,8 +59,8 @@ function main(amount: Uint256, to: Address): void {
   });
 
   it("compiles to the program the compiler makes of the source with its names written by hand", () => {
-    // The one name the chain gives this program is `self`, a read of `@sauce/context`; the rest
-    // reaches the compiler byte for byte, annotations included.
+    // The one name the chain gives this program is `self`, the running contract; the rest reaches
+    // the compiler byte for byte, annotations included.
     const source = `${HELPERS}
 function main(amount: Uint256): Uint256 {
   const parts: Uint256[] = [amount, ctx.timestamp()];
@@ -69,7 +69,7 @@ function main(amount: Uint256): Uint256 {
     const routed = compileSauceRoute("base", source, EXECUTION);
     const direct = compileSauceRoute(
       "base",
-      `import { self as me } from "@sauce/context";\n${source.replace("(self)", "(me())")}`,
+      source.replace("(self)", "(ctx.self())"),
       EXECUTION,
     ).compiled;
 
@@ -94,13 +94,13 @@ function main(amount: Uint256): Uint256 {
     const source = `function main(amount: Uint256): void {
   const held: Uint256 = USDC.balanceOf(ctx.self());
   require(held >= amount);
-  Arbitrum.Portal.send([{ token: USDC, amount }]).refundee(0x3333333333333333333333333333333333333333).receive().then(() => {
+  Arbitrum.Portal.send([{ token: USDC, amount }]).refundee(0x3333333333333333333333333333333333333333).receive({ token: USDC, amount }).then(() => {
     USDC.transfer(RECIPIENT, amount);
   });
 }`;
     const out = compileSauceRoute("base", source, EXECUTION, {
       defines: { RECIPIENT },
-      intents: { deadline: 4_000_000_000n },
+      intents: { deadline: 4_000_000_000n, executionFee: 0n },
     });
 
     expect(out.compiled.bytecode[0]!.length).toBeGreaterThan(0);
