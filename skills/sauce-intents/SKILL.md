@@ -433,8 +433,7 @@ prover deployed on both sides.
 - **The shared Pot.** A program body cooks on the destination Portal Executor's **shared Pot** (its
   owner is the Executor, its salt zero); the destination's file in `sauce-chains` gives the
   Executor, and the deployments file above the Pot. **The Pot must exist before any fill**: until it
-  does, every fulfilment of a program
-  body reverts (`CallToEOA`). `sauce pot --chain <destination> --owner <Executor>` prints its
+  does, every fulfilment of a program body reverts (`CallToEOA`). `sauce pot --chain <destination> --owner <Executor>` prints its
   address and deploy transaction; with `--deploy --keystore <keystore>`
   any signer deploys it (the Pot is the Executor's either way), and an existing one is reported, not
   redeployed; `sauce intent fill` says whether it is deployed on the destination, and deploys it in its
