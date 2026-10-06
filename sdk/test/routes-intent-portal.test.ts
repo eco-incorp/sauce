@@ -26,10 +26,17 @@ import { bytesToHex, decodeFunctionData, encodeAbiParameters, type Hex } from "v
 
 import { requireChain, type CanonicalChain } from "../src/chains/canonical.js";
 import { Arbitrum, Base, Ethereum } from "../src/index.js";
+import { v12PredictPot } from "../src/deployments/pot.js";
 import { PortalABI } from "../src/protocols/eco-routes/abis.js";
+import {
+  ecoRoutesExecutorOf,
+  ecoRoutesPortal,
+  ecoRoutesProver,
+} from "../src/protocols/eco-routes/lookup.js";
 import { DEFAULT_FILL_WINDOW, DEFAULT_REFUND_WINDOW } from "../src/routes/intent-defaults.js";
 import type { IntentDefaults } from "../src/routes/intent-defaults.js";
 import { destinationPot } from "../src/routes/intent-pot.js";
+import { predictIntentVault } from "../src/routes/portal.js";
 import type { EntryValue } from "../src/routes/entry.js";
 import { compileSauceProgram, type CompiledSauceProgram } from "../src/routes/sauce-route.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
@@ -436,6 +443,61 @@ describeEvm("the intents a program publishes", () => {
     expect(opened!.route.nativeAmount).toBe(1_000n);
   });
 
+  it("fills the Portals, the prover and the destination's shared Pot from the registry", async () => {
+    const [opened] = await published(
+      compile(
+        `function main() {
+  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
+    .receive({ token: USDC, amount: 1000000 })
+    .then(() => { USDC.transfer(RECIPIENT, 1000000); });
+}`,
+        INTENTS,
+      ),
+    );
+    expect(low(opened!.route.portal)).toBe(low(ecoRoutesPortal("arbitrum")));
+    expect(low(opened!.reward.prover)).toBe(low(ecoRoutesProver("base", "arbitrum")));
+    const pot = v12PredictPot(ecoRoutesExecutorOf(ecoRoutesPortal("arbitrum")));
+    expect(opened!.route.calls.map((call) => low(call.target))).toEqual([
+      low(hex(usdcOf("arbitrum"))),
+      low(pot),
+    ]);
+  });
+
+  it("cooks on the Pot of an overriding destination Portal's Executor, or the one named", async () => {
+    const program = `function main() {
+  Arbitrum.Portal.send({ token: USDC, amount: 1010000 })
+    .receive({ token: USDC, amount: 1000000 })
+    .then(() => { USDC.transfer(RECIPIENT, 1000000); });
+}`;
+    const portal = "0x6666666666666666666666666666666666666666" as Hex;
+    const [overridden] = await published(
+      compile(program, { ...INTENTS, destinationPortal: portal }),
+    );
+    expect(low(overridden!.route.portal)).toBe(low(portal));
+    expect(low(overridden!.route.calls[1]!.target)).toBe(
+      low(v12PredictPot(ecoRoutesExecutorOf(portal))),
+    );
+    const pot = "0x7777777777777777777777777777777777777777";
+    const [named] = await published(compile(program, { ...INTENTS, pot }));
+    expect(low(named!.route.calls[1]!.target)).toBe(low(pot));
+  });
+
+  it("funds a token listed twice once, for the larger amount", async () => {
+    const [opened] = await published(
+      compile(
+        `function main() {
+  Arbitrum.Portal.send({ token: USDC, amount: 7 }, { token: USDC, amount: 9 }, { token: USDC, amount: 4 })
+    .receive({ token: USDC, amount: 1 })
+    .then(() => { USDC.transfer(RECIPIENT, 1); });
+}`,
+        INTENTS,
+      ),
+    );
+    expect(opened!.reward.tokens.map((t) => t.amount)).toEqual([7n, 9n, 4n]);
+    const vault = predictIntentVault(opened!, { portal: base.portal });
+    expect(await base.local.balanceOf(base.token("USDC"), vault)).toBe(9n);
+  });
+
   it("reads a plain literal past 2^53 exactly, in an item and a modifier", async () => {
     const [opened] = await published(
       compile(
@@ -722,6 +784,19 @@ describe("what the lowering refuses", () => {
         `Arbitrum.Portal.send(${item}).receive(${item})${then}.catch((e) => {}).catch((e) => {});`,
       ),
     ).toThrow(/`\.catch\(\.\.\.\)` is not a step after `\.catch\(\.\.\.\)`/);
+  });
+
+  it("refuses allowPartial, which only publishAndFund takes, and a fundVia it does not know", () => {
+    const opens = `Arbitrum.Portal.send(${item}).receive(${item})${then};`;
+    expect(() =>
+      compile(`function main() {\n${opens}\n}`, { ...INTENTS, allowPartial: true }),
+    ).toThrow(/`intents.allowPartial` goes with `fundVia: "publishAndFund"`/);
+    expect(() =>
+      compile(`function main() {\n${opens}\n}`, {
+        ...INTENTS,
+        fundVia: "permit" as unknown as "transfer",
+      }),
+    ).toThrow(/`intents.fundVia` is 'permit'/);
   });
 
   it("a `const` holding the intent opens it where its block ends", () => {

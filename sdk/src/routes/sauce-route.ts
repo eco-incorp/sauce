@@ -44,6 +44,7 @@ import { chainAmbient } from "./ambient.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
 import type { EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
 import { randomSalt, type IntentDefaults } from "./intent-defaults.js";
+import { INTENT_FUND_VIA } from "./portal.js";
 import { entryParamsOf, type EntryParam, type EntrySignature, type EntryValue } from "./entry.js";
 import { chainCalledError, unknownGlobalError } from "./unknown-global.js";
 import { closureText, isSauceClosure, type SauceBody } from "./closure.js";
@@ -178,6 +179,23 @@ function splitChainDefines(
 
 const toAddress = (value: bigint): Hex => `0x${value.toString(16).padStart(40, "0")}`;
 
+/** `intents.fundVia` checked, refusing an option that belongs to the other mode. */
+function requireFundVia(intents: IntentDefaults): void {
+  const fundVia = intents.fundVia ?? "transfer";
+  if (!INTENT_FUND_VIA.includes(fundVia)) {
+    throw new Error(
+      `intent sugar: \`intents.fundVia\` is '${String(fundVia)}', which is not ` +
+        `${INTENT_FUND_VIA.map((via) => `"${via}"`).join(" or ")}`,
+    );
+  }
+  if (fundVia === "transfer" && intents.allowPartial === true) {
+    throw new Error(
+      'intent sugar: `intents.allowPartial` goes with `fundVia: "publishAndFund"`: funding by ' +
+        "transfer pays the whole reward into the vault, and `publish` takes no such flag",
+    );
+  }
+}
+
 function defaultTargetFor(kind: "evm" | "svm"): CompileTarget {
   return kind === "svm" ? "svm" : "v12";
 }
@@ -213,6 +231,7 @@ function chainModules(
   readonly bodies: Map<number, CanonicalChain>;
 } {
   const { defines, tokens, values } = splitChainDefines(options.defines, options.tokens);
+  requireFundVia(options.intents ?? {});
   const salt = options.intents?.salt ?? randomSalt();
   const moduleOptions: ChainModuleOptions = {
     tokens,

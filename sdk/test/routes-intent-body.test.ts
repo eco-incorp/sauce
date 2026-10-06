@@ -1,55 +1,28 @@
 /**
  * What an intent body's names mean when the body is a program of its own.
  *
- * `Chain.Portal.send(...).receive().then(() => { ... })` with a body that is not plain token writes compiles that body
- * as a program for the destination — the compiler's program argument, in the destination's scope.
+ * `Chain.Portal.send(...).receive().then(() => { ... })` compiles its body as a program for the
+ * destination — `program(body, chainId)` in `@sauce/intents`, in the destination's scope.
  * A name the body reads is one of: its own local; a value of the enclosing program, carried in as
  * an entry argument (a capture); or a declaration of the file — a function, an import, an
  * interface, a constant — which the body's program has as the file does, compiled only where the
  * body reaches it. A module `let` the body reads is a capture too: it starts from the value it has
  * where the intent opens.
  *
- * Each case reads the captures of the body's program from the compile's own report, as `bind`
- * receives it (`src/routes/intent-host.ts`).
+ * Each case reads the captures of the body's program from the compile's own report
+ * (`CompiledSauceProgram.bodies`).
  */
-const { jest } = import.meta as unknown as {
-  jest: { unstable_mockModule(path: string, factory: () => unknown): void };
-};
-const realIntents = await import("../src/routes/intent-host.js");
-/** The captures of each body program bound since the last `compileBody`, in bind order. */
-let bodies: (readonly string[])[] = [];
-jest.unstable_mockModule("../src/routes/intent-host.js", () => ({
-  ...realIntents,
-  intentHost: (level: Parameters<typeof realIntents.intentHost>[0]) => {
-    const host = realIntents.intentHost(level);
-    return {
-      ...host,
-      bind: (site: Parameters<typeof host.bind>[0]) => {
-        const receiver = site.receiver;
-        const body =
-          receiver !== undefined && "record" in receiver
-            ? receiver.record.parts.at(-1)?.args[0]
-            : undefined;
-        if (body !== undefined && "program" in body) {
-          bodies.push(body.program.captures.map((capture) => capture.name));
-        }
-        return host.bind(site);
-      },
-    };
-  },
-}));
-const { compileSauceProgram } = await import("../src/routes/sauce-route.js");
+import { compileSauceProgram } from "../src/routes/sauce-route.js";
 
 const RECIPIENT = 0x9999999999999999999999999999999999999999n;
 const INTENTS = { deadline: 4_000_000_000n, executionFee: 0n } as const;
 
 /** `source` compiled for Base, and the captures of the one body program it opens. */
 function captures(source: string): readonly string[] {
-  bodies = [];
   const program = compileSauceProgram("base", source, { defines: { RECIPIENT }, intents: INTENTS });
   expect(program.bytecode.length).toBeGreaterThan(0);
-  expect(bodies).toHaveLength(1);
-  return bodies[0]!;
+  expect(program.bodies).toHaveLength(1);
+  return program.bodies[0]!.captures;
 }
 
 /** `file` followed by a `main` on Base that opens one Arbitrum intent around `body`. */
@@ -285,7 +258,6 @@ function main(): void {
   it("a function only the body calls is compiled for the body's chain alone", () => {
     // USDT is an Optimism token and not a Base one: compiled for Base, `payout` would name a token
     // Base does not have. It runs only on Optimism, so only Optimism compiles it.
-    bodies = [];
     const program = compileSauceProgram(
       "base",
       `function payout(to: Address, value: Uint256): void {
@@ -301,7 +273,7 @@ function main() {
       { defines: { RECIPIENT }, intents: INTENTS },
     );
     expect(program.bytecode.length).toBeGreaterThan(0);
-    expect(bodies).toEqual([[]]);
+    expect(program.bodies.map((body) => body.captures)).toEqual([[]]);
   });
 });
 

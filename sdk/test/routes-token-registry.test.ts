@@ -14,7 +14,7 @@ import {
   resolveTokenMap,
   svmTokenRows,
 } from "../src/routes/token-registry.js";
-import { TOKEN_METHODS } from "../src/routes/host.js";
+import { TOKEN_METHODS } from "../src/routes/chain-module.js";
 import { NATIVE_MINT } from "../src/svm/prepends.js";
 import { USDC_MINT } from "../src/svm/venues/hylo/index.js";
 

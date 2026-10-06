@@ -205,6 +205,35 @@ function namespaceContracts(
   return contracts.filter(([name]) => IDENTIFIER.test(name));
 }
 
+/** The methods of a token (`@sauce/names`' `Token`), which no registry symbol may share. */
+export const TOKEN_METHODS: ReadonlySet<string> = new Set([
+  "transfer",
+  "approve",
+  "transferFrom",
+  "balanceOf",
+]);
+
+/**
+ * The address a program compiled for `chain` reads `<namespace>.<contract>` as, where the chain's
+ * module gives it one: a deployed contract or an address-only one, its ABI not widened. `undefined`
+ * where it is absent there, ambiguous, or an interface, which has no address of its own.
+ */
+export function contractAddressOn(
+  chain: CanonicalChain,
+  namespace: string,
+  contract: string,
+): string | undefined {
+  const found = resolveNamespace(namespace);
+  if (found === undefined || chain.kind !== "evm") return undefined;
+  const descriptor = namespaceContracts(found).find(([name]) => name === contract)?.[1];
+  if (descriptor === undefined || "ambiguous" in descriptor) return undefined;
+  if (descriptor.kind === "interface" || descriptor.coverage.typeFidelity === "widened") {
+    return undefined;
+  }
+
+  return addressOn(descriptor, chain);
+}
+
 /** What a namespace that names no single contract says when it is used as one. */
 function namesNoSingle(key: string, namespace: Namespace): string {
   const known = namespaceContracts(namespace).map(([name]) => name);

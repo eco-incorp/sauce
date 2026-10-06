@@ -34,7 +34,7 @@ import { encodeRoute, hashIntent } from "../src/routes/encode.js";
 import { decodeEntryArguments, encodeEntryArguments } from "../src/routes/entry.js";
 import { toUniversalAddress } from "../src/routes/normalize.js";
 import { predictIntentVault } from "../src/routes/portal.js";
-import { chainHost } from "../src/routes/host.js";
+import { contractAddressOn } from "../src/routes/chain-module.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 import { sourceGlobals } from "../src/routes/source-globals.js";
 import { SVM_TOKEN_REGISTRY, TOKEN_REGISTRY } from "../src/routes/token-registry.js";
@@ -97,7 +97,7 @@ const file = (name: string, text: string): string => {
 // ---------------------------------------------------------------------------------------------
 
 describe("sourceGlobals: the names a program on a chain may use", () => {
-  it("lists exactly the namespaces and contracts the chain's host declares, at their addresses", () => {
+  it("lists exactly the namespaces and contracts the chain's module gives addresses, at those addresses", () => {
     for (const slug of ["ethereum", "base", "arbitrum"]) {
       const chain = requireChain(slug);
       const listed = new Map<string, string>();
@@ -107,28 +107,14 @@ describe("sourceGlobals: the names a program on a chain may use", () => {
         }
       }
       expect(listed.size).toBeGreaterThan(0);
-      const host = chainHost(chain);
       for (const key of NAMESPACE_KEYS) {
         const ns = resolveNamespace(key)!;
         const names =
           ns.kind === "protocol" ? [...ns.contracts.keys()] : [...ns.contractOwners.keys()];
         for (const name of names) {
           const reference = `${key}.${name}`;
-          // The address a program reads it as, when the chain declares it usable as a value.
-          let declared: string | undefined;
-          try {
-            const declaration = host.declare(reference);
-            if (declaration !== undefined && declaration.unusable === undefined) {
-              declared =
-                declaration.kind === "contract"
-                  ? declaration.address
-                  : declaration.kind === "constant"
-                    ? declaration.value
-                    : undefined;
-            }
-          } catch {
-            declared = undefined;
-          }
+          // The address a program reads it as, where the chain's module gives it one.
+          const declared = contractAddressOn(chain, key, name);
           const address = listed.get(reference);
           // Listed if and only if a program may write it, and at the address it compiles to.
           expect([reference, declared !== undefined]).toEqual([reference, address !== undefined]);
