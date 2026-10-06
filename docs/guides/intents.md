@@ -229,7 +229,7 @@ destination's shared Pot, a token transfer alone included:
 
 The route the Portal's Executor runs is two kinds of call: a transfer of each token `.receive(...)`
 names from the Executor into the Pot, then the cook. The cook pays the destination Kitchen's fee,
-which becomes the route's native amount the solver sends. The program's token writes are
+which becomes the route's native amount the solver sends, and which the reward covers. The program's token writes are
 [`SafeERC20`](protocols-and-tokens.md#writes-follow-safeerc20): USDT works, and a token that
 returns `false` reverts the fulfilment.
 

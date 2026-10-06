@@ -333,9 +333,10 @@ Portal's log.
 
 ## The body
 
-The body is a program for the destination, compiled with the file and cooked on the destination
-Portal Executor's **shared Pot**, which pays the destination Kitchen's fee: the command reads the
-fee unless `.fee(...)` gives it, and it becomes the route's `nativeAmount`, which the solver sends.
+The body is a program for the destination, a single transfer included, compiled with the file and
+cooked on the destination Portal Executor's **shared Pot**, which pays the destination Kitchen's
+fee: the command reads the fee unless `.fee(...)` gives it, and it becomes the route's
+`nativeAmount`, which the solver sends and the reward covers.
 The delivered tokens arrive at the Executor and the route moves them into the Pot before the cook,
 so the body spends what `.receive(...)` names and nothing else that intent owns. Its token writes
 are SafeERC20's (`sauce-script`): a `false` return reverts the fulfilment, and USDT works. Here the
