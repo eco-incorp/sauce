@@ -14,8 +14,10 @@
  * `DEFAULT_REFUND_WINDOW` past that, the compile's salt, each destination's own Kitchen fee. The
  * creator has none: every intent names its own, `.refundee(...)`.
  *
- * On the host: `Base.Portal.send(...)...then(body)` builds the intent `Base(body,
- * options).reward(reward)` builds, and its `then` refuses to be a promise's.
+ * On the host: `Base.Portal.send(...).source(chain)...then(body)` writes the statement a program
+ * opens that intent with and compiles it for the source chain — the same program as the statement
+ * written in a file — and its cook publishes the same intent from a Pot there; its `then` refuses to
+ * be a promise's.
  *
  * And what the lowering refuses, by name: an expression that stops before its body, steps or
  * modifiers out of place or repeated, native coin delivered, a creator nobody named, a token the
@@ -26,7 +28,6 @@ import { bytesToHex, decodeFunctionData, encodeAbiParameters, parseAbi, type Hex
 import { requireChain, type CanonicalChain } from "../src/chains/canonical.js";
 import { Arbitrum, Base, Ethereum } from "../src/index.js";
 import { v12PredictPot } from "../src/deployments/pot.js";
-import { PortalABI } from "../src/protocols/eco-routes/abis.js";
 import {
   ecoRoutesExecutorOf,
   ecoRoutesPortal,
@@ -40,8 +41,7 @@ import type { EntryValue } from "../src/routes/entry.js";
 import { compileSauceProgram, type CompiledSauceProgram } from "../src/routes/sauce-route.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 import type { Intent } from "../src/routes/types.js";
-import { Token } from "../src/token/api.js";
-import { describeEvm } from "./cli-anvil.js";
+import { describeEvm, FEE as KITCHEN_FEE } from "./cli-anvil.js";
 import { startIntentChain, type IntentChain } from "./intent-anvil.js";
 import { freePort } from "./pools-anvil.js";
 
@@ -609,180 +609,110 @@ describeEvm("the intents a program publishes", () => {
     );
     expect(opened!.reward.tokens.map((t) => t.amount)).toEqual([1_010_000n, 7n]);
   }, 120_000);
+
+  it("a TypeScript intent's cook publishes what the same statement in a file publishes", async () => {
+    const built = Arbitrum.Portal.send({ token: base.token("USDC"), amount: 1_010_000n })
+      .source(Base, { defines: { RECIPIENT }, intents: INTENTS })
+      .refundee(CREATOR)
+      .receive({ token: hex(usdcOf("arbitrum")), amount: 1_000_000n })
+      .then(() => {
+        USDC.transfer(RECIPIENT, 1_000_000n);
+      });
+    const cook = built.cook(base.pot, KITCHEN_FEE);
+    const hash = await base.local.send(base.local.deployer, cook.to, cook.data, cook.value);
+    const { logs } = await base.local.publicClient.getTransactionReceipt({ hash });
+    const [sent] = built.intents(logs);
+    const [written] = await published(
+      compile(
+        `Arbitrum.Portal.send({ token: ${base.token("USDC")}, amount: 1010000 })
+  .refundee(${CREATOR})
+  .receive({ token: ${hex(usdcOf("arbitrum"))}, amount: 1000000 })
+  .then(() => { USDC.transfer(RECIPIENT, 1000000); });`,
+        INTENTS,
+      ),
+    );
+    expect(sent!.destination.slug).toBe("arbitrum");
+    expect(sent!.intent).toEqual(written);
+  }, 120_000);
 });
 
 describe("on the host", () => {
   const delivered = [{ token: hex(usdcOf("base")), amount: 1_000_000n }];
   const paid = { token: hex(usdcOf("ethereum")), amount: 1_010_000n };
   const FEE = 1_000n;
-  const program =
-    "function main() { USDC.transfer(0x6666666666666666666666666666666666666666, 1000000); }";
-  /** The route options the host form means, given its modifiers. */
-  const routeOptions = (deadline: bigint) => ({
-    deadline,
-    execution: { value: FEE },
-    tokens: delivered,
-    precalls: delivered.map((d) =>
-      Token.transfer({ token: d.token, to: destinationPot("base"), amount: d.amount }).toCall(),
-    ),
-    creator: CREATOR,
-  });
+  const body = "USDC.transfer(0x6666666666666666666666666666666666666666, 1000000);";
+  const options = { intents: { salt: SALT } } as const;
 
-  it("builds the intent Base(body, options).reward(reward) builds, the Pot given its delivery", () => {
+  it("writes the statement a program opens it with, and compiles it for the source chain", () => {
     const built = Base.Portal.send(paid)
-      .source(Ethereum)
+      .source(Ethereum, options)
       .refundee(CREATOR)
       .deadline(REWARD_DEADLINE + 1n)
       .receive(delivered)
       .fee(FEE)
       .deadline(DEADLINE)
-      .salt(SALT)
-      .then(program);
-    const expected = Base(program, { ...routeOptions(DEADLINE), salt: SALT }).reward({
-      source: "ethereum",
-      creator: CREATOR,
-      deadline: REWARD_DEADLINE + 1n,
-      tokens: [paid],
-    });
-
-    expect(built.intent).toEqual(expected.intent);
-    expect(built.hash()).toEqual(expected.hash());
-    expect(built.encodeEVM()).toEqual(expected.encodeEVM());
-    expect(built.sourceTxs()).toEqual(expected.sourceTxs());
-    expect(built.publishCalldata()).toEqual(expected.publishCalldata());
-    expect(built.source.slug).toBe("ethereum");
-    expect(built.destination.slug).toBe("base");
-    const published = decodeFunctionData({ abi: PortalABI, data: built.publishCalldata().data });
-    expect(published.functionName).toBe("publish");
+      .then(body);
+    const written = `Base.Portal.send({ token: ${paid.token}, amount: 1010000 })
+  .refundee(${CREATOR})
+  .deadline(${REWARD_DEADLINE + 1n})
+  .receive({ token: ${delivered[0]!.token}, amount: 1000000 })
+  .deadline(${DEADLINE})
+  .fee(1000)
+  .then(() => { ${body} });`;
+    expect(built.program.chain.slug).toBe("ethereum");
+    expect(built.program.bodies.map((each) => each.destination.slug)).toEqual(["base"]);
+    expectSame(built.program, compileSauceProgram("ethereum", written, options));
+    expect(built.source).toContain(`.refundee(${CREATOR})`);
   });
 
-  it("defaults the deadlines from now, the prover from the registry, the salt to random bytes", () => {
-    const before = BigInt(Math.floor(Date.now() / 1000));
-    const built = Base.Portal.send(paid, { native: 3n })
-      .source("ethereum")
-      .refundee(CREATOR)
-      .receive(...delivered)
+  it("takes a closure as the body, and items as arguments or one list", () => {
+    const sentOf = () => Base.Portal.send([paid]).source(Ethereum, options).refundee(CREATOR);
+    const one = sentOf()
+      .receive(delivered[0]!)
       .fee(FEE)
-      .then(program);
-    const after = BigInt(Math.floor(Date.now() / 1000));
-    const { route, reward } = built.intent;
-    expect(route.deadline >= before + DEFAULT_FILL_WINDOW).toBe(true);
-    expect(route.deadline <= after + DEFAULT_FILL_WINDOW).toBe(true);
-    expect(reward.deadline).toBe(route.deadline + DEFAULT_REFUND_WINDOW);
-    expect(reward.nativeAmount).toBe(3n);
-    expect(route.salt).toMatch(/^0x[0-9a-f]{64}$/);
-    expect(route.salt).not.toBe(`0x${"00".repeat(32)}`);
-    const again = Base.Portal.send(paid).source("ethereum").refundee(CREATOR).receive().fee(FEE);
-    expect(again.then(program).intent.route.salt).not.toBe(again.then(program).intent.route.salt);
-    const expected = Base(program, { ...routeOptions(route.deadline), salt: route.salt }).reward({
-      source: "ethereum",
-      creator: CREATOR,
-      deadline: route.deadline + DEFAULT_REFUND_WINDOW,
-      nativeAmount: 3n,
-      tokens: [paid],
-    });
-    expect(built.intent).toEqual(expected.intent);
+      .then(() => {
+        USDC.transfer(0x6666666666666666666666666666666666666666n, 1_000_000n);
+      });
+    const many = sentOf().receive(delivered).fee(FEE).then(body);
+    expectSame(one.program, many.program);
   });
 
-  it("refuses what has no default in TypeScript, and a modifier given twice", () => {
-    expect(() => Base.Portal.send(paid).receive(delivered).fee(FEE).then(program)).toThrow(
-      /give `\.source\(\.\.\.\)` after `\.send\(\.\.\.\)`/,
-    );
+  it("cooks on a Pot, named or by its owner, with the source Kitchen's fee as its value", () => {
+    const built = Base.Portal.send(paid)
+      .source("ethereum", options)
+      .refundee(CREATOR)
+      .receive()
+      .fee(FEE)
+      .then(body);
+    const byOwner = built.cook({ owner: CREATOR }, 9n);
+    expect(byOwner.to).toBe(v12PredictPot(CREATOR));
+    expect(byOwner.value).toBe(9n);
+    const decoded = decodeFunctionData({
+      abi: parseAbi(["function cook(address engine, bytes program) payable returns (bytes)"]),
+      data: byOwner.data,
+    });
+    expect(decoded.args[1]).toBe(bytesToHex(built.program.bytecode));
+    expect(built.cook(byOwner.to, 9n)).toEqual(byOwner);
+  });
+
+  it("refuses an intent with no source chain, a modifier given twice, and a handler", () => {
     expect(() =>
-      Base.Portal.send(paid).source("ethereum").receive(delivered).fee(FEE).then(program),
-    ).toThrow(/give `\.refundee\(\.\.\.\)` after `\.send\(\.\.\.\)`: who may reclaim/);
+      Base.Portal.send(paid).refundee(CREATOR).receive(delivered).fee(FEE).then(body),
+    ).toThrow(/give `\.source\(\.\.\.\)` after `\.send\(\.\.\.\)`/);
     expect(() =>
-      Base.Portal.send(paid).source("ethereum").refundee(CREATOR).receive(delivered).then(program),
-    ).toThrow(/give `\.fee\(\.\.\.\)` after `\.receive\(\.\.\.\)`/);
+      Base.Portal.send(paid).source("ethereum", options).receive(delivered).fee(FEE).then(body),
+    ).toThrow(/an intent needs `\.refundee\(<address>\)`/);
     const sent = Base.Portal.send(paid).refundee(CREATOR) as unknown as {
       refundee(address: string): unknown;
     };
     expect(() => sent.refundee(CREATOR)).toThrow(/`\.refundee\(\.\.\.\)` is given twice/);
-  });
-
-  it("refuses a handler: the host builds the body alone", () => {
     const built = Base.Portal.send(paid)
-      .source("ethereum")
+      .source("ethereum", options)
       .refundee(CREATOR)
       .receive(delivered)
       .fee(FEE)
-      .then(program);
-    expect(() => built.catch(() => {})).toThrow(TypeError);
-  });
-
-  it("takes a closure that opens the next intent, and items as arguments or one list", () => {
-    const one = Ethereum.Portal.send(paid)
-      .source("base")
-      .refundee(CREATOR)
-      .receive(delivered[0]!)
-      .fee(FEE)
-      .deadline(DEADLINE)
-      .salt(SALT)
-      .then(() => {
-        const held = USDC.balanceOf(ctx.self());
-        Arbitrum.Portal.send({ token: USDC, amount: held })
-          .refundee(0x4444444444444444444444444444444444444444n)
-          .receive({ token: USDC, amount: held })
-          .salt(1n)
-          .fee(1n)
-          .then(() => {
-            USDC.transfer(0x6666666666666666666666666666666666666666n, held);
-          });
-      });
-    const many = Ethereum.Portal.send([paid])
-      .source("base")
-      .refundee(CREATOR)
-      .receive(delivered)
-      .fee(FEE)
-      .deadline(DEADLINE)
-      .salt(SALT)
-      .then(() => {
-        const held = USDC.balanceOf(ctx.self());
-        Arbitrum.Portal.send({ token: USDC, amount: held })
-          .refundee(0x4444444444444444444444444444444444444444n)
-          .receive({ token: USDC, amount: held })
-          .salt(1n)
-          .fee(1n)
-          .then(() => {
-            USDC.transfer(0x6666666666666666666666666666666666666666n, held);
-          });
-      });
-    expect(one.intent).toEqual(many.intent);
-  });
-
-  it("attaches a child with .nest(), as the route builder does", () => {
-    const body = "function main() { return 1; }";
-    const child = (on: CanonicalChain) =>
-      Ethereum.Portal.send(delivered)
-        .source(on)
-        .refundee(CREATOR)
-        .receive()
-        .fee(FEE)
-        .deadline(DEADLINE)
-        .salt(SALT)
-        .then(body);
-    const nest = { requireCap: true, executionFee: 1_000n } as const;
-    const built = Base.Portal.send(paid)
-      .source("ethereum")
-      .refundee(CREATOR)
-      .receive([])
-      .fee(FEE)
-      .deadline(DEADLINE)
-      .salt(SALT)
-      .nest(child, nest)
       .then(body);
-    const expected = Base(body, { ...routeOptions(DEADLINE), tokens: [], precalls: [], salt: SALT })
-      .nest(child, nest)
-      .reward({
-        source: "ethereum",
-        creator: CREATOR,
-        deadline: REWARD_DEADLINE,
-        tokens: [paid],
-      });
-
-    expect(built.children).toHaveLength(1);
-    expect(built.intents()).toEqual(expected.intents());
-    expect(built.encodeEVM()).toEqual(expected.encodeEVM());
+    expect(() => built.catch(() => {})).toThrow(TypeError);
   });
 
   const pending = () =>

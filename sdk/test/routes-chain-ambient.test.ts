@@ -8,8 +8,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { chainAmbient, openRoute } from "../src/routes/index.js";
-import type { IntentOptions } from "../src/routes/index.js";
+import { chainAmbient } from "../src/routes/index.js";
+import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
 import { compileSauceRoute } from "../src/routes/sauce-route.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;

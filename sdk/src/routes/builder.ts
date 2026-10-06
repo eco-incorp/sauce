@@ -1,47 +1,26 @@
 /**
- * Chain-global surface machinery: every canonical chain global is BOTH
- * callable (`Base(sauce, opts)`) and a namespace carrying `.chain`, `.route`
- * (the same callable, `Base.route === Base`'s own behavior) and `.Portal`
- * (`Base.Portal.send(...).receive(...).then(body)`, the same intent).
+ * Chain-global surface machinery: every canonical chain export is a namespace carrying `.chain`
+ * (its registry record) and `.Portal` (`Base.Portal.send(...).source(...).refundee(...)
+ * .receive(...).then(body)`, an intent whose body runs on that chain, compiled into the program a
+ * Pot on the source chain cooks: `host-intent.ts`).
  *
- * `ChainRoute`/`ChainGlobal` are ONE interface hierarchy — `ChainGlobal
- * extends ChainRoute`, so the call signature and `.route` can never drift
- * apart (see `sdk/test/routes-globals-ambient-types.test.ts`'s type-level pin).
- *
- * `ChainRef`/`CanonicalChain` now come straight from `../chains/canonical.js`
- * (which additionally accepts `bigint`) rather than a narrower copy kept
- * here — re-exported below so the public name survives at this import path.
+ * `ChainRef`/`CanonicalChain` come straight from `../chains/canonical.js` (which additionally
+ * accepts `bigint`), re-exported below so the public name survives at this import path.
  */
 import type { CanonicalChain, ChainRef, ChainSlug } from "../chains/canonical.js";
 import { canonicalChains } from "../chains/canonical.js";
-import type { ChainPortal, IntentOptions, PendingSauceRoute, SauceBody } from "./intent-dsl.js";
-import { chainPortal, openRoute } from "./intent-dsl.js";
+import { chainPortal, type ChainPortal } from "./host-intent.js";
+import { pascalOfSlug, type PascalOf } from "./pascal.js";
 
-export type { ChainRef };
+export type { ChainRef, PascalOf };
+export { pascalOfSlug };
 
-/**
- * `PascalOf<"bnb-chain">` = `"BnbChain"`. Matches the runtime `pascal()`
- * derivation in `accessors.ts` by construction (both reduce to
- * `Capitalize<S>` composed across `-`-separated segments) -- re-exported from
- * `accessors.ts` so callers only need one import site.
- */
-export type PascalOf<S extends string> = S extends `${infer H}-${infer T}`
-  ? `${Capitalize<H>}${PascalOf<T>}`
-  : Capitalize<S>;
-
-/** The call signature: `Chain(sauce, options)` -> a pending route awaiting `.reward(...)`. */
-export interface ChainRoute {
-  (sauce: SauceBody, options?: IntentOptions): PendingSauceRoute;
-}
-
-/** A chain global: callable (the SAME behavior as `.route`), plus `.chain`/`.route`/`.Portal`. */
-export interface ChainGlobal extends ChainRoute {
-  /** The registry record this global was generated from (or resolved via `chain(ref)`). */
+/** A chain export: `.chain`, and `.Portal`, which opens an intent whose body runs there. */
+export interface ChainGlobal {
+  /** The registry record this export was generated from (or resolved via `chain(ref)`). */
   readonly chain: CanonicalChain;
-  /** The SAME interface as the call signature -- `Base.route === Base` in behavior, by construction. */
-  readonly route: ChainRoute;
-  /** Opens an intent whose body runs on this chain: `send(reward).receive(delivery).then(body)`,
-   *  the intent `route(body, { tokens: delivery }).reward({ tokens: reward })` builds. */
+  /** Opens an intent whose body runs on this chain:
+   *  `send(reward).source(chain).refundee(address).receive(delivery).then(body)`. */
   readonly Portal: ChainPortal;
 }
 
@@ -64,31 +43,19 @@ const FUNCTION_INTRINSICS: ReadonlySet<string> = new Set([
   "toString",
   "constructor",
   "chain",
-  "route",
   "Portal",
 ]);
 
 /**
- * Builds the callable `ChainGlobal` for `chain` -- what a generated global
- * (`Base`) or `chain(ref)` returns. An ARROW function (no own `prototype` to
- * collide with) forwarding to `openRoute`, with `chain`/`route`/`Portal`
- * defined onto it as enumerable so `Object.keys(chainAccessors.Base)` is
- * exactly `["Portal","chain","route"]`.
+ * Builds the `ChainGlobal` for `chain` -- what a generated export (`Base`) or `chain(ref)` returns:
+ * `chain` and `Portal`, enumerable, so `Object.keys(chainAccessors.Base)` is exactly
+ * `["chain", "Portal"]`.
  */
 export function makeChainGlobal(chain: CanonicalChain): ChainGlobal {
-  const route: ChainRoute = (sauce: SauceBody, options?: IntentOptions): PendingSauceRoute =>
-    openRoute(chain, sauce, options);
-
-  const fn = ((sauce: SauceBody, options?: IntentOptions): PendingSauceRoute =>
-    route(sauce, options)) as unknown as ChainGlobal;
-
-  Object.defineProperties(fn, {
+  return Object.defineProperties({} as ChainGlobal, {
     chain: { value: chain, enumerable: true, configurable: false, writable: false },
-    route: { value: route, enumerable: true, configurable: false, writable: false },
     Portal: { value: chainPortal(chain), enumerable: true, configurable: false, writable: false },
   });
-
-  return fn;
 }
 
 /**
@@ -108,22 +75,6 @@ export function createChainGlobals(): ChainGlobals {
     out[key] = makeChainGlobal(c);
   }
   return out as ChainGlobals;
-}
-
-// --- shared slug/pascal helpers (also used by accessors.ts, descriptors/accessors.ts, svm/accessors.ts) ---
-
-/**
- * `PascalOf`'s runtime mirror: split on `-`, upper-case each segment's first
- * character, join. Agrees with the type-level `PascalOf` by construction
- * (both reduce to `Capitalize<S>` per `-`-separated segment) as long as a
- * slug matches `^[a-z0-9]+(-[a-z0-9]+)*$` -- pinned by
- * `chains-canonical.test.ts`.
- */
-export function pascalOfSlug(slug: string): string {
-  return slug
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("");
 }
 
 // Re-exported so a caller checking for a hard denylist elsewhere (globals.ts)

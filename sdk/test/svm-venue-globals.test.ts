@@ -1,8 +1,8 @@
 /**
  * E2.5: unification of the svm venue accessor tree onto the SAME `Solana`
- * accessor that already carries `.route(...)` (E3.5) and `ChainContracts`
+ * accessor that already carries `.Portal` and `ChainContracts`
  * (E2.3). Proves: the composed accessor resolves the real adapter's statics,
- * `.route` and `.RaydiumCpSwap` coexist on one object, EVM chains are
+ * `.Portal` and `.RaydiumCpSwap` coexist on one object, EVM chains are
  * unaffected (both at runtime and, in routes-chain-exports-types.test.ts, at
  * the type level), and the OPT-IN install/uninstall bookkeeping still covers
  * the venue namespaces.
@@ -14,9 +14,6 @@ import { venueAdapter } from "../src/svm/venues/registry.js";
 import { chainAccessors, pascalOfSlug } from "../src/routes/index.js";
 import { installRouteGlobals, uninstallRouteGlobals } from "../src/routes/globals.js";
 import { Base, Solana } from "../src/index.js";
-import type { IntentOptions } from "../src/routes/index.js";
-
-const PORTAL = "0x2222222222222222222222222222222222222222" as const;
 
 const g = globalThis as unknown as Record<string, unknown>;
 
@@ -56,34 +53,20 @@ describe("svm venue accessors: on the imported Solana accessor", () => {
   });
 });
 
-describe("svm venue accessors: coexistence with .route", () => {
-  it("the SAME Solana object answers .route(...) AND carries .RaydiumCpSwap", () => {
+describe("svm venue accessors: coexistence with .Portal", () => {
+  it("the SAME Solana object carries its Portal AND .RaydiumCpSwap", () => {
     const solana = Solana as unknown as {
-      route: (s: string, o: IntentOptions) => { reward: (r: bigint) => unknown };
+      Portal: { send: unknown };
       RaydiumCpSwap: unknown;
       chain: { slug: string };
     };
     expect(solana.chain.slug).toBe("solana");
     expect(solana.RaydiumCpSwap).toBeDefined();
-    const built = solana
-      .route("function main() { return 1n; }", {
-        execution: {
-          code: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
-          accounts: [],
-        },
-        deadline: 2000n,
-        portal: PORTAL,
-        source: "base",
-        creator: "0x3333333333333333333333333333333333333333",
-        prover: "0x4444444444444444444444444444444444444444",
-        rewardDeadline: 1000n,
-      })
-      .reward(0n);
-    expect(built).toBeDefined();
+    expect(typeof solana.Portal.send).toBe("function");
   });
 
   it("composition never mutates the imported chainAccessors.Solana object", () => {
-    expect(Object.keys(chainAccessors.Solana).sort()).toEqual(["Portal", "chain", "route"]);
+    expect(Object.keys(chainAccessors.Solana).sort()).toEqual(["Portal", "chain"]);
   });
 });
 
@@ -114,8 +97,8 @@ describe("svm venue accessors: opt-in install bookkeeping", () => {
     const target: Record<string, unknown> = {};
     const report = installRouteGlobals({ target });
     expect(report.installed).toContain("Solana");
-    const solana = target.Solana as { RaydiumCpSwap: unknown; route: unknown };
+    const solana = target.Solana as { RaydiumCpSwap: unknown; Portal: unknown };
     expect(solana.RaydiumCpSwap).toBeDefined();
-    expect(typeof solana.route).toBe("function");
+    expect(solana.Portal).toBeDefined();
   });
 });

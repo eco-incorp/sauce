@@ -13,7 +13,7 @@ describe("IntentOptions execution types", () => {
     const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, sdkDir);
     const probeDir = mkdtempSync(join(tmpdir(), "sauce-intent-options-"));
     const probePath = join(probeDir, "probe.ts");
-    const routesPath = join(sdkDir, "src/routes/index.js");
+    const routesPath = join(sdkDir, "src/routes/intent-dsl.js");
 
     writeFileSync(
       probePath,

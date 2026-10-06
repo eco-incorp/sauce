@@ -25,7 +25,7 @@ import {
   type ChainRef,
   type ChainSlug,
 } from "../chains/canonical.js";
-import { pascalOfSlug } from "../routes/builder.js";
+import { pascalOfSlug } from "../routes/pascal.js";
 import { makeContractCall, type ContractCall } from "./call.js";
 import type { ChainContracts } from "./contracts.generated.js";
 import { addressOn, methodOf, requireContract } from "./query.js";

@@ -24,7 +24,7 @@ import { addressOn } from "../descriptors/query.js";
 import { intentParts } from "../routes/intent-parts.js";
 import { isChainKey } from "../routes/accessor-index.js";
 import { resolveTokenMap } from "../routes/token-registry.js";
-import { pascalOfSlug } from "../routes/builder.js";
+import { pascalOfSlug } from "../routes/pascal.js";
 import type { DefineValue } from "./args.js";
 
 /** One define the program reads, as the compile applied it. */

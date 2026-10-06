@@ -1,6 +1,6 @@
 /**
  * A typed closure's chains are the imported chain exports, and the host calls keep resolving to the
- * host signature, `Parameters` and `ReturnType` included. Nothing is declared globally: a chain
+ * host signature: `Portal`'s steps and the `HostIntent` they return. Nothing is declared globally: a chain
  * named in a closure comes from the same import as the host calls (`routes-chain-exports-types.
  * test.ts` pins that a bare one is an error). An intent a closure opens, `Ethereum.Portal.send(...)
  * ...then(...)`, typechecks through the export's `Portal`: `routes-intent-portal-types.test.ts`.
@@ -19,35 +19,33 @@ import { Base, Ethereum, type routes } from ${ROOT};
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
-const hostParameters: Equal<Parameters<typeof Base>, Parameters<routes.ChainRoute>> = true;
-const hostReturn: Equal<ReturnType<typeof Base>, routes.PendingSauceRoute> = true;
+const portal: Equal<typeof Base.Portal, routes.ChainPortal> = true;
 
-const options: routes.IntentOptions = { deadline: 1n };
-const fromSource: routes.PendingSauceRoute = Base("function main() { return 1n; }", options);
-const fromClosure: routes.PendingSauceRoute = Base(() => {}, options);
-const withTokens: routes.PendingSauceRoute = Base(() => {}, {
-  deadline: 1n,
-  tokens: [{ token: "0x4444444444444444444444444444444444444444", amount: 1n }],
-});
-const nested = Base(() => {}, options)
-  .nest((on) => Ethereum("function main() { return 1n; }", options).reward({ source: on }))
-  .reward({ source: "ethereum", creator: "0x4444444444444444444444444444444444444444" });
-const viaRoute: routes.PendingSauceRoute = Base.route(() => {}, options);
-const parameter: Parameters<typeof Base>[1] = options;
-const returned: ReturnType<typeof Base> = fromClosure;
-export const all = [fromSource, withTokens, nested, viaRoute, parameter, returned, hostParameters, hostReturn];
+const received = Base.Portal.send({ token: "0x4444444444444444444444444444444444444444", amount: 1n })
+  .source(Ethereum, { defines: { RECIPIENT: 1n } })
+  .refundee("0x4444444444444444444444444444444444444444")
+  .receive();
+const fromSource: routes.HostIntent = received.then("USDC.transfer(RECIPIENT, 1);");
+const fromClosure: routes.HostIntent = Base.Portal.send([])
+  .source("ethereum")
+  .refundee("0x4444444444444444444444444444444444444444")
+  .receive({ token: "0x4444444444444444444444444444444444444444", amount: 1n })
+  .fee(0n)
+  .then(() => {});
+export const all = [fromSource, fromClosure, portal];
 `;
 
 /** A chain the closure does not import is not declared: the host surface is imports. */
 const NOT_IMPORTED = `
 import { Base } from ${ROOT};
 
-Base(
-  () => {
+Base.Portal.send([])
+  .source("base")
+  .refundee("0x4444444444444444444444444444444444444444")
+  .receive()
+  .then(() => {
     Ethereum.Portal.send({ token: USDC, amount: 1n }).refundee(0x44n).receive().then(() => {});
-  },
-  { deadline: 1n },
-);
+  });
 `;
 
 const PROBES = { HOST, NOT_IMPORTED } as const;
@@ -86,7 +84,7 @@ describe("a typed closure's chains", () => {
     program = undefined;
   });
 
-  it("leaves every host call on the host signature, its Parameters and its ReturnType", () => {
+  it("leaves every host call on the host signature: the Portal's steps and the intent they build", () => {
     expect(messages("HOST")).toEqual([]);
   });
 

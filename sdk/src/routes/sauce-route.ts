@@ -40,7 +40,7 @@ import { compileWithRs, toRsDefines, type RsCompileResult } from "./rs-compile.j
 import { chainModuleSource, isChainScalar, type ChainModuleOptions } from "./chain-module.js";
 import { registryTokenSymbols, resolveTokenMap } from "./token-registry.js";
 import type { ProtocolNameOptions } from "./protocol-names.js";
-import { pascalOfSlug } from "./builder.js";
+import { pascalOfSlug } from "./pascal.js";
 import { chainAmbient } from "./ambient.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
 import type { EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";

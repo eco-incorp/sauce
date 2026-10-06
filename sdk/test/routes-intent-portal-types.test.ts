@@ -6,9 +6,10 @@
  * given — as is a host intent awaited; one that stops before its body is a statement TypeScript
  * accepts, and is refused when it compiles.
  *
- * The chain is the imported chain export in both: its `Portal` (`intent-dsl.ts#ChainPortal`) takes a
+ * The chain is the imported chain export in both: its `Portal` (`host-intent.ts#ChainPortal`) takes a
  * token as an address or as a SauceScript value, so a closure's `Arbitrum.Portal.send({ token: USDC,
- * amount })` typechecks beside the host's own, and `.then(body)` returns the `BuiltIntent`. */
+ * amount })` typechecks beside the host's own, and `.then(body)` returns the `HostIntent`: the
+ * program and its cook. */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -51,14 +52,14 @@ const built = Base.Portal.send({ token: Ethereum.USDC.address, amount: 1_010_000
           });
       });
   });
-export const hash: string = built.hash().intentHash;
+export const source: string = built.source;
 `;
 
 /** The host form: addresses for tokens, every modifier, the intent from `.then`. */
 const HOST = `
-import { Base, Ethereum, type routes } from ${ROOT};
+import { Base, type routes } from ${ROOT};
 
-const built: routes.BuiltIntent = Base.Portal.send([
+const built: routes.HostIntent = Base.Portal.send([
   { token: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", amount: 1_010_000n },
   { native: 1n },
 ])
@@ -70,11 +71,11 @@ const built: routes.BuiltIntent = Base.Portal.send([
   .fee(1_000n)
   .deadline(2_000_000_000n)
   .salt("0x0000000000000000000000000000000000000000000000000000000000000001")
-  .nest((on) =>
-    Ethereum.Portal.send([]).source(on).refundee("0x44").receive([]).fee(0n).then("function main() {}"),
-  )
-  .then("function main() {}");
-export const all = [built.hash().intentHash];
+  .then("");
+export const cook: { to: string; data: string; value: bigint } = built.cook(
+  { owner: "0x4444444444444444444444444444444444444444" },
+  0n,
+);
 `;
 
 /** Each refusal: no `.receive`, steps out of order, a modifier repeated or in the wrong stage, an
@@ -140,7 +141,7 @@ describe("Chain.Portal.send(...).receive(...).then(...)", () => {
     expect(messages("NESTED")).toEqual([]);
   });
 
-  it("builds the intent on the host, with every modifier and a nested child", () => {
+  it("builds the intent on the host, with every modifier, and its cook", () => {
     expect(messages("HOST")).toEqual([]);
   });
 

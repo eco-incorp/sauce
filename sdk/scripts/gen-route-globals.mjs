@@ -134,10 +134,11 @@ function render(chains, tokensByChain) {
 // \`Token(addr).approve(...)\` typecheck in a TYPED CLOSURE body and not only in one
 // supplied as source text. It is intersected here rather than declared on \`TokenApi\`
 // because the runtime \`Token\` value is a frozen object and is not callable -- the
-// \`Token(x)\` spelling is the compiler host's (\`host.ts\`: a write is \`@sauce/token\`'s
-// SafeERC20 function, a read its \`balanceOf\`) and is never invoked by the host.
+// \`Token(x)\` spelling is the chain module's (\`@sauce/names\`' \`Token\`: a write is
+// \`@sauce/token\`'s SafeERC20 function, a read its \`balanceOf\`) and is never invoked by the host.
 //
-// Every chain export carries the host's \`Portal\` (\`ChainPortal\`), which takes a SauceScript
+// Every chain export carries its \`Portal\` (\`ChainPortal\`): in TypeScript it builds the program
+// that opens an intent to that chain and the cook that publishes it, and it takes a SauceScript
 // token value and amount as well as an address, so a typed closure's
 // \`Ethereum.Portal.send({ token: USDC, amount })...\` typechecks with the chain imported.
 import type { ChainGlobals } from "./builder.js";
@@ -148,8 +149,8 @@ import { Token as tokenApi } from "../token/api.js";
 import { composedChainGlobal } from "./composed.js";
 import type { RegistryToken } from "./token-registry.js";
 
-/** What every chain accessor is: the eco-routes DSL for that chain (callable, plus
- *  \`.chain\`/\`.route\`/\`.Portal\`) intersected with the chain-independent native contract tree.
+/** What every chain accessor is: \`.chain\` and \`.Portal\`, intersected with the
+ *  chain-independent native contract tree.
  *  Naming the chain through \`ChainGlobals\` is the structural cross-check above. */
 type Composed<N extends keyof ChainGlobals> = ChainGlobals[N] & ChainContracts;
 
@@ -162,8 +163,8 @@ ${lines.join("\n")}
 export { chain } from "./accessors.js";
 
 /** Universal token interface — ERC20 on EVM targets, SPL Token on svm. Callable as
- *  \`Token(addr)\` in a route body (the wrapper, rewritten to \`IERC20.at(addr)\`), and carries
- *  the runtime spec-object API for use outside one. */
+ *  \`Token(addr)\` in a program (the chain module's \`Token\`), and carries the runtime
+ *  spec-object API for use outside one. */
 export const Token: TokenApi & TokenFactory = tokenApi as TokenApi & TokenFactory;
 `;
 }

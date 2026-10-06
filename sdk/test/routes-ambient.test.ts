@@ -2,8 +2,8 @@
  * Chain-scoped scalar ambient defines (`ambient.ts#chainDefines`).
  */
 import { requireChain } from "../src/chains/canonical.js";
-import { chainDefines, openRoute } from "../src/routes/index.js";
-import type { IntentOptions } from "../src/routes/index.js";
+import { chainDefines } from "../src/routes/index.js";
+import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
 import { getDescriptor, addressOn } from "../src/descriptors/query.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;

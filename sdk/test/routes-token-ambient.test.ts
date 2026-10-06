@@ -11,8 +11,7 @@
  * the compiler, so it needs no compiler feature even though the M1 subset rejects a method call on
  * a call result.
  */
-import { openRoute } from "../src/routes/index.js";
-import type { IntentOptions } from "../src/routes/index.js";
+import { openRoute, type IntentOptions } from "../src/routes/intent-dsl.js";
 
 const POT = "0x1111111111111111111111111111111111111111" as const;
 const ENGINE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;

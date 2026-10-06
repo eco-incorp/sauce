@@ -47,7 +47,7 @@
  */
 import type { Address } from "@solana/kit";
 import type { PascalOf } from "../routes/builder.js";
-import { pascalOfSlug } from "../routes/builder.js";
+import { pascalOfSlug } from "../routes/pascal.js";
 import type { RegisteredVenueSlug } from "./venues/registry.js";
 import { listVenues, venueAdapter } from "./venues/registry.js";
 import type {

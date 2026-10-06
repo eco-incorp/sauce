@@ -1,15 +1,19 @@
 /**
- * eco-routes cross-chain intent DSL — one chain accessor per canonical chain,
- * generated from `../chains/canonical.js`, each BOTH callable and a namespace.
+ * eco-routes cross-chain intents — one chain accessor per canonical chain, generated from
+ * `../chains/canonical.js`: `.chain` and `.Portal`.
  *
- * The composed accessors (callable + `.chain`/`.route` + the native contract
- * tree) are named exports of the package root; `chainAccessors` below is the
- * BARE record, carrying `.chain`/`.route` and nothing else.
+ * The composed accessors (`.chain`, `.Portal` and the native contract tree) are named exports of the
+ * package root; `chainAccessors` below is the BARE record, carrying `.chain`/`.Portal` alone.
  *
  * ```ts
- * import { Base, Solana } from "@eco-incorp/sauce";
- * const built = Base("function main() { return 1n; }", { pot, engine, deadline, portal }).reward({ source: Solana.chain, creator, prover, deadline });
- * // identically: Base.route("function main() { return 1n; }", {...}).reward({...})
+ * import { Base, Ethereum } from "@eco-incorp/sauce";
+ * const intent = Base.Portal.send({ token, amount: 1_010_000n })
+ *   .source(Ethereum)
+ *   .refundee(owner)
+ *   .receive({ token: usdcBase, amount: 1_000_000n })
+ *   .fee(kitchenFee)
+ *   .then(() => { USDC.transfer(RECIPIENT, 1000000); });
+ * const cook = intent.cook({ owner }, sourceKitchenFee); // { to, data, value }
  * ```
  */
 export { chain, chainAccessors, pascalOfSlug } from "./accessors.js";
@@ -17,7 +21,7 @@ export type { PascalOf } from "./accessors.js";
 
 export { createChainGlobals, makeChainGlobal } from "./builder.js";
 export { composedChainGlobal, composedChainGlobals } from "./composed.js";
-export type { ChainGlobal, ChainGlobals, ChainRef, ChainRoute } from "./builder.js";
+export type { ChainGlobal, ChainGlobals, ChainRef } from "./builder.js";
 
 export { assembleIntent } from "./intent.js";
 
@@ -145,16 +149,13 @@ export type {
 } from "./token-registry.js";
 export { STOCK_ISSUERS, stockSymbol } from "./stock-tokens.js";
 export type { StockIssuer } from "./stock-tokens.js";
-export { chainPortal, openRoute } from "./intent-dsl.js";
+export { chainPortal } from "./host-intent.js";
+export { loggedIntents } from "./published.js";
+export type { IntentLog, LoggedIntent } from "./published.js";
 export { destinationPot } from "./intent-pot.js";
 export type {
-  BuiltIntent,
   ChainPortal,
-  IntentEvmExecution,
-  IntentOptions,
-  NestChildOrThunk,
-  NestOptions,
-  PendingSauceRoute,
+  HostIntent,
   PortalAddress,
   PortalChain,
   PortalCaughtBytes,
@@ -167,10 +168,10 @@ export type {
   PortalSendSteps,
   PortalSent,
   PortalTokenAmount,
-  RewardArg,
-  SauceBody,
-  SauceRewardSpec,
-} from "./intent-dsl.js";
+  PotTarget,
+} from "./host-intent.js";
+export type { SauceBody } from "./closure.js";
+export type { BuiltIntent, RewardArg } from "./intent-dsl.js";
 export {
   DEFAULT_FILL_WINDOW,
   DEFAULT_REFUND_WINDOW,
@@ -237,29 +238,6 @@ export type {
   RewardStatus,
   VaultLeg,
 } from "./portal.js";
-
-export { assertNestingInvariants, assertStaticChild, nestedChildCalls } from "./nest.js";
-export type { AssertNestingInvariantsArgs, NestChild, NestedChildOptions } from "./nest.js";
-
-// --- DYNAMIC nesting: a child intent created on-chain from a runtime measurement ---
-//
-// Unlike the transfer codegen (`nestedTransferProgram`, internal to `intent-dsl.ts`), these ARE
-// public: a caller cannot build a dynamic child at all without the placeholder sentinels, since the
-// sentinels are what it writes into the child's amount fields before handing it to `.nest()`.
-
-export {
-  assertDynamicChild,
-  dynamicChildProgram,
-  dynamicChildStatements,
-  dynamicChildTemplate,
-  renderDynamicChild,
-  AMOUNT_IN_PLACEHOLDER,
-  AMOUNT_OUT_PLACEHOLDER,
-  AMOUNT_IN_PLACEHOLDER_U64,
-  AMOUNT_OUT_PLACEHOLDER_U64,
-  WAD,
-} from "./nest-dynamic.js";
-export type { AmountMeasurement, DynamicChildOptions, DynamicNestEntry } from "./nest-dynamic.js";
 
 export {
   emitTemplate,

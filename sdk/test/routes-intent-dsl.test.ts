@@ -1,14 +1,11 @@
 /**
- * Cross-chain intent DSL — chain-global contract tests.
- *
- * `Base(sauce, opts).reward(rewardArg)` (identically `Base.route(sauce, opts).reward(rewardArg)`)
- * compiles a Sauce route body for the destination chain and slots it into a V2 `Intent`, reusing the
- * EXISTING encode/hash/normalize machinery unchanged.
+ * `openRoute(chain, sauce, opts).reward(rewardArg)`, the internal route builder the CCTP recipe
+ * builders use: compiles a Sauce route body for the destination chain and slots it into a V2
+ * `Intent`, reusing the EXISTING encode/hash/normalize machinery unchanged.
  */
 import { address } from "@solana/kit";
 import { bytesToHex, getAddress, getCreate2Address, keccak256, type Hex } from "viem";
 
-import { chainAccessors } from "../src/routes/accessors.js";
 import { requireChain } from "../src/chains/canonical.js";
 import {
   encodeRewardEvm,
@@ -366,13 +363,6 @@ describe("vault(): predictVaultAddress", () => {
         vaultInitCodeHash: undefined as unknown as Hex,
       }),
     ).toThrow();
-  });
-});
-
-describe("openRoute: additive-ness — chainAccessors survives", () => {
-  it("chainAccessors.Base is still callable and .chain resolves the registry record", () => {
-    expect(typeof chainAccessors.Base).toBe("function");
-    expect(chainAccessors.Base.chain.slug).toBe("base");
   });
 });
 

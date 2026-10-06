@@ -93,90 +93,49 @@ describe("Arc: chain-scoped defines", () => {
 });
 
 describe("Arc: intents", () => {
-  const recipient = 0x2222222222222222222222222222222222222222n;
   const amount = 1_000_000n;
+  const carries = (bytes: Uint8Array, word: string) =>
+    Buffer.from(bytes).toString("hex").includes(word.slice(2).toLowerCase());
 
-  it("Base -> Arc: a typed closure records the shared Portal and cooks on the shared Pot", () => {
-    const built = Arc(
-      () => {
-        USDC.transfer(recipient, amount);
-      },
-      {
-        deadline: 2_000_000_000n,
-        defines: { recipient, amount },
-        execution: { value: ARC_EXECUTION_FEE },
-        nativeAmount: ARC_EXECUTION_FEE,
-        tokens: [{ token: ARC_USDC, amount }],
-      },
-    ).reward({
-      source: Base.chain,
-      creator: CREATOR,
-      prover: ecoRoutesProver("base", "arc"),
-      deadline: 2_000_003_600n,
-      tokens: [{ token: BASE_USDC, amount }],
-    });
+  it("Base -> Arc: the body compiles for Arc and cooks on the shared Pot through its Portal", () => {
+    const intent = Arc.Portal.send({ token: BASE_USDC, amount })
+      .source(Base)
+      .refundee(CREATOR)
+      .prover(ecoRoutesProver("base", "arc"))
+      .receive({ token: ARC_USDC, amount })
+      .fee(ARC_EXECUTION_FEE)
+      .then(() => {
+        USDC.transfer(0x2222222222222222222222222222222222222222n, 1_000_000n);
+      });
 
-    expect(built.intent.destination).toBe(5042n);
-    expect(evm(built.intent.route.portal)).toBe(PORTAL);
+    expect(intent.program.chain).toBe(requireChain("base"));
+    const [body] = intent.program.bodies;
+    expect(body!.destination).toBe(requireChain("arc"));
     expect(ecoRoutesPortal("arc")).toBe(PORTAL);
-    const [cook] = built.intent.route.calls;
-    expect(evm(cook!.target)).toBe(SHARED_POT);
     expect(destinationPot("arc")).toBe(SHARED_POT);
     expect(destinationPot("base")).toBe(SHARED_POT);
-    expect(cook!.value).toBe(ARC_EXECUTION_FEE);
-    expect(built.intent.route.nativeAmount).toBe(ARC_EXECUTION_FEE);
-    const decoded = decodeFunctionData({ abi: v12Pot.abi, data: cook!.data as Hex });
+    // The program publishes on Base's Portal an intent whose route names Arc's Portal and cooks on
+    // the shared Pot: both are one address, carried in the program.
+    expect(carries(intent.program.bytecode, PORTAL)).toBe(true);
+    expect(carries(intent.program.bytecode, SHARED_POT)).toBe(true);
+    // Its cook runs on the owner's Pot, with the source Kitchen's fee.
+    const cook = intent.cook({ owner: CREATOR }, 7n);
+    expect(cook.value).toBe(7n);
+    const decoded = decodeFunctionData({ abi: v12Pot.abi, data: cook.data });
     expect(decoded.args?.[0]).toBe(v12EngineAddress());
-    expect(decoded.args?.[1]).toBe(bytesToHex(built.compiled.bytecode[0]!));
-    // Published and funded on the SOURCE chain's Portal: Base's, the same address.
-    expect(getAddress(built.publishAndFundCalldata(false).to)).toBe(PORTAL);
-    expect(built.hash().intentHash).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(decoded.args?.[1]).toBe(bytesToHex(intent.program.bytecode));
   });
 
-  it("Arc -> Base: a native reward funds on Arc's Portal as 18-decimal USDC value", () => {
-    const oneUsdcNative = 10n ** 18n;
-    const built = Base("USDC.transfer(0x2222222222222222222222222222222222222222n, 1_000_000n);", {
-      deadline: 2_000_000_000n,
-      execution: { value: 1n },
-      nativeAmount: 1n,
-    }).reward({
-      source: Arc.chain,
-      creator: CREATOR,
-      prover: ecoRoutesProver("arc", "base"),
-      deadline: 2_000_003_600n,
-      nativeAmount: oneUsdcNative,
-    });
-
-    expect(built.intent.destination).toBe(8453n);
-    expect(evm(built.intent.route.portal)).toBe(PORTAL);
-    expect(evm(built.intent.route.calls[0]!.target)).toBe(destinationPot("base"));
-    const fund = built.publishAndFundCalldata(false);
-    expect(getAddress(fund.to)).toBe(PORTAL);
-    expect(fund.value).toBe(oneUsdcNative);
-    // Native value only: there is no token leg to approve.
-    expect(built.approvals()).toHaveLength(0);
-  });
-
-  it("Arc -> Base: a USDC token reward is approved through Arc's ERC-20 interface", () => {
-    const built = Base("USDC.transfer(0x2222222222222222222222222222222222222222n, 1_000_000n);", {
-      deadline: 2_000_000_000n,
-      execution: { value: 1n },
-      nativeAmount: 1n,
-    }).reward({
-      source: Arc.chain,
-      creator: CREATOR,
-      prover: ecoRoutesProver("arc", "base"),
-      deadline: 2_000_003_600n,
-      tokens: [{ token: ARC_USDC, amount }],
-    });
-
-    const fund = built.publishAndFundCalldata(false);
-    expect(getAddress(fund.to)).toBe(PORTAL);
-    expect(fund.value).toBe(0n);
-    // In 6-decimal units, through the ERC-20 face of the same balance.
-    const approvals = built.approvals();
-    expect(approvals).toHaveLength(1);
-    expect(getAddress(approvals[0]!.to)).toBe(ARC_USDC);
+  it("Arc -> Base: a native reward, or Arc's USDC as a token, opens from Arc", () => {
+    const open = (reward: routes.PortalReward) =>
+      Base.Portal.send(reward)
+        .source(Arc)
+        .refundee(CREATOR)
+        .receive()
+        .fee(1n)
+        .then(() => {});
+    expect(open({ native: 10n ** 18n }).program.chain).toBe(requireChain("arc"));
+    expect(open({ token: ARC_USDC, amount }).program.chain).toBe(requireChain("arc"));
   });
 
   it("both directions share the prover eco-routes deploys on both ends", () => {
@@ -187,18 +146,20 @@ describe("Arc: intents", () => {
 describe("Arc: a reward cannot offer native value and USDC together", () => {
   const amount = 1_000_000n;
   const oneUsdcNative = 10n ** 18n;
-  const BASE_ROUTE = "USDC.transfer(0x2222222222222222222222222222222222222222n, 1_000_000n);";
   const REFUSAL =
     /arc \(chain 5042\) offers both a nativeAmount and a USDC token leg \(0x3600000000000000000000000000000000000000\)[\s\S]*RewardTokensNotUnique[\s\S]*Fold them into one leg/;
-  const route = { deadline: 2_000_000_000n, execution: { value: 1n }, nativeAmount: 1n } as const;
-  const reward = (source: typeof Arc.chain, destination: string, token: Hex) => ({
-    source,
-    creator: CREATOR as Hex,
-    prover: ecoRoutesProver(source.slug, destination),
-    deadline: 2_000_003_600n,
-    nativeAmount: oneUsdcNative,
-    tokens: [{ token, amount }],
-  });
+  /** Both: native value and `token`, from `source` to `destination`. */
+  const both = (
+    source: routes.PortalChain,
+    destination: { readonly Portal: routes.ChainPortal },
+    token: Hex,
+  ) =>
+    destination.Portal.send({ native: oneUsdcNative }, { token, amount })
+      .source(source)
+      .refundee(CREATOR)
+      .receive()
+      .fee(1n)
+      .then(() => {});
   /** A program that opens an intent to `destination`, rewarded in native value AND its own chain's
    *  USDC. */
   const program = (destination: string) => `
@@ -221,21 +182,19 @@ describe("Arc: a reward cannot offer native value and USDC together", () => {
       },
     );
 
-  it("the builder refuses it at .reward(), naming the chain, the token and the remedy", () => {
-    expect(() => Base(BASE_ROUTE, route).reward(reward(Arc.chain, "base", ARC_USDC))).toThrow(
-      REFUSAL,
-    );
+  it("the TypeScript builder refuses it when it compiles, naming the chain, the token and the remedy", () => {
+    expect(() => both(Arc, Base, ARC_USDC)).toThrow(REFUSAL);
   });
 
   it("the Portal helpers refuse a hand-built one before encoding anything", () => {
-    const built = Base(BASE_ROUTE, route).reward({
-      ...reward(Arc.chain, "base", ARC_USDC),
+    const valid = routes.assembleIntent(requireChain("arc"), requireChain("base"), undefined, {
+      creator: CREATOR,
+      prover: ecoRoutesProver("arc", "base"),
+      deadline: 2_000_003_600n,
       nativeAmount: 0n,
+      tokens: [{ token: ARC_USDC, amount }],
     });
-    const intent = {
-      ...built.intent,
-      reward: { ...built.intent.reward, nativeAmount: oneUsdcNative },
-    };
+    const intent = { ...valid, reward: { ...valid.reward, nativeAmount: oneUsdcNative } };
     expect(() => routes.publishAndFundTx(intent, false, { portal: PORTAL })).toThrow(REFUSAL);
     expect(() => routes.approvalTxs(intent, { portal: PORTAL })).toThrow(REFUSAL);
     expect(() => routes.fundTx(intent, false, { portal: PORTAL })).toThrow(REFUSAL);
@@ -247,9 +206,7 @@ describe("Arc: a reward cannot offer native value and USDC together", () => {
   });
 
   it("the same shape is fine on Base, whose native coin is not a token", () => {
-    const built = Arc(BASE_ROUTE, route).reward(reward(Base.chain, "arc", BASE_USDC));
-    expect(built.publishAndFundCalldata(false).value).toBe(oneUsdcNative);
-    expect(built.approvals()).toHaveLength(1);
+    expect(both(Base, Arc, BASE_USDC).program.bytecode.length).toBeGreaterThan(0);
     expect(compileOn("base", "Arbitrum").compiled.bytecode[0]!.length).toBeGreaterThan(0);
   });
 });

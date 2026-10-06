@@ -19,7 +19,7 @@ import { requireChain } from "../chains/canonical.js";
 import { registryTokenSymbols, resolveTokenMap } from "./token-registry.js";
 import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { chainAt } from "./intent-parts.js";
-import { pascalOfSlug } from "./builder.js";
+import { pascalOfSlug } from "./pascal.js";
 
 /** The diagnostics a name nothing declares produces: an unknown value, or a call of one. */
 const UNKNOWN_CODES: ReadonlySet<string> = new Set([

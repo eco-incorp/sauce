@@ -56,7 +56,7 @@ import {
   resolveNamespace,
   type Namespace,
 } from "./accessor-index.js";
-import { pascalOfSlug } from "./builder.js";
+import { pascalOfSlug } from "./pascal.js";
 import { denormalizeToEvm } from "./encode.js";
 import { rewardAssetsConflict } from "./intent.js";
 import type { IntentDefaults } from "./intent-defaults.js";

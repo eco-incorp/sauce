@@ -12,7 +12,7 @@ import type { Address } from "viem";
 import { requireChain, type CanonicalChain, type ChainRef } from "../chains/canonical.js";
 import { addressOn } from "../descriptors/query.js";
 import type { ContractDescriptor } from "../descriptors/types.js";
-import { pascalOfSlug } from "./builder.js";
+import { pascalOfSlug } from "./pascal.js";
 import { chainSlugForKey, isChainKey, resolveNamespace, type Namespace } from "./accessor-index.js";
 
 /** How a compile treats the registry's protocol names. */

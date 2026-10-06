@@ -4,54 +4,18 @@
  * `intent publish`). An intent a program opens exists nowhere else: `@sauce/intents` builds it while
  * the program compiles, and the program encodes it as it runs.
  */
-import { getAddress, type Address, type Hex } from "viem";
-
-import { chainById, type CanonicalChain } from "../chains/canonical.js";
-import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
-import { intentFromPublished } from "../routes/portal.js";
-import type { Intent } from "../routes/types.js";
+import { loggedIntents as published, type LoggedIntent } from "../routes/published.js";
+import type { CanonicalChain } from "../chains/canonical.js";
 import { intentRecord } from "./lifecycle.js";
 
 /** One intent a cook published, rebuilt from the Portal's log. */
-export interface FileIntent {
-  readonly intent: Intent;
-  readonly intentHash: Hex;
-  readonly destination: CanonicalChain;
-  /** The Portal that published it, where it is claimed and refunded. */
-  readonly portal: Address;
-}
+export type FileIntent = LoggedIntent;
 
-/** A log as a receipt or a rehearsal gives it. */
-interface Log {
-  readonly address: Address;
-  readonly topics: readonly Hex[];
-  readonly data: Hex;
-}
-
-/**
- * The intents `logs` record `chain`'s Portal publishing, each rebuilt from its `IntentPublished`.
- * A log from any other address is not the Portal's, whatever it says.
- */
-export function loggedIntents(chain: CanonicalChain, logs: readonly Log[]): FileIntent[] {
-  if (chain.kind !== "evm" || logs.length === 0) return [];
-  let portal: Address;
-  try {
-    portal = getAddress(ecoRoutesPortal(chain));
-  } catch {
-    // No Portal on the chain: nothing there publishes an intent.
-    return [];
-  }
-
-  return logs.flatMap((log) => {
-    if (getAddress(log.address) !== portal) return [];
-    const published = intentFromPublished(log, BigInt(chain.id));
-    const destination =
-      published === undefined ? undefined : chainById(Number(published.intent.destination));
-    if (published === undefined || destination === undefined) return [];
-
-    return [{ ...published, destination, portal }];
-  });
-}
+/** The intents `logs` record `chain`'s registry Portal publishing (`routes/published.ts`). */
+export const loggedIntents = (
+  chain: CanonicalChain,
+  logs: Parameters<typeof published>[1],
+): FileIntent[] => published(chain, logs);
 
 /**
  * The intents a cook published, for a report: each one's hash, its destination, and its `record`,
