@@ -459,10 +459,11 @@ program to read. `compile`, `simulate`, `tx` and `run` take a document wherever 
   `sauce intent publish … --from <address> --dry-run --assume-balance USDC:<amount>` rehearses it
   for a Pot that does not hold the reward yet and prints the intents it would publish, and
   `--format json` prints the cook, unsigned, as `sauce tx` does.
-  `sauce intent fill <file> --chain <chain> --args <arguments>` rehearses each intent where its
+  `sauce intent fill <file> --chain <chain> --args <arguments>` previews each intent where its
   body runs: on its destination chain, as the solver who fills it, with no key and nothing sent,
-  having read the intent from a rehearsal of publishing it on the source. `publish --dry-run`
-  covers only the source chain. `fill` prints what the body moved, what it left in the shared Pot,
+  having read the intent from a rehearsal of publishing it on the source, so its hash is the
+  rehearsal's. `publish --dry-run` covers only the source chain. Every step after publishing
+  takes the intent as published: its hash, or `--tx <hash> --chain <source>`. `fill` prints what the body moved, what it left in the shared Pot,
   and why it reverts.
   `sauce-intents` covers writing, publishing, funding (including a transfer into the intent's
   vault), rehearsing them, and every later step (`sauce intent fill --send`, `prove`, `claim`,

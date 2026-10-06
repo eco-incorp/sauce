@@ -196,16 +196,15 @@ describe("refused on a preview chain, before the call's endpoint", () => {
       await mcp.call("sauce_intent_fill", { intent: toArbitrum, from: OWNER, rpcUrls }),
       "arbitrum",
     );
-    refused(
-      await mcp.call("sauce_intent_fill", {
-        source: intentTo("Arbitrum"),
-        chain: "base",
-        ...INTENT,
-        from: OWNER,
-        rpcUrls,
-      }),
-      "arbitrum",
-    );
+    // A program's intents are a preview, rehearsed with dryRun: a fill is built for a published one.
+    const fromProgram = await mcp.call("sauce_intent_fill", {
+      source: intentTo("Arbitrum"),
+      chain: "base",
+      ...INTENT,
+      from: OWNER,
+      rpcUrls,
+    });
+    assert.match(textOf(fromProgram), /a fill is built for an intent as it was published/);
     refused(await mcp.call("sauce_intent_prove", { intent: toArbitrum, rpcUrls }), "arbitrum");
     refused(await mcp.call("sauce_intent_cancel", { intent: toArbitrum, rpcUrls }), "arbitrum");
     // The source's: a claim and a refund — named by the source transaction, before it is read.

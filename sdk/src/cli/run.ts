@@ -73,7 +73,6 @@ import type { FundRequest } from "./funding.js";
 import {
   cancelCommand,
   claimCommand,
-  fileTargets,
   importCommand,
   isIntentHash,
   listCommand,
@@ -87,7 +86,7 @@ import {
 } from "./intent-commands.js";
 import { svmFillCommand } from "./intent-svm.js";
 import { interactiveIntents } from "./interactive.js";
-import { intentOf, intentRecord } from "./lifecycle.js";
+import { importIntents, intentOf, intentRecord } from "./lifecycle.js";
 import type { Ask } from "./prompt.js";
 import { defaultStoreDir, IntentStore } from "./store.js";
 import { globalsCommand } from "./globals.js";
@@ -1183,50 +1182,91 @@ async function lifecycleContext(args: ParsedArgs, io: CliIo): Promise<LifecycleC
 }
 
 /**
- * The intents a lifecycle command acts on: the store's, named by hash (one or several), or the
- * file's, built as `publish` builds them (`--chain` its source). `--chain` with hashes must be
- * their source.
+ * The intents a lifecycle command acts on, as they were PUBLISHED: the store's, named by hash (one
+ * or several), or the ones a transaction published, `--tx <hash>` on `--chain` (their source),
+ * read from its `IntentPublished` logs and stored. Never a file: its intents are rebuilt by a
+ * rehearsal, whose salt and deadlines are its own, so they are not the ones a wallet published.
+ * `--chain` with hashes must be their source.
  */
 async function lifecycleTargets(
   args: ParsedArgs,
   io: CliIo,
   store: IntentStore,
-  gate?: Gate,
+  command: string,
+  sourceEndpoint?: (chain: CanonicalChain) => string | undefined,
 ): Promise<Target[]> {
   const operands = args.positionals;
-  if (operands.length === 0) {
-    throw new UsageError("missing <file | intent-hash>: the intent, by its file or its hash");
-  }
-  if (operands.every(isIntentHash)) {
-    const targets = operands.flatMap((hash) => storedTargets(store, hash as `0x${string}`));
-    const chainFlag = stringFlag(args, "chain");
-    if (chainFlag !== undefined) {
-      const chain = parseChain(chainFlag);
-      const other = targets.find((target) => target.record.source.chainId !== chain.id);
-      if (other !== undefined) {
-        throw new UsageError(
-          `--chain ${chain.slug} is not the source of ${other.record.intentHash}, which ` +
-            `${other.record.source.chain} published`,
-        );
-      }
+  const tx = stringFlag(args, "tx");
+  if (tx !== undefined) {
+    if (operands.length > 0) {
+      throw new UsageError(
+        `--tx names the intents ${tx} published: give it alone, or name stored intents by hash`,
+      );
     }
 
-    return targets;
+    return txTargets(args, io, store, tx, sourceEndpoint ?? (await endpointLookup(args, io)));
   }
-  if (operands.length > 1) {
-    throw new UsageError("give one <file>, or one or more intent hashes");
-  }
-
-  const program = await programInput(args, io, operands[0]!, undefined, gate);
-  const rpcUrl = (await endpointLookup(args, io))(program.chain);
-  if (rpcUrl === undefined) {
+  if (operands.length === 0) {
     throw new UsageError(
-      `the intents ${program.file} opens are read from a rehearsal of publishing them on ` +
-        `${program.chain.slug}: give its endpoint (--rpc-url or --config), or name the intent by its hash`,
+      "missing <intent-hash>: an intent as it was published, by its hash in the store, or " +
+        "--tx <hash> --chain <source>, the transaction that published it",
     );
   }
+  const file = operands.find((operand) => !isIntentHash(operand));
+  if (file !== undefined) {
+    throw new UsageError(
+      `${command} takes an intent as it was published, and ${file} is not an intent hash. A ` +
+        "file's intents are rebuilt by a rehearsal with a salt and deadlines of its own, so " +
+        "they are not the ones a wallet published: name the intent by its hash (`sauce intent " +
+        "list`), or by the transaction that published it, --tx <hash> --chain <source>",
+    );
+  }
+  const targets = operands.flatMap((hash) => storedTargets(store, hash as `0x${string}`));
+  const chainFlag = stringFlag(args, "chain");
+  if (chainFlag !== undefined) {
+    const chain = parseChain(chainFlag);
+    const other = targets.find((target) => target.record.source.chainId !== chain.id);
+    if (other !== undefined) {
+      throw new UsageError(
+        `--chain ${chain.slug} is not the source of ${other.record.intentHash}, which ` +
+          `${other.record.source.chain} published`,
+      );
+    }
+  }
 
-  return fileTargets(program, io, store, { rpcUrl });
+  return targets;
+}
+
+/** The intents transaction `tx` published on `--chain`, read from its receipt and stored. */
+async function txTargets(
+  args: ParsedArgs,
+  io: CliIo,
+  store: IntentStore,
+  tx: string,
+  endpointOf: (chain: CanonicalChain) => string | undefined,
+): Promise<Target[]> {
+  if (!TX_HASH.test(tx)) {
+    throw new UsageError(`--tx: '${tx}' is not a transaction hash (32 bytes of hex)`);
+  }
+  const chain = parseChain(requiredFlag(args, "chain", "<source>"));
+  const url = endpointOf(chain);
+  if (url === undefined) {
+    throw new UsageError(
+      `--tx is read from its receipt on ${chain.slug}: give that chain's endpoint (--rpc-url or ` +
+        "--config)",
+    );
+  }
+  const { intents } = await importIntents(
+    { txHash: tx as `0x${string}`, chain: chain.id },
+    { [String(chain.id)]: url },
+  );
+  if (intents.length === 0) throw new CliError(`${tx} published no intent on ${chain.slug}`);
+
+  return intents.map(({ record }) => {
+    store.save(record);
+
+    return { record, stored: store.load(record.intentHash) };
+  });
 }
 
 /**
@@ -1237,9 +1277,10 @@ async function lifecycleTargets(
 async function lifecycleOf(
   args: ParsedArgs,
   io: CliIo,
+  verb: string,
   gate: Gate,
 ): Promise<{ readonly targets: Target[]; readonly context: LifecycleContext }> {
-  const targets = await lifecycleTargets(args, io, storeOf(args, io), gate);
+  const targets = await lifecycleTargets(args, io, storeOf(args, io), `sauce intent ${verb}`);
   requireSupported(
     gate.action,
     targets.map(({ record }) =>
@@ -1445,8 +1486,22 @@ const EVM_SIGNER: FlagSpecs = Object.fromEntries(
   Object.entries(SIGNER).filter(([name]) => name !== "keypair"),
 );
 
+/** How a lifecycle command names an intent beside its hash: the transaction that published it. */
+const PUBLISHED: FlagSpecs = {
+  chain: {
+    type: "string",
+    value: "<chain>",
+    help: "The intents' source chain: with --tx, where it was sent; with hashes, checked",
+  },
+  tx: {
+    type: "string",
+    value: "<tx-hash>",
+    help: "The transaction that published the intents, on --chain: read from its logs, and stored",
+  },
+};
+
 const LIFECYCLE: FlagSpecs = {
-  ...PROGRAM,
+  ...PUBLISHED,
   ...ENDPOINT,
   ...EVM_SIGNER,
   keypair: {
@@ -1859,12 +1914,13 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
   },
   fill: {
     usage: [
-      "sauce intent fill <file | -> --chain <source> [options] [--args <value>…]",
-      "sauce intent fill <intent-hash> [options]",
-      "sauce intent fill <file | intent-hash> … --send (--keystore <path> | --private-key <hex>) [--auto-approve]",
+      "sauce intent fill <intent-hash…> [options]",
+      "sauce intent fill --tx <tx-hash> --chain <source> [options]",
+      "sauce intent fill <intent-hash… | --tx <tx-hash>> … --send (--keystore <path> | --private-key <hex>) [--auto-approve]",
       "sauce intent fill <intent-hash> --claimant <address> --send --keypair <path>   (to Solana)",
+      "sauce intent fill <file | -> --chain <source> [options] [--args <value>…]   (a preview)",
     ],
-    summary: "Fill a file's (or a stored) intents on their destination: rehearsed, or --send",
+    summary: "Fill published intents on their destination, rehearsed or --send; preview a file's",
     trailing: "args",
     flags: {
       ...PROGRAM,
@@ -1885,6 +1941,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         value: "<address>",
         help: "With a file: whose Pot publishes its intents in the rehearsal that reads them",
       },
+      tx: PUBLISHED.tx!,
       solver: {
         type: "string",
         value: "<address|key>",
@@ -1912,10 +1969,9 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       ...ARGS,
     },
     details: [
-      "Reads each intent the file opens from a rehearsal of publishing it on the source chain — the",
-      "file cooked on --owner's Pot (default: an account nobody holds the key of) with its rewards",
-      "unpaid, each intent rebuilt from the Portal's IntentPublished log — or takes the intent the",
-      "store holds under that hash, and fills it on its destination chain as a solver does: one",
+      "Takes each intent as it was published — the store's, by hash, or the ones a transaction",
+      "published, --tx on --chain, read from its IntentPublished logs and stored — and fills it on",
+      "its destination chain as a solver does: one",
       "eth_simulateV1 block, every call from the solver — Kitchen.deployPot for the destination's",
       "shared intent Pot when the route cooks on it and it is not deployed yet (any account may",
       "send it), the solver's approval of the Portal for each token the route delivers (reset to",
@@ -1941,6 +1997,13 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "IntentFulfilled record, and, sent, the Hyperlane message the proof travels as; or the",
       "decoded reason it reverts (exit 1), a failed route call unwrapped to the program's own",
       "message.",
+      "",
+      "A FILE is a preview, never sent: each intent it opens is read from a rehearsal of",
+      "publishing it on the source chain — the file cooked on --owner's Pot (default: an account",
+      "nobody holds the key of) with its rewards unpaid, each intent rebuilt from the Portal's",
+      "IntentPublished log — and its fill rehearsed. Its hashes are illustrative: the rehearsal",
+      "picks a salt and deadlines of its own, so the intent a wallet publishes from the file is",
+      "another. Fill that one by its hash or its --tx.",
       "",
       "It runs on the DESTINATION, and reads the source to check the source prover trusts the",
       "destination's; --rpc-url is the destination's endpoint, for intents that all go to one",
@@ -1989,26 +2052,42 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       const operands = args.positionals;
       let targets: readonly FillTarget[];
       let labels: ReadonlyArray<readonly [`0x${string}`, string]> = [];
+      // A file's intents, rebuilt by a rehearsal: their hashes are the rehearsal's.
+      let preview = false;
       let from: string;
       const gate: Gate | undefined = sending
         ? { action: "sending a fill", by: "destinations" }
         : undefined;
-      if (operands.length > 0 && operands.every(isIntentHash)) {
+      const tx = stringFlag(args, "tx");
+      if (tx !== undefined || (operands.length > 0 && operands.every(isIntentHash))) {
         if (argsInput(args, io, trailing).args !== undefined) {
           throw new UsageError(
-            "--args gives a file's main its arguments; a stored intent is built already",
+            "--args gives a file's main its arguments; a published intent is built already",
           );
         }
-        targets = operands.flatMap((hash) =>
-          storedTargets(store, hash as `0x${string}`).map(({ record }) => ({
-            intent: intentOf(record),
-            source: parseChain(String(record.source.chainId)),
-            destination: parseChain(String(record.destination.chainId)),
-            sourcePortal: record.source.portal,
-          })),
-        );
-        from = operands.length === 1 ? operands[0]! : "the intents named";
+        const published =
+          tx === undefined
+            ? operands.flatMap((hash) => storedTargets(store, hash as `0x${string}`))
+            : // --rpc-url is the destination's: the source is read through the others.
+              await lifecycleTargets(args, io, store, "sauce intent fill", (chain) =>
+                rpcUrl === undefined ? endpoint(args, io, chain) : sharedEndpoint(args, io, chain),
+              );
+        targets = published.map(({ record }) => ({
+          intent: intentOf(record),
+          source: parseChain(String(record.source.chainId)),
+          destination: parseChain(String(record.destination.chainId)),
+          sourcePortal: record.source.portal,
+        }));
+        from = tx ?? (operands.length === 1 ? operands[0]! : "the intents named");
       } else {
+        if (sending) {
+          throw new UsageError(
+            "--send fills an intent as it was published, and a file's intents are a preview: " +
+              "rebuilt by a rehearsal with a salt and deadlines of its own, they are not the ones " +
+              "a wallet published. Name the intent by its hash, or by the transaction that " +
+              "published it, --tx <hash> --chain <source>",
+          );
+        }
         const program = await programInput(args, io, undefined, undefined, gate);
         // A deadline that has passed is rehearsed anyway, so the Portal's own refusal shows.
         const past = pastDeadline(program);
@@ -2053,6 +2132,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         });
         labels = defineLabels(program);
         from = program.file;
+        preview = true;
       }
       // A rehearsal runs on every chain; a fill is sent only to a supported destination.
       if (gate !== undefined) {
@@ -2098,7 +2178,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
           ? await endpointLookup(args, io)
           : (chain: CanonicalChain) => sharedEndpoint(args, io, chain);
 
-      return fillCommand({
+      const output = await fillCommand({
         intents: targets,
         from,
         labels,
@@ -2112,10 +2192,24 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
           ? {}
           : { send: { account, approver: approverOf(args, io), store } }),
       });
+
+      return preview
+        ? {
+            ...output,
+            notes: [
+              ...(output.notes ?? []),
+              `A preview: each hash is the rehearsal's. The intent a wallet publishes from ${from} ` +
+                "has a salt and deadlines of its own; fill that one by its hash or --tx.",
+            ],
+          }
+        : output;
     },
   },
   prove: {
-    usage: "sauce intent prove <file | intent-hash…> [--keystore <path> | --private-key <hex>]",
+    usage: [
+      "sauce intent prove <intent-hash…> [--keystore <path> | --private-key <hex>]",
+      "sauce intent prove --tx <tx-hash> --chain <source> [--keystore <path> | --private-key <hex>]",
+    ],
     summary: "Send the proof of filled (or cancelled) intents, paying the prover's fee",
     flags: { ...LIFECYCLE, ...JSON_FLAG, ...HELP },
     details: [
@@ -2127,16 +2221,16 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "Prints the transaction and the Hyperlane message the proof travels as. With no signer,",
       "prints the unsigned transaction instead.",
       "",
-      "The intent is a hash the store holds (`sauce intent publish`, `run`, `fill` and `intents import`",
-      "store them), or the file that opens it (with --chain, its source, and the flags it was",
-      "built with). It reads the destination, and the source to skip what is proven already.",
+      "The intent is one as it was published: a hash the store holds (`sauce intent publish`,",
+      "`run`, `fill` and `intent import` store them), or --tx, the transaction that published it,",
+      "on --chain. It reads the destination, and the source to skip what is proven already.",
       ...SUPPORTED_ONLY("Proves (or prints the transaction)"),
       "",
       "Example:",
       "  sauce intent prove 0x<intent hash> --keystore ~/.keys/me.json",
     ].join("\n"),
     run: async (args, io) => {
-      const { targets, context } = await lifecycleOf(args, io, {
+      const { targets, context } = await lifecycleOf(args, io, "prove", {
         action: "proving",
         by: "destinations",
       });
@@ -2145,7 +2239,10 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   claim: {
-    usage: "sauce intent claim <file | intent-hash…> --chain <source> [signer]",
+    usage: [
+      "sauce intent claim <intent-hash…> --chain <source> [signer]",
+      "sauce intent claim --tx <tx-hash> --chain <source> [signer]",
+    ],
     summary: "Withdraw proven intents' rewards to their claimants, on the source",
     flags: { ...LIFECYCLE, ...JSON_FLAG, ...HELP },
     details: [
@@ -2164,7 +2261,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "  sauce intent claim 0x<intent hash> --chain ethereum --keystore ~/.keys/me.json",
     ].join("\n"),
     run: async (args, io) => {
-      const { targets, context } = await lifecycleOf(args, io, {
+      const { targets, context } = await lifecycleOf(args, io, "claim", {
         action: "claiming",
         by: "source",
       });
@@ -2173,7 +2270,10 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   refund: {
-    usage: "sauce intent refund <file | intent-hash…> --chain <source> [signer]",
+    usage: [
+      "sauce intent refund <intent-hash…> --chain <source> [signer]",
+      "sauce intent refund --tx <tx-hash> --chain <source> [signer]",
+    ],
     summary: "Return unearned rewards from their vaults to their creators, on the source",
     flags: { ...LIFECYCLE, ...JSON_FLAG, ...HELP },
     details: [
@@ -2191,7 +2291,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "  sauce intent refund 0x<intent hash> --chain ethereum --keystore ~/.keys/me.json",
     ].join("\n"),
     run: async (args, io) => {
-      const { targets, context } = await lifecycleOf(args, io, {
+      const { targets, context } = await lifecycleOf(args, io, "refund", {
         action: "refunding",
         by: "source",
       });
@@ -2200,7 +2300,10 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   cancel: {
-    usage: "sauce intent cancel <file | intent-hash…> [--and-prove] [signer]",
+    usage: [
+      "sauce intent cancel <intent-hash…> [--and-prove] [signer]",
+      "sauce intent cancel --tx <tx-hash> --chain <source> [--and-prove] [signer]",
+    ],
     summary: "Cancel unfilled intents after their route's deadline, for an early refund",
     flags: {
       ...LIFECYCLE,
@@ -2233,7 +2336,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "  sauce intent cancel 0x<intent hash> --keystore ~/.keys/me.json",
     ].join("\n"),
     run: async (args, io) => {
-      const { targets, context } = await lifecycleOf(args, io, {
+      const { targets, context } = await lifecycleOf(args, io, "cancel", {
         action: "cancelling",
         by: "destinations",
       });
@@ -2242,9 +2345,12 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     },
   },
   status: {
-    usage: "sauce intent status <file | intent-hash…>",
+    usage: [
+      "sauce intent status <intent-hash…>",
+      "sauce intent status --tx <tx-hash> --chain <source>",
+    ],
     summary: "Where intents stand on both chains, and what can be done next",
-    flags: { ...PROGRAM, ...ENDPOINT, ...API, store: LIFECYCLE.store!, ...JSON_FLAG, ...HELP },
+    flags: { ...PUBLISHED, ...ENDPOINT, ...API, store: LIFECYCLE.store!, ...JSON_FLAG, ...HELP },
     details: [
       "Reads each intent on its source chain (the reward's status, what its vault holds, the",
       "proof its prover records) and its destination (whether the Portal recorded a fill or a",
@@ -2260,7 +2366,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
     ].join("\n"),
     run: async (args, io) => {
       const context = await lifecycleContext(args, io);
-      const targets = await lifecycleTargets(args, io, context.store);
+      const targets = await lifecycleTargets(args, io, context.store, "sauce intent status");
       const shown = await Promise.all(targets.map((target) => showCommand(target, context)));
 
       return {
@@ -2919,12 +3025,13 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         ([verb, command]) => `  ${verb.padEnd(8)}  ${command.summary}`,
       ),
       "",
-      "An intent is a file that opens one (`Base.Portal.send(…).receive(…).then(() => { … })`),",
-      "named with the flags it is built with, or its hash once the store keeps it: `publish`, `fill` and",
-      "`import` store every intent they touch (--store, default ~/.sauce/intents), and every verb",
-      "takes the hash. With no verb, at a terminal: a list of the stored intents, read live from",
-      "the chains, to pick one from, then a menu that runs these verbs on it, with the same",
-      "approvals (with a signer, they send). With no terminal, the plain list.",
+      "An intent is published from a file that opens one (`Base.Portal.send(…).then(() => { … })`),",
+      "and every later verb takes it as published: its hash once the store keeps it (`publish`, `fill`",
+      "and `import` store every intent they touch: --store, default ~/.sauce/intents), or --tx, the",
+      "transaction that published it, on --chain. With no verb, at a terminal: a list of the",
+      "stored intents, read live from the chains, to pick one from, then a menu that runs these",
+      "verbs on it, with the same approvals (with a signer, they send). With no terminal, the",
+      "plain list.",
       "",
       "Examples:",
       "  sauce intent publish                          (guided, at a terminal)",

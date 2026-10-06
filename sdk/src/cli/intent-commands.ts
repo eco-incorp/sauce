@@ -13,12 +13,10 @@ import { formatUnits, getAddress, type Address, type Hex } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
-import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { CliError, UsageError } from "./args.js";
-import { fileIntents, type FileInput, type RehearsalAccess } from "./file-intents.js";
 import { connect, sendAndWait, type Sent } from "./chain.js";
-import { type CliFiles, unapproved, type Approver, type CommandOutput } from "./commands.js";
+import { unapproved, type Approver, type CommandOutput } from "./commands.js";
 import { addressLabels, effectLines, effectsJson, effectsOf, nativeSymbol } from "./effects.js";
 import { costJson, costLine, costOf, type Cost } from "./receipt.js";
 import {
@@ -30,7 +28,6 @@ import {
   gatewayStatus,
   importIntents,
   intentOf,
-  intentRecord,
   intentStatus,
   publishedIntents,
   txRequest,
@@ -77,34 +74,14 @@ export interface Target {
 export function storedTargets(store: IntentStore, hash: Hex): Target[] {
   if (!store.has(hash)) {
     throw new CliError(
-      `no intent ${hash.toLowerCase()} in ${store.dir}: name the file that opens it, or import ` +
-        "the transaction that published it (`sauce intent import <tx hash> --chain <source>`)",
+      `no intent ${hash.toLowerCase()} in ${store.dir}: name the transaction that published it ` +
+        "instead, --tx <hash> --chain <source> (or store it: `sauce intent import <tx hash> " +
+        "--chain <source>`)",
     );
   }
   const stored = store.load(hash);
 
   return [{ record: stored.record, stored }];
-}
-
-/**
- * The intents a file opens, read from a rehearsal of publishing them (`file-intents.ts`): the
- * stored ones as the store keeps them.
- */
-export async function fileTargets(
-  input: FileInput,
-  files: CliFiles,
-  store: IntentStore,
-  access: RehearsalAccess,
-): Promise<Target[]> {
-  const intents = await fileIntents(input, files, access, "sauce intent");
-
-  return intents.map((intent) => {
-    const record = intentRecord(intent.intent, { sourcePortal: ecoRoutesPortal(input.chain) });
-
-    return store.has(record.intentHash)
-      ? { record, stored: store.load(record.intentHash) }
-      : { record };
-  });
 }
 
 /** Every chain `targets` touch, with the endpoint each has. */

@@ -239,6 +239,20 @@ describeEvm("the intent lifecycle: publish, fill and prove, claim; refund; cance
       source: { rewardStatus: "Initial", funded: true },
       can: { fill: { ok: true } },
     });
+    // The same intent, named by the transaction that published it, read from its receipt into a
+    // store that never saw it.
+    const { tx } = JSON.parse(
+      readFileSync(join(store, hash, "events.jsonl"), "utf8").split("\n")[0]!,
+    ) as { tx: Hex };
+    const byTx = jsonOf(
+      await sauce(
+        ...["intent", "status", "--tx", tx, "--chain", "ethereum", "--config", config],
+        ...["--store", mkdtempSync(join(work, "store-")), "--json"],
+      ),
+    );
+    expect(byTx.intents).toMatchObject([
+      { record: { intentHash: hash }, status: { state: "funded" } },
+    ]);
 
     // The rehearsal, by hash: fulfillAndProve with the Hyperlane fee in its value.
     const rehearsal = jsonOf(

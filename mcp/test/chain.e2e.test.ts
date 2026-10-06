@@ -642,15 +642,34 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       /Rehearsing a fill needs an RPC endpoint for base .* Pass rpcUrl with the call/,
     );
 
-    // Built, for a solver to sign: its approval, then the fill. No prover this server drives is on
+    // A program's intents are a preview: a fill is built only for an intent as it was published.
+    assert.match(
+      failed(await mcp.call("sauce_intent_fill", { ...args, from: NOBODY, rpcUrl: base.rpcUrl })),
+      /a fill is built for an intent as it was published/,
+    );
+
+    // Built, for a solver to sign, from a record as the other intent tools return one (here,
+    // a publish's dry run's): its approval, then the fill. No prover this server drives is on
     // this destination, so it is fulfill, proven later; and this solver holds nothing yet.
     type Built = {
       intentHash: string;
       proves: boolean;
       transactions: Array<{ chainId: number; to: string; what: string; value: string }>;
     };
+    const published = ok(
+      await mcp.call("sauce_intent_publish", {
+        ...args,
+        owner: NOBODY,
+        assumeBalance: ["USDC:1"],
+        dryRun: true,
+      }),
+    ) as { intents: Array<{ record: unknown }> };
     const built = ok(
-      await mcp.call("sauce_intent_fill", { ...args, from: NOBODY, rpcUrl: base.rpcUrl }),
+      await mcp.call("sauce_intent_fill", {
+        intent: published.intents[0]!.record,
+        from: NOBODY,
+        rpcUrl: base.rpcUrl,
+      }),
     ) as { from: string; intents: Built[]; notes: string[] };
     assert.equal(built.from, NOBODY);
     const [fill] = built.intents;

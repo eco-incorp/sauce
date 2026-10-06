@@ -500,8 +500,9 @@ default).
 The server keeps no intents: each call names one, by its `record` — the JSON
 `sauce_intent_publish`, `sauce_intent_import` and `sauce_intent_status` return, checked against its
 own hash before anything is built from it — or by the transaction that published it, `txHash` with
-its source `chain` (and `index` when it published several). `sauce_intent_fill` also takes the
-program itself, with the same inputs as `sauce_intent_publish`.
+its source `chain` (and `index` when it published several). With `dryRun`, `sauce_intent_fill`
+also takes the program itself, with the same inputs as `sauce_intent_publish`, as a preview: its
+intents are rebuilt by a rehearsal, so their hashes are not the ones a wallet publishes.
 
 1. `sauce_intent_publish`: with `dryRun`, each intent's `record`, read from the rehearsal's log;
    without, the unsigned cook on the creator's Pot. Once it lands, `sauce_intent_import` with its

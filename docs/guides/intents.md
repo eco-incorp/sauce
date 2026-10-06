@@ -625,7 +625,8 @@ Rehearse them before publishing. A route that cooks needs the shared Pot deploye
 rehearsal on a chain where nobody has deployed it yet puts `Kitchen.deployPot(executor, 0)` ahead
 of the fill, in the same simulated block. From the command line,
 [`sauce intent fill`](cli.md#rehearsing-the-fill-sauce-intent-fill) does all of it with no key: it
-reads the file's intents from a rehearsal of publishing them on the source chain, gives a solver
+takes a published intent by its hash, or previews a file's, read from a rehearsal of publishing
+them on the source chain (so their hashes are the rehearsal's), gives a solver
 the route's tokens by state override, runs the deployment, the approvals and the fill in one `eth_simulateV1` block on
 the destination, and prints what moved, what the shared Pot and the Executor were left holding, and
 the decoded reason when it reverts. With `--send` and a signer it then sends them, the signer being

@@ -311,31 +311,77 @@ describe("refused on a preview chain, before any network call", () => {
 
   it("sauce intent fill --send, prove and cancel by the destination; claim and refund by the source", async () => {
     const { config, recorded } = await endpoints(8453, 42161);
-    const toArbitrum = file("to-arbitrum.sauce.ts", TO_ARBITRUM);
-    const toBase = file("to-base.sauce.ts", TO_BASE);
-    const base = ["--chain", "base", ...INTENT_FLAGS, "--config", config];
-    const arbitrum = ["--chain", "arbitrum", ...INTENT_FLAGS, "--config", config];
+    // Each step takes an intent as it was published: here, as the store holds it.
+    const stored = (source: string, destination: string) => {
+      const intent = assembleIntent(
+        requireChain(source),
+        requireChain(destination),
+        {
+          salt: `0x${"00".repeat(32)}`,
+          deadline: 2_000_000_000n,
+          portal: ecoRoutesPortal(destination),
+          tokens: [],
+          calls: [],
+        },
+        {
+          deadline: 2_000_000_000n,
+          creator: CREATOR,
+          prover: ecoRoutesProver(source, destination),
+          tokens: [],
+          nativeAmount: 7n,
+        },
+      );
+      const record = intentRecord(intent, { sourcePortal: ecoRoutesPortal(source) });
+      new IntentStore(store).save(record);
+
+      return record.intentHash;
+    };
+    const toArbitrum = stored("base", "arbitrum");
+    const toBase = stored("arbitrum", "base");
+    const flags = ["--store", store, "--config", config];
     expectRefused(
-      await sauce(...["intent", "fill", toArbitrum, ...base, "--send", "--private-key", OWNER_KEY]),
+      await sauce(
+        ...["intent", "fill", toArbitrum, ...flags, "--send", "--private-key", OWNER_KEY],
+      ),
       "arbitrum",
       /^sauce intent fill: sending a fill is refused/,
     );
     expectRefused(
-      await sauce("intent", "prove", toArbitrum, ...base),
+      await sauce("intent", "prove", toArbitrum, ...flags),
       "arbitrum",
       /^sauce intent prove: proving/,
     );
-    expectRefused(await sauce("intent", "cancel", toArbitrum, ...base), "arbitrum");
+    expectRefused(await sauce("intent", "cancel", toArbitrum, ...flags), "arbitrum");
     expectRefused(
-      await sauce("intent", "claim", toBase, ...arbitrum),
+      await sauce("intent", "claim", toBase, ...flags),
       "arbitrum",
       /^sauce intent claim: claiming/,
     );
-    expectRefused(await sauce("intent", "refund", toBase, ...arbitrum), "arbitrum");
+    expectRefused(await sauce("intent", "refund", toBase, ...flags), "arbitrum");
+    expect(recorded()).toEqual([]);
     // The other side of each intent is a supported chain, so the same steps go ahead (and fail
     // on the recorder's empty chain, which is past the gate).
-    expect((await sauce("intent", "claim", toArbitrum, ...base)).stderr).not.toMatch(/refused/);
+    expect((await sauce("intent", "claim", toArbitrum, ...flags)).stderr).not.toMatch(/refused/);
     expect(recorded()).not.toEqual([]);
+  });
+
+  it("a lifecycle step refuses a file: its intents are a rehearsal's, not the published ones", async () => {
+    const toBase = file("to-base.sauce.ts", TO_BASE);
+    for (const verb of ["prove", "claim", "refund", "cancel", "status"]) {
+      const refused = await sauce("intent", verb, toBase, "--chain", "arbitrum");
+      expect(refused.code).toBe(2);
+      expect(refused.stderr).toMatch(
+        /takes an intent as it was published.*--tx <hash> --chain <source>/s,
+      );
+    }
+    const sent = await sauce(
+      ...["intent", "fill", toBase, "--chain", "arbitrum", ...INTENT_FLAGS],
+      ...["--send", "--private-key", OWNER_KEY],
+    );
+    expect(sent.code).toBe(2);
+    expect(sent.stderr).toMatch(
+      /--send fills an intent as it was published, and a file's intents are a preview/,
+    );
   });
 
   it("an intent the store holds, before its endpoint is asked which chain it serves", async () => {

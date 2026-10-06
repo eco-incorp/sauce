@@ -91,17 +91,28 @@ export async function publishCommand(input: PublishInput, files: CliFiles): Prom
     );
     const published = (output.json as { intents?: unknown[] }).intents ?? [];
     if (output.exitCode === undefined && published.length === 0) {
-      return {
+      return noted({
         ...output,
         notes: [
           ...(output.notes ?? []),
           "The rehearsal shows no intent published: the endpoint returned no logs (no " +
             "eth_simulateV1), so the intents' hashes are not known until it is sent.",
         ],
-      };
+      });
     }
 
-    return output;
+    return noted(
+      published.length === 0
+        ? output
+        : {
+            ...output,
+            notes: [
+              ...(output.notes ?? []),
+              "A preview: each hash is the rehearsal's. Published, an intent has its own, from " +
+                "the salt and deadlines picked when it is sent; read it from the receipt.",
+            ],
+          },
+    );
   }
   if (input.account === undefined || input.approver === undefined) {
     throw new UsageError(

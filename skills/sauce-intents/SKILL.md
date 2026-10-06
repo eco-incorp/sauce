@@ -151,8 +151,10 @@ may send the Portal's `refundTo` to redirect it.
 
 ## Every step from the command line
 
-`sauce intent` drives the whole lifecycle. Each verb takes the intent file (with `--chain`, the
-source, and the flags it was built with) or the intent's hash, and reads both chains. Every intent
+`sauce intent` drives the whole lifecycle. Each verb after publishing takes the intent as it was
+published: its hash, or `--tx <hash> --chain <source>`, the transaction that published it. A file
+is only a preview (`sauce intent fill <file>` without `--send`): its intents are rebuilt by a
+rehearsal with a salt and deadlines of their own. Each verb reads both chains. Every intent
 the commands publish, fill or import goes into a local
 store in your home directory (`--store <dir>` names another), so later steps name it by hash; where it
 stands is read from the chains each time.

@@ -786,8 +786,11 @@ Choose it when something you rely on reads that event or status rather than the 
 
 Publishing from Solana is not supported: see [Solana](#solana).
 
-Everything after publishing is a verb of `sauce intent` too. Each takes the intent's file (with
-`--chain`, its source, and the flags it was built with) or its hash, and reads both chains:
+Everything after publishing is a verb of `sauce intent` too. Each takes the intent as it was
+published: its hash, which the store keeps, or `--tx <hash> --chain <source>`, the transaction that
+published it, read from its `IntentPublished` logs. A file is not one: its intents are rebuilt by a
+rehearsal with a salt and deadlines of its own, so they are not the ones you published. Each verb
+reads both chains:
 
 | Verb                   | What it does                                                              |
 | ---------------------- | ------------------------------------------------------------------------- |
@@ -840,18 +843,19 @@ stores it.
 `publish --dry-run` rehearses the source side: the cook that pays the vault and publishes. What the
 intent does — the swap, the minimum it checks, the refund — runs on the destination, when a solver
 fills it, and that is where it fails. `sauce intent fill` rehearses that fill with no key and sends
-nothing. It takes the file and the flags `publish` does (or the intent's hash), and reads both
-chains:
+nothing. It takes the intent's hash or `--tx`, or, as a preview, the file and the flags `publish`
+does, and reads both chains:
 
 ```sh
 sauce intent fill swap.sauce.ts --chain ethereum \
   --intent-deadline 2000000000 --no-prove --args-json swap.args.json
 ```
 
-It first reads the file's intents from a rehearsal of publishing them on the source chain: the file
+A file's intents are first read from a rehearsal of publishing them on the source chain: the file
 cooked on `--owner <address>`'s Pot (by default an account nobody holds the key of) with the
 rewards left unpaid, each intent rebuilt from the Portal's log; a value the program measures is
-measured on that Pot as it stands. Then for each intent it runs one `eth_simulateV1` block on the
+measured on that Pot as it stands. Their hashes are the rehearsal's, so a file is a preview, and
+`--send` refuses one. Then for each intent it runs one `eth_simulateV1` block on the
 intent's destination, every call from a solver:
 
 1. `Kitchen.deployPot(executor, 0)`, when the route cooks on the destination's shared intent Pot

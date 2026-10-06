@@ -479,9 +479,10 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         "On a Solana destination: the Portal's fulfill as a base64 transaction, the solver its " +
         "fee payer, then the proof to send once it lands, with claimant (the EVM source address " +
         "the reward pays) required. " +
-        "Name the intent by its record or txHash, or give the program that opens it (source " +
-        "and the sauce_intent_publish inputs, chain the SOURCE). With dryRun, instead rehearse " +
-        "the fill there in one eth_simulateV1 block, from any solver (no from needed): per " +
+        "Name the intent as it was published, by its record or txHash. With dryRun, instead " +
+        "rehearse the fill there in one eth_simulateV1 block, from any solver (no from needed), " +
+        "and a dry run may take the program that opens the intents as a preview (source and the " +
+        "sauce_intent_publish inputs, chain the SOURCE; its hashes are the rehearsal's): per " +
         "intent ok with gas and what moved, or the decoded reason it reverts. Needs the " +
         "destination's endpoint, and the source's to check the prover. The rehearsal works on " +
         "every chain; the fill is built only for a supported destination. " +
@@ -491,9 +492,10 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         source: PROGRAM.source
           .optional()
           .describe(
-            "Or the SauceScript program that opens the intents, as sauce_intent_publish takes " +
-              "it: each intent it opens is read from a rehearsal of publishing it on the source " +
-              "chain (its rewards unpaid), rebuilt from the Portal's IntentPublished.",
+            "With dryRun only, a preview: the SauceScript program that opens the intents, as " +
+              "sauce_intent_publish takes it. Each intent it opens is read from a rehearsal of " +
+              "publishing it on the source chain (its rewards unpaid), rebuilt from the Portal's " +
+              "IntentPublished; its hash is the rehearsal's, not a published intent's.",
           ),
         args: RUN_ARGS,
         owner: z
@@ -572,6 +574,14 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
       const gate: Gate | undefined =
         args.dryRun === true ? undefined : { action: "building a fill", side: "destination" };
       if (args.source !== undefined) {
+        if (args.dryRun !== true) {
+          throw new UsageError(
+            "a fill is built for an intent as it was published, and a program's intents are a " +
+              "preview: rebuilt by a rehearsal with a salt and deadlines of its own, they are not " +
+              "the ones a wallet published. Name the intent by its record or txHash, or rehearse " +
+              "the program's with dryRun",
+          );
+        }
         const program = programOf(args as ProgramArgs);
         past = pastDeadline(program.input);
         // Refused by the chains the program's intents go to before the rehearsal reads any.
@@ -649,13 +659,23 @@ export function registerIntentTools(server: McpServer, context: ToolContext): vo
         });
 
         const rehearsed = fromCommand(output);
+        const preview =
+          args.source === undefined
+            ? []
+            : [
+                "A preview: each hash is the rehearsal's. The intent a wallet publishes from the " +
+                  "program has a salt and deadlines of its own; fill that one by its record or txHash.",
+              ];
 
-        return past === undefined
+        return past === undefined && preview.length === 0
           ? rehearsed
           : {
               ...rehearsed,
               notes: [
-                `${past}: the rehearsal shows the Portal refusing it`,
+                ...(past === undefined
+                  ? []
+                  : [`${past}: the rehearsal shows the Portal refusing it`]),
+                ...preview,
                 ...(rehearsed.notes ?? []),
               ],
             };

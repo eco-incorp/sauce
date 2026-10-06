@@ -780,12 +780,17 @@ naming the signer as `.refundee(...)` and publishes it the same way. Publishing 
 refused. There is no offline intent hash and no second encoder: each intent's hash and record come
 from the Portal's `IntentPublished` (`logged-intents.ts#loggedIntents`, the chain's registry Portal's
 logs, each rebuilt by `portal.ts#intentFromPublished`), the rehearsal's and then the receipt's, which
-the store keeps; `sauce run` and `simulate` report what a cook published too. `sauce intent fill
-<file>` and the lifecycle verbs given a file read its intents the same way
-(`file-intents.ts#fileIntents`): the file cooked with `intents.fund: false` on `--owner`'s Pot
-(`REHEARSAL_OWNER`, an address nobody holds, by default) in an `eth_simulateV1` rehearsal, so an
-endpoint without `eth_simulateV1` is refused there; a value the program measures is measured on that
-Pot as it stands. The off-chain intent a solver API would take with no publish is future work (the
+the store keeps; `sauce run` and `simulate` report what a cook published too. **Every step after
+publishing takes the intent as PUBLISHED** (lead, 2026-10-06): a hash the store holds, or
+`--tx <hash> --chain <source>` (`run.ts#lifecycleTargets`, reading the receipt's logs and storing
+them), never a file — a default deadline counts from `ctx.timestamp()` and the salt is picked per
+compile, so a rehearsal rebuilds another intent with another hash. The MCP intent tools take a
+`record` or a `txHash` the same way. A file's intents are only a PREVIEW, with illustrative hashes:
+`publish --dry-run`, and `sauce intent fill <file>` without `--send` (MCP `sauce_intent_fill`
+with `dryRun`), which read them from a rehearsal (`file-intents.ts#fileIntents`): the file cooked
+with `intents.fund: false` on `--owner`'s Pot (`REHEARSAL_OWNER`, an address nobody holds, by
+default) in an `eth_simulateV1` rehearsal, so an endpoint without `eth_simulateV1` is refused
+there; a value the program measures is measured on that Pot as it stands. The off-chain intent a solver API would take with no publish is future work (the
 compiler reporting folded static values).
 
 An intent's life after publishing is `lifecycle.ts`: plain-value functions
