@@ -283,8 +283,8 @@ function portalAbsence(source: CanonicalChain, destination: CanonicalChain): str
 }
 
 /**
- * A chain's name called as a function — `Arbitrum(() => { … }).reward(…)`, the intent form a
- * program no longer has — reported with the form that replaced it. A chain's name is an instance
+ * A chain's name called as a function — `Arbitrum(() => { … }).reward(…)`, the removed intent
+ * form — reported with the form that replaced it. A chain's name is an instance
  * of its chain's class (`chain-module.ts`), which the compiler refuses to call.
  */
 export function chainCalledError(cause: unknown): Error | undefined {

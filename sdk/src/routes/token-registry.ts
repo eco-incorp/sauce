@@ -1,7 +1,7 @@
 /**
- * Per-chain token symbol -> address registry, the DEFAULT source of the token symbols a chain's host
- * declares (`host.ts`) — so a bare `USDC.transfer(to, amt)` inside a `Base.route(...)` compiles
- * with NO `IntentOptions.tokenDefines`.
+ * Per-chain token symbol -> address registry, the DEFAULT source of the token symbols a chain's
+ * module exports (`chain-module.ts`) — so a bare `USDC.transfer(to, amt)` in a program compiles
+ * with no `tokens` option.
  *
  * DISCOVERY (measured, not assumed): this SDK has no existing per-chain token-address source to
  * reuse. `protocols/erc20/addresses.ts` is deliberately empty ("ERC20 is a standard interface, not

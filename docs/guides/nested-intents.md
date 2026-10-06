@@ -42,6 +42,7 @@ const built = Base.Portal.send({ token: usdc(Ethereum.chain), amount: 1_010_000n
     Ethereum.Portal.send({ token: USDC, amount: 1_000_000n })
       .refundee(0x4444444444444444444444444444444444444444n)
       .receive({ token: USDC, amount: payout })
+      .fee(1_000n) // Ethereum's Kitchen fee, which this body's cook pays.
       .then(() => {
         USDC.transfer(0x6666666666666666666666666666666666666666n, payout);
       });
@@ -56,7 +57,8 @@ intent, not a host one. Nothing is declared globally: a chain the closure names 
 it is an error. The closure is never run: its text is compiled. So it names only what SauceScript
 knows, a value of your script is written into it as a literal, and a bundler that renames imports
 breaks it ([callbacks are compiled source](intents.md#callbacks-are-compiled-source)).
-`built.sourceTxs()` is the wallet's funding and publication on Ethereum.
+`built.cook({ owner }, fee)` publishes the outer intent from your Pot on Ethereum, and the inner one
+is published in the outer one's fill, read from the `IntentPublished` in that fill's receipt.
 
 The same intent can be a file, all of it SauceScript, and the CLI opens it on the chain that pays
 the outer reward. Its inputs are `main`'s parameters, which `sauce intent publish --args` passes to
@@ -218,9 +220,9 @@ returns.
 Every level takes the modifiers any intent takes, written on its own steps, and each one it leaves
 out takes its default for that level ([Intent defaults](../reference/intent-defaults.md)):
 
-- **Deadlines count from when the level opens.** The first level opens when it is built — the
-  `sauce` command builds it, or the program opening it runs — and every level below it when the
-  body above runs, in that fill. So each level has its own five minutes to be filled, and its
+- **Deadlines count from when the level opens.** The first level opens when the program opening it
+  runs, unless the compile fixes when (`intents.openedAt`, which the `sauce` command sets), and
+  every level below it when the body above runs, in that fill. So each level has its own five minutes to be filled, and its
   reward its own seven days after that. A level that needs longer says so:
   `.receive(...).deadline(ctx.timestamp() + 3600)` is an hour from when that level opens.
 - **Each level names its refundee.** An intent a program opens has no default refundee, at any depth:
@@ -228,7 +230,7 @@ out takes its default for that level ([Intent defaults](../reference/intent-defa
   nothing is taken from the level above. The files here give every level `refundTo`, one of
   `main`'s parameters, so one address reclaims an unearned reward of every level, each on the
   chain that escrowed it: it must be an address its owner controls on each of them.
-- **Each level's salt is random**, picked as the level above is built.
+- **Each level's salt is random**, picked when the file compiles; `.salt(...)` gives one.
 - **Each program body pays its own chain's Kitchen fee.** The `sauce` command reads the Kitchen of
   every chain a level's program runs on; `.fee(wei)` on a level gives that level's, and
   `compile.intents.executionFee` may be a function from the destination chain to its fee. In the
@@ -317,52 +319,3 @@ program](intents.md#create-an-intent-from-inside-a-program) covers what may be c
 is compiled, and the functions and imports a body may use. The
 hashes follow one level at a time: each level's is in the `IntentPublished` event of the fill above
 it.
-
-## The TypeScript builder: `.nest()`
-
-The program form above is the way to write nested intents. `.nest(child, options)` is the lower
-level underneath it: it attaches an intent you built in TypeScript to a route you built in
-TypeScript, before either runs.
-
-```ts
-import { Base, Ethereum } from "@eco-incorp/sauce";
-import type { routes } from "@eco-incorp/sauce";
-
-export function attachChild(
-  creator: routes.PortalAddress,
-  parentReward: routes.PortalReward,
-  childReward: routes.PortalReward,
-  fees: { readonly base: bigint; readonly ethereum: bigint },
-) {
-  return Base.Portal.send(parentReward)
-    .source("ethereum")
-    .refundee(creator)
-    .receive([])
-    .fee(fees.base)
-    .nest(
-      (on) =>
-        Ethereum.Portal.send(childReward)
-          .source(on)
-          .refundee(creator)
-          .receive([])
-          .fee(fees.ethereum)
-          .then("function main() { return 1; }"),
-      { requireCap: true, executionFee: fees.ethereum },
-    )
-    .then("function main() { return 1; }");
-}
-```
-
-Reach for it where the program form does not reach:
-
-- **A child built in TypeScript.** Each child is a host intent of its own, with its own reward,
-  modifiers and body, attached to the parent before either runs.
-- **Action programs.** A JSON action program has no action that opens an intent, so `.nest()` is how
-  one is chained to another ([actions](actions.md#fund-a-child-from-a-measured-amount)).
-- **A child that is never published.** The default `via: "transfer"` pays the child's vault from the
-  parent's Pot and publishes nothing: share the child with your solver yourself.
-
-`via: "publishAndFund"` publishes the child from the parent route, and `via: "dynamic"` builds it
-with placeholders for amounts the parent measures — what the program form does by capturing a
-variable. [Nesting in TypeScript](../api/routes.md#nesting-in-typescript) is the reference for the
-three modes, their options and their ordering.

@@ -816,10 +816,9 @@ export function intentFromPublished(
 // ---------------------------------------------------------------------------
 
 /**
- * How an intent's reward reaches its vault, everywhere the SDK funds one — this builder, the
+ * How an intent's reward reaches its vault, everywhere the SDK funds one — `intentSourceTxs`, the
  * program a Pot runs for an intent it opens, `sauce intent publish` (`--intent-fund-via`) and the MCP
- * `sauce_publish` tool (`intentFundVia`). The same two words, with the same meanings, as `.nest()`'s
- * `via`:
+ * `sauce_intent_publish` tool (`intentFundVia`):
  *
  *  - `"transfer"` (the default): each reward token transferred to the vault, and the native amount
  *    sent to it, then `Portal.publish`. No approval. See the module doc.

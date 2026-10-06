@@ -35,6 +35,8 @@ import { POT_SALT } from "../../sdk/test/evm/gated-engine.js";
 import { legs, program, routeProgram, type Leg } from "../../docs/examples/router-route.js";
 import { minOut as swapFloor, payload as swapPayload } from "../../docs/examples/router-swap.js";
 import { onBase, onOptimism } from "../../docs/examples/registry-names.js";
+import { built as firstIntent } from "../../docs/examples/first-intent.js";
+import { v12KitchenAddress } from "../../sdk/dist/deployments/v12-addresses.js";
 import { OWNER_KEY, REPO_ROOT, skipReason, startAnvil, type Anvil } from "./anvil.js";
 import { balanceOf, setBalance, type BalanceSlot } from "./swap-venues.js";
 
@@ -548,6 +550,34 @@ describe("venue-where-deployed and cross-chain-intent on Base state", SUITE, () 
     );
     assert.deepEqual([denormalize(cooked!.target), cooked!.value], [pot, ETHEREUM_FEE]);
     assert.ok(cooked!.data.toLowerCase().includes(RECIPIENT.slice(2).toLowerCase()));
+  });
+
+  it("first-intent.ts's cook publishes its intent from a Pot holding the reward, its hash read from the log", async () => {
+    const reward = 1_010_000n;
+    await setBalance(env, USDC, { slot: 9n }, env.pot, reward);
+    const fee = await env.publicClient.readContract({
+      address: getAddress(v12KitchenAddress()),
+      abi: parseAbi(["function executionFee() view returns (uint256)"]),
+      functionName: "executionFee",
+    });
+    const cook = firstIntent.cook(env.pot, fee);
+    const receipt = await env.send({ to: cook.to, data: cook.data, value: cook.value });
+    assert.equal(receipt.status, "success");
+    const [published, ...more] = firstIntent.intents(receipt.logs);
+    assert.equal(more.length, 0, "one intent published");
+    assert.equal(published!.destination.slug, "ethereum");
+    // The hash the Portal announced, which the intent rebuilt from its log hashes to.
+    assert.equal(published!.intentHash, routes.hashIntent(published!.intent).intentHash);
+    assert.deepEqual(
+      published!.intent.reward.tokens.map((t) => [denormalize(t.token), t.amount]),
+      [[getAddress(USDC), reward]],
+    );
+    const vault = routes.predictIntentVault(published!.intent, { portal: published!.portal });
+    assert.equal(await balanceOf(env, USDC, vault), reward);
+    assert.deepEqual(
+      published!.intent.route.tokens.map((t) => [denormalize(t.token), t.amount]),
+      [[getAddress(ETHEREUM_USDC), 1_000_000n]],
+    );
   });
 
   it("below `minAmount` the whole transaction reverts and nothing is published", async () => {

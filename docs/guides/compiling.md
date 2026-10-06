@@ -11,11 +11,11 @@ Use the **route path** when the program is part of an Eco intent and should say 
 ready-made call. Use the **raw compiler** when you want a reusable program that takes values at
 execution time, a Solana account manifest, or full control over module resolution.
 
-| Entry point                                                         | You supply                                                  | The SDK supplies                                                                                   |
-| ------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `Base.Portal…then(body)` / `routes.openRoute(...)`                  | Body, and the intent's steps or route options               | Chain defines, the ambient token module, registry rewrites, the EVM Pot and engine, a built intent |
-| `routes.compileSauceRoute(destination, source, execution, options)` | Source, destination, execution settings                     | Registry rewrites, token defines, one encoded route call                                           |
-| `compile({ target, resolve, ... })`                                 | All source and dependency resolution, and compiler settings | Nothing — you get the compiler's own result                                                        |
+| Entry point                                                         | You supply                                                  | The SDK supplies                                                                              |
+| ------------------------------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `Base.Portal…then(body)` / `routes.compileSauceProgram(...)`        | Body and the intent's steps, or a program file              | The chain's names, the ambient token module, the EVM Pot and engine, the program and its cook |
+| `routes.compileSauceRoute(destination, source, execution, options)` | Source, destination, execution settings                     | The chain's names, one encoded route call                                                     |
+| `compile({ target, resolve, ... })`                                 | All source and dependency resolution, and compiler settings | Nothing — you get the compiler's own result                                                   |
 
 From a terminal, [`sauce compile`](cli.md) compiles a program file with everything the first row
 supplies except the intent, and `sauce tx` builds the call that runs it on your own Pot.

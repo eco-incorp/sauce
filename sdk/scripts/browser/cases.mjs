@@ -44,8 +44,8 @@ export function beforeReady() {
 export async function run(source) {
   await ready(source);
 
-  // The README's route example, verbatim: `Base(() => { USDC.approve(...) }, options).reward(...)`.
-  // Imported only now, because building the route compiles it.
+  // The README's intent example, verbatim: `Base.Portal.send(...).then(() => { USDC.approve(...) })`.
+  // Imported only now, because building the intent compiles it.
   const { built } = await import("./readme-route.mjs");
 
   // A raw compile with compact entry arguments, on both targets, round-tripped through the codec.
@@ -139,9 +139,10 @@ export async function run(source) {
   );
 
   return {
+    // The intent's salt is random per compile, so its length and its cook's Pot stand for its bytes.
     readme: {
-      bytecode: built.compiled.bytecode.map(hex),
-      intentHash: built.hash().intentHash,
+      bytes: built.program.bytecode.length,
+      pot: built.cook({ owner: "0x4444444444444444444444444444444444444444" }, 0n).to,
     },
     raw,
     settle: hex(settle.bytecode),

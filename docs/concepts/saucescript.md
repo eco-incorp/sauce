@@ -169,8 +169,8 @@ defines replace same-named module `const` values. Pick specific define names
 because that replacement also reaches imported dependencies.
 
 The SDK adds chain selection, token symbols, and protocol member access around
-that compiler API. `openRoute` and chain helpers supply chain defines and the
-default `@sauce/token` ambient module. Direct `compileSauceRoute()` accepts an
+that compiler API. `compileSauceProgram`, and so a TypeScript intent, supplies the chain's names
+and the default `@sauce/token` ambient module. Direct `compileSauceRoute()` accepts an
 explicit `ambient` list and does not add that default list. Raw `compile()` adds
 neither the SDK registry nor its filesystem resolver. See the
 [compilation guide](../guides/compiling.md) for the exact boundary.

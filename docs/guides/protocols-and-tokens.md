@@ -184,7 +184,7 @@ The raw ABI call is **not** SafeERC20: `Erc20.ERC20.at(address).transfer(...)`, 
 reverts on a token that returns nothing and accepts one that returns `false`. Use it only when that
 is the behavior you want; otherwise use one of the spellings above.
 
-Use `tokenDefines` on `routes.openRoute`'s options to add or override symbols, or `tokens` on `compileSauceRoute`'s compile options. Overrides merge per symbol with the registry. These maps contain **addresses**; an intent's `.receive(...)`, or a route's `tokens` option, instead declares the **token amounts** a solver must deliver for the route.
+Use `tokens` in the compile options — `compileSauceProgram`'s, `compileSauceRoute`'s, or `.source(chain, options)` for a TypeScript intent — to add or override symbols. Overrides merge per symbol with the registry. These maps contain **addresses**; an intent's `.receive(...)`, or a route's `tokens` option, instead declares the **token amounts** a solver must deliver for the route.
 
 ```ts
 import { routes } from "@eco-incorp/sauce";

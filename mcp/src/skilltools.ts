@@ -62,7 +62,7 @@ export const DEV_TOPICS: ReadonlyArray<{
   },
   {
     topic: "intents",
-    about: "cross-chain intents from TypeScript: openRoute, rewards, publishing, nesting",
+    about: "cross-chain intents from TypeScript: the Portal form, its program and cook, publishing",
     keywords: [
       "intent",
       "intents",

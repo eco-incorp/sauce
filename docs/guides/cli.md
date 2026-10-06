@@ -500,7 +500,7 @@ either. `sauce pot --format cast` does the same for the deployment.
 ## Writing the program file
 
 The file is compiled for the chain as a standalone program (`routes.compileSauceProgram`, the
-compile half of `routes.compileSauceRoute`, with the chain's names `openRoute` gives a route body):
+compile half of `routes.compileSauceRoute`, with the chain's names and the default token module):
 the chain's token symbols (`USDC`), protocol namespaces (`Uniswap.UniversalRouter`), `chainId`, the
 `@sauce/token` functions (`transfer(token, to, amount)` and the rest, with no import), the token
 syntax (`USDC.transfer(...)`, `Token(address).approve(...)`, both SafeERC20) and

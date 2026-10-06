@@ -139,8 +139,8 @@ a recorded address, not proof of live code on the chain.
   contracts by namespace (`"UniswapV3.Factory"`), and a swap may give its pool by its factory's
   key (`factory` and `fee`). `compileProgram(program, { chain })` compiles it for any chain that
   has those names; a name the chain lacks throws `ProgramError`, whose `issues` and `chain` say
-  which. `argument` actions become runtime amounts. `programIntent(...)`, `quoteAction(...)` and
-  `compileSplitSwap(...)` resolve names on `chain` the same way. Reference:
+  which. `argument` actions become runtime amounts. `quoteAction(...)` and `compileSplitSwap(...)`
+  resolve names on `chain` the same way. Reference:
   `node_modules/@eco-incorp/sauce/docs/guides/actions.md`; see
   [examples/actions.mts](examples/actions.mts), and `sauce-actions` for writing the documents.
 - **Settlement verification** (`/verify`, `/svm/verify`): `validateSettleProgram`,
@@ -149,7 +149,7 @@ a recorded address, not proof of live code on the chain.
   it). See [examples/verify.mts](examples/verify.mts).
 - **Solana execution** (`/svm`): the Kitchen client,
   `createSauceSvmClient({ rpcUrl, payer, programId, kitchen, maxExecutionFee })`, with no default
-  endpoint; the SVM route helpers (`Solana(...)` routes, `buildSauceSvmCall`) do not produce an
+  endpoint; the SVM route helpers (`compileSauceRoute("solana", …)`, `buildSauceSvmCall`) do not produce an
   instruction the engine accepts, so build execution with the Kitchen client. `USDC_MINT` is the
   mainnet USDC mint. The token builder generates Token-2022 and `TransferChecked` programs:
   `token.Token.transfer({ amount, svm: { ... } }).source("svm")`, with top-level
@@ -168,24 +168,27 @@ a recorded address, not proof of live code on the chain.
   `fulfill`), `destinationPot(chain)` the shared Pot and
   `routes.sauceEvmDeployPotCall({ owner: ecoRoutesExecutor(chain), salt: SAUCE_INTENT_POT_SALT })`
   its deploy; the intents runner builds a rehearsal with them. In TypeScript,
-  `Base.Portal.send(reward).source("ethereum").refundee(owner).receive(delivery).fee(fee).then(program)`
-  builds an intent around a program for the destination, `built`, taking the modifiers a program
-  takes; there `.source`, `.refundee` and `.fee` are required, since the host runs on no chain and
-  reads none. For the source side, `built.sourceTxs()` (`routes.intentSourceTxs` for an intent
-  built some other way) is the funding and publication in order: a transfer of each reward token to the vault, then `publish`
-  (`{ fundVia: "publishAndFund" }` for the approvals and `publishAndFund`). Pass `{ vault }` read with
-  `routes.intentVaultAddressCall`: it is checked against `routes.predictIntentVault`, the package's
-  own computation. `routes.publishTx`, `routes.publishAndFundTx`, `routes.approvalTxs` and
-  `routes.isIntentFundedCall` build the single calls (`{ to, data }`, with `decode` for a read).
+  `Base.Portal.send(reward).source(Ethereum, options).refundee(owner).receive(delivery).fee(fee).then(body)`
+  writes the statement a program opens that intent with, compiles it for the source chain and
+  returns `{ source, program, cook(target, value), intents(logs) }`: the same program the
+  statement compiles to in a file, taking the modifiers a program takes; there `.source` is
+  required, since the host runs on no chain, and `options` are the compile's (`defines` the body
+  reads, `intents` defaults). Its cook runs on a Pot on the source chain (`{ owner }` or the Pot's
+  address, the source Kitchen's fee as value), which pays the reward into the intent's vault and
+  publishes it, so the Pot holds the reward first. There is no offline hash: `intents(logs)` reads
+  each published intent and its hash from the `IntentPublished` in the cook's receipt or
+  rehearsal (`routes.loggedIntents`). For an intent built some other way,
+  `routes.intentSourceTxs` is a wallet's funding and publication in order: a transfer of each
+  reward token to the vault, then `publish` (`{ fundVia: "publishAndFund" }` for the approvals and
+  `publishAndFund`); pass `{ vault }` read with `routes.intentVaultAddressCall`, checked against
+  `routes.predictIntentVault`. `routes.publishTx`, `routes.publishAndFundTx`, `routes.approvalTxs`
+  and `routes.isIntentFundedCall` build the single calls (`{ to, data }`, with `decode` for a read).
 - **Nested intents** are written in the program: a body that opens the next intent with
   `Chain.Portal.send(reward).receive(delivery).then(() => { ... })` (`sauce-intents`, Cascades).
   In a typed closure the chain is the imported export, which typechecks there, modifiers included. `routes.compileSauceProgram`
   lists each intent's body in `.bodies`, its destination and its program. The intents themselves
   are encoded as the program runs, so every one is published by a cook, and read back from the
-  cook's logs, in its receipt or rehearsal (`routes.intentFromPublished`). The lower-level builder, `routes.openRoute(chain, body, options).nest(child,
-{ via })`, attaches a child built in TypeScript instead, with options of its own: by default
-  (`via: "transfer"`) the parent's route funds the child by a transfer into its vault, with no
-  publication of its own; `via: "publishAndFund"` publishes and funds it for public discovery.
+  cook's logs, in its receipt or rehearsal (`routes.intentFromPublished`).
 
 ## Example
 

@@ -13,45 +13,54 @@ the package once globally: `npm i -g @eco-incorp/sauce`, then `sauce --version`
 
 ## Build your first intent
 
-This is a complete program. It builds an Eco intent offline: the refundee and the fee are fixtures
-and nothing is sent to a chain.
+This is a complete program. It builds an Eco intent offline: the owner, the reward and the fees are
+fixtures and nothing is sent to a chain.
 
 ```ts
-import { Base } from "@eco-incorp/sauce";
+import { Base, Ethereum } from "@eco-incorp/sauce";
 
-const executionFee = 1_000n; // Fixture: read Base's Kitchen fee with destinationExecutionFee().
+const owner = "0x4444444444444444444444444444444444444444";
+const kitchenFee = 1_000n; // Fixture: read each Kitchen's fee with destinationExecutionFee().
 
-const built = Base.Portal.send([])
-  .source("ethereum")
-  .refundee("0x4444444444444444444444444444444444444444")
-  .receive([])
-  .fee(executionFee)
+const built = Base.Portal.send({ token: Ethereum.USDC.address, amount: 10_000n })
+  .source(Ethereum)
+  .refundee(owner)
+  .receive()
+  .fee(kitchenFee)
   .then(() => {
     USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
   });
 
-console.log(built.hash().intentHash);
+const cook = built.cook({ owner }, kitchenFee); // { to, data, value }, from your Pot on Ethereum
+console.log(`${built.program.bytecode.length} bytes, cooked on ${cook.to}`);
 ```
 
 `Base.Portal` names the **destination**, the chain the body runs on; `.send(...)` names the reward
-and `.source(...)` the **source**, where it is escrowed. `.receive(...)` names what a solver
-delivers on Base for the body to use: nothing, here. That one expression does what an intent
-otherwise takes by hand:
+and `.source(...)` the **source**, where it is escrowed and the intent is published. `.receive(...)`
+names what a solver delivers on Base for the body to use: nothing, here. `.then(...)` writes the
+statement a Sauce program opens that intent with and compiles it for Ethereum: the intent is the
+same one a program in a file opens. That one expression does what an intent otherwise takes by
+hand:
 
 - looks up USDC and the Universal Router on Base, and binds the ERC-20 ABI;
-- compiles the body, so there is no contract to write or deploy;
-- derives the Pot and engine, and encodes the `cook(engine, program)` call on that Pot — the shared
-  one the solver deploys for that Portal;
+- compiles the body for Base, so there is no contract to write or deploy;
+- derives the destination's Pot and engine, and encodes the `cook(engine, program)` call on that
+  Pot — the shared one the solver deploys for that Portal;
 - looks up the eco-routes Portal on both chains, and the prover for the pair;
 - sets the route's native amount, what the solver sends with the fill, to what its calls spend: here
   the cook's fee;
-- defaults the deadlines, the fill five minutes from now and the reward's seven days after it;
-- assembles the route and reward, which is all `built.hash()` and the source Portal requests need.
+- defaults the deadlines, the fill five minutes from when the cook runs and the reward's seven days
+  after it, and a random salt;
+- compiles the program that opens it, and its cook: the Pot pays the reward into the intent's vault
+  and publishes it.
 
-What stays yours: the refundee, the Kitchen fee, and a reward that pays a solver to fill the intent.
-The fee is on-chain state, so the SDK builds its read, `destinationExecutionFee()`, and does not
-guess it. A modifier sets anything else ([Intent defaults](../reference/intent-defaults.md)). The
-SDK sends nothing, and it does not price the reward.
+What stays yours: the refundee, the Kitchen fees, and a reward that pays a solver to fill the
+intent, which your Pot must hold when the cook runs. The fees are on-chain state, so the SDK builds
+their read, `destinationExecutionFee()`, and does not guess them. A modifier sets anything else
+([Intent defaults](../reference/intent-defaults.md)). The SDK sends nothing, and it does not price
+the reward. The intent's hash is the Portal's: send the cook, or rehearse it with
+`eth_simulateV1`, and `built.intents(logs)` reads each intent it published, with its hash, from the
+`IntentPublished` in its logs.
 
 Ethereum and Base are two of the three chains the initial release supports, with Solana. Every
 other chain in the registry is a preview chain: the SDK builds for it at your own risk, and the
@@ -62,8 +71,9 @@ other chain in the registry is a preview chain: the SDK builds for it at your ow
 
 **The callback is source, not a function.** It is read with `Function.prototype.toString()`, parsed
 and compiled. It never runs as JavaScript, so it captures nothing: a surrounding `const amount` is
-invisible inside it. Write application values into the body as literals, or write the body as a
-string with them in it. If your bundler rewrites function bodies, use a string or a source file.
+invisible inside it. Write application values into the body as literals, pass them as defines
+(`.source(Ethereum, { defines: { AMOUNT: amount } })`), or write the body as a string with them in
+it. If your bundler rewrites function bodies, use a string or a source file.
 
 **`USDC` and `Uniswap` are not imports.** They are program syntax the compiler resolves against the
 destination chain. The package ships TypeScript declarations so a typed body checks, but there is no
@@ -83,8 +93,8 @@ The destination assets and the source reward are separate things. What `.receive
 arrives at the Portal's Executor, and the intent moves it into the Pot before the body runs. What
 `.send(...)` names is paid into the intent's vault on the source chain, which escrows it.
 
-[first-intent.ts](../examples/first-intent.ts) builds both sides and returns the source transaction
-requests. Read [create an intent](intents.md) before submitting them, and
+[first-intent.ts](../examples/first-intent.ts) builds both sides and the cook that publishes them.
+Read [create an intent](intents.md) before sending it, and
 [nested intents](nested-intents.md) to chain a second execution onto the first.
 
 ## Compile without an intent
@@ -95,4 +105,4 @@ specialised at compile time.
 
 [compile-program.ts](../examples/compile-program.ts) compiles a typed entry point and appends compact
 arguments. [Compiling programs](compiling.md) explains module resolution and how the raw compiler
-differs from the route wrapper.
+differs from the SDK's program compile.

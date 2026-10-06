@@ -12,18 +12,18 @@ delivers on the destination for the body to use.
 Every chain is a named export; import the ones you use.
 
 ```ts
-import { Base } from "@eco-incorp/sauce";
+import { Base, Ethereum } from "@eco-incorp/sauce";
 import type { routes } from "@eco-incorp/sauce";
 
 export function buildApprovalIntent(
   reward: routes.PortalReward,
-  creator: routes.PortalAddress,
+  refundee: routes.PortalAddress,
   executionFee: bigint,
 ) {
   return Base.Portal.send(reward)
-    .source("ethereum")
-    .refundee(creator)
-    .receive([])
+    .source(Ethereum)
+    .refundee(refundee)
+    .receive()
     .fee(executionFee)
     .then(() => {
       USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
@@ -31,12 +31,16 @@ export function buildApprovalIntent(
 }
 ```
 
-The SDK builds the intent and the transaction requests, and sends nothing. It looks up the Portals
-and the prover, derives the destination Pot and engine, sets the native amount the solver sends to
-what the route's calls spend, and resolves registered token and protocol addresses. You choose the
-refundee, read the Kitchen fee, fund the reward and submit; the deadlines, the prover and the salt
-have defaults ([Intent defaults](../reference/intent-defaults.md)). A solver then decides
-whether to fulfill it; the SDK does not price the reward or promise a fill.
+In TypeScript, `.then(...)` writes the statement a program opens that intent with, compiles it for
+the source chain, and returns the program and its cook (`routes.HostIntent`); it sends nothing. The
+intent is the one the same statement opens in a file: an intent is always published by a program,
+cooked on a Pot on its source chain, and its hash is the one the Portal announces, read from the
+`IntentPublished` in the cook's logs (`built.intents(logs)`). The SDK looks up the Portals and the
+prover, derives the destination Pot and engine, sets the native amount the solver sends to what the
+route's calls spend, and resolves registered token and protocol addresses. You choose the refundee,
+read the Kitchen fees, fund your Pot with the reward and send the cook; the deadlines, the prover
+and the salt have defaults ([Intent defaults](../reference/intent-defaults.md)). A solver then
+decides whether to fulfill it; the SDK does not price the reward or promise a fill.
 
 The SDK builds an intent between any two registry chains. For the initial release, Sauce supports
 transactions on Ethereum, Base and Solana, and the [`sauce` command](cli.md) and the
@@ -51,26 +55,26 @@ one is at your own risk.
 An intent has two sides, and each step or modifier sets one part of it. Within the reward's steps
 and within the route's, modifiers come in any order, each at most once; `.then(...)` ends the intent.
 
-| Step or modifier                    | Sets                                                                           | When you omit it                                                              |
-| ----------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| `Base.Portal`                       | Destination chain, where the body runs                                         | Required                                                                      |
-| `.send(...items)`                   | The reward: `{ token, amount }` items, and native coin as `{ native: amount }` | Required; in TypeScript, `.send()` offers nothing                             |
-| `.source(chain)`, after `.send`     | Chain where the reward is escrowed and the intent published                    | Required in TypeScript; in a program, the chain it runs on                    |
-| `.refundee(address)`, after `.send` | The refund address: who may reclaim an unearned reward                         | Required; see [the refundee](#where-each-value-comes-from)                    |
-| `.deadline(t)`, after `.send`       | From when an unproven reward may be refunded                                   | The fill deadline plus seven days                                             |
-| `.prover(address)`, after `.send`   | The source chain's prover, which accepts the proof of the fill                 | The registry's prover for the pair                                            |
-| `.receive(...items)`                | Destination tokens the solver delivers to the Portal's Executor                | Required; `.receive()` names none                                             |
-| `.fee(wei)`, after `.receive`       | The destination Kitchen's fee the body's cook pays                             | Required in TypeScript; see [the fee](#where-each-value-comes-from)           |
-| `.deadline(t)`, after `.receive`    | The last second the intent may be filled                                       | Five minutes after it is built                                                |
-| `.salt(s)`, after `.receive`        | The route's salt                                                               | 32 random bytes, picked when it is built                                      |
-| `.nest(child, options)`             | A child intent the route funds (TypeScript)                                    | None: [the TypeScript builder](nested-intents.md#the-typescript-builder-nest) |
-| `.then(body)`                       | The body: a closure or a source string                                         | Required                                                                      |
+| Step or modifier                    | Sets                                                                           | When you omit it                                           |
+| ----------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| `Base.Portal`                       | Destination chain, where the body runs                                         | Required                                                   |
+| `.send(...items)`                   | The reward: `{ token, amount }` items, and native coin as `{ native: amount }` | Required; it must offer something                          |
+| `.source(chain)`, after `.send`     | Chain where the reward is escrowed and the intent published                    | Required in TypeScript; in a program, the chain it runs on |
+| `.refundee(address)`, after `.send` | The refund address: who may reclaim an unearned reward                         | Required; see [the refundee](#where-each-value-comes-from) |
+| `.deadline(t)`, after `.send`       | From when an unproven reward may be refunded                                   | The fill deadline plus seven days                          |
+| `.prover(address)`, after `.send`   | The source chain's prover, which accepts the proof of the fill                 | The registry's prover for the pair                         |
+| `.receive(...items)`                | Destination tokens the solver delivers to the Portal's Executor                | Required; `.receive()` names none                          |
+| `.fee(wei)`, after `.receive`       | The destination Kitchen's fee the body's cook pays                             | See [the fee](#where-each-value-comes-from)                |
+| `.deadline(t)`, after `.receive`    | The last second the intent may be filled                                       | Five minutes after the intent opens                        |
+| `.salt(s)`, after `.receive`        | The route's salt                                                               | 32 random bytes, picked per compile                        |
+| `.then(body)`                       | The body: a closure, or the statements of one                                  | Required                                                   |
 
 [Intent defaults](../reference/intent-defaults.md) gives each default and why it is Eco's.
-TypeScript builds the intent where no chain is read, so the source and the fee have no default
-there; the refundee has none anywhere. Overriding what the registry derives — the destination
-Portal, the Pot, the engine, the route's native amount, the source Portal — is the lower-level
-builder's, `routes.openRoute(chain, body, options)` ([Routes API](../api/routes.md)).
+TypeScript builds the intent where no chain is read, so the source has no default there; the
+refundee has none anywhere. Overriding what the registry derives — the source and destination
+Portals, the destination Pot and engine — is the compile's `intents` options (`sourcePortal`,
+`destinationPortal`, `pot`, `engine`), which TypeScript passes as `.source(chain, options)`
+([Routes API](../api/routes.md)).
 
 The prover is the one `ecoRoutesProver(source, destination)` names: the first of eco-routes'
 provers, the HyperProver first, that the registry records on both chains, in the deployment
@@ -88,20 +92,20 @@ On Arc the native coin is USDC, so every one of these native amounts is USDC at 
 while `tokens` amounts of Arc's `USDC` are 6 decimals — and both draw on one balance. See
 [Arc: USDC is the native coin](../reference/chains/arc.md#notes).
 
-Deadlines are absolute Unix timestamps in seconds. The route's deadline limits destination fulfillment. The reward's allows source refunds when no valid proof exists; leave time for fulfillment and proof delivery before it. Left out, each counts from when the intent is built: the fill deadline five minutes later, the reward's seven days after that, so each build is a new intent.
+Deadlines are absolute Unix timestamps in seconds. The route's deadline limits destination fulfillment. The reward's allows source refunds when no valid proof exists; leave time for fulfillment and proof delivery before it. Left out, each counts from when the intent opens: the fill deadline five minutes later, the reward's seven days after that, so each publication is a new intent.
 
 ## The destination Pot
 
 A route call runs as the Executor of the Portal that fulfils it, and a Pot's `cook` accepts only
 its owner. So the Pot's owner must be the **`executor()` of the Portal the route records** —
-`options.portal` when you set it on `routes.openRoute`, the registry's otherwise. A user-owned or solver-owned Pot rejects
+`intents.destinationPortal` when you set it, the registry's otherwise. A user-owned or solver-owned Pot rejects
 the call with `NotOwner()`.
 
 You do not supply one. The builder uses the Pot an intent opened in a program
 [derives](#the-destination-pot-is-derived) — CREATE2 from the released Kitchen over that Executor
 and salt zero (`SAUCE_INTENT_POT_SALT`) — and the released engine. That is the one Pot the solver
-deploys per Portal and every intent through that Portal shares. `routes.openRoute` takes
-`execution.pot` and `execution.engine` as overrides. `destinationPot(Base.chain, { portal })`
+deploys per Portal and every intent through that Portal shares. The compile options
+`intents.pot` and `intents.engine` override them. `destinationPot(Base.chain, { portal })`
 returns that address.
 
 The address also follows the pinned Kitchen release's Pot bytecode, whose hash is part of every Pot
@@ -134,8 +138,8 @@ that Pot must be deployed on the destination before an intent to it can run; the
 alone does not confirm readiness.
 
 A solver fills an intent only on the Portal it serves: an intent published on a different Portal
-deployment is not one it can fill. Set `options.portal` or `options.sourcePortal` only to a Portal
-you have confirmed a solver serves.
+deployment is not one it can fill. Set `intents.destinationPortal` or `intents.sourcePortal` only to
+a Portal you have confirmed a solver serves.
 
 The deployment helpers return the released addresses. They do not check that code is live at those
 addresses on your chain. The same helper confirms the Kitchen and engine have code, and reads the
@@ -160,19 +164,20 @@ interface TransferIntentConfig {
   source: routes.ChainRef;
   rewardToken: routes.AddressInput;
   rewardAmount: bigint;
-  creator: routes.AddressInput;
+  refundee: routes.AddressInput;
   routeDeadline: bigint;
   rewardDeadline: bigint;
 }
 
 export function buildBaseTransfer(config: TransferIntentConfig) {
   const amount = 1_000_000n;
-  // The body is SauceScript: the values it needs are written into its text.
-  const body = `function main() { Token(${config.baseUsdc}).transfer(${config.recipient}, ${amount}); }`;
+  // The body is SauceScript, the statements of the body it runs: the values it needs are written
+  // into its text.
+  const body = `Token(${config.baseUsdc}).transfer(${config.recipient}, ${amount});`;
 
   return Base.Portal.send({ token: config.rewardToken, amount: config.rewardAmount })
     .source(config.source)
-    .refundee(config.creator)
+    .refundee(config.refundee)
     .deadline(config.rewardDeadline)
     .receive({ token: config.baseUsdc, amount })
     .fee(config.executionFee)
@@ -181,7 +186,7 @@ export function buildBaseTransfer(config: TransferIntentConfig) {
 }
 ```
 
-The submission helpers below generate EVM calldata and reject an SVM source, so an intent you submit with them is EVM-sourced. Its **destination** may be Solana — the encoding supports it — but see the [Solana guide](solana.md) for how that execution is actually built.
+An intent is published from an EVM chain, by a cook on a Pot there. Its **destination** may be Solana — the encoding supports it — but see the [Solana guide](solana.md) for how that execution is actually built.
 
 The route has two calls: the delivery into the Pot, and the cook.
 `executionFee` is the destination Kitchen quote obtained above, and the route's `nativeAmount`, which the solver sends, is that fee. The source reward must separately compensate the solver for delivery, fees, and gas; the SDK does not price it.
@@ -210,9 +215,7 @@ source. No Portal, prover, selector, encoding or approval appears, because none 
 decision you are making. The modifiers are the same, and so are their
 [defaults](../reference/intent-defaults.md); a modifier's value may be one the program computes, such
 as `.deadline(ctx.timestamp() + 3600)`. This is how intents are
-nested: the [nested intents](nested-intents.md) guide opens one inside another's body. The closest
-TypeScript form is a [dynamic nest](../api/routes.md#dynamic-children), where you build a
-placeholder child, name the measurement and count each placeholder's occurrences yourself.
+nested: the [nested intents](nested-intents.md) guide opens one inside another's body.
 
 ### The body is a Sauce program
 
@@ -558,7 +561,7 @@ reads the same way: it names the variable that is not declared.
 
 A callback is read with `Function.prototype.toString()`, parsed, and compiled as SauceScript. It is never invoked as a JavaScript callback and captures no outer variables. An `amount` in surrounding JavaScript does not become a value inside the program.
 
-Use literals in a callback. A value of your application goes into the program's text: write the body as a source string with the value in it, as [above](#build-a-base-usdc-transfer-intent), or write the intent as a file whose `main` takes the value as an argument. Local declarations in the program take precedence over ambient names.
+Use literals in a callback. A value of your application goes into the program's text: write the body as a source string with the value in it, as [above](#build-a-base-usdc-transfer-intent), pass it as a define (`.source(chain, { defines: { AMOUNT: amount } })`, read as `AMOUNT` in the body), or write the intent as a file whose `main` takes the value as an argument. Local declarations in the program take precedence over ambient names.
 
 A chain the callback opens an intent on, `Ethereum.Portal.send(…).receive(…).then(() => { … })`, is the imported chain export, whose `Portal` carries that SauceScript form as well as the host one; import it as you import `Base` ([nested intents](nested-intents.md)). The package declares SauceScript's builtins for TypeScript — `ctx`, `crypto.keccak256`, `hex`, `Math.mulDiv`, `require(condition, message)`, `abi`, `evm`, `svm`, `.toBytesBe(...)` and the rest of the [reference](../reference/saucescript.md) — as it declares token symbols and protocols, so a typed callback that uses them typechecks. The declarations install nothing at run time, and a builtin's comment says which targets have it: TypeScript does not know which chain the callback compiles for.
 
@@ -566,38 +569,37 @@ Callbacks must be synchronous and take no parameters. Bound/native functions, ge
 
 A function the callback declares in its own body is a helper of the program: SauceScript has no nested functions, so it is declared beside `main`, and an intent opened inside the callback can call it like any other function of the file. Its annotations are whatever the host's TypeScript compilation left in the callback's text, which is usually none, so a helper that takes or returns an array or a record belongs in a source string.
 
-The Portal form, like `routes.openRoute(...)`, adds the SDK's default ambient token module, enabling function forms such as `approve(tokenAddress, spender, amount)`. Direct `compileSauceRoute(...)` does not automatically add that ambient module. The token and protocol member syntax described in [protocols and tokens](protocols-and-tokens.md) is a separate rewrite that works on both paths; its writes import the same module's functions themselves, so they have the same `SafeERC20` semantics either way.
+A program compile (`compileSauceProgram`, and so the Portal form and every body) adds the SDK's default ambient token module, enabling function forms such as `approve(tokenAddress, spender, amount)`. Direct `compileSauceRoute(...)` does not automatically add that ambient module. The token and protocol member syntax described in [protocols and tokens](protocols-and-tokens.md) works on both paths; its writes are the same module's functions, so they have the same `SafeERC20` semantics either way.
 
-## Submit the source reward
+## Publish it: the cook
 
-For a built intent, prepare the source-chain requests:
+An intent is published by its cook. `built.cook(target, value)` is `Pot.cook(engine, program)` on
+`target` — your Pot's address, or `{ owner, salt? }` — with `value` the source Kitchen's fee: send
+it from the Pot's owner. The program it runs pays each reward into its intent's vault, then calls
+`Portal.publish`, in one transaction: by default an ERC-20 `transfer` per reward token (for the
+largest amount listed for it) and a plain send of the native amount. The Portal counts an intent
+funded when its vault holds the reward (`isIntentFunded`), and that is what a solver checks after
+it sees `IntentPublished`. No approval is asked for, so none is left standing and a USDT-style token
+needs no reset. With `intents.fundVia: "publishAndFund"` the program approves the source Portal
+instead (reset to zero first where an allowance stands) and calls `publishAndFund`, which pulls the
+reward, records the intent `Funded` and emits `IntentFunded`: choose it when something you rely on
+reads that event or status rather than the vault's balance.
 
-```ts
-import type { routes } from "@eco-incorp/sauce";
+**The Pot holds the reward when the cook runs.** Send it there first, or have
+[`sauce run --fund`](cli.md#intents-sauce-run-or-sauce-intent) pull it from your wallet in the same
+cook, as [`sauce intent publish`](cli.md#intents-sauce-run-or-sauce-intent) does for a file. The Pot
+must be deployed (`routes.sauceEvmDeployPotCall({ owner, salt })`).
 
-export async function sourceTransactions(
-  built: routes.BuiltIntent,
-  ethCall: (request: Pick<routes.PortalReadCall<routes.Hex>, "to" | "data">) => Promise<routes.Hex>,
-) {
-  const read = built.vaultCall();
-  const vault = read.decode(await ethCall({ to: read.to, data: read.data }));
-  return built.sourceTxs({ vault });
-}
-```
+**Read the intent from the cook's logs.** `built.intents(receipt.logs)` returns each intent the
+source chain's Portal published, rebuilt from its `IntentPublished` and held to the hash it
+announces, with its destination and the Portal that published it, where it is claimed and
+refunded; a rehearsal's logs (`eth_simulateV1`) give the same before anything is sent. That is the
+intent every later step takes.
 
-Each request is `{ to, data, value }`. Send them from the intended funder on `built.source`, in order. By default an intent is funded **by transfer to its vault**: one ERC-20 `transfer` per reward token to the vault (for the largest amount listed for it), a plain send of the native amount, then `Portal.publish`. The Portal counts an intent funded when its vault holds the reward (`isIntentFunded`), and that is what a solver checks after it sees `IntentPublished`. No approval is asked for, so none is left standing and a USDT-style token needs no reset. `sourceTxs()` covers only the root reward, even when the intent has children.
-
-**Pass the vault you read.** `vault` is checked against `predictVault()`, the SDK's own derivation, and a mismatch throws `IntentVaultMismatchError` before anything is built: a transfer is final, so an address two sources disagree on is not paid. Without `vault`, the derivation alone is used. It is held to the `intentVaultAddress` of every eco-routes Portal the SDK records.
-
-**Send the transfers first, and publish once they have landed.** The solver then sees `IntentPublished` with the vault already funded. If `publish` fails, the reward stays in the vault: publish again later, or refund it after the reward deadline. A token whose `transfer` returns `false` instead of reverting leaves the vault short, so check `fundedCall()` before sending `publish`. An intent file is published another way:
-[`sauce intent publish`](cli.md#intents-sauce-run-or-sauce-intent) cooks it on your Pot, which pays
-each reward into its vault and publishes it in one transaction.
-
-`sourceTxs({ fundVia: "publishAndFund" })` returns `[...approvals(), publishAndFundCalldata(allowPartial)]` instead. ERC-20 approvals authorize the **source Portal**, which pulls tokens into the vault, records the intent `Funded` and emits `IntentFunded`. Native rewards are included as transaction `value`. Wait for successful approvals before funding. `allowPartial` defaults to `false`; use partial funding only when the application deliberately supports it. Choose this mode when something you rely on reads the `IntentFunded` event or the `Funded` status rather than the vault's balance.
-
-`publishCalldata()` publishes without funding, and `fundCalldata(allowPartial)` funds separately. These methods do no RPC and send no transactions.
-
-The helpers address the registry's Portal on the source chain. For a deployment the registry does not carry, pass `{ portal }` to each helper, or set `sourcePortal` when building with `routes.openRoute`. The destination `portal` is never silently reused as the submission target.
+For an intent built some other way, `routes.intentSourceTxs(intent, { portal }, options)` builds
+the wallet's own funding and `publish` requests, the same two modes; `predictIntentVault` and
+`intentVaultAddressCall` give its vault, and a `vault` you read is checked against the prediction
+(`IntentVaultMismatchError`).
 
 ## Rehearse the fill on the destination
 
@@ -610,14 +612,15 @@ fails shows up only there. A solver sends two things on the destination chain:
 - `Portal.fulfill(intentHash, route, rewardHash, claimant)`, with `route.nativeAmount` as its value
   — the Kitchen's fee for each cook in the route, plus any native the calls spend.
 
-`routes.fulfillApprovalTxs(built.intent)` and `routes.fulfillTx(built.intent, { claimant })` build
-them, for an EVM destination:
+`routes.fulfillApprovalTxs(intent)` and `routes.fulfillTx(intent, { claimant })` build them, for an
+EVM destination, from the intent as published:
 
 ```ts
 import { routes } from "@eco-incorp/sauce";
 
-export function solverTransactions(built: routes.BuiltIntent, claimant: routes.Hex) {
-  return [...routes.fulfillApprovalTxs(built.intent), routes.fulfillTx(built.intent, { claimant })];
+export function solverTransactions(published: routes.LoggedIntent, claimant: routes.Hex) {
+  const { intent } = published;
+  return [...routes.fulfillApprovalTxs(intent), routes.fulfillTx(intent, { claimant })];
 }
 ```
 
@@ -705,23 +708,12 @@ stands on both chains. `routes.intentFromPublished(log, sourceChainId)` rebuilds
 
 ## Inspect hashes, vaults, and status
 
-`built.hash()` returns `intentHash`, `routeHash`, and `rewardHash`. `built.intent` or `.root()` returns the normalized intent. `.intents()` returns the root and descendants in preorder; it does not imply they execute atomically across chains.
-
-Read helpers return a request plus its decoder:
-
-```ts
-import type { routes } from "@eco-incorp/sauce";
-
-export async function readVault(
-  built: routes.BuiltIntent,
-  ethCall: (request: Pick<routes.PortalReadCall<routes.Hex>, "to" | "data">) => Promise<routes.Hex>,
-) {
-  const request = built.vaultCall();
-  const result = await ethCall({ to: request.to, data: request.data });
-  return request.decode(result);
-}
-```
-
-Execute this read on the source chain. `hashCall()` cross-checks hashes against the Portal; `fundedCall()` checks funding. `predictVault()` is the offline CREATE2 prediction of the same address, with nothing read from a chain: an eco-routes Portal's vaults are clones, salted with the intent hash, of a Proxy over the Portal's first `CREATE`, so the address follows from the Portal's own. For a Portal built some other way, pass its configuration: `predictVault({ portal, vaultInitCodeHash })`.
+A published intent's hash is the one its log announced: `routes.hashIntent(intent)` returns its
+`intentHash`, `routeHash` and `rewardHash`, the same values, and `routes.predictIntentVault(intent)`
+its vault, an offline CREATE2 prediction with nothing read from a chain: an eco-routes Portal's
+vaults are clones, salted with the intent hash, of a Proxy over the Portal's first `CREATE`, so the
+address follows from the Portal's own. `routes.intentVaultAddressCall`, `intentHashCall` and
+`isIntentFundedCall` build the matching reads of the source Portal, each a request plus its
+decoder, to run on the source chain.
 
 For a Solana destination, build the execution with the Kitchen client rather than the SVM route helpers: the instruction those helpers emit is not one the Solana engine accepts, and staging the code does not change that. The [Solana guide](solana.md) has the supported path.

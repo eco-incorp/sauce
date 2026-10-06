@@ -130,41 +130,47 @@ cascades several hops deep.
 
 ## A program that calls protocols and tokens by name
 
-Inside a route body the SDK resolves token symbols and protocol contracts against the destination
-chain, so a program reads like the operation it performs. This example builds a complete intent
-offline; the refundee and the fee are fixtures and nothing is sent.
+Inside a program the SDK resolves token symbols and protocol contracts against the chain it runs
+on, so a program reads like the operation it performs. From TypeScript, this example builds an
+intent whose body approves Uniswap's router on Base, offline; the refundee, the owner and the fees
+are fixtures and nothing is sent.
 
 ```ts
-import { Base } from "@eco-incorp/sauce";
+import { Base, Ethereum } from "@eco-incorp/sauce";
 
-const executionFee = 1_000n; // Fixture: read Base's Kitchen fee with destinationExecutionFee().
+const owner = "0x4444444444444444444444444444444444444444";
+const kitchenFee = 1_000n; // Fixture: read each Kitchen's fee with destinationExecutionFee().
 
-const built = Base.Portal.send([])
-  .source("ethereum")
-  .refundee("0x4444444444444444444444444444444444444444")
-  .receive([])
-  .fee(executionFee)
+const built = Base.Portal.send({ token: Ethereum.USDC.address, amount: 10_000n })
+  .source(Ethereum)
+  .refundee(owner)
+  .receive()
+  .fee(kitchenFee)
   .then(() => {
     USDC.approve(Uniswap.UniversalRouter, 1_000_000n);
   });
 
-console.log(built.hash().intentHash);
+// The cook that publishes it from your Pot on Ethereum: { to, data, value }.
+const cook = built.cook({ owner }, kitchenFee);
+console.log(`${built.program.bytecode.length} bytes, cooked on ${cook.to}`);
 ```
 
-What the snippet leaves out, the SDK fills in from what it records: the eco-routes Portal on both
-chains, the prover for the pair, the destination Pot and engine, and the native amount the solver
-sends, which is the cook's fee, and the deadlines, counted from now. A modifier sets a deadline, the
-prover or the salt instead. What stays yours are the refundee, the reward and the fee, which is
-on-chain state the destination's Kitchen sets: `destinationExecutionFee()` builds the read.
+`.then(...)` writes the statement a program opens the intent with, compiles it for Ethereum and
+returns the program and its cook. The Pot pays the reward into the intent's vault and publishes it,
+so it must hold the reward when the cook runs. What the snippet leaves out, the SDK fills in from
+what it records: the eco-routes Portal on both chains, the prover for the pair, the destination Pot
+and engine, the native amount the solver sends, which is the body's cook fee, the deadlines, counted
+from when the cook runs, and a random salt. What stays yours are the refundee, the reward and the
+fees, which are on-chain state each chain's Kitchen sets: `destinationExecutionFee()` builds the
+read. The intent's hash is the one the Portal announces when the cook publishes it:
+`built.intents(receipt.logs)` reads it from the receipt, or from a rehearsal's logs.
 
-Two kinds of name meet in that snippet. `Base` is a **named export**, one per chain; importing the
-package puts nothing on `globalThis`. `USDC` and `Uniswap` are **program syntax**: the SDK resolves
-them to Base's addresses and binds the ABI, so there is no address to look up and no JavaScript
-object to import. The callback is read as source text and never invoked, so it captures nothing;
-an application value is written into it as a literal, or into a body written as a source string.
-
-`.then(...)` completes the intent and returns its hashes, bytecode and the Portal transaction
-requests your application submits. [Quick start](docs/guides/quick-start.md) walks through it, and
+Two kinds of name meet in that snippet. `Base` and `Ethereum` are **named exports**, one per chain;
+importing the package puts nothing on `globalThis`. `USDC` and `Uniswap` in the body are **program
+syntax**: the SDK resolves them to Base's addresses and binds the ABI, so there is no address to
+look up and no JavaScript object to import. The callback is read as source text and never invoked,
+so it captures nothing; an application value is written into it as a literal, or passed as a define
+(`.source(Ethereum, { defines })`). [Quick start](docs/guides/quick-start.md) walks through it, and
 [protocols and tokens](docs/guides/protocols-and-tokens.md) covers the names available.
 
 ## Agent wallets

@@ -4458,7 +4458,7 @@ declare global {
   const WSOL: bigint;
   const WULF_US: bigint;
   const XAI: bigint;
-  /** Destination chain identity supplied by openRoute. */
+  /** The id of the chain the program is compiled for. */
   const chainId: bigint;
   const CHAIN_ID: bigint;
 }

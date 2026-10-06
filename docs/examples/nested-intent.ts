@@ -51,7 +51,12 @@ const built = Base.Portal.send({ token: usdcOn(Ethereum.chain), amount: REWARD }
         USDC.transfer(0x6666666666666666666666666666666666666666n, payout);
       });
   });
-console.log("Ethereum → Base → Ethereum:", built.hash().intentHash);
+// The program that opens it on Ethereum, and the bodies it compiled: Base's, and the one Base's
+// opens back on Ethereum. A cook on your Pot there publishes it (`built.cook(...)`), and its hash is
+// read from the Portal's `IntentPublished` in the cook's logs (`built.intents(logs)`).
+if (built.program.bodies.length !== 2)
+  throw new Error("Expected a body on Base and one on Ethereum");
+console.log(`Ethereum → Base → Ethereum: a program of ${built.program.bytecode.length} bytes`);
 
 // The file form, compiled for Ethereum where it opens its intent: a program whose body on Base
 // opens the next intent, back to Ethereum. Its intents are encoded as it runs, so they are read

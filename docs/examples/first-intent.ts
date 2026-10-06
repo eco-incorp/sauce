@@ -1,44 +1,44 @@
+// An intent from Base to Ethereum, built in TypeScript: the reward escrowed on Base, what a solver
+// delivers on Ethereum, and the body that runs there with it. `.then(...)` writes the statement a
+// program opens the intent with, compiles it for Base, and returns the program and the cook that
+// publishes it from a Pot there.
 import { Base, Ethereum, routes } from "@eco-incorp/sauce";
 import { toHex } from "viem";
 
-// Offline fixtures. Read the current Kitchen fee before submission: destinationExecutionFee().
-const executionFee = 1_000n;
+// Offline fixtures: the Pot's owner, who also names the refundee, and Ethereum's Kitchen fee, which
+// the body's cook pays: read it with destinationExecutionFee(). The Portals, the prover, the
+// destination's Pot and engine and the deadlines come from the SDK.
+const owner = "0x4444444444444444444444444444444444444444";
+const ethereumFee = 1_000n;
 const usdcOn = (chain: typeof Base.chain) => {
   const value = routes.registryTokenAddress(chain, "USDC");
   if (value === undefined) throw new Error("Missing USDC registry");
   return toHex(value, { size: 20 });
 };
-const baseUsdc = usdcOn(Base.chain);
-const sourceUsdc = usdcOn(Ethereum.chain);
 
-// The reward escrowed on Ethereum, what a solver delivers on Base, and the body that runs there with
-// it. The body is SauceScript for Base, read as source and never run here, so it names only what
-// SauceScript knows: Base's `USDC` and literals. The delivered USDC arrives at Base's Portal
-// Executor, and the intent moves it into the Pot the body cooks on: the shared one that Executor
-// owns, which must already exist. The deadlines take their defaults, counted from now.
-const built = Base.Portal.send({ token: sourceUsdc, amount: 1_010_000n })
-  .source("ethereum")
-  .refundee("0x6666666666666666666666666666666666666666")
-  .receive({ token: baseUsdc, amount: 1_000_000n })
-  .fee(executionFee)
+// The body is SauceScript for Ethereum, read as source and never run here, so it names only what
+// SauceScript knows: Ethereum's `USDC` and literals. The delivered USDC arrives at Ethereum's
+// Portal Executor, and the intent moves it into the Pot the body cooks on: the shared one that
+// Executor owns.
+export const built = Ethereum.Portal.send({ token: usdcOn(Base.chain), amount: 1_010_000n })
+  .source(Base)
+  .refundee(owner)
+  .receive({ token: usdcOn(Ethereum.chain), amount: 1_000_000n })
+  .fee(ethereumFee)
   .then(() => {
     USDC.transfer(0x2222222222222222222222222222222222222222n, 1_000_000n);
   });
 
-// The reward paid into the intent's vault, then `publish`. Pass `{ vault }` as `built.vaultCall()`
-// reads it from the source chain to have it checked against this offline derivation.
-const sourceRequests = built.sourceTxs();
-if (built.intent.route.calls.length !== 2 || sourceRequests.length !== 2) {
-  throw new Error("Expected destination delivery + cook and source transfer + publish");
+// The cook, from the owner's Pot on Base, with Base's Kitchen fee as its value (a fixture here).
+// The Pot pays the reward into the intent's vault, so it holds the reward first. Send it, or
+// rehearse it with eth_simulateV1, and read the intent from the Portal's `IntentPublished` in its
+// logs: `built.intents(receipt.logs)`, each with its `intentHash`. The hash is the Portal's: the
+// deadlines count from when the cook runs.
+const cook = built.cook({ owner }, 1_000n);
+
+const [body] = built.program.bodies;
+if (built.program.chain.slug !== "base" || body?.destination.slug !== "ethereum") {
+  throw new Error("Expected a program for Base whose body runs on Ethereum");
 }
-if (sourceRequests[0]?.to.toLowerCase() !== sourceUsdc.toLowerCase()) {
-  throw new Error("The reward is transferred in the source chain's USDC");
-}
-if (
-  built.intent.route.calls[1]?.value !== executionFee ||
-  built.intent.route.nativeAmount !== executionFee
-) {
-  throw new Error("Destination funding must include the cook fee");
-}
-console.log("Ethereum → Base intent:", built.hash().intentHash);
-console.log("Prepared source transactions:", sourceRequests.length);
+console.log(`Base → Ethereum: a program of ${built.program.bytecode.length} bytes`);
+console.log(`Its cook: to ${cook.to}, ${(cook.data.length - 2) / 2} bytes, value ${cook.value}`);

@@ -587,7 +587,7 @@ resolves it off disk.
 
 `src/std/router/` is **`@sauce/router`**, the SauceScript swap library, SDK-owned and shipped the
 same two ways (embedded, and `dist/std/router` via `copy-verify-assets.mjs`); `resolveSdkPackage`
-maps it like `@sauce/token`, so every SDK compile — route bodies, `openRoute`, actions — resolves it
+maps it like `@sauce/token`, so every SDK compile — programs, intent bodies, actions — resolves it
 with no option. It is THE one implementation of a swap at its nine venues: one exported function
 per venue (`uniswapV2`, `uniswapV3`, `uniswapV4`, `curve`, `balancerV2`, `dodoV2`, `traderJoeLB`,
 `woofi`, `maverickV2`), every argument a RUN-TIME value, in one order —
@@ -607,7 +607,7 @@ there is no `router.js` and no SVM arm, so an SVM import fails at the import.
 
 `@sauce/token` is the **default ambient MODULE**: `manifest.json`'s `ambient` list
 (`["@sauce/token"]`), which `ambient.ts#chainAmbient()` returns, is added by `compileSauceProgram`,
-by every intent body's options (`programOptions`) and by `openRoute`, so its exported functions
+by every intent body's options (`programOptions`) and by the internal route builder, so its exported functions
 (`approve`/`transfer`/`balanceOf`/…) are callable there with **zero import**. `compileSauceRoute`
 adds only the chain's module to its caller's `ambient`, so a direct `compileSauceRoute(..., {})`
 reaches `@sauce/token` only through `Token`. These resolve because `embedded/resolve.ts`'s
@@ -671,11 +671,23 @@ a reward on Base, Base's in an Arbitrum body). `routes-intent-chains.e2e.test.ts
 cascades on three anvils whose USDC differs; a test that gives a symbol one address everywhere (a
 `tokens` override, a define) cannot see either defect.
 
-**`intent-syntax.ts#INTENT_STAGES` is the syntax as data** for the editor's declarations
-(`gen-source-globals.mjs`: `Portal`, `Sent`, `Received`, `Opened`, `Caught`) and the TypeScript
-builder (`intent-dsl.ts#openRoute`, which still assembles an intent host-side with viem and is to
-return the cook instead). The class is what compiles, so change them together;
-`routes-intent-portal.test.ts` holds the bytes each modifier builds.
+**A TypeScript intent is the program that opens it** (`routes/host-intent.ts`, lead, 2026-10-06):
+`Base.Portal.send(...).source(chain, options).refundee(...).receive(...).then(body)` writes the
+statement a program opens that intent with, compiles it for the source chain with `options` (a
+`SauceProgramOptions`), and returns `{ source, program, cook(target, value), intents(logs) }`; the
+cook runs on a Pot on the source chain, and `intents(logs)` reads each published intent from the
+Portal's `IntentPublished` (`routes/published.ts#loggedIntents`, which the CLI's
+`logged-intents.ts` uses too). There is no offline hash and no `.nest()`. The old route-then-reward
+form — `Base(body, options).reward(...)`, `Base.route`, `routes.openRoute`, the nesting exports,
+actions' `programIntent` — is removed from the public surface: a chain export is a namespace
+(`chain`, `Portal`, contracts, tokens), not a function. `intent-dsl.ts#openRoute` stays INTERNAL for
+the CCTP recipe builders (`recipes/cctp-transfer.ts`), and `.nest()` with `nest.ts` and
+`nest-dynamic.ts` survive only beneath it, reached by no shipped path; their suites
+(`routes-nest-*`, `routes-intent-dsl`) import the module directly.
+`intent-syntax.ts#INTENT_STAGES` is the syntax as data for the editor's declarations
+(`gen-source-globals.mjs`: `Portal`, `Sent`, `Received`, `Opened`, `Caught`); the class is what
+compiles, so change them together; `routes-intent-portal.test.ts` holds the bytes each modifier
+builds, and the TypeScript intent's cook to what the same statement in a file publishes.
 
 **`Token(addr)` and `<Sym>.transfer(...)` are `@sauce/names`' `Token`**, not rewrites: a WRITE
 (`transfer`/`approve`/`transferFrom`) is the `@sauce/token` function of the same name with the token
@@ -689,8 +701,8 @@ USDT among the tokens.
 **The host surface and compiled-source declarations are separate — and only one of them is
 global.** The HOST surface is IMPORTS ONLY: `routes/chain-exports.generated.ts` exports one named
 value per canonical chain (`Base`, `Solana`, …) plus `chain` and `Token`, re-exported from the
-package root, each composed in `routes/composed.ts` (callable + `.chain`/`.route` + the lazy
-contract tree, + the svm venue tree on an svm chain). **Importing the SDK touches nothing on
+package root, each composed in `routes/composed.ts` (`.chain`, `.Portal`, the lazy contract tree,
+the chain's registry tokens, + the svm venue tree on an svm chain). **Importing the SDK touches nothing on
 `globalThis`**; `installRouteGlobals()`/`uninstallRouteGlobals()` (`routes/globals.ts`) remain as an
 opt-in for a host that wants the bare-name spelling at run time, hand out the SAME memoised objects,
 and install no types. `routeGlobals` is a live view of the last install, empty until one happens.
@@ -735,7 +747,7 @@ address (`spec.ts`'s `oneOf` alternatives, which the schema expresses as `oneOf`
 reads the pool on chain and reverts on the zero address. `quoteAction` and `compileSplitSwap` refuse
 a key (a quote is an `eth_call` at the pool). `programSource` (`compose.ts`, not exported from the
 index) is what `sauce actions` lowers with. The public surface is deliberately small — `parseProgram`, `serializeProgram`,
-`programSchema`, `compileProgram`, `programIntent`, `quoteAction`, `compileSplitSwap`,
+`programSchema`, `compileProgram`, `quoteAction`, `compileSplitSwap`,
 `ProgramError` and the types — and the types ARE the JSON (no per-action chain, one `amount`, one
 `amountOutMin`, `recipient` everywhere); keep it that way rather than adding parallel entry points.
 `spec.ts` is the single field table: `program.ts` parses/validates against it (located issues,
@@ -756,9 +768,9 @@ bindings: they go through the SDK's `token/safe` (USDT returns no `bool`; `SafeE
 `evm.call` because a binding cannot attach value; the Stargate and Hyperlane fees are quoted by a
 `view` binding (a STATICCALL) just before. Actions **chain**: output feeds the next implicitly (no
 amount) or via `saveOutputAs`/`amountRef`; an output is what the action delivered to the Pot (a
-return value or a balance delta) or its own amount, per `spec.ts`. `compose.ts` opens intents
-(`programIntent`, on the program's own chain) and compiles standalone programs with runtime
-arguments (ABI-v1, or compact-v1 with fixed-width offsets). `to-quote.ts` builds the `eth_call`
+return value or a balance delta) or its own amount, per `spec.ts`. `compose.ts` compiles standalone
+programs with runtime arguments (ABI-v1, or compact-v1 with fixed-width offsets); an action
+program runs in an intent as its body's statements, which `sauce actions` prints. `to-quote.ts` builds the `eth_call`
 quotes and, for the split swap, the same quoter calls as SauceScript over fixed amount offsets.
 `AMM_SWAP_INTERFACES.md` is third-party interface reference; only its sections marked Verified have
 been checked.

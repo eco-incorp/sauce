@@ -308,8 +308,8 @@ export function compileSauceRoute(
 }
 
 /**
- * {@link compileSauceRoute} on a program's text, a module's or a closure's — `openRoute`'s entry.
- * Not exported from the package.
+ * {@link compileSauceRoute} on a program's text, a module's or a closure's — the internal route
+ * builder's entry. Not exported from the package.
  */
 export function compileScopedRoute(
   destination: ChainRef,
@@ -402,7 +402,7 @@ export interface SauceProgramOptions extends SauceCompileOptions {
  * Compiles a standalone program for `chain`: a program that runs directly on a Pot, rather than
  * the destination half of an intent.
  *
- * It gets everything `openRoute` gives a route body except the intent around it: the chain's names
+ * It gets everything an intent's body gets except the intent around it: the chain's names
  * (tokens, protocols, `self`, chains and their `Portal`s) and the `@sauce/token` functions with no
  * import, and intents the program itself opens
  * (`Arbitrum.Portal.send({ ... }).receive().then(() => { ... })`), which take their deadline and

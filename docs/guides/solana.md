@@ -261,7 +261,7 @@ Direct, the engine checks nothing about the code account — not its owner, not 
 
 **Build Solana execution with the SVM client (`createSauceSvmClient`), not the SVM route helpers.**
 
-`routes.openRoute("solana", body, { execution, ... }).reward(...)`, `routes.compileSauceRoute()`,
+`routes.compileSauceRoute()`,
 `buildSauceSvmCall()` and `buildSauceSvmCalls()` emit an `execute_from_account`
 instruction carrying only its 8-byte discriminator. The engine needs 65 further
 bytes of Pot derivation material and a trailing Pot signer that the Kitchen

@@ -275,34 +275,33 @@ try {
   });
   // Check emitted declarations from a real install, not src/. Bare source globals and builtins
   // must survive declaration emit and the root package's side-effect import.
-  // Base is a named export; USDC and Uniswap are SauceScript globals the compiler resolves
-  // inside the route body — declared types with no runtime value, so importing them would be
-  // wrong. This fixture is the packaged surface a consumer actually gets.
+  // Base and Ethereum are named exports; USDC and Uniswap are SauceScript globals the compiler
+  // resolves inside the intent's body — declared types with no runtime value, so importing them
+  // would be wrong. This fixture is the packaged surface a consumer actually gets.
   const consumer = `
-    import { Base } from '${name}';
-    import { parseProgram, programIntent, type ActionProgram } from '${name}/actions';
-    const options = {
-      pot: '0x1111111111111111111111111111111111111111' as const,
-      engine: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' as const,
-      deadline: 2000000000n,
-      portal: '0x2222222222222222222222222222222222222222' as const,
-      source: 'ethereum' as const,
-      creator: '0x3333333333333333333333333333333333333333' as const,
-      prover: '0x4444444444444444444444444444444444444444' as const,
-    };
-    const built = Base(() => {
-      USDC.approve(Uniswap.UniversalRouter, 1000000n);
-      // The language's builtins are declared for a typed closure too (builtins.generated.ts).
-      require(ctx.timestamp() > 0n, "stale");
-      log(crypto.keccak256(hex\`01\`).toBytesBe(32n));
-    }, options).reward(0n);
-    if (built.compiled.bytecode[0].length === 0) throw new Error('Empty route');
+    import { Base, Ethereum } from '${name}';
+    import { compileProgram, parseProgram, type ActionProgram } from '${name}/actions';
+    const owner = '0x3333333333333333333333333333333333333333' as const;
+    const built = Base.Portal.send({ token: Ethereum.USDC.address, amount: 1n })
+      .source(Ethereum)
+      .refundee(owner)
+      .receive()
+      .fee(0n)
+      .then(() => {
+        USDC.approve(Uniswap.UniversalRouter, 1000000n);
+        // The language's builtins are declared for a typed closure too (builtins.generated.ts).
+        require(ctx.timestamp() > 0n, "stale");
+        log(crypto.keccak256(hex\`01\`).toBytesBe(32n));
+      });
+    if (built.program.bytecode.length === 0) throw new Error('Empty intent program');
+    const cook: { to: string; data: string; value: bigint } = built.cook({ owner }, 0n);
     // The actions declarations reference the SDK's by relative path; this checks they resolve.
     const program: ActionProgram = parseProgram({ version: 1, chainId: 8453, actions: [
-      { type: 'approve', amount: '1', token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', spender: options.pot },
+      { type: 'approve', amount: '1', token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', spender: owner },
     ] });
-    const intent = programIntent(program, options).reward(0n);
-    if (intent.compiled.bytecode[0].length === 0) throw new Error('Empty action route');
+    if (compileProgram(program).bytecode.length === 0 || cook.data.length === 0) {
+      throw new Error('Empty action program');
+    }
   `;
   writeFileSync(join(work, "consumer.ts"), consumer);
   // Every export the actions pages name, typechecked from the installed package: the runtime ones as

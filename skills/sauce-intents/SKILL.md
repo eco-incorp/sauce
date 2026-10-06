@@ -542,14 +542,13 @@ Each level takes its own modifiers, and each it leaves out takes its default for
 - **The refundee** has no default at any level: each names its own, here the same `refundTo`, which
   reclaims each level's unearned reward on the chain that escrowed it, so it must be an address its
   owner controls on each of them.
-- **The salt** is random for each level, picked as the level above is built.
+- **The salt** is random for each level, picked when the file compiles; `.salt(...)` gives one.
 - **The fee** is each destination Kitchen's own, read for every chain a level's program runs on.
 - **The Portal and the prover** are looked up per level, for its own two chains.
 
 The hash of a level below the first exists only once the level above has run: import it from that
 fill's transaction (`sauce intent import <tx hash> --chain <chain>`), then fill, prove and claim it
-like any other. (The TypeScript builder, `.nest()` in `sauce-typescript`, takes a child per level,
-and by default funds it by a transfer into its vault with no publication of its own.)
+like any other.
 
 ## What the compile supplies, and what you pass
 
