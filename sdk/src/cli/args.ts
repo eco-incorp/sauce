@@ -82,8 +82,15 @@ export function parseFlags(argv: readonly string[], flags: FlagSpecs): ParsedArg
   }
 }
 
-/** Flags the command once took under another name, and the name each has now. */
-const RENAMED_FLAGS: Readonly<Record<string, string>> = { "intent-creator": "intent-refundee" };
+/** Flags the command once took, and what does their work now. */
+const RETIRED_FLAGS: Readonly<Record<string, string>> = {
+  "intent-creator":
+    "an intent names its refundee in the file: `.refundee(<address>)`, or `.refundee(refundTo)` " +
+    "with `refundTo` one of main's arguments",
+  "intent-refundee":
+    "an intent names its refundee in the file: `.refundee(<address>)`, or `.refundee(refundTo)` " +
+    "with `refundTo` one of main's arguments",
+};
 
 /** `parseArgs`'s messages advise on `--` escaping; say what was wrong with the flag instead. */
 function describeParseError(error: unknown, flags: FlagSpecs, argv: readonly string[]): string {
@@ -103,10 +110,8 @@ function describeParseError(error: unknown, flags: FlagSpecs, argv: readonly str
     );
   }
   if (code === "ERR_PARSE_ARGS_UNKNOWN_OPTION" && flag !== undefined) {
-    const renamed = RENAMED_FLAGS[flag.replace(/^-+/, "").replace(/=.*$/, "")];
-    if (renamed !== undefined && flags[renamed] !== undefined) {
-      return `\`${flag.replace(/=.*$/, "")}\` is now \`--${renamed}\``;
-    }
+    const retired = RETIRED_FLAGS[flag.replace(/^-+/, "").replace(/=.*$/, "")];
+    if (retired !== undefined) return `\`${flag.replace(/=.*$/, "")}\` is gone: ${retired}`;
 
     return `unknown option ${flag}`;
   }

@@ -11,7 +11,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { fillTargets } from "../src/cli/fill.js";
 import { intentRecord } from "../src/cli/lifecycle.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { IntentStore } from "../src/cli/store.js";
@@ -22,6 +21,8 @@ import {
   previewRefusal,
   requireSupported,
 } from "../src/cli/support.js";
+import { ecoRoutesPortal, ecoRoutesProver } from "../src/protocols/eco-routes/lookup.js";
+import { assembleIntent } from "../src/routes/intent.js";
 import { compileSauceProgram } from "../src/routes/sauce-route.js";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
@@ -30,7 +31,7 @@ const RECIPIENT = "0x6666666666666666666666666666666666666666";
 const CREATOR = "0x3333333333333333333333333333333333333333" as const;
 const INTENT_FLAGS = [
   ...["--define", `RECIPIENT=${RECIPIENT}`],
-  ...["--intent-deadline", "2000000000", "--intent-refundee", CREATOR],
+  ...["--intent-deadline", "2000000000"],
 ];
 
 /** An endpoint that answers the reads a rehearsal starts with, and counts every request. */
@@ -150,21 +151,20 @@ function expectRefused(
 }
 
 const PAY = "function main() {\n  USDC.transfer(RECIPIENT, 1000n);\n}\n";
-/** Base to Arbitrum, the body token writes the Portal's Executor runs. */
-const TO_ARBITRUM =
-  "Arbitrum.Portal.send([{ token: USDC, amount: 7n }]).receive().then(() => {\n  USDC.transfer(RECIPIENT, 5n);\n});\n";
+/** Base to Arbitrum, its body a program on the destination's shared Pot. */
+const TO_ARBITRUM = `Arbitrum.Portal.send([{ token: USDC, amount: 7 }]).refundee(${CREATOR}).receive().then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`;
 /** Base to Arbitrum, the body a program on the destination's Pot: it pays the Kitchen's fee. */
 const TO_ARBITRUM_PROGRAM = [
-  "Arbitrum.Portal.send({ token: USDC, amount: 7n })",
-  "  .receive({ token: USDC, amount: 5n })",
+  "Arbitrum.Portal.send({ token: USDC, amount: 7 })",
+  `  .refundee(${CREATOR})`,
+  "  .receive({ token: USDC, amount: 5 })",
   "  .then(() => {",
   "    USDC.transfer(RECIPIENT, USDC.balanceOf(ctx.self()));",
   "  });",
   "",
 ].join("\n");
 /** Arbitrum to Base: Arbitrum is its source. */
-const TO_BASE =
-  "Base.Portal.send([{ token: USDC, amount: 7n }]).receive().then(() => {\n  USDC.transfer(RECIPIENT, 5n);\n});\n";
+const TO_BASE = `Base.Portal.send([{ token: USDC, amount: 7 }]).refundee(${CREATOR}).receive().then(() => {\n  USDC.transfer(RECIPIENT, 5);\n});\n`;
 
 describe("the gate", () => {
   it("refuses only a preview chain, naming each one once with its request", () => {
@@ -194,11 +194,11 @@ describe("the gate", () => {
   });
 
   it("takes a program's intents by their destinations", () => {
-    const { intents } = compileSauceProgram("base", TO_ARBITRUM, {
+    const { bodies } = compileSauceProgram("base", TO_ARBITRUM, {
       defines: { RECIPIENT: BigInt(RECIPIENT) },
-      intents: { deadline: 2_000_000_000n, publisher: CREATOR },
+      intents: { deadline: 2_000_000_000n, executionFee: 0n },
     });
-    expect(intentDestinations(intents).map((chain) => chain.slug)).toEqual(["arbitrum"]);
+    expect(intentDestinations(bodies).map((chain) => chain.slug)).toEqual(["arbitrum"]);
   });
 });
 
@@ -344,16 +344,25 @@ describe("refused on a preview chain, before any network call", () => {
 
       return made;
     });
-    const program = {
-      file: "to-arbitrum.sauce.ts",
-      text: TO_ARBITRUM,
-      chain: requireChain("base"),
-      compactArgs: false,
-      defines: { RECIPIENT: BigInt(RECIPIENT) },
-      intents: { deadline: 2_000_000_000n, refundee: CREATOR },
-    };
-    const [target] = fillTargets(program, nodeIo());
-    const record = intentRecord(target!.intent, { sourcePortal: target!.sourcePortal });
+    const intent = assembleIntent(
+      requireChain("base"),
+      requireChain("arbitrum"),
+      {
+        salt: `0x${"00".repeat(32)}`,
+        deadline: 2_000_000_000n,
+        portal: ecoRoutesPortal("arbitrum"),
+        tokens: [],
+        calls: [],
+      },
+      {
+        deadline: 2_000_000_000n,
+        creator: CREATOR,
+        prover: ecoRoutesProver("base", "arbitrum"),
+        tokens: [],
+        nativeAmount: 7n,
+      },
+    );
+    const record = intentRecord(intent, { sourcePortal: ecoRoutesPortal("base") });
     new IntentStore(store).save(record);
     expectRefused(
       await sauce(

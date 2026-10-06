@@ -41,6 +41,7 @@ import {
   tokenInfo,
   type Effects,
 } from "./effects.js";
+import { intentLines, intentsJson, loggedIntents } from "./logged-intents.js";
 import { baseUnits, type BeforeCook, type Funding, type FundRequest } from "./funding.js";
 import { rehearse, type Rehearsal } from "./rehearse.js";
 import { decodeReturned, returnedLine } from "./returned.js";
@@ -273,6 +274,10 @@ export async function simulateCommand(
       ? await effectsOf(client, input.chain, rehearsal.logs, rehearsal.traced, labels)
       : undefined;
 
+  // The intents the cook published, read back from the Portal's logs.
+  const intents =
+    rehearsal.ok && rehearsal.logs !== undefined ? loggedIntents(input.chain, rehearsal.logs) : [];
+
   const how = routeLines(
     rehearsal,
     input.chain.slug,
@@ -362,6 +367,7 @@ export async function simulateCommand(
           ],
           returns: rehearsal.returns,
           ...(returnType === undefined ? {} : { returnType, returned: returned ?? null }),
+          ...(intents.length === 0 ? {} : { intents: intentsJson(intents) }),
           ...(effects === undefined ? {} : effectsJson(effects)),
         }
       : {
@@ -409,6 +415,7 @@ export async function simulateCommand(
       ...(returnType === undefined
         ? []
         : [returnedLine(returnType, rehearsal.returns, input.chain)]),
+      ...intentLines(intents),
       ...how,
       ...assumedLines,
       ...(effects === undefined ? [] : effectLines(effects)),

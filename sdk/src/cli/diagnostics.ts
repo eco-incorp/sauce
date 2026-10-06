@@ -206,8 +206,8 @@ const HINTS: ReadonlyArray<readonly [RegExp, (match: RegExpExecArray) => string]
   [
     /needs `\.refundee\(<address>\)`/,
     () =>
-      "write `.refundee(<address>)` in the file; only an intent `sauce intent publish` publishes " +
-      "from a wallet takes that wallet (or --intent-refundee <address>) instead",
+      "write `.refundee(<address>)` in the file, or `.refundee(refundTo)` with `refundTo: Address` " +
+      "a parameter of main, passed with --args",
   ],
   [/`intents\.executionFee`/, () => "pass --intent-execution-fee <wei>"],
   [

@@ -13,11 +13,8 @@ import {
   bytesToHex,
   decodeFunctionData,
   getAddress,
-  hexToBigInt,
   hexToBytes,
   keccak256,
-  numberToHex,
-  slice,
   toFunctionSelector,
   type Address,
   type Hex,
@@ -38,7 +35,6 @@ import type { Reward, Route, UniversalAddress } from "../routes/types.js";
 import { ecoRoutesVaultConfig, predictVaultAddress } from "../routes/vault.js";
 import { validateSettleProgram } from "../verify/decode.js";
 import { CliError } from "./args.js";
-import { fileIntents } from "./file-intents.js";
 import { connect, receiptOf } from "./chain.js";
 import type { CommandOutput } from "./commands.js";
 import { costJson, costLine, costOf, receiptEffects, receiptReport } from "./receipt.js";
@@ -339,26 +335,15 @@ function embeddedIntents(program: Uint8Array, context: InspectContext, depth: nu
         fundedBy(publishedIntent(destination, routeBytes, reward, context, depth), fundVia),
       );
     } catch {
-      // Split around values the program measures when it runs: only the destination, the first
-      // argument, is whole. The rest is filled in on chain.
-      if (data.length < 2 + 8 + 64) continue;
-      const destination = hexToBigInt(slice(data, 4, 36));
-      if (destination >> 64n !== 0n) continue;
+      // A call the program encodes as it runs, from an intent built while it compiled: its route
+      // and reward are in the Portal's log once it runs, not in the bytes.
       parts.push(
         fundedBy(
           {
-            json: {
-              destination: {
-                id: destination.toString(),
-                ...(resolveChain(destination) === undefined
-                  ? {}
-                  : { chain: resolveChain(destination)!.slug }),
-              },
-              measured: true,
-            },
+            json: { measured: true },
             lines: [
-              `intent to ${chainNamed(destination)}, with values the program measures when it ` +
-                "runs (inspect its source file to see them)",
+              "an intent, encoded as the program runs: `sauce simulate` reads it from the " +
+                "Portal's log (`IntentPublished`)",
             ],
           },
           fundVia,
@@ -547,53 +532,30 @@ export function describeData(data: Hex, given: InspectContext): Part {
   return { json: { call: null, program: program.json }, lines: program.lines };
 }
 
-/** `part` with each sentinel shown as the local whose value the program splices in for it. */
-function named(
-  part: Part,
-  sentinels: readonly { readonly sentinel: bigint; readonly capture: string }[],
-): Part {
-  if (sentinels.length === 0) return part;
-  const names = new Map<string, string>();
-  for (const { sentinel, capture } of sentinels) {
-    names.set(sentinel.toString(), `<${capture}>`);
-    names.set(numberToHex(sentinel, { size: 20 }), `<${capture}>`);
-  }
-  const swap = (text: string): string =>
-    text.replace(
-      /0x[0-9a-fA-F]{40}\b|\b\d{20,}\b/g,
-      (word) => names.get(word.toLowerCase()) ?? word,
-    );
-  const deep = (value: unknown): unknown =>
-    typeof value === "string"
-      ? swap(value)
-      : Array.isArray(value)
-        ? value.map(deep)
-        : value !== null && typeof value === "object"
-          ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, deep(v)]))
-          : value;
-
-  return { json: deep(part.json) as Record<string, unknown>, lines: part.lines.map(swap) };
-}
-
-/** The intents a compiled program opens, from the compile itself: each measured value named. */
+/**
+ * The intents a compiled program opens, from the compile: where each goes, and the body it cooks
+ * there. Its route and reward are encoded as the program runs, so they are read from the Portal's
+ * log (`sauce simulate`), not from the compile.
+ */
 function sourceIntents(program: CompiledSauceProgram): Part[] {
-  return (program.bodies.length === 0 ? [] : fileIntents(program, "sauce inspect")).map((lowered) =>
-    fundedBy(
-      named(
-        intentPart(
-          BigInt(lowered.destination.id),
-          lowered.intent.route,
-          lowered.intent.reward,
-          // A measured value is a placeholder until the program runs, and the vault follows from
-          // the hash those values are part of — so there is no vault to show before then.
-          { chain: program.chain, ...(lowered.captures.length > 0 ? { measured: true } : {}) },
-          0,
-        ),
-        lowered.sentinels,
-      ),
-      lowered.fundVia,
-    ),
-  );
+  return program.bodies.map((body) => {
+    const described = programPart(body.bytecode, { chain: body.destination }, 1, false);
+
+    return {
+      json: {
+        destination: { id: String(body.destination.id), chain: body.destination.slug },
+        body: described.json,
+        captures: body.captures,
+      },
+      lines: [
+        `intent to ${body.destination.slug}: its body, cooked on the destination's shared Pot`,
+        ...indent(described.lines),
+        ...(body.captures.length === 0
+          ? []
+          : [`  given by the program as it runs: ${body.captures.join(", ")}`]),
+      ],
+    };
+  });
 }
 
 /** `sauce inspect <file>`: the program the file compiles to, what it takes, the intents it opens. */
@@ -620,6 +582,12 @@ export function inspectFile(file: string, program: CompiledSauceProgram): Comman
               .join(", ")}`,
           ]),
       ...indent(intents.flatMap((intent) => intent.lines)),
+      ...(intents.length === 0
+        ? []
+        : [
+            "  each intent's route and reward are encoded as the program runs: `sauce simulate` " +
+              "reads them from the Portal's log",
+          ]),
     ].join("\n"),
     json: {
       file,

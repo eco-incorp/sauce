@@ -55,12 +55,10 @@ import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { denormalizeToEvm } from "../routes/encode.js";
 import type { Intent } from "../routes/types.js";
 import { CliError, UsageError } from "./args.js";
-import { fileIntents } from "./file-intents.js";
+import { fileIntents, type FileInput, type RehearsalAccess } from "./file-intents.js";
 import { assumeTokenBalance, mergeOverrides } from "./assume.js";
 import { connect, revertReason, sendAndWait, type Sent } from "./chain.js";
 import {
-  asPublished,
-  compileProgram,
   kitchenAddress,
   type CliFiles,
   unapproved,
@@ -197,31 +195,16 @@ const read = async <T>(what: string, call: () => Promise<T>): Promise<T> => {
   }
 };
 
-/** The intents the file opens, each one a solver could fill from what the file says. */
-export function fillTargets(input: ProgramInput, files: CliFiles): readonly FillTarget[] {
-  if (input.chain.kind !== "evm") {
-    throw new UsageError(
-      `sauce intent fill rehearses intents an EVM chain opens, and ${input.chain.slug} is not one: ` +
-        "the eco-routes Portal this SDK publishes through is EVM only",
-    );
-  }
-  // Built as `sauce intent publish` builds them, `--intent-refundee` standing in for its wallet.
-  const intents = fileIntents(compileProgram(asPublished(input), files), "sauce intent fill");
-  if (intents.length === 0) {
-    throw new UsageError(`${input.file} opens no intent: there is nothing for a solver to fill`);
-  }
-  for (const intent of intents) {
-    if (intent.captures.length > 0) {
-      throw new CliError(
-        `the intent to ${intent.destination.slug} uses ` +
-          `${intent.captures.map((name) => `\`${name}\``).join(", ")}, which the program measures ` +
-          "or computes while it runs: its route exists only once the program has run, so it " +
-          "cannot be rehearsed from the file. Name it by its hash once `sauce run` has published " +
-          "it, or make the value a literal, one of main's arguments (given with --args) or a " +
-          "top-level `const` of a literal",
-      );
-    }
-  }
+/**
+ * The intents the file opens, read from a rehearsal of publishing them (`file-intents.ts`), each
+ * one a solver could fill.
+ */
+export async function fillTargets(
+  input: FileInput,
+  files: CliFiles,
+  access: RehearsalAccess,
+): Promise<readonly FillTarget[]> {
+  const intents = await fileIntents(input, files, access, "sauce intent fill");
 
   return intents.map((intent) => ({
     intent: intent.intent,

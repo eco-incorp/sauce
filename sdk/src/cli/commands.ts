@@ -61,6 +61,7 @@ import {
   type PotCheck,
   type Endpoints,
 } from "./intents.js";
+import { intentLines, intentsJson, loggedIntents } from "./logged-intents.js";
 import { costJson, costLine, costOf, receiptEffects, receiptReport } from "./receipt.js";
 import { appliedDefines, usedContracts } from "./report.js";
 import { EntryArgumentError, entryReturnType } from "../routes/entry.js";
@@ -110,9 +111,6 @@ export interface ProgramInput {
   /** The defines whose value was written as an address (`args.ts#addressDefines`), which a
    *  report shows as one. */
   readonly addressDefines?: readonly string[];
-  /** `main`'s arguments the program is compiled for, as a wallet that publishes its intents gives
-   *  them (`inputs.ts#bindMainArguments`): `main` then takes none as it runs. */
-  readonly bound?: readonly EntryValue[];
   /** Compile `main`'s parameters for compact-v1 arguments instead of ABI-v1. */
   readonly compactArgs: boolean;
   /** The intents the program opens (`Chain.Portal.send(…).receive(…).then(…)`): what the SDK
@@ -123,14 +121,6 @@ export interface ProgramInput {
     readonly rewardDeadline?: bigint;
     /** When the program's own intents open, for their default deadlines: now, unless given. */
     readonly openedAt?: bigint;
-    /** `--intent-refundee`: where the command publishes from a wallet, the refundee (the reward's
-     *  creator) of each top-level intent that names none, in place of that wallet
-     *  ({@link publisher}). Never the refundee of an intent a program opens on a Pot: that one
-     *  names its own. */
-    readonly refundee?: Address;
-    /** The wallet that publishes the program's top-level intents itself: their refundee when they
-     *  name none. Set only by the commands that publish from a wallet, or rehearse doing so. */
-    readonly publisher?: Address;
     /** The route salt of every intent that names none: random, picked once per command, so every
      *  compile the command makes builds the same intents. */
     readonly salt?: Hex;
@@ -141,6 +131,9 @@ export interface ProgramInput {
     /** How their reward is funded, by the program a Pot runs or by `sauce intent publish`'s wallet:
      *  `"transfer"` into the vault then `publish` (the default), or `"publishAndFund"`. */
     readonly fundVia?: IntentFundVia;
+    /** `false`: publish each top-level intent without paying its reward, to read the intents
+     *  from a rehearsal (`file-intents.ts`). */
+    readonly fund?: boolean;
   };
   /**
    * ABI bindings the program calls through without declaring them — an actions document's
@@ -217,8 +210,7 @@ export function castSend(to: Address, data: Hex, value?: bigint): string {
  */
 function compileOptions(input: ProgramInput, files: CliFiles): SauceCompileOptions {
   const dir = sourceDirOf(input);
-  const { deadline, rewardDeadline, publisher, salt, prover, executionFee, fundVia } =
-    input.intents;
+  const { deadline, rewardDeadline, salt, prover, executionFee, fundVia, fund } = input.intents;
   // An intent written `Chain.Portal...` with no deadline gets its default counted from now, so it
   // is fixed when the file compiles, as a wallet that publishes it needs; a level below counts from
   // when its parent runs.
@@ -229,11 +221,11 @@ function compileOptions(input: ProgramInput, files: CliFiles): SauceCompileOptio
     ...(deadline === undefined ? {} : { deadline }),
     ...(rewardDeadline === undefined ? {} : { rewardDeadline }),
     ...(openedAt === undefined ? {} : { openedAt }),
-    ...(publisher === undefined ? {} : { publisher }),
     ...(salt === undefined ? {} : { salt }),
     ...(prover === undefined ? {} : { prover }),
     ...(executionFee === undefined ? {} : { executionFee }),
     ...(fundVia === undefined ? {} : { fundVia }),
+    ...(fund === undefined ? {} : { fund }),
   };
 
   return {
@@ -245,16 +237,6 @@ function compileOptions(input: ProgramInput, files: CliFiles): SauceCompileOptio
   };
 }
 
-/**
- * `input` as a wallet publishes its intents, for a command that names them by their file rather
- * than publishing them: `--intent-refundee` is the wallet, the refundee of each top-level intent
- * that names none.
- */
-export const asPublished = (input: ProgramInput): ProgramInput =>
-  input.intents.publisher !== undefined || input.intents.refundee === undefined
-    ? input
-    : { ...input, intents: { ...input.intents, publisher: input.intents.refundee } };
-
 /** The directory a program's relative imports resolve against. */
 export const sourceDirOf = (input: ProgramInput): string =>
   resolvePath(input.sourceDir ?? (input.stdin === true ? "." : dirname(resolvePath(input.file))));
@@ -262,10 +244,7 @@ export const sourceDirOf = (input: ProgramInput): string =>
 /** Compiles the file as a standalone program, turning a failure into one message about the file. */
 export function compileProgram(input: ProgramInput, files: CliFiles): CompiledSauceProgram {
   try {
-    return compileSauceProgram(input.chain, input.text, {
-      ...compileOptions(input, files),
-      ...(input.bound === undefined ? {} : { args: input.bound }),
-    });
+    return compileSauceProgram(input.chain, input.text, compileOptions(input, files));
   } catch (error) {
     // A value for one of `main`'s parameters, given with --args, that is not of its type.
     if (error instanceof EntryArgumentError) throw new UsageError(`--args: ${error.message}`);
@@ -283,21 +262,15 @@ export function compileProgram(input: ProgramInput, files: CliFiles): CompiledSa
 }
 
 /**
- * What a compile that only looks for the intents a program opens — their chains, the fees their
- * cooks pay — gives for what the command fills in later: a fee of zero, and a publisher standing in
- * for the wallet that will send. Neither changes which intents there are, or where.
+ * `input` compiled for the intents it opens — their chains, the fees their cooks pay — before the
+ * command fills in a fee: zero, which changes neither which intents there are nor where.
  */
-export const PROBE_CREATOR: Address = "0x0000000000000000000000000000000000000001";
-
-/** `input` compiled for the intents it opens, before the command fills in a fee or a publisher:
- *  {@link PROBE_CREATOR}. */
 export function probeProgram(input: ProgramInput, files: CliFiles): CompiledSauceProgram {
   return compileProgram(
     {
       ...input,
       intents: {
         ...input.intents,
-        publisher: input.intents.publisher ?? input.intents.refundee ?? PROBE_CREATOR,
         executionFee: input.intents.executionFee ?? 0n,
       },
     },
@@ -580,12 +553,16 @@ export interface Cook {
   readonly program: CompiledSauceProgram;
 }
 
-/** Compiles the file and builds the cook on its Pot — what `tx`, `simulate` and `run` all send. */
-export function cookOf(input: CookInput, files: CliFiles): Cook {
+/**
+ * Compiles the file and builds the cook on its Pot — what `tx`, `simulate` and `run` all send. An
+ * intent deadline that has passed is refused, unless `rehearsal` says the cook is only read from
+ * (`file-intents.ts`, for `fill`, which shows the Portal refusing it).
+ */
+export function cookOf(input: CookInput, files: CliFiles, rehearsal = false): Cook {
   if (input.chain.kind !== "evm") {
     throw new Error(`internal: ${input.chain.slug}'s cook is built by solana.ts`);
   }
-  refusePastDeadline(input);
+  if (!rehearsal) refusePastDeadline(input);
   const target = input.target;
   const pot = "pot" in target ? target.pot : (v12PredictPot(target.owner, target.salt) as Address);
   const engine = getAddress(v12EngineAddress());
@@ -805,6 +782,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   const request: TxRequest = { to: cook.pot, data: funded.data, value };
   const sent = await sendAndWait(client, input.rpcUrl, input.account, request);
   const stored = input.onSent === undefined ? [] : await input.onSent(sent);
+  const intents = sent.status === "success" ? loggedIntents(input.chain, sent.logs) : [];
   const notes = [...(funding?.notes ?? []), ...stored];
   // What the cook cost, and what it moved, from its receipt.
   const cost = sent.receipt === undefined ? undefined : costOf(sent.receipt, value);
@@ -823,6 +801,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
       ...(deployed === undefined ? [] : [sentText(`deployed Pot ${cook.pot} in`, deployed)]),
       ...(funding?.sent ?? []).map((step) => sentText(step.what, step.sent)),
       sentText("cook", sent),
+      ...intentLines(intents),
       ...(cost === undefined
         ? []
         : [costLine(cost, input.chain, "the Kitchen's fee and any native the program spends")]),
@@ -842,6 +821,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
         ...(cost === undefined ? {} : { cost: costJson(cost) }),
         ...(effects === undefined ? {} : { effects: effects.json }),
       },
+      ...(intents.length === 0 ? {} : { intents: intentsJson(intents) }),
     },
     ...(notes.length === 0 ? {} : { notes }),
     ...(sent.status === "success" ? {} : { exitCode: 1 }),

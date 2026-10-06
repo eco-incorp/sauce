@@ -16,17 +16,9 @@ import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { ecoRoutesPortal } from "../protocols/eco-routes/lookup.js";
 import { TOKEN_REGISTRY } from "../routes/token-registry.js";
 import { CliError, UsageError } from "./args.js";
-import { fileIntents } from "./file-intents.js";
+import { fileIntents, type FileInput, type RehearsalAccess } from "./file-intents.js";
 import { connect, sendAndWait, type Sent } from "./chain.js";
-import {
-  asPublished,
-  compileProgram,
-  type CliFiles,
-  unapproved,
-  type Approver,
-  type CommandOutput,
-  type ProgramInput,
-} from "./commands.js";
+import { type CliFiles, unapproved, type Approver, type CommandOutput } from "./commands.js";
 import { addressLabels, effectLines, effectsJson, effectsOf, nativeSymbol } from "./effects.js";
 import { costJson, costLine, costOf, type Cost } from "./receipt.js";
 import {
@@ -94,26 +86,17 @@ export function storedTargets(store: IntentStore, hash: Hex): Target[] {
   return [{ record: stored.record, stored }];
 }
 
-/** The intents a file opens, each published through its source chain's registry Portal. */
-export function fileTargets(input: ProgramInput, files: CliFiles, store: IntentStore): Target[] {
-  if (input.chain.kind !== "evm") {
-    throw new UsageError(
-      `the intents ${input.file} opens would be published on ${input.chain.slug}, and the ` +
-        "eco-routes Portal this SDK publishes through is EVM only",
-    );
-  }
-  // Built as `sauce intent publish` builds them, `--intent-refundee` standing in for its wallet.
-  const intents = fileIntents(compileProgram(asPublished(input), files), "sauce intent");
-  if (intents.length === 0) throw new UsageError(`${input.file} opens no intent`);
-  const measured = intents.find((intent) => intent.captures.length > 0);
-  if (measured !== undefined) {
-    throw new CliError(
-      `the intent to ${measured.destination.slug} uses ` +
-        `${measured.captures.map((name) => `\`${name}\``).join(", ")}, which the program measures ` +
-        "or computes while it runs, so the file does not say what it is: name it by its hash, " +
-        "which `sauce run` stored when it published it",
-    );
-  }
+/**
+ * The intents a file opens, read from a rehearsal of publishing them (`file-intents.ts`): the
+ * stored ones as the store keeps them.
+ */
+export async function fileTargets(
+  input: FileInput,
+  files: CliFiles,
+  store: IntentStore,
+  access: RehearsalAccess,
+): Promise<Target[]> {
+  const intents = await fileIntents(input, files, access, "sauce intent");
 
   return intents.map((intent) => {
     const record = intentRecord(intent.intent, { sourcePortal: ecoRoutesPortal(input.chain) });

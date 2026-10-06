@@ -85,7 +85,7 @@ interface ReadName {
  * compile's rewrites parse it, as written). Each comes with the chains of the intent bodies it is
  * read inside, which decide what it resolves to.
  */
-export function namesRead(text: string, chain: CanonicalChain): readonly ReadName[] {
+export function namesRead(text: string): readonly ReadName[] {
   let program: AstNode;
   try {
     program = parseSauce(text);
@@ -180,7 +180,7 @@ export function appliedDefines(
   const applied = new Map<string, AppliedDefine>();
   const used = new Set<string>();
   const readOn = new Map<string, Set<string>>();
-  for (const { name, path } of namesRead(text, chain)) {
+  for (const { name, path } of namesRead(text)) {
     const on = path.at(-1) ?? chain;
     const key = `${on.slug} ${name}`;
     readOn.set(name, (readOn.get(name) ?? new Set()).add(on.slug));

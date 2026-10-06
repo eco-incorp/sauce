@@ -7,11 +7,12 @@
  * `--reward-deadline`, `--out`); at a terminal what no flag gave is asked, and with no terminal a
  * missing one is an error naming every flag still needed (`prompt.ts#missingFlags`).
  *
- * The file is an ordinary intent file — `Dest.Portal.send({ token, amount }).receive({ token,
- * amount }).then(() => { TOKEN.transfer(RECIPIENT, AMOUNT) })`, a body of plain token transfers,
- * which the Portal's Executor runs with no Pot — and `run.ts` then publishes it exactly as `sauce intent publish
- * <file>` would: rehearsed on the source (`--dry-run`) and on the destination (`fill`), confirmed,
- * sent, stored.
+ * The file is an ordinary intent file — `Dest.Portal.send({ token, amount }).refundee(you)
+ * .receive({ token, amount }).then(() => { TOKEN.transfer(RECIPIENT, AMOUNT) })`, whose body the
+ * destination's shared Pot cooks, paying its Kitchen's fee — and `run.ts` then publishes it exactly as
+ * `sauce intent publish <file> --fund <reward>` would: cooked on your Pot, which pulls the reward
+ * from you and pays it into the intent's vault; rehearsed on the source (`--dry-run`) and on the
+ * destination (`fill`), confirmed, sent, stored.
  */
 import {
   formatUnits,
@@ -61,8 +62,9 @@ export interface CreateInput {
   /** `undefined` with no terminal: then every value must come from a flag. */
   readonly ask?: Ask;
   readonly endpoint: (chain: CanonicalChain) => string | undefined;
-  /** Who publishes: the creator, and the recipient by default. */
-  readonly signer?: Address;
+  /** Who publishes: the refundee the file names, whose Pot publishes it, and the recipient by
+   *  default. */
+  readonly signer: Address;
   /** The time deadlines count from (unix seconds). */
   readonly now: bigint;
   readonly writeText: (path: string, text: string) => void;
@@ -79,7 +81,10 @@ export interface Created {
   readonly rewardDeadline: bigint;
   readonly prover: Address;
   readonly fundVia: IntentFundVia;
-  readonly creator?: Address;
+  /** The reward, as `--fund` pulls it into the Pot that publishes: `USDC:1010000n`. */
+  readonly fund: string;
+  /** The destination Kitchen's fee, which the body's cook pays: read where its endpoint was given. */
+  readonly executionFee?: bigint;
   /** For a person: what was chosen, and why the defaults are what they are. */
   readonly summary: readonly string[];
 }
@@ -272,6 +277,7 @@ async function margin(
   rewardToken: Token,
   deliveredToken: Token,
   proverFee: bigint | undefined,
+  kitchen: bigint | undefined,
 ): Promise<{ readonly amount: bigint; readonly lines: string[] }> {
   if (client === undefined) {
     return {
@@ -284,14 +290,13 @@ async function margin(
   }
   const native = nativeSymbol(destination);
   const gasPrice = await client.getGasPrice().catch(() => 0n);
-  const kitchen = await kitchenFee(client, destination).catch(() => 0n);
-  // A body of plain transfers runs on the Executor, not a Pot: no Kitchen fee is paid.
-  const costs = FILL_GAS * gasPrice + (proverFee ?? 0n);
+  // The body is cooked on the destination's shared Pot: the solver pays its Kitchen's fee.
+  const costs = FILL_GAS * gasPrice + (proverFee ?? 0n) + (kitchen ?? 0n);
   const lines = [
-    `the solver's costs on ${destination.slug}: ~${FILL_GAS} gas at ${formatUnits(gasPrice, 9)} gwei ` +
-      `and ${proverFee === undefined ? "an unquoted" : formatUnits(proverFee, 18)} ${native} for ` +
-      `the proof = ${formatUnits(costs, 18)} ${native} (no Kitchen fee: a transfer runs on no Pot; ` +
-      `a cook would pay ${formatUnits(kitchen, 18)} ${native})`,
+    `the solver's costs on ${destination.slug}: ~${FILL_GAS} gas at ${formatUnits(gasPrice, 9)} gwei, ` +
+      `${proverFee === undefined ? "an unquoted" : formatUnits(proverFee, 18)} ${native} for ` +
+      `the proof and ${kitchen === undefined ? "an unread" : formatUnits(kitchen, 18)} ${native} ` +
+      `for the Kitchen's fee = ${formatUnits(costs, 18)} ${native}`,
   ];
   const stable = STABLES.has((rewardToken.symbol ?? "").toUpperCase());
   const sameNative =
@@ -345,7 +350,9 @@ function proverChoices(source: CanonicalChain, destination: CanonicalChain) {
 
 /** The intent file, written for a person to read and keep. */
 function intentText(options: {
+  readonly source: CanonicalChain;
   readonly destination: CanonicalChain;
+  readonly refundee: Address;
   readonly delivered: Token;
   readonly amount: bigint;
   readonly recipient: Address;
@@ -354,14 +361,21 @@ function intentText(options: {
   readonly header: readonly string[];
 }): string {
   const accessor = options.destination.name.replace(/[^A-Za-z0-9]/g, "");
-  /** A token as a value: its symbol, or its address as a literal. */
-  const value = (token: Token): string =>
-    token.spelled === token.symbol ? token.symbol : token.address.toLowerCase();
+  // `.receive(...)` is written on the source, where only the source's names exist: a token the
+  // source does not name by that symbol is given by its address on the destination.
+  const named = (TOKEN_REGISTRY[options.source.id] ?? []).some(
+    (row) => row.symbol === options.delivered.symbol,
+  );
+  const received =
+    options.delivered.spelled === options.delivered.symbol && !named
+      ? `Token(${options.delivered.address.toLowerCase()})`
+      : options.delivered.spelled;
 
   return [
     ...options.header.map((line) => `// ${line}`),
-    `${accessor}.Portal.send({ token: ${value(options.rewardToken)}, amount: ${options.reward} })`,
-    `  .receive({ token: ${value(options.delivered)}, amount: ${options.amount} })`,
+    `${accessor}.Portal.send({ token: ${options.rewardToken.spelled}, amount: ${options.reward} })`,
+    `  .refundee(${options.refundee.toLowerCase()})`,
+    `  .receive({ token: ${received}, amount: ${options.amount} })`,
     "  .then(() => {",
     `    ${options.delivered.spelled}.transfer(${options.recipient.toLowerCase()}, ${options.amount});`,
     "  });",
@@ -442,7 +456,7 @@ export async function createIntent(input: CreateInput): Promise<Created> {
       : parseUnits(amountRaw, delivered.decimals);
   const recipientRaw = await value(input, missing, "--recipient", input.given.recipient, (ask) =>
     askText(ask, `Recipient on ${destination?.slug ?? "the destination"}`, {
-      ...(input.signer === undefined ? {} : { fallback: input.signer }),
+      fallback: input.signer,
       check: (text) => (isAddress(text, { strict: false }) ? undefined : "not an address"),
     }),
   );
@@ -490,6 +504,11 @@ export async function createIntent(input: CreateInput): Promise<Created> {
       : await tokenOn(source, rewardTokenRaw, sourceClient, "reward-token");
   let suggested: bigint | undefined;
   const marginLines: string[] = [];
+  // The Kitchen fee the body's cook pays on the destination, part of the intent.
+  const executionFee =
+    destinationClient === undefined || destination === undefined
+      ? undefined
+      : await kitchenFee(destinationClient, destination).catch(() => undefined);
   if (
     rewardToken !== undefined &&
     delivered !== undefined &&
@@ -507,7 +526,14 @@ export async function createIntent(input: CreateInput): Promise<Created> {
       (rewardToken.symbol === delivered.symbol ||
         (STABLES.has(rewardToken.symbol.toUpperCase()) &&
           STABLES.has((delivered.symbol ?? "").toUpperCase())));
-    const extra = await margin(destination, destinationClient, rewardToken, delivered, fee);
+    const extra = await margin(
+      destination,
+      destinationClient,
+      rewardToken,
+      delivered,
+      fee,
+      executionFee,
+    );
     marginLines.push(...extra.lines);
     if (same) {
       const base =
@@ -610,18 +636,23 @@ export async function createIntent(input: CreateInput): Promise<Created> {
       .replace(/[-:]/g, "")
       .replace(/\..*$/, "")}.sauce.ts`;
   if (input.exists(out)) throw new CliError(`${out} exists: name another with --out`);
+  // The reward, as `--fund` pulls it into the Pot that publishes: base units, as written here.
+  const fund = `${rewardToken!.spelled === rewardToken!.symbol ? rewardToken!.symbol : rewardToken!.address}:${reward!}n`;
   const header = [
     `${formatUnits(amount!, delivered!.decimals)} ${delivered!.symbol ?? delivered!.address} to ` +
       `${recipient!} on ${destination!.slug}, for ${formatUnits(reward!, rewardToken!.decimals)} ` +
       `${rewardToken!.symbol ?? rewardToken!.address} on ${source!.slug}.`,
     "Written by `sauce intent publish`. Publish it again with the same deadlines and prover:",
-    `  sauce intent publish ${out} --chain ${source!.slug} --keystore <path> \\`,
+    `  sauce intent publish ${out} --chain ${source!.slug} --keystore <path> --fund ${fund} \\`,
     `    --intent-deadline ${deadline} --intent-reward-deadline ${rewardDeadline} \\`,
-    `    --intent-prover ${prover}${input.signer === undefined ? "" : ` --intent-refundee ${input.signer}`}` +
+    `    --intent-prover ${prover}` +
+      (executionFee === undefined ? "" : ` --intent-execution-fee ${executionFee}`) +
       (fundVia === "transfer" ? "" : ` --intent-fund-via ${fundVia}`),
   ];
   const text = intentText({
+    source: source!,
     destination: destination!,
+    refundee: input.signer,
     delivered: delivered!,
     amount: amount!,
     recipient: recipient!,
@@ -640,7 +671,8 @@ export async function createIntent(input: CreateInput): Promise<Created> {
     rewardDeadline: rewardDeadline!,
     prover: prover!,
     fundVia,
-    ...(input.signer === undefined ? {} : { creator: input.signer }),
+    fund,
+    ...(executionFee === undefined ? {} : { executionFee }),
     summary: [
       `Wrote ${out}:`,
       ...text.split("\n").map((line) => `  ${line}`),

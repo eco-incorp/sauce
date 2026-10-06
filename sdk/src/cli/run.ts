@@ -48,10 +48,8 @@ import { chainServedBy, connect, connectAt, endpointFor, type Sent } from "./cha
 import {
   compileCommand,
   pastDeadline,
-  asPublished,
   compileProgram,
   potCommand,
-  PROBE_CREATOR,
   probeProgram,
   programChains,
   potDeployCommand,
@@ -96,7 +94,6 @@ import { globalsCommand } from "./globals.js";
 import { initProject, installedViem, writeSauceScriptTsconfig } from "./init.js";
 import {
   assumedBalances,
-  bindMainArguments,
   definesReach,
   fundingFor,
   potTarget,
@@ -391,11 +388,6 @@ const PROGRAM: FlagSpecs = {
     value: "<unix seconds>",
     help: "For intents the program opens: their deadline",
   },
-  "intent-refundee": {
-    type: "string",
-    value: "<address>",
-    help: "…the refundee of those a wallet publishes itself, in its place; a program names its own",
-  },
   "intent-reward-deadline": {
     type: "string",
     value: "<unix seconds>",
@@ -637,7 +629,6 @@ async function autoExecutionFee(
         ...input,
         intents: {
           ...input.intents,
-          publisher: input.intents.publisher ?? input.intents.refundee ?? PROBE_CREATOR,
           executionFee: 0n,
         },
       },
@@ -721,9 +712,6 @@ async function programInput(
   operand: string | ProgramText = fileOperand(args),
   fallback?: CanonicalChain,
   gate?: Gate,
-  /** For a wallet's intents: `main`'s arguments, bound into them (`bindMainArguments`), after
-   *  `before` has refused what no arguments could fix. */
-  bind?: { readonly args?: ArgsInput; readonly before?: (input: ProgramInput) => void },
 ): Promise<ProgramInput> {
   const { file, text, stdin } = programText(io, operand);
   const sourceDir = stringFlag(args, "source-dir");
@@ -732,7 +720,6 @@ async function programInput(
   const definesFile = stringFlag(args, "defines");
   const deadline = stringFlag(args, "intent-deadline");
   const rewardDeadline = stringFlag(args, "intent-reward-deadline");
-  const refundee = stringFlag(args, "intent-refundee");
   const prover = stringFlag(args, "intent-prover");
   const salt = stringFlag(args, "intent-salt");
   const fee = stringFlag(args, "intent-execution-fee");
@@ -767,7 +754,6 @@ async function programInput(
       ...(rewardDeadline === undefined
         ? {}
         : { rewardDeadline: parseUnixSeconds("intent-reward-deadline", rewardDeadline) }),
-      ...(refundee === undefined ? {} : { refundee: parseAddress("intent-refundee", refundee) }),
       ...(prover === undefined ? {} : { prover: parseAddress("intent-prover", prover) }),
       // Random unless given, and picked once, for the same reason as the time the intents open.
       salt: salt === undefined ? randomSalt() : parseIntentSalt(salt),
@@ -777,11 +763,9 @@ async function programInput(
       ...(fundVia === undefined ? {} : { fundVia: parseFundVia(fundVia) }),
     },
   };
-  bind?.before?.(given);
-  const input = bind === undefined ? given : bindMainArguments(given, bind.args, io);
-  if (fee !== undefined && fee !== "auto") return input;
+  if (fee !== undefined && fee !== "auto") return given;
   const executionFee = await autoExecutionFee(
-    input,
+    given,
     io,
     endpointsOf(args, io, chain),
     gate,
@@ -789,8 +773,8 @@ async function programInput(
   );
 
   return executionFee === undefined
-    ? input
-    : { ...input, intents: { ...input.intents, executionFee } };
+    ? given
+    : { ...given, intents: { ...given.intents, executionFee } };
 }
 
 /**
@@ -1218,7 +1202,16 @@ async function lifecycleTargets(
     throw new UsageError("give one <file>, or one or more intent hashes");
   }
 
-  return fileTargets(await programInput(args, io, operands[0]!, undefined, gate), io, store);
+  const program = await programInput(args, io, operands[0]!, undefined, gate);
+  const rpcUrl = (await endpointLookup(args, io))(program.chain);
+  if (rpcUrl === undefined) {
+    throw new UsageError(
+      `the intents ${program.file} opens are read from a rehearsal of publishing them on ` +
+        `${program.chain.slug}: give its endpoint (--rpc-url or --config), or name the intent by its hash`,
+    );
+  }
+
+  return fileTargets(program, io, store, { rpcUrl });
 }
 
 /**
@@ -1284,6 +1277,20 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
   const lookup = await endpointLookup(args, io);
   const account = hasSigner(args, io) ? await signerOf(args, io) : undefined;
   const flag = (name: string) => stringFlag(args, name);
+  if (flag("from") !== undefined && account !== undefined) {
+    throw new UsageError("--from is for when there is no signer: the signer's Pot publishes");
+  }
+  // Whose Pot publishes it, and the refundee the file names: asked before anything else.
+  const owner =
+    account?.address ??
+    (flag("from") === undefined ? undefined : parseAddress("from", flag("from")!));
+  if (owner === undefined) {
+    throw new UsageError(
+      "publishing an intent needs whose it is — the refundee the file names, whose Pot publishes " +
+        "it: a signer (--wallet, --keystore or --private-key), or --from <address> with --format " +
+        "json to print the cook unsigned",
+    );
+  }
   const given = {
     ...((flag("source") ?? flag("chain")) ? { source: (flag("source") ?? flag("chain"))! } : {}),
     ...(flag("destination") === undefined ? {} : { destination: flag("destination")! }),
@@ -1302,19 +1309,12 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
     given,
     ...(io.ask === undefined ? {} : { ask: io.ask }),
     endpoint: lookup,
-    ...(account === undefined ? {} : { signer: account.address }),
+    signer: owner,
     now: BigInt(Math.floor(Date.now() / 1000)),
     writeText: io.writeText,
     exists: (path) => io.readModule(path) !== undefined,
   });
   io.stderr(`${created.summary.join("\n")}\n\n`);
-  const creator = account?.address ?? (flag("intent-refundee") as `0x${string}` | undefined);
-  if (creator === undefined) {
-    throw new UsageError(
-      `${created.file} is written; publishing it needs a signer (the refundee), or ` +
-        "--intent-refundee with --format json to print the transactions unsigned",
-    );
-  }
   const program: ProgramInput = {
     file: created.file,
     text: created.text,
@@ -1324,17 +1324,41 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
     intents: {
       deadline: created.deadline,
       rewardDeadline: created.rewardDeadline,
-      refundee: creator,
       prover: created.prover,
       fundVia: created.fundVia,
+      executionFee: created.executionFee,
+      // One salt for every compile below: the rehearsals publish the intent that is sent.
+      salt: randomSalt(),
     },
   };
   const rpcUrl = lookup(created.source);
   if (rpcUrl === undefined) {
     throw new UsageError(`publishing needs ${created.source.slug}'s endpoint: --config with it`);
   }
+  if (created.executionFee === undefined) {
+    throw new UsageError(
+      `${created.file} is written, and not published: its body cooks on ` +
+        `${created.destination.slug}, whose Kitchen's fee it pays, and nothing read it: --config ` +
+        `with ${created.destination.slug}'s endpoint`,
+    );
+  }
+  const approver = approverOf(args, io);
+  const cook = {
+    ...program,
+    target: potInput(args, owner),
+  };
+  const fund = (send: boolean) =>
+    fundingFor({
+      chain: created.source,
+      rpcUrl,
+      fund: [created.fund],
+      sweep: false,
+      send,
+      ...(account === undefined ? {} : { account }),
+      approver,
+    });
   // Rehearsed on the source, then on the destination, before anything is sent.
-  const dry = await publishCommand({ ...program, dryRun: true, rpcUrl, from: creator }, io);
+  const dry = await publishCommand({ ...cook, dryRun: true, rpcUrl, fund: fund(false) }, io);
   io.stderr(`Publishing, rehearsed on ${created.source.slug}:\n${dry.text}\n\n`);
   if (dry.exitCode !== undefined && dry.exitCode !== 0) {
     return {
@@ -1344,7 +1368,7 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
   }
   if (lookup(created.destination) !== undefined) {
     const fill = await fillCommand({
-      intents: fillTargets(program, io),
+      intents: await fillTargets(program, io, { rpcUrl, owner }),
       from: created.file,
       labels: [],
       endpointOf: (chain) => lookup(chain) ?? requiredEndpoint(args, io, chain),
@@ -1356,10 +1380,16 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
     );
   }
   if (account === undefined) {
-    return publishCommand({ ...program, dryRun: false, format: "json", rpcUrl, from: creator }, io);
+    return {
+      ...(await publishCommand({ ...cook, dryRun: false, format: "json", rpcUrl }, io)),
+      notes: [
+        `The cook publishes ${created.file} from ${owner}'s Pot, which must hold the reward: ` +
+          `fund it first (${created.fund}), or publish with a signer, which pulls it in.`,
+      ],
+    };
   }
   const action = `publish ${created.file} from ${account.address}`;
-  const answer = await approverOf(args, io).approve(
+  const answer = await approver.approve(
     action,
     `Publish ${created.file} from ${account.address}? [y/N] `,
   );
@@ -1372,10 +1402,12 @@ async function createAndPublish(args: ParsedArgs, io: CliIo): Promise<CommandOut
 
   return publishCommand(
     {
-      ...program,
+      ...cook,
       dryRun: false,
       rpcUrl,
       account,
+      approver,
+      fund: fund(true),
       onSent: storing(args, io, created.source, rpcUrl),
     },
     io,
@@ -1626,40 +1658,53 @@ const SUPPORTED_ONLY = (what: string): string[] => [
   ),
 ];
 
+/** Why `sauce intent publish` refuses a Solana file. */
+const SOLANA_PUBLISH =
+  "sauce intent publish cooks the file on its source chain, which publishes through that chain's " +
+  "Portal, an EVM contract. Publishing from Solana is not supported: the SDK has no Kitchen-built " +
+  "path for an intent that Solana's Portal runs (docs/guides/solana.md). Open the intent from an " +
+  "EVM chain; its destination may be Solana.";
+
 const INTENT_VERBS: Readonly<Record<string, Command>> = {
   publish: {
     usage: [
-      "sauce intent publish <file | -> --chain <source> (--keystore <path> | --private-key <hex>) [options] [--args <value>…]",
+      "sauce intent publish <file | -> --chain <source> (--wallet <name> | --keystore <path> | --private-key <hex>) [--fund <TOKEN:amount>]… [options] [--args <value>…]",
       "sauce intent publish [--source <chain>] [--destination <chain>] [--token <token>] [--amount <n>] …",
     ],
-    summary: "Publish a file's fixed intents from a wallet (or make one, step by step)",
+    summary: "Publish a file's intents from your Pot (or make one, step by step)",
     trailing: "args",
     flags: {
       ...PROGRAM,
       "args-json": COOK["args-json"]!,
+      ...SALT,
+      value: COOK.value!,
       ...ENDPOINT,
       ...SIGNER,
+      ...FUND,
       ...CREATE,
-      "auto-approve": LIFECYCLE["auto-approve"]!,
+      "auto-approve": {
+        type: "boolean",
+        help: "Approve, without asking, what the publish sends first (as sauce run does)",
+      },
       from: {
         type: "string",
         value: "<address>",
-        help: "With --dry-run or --format and no signer: whose wallet",
+        help: "With --dry-run or --format and no signer: whose Pot",
       },
       "dry-run": {
         type: "boolean",
-        help: "Rehearse the transactions together (eth_simulateV1); send nothing",
+        help: "Rehearse the cook (eth_simulateV1) and read the intents it publishes; send nothing",
       },
       "assume-balance": {
         type: "string",
         multiple: true,
         value: "<TOKEN:amount>",
-        help: "With --dry-run: give the wallet this balance, in whole tokens, for the rehearsal only",
+        help: "With --dry-run: give the Pot this balance, in whole tokens, for the rehearsal only",
       },
       format: {
         type: "string",
         value: "<json|cast>",
-        help: "Print the unsigned transactions instead of sending them",
+        help: "Print the unsigned cook instead of sending it",
       },
       store: LIFECYCLE.store!,
       ...JSON_FLAG,
@@ -1667,48 +1712,40 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       ...ARGS,
     },
     details: [
-      "For a file whose intents are fixed when it is built — every amount a literal, one of main's",
-      "arguments or a top-level `const` of a literal — builds each intent off-chain (the SDK's own",
-      "lowering) and sends the source chain's transactions from the signer's wallet: each reward token",
-      "transferred to the intent's vault (and the native amount sent to it), then Portal.publish.",
-      "No approval is asked for. The vault is the SDK's offline derivation, which the Portal's own",
-      "intentVaultAddress must agree with or nothing is sent; only what the vault does not hold",
-      "yet is transferred, and publish is sent only once the Portal counts the intent funded.",
-      "Prints the intent hashes and the transactions. A file whose intent uses a value the program",
-      "measures or computes while it runs, or that does anything besides open its intents, is",
-      "refused: use `sauce run` on a Pot.",
+      "Cooks the file on the signer's own Pot (--salt picks another of yours), which publishes",
+      "every intent it opens: the file runs as `sauce run` runs it, and each intent pays its reward",
+      "from the Pot into its vault (or through publishAndFund, --intent-fund-via), then is",
+      "published. --fund TOKEN:amount pulls the reward into the Pot in the same cook, as `sauce run",
+      "--fund` does (Permit2 by default; --fund-mode, --sweep). Every intent names its refundee in",
+      "the file, `.refundee(<address>)`: no default is safe on a Pot.",
       "",
-      "main's arguments (--args, in order, or --args-json) are the values the intents are built",
-      "with: a wallet publishes what it knows before anything runs, so each is bound into the",
-      "intents as it is. Each is one word: an integer, an address or a bool.",
+      "Each intent's hash and record are read from the Portal's IntentPublished log: from the",
+      "rehearsal with --dry-run, and from the receipt once sent, which the store keeps (--store).",
+      "main's arguments (--args, in order, or --args-json) are the cook's, read as it runs.",
       "",
-      "--intent-fund-via publishAndFund funds it through the Portal instead: each reward token",
-      "approved to the Portal (reset to zero first when a smaller allowance stands, as SafeERC20",
-      "does), then publishAndFund, which records the intent Funded and emits IntentFunded.",
-      "",
-      "--dry-run rehearses the transactions together through eth_simulateV1 from the signer's",
-      "wallet, or --from's with no key, then asks the Portal whether each intent is funded, and",
-      "sends nothing. --assume-balance TOKEN:amount gives that wallet a balance for the rehearsal",
-      "only, by state override (repeatable; the amount as `sauce run --fund` takes it;",
-      "ETH:<amount> for the native currency), so a wallet that does not hold the reward yet can",
-      "rehearse publishing it.",
+      "--dry-run rehearses the cook from the Pot's owner, the signer or --from with no key, as",
+      "`sauce simulate` does, and prints the intents it publishes. --assume-balance TOKEN:amount",
+      "gives the Pot a balance for the rehearsal only, by state override (repeatable; ETH:<amount>",
+      "for the native currency); with no key, --fund credits the Pot what its pulls would bring.",
+      "--format json|cast prints the unsigned cook instead, as `sauce tx` does: the Pot must hold",
+      "the reward already.",
       "",
       "With no <file>, it makes one: which chains, what is delivered and to whom, the reward",
       "(suggested: what is delivered plus a margin over the solver's destination costs — gas, the",
-      "proof's fee, a Kitchen fee where one runs — priced through a Uniswap V3 pool there, and",
+      "proof's fee, the destination Kitchen's fee — priced through a Uniswap V3 pool there, and",
       "doubled so a fill is worth a solver's while), the fill and reward deadlines, the prover",
       "and how the reward is funded (--intent-fund-via, a transfer to the vault by default), each",
       "asked at a terminal unless its flag gives it (with no terminal, every flag still needed is",
       "named). It writes the intent as a .sauce.ts file (--out, default",
-      "intent-<source>-to-<destination>-<time>.sauce.ts) to keep and publish again, rehearses",
-      "publishing it (--dry-run) and filling it on the destination (`sauce intent fill`), and",
-      "with a signer publishes it once you approve (or with --auto-approve), storing it. It reads",
-      "both chains.",
-      ...SUPPORTED_ONLY("Publishes (or prints the transactions)"),
+      "intent-<source>-to-<destination>-<time>.sauce.ts) naming you as its refundee, to keep and",
+      "publish again, rehearses publishing it (--dry-run, the reward funded) and filling it on the",
+      "destination (`sauce intent fill`), and with a signer publishes it once you approve (or with",
+      "--auto-approve), pulling the reward in with --fund, and stores it. It reads both chains.",
+      ...SUPPORTED_ONLY("Publishes (or prints the cook)"),
       "",
       "Examples:",
       "  sauce intent publish bridge.sauce.ts --chain ethereum --keystore ~/.keys/me.json \\",
-      "    --intent-deadline 2000000000 --intent-refundee 0x… --args 1000000 0x…",
+      "    --fund USDC:1.01 --args 1000000 0x… 0x…",
       "  sauce intent publish --keystore ~/.keys/me.json",
       "  sauce intent publish --source ethereum --destination base --token USDC --amount 1 \\",
       "    --recipient 0x… --reward-token USDC --reward 1.01 --prover HyperProver \\",
@@ -1721,49 +1758,58 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         throw new UsageError(`--${created} makes a new intent: give it with no <file>`);
       }
       const format = stringFlag(args, "format");
-      // A dry run rehearses on every chain; transactions, printed or sent, need supported ones.
-      const gate: Gate | undefined =
-        args.values["dry-run"] === true && format === undefined
-          ? undefined
-          : { action: "publishing intents", by: "all" };
-      const program = await programInput(args, io, undefined, undefined, gate, {
-        ...argsInput(args, io, trailing),
-        // Before main's arguments: no argument makes a Solana file publishable.
-        before: ({ chain }) => {
-          if (chain.kind !== "svm") return;
-          throw new UsageError(
-            "sauce intent publish sends a source chain's Portal transactions from an EVM wallet. " +
-              "Publishing from Solana is not supported: the SDK has no Kitchen-built path for an " +
-              "intent that Solana's Portal runs (docs/guides/solana.md). Open the intent from an " +
-              "EVM chain; its destination may be Solana.",
-          );
-        },
-      });
       if (format !== undefined && format !== "json" && format !== "cast") {
         throw new UsageError(`--format: '${format}' is not json or cast`);
       }
+      const dryRun = args.values["dry-run"] === true;
+      // A dry run rehearses on every chain; a cook, printed or sent, needs supported ones.
+      const gate: Gate | undefined =
+        dryRun && format === undefined ? undefined : { action: "publishing intents", by: "all" };
+      const program = await programOperand(args, io, gate);
+      // Before the compile: nothing in a Solana file makes it publishable.
+      if (program.chain.kind === "svm") throw new UsageError(SOLANA_PUBLISH);
       // Compiled once: refused before the signer or any endpoint, then the Pots checked.
       const compiled = probeProgram(program, io);
       if (gate !== undefined) gated(gate, program.chain, compiled.bodies);
-      const account = hasSigner(args, io) ? await signerOf(args, io) : undefined;
       const from = stringFlag(args, "from");
-      if (from !== undefined && account !== undefined) {
+      if (from !== undefined && hasSigner(args, io)) {
+        throw new UsageError("--from is for when there is no signer: the signer's Pot publishes");
+      }
+      const funds = repeatedFlag(args, "fund").length > 0;
+      // A key sends the cook; in a rehearsal it signs --fund's pulls. Otherwise it names the owner.
+      const account =
+        format === undefined && (!dryRun || funds) && hasSigner(args, io)
+          ? await signerOf(args, io)
+          : undefined;
+      const owner =
+        account?.address ??
+        (hasSigner(args, io)
+          ? await signerAddress(args, io)
+          : from === undefined
+            ? undefined
+            : parseAddress("from", from));
+      if (owner === undefined) {
         throw new UsageError(
-          "--from is for when there is no signer: the signer's wallet publishes",
+          dryRun || format !== undefined
+            ? "whose Pot publishes: a signer (--wallet, --keystore or --private-key), or --from <address>"
+            : "missing a signer to publish from: --wallet <name>, --keystore <path> or " +
+                "--private-key <hex> (or rehearse with --dry-run, or print the unsigned cook " +
+                "with --format json)",
         );
       }
+      const input = cookInput(args, io, trailing, owner, program);
       const rpcUrl =
-        format === undefined && args.values["dry-run"] !== true
+        format === undefined
           ? requiredEndpoint(args, io, program.chain)
           : endpoint(args, io, program.chain);
-
       const assume = assumedBalancesOf(args, program.chain);
-      if (assume.length > 0 && args.values["dry-run"] !== true) {
+      if (assume.length > 0 && !dryRun) {
         throw new UsageError(
-          "--assume-balance goes with --dry-run: it gives the wallet a balance for a rehearsal, " +
-            "and nothing to a transaction that is sent",
+          "--assume-balance goes with --dry-run: it gives the Pot a balance for a rehearsal, and " +
+            "nothing to a cook that is sent",
         );
       }
+      const fund = fundingOf(args, io, program.chain, rpcUrl ?? "", !dryRun, account);
 
       // Before anything is sent: an intent whose Pot is not deployed is one no solver can fill.
       const pots = await checkIntentPots(
@@ -1780,14 +1826,17 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
 
       return publishCommand(
         {
-          ...program,
+          ...input,
           ...(format === undefined ? {} : { format }),
-          dryRun: args.values["dry-run"] === true,
+          dryRun,
           ...(assume.length === 0 ? {} : { assume }),
           ...(rpcUrl === undefined ? {} : { rpcUrl }),
           ...(account === undefined ? {} : { account }),
-          ...(from === undefined ? {} : { from: parseAddress("from", from) }),
-          ...(rpcUrl === undefined ? {} : { onSent: storing(args, io, program.chain, rpcUrl) }),
+          ...(fund === undefined ? {} : { fund }),
+          approver: approverOf(args, io),
+          ...(rpcUrl === undefined || dryRun
+            ? {}
+            : { onSent: storing(args, io, program.chain, rpcUrl) }),
         },
         io,
       );
@@ -1816,6 +1865,11 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         help: 'Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }',
       },
       offline: ENDPOINT.offline!,
+      owner: {
+        type: "string",
+        value: "<address>",
+        help: "With a file: whose Pot publishes its intents in the rehearsal that reads them",
+      },
       solver: {
         type: "string",
         value: "<address|key>",
@@ -1843,8 +1897,10 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       ...ARGS,
     },
     details: [
-      "Builds each intent the file opens, as `sauce intent publish` does (or takes the intent the store",
-      "holds under that hash), and fills it on its destination chain as a solver does: one",
+      "Reads each intent the file opens from a rehearsal of publishing it on the source chain — the",
+      "file cooked on --owner's Pot (default: an account nobody holds the key of) with its rewards",
+      "unpaid, each intent rebuilt from the Portal's IntentPublished log — or takes the intent the",
+      "store holds under that hash, and fills it on its destination chain as a solver does: one",
       "eth_simulateV1 block, every call from the solver — Kitchen.deployPot for the destination's",
       "shared intent Pot when the route cooks on it and it is not deployed yet (any account may",
       "send it), the solver's approval of the Portal for each token the route delivers (reset to",
@@ -1873,9 +1929,9 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "",
       "It runs on the DESTINATION, and reads the source to check the source prover trusts the",
       "destination's; --rpc-url is the destination's endpoint, for intents that all go to one",
-      "chain. The intent must be fixed when it is built, as for publish: one using a value the",
-      "program measures on chain has no route until it runs (name it by the hash `sauce run`",
-      "stored). Needs an endpoint that serves eth_simulateV1.",
+      "chain, and the source is read through --config or the built-in endpoints. A value the",
+      "program measures as it runs is measured on --owner's Pot as it stands. Needs endpoints",
+      "that serve eth_simulateV1.",
       "",
       "An intent to Solana (one `sauce intent import` stored from its publishing transaction) is",
       "filled through Solana's Portal program: Portal.fulfill, the solver's token accounts paying",
@@ -1888,7 +1944,7 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "",
       "Examples:",
       "  sauce intent fill swap-on-base.sauce.ts --chain ethereum \\",
-      "    --intent-deadline 2000000000 --intent-refundee 0x… --intent-execution-fee 1000000000000 \\",
+      "    --intent-deadline 2000000000 --intent-execution-fee 1000000000000 \\",
       "    --args <amountIn> <reward> <sqrtPriceLimitX96> <minOut> <recipient> <refundTo>",
       "  sauce intent fill 0x<intent hash> --send --keystore ~/.keys/me.json",
     ].join("\n"),
@@ -1938,18 +1994,48 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
         );
         from = operands.length === 1 ? operands[0]! : "the intents named";
       } else {
-        const program = await programInput(
-          args,
-          io,
-          undefined,
-          undefined,
-          gate,
-          argsInput(args, io, trailing),
-        );
+        const program = await programInput(args, io, undefined, undefined, gate);
         // A deadline that has passed is rehearsed anyway, so the Portal's own refusal shows.
         const past = pastDeadline(program);
         if (past !== undefined) io.stderr(`${past}: the rehearsal shows the Portal refusing it\n`);
-        targets = fillTargets(program, io);
+        // What no rehearsal could change, before any endpoint is reached.
+        if (program.chain.kind !== "evm") {
+          throw new UsageError(
+            `sauce intent fill rehearses intents an EVM chain opens, and ${program.chain.slug} is ` +
+              "not one: the eco-routes Portal this SDK publishes through is EVM only",
+          );
+        }
+        const destinations = intentDestinations(probeProgram(program, io).bodies);
+        if (destinations.length === 0) {
+          throw new UsageError(
+            `${program.file} opens no intent: there is nothing for a solver to fill`,
+          );
+        }
+        const reached = new Set(destinations.map((chain) => chain.slug));
+        if (rpcUrl !== undefined && reached.size > 1) {
+          throw new UsageError(
+            `${program.file}'s intents go to ${[...reached].join(" and ")}: --rpc-url names one ` +
+              "endpoint, so give --config, which names each destination's",
+          );
+        }
+        // Each destination's endpoint, which the fill needs, then the source's for the rehearsal.
+        for (const chain of destinations) requiredEndpoint(args, io, chain);
+        // --rpc-url is the destination's: the source is read only through the others.
+        const source =
+          rpcUrl === undefined
+            ? endpoint(args, io, program.chain)
+            : sharedEndpoint(args, io, program.chain);
+        if (source === undefined) {
+          throw new UsageError(
+            `the intents ${program.file} opens are read from a rehearsal of publishing them on ` +
+              `${program.chain.slug}: give its endpoint in --config, or name the intent by its hash`,
+          );
+        }
+        const owner = stringFlag(args, "owner");
+        targets = await fillTargets({ ...program, ...argsInput(args, io, trailing) }, io, {
+          rpcUrl: source,
+          ...(owner === undefined ? {} : { owner: parseAddress("owner", owner) }),
+        });
         labels = defineLabels(program);
         from = program.file;
       }
@@ -3305,16 +3391,16 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "publish or publishAndFund (the route and the reward), an ERC-20 call, or a bare program.",
       "A 32-byte hash with --chain (or --rpc-url) is a transaction, fetched first.",
       "With --source, a cook's program is checked against that file's and the arguments after it",
-      "are decoded against its main. A file operand is compiled and its intents listed, with",
-      "each value it measures at run time named; with --args, main's arguments are bound into",
-      "them, as `sauce intent publish` binds them. No opcode listing: programs are reported by",
-      "size, hash and what they open.",
+      "are decoded against its main. A file operand is compiled and its intents listed: each",
+      "one's destination and the body it cooks there, with the values the program gives it as it",
+      "runs. Each intent's route and reward are encoded as the program runs, so `sauce simulate`",
+      "reads them from the Portal's log. No opcode listing: programs are reported by size, hash",
+      "and what they open.",
       "",
       "Examples:",
       "  sauce inspect 0x… --chain base --source split.sauce.ts",
       "  sauce inspect 0x<tx hash> --chain base",
-      "  sauce inspect bridge.sauce.ts --chain arbitrum --intent-deadline 2000000000 --intent-refundee 0x… \\",
-      "    --args 1000000 0x…",
+      "  sauce inspect bridge.sauce.ts --chain arbitrum",
     ].join("\n"),
     run: async (args, io, trailing) => {
       const [operand, ...extra] = args.positionals;
@@ -3328,17 +3414,19 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         if (stringFlag(args, "source") !== undefined) {
           throw new UsageError("--source goes with hex: a file operand is its own source");
         }
-        const given = argsInput(args, io, trailing);
+        if (argsInput(args, io, trailing).args !== undefined) {
+          throw new UsageError(
+            "--args: a file's main reads its arguments as it runs, and inspect compiles it " +
+              "without running it; `sauce simulate` runs it with them",
+          );
+        }
         const input = await programInput(
           args,
           io,
           piped === undefined ? fileOperand(args) : { file: STDIN, text: piped, stdin: true },
-          undefined,
-          undefined,
-          given.args === undefined ? undefined : given,
         );
 
-        return inspectFile(input.file, compileProgram(asPublished(input), io));
+        return inspectFile(input.file, compileProgram(input, io));
       }
       if (argsInput(args, io, trailing).args !== undefined) {
         throw new UsageError(

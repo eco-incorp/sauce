@@ -74,8 +74,13 @@ describe("making an intent: sauce intent publish with no file", () => {
     const text = readFileSync(out, "utf8");
     expect(text).toContain(`USDC.transfer(${RECIPIENT.toLowerCase()}, 1500000);`);
     expect(text).toContain("Base.Portal.send({ token: USDC, amount: 1600000 })");
+    // The signer is its refundee, written in the file: no intent has a default one.
+    expect(text).toContain(`.refundee(${ME.toLowerCase()})`);
     expect(text).toContain(".receive({ token: USDC, amount: 1500000 })");
     expect(text).toContain(`sauce intent publish ${out} --chain ethereum`);
+    // Published by a cook on the signer's Pot, which pulls the reward in.
+    expect(created.fund).toBe("USDC:1600000n");
+    expect(text).toContain("--fund USDC:1600000n");
     expect(text).toContain("--intent-fund-via publishAndFund");
     // With no endpoint the solver's costs are not estimated, and it says so.
     expect(created.summary.join("\n")).toContain("no base endpoint");
@@ -89,18 +94,16 @@ describe("making an intent: sauce intent publish with no file", () => {
         intents: {
           deadline: created.deadline,
           rewardDeadline: created.rewardDeadline,
-          // As `sauce intent publish` builds it: the wallet that publishes it is its creator.
-          publisher: ME,
           prover: created.prover,
+          executionFee: 0n,
         },
       },
       nodeIo(),
     );
-    const [intent] = program.intents;
-    expect(intent!.destination.slug).toBe("base");
-    expect(intent!.intent.reward.deadline).toBe(NOW + 86_400n);
-    expect(intent!.intent.route.deadline).toBe(NOW + 3600n);
-    expect(intent!.intent.route.tokens[0]!.amount).toBe(1_500_000n);
+    // One intent, to Base, whose body the program fixes entirely.
+    expect(program.bodies.map((body) => [body.destination.slug, body.captures])).toEqual([
+      ["base", []],
+    ]);
   });
 
   it("asks what no flag gave, at a terminal, with the defaults it says", async () => {
