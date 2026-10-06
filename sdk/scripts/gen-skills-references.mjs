@@ -417,7 +417,7 @@ export async function skillsReferences(api, documented) {
           ? {
               engine: deployments.v12EngineAddress(),
               kitchen: deployments.v12KitchenAddress(),
-              router: deployments.v12RouterAddress(),
+              router: deployments.v12QuoteRouterAddress(),
             }
           : {
               engine: deployments.v12SvmEngineProgramId(),

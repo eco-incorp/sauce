@@ -107,7 +107,7 @@ the shared Pot — to predict the Pot and check that it is deployed, with the ri
 The registry records one eco-routes Portal, `0xEC000769A73b70e16f361a442292500b3BCf4A85`, on every
 EVM chain it has eco-routes on, Arc included. So one Executor
 (`0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082`) and one derived Pot
-(`destinationPot(chain)`, `0xDd330394620fBFF4D0AdcfA33B0D7b3622Db15B0`) serve every destination.
+(`destinationPot(chain)`, `0x6340080a1967a03cAAD490a170828d4C59EE5983`) serve every destination.
 This prediction uses the pinned Kitchen release's Pot bytecode. The Kitchen, the matching engine and
 that Pot must be deployed on the destination before an intent to it can run; the release address
 alone does not confirm readiness.

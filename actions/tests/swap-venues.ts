@@ -2,13 +2,12 @@
  * Shared harness for the `swap-*.mainnet.test.ts` suites, which EXECUTE `@sauce/router` on captured
  * chain state through the released engine, Kitchen, Pot and Router. NOT a `.test.ts`.
  *
- * Each venue is called three ways from the same snapshot with the same funding, so the outputs can
+ * Each venue is called two ways from the same snapshot with the same funding, so the outputs can
  * be compared exactly and the gas and program bytes attributed:
  *
  *   - `library`: a Sauce program calling the `@sauce/router` function with literal arguments;
  *   - `runtime`: the same function called with every pool, token and amount a `main` argument, the
  *     shape a program that chooses its venue while it runs has;
- *   - `router`: the Pot's Router's unified `swap(SwapParams)`, where the Router can run the venue.
  *
  * and once more through the action that lowers to it.
  */
@@ -269,46 +268,10 @@ export function actionProgram(chainId: number, actions: Action[]): Uint8Array {
   return compileProgram({ version: 1, chainId, actions }).bytecode;
 }
 
-/** What the Router path reads for one pay-first leg: the fields its unified `swap` takes. */
-export interface RouterLeg {
-  readonly poolType: number;
-  readonly pool: string;
-  readonly tokenIn: string;
-  readonly tokenOut: string;
-  readonly amountIn: bigint;
-  /** UniV2's `poolKey.fee` (ppm; 0 is the Router's 3000). */
-  readonly fee?: bigint;
-}
-
-/** The Pot's Router's unified `swap({...})` for a pay-first venue, field for field. */
-export function routerSource(leg: RouterLeg): string {
-  const n = (value: string | bigint): string => `${BigInt(value)}n`;
-
-  return [
-    'import { ISauceRouter } from "./artifacts/ISauceRouter.json";',
-    "",
-    "function main() {",
-    "  ISauceRouter.at(ctx.self()).swap({",
-    `    poolType: ${leg.poolType}n,`,
-    `    pool: ${n(leg.pool)},`,
-    `    poolKey: { currency0: 0n, currency1: 0n, fee: ${n(leg.fee ?? 0n)}, tickSpacing: 0n, hooks: 0n },`,
-    `    tokenIn: ${n(leg.tokenIn)},`,
-    `    tokenOut: ${n(leg.tokenOut)},`,
-    `    amountSpecified: ${n(leg.amountIn)},`,
-    "    sqrtPriceLimitX96: 0n,",
-    "    payer: ctx.self(),",
-    "    recipient: ctx.self(),",
-    "    callback: hex``,",
-    "  });",
-    "}",
-    "",
-  ].join("\n");
-}
-
 /** One measured cook. */
 export interface Measurement {
   readonly venue: string;
-  readonly path: "router" | "library" | "runtime" | "action";
+  readonly path: "library" | "runtime" | "action";
   readonly bytes: number;
   readonly gas: bigint;
   readonly out: bigint;
@@ -335,7 +298,7 @@ export async function measure(
 /** The measurements as a table: venue, then bytes · gasUsed for each path that ran. */
 export function printMeasurements(chain: string): void {
   const venues = [...new Set(MEASUREMENTS.map((m) => m.venue))];
-  const paths = ["library", "runtime", "action", "router"] as const;
+  const paths = ["library", "runtime", "action"] as const;
   const rows = venues.map((venue) => {
     const cells = paths.map((path) => {
       const m = MEASUREMENTS.find((x) => x.venue === venue && x.path === path);
@@ -347,8 +310,8 @@ export function printMeasurements(chain: string): void {
   console.log(
     [
       `\n${chain}: program bytes · cook gasUsed`,
-      "| venue | @sauce/router, literal args | @sauce/router, run-time args | action | Router `swap` | delivered |",
-      "|---|---|---|---|---|---|",
+      "| venue | @sauce/router, literal args | @sauce/router, run-time args | action | delivered |",
+      "|---|---|---|---|---|",
       ...rows,
     ].join("\n"),
   );

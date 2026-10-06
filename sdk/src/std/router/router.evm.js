@@ -20,8 +20,8 @@
 //     involved, so they run in any Pot.
 //   - Uniswap V3 (and its forks), Uniswap V4 and Maverick V2 pools re-enter their caller mid-swap to
 //     be paid. A program cannot answer that call, so these functions call the Pot's Router
-//     (`ctx.self()`, whose fallback delegatecalls it), which can. The Router checks the pool's
-//     tokens against `tokenIn`/`tokenOut` and pays only what the pool asks for, up to `amountIn`.
+//     (`ctx.self()`, whose fallback delegatecalls it), which can. Generation 4 pays only the named
+//     input token and only what the pool asks for, up to `amountIn`.
 //
 // Every token write is `@sauce/token`'s: OpenZeppelin `SafeERC20`, so a token that returns nothing
 // (USDT) works, one that returns `false` reverts the program, and an approval resets a standing
@@ -51,8 +51,10 @@ import CurveCryptoSwap from "./curve-cryptoswap.abi.json";
 import CurveStableSwap from "./curve-stableswap.abi.json";
 import DODOV2Pool from "./dodo-v2-pool.abi.json";
 import LBPair from "./lb-pair.abi.json";
+import MaverickV2Pool from "./maverick-v2-pool.abi.json";
 import SauceRouter from "./sauce-router.abi.json";
 import UniswapV2Pair from "./uniswap-v2-pair.abi.json";
+import UniswapV3Pool from "./uniswap-v3-pool.abi.json";
 import WooPPV2 from "./woo-pp-v2.abi.json";
 
 // ---------------------------------------------------------------------------------------------
@@ -452,13 +454,9 @@ export function woofi(
 // Through the Pot's Router: Uniswap V3, Uniswap V4, Maverick V2
 // ---------------------------------------------------------------------------------------------
 
-// A Uniswap V3 pool, or a fork's that keeps its `swap`, through the Router's `swapV3`. A V3
-// `amountSpecified` is exact input when POSITIVE, so `amountIn` must be below 2^255. A non-zero
+// A Uniswap V3 pool, or a fork's that keeps its `swap`, through generation 4's `swapV3`. A non-zero
 // `sqrtPriceLimitX96` stops the swap at that price, and the Router then takes only what the pool
-// used; the rest stays in the Pot. The output is the lane the pool paid, from the Router's deltas.
-//
-// Synthra V3 and UnitFlow V3 pools call back under their own names, which only a generation-3
-// Router answers: on an older one the swap reverts.
+// used; the rest stays in the Pot. The Router returns the input used and output sent.
 export function uniswapV3(
   pool: Address,
   tokenIn: Address,
@@ -469,29 +467,26 @@ export function uniswapV3(
   recipient: Address,
 ): Uint256 {
   require(amountIn >> 255n == 0n);
-  const [amount0, amount1] = SauceRouter.at(ctx.self()).swapV3(
+  require(tokenIn != tokenOut);
+  const token0 = UniswapV3Pool.at(pool).token0();
+  const token1 = UniswapV3Pool.at(pool).token1();
+  require((tokenIn == token0 && tokenOut == token1) || (tokenIn == token1 && tokenOut == token0));
+  const [paid, out] = SauceRouter.at(ctx.self()).swapV3(
     pool,
     tokenIn,
-    tokenOut,
+    tokenIn < tokenOut,
     amountIn,
     sqrtPriceLimitX96,
-    ctx.self(),
     recipient,
   );
-  // A received lane is negative; unary `-` is two's-complement negation.
-  let out = -amount0;
-  if (tokenIn < tokenOut) {
-    out = -amount1;
-  }
   require(out >= minOut);
   return out;
 }
 
 // A Uniswap V4 pool, through the Router's `swapV4` (`pool` is the PoolManager). The pool key is
 // `tokenIn` and `tokenOut` in sort order — native ETH is the zero address, which sorts first — with
-// the pool's `fee`, `tickSpacing` and `hooks`, and the direction is that order. V4 reads a NEGATIVE
-// `amountSpecified` as exact input, so this passes `-amountIn` (unary negation, never `0n - x`,
-// which reverts), and `amountIn` must be below 2^255.
+// the pool's `fee`, `tickSpacing` and `hooks`, and the direction is that order. The Router converts
+// the unsigned exact input to the venue's signed amount.
 export function uniswapV4(
   poolManager: Address,
   tokenIn: Address,
@@ -513,7 +508,7 @@ export function uniswapV4(
     currency0 = tokenIn;
     currency1 = tokenOut;
   }
-  const [amount0, amount1] = SauceRouter.at(ctx.self()).swapV4(
+  const [paid, out] = SauceRouter.at(ctx.self()).swapV4(
     poolManager,
     {
       currency0: currency0,
@@ -522,22 +517,17 @@ export function uniswapV4(
       tickSpacing: tickSpacing,
       hooks: hooks,
     },
+    tokenIn,
     zeroForOne,
-    -amountIn,
+    amountIn,
     sqrtPriceLimitX96,
-    ctx.self(),
     recipient,
   );
-  // The lane the PoolManager paid out is positive.
-  let out = amount0;
-  if (zeroForOne) {
-    out = amount1;
-  }
   require(out >= minOut);
   return out;
 }
 
-// A Maverick V2 pool, through the Router's unified `swap` over the pool's full tick range. The
+// A Maverick V2 pool, through generation 4's `swapMaverickV2` over the pool's full tick range. The
 // Router pays exactly what the pool asks for, so if the pool runs out before taking all of
 // `amountIn`, the rest stays in the Pot. The Router returns the input it paid and the output.
 export function maverickV2(
@@ -549,19 +539,20 @@ export function maverickV2(
   recipient: Address,
 ): Uint256 {
   require(amountIn >> 255n == 0n);
-  const callback = hex``;
-  const [paid, out] = SauceRouter.at(ctx.self()).swap({
-    poolType: 7n,
-    pool: pool,
-    poolKey: { currency0: 0n, currency1: 0n, fee: 0n, tickSpacing: 0n, hooks: 0n },
-    tokenIn: tokenIn,
-    tokenOut: tokenOut,
-    amountSpecified: amountIn,
-    sqrtPriceLimitX96: 0n,
-    payer: ctx.self(),
-    recipient: recipient,
-    callback: callback,
-  });
+  const tokenA = MaverickV2Pool.at(pool).tokenA();
+  const tokenB = MaverickV2Pool.at(pool).tokenB();
+  const tokenAIn = tokenIn == tokenA;
+  require((tokenAIn && tokenOut == tokenB) || (tokenIn == tokenB && tokenOut == tokenA));
+  let tickLimit = -2147483648n;
+  if (tokenAIn) tickLimit = 2147483647n;
+  const [paid, out] = SauceRouter.at(ctx.self()).swapMaverickV2(
+    pool,
+    tokenIn,
+    tokenAIn,
+    amountIn,
+    tickLimit,
+    recipient,
+  );
   require(out >= minOut);
   return out;
 }

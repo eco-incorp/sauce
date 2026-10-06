@@ -70,10 +70,9 @@ const REPO_ROOT = resolve(SDK_DIR, "..");
 // whichever commit produced them.
 //
 // ONE ROW PER COMPILER. Compiler output and engines pair by exact package version in both
-// directions, so this syncs the row whose `compiler` is the compiler actually installed: switching
-// the compiler switches the engines with it, and no tree can hold a compiler and engines that do not
-// run each other's programs. `deployments/releases.ts` reads the same rows to refuse, at call-build
-// time, an engine another row names.
+// directions as recorded (several compilers may share an engine). This syncs the row of the installed
+// compiler. `deployments/releases.ts` refuses an engine unless a row explicitly pairs it with that
+// compiler; historical rows preserve the compatibility checks for older releases.
 //
 // There is deliberately no commit pin. The components release INDEPENDENTLY, so a shared commit is
 // not a property this can rely on. Requiring one shared commit made a
@@ -86,7 +85,8 @@ const REPO_ROOT = resolve(SDK_DIR, "..");
 // engines release before the compiler that pairs with them does.
 
 const RELEASES_JSON = resolve(SDK_DIR, "src", "deployments", "releases.json");
-const RELEASE_SETS = JSON.parse(readFileSync(RELEASES_JSON, "utf8")).releases;
+const RELEASE_TABLE = JSON.parse(readFileSync(RELEASES_JSON, "utf8"));
+const RELEASE_SETS = RELEASE_TABLE.releases;
 
 /** The installed `sauce-compiler`'s version. Its `./package.json` is not in the package's
  *  `exports`, so resolve the entry and walk up to the manifest that NAMES the package — the package
@@ -159,6 +159,13 @@ const V12_ENGINE_WIRE_MAINNET = pin("v12-svm", "engine-wire-mainnet.json");
 // a superset: `IERC20` is the ERC-20 standard (OpenZeppelin's, never v12's) and `IUniswapV3Pool` is
 // Uniswap's, so neither appears here and neither should — see ARTIFACTS below.
 const V12_EVM_ABIS = pin("kitchen-evm", "abis.json");
+// Generation 4 only swaps; generation 3 remains the token-free quote service.
+const QUOTE_ROUTER_ABIS = {
+  tag: `kitchen-evm-v${RELEASE_TABLE.quoteRouter.version}`,
+  asset: "abis.json",
+  digest: RELEASE_TABLE.quoteRouter.assets["abis.json"],
+  ...ASSET_FORMATS["abis.json"],
+};
 
 // The kitchen — the Anchor loader that stages bytecode and owns Pots. Fetched rather than vendored:
 // a released binary is already pinned by tag + digest, so a second copy in the tree would be a
@@ -796,6 +803,15 @@ const addressesFor = (tag) => {
   }
   return parsed;
 };
+const quoteRouter = addressesFor(QUOTE_ROUTER_ABIS.tag).contracts.router;
+{
+  const released = JSON.parse(readFileSync(fetchReleaseAsset(QUOTE_ROUTER_ABIS), "utf8"));
+  const { abi, bytecode } = released.contracts.Router;
+  if (routerGeneration(quoteRouter) !== 3 || !abi.some((item) => item.name === "quote")) {
+    throw new Error("the quote service must be the generation-3 Router with quote(QuoteParams)");
+  }
+  write("V12QuoteRouter", { abi, bytecode, address: quoteRouter.address });
+}
 try {
   const evm = addressesFor(V12_EVM.tag); // engine
   const kitchenEvm = addressesFor(V12_EVM_ABIS.tag); // router + kitchen + kitchenImplementation + pot
@@ -823,6 +839,7 @@ try {
           ...kitchenEvm.contracts.router,
           generation: routerGeneration(kitchenEvm.contracts.router),
         },
+        quoteRouter: { ...quoteRouter, generation: routerGeneration(quoteRouter) },
         kitchen: kitchenEvm.contracts.kitchen,
         kitchenImplementation: kitchenEvm.contracts.kitchenImplementation,
       },

@@ -4,8 +4,8 @@
  * engine, Kitchen, Pot and Router. No RPC is reached.
  *
  * Each venue runs from a Sauce program with literal arguments, from one with every argument a
- * run-time `main` argument, through the action that lowers to it, and beside the Router's unified
- * `swap` where the Router can run the venue — from the same snapshot and funding, so the outputs
+ * run-time `main` argument, and through the action that lowers to it — from the same snapshot
+ * and funding, so the outputs
  * must be equal; the gas and bytes of each are printed. Then the rules the library keeps: a
  * no-return token (USDT) is accepted and a `false`-returning one refused; an approval is exact and
  * ends at zero; a swap consumes its whole input or reverts the whole cook, with nothing left in the
@@ -41,12 +41,10 @@ import {
   printMeasurements,
   REVERTING_CODE,
   routerProgram,
-  routerSource,
   runtimeCall,
   setAllowance,
   setBalance,
   type Arg,
-  type RouterLeg,
 } from "./swap-venues.js";
 
 const CHAIN = "ethereum";
@@ -73,7 +71,6 @@ const BALANCER_V2_VAULT = "0xBA12222222228d8Ba445958a75a0704d566BF2C8";
 /** Balancer V2's 50/50 USDC/WETH weighted pool, whose address is its id's top 20 bytes. */
 const BALANCER_USDC_WETH_ID =
   "0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019" as Hex;
-const BALANCER_USDC_WETH = "0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8";
 /** A DODO V2 DVM, base WETH and quote USDC, and a DSP, base USDT and quote USDC. */
 const DODO_DVM_WETH_USDC = "0x8B2F062d112aE1ac6Ccc6C358cc40C9518c847Dc";
 const DODO_DSP_USDT_USDC = "0x201939F5c74f5Fd3beEf1cf03a9CFcc75bEBa9D9";
@@ -190,8 +187,7 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 600_0
 
   /**
    * One swap, every way it can be spelled, from the same state and funding: the library call with
-   * literal arguments, with run-time arguments, the action that lowers to it, and the Router's own
-   * `swap` where the Router runs the venue. Every one must deliver the same amount and spend the
+   * literal arguments, with run-time arguments, and the action that lowers to it. Every one must deliver the same amount and spend the
    * whole input. Returns that amount.
    */
   async function everyWay(
@@ -201,7 +197,6 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 600_0
     funding: [keyof typeof BALANCE, bigint],
     tokenOut: string,
     action?: Action,
-    router?: RouterLeg,
   ): Promise<bigint> {
     const delivered = () => balanceOf(env, tokenOut, env.pot);
     const programs: Array<[Parameters<typeof measure>[2], Uint8Array]> = [
@@ -209,7 +204,6 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 600_0
       ["runtime", runtimeCall(name, args)],
     ];
     if (action) programs.push(["action", actionProgram(1, [action])]);
-    if (router) programs.push(["router", compileSource(env, CHAIN, routerSource(router))]);
 
     const outs: bigint[] = [];
     for (const [path, program] of programs) {
@@ -228,7 +222,7 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 600_0
   }
 
   describe("Uniswap V2", () => {
-    it("WETH -> USDC (WETH is token1): every spelling, and the Router, deliver the same", async () => {
+    it("WETH -> USDC (WETH is token1): every spelling delivers the same", async () => {
       const out = await everyWay(
         "UniV2 WETH->USDC, 1 WETH",
         "uniswapV2",
@@ -244,7 +238,6 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 600_0
           amountOutMin: "1",
           recipient: "self",
         },
-        { poolType: 0, pool: UNIV2_USDC_WETH, tokenIn: WETH, tokenOut: USDC, amountIn: ONE_ETH },
       );
       assert.equal(out, 2_683_509_365n);
     });
@@ -257,7 +250,6 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 600_0
         [USDC, USDC_100],
         WETH,
         undefined,
-        { poolType: 0, pool: UNIV2_USDC_WETH, tokenIn: USDC, tokenOut: WETH, amountIn: USDC_100 },
       );
     });
 
@@ -269,7 +261,6 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 600_0
         [USDT, USDC_100],
         WETH,
         undefined,
-        { poolType: 0, pool: UNIV2_WETH_USDT, tokenIn: USDT, tokenOut: WETH, amountIn: USDC_100 },
       );
     });
 
@@ -364,7 +355,7 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 600_0
   });
 
   describe("Curve", () => {
-    it("3pool USDC -> USDT, a pool whose exchange returns nothing: the Router path cannot", async () => {
+    it("3pool USDC -> USDT, a pool whose exchange returns nothing", async () => {
       const out = await everyWay(
         "Curve 3pool USDC->USDT, 100 USDC",
         "curve",
@@ -386,16 +377,6 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 600_0
       );
       assert.equal(out, 100_007_483n);
       assert.equal(await allowance(env, USDC, env.pot, CURVE_3POOL), 0n, "the approval was exact");
-      await fresh();
-      await fund(USDC, USDC_100);
-      const router = routerSource({
-        poolType: 3,
-        pool: CURVE_3POOL,
-        tokenIn: USDC,
-        tokenOut: USDT,
-        amountIn: USDC_100,
-      });
-      assert.equal((await cook(router)).status, "reverted");
     });
 
     it("3pool USDT -> USDC approves a token whose approve returns nothing, and ends at zero", async () => {
@@ -427,7 +408,7 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 600_0
       assert.equal(await balanceOf(env, USDT, env.pot), 0n);
     });
 
-    it("tricrypto-ng USDC -> WETH, uint256 indices, which the Router's int128 exchange cannot reach", async () => {
+    it("tricrypto-ng USDC -> WETH with uint256 indices", async () => {
       const out = await everyWay(
         "Curve tricrypto-ng USDC->WETH, 100 USDC",
         "curve",
@@ -476,7 +457,7 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 600_0
   });
 
   describe("Balancer V2", () => {
-    it("WETH -> USDC through the Vault: every spelling, and the Router, deliver the same", async () => {
+    it("WETH -> USDC through the Vault: every spelling delivers the same", async () => {
       await everyWay(
         "BalancerV2 WETH->USDC, 1 WETH",
         "balancerV2",
@@ -493,7 +474,6 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 600_0
           amountOutMin: "1",
           recipient: "self",
         },
-        { poolType: 4, pool: BALANCER_USDC_WETH, tokenIn: WETH, tokenOut: USDC, amountIn: ONE_ETH },
       );
       assert.equal(await allowance(env, WETH, env.pot, BALANCER_V2_VAULT), 0n);
     });
@@ -533,7 +513,7 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 600_0
       }
     });
 
-    it("sellBase (WETH -> USDC): every spelling, and the Router, deliver the same", async () => {
+    it("sellBase (WETH -> USDC): every spelling delivers the same", async () => {
       const amount = ONE_ETH / 100n;
       await everyWay(
         "DODOV2 WETH->USDC (sellBase), 0.01 WETH",
@@ -552,7 +532,6 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 600_0
           amountOutMin: "1",
           recipient: "self",
         },
-        { poolType: 5, pool: DODO_DVM_WETH_USDC, tokenIn: WETH, tokenOut: USDC, amountIn: amount },
       );
     });
 
@@ -564,13 +543,6 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 600_0
         [USDC, 100_000n],
         WETH,
         undefined,
-        {
-          poolType: 5,
-          pool: DODO_DVM_WETH_USDC,
-          tokenIn: USDC,
-          tokenOut: WETH,
-          amountIn: 100_000n,
-        },
       );
     });
 
@@ -582,13 +554,6 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 600_0
         [USDT, 1_000_000n],
         USDC,
         undefined,
-        {
-          poolType: 5,
-          pool: DODO_DSP_USDT_USDC,
-          tokenIn: USDT,
-          tokenOut: USDC,
-          amountIn: 1_000_000n,
-        },
       );
     });
 
@@ -723,14 +688,6 @@ describe("@sauce/router on Ethereum state", { skip: skipReason(), timeout: 600_0
     );
     assert.equal(receipt.status, "success");
     assert.ok((await balanceOf(env, USDT, env.pot)) > 99_000_000n);
-    const router = routerSource({
-      poolType: 0,
-      pool: UNIV2_USDC_WETH,
-      tokenIn: WETH,
-      tokenOut: USDC,
-      amountIn: ONE_ETH / 2n,
-    });
-    assert.equal((await cook(router)).status, "reverted");
   });
 
   it("one precompiled program picks each venue at run time, in a loop over pools, chaining the amounts", async () => {

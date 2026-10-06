@@ -2,11 +2,8 @@
  * `@sauce/router`'s `uniswapV4`, EXECUTED through the released Router on a local anvil — the stack
  * deployed from creation code at its release addresses (`gated-engine.ts`), nothing forked.
  *
- * Uniswap V4 reads a NEGATIVE `amountSpecified` as exact input, so `uniswapV4` passes `-amountIn`,
- * and with an amount only known at run time — the Pot's balance — that negation has to be unary `-`
- * (two's-complement NEG): subtraction is checked unsigned, so `0n - balance` reverts inside the
- * engine for every non-zero balance and the swap never reaches the Router. Compiling that path
- * proves nothing; this runs it.
+ * Generation 4 takes an unsigned exact input and negates it inside the Router for V4. Subtracting
+ * a nonzero balance from zero in Sauce still reverts before reaching the Router.
  *
  * The PoolManager is `fixtures/MockPoolManager.sol`: the slice of V4's PoolManager the Router's V4
  * path drives (`unlock`/`swap`/`take`/`sync`/`settle`) over one fixed-rate pool. It refuses anything
@@ -201,7 +198,7 @@ describeEvm("@sauce/router's uniswapV4, executed through the released Router", (
       `  const amount = balanceOf(${BigInt(token0)}n, ctx.self());`,
       `  ISauceRouter.at(ctx.self()).swapV4(${BigInt(manager)}n, ` +
         `{ currency0: ${BigInt(token0)}n, currency1: ${BigInt(token1)}n, fee: 3000n, tickSpacing: 60n, hooks: 0n }, ` +
-        "true, 0n - amount, 0n, ctx.self(), ctx.self());",
+        `${BigInt(token0)}n, true, 0n - amount, 0n, ctx.self());`,
       "}",
     ].join("\n");
 

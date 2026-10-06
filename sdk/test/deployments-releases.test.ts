@@ -73,13 +73,20 @@ describe("the release table", () => {
     }
   });
 
-  it("gives every engine to one compiler — no engine is claimed by two rows", () => {
+  it("keeps an engine's version and artifact pins identical across compatible compilers", () => {
     for (const component of ["v12-evm", "v12-svm"] as const) {
-      const engines = V12_RELEASE_SETS.map((row) => row[component].engine).filter(
-        (engine): engine is string => engine !== null,
-      );
-      const keys = engines.map((e) => (component === "v12-evm" ? e.toLowerCase() : e));
-      expect(new Set(keys).size).toBe(keys.length);
+      for (const row of V12_RELEASE_SETS) {
+        const pin = row[component];
+        if (pin.engine === null) continue;
+        const key = (engine: string | null) =>
+          component === "v12-evm" ? engine?.toLowerCase() : engine;
+        for (const other of V12_RELEASE_SETS.filter(
+          (other) => key(other[component].engine) === key(pin.engine),
+        )) {
+          expect(other[component].version).toBe(pin.version);
+          expect(other[component].assets).toEqual(pin.assets);
+        }
+      }
     }
   });
 
@@ -119,20 +126,17 @@ describe("assertEngineRunsCompiler — one table, both directions", () => {
     }
   });
 
-  it("refuses every other row's compiler on a row's engines", () => {
+  it("refuses other compilers unless their row explicitly shares the engine", () => {
     expect(crossings.length).toBeGreaterThan(0);
     for (const { own, other } of crossings) {
-      const evm = own["v12-evm"].engine;
-      const svm = own["v12-svm"].engine;
-      if (evm !== null) {
-        expect(() => assertEngineRunsCompiler("evm", evm, other.compiler)).toThrow(
-          `is v12-evm ${own["v12-evm"].version}, which runs compiler ${own.compiler} output`,
-        );
-      }
-      if (svm !== null) {
-        expect(() => assertEngineRunsCompiler("svm", svm, other.compiler)).toThrow(
-          `is v12-svm ${own["v12-svm"].version}, which runs compiler ${own.compiler} output`,
-        );
+      for (const target of ["evm", "svm"] as const) {
+        const component = target === "evm" ? "v12-evm" : "v12-svm";
+        const engine = own[component].engine;
+        if (engine === null) continue;
+        const check = () => assertEngineRunsCompiler(target, engine, other.compiler);
+        if (engine === other[component].engine) expect(check).not.toThrow();
+        else
+          expect(check).toThrow(`is ${component} ${own[component].version}, which runs compiler`);
       }
     }
   });
@@ -183,7 +187,7 @@ describe("assertEngineRunsCompiler — one table, both directions", () => {
 
 /** An engine the table names for a compiler that is NOT this SDK's — what every builder refuses. */
 const foreign = (component: "v12-evm" | "v12-svm"): string[] =>
-  V12_RELEASE_SETS.filter((row) => row.compiler !== sdkCompilerVersion())
+  V12_RELEASE_SETS.filter((row) => row[component].engine !== v12ReleaseSet()[component].engine)
     .map((row) => row[component].engine)
     .filter((engine): engine is string => engine !== null);
 

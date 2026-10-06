@@ -19,7 +19,7 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 | Kind | EVM |
 | Name in a program | `Boba` |
 | Native coin | ETH (Ether), 18 decimals |
-| Sauce engine | `0x6785455AA479AA99D59357d7c9Fe14cba626F175` |
+| Sauce engine | `0xcF7A92abCC7Ede43277AcCBAfda910b8829bF9AD` |
 | Sauce Kitchen | `0x19845b22989150E6B09dE55a661295Dd9188506b` |
 | Sauce Router | `0x9201aF06536Cb4819cf1F08aE7063c5997D87459` |
 | Intents (eco-routes) | none recorded |

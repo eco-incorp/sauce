@@ -259,13 +259,14 @@ describe("a revert, by name", () => {
     }
   });
 
-  it("names the Router's errors, and says what the pair check means", () => {
+  it("names the Router's input-token mismatch error", () => {
     const data = encodeErrorResult({
-      abi: parseAbi(["error InvalidPool()"]),
-      errorName: "InvalidPool",
+      abi: parseAbi(["error InputTokenMismatch(address named, address keyed)"]),
+      errorName: "InputTokenMismatch",
+      args: [HOLDER, HOLDER],
     });
     expect(revertReason({ data })).toBe(
-      "InvalidPool() (the Router's check that the pool's token0 and token1 are the pair passed)",
+      `InputTokenMismatch(${HOLDER}, ${HOLDER}) (the input token does not match the pool key and swap direction)`,
     );
   });
 });
