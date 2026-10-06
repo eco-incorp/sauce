@@ -15,8 +15,8 @@
  */
 import { getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
-import { sha256 } from "../../../bytes.js";
 import { readUintLE, ceilDiv } from "../math.js";
+import { memoizedCreateProgramAddress } from "../pda-memo.js";
 import type {
   AccountBytesMap,
   AccountLoader,
@@ -95,15 +95,10 @@ function netAmountIn(cfg: OrcaLegacyPoolConfig, amountIn: bigint): bigint {
  * sha256(pool || 0xFC || program || 'ProgramDerivedAddress') = JU8km...
  */
 function deriveSwapAuthority(pool: Address, bumpSeed: number): Address {
-  const codec = getAddressCodec();
-  return codec.decode(
-    sha256(
-      new Uint8Array(codec.encode(pool)),
-      Uint8Array.of(bumpSeed),
-      new Uint8Array(codec.encode(PROGRAM_ID)),
-      "ProgramDerivedAddress",
-    ),
-  );
+  return memoizedCreateProgramAddress(PROGRAM_ID, [
+    getAddressCodec().encode(pool),
+    Uint8Array.of(bumpSeed),
+  ]).address;
 }
 
 const poolRef = (cfg: OrcaLegacyPoolConfig, role: string): string => `${SLUG}:${cfg.pool}:${role}`;
