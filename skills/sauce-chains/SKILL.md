@@ -111,8 +111,8 @@ function main(): Address {
 }
 ```
 
-- **A token is never qualified.** `Base.USDC` is refused
-  (`'USDC' is not a known protocol or family alias`); the symbol is always the compiled-for chain's.
+- **A token is never qualified.** `Base.USDC` is refused (`a token is never qualified by a chain`);
+  the symbol is always the compiled-for chain's, and another chain's token is an address.
 - **To act on another chain, open an intent** (`sauce-intents`):
   `Ethereum.Portal.send(reward).receive(delivery).then(() => { ... })`. In `.receive(...)` and the
   body, every name is the destination's; `.send(...)` resolves on the chain the file is compiled

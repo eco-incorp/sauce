@@ -131,7 +131,7 @@ check(skill.includes("calls that address on Ethereum"), "the skill says where th
 // A token is never qualified: the symbol is the chain's own, or an address.
 quoted(
   refusal("ethereum", "function main(): Address { return Base.USDC; }"),
-  "'USDC' is not a known protocol or family alias",
+  "a token is never qualified by a chain",
 );
 
 // payout-solana.sauce.ts: every account is a slot, in order, with its role; the scalars are the

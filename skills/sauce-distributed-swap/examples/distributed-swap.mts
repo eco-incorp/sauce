@@ -199,10 +199,7 @@ const tokenWrite = (body: string, imports = "") =>
   );
 check(
   tokenWrite("const pay = Token(token); pay.transfer(to, amount);").equals(
-    tokenWrite(
-      "const pay = token; transfer(pay, to, amount);",
-      'import { transfer } from "@sauce/token";\n',
-    ),
+    tokenWrite("transfer(token, to, amount);", 'import { transfer } from "@sauce/token";\n'),
   ) && source.includes("pay.transfer(refundTo, unspent);"),
   "the refund is a SafeERC20 transfer of what is left of the budget",
 );

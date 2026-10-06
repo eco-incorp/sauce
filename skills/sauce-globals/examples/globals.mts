@@ -19,7 +19,8 @@ for (const slug of ["ethereum", "optimism"]) {
 }
 
 // Token names compile to @sauce/token in every spelling: the program is byte for byte the one that
-// calls the library's functions with the token's address first.
+// calls the library's functions with the token's address first. A bound `Token(...)` is no local of
+// its own: each call through it is the library's, given the address.
 const ethereum = requireChain("ethereum");
 const addressOf = (symbol: string) =>
   `0x${routes.registryTokenAddress(ethereum, symbol)!.toString(16).padStart(40, "0")}`;
@@ -30,7 +31,7 @@ const named = routes.compileSauceProgram(
 const byHand = routes.compileSauceProgram(
   "ethereum",
   `import { approve, balanceOf, transfer, transferFrom } from "@sauce/token";
-function main(to: Address, token: Address, amount: Uint256) { transfer(${addressOf("USDT")}, to, amount); approve(${addressOf("USDT")}, to, amount); const t = token; transferFrom(t, to, ctx.self(), amount); require(balanceOf(${addressOf("USDC")}, ctx.self()) > 0n); }`,
+function main(to: Address, token: Address, amount: Uint256) { transfer(${addressOf("USDT")}, to, amount); approve(${addressOf("USDT")}, to, amount); transferFrom(token, to, ctx.self(), amount); require(balanceOf(${addressOf("USDC")}, ctx.self()) > 0n); }`,
 );
 check(
   Buffer.from(named.bytecode).equals(Buffer.from(byHand.bytecode)),
