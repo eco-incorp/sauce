@@ -51,14 +51,6 @@ export interface IntentDefaults extends EcoRoutesSelector {
    *  opens when its parent's body runs, at the block's time; so does every level when this is left
    *  out. */
   readonly openedAt?: bigint;
-  /**
-   * The wallet that publishes the program's top-level intents itself, as `sauce intent publish`
-   * does: the creator of each one that names none, as Eco's Portal app makes the publishing wallet
-   * the creator. It is never the creator of an intent a body opens, and a level below drops it:
-   * every intent a program opens names its own `.refundee(...)`, since the Pot it runs on may be
-   * shared and a refund there could go to anyone.
-   */
-  readonly publisher?: AddressInput;
   /** Defaults to the prover the deployment registry records for this source/destination pair. */
   readonly prover?: AddressInput;
   /** Overrides the source-chain Portal the program publishes through. */
@@ -73,6 +65,12 @@ export interface IntentDefaults extends EcoRoutesSelector {
   readonly fundVia?: IntentFundVia;
   /** Passed to `publishAndFund` (`fundVia: "publishAndFund"` only). Default `false`. */
   readonly allowPartial?: boolean;
+  /**
+   * `false`: publish each intent without paying its reward into its vault — a rehearsal that reads
+   * the intents a file opens from the Portal's `IntentPublished`, for a Pot that does not hold the
+   * reward. The intents are the same either way. Default `true`.
+   */
+  readonly fund?: boolean;
   /** Overrides the destination Pot a body cooks on. */
   readonly pot?: AddressInput;
   /** The interpreter that Pot cooks on. Defaults to the released engine address. */

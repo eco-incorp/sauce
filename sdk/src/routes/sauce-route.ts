@@ -40,7 +40,7 @@ import { compileWithRs, toRsDefines, type RsCompileResult } from "./rs-compile.j
 import { chainModuleSource, isChainScalar, type ChainModuleOptions } from "./chain-module.js";
 import { registryTokenSymbols, resolveTokenMap } from "./token-registry.js";
 import type { ProtocolNameOptions } from "./protocol-names.js";
-import { pascalOfSlug } from "./accessors.js";
+import { pascalOfSlug } from "./builder.js";
 import { chainAmbient } from "./ambient.js";
 import { CANONICAL_CHAINS } from "../chains/canonical.js";
 import type { EcoRoutesSelector } from "../protocols/eco-routes/lookup.js";
@@ -98,8 +98,7 @@ export interface SauceCompileOptions {
    * every intent that does not set its own. See `@sauce/intents`.
    *
    * Omitted entirely, an intent still compiles: its deadlines and salt have defaults, and its
-   * refundee (the reward's `creator`), which has none, is its own `.refundee(...)` — or
-   * `publisher`'s, for a top-level intent a wallet publishes itself.
+   * refundee (the reward's `creator`), which has none, is its own `.refundee(...)`.
    */
   intents?: IntentDefaults & EcoRoutesSelector;
   /** Compile for compact-v1 entry arguments. */
@@ -139,8 +138,6 @@ export function chainAccessorNames(): ReadonlyMap<string, (typeof CANONICAL_CHAI
   );
   return chainAccessorCache;
 }
-
-type ChainRefResolved = ReturnType<typeof requireChain>;
 
 type DefineValue = bigint | boolean | number;
 
@@ -242,7 +239,9 @@ function chainModules(
   };
   const own = moduleSpecifier(chain, false);
   const modules = new Map([[own, chainModuleSource(chain, moduleOptions, salt)]]);
-  const { openedAt: _openedAt, publisher: _publisher, ...inherited } = options.intents ?? {};
+  // A level below opens its intents when its parent runs, and funds them whatever the root does: a
+  // rehearsal that leaves the root's rewards unpaid must not change the bodies it publishes.
+  const { openedAt: _openedAt, fund: _fund, ...inherited } = options.intents ?? {};
   const bodies = new Map<number, CanonicalChain>();
 
   const programOptions = (scope: ProgramScope): ProgramOptions => {

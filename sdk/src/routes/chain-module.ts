@@ -233,12 +233,6 @@ function namesNoSingle(key: string, namespace: Namespace): string {
   return `'${key}' names no single contract — it has ${known.join(", ")}: use '${key}.<Contract>'`;
 }
 
-/** What a namespace says where the chain that qualifies it has none of it. */
-const namesNoneThere = (key: string, namespace: Namespace): string =>
-  namespace.kind === "protocol"
-    ? `'${key}' (${namespace.protocol}) has no contract deployed on the chain that qualifies it`
-    : `'${key}' has no contract deployed on the chain that qualifies it`;
-
 /** The method names a namespace class keeps for itself. */
 const CLASS_MEMBERS: ReadonlySet<string> = new Set([
   "address",
@@ -550,12 +544,7 @@ function levelSource(
   return (
     `new Level({ chainId: ${chain.id}, portal: ${word(portal)}, salt: ${salt}, ` +
     `deadline: ${optional(defaults.deadline)}, rewardDeadline: ${optional(defaults.rewardDeadline)}, ` +
-    `openedAt: ${optional(defaults.openedAt)}, ` +
-    `publisher: ${
-      defaults.publisher === undefined
-        ? "undefined"
-        : word(denormalizeToEvm(toUniversalAddress(defaults.publisher)))
-    }, ` +
+    `openedAt: ${optional(defaults.openedAt)}, fund: ${defaults.fund !== false}, ` +
     `fundVia: ${str(defaults.fundVia ?? "transfer")}, allowPartial: ${defaults.allowPartial === true}, ` +
     `nativeToken: ${native === undefined ? "undefined" : word(native.address)}, ` +
     `nativeConflict: ${conflict === undefined ? "undefined" : str(conflict)} })`
