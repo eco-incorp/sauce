@@ -667,8 +667,8 @@ the destination has is written `Token(0x…)` until the compiler can hand a call
 bare name. `.catch(handler)` makes the body and its handler one destination program,
 `intents.evm.js#_run`: `() => { try { body(); } catch (e) { handler(e); } }`, byte for byte the
 `try` a program would write (EVM only); `e` is the body's revert data, and a handler that names no
-parameter drops it, as an arrow called in place does. A handler that reads `e` needs the engine whose
-`CATCH` reads `CATCH_READS` (v12-evm's major after #553). `await x; rest` is the compiler's
+parameter drops it, as an arrow called in place does. A handler that reads `e` needs the v12-evm
+release after 1.2.0 that carries `CATCH_READS` (#553's major). `await x; rest` is the compiler's
 `x.then(() => { rest })` (once its `await` lands). Until then the
 example files the suites EXECUTE (and the file `sauce intent publish` writes) are written with
 `.then(...)`, while prose and skill blocks lead with `await`: `check-skills.mjs#THEN_UNTIL_AWAIT`
