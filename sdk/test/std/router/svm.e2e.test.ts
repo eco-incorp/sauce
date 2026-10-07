@@ -520,33 +520,61 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
         expect(refused(await cook(compiled(name), phoenix))).toBe("market is not the pair");
     }, 120_000);
 
-    it("another venue's pool, a slot whose program does not own its pool, and no venue's pool", async () => {
+    // Each venue's function refuses any pool but its venue's, by the program it would call.
+    const REASONS: Record<string, string> = {
+      RaydiumClmm: "not a Raydium CLMM pool",
+      PancakeswapClmm: "not a PancakeSwap CLMM pool",
+      Byreal: "not a Byreal pool",
+      StabbleClmm: "not a Stabble CLMM pool",
+      OrcaWhirlpool: "not an Orca whirlpool",
+      Cropper: "not a Cropper pool",
+      Defituna: "not a DefiTuna pool",
+      Crema: "not a Crema pool",
+      Phoenix: "not a Phoenix market",
+    };
+    const plainOf = (venue: string): string => venue.charAt(0).toLowerCase() + venue.slice(1);
+
+    // The authority signs the swap, so the program a slot names must be the venue's own: a direct
+    // call checks its venue's id itself, and `trySwap` that the slot's program owns the pool.
+    it.each(VENUES)(
+      "$venue: a slot naming another program reverts, through its function and through trySwap",
+      async (entry) => {
+        const order = await orderFor(entry);
+        const another =
+          entry.venue === "RaydiumClmm"
+            ? pool("orca-whirlpool-sol-usdc").program
+            : pool("raydium-clmm-sol-usdc").program;
+        const misnamed = { ...order, pool: { ...order.pool, program: another } };
+        for (const name of [`try${entry.venue}`, plainOf(entry.venue)])
+          expect(refused(await cook(compiled(name), misnamed))).toBe(REASONS[entry.venue]);
+        for (const name of ["trySwap", "swap"])
+          expect(refused(await cook(compiled(name), misnamed))).toBe(
+            "a pool's program is not its owner",
+          );
+      },
+      120_000,
+    );
+
+    it("another venue's pool, through each venue's function", async () => {
       const orca = await orderFor(VENUES[4]!);
-      const reasons = {
-        tryRaydiumClmm: "not a Raydium CLMM pool",
-        tryPancakeswapClmm: "not a PancakeSwap CLMM pool",
-        tryByreal: "not a Byreal pool",
-        tryStabbleClmm: "not a Stabble CLMM pool",
-        tryCropper: "not a Cropper pool",
-        tryDefituna: "not a DefiTuna pool",
-        tryCrema: "not a Crema pool",
-        tryPhoenix: "not a Phoenix market",
-      };
-      for (const [name, reason] of Object.entries(reasons))
-        expect(refused(await cook(compiled(name), orca))).toBe(reason);
-      // The whirlpool, under Raydium's program.
-      const misnamed = {
-        ...orca,
-        pool: { ...orca.pool, program: pool("raydium-clmm-sol-usdc").program },
-      };
-      expect(refused(await cook(compiled("tryOrcaWhirlpool"), misnamed))).toBe(
-        "not an Orca whirlpool",
-      );
-      expect(refused(await cook(compiled("trySwap"), misnamed))).toBe(
-        "a pool's program is not its owner",
-      );
-      const dlmm = { ...orca, pool: pool("meteora-dlmm-sol-usdc") };
-      expect(refused(await cook(compiled("trySwap"), dlmm))).toBe("not a supported venue's pool");
+      for (const [venue, reason] of Object.entries(REASONS))
+        if (venue !== "OrcaWhirlpool")
+          expect(refused(await cook(compiled(`try${venue}`), orca))).toBe(reason);
     }, 120_000);
+
+    // A pool no venue here owns is the caller's mistake, never a skip: a Meteora pool under its own
+    // program, and an account the System program owns that is not the System program itself, which
+    // alone stands for a missing slot.
+    it("a pool no venue here owns reverts, through every function", async () => {
+      const orca = await orderFor(VENUES[4]!);
+      const dlmm = { ...orca, pool: pool("meteora-dlmm-sol-usdc") };
+      const nobody = { ...orca, pool: { ...NONE, pool: randomAddress() } };
+      for (const order of [dlmm, nobody]) {
+        for (const name of ["trySwap", "swap"])
+          expect(refused(await cook(compiled(name), order))).toBe("not a supported venue's pool");
+        for (const [venue, reason] of Object.entries(REASONS))
+          expect(refused(await cook(compiled(`try${venue}`), order))).toBe(reason);
+      }
+    }, 180_000);
   });
 });
