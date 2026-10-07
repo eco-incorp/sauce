@@ -118,6 +118,7 @@ export {
   parsePubkey,
   svmPotCommand,
   svmPotExists,
+  svmAssumedBalances,
   svmPotTokenAccounts,
   svmSimulateCommand,
   svmTxCommand,

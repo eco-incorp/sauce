@@ -81,6 +81,7 @@ import {
   simulateCommand,
   svmPotCommand,
   svmPotExists,
+  svmAssumedBalances,
   svmPotTokenAccounts,
   svmSimulateCommand,
   svmTxCommand,
@@ -1907,16 +1908,21 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "a trade: ok or the reason, what main returns, balance changes, transfers, each " +
         "transaction's gas and the block. Solana: the Kitchen cook simulated from the owner (a " +
         "missing Pot created first), or via engine the engine's own paid cook with no Pot: " +
-        "compute units, the fee, or the reason and the program logs. `sourceSha256` is the " +
+        "compute units, the fee, or the reason and the program logs; a cook too large for one " +
+        "transaction, or given assumeBalance, in a local copy of the accounts it names (`path`), " +
+        "its program staged as sauce run stages it. `sourceSha256` is the " +
         "sha256 of the program's text. Nothing is signed or sent.",
       input: {
         ...PROGRAM,
         ...sourceInputs(local),
         ...COOK,
         assumeBalance: TOKEN_AMOUNTS.describe(
-          "EVM only: balances the Pot holds for this rehearsal only, by state override. Each " +
-            "<TOKEN|address>:<amount>, the amount in whole tokens (USDC:2 is 2 USDC), or base " +
-            "units ending in n (USDC:2000000n); ETH:<amount> for the native currency.",
+          "Balances the Pot holds for this rehearsal only. Each <TOKEN|address>:<amount>, the " +
+            "amount in whole tokens (USDC:2 is 2 USDC), or base units ending in n " +
+            "(USDC:2000000n); ETH:<amount> for an EVM chain's native currency. EVM: by state " +
+            "override. Solana: in a local copy of the accounts the cook names (the Pot's token " +
+            "account for the mint, or the owner's via engine), as a cook too large for one " +
+            "transaction is rehearsed too.",
         ),
         fund: TOKEN_AMOUNTS.describe(
           "EVM only: tokens the cook would pull from the owner into the Pot before the program " +
@@ -1994,16 +2000,17 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           approver: NO_APPROVER,
         };
         if (chain.kind === "svm") {
-          if ((scenario.assumeBalance ?? []).length > 0) {
-            throw new UsageError(
-              "assumeBalance is for EVM chains: a Solana endpoint's simulateTransaction takes " +
-                "no account overrides, so on solana the rehearsal runs on the accounts as they are",
-            );
-          }
           fundingFor(funding);
+          const assumed = svmAssumedBalances(scenario.assumeBalance ?? [], chain);
 
           return fromCommand(
-            await svmSimulateCommand(svmCook(scenario, built, rpcUrl), built.files),
+            await svmSimulateCommand(
+              {
+                ...svmCook(scenario, built, rpcUrl),
+                ...(assumed.length === 0 ? {} : { assume: assumed }),
+              },
+              built.files,
+            ),
           );
         }
         const cook = evmCook(scenario, built);

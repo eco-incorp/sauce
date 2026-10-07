@@ -16,6 +16,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 import {
+  AccountRole,
   address,
   createKeyPairSignerFromBytes,
   createSolanaRpc,
@@ -31,6 +32,7 @@ import {
   isAddress,
   signTransaction,
   TRANSACTION_SIZE_LIMIT,
+  lamports,
   type Address,
   type AddressesByLookupTableAddress,
   type Blockhash,
@@ -43,7 +45,7 @@ import {
   type TransactionSigner,
 } from "@solana/kit";
 import type { AccountManifest } from "sauce-compiler";
-import { bytesToHex, formatUnits, hexToBytes, type Hex } from "viem";
+import { bytesToHex, formatUnits, hexToBytes, parseUnits, type Hex } from "viem";
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
@@ -60,7 +62,9 @@ import { verifySvmSettleExecution, type SvmSettleExecutionVerification } from ".
 import {
   buildCloseCodeBufferInstruction,
   buildComputeBudgetPrepend,
+  buildCookAndPayFromAccountPinnedInstruction,
   buildCookAndPayInstruction,
+  buildCookFromAccountInstruction,
   buildCookInstruction,
   buildCreateCodeBufferInstruction,
   buildCreatePotInstruction,
@@ -105,6 +109,7 @@ import {
 } from "./commands.js";
 import { decodeReturned, returnedLine } from "./returned.js";
 import { guardOf } from "./policy.js";
+import { openFork } from "./svm-fork.js";
 import { secret } from "./signer.js";
 import { requireSupported } from "./support.js";
 import {
@@ -594,6 +599,12 @@ interface TokenAccountNamed {
   readonly label: string;
   /** A holder's token account, which a transfer can bring into being, or the mint or its program. */
   readonly kind: "account" | "mint" | "program";
+  /** A holder's token account's mint, holder and token program. */
+  readonly account?: {
+    readonly mint: Address;
+    readonly holder: Address;
+    readonly program: Address;
+  };
 }
 
 /** The token program that owns a mint the registry does not record, read from the cluster. */
@@ -690,12 +701,14 @@ export async function resolveTokenAccounts(
       });
       continue;
     }
-    const account = await svmTokenAccount({ mint, tokenProgram }, whose === "pot" ? pot : owner);
+    const holder = whose === "pot" ? pot : owner;
+    const account = await svmTokenAccount({ mint, tokenProgram }, holder);
     accounts[name] = account;
     named.set(name, {
       address: account,
       label: `${whose === "pot" ? "the Pot" : "the owner"}'s ${what} account`,
       kind: "account",
+      account: { mint, holder, program: tokenProgram },
     });
   }
 
@@ -993,6 +1006,62 @@ export interface SvmCookInput extends ProgramInput, SvmTarget {
    * and the accounts do not fit.
    */
   readonly lookupTables?: readonly Address[];
+  /**
+   * Balances to give for the rehearsal only (`--assume-balance`), each in the account the cook
+   * spends from: the Pot's for the mint, or the owner's cooked directly. Solana's simulation takes
+   * no account overrides, so a rehearsal with one runs in a local copy of the accounts.
+   */
+  readonly assume?: readonly SvmAssumed[];
+}
+
+/** A balance `--assume-balance` gives, on Solana: a mint and an amount of it. */
+export interface SvmAssumed {
+  readonly raw: string;
+  readonly mint: Address;
+  /** The symbol given, or the mint. */
+  readonly label: string;
+  /** The registry's decimals; `undefined` for a mint by address, read from the mint. */
+  readonly decimals?: number;
+  readonly program?: Address;
+  /** In whole tokens as written (`1.5`), or in base units (`1500000n`). */
+  readonly amount: { readonly units: string } | { readonly base: bigint };
+}
+
+/** `--assume-balance` on Solana: `<TOKEN|mint>:<amount>`, each mint once. */
+export function svmAssumedBalances(raws: readonly string[], chain: CanonicalChain): SvmAssumed[] {
+  const rows = svmTokenRows(chain);
+  const seen = new Set<string>();
+
+  return raws.map((raw) => {
+    const at = raw.lastIndexOf(":");
+    const token = raw.slice(0, at).trim();
+    const amount = raw.slice(at + 1).trim();
+    const base = /^(\d+)n$/.exec(amount);
+    if (at <= 0 || (base === null && !/^\d+(\.\d+)?$/.test(amount))) {
+      throw new UsageError(
+        `--assume-balance: expected <TOKEN|mint>:<amount>, as USDC:1.5 (whole tokens) or ` +
+          `USDC:1500000n (base units); got '${raw}'`,
+      );
+    }
+    const row = rows.find((candidate) => candidate.symbol.toUpperCase() === token.toUpperCase());
+    if (row === undefined && !isAddress(token)) {
+      throw new UsageError(
+        `--assume-balance ${raw}: ${token} is not a mint ${chain.slug} registers: give its symbol ` +
+          "(sauce globals --chain solana) or its base58 address",
+      );
+    }
+    const mint = address(row?.mint ?? token);
+    if (seen.has(mint)) throw new UsageError(`--assume-balance names ${token} twice: give it once`);
+    seen.add(mint);
+
+    return {
+      raw,
+      mint,
+      label: row?.symbol ?? mint,
+      ...(row === undefined ? {} : { decimals: row.decimals, program: address(row.tokenProgram) }),
+      amount: base === null ? { units: amount } : { base: BigInt(base[1]!) },
+    };
+  });
 }
 
 interface Prepared {
@@ -1290,7 +1359,10 @@ export async function svmSimulateCommand(
   const direct = prepared.via === "engine";
   // The size first: it is the program's own, whatever the cluster holds.
   const alone = await fits(prepared);
-  if (!alone.fits) throw tooLarge(prepared, alone.size, "a simulation, which sends nothing,");
+  // Too large for one transaction: no cluster can stage it without sending, so a local copy does;
+  // and a balance to assume, which a cluster's simulation takes no override for.
+  if (!alone.fits || (input.assume ?? []).length > 0)
+    return stagedRehearsal(prepared, input, alone.fits);
   const created = direct || (await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot"));
   const prepends = created ? [] : [createPotInstruction(input, prepared.pot)];
   let built = alone.transaction;
@@ -1414,6 +1486,270 @@ export async function svmSimulateCommand(
     ...(short === undefined && missing.length === 0
       ? {}
       : { notes: [...missing, ...(short === undefined ? [] : [short])] }),
+    exitCode: 1,
+  };
+}
+
+/**
+ * `sauce simulate` of a cook too large for one transaction: in a local copy of every account it
+ * names (`svm-fork.ts`), the program staged into a code buffer as `sauce run` stages it, the Pot
+ * created first where the cluster has none, then the cook from that buffer, its accounts listed in
+ * full (the copy takes a transaction of any size). What the cook moved is the copy's accounts
+ * before it and after. Nothing is signed or sent.
+ */
+async function stagedRehearsal(
+  prepared: Prepared,
+  input: SvmCookInput,
+  fitsOne = false,
+): Promise<CommandOutput> {
+  const owner = input.owner;
+  const direct = prepared.via === "engine";
+  const signer = unsignedSigner(owner);
+  const { bytecode } = prepared;
+  const nonce = 0n;
+  const { address: codeBuffer } = await deriveCodeBufferPda(kitchen(), owner, nonce);
+  const { address: code } = await deriveCodePda(kitchen(), codeBuffer);
+  const buffer = { kitchen: kitchen(), owner, codeBuffer, code };
+  const sha256 = new Uint8Array(createHash("sha256").update(bytecode).digest());
+  const CHUNK = 900;
+  const staging: Instruction[][] = [
+    [
+      buildCreateCodeBufferInstruction({ ...buffer, nonce, capacity: bytecode.length }),
+      ...Array.from({ length: Math.ceil(bytecode.length / GROWTH_STEP) - 1 }, () =>
+        buildGrowCodeBufferInstruction(buffer),
+      ),
+    ],
+    ...Array.from({ length: Math.ceil(bytecode.length / CHUNK) }, (_, i) => [
+      buildWriteCodeBufferInstruction({
+        ...buffer,
+        offset: i * CHUNK,
+        chunk: bytecode.subarray(i * CHUNK, (i + 1) * CHUNK),
+      }),
+    ]),
+    [
+      buildFinalizeCodeBufferInstruction({
+        ...buffer,
+        len: bytecode.length,
+        expectedSha256: sha256,
+      }),
+    ],
+  ];
+  const tail = resolveAccounts(prepared.manifest, prepared.accounts, owner);
+  const { address: feeConfig } = await deriveExecutionFeeConfigPda(kitchen());
+  const cook = direct
+    ? buildCookAndPayFromAccountPinnedInstruction({
+        engineProgram: engine(),
+        code,
+        expectedSha256: sha256,
+        feeConfig,
+        feePayer: owner,
+        maxExecutionFee: prepared.fee,
+        tail,
+      })
+    : buildCookFromAccountInstruction({
+        kitchen: kitchen(),
+        owner,
+        codeBuffer,
+        code,
+        engineProgram: engine(),
+        potSalt: saltBytes(input.salt),
+        pot: prepared.pot,
+        feeConfig,
+        maxExecutionFee: prepared.fee,
+        tail,
+      });
+  const created = direct || (await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot"));
+  const fork = await openFork(
+    prepared.rpc,
+    (what, request) => ask(input.rpcUrl, what, request),
+    [
+      owner,
+      prepared.pot,
+      ...(input.assume ?? []).map((assumed) => assumed.mint),
+      ...(cook.accounts ?? []).map((meta) => meta.address),
+    ],
+    engine(),
+    kitchen(),
+  );
+  const notes: string[] = [];
+  // A Pot's or owner's token account the cluster does not have yet is made, empty, in the copy:
+  // `sauce run` does not make it, so the note says to.
+  for (const [name, token] of prepared.given.named) {
+    if (token.account === undefined || fork.account(token.address) !== null) continue;
+    fork.tokenAccount(
+      token.address,
+      token.account.mint,
+      token.account.holder,
+      token.account.program,
+      0n,
+    );
+    notes.push(
+      `--account ${name}: ${token.label}, ${token.address}, does not exist on solana; the copy made ` +
+        "it empty. Create it before sending the cook (its associated token account, idempotently)",
+    );
+  }
+  const holder = direct ? owner : prepared.pot;
+  for (const assumed of input.assume ?? []) {
+    const mintAccount = fork.account(assumed.mint);
+    if (mintAccount === null) {
+      throw new CliError(
+        `--assume-balance ${assumed.raw}: ${assumed.mint} is not a mint on solana`,
+      );
+    }
+    const program = assumed.program ?? mintAccount.owner;
+    const decimals = assumed.decimals ?? mintAccount.data[44] ?? 0;
+    const amount =
+      "base" in assumed.amount ? assumed.amount.base : parseUnits(assumed.amount.units, decimals);
+    const account = await svmTokenAccount({ mint: assumed.mint, tokenProgram: program }, holder);
+    fork.tokenAccount(account, assumed.mint, holder, program, amount);
+    notes.push(
+      `assumed: ${direct ? "the owner" : "the Pot"}'s ${assumed.label} account, ${account}, holds ` +
+        `${formatUnits(amount, decimals)} ${assumed.label} in the copy (--assume-balance)`,
+    );
+  }
+  const held = fork.svm.getBalance(owner) ?? 0n;
+  // The copy pays the staging rent and the fees from the owner's lamports as the cluster would;
+  // short of them, it is given them, which the result says.
+  const topUp = 10_000_000_000n;
+  fork.svm.airdrop(owner, lamports(topUp));
+  const transactionOf = (instructions: readonly Instruction[]): Promise<Transaction> =>
+    buildExecuteTransaction({
+      payer: signer,
+      instructions,
+      latestBlockhash: {
+        blockhash: fork.svm.latestBlockhash() as Blockhash,
+        lastValidBlockHeight: 1_000_000n,
+      },
+    });
+  const send = async (instructions: readonly Instruction[], what: string): Promise<void> => {
+    const result = fork.send(await transactionOf(instructions));
+    if (!result.ok) {
+      throw new CliError(
+        `${what} fails in the local copy: ${failureReason(result.err, result.logs)}\n` +
+          result.logs.join("\n"),
+      );
+    }
+  };
+  if (!created) await send([createPotInstruction(input, prepared.pot)], "creating the Pot");
+  for (const [index, batch] of staging.entries())
+    await send(batch, index === 0 ? "creating the code buffer" : "staging the program");
+  const tracked = [
+    ...new Set(
+      (cook.accounts ?? [])
+        .filter(
+          (meta) => meta.role === AccountRole.WRITABLE || meta.role === AccountRole.WRITABLE_SIGNER,
+        )
+        .map((meta) => meta.address),
+    ),
+  ];
+  const before = tracked.map(fork.account);
+  fork.svm.expireBlockhash();
+  // Its accounts through a lookup table, as `sauce run` sends it.
+  const instructions = [
+    buildHeapFramePrepend(),
+    ...buildComputeBudgetPrepend({ unitLimit: 1_400_000 }),
+    cook,
+  ];
+  const lookupTables = fork.table(tableAddresses(await transactionOf(instructions)));
+  const simulated = fork.simulate(
+    await buildExecuteTransaction({
+      payer: signer,
+      instructions,
+      latestBlockhash: {
+        blockhash: fork.svm.latestBlockhash() as Blockhash,
+        lastValidBlockHeight: 1_000_000n,
+      },
+      lookupTables,
+    }),
+    tracked,
+  );
+  const failed = !simulated.ok;
+  const { logs, units, returnData, after } = simulated;
+  const moved = failed
+    ? undefined
+    : await movedBy(
+        prepared.rpc,
+        input.chain,
+        tracked,
+        before,
+        after,
+        await accountLabels(input, prepared.pot, prepared.given),
+        owner,
+      );
+  const returns = failed ? undefined : bytesToHex(returnData);
+  const returnType = mainReturnType(input.text);
+  const reason = failed
+    ? failureReason(simulated.err, logs, returnData.length > 0 ? returnData : undefined)
+    : undefined;
+  const staged = `${bytecode.length}-byte`;
+  const json = {
+    ok: !failed,
+    chain: "solana",
+    via: prepared.via,
+    owner,
+    ...(direct ? {} : { pot: prepared.pot }),
+    fee: prepared.fee.toString(),
+    maxExecutionFee: prepared.fee.toString(),
+    path: "local copy (LiteSVM)",
+    slot: fork.slot.toString(),
+    staged: { bytes: bytecode.length, transactions: staging.length },
+    ...(returns === undefined ? {} : { returns }),
+    ...(returns === undefined || returnType === undefined
+      ? {}
+      : { returnType, returned: decodeReturned(returnType, returns, input.chain) ?? null }),
+    ...(direct
+      ? {}
+      : { createPot: created ? null : { kitchen: kitchen(), owner, salt: input.salt } }),
+    computeUnits: units.toString(),
+    ...(reason === undefined ? {} : { reason }),
+    ...(failed ? {} : moved === undefined ? { moved: null } : svmMovedJson(moved)),
+    logs,
+  };
+  const how = [
+    `Rehearsed in a local copy (LiteSVM) of the ${fork.loaded} accounts the cook names, read from ` +
+      `solana at slot ${fork.slot}, with the released engine and Kitchen: ` +
+      (fitsOne
+        ? "a cluster's simulation takes no balance to assume."
+        : "the cook does not fit one transaction, and no cluster can stage a program without sending.") +
+      " Nothing was signed or sent:",
+    ...(created
+      ? []
+      : [
+          `  Kitchen create_pot: Pot ${prepared.pot} is not created on solana yet, so the copy creates it first`,
+        ]),
+    `  the ${staged} program staged into a code buffer in ${staging.length} transactions, as \`sauce run\` stages it`,
+    direct
+      ? `  ${DIRECT_COOK} from that buffer, from ${owner}, which signs and pays the execution fee of ${prepared.fee} lamports`
+      : `  the cook from that buffer, from the owner ${owner}, which pays the Kitchen's execution fee of ${prepared.fee} lamports`,
+  ];
+  if (held < 100_000_000n)
+    notes.push(
+      `${owner} holds ${held} lamports on solana; the copy gave it more to pay the staging rent ` +
+        "and the fees, which `sauce run` takes from it on the cluster (the buffer's rent comes " +
+        "back when the run closes it)",
+    );
+  if (!failed) {
+    return {
+      text: [
+        `The cook succeeds from ${owner}: ${units} compute units` +
+          (returns === undefined || returns === "0x" ? "" : `, returns ${returns}`),
+        ...(returns === undefined || returnType === undefined
+          ? []
+          : [returnedLine(returnType, returns, input.chain)]),
+        ...how,
+        ...(moved === undefined ? [] : svmMovedLines(moved)),
+      ].join("\n"),
+      json,
+      ...(notes.length === 0 ? {} : { notes }),
+    };
+  }
+
+  return {
+    text: [`The cook fails: ${reason}`, ...how, "Program logs:", ...logs.map((l) => `  ${l}`)].join(
+      "\n",
+    ),
+    json,
+    ...(notes.length === 0 ? {} : { notes }),
     exitCode: 1,
   };
 }

@@ -213,20 +213,67 @@ describeSvm(
       expect(second.lookupTable).toBeUndefined();
     }, 300_000);
 
-    it("refuses to simulate or print it as one transaction, naming staging and the table", async () => {
-      const recipient = randomAddress();
-      const refund = randomAddress();
-      for (const command of ["simulate", "tx"]) {
-        const run = await sauce(
-          ...[command, PROGRAM, "--chain", "solana", "--rpc-url", SOLANA_URL],
-          ...["--owner", owner.signer.address, ...accounts(DEEP, recipient, refund)],
-          ...["--args", String(budget), String(maxPrice), "0", "0"],
-        );
-        expect(run.code).toBe(1);
-        expect(run.stderr).toContain("sauce run");
-        expect(run.stderr).toContain("--lookup-table");
-      }
-      void BYTES;
-    }, 120_000);
+    it("simulates it in a local copy of its accounts, and refuses to print it as one transaction", async () => {
+      restoreVenues(harness.svm);
+      await potAccount(USDC, budget);
+      await potAccount(WSOL, 0n);
+      const recipient = setTokenAccount(harness, randomAddress(), WSOL, randomAddress(), 0n);
+      const refund = setTokenAccount(harness, randomAddress(), USDC, randomAddress(), 0n);
+      const argv = (command: string, minTokens = "0"): string[] => [
+        ...[command, PROGRAM, "--chain", "solana", "--rpc-url", SOLANA_URL],
+        ...["--owner", owner.signer.address, ...accounts(DEEP, recipient, refund)],
+        ...["--args", String(budget), String(maxPrice), minTokens, "0"],
+        ...(command === "simulate" ? ["--json"] : []),
+      ];
+      const rehearsed = await sauce(...argv("simulate"));
+      if (rehearsed.code !== 0)
+        throw new Error(`exit ${rehearsed.code}\n${rehearsed.stderr}\n${rehearsed.stdout}`);
+      const out = JSON.parse(rehearsed.stdout) as {
+        path: string;
+        staged: { bytes: number };
+        returned: { spent: string; bought: string; unspent: string };
+      };
+      expect(out.path).toBe("local copy (LiteSVM)");
+      expect(out.staged.bytes).toBeGreaterThan(1232);
+      const bought = BigInt(out.returned.bought);
+      expect(bought).toBeGreaterThan(0n);
+      expect(BigInt(out.returned.spent) + BigInt(out.returned.unspent)).toBe(budget);
+      // Nothing happened on the cluster: the pools and the accounts are as they were.
+      for (const p of DEEP)
+        expect(priceOf(p)).toBe(le(BYTES.get(p.pool)!, LAYOUT[p.venue]!.price, 16));
+      expect(tokenAmount(harness, recipient)).toBe(0n);
+
+      // A rehearsal that reverts says why.
+      const short = await sauce(...argv("simulate", String(bought + 1n)));
+      expect(short.code).toBe(1);
+      expect(short.stdout).toContain("bought below minTokens");
+
+      const tx = await sauce(...argv("tx"));
+      expect(tx.code).toBe(1);
+      expect(tx.stderr).toContain("sauce run");
+      expect(tx.stderr).toContain("--lookup-table");
+    }, 300_000);
+
+    it("rehearses for an owner with no Pot, no lamports and no USDC, given --assume-balance", async () => {
+      restoreVenues(harness.svm);
+      const stranger = (await keypairFile(work)).signer.address;
+      const recipient = setTokenAccount(harness, randomAddress(), WSOL, randomAddress(), 0n);
+      const refund = setTokenAccount(harness, randomAddress(), USDC, randomAddress(), 0n);
+      const run = await sauce(
+        ...["simulate", PROGRAM, "--chain", "solana", "--rpc-url", SOLANA_URL, "--owner", stranger],
+        ...["--assume-balance", "USDC:1000000", ...accounts(DEEP, recipient, refund)],
+        ...["--args", String(budget), String(maxPrice), "0", "0", "--json"],
+      );
+      if (run.code !== 0) throw new Error(`exit ${run.code}\n${run.stderr}\n${run.stdout}`);
+      const out = JSON.parse(run.stdout) as {
+        createPot: unknown;
+        returned: { spent: string; bought: string };
+      };
+      expect(out.createPot).not.toBeNull();
+      expect(BigInt(out.returned.bought)).toBeGreaterThan(0n);
+      // The Pot's SOL account, which the cluster does not have, was made empty in the copy.
+      expect(run.stderr).toContain("--account output: the Pot's WSOL account");
+      expect(run.stderr).toContain("assumed: the Pot's USDC account");
+    }, 300_000);
   },
 );

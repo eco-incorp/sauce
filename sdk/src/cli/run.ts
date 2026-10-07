@@ -123,6 +123,7 @@ import {
   loadKeypair,
   parseAccounts,
   parsePubkey,
+  svmAssumedBalances,
   svmPotCommand,
   svmPotDeployCommand,
   svmPotStatusCommand,
@@ -2505,7 +2506,6 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         multiple: true,
         value: "<TOKEN:amount>",
         help: "Give the Pot this balance, in whole tokens, for the rehearsal only: USDC:2, ETH:0.1",
-        only: "evm",
       },
       block: {
         type: "string",
@@ -2578,9 +2578,15 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "cook moved — each token account's balance change and each account's lamports, read from the",
       "accounts the transaction writes before it and as the simulation leaves them — or the reason",
       "(a program's revert message decoded) and the program logs. Solana's simulateTransaction",
-      "takes no account overrides, so the owner must hold the Pot's rent and the fees, and",
-      "--assume-balance is refused there. A cook too large for one transaction is refused with the",
-      "bytes to shrink: staging it writes a code buffer on chain, which only `sauce run` does.",
+      "takes no account overrides, so the owner must hold the Pot's rent and the fees there.",
+      "A cook too large for one transaction, or one given --assume-balance, is rehearsed in a",
+      "local copy instead (LiteSVM, which the project must have: npm install litesvm): every",
+      "account it names read from the cluster, the released engine and Kitchen, the Pot created",
+      "if missing, the program staged into a code buffer as `sauce run` stages it, then the cook,",
+      "its accounts through a lookup table. There --assume-balance TOKEN:amount gives the account",
+      "the cook spends that token from (the Pot's, or the owner's with --via engine) that balance,",
+      "and a pot:<token> or owner:<token> account the cluster does not have yet is made empty,",
+      "which a note says to create before sending.",
       "",
       "Examples:",
       "  sauce simulate pay.sauce.ts --chain base --owner 0x… \\",
@@ -2597,12 +2603,6 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       const assume = repeatedFlag(args, "assume-balance");
       if (program.chain.kind === "svm") {
         fundingOf(args, io, program.chain, "", false, undefined);
-        if (assume.length > 0) {
-          throw new UsageError(
-            "--assume-balance is for EVM chains: a Solana endpoint's simulateTransaction takes no " +
-              "account overrides, so on solana the rehearsal runs on the accounts as they are",
-          );
-        }
         if (stringFlag(args, "block") !== undefined) {
           throw new UsageError(
             "--block is for EVM chains: Solana's simulateTransaction runs on the cluster's " +
@@ -2613,7 +2613,15 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         // A keypair or a wallet names the owner; the rehearsal signs nothing with it.
         const owner = hasSvmSigner(args, io) ? await keypairAddress(args, io) : undefined;
 
-        return svmSimulateCommand(svmCookInput(args, io, trailing, program, owner), io);
+        const assumed = svmAssumedBalances(assume, program.chain);
+
+        return svmSimulateCommand(
+          {
+            ...svmCookInput(args, io, trailing, program, owner),
+            ...(assumed.length === 0 ? {} : { assume: assumed }),
+          },
+          io,
+        );
       }
       if (hasSvmSigner(args, io)) {
         throw new UsageError(
