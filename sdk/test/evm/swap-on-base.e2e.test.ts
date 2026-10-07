@@ -821,8 +821,8 @@ describeEvm("the sauce-intents swap-on-base body, on real Uniswap V3 and V4 pool
     const receipt = await fulfil(
       { amountIn: WETH_UNIT },
       replacing(
-        "if (!sellsToken0) {\n          protocolFee",
-        "if (sellsToken0) {\n          protocolFee",
+        "if (!sellsToken0) {\n        protocolFee",
+        "if (sellsToken0) {\n        protocolFee",
       ),
     );
     expect(receipt.status).toBe("success");

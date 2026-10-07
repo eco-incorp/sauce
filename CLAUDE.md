@@ -670,11 +670,9 @@ bare name. `.catch(handler)` makes the body and its handler one destination prog
 parameter drops it, as an arrow called in place does. A handler that reads `e` needs v12-evm 2.0.0,
 the major that carries `CATCH_READS` (#553): the releases.json row of the compiler with #553 pairs
 with it. `await x; rest` is the compiler's
-`x.then(() => { rest })` (once its `await` lands). Until then the
-example files the suites EXECUTE (and the file `sauce intent publish` writes) are written with
-`.then(...)`, while prose and skill blocks lead with `await`: `check-skills.mjs#THEN_UNTIL_AWAIT`
-lists every such file, requires every example that opens a hop with `.then` to be listed, and fails
-naming them all once the compiler compiles `await`; its `PENDING` list names the blocks that wait.
+`x.then(() => { rest })`, inside a `try` at every `await` with its `catch`, so a cascade is one
+`await` per hop; an `await` cannot stand in an `if`, a loop or another block, so a hop opened on a
+condition is written with `.then`.
 
 **What an intent leaves out is Eco's default** (`intent-defaults.ts`, which
 `docs/reference/intent-defaults.md` and the `sauce-intents` defaults reference state): the route
@@ -887,7 +885,9 @@ it (every test, the skills checker) reads no chain it is not given, so CI stays 
 wraps the file's source before that compile — a new `main` with the same signature that pulls
 through `@sauce/token` (`permitTransferFrom`, `permit`, `transferFrom`), calls the original
 renamed, and sweeps; in a script, the pulls after its imports and the sweeps after its last
-statement — signing Permit2 or EIP-2612 locally; `cli-funding.e2e.test.ts` runs every
+statement; a program that awaits an intent is wrapped in its `.then` form (`funding.ts#thenForm`,
+the compiler's own reading, byte for byte), so the sweeps run where it opens, not in the body —
+signing Permit2 or EIP-2612 locally; `cli-funding.e2e.test.ts` runs every
 mode against canonical Permit2's runtime (`test/fixtures/cli/Permit2.json`). `cli.e2e.test.ts` runs the
 EVM commands against anvils with the released gated stack (and one `cast send` line verbatim);
 `cli-solana.e2e.test.ts` runs the Solana ones against the released Kitchen and engine in LiteSVM

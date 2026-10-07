@@ -1496,35 +1496,31 @@ describe("sauce intent publish, offline", () => {
     expect(measured.code).toBe(0);
   });
 
-  // Pending the compiler: `await` (#554), which makes the statements after it the body.
-  it.failing(
-    "publishes an awaited intent with main's arguments as its `.then(...)` form",
-    async () => {
-      const form = (opened: string, body: string) =>
-        [
-          "function main(recipient: Address, amount: Uint256) {",
-          `  ${opened}`,
-          `  ${body}`,
-          "}",
-          "",
-        ].join("\n");
-      const intent = `Base.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })`;
-      const cook = async (text: string): Promise<string> => {
-        const run = await sauce(
-          ...["intent", "publish", file("awaited.sauce.ts", text), "--chain", "ethereum"],
-          ...FLAGS.slice(2),
-          ...PRINTED,
-          ...["--from", OWNER, "--format", "json", "--args", RECIPIENT, "1000000"],
-        );
-        expect(run.code).toBe(0);
-
-        return (JSON.parse(run.stdout) as { data: string }).data;
-      };
-      expect(await cook(form(`await ${intent};`, "USDC.transfer(recipient, amount);"))).toBe(
-        await cook(form(`${intent}.then(() => { USDC.transfer(recipient, amount); });`, "")),
+  it("publishes an awaited intent with main's arguments as its `.then(...)` form", async () => {
+    const form = (opened: string, body: string) =>
+      [
+        "function main(recipient: Address, amount: Uint256) {",
+        `  ${opened}`,
+        `  ${body}`,
+        "}",
+        "",
+      ].join("\n");
+    const intent = `Base.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: ${CREATOR} })`;
+    const cook = async (text: string): Promise<string> => {
+      const run = await sauce(
+        ...["intent", "publish", file("awaited.sauce.ts", text), "--chain", "ethereum"],
+        ...FLAGS.slice(2),
+        ...PRINTED,
+        ...["--from", OWNER, "--format", "json", "--args", RECIPIENT, "1000000"],
       );
-    },
-  );
+      expect(run.code).toBe(0);
+
+      return (JSON.parse(run.stdout) as { data: string }).data;
+    };
+    expect(await cook(form(`await ${intent};`, "USDC.transfer(recipient, amount);"))).toBe(
+      await cook(form(`${intent}.then(() => { USDC.transfer(recipient, amount); });`, "")),
+    );
+  });
 
   it("refuses a file with no intent, or with main's arguments not given, before any network", async () => {
     const none = await sauce(

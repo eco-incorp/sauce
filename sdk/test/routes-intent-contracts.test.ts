@@ -56,8 +56,7 @@ describe("an ABI binding given in `contracts`", () => {
     same(given(body), imported(body));
   });
 
-  // Pending the compiler: `await x;` as `x.then(() => { … })`.
-  it.failing("reaches what follows an `await`, and a body nested in a body", () => {
+  it("reaches what follows an `await`, and a body nested in a body", () => {
     same(
       given(`await ${opened};\n  Grid.at(${AT}).poke(1);`),
       given(`${opened}.then(() => { Grid.at(${AT}).poke(1); });`),

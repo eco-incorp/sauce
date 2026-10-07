@@ -196,18 +196,45 @@ describe("the intents a program opens, as compiled", () => {
     },
   );
 
-  // Pending the compiler: `await x;` as `x.then(() => { … })`.
-  it.failing(
-    "an `await` of the intent makes the statements after it its body, byte for byte",
-    () => {
-      const opened = `Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })`;
-      const body = "const held = USDC.balanceOf(ctx.self()); USDC.transfer(RECIPIENT, held);";
-      expectSame(
-        compile(`function main() {\n  await ${opened};\n  ${body}\n}`, INTENTS),
-        compile(`function main() {\n  ${opened}\n    .then(() => { ${body} });\n}`, INTENTS),
+  it("an `await` of the intent makes the statements after it its body, byte for byte", () => {
+    const opened = `Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })`;
+    const body = "const held = USDC.balanceOf(ctx.self()); USDC.transfer(RECIPIENT, held);";
+    expectSame(
+      compile(`function main() {\n  await ${opened};\n  ${body}\n}`, INTENTS),
+      compile(`function main() {\n  ${opened}\n    .then(() => { ${body} });\n}`, INTENTS),
+    );
+  });
+
+  it("a `try` around awaited hops is each body's `.catch`, byte for byte, two and three deep", () => {
+    const hop = (chain: string) =>
+      `${chain}.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })`;
+    const pay = "USDC.transfer(RECIPIENT, 1000000);";
+    const handle = "USDC.transfer(" + CREATOR + ", e.length);";
+    const chains = ["Arbitrum", "Optimism", "Ethereum"];
+    for (const depth of [2, 3]) {
+      const used = chains.slice(0, depth);
+      const awaited = `function main() {
+  try {
+    ${used.map((chain) => `await ${hop(chain)};\n    ${pay}`).join("\n    ")}
+  } catch (e) {
+    ${handle}
+  }
+}`;
+      // `try { S1; await a; S2 } catch (e) { H }` is `try { S1; a.then(() => { S2 }).catch(H) }
+      // catch (e) { H }`, at every `await` in it.
+      const written = used.reduceRight(
+        (rest, chain) =>
+          `${hop(chain)}.then(() => { ${pay} ${rest} }).catch((e) => { ${handle} });`,
+        "",
       );
-    },
-  );
+      const handled = compile(awaited, INTENTS);
+      expectSame(
+        handled,
+        compile(`function main() {\n  try { ${written} } catch (e) { ${handle} }\n}`, INTENTS),
+      );
+      expect(handled.bodies).toHaveLength(depth);
+    }
+  });
 
   it("`.then(...).catch(() => { … })` is the body in a `try` on its destination, byte for byte", () => {
     const handled = compile(
