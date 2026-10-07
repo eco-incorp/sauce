@@ -157,7 +157,8 @@ const lower = (name: string): string => name.charAt(0).toLowerCase() + name.slic
 
 /** Every function of the SVM arm: `trySwap`/`swap`; each of the nine venues at a price, `try` and
  *  plain; each venue at its own limit, `try`, plain, its instruction alone and its instruction's data
- *  (Orca's two: `swap`'s and `swap_v2`'s); and Manifest's. */
+ *  (Orca's two: `swap`'s and `swap_v2`'s; OpenBook's two: from an amount and from lots); and
+ *  Manifest's. */
 export const SVM_FUNCTIONS = [
   "trySwap",
   "swap",
@@ -169,6 +170,7 @@ export const SVM_FUNCTIONS = [
     `${lower(venue)}Data`,
   ]),
   "orcaWhirlpoolV2Data",
+  "openbookV2LotsData",
   "tryManifest",
   "manifest",
   "manifestCpi",
@@ -208,9 +210,11 @@ export const svmDataArguments = (name: string): string[] =>
     ? ["amountIn", "lot", "ticks", "paysBase"]
     : name === "openbookV2Data"
       ? ["amountIn", "baseLot", "quoteLot", "priceLots", "orders", "paysBase"]
-      : name === "orcaWhirlpoolV2Data"
-        ? ["amountIn", "limit", "minOut", "aToB"]
-        : svmCpiArguments(name.replace(/Data$/, "Cpi"));
+      : name === "openbookV2LotsData"
+        ? ["baseLots", "quoteLots", "priceLots", "orders", "paysBase"]
+        : name === "orcaWhirlpoolV2Data"
+          ? ["amountIn", "limit", "minOut", "aToB"]
+          : svmCpiArguments(name.replace(/Data$/, "Cpi"));
 /** The direction arguments, a `bool` each, which `main` takes as a number. */
 const DIRECTIONS = new Set(["aToB", "xToY", "paysBase"]);
 

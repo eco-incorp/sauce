@@ -400,6 +400,7 @@ describe("@sauce/router (SVM): the venues' program ids and instructions", () => 
     ["invariantData", { swap: 2 }],
     ["manifestData", {}],
     ["openbookV2Data", { place_take_order: 1 }],
+    ["openbookV2LotsData", { place_take_order: 1 }],
   ];
 
   it("lists every …Data function", () => {
@@ -515,6 +516,7 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
       for (const name of ["orcaWhirlpoolData", "orcaWhirlpoolV2Data"])
         expect(reasons(name)).toEqual({ ...none, "minOut past 64 bits": 1 });
     else expect(reasons(`${lower}Data`)).toEqual({ ...none, ...data });
+    if (venue === "OpenbookV2") expect(reasons("openbookV2LotsData")).toEqual({ ...none, ...data });
     expect(reasons(tryForm)).toEqual({
       ...none,
       ...data,

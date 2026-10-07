@@ -598,6 +598,31 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
     const viaCpi = (minOut = floor) => instructionOnly(fn, svmCpiArguments(fn), minOut);
     const viaData = (minOut = floor) =>
       instructionOnly(dataName(t), svmDataArguments(dataName(t)), minOut);
+    // OpenBook's data in lots, divided as a program compiled for the one trade divides them: the side
+    // paid from the amount by its lot size, the other the most an order may take, each a literal but
+    // the amount.
+    const viaLotsData = () => {
+      const most = 0x7fffffffffffffffn;
+      const [baseLot, quoteLot] = [value("baseLot", floor), value("quoteLot", floor)];
+      const names = t.accounts.map((_, i) => `a${i}`);
+      const lots =
+        first === 1n
+          ? `amountIn / ${baseLot}, ${most / quoteLot}`
+          : `${most / baseLot}, amountIn / ${quoteLot}`;
+      return cook(
+        compiled(
+          `import { openbookV2LotsData } from "@sauce/router";\n` +
+            `function main(\n  program: Account,\n  source: Account<Writable>,\n` +
+            names.map((n) => `  ${n}: Account<Writable>,\n`).join("") +
+            `  amountIn: Uint256,\n): Uint256 {\n` +
+            `  const data = openbookV2LotsData(${lots}, 0, ${orders}, ${first === 1n});\n` +
+            `  const held = svm.sload(source, 64, 8).toLe();\n` +
+            `  svm.call(program, [${names.join(", ")}], data);\n` +
+            `  return held - svm.sload(source, 64, 8).toLe();\n}\n`,
+        ),
+        { ...order, args: [amountIn], named: listed },
+      );
+    };
 
     // `try…AtLimit` on the pool's slot, each account with the role the recipes give it.
     const slot = slotOf(t);
@@ -633,7 +658,21 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         },
       });
     };
-    return { p, pay, buy, expected, hand, viaData, viaCpi, viaTry, slot, tryArgs, limit, floor };
+    return {
+      p,
+      pay,
+      buy,
+      expected,
+      hand,
+      viaData,
+      viaLotsData,
+      viaCpi,
+      viaTry,
+      slot,
+      tryArgs,
+      limit,
+      floor,
+    };
   };
 
   // -----------------------------------------------------------------------------------------
@@ -654,6 +693,8 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
     priced?: number;
   }[] = [];
   const refusedByVenue: string[] = [];
+  /** OpenBook's swaps through `openbookV2LotsData`, their cook's compute beside the hand-built one. */
+  const lotsUnits: string[] = [];
 
   /** How far a concentrated-liquidity pool's tick moved in the last cook, read off the bank. */
   const tickMoved = (p: Pool): string => {
@@ -708,6 +749,15 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         expect(d.returned).toBe(d.paid);
         expect(c.returned).toBe(c.paid); // …Cpi returns what was paid
         expect(r.returned).toBe(r.received); // try…AtLimit what was received
+        // OpenBook's data in lots, divided beforehand: the same instruction and the same swap.
+        if (t.venue === "openbook-v2") {
+          const lots = succeeded(await w.viaLotsData());
+          expect(lots.cpi).toEqual(w.expected);
+          expect([lots.paid, lots.received]).toEqual([h.paid, h.received]);
+          lotsUnits.push(
+            `${t.pool} ${t.direction}: ${lots.units} (${lots.units - h.units >= 0 ? "+" : ""}${lots.units - h.units})`,
+          );
+        }
         // The arm's price-limited form on the same pool, a few basis points past its price, on a
         // slot of nine (it takes no bitmap extension's slot of its own past them).
         let priced: number | undefined;
@@ -1092,6 +1142,9 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         "",
         "Refused by the venue, all four ways alike:",
         ...refusedByVenue,
+        "",
+        "OpenBook through openbookV2LotsData, cook CU beside the hand-built CPI:",
+        ...lotsUnits,
       ].join("\n"),
     );
   });

@@ -19,7 +19,8 @@
 // other three are theirs and Invariant's and OpenBook v2's, which take `priceLots` and `orders` in
 // place of `limit`; Manifest's swap takes no limit, so its functions (`tryManifest`, `manifest`,
 // `manifestCpi`, `manifestData`) take none. Orca has two data functions, its classic `swap`'s
-// (`orcaWhirlpoolData`) and `swap_v2`'s (`orcaWhirlpoolV2Data`). The `try` forms return what the
+// (`orcaWhirlpoolData`) and `swap_v2`'s (`orcaWhirlpoolV2Data`), and OpenBook a second that takes
+// the order in lots, divided already (`openbookV2LotsData`). The `try` forms return what the
 // recipient received; `…Cpi` what the paying account paid; `…Data` the bytes. Every form sends the
 // same instruction for the same amount, limit and floor: they all build it with `…Data`.
 //
@@ -356,9 +357,7 @@ export function phoenixData(
 
 // OpenBook v2's `place_take_order`: every lot of `amountIn` of the token paid, by the market's lot
 // sizes `baseLot` and `quoteLot` (base lots selling base, quote lots including the fee buying it; the
-// other side unbounded), an immediate-or-cancel order at `priceLots` (0: a market order, at any price,
-// whose price the program does not read and requires positive), matching at most `orders` resting
-// orders. It carries no least out.
+// other side unbounded); `priceLots`, `orders` and `paysBase` as `openbookV2LotsData` takes them.
 export function openbookV2Data(
   amountIn: Uint256,
   baseLot: Uint256,
@@ -367,10 +366,26 @@ export function openbookV2Data(
   orders: Uint256,
   paysBase: bool,
 ): bytes {
-  require(priceLots <= 0x7fffffffffffffff && orders <= 255, "limit past its field");
   const most = 0x7fffffffffffffff;
   const baseLots = paysBase ? amountIn / baseLot : most / baseLot;
   const quoteLots = paysBase ? most / quoteLot : amountIn / quoteLot;
+  return openbookV2LotsData(baseLots, quoteLots, priceLots, orders, paysBase);
+}
+
+// OpenBook v2's `place_take_order` in the market's own lots: at most `baseLots` base lots and
+// `quoteLots` quote lots including the fee (the side paid bounds the order; give the other its
+// most), an immediate-or-cancel order at `priceLots` (0: a market order, at any price, whose price
+// the program does not read and requires positive), matching at most `orders` resting orders, selling
+// base when `paysBase`. It carries no least out. For a caller that knows the market's lot sizes when
+// it compiles: it divides nothing.
+export function openbookV2LotsData(
+  baseLots: Uint256,
+  quoteLots: Uint256,
+  priceLots: Uint256,
+  orders: Uint256,
+  paysBase: bool,
+): bytes {
+  require(priceLots <= 0x7fffffffffffffff && orders <= 255, "limit past its field");
   const take = hex`032c47031ac7cb55`;
   const word =
     (paysBase ? 1 : 0) |

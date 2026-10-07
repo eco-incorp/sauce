@@ -163,7 +163,11 @@ for (const name of ["tryInvariantAtLimit", "tryOpenbookV2AtLimit", "tryManifest"
   check(named.includes(name), `the skill names ${name}`);
 const plainOf = (name: string) => name.charAt(3).toLowerCase() + name.slice(4);
 const cpi = atLimit.map((name) => `${plainOf(name).replace(/AtLimit$/, "")}Cpi`);
-const data = [...cpi.map((name) => name.replace(/Cpi$/, "Data")), "orcaWhirlpoolV2Data"];
+const data = [
+  ...cpi.map((name) => name.replace(/Cpi$/, "Data")),
+  "orcaWhirlpoolV2Data",
+  "openbookV2LotsData",
+];
 check(
   svmExports
     .map((m) => m[1])
@@ -190,7 +194,7 @@ const argsOf = (args: string) =>
     .join(", ");
 for (const [, name, args] of svmExports) {
   const want = name!.endsWith("Data")
-    ? /^amountIn\b/
+    ? /^(amountIn|baseLots, quoteLots)\b/
     : name!.endsWith("Cpi")
       ? /^program, accounts, source, amountIn\b/
       : name!.endsWith("AtLimit") || name === "tryManifest" || name === "manifest"
