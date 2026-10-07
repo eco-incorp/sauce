@@ -1802,7 +1802,8 @@ export function stabbleClmmCpi(
 // Orca Whirlpools, whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc, at `limit`, its own
 // `sqrt_price_limit` (0: the program's own bound). A limit in the pool's own terms holds whatever
 // fee the pool charges, so an adaptive-fee pool trades here; it writes its oracle, the slot's
-// `extra`, which must then be writable.
+// `extra`, which must then be writable, as it must for any pool its `swap_v2` takes (a Token-2022
+// mint), which declares the oracle writable whatever the fee.
 export function tryOrcaWhirlpoolAtLimit(
   slot: Account[],
   trader: Account[],

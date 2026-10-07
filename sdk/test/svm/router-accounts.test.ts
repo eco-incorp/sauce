@@ -212,7 +212,7 @@ describe("routerSvmAccountOrder: the options", () => {
     expect(ba.slice(11, 13)).toEqual(["mintB", "mintA"]);
   });
 
-  it("gives Orca's swap_v2 each mint and its token program, and an adaptive pool's oracle writable", () => {
+  it("gives Orca's swap_v2 each mint and its token program and the oracle writable, and the classic swap an adaptive pool's oracle writable", () => {
     const v2 = routerSvmAccountOrder("orca-whirlpool", { aToB: false, v2: true });
     expect(v2.map((a) => a.name)).toEqual([
       "tokenProgramA",
@@ -231,12 +231,19 @@ describe("routerSvmAccountOrder: the options", () => {
       "tickArray2",
       "oracle",
     ]);
-    expect(v2.at(-1)!.writable).toBe(false);
-    expect(routerSvmAccountOrder("orca-whirlpool", { aToB: true, adaptive: true }).at(-1)).toEqual({
-      name: "oracle",
-      writable: true,
-      signer: false,
-    });
+    // `swap_v2` declares the oracle `mut` whatever the pool's fee.
+    const oracle = (options: RouterSvmAccountOptions) =>
+      routerSvmAccountOrder("orca-whirlpool", options).at(-1);
+    for (const adaptive of [undefined, false, true])
+      expect(oracle({ aToB: true, v2: true, adaptive })).toEqual({
+        name: "oracle",
+        writable: true,
+        signer: false,
+      });
+    // The classic `swap` writes it only for an adaptive fee.
+    expect(oracle({ aToB: true, adaptive: true })!.writable).toBe(true);
+    expect(oracle({ aToB: true })!.writable).toBe(false);
+    expect(oracle({ aToB: false, adaptive: false })!.writable).toBe(false);
   });
 
   it("takes fewer tick arrays on Crema and fewer ticks on Invariant", () => {

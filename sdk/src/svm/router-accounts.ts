@@ -105,7 +105,10 @@ export interface RouterSvmAccountOptions {
    * classic `swap`, which takes SPL Token alone. `swap_v2` for any pool with a Token-2022 mint.
    */
   readonly v2?: boolean;
-  /** Orca Whirlpools: the pool's fee is adaptive, so its swap writes the pool's oracle. */
+  /**
+   * Orca Whirlpools: the pool's fee is adaptive, so its classic `swap` writes the pool's oracle.
+   * `swap_v2` declares the oracle writable whatever the fee, so with `v2` it is writable either way.
+   */
   readonly adaptive?: boolean;
   /**
    * The Raydium-layout venues: pass the pool's tick-array bitmap extension, which the swap reads
@@ -187,7 +190,9 @@ export function routerSvmAccountOrder(
         ...ticks("tickArray", 3),
       ];
     case "orca-whirlpool": {
-      const oracle = options.adaptive === true ? w("oracle") : r("oracle");
+      // `swap_v2` declares the oracle `mut` whatever the pool's fee (a read-only one is refused,
+      // ConstraintMut); the classic `swap` writes it only for an adaptive fee.
+      const oracle = options.v2 === true || options.adaptive === true ? w("oracle") : r("oracle");
       if (options.v2 === true) {
         return [
           r("tokenProgramA"),

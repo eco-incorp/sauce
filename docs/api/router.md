@@ -318,7 +318,7 @@ trySwap(slot: Account[], trader: Account[], amountIn, maxPrice, minOut, recipien
   program's state, `extra` the pool's tickmap, its ticks the tick accounts the swap may cross);
   OpenBook v2 its two oracles, the program itself for one the market has not (its `config` is the
   market's authority, `extra` its event heap, its ticks its bids, asks and the System program);
-  Manifest's `config` is the System program, which its swap takes. Crema refuses a tick array its
+  Manifest's `config` is the System program, which its swap takes. An Orca pool's `extra`, its oracle, must be writable for an adaptive fee and for a pool with a Token-2022 mint, whose `swap_v2` declares it writable whatever the fee. Crema refuses a tick array its
   map does not mark and Invariant takes only the ticks it crosses, so each is passed the slot's first
   tick array and each after it until a System program.
 - **`trader`** is `[authority, source, payMint, buyMint, tokenProgram, token2022, memo]`: the
@@ -527,8 +527,9 @@ the order each instruction takes them, so a code generator need not keep its own
 whether the instruction writes it and it signs, and `routerSvmAccounts(venue, options, refs)` builds
 the list from a value for each name (an address, or whatever reference the generator resolves
 later). `options` is the direction (`aToB`: the pool's first token is paid — token 0 or A,
-Invariant's X, a market's base) and, where the venue takes them, Orca's `swap_v2` (`v2`), an
-adaptive-fee whirlpool, whose swap writes its oracle (`adaptive`), a Raydium-layout pool's bitmap
+Invariant's X, a market's base) and, where the venue takes them, Orca's `swap_v2` (`v2`, whose
+oracle is always writable), an adaptive-fee whirlpool, whose classic `swap` writes its oracle too
+(`adaptive`), a Raydium-layout pool's bitmap
 extension (`bitmapExtension`), and how many tick arrays Crema, or ticks Invariant, takes
 (`tickArrays`). `ROUTER_SVM_VENUES` gives each venue's program and its `…Data` and `…Cpi` functions.
 

@@ -38,6 +38,7 @@ import {
   buildCookFromAccountInstruction,
   buildExecuteTransaction,
   buildHeapFramePrepend,
+  routerSvmAccounts,
 } from "../../../src/svm/index.js";
 import {
   describeSvm,
@@ -1002,6 +1003,97 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
           past[past.length - 1] = 2n ** 64n;
           expect(failed(await w.viaTry({ args: past })).reason).toBe("minOut past 64 bits");
         }
+      },
+      120_000,
+    );
+  });
+
+  // Orca's `swap_v2` declares the oracle mutable whatever the pool's fee, where the classic `swap`
+  // writes it only for an adaptive fee: the order `routerSvmAccounts` gives for `swap_v2` on a pool
+  // whose fee is not adaptive swaps like the classic template, and a read-only oracle there is
+  // refused (Anchor's ConstraintMut, 2000).
+  describe("Orca's swap_v2 writes its oracle whatever the pool's fee", () => {
+    it.each(["aToB", "bToA"] as const)(
+      "%s, a pool whose fee is not adaptive",
+      async (direction) => {
+        const t = served("orca-whirlpool-sol-usdc", direction);
+        const [pay, buy] = pairOf(pool(t.pool), direction);
+        const amountIn = amountOf(pay);
+        const aToB = direction === "aToB";
+        const by = new Map(t.accounts.map((a) => [role(a.ref), a.address!]));
+        const source = randomAddress();
+        const recipient = randomAddress();
+        const listed = routerSvmAccounts(
+          "orca-whirlpool",
+          { aToB, v2: true },
+          {
+            tokenProgramA: TOKEN,
+            tokenProgramB: TOKEN,
+            memo: MEMO,
+            authority: harness.pot,
+            pool: by.get("pool")!,
+            mintA: aToB ? pay : buy,
+            mintB: aToB ? buy : pay,
+            source,
+            recipient,
+            vaultA: by.get("va")!,
+            vaultB: by.get("vb")!,
+            tickArray0: by.get("ta0")!,
+            tickArray1: by.get("ta1")!,
+            tickArray2: by.get("ta2")!,
+            oracle: by.get("orc")!,
+          },
+        );
+        const { limit, floor } = carried(t);
+        const program = compiled(
+          svmProgramCalling("orcaWhirlpoolCpi", listed.length, {
+            limit: String(limit),
+            minOut: String(floor),
+            aToB: String(aToB),
+          }),
+        );
+        const send = (oracle?: AccountRole) =>
+          cook(program, {
+            pay,
+            buy,
+            amountIn,
+            venue: t.programId,
+            source,
+            recipient,
+            args: [amountIn],
+            named: {
+              program: { address: t.programId, role: AccountRole.READONLY },
+              ...Object.fromEntries(
+                listed.map((a, i) => [
+                  `a${i}`,
+                  {
+                    address: a.ref,
+                    role:
+                      a.name === "oracle" && oracle !== undefined
+                        ? oracle
+                        : a.writable
+                          ? AccountRole.WRITABLE
+                          : AccountRole.READONLY,
+                  },
+                ]),
+              ),
+            },
+          });
+        const v2 = succeeded(await send());
+        expect(v2.cpi).toEqual({
+          data:
+            `2b04ed0b1ac91e62${leBytes(amountIn, 8)}${leBytes(floor, 8)}${leBytes(limit, 16)}` +
+            (aToB ? "010100" : "010000"),
+          accounts: listed.map((a) => a.ref),
+        });
+        // The classic template's swap, from the same state: the same amounts.
+        const classic = succeeded(await ways(t, amountIn).hand());
+        expect([v2.paid, v2.received]).toEqual([classic.paid, classic.received]);
+        expect(
+          venueFailure(failed(await send(AccountRole.READONLY)), t.programId).map((line) =>
+            line.replace(/^.* failed: /, ""),
+          ),
+        ).toEqual(["custom program error: 0x7d0"]);
       },
       120_000,
     );

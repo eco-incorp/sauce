@@ -624,7 +624,7 @@ array first), which an `Account[]` parameter always forces — and `main` cannot
 A 3-argument data function costs ~1.1k over the same code inline, a `bool` direction ~700 more.
 Reading an account out of an array costs ~2k CU, a hex literal ~1.6k, `toBytesLe` ~3–5k — so each
 venue's data is ONE packed word written with one `toBytesLe`, each field its low bytes. `@eco-incorp/sauce/svm`'s
-`routerSvmAccountOrder(venue, { aToB, v2?, adaptive?, bitmapExtension?, tickArrays? })` names each
+`routerSvmAccountOrder(venue, { aToB, v2?, adaptive?, bitmapExtension?, tickArrays? })` (Orca's `swap_v2` oracle ALWAYS writable — a read-only one is ConstraintMut 2000 on the real program; the classic `swap`'s only for `adaptive`) names each
 instruction account in order with its writable/signer flags, `routerSvmAccounts(…, refs)` builds the
 list from a value per name, and `ROUTER_SVM_VENUES` gives each venue's program and `…Data`/`…Cpi`
 names (`sdk/src/svm/router-accounts.ts`; `test/svm/router-accounts.test.ts` holds it account for
