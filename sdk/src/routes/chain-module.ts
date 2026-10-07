@@ -6,14 +6,14 @@
  * export const chainId = 8453;
  * export const USDC = new TokenOf("USDC", 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913, 6);
  * export const UniswapV3 = new NsUniswapV3({ Factory: ABI_3.at(0x33128a8f…), Pool: (address) => ABI_4.at(address) });
- * export const Arbitrum = new OnArbitrum(); // its chain id, its `Portal`, its contracts
+ * export const Arbitrum = new OnArbitrum(); // its chain id, its `hop(…)`, its contracts
  * ```
  *
  * Everything comes from the SDK's registries — tokens (`token-registry.ts`), protocol contracts
  * (`descriptors/`), chains and eco-routes' deployments — and nothing is enumerated by the program:
  * the compiler makes a module constant only when a program reads it, so Ethereum's two thousand
  * names cost a program its parsing and nothing else. The classes are `@sauce/names`' (`Token`,
- * `Holding`) and `@sauce/intents`' (`Portal`, `Level`), and the ones written here: a class per
+ * `Holding`) and `@sauce/intents`' (`Intent`, `Level`), and the ones written here: a class per
  * protocol namespace and per chain.
  *
  * WHAT A CHAIN'S MODULE EXPORTS:
@@ -25,9 +25,9 @@
  *  - every protocol namespace (`UniswapV3`, a family's `Uniswap`), its contracts bound at their
  *    addresses on this chain, an interface as a function of an address (`UniswapV3.Pool(pool)`),
  *    and a protocol's one callable contract standing for the protocol (`Lido.submit(…)`);
- *  - every chain's name: its chain id where it is compared (`chainId == Ethereum`), its `Portal`,
- *    which opens an intent whose body runs there, and its contracts (`Base.UniswapV3.Factory`),
- *    whose addresses a program passes across chains.
+ *  - every chain's name: its chain id where it is compared (`chainId == Ethereum`), its `hop(…)`,
+ *    which opens an intent whose body runs there, and its contracts (`Base.UniswapV3.Factory`, and
+ *    its eco-routes Portal as `Base.Portal`), whose addresses a program passes across chains.
  * A module exports only what its chain has. A dotted name the chain lacks (`PancakeswapV3.Factory`,
  * `Base.AaveV3.Pool`) is the compiler's to fold: it compares as zero, so `if (X != 0)` is decided
  * while compiling, and the compile reports each such path (`absentPaths`), which the SDK holds to the
@@ -36,7 +36,7 @@
  *
  * WHAT DEPENDS ON THE COMPILE. A `tokens` override and a chain value chosen by the caller change
  * this chain's names; the intent defaults (`intents`) and each destination's Kitchen fee change its
- * `Portal`s. The registry part is written once per chain and kept; the rest is written per call.
+ * hops. The registry part is written once per chain and kept; the rest is written per call.
  */
 import type { Abi } from "viem";
 
@@ -305,7 +305,7 @@ class Namespaces {
   /** One contract on `chain`, as a namespace holds it — bound at its address, an interface as a
    *  function of an address, an address-only contract as its address — or `undefined` where the
    *  chain has none to give: not deployed there, or its ABI widened. */
-  private contract(descriptor: ContractDescriptor, chain: CanonicalChain): string | undefined {
+  contract(descriptor: ContractDescriptor, chain: CanonicalChain): string | undefined {
     if (descriptor.kind === "interface") {
       return `(address) => ${this.imports.abiOf(descriptor)}.at(address)`;
     }
@@ -469,7 +469,7 @@ function destinationTokenTable(chain: CanonicalChain): string {
   return table;
 }
 
-/** A destination's facts, as seen from `source`, for its `Portal`: or why it has none. */
+/** A destination's facts, as seen from `source`, for a hop there: or why it has none. */
 function destinationOf(
   source: CanonicalChain,
   destination: CanonicalChain,
@@ -508,7 +508,7 @@ function destinationOf(
       ? defaults.executionFee(destination)
       : defaults.executionFee;
   const missing =
-    `a token \`.receive(...)\` names is ${destination.slug}'s of the same symbol, and ` +
+    `a token a hop's \`receive\` names is ${destination.slug}'s of the same symbol, and ` +
     `${destination.slug} registers no token of that symbol: name one it has, or give its address ` +
     "with `Token(address)`";
 
@@ -551,7 +551,14 @@ function levelSource(
   );
 }
 
-/** Every chain's name, on `chain`: its id, its `Portal` from here, its contracts. */
+/** The eco-routes Portal's descriptor, which every chain's name binds as its `Portal`. */
+function ecoRoutesPortalContract(): ContractDescriptor | undefined {
+  const namespace = resolveNamespace("EcoRoutes");
+
+  return namespace?.kind === "protocol" ? namespace.contracts.get("Portal") : undefined;
+}
+
+/** Every chain's name, on `chain`: its id, its `hop` from here, its contracts and its Portal. */
 function chainsPart(
   chain: CanonicalChain,
   options: ChainModuleOptions,
@@ -574,23 +581,26 @@ function chainsPart(
     const className = `On${key}`;
     const fields: string[] = [];
     let explain =
-      "a chain's name is its chain id, its `Portal` and its contracts; a token is never " +
+      "a chain's name is its chain id, its `hop({ … })` and its contracts; a token is never " +
       "qualified by a chain: a symbol alone is the chain's own, compiled for it, and another " +
       "chain's is an address";
+    // Why a hop there cannot be opened from here, where it cannot.
+    let unhopped: string | undefined;
+    let hop: string | undefined;
     if (scope !== undefined && !scope.has(other.id)) {
       explain = `chain '${other.slug}' (referenced as '${key}....') is outside the allowed chainScope`;
     } else {
-      // Its `Portal`, from here: or, where there is none, why — what a use of it says.
+      // A hop there, from here: or, where there is none, why — what calling it says.
       if (chain.kind !== "evm") {
-        explain = `a program on ${chain.slug} opens no intent: the Portals a program publishes through are EVM contracts`;
+        unhopped = `a program on ${chain.slug} opens no intent: the Portals a program publishes through are EVM contracts`;
       } else if (level === undefined) {
-        explain = `eco-routes has no Portal on ${chain.slug}, so a program there opens no intent`;
+        unhopped = `eco-routes has no Portal on ${chain.slug}, so a program there opens no intent`;
       } else {
         const destination = destinationOf(chain, other, defaults);
         if (typeof destination === "string") {
-          fields.push(`this.Portal = new Portal(${destination}, HERE);`);
+          hop = `  hop(config) { return new Intent(${destination}, HERE, config); }`;
         } else {
-          explain = destination.absent;
+          unhopped = destination.absent;
         }
       }
       // Another chain's contracts, as that chain deploys them: addresses to pass across chains.
@@ -599,6 +609,11 @@ function chainsPart(
           const value = namespaces.value(namespaceKey, resolveNamespace(namespaceKey)!, other);
           if (value !== undefined) fields.push(`this.${namespaceKey} = ${value};`);
         }
+        // Its eco-routes Portal, the contract: for a low-level call or a check, never to open an
+        // intent, which is `hop`.
+        const portal = ecoRoutesPortalContract();
+        const binding = portal === undefined ? undefined : namespaces.contract(portal, other);
+        if (binding !== undefined) fields.push(`this.Portal = ${binding};`);
       }
     }
     lines.push(
@@ -607,6 +622,7 @@ function chainsPart(
         `  constructor() { ${fields.join(" ")} }`,
         `  valueOf() { return ${other.id}; }`,
         `  toString() { return ${str(explain)}; }`,
+        hop ?? `  hop(config) { throw new Error(${str(unhopped ?? explain)}); }`,
         "}",
         `export const ${key} = new ${className}();`,
       ].join("\n"),
@@ -633,7 +649,7 @@ export function chainModuleSource(
     ...(evm
       ? [
           `import { Token as TokenOf, Holding } from "${NAMES}";`,
-          `import { Portal, Level } from "${INTENTS}";`,
+          `import { Intent, Level } from "${INTENTS}";`,
         ]
       : []),
     ...registry.imports.lines(),

@@ -1,19 +1,22 @@
 // @sauce/intents — EVM arm.
 //
-// An Eco intent opened from inside a program:
+// An Eco intent opened from inside a program, a hop to another chain:
 //
-//   Arbitrum.Portal.send({ token: USDC, amount })
-//     .refundee(owner)
-//     .receive({ token: USDC, amount: delivered })
-//     .then(() => { USDC.transfer(recipient, delivered); });
+//   await Arbitrum.hop({
+//     reward: { token: USDC, amount },
+//     receive: { token: USDC, amount: delivered },
+//     refundee: owner,
+//   });
+//   USDC.transfer(recipient, delivered); // runs on Arbitrum
 //
-// `Arbitrum.Portal` is a `Portal`, made by the SDK's module for the chain the program is compiled
-// for, with what the SDK knows about that pair of chains: both Portals, the prover, the destination's
-// shared Pot, its engine and its Kitchen fee, and its tokens by symbol. `send` returns an `Intent`,
-// whose methods only record what they are given. The compiler runs all of it while it compiles, and
-// when the statement ends it runs `[Symbol.dispose]()`, which builds the intent as one literal, the
-// body compiled as a program for the destination, and leaves the program only the run-time work:
-// reading the vault, paying the reward into it, and publishing.
+// which is, as in JavaScript, `Arbitrum.hop({ … }).then(() => { USDC.transfer(recipient, delivered); })`.
+// `Arbitrum.hop` is a method of the chain's name in the SDK's module for the chain the program is
+// compiled for, which knows that pair of chains: both Portals, the prover, the destination's shared
+// Pot, its engine and its Kitchen fee, and its tokens by symbol. It returns an `Intent`, whose steps
+// only record what they are given. The compiler runs all of it while it compiles, and when the
+// statement ends it runs `[Symbol.dispose]()`, which builds the intent as one literal, the body
+// compiled as a program for the destination, and leaves the program only the run-time work: reading
+// the vault, paying the reward into it, and publishing.
 //
 // Every intent a program opens takes Eco's defaults for what it leaves out, as Eco's solver quotes
 // an intent and its Portal app publishes one: the route's deadline 300 seconds after the intent
@@ -34,7 +37,7 @@ import { approve, transfer } from "@sauce/token";
 // survives a `try` block, which runs as a program of its own.
 const SAUCE_INTENTS_NONCE = 0x91da66d2ed07997bae5bcd0c9e8b6e7824eb17d69e494553b5ad7ec46532b578;
 
-// What `.send(...)` lists, recorded as it is given, and what a list of them becomes.
+// What a hop's `reward` or `receive` lists, recorded as it is given, and what a list of them becomes.
 class Items {
   constructor() {
     this.list = Lists.empty();
@@ -96,179 +99,43 @@ export class Level {
   }
 }
 
-// A chain's Portal, opening an intent whose body runs on `destination`: what the SDK knows of that
-// chain as seen from `level` — its Portal, the prover, its shared Pot and engine, its Kitchen fee,
-// its tokens by symbol.
-export class Portal {
-  constructor(destination, level) {
+// One hop: an Eco intent a program opens, whose body runs on `destination`, as the chain the program
+// runs on (`level`) sees it — that chain's Portal, the prover, its shared Pot and engine, its Kitchen
+// fee, its tokens by symbol — with what `config` gives:
+//
+//   reward          what the program pays the solver, escrowed here: `{ token, amount }`,
+//                   `{ native: amount }`, or a list of them
+//   receive         what the solver delivers there, for the body: `{ token, amount }` or a list
+//   refundee        who may reclaim an unearned reward (the reward's `creator`); required
+//   deadline        the last second the intent may be filled
+//   rewardDeadline  from when an unproven reward may be refunded
+//   prover          the prover on this chain
+//   salt            the route's salt, used as written
+//   fee             the destination Kitchen's fee the body's cook pays, in wei
+//
+// The SDK's module for the chain makes one from each chain's `hop(config)`.
+export class Intent {
+  constructor(destination, level, config) {
+    if (config === undefined || config.length !== undefined) {
+      throw new Error(
+        "`hop(...)` takes one object: `hop({ reward: { token, amount }, receive: { token, amount }, refundee })`",
+      );
+    }
     this._destination = destination;
     this._here = level.fields;
-  }
-  // The reward: what the program pays the solver, escrowed on the chain it runs on. Each item an
-  // argument, `{ token, amount }` or `{ native: amount }`, the tokens also as one list of them.
-  send(...reward) {
-    return new Intent(this._destination, this._here, reward);
-  }
-  toString() {
-    return "a chain's `Portal` takes one step, `.send(...)`: the reward the solver earns";
-  }
-}
-
-class Intent {
-  constructor(destination, here, reward) {
-    this._destination = destination;
-    this._here = here;
-    this._reward = reward;
-    // 1 after `send`, 2 after `receive`, 3 after `then`, 4 after `catch`.
+    this._config = config;
+    // 1 after `hop`, 2 after `then`, 3 after `catch`.
     this._stage = 1;
     // Raw route calls the Executor makes before the delivered tokens move into the Pot, and after
-    // the cook, as written. None yet: a step that adds them is a later one.
+    // the cook, as written. None yet: a field that adds them is a later one.
     this._before = Lists.empty();
     this._after = Lists.empty();
-  }
-
-  // Who may reclaim an unearned reward: the reward's `creator` on the Portal.
-  refundee(address) {
-    if (this._stage == 2) {
-      throw new Error(
-        "`.refundee(...)` is not a step after `.receive(...)`: its steps are `.deadline(...)`, `.salt(...)`, `.fee(...)` and `.then(...)`",
-      );
-    }
-    if (this._stage > 2) {
-      throw new Error(
-        "`.refundee(...)` is not a step after `.then(...)`: its one step is `.catch(...)`",
-      );
-    }
-    if (this._refundee !== undefined) {
-      throw new Error("`.refundee(...)` is given twice after `.send(...)`: give it once");
-    }
-    if (address === undefined) {
-      throw new Error(
-        "`.refundee(...)` takes the address an unfilled intent's reward is refunded to",
-      );
-    }
-    this._refundee = address;
-    return this;
-  }
-
-  // After `send`, from when an unproven reward may be refunded; after `receive`, the last second
-  // the intent may be filled. Unix seconds.
-  deadline(seconds) {
-    if (seconds === undefined) {
-      throw new Error("`.deadline(...)` takes the deadline, in Unix seconds");
-    }
-    if (this._stage == 1) {
-      if (this._rewardDeadline !== undefined) {
-        throw new Error("`.deadline(...)` is given twice after `.send(...)`: give it once");
-      }
-      this._rewardDeadline = seconds;
-      return this;
-    }
-    if (this._stage > 2) {
-      throw new Error(
-        "`.deadline(...)` is not a step after `.then(...)`: its one step is `.catch(...)`",
-      );
-    }
-    if (this._routeDeadline !== undefined) {
-      throw new Error("`.deadline(...)` is given twice after `.receive(...)`: give it once");
-    }
-    this._routeDeadline = seconds;
-    return this;
-  }
-
-  // The source chain's prover.
-  prover(address) {
-    if (this._stage == 2) {
-      throw new Error(
-        "`.prover(...)` is not a step after `.receive(...)`: its steps are `.deadline(...)`, `.salt(...)`, `.fee(...)` and `.then(...)`",
-      );
-    }
-    if (this._stage > 2) {
-      throw new Error(
-        "`.prover(...)` is not a step after `.then(...)`: its one step is `.catch(...)`",
-      );
-    }
-    if (this._prover !== undefined) {
-      throw new Error("`.prover(...)` is given twice after `.send(...)`: give it once");
-    }
-    if (address === undefined) {
-      throw new Error("`.prover(...)` takes the source chain's prover's address");
-    }
-    this._prover = address;
-    return this;
-  }
-
-  // What the solver delivers on the destination, for the body to run with: each item an argument,
-  // `{ token, amount }`, or one list of them. A token is the destination's of the same symbol.
-  receive(...delivery) {
-    if (this._stage == 2) {
-      throw new Error(
-        "`.receive(...)` is not a step after `.receive(...)`: its steps are `.deadline(...)`, `.salt(...)`, `.fee(...)` and `.then(...)`",
-      );
-    }
-    if (this._stage > 2) {
-      throw new Error(
-        "`.receive(...)` is not a step after `.then(...)`: its one step is `.catch(...)`",
-      );
-    }
-    this._delivery = delivery;
-    this._stage = 2;
-    return this;
-  }
-
-  // The route's salt.
-  salt(salt) {
-    if (this._stage == 1) {
-      throw new Error(
-        "`.salt(...)` is not a step after `.send(...)`: its steps are `.refundee(...)`, `.deadline(...)`, `.prover(...)` and `.receive(...)`",
-      );
-    }
-    if (this._stage > 2) {
-      throw new Error(
-        "`.salt(...)` is not a step after `.then(...)`: its one step is `.catch(...)`",
-      );
-    }
-    if (this._salt !== undefined) {
-      throw new Error("`.salt(...)` is given twice after `.receive(...)`: give it once");
-    }
-    if (salt === undefined) {
-      throw new Error("`.salt(...)` takes the route's salt");
-    }
-    this._salt = salt;
-    return this;
-  }
-
-  // The destination Kitchen's fee the body's cook pays, in wei.
-  fee(wei) {
-    if (this._stage == 1) {
-      throw new Error(
-        "`.fee(...)` is not a step after `.send(...)`: its steps are `.refundee(...)`, `.deadline(...)`, `.prover(...)` and `.receive(...)`",
-      );
-    }
-    if (this._stage > 2) {
-      throw new Error(
-        "`.fee(...)` is not a step after `.then(...)`: its one step is `.catch(...)`",
-      );
-    }
-    if (this._fee !== undefined) {
-      throw new Error("`.fee(...)` is given twice after `.receive(...)`: give it once");
-    }
-    if (wei === undefined) {
-      throw new Error("`.fee(...)` takes the destination Kitchen's fee, in wei");
-    }
-    this._fee = wei;
-    return this;
   }
 
   // The body: compiled as a program for the destination, run there on its shared Pot with what was
   // received.
   then(body) {
-    if (this._stage == 1) {
-      throw new Error(
-        "`<Chain>.Portal.send(...)` stops before `.receive(...)`, which every intent has: what the solver delivers on its destination, `.receive({ token, amount })`, or `.receive()` for nothing, then the body that runs there with it, `.then(() => { … })`",
-      );
-    }
-    if (this._stage > 2) {
+    if (this._stage > 1) {
       throw new Error(
         "`.then(...)` is not a step after `.then(...)`: its one step is `.catch(...)`",
       );
@@ -277,31 +144,28 @@ class Intent {
       throw new Error("`.then(...)` takes the body: `.then(() => { … })`");
     }
     this._body = body;
-    this._stage = 3;
+    this._stage = 2;
     return this;
   }
 
   // What runs on the destination in the body's place when the body reverts.
   catch(handler) {
-    if (this._stage < 3) {
+    if (this._stage < 2) {
       throw new Error("`.catch(...)` follows `.then(...)`: it handles the body's failure");
     }
-    if (this._stage > 3) {
+    if (this._stage > 2) {
       throw new Error("`.catch(...)` is not a step after `.catch(...)`: nothing follows it");
     }
     this._handler = handler;
-    this._stage = 4;
+    this._stage = 3;
     return this;
   }
 
   toString() {
     if (this._stage == 1) {
-      return "after `.send(...)` its steps are `.refundee(...)`, `.deadline(...)`, `.prover(...)` and `.receive(...)`";
+      return "after `hop({ … })` its one step is `.then(() => { … })`, the body; or `await` it, and the body is what follows";
     }
     if (this._stage == 2) {
-      return "after `.receive(...)` its steps are `.deadline(...)`, `.salt(...)`, `.fee(...)` and `.then(...)`";
-    }
-    if (this._stage == 3) {
       return "after `.then(...)` its one step is `.catch(...)`";
     }
     return "after `.catch(...)` nothing follows it";
@@ -311,12 +175,7 @@ class Intent {
   [Symbol.dispose]() {
     if (this._stage == 1) {
       throw new Error(
-        "`<Chain>.Portal.send(...)` stops before `.receive(...)`, which every intent has: what the solver delivers on its destination, `.receive({ token, amount })`, or `.receive()` for nothing, then the body that runs there with it, `.then(() => { … })`",
-      );
-    }
-    if (this._stage == 2) {
-      throw new Error(
-        "`<Chain>.Portal.send(...).receive(...)` has no body. Finish it with `.then(() => { … })`: the code that runs on its destination with what was received",
+        "`<Chain>.hop({ … })` has no body. Finish it with `.then(() => { … })`, or `await` it and write the body after it: the code that runs on its destination with what was received",
       );
     }
     if (this._handler !== undefined) {
@@ -324,26 +183,32 @@ class Intent {
         "`.catch(...)` needs a compiler that compiles `try`, which this one does not: leave the handler out",
       );
     }
-    const creator = this._refundee;
+    const config = this._config;
+    const creator = config.refundee;
     if (creator === undefined) {
       throw new Error(
-        "an intent needs `.refundee(<address>)` after `.send(...)`: the address an unfilled intent's reward is refunded to, and the only one that may redirect a refund. No default is safe: the Pot a program runs on may be shared, so a refund there is one anyone can take. Name the owner, or an address the program is given (`.refundee(refundTo)`).",
+        "a hop needs a `refundee`: the address an unfilled intent's reward is refunded to, and the only one that may redirect a refund. No default is safe: the Pot a program runs on may be shared, so a refund there is one anyone can take. Name the owner, or an address the program is given (`hop({ reward, refundee: refundTo })`).",
       );
     }
 
     // The reward, escrowed here.
+    if (config.reward === undefined) {
+      throw new Error(
+        "a hop needs a `reward`: what the program pays the solver, `{ token, amount }`, `{ native: amount }`, or a list of them",
+      );
+    }
     const rewardTokens = new Items();
     const funds = new Funds();
     const native = new Native();
-    for (const item of this._reward) {
-      if (item.length !== undefined) {
-        for (const listed of item) this._rewardItem(listed, rewardTokens, funds, native);
-      } else {
-        this._rewardItem(item, rewardTokens, funds, native);
-      }
+    if (config.reward.length !== undefined) {
+      for (const item of config.reward) this._rewardItem(item, rewardTokens, funds, native);
+    } else {
+      this._rewardItem(config.reward, rewardTokens, funds, native);
     }
     if (rewardTokens.list.length == 0 && native.amount === undefined) {
-      throw new Error("`.send(...)` must offer something: a token amount, or `{ native: amount }`");
+      throw new Error(
+        "a hop's `reward` must offer something: a token amount, or `{ native: amount }`",
+      );
     }
     const nativeAmount = native.amount === undefined ? 0 : native.amount;
     if (native.amount !== undefined && this._here.nativeToken !== undefined) {
@@ -354,20 +219,20 @@ class Intent {
 
     // The delivery, on the destination: the destination's token of each symbol.
     const deliveryTokens = new Items();
-    for (const item of this._delivery) {
-      if (item.length !== undefined) {
-        for (const listed of item) this._deliveryToken(listed, deliveryTokens);
+    if (config.receive !== undefined) {
+      if (config.receive.length !== undefined) {
+        for (const item of config.receive) this._deliveryToken(item, deliveryTokens);
       } else {
-        this._deliveryToken(item, deliveryTokens);
+        this._deliveryToken(config.receive, deliveryTokens);
       }
     }
 
     // The body, a program for the destination, cooked on its shared Pot after the delivered tokens
     // are moved into it from the Executor they land on.
-    const fee = this._fee === undefined ? this._destination.fee : this._fee;
+    const fee = config.fee === undefined ? this._destination.fee : config.fee;
     if (fee === undefined) {
       throw new Error(
-        "the intent runs a program, so its cook must pay that chain's Kitchen fee — give it `.fee(...)` after `.receive(...)`, or set `intents.executionFee` (`destinationExecutionFee()` reads it)",
+        "the intent runs a program, so its cook must pay that chain's Kitchen fee — give the hop a `fee`, or set `intents.executionFee` (`destinationExecutionFee()` reads it)",
       );
     }
     const body = program(this._body, this._destination.chainId);
@@ -390,23 +255,23 @@ class Intent {
     // The deadlines: the route's 300 seconds after the intent opens — when the compile says, else
     // as the program runs — and the reward's seven days after the route's.
     const routeDeadline =
-      this._routeDeadline !== undefined
-        ? this._routeDeadline
+      config.deadline !== undefined
+        ? config.deadline
         : this._here.deadline !== undefined
           ? this._here.deadline
           : this._here.openedAt !== undefined
             ? this._here.openedAt + 300
             : ctx.timestamp() + 300;
     const rewardDeadline =
-      this._rewardDeadline !== undefined
-        ? this._rewardDeadline
+      config.rewardDeadline !== undefined
+        ? config.rewardDeadline
         : this._here.rewardDeadline !== undefined
           ? this._here.rewardDeadline
           : routeDeadline + 604800;
 
     const route = abi.encode({
       route: {
-        salt: this._salt === undefined ? this._defaultSalt() : this._salt,
+        salt: config.salt === undefined ? this._defaultSalt() : config.salt,
         deadline: routeDeadline,
         portal: this._destination.portal,
         nativeAmount: fee,
@@ -414,7 +279,7 @@ class Intent {
         calls: calls.value(),
       },
     });
-    const prover = this._prover === undefined ? this._destination.prover : this._prover;
+    const prover = config.prover === undefined ? this._destination.prover : config.prover;
     if (prover === undefined) throw new Error(this._destination.unproven);
     const reward = {
       deadline: rewardDeadline,
@@ -456,7 +321,7 @@ class Intent {
 
   // A salt the intent was not given: the compile's, mixed with how many intents this transaction
   // has opened, counting this one, so two intents built alike — twice in a program, or in a loop —
-  // are two intents with two hashes. A salt given (`.salt(x)`) is used as written.
+  // are two intents with two hashes. A salt given (`salt: x`) is used as written.
   _defaultSalt() {
     const opened = evm.tload(SAUCE_INTENTS_NONCE) + 1;
     evm.tstore(SAUCE_INTENTS_NONCE, opened);
@@ -466,14 +331,14 @@ class Intent {
   _rewardItem(item, tokens, funds, native) {
     if (item.native !== undefined) {
       if (native.amount !== undefined) {
-        throw new Error("`.send(...)` names its native amount once");
+        throw new Error("a hop's `reward` names its native amount once");
       }
       native.amount = item.native;
       return;
     }
     if (item.token === undefined || item.amount === undefined) {
       throw new Error(
-        "each item `.send(...)` takes is `{ token, amount }`, `{ native: amount }`, or a list of token amounts",
+        "each item of a hop's `reward` is `{ token, amount }` or `{ native: amount }`",
       );
     }
     tokens.add({ token: item.token, amount: item.amount });
@@ -482,12 +347,10 @@ class Intent {
 
   _deliveryToken(item, tokens) {
     if (item.native !== undefined) {
-      throw new Error("`.receive(...)` names tokens: the native coin is paid with `.send(...)`");
+      throw new Error("a hop's `receive` names tokens: the native coin is paid in its `reward`");
     }
     if (item.token === undefined || item.amount === undefined) {
-      throw new Error(
-        "each item `.receive(...)` takes is `{ token, amount }`, or a list of token amounts",
-      );
+      throw new Error("each item of a hop's `receive` is `{ token, amount }`");
     }
     // An address, or a `Token(address)`, is used as written; a token the registry names is the
     // destination's token of its symbol.

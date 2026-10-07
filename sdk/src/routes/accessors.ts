@@ -23,7 +23,7 @@ export type { PascalOf, ChainRef };
 export { pascalOfSlug };
 
 /** The generated record: `const { Base, Solana, Ethereum } = chainAccessors;` -- each entry a
- *  namespace with `.chain` and `.Portal`. */
+ *  namespace with `.chain` and `.hop`. */
 export const chainAccessors: ChainGlobals = createChainGlobals();
 
 /**

@@ -75,7 +75,7 @@ export async function destinationFees(
         `an intent's body runs a program on ${chain.slug}, whose cook pays its Kitchen's fee: the ` +
           `command reads the Kitchen's fee on ${chain.slug} from the chain, and nothing here reaches ` +
           `it (--offline, or no endpoint: --config with an rpcUrls entry for chain id ` +
-          `${chain.id}). Give the fee with \`.fee(<wei>)\` after \`.receive(...)\`, or ` +
+          `${chain.id}). Give the fee as the hop's \`fee: <wei>\`, or ` +
           `--intent-execution-fee <wei>`,
       );
     }

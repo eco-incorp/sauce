@@ -38,7 +38,7 @@ export function randomSalt(): `0x${string}` {
 /**
  * What every intent a program opens takes when it does not name its own, and what the SDK cannot
  * look up: the defaults a compile hands `@sauce/intents` (`SauceCompileOptions.intents`). Each
- * modifier an intent is written with wins over its field here.
+ * field a hop is given wins over its field here.
  */
 export interface IntentDefaults extends EcoRoutesSelector {
   /** The route's deadline, absolute Unix seconds, for every intent the program opens at any depth.
@@ -57,7 +57,7 @@ export interface IntentDefaults extends EcoRoutesSelector {
   readonly sourcePortal?: AddressInput;
   /** Overrides the destination-chain Portal recorded in the child's route. */
   readonly destinationPortal?: AddressInput;
-  /** The base of the route salt of every intent that names none with `.salt(...)`, which each such
+  /** The base of the route salt of every hop that gives no `salt`, which each such
    *  intent mixes, as it opens, with how many intents the transaction has opened (transient
    *  storage), so two built alike are two. Left out: 32 random bytes, picked once per compile
    *  ({@link randomSalt}). */
@@ -79,7 +79,7 @@ export interface IntentDefaults extends EcoRoutesSelector {
   readonly engine?: AddressInput;
   /** The destination Kitchen's current execution fee, in wei, paid on every cook: one for every
    *  destination, or each destination's own. Every body is a program cooked on the destination's
-   *  Pot, so every intent needs it unless it is given `.fee(...)`: it is read from the chain and it
+   *  Pot, so every intent needs it unless its hop gives a `fee`: it is read from the chain and it
    *  changes. */
   readonly executionFee?: bigint | ((destination: CanonicalChain) => bigint | undefined);
 }

@@ -137,10 +137,11 @@ function render(chains, tokensByChain) {
 // \`Token(x)\` spelling is the chain module's (\`@sauce/names\`' \`Token\`: a write is
 // \`@sauce/token\`'s SafeERC20 function, a read its \`balanceOf\`) and is never invoked by the host.
 //
-// Every chain export carries its \`Portal\` (\`ChainPortal\`): in TypeScript it builds the program
-// that opens an intent to that chain and the cook that publishes it, and it takes a SauceScript
-// token value and amount as well as an address, so a typed closure's
-// \`Ethereum.Portal.send({ token: USDC, amount })...\` typechecks with the chain imported.
+// Every chain export carries its \`hop\` (\`ChainHop\`): in TypeScript it builds the program that
+// opens an intent to that chain and the cook that publishes it, and it takes a SauceScript token
+// value and amount as well as an address, so a typed closure's
+// \`Ethereum.hop({ reward: { token: USDC, amount }, refundee })...\` typechecks with the chain
+// imported. Its \`Portal\` is the chain's eco-routes Portal contract, \`EcoRoutes.Portal\`.
 import type { ChainGlobals } from "./builder.js";
 import type { ChainContracts } from "../descriptors/accessors.js";
 import type { SvmVenueAccessors } from "../svm/accessors.js";
@@ -149,10 +150,11 @@ import { Token as tokenApi } from "../token/api.js";
 import { composedChainGlobal } from "./composed.js";
 import type { RegistryToken } from "./token-registry.js";
 
-/** What every chain accessor is: \`.chain\` and \`.Portal\`, intersected with the
- *  chain-independent native contract tree.
+/** What every chain accessor is: \`.chain\` and \`.hop\`, intersected with the
+ *  chain-independent native contract tree and its eco-routes \`Portal\`.
  *  Naming the chain through \`ChainGlobals\` is the structural cross-check above. */
-type Composed<N extends keyof ChainGlobals> = ChainGlobals[N] & ChainContracts;
+type Composed<N extends keyof ChainGlobals> = ChainGlobals[N] &
+  ChainContracts & { readonly Portal: ChainContracts["EcoRoutes"]["Portal"] };
 
 /** The chain's registry tokens, by symbol: \`Base.USDC\` is \`{ address, decimals, symbol, chain }\`. */
 type Tokens<S extends string> = { readonly [K in S]: RegistryToken };

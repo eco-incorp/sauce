@@ -204,10 +204,10 @@ function locate(
 /** What to pass the command for a failure whose SDK message names an API option instead. */
 const HINTS: ReadonlyArray<readonly [RegExp, (match: RegExpExecArray) => string]> = [
   [
-    /needs `\.refundee\(<address>\)`/,
+    /a hop needs a `refundee`/,
     () =>
-      "write `.refundee(<address>)` in the file, or `.refundee(refundTo)` with `refundTo: Address` " +
-      "a parameter of main, passed with --args",
+      "write `refundee: <address>` in the hop's config, or `refundee: refundTo` with " +
+      "`refundTo: Address` a parameter of main, passed with --args",
   ],
   [/`intents\.executionFee`/, () => "pass --intent-execution-fee <wei>"],
   [

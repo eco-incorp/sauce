@@ -282,17 +282,17 @@ try {
     import { Base, Ethereum } from '${name}';
     import { compileProgram, parseProgram, type ActionProgram } from '${name}/actions';
     const owner = '0x3333333333333333333333333333333333333333' as const;
-    const built = Base.Portal.send({ token: Ethereum.USDC.address, amount: 1n })
-      .source(Ethereum)
-      .refundee(owner)
-      .receive()
-      .fee(0n)
-      .then(() => {
-        USDC.approve(Uniswap.UniversalRouter, 1000000n);
-        // The language's builtins are declared for a typed closure too (builtins.generated.ts).
-        require(ctx.timestamp() > 0n, "stale");
-        log(crypto.keccak256(hex\`01\`).toBytesBe(32n));
-      });
+    const built = Base.hop({
+      source: Ethereum,
+      reward: { token: Ethereum.USDC.address, amount: 1n },
+      refundee: owner,
+      fee: 0n,
+    }).then(() => {
+      USDC.approve(Uniswap.UniversalRouter, 1000000n);
+      // The language's builtins are declared for a typed closure too (builtins.generated.ts).
+      require(ctx.timestamp() > 0n, "stale");
+      log(crypto.keccak256(hex\`01\`).toBytesBe(32n));
+    });
     if (built.program.bytecode.length === 0) throw new Error('Empty intent program');
     const cook: { to: string; data: string; value: bigint } = built.cook({ owner }, 0n);
     // The actions declarations reference the SDK's by relative path; this checks they resolve.

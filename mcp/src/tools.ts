@@ -962,11 +962,11 @@ export type ToolRegistrar = <Input extends z.ZodRawShape, Output extends z.ZodRa
 /** Inputs a tool once took, and what does their work now. */
 const RETIRED_INPUTS: Readonly<Record<string, string>> = {
   intentCreator:
-    "an intent names its refundee in the program: `.refundee(<address>)`, or `.refundee(refundTo)` " +
-    "with `refundTo` one of main's arguments",
+    "an intent names its refundee in the program: `hop({ reward, refundee: refundTo })`, with " +
+    "`refundTo` one of main's arguments or an address",
   intentRefundee:
-    "an intent names its refundee in the program: `.refundee(<address>)`, or `.refundee(refundTo)` " +
-    "with `refundTo` one of main's arguments",
+    "an intent names its refundee in the program: `hop({ reward, refundee: refundTo })`, with " +
+    "`refundTo` one of main's arguments or an address",
 };
 
 /** A tool's input schema: every field it knows, and a refusal of any other, which says what does a
@@ -2033,7 +2033,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "Every intent is published by a cook: the program run on the Pot of `owner` (who signs " +
         "it), paying each intent's reward from the Pot into its vault — or through " +
         "publishAndFund, intentFundVia — then publishing it. Each intent names its refundee in " +
-        "the program, `.refundee(<address>)`. dryRun rehearses the cook through eth_simulateV1, " +
+        "the program, `hop({ reward, refundee })`. dryRun rehearses the cook through eth_simulateV1, " +
         "as sauce_simulate does, and returns each intent it publishes, read from the Portal's " +
         "IntentPublished: its hash, destination and `record`, the intent in full, which " +
         "sauce_intent_status and the other intent tools take; fund rehearses pulling the reward " +

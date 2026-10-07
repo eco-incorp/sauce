@@ -3,12 +3,12 @@
  *
  * `compileSauceRoute` selects the target from the destination chain, compiles the program as
  * written through the published compiler dependency — the chain's names (tokens, protocols, `self`,
- * chains and their `Portal`s) are a SauceScript module the SDK writes from its registries and hands
+ * chains and their hops) are a SauceScript module the SDK writes from its registries and hands
  * the compiler as an ambient module (`chain-module.ts`), never rewritten into the text — and
  * delegates call encoding to `buildSauceEvmCall` or `buildSauceSvmCall`. One body produces one
  * bytecode segment and one call.
  *
- * An intent a program opens (`Arbitrum.Portal.send(…).receive(…).then(() => { … })`) is
+ * An intent a program opens (`await Arbitrum.hop({ … })`, `Arbitrum.hop({ … }).then(() => { … })`) is
  * `@sauce/intents`' classes, which the compiler runs while it compiles. Its body is compiled as a
  * program of its own, `program(body, chainId)`, with the options `programOptions` gives that chain:
  * its own module of names, its target, and the caller's defines.
@@ -92,13 +92,13 @@ export interface SauceCompileOptions {
    */
   ambient?: string[];
   /**
-   * Settings for `Chain.Portal.send(...).receive(...).then(() => { ... })` written inside the
+   * Settings for `await Chain.hop({ ... })` written inside the
    * program — creating an intent from a program, rather than compiling a program into one.
    * Everything the SDK can look up it looks up; these are the fields it cannot, plus overrides, for
    * every intent that does not set its own. See `@sauce/intents`.
    *
    * Omitted entirely, an intent still compiles: its deadlines and salt have defaults, and its
-   * refundee (the reward's `creator`), which has none, is its own `.refundee(...)`.
+   * refundee (the reward's `creator`), which has none, is its own `refundee`.
    */
   intents?: IntentDefaults & EcoRoutesSelector;
   /** Compile for compact-v1 entry arguments. */
@@ -378,7 +378,7 @@ export interface CompiledSauceProgram {
   /** The SVM account manifest: the accounts to attach, in order. Absent on the EVM. */
   readonly manifest?: AccountManifest;
   /** The body of every intent the program opens, at any depth
-   *  (`Arbitrum.Portal.send({ ... }).receive().then(() => { ... })`), as compiled for its chain. */
+   *  (`await Arbitrum.hop({ ... })`), as compiled for its chain. */
   readonly bodies: readonly CompiledBody[];
   /** `main`'s signature as the compile reports it. */
   readonly entrySignature: EntrySignature;
@@ -403,9 +403,9 @@ export interface SauceProgramOptions extends SauceCompileOptions {
  * the destination half of an intent.
  *
  * It gets everything an intent's body gets except the intent around it: the chain's names
- * (tokens, protocols, `self`, chains and their `Portal`s) and the `@sauce/token` functions with no
+ * (tokens, protocols, `self`, chains and their hops) and the `@sauce/token` functions with no
  * import, and intents the program itself opens
- * (`Arbitrum.Portal.send({ ... }).receive().then(() => { ... })`), which take their deadline and
+ * (`await Arbitrum.hop({ ... })`), which take their deadline and
  * creator from `options.intents`. So one source compiles, unchanged, for any chain whose names it
  * uses. `main` may declare typed runtime parameters; `entryParams` reports them and
  * `encodeEntryArguments` encodes values for them.

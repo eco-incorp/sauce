@@ -51,8 +51,8 @@ const consumer = realpathSync(argument("--consumer", packageRoot));
 function readmeRoute() {
   const readme = readFileSync(join(packageRoot, "README.md"), "utf8");
   const fence = [...readme.matchAll(/```ts\n([^]*?)```/g)].map((match) => match[1]);
-  const example = fence.find((code) => code.includes(".Portal.send("));
-  assert.ok(example, "the README has no TypeScript `Base.Portal.send(...)` intent example");
+  const example = fence.find((code) => code.includes(".hop({"));
+  assert.ok(example, "the README has no TypeScript `Base.hop({ … })` intent example");
   const { code } = esbuild.transformSync(example, { loader: "ts", format: "esm" });
 
   return `${code}\nexport { built };\n`;

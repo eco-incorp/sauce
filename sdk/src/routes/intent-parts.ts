@@ -1,8 +1,9 @@
 /**
- * Where the parts of a program run that an intent sends to another chain: each `.then(...)` body of
- * an intent opened on a chain's `Portal` (`Arbitrum.Portal.send(…)…then(() => { … })`), and the
- * items of its `.receive(...)`, which name the destination's tokens. Read from the program's text,
- * for what the compile does not report: which chain a diagnostic, or a name a program reads, is on.
+ * Where the parts of a program run that a hop sends to another chain: the body of each intent
+ * opened with a chain's `hop` — what follows `await Arbitrum.hop({ … });` in its block, or the
+ * argument of `Arbitrum.hop({ … }).then(…)` — and its config's `receive`, which names the
+ * destination's tokens. Read from the program's text, for what the compile does not report: which
+ * chain a diagnostic, or a name a program reads, is on.
  */
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { chainSlugForKey, isChainKey } from "./accessor-index.js";
@@ -20,12 +21,41 @@ export interface IntentPart {
 export function intentParts(program: AstNode): IntentPart[] {
   const parts: IntentPart[] = [];
   walk(program, (node) => {
+    // `await X.hop({ … });` and the statements after it in its block.
+    const statements =
+      node.type === "Program" || node.type === "BlockStatement"
+        ? (node.body as AstNode[] | undefined)
+        : undefined;
+    statements?.forEach((statement, i) => {
+      const awaited = statement.type === "ExpressionStatement" ? statement.expression : undefined;
+      if ((awaited as AstNode | undefined)?.type !== "AwaitExpression") return;
+      const chain = hopChain((awaited as AstNode).argument as AstNode);
+      const rest = statements.slice(i + 1);
+      if (chain !== undefined && rest.length > 0) {
+        parts.push({ chain, start: rest[0]!.start, end: rest[rest.length - 1]!.end });
+      }
+    });
     if (node.type !== "CallExpression") return;
     const callee = node.callee as AstNode;
     if (callee.type !== "MemberExpression") return;
     const method = (callee.property as AstNode | undefined)?.name;
-    if (method !== "then" && method !== "receive") return;
-    const chain = portalChain(callee.object as AstNode);
+    // `X.hop({ … receive … })`.
+    if (method === "hop") {
+      const chain = chainOf(callee.object as AstNode);
+      const config = (node.arguments as AstNode[] | undefined)?.[0];
+      if (chain === undefined || config?.type !== "ObjectExpression") return;
+      for (const field of (config.properties as AstNode[] | undefined) ?? []) {
+        const key = field.key as AstNode | undefined;
+        if (field.type === "Property" && (key?.name ?? key?.value) === "receive") {
+          const value = field.value as AstNode;
+          parts.push({ chain, start: value.start, end: value.end });
+        }
+      }
+      return;
+    }
+    // `X.hop({ … }).then(body)`.
+    if (method !== "then") return;
+    const chain = hopChain(callee.object as AstNode);
     if (chain === undefined) return;
     for (const part of (node.arguments as AstNode[] | undefined) ?? []) {
       parts.push({ chain, start: part.start, end: part.end });
@@ -35,28 +65,22 @@ export function intentParts(program: AstNode): IntentPart[] {
   return parts;
 }
 
-/** The chain whose `Portal` a chain of calls starts from, or `undefined`. */
-function portalChain(node: AstNode): CanonicalChain | undefined {
-  let at: AstNode | undefined = node;
-  while (at !== undefined) {
-    if (at.type === "CallExpression") {
-      at = at.callee as AstNode;
-    } else if (at.type === "MemberExpression") {
-      const object = at.object as AstNode;
-      const property = (at.property as AstNode | undefined)?.name;
-      if (
-        property === "Portal" &&
-        object.type === "Identifier" &&
-        isChainKey(object.name as string)
-      ) {
-        return requireChain(chainSlugForKey(object.name as string)!);
-      }
-      at = object;
-    } else {
-      return undefined;
-    }
-  }
-  return undefined;
+/** The chain a chain's name is, `Arbitrum`, or `undefined`. */
+function chainOf(node: AstNode): CanonicalChain | undefined {
+  return node.type === "Identifier" && isChainKey(node.name as string)
+    ? requireChain(chainSlugForKey(node.name as string)!)
+    : undefined;
+}
+
+/** The chain `node`, a call of a chain's `hop`, opens its hop to, or `undefined`. */
+function hopChain(node: AstNode | undefined): CanonicalChain | undefined {
+  if (node?.type !== "CallExpression") return undefined;
+  const callee = node.callee as AstNode;
+  if (callee.type !== "MemberExpression") return undefined;
+
+  return (callee.property as AstNode | undefined)?.name === "hop"
+    ? chainOf(callee.object as AstNode)
+    : undefined;
 }
 
 /** The chain the code at `offset` of `source` runs on: the innermost intent body around it, or

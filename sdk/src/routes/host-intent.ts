@@ -1,12 +1,13 @@
 /**
  * An Eco intent built in TypeScript:
  *
- *   Base.Portal.send({ token: usdcEthereum, amount: 1_010_000n })
- *     .source(Ethereum)
- *     .refundee(owner)
- *     .receive({ token: usdcBase, amount: 1_000_000n })
- *     .fee(kitchenFee)
- *     .then(() => { USDC.transfer(RECIPIENT, 1000000); });
+ *   Base.hop({
+ *     source: Ethereum,
+ *     reward: { token: usdcEthereum, amount: 1_010_000n },
+ *     receive: { token: usdcBase, amount: 1_000_000n },
+ *     refundee: owner,
+ *     fee: kitchenFee,
+ *   }).then(() => { USDC.transfer(RECIPIENT, 1000000); });
  *
  * is the statement a program would open the intent with, written out as SauceScript and compiled
  * for the source chain, where a Pot cooks it: the Pot pays the reward into the intent's vault and
@@ -16,7 +17,7 @@
  * read from the cook's rehearsal or its receipt (`intents(logs)`).
  *
  * The body is a closure whose text is compiled, never run: it captures no JavaScript value, and
- * what it needs from the host it reads as a define (`.source(chain, { defines })`).
+ * what it needs from the host it reads as a define (`compile: { defines }`).
  */
 import { bytesToHex, getAddress, type Address, type Hex } from "viem";
 
@@ -24,6 +25,7 @@ import { requireChain, type CanonicalChain, type ChainRef } from "../chains/cano
 import { v12PredictPot, SAUCE_INTENT_POT_SALT } from "../deployments/pot.js";
 import { v12EngineAddress } from "../deployments/v12-addresses.js";
 import { closureText, isSauceClosure, type SauceBody } from "./closure.js";
+import { HOP_FIELDS } from "./intent-syntax.js";
 import { denormalizeToEvm } from "./encode.js";
 import { toBigInt, toUniversalAddress } from "./normalize.js";
 import { pascalOfSlug } from "./pascal.js";
@@ -36,68 +38,69 @@ import {
 } from "./sauce-route.js";
 import type { AddressInput } from "./types.js";
 
-/** A token's address, as the host spells it or as a SauceScript value does. */
-export type PortalAddress = AddressInput | bigint;
+/** An address, as the host spells it or as a SauceScript value does. */
+export type HopAddress = AddressInput | bigint;
 
 /** A token and an amount. */
-export interface PortalTokenAmount {
-  readonly token: PortalAddress;
+export interface HopTokenAmount {
+  readonly token: HopAddress;
   readonly amount: bigint | number | string;
 }
 
-/** One thing `send` pays: a token and an amount, or native coin as `{ native: amount }`. */
-export type PortalRewardItem = PortalTokenAmount | { readonly native: bigint | number | string };
+/** One thing a hop's `reward` pays: a token and an amount, or native coin as `{ native: amount }`. */
+export type HopRewardItem = HopTokenAmount | { readonly native: bigint | number | string };
 
-/** What `send` takes as one argument: an item, or a list of them. */
-export type PortalReward = PortalRewardItem | readonly PortalRewardItem[];
+/** A hop's `reward`: an item, or a list of them. */
+export type HopReward = HopRewardItem | readonly HopRewardItem[];
 
-/** What `receive` takes as one argument: a token the solver delivers, or a list of them. */
-export type PortalDelivery = PortalTokenAmount | readonly PortalTokenAmount[];
+/** A hop's `receive`: a token the solver delivers, or a list of them. */
+export type HopDelivery = HopTokenAmount | readonly HopTokenAmount[];
 
 /** A chain, as a reference or as a chain export (`Ethereum`). */
-export type PortalChain = ChainRef | { readonly chain: CanonicalChain };
+export type HopChain = ChainRef | { readonly chain: CanonicalChain };
 
-/** The reward's steps, after `send(...)`: each modifier at most once, in any order. */
-export interface PortalSendSteps<Used extends string> {
+/**
+ * What a hop takes: the fields a program's `hop({ … })` takes (`intent-syntax.ts#HOP_FIELDS`),
+ * with `source` and `compile` besides, which only the host has.
+ */
+export interface HopConfig {
   /** The chain the reward is escrowed on, where the intent is published and the program is
-   *  compiled, with that compile's options: defines the body reads, the intents' defaults (the
-   *  Kitchen fee as `intents.executionFee`, the Portals), tokens. Required: a TypeScript intent runs
-   *  on no chain to default it to. */
-  source(chain: PortalChain, options?: SauceProgramOptions): PortalSent<Used | "source">;
+   *  compiled. Required on the host, which runs on no chain to default it to; left out only inside
+   *  a typed closure, where the program opens the hop from the chain the body runs on. */
+  readonly source?: HopChain;
+  /** The source compile's options: defines the body reads, the intents' defaults (the Kitchen fee
+   *  as `intents.executionFee`, the Portals), tokens. */
+  readonly compile?: SauceProgramOptions;
+  /** What the program pays the solver, escrowed on the source chain: tokens, and native coin as
+   *  `{ native: amount }`. */
+  readonly reward: HopReward;
+  /** What the solver delivers on the destination, for the body. Left out, nothing. */
+  readonly receive?: HopDelivery;
   /** Who may reclaim an unearned reward, the reward's `creator` on the Portal. Required, as on
    *  every intent. */
-  refundee(address: PortalAddress): PortalSent<Used | "refundee">;
-  /** From when an unproven reward may be refunded, Unix seconds. Defaults to the route's deadline
-   *  plus `DEFAULT_REFUND_WINDOW`. */
-  deadline(seconds: bigint | number): PortalSent<Used | "deadline">;
-  /** The source chain's prover. Defaults to the registry's for the pair. */
-  prover(address: PortalAddress): PortalSent<Used | "prover">;
-  /** What the solver delivers on the destination, each token an argument or one list of them.
-   *  `.receive()` for nothing. */
-  receive(...delivery: readonly PortalDelivery[]): PortalReceived;
-}
-
-/** An intent with its reward: the reward's modifiers not given yet, then `receive`. */
-export type PortalSent<Used extends string = never> = Omit<PortalSendSteps<Used>, Used>;
-
-/** The route's steps, after `receive(...)`: each modifier at most once, in any order. */
-export interface PortalReceiveSteps<Used extends string> {
+  readonly refundee: HopAddress;
   /** The last second the intent may be filled, Unix seconds. Defaults to `DEFAULT_FILL_WINDOW`
    *  past when the cook publishes it. */
-  deadline(seconds: bigint | number): PortalReceived<Used | "deadline">;
-  /** The route's salt: two otherwise identical intents are distinct with distinct salts. Defaults
-   *  to 32 random bytes, picked when it compiles. */
-  salt(salt: Hex | bigint): PortalReceived<Used | "salt">;
+  readonly deadline?: bigint | number;
+  /** From when an unproven reward may be refunded, Unix seconds. Defaults to the fill deadline
+   *  plus `DEFAULT_REFUND_WINDOW`. */
+  readonly rewardDeadline?: bigint | number;
+  /** The source chain's prover. Defaults to the registry's for the pair. */
+  readonly prover?: HopAddress;
+  /** The route's salt, used as written. Left out, the compile's salt mixed with how many intents
+   *  the cook has opened. */
+  readonly salt?: Hex | bigint;
   /** The destination Kitchen's fee, in wei, which the body's cook pays: read it with
-   *  `destinationExecutionFee()`. Else `intents.executionFee` in `.source(chain, options)`. */
-  fee(wei: bigint | number): PortalReceived<Used | "fee">;
-  /** The body that runs on the destination: an arrow function, or the statements of one. */
-  then(body: SauceBody): PortalOpened;
+   *  `destinationExecutionFee()`. Else `intents.executionFee` in `compile`. */
+  readonly fee?: bigint | number;
 }
 
-/** An intent waiting for its body: the route's modifiers not given yet, then `then`. Its `then`
- *  is the intent's, not a promise's: `await` on it is refused. */
-export type PortalReceived<Used extends string = never> = Omit<PortalReceiveSteps<Used>, Used>;
+/** A hop waiting for its body. Its `then` is the intent's, not a promise's: `await` on it is
+ *  refused on the host. */
+export interface HostHop {
+  /** The body that runs on the destination: an arrow function, or the statements of one. */
+  then(body: SauceBody): HopOpened;
+}
 
 /** The Pot a cook runs on: its address, or its owner and salt (zero by default). */
 export type PotTarget = AddressInput | { readonly owner: AddressInput; readonly salt?: Hex };
@@ -125,40 +128,35 @@ export interface HostIntent {
  * .catch((e) => { … })` in a program, where the compiler builds the two as one program. On the host
  * `.catch(...)` is refused: write the intent in the program a Pot runs.
  */
-export type PortalOpened = HostIntent & {
+export type HopOpened = HostIntent & {
   /** What runs on the destination in the body's place when the body reverts, `e` what it reverted
    *  with: written in a program, never called on the host. */
-  catch(handler: (e: PortalCaughtBytes) => void): void;
+  catch(handler: (e: HopCaughtBytes) => void): void;
 };
 
 /**
  * What a handler's `e` is in a typed closure: SauceScript `bytes`, the shape
  * `source-globals.generated.ts`'s `SauceBytes` has, written out so this module declares no globals.
  */
-export interface PortalCaughtBytes {
+export interface HopCaughtBytes {
   readonly length: bigint;
   [index: number]: bigint;
-  slice(start: bigint, end: bigint): PortalCaughtBytes;
+  slice(start: bigint, end: bigint): HopCaughtBytes;
   toBe(): bigint;
   toLe(): bigint;
 }
 
-/** A chain's Portal, opening an intent whose body runs on that chain. */
-export interface ChainPortal {
-  /** The reward the creator pays, each item an argument or one list of them: tokens, and native
-   *  coin as `{ native: amount }`. */
-  send(...reward: readonly PortalReward[]): PortalSent;
-}
+/** A chain's `hop`, opening an intent whose body runs on that chain. */
+export type ChainHop = (config: HopConfig) => HostHop;
 
-/** Items given as arguments, any of them a list of items. */
-const itemsOf = <T>(given: readonly (T | readonly T[])[]): readonly T[] =>
-  given.flatMap((item) => (Array.isArray(item) ? (item as readonly T[]) : [item as T]));
+/** The fields a hop takes on the host: a program's, and the source and its compile. */
+const HOP_CONFIG: ReadonlySet<string> = new Set(["source", "compile", ...Object.keys(HOP_FIELDS)]);
 
 const isNative = (value: unknown): boolean =>
   typeof value === "function" && Function.prototype.toString.call(value).includes("[native code]");
 
 /** A chain export (`Ethereum`, carrying `.chain`) rather than a reference. */
-function isChainExport(value: PortalChain): value is { readonly chain: CanonicalChain } {
+function isChainExport(value: HopChain): value is { readonly chain: CanonicalChain } {
   return (
     (typeof value === "object" || typeof value === "function") && value !== null && "chain" in value
   );
@@ -169,7 +167,7 @@ const evmAddress = (address: AddressInput): Address =>
   getAddress(denormalizeToEvm(toUniversalAddress(address)));
 
 /** An address as SauceScript writes it: a hex literal. */
-const addressLiteral = (address: PortalAddress): string =>
+const addressLiteral = (address: HopAddress): string =>
   typeof address === "bigint"
     ? `0x${address.toString(16).padStart(40, "0")}`
     : evmAddress(address).toLowerCase();
@@ -178,108 +176,81 @@ const addressLiteral = (address: PortalAddress): string =>
 const integer = (value: bigint | number | string): string => toBigInt(value).toString();
 
 /** A token amount, or native coin, as a SauceScript item. */
-function itemLiteral(item: PortalRewardItem): string {
+function itemLiteral(item: HopRewardItem): string {
   return "native" in item
     ? `{ native: ${integer(item.native)} }`
     : `{ token: ${addressLiteral(item.token)}, amount: ${integer(item.amount)} }`;
 }
 
-/**
- * The Portal of `chain`: `send(reward).source(chain).refundee(address)[.deadline().prover()]
- * .receive(delivery)[.deadline().salt().fee()].then(body)` writes the statement a program opens
- * that intent with, compiles it for the source chain, and returns the program and its cook.
- */
-export function chainPortal(chain: ChainRef): ChainPortal {
-  const destination = requireChain(chain);
-  const name = `${pascalOfSlug(destination.slug)}.Portal`;
-  const once = (stage: Map<string, unknown>, step: string, value: unknown, after: string) => {
-    if (stage.has(step)) {
-      throw new TypeError(`${name}: \`.${step}(...)\` is given twice after \`.${after}(...)\``);
-    }
-    stage.set(step, value);
-  };
+/** One item, or a list of them, as SauceScript writes it. */
+function itemsLiteral(given: HopRewardItem | readonly HopRewardItem[]): string {
+  return Array.isArray(given)
+    ? `[${(given as readonly HopRewardItem[]).map(itemLiteral).join(", ")}]`
+    : itemLiteral(given as HopRewardItem);
+}
 
-  return {
-    send: (...reward) => {
-      const rewardSteps = new Map<string, unknown>();
-      let options: SauceProgramOptions = {};
-      const sent = {
-        source: (value: PortalChain, given?: SauceProgramOptions) => {
-          once(rewardSteps, "source", value, "send");
-          options = given ?? {};
-          return sent;
-        },
-        refundee: (value: PortalAddress) => (once(rewardSteps, "refundee", value, "send"), sent),
-        deadline: (value: bigint | number) => (once(rewardSteps, "deadline", value, "send"), sent),
-        prover: (value: PortalAddress) => (once(rewardSteps, "prover", value, "send"), sent),
-        receive: (...delivery: readonly PortalDelivery[]) => {
-          const routeSteps = new Map<string, unknown>();
-          const received = {
-            deadline: (value: bigint | number) => (
-              once(routeSteps, "deadline", value, "receive"),
-              received
-            ),
-            salt: (value: Hex | bigint) => (once(routeSteps, "salt", value, "receive"), received),
-            fee: (value: bigint | number) => (once(routeSteps, "fee", value, "receive"), received),
-            // Not `then(body)`: a promise's resolution calls it with two native functions, and that
-            // call has to be told apart from the intent's own.
-            then(...args: unknown[]): PortalOpened {
-              const [body] = args;
-              if (args.length !== 1 || isNative(body)) {
-                throw new TypeError(
-                  `${name}.send(...).receive(...) is not a promise: \`.then(...)\` takes the ` +
-                    "intent's body, `.then(() => { … })`, and returns the intent. It was called " +
-                    "as a promise's `then` — by `await`, or by returning it from an async " +
-                    "function — which would build nothing. Call `.then(() => { … })` and use the " +
-                    "intent it returns.",
-                );
-              }
-              const built = hostIntent(destination, name, {
-                reward: itemsOf(reward),
-                rewardSteps,
-                delivery: itemsOf(delivery),
-                routeSteps,
-                body: body as SauceBody,
-                options,
-              });
-              return Object.defineProperty(built, "catch", {
-                value: () => {
-                  throw new TypeError(
-                    `${name}...then(body).catch(handler) handles a body inside a program, where ` +
-                      "the compiler builds the two as one: open the intent in the program a Pot " +
-                      "runs.",
-                  );
-                },
-              }) as PortalOpened;
-            },
-          };
-          return received;
-        },
-      };
-      return sent as unknown as PortalSent;
-    },
+/**
+ * The `hop` of `chain`: `hop({ source, reward, receive, refundee, … }).then(body)` writes the
+ * statement a program opens that intent with, compiles it for the source chain, and returns the
+ * program and its cook.
+ */
+export function chainHop(chain: ChainRef): ChainHop {
+  const destination = requireChain(chain);
+  const name = `${pascalOfSlug(destination.slug)}.hop`;
+
+  return (config) => {
+    if (typeof config !== "object" || config === null || Array.isArray(config)) {
+      throw new TypeError(
+        `${name}(...) takes one object: \`${name}({ source, reward, receive, refundee })\``,
+      );
+    }
+    const unknown = Object.keys(config).filter((field) => !HOP_CONFIG.has(field));
+    if (unknown.length > 0) {
+      throw new TypeError(
+        `${name}(...) takes no ${unknown.map((field) => `\`${field}\``).join(", ")}: its fields ` +
+          `are ${[...HOP_CONFIG].map((field) => `\`${field}\``).join(", ")}`,
+      );
+    }
+
+    return {
+      // Not `then(body)`: a promise's resolution calls it with two native functions, and that call
+      // has to be told apart from the intent's own.
+      then(...args: unknown[]): HopOpened {
+        const [body] = args;
+        if (args.length !== 1 || isNative(body)) {
+          throw new TypeError(
+            `${name}({ … }) is not a promise: \`.then(...)\` takes the intent's body, ` +
+              "`.then(() => { … })`, and returns the intent. It was called as a promise's `then` " +
+              "— by `await`, or by returning it from an async function — which would build " +
+              "nothing. Call `.then(() => { … })` and use the intent it returns.",
+          );
+        }
+        const built = hostIntent(destination, name, config, body as SauceBody);
+        return Object.defineProperty(built, "catch", {
+          value: () => {
+            throw new TypeError(
+              `${name}({ … }).then(body).catch(handler) handles a body inside a program, where ` +
+                "the compiler builds the two as one: open the intent in the program a Pot runs.",
+            );
+          },
+        }) as HopOpened;
+      },
+    };
   };
 }
 
-/** `chainPortal`'s `then`: the statement written out, compiled for the source chain. */
+/** `chainHop`'s `then`: the statement written out, compiled for the source chain. */
 function hostIntent(
   destination: CanonicalChain,
   name: string,
-  given: {
-    readonly reward: readonly PortalRewardItem[];
-    readonly rewardSteps: ReadonlyMap<string, unknown>;
-    readonly delivery: readonly PortalTokenAmount[];
-    readonly routeSteps: ReadonlyMap<string, unknown>;
-    readonly body: SauceBody;
-    readonly options: SauceProgramOptions;
-  },
+  config: HopConfig,
+  given: SauceBody,
 ): HostIntent {
-  const { rewardSteps, routeSteps } = given;
-  const sourceRef = rewardSteps.get("source") as PortalChain | undefined;
+  const sourceRef = config.source;
   if (sourceRef === undefined) {
     throw new TypeError(
-      `${name}: give \`.source(...)\` after \`.send(...)\`: the chain the reward is escrowed on, ` +
-        "where the intent is published and the program that opens it is compiled",
+      `${name}({ … }) needs a \`source\`: the chain the reward is escrowed on, where the intent ` +
+        "is published and the program that opens it is compiled",
     );
   }
   const source = requireChain(isChainExport(sourceRef) ? sourceRef.chain : sourceRef);
@@ -290,36 +261,35 @@ function hostIntent(
     );
   }
 
-  const steps = (entries: readonly (readonly [string, string | undefined])[]): string =>
-    entries
-      .filter((entry): entry is readonly [string, string] => entry[1] !== undefined)
-      .map(([step, value]) => `\n  .${step}(${value})`)
-      .join("");
-  const optional = <T>(
-    map: ReadonlyMap<string, unknown>,
-    step: string,
-    as: (value: T) => string,
-  ) => (map.has(step) ? as(map.get(step) as T) : undefined);
   const salt = (value: Hex | bigint): string =>
     typeof value === "bigint" ? `0x${value.toString(16).padStart(64, "0")}` : value;
-  const body = isSauceClosure(given.body) ? closureText(given.body) : `() => {\n${given.body}\n}`;
+  // Each field given, as the program's `hop({ … })` takes it; one left out is the program's to
+  // default or refuse, in its own words.
+  const fields: (readonly [string, string | undefined])[] = [
+    ["reward", config.reward === undefined ? undefined : itemsLiteral(config.reward)],
+    ["receive", config.receive === undefined ? undefined : itemsLiteral(config.receive)],
+    ["refundee", config.refundee === undefined ? undefined : addressLiteral(config.refundee)],
+    ["deadline", config.deadline === undefined ? undefined : integer(config.deadline)],
+    [
+      "rewardDeadline",
+      config.rewardDeadline === undefined ? undefined : integer(config.rewardDeadline),
+    ],
+    ["prover", config.prover === undefined ? undefined : addressLiteral(config.prover)],
+    ["salt", config.salt === undefined ? undefined : salt(config.salt)],
+    ["fee", config.fee === undefined ? undefined : integer(config.fee)],
+  ];
+  const body = isSauceClosure(given) ? closureText(given) : `() => {\n${given}\n}`;
+  const options = config.compile ?? {};
 
   const text =
-    `${pascalOfSlug(destination.slug)}.Portal.send(${given.reward.map(itemLiteral).join(", ")})` +
-    steps([
-      ["refundee", optional(rewardSteps, "refundee", addressLiteral)],
-      ["deadline", optional(rewardSteps, "deadline", integer)],
-      ["prover", optional(rewardSteps, "prover", addressLiteral)],
-    ]) +
-    `\n  .receive(${given.delivery.map(itemLiteral).join(", ")})` +
-    steps([
-      ["deadline", optional(routeSteps, "deadline", integer)],
-      ["salt", optional(routeSteps, "salt", salt)],
-      ["fee", optional(routeSteps, "fee", integer)],
-    ]) +
-    `\n  .then(${body});\n`;
-  const program = compileSauceProgram(source, text, given.options);
-  const portal = given.options.intents?.sourcePortal;
+    `${pascalOfSlug(destination.slug)}.hop({\n` +
+    fields
+      .filter((field): field is readonly [string, string] => field[1] !== undefined)
+      .map(([field, value]) => `  ${field}: ${value},\n`)
+      .join("") +
+    `}).then(${body});\n`;
+  const program = compileSauceProgram(source, text, options);
+  const portal = options.intents?.sourcePortal;
 
   return {
     source: text,
@@ -327,7 +297,7 @@ function hostIntent(
     cook: (target, value) =>
       buildSauceEvmCall({
         pot: potOf(target),
-        engine: given.options.intents?.engine ?? (v12EngineAddress() as Hex),
+        engine: options.intents?.engine ?? (v12EngineAddress() as Hex),
         program: bytesToHex(program.bytecode),
         value: toBigInt(value),
       }),

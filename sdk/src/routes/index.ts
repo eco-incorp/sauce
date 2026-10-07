@@ -1,18 +1,20 @@
 /**
  * eco-routes cross-chain intents — one chain accessor per canonical chain, generated from
- * `../chains/canonical.js`: `.chain` and `.Portal`.
+ * `../chains/canonical.js`: `.chain` and `.hop`.
  *
- * The composed accessors (`.chain`, `.Portal` and the native contract tree) are named exports of the
- * package root; `chainAccessors` below is the BARE record, carrying `.chain`/`.Portal` alone.
+ * The composed accessors (`.chain`, `.hop`, `.Portal` and the native contract tree) are named
+ * exports of the package root; `chainAccessors` below is the BARE record, carrying `.chain`/`.hop`
+ * alone.
  *
  * ```ts
  * import { Base, Ethereum } from "@eco-incorp/sauce";
- * const intent = Base.Portal.send({ token, amount: 1_010_000n })
- *   .source(Ethereum)
- *   .refundee(owner)
- *   .receive({ token: usdcBase, amount: 1_000_000n })
- *   .fee(kitchenFee)
- *   .then(() => { USDC.transfer(RECIPIENT, 1000000); });
+ * const intent = Base.hop({
+ *   source: Ethereum,
+ *   reward: { token, amount: 1_010_000n },
+ *   receive: { token: usdcBase, amount: 1_000_000n },
+ *   refundee: owner,
+ *   fee: kitchenFee,
+ * }).then(() => { USDC.transfer(RECIPIENT, 1000000); });
  * const cook = intent.cook({ owner }, sourceKitchenFee); // { to, data, value }
  * ```
  */
@@ -149,25 +151,23 @@ export type {
 } from "./token-registry.js";
 export { STOCK_ISSUERS, stockSymbol } from "./stock-tokens.js";
 export type { StockIssuer } from "./stock-tokens.js";
-export { chainPortal } from "./host-intent.js";
+export { chainHop } from "./host-intent.js";
 export { loggedIntents } from "./published.js";
 export type { IntentLog, LoggedIntent } from "./published.js";
 export { destinationPot } from "./intent-pot.js";
 export type {
-  ChainPortal,
+  ChainHop,
+  HopAddress,
+  HopCaughtBytes,
+  HopChain,
+  HopConfig,
+  HopDelivery,
+  HopOpened,
+  HopReward,
+  HopRewardItem,
+  HopTokenAmount,
+  HostHop,
   HostIntent,
-  PortalAddress,
-  PortalChain,
-  PortalCaughtBytes,
-  PortalDelivery,
-  PortalOpened,
-  PortalReceived,
-  PortalReceiveSteps,
-  PortalReward,
-  PortalRewardItem,
-  PortalSendSteps,
-  PortalSent,
-  PortalTokenAmount,
   PotTarget,
 } from "./host-intent.js";
 export type { SauceBody } from "./closure.js";
@@ -178,13 +178,12 @@ export {
   type IntentDefaults,
 } from "./intent-defaults.js";
 export {
-  INTENT_STAGES,
-  REWARD_MODIFIERS,
-  ROUTE_MODIFIERS,
-  type IntentMethod,
-  type IntentParam,
-  type IntentStage,
-  type IntentStageSpec,
+  HOP_FIELDS,
+  HOP_STAGES,
+  type HopField,
+  type HopFieldName,
+  type HopStage,
+  type HopStep,
 } from "./intent-syntax.js";
 
 export {

@@ -616,9 +616,9 @@ async function autoExecutionFee(
   gate: Gate | undefined,
   told: boolean,
 ): Promise<((destination: CanonicalChain) => bigint | undefined) | undefined> {
-  // By default, only where an intent could be opened: an EVM program naming a Portal. One that does
-  // not compile is left to the compile that follows, whose refusal is the one to see.
-  if (!told && (input.chain.kind !== "evm" || !/\.Portal\b/.test(input.text))) {
+  // By default, only where an intent could be opened: an EVM program calling a chain's `hop`. One
+  // that does not compile is left to the compile that follows, whose refusal is the one to see.
+  if (!told && (input.chain.kind !== "evm" || !/\.hop\s*\(/.test(input.text))) {
     return undefined;
   }
   let probe: ReturnType<typeof compileProgram>;
@@ -1786,8 +1786,8 @@ const INTENT_VERBS: Readonly<Record<string, Command>> = {
       "every intent it opens: the file runs as `sauce run` runs it, and each intent pays its reward",
       "from the Pot into its vault (or through publishAndFund, --intent-fund-via), then is",
       "published. --fund TOKEN:amount pulls the reward into the Pot in the same cook, as `sauce run",
-      "--fund` does (Permit2 by default; --fund-mode, --sweep). Every intent names its refundee in",
-      "the file, `.refundee(<address>)`: no default is safe on a Pot.",
+      "--fund` does (Permit2 by default; --fund-mode, --sweep). Every hop names its refundee in",
+      "the file, `hop({ reward, refundee })`: no default is safe on a Pot.",
       "",
       "Each intent's hash and record are read from the Portal's IntentPublished log: from the",
       "rehearsal with --dry-run, and from the receipt once sent, which the store keeps (--store).",
@@ -3025,7 +3025,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         ([verb, command]) => `  ${verb.padEnd(8)}  ${command.summary}`,
       ),
       "",
-      "An intent is published from a file that opens one (`Base.Portal.send(…).then(() => { … })`),",
+      "An intent is published from a file that opens one (`await Base.hop({ … })`),",
       "and every later verb takes it as published: its hash once the store keeps it (`publish`, `fill`",
       "and `import` store every intent they touch: --store, default ~/.sauce/intents), or --tx, the",
       "transaction that published it, on --chain. With no verb, at a terminal: a list of the",

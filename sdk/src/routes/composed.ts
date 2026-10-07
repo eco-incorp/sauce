@@ -1,7 +1,8 @@
 /**
- * The composed chain accessor -- `Base` as the SDK hands it out: `.chain`, `.Portal`, the lazy
- * contract namespace tree (`Uniswap`, `UniswapV4`, ...), the chain's registry tokens (`Base.USDC`)
- * and, for an `svm`-kind chain, the svm venue accessor tree.
+ * The composed chain accessor -- `Base` as the SDK hands it out: `.chain`, `.hop`, the lazy
+ * contract namespace tree (`Uniswap`, `UniswapV4`, ...) with its eco-routes Portal as `.Portal`,
+ * the chain's registry tokens (`Base.USDC`) and, for an `svm`-kind chain, the svm venue accessor
+ * tree.
  *
  * One shape, two delivery paths: the generated NAMED EXPORTS
  * (`./chain-exports.generated.ts`, what `import { Base }` resolves) and the
@@ -13,7 +14,7 @@
 import type { CanonicalChain } from "../chains/canonical.js";
 import { chainAccessors } from "./accessors.js";
 // Composes each chain accessor with its native contract accessor tree
-// (`Base.Uniswap.UniversalRouter.method(...)`) alongside its `Portal` -- see composeChainGlobal
+// (`Base.Uniswap.UniversalRouter.method(...)`) alongside its `hop` -- see composeChainGlobal
 // below.
 import { chainContracts } from "../descriptors/accessors.js";
 // The SVM twin of the above: composes the svm venue accessor tree
@@ -27,7 +28,7 @@ import { registryTokens } from "./token-registry.js";
 /** What `chainAccessors[name]` is, in the shape this module consumes it. */
 type ChainOrigin = Record<string, unknown> & {
   chain: CanonicalChain;
-  Portal: unknown;
+  hop: unknown;
 };
 
 /** Names a contract/venue namespace key must never take: an object's own intrinsics, and the names
@@ -46,13 +47,14 @@ const FUNCTION_INTRINSIC_DENYLIST: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Composes one chain accessor: a FRESH object with `chain`/`Portal`, the lazy contract-namespace
- * tree (`Uniswap`, `UniswapV4`, ...), the chain's registry tokens (`USDC`, ...) and, for an
+ * Composes one chain accessor: a FRESH object with `chain`/`hop`, the lazy contract-namespace
+ * tree (`Uniswap`, `UniswapV4`, ...) and `Portal`, its eco-routes Portal contract (read lazily,
+ * like the tree it comes from), the chain's registry tokens (`USDC`, ...) and, for an
  * `svm`-kind chain only, the svm venue accessor tree (`RaydiumCpSwap`, `MeteoraDammV2`, ...) —
  * copied via `Object.getOwnPropertyDescriptors` (NOT spread) so every namespace's memoising GETTERS
  * stay lazy — spread would invoke every one of them eagerly at composition time. `origin` itself is
  * never mutated. Throws on a name collision — a protocol, family, token or venue name literally
- * "chain", "Portal" or an intrinsic like "call"/"bind", or two of them sharing a name (a token
+ * "chain", "hop", "Portal" or an intrinsic like "call"/"bind", or two of them sharing a name (a token
  * symbol that is also a protocol namespace) — mirroring `createChainGlobals`'s own duplicate-key
  * throw. The `kind === "svm"` gate is registry-derived (from `../chains/canonical.js`'s own
  * `CanonicalChain.kind`), not a hardcoded chain name -- a second SVM chain added to
@@ -76,14 +78,19 @@ function composeChainGlobal(name: string, origin: ChainOrigin): object {
 
   const merged: PropertyDescriptorMap = {
     chain: { value: origin.chain, enumerable: true, configurable: false, writable: false },
-    Portal: { value: origin.Portal, enumerable: true, configurable: false, writable: false },
+    hop: { value: origin.hop, enumerable: true, configurable: false, writable: false },
+    Portal: {
+      get: () => (contracts.EcoRoutes as Record<string, unknown> | undefined)?.Portal,
+      enumerable: true,
+      configurable: false,
+    },
   };
   for (const source of sources) {
     for (const key of Object.keys(source)) {
       if (key in merged || FUNCTION_INTRINSIC_DENYLIST.has(key)) {
         throw new Error(
           `routes/composed: '${key}' collides with another name on the '${name}' accessor ` +
-            "(its chain, Portal, an intrinsic, or a protocol, token or venue of the " +
+            "(its chain, hop, Portal, an intrinsic, or a protocol, token or venue of the " +
             "same name)",
         );
       }

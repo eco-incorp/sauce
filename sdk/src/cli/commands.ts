@@ -113,7 +113,7 @@ export interface ProgramInput {
   readonly addressDefines?: readonly string[];
   /** Compile `main`'s parameters for compact-v1 arguments instead of ABI-v1. */
   readonly compactArgs: boolean;
-  /** The intents the program opens (`Chain.Portal.send(…).receive(…).then(…)`): what the SDK
+  /** The intents the program opens (`await Chain.hop({ … })`): what the SDK
    *  cannot look up. */
   readonly intents: {
     readonly deadline?: bigint;

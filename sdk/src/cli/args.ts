@@ -85,11 +85,11 @@ export function parseFlags(argv: readonly string[], flags: FlagSpecs): ParsedArg
 /** Flags the command once took, and what does their work now. */
 const RETIRED_FLAGS: Readonly<Record<string, string>> = {
   "intent-creator":
-    "an intent names its refundee in the file: `.refundee(<address>)`, or `.refundee(refundTo)` " +
-    "with `refundTo` one of main's arguments",
+    "an intent names its refundee in the file: `hop({ reward, refundee: refundTo })`, with " +
+    "`refundTo` one of main's arguments or an address",
   "intent-refundee":
-    "an intent names its refundee in the file: `.refundee(<address>)`, or `.refundee(refundTo)` " +
-    "with `refundTo` one of main's arguments",
+    "an intent names its refundee in the file: `hop({ reward, refundee: refundTo })`, with " +
+    "`refundTo` one of main's arguments or an address",
 };
 
 /** `parseArgs`'s messages advise on `--` escaping; say what was wrong with the flag instead. */

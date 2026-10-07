@@ -7,8 +7,8 @@
  * `--reward-deadline`, `--out`); at a terminal what no flag gave is asked, and with no terminal a
  * missing one is an error naming every flag still needed (`prompt.ts#missingFlags`).
  *
- * The file is an ordinary intent file — `Dest.Portal.send({ token, amount }).refundee(you)
- * .receive({ token, amount }).then(() => { TOKEN.transfer(RECIPIENT, AMOUNT) })`, whose body the
+ * The file is an ordinary intent file — `Dest.hop({ reward: { token, amount }, receive: { token,
+ * amount }, refundee: you }).then(() => { TOKEN.transfer(RECIPIENT, AMOUNT) })`, whose body the
  * destination's shared Pot cooks, paying its Kitchen's fee — and `run.ts` then publishes it exactly as
  * `sauce intent publish <file> --fund <reward>` would: cooked on your Pot, which pulls the reward
  * from you and pays it into the intent's vault; rehearsed on the source (`--dry-run`) and on the
@@ -361,7 +361,7 @@ function intentText(options: {
   readonly header: readonly string[];
 }): string {
   const accessor = options.destination.name.replace(/[^A-Za-z0-9]/g, "");
-  // `.receive(...)` is written on the source, where only the source's names exist: a token the
+  // `receive` is written on the source, where only the source's names exist: a token the
   // source does not name by that symbol is given by its address on the destination.
   const named = (TOKEN_REGISTRY[options.source.id] ?? []).some(
     (row) => row.symbol === options.delivered.symbol,
@@ -373,12 +373,13 @@ function intentText(options: {
 
   return [
     ...options.header.map((line) => `// ${line}`),
-    `${accessor}.Portal.send({ token: ${options.rewardToken.spelled}, amount: ${options.reward} })`,
-    `  .refundee(${options.refundee.toLowerCase()})`,
-    `  .receive({ token: ${received}, amount: ${options.amount} })`,
-    "  .then(() => {",
-    `    ${options.delivered.spelled}.transfer(${options.recipient.toLowerCase()}, ${options.amount});`,
-    "  });",
+    `${accessor}.hop({`,
+    `  reward: { token: ${options.rewardToken.spelled}, amount: ${options.reward} },`,
+    `  receive: { token: ${received}, amount: ${options.amount} },`,
+    `  refundee: ${options.refundee.toLowerCase()},`,
+    "}).then(() => {",
+    `  ${options.delivered.spelled}.transfer(${options.recipient.toLowerCase()}, ${options.amount});`,
+    "});",
     "",
   ].join("\n");
 }

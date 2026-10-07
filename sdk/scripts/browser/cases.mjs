@@ -44,7 +44,7 @@ export function beforeReady() {
 export async function run(source) {
   await ready(source);
 
-  // The README's intent example, verbatim: `Base.Portal.send(...).then(() => { USDC.approve(...) })`.
+  // The README's intent example, verbatim: `Base.hop({ … }).then(() => { USDC.approve(...) })`.
   // Imported only now, because building the intent compiles it.
   const { built } = await import("./readme-route.mjs");
 

@@ -3,7 +3,7 @@
  * (`*.sauce.ts`) — the package's `./sauce-script` types export, `dist/sauce-script/index.d.ts`:
  *
  * - every chain as its chain id, with the `Portal` that opens an intent there and its namespaces
- *   (`chainId == Base`, `Base.Portal.send(…)`, `Base.UniswapV3.Factory`);
+ *   (`chainId == Base`, `Base.hop({ … })`, `Base.UniswapV3.Factory`);
  * - every `<Namespace>_<Contract>` define a chain sets;
  * - every JSON ABI the SDK serves (`./artifacts/IERC20.json`, `./protocols/<slug>/<Export>.json`)
  *   as a module whose contract is typed from its ABI;
@@ -218,8 +218,8 @@ export function sauceScriptDeclarations(): string {
     "/** Opening an intent on a chain, as a typed closure in a host file opens one too. */",
     `type SauceOpensIntent = ${sources}.SauceIntentChain;`,
     "",
-    "/** A chain: its Portal opens an intent there",
-    " *  (`Base.Portal.send({ token, amount }).receive({ token, amount }).then(() => { … })`); its",
+    "/** A chain: its `hop` opens an intent there",
+    " *  (`await Base.hop({ reward: { token, amount }, receive: { token, amount }, refundee })`); its",
     " *  namespaces qualify an accessor to that chain (`Base.UniswapV3.Factory`). */",
     "interface SauceChain extends SauceOpensIntent {",
     ...[...namespaces].sort().map((ns) => `  readonly ${ns}: ${sources}.${ns}Source;`),

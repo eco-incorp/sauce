@@ -18,7 +18,7 @@
 //   2. every file reads the same for every agent and every release: no version numbers or release
 //      talk, no agent's name or install path, no engine internals (opcodes, mnemonics, stack
 //      effects, bytecode bytes), no placeholder or unrecorded address, no Portal or prover outside
-//      the intents skill (but for the intent syntax, `Chain.Portal.send(...)`), no RPC endpoint,
+//      the intents skill (a chain's `Portal` is the contract too), no RPC endpoint,
 //      no description of Sauce as a multicall, no call to `available(...)` (a name a chain lacks is
 //      zero there: `X != 0`), and nothing that
 //      tells the reader to copy, adapt or start from an example (the agent writes each program
@@ -111,8 +111,8 @@ const SKILLS_DIR =
   skillsFlag < 0 ? join(REPOSITORY, "skills") : resolve(process.argv[skillsFlag + 1]);
 const INDEX_SKILL = "sauce-examples";
 const INTENTS_SKILL = "sauce-intents";
-// A program that opens an intent: `<Chain>.Portal.send(…)`.
-const OPENS_INTENT = /\.Portal\s*\.send\s*\(/;
+// A program that opens an intent: `<Chain>.hop(…)`.
+const OPENS_INTENT = /\b[A-Z]\w*\s*\.hop\s*\(/;
 const PKG = "@eco-incorp/sauce";
 
 const failures = [];
@@ -596,12 +596,6 @@ const REFERENCES = await skillsReferences(
   (slug) => existsSync(join(PROTOCOL_DOCUMENTS, `${slug}.md`)),
 );
 const RENDERED = renderSkillsReferences(REFERENCES);
-// The intent syntax names a chain's Portal (`Ethereum.Portal.send(...)`, or `Chain.Portal` for any
-// chain), and every skill may write it: the Portal rule is about the contract, not the syntax.
-const CHAIN_PORTAL = new RegExp(
-  `(?:<Chain>|\\b(?:Chain|${REFERENCES.globals.chains.map((chain) => chain.key).join("|")}))\\.Portal\\b`,
-  "g",
-);
 const GENERATED = new Set(Object.keys(RENDERED).map((name) => join(SKILLS_DIR, name)));
 const isGenerated = (file) => GENERATED.has(file);
 // A heading's anchor, as GitHub and the docs check derive it.
@@ -681,7 +675,7 @@ function wording(skill, file) {
     if (
       skill.dir !== INTENTS_SKILL &&
       !isGenerated(file) &&
-      /\b(?:Portal|portal|[Pp]rover)s?\b/.test(line.replace(CHAIN_PORTAL, ""))
+      /\b(?:Portal|portal|[Pp]rover)s?\b/.test(line)
     )
       fail(where(i), `names the Portal or a prover outside ${INTENTS_SKILL}`);
     for (const m of line.matchAll(/0x[0-9a-fA-F]{40}(?![0-9a-fA-F])/g)) {
@@ -1912,7 +1906,7 @@ const PENDING = [
     waits: "the compiler's try/catch, which `.catch` lowers to (v12 #552)",
   },
   {
-    file: "skills/sauce-intents/SKILL.md",
+    file: "skills/",
     match: /`await` is only allowed within async functions/,
     waits: "the compiler's await (v12 #554)",
   },
