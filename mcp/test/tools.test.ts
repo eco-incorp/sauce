@@ -439,6 +439,20 @@ describe("sauce_pools", () => {
       );
       assert.deepEqual([listed.pools, listed.skipped], [[], []]);
       assert.ok(stub.methods.has("getProgramAccounts"));
+      // Chosen for a swap paying USDC: no pool, so every slot's accounts the System program.
+      const chosen = ok(
+        await mcp.call("sauce_pools", {
+          chain: "solana",
+          tokenA: "USDC",
+          tokenB: "WSOL",
+          pay: "USDC",
+          perVenue: true,
+          rpcUrl: stub.url,
+        }),
+      ) as { chosen: unknown[]; accounts: Record<string, string> };
+      assert.deepEqual(chosen.chosen, []);
+      assert.equal(Object.keys(chosen.accounts).length, 36);
+      assert.equal(chosen.accounts.ticks32, "11111111111111111111111111111111");
     } finally {
       await stub.close();
     }

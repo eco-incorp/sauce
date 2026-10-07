@@ -1177,7 +1177,11 @@ accounts [the distributed swap on Solana](solana-distributed-swap.md) takes for 
 program, the pool, its config, its two vaults, one more account its swap takes, and the three tick
 arrays its walk crosses that way, each unused one the System program. A pool the distributed swap
 skips (no liquidity, swaps switched off, a fee that is more than one rate, paused, a market not open
-for taking) is listed under `skipped` with why. `--block` and `--v4-key` are EVM's.
+for taking) is listed under `skipped` with why. `--pay <token>` chooses a distributed swap's slots:
+the deepest pools whose price with the fee is within `--max-price`, one a venue with
+`--per-venue`, as many as `--slots` (4), printed as `chosen` and as `accounts`, the slots'
+accounts as `--accounts` takes them. A venue that could not be read leaves the listing partial: a
+note says which, and the command exits 1. `--block` and `--v4-key` are EVM's.
 
 ### `sauce inspect`
 

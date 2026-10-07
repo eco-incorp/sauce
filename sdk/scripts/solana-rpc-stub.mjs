@@ -20,8 +20,10 @@ const rentExempt = (size) => (128n + BigInt(size)) * 5080n;
 
 /**
  * Serves `accounts` (address -> { owner, data }) beside the Rent sysvar, the fee config at
- * `feeConfig` (when given) charging `fee` lamports, and a clock at `slot`. Resolves to { url, methods, close }:
- * `methods` counts what was asked, and an unknown method is answered with an error naming it.
+ * `feeConfig` (when given) charging `fee` lamports, and a clock at `slot`. A scan
+ * (`getProgramAccounts`) of a program in `refuseScans` is refused, as a rate-limited endpoint
+ * refuses it. Resolves to { url, methods, close }: `methods` counts what was asked, and an unknown
+ * method is answered with an error naming it.
  */
 export async function solanaRpcStub({
   feeConfig,
@@ -29,6 +31,7 @@ export async function solanaRpcStub({
   fee = 0n,
   accounts = {},
   slot = 1_000n,
+  refuseScans = [],
 } = {}) {
   const held = new Map(Object.entries(accounts));
   const discriminator = createHash("sha256").update("account:ExecutionFeeConfig").digest();
@@ -63,6 +66,7 @@ export async function solanaRpcStub({
       case "getAccountInfo":
         return { context, value: info(params[0]) };
       case "getProgramAccounts":
+        if (refuseScans.includes(params[0])) throw new Error("scans of this program are refused");
         return [];
       case "getBalance":
         return { context, value: 0 };

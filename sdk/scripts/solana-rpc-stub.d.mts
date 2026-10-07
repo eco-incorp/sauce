@@ -9,4 +9,5 @@ export declare function solanaRpcStub(options?: {
   fee?: bigint;
   accounts?: Record<string, { owner: string; data: Uint8Array }>;
   slot?: bigint;
+  refuseScans?: string[];
 }): Promise<SolanaRpcStub>;

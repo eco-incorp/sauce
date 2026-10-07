@@ -70,6 +70,10 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["sqrt-price-x96"], input: "sqrtPriceX96" },
   { flags: ["pool"], input: "pool" },
   { flags: ["v4-key"], input: "v4Pools" },
+  { flags: ["pay"], input: "pay" },
+  { flags: ["max-price"], input: "maxPrice" },
+  { flags: ["per-venue"], input: "perVenue" },
+  { flags: ["slots"], input: "slots" },
 ];
 
 /** What the mapping does not show flag by flag: a command is its tool, and a file its text. */

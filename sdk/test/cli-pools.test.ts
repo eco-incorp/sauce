@@ -34,6 +34,7 @@ import {
 } from "../src/cli/pools.js";
 import { priceCommand, tokenGiven, type PriceToken } from "../src/cli/price.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
+import { solanaRpcStub } from "../scripts/solana-rpc-stub.mjs";
 import { MAX_SQRT_PRICE_X96, MIN_SQRT_PRICE_X96 } from "../src/price.js";
 
 const Q96 = 1n << 96n;
@@ -466,5 +467,57 @@ describe("a pool given by its address (sauce price --pool)", () => {
         pool: read,
       }),
     ).toThrow(/trades 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 and 0xb2\w+, not WETH and USDC/);
+  });
+});
+
+describe("sauce pools on Solana, through an endpoint with no pools", () => {
+  const SYSTEM = "11111111111111111111111111111111";
+
+  it("chooses no pool for --pay, every slot of the program the System program", async () => {
+    const stub = await solanaRpcStub();
+    try {
+      const run = await sauce(
+        ...["pools", "--chain", "solana", "USDC", "SOL", "--rpc-url", stub.url],
+        ...["--pay", "SOL", "--slots", "5", "--json"],
+      );
+      expect(run.code).toBe(0);
+      const out = JSON.parse(run.stdout) as { chosen: unknown[]; accounts: Record<string, string> };
+      expect(out.chosen).toEqual([]);
+      expect(Object.keys(out.accounts)).toHaveLength(45);
+      expect(out.accounts.program4).toBe(SYSTEM);
+      expect(new Set(Object.values(out.accounts))).toEqual(new Set([SYSTEM]));
+    } finally {
+      await stub.close();
+    }
+  });
+
+  it("says a listing is partial when a venue cannot be read, and exits 1", async () => {
+    const stub = await solanaRpcStub({
+      refuseScans: ["whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"],
+    });
+    try {
+      const run = await sauce(
+        ...["pools", "--chain", "solana", "USDC", "WSOL", "--rpc-url", stub.url, "--json"],
+      );
+      expect(run.code).toBe(1);
+      expect(run.stderr).toMatch(/1 of 9 venues could not be read \(Orca Whirlpools\)/);
+      const out = JSON.parse(run.stdout) as { checked: { venue: string; error?: string }[] };
+      expect(out.checked.filter((one) => one.error !== undefined).map((one) => one.venue)).toEqual([
+        "Orca Whirlpools",
+      ]);
+    } finally {
+      await stub.close();
+    }
+  });
+
+  it("takes --max-price, --per-venue and --slots only with --pay", async () => {
+    for (const extra of [["--per-venue"], ["--slots", "5"], ["--max-price", "1"]]) {
+      const run = await sauce(
+        ...["pools", "--chain", "solana", "USDC", "WSOL", "--rpc-url", "http://127.0.0.1:9"],
+        ...extra,
+      );
+      expect(run.code).toBe(2);
+      expect(run.stderr).toMatch(/choose pools for --pay <token>/);
+    }
   });
 });

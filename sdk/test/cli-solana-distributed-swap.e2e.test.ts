@@ -304,9 +304,20 @@ describeSvm(
       expect(tx.code).toBe(1);
       expect(tx.stderr).toContain("sauce run");
       expect(tx.stderr).toContain("--lookup-table");
+
+      // An owner that cannot pay, such as a pool, is refused by name before anything runs.
+      const orca = pool("orca-whirlpool-sol-usdc").pool;
+      const pooled = await sauce(
+        ...argv("simulate").map((value) => (value === owner.signer.address ? orca : value)),
+      );
+      expect(pooled.code).toBe(1);
+      expect(pooled.stderr).toContain(
+        `--owner ${orca} is an account of whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc`,
+      );
+      expect(pooled.stderr).toContain("not a wallet");
     }, 300_000);
 
-    it("finds the pair's pools and fills each slot with sauce pools, which the rehearsal takes", async () => {
+    it("finds the pair's pools and chooses each slot with sauce pools, which the rehearsal takes", async () => {
       restoreVenues(harness.svm);
       // SOL names the wrapped SOL a pool holds.
       const listed = await sauce(
@@ -370,6 +381,40 @@ describeSvm(
       expect(out.skipped.find((one) => one.pool === pool("byreal-sol-usdc").pool)?.why).toMatch(
         /more than one rate/,
       );
+
+      // Chosen for a swap paying USDC within maxPrice, one pool a venue: the accounts of the
+      // program's four slots, which a rehearsal takes as they are, beside the shared ones.
+      const choosing = await sauce(
+        ...["pools", "--chain", "solana", "USDC", "WSOL", "--rpc-url", SOLANA_URL, "--json"],
+        ...["--pay", "USDC", "--max-price", String(maxPrice), "--per-venue"],
+      );
+      if (choosing.code !== 0)
+        throw new Error(`exit ${choosing.code}\n${choosing.stderr}\n${choosing.stdout}`);
+      const picked = JSON.parse(choosing.stdout) as {
+        chosen: { venue: string; pool: Address }[];
+        accounts: Record<string, string>;
+      };
+      expect(picked.chosen).toHaveLength(4);
+      expect(new Set(picked.chosen.map((one) => one.venue)).size).toBe(4);
+      picked.chosen.forEach((one, k) => {
+        const p = manifest.pools.find((entry) => entry.pool === one.pool)!;
+        const each = [p.program, p.pool, p.config, p.vaultA, p.vaultB, p.extra, ...p.payB];
+        SLOT_NAMES(k).forEach((name, j) => expect(picked.accounts[name]).toBe(each[j]));
+      });
+      const recipient = setTokenAccount(harness, randomAddress(), WSOL, randomAddress(), 0n);
+      const refund = setTokenAccount(harness, randomAddress(), USDC, randomAddress(), 0n);
+      const file = join(work, "chosen.json");
+      writeFileSync(file, JSON.stringify({ ...named([], recipient, refund), ...picked.accounts }));
+      const rehearsal = await sauce(
+        ...["simulate", PROGRAM, "--chain", "solana", "--rpc-url", SOLANA_URL],
+        ...["--owner", (await keypairFile(work)).signer.address, "--accounts", file],
+        ...["--assume-balance", "USDC:1000000", "--json"],
+        ...["--args", String(budget), String(maxPrice), "0", "0"],
+      );
+      if (rehearsal.code !== 0)
+        throw new Error(`exit ${rehearsal.code}\n${rehearsal.stderr}\n${rehearsal.stdout}`);
+      const rehearsed = JSON.parse(rehearsal.stdout) as { returned: { bought: string } };
+      expect(BigInt(rehearsed.returned.bought)).toBeGreaterThan(0n);
     }, 300_000);
 
     it("rehearses for an owner with no Pot, no lamports and no USDC, given --assume-balance and --accounts", async () => {

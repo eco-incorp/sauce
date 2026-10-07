@@ -93,6 +93,18 @@ export interface SvmPoolsInput {
   readonly rpcUrl: string;
   /** The pair, as written: registry symbols or base58 mints; the first is the one paid first. */
   readonly tokens: readonly [string, string];
+  /**
+   * Chooses the pools for a distributed swap paying `pay` (one of the pair): those whose price with
+   * the fee is within `maxPrice` (its units), the deepest first, one a venue with `perVenue`, the
+   * first `slots` (4) of them; and returns the accounts the program's slots take for them, every
+   * slot past the last chosen the System program.
+   */
+  readonly choose?: {
+    readonly pay: string;
+    readonly maxPrice?: bigint;
+    readonly perVenue?: boolean;
+    readonly slots?: number;
+  };
 }
 
 /** Makes each request, naming what it reads when it fails (the endpoint never named). */
@@ -257,10 +269,23 @@ export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutp
     });
   }
 
+  // A pool none of whose slots could be read cannot be traded: it is skipped, with why.
+  for (const pool of [...listed]) {
+    if (Object.keys(pool.slots).length > 0) continue;
+    listed.splice(listed.indexOf(pool), 1);
+    skipped.push({
+      venue: pool.venue,
+      pool: pool.pool,
+      why: `its slot's accounts could not be read: ${Object.values(pool.unfilled ?? {})[0] ?? "no reason given"}`,
+    });
+  }
+  const chosen = input.choose === undefined ? undefined : choose(input.choose, listed, mints);
+  const unread = checked.filter((one) => one.error !== undefined);
   const json = {
     chain: chain.slug,
     tokens: mints.map((m) => ({ symbol: m.symbol, mint: m.mint, decimals: m.decimals })),
     sortedBy: "liquidity at the pool's price, the order books after",
+    ...(chosen === undefined ? {} : { chosen: chosen.pools, accounts: chosen.accounts }),
     pools: listed,
     skipped,
     checked,
@@ -297,8 +322,89 @@ export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutp
     "",
     `Looked at: ${checked.map((c) => `${c.venue} (${c.error ?? `${c.pools} pools`})`).join(", ")}`,
   );
+  if (chosen !== undefined) {
+    lines.push(
+      "",
+      `Chosen, paying ${chosen.pay}${input.choose?.maxPrice === undefined ? "" : ` within maxPrice ${input.choose.maxPrice}`}: ` +
+        (chosen.pools.length === 0
+          ? "no pool"
+          : chosen.pools.map((pool, k) => `slot ${k} ${pool.venue} ${pool.pool}`).join(", ")),
+      "Their accounts, as --accounts takes them (add the shared ones):",
+      JSON.stringify(chosen.accounts, null, 2),
+    );
+  }
 
-  return { text: lines.join("\n"), json };
+  // A venue that could not be read leaves the listing partial: said, and the exit is not 0.
+  return {
+    text: lines.join("\n"),
+    json,
+    ...(unread.length === 0
+      ? {}
+      : {
+          notes: [
+            `${unread.length} of ${checked.length} venues could not be read (${unread
+              .map((one) => one.venue)
+              .join(", ")}), so the listing is partial: run it again, or give an endpoint that ` +
+              "answers getProgramAccounts",
+          ],
+          exitCode: 1,
+        }),
+  };
+}
+
+/** The pools a distributed swap paying `want` takes, and the accounts of the program's slots. */
+function choose(
+  want: NonNullable<SvmPoolsInput["choose"]>,
+  listed: readonly Listed[],
+  mints: readonly Mint[],
+): {
+  pay: string;
+  pools: { venue: string; pool: Address; taker: string }[];
+  accounts: Record<string, string>;
+} {
+  const symbol = want.pay.toUpperCase() === "SOL" ? "WSOL" : want.pay.toUpperCase();
+  const pay = mints.find((mint) => mint.symbol.toUpperCase() === symbol || mint.mint === want.pay);
+  if (pay === undefined)
+    throw new UsageError(
+      `--pay ${want.pay} is not one of the pair (${mints.map((m) => m.symbol).join(", ")})`,
+    );
+  const slots = want.slots ?? 4;
+  const venues = new Set<string>();
+  const pools: { venue: string; pool: Address; taker: string }[] = [];
+  for (const pool of listed) {
+    if (pools.length === slots) break;
+    const side = pool.sides.find((one) => one.pay === pay.symbol);
+    if (side === undefined || pool.slots[pay.symbol] === undefined) continue;
+    if (want.maxPrice !== undefined && BigInt(side.maxPrice) > want.maxPrice) continue;
+    if (want.perVenue && venues.has(pool.venue)) continue;
+    venues.add(pool.venue);
+    pools.push({ venue: pool.venue, pool: pool.pool, taker: side.taker });
+  }
+  const accounts: Record<string, string> = {};
+  for (let k = 0; k < slots; k++) {
+    const slot =
+      pools[k] === undefined
+        ? undefined
+        : listed.find((one) => one.pool === pools[k]!.pool)!.slots[pay.symbol]!;
+    const each =
+      slot === undefined
+        ? Array<Address>(9).fill(SYSTEM)
+        : [
+            slot.program,
+            slot.pool,
+            slot.config,
+            slot.vaultA,
+            slot.vaultB,
+            slot.extra,
+            ...slot.ticks,
+          ];
+    ["program", "pool", "config", "vaultA", "vaultB", "extra"].forEach(
+      (name, i) => (accounts[`${name}${k}`] = each[i]!),
+    );
+    [0, 1, 2].forEach((i) => (accounts[`ticks${k}${i}`] = each[6 + i]!));
+  }
+
+  return { pay: pay.symbol, pools, accounts };
 }
 
 /** A registry symbol or a base58 mint, with its decimals. */

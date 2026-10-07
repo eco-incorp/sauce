@@ -1498,6 +1498,29 @@ export function registerTools(server: McpServer, context: ToolContext): void {
             "Return only this many pools, the deepest first; `more` counts the rest. A Solana " +
               "pair can have dozens, each with its slots both ways.",
           ),
+        pay: z
+          .string()
+          .min(1)
+          .max(64)
+          .optional()
+          .describe(
+            "Solana only: choose the pools a distributed swap paying this token (one of the " +
+              "pair) takes, and return `chosen` and `accounts`, the program's slots' accounts " +
+              "(program0 … ticks32), every slot past the last chosen the System program.",
+          ),
+        maxPrice: z
+          .string()
+          .regex(/^\d+$/)
+          .optional()
+          .describe("With pay: only pools whose price with the fee is within this maxPrice."),
+        perVenue: z.boolean().optional().describe("With pay: the deepest pool of each venue only."),
+        slots: z
+          .number()
+          .int()
+          .min(1)
+          .max(9)
+          .optional()
+          .describe("With pay: how many slots the program has (default 4)."),
         rpcUrl: RPC_URL,
       },
       // One schema for both kinds of chain: what only an EVM chain's pools have (a block, a
@@ -1538,6 +1561,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           }),
         ),
         more: z.number().optional(),
+        chosen: z
+          .array(z.looseObject({ venue: z.string(), pool: z.string(), taker: z.string() }))
+          .optional(),
+        accounts: z.record(z.string(), z.string()).optional(),
         empty: z.array(z.looseObject({ venue: z.string(), why: z.string() })).optional(),
         skipped: z.array(z.looseObject({ venue: z.string(), why: z.string() })).optional(),
         checked: z.array(z.looseObject({ venue: z.string() })),
@@ -1550,14 +1577,34 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         if (args.v4Pools !== undefined || args.block !== undefined)
           throw new UsageError("v4Pools and block are for an EVM chain's pools");
         const url = await reach.require(chain, args.rpcUrl, "Listing a pair's pools");
+        if (
+          args.pay === undefined &&
+          (args.maxPrice !== undefined || args.perVenue !== undefined || args.slots !== undefined)
+        )
+          throw new UsageError("maxPrice, perVenue and slots choose pools for pay");
 
         return fromCommand(
           limited(
-            await svmPoolsCommand({ chain, rpcUrl: url, tokens: [args.tokenA, args.tokenB] }),
+            await svmPoolsCommand({
+              chain,
+              rpcUrl: url,
+              tokens: [args.tokenA, args.tokenB],
+              ...(args.pay === undefined
+                ? {}
+                : {
+                    choose: {
+                      pay: args.pay,
+                      ...(args.maxPrice === undefined ? {} : { maxPrice: BigInt(args.maxPrice) }),
+                      perVenue: args.perVenue === true,
+                      ...(args.slots === undefined ? {} : { slots: args.slots }),
+                    },
+                  }),
+            }),
             args.limit,
           ),
         );
       }
+      if (args.pay !== undefined) throw new UsageError("pay chooses a Solana pair's pools");
       const v4Keys = (args.v4Pools ?? []).map((raw) => parseV4Key(raw, "v4Pools"));
       const rpcUrl = await reach.require(chain, args.rpcUrl, "Listing a pair's pools");
       const { client, block } = await connectAt(rpcUrl, chain, blockText(args.block));
