@@ -305,10 +305,20 @@ describeSvm(
         expect(priceOf(p)).toBe(le(BYTES.get(p.pool)!, LAYOUT[p.venue]!.price, 16));
       expect(tokenAmount(harness, recipient)).toBe(0n);
 
-      // A rehearsal that reverts says why.
+      // A rehearsal that reverts says why, first; held to that revert, it is what was asked.
       const short = await sauce(...argv("simulate", String(bought + 1n)));
       expect(short.code).toBe(1);
       expect(short.stdout).toContain("bought below minTokens");
+      expect(short.stderr.split("\n")[0]).toBe(
+        'the cook reverts: the program threw "bought below minTokens"',
+      );
+      const guarded = await sauce(
+        ...argv("simulate", String(bought + 1n)),
+        "--expect-revert",
+        "bought below minTokens",
+      );
+      expect(guarded.code).toBe(0);
+      expect((JSON.parse(guarded.stdout) as { asExpected: boolean }).asExpected).toBe(true);
 
       const tx = await sauce(...argv("tx"));
       expect(tx.code).toBe(1);

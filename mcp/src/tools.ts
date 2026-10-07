@@ -30,77 +30,80 @@ import {
   actionsProgram,
   addressDefinesOf,
   assumedBalances,
+  bindMainArguments,
   CANONICAL_CHAINS,
+  type CanonicalChain,
   CHAIN_SUPPORT_NEW_ISSUE_URL,
   chainSupport,
+  type CliFiles,
+  type CommandOutput,
   compileCommand,
+  type CompileInput,
   compileProgram,
   connect,
-  bindMainArguments,
   connectAt,
+  type CookInput,
   definesReach,
+  expectingRevert,
   fillTargets,
+  forkSnapshot,
+  type ForkSnapshot,
   fundingFor,
   globalsCommand,
   inspectCommand,
   inspectFile,
   intentRecord,
+  type IntentRecord,
   kitchenFee,
+  MAX_V4_KEYS,
   parseAccounts,
   parseAddress,
   parseChain,
   parseDefineMap,
   parseLamports,
-  MAX_V4_KEYS,
   parsePin,
   parsePubkey,
   parseSalt,
-  plannedTransactions,
   parseUnixSeconds,
   parseV4Key,
   parseVia,
   parseWei,
+  plannedTransactions,
   poolsCommand,
   potCommand,
   potState,
   potTarget,
+  PreviewChainError,
+  type PreviewChainRefusal,
+  previewRefusal,
   priceCommand,
   pricedChain,
   priceGiven,
-  previewRefusal,
-  PreviewChainError,
   programChain,
   programChains,
-  withoutShebang,
+  type ProgramInput,
   publishCommand,
   readPoolAt,
   registeredBalances,
   requireSupported,
   resolvePriceTokens,
-  tokenGiven,
   simulateCommand,
+  supportedChainNames,
+  svmAssumedBalances,
+  type SvmCookInput,
+  svmPoolsCommand,
   svmPotCommand,
   svmPotExists,
-  svmAssumedBalances,
-  svmPoolsCommand,
   svmPotTokenAccounts,
   svmSimulateCommand,
   svmTxCommand,
-  supportedChainNames,
   svmVerifyCommand,
+  tokenGiven,
   txCommand,
   UsageError,
   verifyCommand,
-  type CanonicalChain,
-  type CliFiles,
-  type CommandOutput,
-  type CompileInput,
-  type CookInput,
-  type IntentRecord,
-  type PreviewChainRefusal,
-  type ProgramInput,
-  type SvmCookInput,
   type WalletStore,
+  withoutShebang,
 } from "./sdk.js";
 
 /** Input bounds, so one call cannot hand the server unbounded work. */
@@ -395,8 +398,21 @@ export const MAX_SCENARIOS = 16;
 
 /** One of `sauce_simulate`'s scenarios: the call's program with other arguments, defines and
  *  balances. */
+/** What a rehearsal is expected to revert with, rather than succeed. */
+const EXPECT_REVERT = z
+  .string()
+  .min(1)
+  .max(200)
+  .optional()
+  .describe(
+    "Expect the cook to revert with a reason containing this text (a guard's message, such as " +
+      "bought below minTokens): the rehearsal is ok, with asExpected, only when it does, and " +
+      "fails when the cook succeeds or reverts for another reason.",
+  );
+
 const SCENARIO = z.strictObject({
   args: ARGS,
+  expectRevert: EXPECT_REVERT,
   defines: PROGRAM.defines.describe(
     "Defines for this scenario, laid over the call's own (a define compiles into the program).",
   ),
@@ -410,6 +426,10 @@ type Scenario = z.infer<typeof SCENARIO>;
  *  moved, each transaction's gas, and the block. */
 const SUMMARY_FIELDS = [
   "ok",
+  "reverted",
+  "error",
+  "expectRevert",
+  "asExpected",
   "chain",
   "block",
   "stage",
@@ -840,6 +860,8 @@ function withRecords(program: Program, output: CommandOutput): ToolOutput {
 export interface ToolOutput {
   readonly json: Record<string, unknown>;
   readonly notes?: readonly string[] | undefined;
+  /** An error result whose structured content is still `json`: a rehearsal that reverted. */
+  readonly isError?: boolean;
 }
 
 /** A pools listing cut to its `limit` deepest pools, `more` counting the rest. */
@@ -915,6 +937,7 @@ const result = (output: ToolOutput, scrub: (text: string) => string): CallToolRe
   ) as Record<string, unknown>;
 
   return {
+    ...(output.isError === true ? { isError: true } : {}),
     structuredContent: structured,
     content: [{ type: "text", text: JSON.stringify(structured, null, 2) }],
   };
@@ -1997,8 +2020,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "says which), on a Pot that need not be deployed yet — the rehearsal deploys it first, " +
         "and `transactions` gives each transaction's gas (Kitchen.deployPot, then the cook). " +
         "Returns ok, gas, what main returns, the ERC-20 transfers and approvals, native " +
-        "transfers and each address's net balance change; or the `stage` and decoded `reason` " +
-        "it reverts — a revert is a result (ok: false), not an error. assumeBalance gives the " +
+        "transfers and each address's net balance change. A cook that reverts is an ERROR " +
+        "result, led by reverted: true and error (the decoded reason), with ok: false and the " +
+        "`stage` it reverts at: it did not work. expectRevert holds a rehearsal of a guard to " +
+        "its revert instead (ok, and asExpected, only when it reverts with that reason). " +
+        "assumeBalance gives the " +
         "Pot balances for the rehearsal only; fund rehearses pulling tokens from the owner into " +
         "the Pot in the cook, the Pot credited what they would bring. block pins the chain's " +
         "state (sauce_pools' block, to rehearse on the prices a limit was taken from). " +
@@ -2047,11 +2073,13 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           .optional()
           .describe(
             `Up to ${MAX_SCENARIOS} rehearsals of the same program, in order, all at one block ` +
-              "(block, or the latest when the call starts). Each scenario's args and " +
+              "(block, or the latest when the call starts); on Solana, all in local copies of one " +
+              "read of the accounts, at one slot. Each scenario's args and " +
               "assumeBalance replace the call's own; its defines are laid over the call's. " +
-              "The result is { ok: every scenario ok, block, scenarios: [one result each, or " +
-              "its error] }.",
+              "Each takes its own expectRevert. The result is { ok: every scenario ok, block, " +
+              "scenarios: [one result each, or its error] }, an error result unless every one is ok.",
           ),
+        expectRevert: EXPECT_REVERT,
         summary: z
           .boolean()
           .optional()
@@ -2063,6 +2091,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       },
       output: {
         ok: z.boolean(),
+        reverted: z.boolean().optional(),
+        error: z.string().optional(),
+        expectRevert: z.string().optional(),
+        asExpected: z.boolean().optional(),
         sourceSha256: z.string(),
         scenarios: z.array(z.looseObject({ ok: z.boolean() })).optional(),
       },
@@ -2078,7 +2110,14 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         );
       }
       // One rehearsal, its scenario's args, defines and balances over the call's own.
-      const rehearse = async (each: Scenario, block: string | undefined): Promise<ToolOutput> => {
+      const rehearse = async (
+        each: Scenario,
+        block: string | undefined,
+        snapshot?: ForkSnapshot,
+      ): Promise<ToolOutput> => {
+        const expected = each.expectRevert ?? args.expectRevert;
+        const held = (output: CommandOutput) =>
+          fromCommand(expected === undefined ? output : expectingRevert(output, expected));
         const scenario = {
           ...args,
           ...(each.args === undefined ? {} : { args: each.args }),
@@ -2102,11 +2141,12 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           fundingFor(funding);
           const assumed = svmAssumedBalances(scenario.assumeBalance ?? [], chain);
 
-          return fromCommand(
+          return held(
             await svmSimulateCommand(
               {
                 ...svmCook(scenario, built, rpcUrl),
                 ...(assumed.length === 0 ? {} : { assume: assumed }),
+                ...(snapshot === undefined ? {} : { snapshot }),
               },
               built.files,
             ),
@@ -2116,7 +2156,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         const assume = assumedBalances(scenario.assumeBalance ?? [], chain);
         const fund = fundingFor(funding);
 
-        return fromCommand(
+        return held(
           await simulateCommand(
             {
               ...cook,
@@ -2134,20 +2174,25 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       if (args.scenarios === undefined) {
         const output = await rehearse({}, blockText(args.block));
 
+        // A revert nobody expected is an error result: the call did not do what was asked.
         return {
           json: { ...shaped(output.json), sourceSha256: program.sourceSha256 },
           notes: output.notes,
+          isError: output.json.ok === false,
         };
       }
-      // Every scenario on one block: the one given, or the latest now, read once.
+      // Every scenario on one block: the one given, or the latest now, read once. On Solana, one
+      // local copy's reads: the accounts and the slot the first scenario read, every one rehearsed
+      // on a fresh copy of them.
       const block =
         chain.kind === "svm"
           ? undefined
           : (await connectAt(rpcUrl, chain, blockText(args.block))).block.toString();
+      const snapshot = chain.kind === "svm" ? forkSnapshot() : undefined;
       const results: Array<Record<string, unknown>> = [];
       for (const [index, each] of args.scenarios.entries()) {
         try {
-          const output = await rehearse(each, block);
+          const output = await rehearse(each, block, snapshot);
           const notes = output.notes ?? [];
           results.push({
             index,
@@ -2164,13 +2209,17 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         }
       }
 
+      const ok = results.every((each) => each.ok === true);
+
       return {
         json: {
-          ok: results.every((each) => each.ok === true),
+          ok,
           sourceSha256: program.sourceSha256,
           ...(block === undefined ? {} : { block }),
+          ...(snapshot?.slot === undefined ? {} : { slot: snapshot.slot.toString() }),
           scenarios: results,
         },
+        isError: !ok,
       };
     },
   );

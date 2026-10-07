@@ -44,25 +44,26 @@ import {
 import { actionsCommand, actionsProgram, isActionsDocument, type ActionsInput } from "./actions.js";
 import { chainServedBy, connect, connectAt, endpointFor, type Sent } from "./chain.js";
 import {
+  type Approver,
+  type ArgsInput,
+  type CliFiles,
+  type CommandOutput,
   compileCommand,
-  pastDeadline,
   compileProgram,
+  type Confirm,
+  type CookInput,
+  expectingRevert,
+  pastDeadline,
   potCommand,
-  programChains,
   potDeployCommand,
+  type PotInput,
   potStatusCommand,
+  programChains,
+  type ProgramInput,
   readInput,
   runCommand,
   txCommand,
   unapproved,
-  type ArgsInput,
-  type CliFiles,
-  type CommandOutput,
-  type Approver,
-  type Confirm,
-  type CookInput,
-  type PotInput,
-  type ProgramInput,
 } from "./commands.js";
 import { createIntent } from "./create.js";
 import { defineLabels, fillCommand, fillTargets, type FillTarget } from "./fill.js";
@@ -2387,6 +2388,74 @@ const WALLET_VERBS: Readonly<Record<string, Command>> = {
   },
 };
 
+/** `sauce simulate`'s rehearsal, on either kind of chain, before --expect-revert holds it. */
+async function simulateOf(
+  args: ParsedArgs,
+  io: CliIo,
+  trailing: readonly string[] | undefined,
+): Promise<CommandOutput> {
+  const program = await programOperand(args, io);
+  const funds = repeatedFlag(args, "fund").length > 0;
+  const assume = repeatedFlag(args, "assume-balance");
+  if (program.chain.kind === "svm") {
+    fundingOf(args, io, program.chain, "", false, undefined);
+    if (stringFlag(args, "block") !== undefined) {
+      throw new UsageError(
+        "--block is for EVM chains: Solana's simulateTransaction runs on the cluster's " +
+          "current state, at no slot it can be given",
+      );
+    }
+
+    // A keypair or a wallet names the owner; the rehearsal signs nothing with it.
+    const owner = hasSvmSigner(args, io) ? await keypairAddress(args, io) : undefined;
+
+    const assumed = svmAssumedBalances(assume, program.chain);
+
+    return svmSimulateCommand(
+      {
+        ...svmCookInput(args, io, trailing, program, owner),
+        ...(assumed.length === 0 ? {} : { assume: assumed }),
+      },
+      io,
+    );
+  }
+  if (hasSvmSigner(args, io)) {
+    throw new UsageError(
+      "a Solana keypair or wallet names no owner on an EVM chain: name the owner with an EVM " +
+        "--wallet, --keystore or --private-key, or --owner",
+    );
+  }
+  // A key names the owner, whose Pot the rehearsal runs on, and signs --fund's pulls if any.
+  const account = funds && hasSigner(args, io) ? await signerOf(args, io) : undefined;
+  const owner =
+    account?.address ?? (hasSigner(args, io) ? await signerAddress(args, io) : undefined);
+  if (owner !== undefined && stringFlag(args, "owner") !== undefined) {
+    if (parseAddress("owner", stringFlag(args, "owner")!) !== owner) {
+      throw new UsageError(
+        `--owner ${stringFlag(args, "owner")} is not the signer, ${owner}: with a key, the ` +
+          "owner is the key's. Leave --owner out, or give its key.",
+      );
+    }
+  }
+  const input = cookInput(args, io, trailing, owner, program);
+  const assumed = assumedBalancesOf(args, input.chain);
+  const rpcUrl = requiredEndpoint(args, io, input.chain);
+  const fund = fundingOf(args, io, input.chain, rpcUrl, false, account);
+
+  const block = stringFlag(args, "block");
+
+  return simulateCommand(
+    {
+      ...input,
+      rpcUrl,
+      assume: assumed,
+      ...(fund === undefined ? {} : { fund }),
+      ...(block === undefined ? {} : { block }),
+    },
+    io,
+  );
+}
+
 const COMMANDS: Readonly<Record<string, Command>> = {
   compile: {
     usage: "sauce compile <file | -> --chain <slug|id> [options]",
@@ -2546,6 +2615,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         help: "Rehearse on this block: a number, or latest, safe, finalized (default: latest)",
         only: "evm",
       },
+      "expect-revert": {
+        type: "string",
+        value: "<text>",
+        help: "Expect the cook to revert with a reason containing this text: exit 0 only if it does",
+      },
       ...FUND,
       wallet: {
         type: "string",
@@ -2622,9 +2696,16 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "and a pot:<token> or owner:<token> account the cluster does not have yet is made empty,",
       "which `sauce run` creates before the cook. An --owner that is not a wallet is refused.",
       "",
+      "A cook that reverts exits 1, and the first line says so: The cook reverts: <reason>. In",
+      "--json, reverted: true and error lead the JSON, and the same line leads stderr.",
+      "--expect-revert <text> holds a rehearsal of a guard to its revert: it exits 0 only when the",
+      "cook reverts with a reason containing the text, and 1 when it succeeds or reverts otherwise.",
+      "",
       "Examples:",
       "  sauce simulate pay.sauce.ts --chain base --owner 0x… \\",
       "    --assume-balance USDC:2 --args 0x… 1000000",
+      "  sauce simulate pay.sauce.ts --chain base --owner 0x… \\",
+      '    --args 0x… 1000000 --expect-revert "too much"',
       "  sauce simulate sweep.sauce.ts --chain solana --owner <pubkey> \\",
       "    --account source=<token account> --account authority=pot",
       "  sauce simulate sweep.sauce.ts --chain solana --owner <pubkey> \\",
@@ -2632,66 +2713,18 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     ].join("\n"),
     trailing: "args",
     run: async (args, io, trailing) => {
-      const program = await programOperand(args, io);
-      const funds = repeatedFlag(args, "fund").length > 0;
-      const assume = repeatedFlag(args, "assume-balance");
-      if (program.chain.kind === "svm") {
-        fundingOf(args, io, program.chain, "", false, undefined);
-        if (stringFlag(args, "block") !== undefined) {
-          throw new UsageError(
-            "--block is for EVM chains: Solana's simulateTransaction runs on the cluster's " +
-              "current state, at no slot it can be given",
-          );
-        }
-
-        // A keypair or a wallet names the owner; the rehearsal signs nothing with it.
-        const owner = hasSvmSigner(args, io) ? await keypairAddress(args, io) : undefined;
-
-        const assumed = svmAssumedBalances(assume, program.chain);
-
-        return svmSimulateCommand(
-          {
-            ...svmCookInput(args, io, trailing, program, owner),
-            ...(assumed.length === 0 ? {} : { assume: assumed }),
-          },
-          io,
-        );
-      }
-      if (hasSvmSigner(args, io)) {
-        throw new UsageError(
-          "a Solana keypair or wallet names no owner on an EVM chain: name the owner with an EVM " +
-            "--wallet, --keystore or --private-key, or --owner",
-        );
-      }
-      // A key names the owner, whose Pot the rehearsal runs on, and signs --fund's pulls if any.
-      const account = funds && hasSigner(args, io) ? await signerOf(args, io) : undefined;
-      const owner =
-        account?.address ?? (hasSigner(args, io) ? await signerAddress(args, io) : undefined);
-      if (owner !== undefined && stringFlag(args, "owner") !== undefined) {
-        if (parseAddress("owner", stringFlag(args, "owner")!) !== owner) {
-          throw new UsageError(
-            `--owner ${stringFlag(args, "owner")} is not the signer, ${owner}: with a key, the ` +
-              "owner is the key's. Leave --owner out, or give its key.",
-          );
-        }
-      }
-      const input = cookInput(args, io, trailing, owner, program);
-      const assumed = assumedBalancesOf(args, input.chain);
-      const rpcUrl = requiredEndpoint(args, io, input.chain);
-      const fund = fundingOf(args, io, input.chain, rpcUrl, false, account);
-
-      const block = stringFlag(args, "block");
-
-      return simulateCommand(
-        {
-          ...input,
-          rpcUrl,
-          assume: assumed,
-          ...(fund === undefined ? {} : { fund }),
-          ...(block === undefined ? {} : { block }),
-        },
-        io,
-      );
+      const output = await simulateOf(args, io, trailing);
+      const expected = stringFlag(args, "expect-revert");
+      const held = expected === undefined ? output : expectingRevert(output, expected);
+      // In JSON, stdout is the JSON: a revert nobody expected leads stderr too.
+      return args.values.json === true &&
+        held.json.reverted === true &&
+        held.json.asExpected !== true
+        ? {
+            ...held,
+            notes: [`the cook reverts: ${String(held.json.error)}`, ...(held.notes ?? [])],
+          }
+        : held;
     },
   },
   run: {

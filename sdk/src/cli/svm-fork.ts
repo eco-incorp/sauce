@@ -91,7 +91,7 @@ export interface Fork {
  * LiteSVM's fieldless transaction errors in their order (its `TransactionErrorFieldless`, a const
  * enum the package does not export at run time), so a failure says its name and not its number.
  */
-const FIELDLESS = [
+export const FIELDLESS = [
   "AccountInUse",
   "AccountLoadedTwice",
   "AccountNotFound",
@@ -148,24 +148,45 @@ function rpcError(err: unknown): unknown {
 }
 
 /** The cluster's accounts at `keys`, `null` where one does not exist, read 100 at a time. */
+/** An account as the cluster held it, or `null` where it held none. */
+type ClusterAccount = {
+  data: Uint8Array;
+  owner: Address;
+  lamports: bigint;
+  executable: boolean;
+} | null;
+
+/**
+ * The cluster's state as one local copy read it: every account, its slot and its time. Handed to
+ * the next copy, it reads nothing it already holds, so rehearsals that share one rehearse on one
+ * slot (`sauce_simulate`'s scenarios on Solana).
+ */
+export interface ForkSnapshot {
+  readonly accounts: Map<Address, ClusterAccount>;
+  slot?: bigint;
+  time?: bigint | null;
+}
+
+/** A snapshot to share between local copies: empty until the first reads it. */
+export const forkSnapshot = (): ForkSnapshot => ({ accounts: new Map() });
+
+/** The cluster's accounts at `keys`, `null` where one does not exist, read 100 at a time (only
+ *  those `snapshot` does not hold, which it keeps). */
 async function read(
   rpc: Rpc,
   ask: <T>(what: string, request: () => Promise<T>) => Promise<T>,
   keys: readonly Address[],
-): Promise<({ data: Uint8Array; owner: Address; lamports: bigint; executable: boolean } | null)[]> {
-  const out: ({
-    data: Uint8Array;
-    owner: Address;
-    lamports: bigint;
-    executable: boolean;
-  } | null)[] = [];
-  for (let at = 0; at < keys.length; at += 100) {
-    const chunk = keys.slice(at, at + 100);
+  snapshot: ForkSnapshot = forkSnapshot(),
+): Promise<ClusterAccount[]> {
+  const missing = [...new Set(keys)].filter((key) => !snapshot.accounts.has(key));
+  for (let at = 0; at < missing.length; at += 100) {
+    const chunk = missing.slice(at, at + 100);
     const { value } = await ask("the accounts the cook names", () =>
       rpc.getMultipleAccounts([...chunk], { encoding: "base64" }).send(),
     );
-    for (const account of value)
-      out.push(
+    value.forEach((account, index) =>
+      snapshot.accounts.set(
+        chunk[index]!,
         account === null
           ? null
           : {
@@ -174,10 +195,11 @@ async function read(
               lamports: BigInt(account.lamports),
               executable: account.executable,
             },
-      );
+      ),
+    );
   }
 
-  return out;
+  return keys.map((key) => snapshot.accounts.get(key) ?? null);
 }
 
 /**
@@ -190,6 +212,7 @@ export async function openFork(
   keys: readonly Address[],
   engine: Address,
   kitchen: Address,
+  snapshot: ForkSnapshot = forkSnapshot(),
 ): Promise<Fork> {
   let litesvm: typeof import("litesvm");
   try {
@@ -219,7 +242,7 @@ export async function openFork(
   // The cluster's rent, which is not LiteSVM's default: an account the cluster holds rent-exempt
   // must stay so in the copy when the cook pays into it, as the Kitchen's fee config is paid.
   const unique = [...new Set(keys)].filter((key) => key !== engine && key !== kitchen);
-  const [rent, ...accounts] = await read(rpc, ask, [RENT_SYSVAR, ...unique]);
+  const [rent, ...accounts] = await read(rpc, ask, [RENT_SYSVAR, ...unique], snapshot);
   if (rent !== null && rent !== undefined && rent.data.length >= 17) {
     const view = new DataView(rent.data.buffer, rent.data.byteOffset, rent.data.byteLength);
     svm.setRent(new Rent(view.getBigUint64(0, true), view.getFloat64(8, true), rent.data[16]!));
@@ -235,7 +258,7 @@ export async function openFork(
       if (present.exists && present.executable) continue;
       if (account.owner === UPGRADEABLE_LOADER) {
         const programData = getAddressDecoder().decode(account.data.subarray(4, 36));
-        const [data] = await read(rpc, ask, [programData]);
+        const [data] = await read(rpc, ask, [programData], snapshot);
         if (data !== null) svm.addProgram(key, data.data.subarray(PROGRAM_DATA_HEADER));
       } else {
         svm.addProgram(key, account.data);
@@ -251,8 +274,15 @@ export async function openFork(
       space: BigInt(account.data.length),
     });
   }
-  const slot = await ask("the slot", () => rpc.getSlot({ commitment: "confirmed" }).send());
-  const time = await ask("the block time", () => rpc.getBlockTime(slot).send()).catch(() => null);
+  // The slot and time once a snapshot holds them: every copy of it rehearses on that one slot.
+  snapshot.slot ??= await ask("the slot", () => rpc.getSlot({ commitment: "confirmed" }).send());
+  const slot = snapshot.slot;
+  if (snapshot.time === undefined) {
+    snapshot.time = await ask("the block time", () => rpc.getBlockTime(slot).send()).catch(
+      () => null,
+    );
+  }
+  const time = snapshot.time;
   svm.warpToSlot(slot);
   svm.setClock(
     new Clock(

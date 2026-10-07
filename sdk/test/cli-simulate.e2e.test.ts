@@ -433,6 +433,34 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
       expect(run.code).toBe(1);
       expect(run.stdout.split("\n")[0]).toBe('The cook reverts: the program threw "not today"');
     }
+    // In JSON the revert leads it, and stderr; held to that revert, the rehearsal is what was asked.
+    const base = ["simulate", refusing, "--chain", "ethereum", "--owner", OWNER];
+    const json = await sauce(...base, "--rpc-url", local.rpcUrl, "--json");
+    expect(json.code).toBe(1);
+    expect(json.stderr.split("\n")[0]).toBe('the cook reverts: the program threw "not today"');
+    const reverted = JSON.parse(json.stdout) as Record<string, unknown>;
+    expect(Object.keys(reverted).slice(0, 2)).toEqual(["reverted", "error"]);
+    expect([reverted.reverted, reverted.error, reverted.ok]).toEqual([
+      true,
+      'the program threw "not today"',
+      false,
+    ]);
+    const expected = await sauce(
+      ...base,
+      "--rpc-url",
+      local.rpcUrl,
+      "--expect-revert",
+      "not today",
+    );
+    expect(expected.code).toBe(0);
+    expect(expected.stdout.split("\n")[0]).toBe(
+      'As expected, the cook reverts: the program threw "not today"',
+    );
+    const other = await sauce(...base, "--rpc-url", local.rpcUrl, "--expect-revert", "too late");
+    expect(other.code).toBe(1);
+    expect(other.stdout.split("\n")[0]).toBe(
+      'Expected a revert with "too late", but the cook reverts: the program threw "not today"',
+    );
     const named = await sauce(
       "simulate",
       refusing,

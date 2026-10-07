@@ -98,19 +98,20 @@ import {
 } from "../svm/index.js";
 import { CliError, UsageError, type SaltChoice } from "./args.js";
 import {
-  compileProgram,
-  payloadOf,
-  refusePastDeadline,
-  unapproved,
   type Approver,
   type ArgsInput,
   type CliFiles,
   type CommandOutput,
+  compileProgram,
+  payloadOf,
   type ProgramInput,
+  refusePastDeadline,
+  revertedFirst,
+  unapproved,
 } from "./commands.js";
 import { decodeReturned, returnedLine } from "./returned.js";
 import { guardOf } from "./policy.js";
-import { openFork } from "./svm-fork.js";
+import { FIELDLESS, openFork, type ForkSnapshot } from "./svm-fork.js";
 import { secret } from "./signer.js";
 import { requireSupported } from "./support.js";
 import {
@@ -394,6 +395,9 @@ export function failureReason(
   if (detail !== undefined) {
     return `${program === undefined ? `instruction ${detail[0]}` : `program ${program}`} failed: ${String(detail[1])}`;
   }
+
+  // A transaction error with no fields, by its number (as a local copy reports one): its name.
+  if (typeof err === "number" && FIELDLESS[err] !== undefined) return FIELDLESS[err];
 
   return JSON.stringify(err, (_key, value: unknown) =>
     typeof value === "bigint" ? value.toString() : value,
@@ -1043,6 +1047,11 @@ export interface SvmCookInput extends ProgramInput, SvmTarget {
    * no account overrides, so a rehearsal with one runs in a local copy of the accounts.
    */
   readonly assume?: readonly SvmAssumed[];
+  /**
+   * The cluster's state shared with other rehearsals (`sauce_simulate`'s scenarios): rehearsed in
+   * a local copy of it, so each sees the accounts and the slot the first read.
+   */
+  readonly snapshot?: ForkSnapshot;
 }
 
 /** A balance `--assume-balance` gives, on Solana: a mint and an amount of it. */
@@ -1386,13 +1395,18 @@ export async function svmSimulateCommand(
   input: SvmCookInput,
   files: CliFiles,
 ): Promise<CommandOutput> {
+  return revertedFirst(await simulateSvm(input, files));
+}
+
+async function simulateSvm(input: SvmCookInput, files: CliFiles): Promise<CommandOutput> {
   const prepared = await prepare(input, files, unsignedSigner(input.owner));
   const direct = prepared.via === "engine";
   // The size first: it is the program's own, whatever the cluster holds.
   const alone = await fits(prepared);
   // Too large for one transaction: no cluster can stage it without sending, so a local copy does;
-  // and a balance to assume, which a cluster's simulation takes no override for.
-  if (!alone.fits || (input.assume ?? []).length > 0)
+  // and a balance to assume, which a cluster's simulation takes no override for; and a snapshot
+  // shared with other rehearsals, which a cluster, moving on between them, cannot hold.
+  if (!alone.fits || (input.assume ?? []).length > 0 || input.snapshot !== undefined)
     return stagedRehearsal(prepared, input, alone.fits);
   const created = direct || (await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot"));
   const prepends = created ? [] : [createPotInstruction(input, prepared.pot)];
@@ -1508,7 +1522,7 @@ export async function svmSimulateCommand(
 
   return {
     text: [
-      `The cook fails: ${simulated(result)}`,
+      `The cook reverts: ${simulated(result)}`,
       ...how,
       "Program logs:",
       ...result.logs.map((l) => `  ${l}`),
@@ -1601,6 +1615,7 @@ async function stagedRehearsal(
     ],
     engine(),
     kitchen(),
+    input.snapshot,
   );
   // The owner signs and pays every transaction of the rehearsal: an account a program owns, or one
   // holding data, cannot pay a fee, so it is refused here, by name, before anything runs.
@@ -1788,7 +1803,7 @@ async function stagedRehearsal(
 
   return {
     text: [
-      `The cook fails: ${reason}`,
+      `The cook reverts: ${reason}`,
       ...(returns === undefined || returnType === undefined
         ? []
         : [`${returnedLine(returnType, returns, input.chain)}, before the transaction failed`]),

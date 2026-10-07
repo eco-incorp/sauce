@@ -28,7 +28,7 @@ import {
 } from "../../sdk/test/cli-anvil.js";
 import { v12KitchenAddress } from "../../sdk/dist/deployments/index.js";
 import { v12PredictPot } from "../../sdk/dist/deployments/pot.js";
-import { connect, endpointsFor, failed, ok, type Connected } from "./harness.js";
+import { connect, endpointsFor, erred, failed, ok, type Connected } from "./harness.js";
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
 
@@ -233,16 +233,55 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     }
   });
 
-  it("returns a revert as a result, decoded, and credits what a keyless fund would pull", async () => {
-    const reverts = ok(
+  it("returns a revert as an error result led by its reason, and credits what a keyless fund would pull", async () => {
+    const reverts = erred(
       await mcp.call("sauce_simulate", {
         source: 'function main() {\n  throw "not today";\n}\n',
         chain: "ethereum",
         owner: NOBODY,
       }),
     );
+    assert.deepEqual(Object.keys(reverts).slice(0, 2), ["reverted", "error"]);
+    assert.equal(reverts.reverted, true);
+    assert.equal(reverts.error, 'the program threw "not today"');
     assert.equal(reverts.ok, false);
     assert.equal(reverts.reason, 'the program threw "not today"');
+    // A revert asked for is the result asked for: ok, and still reverted.
+    const expected = ok(
+      await mcp.call("sauce_simulate", {
+        source: 'function main() {\n  throw "not today";\n}\n',
+        chain: "ethereum",
+        owner: NOBODY,
+        expectRevert: "not today",
+      }),
+    );
+    assert.deepEqual([expected.ok, expected.reverted, expected.asExpected], [true, true, true]);
+    const unmet = erred(
+      await mcp.call("sauce_simulate", {
+        ...pay,
+        owner: NOBODY,
+        assumeBalance: ["USDC:2"],
+        expectRevert: "not today",
+      }),
+    );
+    assert.deepEqual([unmet.ok, unmet.asExpected], [false, false]);
+    // Each scenario holds its own: one revert unexpected, the same revert expected.
+    const scenarios = erred(
+      await mcp.call("sauce_simulate", {
+        source: 'function main() {\n  throw "not today";\n}\n',
+        chain: "ethereum",
+        owner: NOBODY,
+        scenarios: [{}, { expectRevert: "not today" }],
+      }),
+    ) as { ok: boolean; scenarios: Array<Record<string, unknown>> };
+    assert.equal(scenarios.ok, false);
+    assert.deepEqual(
+      scenarios.scenarios.map((each) => [each.ok, each.reverted, each.asExpected]),
+      [
+        [false, true, undefined],
+        [true, true, true],
+      ],
+    );
     const funded = ok(
       await mcp.call("sauce_simulate", { ...pay, owner: NOBODY, fund: ["USDC:1.5"] }),
     );
@@ -321,7 +360,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     assert.ok(full.assumed !== undefined && full.otherLogs !== undefined);
     assert.ok(JSON.stringify(summary).length < JSON.stringify(full).length);
     // A revert keeps its reason, and what main returned is kept decoded.
-    const reverts = ok(
+    const reverts = erred(
       await mcp.call("sauce_simulate", {
         source: 'function main() {\n  throw "not today";\n}\n',
         chain: "ethereum",
@@ -330,8 +369,8 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       }),
     );
     assert.deepEqual(
-      [reverts.ok, reverts.stage, reverts.reason],
-      [false, "cook", 'the program threw "not today"'],
+      [reverts.reverted, reverts.error, reverts.ok, reverts.stage, reverts.reason],
+      [true, 'the program threw "not today"', false, "cook", 'the program threw "not today"'],
     );
     const returns = ok(
       await mcp.call("sauce_simulate", {
@@ -346,7 +385,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
   });
 
   it("rehearses one program as several scenarios at one block, one result each", async () => {
-    const out = ok(
+    const out = erred(
       await mcp.call("sauce_simulate", {
         ...pay,
         owner: NOBODY,

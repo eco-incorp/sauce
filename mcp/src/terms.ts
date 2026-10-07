@@ -74,6 +74,7 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["max-price"], input: "maxPrice" },
   { flags: ["per-venue"], input: "perVenue" },
   { flags: ["slots"], input: "slots" },
+  { flags: ["expect-revert"], input: "expectRevert" },
 ];
 
 /** What the mapping does not show flag by flag: a command is its tool, and a file its text. */

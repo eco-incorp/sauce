@@ -1006,7 +1006,10 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(poor.code).toBe(1);
     expect(JSON.parse(poor.stdout)).toMatchObject({ ok: false, createPot: { owner: broke } });
     expect(poor.stderr).toMatch(
-      new RegExp(`^${broke} holds 0 lamports, and the cook takes \\d+: \\d+ in rent for the Pot`),
+      new RegExp(
+        `^${broke} holds 0 lamports, and the cook takes \\d+: \\d+ in rent for the Pot`,
+        "m",
+      ),
     );
     expect(poor.stderr).toContain("Solana's simulateTransaction takes no balance overrides");
   }, 60_000);
@@ -1040,7 +1043,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       owner.signer.address,
       `["${key}","${key}"]`,
     );
-    expect(other.stdout).toMatch(/^The cook fails: the program threw "not the key"/);
+    expect(other.stdout).toMatch(/^The cook reverts: the program threw "not the key"/);
     const evm = await sauce(
       ...base,
       ...flags,
@@ -1087,7 +1090,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(failed.code).toBe(1);
     // The token program's refusal in its own words, from the line it logged.
     expect(failed.stdout).toMatch(
-      /^The cook fails: SPL Token refused: insufficient funds \(custom program error 1\)/,
+      /^The cook reverts: SPL Token refused: insufficient funds \(custom program error 1\)/,
     );
     expect(failed.stdout).toMatch(/Program logs:\n {2}Program /);
     expect(failed.stdout).toMatch(/insufficient funds/i);

@@ -33,6 +33,7 @@ export {
 export {
   compileCommand,
   compileProgram,
+  expectingRevert,
   pastDeadline,
   potCommand,
   programChains,
@@ -132,3 +133,4 @@ export {
   requireChain,
   type CanonicalChain,
 } from "../../sdk/dist/chains/canonical.js";
+export { forkSnapshot, type ForkSnapshot } from "../../sdk/dist/cli/svm-fork.js";

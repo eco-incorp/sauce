@@ -348,6 +348,7 @@ server's instructions also list:
 | `--max-price`              | `maxPrice`             |
 | `--per-venue`              | `perVenue`             |
 | `--slots`                  | `slots`                |
+| `--expect-revert`          | `expectRevert`         |
 
 Over stdio, `sauce_compile`, `sauce_simulate` and `sauce_tx` take `path` instead of `source`: a
 program file on the same machine, relative to the directory the server runs in, read with its
