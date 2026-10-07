@@ -272,31 +272,33 @@ import, naming it: "`woofi` is not exported by module …" on Solana, "`trySwap`
 
 On Solana `@sauce/router` swaps at the venues whose swap takes a price limit that stops it and
 leaves the rest of the input, the venues of [the distributed swap on Solana](../guides/solana-distributed-swap.md),
-and at Manifest's book. Each venue's swap comes in three forms:
+and at Manifest's book. Each venue's swap comes in four forms:
 
 | Form                                         | Takes                                                   | Returns                      |
 | -------------------------------------------- | ------------------------------------------------------- | ---------------------------- |
 | at a price: `try<Venue>`                     | `(slot, trader, amountIn, maxPrice, minOut, recipient)` | what the recipient received  |
 | at the pool's own limit: `try<Venue>AtLimit` | `(slot, trader, amountIn, limit, minOut, recipient)`    | what the recipient received  |
 | the instruction alone: `<venue>Cpi`          | `(program, accounts, source, amountIn, limit, …)`       | what the paying account paid |
+| the instruction's data: `<venue>Data`        | `(amountIn, limit, …)`                                  | the data, to send yourself   |
 
 with a plain form of each `try` form (`raydiumClmm`, `raydiumClmmAtLimit`, …) that reverts where
-it returns `0`:
+it returns `0`. Every form sends the same instruction for the same amount, limit and floor: each
+builds it with the venue's `…Data`.
 
-| Venue            | Program                                        | At a price           | At its own limit            | Its instruction      |
-| ---------------- | ---------------------------------------------- | -------------------- | --------------------------- | -------------------- |
-| Raydium CLMM     | `CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK` | `tryRaydiumClmm`     | `tryRaydiumClmmAtLimit`     | `raydiumClmmCpi`     |
-| PancakeSwap CLMM | `HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq` | `tryPancakeswapClmm` | `tryPancakeswapClmmAtLimit` | `pancakeswapClmmCpi` |
-| Byreal           | `REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2`  | `tryByreal`          | `tryByrealAtLimit`          | `byrealCpi`          |
-| Stabble CLMM     | `6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6` | `tryStabbleClmm`     | `tryStabbleClmmAtLimit`     | `stabbleClmmCpi`     |
-| Orca Whirlpools  | `whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc`  | `tryOrcaWhirlpool`   | `tryOrcaWhirlpoolAtLimit`   | `orcaWhirlpoolCpi`   |
-| Cropper          | `H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt` | `tryCropper`         | `tryCropperAtLimit`         | `cropperCpi`         |
-| DefiTuna         | `fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9`  | `tryDefituna`        | `tryDefitunaAtLimit`        | `defitunaCpi`        |
-| Crema            | `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR` | `tryCrema`           | `tryCremaAtLimit`           | `cremaCpi`           |
-| Phoenix          | `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY`  | `tryPhoenix`         | `tryPhoenixAtLimit`         | `phoenixCpi`         |
-| Invariant        | `HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt` |                      | `tryInvariantAtLimit`       | `invariantCpi`       |
-| OpenBook v2      | `opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb`  |                      | `tryOpenbookV2AtLimit`      | `openbookV2Cpi`      |
-| Manifest         | `MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms`  |                      | `tryManifest` (no limit)    | `manifestCpi`        |
+| Venue            | Program                                        | At a price           | At its own limit            | Its instruction      | Its data                                   |
+| ---------------- | ---------------------------------------------- | -------------------- | --------------------------- | -------------------- | ------------------------------------------ |
+| Raydium CLMM     | `CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK` | `tryRaydiumClmm`     | `tryRaydiumClmmAtLimit`     | `raydiumClmmCpi`     | `raydiumClmmData`                          |
+| PancakeSwap CLMM | `HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq` | `tryPancakeswapClmm` | `tryPancakeswapClmmAtLimit` | `pancakeswapClmmCpi` | `pancakeswapClmmData`                      |
+| Byreal           | `REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2`  | `tryByreal`          | `tryByrealAtLimit`          | `byrealCpi`          | `byrealData`                               |
+| Stabble CLMM     | `6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6` | `tryStabbleClmm`     | `tryStabbleClmmAtLimit`     | `stabbleClmmCpi`     | `stabbleClmmData`                          |
+| Orca Whirlpools  | `whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc`  | `tryOrcaWhirlpool`   | `tryOrcaWhirlpoolAtLimit`   | `orcaWhirlpoolCpi`   | `orcaWhirlpoolData`, `orcaWhirlpoolV2Data` |
+| Cropper          | `H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt` | `tryCropper`         | `tryCropperAtLimit`         | `cropperCpi`         | `cropperData`                              |
+| DefiTuna         | `fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9`  | `tryDefituna`        | `tryDefitunaAtLimit`        | `defitunaCpi`        | `defitunaData`                             |
+| Crema            | `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR` | `tryCrema`           | `tryCremaAtLimit`           | `cremaCpi`           | `cremaData`                                |
+| Phoenix          | `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY`  | `tryPhoenix`         | `tryPhoenixAtLimit`         | `phoenixCpi`         | `phoenixData`                              |
+| Invariant        | `HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt` |                      | `tryInvariantAtLimit`       | `invariantCpi`       | `invariantData`                            |
+| OpenBook v2      | `opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb`  |                      | `tryOpenbookV2AtLimit`      | `openbookV2Cpi`      | `openbookV2Data`                           |
+| Manifest         | `MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms`  |                      | `tryManifest` (no limit)    | `manifestCpi`        | `manifestData`                             |
 
 and `trySwap`/`swap`, which take a pool at any of the nine venues priced the first way and read its
 venue from the program that owns it.
@@ -407,42 +409,52 @@ after, and returns what that account paid, reverting (`debit`) if the venue took
 `amountIn`. The instruction is the one a caller would build by hand, byte for byte; an amount of `0`
 is the venue's to refuse, so skip the call.
 
-| Function                                                              | After `program, accounts, source`       | `accounts`, in order                                                                                                                                                                                                                                                                              |
-| --------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `raydiumClmmCpi`, `pancakeswapClmmCpi`, `byrealCpi`, `stabbleClmmCpi` | `amountIn, limit, minOut`               | the authority, the `AmmConfig`, the pool, the paying and receiving token accounts, the input and output vault, the observation account, SPL Token, Token-2022, the memo program, the input and output mint, then the bitmap extension (if any) and the tick arrays                                |
-| `orcaWhirlpoolCpi`                                                    | `amountIn, limit, minOut, aToB`         | for `swap` (both mints SPL Token's): SPL Token, the authority, the pool, token A's account and vault, token B's, three tick arrays, the oracle; for `swap_v2`: token A's and B's token programs, the memo program, the authority, the pool, mint A, mint B, then as `swap` from token A's account |
-| `cropperCpi`                                                          | `amountIn, limit, minOut, aToB`         | as a whirlpool's `swap`                                                                                                                                                                                                                                                                           |
-| `defitunaCpi`                                                         | `amountIn, limit, minOut, aToB`         | token A's and B's token programs, the memo program, the authority, the pool, mint A, mint B, token A's and B's accounts, vault A, vault B, three tick arrays                                                                                                                                      |
-| `cremaCpi`                                                            | `amountIn, limit, minOut, aToB`         | the `clmm_config`, the pool, mint A, mint B, token A's and B's accounts, vault A, vault B, the tick-array map, the authority, SPL Token, the marked tick arrays                                                                                                                                   |
-| `phoenixCpi`                                                          | `amountIn, ticks, paysBase`             | the program, the log authority, the market, the authority, the base and quote token accounts, the base and quote vaults, SPL Token                                                                                                                                                                |
-| `invariantCpi`                                                        | `amountIn, limit, xToY`                 | the program's state, the pool, its tickmap, the X and Y token accounts, the X and Y reserves, the authority, the program's authority, SPL Token, the ticks it may cross                                                                                                                           |
-| `manifestCpi`                                                         | `amountIn, minOut, paysBase`            | the authority, the market, the System program, the base and quote token accounts, the base and quote vaults, the base token program, the base mint, the quote token program, the quote mint                                                                                                       |
-| `openbookV2Cpi`                                                       | `amountIn, priceLots, orders, paysBase` | the authority twice (signer and penalty payer), the market, its authority, bids, asks, the base and quote vaults, the event heap, the base and quote token accounts, the two oracles, SPL Token, the System program, the program                                                                  |
+`<venue>Data` is that instruction's data alone, for a program that sends it with `svm.call` itself:
+it takes what the instruction carries and its direction, checks only that each field can carry its
+value (a floor past 64 bits, Phoenix's limit past 64 bits, OpenBook's price past 63 or `orders` past
+255 revert), and returns the bytes. The program names the venue's program and reads whatever
+balances it wants. It is the cheapest form: an account list passed to a function, as `…Cpi` takes it,
+is built as an array first, and one written into `svm.call` is not.
+
+| Function                                                              | After `program, accounts, source`       | `…Data` takes                                               | `accounts`, in order                                                                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `raydiumClmmCpi`, `pancakeswapClmmCpi`, `byrealCpi`, `stabbleClmmCpi` | `amountIn, limit, minOut`               | `amountIn, limit, minOut`                                   | the authority, the `AmmConfig`, the pool, the paying and receiving token accounts, the input and output vault, the observation account, SPL Token, Token-2022, the memo program, the input and output mint, then the bitmap extension (if any) and the tick arrays                                |
+| `orcaWhirlpoolCpi`                                                    | `amountIn, limit, minOut, aToB`         | `amountIn, limit, minOut, aToB` (`swap`'s, and `swap_v2`'s) | for `swap` (both mints SPL Token's): SPL Token, the authority, the pool, token A's account and vault, token B's, three tick arrays, the oracle; for `swap_v2`: token A's and B's token programs, the memo program, the authority, the pool, mint A, mint B, then as `swap` from token A's account |
+| `cropperCpi`                                                          | `amountIn, limit, minOut, aToB`         | `amountIn, limit, minOut, aToB`                             | as a whirlpool's `swap`                                                                                                                                                                                                                                                                           |
+| `defitunaCpi`                                                         | `amountIn, limit, minOut, aToB`         | `amountIn, limit, minOut, aToB`                             | token A's and B's token programs, the memo program, the authority, the pool, mint A, mint B, token A's and B's accounts, vault A, vault B, three tick arrays                                                                                                                                      |
+| `cremaCpi`                                                            | `amountIn, limit, minOut, aToB`         | `amountIn, limit, minOut, aToB`                             | the `clmm_config`, the pool, mint A, mint B, token A's and B's accounts, vault A, vault B, the tick-array map, the authority, SPL Token, the marked tick arrays                                                                                                                                   |
+| `phoenixCpi`                                                          | `amountIn, ticks, paysBase`             | `amountIn, lot, ticks, paysBase`                            | the program, the log authority, the market, the authority, the base and quote token accounts, the base and quote vaults, SPL Token                                                                                                                                                                |
+| `invariantCpi`                                                        | `amountIn, limit, xToY`                 | `amountIn, limit, xToY`                                     | the program's state, the pool, its tickmap, the X and Y token accounts, the X and Y reserves, the authority, the program's authority, SPL Token, the ticks it may cross                                                                                                                           |
+| `manifestCpi`                                                         | `amountIn, minOut, paysBase`            | `amountIn, minOut, paysBase`                                | the authority, the market, the System program, the base and quote token accounts, the base and quote vaults, the base token program, the base mint, the quote token program, the quote mint                                                                                                       |
+| `openbookV2Cpi`                                                       | `amountIn, priceLots, orders, paysBase` | `amountIn, baseLot, quoteLot, priceLots, orders, paysBase`  | the authority twice (signer and penalty payer), the market, its authority, bids, asks, the base and quote vaults, the event heap, the base and quote token accounts, the two oracles, SPL Token, the System program, the program                                                                  |
 
 `minOut` rides in the venue's floor; Phoenix's, Invariant's and OpenBook's instructions carry none,
-and their `…Cpi` takes none. Phoenix and OpenBook size the order in their market's lots, read from
-the market, the instruction's third account.
+and their `…Cpi` and `…Data` take none. Phoenix and OpenBook size the order in their market's lots:
+`…Cpi` reads them from the market, the instruction's third account, and `…Data` takes them (`lot`,
+the paid token's lot size on Phoenix; `baseLot` and `quoteLot` on OpenBook). An input under one lot
+is no order: `phoenixCpi` returns `0` for it, and a caller of `phoenixData` skips it.
+
+The two `try` forms return what the recipient received, and `…Cpi` what the paying account paid,
+each one number. A program that wants both reads the other itself:
 
 ```js
-import { raydiumClmmCpi } from "@sauce/router";
+import { defitunaCpi } from "@sauce/router";
 
-// A Raydium CLMM swap at a sqrt price limit computed beforehand: the accounts as its instruction
-// takes them, and what the paying account paid.
+// A DefiTuna swap at a sqrt price limit computed beforehand, A to B: what source paid, through
+// defitunaCpi, and what output received, read around it. accounts is the instruction's own list.
 function main(
   program: Account,
+  tokenProgramA: Account,
+  tokenProgramB: Account,
+  memo: Account,
   authority: Account<Signer>,
-  ammConfig: Account,
   pool: Account<Writable>,
+  mintA: Account,
+  mintB: Account,
   source: Account<Writable>,
   output: Account<Writable>,
-  inputVault: Account<Writable>,
-  outputVault: Account<Writable>,
-  observation: Account<Writable>,
-  tokenProgram: Account,
-  token2022: Account,
-  memo: Account,
-  inputMint: Account,
-  outputMint: Account,
+  vaultA: Account<Writable>,
+  vaultB: Account<Writable>,
   ticks0: Account<Writable>,
   ticks1: Account<Writable>,
   ticks2: Account<Writable>,
@@ -451,46 +463,136 @@ function main(
   minOut: Uint256,
 ): Uint256 {
   const accounts = [
-    authority, ammConfig, pool, source, output, inputVault, outputVault, observation,
-    tokenProgram, token2022, memo, inputMint, outputMint, ticks0, ticks1, ticks2,
+    tokenProgramA, tokenProgramB, memo, authority, pool, mintA, mintB, source, output, vaultA,
+    vaultB, ticks0, ticks1, ticks2,
   ];
-  return raydiumClmmCpi(program, accounts, source, amountIn, sqrtLimitX64, minOut);
+  const before = svm.sload(output, 64, 8).toLe();
+  const spent = defitunaCpi(program, accounts, source, amountIn, sqrtLimitX64, minOut, true);
+  const received = svm.sload(output, 64, 8).toLe() - before;
+  return (spent << 128) | received;
 }
+```
+
+With `…Data`, the same swap reads both itself, and costs a few thousand compute units less:
+
+```js
+import { defitunaData } from "@sauce/router";
+
+function main(
+  program: Account,
+  tokenProgramA: Account,
+  tokenProgramB: Account,
+  memo: Account,
+  authority: Account<Signer>,
+  pool: Account<Writable>,
+  mintA: Account,
+  mintB: Account,
+  source: Account<Writable>,
+  output: Account<Writable>,
+  vaultA: Account<Writable>,
+  vaultB: Account<Writable>,
+  ticks0: Account<Writable>,
+  ticks1: Account<Writable>,
+  ticks2: Account<Writable>,
+  amountIn: Uint256,
+  sqrtLimitX64: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  const data = defitunaData(amountIn, sqrtLimitX64, minOut, true);
+  const held = svm.sload(source, 64, 8).toLe();
+  const before = svm.sload(output, 64, 8).toLe();
+  svm.call(
+    program,
+    [tokenProgramA, tokenProgramB, memo, authority, pool, mintA, mintB, source, output, vaultA,
+     vaultB, ticks0, ticks1, ticks2],
+    data,
+  );
+  const spent = held - svm.sload(source, 64, 8).toLe();
+  require(spent <= amountIn, "debit");
+  return (spent << 128) | (svm.sload(output, 64, 8).toLe() - before);
+}
+```
+
+A program compiled for one trade knows the venue's accounts before it runs. The SDK names them in
+the order each instruction takes them, so a code generator need not keep its own copy of that order:
+`routerSvmAccountOrder(venue, options)` from `@eco-incorp/sauce/svm` lists each account's name and
+whether the instruction writes it and it signs, and `routerSvmAccounts(venue, options, refs)` builds
+the list from a value for each name (an address, or whatever reference the generator resolves
+later). `options` is the direction (`aToB`: the pool's first token is paid — token 0 or A,
+Invariant's X, a market's base) and, where the venue takes them, Orca's `swap_v2` (`v2`), an
+adaptive-fee whirlpool, whose swap writes its oracle (`adaptive`), a Raydium-layout pool's bitmap
+extension (`bitmapExtension`), and how many tick arrays Crema, or ticks Invariant, takes
+(`tickArrays`). `ROUTER_SVM_VENUES` gives each venue's program and its `…Data` and `…Cpi` functions.
+
+```ts
+import { routerSvmAccounts, ROUTER_SVM_VENUES } from "@eco-incorp/sauce/svm";
+
+const accounts = routerSvmAccounts(
+  "defituna",
+  { aToB: true },
+  {
+    tokenProgramA: TOKEN_PROGRAM,
+    tokenProgramB: TOKEN_PROGRAM,
+    memo: MEMO_PROGRAM,
+    authority: pot,
+    pool,
+    mintA: SOL,
+    mintB: USDC,
+    source,
+    recipient,
+    vaultA,
+    vaultB,
+    tickArray0,
+    tickArray1,
+    tickArray2,
+  },
+);
+// [{ name: "tokenProgramA", ref: …, writable: false, signer: false }, …], in the instruction's order
+const program = ROUTER_SVM_VENUES.defituna.program;
 ```
 
 ### Size and compute
 
 A program carries the venues it calls and no other: one venue's function at a price or at a limit
-is about 1.1 to 1.9 KB of program, its instruction alone about 0.3 to 0.5 KB, `trySwap` all nine
-about 5.5 KB. A program that knows its venue calls that venue's function, and keeps `trySwap` for
-slots whose venue it learns as it runs. Past one transaction a program is staged in a code buffer,
-as `sauce run` does. [The distributed swap on Solana](../guides/solana-distributed-swap.md) is one
-`trySwap` call per pool.
+is about 0.9 to 2.0 KB of program, its instruction alone about 0.3 to 0.6 KB, its data alone about
+0.2 to 0.4 KB, `trySwap` all nine about 5.8 KB. A program that knows its venue calls that venue's
+function, and keeps `trySwap` for slots whose venue it learns as it runs. Past one transaction a
+program is staged in a code buffer, as `sauce run` does. [The distributed swap on Solana](../guides/solana-distributed-swap.md)
+is one `trySwap` call per pool.
 
 Reading an account out of an array is among the dearest steps in a program, so a form that takes a
-slot pays for every account it lays out; `…Cpi` reads none. Measured on each fixture pool with the
-released engine (v12-svm 1.3.0, devnet build, in LiteSVM), a swap of ten tokens: the venue's own
-compute, the whole cook of a hand-built CPI of the same instruction, and what each form adds to that
-cook. A whole cook moves by a few thousand units with its accounts' addresses; what a form adds,
+slot pays for every account it lays out; `…Cpi` and `…Data` read none, and `…Data` does not even
+build its accounts into an array. Measured on each fixture pool with the released engine (v12-svm
+1.3.0, devnet build, in LiteSVM), a swap of ten tokens: the venue's own compute, the whole cook of
+the instruction eco-incorp/sauce-recipes builds for it, sent by hand (its bytes, the amount patched
+in, and the paying account read around it), and what each form adds to that cook. `…Data` and
+`…Cpi` are compiled for the one trade, as the hand-built CPI is: every argument but the amount a
+literal. A whole cook moves by a few thousand units with its accounts' addresses; what a form adds,
 measured on the same accounts, does not.
 
-| Venue (pool, way)                     | Venue CU | Hand-built CPI |  `…Cpi` | `try…AtLimit` | `try…` at a price |
-| ------------------------------------- | -------: | -------------: | ------: | ------------: | ----------------: |
-| Raydium CLMM (SOL/USDC, 0→1)          |   48,291 |        111,679 |  +9,436 |       +97,410 |          +111,772 |
-| PancakeSwap CLMM (SOL/USDC, 0→1)      |   70,098 |        133,486 |  +9,436 |       +97,410 |          +112,934 |
-| Byreal (USDC pool, 0→1)               |   72,927 |        136,281 |  +9,436 |       +96,449 |          +113,426 |
-| Orca Whirlpools (SOL/USDC, A→B)       |   30,166 |         84,749 | +14,632 |       +84,909 |          +111,055 |
-| Orca Whirlpools, adaptive fee (B→A)   |   42,792 |         97,130 | +14,981 |       +86,607 |           skipped |
-| Cropper (SOL/USDC, B→A)               |   51,207 |        105,790 | +12,482 |       +82,470 |           +94,966 |
-| DefiTuna (SOL/USDC, A→B)              |   50,589 |        109,128 | +12,308 |       +81,030 |           +92,721 |
-| Crema (SOL/USDC, B→A)                 |   75,506 |        134,178 | +12,104 |       +83,721 |          +110,153 |
-| Phoenix (SOL/USDC, selling base)      |   22,645 |         88,213 | +19,568 |       +57,589 |                   |
-| Invariant (USDC/USDT, X→Y)            |   62,133 |        119,300 | +10,011 |       +75,021 |                   |
-| Manifest (SOL/USDC, selling base)     |   13,229 |         68,801 | +11,759 |       +57,219 |                   |
-| OpenBook v2 (BONK/USDC, selling base) |   31,112 |         92,145 | +26,870 |       +85,829 |                   |
+| Venue (pool, way)                     | Venue CU | Hand-built CPI | `…Data` |  `…Cpi` | `try…AtLimit` | `try…` at a price |
+| ------------------------------------- | -------: | -------------: | ------: | ------: | ------------: | ----------------: |
+| Raydium CLMM (SOL/USDC, 0→1)          |   48,274 |        120,662 |  +2,585 |  +7,508 |       +96,071 |          +110,433 |
+| PancakeSwap CLMM (SOL/USDC, 0→1)      |   70,098 |        142,486 |  +2,585 |  +7,508 |       +96,071 |          +111,595 |
+| Byreal (USDC pool, 0→1)               |   72,927 |        145,281 |  +2,585 |  +7,508 |       +95,110 |          +112,088 |
+| Orca Whirlpools (SOL/USDC, A→B)       |   30,166 |         93,749 |  +3,193 | +10,339 |       +82,752 |          +108,898 |
+| Orca Whirlpools, adaptive fee (B→A)   |   42,792 |        106,130 |  +3,353 | +10,499 |       +84,450 |           skipped |
+| Cropper (SOL/USDC, B→A)               |   51,207 |        114,790 |  +3,353 |  +8,884 |       +80,955 |           +93,451 |
+| DefiTuna (SOL/USDC, A→B)              |   50,589 |        118,128 |  +3,176 |  +8,707 |       +79,515 |           +91,206 |
+| Crema (SOL/USDC, B→A)                 |   75,506 |        143,178 |  +2,975 |  +8,506 |       +82,758 |          +109,190 |
+| Phoenix (SOL/USDC, selling base)      |   22,478 |         97,046 |  +6,437 | +14,318 |       +61,360 |                   |
+| Invariant (USDC/USDT, X→Y)            |   62,133 |        128,300 |  +2,898 |  +7,821 |       +75,021 |                   |
+| Manifest (SOL/USDC, selling base)     |   13,268 |         77,840 |  +4,762 |  +9,685 |       +57,206 |                   |
+| OpenBook v2 (BONK/USDC, selling base) |   31,112 |        101,145 | +13,263 | +22,642 |       +83,403 |                   |
+
+`…Data`'s few thousand units are its fields' packing and checks: the floor's 64-bit check, the
+direction, one `toBytesLe`. `…Cpi` adds the program's check, building its account list into an
+array, and the call. A book's data divides the input by its market's lot sizes, which is the rest
+of Phoenix's and OpenBook's. The `try` forms pay for reading the slot: the pool's owner, its state
+for the skips, and every account they lay out.
 
 Stabble CLMM runs Raydium's code and its forms cost what Raydium's do. The forms' cost does not grow
 with the ticks a swap crosses; the venue's does. To the window's edge, with more input than the
 window holds, Raydium CLMM's SOL/USDC swap crosses 6 ticks for 64,198 units of its own, PancakeSwap's
-57 for 105,004, Crema's 1,423 for 121,001, and each form costs what it cost for ten tokens past
+57 for 105,004, Crema's 1,423 for 122,377, and each form costs what it cost for ten tokens past
 that.

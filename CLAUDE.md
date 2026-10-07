@@ -589,7 +589,7 @@ a program-wide define would replace it. Keep its functions FLAT: an internal hel
 frame (measured ~1–4k gas each on the engine), so each exported function is self-contained.
 
 The SVM arm (`router.svm.js`) is the Solana distributed swap's per-pool code, extracted, and a
-limit-order swap at each Solana venue whose swap stops at a price limit, in three forms. AT A PRICE: a
+limit-order swap at each Solana venue whose swap stops at a price limit, in four forms. AT A PRICE: a
 `try` and a plain function per venue of the distributed swap (`tryRaydiumClmm`,
 `tryPancakeswapClmm`, `tryByreal`, `tryStabbleClmm`, `tryOrcaWhirlpool`, `tryCropper`,
 `tryDefituna`, `tryCrema`, `tryPhoenix`, and `raydiumClmm` … `phoenix`), plus `trySwap`/`swap`,
@@ -604,11 +604,25 @@ takes it): no fee read and no root, so adaptive-fee Orca and Byreal's own-fee po
 `minOut` rides in the venue's own floor field where its instruction has one (the others' recipient is
 measured). THE INSTRUCTION ALONE: `<venue>Cpi(program, accounts, source, amountIn, …[, aToB | xToY |
 paysBase])` takes the CPI's accounts in the venue's own order, checks the program only, reads only
-`source` before and after, and returns what it paid (`debit` if more than `amountIn`); it is the
-CU-minimal form (eco-incorp/sauce-recipes' served swaps), because reading an account out of an array
-costs ~2k CU on the engine, `toBytesLe` ~3–5k, a hex literal ~1.6k — so each venue's data is ONE
-packed word written with one `toBytesLe`, each field its low bytes, and `…Cpi`'s data is inlined
-rather than called. A slot's accounts past its nine (`more`): Raydium-layout pools' tick-array bitmap
+`source` before and after, and returns what it paid (`debit` if more than `amountIn`). ITS DATA:
+`<venue>Data(amountIn, …)` (Orca: `orcaWhirlpoolData` for the classic `swap`, `orcaWhirlpoolV2Data`;
+Phoenix/OpenBook take the market's lot sizes) returns the instruction's bytes, checking only that a
+field can carry its value (`minOut past 64 bits`, Phoenix's `limit past 64 bits`, OpenBook's `limit
+past its field`); EVERY form builds its data with it, so the four send one encoding. `…Data` is the
+CU-minimal form (eco-incorp/sauce-recipes' served swaps: `svm.call(program, [accounts…],
+<venue>Data(…))`): +2.6–3.4k CU over the recipes' hand-built CPI on the CLMMs, `…Cpi` +7.5–10.5k,
+`try…AtLimit` ~+80–96k (measured in `svm-at-limit.e2e.test.ts`). The gap between `…Data` and `…Cpi`
+is MOSTLY THE ACCOUNT ARRAY (measured, DefiTuna's 14 accounts): a literal list written into
+`svm.call` costs ~100 CU, the same list passed to a function ~4.4k (~300 an account, built as an
+array first), which an `Account[]` parameter always forces — and `main` cannot take an `Account[]`.
+A 3-argument data function costs ~1.1k over the same code inline, a `bool` direction ~700 more.
+Reading an account out of an array costs ~2k CU, a hex literal ~1.6k, `toBytesLe` ~3–5k — so each
+venue's data is ONE packed word written with one `toBytesLe`, each field its low bytes. `@eco-incorp/sauce/svm`'s
+`routerSvmAccountOrder(venue, { aToB, v2?, adaptive?, bitmapExtension?, tickArrays? })` names each
+instruction account in order with its writable/signer flags, `routerSvmAccounts(…, refs)` builds the
+list from a value per name, and `ROUTER_SVM_VENUES` gives each venue's program and `…Data`/`…Cpi`
+names (`sdk/src/svm/router-accounts.ts`; `test/svm/router-accounts.test.ts` holds it account for
+account and flag for flag to the recipes' templates). A slot's accounts past its nine (`more`): Raydium-layout pools' tick-array bitmap
 extension (17 accounts, more values than a function holds, so that list is FILLED IN PLACE from a
 literal of one repeated value — a literal of 17 distinct values does not compile in a non-`main`
 function), Invariant's program authority, OpenBook's oracles; Crema and Invariant pass their slot's
@@ -626,13 +640,13 @@ is a missing slot. Each EXPORTED venue function checks its own program id, so a 
 signs a CPI into a program the caller names; only `trySwap`'s internal path relies on its one owner
 read. Unlike the EVM arm, Solana is SIZE-bound, so its code is shared through internal functions
 (each venue's `…Data`, `cpi<Venue>` laying out a slot, `swap<Venue>`, `clmmLimit`/`clmmCan`,
-`settled`): a program carries only the venues it calls (`trySwap` ~5.5 KB, one venue's function
-~1.1–1.9 KB, its `…Cpi` ~0.3–0.5 KB; the distributed swap is 7.4 KB, and 1.7% cheaper than before
-these were shared). `compile.test.ts` pins its exports, each family's argument order, each venue's
+`settled`): a program carries only the venues it calls (`trySwap` ~5.8 KB, one venue's function
+~0.9–2.0 KB, its `…Cpi` ~0.3–0.6 KB, its `…Data` ~0.2–0.4 KB; the distributed swap, 7.7 KB, cooks in 920,363
+CU, 2.8% under its unshared 946,905). `compile.test.ts` pins its exports, each family's argument order, each venue's
 program id (from the SDK's base58 ids) and instruction discriminators counted per function, and its
 revert reasons; `svm.e2e.test.ts` executes every price-limited function on the venues' own programs
 in LiteSVM against `fixtures/inline-trade.svm.sauce.ts`, the helper as the skill carried it, from
-the same state; `svm-at-limit.e2e.test.ts` executes the other two forms, holding each venue's CPI —
+the same state; `svm-at-limit.e2e.test.ts` executes the other three forms, holding each venue's CPI —
 read back from the transaction's inner instructions — byte for byte to
 `fixtures/recipes-swap-templates.json`, the swaps eco-incorp/sauce-recipes builds for the fixture's
 pools (`scripts/recipes-swap-templates.mjs --recipes <checkout>` regenerates it, run with that

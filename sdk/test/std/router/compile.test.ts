@@ -56,6 +56,8 @@ import {
   SVM_TRADER,
   svmArguments,
   svmCpiArguments,
+  svmDataArguments,
+  svmInstructionForm,
   svmProgramCalling,
 } from "./harness.js";
 
@@ -249,8 +251,9 @@ describe("@sauce/router: every fragment it calls is pinned", () => {
   });
 });
 
-/** The accounts a Solana function's test program attaches: an instruction-only `…Cpi`'s list. */
-const cpiAccounts = (name: string): number => (name.endsWith("Cpi") ? 16 : 0);
+/** The accounts a Solana function's test program attaches: an instruction-only `…Cpi`'s or
+ *  `…Data`'s list. */
+const cpiAccounts = (name: string): number => (svmInstructionForm(name) ? 16 : 0);
 
 describe("@sauce/router (SVM): every function compiles from run-time arguments", () => {
   it.each(SVM_FUNCTIONS)("%s, off disk and embedded, to the same bytes", (name) => {
@@ -263,11 +266,12 @@ describe("@sauce/router (SVM): every function compiles from run-time arguments",
 
   // The manifest is `main`'s own `Account` params, so what this pins is the attach order the
   // execution suites resolve by name: a slot function's nine, the trader's seven, then the
-  // recipient; an instruction-only `…Cpi`'s program, paying account and instruction accounts.
+  // recipient; an instruction-only `…Cpi`'s or `…Data`'s program, paying account and instruction
+  // accounts.
   it.each(SVM_FUNCTIONS)("%s takes its accounts in their documented order", (name) => {
     const { manifest } = compileStdRouter(svmProgramCalling(name, cpiAccounts(name)), "svm");
     expect(manifest?.accounts.map((entry) => (entry.kind === "slot" ? entry.name : "…"))).toEqual(
-      name.endsWith("Cpi")
+      svmInstructionForm(name)
         ? ["program", "source", ...Array.from({ length: 16 }, (_, i) => `a${i}`)]
         : [...SVM_SLOT, ...SVM_TRADER, "recipient"],
     );
@@ -275,7 +279,7 @@ describe("@sauce/router (SVM): every function compiles from run-time arguments",
 });
 
 describe("@sauce/router (SVM): the exports are the documented API", () => {
-  it("exports trySwap/swap, the nine venues at a price, the eleven at their own limit and Manifest's", () => {
+  it("exports trySwap/swap, the nine venues at a price, the eleven at their own limit, each instruction's data and Manifest's", () => {
     const exported = [...routerSource("svm").matchAll(/^export function (\w+)\(/gm)].map(
       (m) => m[1],
     );
@@ -283,7 +287,13 @@ describe("@sauce/router (SVM): the exports are the documented API", () => {
   });
 
   it("takes each family's arguments in one order", () => {
+    const BOOLS = ["aToB", "xToY", "paysBase"];
     const signature = (name: string): string[] => {
+      if (name.endsWith("Data")) {
+        return svmDataArguments(name).map(
+          (arg) => `${arg}: ${BOOLS.includes(arg) ? "bool" : "Uint256"}`,
+        );
+      }
       if (name.endsWith("Cpi")) {
         const direction = /^(raydiumClmm|pancakeswapClmm|byreal|stabbleClmm)Cpi$/.test(name)
           ? []
@@ -375,6 +385,35 @@ describe("@sauce/router (SVM): the venues' program ids and instructions", () => 
     for (const name of INSTRUCTIONS) expect(count(code, discriminator(name))).toBe(ix[name] ?? 0);
   });
 
+  // `…Data` is the instruction's data alone: its instructions, and no program id at all.
+  const DATA: [string, Partial<Record<(typeof INSTRUCTIONS)[number], number>>][] = [
+    ["raydiumClmmData", { swap_v2: 1 }],
+    ["pancakeswapClmmData", { swap_v2: 1 }],
+    ["byrealData", { swap_v2: 1 }],
+    ["stabbleClmmData", { swap_v2: 1 }],
+    ["orcaWhirlpoolData", { swap: 1 }],
+    ["orcaWhirlpoolV2Data", { swap_v2: 1 }],
+    ["cropperData", { swap: 1 }],
+    ["defitunaData", { swap: 1 }],
+    ["cremaData", { swap: 2 }],
+    ["phoenixData", {}],
+    ["invariantData", { swap: 2 }],
+    ["manifestData", {}],
+    ["openbookV2Data", { place_take_order: 1 }],
+  ];
+
+  it("lists every …Data function", () => {
+    expect(DATA.map(([fn]) => fn).sort()).toEqual(
+      SVM_FUNCTIONS.filter((fn) => fn.endsWith("Data")).sort(),
+    );
+  });
+
+  it.each(DATA)("%s carries its instructions and no program id", (fn, ix) => {
+    const code = bytecode(fn);
+    for (const [, id] of VENUES) expect(count(code, key(id))).toBe(0);
+    for (const name of INSTRUCTIONS) expect(count(code, discriminator(name))).toBe(ix[name] ?? 0);
+  });
+
   it("trySwap carries the nine venues' program ids once, and each instruction once per venue code", () => {
     const code = bytecode("trySwap");
     for (const [venue, id] of VENUES)
@@ -410,6 +449,8 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
   const none = Object.fromEntries(REASONS.map((reason) => [reason, 0]));
 
   it("trySwap refuses a slot whose program is not its pool's owner, a pool of no venue here, a pool or market not the pair, and a swap below its floor", () => {
+    // And each venue's data's: a floor its field cannot carry (Raydium's code, Orca's two swaps,
+    // Cropper, DefiTuna, Crema), and Phoenix's limit.
     expect(reasons("trySwap")).toEqual({
       ...none,
       "a pool's program is not its owner": 1,
@@ -417,6 +458,8 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
       "pool is not the pair": 1,
       "market is not the pair": 1,
       "below minOut": 1,
+      "minOut past 64 bits": 6,
+      "limit past 64 bits": 1,
     });
     expect(reasons("swap")["nothing swapped"]).toBe(1);
   });
@@ -446,30 +489,41 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
     expect(code.split(Buffer.from(pair).toString("hex")).length - 1).toBe(1);
   });
 
-  // At a limit: the venue's own pool and pair, as above; a limit or floor its instruction cannot
-  // carry; and, its instruction alone, only the program, the floor, the limit and the debit.
+  // At a limit: its data refuses a floor or a limit its instruction cannot carry (Orca's data is two
+  // swaps', each with its floor); `…Cpi` adds only the program and the debit; `try…AtLimit` the
+  // venue's own pool and pair, as above, the floor afterwards, and, first, a limit its order cannot
+  // carry, whatever the market's state.
   it.each(VENUE_REASONS)("%s at a limit refuses another venue's pool as %j", (venue, reason) => {
     const tryForm = venue === "Manifest" ? "tryManifest" : `try${venue}AtLimit`;
-    const floor = !["Phoenix", "Invariant", "OpenbookV2"].includes(venue);
+    const floors = ["Phoenix", "Invariant", "OpenbookV2"].includes(venue)
+      ? 0
+      : venue === "OrcaWhirlpool"
+        ? 2
+        : 1;
     const limit =
       venue === "Phoenix"
         ? "limit past 64 bits"
         : venue === "OpenbookV2"
           ? "limit past its field"
           : undefined;
+    const data = {
+      ...(floors > 0 ? { "minOut past 64 bits": floors } : {}),
+      ...(limit === undefined ? {} : { [limit]: 1 }),
+    };
+    const lower = `${venue.charAt(0).toLowerCase()}${venue.slice(1)}`;
+    if (venue === "OrcaWhirlpool")
+      for (const name of ["orcaWhirlpoolData", "orcaWhirlpoolV2Data"])
+        expect(reasons(name)).toEqual({ ...none, "minOut past 64 bits": 1 });
+    else expect(reasons(`${lower}Data`)).toEqual({ ...none, ...data });
     expect(reasons(tryForm)).toEqual({
       ...none,
+      ...data,
       [book(venue) ? "market is not the pair" : "pool is not the pair"]: 1,
       "below minOut": 1,
-      ...(limit === undefined ? {} : { [limit]: 1 }),
+      ...(limit === undefined ? {} : { [limit]: 2 }),
     });
-    const cpi = `${venue.charAt(0).toLowerCase()}${venue.slice(1)}Cpi`;
-    expect(reasons(cpi)).toEqual({
-      ...none,
-      debit: 1,
-      ...(floor ? { "minOut past 64 bits": 1 } : {}),
-      ...(limit === undefined ? {} : { [limit]: 1 }),
-    });
+    const cpi = `${lower}Cpi`;
+    expect(reasons(cpi)).toEqual({ ...none, ...data, debit: 1 });
     for (const name of [tryForm, cpi]) {
       const code = hex(
         compileStdRouter(svmProgramCalling(name, cpiAccounts(name)), "svm").bytecode,

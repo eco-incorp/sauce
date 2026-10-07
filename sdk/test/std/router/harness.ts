@@ -156,7 +156,8 @@ export const SVM_LIMIT_VENUES = ["Invariant", "OpenbookV2"] as const;
 const lower = (name: string): string => name.charAt(0).toLowerCase() + name.slice(1);
 
 /** Every function of the SVM arm: `trySwap`/`swap`; each of the nine venues at a price, `try` and
- *  plain; each venue at its own limit, `try`, plain and its instruction alone; and Manifest's. */
+ *  plain; each venue at its own limit, `try`, plain, its instruction alone and its instruction's data
+ *  (Orca's two: `swap`'s and `swap_v2`'s); and Manifest's. */
 export const SVM_FUNCTIONS = [
   "trySwap",
   "swap",
@@ -165,11 +166,17 @@ export const SVM_FUNCTIONS = [
     `try${venue}AtLimit`,
     `${lower(venue)}AtLimit`,
     `${lower(venue)}Cpi`,
+    `${lower(venue)}Data`,
   ]),
+  "orcaWhirlpoolV2Data",
   "tryManifest",
   "manifest",
   "manifestCpi",
+  "manifestData",
 ] as const;
+
+/** An instruction's own: `…Cpi`, which sends it, or `…Data`, which builds its data. */
+export const svmInstructionForm = (name: string): boolean => /(Cpi|Data)$/.test(name);
 
 /** A function's arguments after `slot` and `trader` and before `recipient`, by its family. */
 export const svmArguments = (name: string): string[] =>
@@ -195,6 +202,15 @@ export const svmCpiArguments = (name: string): string[] =>
           : name === "manifestCpi"
             ? ["amountIn", "minOut", "paysBase"]
             : ["amountIn", "priceLots", "orders", "paysBase"];
+/** A `…Data` function's arguments, by venue: what its instruction carries, and its direction. */
+export const svmDataArguments = (name: string): string[] =>
+  name === "phoenixData"
+    ? ["amountIn", "lot", "ticks", "paysBase"]
+    : name === "openbookV2Data"
+      ? ["amountIn", "baseLot", "quoteLot", "priceLots", "orders", "paysBase"]
+      : name === "orcaWhirlpoolV2Data"
+        ? ["amountIn", "limit", "minOut", "aToB"]
+        : svmCpiArguments(name.replace(/Data$/, "Cpi"));
 /** The direction arguments, a `bool` each, which `main` takes as a number. */
 const DIRECTIONS = new Set(["aToB", "xToY", "paysBase"]);
 
@@ -211,24 +227,40 @@ const svmRole = (name: string): string =>
 /**
  * A Solana program that calls `name` once and returns what it returned. A slot function takes the
  * slot's accounts (its nine, then `more` past them), the trader's seven and the recipient as `main`'s
- * accounts, then its arguments as `main`'s; an instruction-only `…Cpi` takes the venue's program, the
- * paying account and `more` accounts in the instruction's order, then its arguments.
+ * accounts, then its arguments as `main`'s; an instruction-only `…Cpi` or `…Data` takes the venue's
+ * program, the paying account and `more` accounts in the instruction's order, then its arguments, and
+ * a `…Data` program builds the data, sends the instruction itself and returns what the paying account
+ * paid. `baked` writes an instruction-only function's arguments it names as those literals, as a
+ * program compiled for one trade does, in place of `main`'s; a direction, a `bool`, is otherwise
+ * `main`'s number.
  */
-export const svmProgramCalling = (name: string, more = 0): string => {
-  if (name.endsWith("Cpi")) {
+export const svmProgramCalling = (
+  name: string,
+  more = 0,
+  baked: Readonly<Record<string, string>> = {},
+): string => {
+  if (svmInstructionForm(name)) {
     const accounts = Array.from({ length: more }, (_, i) => `a${i}`);
-    const args = svmCpiArguments(name);
+    const all = name.endsWith("Data") ? svmDataArguments(name) : svmCpiArguments(name);
+    const args = all.filter((arg) => !Object.hasOwn(baked, arg));
+    const call = all
+      .map((arg) => baked[arg] ?? (DIRECTIONS.has(arg) ? `${arg} != 0` : arg))
+      .join(", ");
     const params = [
       "  program: Account,",
       "  source: Account<Writable>,",
       ...accounts.map((account) => `  ${account}: Account<Writable>,`),
       ...args.map((arg) => `  ${arg}: Uint256,`),
     ].join("\n");
-    const call = args.map((arg) => (DIRECTIONS.has(arg) ? `${arg} != 0` : arg)).join(", ");
+    const head = `import { ${name} } from "@sauce/router";\nfunction main(\n${params}\n): Uint256 {\n`;
+    if (name.endsWith("Cpi"))
+      return `${head}  return ${name}(program, [${accounts.join(", ")}], source, ${call});\n}\n`;
     return (
-      `import { ${name} } from "@sauce/router";\n` +
-      `function main(\n${params}\n): Uint256 {\n` +
-      `  return ${name}(program, [${accounts.join(", ")}], source, ${call});\n}\n`
+      head +
+      `  const data = ${name}(${call});\n` +
+      `  const held = svm.sload(source, 64, 8).toLe();\n` +
+      `  svm.call(program, [${accounts.join(", ")}], data);\n` +
+      `  return held - svm.sload(source, 64, 8).toLe();\n}\n`
     );
   }
   const slot = [...SVM_SLOT, ...SVM_MORE.slice(0, more)];

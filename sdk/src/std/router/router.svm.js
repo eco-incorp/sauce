@@ -5,20 +5,23 @@
 // paid and lets the pool trade until its price reaches the limit; the pool takes only what it
 // swapped before that and leaves the rest in the paying account, so nothing is stranded. Every swap
 // is EXACT INPUT up to the limit: nothing here can express an exact-output swap. Every function
-// takes RUN-TIME arguments. There are three forms of each venue's swap:
+// takes RUN-TIME arguments. There are four forms of each venue's swap:
 //
 //   try<Venue>(slot, trader, amountIn, maxPrice, minOut, recipient)          at a price
 //   try<Venue>AtLimit(slot, trader, amountIn, limit, minOut, recipient)      at the pool's own limit
 //   <venue>Cpi(program, accounts, source, amountIn, limit, …)                its instruction alone
+//   <venue>Data(amountIn, limit, …)                                          its instruction's data
 //
 // with a plain form of each `try` form (`raydiumClmm`, `raydiumClmmAtLimit`, …) that reverts where
 // it returns 0, and `trySwap`/`swap`, which take a pool at any of the nine venues of the first form
 // and read its venue from `pool.owner`. The first form is the nine venues' (Raydium CLMM,
 // PancakeSwap CLMM, Byreal, Stabble CLMM, Orca Whirlpools, Cropper, DefiTuna, Crema, Phoenix); the
-// other two are theirs and Invariant's and OpenBook v2's, which take `priceLots` and `orders` in
+// other three are theirs and Invariant's and OpenBook v2's, which take `priceLots` and `orders` in
 // place of `limit`; Manifest's swap takes no limit, so its functions (`tryManifest`, `manifest`,
-// `manifestCpi`) take none. The `try` forms return what the recipient received; `…Cpi` what the
-// paying account paid.
+// `manifestCpi`, `manifestData`) take none. Orca has two data functions, its classic `swap`'s
+// (`orcaWhirlpoolData`) and `swap_v2`'s (`orcaWhirlpoolV2Data`). The `try` forms return what the
+// recipient received; `…Cpi` what the paying account paid; `…Data` the bytes. Every form sends the
+// same instruction for the same amount, limit and floor: they all build it with `…Data`.
 //
 // `slot` is the pool's accounts, in this order (an account a venue does not take is the System
 // program, `11111111111111111111111111111111`):
@@ -74,14 +77,19 @@
 // one a caller would build by hand for the same amount, limit and floor, byte for byte.
 //
 // ITS INSTRUCTION ALONE. `…Cpi` takes the accounts in the venue's own order (each function lists
-// them), the paying account beside them, what the instruction carries and its direction where the
-// accounts do not say it (`aToB`, `xToY`, `paysBase`). It checks the program and nothing else, reads
-// the paying account before and after and nothing else, and returns what it paid, reverting
-// ("debit") if a venue took more than `amountIn`. `minOut` rides in the venue's floor; a venue whose
-// instruction carries none takes no `minOut` here. An amount of 0 is the venue's to refuse: skip the
-// call. It is the form for a caller that keeps the venue's account list itself, as a router compiling
-// one program per trade does: reading an account out of an array is among the dearest steps here, and
-// it reads none.
+// them; `@eco-incorp/sauce/svm`'s `routerSvmAccountOrder` names them, and `routerSvmAccounts`
+// builds the list), the paying account beside them, what the instruction carries and its direction
+// where the accounts do not say it (`aToB`, `xToY`, `paysBase`). It checks the program and nothing
+// else, reads the paying account before and after and nothing else, and returns what it paid,
+// reverting ("debit") if a venue took more than `amountIn`. `minOut` rides in the venue's floor; a
+// venue whose instruction carries none takes no `minOut` here. An amount of 0 is the venue's to
+// refuse: skip the call. `…Data` is that instruction's data alone, for a caller that sends it with
+// `svm.call` itself: it checks nothing but the fields (a floor or a limit its field cannot carry
+// reverts), and the caller names the program and reads the balances it wants. They are the forms for
+// a caller that keeps the venue's account list itself, as a router compiling one program per trade
+// does: reading an account out of an array is among the dearest steps here, and they read none. Of
+// the two, `…Data` is the cheaper by a few thousand compute units: an account list passed to a
+// function is built as an array first, where one written into `svm.call` is not.
 //
 // WHICH VENUE. A pool is an account of its venue's program, so `pool.owner` says how to read and swap
 // it. The per-venue functions take one venue's pools and refuse any other. Each requires the slot's
@@ -107,22 +115,22 @@
 // foresee still aborts the transaction: a tick array missing from the slot. A slot that is not the
 // pair, whose program is not the venue's or not the pool's owner, or whose pool no venue here owns
 // (`trySwap`: "not a supported venue's pool"; a venue's own function: "not a <venue> pool"), and a
-// limit its order cannot carry, revert: those are the caller's, not the pool's state. Only a missing
-// slot, the System program itself as its pool, is skipped.
+// limit or a floor its order cannot carry, revert: those are the caller's, not the pool's state. Only
+// a missing slot, the System program itself as its pool, is skipped.
 //
 // Every venue's swap is its own instruction, called with `svm.call`. Its data is a few fixed bytes
 // around little-endian integers, packed into one word and written with one `toBytesLe`, each field
-// its low bytes (an amount and a floor 8, a limit 16). The price-limited forms read the pair's
-// balances with `@sauce/token`'s checks; the others read the amount alone, which only a token
-// account of the pair that a swap moved could hold.
+// its low bytes (an amount 8, a limit 16; a floor past its 8 reverts). The price-limited forms read
+// the pair's balances with `@sauce/token`'s checks; the others read the amount alone, which only a
+// token account of the pair that a swap moved could hold.
 //
-// SIZE. A Solana program rides in transactions, so the arm shares code through internal functions
-// (each venue's data, its accounts from a slot, its checks, `settled`) where the EVM arm keeps each
+// SIZE. A Solana program rides in transactions, so the arm shares code through functions (each
+// venue's data, its accounts from a slot, its checks, `settled`) where the EVM arm keeps each
 // function flat, and only the functions a program calls are compiled into it. `trySwap` takes any of
-// the nine, so it carries all nine venues' code: a program calling it is about 5.5 KB, one calling a
-// single venue's function about 1.3 to 1.9 KB, its instruction alone about 0.3 to 0.5 KB. A program
-// that knows its venue calls that venue's function; `trySwap` is for slots whose venue is only known
-// when the program runs. Each venue's functions check its own program id, so a direct call never
+// the nine, so it carries all nine venues' code: a program calling it is about 5.8 KB, one calling a
+// single venue's function about 0.9 to 2.0 KB, its instruction alone about 0.3 to 0.6 KB, its data
+// alone about 0.2 to 0.4 KB. A program that knows its venue calls that venue's function; `trySwap` is
+// for slots whose venue is only known when the program runs. Each venue's functions check its own program id, so a direct call never
 // signs into a program the caller names; only `trySwap`'s internal path relies on its one read of the
 // pool's owner.
 //
@@ -207,88 +215,137 @@ function dust(paysA: bool, price: Uint256, fee: Uint256, amountIn: Uint256): boo
 // Each venue's instruction data
 // ---------------------------------------------------------------------------------------------
 //
-// A swap's data is a few fixed bytes around little-endian integers. The integers are packed into one
-// word and written with one `toBytesLe`, the dearest step of building it, so each field takes the low
-// bytes `toBytesLe` would write for it alone: an amount and a floor their low 8, a limit its low 16.
+// `<venue>Data` is a swap's instruction data alone, the one encoding every form here sends: a caller
+// that keeps the venue's accounts and program itself (`@eco-incorp/sauce/svm`'s
+// `routerSvmAccountOrder` names them in order) calls `svm.call(program, [accounts…], <venue>Data(…))`,
+// the cheapest way to send it. The data is a few fixed bytes around little-endian integers, packed
+// into one word and written with one `toBytesLe`, the dearest step of building it, so each field takes
+// the low bytes `toBytesLe` would write for it alone: an amount its low 8, a limit its low 16. A
+// `minOut` past 64 bits, which its field cannot carry, reverts.
 
-// A concentrated-liquidity swap's exact-input order, as Raydium's and the whirlpools' layouts carry
-// it: the amount, the least out (`floor`) and the pool's own limit.
-function clmmOrder(amountIn: Uint256, floor: Uint256, limit: Uint256): bytes {
-  const word =
-    (amountIn & 0xffffffffffffffff) | ((floor & 0xffffffffffffffff) << 64) | (limit << 128);
-  return word.toBytesLe(32);
-}
-
-// Raydium CLMM's `swap_v2`, on its code's four programs: the order, base input.
-function raydiumData(amountIn: Uint256, limit: Uint256, floor: Uint256): bytes {
+// Raydium CLMM's `swap_v2`: exact input of `amountIn`, `minOut` its least out, `limit` its
+// `sqrt_price_limit_x64`. The direction is the accounts'.
+export function raydiumClmmData(amountIn: Uint256, limit: Uint256, minOut: Uint256): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swapV2 = hex`2b04ed0b1ac91e62`;
-  return swapV2.concat(clmmOrder(amountIn, floor, limit), hex`01`);
+  return swapV2.concat(word.toBytesLe(32), hex`01`);
 }
 
-// A whirlpool's `swap`, exact input, A to B when `aToB`; with `v2`, its `swap_v2`, which also says
-// it passes no remaining-accounts info.
-function whirlpoolData(
+// PancakeSwap CLMM's, Byreal's and Stabble CLMM's: Raydium's code, Raydium's data.
+export function pancakeswapClmmData(amountIn: Uint256, limit: Uint256, minOut: Uint256): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
+  const swapV2 = hex`2b04ed0b1ac91e62`;
+  return swapV2.concat(word.toBytesLe(32), hex`01`);
+}
+
+export function byrealData(amountIn: Uint256, limit: Uint256, minOut: Uint256): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
+  const swapV2 = hex`2b04ed0b1ac91e62`;
+  return swapV2.concat(word.toBytesLe(32), hex`01`);
+}
+
+export function stabbleClmmData(amountIn: Uint256, limit: Uint256, minOut: Uint256): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
+  const swapV2 = hex`2b04ed0b1ac91e62`;
+  return swapV2.concat(word.toBytesLe(32), hex`01`);
+}
+
+// A whirlpool's classic `swap`, exact input, A to B when `aToB`: for a pool of two SPL Token mints.
+export function orcaWhirlpoolData(
   amountIn: Uint256,
   limit: Uint256,
-  floor: Uint256,
+  minOut: Uint256,
   aToB: bool,
-  v2: bool,
 ): bytes {
-  const order = clmmOrder(amountIn, floor, limit);
-  if (v2) {
-    const swapV2 = hex`2b04ed0b1ac91e62`;
-    return swapV2.concat(order, aToB ? hex`010100` : hex`010000`);
-  }
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swap = hex`f8c69e91e17587c8`;
-  return swap.concat(order, aToB ? hex`0101` : hex`0100`);
+  return swap.concat(word.toBytesLe(32), aToB ? hex`0101` : hex`0100`);
 }
 
-// Cropper's `swap`, a whirlpool's first.
-function cropperData(amountIn: Uint256, limit: Uint256, floor: Uint256, aToB: bool): bytes {
+// A whirlpool's `swap_v2`, which also says it passes no remaining-accounts info: for any pool, and
+// the only swap for one with a Token-2022 mint.
+export function orcaWhirlpoolV2Data(
+  amountIn: Uint256,
+  limit: Uint256,
+  minOut: Uint256,
+  aToB: bool,
+): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
+  const swapV2 = hex`2b04ed0b1ac91e62`;
+  return swapV2.concat(word.toBytesLe(32), aToB ? hex`010100` : hex`010000`);
+}
+
+// Cropper's `swap`, a whirlpool's classic one.
+export function cropperData(amountIn: Uint256, limit: Uint256, minOut: Uint256, aToB: bool): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swap = hex`f8c69e91e17587c8`;
-  return swap.concat(clmmOrder(amountIn, floor, limit), aToB ? hex`0101` : hex`0100`);
+  return swap.concat(word.toBytesLe(32), aToB ? hex`0101` : hex`0100`);
 }
 
 // DefiTuna's `swap`: a whirlpool's `swap_v2` fields under `swap`'s name.
-function defitunaData(amountIn: Uint256, limit: Uint256, floor: Uint256, aToB: bool): bytes {
+export function defitunaData(
+  amountIn: Uint256,
+  limit: Uint256,
+  minOut: Uint256,
+  aToB: bool,
+): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swap = hex`f8c69e91e17587c8`;
-  return swap.concat(clmmOrder(amountIn, floor, limit), aToB ? hex`010100` : hex`010000`);
+  return swap.concat(word.toBytesLe(32), aToB ? hex`010100` : hex`010000`);
 }
 
-// Crema's `swap`: the direction and exact input first, then the order.
-function cremaData(amountIn: Uint256, limit: Uint256, floor: Uint256, aToB: bool): bytes {
+// Crema's `swap`: the direction and exact input first, then the amount, its `amount_limit` (the least
+// out) and its `sqrt_price_limit`.
+export function cremaData(amountIn: Uint256, limit: Uint256, minOut: Uint256, aToB: bool): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
+  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
   const swap = aToB ? hex`f8c69e91e17587c80101` : hex`f8c69e91e17587c80001`;
-  return swap.concat(clmmOrder(amountIn, floor, limit));
+  return swap.concat(word.toBytesLe(32));
 }
 
-// Invariant's `swap`: the direction first, then the amount, exact input and the limit. It carries no
-// least out.
-function invariantData(amountIn: Uint256, limit: Uint256, xToY: bool): bytes {
+// Invariant's `swap`: the direction (selling X when `xToY`), the amount, exact input and its
+// `sqrt_price_limit`. It carries no least out.
+export function invariantData(amountIn: Uint256, limit: Uint256, xToY: bool): bytes {
   const swap = xToY ? hex`f8c69e91e17587c801` : hex`f8c69e91e17587c800`;
   const word = (amountIn & 0xffffffffffffffff) | (1 << 64) | (limit << 72);
   return swap.concat(word.toBytesLe(25));
 }
 
-// Manifest's `Swap`: exact input of `amountIn`, `floor` as its least out (`out_atoms`), selling base
+// Manifest's `Swap`: exact input of `amountIn`, `minOut` as its least out (`out_atoms`), selling base
 // when `paysBase`.
-function manifestData(amountIn: Uint256, floor: Uint256, paysBase: bool): bytes {
+export function manifestData(amountIn: Uint256, minOut: Uint256, paysBase: bool): bytes {
+  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
   const swap = hex`04`;
   const word =
-    (amountIn & 0xffffffffffffffff) |
-    ((floor & 0xffffffffffffffff) << 64) |
-    ((paysBase ? 1 : 0) << 128) |
-    (1 << 136);
+    (amountIn & 0xffffffffffffffff) | (minOut << 64) | ((paysBase ? 1 : 0) << 128) | (1 << 136);
   return swap.concat(word.toBytesLe(18));
 }
 
-// Phoenix's `Swap`: an immediate-or-cancel order for `lots` lots of the token paid (base lots selling
-// base, quote lots buying it) at `ticks` (0: none, the book at any price). No minimum fill, a
-// self-trade cancels the resting order, no match limit, client id 0, no deposited funds, no expiry.
-function phoenixData(lots: Uint256, ticks: Uint256, paysBase: bool): bytes {
+// Phoenix's `Swap`: an immediate-or-cancel order for every lot of `amountIn`, in `lot`, the market's
+// lot size of the token paid (base lots selling base, quote lots buying it), at `ticks` (0: none, the
+// book at any price). No minimum fill, a self-trade cancels the resting order, no match limit, client
+// id 0, no deposited funds, no expiry. It carries no least out. An input under one lot is no order:
+// skip it.
+export function phoenixData(
+  amountIn: Uint256,
+  lot: Uint256,
+  ticks: Uint256,
+  paysBase: bool,
+): bytes {
+  require(ticks <= 0xffffffffffffffff, "limit past 64 bits");
+  const lots = (amountIn / lot) & 0xffffffffffffffff;
   const side = paysBase ? hex`000201` : hex`000200`;
   const rest = hex`00000000000000000000000000000000010000000000000000000000000000000000000000`;
-  const base = paysBase ? lots & 0xffffffffffffffff : 0;
-  const quote = paysBase ? 0 : lots & 0xffffffffffffffff;
+  const base = paysBase ? lots : 0;
+  const quote = paysBase ? 0 : lots;
   if (ticks == 0) {
     const any = (base << 8) | (quote << 72);
     return side.concat(any.toBytesLe(17), rest);
@@ -297,19 +354,20 @@ function phoenixData(lots: Uint256, ticks: Uint256, paysBase: bool): bytes {
   return side.concat(priced.toBytesLe(25), rest);
 }
 
-// OpenBook v2's `place_take_order` on `market`: `amountIn`'s lots of the token paid (base lots
-// selling base, quote lots including the fee buying it; the other side unbounded), an
-// immediate-or-cancel order at `priceLots` (0: a market order, at any price, whose price the program
-// does not read and requires positive), matching at most `orders` resting orders.
-function openbookV2Data(
-  market: Account,
+// OpenBook v2's `place_take_order`: every lot of `amountIn` of the token paid, by the market's lot
+// sizes `baseLot` and `quoteLot` (base lots selling base, quote lots including the fee buying it; the
+// other side unbounded), an immediate-or-cancel order at `priceLots` (0: a market order, at any price,
+// whose price the program does not read and requires positive), matching at most `orders` resting
+// orders. It carries no least out.
+export function openbookV2Data(
   amountIn: Uint256,
+  baseLot: Uint256,
+  quoteLot: Uint256,
   priceLots: Uint256,
   orders: Uint256,
   paysBase: bool,
 ): bytes {
-  const quoteLot = svm.sload(market, 448, 8).toLe();
-  const baseLot = svm.sload(market, 456, 8).toLe();
+  require(priceLots <= 0x7fffffffffffffff && orders <= 255, "limit past its field");
   const most = 0x7fffffffffffffff;
   const baseLots = paysBase ? amountIn / baseLot : most / baseLot;
   const quoteLots = paysBase ? most / quoteLot : amountIn / quoteLot;
@@ -320,7 +378,7 @@ function openbookV2Data(
     ((baseLots & 0xffffffffffffffff) << 72) |
     ((quoteLots & 0xffffffffffffffff) << 136) |
     ((priceLots == 0 ? 3 : 1) << 200) |
-    ((orders & 255) << 208);
+    (orders << 208);
   return take.concat(word.toBytesLe(27));
 }
 
@@ -341,7 +399,7 @@ function cpiRaydium(
   floor: Uint256,
   recipient: Account,
 ): void {
-  const data = raydiumData(amountIn, limit, floor);
+  const data = raydiumClmmData(amountIn, limit, floor);
   // The input and output vault, token program, Token-2022 and the memo program, both mints, then the
   // bitmap extension, where there is one, and the tick arrays. Seventeen accounts are more values
   // than a function holds at once, so that list is filled in place.
@@ -425,7 +483,7 @@ function cpiWhirlpool(
         slot[8],
         slot[5],
       ],
-      whirlpoolData(amountIn, limit, floor, paysA, false),
+      orcaWhirlpoolData(amountIn, limit, floor, paysA),
     );
     return;
   }
@@ -448,7 +506,7 @@ function cpiWhirlpool(
       slot[8],
       slot[5],
     ],
-    whirlpoolData(amountIn, limit, floor, paysA, true),
+    orcaWhirlpoolV2Data(amountIn, limit, floor, paysA),
   );
 }
 
@@ -609,7 +667,8 @@ function cpiPhoenix(
   slot: Account[],
   trader: Account[],
   paysBase: bool,
-  lots: Uint256,
+  amountIn: Uint256,
+  lot: Uint256,
   ticks: Uint256,
   recipient: Account,
 ): void {
@@ -627,7 +686,7 @@ function cpiPhoenix(
       slot[4],
       trader[4],
     ],
-    phoenixData(lots, ticks, paysBase),
+    phoenixData(amountIn, lot, ticks, paysBase),
   );
 }
 
@@ -754,6 +813,14 @@ function cpiOpenbookV2(
 ): void {
   const market = slot[1];
   const source = trader[1];
+  const data = openbookV2Data(
+    amountIn,
+    svm.sload(market, 456, 8).toLe(),
+    svm.sload(market, 448, 8).toLe(),
+    priceLots,
+    orders,
+    paysBase,
+  );
   svm.call(
     slot[0],
     [
@@ -774,7 +841,7 @@ function cpiOpenbookV2(
       slot[8],
       slot[0],
     ],
-    openbookV2Data(market, amountIn, priceLots, orders, paysBase),
+    data,
   );
 }
 
@@ -974,11 +1041,11 @@ function swapPhoenix(
   // Every lot of the input, of the token it pays: base lots selling base, quote lots buying it. The
   // order's price is 64 bits, and a limit past them would be cut to some other price: no order. A
   // limit under one tick, buying, finds no offer either.
-  const lots = amountIn / (paysBase ? baseLot : quoteLot);
-  if (lots == 0 || ticks == 0 || ticks > 0xffffffffffffffff) {
+  const lot = paysBase ? baseLot : quoteLot;
+  if (amountIn < lot || ticks == 0 || ticks > 0xffffffffffffffff) {
     return;
   }
-  cpiPhoenix(slot, trader, paysBase, lots, ticks, recipient);
+  cpiPhoenix(slot, trader, paysBase, amountIn, lot, ticks, recipient);
 }
 
 // What a swap moved: 0 when `source` paid nothing (`held` is its balance before), else
@@ -1393,7 +1460,7 @@ export function phoenix(
 // the one a caller would build by hand for that limit, `minOut` in the venue's own floor where its
 // instruction has one. `…Cpi` is that instruction alone, on the accounts the caller lists in the
 // venue's own order: it checks nothing but the program, reads nothing but the paying account, and
-// returns what that account paid.
+// returns what that account paid. Each builds its data with the venue's `…Data`.
 
 // The checks a Raydium-layout pool's `try…AtLimit` makes past its program and owner: swaps on, and
 // the pool able to trade toward the limit, dust judged at its config's rate (fees a Byreal pool adds
@@ -1500,10 +1567,7 @@ export function raydiumClmmCpi(
 ): Uint256 {
   require(program.address ==
     0xa5d5ca9e04cf5db590b714ba2fe32cb159133fc1c192b72257fd07d39cb0401e, "not a Raydium CLMM pool");
-  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
-  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
-  const swapV2 = hex`2b04ed0b1ac91e62`;
-  const data = swapV2.concat(word.toBytesLe(32), hex`01`);
+  const data = raydiumClmmData(amountIn, limit, minOut);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -1565,10 +1629,7 @@ export function pancakeswapClmmCpi(
 ): Uint256 {
   require(program.address ==
     0xf9ddcb1fe2f88ebbac5f5b97b4b90ad49551962b89419d765284622845e41cf8, "not a PancakeSwap CLMM pool");
-  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
-  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
-  const swapV2 = hex`2b04ed0b1ac91e62`;
-  const data = swapV2.concat(word.toBytesLe(32), hex`01`);
+  const data = pancakeswapClmmData(amountIn, limit, minOut);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -1631,10 +1692,7 @@ export function byrealCpi(
 ): Uint256 {
   require(program.address ==
     0x0634d20f1bf56dd164e3c13c7836a4229ec5ab21ff54528390a51789f3cdbbdb, "not a Byreal pool");
-  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
-  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
-  const swapV2 = hex`2b04ed0b1ac91e62`;
-  const data = swapV2.concat(word.toBytesLe(32), hex`01`);
+  const data = byrealData(amountIn, limit, minOut);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -1696,10 +1754,7 @@ export function stabbleClmmCpi(
 ): Uint256 {
   require(program.address ==
     0x539a8f14242a332eff95ba037c2c3936689d09da4571718f89491b86302586a3, "not a Stabble CLMM pool");
-  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
-  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
-  const swapV2 = hex`2b04ed0b1ac91e62`;
-  const data = swapV2.concat(word.toBytesLe(32), hex`01`);
+  const data = stabbleClmmData(amountIn, limit, minOut);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -1768,17 +1823,11 @@ export function orcaWhirlpoolCpi(
 ): Uint256 {
   require(program.address ==
     0x0e03685f8e909053e458121c66f5a76aedc7706aa11c82f8aa952a8f2b7879a9, "not an Orca whirlpool");
-  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
-  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
-  // Eleven accounts are the classic `swap`'s; `swap_v2` takes fifteen, and says it passes no
-  // remaining-accounts info.
-  let swap = hex`2b04ed0b1ac91e62`;
-  let flags = aToB ? hex`010100` : hex`010000`;
-  if (accounts.length == 11) {
-    swap = hex`f8c69e91e17587c8`;
-    flags = aToB ? hex`0101` : hex`0100`;
-  }
-  const data = swap.concat(word.toBytesLe(32), flags);
+  // Eleven accounts are the classic `swap`'s; `swap_v2` takes fifteen.
+  const data =
+    accounts.length == 11
+      ? orcaWhirlpoolData(amountIn, limit, minOut, aToB)
+      : orcaWhirlpoolV2Data(amountIn, limit, minOut, aToB);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -1842,10 +1891,7 @@ export function cropperCpi(
 ): Uint256 {
   require(program.address ==
     0xefa6e5dfb789ce3db66eccedff9eab02ca6a57cf068746befe835ab4c2f2ee0f, "not a Cropper pool");
-  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
-  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
-  const swap = hex`f8c69e91e17587c8`;
-  const data = swap.concat(word.toBytesLe(32), aToB ? hex`0101` : hex`0100`);
+  const data = cropperData(amountIn, limit, minOut, aToB);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -1922,10 +1968,7 @@ export function defitunaCpi(
 ): Uint256 {
   require(program.address ==
     0x09db19e5e1ffb1eba60fcffdafaa314664a12f6cac8af15485b5ddd92b6f3ae6, "not a DefiTuna pool");
-  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
-  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
-  const swap = hex`f8c69e91e17587c8`;
-  const data = swap.concat(word.toBytesLe(32), aToB ? hex`010100` : hex`010000`);
+  const data = defitunaData(amountIn, limit, minOut, aToB);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -2005,10 +2048,7 @@ export function cremaCpi(
 ): Uint256 {
   require(program.address ==
     0xa865993892793f8063d3199efd7fbda5844e3a99b4c73ce660916534b64e4ce6, "not a Crema pool");
-  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
-  const word = (amountIn & 0xffffffffffffffff) | (minOut << 64) | (limit << 128);
-  const swap = aToB ? hex`f8c69e91e17587c80101` : hex`f8c69e91e17587c80001`;
-  const data = swap.concat(word.toBytesLe(32));
+  const data = cremaData(amountIn, limit, minOut, aToB);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -2044,14 +2084,14 @@ export function tryPhoenixAtLimit(
   const paysBase = svm.sload(pool, 48, 32).toBe() == trader[2].address;
   const buy = trader[3].address;
   require(svm.sload(pool, paysBase ? 128 : 48, 32).toBe() == buy, "market is not the pair");
-  const lots = amountIn / svm.sload(pool, paysBase ? 112 : 192, 8).toLe();
-  if (lots == 0) {
+  const lot = svm.sload(pool, paysBase ? 112 : 192, 8).toLe();
+  if (amountIn < lot) {
     return 0;
   }
   const source = trader[1];
   const held = svm.sload(source, 64, 8).toLe();
   const before = svm.sload(recipient, 64, 8).toLe();
-  cpiPhoenix(slot, trader, paysBase, lots, ticks, recipient);
+  cpiPhoenix(slot, trader, paysBase, amountIn, lot, ticks, recipient);
   return settled(source, recipient, held, before, minOut);
 }
 
@@ -2081,25 +2121,13 @@ export function phoenixCpi(
 ): Uint256 {
   require(program.address ==
     0x05d0ea4f33737013a563e09348edb6f4593d91fc7641f9247c2441a842a1bbeb, "not a Phoenix market");
-  require(ticks <= 0xffffffffffffffff, "limit past 64 bits");
-  // Every lot of the input, of the token it pays, by the market's own lot size: the market is the
-  // instruction's third account. Under one lot, no order.
-  const lots =
-    (amountIn / svm.sload(accounts[2], paysBase ? 112 : 192, 8).toLe()) & 0xffffffffffffffff;
-  if (lots == 0) {
+  // The market's lot size of the token paid: the market is the instruction's third account. Under one
+  // lot, no order.
+  const lot = svm.sload(accounts[2], paysBase ? 112 : 192, 8).toLe();
+  if (amountIn < lot) {
     return 0;
   }
-  const side = paysBase ? hex`000201` : hex`000200`;
-  const rest = hex`00000000000000000000000000000000010000000000000000000000000000000000000000`;
-  const base = paysBase ? lots : 0;
-  const quote = paysBase ? 0 : lots;
-  let order = (base << 8) | (quote << 72);
-  let width = 17;
-  if (ticks != 0) {
-    order = 1 | (ticks << 8) | (base << 72) | (quote << 136);
-    width = 25;
-  }
-  const data = side.concat(order.toBytesLe(width), rest);
+  const data = phoenixData(amountIn, lot, ticks, paysBase);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -2180,9 +2208,7 @@ export function invariantCpi(
 ): Uint256 {
   require(program.address ==
     0xfc39066f804ec84d465acc0cafceb1debdfb9e4751e3c99ecb5463ac63cd89c9, "not an Invariant pool");
-  const swap = xToY ? hex`f8c69e91e17587c801` : hex`f8c69e91e17587c800`;
-  const word = (amountIn & 0xffffffffffffffff) | (1 << 64) | (limit << 72);
-  const data = swap.concat(word.toBytesLe(25));
+  const data = invariantData(amountIn, limit, xToY);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -2246,11 +2272,7 @@ export function manifestCpi(
 ): Uint256 {
   require(program.address ==
     0x0537a47738da25a988f964d99ba43a88cf1187395b6acf1483f570228d8002b2, "not a Manifest market");
-  require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
-  const swap = hex`04`;
-  const word =
-    (amountIn & 0xffffffffffffffff) | (minOut << 64) | ((paysBase ? 1 : 0) << 128) | (1 << 136);
-  const data = swap.concat(word.toBytesLe(18));
+  const data = manifestData(amountIn, minOut, paysBase);
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();
@@ -2332,24 +2354,16 @@ export function openbookV2Cpi(
 ): Uint256 {
   require(program.address ==
     0x0bfebfbdfbabfad0b46571bf958c1eb824787bb0994bb1846b2978071e1799be, "not an OpenBook v2 market");
-  require(priceLots <= 0x7fffffffffffffff && orders <= 255, "limit past its field");
-  // The market is the instruction's third account: its lot sizes size the order, and the side not
-  // paid is unbounded.
+  // The market's lot sizes: the market is the instruction's third account.
   const market = accounts[2];
-  const quoteLot = svm.sload(market, 448, 8).toLe();
-  const baseLot = svm.sload(market, 456, 8).toLe();
-  const most = 0x7fffffffffffffff;
-  const baseLots = paysBase ? amountIn / baseLot : most / baseLot;
-  const quoteLots = paysBase ? most / quoteLot : amountIn / quoteLot;
-  const take = hex`032c47031ac7cb55`;
-  const word =
-    (paysBase ? 1 : 0) |
-    ((priceLots == 0 ? 1 : priceLots) << 8) |
-    ((baseLots & 0xffffffffffffffff) << 72) |
-    ((quoteLots & 0xffffffffffffffff) << 136) |
-    ((priceLots == 0 ? 3 : 1) << 200) |
-    (orders << 208);
-  const data = take.concat(word.toBytesLe(27));
+  const data = openbookV2Data(
+    amountIn,
+    svm.sload(market, 456, 8).toLe(),
+    svm.sload(market, 448, 8).toLe(),
+    priceLots,
+    orders,
+    paysBase,
+  );
   const held = svm.sload(source, 64, 8).toLe();
   svm.call(program, accounts, data);
   const left = svm.sload(source, 64, 8).toLe();

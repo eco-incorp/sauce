@@ -261,8 +261,11 @@ recipient)`, `limit` the sqrt price the pool's swap takes (Phoenix's order price
 whirlpool trades there, and `minOut` rides in the venue's own least-out field where it has one. A
 third, `<venue>Cpi(program, accounts, source, amountIn, …)`, is the instruction alone on the accounts
 in the venue's own order: it checks the program, reads only the paying account, and returns what it
-paid. A slot may carry accounts past its nine: a Raydium-layout pool's bitmap extension, Invariant's
-program authority, OpenBook's oracles.
+paid. A fourth, `<venue>Data(amountIn, …)`, is that instruction's data alone, for a program that sends
+it with `svm.call` on accounts it writes in itself: the cheapest form, a few thousand compute units
+over a hand-built instruction. `@eco-incorp/sauce/svm`'s `routerSvmAccountOrder` and
+`routerSvmAccounts` give each instruction's accounts in order. A slot may carry accounts past its
+nine: a Raydium-layout pool's bitmap extension, Invariant's program authority, OpenBook's oracles.
 
 ```sauce chain=solana
 import { orcaWhirlpool } from "@sauce/router";
@@ -295,8 +298,8 @@ function main(
 }
 ```
 
-A program carries only the venues it calls: one venue's function is about 1.9 KB of program, and
-`trySwap` all nine, about 5.5 KB, so a program that knows its venue calls that venue's function and
+A program carries only the venues it calls: one venue's function is about 2.0 KB of program, and
+`trySwap` all nine, about 5.8 KB, so a program that knows its venue calls that venue's function and
 keeps `trySwap` for slots whose venue it learns as it runs. Either is past one transaction, so the
 program is staged (`sauce-solana`). For one order over several pools under one price, use
 `sauce-solana-distributed-swap`.

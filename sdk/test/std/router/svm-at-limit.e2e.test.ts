@@ -8,16 +8,18 @@
  *   - for every swap eco-incorp/sauce-recipes builds for the fixture's pools
  *     (`fixtures/recipes-swap-templates.json`, both ways, the served window-bounded one and the plain
  *     one), the venue receives the same instruction, byte for byte and account for account, from the
- *     recipes' own hand-built CPI, from `…Cpi` given that account list, and from `try…AtLimit` given
- *     the pool's slot — read back from the transaction's inner instructions — and all three move the
- *     same amounts; `…Cpi` returns what the paying account paid, `try…AtLimit` what the recipient
- *     received;
+ *     recipes' own hand-built CPI, from that CPI with `…Data`'s data, from `…Cpi` given that account
+ *     list, and from `try…AtLimit` given the pool's slot — read back from the transaction's inner
+ *     instructions — and all four move the same amounts; `…Cpi` returns what the paying account
+ *     paid, `try…AtLimit` what the recipient received;
  *   - a `try…AtLimit` returns 0 having moved nothing for every skip its header names, its plain form
  *     reverts there, and a swap below its floor reverts, the venue's own floor first where it has one;
  *   - Raydium's bitmap extension is optional, a Crema slot of fewer arrays passes fewer, Phoenix and
  *     OpenBook trade at a price as well as at any, an adaptive-fee Orca pool trades at a limit;
  *   - and what each costs in compute beside the hand-built CPI, small and to the pool's window edge:
- *     printed as tables.
+ *     printed as tables. `…Data` and `…Cpi` are compiled for the one trade, every argument but the
+ *     amount a literal, as the hand-built CPI's own bytes carry them and as a router compiling one
+ *     program per trade writes them.
  *
  * GATED on the engine artifacts like every engine-executing suite, and a hard failure without them
  * in CI.
@@ -63,7 +65,13 @@ import {
   TOKEN_2022,
 } from "../../svm/venue-fixture.js";
 import type { Pool } from "../../svm/venue-fixture.js";
-import { SVM_MORE, SVM_SLOT, svmCpiArguments, svmProgramCalling } from "./harness.js";
+import {
+  SVM_MORE,
+  SVM_SLOT,
+  svmCpiArguments,
+  svmDataArguments,
+  svmProgramCalling,
+} from "./harness.js";
 
 type Compiled = ReturnType<typeof compileSauceProgram>;
 interface Meta {
@@ -155,6 +163,13 @@ const lower = (name: string): string => name.charAt(0).toLowerCase() + name.slic
 const tryName = (venue: string): string =>
   venue === "manifest" ? "tryManifest" : `try${VENUE[venue]!.fn}AtLimit`;
 const cpiName = (venue: string): string => `${lower(VENUE[venue]!.fn)}Cpi`;
+/** A template's `…Data` function: Orca's classic `swap` takes eleven accounts, `swap_v2` fifteen. */
+const dataName = (t: Template): string =>
+  t.venue === "orca-whirlpool" && t.accounts.length !== 11
+    ? "orcaWhirlpoolV2Data"
+    : `${lower(VENUE[t.venue]!.fn)}Data`;
+/** The direction arguments, written into a program compiled for one trade. */
+const DIRECTIONS = new Set(["aToB", "xToY", "paysBase"]);
 
 /** A pool's two mints, the one paid first. */
 const pairOf = (p: Pool, direction: string): [Address, Address] => {
@@ -491,9 +506,11 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
     outcome.ok ? [] : outcome.logs.filter((line) => line.startsWith(`Program ${venue} failed:`));
 
   /**
-   * The three ways a template's swap is sent, from one state: the recipes' own hand-built CPI, `…Cpi`
-   * on the template's account list, and `try…AtLimit` on the pool's slot (Manifest: `tryManifest`),
-   * each with `amountIn` of the mint the template's direction pays.
+   * The four ways a template's swap is sent, from one state: the recipes' own hand-built CPI, the
+   * same CPI with `…Data`'s data, `…Cpi` on the template's account list, and `try…AtLimit` on the
+   * pool's slot (Manifest: `tryManifest`), each with `amountIn` of the mint the template's direction
+   * pays. The two instruction-only forms are compiled for the one trade, as the hand-built one is:
+   * every argument but the amount a literal.
    */
   const ways = (t: Template, amountIn: bigint) => {
     const p = pool(t.pool);
@@ -543,29 +560,44 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         { ...order, args: [amountIn], named: listed, edit },
       );
 
-    // `…Cpi` on the same account list.
-    const fn = cpiName(t.venue);
-    const cpiArgs = (minOut: bigint) =>
-      svmCpiArguments(fn).map(
-        (arg) =>
-          ({
-            amountIn,
-            limit,
-            ticks: 0n,
-            priceLots: 0n,
-            orders,
-            minOut,
-            aToB: first,
-            xToY: first,
-            paysBase: first,
-          })[arg]!,
+    // `…Data` and `…Cpi` on the same account list. A book's lot sizes are its market's.
+    const market = BYTES.get(p.pool)!;
+    const value = (arg: string, minOut: bigint): bigint =>
+      ({
+        amountIn,
+        limit,
+        ticks: 0n,
+        priceLots: 0n,
+        orders,
+        minOut,
+        lot: BigInt(t.divisor ?? "1"),
+        baseLot: t.venue === "openbook-v2" ? le(market, 456, 8) : 0n,
+        quoteLot: t.venue === "openbook-v2" ? le(market, 448, 8) : 0n,
+      })[arg]!;
+    // Compiled for the one trade: every argument but the amount written into the program, as the
+    // template's own bytes carry them.
+    const instructionOnly = (name: string, args: string[], minOut: bigint) =>
+      cook(
+        compiled(
+          svmProgramCalling(
+            name,
+            t.accounts.length,
+            Object.fromEntries(
+              args
+                .filter((arg) => arg !== "amountIn")
+                .map((arg) => [
+                  arg,
+                  DIRECTIONS.has(arg) ? String(first === 1n) : String(value(arg, minOut)),
+                ]),
+            ),
+          ),
+        ),
+        { ...order, args: [amountIn], named: listed },
       );
-    const viaCpi = (minOut = floor) =>
-      cook(compiled(svmProgramCalling(fn, t.accounts.length)), {
-        ...order,
-        args: cpiArgs(minOut),
-        named: listed,
-      });
+    const fn = cpiName(t.venue);
+    const viaCpi = (minOut = floor) => instructionOnly(fn, svmCpiArguments(fn), minOut);
+    const viaData = (minOut = floor) =>
+      instructionOnly(dataName(t), svmDataArguments(dataName(t)), minOut);
 
     // `try…AtLimit` on the pool's slot, each account with the role the recipes give it.
     const slot = slotOf(t);
@@ -601,11 +633,11 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         },
       });
     };
-    return { p, pay, buy, expected, hand, viaCpi, viaTry, slot, tryArgs, limit, floor };
+    return { p, pay, buy, expected, hand, viaData, viaCpi, viaTry, slot, tryArgs, limit, floor };
   };
 
   // -----------------------------------------------------------------------------------------
-  // Byte for byte, the recipes' own instruction, three ways
+  // Byte for byte, the recipes' own instruction, four ways
   // -----------------------------------------------------------------------------------------
 
   /** The compute of each template's swaps, for the tables, and the templates a venue refuses. */
@@ -615,6 +647,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
     ticks: string;
     venue: number;
     hand: number;
+    data: number;
     cpi: number;
     tried: number;
     /** The same pool's `try<Venue>` at a price a few basis points past the pool's own. */
@@ -631,36 +664,48 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
     return String(moved < 0n ? -moved : moved);
   };
 
-  describe("each swap the recipes build reaches the venue byte for byte: by hand, through …Cpi and through try…AtLimit", () => {
+  describe("each swap the recipes build reaches the venue byte for byte: by hand, with …Data, through …Cpi and through try…AtLimit", () => {
     it.each(TEMPLATES.map((t) => [`${t.pool} ${t.direction} ${t.builder}`, t] as const))(
       "%s",
       async (_, t) => {
         const amountIn = amountOf(pairOf(pool(t.pool), t.direction)[0]);
         const w = ways(t, amountIn);
         const theirs = await w.hand();
+        const data = await w.viaData();
         const ours = await w.viaCpi();
         const tried = await w.viaTry();
-        for (const outcome of [theirs, ours, tried]) expect(outcome.cpi).toEqual(w.expected);
+        for (const outcome of [theirs, data, ours, tried]) expect(outcome.cpi).toEqual(w.expected);
         // A template the venue refuses for this pool's state (an unbounded walk past the slot's tick
         // arrays, a tick array that is not the pool's first, a limit on the wrong side) is refused
-        // the same way, all three ways.
+        // the same way, all four ways.
         if (!theirs.ok) {
           const failure = venueFailure(theirs, t.programId);
           expect(failure).toHaveLength(1);
-          expect(venueFailure(ours, t.programId)).toEqual(failure);
-          expect(venueFailure(tried, t.programId)).toEqual(failure);
+          for (const outcome of [data, ours, tried])
+            expect(venueFailure(outcome, t.programId)).toEqual(failure);
           refusedByVenue.push(`${t.pool} ${t.direction} ${t.builder}: ${failure[0]}`);
           return;
         }
-        const [h, c, r] = [succeeded(theirs), succeeded(ours), succeeded(tried)];
+        const [h, d, c, r] = [
+          succeeded(theirs),
+          succeeded(data),
+          succeeded(ours),
+          succeeded(tried),
+        ];
         const ticks = tickMoved(w.p);
         expect(h.paid).toBeGreaterThan(0n);
         expect(h.paid).toBeLessThanOrEqual(amountIn);
-        expect({ c: [c.paid, c.received], r: [r.paid, r.received] }).toEqual({
+        expect({
+          d: [d.paid, d.received],
+          c: [c.paid, c.received],
+          r: [r.paid, r.received],
+        }).toEqual({
+          d: [h.paid, h.received],
           c: [h.paid, h.received],
           r: [h.paid, h.received],
         });
         expect(h.returned).toBe(h.paid);
+        expect(d.returned).toBe(d.paid);
         expect(c.returned).toBe(c.paid); // …Cpi returns what was paid
         expect(r.returned).toBe(r.received); // try…AtLimit what was received
         // The arm's price-limited form on the same pool, a few basis points past its price, on a
@@ -682,6 +727,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
           ticks,
           venue: c.venueUnits,
           hand: h.units,
+          data: d.units,
           cpi: c.units,
           tried: r.units,
           priced,
@@ -879,8 +925,14 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         exact[exact.length - 1] = received;
         expect(succeeded(await w.viaTry({ args: exact })).received).toBe(received);
         if (own) {
-          expect(venueFailure(failed(await w.viaCpi(received + 1n)), t.programId)).toHaveLength(1);
-          expect(failed(await w.viaCpi(2n ** 64n)).reason).toBe("minOut past 64 bits");
+          for (const sent of [w.viaData, w.viaCpi]) {
+            expect(venueFailure(failed(await sent(received + 1n)), t.programId)).toHaveLength(1);
+            expect(failed(await sent(2n ** 64n)).reason).toBe("minOut past 64 bits");
+          }
+          // So does try…AtLimit's, before it moves anything.
+          const past = [...w.tryArgs];
+          past[past.length - 1] = 2n ** 64n;
+          expect(failed(await w.viaTry({ args: past })).reason).toBe("minOut past 64 bits");
         }
       },
       120_000,
@@ -982,19 +1034,29 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
         const w = ways(t, amountIn);
         const theirs = await w.hand();
         const ticks = tickMoved(w.p);
-        const [ours, tried] = [await w.viaCpi(), await w.viaTry()];
+        const [data, ours, tried] = [await w.viaData(), await w.viaCpi(), await w.viaTry()];
         // A walk too long for one transaction's compute, or that leaves the slot's ticks, fails
-        // the same way all three ways.
+        // the same way all four ways.
         if (!theirs.ok) {
           const failure = venueFailure(theirs, t.programId);
           expect(failure).toHaveLength(1);
-          expect(venueFailure(ours, t.programId)).toEqual(failure);
-          expect(venueFailure(tried, t.programId)).toEqual(failure);
+          for (const outcome of [data, ours, tried])
+            expect(venueFailure(outcome, t.programId)).toEqual(failure);
           refusedByVenue.push(`${t.pool} ${t.direction} past the window: ${failure[0]}`);
           return;
         }
-        const [h, c, r] = [succeeded(theirs), succeeded(ours), succeeded(tried)];
-        expect({ c: [c.paid, c.received], r: [r.paid, r.received] }).toEqual({
+        const [h, d, c, r] = [
+          succeeded(theirs),
+          succeeded(data),
+          succeeded(ours),
+          succeeded(tried),
+        ];
+        expect({
+          d: [d.paid, d.received],
+          c: [c.paid, c.received],
+          r: [r.paid, r.received],
+        }).toEqual({
+          d: [h.paid, h.received],
           c: [h.paid, h.received],
           r: [h.paid, h.received],
         });
@@ -1006,6 +1068,7 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
           ticks,
           venue: c.venueUnits,
           hand: h.units,
+          data: d.units,
           cpi: c.units,
           tried: r.units,
         });
@@ -1019,15 +1082,15 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
     const sign = (n: number): string => (n >= 0 ? `+${n}` : String(n));
     const rows = units.map(
       (u) =>
-        `| ${u.template.pool} | ${u.template.direction} | ${u.template.builder} | ${u.size} | ${u.ticks} | ${u.venue} | ${u.hand} | ${u.cpi} (${sign(u.cpi - u.hand)}) | ${u.tried} (${sign(u.tried - u.hand)}) | ${u.priced === undefined ? "" : `${u.priced} (${sign(u.priced - u.hand)})`} |`,
+        `| ${u.template.pool} | ${u.template.direction} | ${u.template.builder} | ${u.size} | ${u.ticks} | ${u.venue} | ${u.hand} | ${u.data} (${sign(u.data - u.hand)}) | ${u.cpi} (${sign(u.cpi - u.hand)}) | ${u.tried} (${sign(u.tried - u.hand)}) | ${u.priced === undefined ? "" : `${u.priced} (${sign(u.priced - u.hand)})`} |`,
     );
     console.log(
       [
-        "| pool | direction | template | size | ticks moved | venue CU | hand-built cook CU | …Cpi cook CU | try…AtLimit cook CU | try… at a price cook CU |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| pool | direction | template | size | ticks moved | venue CU | hand-built cook CU | …Data cook CU | …Cpi cook CU | try…AtLimit cook CU | try… at a price cook CU |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ...rows,
         "",
-        "Refused by the venue, all three ways alike:",
+        "Refused by the venue, all four ways alike:",
         ...refusedByVenue,
       ].join("\n"),
     );
