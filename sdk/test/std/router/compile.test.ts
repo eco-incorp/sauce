@@ -1,24 +1,58 @@
 /**
  * `@sauce/router` compile conformance: the library at sdk/src/std/router built through the published
- * compiler, off disk and from the SDK's embedded copy.
+ * compiler, off disk and from the SDK's embedded copy, for both of its arms.
  *
+ * The EVM arm:
  *   1. every exported function compiles, from run-time arguments, to the same bytes either way;
  *   2. the exports are exactly the documented API, no more and no fewer;
  *   3. each ABI fragment the library calls is pinned: the pool fragments to the selectors their
  *      deployed contracts dispatch, the Router's to the released ABI, and those the registry also
- *      declares (Curve, the Balancer V2 Vault, the Uniswap V2 pair, the LB pair) to its fragments;
- *   4. the packaging invariant: there is no neutral `router.js` and no SVM arm, so importing the
- *      package for the SVM fails on the import.
+ *      declares (Curve, the Balancer V2 Vault, the Uniswap V2 pair, the LB pair) to its fragments.
+ * The SVM arm:
+ *   4. every exported function compiles, from run-time arguments, to the same bytes either way, and
+ *      takes the accounts its callers attach in the documented order;
+ *   5. the exports are exactly the documented API;
+ *   6. each venue's program id, derived from the SDK's base58 id, and each instruction's
+ *      discriminator, derived from its name, counted in the bytecode: a function carries its own
+ *      venue's and no other, `trySwap` every one;
+ *   7. the reasons the checks revert with, counted the same way.
+ * Both:
+ *   8. the packaging invariant: there is no neutral `router.js`, so a function only one arm has fails
+ *      at its import on the other, naming it.
  *
- * What the functions DO on chain is `actions/tests/swap*.mainnet.test.ts`'s (real pools, captured
- * state) and `test/evm/{swap,router}.e2e.test.ts`'s (the Router's V3 and V4 paths, on mocks).
+ * What the EVM functions DO on chain is `actions/tests/swap*.mainnet.test.ts`'s (real pools, captured
+ * state) and `test/evm/{swap,router}.e2e.test.ts`'s (the Router's V3 and V4 paths, on mocks); what
+ * the SVM functions do is `svm.e2e.test.ts`'s, on the venues' own programs and pools in LiteSVM.
  */
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { address, getAddressCodec } from "@solana/kit";
 import { toFunctionSelector, type AbiFunction } from "viem";
 
 import { compileWithRs } from "../../../src/routes/rs-compile.js";
-import { compileStdRouter, FUNCTIONS, programCalling, routerAbi, routerSource } from "./harness.js";
+import {
+  BYREAL_PROGRAM_ID,
+  CREMA_PROGRAM_ID,
+  CROPPER_PROGRAM_ID,
+  DEFITUNA_PROGRAM_ID,
+  ORCA_WHIRLPOOL_PROGRAM_ID,
+  PANCAKESWAP_CLMM_PROGRAM_ID,
+  PHOENIX_PROGRAM_ID,
+  RAYDIUM_CLMM_PROGRAM_ID,
+  STABBLE_CLMM_PROGRAM_ID,
+} from "../../../src/svm/index.js";
+import {
+  compileStdRouter,
+  FUNCTIONS,
+  programCalling,
+  routerAbi,
+  routerSource,
+  SVM_FUNCTIONS,
+  SVM_SLOT,
+  SVM_TRADER,
+  svmProgramCalling,
+} from "./harness.js";
 
 const hex = (bytes: Uint8Array): string => Buffer.from(bytes).toString("hex");
 /** jest's cwd is `sdk/`. */
@@ -210,13 +244,161 @@ describe("@sauce/router: every fragment it calls is pinned", () => {
   });
 });
 
+describe("@sauce/router (SVM): every function compiles from run-time arguments", () => {
+  it.each(SVM_FUNCTIONS)("%s, off disk and embedded, to the same bytes", (name) => {
+    const source = svmProgramCalling(name);
+    const fromDisk = compileStdRouter(source, "svm");
+    const embedded = compileWithRs({ source, target: "svm" });
+    expect(fromDisk.bytecode.length).toBeGreaterThan(0);
+    expect(hex(embedded.bytecode[0]!)).toBe(hex(fromDisk.bytecode));
+  });
+
+  // The manifest is `main`'s own `Account` params, so what this pins is the attach order the
+  // execution suite resolves by name: the slot's nine, the trader's seven, then the recipient.
+  it.each(SVM_FUNCTIONS)("%s takes the slot, the trader's accounts and the recipient", (name) => {
+    const { manifest } = compileStdRouter(svmProgramCalling(name), "svm");
+    expect(manifest?.accounts.map((entry) => (entry.kind === "slot" ? entry.name : "…"))).toEqual([
+      ...SVM_SLOT,
+      ...SVM_TRADER,
+      "recipient",
+    ]);
+  });
+});
+
+describe("@sauce/router (SVM): the exports are the documented API", () => {
+  it("exports the nine venues and trySwap/swap, each with its `try` form", () => {
+    const exported = [...routerSource("svm").matchAll(/^export function (\w+)\(/gm)].map(
+      (m) => m[1],
+    );
+    expect(exported.sort()).toEqual([...SVM_FUNCTIONS].sort());
+  });
+
+  it("takes every function's arguments in one order", () => {
+    for (const [, params] of routerSource("svm").matchAll(/^export function \w+\(([^)]*)\)/gm))
+      expect(
+        params!
+          .split(",")
+          .map((p) => p.trim())
+          .filter(Boolean),
+      ).toEqual([
+        "slot: Account[]",
+        "trader: Account[]",
+        "amountIn: Uint256",
+        "maxPrice: Uint256",
+        "minOut: Uint256",
+        "recipient: Account",
+      ]);
+  });
+
+  it("declares no module-level const, which a program-wide define could replace", () => {
+    expect(routerSource("svm")).not.toMatch(/^(export )?(const|let) /m);
+  });
+});
+
+describe("@sauce/router (SVM): the venues' program ids and instructions", () => {
+  // Derived from the SDK's base58 ids rather than copied from the library: a copy would agree with
+  // the library however wrong its constant was.
+  const key = (base58: string): string =>
+    Buffer.from(getAddressCodec().encode(address(base58))).toString("hex");
+  // An Anchor instruction's discriminator: the first 8 bytes of sha256("global:<name>").
+  const discriminator = (name: string): string =>
+    createHash("sha256").update(`global:${name}`).digest("hex").slice(0, 16);
+  const VENUES: [string, string, string | undefined][] = [
+    ["RaydiumClmm", RAYDIUM_CLMM_PROGRAM_ID, "swap_v2"],
+    ["PancakeswapClmm", PANCAKESWAP_CLMM_PROGRAM_ID, "swap_v2"],
+    ["Byreal", BYREAL_PROGRAM_ID, "swap_v2"],
+    ["StabbleClmm", STABBLE_CLMM_PROGRAM_ID, "swap_v2"],
+    ["OrcaWhirlpool", ORCA_WHIRLPOOL_PROGRAM_ID, "swap_v2"],
+    ["Cropper", CROPPER_PROGRAM_ID, "swap"],
+    ["Defituna", DEFITUNA_PROGRAM_ID, "swap"],
+    ["Crema", CREMA_PROGRAM_ID, "swap"],
+    // Phoenix's instructions are a one-byte tag, not an Anchor discriminator.
+    ["Phoenix", PHOENIX_PROGRAM_ID, undefined],
+  ];
+  const bytecode = (name: string): string =>
+    hex(compileStdRouter(svmProgramCalling(name), "svm").bytecode);
+  const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
+
+  it.each(VENUES)(
+    "try%s carries its venue's program id and instruction, and no other's",
+    (venue, id, ix) => {
+      const code = bytecode(`try${venue}`);
+      for (const [, other] of VENUES) expect(count(code, key(other))).toBe(other === id ? 1 : 0);
+      for (const name of ["swap_v2", "swap"])
+        expect(count(code, discriminator(name))).toBe(name === ix ? 1 : 0);
+    },
+  );
+
+  it("trySwap carries every venue's program id once, and each instruction once per venue code", () => {
+    const code = bytecode("trySwap");
+    for (const [, id] of VENUES) expect(count(code, key(id))).toBe(1);
+    // swap_v2: Raydium's code (four programs) and Orca's; swap: Cropper, DefiTuna, Crema.
+    expect(count(code, discriminator("swap_v2"))).toBe(2);
+    expect(count(code, discriminator("swap"))).toBe(3);
+  });
+});
+
+describe("@sauce/router (SVM): the reasons its checks revert with", () => {
+  const reasons = (name: string): Record<string, number> => {
+    const code = hex(compileStdRouter(svmProgramCalling(name), "svm").bytecode);
+    return Object.fromEntries(
+      [
+        "a pool's program is not its owner",
+        "not a supported venue's pool",
+        "pool is not the pair",
+        "market is not the pair",
+        "below minOut",
+        "nothing swapped",
+      ].map((reason) => [reason, code.split(Buffer.from(reason).toString("hex")).length - 1]),
+    );
+  };
+
+  it("trySwap refuses a slot whose program is not its pool's owner, a pool of no venue here, a pool or market not the pair, and a swap below its floor", () => {
+    expect(reasons("trySwap")).toEqual({
+      "a pool's program is not its owner": 1,
+      "not a supported venue's pool": 1,
+      "pool is not the pair": 1,
+      "market is not the pair": 1,
+      "below minOut": 1,
+      "nothing swapped": 0,
+    });
+    expect(reasons("swap")["nothing swapped"]).toBe(1);
+  });
+
+  it.each([
+    ["RaydiumClmm", "not a Raydium CLMM pool"],
+    ["PancakeswapClmm", "not a PancakeSwap CLMM pool"],
+    ["Byreal", "not a Byreal pool"],
+    ["StabbleClmm", "not a Stabble CLMM pool"],
+    ["OrcaWhirlpool", "not an Orca whirlpool"],
+    ["Cropper", "not a Cropper pool"],
+    ["Defituna", "not a DefiTuna pool"],
+    ["Crema", "not a Crema pool"],
+    ["Phoenix", "not a Phoenix market"],
+  ])("try%s refuses another venue's pool as %j", (venue, reason) => {
+    const code = hex(compileStdRouter(svmProgramCalling(`try${venue}`), "svm").bytecode);
+    expect(code.split(Buffer.from(reason).toString("hex")).length - 1).toBe(1);
+    const pair = venue === "Phoenix" ? "market is not the pair" : "pool is not the pair";
+    expect(code.split(Buffer.from(pair).toString("hex")).length - 1).toBe(1);
+  });
+});
+
 describe("@sauce/router: packaging", () => {
-  it("has no SVM arm: importing it for the SVM fails on the import, not on an export", () => {
-    const source =
+  it("has no neutral router.js: a function one arm lacks fails at its import, naming it", () => {
+    expect(existsSync(join(SRC, "std", "router", "router.js"))).toBe(false);
+    const evmOnly =
       'import { woofi } from "@sauce/router";\nfunction main(): Uint256 { return 1n; }';
-    const refused = /failed to import module "@sauce\/router"/;
-    expect(() => compileStdRouter(source, "svm")).toThrow(refused);
-    expect(() => compileWithRs({ source, target: "svm" })).toThrow(refused);
-    expect(() => compileStdRouter(source, "evm")).not.toThrow();
+    const svmOnly =
+      'import { trySwap } from "@sauce/router";\nfunction main(): Uint256 { return 1n; }';
+    expect(() => compileStdRouter(evmOnly, "svm")).toThrow("`woofi` is not exported by module");
+    expect(() => compileWithRs({ source: evmOnly, target: "svm" })).toThrow(
+      "`woofi` is not exported by module",
+    );
+    expect(() => compileStdRouter(svmOnly, "evm")).toThrow("`trySwap` is not exported by module");
+    expect(() => compileWithRs({ source: svmOnly, target: "evm" })).toThrow(
+      "`trySwap` is not exported by module",
+    );
+    expect(() => compileStdRouter(evmOnly, "evm")).not.toThrow();
+    expect(() => compileStdRouter(svmOnly, "svm")).not.toThrow();
   });
 });

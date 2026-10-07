@@ -572,8 +572,8 @@ export function tryRaydiumClmm(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const venue = 0xa5d5ca9e04cf5db590b714ba2fe32cb159133fc1c192b72257fd07d39cb0401e;
-  require(slot[0].address == venue && pool.owner == venue, "not a Raydium CLMM pool");
+  const owned = pool.owner == 0xa5d5ca9e04cf5db590b714ba2fe32cb159133fc1c192b72257fd07d39cb0401e;
+  require(owned && slot[0].address == pool.owner, "not a Raydium CLMM pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
   swapRaydium(slot, trader, amountIn, maxPrice, recipient);
@@ -606,8 +606,8 @@ export function tryPancakeswapClmm(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const venue = 0xf9ddcb1fe2f88ebbac5f5b97b4b90ad49551962b89419d765284622845e41cf8;
-  require(slot[0].address == venue && pool.owner == venue, "not a PancakeSwap CLMM pool");
+  const owned = pool.owner == 0xf9ddcb1fe2f88ebbac5f5b97b4b90ad49551962b89419d765284622845e41cf8;
+  require(owned && slot[0].address == pool.owner, "not a PancakeSwap CLMM pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
   swapRaydium(slot, trader, amountIn, maxPrice, recipient);
@@ -640,8 +640,8 @@ export function tryByreal(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const venue = 0x0634d20f1bf56dd164e3c13c7836a4229ec5ab21ff54528390a51789f3cdbbdb;
-  require(slot[0].address == venue && pool.owner == venue, "not a Byreal pool");
+  const owned = pool.owner == 0x0634d20f1bf56dd164e3c13c7836a4229ec5ab21ff54528390a51789f3cdbbdb;
+  require(owned && slot[0].address == pool.owner, "not a Byreal pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
   swapRaydium(slot, trader, amountIn, maxPrice, recipient);
@@ -674,8 +674,8 @@ export function tryStabbleClmm(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const venue = 0x539a8f14242a332eff95ba037c2c3936689d09da4571718f89491b86302586a3;
-  require(slot[0].address == venue && pool.owner == venue, "not a Stabble CLMM pool");
+  const owned = pool.owner == 0x539a8f14242a332eff95ba037c2c3936689d09da4571718f89491b86302586a3;
+  require(owned && slot[0].address == pool.owner, "not a Stabble CLMM pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
   swapRaydium(slot, trader, amountIn, maxPrice, recipient);
@@ -708,8 +708,8 @@ export function tryOrcaWhirlpool(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const venue = 0x0e03685f8e909053e458121c66f5a76aedc7706aa11c82f8aa952a8f2b7879a9;
-  require(slot[0].address == venue && pool.owner == venue, "not an Orca whirlpool");
+  const owned = pool.owner == 0x0e03685f8e909053e458121c66f5a76aedc7706aa11c82f8aa952a8f2b7879a9;
+  require(owned && slot[0].address == pool.owner, "not an Orca whirlpool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
   swapWhirlpool(slot, trader, amountIn, maxPrice, recipient);
@@ -743,8 +743,8 @@ export function tryCropper(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const venue = 0xefa6e5dfb789ce3db66eccedff9eab02ca6a57cf068746befe835ab4c2f2ee0f;
-  require(slot[0].address == venue && pool.owner == venue, "not a Cropper pool");
+  const owned = pool.owner == 0xefa6e5dfb789ce3db66eccedff9eab02ca6a57cf068746befe835ab4c2f2ee0f;
+  require(owned && slot[0].address == pool.owner, "not a Cropper pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
   swapCropper(slot, trader, amountIn, maxPrice, recipient);
@@ -777,8 +777,8 @@ export function tryDefituna(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const venue = 0x09db19e5e1ffb1eba60fcffdafaa314664a12f6cac8af15485b5ddd92b6f3ae6;
-  require(slot[0].address == venue && pool.owner == venue, "not a DefiTuna pool");
+  const owned = pool.owner == 0x09db19e5e1ffb1eba60fcffdafaa314664a12f6cac8af15485b5ddd92b6f3ae6;
+  require(owned && slot[0].address == pool.owner, "not a DefiTuna pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
   swapDefituna(slot, trader, amountIn, maxPrice, recipient);
@@ -811,8 +811,8 @@ export function tryCrema(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const venue = 0xa865993892793f8063d3199efd7fbda5844e3a99b4c73ce660916534b64e4ce6;
-  require(slot[0].address == venue && pool.owner == venue, "not a Crema pool");
+  const owned = pool.owner == 0xa865993892793f8063d3199efd7fbda5844e3a99b4c73ce660916534b64e4ce6;
+  require(owned && slot[0].address == pool.owner, "not a Crema pool");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
   swapCrema(slot, trader, amountIn, maxPrice, recipient);
@@ -846,8 +846,8 @@ export function tryPhoenix(
   if (pool.address == 0 || amountIn == 0) {
     return 0;
   }
-  const venue = 0x05d0ea4f33737013a563e09348edb6f4593d91fc7641f9247c2441a842a1bbeb;
-  require(slot[0].address == venue && pool.owner == venue, "not a Phoenix market");
+  const owned = pool.owner == 0x05d0ea4f33737013a563e09348edb6f4593d91fc7641f9247c2441a842a1bbeb;
+  require(owned && slot[0].address == pool.owner, "not a Phoenix market");
   const held = balanceOf(trader[2].address, trader[1]);
   const before = balanceOf(trader[3].address, recipient);
   swapPhoenix(slot, trader, amountIn, maxPrice, recipient);
