@@ -367,7 +367,11 @@ describe("every registry protocol, every contract kind", () => {
         "function main(): Uint256 { const pool = UniswapV3.Pool(1n); return pool.fee(); }",
       ),
     ).toEqual(bytesOf("base", "function main(): Uint256 { return UniswapV3.Pool(1n).fee(); }"));
-    expect(() => bytesOf("base", "function main() { UniswapV3.Pool(1n, 2n).fee(); }")).toThrow();
+    // An interface is an arrow of one address: as in JavaScript, an argument beyond it is dropped
+    // (the editor's declarations flag it).
+    expect(
+      bytesOf("base", "function main(): Uint256 { return UniswapV3.Pool(1n, 2n).fee(); }"),
+    ).toEqual(bytesOf("base", "function main(): Uint256 { return UniswapV3.Pool(1n).fee(); }"));
   });
 
   it("a deployed contract's name is never called with an address: .at binds another deployment", () => {

@@ -1355,8 +1355,9 @@ describeEvm("intent bodies, executed", () => {
           0x6e6fn,
         ],
       ] as const) {
-        // Pending the compiler: `catch (e)`, which hands the handler what the body reverted with
-        // (v12 #553).
+        // Pending the engine: a handler that reads `e` runs on the v12-evm release whose `CATCH`
+        // reads `CATCH_READS` (v12 #553's major). Against an engine built from #553
+        // (SAUCE_V12_RUNTIME_CREATION_HEX), it passes.
         (handler.startsWith("(e)") ? it.failing : it)(
           name,
           async () => {

@@ -229,9 +229,7 @@ describe("the intents a program opens, as compiled", () => {
     expect(bytesToHex(handled.bodies[0]!.bytecode)).toBe(bytesToHex(tried.bytecode));
   });
 
-  // Pending the compiler: `catch (e)`, which hands the handler what the body reverted with (v12
-  // #553).
-  it.failing("a handler reads what the body reverted with", () => {
+  it("a handler reads what the body reverted with", () => {
     compile(
       `function main() {
   Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })

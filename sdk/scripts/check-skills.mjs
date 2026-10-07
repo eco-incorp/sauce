@@ -1952,19 +1952,8 @@ const summary =
 const PENDING = [
   {
     file: "skills/",
-    match: /a `catch` parameter \(a caught failure keeps no revert data/,
-    waits: "the compiler's catch (e) (v12 #553)",
-  },
-  {
-    file: "skills/",
     match: /`await` is only allowed within async functions/,
     waits: "the compiler's await (v12 #554)",
-  },
-  {
-    file: "skills/sauce-script/references/builtins.md",
-    match:
-      /\.catch\(\) handler parameter|"a `\.catch\(\)`|"a `try` block|"`try`\/`catch` is not available/,
-    waits: "the compiler's catch (e) (v12 #553)",
   },
 ];
 const pending = [];

@@ -860,7 +860,7 @@ export const rejections = [
     src: "function main(t: Address, d: bytes): bytes { const r = evm.static(t, d).catch(() => { return 0n; }); return r; }",
   },
   {
-    quotes: ["a .catch() handler compiles to N bytes, over the 255-byte limit …"],
+    quotes: ["a .catch() handler compiles to N bytes, over the 254-byte limit …"],
     targets: ["evm"],
     contracts,
     src: `function main(t: Uint256, s: Uint256): Uint256 { let v = 0n; ERC20.at(t).approve(s, 1n).catch(() => { ${long} }); return v; }`,

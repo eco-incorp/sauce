@@ -75,10 +75,11 @@ check(
   "try/catch is EVM only",
 );
 check(
-  /unsupported construct/.test(
-    rejects('function main(x: Uint256): void { throw new Error("no"); }'),
-  ),
-  "throw new Error",
+  build(
+    'function main(x: Uint256): void { if (x > 1) { throw new Error("no"); } }',
+  ).bytecode.join() ===
+    build('function main(x: Uint256): void { if (x > 1) { throw "no"; } }').bytecode.join(),
+  "throw new Error(message) is throw message",
 );
 check(
   /not a context builtin/.test(rejects("function main(): Address { return ctx.caller(); }")),
