@@ -656,7 +656,10 @@ A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400
 ## Running it
 
 Four steps, each a `sauce` command: find the pools, rehearse with no key, then send. Every
-amount is base units; the command's token amounts (`--assume-balance`) are whole tokens.
+amount is base units but the command's token amounts. `--assume-balance <token>:<amount>` gives
+the account the cook spends that token from (the Pot's) that balance, in the rehearsal only, the
+amount in whole tokens: `--assume-balance USDC:1000` is 1,000 USDC, and `USDC:1000000000n`, with
+a trailing `n`, the same in base units.
 
 1. **Find the pools and choose the slots.** `sauce pools --chain solana USDC WSOL --json` reads
    every pool of the pair at the venues above, by liquidity at its price, deepest first, each with
@@ -680,7 +683,12 @@ amount is base units; the command's token amounts (`--assume-balance`) are whole
    System program trades nothing and returns the whole budget, so check what `bought` says.
 
 2. **Write the accounts** as one JSON object, which `--accounts` takes (each is also
-   `--account NAME=<value>`). `pot:USDC` is the Pot's own USDC account, `mint:USDC` the mint:
+   `--account NAME=<value>`). A value is an address or a form the command resolves, a token being
+   a symbol the chain registers or a base58 mint: `pot` is the Pot, which the Kitchen signs for;
+   `owner` the owner; `pot:<token>` the Pot's associated token account for the token, as
+   `pot:USDC`; `owner:<token>` the owner's, as `owner:WSOL`; `mint:<token>` the token's mint, as
+   `mint:USDC`; and `program:<token>` its token program, SPL Token or Token-2022, as
+   `program:USDC`:
 
    ```json
    {
@@ -752,8 +760,10 @@ the cook. A signer other than the `sauce` command sends the same sequence, which
 TypeScript client builds ([the API reference](../api/README.md)).
 
 **Reading a rehearsal.** `sauce simulate` prints what `main` returned, by name, how it rehearsed,
-and what moved. Buying SOL with 2,000 USDC, one pool deep enough for all of it, the addresses as
-placeholders:
+and what moved. **The order is rehearsed only when the rehearsal succeeds and `bought` is above
+0**: anything else (a failure, a revert, nothing bought) is a failed rehearsal to fix and rehearse
+again, never a result. Buying SOL with 2,000 USDC, one pool deep enough for all of it, the
+addresses as placeholders:
 
 ```text
 The cook succeeds from <owner>: 411038 compute units, returns <the same three words, in hex>
