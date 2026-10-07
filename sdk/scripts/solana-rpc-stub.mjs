@@ -1,7 +1,8 @@
 // A Solana JSON-RPC endpoint on loopback holding only what `sauce simulate` reads to rehearse a cook
 // in its local copy: the Rent sysvar at mainnet's rent, the Kitchen's fee config, and the mints it is
-// given. Every other account is absent, as an owner's and a Pot's are before they exist. The packed
-// check rehearses a Solana cook through it from the installed tarball, with no network.
+// given. Every other account is absent, as an owner's and a Pot's are before they exist, and no
+// program owns any (`sauce pools` finds none). The packed check rehearses a Solana cook through it
+// from the installed tarball, with no network; the MCP tests list a pair's pools through it.
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 
@@ -19,16 +20,22 @@ const rentExempt = (size) => (128n + BigInt(size)) * 5080n;
 
 /**
  * Serves `accounts` (address -> { owner, data }) beside the Rent sysvar, the fee config at
- * `feeConfig` charging `fee` lamports, and a clock at `slot`. Resolves to { url, methods, close }:
+ * `feeConfig` (when given) charging `fee` lamports, and a clock at `slot`. Resolves to { url, methods, close }:
  * `methods` counts what was asked, and an unknown method is answered with an error naming it.
  */
-export async function solanaRpcStub({ feeConfig, kitchen, fee, accounts = {}, slot = 1_000n }) {
+export async function solanaRpcStub({
+  feeConfig,
+  kitchen,
+  fee = 0n,
+  accounts = {},
+  slot = 1_000n,
+} = {}) {
   const held = new Map(Object.entries(accounts));
   const discriminator = createHash("sha256").update("account:ExecutionFeeConfig").digest();
   const feeData = Buffer.alloc(16);
   discriminator.copy(feeData, 0, 0, 8);
   feeData.writeBigUInt64LE(BigInt(fee), 8);
-  held.set(feeConfig, { owner: kitchen, data: feeData });
+  if (feeConfig !== undefined) held.set(feeConfig, { owner: kitchen, data: feeData });
   held.set("SysvarRent111111111111111111111111111111111", {
     owner: "Sysvar1111111111111111111111111111111111111",
     data: rentSysvar(),
@@ -55,6 +62,8 @@ export async function solanaRpcStub({ feeConfig, kitchen, fee, accounts = {}, sl
         return { context, value: params[0].map(info) };
       case "getAccountInfo":
         return { context, value: info(params[0]) };
+      case "getProgramAccounts":
+        return [];
       case "getBalance":
         return { context, value: 0 };
       case "getSlot":

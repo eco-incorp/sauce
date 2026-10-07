@@ -26,6 +26,7 @@ import { SKILL_TOOL_NAMES } from "../src/skilltools.js";
 import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
 import { FLAG_INPUTS, flagInputLines, LISTED_FLAG_INPUTS } from "../src/terms.js";
 import { simulateSummary, TOOL_NAMES } from "../src/tools.js";
+import { solanaRpcStub } from "../../sdk/scripts/solana-rpc-stub.mjs";
 import { connect, failed, ok, type Connected } from "./harness.js";
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -418,6 +419,29 @@ describe("sauce_pools", () => {
     );
     assert.match(message, /Listing a pair's pools needs an RPC endpoint for base/);
     assert.match(message, /Pass rpcUrl with the call/);
+  });
+
+  it("returns a Solana listing its output schema takes: no block, mints for addresses, skipped", async () => {
+    const stub = await solanaRpcStub();
+    try {
+      const listed = ok(
+        await mcp.call("sauce_pools", {
+          chain: "solana",
+          tokenA: "USDC",
+          tokenB: "SOL",
+          limit: 4,
+          rpcUrl: stub.url,
+        }),
+      ) as { tokens: { symbol: string; mint: string }[]; pools: unknown[]; skipped: unknown[] };
+      assert.deepEqual(
+        listed.tokens.map((token) => token.symbol),
+        ["USDC", "WSOL"],
+      );
+      assert.deepEqual([listed.pools, listed.skipped], [[], []]);
+      assert.ok(stub.methods.has("getProgramAccounts"));
+    } finally {
+      await stub.close();
+    }
   });
 
   it("lists Solana's pools through an endpoint too, and refuses a V4 key it cannot read before one", async () => {
