@@ -620,21 +620,33 @@ SCALARS, still exported for a caller compiling a standalone asset) vs ambient **
 library exports, the chain's names among them).
 
 **Intents are a SauceScript class library, `@sauce/intents`** (`src/std/intents/intents.evm.js`),
-which the compiler runs while it compiles. `<Chain>.Portal` is a `Portal` in the chain's module,
-holding the destination's chain id and this level's defaults (`intents`, the registry's source and
-destination Portal and prover, the destination Pot, its Kitchen fee). `send(...items)` returns an
-`Intent`, whose methods set fields and return it: `refundee`, `deadline` (the reward's) and `prover`
-after `send`; `receive(...items)`; `deadline` (the route's), `salt` and `fee` after `receive`;
-`then(body)`; `catch((e) => …)`. A modifier is given at most once and refuses the wrong stage in
-the class's words. Nothing is emitted until the statement ends: the compiler calls
+which the compiler runs while it compiles. The syntax is ONE verb with ONE config object (user,
+2026-10-06): `await Optimism.hop({ reward, receive?, refundee, deadline?, rewardDeadline?, prover?,
+salt?, fee? })`, the code after the `await` running on Optimism, or `Optimism.hop({ … }).then(() =>
+{ … })`, and `.catch((e) => …)` on what `.then` returns. `reward`/`receive` take one item or a list.
+The chained `Chain.Portal.send(…).refundee(…).receive(…)` form is GONE (unreleased, no alias), and
+`Chain.Portal` is now just the chain's eco-routes Portal contract binding (`EcoRoutes.Portal`), for
+low-level calls, in a program and on the host. Each chain's class in the chain's module has
+`hop(config) { return new Intent(<destination facts>, HERE, config); }` (or a `hop` that throws why
+that pair has none): the destination's chain id, Portal, prover, Pot, engine, Kitchen fee and
+tokens, and `HERE` this level's defaults (`intents`, the source Portal). The `Intent` keeps the
+config and its steps record and return it: `then(body)`, then `catch(handler)`; a step out of place
+is refused in the class's words. Room is left for `before`/`after` hook fields (SDK #92): the class
+already assembles raw route calls before the delivery and after the cook. A field the hop does not
+take is IGNORED: nothing enumerates a static object's keys while compiling (no `for…in`,
+`Object.keys` or object destructuring; reported to the lead), so the editor declarations
+(`SauceHopConfig`) and the TypeScript builder are what refuse one. Nothing is emitted until the
+statement ends: the compiler calls
 `[Symbol.dispose]()` on an expression statement's static object (and on a `const` holding one, at
 the end of its block), which builds the intent as ONE inline literal — encoded by the engine's
 ABI_ENCODE as the program runs, a run-time value a hole in it — and publishes it (`publish` after a
-transfer into the vault, or `publishAndFund`, `intents.fundVia`). An intent missing `.then` is a
-compile-time `throw` with the class's message. **`.refundee(<address>)` is REQUIRED on every
-intent, with no default — not the signer's, not the Pot's** (user, 2026-10-06). `{ native }` is a
-reward item only. A computed `.fee(...)`, a `const` holding an intent and a non-literal item list
-compile like any other value.
+transfer into the vault, or `publishAndFund`, `intents.fundVia`). A hop with no body is a
+compile-time `throw` with the class's message. **`refundee` is REQUIRED on every hop, with no
+default — not the signer's, not the Pot's** (user, 2026-10-06). `{ native }` is a reward item only.
+A computed `fee`, a `const` holding an intent and a non-literal item list compile like any other
+value. The default salt is the compile's base salt mixed with a run-time count of the intents the
+transaction opened, kept in transient storage (`keccak256("sauce.intents.nonce")`), so two intents
+built alike, in sequence or a loop, are two; an explicit `salt` is used as written.
 
 **Every body is a program cooked on the destination's shared Pot, and pays the Kitchen fee** (user,
 2026-10-06), transfer-only bodies included: there is no Executor-only `route.calls` path. `then`'s
@@ -644,14 +656,16 @@ target, `chainAmbient`, its BODY module `@sauce/chain-<slug>-body` (whose intent
 runs, with no `openedAt`, and are funded whatever the root does), the caller's defines — and returns
 `{ code, args }`, each value the closure captures from where it was written a run-time argument.
 The route moves the delivery's tokens to the Pot and calls `cook(engine, code ‖ args)` with the
-destination Kitchen's fee as `route.nativeAmount` (`.fee(...)`, else `intents.executionFee`, a
-bigint or a function of the destination; the CLI reads each destination's Kitchen). `.receive()`
-delivers nothing; `.receive({ token: USDC, amount })` is the destination's token of THAT SYMBOL,
-re-resolved there, and a token only the destination has is written `Token(0x…)` until the
-compiler can hand a call it runs an unknown bare name. `.catch((e) => { … })` makes the body and its
-handler one destination program, `try { … } catch (e) { … }` (EVM only; it compiles once the
-compiler's try/catch lands), and `await x; rest` is the compiler's `x.then(() => { rest })` (once its
-`await` lands).
+destination Kitchen's fee as `route.nativeAmount` (the hop's `fee`, else `intents.executionFee`, a
+bigint or a function of the destination; the CLI reads each destination's Kitchen). No `receive`
+delivers nothing; `receive: { token: USDC, amount }` is the destination's token of THAT SYMBOL,
+re-resolved there (only the tokens: every other value is computed on the source), and a token only
+the destination has is written `Token(0x…)` until the compiler can hand a call it runs an unknown
+bare name. `.catch((e) => { … })` makes the body and its handler one destination program,
+`try { … } catch (e) { … }` (EVM only; it compiles once the compiler's try/catch lands), and
+`await x; rest` is the compiler's `x.then(() => { rest })` (once its `await` lands). Until then the
+example files the suites EXECUTE are written with `.then(...)`, while prose and skill blocks lead
+with `await` (the checker's `PENDING` list names what waits on the compiler).
 
 **What an intent leaves out is Eco's default** (`intent-defaults.ts`, which
 `docs/reference/intent-defaults.md` and the `sauce-intents` defaults reference state): the route
@@ -663,7 +677,7 @@ command, so every compile the command makes builds the same intents — else whe
 reads a file's intents (below); nothing else about them changes.
 
 **Chain-scoped names are resolved per level.** The body and the delivery resolve on the
-destination, and the reward and every modifier on the enclosing chain, which escrows the reward.
+destination, and the reward and every other field on the enclosing chain, which escrows the reward.
 Every `tokens` override and every chain value the caller chose belongs to the program it was given
 for: a body on another chain takes its own chain's registry values, and only the caller's other
 defines (`RECIPIENT`) hold at every depth. Two defects came from mixing these up (Arbitrum's USDC as
@@ -672,19 +686,23 @@ cascades on three anvils whose USDC differs; a test that gives a symbol one addr
 `tokens` override, a define) cannot see either defect.
 
 **A TypeScript intent is the program that opens it** (`routes/host-intent.ts`, lead, 2026-10-06):
-`Base.Portal.send(...).source(chain, options).refundee(...).receive(...).then(body)` writes the
-statement a program opens that intent with, compiles it for the source chain with `options` (a
-`SauceProgramOptions`), and returns `{ source, program, cook(target, value), intents(logs) }`; the
+`Base.hop({ source, reward, receive, refundee, …, compile }).then(body)` writes the statement a
+program opens that intent with, compiles it for the source chain with `compile` (a
+`SauceProgramOptions`), and returns `{ source, program, cook(target, value), intents(logs) }`; a
+field it does not know is refused; the
 cook runs on a Pot on the source chain, and `intents(logs)` reads each published intent from the
 Portal's `IntentPublished` (`routes/published.ts#loggedIntents`, which the CLI's
 `logged-intents.ts` uses too). There is no offline hash and no `.nest()`. The old route-then-reward
 form — `Base(body, options).reward(...)`, `Base.route`, `openRoute`, `.nest()` and its transfer
 and dynamic modes, the CCTP recipe builders, actions' `programIntent` — is deleted: a chain export
-is a namespace (`chain`, `Portal`, contracts, tokens), not a function.
-`intent-syntax.ts#INTENT_STAGES` is the syntax as data for the editor's declarations
-(`gen-source-globals.mjs`: `Portal`, `Sent`, `Received`, `Opened`, `Caught`); the class is what
-compiles, so change them together; `routes-intent-portal.test.ts` holds the bytes each modifier
-builds, and the TypeScript intent's cook to what the same statement in a file publishes.
+is a namespace (`chain`, `hop`, `Portal`, contracts, tokens), not a function.
+`intent-syntax.ts#HOP_FIELDS`/`HOP_STAGES` is the syntax as data for the editor's declarations
+(`gen-source-globals.mjs`: `SauceHopConfig`, `SauceHop`, `SauceHopOpened`, and `SauceIntentChain`'s
+`hop` and `Portal`); the class is what compiles, so change them together;
+`routes-intent-portal.test.ts` holds the bytes each field builds, and the TypeScript intent's cook
+to what the same statement in a file publishes. `intent-parts.ts` reads from a program's text which
+chain each part runs on (what follows `await X.hop(…)`, `.then`'s argument, `receive`), for
+diagnostics and the defines report.
 
 **`Token(addr)` and `<Sym>.transfer(...)` are `@sauce/names`' `Token`**, not rewrites: a WRITE
 (`transfer`/`approve`/`transferFrom`) is the `@sauce/token` function of the same name with the token
@@ -698,7 +716,7 @@ USDT among the tokens.
 **The host surface and compiled-source declarations are separate — and only one of them is
 global.** The HOST surface is IMPORTS ONLY: `routes/chain-exports.generated.ts` exports one named
 value per canonical chain (`Base`, `Solana`, …) plus `chain` and `Token`, re-exported from the
-package root, each composed in `routes/composed.ts` (`.chain`, `.Portal`, the lazy contract tree,
+package root, each composed in `routes/composed.ts` (`.chain`, `.hop`, `.Portal` (the eco-routes Portal contract, read lazily), the lazy contract tree,
 the chain's registry tokens, + the svm venue tree on an svm chain). **Importing the SDK touches nothing on
 `globalThis`**; `installRouteGlobals()`/`uninstallRouteGlobals()` (`routes/globals.ts`) remain as an
 opt-in for a host that wants the bare-name spelling at run time, hand out the SAME memoised objects,
@@ -785,7 +803,7 @@ verbs from each command's `--help`.
 (`publish.ts#publishCommand`) is `sauce run` on the signer's own Pot — `simulate` with `--dry-run`,
 `tx` with `--format` — for a file that opens at least one intent, the reward pulled into the Pot by
 `--fund` (`funding.ts`); with no file it is the guided create (`create.ts`), which writes a file
-naming the signer as `.refundee(...)` and publishes it the same way. Publishing from Solana is
+naming the signer as its hop's `refundee` and publishes it the same way. Publishing from Solana is
 refused. There is no offline intent hash and no second encoder: each intent's hash and record come
 from the Portal's `IntentPublished` (`logged-intents.ts#loggedIntents`, the chain's registry Portal's
 logs, each rebuilt by `portal.ts#intentFromPublished`), the rehearsal's and then the receipt's, which
