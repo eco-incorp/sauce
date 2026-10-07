@@ -218,13 +218,16 @@ How a program's names resolve per chain, and each chain's facts. One file compil
 gets each one's own tokens, stocks, contracts and `chainId`; a name a chain lacks is refused when
 compiling; another chain's contract (`Base.UniswapV3.Factory`) is only its address, never a call;
 the same names are written for an EVM chain or for Solana. Per chain: supported or preview (and
-how to request it), its id, slug, native coin, Sauce engine and Kitchen, intents, CCTP domain,
-every token and every protocol deployment with its address.
+how to request it), its id, slug, native coin, intents, CCTP domain, every token and every
+protocol deployment with its address; and the Sauce deployment, the same on every chain, in one
+file.
 
 - **Holds** [references/index.md](../sauce-chains/references/index.md) and a generated file per
   chain, such as [references/base.md](../sauce-chains/references/base.md), with a separate file of
-  tokenized stocks for each chain that has them. Its examples read what a Pot holds on any EVM
-  chain, and pay cash and stock on Solana.
+  tokenized stocks for each chain that has them, and
+  [references/deployments.json](../sauce-chains/references/deployments.json): the engine, the
+  Kitchen, the Routers, the shared intent Pot and the Solana programs. Its examples read what a Pot
+  holds on any EVM chain, and pay cash and stock on Solana.
 - **Load it** for an address, for what one chain offers, for one program meant for several chains,
   or when a transaction is refused on a preview chain. For a name alone, `sauce-globals` is
   lighter; for a Solana program in depth, `sauce-solana`.

@@ -19,12 +19,10 @@ use case to it, or [open one](https://github.com/eco-incorp/sauce/issues/new?tem
 | Kind | EVM |
 | Name in a program | `Polygon` |
 | Native coin | MATIC (MATIC), 18 decimals |
-| Sauce engine | `0xcF7A92abCC7Ede43277AcCBAfda910b8829bF9AD` |
-| Sauce Kitchen | `0x19845b22989150E6B09dE55a661295Dd9188506b` |
-| Sauce Router | `0x9201aF06536Cb4819cf1F08aE7063c5997D87459` |
+| Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [deployments.json](deployments.json) (`evm`) |
 | Intents (eco-routes) | takes intents; Portal `0xEC000769A73b70e16f361a442292500b3BCf4A85` |
 | Intent Executor | `0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082` |
-| Shared intent Pot | `0x6340080a1967a03cAAD490a170828d4C59EE5983`: the Kitchen's `deployPot(<Executor>, 0x0)` creates it, from any account |
+| Shared intent Pot | the Executor's Pot under salt zero, the same on every chain: [deployments.json](deployments.json) (`evm.intentPot`); the Kitchen's `deployPot(<Executor>, 0x0)` creates it, from any account |
 | CCTP domain | 7 |
 
 ## In a program
