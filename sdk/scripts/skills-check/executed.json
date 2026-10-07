@@ -37,6 +37,9 @@
     "sauce-solana-distributed-swap/examples/solana-distributed-swap.sauce.ts": [
       "sdk/test/svm/distributed-swap.e2e.test.ts",
       "sdk/test/cli-solana-distributed-swap.e2e.test.ts"
+    ],
+    "sauce-solana-distributed-swap/examples/solana-distributed-swap-5.sauce.ts": [
+      "sdk/test/svm/distributed-swap.e2e.test.ts"
     ]
   },
   "compileOnly": {

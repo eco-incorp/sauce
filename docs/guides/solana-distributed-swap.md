@@ -580,9 +580,11 @@ ticks41: Account<Writable>, ticks42: Account<Writable>,
 ```
 
 and call `trade([program4, pool4, config4, vaultA4, vaultB4, extra4, ticks40, ticks41, ticks42],
-shared, kept, limit, maxPrice)` after the fourth call. Five fit one cook ("What fits in one cook").
-To drop one, remove its parameters and its call; an unused slot can also stay, all nine the System
-program.
+shared, kept, limit, maxPrice)` after the fourth call.
+`solana-distributed-swap-5.sauce.ts` is the
+program with that slot, ready to use whole as the four-slot one is (`sauce pools … --slots 5` fills
+it). Five fit one cook ("What fits in one cook"). To drop one, remove its parameters and its call;
+an unused slot can also stay, all nine the System program.
 
 **The skips are reads, never failures.** A venue fails the whole cook on a limit on the wrong side
 of its price, on a paused pool and on a closed market, so the program checks each before calling
@@ -645,10 +647,11 @@ A cook is one Solana transaction: at most 1,232 bytes and 64 accounts, and 1,400
   listed in the transaction they are over 1,500 bytes, and through an address lookup table one byte
   each. With the program staged and its accounts in a table, the cook is about 400 bytes.
 - **About five pools fit.** Four distinct pools, the shared accounts and the cook's own come to
-  about 52 accounts of 64; a fifth pool brings eight more. Measured on the venues' own programs,
-  the program costs about 190,000 compute units with every slot empty, each pool that trades about
-  210,000 more, and each pool skipped after its reads about 75,000: four trading pools take about
-  1,000,000 of the 1,400,000. Pools that share a program or a config cost fewer accounts.
+  about 52 accounts of 64; a fifth pool brings eight more, about 60. Measured on the venues' own
+  programs, the program costs about 190,000 compute units with every slot empty, each pool that
+  trades about 210,000 more, and each pool skipped after its reads about 75,000: four trading
+  pools take about 1,000,000 of the 1,400,000, and the five-slot program with four trading and one
+  skipped about 1,080,000. Pools that share a program or a config cost fewer accounts.
 - **Which pools, then.** On Solana the program does not walk every pool there is: the cook carries
   the four or five best the search found, the deepest and cheapest first. More pools than fit is
   more than one cook.
@@ -737,10 +740,21 @@ a trailing `n`, the same in base units.
    ```
 
    Rehearse once with `minTokens` and `maxAvgPrice` 0 to read what fills and its average, once with
-   `minTokens` above what filled (it reverts `bought below minTokens`), once with `maxAvgPrice`
-   below the average (it reverts `average too high`); then set them by the rules above. A token
-   account the cluster does not have yet, such as a new Pot's WSOL account, the copy makes empty and
-   a note names; `sauce run` creates it before the cook.
+   `minTokens` above what filled, once with `maxAvgPrice` below the average; then set them by the
+   rules above. A rehearsal that reverts exits 1, its first line `The cook reverts: <reason>`, so
+   hold each guard's to its revert with `--expect-revert`, which exits 0 only when the cook reverts
+   with that reason:
+
+   ```sh
+   sauce simulate solana-distributed-swap.sauce.ts --chain solana --owner <owner> \
+     --accounts accounts.json --assume-balance USDC:1000 \
+     --args 1000000000 120000000000000000 8333333334 0 --expect-revert "bought below minTokens"
+   ```
+
+   and `--expect-revert "average too high"` for the average. Over MCP, `sauce_simulate`'s
+   `scenarios`, each with its own `expectRevert`, rehearse all three in local copies of one read
+   of the cluster, at one slot. A token account the cluster does not have yet, such as a new Pot's
+   WSOL account, the copy makes empty and a note names; `sauce run` creates it before the cook.
 
 4. **Send** with `sauce run`, signed by the owner's `--keypair` (or `--wallet`). The budget must be
    in the Pot's USDC account first: a transfer into it from any wallet. `sauce run` creates the Pot

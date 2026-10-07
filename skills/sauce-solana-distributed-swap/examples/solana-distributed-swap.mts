@@ -138,6 +138,31 @@ check(
   "the skill gives the program's size",
 );
 
+// The five-slot program is this one with a fifth slot: the same venue code, word for word, and
+// main the same but for slot 4's nine accounts and its trade call.
+const five = readFileSync(new URL("./solana-distributed-swap-5.sauce.ts", import.meta.url), "utf8");
+const venueCode = (text: string) =>
+  text.slice(text.indexOf("// The venues."), text.indexOf("function main("));
+check(venueCode(five) === venueCode(source), "the five-slot program's venue code is this one's");
+const program5 = routes.compileSauceProgram("solana", five);
+const names5 = (program5.manifest?.accounts ?? []).map((entry) =>
+  entry.kind === "slot" ? entry.name : "…",
+);
+const expected5 = [...expected, ...slot(4)];
+check(
+  names5.join() === expected5.join(),
+  `the five-slot program takes ${expected5.length} accounts`,
+);
+check(
+  (five.match(/^ {2}trade\(/gm) ?? []).length === 5,
+  "and trades each of its five slots in turn",
+);
+check(
+  program5.entryParams.map((param) => param.name).join() ===
+    "budget,maxPrice,minTokens,maxAvgPrice",
+  "with the same arguments",
+);
+
 // maxPrice: the price in whole tokens times 10^(18 + payDecimals − buyDecimals). USDC has 6
 // decimals on Solana and SOL 9.
 const solana = routes.chain("solana").chain;

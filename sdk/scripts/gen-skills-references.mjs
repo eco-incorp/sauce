@@ -1962,6 +1962,7 @@ export function renderDocsReference(data, skillFiles) {
         skillFiles.solanaDistributedSwapExample,
         {
           "examples/solana-distributed-swap.sauce.ts": ["`solana-distributed-swap.sauce.ts`"],
+          "examples/solana-distributed-swap-5.sauce.ts": ["`solana-distributed-swap-5.sauce.ts`"],
           "examples/solana-distributed-swap.mts": ["`solana-distributed-swap.mts`"],
           "references/venues.md": [
             "the venues, their pools and their slots",

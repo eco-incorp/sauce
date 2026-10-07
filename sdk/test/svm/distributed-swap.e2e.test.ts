@@ -60,10 +60,16 @@ import {
 } from "./venue-fixture.js";
 import type { Pool } from "./venue-fixture.js";
 
-/** The skill's program. */
+/** The skill's program, and the same with a fifth slot. */
 const PROGRAM = fileURLToPath(
   new URL(
     "../../../skills/sauce-solana-distributed-swap/examples/solana-distributed-swap.sauce.ts",
+    import.meta.url,
+  ),
+);
+const PROGRAM_5 = fileURLToPath(
+  new URL(
+    "../../../skills/sauce-solana-distributed-swap/examples/solana-distributed-swap-5.sauce.ts",
     import.meta.url,
   ),
 );
@@ -104,6 +110,7 @@ type Outcome =
 describeSvm("the Solana distributed swap, on the venues' own programs and pools", () => {
   const source = readFileSync(PROGRAM, "utf8");
   const program = compileSauceProgram("solana", source);
+  const program5 = compileSauceProgram("solana", readFileSync(PROGRAM_5, "utf8"));
   let harness: EngineHarness;
   let nonce = 0n;
 
@@ -113,7 +120,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     loadVenues(harness.svm);
   }, 120_000);
 
-  const cook = async (order: Order): Promise<Outcome> => {
+  const cook = async (order: Order, compiled = program): Promise<Outcome> => {
     restoreVenues(harness.svm, order.edit);
     const kept = order.kept ?? 0n;
     const source = setTokenAccount(
@@ -143,7 +150,10 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
       memo: { address: MEMO, role: r },
     };
     const slots = [...order.slots];
-    while (slots.length < 4) slots.push(NONE);
+    const slotCount = compiled.manifest!.accounts.filter(
+      (entry) => entry.kind === "slot" && /^program\d+$/.test(entry.name),
+    ).length;
+    while (slots.length < slotCount) slots.push(NONE);
     slots.forEach((p, k) => {
       const ticks = paysA ? p.payA : p.payB;
       const accounts = [p.program, p.pool, p.config, p.vaultA, p.vaultB, p.extra, ...ticks];
@@ -154,7 +164,7 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
         named[name] = { address: accounts[j]!, role: writable ? w : r };
       });
     });
-    const tail = program.manifest!.accounts.map((entry) => {
+    const tail = compiled.manifest!.accounts.map((entry) => {
       if (entry.kind !== "slot") throw new Error("the program takes no remaining accounts");
       return (
         named[entry.name] ??
@@ -166,15 +176,15 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
 
     // The cook carries the program and its arguments staged in a code buffer, and its accounts
     // through a lookup table: as `sauce run` stages a program too large for one transaction.
-    const args = encodeEntryArguments(program, [
+    const args = encodeEntryArguments(compiled, [
       order.budget,
       order.maxPrice,
       order.minTokens ?? 0n,
       order.maxAvgPrice ?? 0n,
     ]);
-    const payload = new Uint8Array(program.bytecode.length + args.length);
-    payload.set(program.bytecode);
-    payload.set(args, program.bytecode.length);
+    const payload = new Uint8Array(compiled.bytecode.length + args.length);
+    payload.set(compiled.bytecode);
+    payload.set(args, compiled.bytecode.length);
     nonce += 1n;
     const staged = await stageProgram(harness, payload, nonce);
     const instructions: Instruction[] = [
@@ -290,6 +300,29 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     expect(outcome.size).toBeLessThanOrEqual(1232);
     console.log(
       `four pools: ${outcome.units} compute units, ${outcome.size}-byte transaction, ${outcome.accounts} accounts, ${program.bytecode.length}-byte program`,
+    );
+  }, 120_000);
+
+  it("takes a fifth slot in one cook: each pool trades to its own limit or, past it, sits out", async () => {
+    const cropper = pool("cropper-sol-usdc");
+    const five = [...DEEP, cropper];
+    const budget = 1_000_000n * 10n ** 6n;
+    const outcome = succeeded(
+      await cook({ slots: five, pay: USDC, buy: WSOL, budget, maxPrice }, program5),
+    );
+    for (const p of DEEP) expect(priceOf(p)).toBe(ownLimit(p, maxPrice, false));
+    // The fifth, read and decided as the others: at its own limit, or untouched past it.
+    const pastLimit = allIn(cropper, false) > maxPrice;
+    expect(priceOf(cropper)).toBe(
+      pastLimit ? snapshotPrice(cropper) : ownLimit(cropper, maxPrice, false),
+    );
+    expect(outcome.spent + outcome.unspent).toBe(budget);
+    expect(outcome.spent * E18).toBeLessThanOrEqual(maxPrice * outcome.bought);
+    expect(outcome.units).toBeLessThan(1_400_000);
+    expect(outcome.accounts).toBeLessThanOrEqual(64);
+    expect(outcome.size).toBeLessThanOrEqual(1232);
+    console.log(
+      `five pools (the fifth ${pastLimit ? "past its limit" : "trading"}): ${outcome.units} compute units, ${outcome.size}-byte transaction, ${outcome.accounts} accounts, ${program5.bytecode.length}-byte program`,
     );
   }, 120_000);
 
