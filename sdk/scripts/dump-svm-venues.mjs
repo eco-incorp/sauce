@@ -1,30 +1,34 @@
 // Dumps the Solana venues the distributed-swap skill trades on — each venue's program and, for the
-// pools its suite trades, every account a swap reads — into the test-only fixture
-// `test/fixtures/svm-venues/` that `test/svm/distributed-swap.e2e.test.ts` loads into LiteSVM.
-// Nothing in the SDK ships them: the suite runs the venues exactly as mainnet does.
+// pools its suites trade, every account a swap reads — into the test-only fixture the suites load
+// into LiteSVM (`test/svm/venue-fixture.ts`): the programs and the manifest in
+// `test/fixtures/svm-venue-programs/`, each account beside the other venue fixtures in
+// `test/svm/fixtures/<venue>/` (`scripts/lib/svm-venue-fixture.mjs` has the layout). Nothing in the
+// SDK ships them: the suites run the venues exactly as mainnet does.
 //
 //   node scripts/dump-svm-venues.mjs --redump --rpc-config rpc.config.json
 //   node scripts/dump-svm-venues.mjs --check --rpc-config rpc.config.json
 //
 // Build first (`pnpm --filter './sdk' build`): the accounts a pool's swap takes (its config, vaults,
 // observation or oracle, and the tick arrays its walk crosses each way) come from the SDK's own venue
-// decoders in `dist/`. `--redump` rewrites the fixture: each program's ELF (gzipped), each account's
-// data (gzipped), and `manifest.json` — every program's id, ProgramData address, last-deploy slot and
-// sha256; every account's address, owner, lamports and sha256; every pool's slot (its nine accounts,
-// the tick arrays both ways); the slot and time the accounts were read at. `--check` reads the
-// programs again and reports which were upgraded, writing nothing. Review a redump's diff before
+// decoders in `dist/`. `--redump` rewrites the fixture: each program's ELF (gzipped), each account
+// (refreshing a fixture file that already holds it), and `manifest.json` — every program's id,
+// ProgramData address, last-deploy slot and sha256; every account's address, owner, lamports, file
+// and sha256; every pool's slot (its nine accounts, the tick arrays both ways); the slot and time the
+// accounts were read at. `--check` reads the programs again and reports which were upgraded, and
+// re-hashes every file against its pin, writing nothing. Review a redump's diff before
 // committing it: a changed program sha256 is an upgrade, and the suite then runs the new code.
 //
 // The endpoint comes only from the `--rpc-config` file (chain id -> URL), under Solana's chain id
 // 1399811149, as in `dump-eco-routes-svm.mjs`: no default, no fallback, nothing read from the
 // environment, and no URL ever written to the fixture.
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { gunzipSync, gzipSync } from "node:zlib";
+import { gunzipSync } from "node:zlib";
 import { address, getAddressDecoder, getProgramDerivedAddress } from "@solana/kit";
+
+import { readAccountFile, roots, sha256, writeVenueFixture } from "./lib/svm-venue-fixture.mjs";
 
 const USAGE = "usage: node scripts/dump-svm-venues.mjs (--redump | --check) --rpc-config <path>";
 const SOLANA = "1399811149";
@@ -65,7 +69,7 @@ if (typeof RPC !== "string" || !/^https?:\/\//.test(RPC)) {
 }
 
 const SDK = join(dirname(fileURLToPath(import.meta.url)), "..");
-const DIR = join(SDK, "test", "fixtures", "svm-venues");
+const DIR = roots(SDK).programs;
 const MANIFEST = join(DIR, "manifest.json");
 const venues = await import(join(SDK, "dist", "svm", "venues", "index.js")).catch(() =>
   fail("the SDK is not built: run `pnpm --filter './sdk' build` first"),
@@ -168,8 +172,6 @@ async function rpc(method, params) {
   }
 }
 
-const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
-
 /** Accounts read so far, by address: one cache, so every decoder and the dump see the same bytes. */
 const read = new Map();
 let slot = 0;
@@ -234,9 +236,14 @@ if (cli.values.check) {
 
     return was?.sha256 === entry.sha256 ? [] : [`${entry.name}: ${was?.sha256} -> ${entry.sha256}`];
   });
-  const broken = [...before.programs, ...before.accounts].flatMap((item) =>
-    sha256(gunzipSync(readFileSync(join(DIR, item.file)))) === item.sha256 ? [] : [item.file],
-  );
+  const broken = [
+    ...before.programs.flatMap((item) =>
+      sha256(gunzipSync(readFileSync(join(DIR, item.file)))) === item.sha256 ? [] : [item.file],
+    ),
+    ...before.accounts.flatMap((item) =>
+      sha256(readAccountFile(SDK, item.file)) === item.sha256 ? [] : [item.file],
+    ),
+  ];
   for (const line of upgraded) console.log(`upgraded since the dump: ${line}`);
   for (const file of broken) console.log(`does not hash to its pin: ${file}`);
   if (upgraded.length + broken.length > 0) process.exit(1);
@@ -405,16 +412,26 @@ async function slotOf({ venue, pool, only }) {
 const pools = [];
 for (const spec of POOLS)
   pools.push({ name: spec.name, venue: spec.venue, ...(await slotOf(spec)) });
-// The mints of every pool, from the pools themselves: SOL, USDC, USDT and Byreal's token.
-const wanted = new Set([
-  WSOL,
-  USDC,
-  USDT,
+// Each account in the directory of the first pool naming it; a pool the suites only refuse is kept
+// as an earlier fixture of it has it. The mints, from the pools themselves: SOL and USDC with
+// Raydium's, USDT with Stabble's, Byreal's token with its pool.
+const venueOf = new Map();
+const kept = new Set();
+const claim = (at, venue) => {
+  if (at !== SYSTEM && !Object.values(PROGRAMS).includes(at) && !venueOf.has(at))
+    venueOf.set(at, venue);
+};
+claim(WSOL, "raydium-clmm");
+claim(USDC, "raydium-clmm");
+claim(USDT, "stabble-clmm");
+claim(
   getAddressDecoder().decode(
     read.get(POOLS.find((p) => p.name === "byreal-usdc").pool).data.subarray(73, 105),
   ),
-]);
-for (const pool of pools)
+  "byreal",
+);
+for (const [index, pool] of pools.entries()) {
+  if (POOLS[index].only) kept.add(pool.pool);
   for (const at of [
     pool.pool,
     pool.config,
@@ -424,7 +441,9 @@ for (const pool of pools)
     ...pool.payA,
     ...pool.payB,
   ])
-    if (at !== SYSTEM && !Object.values(PROGRAMS).includes(at)) wanted.add(at);
+    claim(at, pool.venue);
+}
+const wanted = new Set(venueOf.keys());
 // Read them all again at one slot at least as late as the last decoder read, so the pools, their
 // vaults and their tick arrays are one consistent snapshot.
 for (const at of wanted) read.delete(at);
@@ -432,44 +451,27 @@ await fetchAll([...wanted]);
 const time = await rpc("getBlockTime", [slot]);
 
 const accounts = [];
-for (const at of [...wanted].sort()) {
+for (const at of wanted) {
   const account = read.get(at);
   if (account === null) continue; // an uninitialized tick array: the swap takes it as empty
   accounts.push({
-    entry: {
-      address: at,
-      owner: account.owner,
-      lamports: String(account.lamports),
-      size: account.data.length,
-      sha256: sha256(account.data),
-      file: `accounts/${at}.bin.gz`,
-    },
+    address: at,
+    owner: account.owner,
+    lamports: account.lamports,
     data: account.data,
+    venue: venueOf.get(at),
+    keep: kept.has(at),
   });
 }
 
-rmSync(DIR, { recursive: true, force: true });
-mkdirSync(join(DIR, "accounts"), { recursive: true });
-for (const { entry, elf } of programs)
-  writeFileSync(join(DIR, entry.file), gzipSync(elf, { level: 9 }));
-for (const { entry, data } of accounts)
-  writeFileSync(join(DIR, entry.file), gzipSync(data, { level: 9 }));
-writeFileSync(
-  MANIFEST,
-  JSON.stringify(
-    {
-      cluster: "mainnet-beta",
-      slot,
-      unixTimestamp: time,
-      date: new Date().toISOString().slice(0, 10),
-      programs: programs.map(({ entry }) => entry),
-      pools,
-      accounts: accounts.map(({ entry }) => entry),
-    },
-    null,
-    2,
-  ) + "\n",
-);
+writeVenueFixture(SDK, {
+  programs,
+  pools,
+  accounts,
+  slot,
+  unixTimestamp: time,
+  date: new Date().toISOString().slice(0, 10),
+});
 console.log(
   `dump-svm-venues: ${programs.length} programs, ${pools.length} pools, ${accounts.length} accounts at slot ${slot}`,
 );

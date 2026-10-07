@@ -1,7 +1,8 @@
 /**
- * The venues the Solana distributed swap trades on, as `scripts/dump-svm-venues.mjs` dumped them into
- * `test/fixtures/svm-venues/`: each venue's mainnet program, and every account of the pools a swap
- * takes, with the slot of nine accounts the skill's program takes for each pool. Loaded into a LiteSVM
+ * The venues the Solana distributed swap trades on, as `scripts/dump-svm-venues.mjs` dumped them:
+ * each venue's mainnet program and the manifest in `test/fixtures/svm-venue-programs/`, and every
+ * account of the pools a swap takes beside the other venue fixtures in `test/svm/fixtures/<venue>/`,
+ * with the slot of nine accounts the skill's program takes for each pool. Loaded into a LiteSVM
  * bank by the suites that execute the program, directly through the Kitchen
  * (`distributed-swap.e2e.test.ts`) and through the `sauce` command (`cli-solana-distributed-swap`).
  */
@@ -14,7 +15,8 @@ import type { Address } from "@solana/kit";
 import type { LiteSVM } from "litesvm";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const FIXTURE = join(HERE, "../fixtures/svm-venues");
+const PROGRAMS = join(HERE, "../fixtures/svm-venue-programs");
+const ACCOUNTS = join(HERE, "fixtures");
 export interface Pool {
   name: string;
   venue: string;
@@ -33,17 +35,28 @@ export interface Manifest {
   unixTimestamp: number;
   programs: { name: string; programId: Address; file: string }[];
   pools: Pool[];
-  accounts: { address: Address; owner: Address; lamports: string; file: string }[];
+  /** `file` under `test/svm/fixtures/`; `lamports` absent where an earlier fixture of the account,
+   *  kept as it was, does not record them. */
+  accounts: { address: Address; owner: Address; lamports?: string; file: string }[];
 }
 
 export const manifest = JSON.parse(
-  readFileSync(join(FIXTURE, "manifest.json"), "utf8"),
+  readFileSync(join(PROGRAMS, "manifest.json"), "utf8"),
 ) as Manifest;
-export const unzip = (file: string): Uint8Array =>
-  new Uint8Array(gunzipSync(readFileSync(join(FIXTURE, file))));
+/** A program's ELF. */
+const program = (file: string): Uint8Array =>
+  new Uint8Array(gunzipSync(readFileSync(join(PROGRAMS, file))));
+/** An account file's data: `{ address, owner, lamports, base64Data }`, gzipped when `.gz`. */
+const accountData = (file: string): Uint8Array => {
+  const raw = readFileSync(join(ACCOUNTS, file));
+  const json = JSON.parse((file.endsWith(".gz") ? gunzipSync(raw) : raw).toString("utf8")) as {
+    base64Data: string;
+  };
+  return new Uint8Array(Buffer.from(json.base64Data, "base64"));
+};
 export const SNAPSHOT = new Map(manifest.accounts.map((account) => [account.address, account]));
 export const BYTES = new Map(
-  manifest.accounts.map((account) => [account.address, unzip(account.file)]),
+  manifest.accounts.map((account) => [account.address, accountData(account.file)]),
 );
 
 export const SYSTEM = address("11111111111111111111111111111111");
@@ -135,7 +148,7 @@ export const SLOT_NAMES = (k: number): string[] => [
 
 /** Every venue's program, loaded at its mainnet id. */
 export const loadVenues = (svm: LiteSVM): void => {
-  for (const venue of manifest.programs) svm.addProgram(venue.programId, unzip(venue.file));
+  for (const venue of manifest.programs) svm.addProgram(venue.programId, program(venue.file));
 };
 
 /** Every fixture account back as the snapshot has it, `edit` applied: each cook starts from the
@@ -152,7 +165,11 @@ export const restoreVenues = (
       address: at,
       data: copy,
       executable: false,
-      lamports: lamports(BigInt(account.lamports)),
+      lamports: lamports(
+        account.lamports === undefined
+          ? svm.minimumBalanceForRentExemption(BigInt(copy.length))
+          : BigInt(account.lamports),
+      ),
       programAddress: account.owner,
       space: BigInt(copy.length),
     });

@@ -739,6 +739,16 @@ Portal hashes. The Solana suites run eco-routes' programs as mainnet does, from 
 `eco-routes-svm-fixture.test.ts`; `--check` fails on a program upgrade and reports the Mailbox's
 and IGP's live state as expected drift); `cli-intent-solana.e2e.test.ts` drives the CLI against
 it in LiteSVM behind `svm/rpc-shim.ts` and an Arbitrum anvil, mocking only the Mailbox's relay.
+The Solana distributed swap's suites (`svm/distributed-swap.e2e.test.ts`,
+`cli-solana-distributed-swap.e2e.test.ts`) run nine venues' mainnet programs the same way: the
+programs and the manifest in `test/fixtures/svm-venue-programs/`, every account the pools' swaps
+take beside the other venue fixtures in `test/svm/fixtures/<venue>/`, as `{ address, owner,
+lamports, base64Data }` (`scripts/dump-svm-venues.mjs --redump|--check --rpc-config <file>`, the
+layout in `scripts/lib/svm-venue-fixture.mjs`). A redump refreshes a fixture file already holding
+an account rather than adding a second, so `raydium-clmm/` and `orca-whirlpool/`'s SOL/USDC pools
+are that snapshot's, read at one slot with every other venue's: the swap's split is only real
+when every pool's price is one moment's. The CLI suite runs its cluster at mainnet's rent and
+Kitchen fee, which a rehearsal's local copy must take from the cluster.
 `actions.ts` takes an actions document as a program operand: `sauce actions` prints what it lowers
 to, and `compile`/`tx`/`simulate`/`run` accept one wherever they take a file, as an ordinary
 `ProgramInput` (the generated source, plus its ABI bindings in `contracts`). It loads
