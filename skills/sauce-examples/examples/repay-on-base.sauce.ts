@@ -14,8 +14,8 @@
 // braces is enough: their values go into each intent. Each intent names `refundTo` its refundee,
 // where its reward goes back if no solver fills it.
 //
-// `USDC` and `AaveV3.Pool` in the braces are Base's; in each `.send(...)`, the chain's that pays
-// it: Ethereum's for the first, Base's for the second. The variable debt token is read from the
+// `USDC` and `AaveV3.Pool` in the braces are Base's; in each `reward`, the chain's that pays it:
+// Ethereum's for the first, Base's for the second. The variable debt token is read from the
 // pool through AaveV3Reads.json beside this file, the reads the registry's Aave V3 ABI does not
 // declare.
 //
@@ -43,30 +43,32 @@ function main(borrower: Address, solverBps: Uint256, refundTo: Address) {
   require(amount > 0, "no USDC in the Pot");
   const delivered = amount - (amount * solverBps) / 10000;
 
-  Base.Portal.send({ token: USDC, amount }) // Ethereum's
-    .refundee(refundTo)
-    .receive({ token: USDC, amount: delivered }) // Base's USDC, which the solver delivers
-    .then(() => {
-      // The Pot is shared by every intent to Base: this body moves only `delivered`.
-      const debtToken = AaveV3Reads.at(AaveV3.Pool).getReserveVariableDebtToken(USDC);
-      const owed = Token(debtToken).balanceOf(borrower);
-      const repay = delivered < owed ? delivered : owed;
-      let used = 0;
-      if (repay > 0) {
-        const before = USDC.balanceOf(ctx.self());
-        USDC.approve(AaveV3.Pool, repay);
-        AaveV3.Pool.repay(USDC, repay, 2, borrower);
-        used = before - USDC.balanceOf(ctx.self());
-      }
-      const change = delivered - used;
-      if (change > 0) {
-        const paid = change - (change * solverBps) / 10000;
-        Ethereum.Portal.send({ token: USDC, amount: change }) // Base's: it funds this level
-          .refundee(refundTo)
-          .receive({ token: USDC, amount: paid }) // Ethereum's
-          .then(() => {
-            USDC.transfer(borrower, paid); // Ethereum's USDC
-          });
-      }
-    });
+  Base.hop({
+    reward: { token: USDC, amount }, // Ethereum's
+    receive: { token: USDC, amount: delivered }, // Base's USDC, which the solver delivers
+    refundee: refundTo,
+  }).then(() => {
+    // The Pot is shared by every intent to Base: this body moves only `delivered`.
+    const debtToken = AaveV3Reads.at(AaveV3.Pool).getReserveVariableDebtToken(USDC);
+    const owed = Token(debtToken).balanceOf(borrower);
+    const repay = delivered < owed ? delivered : owed;
+    let used = 0;
+    if (repay > 0) {
+      const before = USDC.balanceOf(ctx.self());
+      USDC.approve(AaveV3.Pool, repay);
+      AaveV3.Pool.repay(USDC, repay, 2, borrower);
+      used = before - USDC.balanceOf(ctx.self());
+    }
+    const change = delivered - used;
+    if (change > 0) {
+      const paid = change - (change * solverBps) / 10000;
+      Ethereum.hop({
+        reward: { token: USDC, amount: change }, // Base's: it funds this level
+        receive: { token: USDC, amount: paid }, // Ethereum's
+        refundee: refundTo,
+      }).then(() => {
+        USDC.transfer(borrower, paid); // Ethereum's USDC
+      });
+    }
+  });
 }

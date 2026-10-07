@@ -88,9 +88,9 @@ export async function cookTransactions(
 - A Pot swaps through the Router its Kitchen handed it when it was minted. `potRouterUpdate(client,
 pot)` from `/evm/engine` reads both, and returns the `setRouter` call for the Pot's owner to send
   when the Kitchen has a newer one.
-- A program that opens an intent names its refundee with `.refundee(...)`, always: no option
+- A program that opens an intent names its refundee in its hop, `refundee`, always: no option
   defaults it. Its body's cook also needs `options.intents.executionFee` (one fee, or a function of
-  the destination) unless it gives `.fee(...)`. `openedAt` (Unix seconds) makes its
+  the destination) unless the hop gives a `fee`. `openedAt` (Unix seconds) makes its
   default deadlines count from then rather than from when the program runs, and `salt` fixes the
   salt, random otherwise (`sauce-intents`).
 
@@ -168,12 +168,12 @@ a recorded address, not proof of live code on the chain.
   `fulfill`), `destinationPot(chain)` the shared Pot and
   `routes.sauceEvmDeployPotCall({ owner: ecoRoutesExecutor(chain), salt: SAUCE_INTENT_POT_SALT })`
   its deploy; the intents runner builds a rehearsal with them. In TypeScript,
-  `Base.Portal.send(reward).source(Ethereum, options).refundee(owner).receive(delivery).fee(fee).then(body)`
+  `Base.hop({ source: Ethereum, reward, receive, refundee: owner, fee, compile: options }).then(body)`
   writes the statement a program opens that intent with, compiles it for the source chain and
   returns `{ source, program, cook(target, value), intents(logs) }`: the same program the
-  statement compiles to in a file, taking the modifiers a program takes; there `.source` is
-  required, since the host runs on no chain, and `options` are the compile's (`defines` the body
-  reads, `intents` defaults). Its cook runs on a Pot on the source chain (`{ owner }` or the Pot's
+  statement compiles to in a file, taking the fields a program's hop takes; there `source` is
+  required, since the host runs on no chain, `compile` is the compile's options (`defines` the body
+  reads, `intents` defaults), and a field it does not know is refused. Its cook runs on a Pot on the source chain (`{ owner }` or the Pot's
   address, the source Kitchen's fee as value), which pays the reward into the intent's vault and
   publishes it, so the Pot holds the reward first. There is no offline hash: `intents(logs)` reads
   each published intent and its hash from the `IntentPublished` in the cook's receipt or
@@ -184,8 +184,9 @@ a recorded address, not proof of live code on the chain.
   `routes.predictIntentVault`. `routes.publishTx`, `routes.publishAndFundTx`, `routes.approvalTxs`
   and `routes.isIntentFundedCall` build the single calls (`{ to, data }`, with `decode` for a read).
 - **Nested intents** are written in the program: a body that opens the next intent with
-  `Chain.Portal.send(reward).receive(delivery).then(() => { ... })` (`sauce-intents`, Cascades).
-  In a typed closure the chain is the imported export, which typechecks there, modifiers included. `routes.compileSauceProgram`
+  `await Chain.hop({ reward, receive, refundee })`, or `Chain.hop({ … }).then(() => { ... })`
+  (`sauce-intents`, Cascades). In a typed closure the chain is the imported export, whose `hop`
+  typechecks there, its fields included. `routes.compileSauceProgram`
   lists each intent's body in `.bodies`, its destination and its program. The intents themselves
   are encoded as the program runs, so every one is published by a cook, and read back from the
   cook's logs, in its receipt or rehearsal (`routes.intentFromPublished`).

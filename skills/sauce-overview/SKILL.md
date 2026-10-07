@@ -13,7 +13,8 @@ has control flow, reads and checks, and the engine runs it as written: it is not
 it does not use a magic header.
 
 On top of the runtime sit **intents**: an offer of work on another chain, with a reward escrowed on
-this one, written `Ethereum.Portal.send(reward).receive(delivery).then(() => { ... })`.
+this one, written `await Ethereum.hop({ reward, receive, refundee })`, the code after it running on
+Ethereum.
 A solver decides whether to fill it (`sauce-intents`).
 
 ## You write the program
@@ -263,9 +264,9 @@ pools by their factory's key, so one document serves every chain that has its na
 
 ### `sauce-intents`
 
-Work continued on another chain: an intent file (`Base.Portal.send(...).receive(...).then(...)`
+Work continued on another chain: an intent file (`await Base.hop({ reward, receive, refundee })`
 in `main`, its inputs `main`'s parameters, the refundee named, the deadlines, salt and fee defaulted
-or set by modifiers), its life (fund, publish, fill, prove, claim, refund
+or set as fields of the hop), its life (fund, publish, fill, prove, claim, refund
 or cancel, a `sauce intent` command each), every way to publish and fund one (a cook on your
 Pot), the body (a program cooked on the destination's shared Pot), cascades, on which chain each
 name resolves, and rehearsing both sides.

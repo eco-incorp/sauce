@@ -190,7 +190,7 @@ function main(tokenA: Address, tokenB: Address) {
 ## Chains, context, imports
 
 - **Chain names** (`Base`, `Ethereum`, … in [references/chains.md](references/chains.md)) open an
-  intent from inside a program: `Ethereum.Portal.send(reward).receive(delivery).then(() => { ... })`.
+  intent from inside a program: `await Ethereum.hop({ reward, receive, refundee })`.
   A chain's name alone is its chain id, so `if (chainId == Ethereum) { … } else { … }` is decided
   while compiling: a program compiled for a chain keeps only that chain's branch. Every chain's names
   compile; for the initial release its transactions are built and sent only on Ethereum, Base and

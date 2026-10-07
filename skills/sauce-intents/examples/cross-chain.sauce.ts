@@ -2,8 +2,8 @@
 // `beneficiary`. The amount is only known when this runs, so the file runs on the owner's Pot
 // (sauce run) and opens the intent as it goes.
 //
-// `--chain` is the source chain, which funds the reward: `USDC` in `.send(...)` is its USDC. In
-// `.receive(...)` and inside the body, the code runs on Ethereum: `USDC` and `AaveV3.Pool` there are
+// `--chain` is the source chain, which funds the reward: `USDC` in `reward` is its USDC. In
+// `receive` and inside the body, the code runs on Ethereum: `USDC` and `AaveV3.Pool` there are
 // Ethereum's. The gap between what is delivered and the reward is the solver's margin. The intent
 // names its refundee, `refundTo`, where its reward goes back if no solver fills it; the deadlines,
 // the salt and Ethereum's Kitchen fee take their defaults.
@@ -25,11 +25,12 @@ function main(beneficiary: Address, refundTo: Address) {
   require(amount > 0, "nothing to forward");
   const delivered = amount - (amount * 10) / 10000; // the solver keeps 0.1%
 
-  Ethereum.Portal.send({ token: USDC, amount })
-    .refundee(refundTo)
-    .receive({ token: USDC, amount: delivered })
-    .then(() => {
-      USDC.approve(AaveV3.Pool, delivered);
-      AaveV3.Pool.supply(USDC, delivered, beneficiary, 0);
-    });
+  Ethereum.hop({
+    reward: { token: USDC, amount },
+    receive: { token: USDC, amount: delivered },
+    refundee: refundTo,
+  }).then(() => {
+    USDC.approve(AaveV3.Pool, delivered);
+    AaveV3.Pool.supply(USDC, delivered, beneficiary, 0);
+  });
 }

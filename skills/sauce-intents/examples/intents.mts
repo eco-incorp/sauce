@@ -3,8 +3,8 @@
 // resolves: the body and its delivery on the destination, the reward on the source. Each body is a
 // program for its destination, compiled with the file; the refund address and each destination
 // Kitchen's fee are given here. Pins the defaults the skill states, each the program
-// its modifier writes; that every intent names its refundee; that every body is a program, whose
-// cook pays the fee; and the modifiers example. Then the destination side of a rehearsal: the
+// its field writes; that every hop names its refundee; that every body is a program, whose
+// cook pays the fee; and the fields example. Then the destination side of a rehearsal: the
 // shared Pot's deploy. Pins the funding by transfer (fund-by-transfer.sauce.ts) and the Portal
 // reference (references/portal.md) to the registry's Portal ABI. Offline: nothing is sent, so no
 // intent is published, and an intent's route and reward, which the program encodes as it runs,
@@ -84,7 +84,7 @@ check(
   "its inputs are main's parameters",
 );
 check(
-  refusal("base", forward).includes(".fee("),
+  refusal("base", forward).includes("give the hop a `fee`"),
   "a body is a program: its cook needs the destination's Kitchen fee",
 );
 const forwarded = compileFor("base", forward, { executionFee: fee.ethereum });
@@ -108,7 +108,7 @@ check(
 check(carries(forwarded.bytecode, token("base", "USDC")), "the reward is Base's USDC");
 
 // ---- The defaults the skill states, for an intent that sets none: each is the program its
-// modifier writes. The fill deadline 5 minutes after the intent opens (when the command builds
+// field writes. The fill deadline 5 minutes after the intent opens (when the command builds
 // it: `openedAt`), the reward's 7 days after that, the registry's prover, a random salt. The
 // refundee has none: the file names `refundTo`.
 const openedAt = BigInt(Math.floor(Date.now() / 1000));
@@ -118,26 +118,23 @@ const fixed = (source: string, intents: Intents) =>
       intents: { openedAt, executionFee: fee.ethereum, ...intents },
     }).bytecode,
   );
-const modified = forward
-  .replace(
-    "    .refundee(refundTo)\n",
-    `    .refundee(refundTo)\n    .deadline(${openedAt + 300n + 604800n})\n    .prover(${ecoRoutesProver("base", "ethereum")})\n`,
-  )
-  .replace(
-    "    .receive({ token: USDC, amount: delivered })\n",
-    `    .receive({ token: USDC, amount: delivered })\n    .deadline(${openedAt + 300n})\n`,
-  );
-check(modified !== forward, "the modifiers are written in");
+const modified = forward.replace(
+  "    refundee: refundTo,\n",
+  `    refundee: refundTo,\n    deadline: ${openedAt + 300n},\n` +
+    `    rewardDeadline: ${openedAt + 300n + 604800n},\n` +
+    `    prover: ${ecoRoutesProver("base", "ethereum")},\n`,
+);
+check(modified !== forward, "the fields are written in");
 check(
   fixed(forward, { salt }) === fixed(modified, { salt }),
   "the deadlines default to 5 minutes and 7 days on, the prover to the registry's",
 );
 check(fixed(forward, {}) !== fixed(forward, {}), "the salt is picked at random for each build");
 check(
-  refusal("base", forward.replace("    .refundee(refundTo)\n", ""), {
+  refusal("base", forward.replace("    refundee: refundTo,\n", ""), {
     executionFee: fee.ethereum,
-  }).includes("needs `.refundee(<address>)`"),
-  "an intent with no refundee is refused",
+  }).includes("a hop needs a `refundee`"),
+  "a hop with no refundee is refused",
 );
 
 // ---- swap-on-base.sauce.ts: from Ethereum, the distributed swap as a program body on Base.
@@ -198,10 +195,13 @@ check(
 
 // ---- A body of one transfer is a program too: it cooks on the shared Pot and pays the fee.
 // Inside the body, and in the delivery, a token symbol is the destination's: `USDC` here is
-// Ethereum's, while the one in `.send(...)` is Base's, which the program escrows.
+// Ethereum's, while the one in `reward` is Base's, which the program escrows.
 const oneTransfer =
-  "function main(to: Address, amount: Uint256) { Ethereum.Portal.send({ token: USDC, amount }).refundee(to).receive({ token: USDC, amount }).then(() => { USDC.transfer(to, amount); }); }";
-check(refusal("base", oneTransfer).includes(".fee("), "a one-transfer body pays the fee too");
+  "function main(to: Address, amount: Uint256) { Ethereum.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: to }).then(() => { USDC.transfer(to, amount); }); }";
+check(
+  refusal("base", oneTransfer).includes("give the hop a `fee`"),
+  "a one-transfer body pays the fee too",
+);
 const direct = compileFor("base", oneTransfer, { executionFee: fee.ethereum });
 check(
   direct.bodies.length === 1 && carries(direct.bodies[0]!.bytecode, token("ethereum", "USDC")),
@@ -212,7 +212,7 @@ check(contracts.on("ethereum").AaveV3.Pool.available, "Ethereum has AaveV3.Pool"
 
 // ---- Inside a body, a decoded result is read by position or destructured, as anywhere else.
 const decodeIn = (statement: string) =>
-  `function main(pool: Address) { Base.Portal.send({ token: WETH, amount: 1 }).refundee(${refundee}).receive({ token: WETH, amount: 1 }).then(() => { const d = hex\`3850c7bd\`; ${statement} require(x != 0); }); }`;
+  `function main(pool: Address) { Base.hop({ reward: { token: WETH, amount: 1 }, receive: { token: WETH, amount: 1 }, refundee: ${refundee} }).then(() => { const d = hex\`3850c7bd\`; ${statement} require(x != 0); }); }`;
 check(
   refusal("ethereum", decodeIn('const x = abi.decode(evm.static(pool, d), ["Uint256"])[0];'), {
     executionFee: fee.base,
@@ -317,18 +317,17 @@ check(
   "the one-pool body is a program for Base",
 );
 
-// The modifiers example: its refundee is main's argument, and its deadlines are read as the
-// program runs, from ctx.timestamp().
-const modifiers =
-  /```sauce chain=base\n(function main\([^`]*?\.deadline\(ctx\.timestamp\(\) \+ 1800\)[^`]*)```/.exec(
+// The fields example: its refundee is main's argument, and its deadlines are read as the
+// program runs, from ctx.timestamp(), as `modified` above writes them in.
+const fields =
+  /```sauce chain=base\n(function main\(recipient: Address, amount: Uint256, reward: Uint256, refundTo: Address\)[^`]*?deadline: ctx\.timestamp\(\) \+ 1800,[^`]*)```/.exec(
     skill,
   );
-check(modifiers !== null, "the skill gives the modifiers example");
-const modifiersProgram = compileFor("base", modifiers[1]!, { executionFee: fee.ethereum });
+check(fields !== null, "the skill gives the fields example");
 check(
-  modifiersProgram.entryParams.map((param) => param.name).join() ===
-    "recipient,amount,reward,refundTo",
-  "`.refundee(refundTo)` is main's argument",
+  /refundee: refundTo,/.test(fields[1]!) &&
+    /rewardDeadline: ctx\.timestamp\(\) \+ 86400 \* 14,/.test(fields[1]!),
+  "its refundee is main's argument, and its reward's deadline is read as it runs",
 );
 
 console.log(

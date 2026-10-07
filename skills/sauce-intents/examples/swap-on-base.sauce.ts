@@ -6,8 +6,8 @@
 // on Base. The solver earns `reward` of WETH, which `sauce intent publish --fund` pulls into your
 // Pot as it publishes (with the same --args).
 //
-// `--chain` is the source chain: `WETH` in `.send(...)` is its WETH. In `.receive(...)` and inside
-// the body, the code runs on Base: `WETH`, `USDC`, `UniswapV3.Factory`, `UniswapV3.Pool`,
+// `--chain` is the source chain: `WETH` in `reward` is its WETH. In `receive` and inside the body,
+// the code runs on Base: `WETH`, `USDC`, `UniswapV3.Factory`, `UniswapV3.Pool`,
 // `UniswapV4.StateView` and `UniswapV4.PoolManager` there are Base's. `refundTo` is the intent's
 // refundee too, where its reward goes back if no solver fills it; the deadlines, the salt and
 // Base's Kitchen fee take their defaults.
@@ -56,88 +56,86 @@ function main(
   recipient: Address,
   refundTo: Address,
 ) {
-  Base.Portal.send({ token: WETH, amount: reward })
-    .refundee(refundTo)
-    .receive({ token: WETH, amount: amountIn })
-    .then(() => {
-      require(sqrtPriceLimitX96 != 0 &&
-        recipient != 0 &&
-        refundTo != 0, "give sqrtPriceLimitX96, recipient and refundTo");
-      const self = ctx.self();
-      const sellsToken0 = WETH < USDC;
-      const usdcBefore = USDC.balanceOf(self);
-      // What this intent delivered and is still unsold. The Pot is shared by every intent to Base,
-      // so the body sells and returns only this, never the Pot's whole balance of WETH.
-      let unsold = amountIn;
+  Base.hop({
+    reward: { token: WETH, amount: reward },
+    receive: { token: WETH, amount: amountIn },
+    refundee: refundTo,
+  }).then(() => {
+    require(sqrtPriceLimitX96 != 0 &&
+      recipient != 0 &&
+      refundTo != 0, "give sqrtPriceLimitX96, recipient and refundTo");
+    const self = ctx.self();
+    const sellsToken0 = WETH < USDC;
+    const usdcBefore = USDC.balanceOf(self);
+    // What this intent delivered and is still unsold. The Pot is shared by every intent to Base,
+    // so the body sells and returns only this, never the Pot's whole balance of WETH.
+    let unsold = amountIn;
 
-      // One pass over the pools: each is offered all the WETH still unsold, up to its own limit, and
-      // skipped when it is missing, has no liquidity, or is already past that limit. A pool fills
-      // what it can and leaves the rest for the next.
-      // Uniswap V3, by fee tier, each pool read through the `UniswapV3.Pool` namespace.
-      for (const tier of [100, 500, 3000, 10000]) {
-        const pool = UniswapV3.Factory.getPool(WETH, USDC, tier);
-        if (pool != 0) {
-          if (UniswapV3.Pool(pool).liquidity() > 0) {
-            const limit = ownLimit(sqrtPriceLimitX96, UniswapV3.Pool(pool).fee(), sellsToken0);
-            const price = UniswapV3.Pool(pool).slot0().sqrtPriceX96;
-            if (unsold > 0 && (sellsToken0 ? price > limit : price < limit)) {
-              const before = WETH.balanceOf(self);
-              uniswapV3(pool, WETH, USDC, unsold, limit, 0, self);
-              unsold -= before - WETH.balanceOf(self);
-            }
-          }
-        }
-      }
-      // Uniswap V4's four standard hookless keys, read from the StateView. Its protocol fee for
-      // this direction is taken first (selling token0's in the low 12 bits, token1's in the next 12),
-      // and the LP fee from the rest.
-      const currency0 = sellsToken0 ? WETH : USDC;
-      const currency1 = sellsToken0 ? USDC : WETH;
-      const v4Fees = [100, 500, 3000, 10000];
-      const v4TickSpacings = [1, 10, 60, 200];
-      for (let k = 0; k < 4; k++) {
-        const id = crypto.keccak256(
-          abi.encode(currency0, currency1, v4Fees[k], v4TickSpacings[k], 0),
-        );
-        if (UniswapV4.StateView.getLiquidity(id) > 0) {
-          const slot0 = UniswapV4.StateView.getSlot0(id);
-          let protocolFee = slot0.protocolFee & 0xfff;
-          if (!sellsToken0) {
-            protocolFee = (slot0.protocolFee >> 12) & 0xfff;
-          }
-          const fee = protocolFee + slot0.lpFee - (protocolFee * slot0.lpFee) / 1000000;
-          const limit = ownLimit(sqrtPriceLimitX96, fee, sellsToken0);
-          if (
-            unsold > 0 &&
-            (sellsToken0 ? slot0.sqrtPriceX96 > limit : slot0.sqrtPriceX96 < limit)
-          ) {
+    // One pass over the pools: each is offered all the WETH still unsold, up to its own limit, and
+    // skipped when it is missing, has no liquidity, or is already past that limit. A pool fills
+    // what it can and leaves the rest for the next.
+    // Uniswap V3, by fee tier, each pool read through the `UniswapV3.Pool` namespace.
+    for (const tier of [100, 500, 3000, 10000]) {
+      const pool = UniswapV3.Factory.getPool(WETH, USDC, tier);
+      if (pool != 0) {
+        if (UniswapV3.Pool(pool).liquidity() > 0) {
+          const limit = ownLimit(sqrtPriceLimitX96, UniswapV3.Pool(pool).fee(), sellsToken0);
+          const price = UniswapV3.Pool(pool).slot0().sqrtPriceX96;
+          if (unsold > 0 && (sellsToken0 ? price > limit : price < limit)) {
             const before = WETH.balanceOf(self);
-            uniswapV4(
-              UniswapV4.PoolManager,
-              WETH,
-              USDC,
-              unsold,
-              v4Fees[k],
-              v4TickSpacings[k],
-              0,
-              limit,
-              0,
-              self,
-            );
+            uniswapV3(pool, WETH, USDC, unsold, limit, 0, self);
             unsold -= before - WETH.balanceOf(self);
           }
         }
       }
-
-      // Settle on Base: the checks, the USDC out, and the WETH this intent delivered and did not sell
-      // back.
-      const spent = amountIn - unsold;
-      const out = USDC.balanceOf(self) - usdcBefore;
-      require(out >= minOut, "output below minOut");
-      require(out * 10 ** 18 >= minAvgPrice * spent, "average price below minAvgPrice");
-      USDC.transfer(recipient, out);
-      if (unsold > 0) {
-        WETH.transfer(refundTo, unsold);
+    }
+    // Uniswap V4's four standard hookless keys, read from the StateView. Its protocol fee for
+    // this direction is taken first (selling token0's in the low 12 bits, token1's in the next 12),
+    // and the LP fee from the rest.
+    const currency0 = sellsToken0 ? WETH : USDC;
+    const currency1 = sellsToken0 ? USDC : WETH;
+    const v4Fees = [100, 500, 3000, 10000];
+    const v4TickSpacings = [1, 10, 60, 200];
+    for (let k = 0; k < 4; k++) {
+      const id = crypto.keccak256(
+        abi.encode(currency0, currency1, v4Fees[k], v4TickSpacings[k], 0),
+      );
+      if (UniswapV4.StateView.getLiquidity(id) > 0) {
+        const slot0 = UniswapV4.StateView.getSlot0(id);
+        let protocolFee = slot0.protocolFee & 0xfff;
+        if (!sellsToken0) {
+          protocolFee = (slot0.protocolFee >> 12) & 0xfff;
+        }
+        const fee = protocolFee + slot0.lpFee - (protocolFee * slot0.lpFee) / 1000000;
+        const limit = ownLimit(sqrtPriceLimitX96, fee, sellsToken0);
+        if (unsold > 0 && (sellsToken0 ? slot0.sqrtPriceX96 > limit : slot0.sqrtPriceX96 < limit)) {
+          const before = WETH.balanceOf(self);
+          uniswapV4(
+            UniswapV4.PoolManager,
+            WETH,
+            USDC,
+            unsold,
+            v4Fees[k],
+            v4TickSpacings[k],
+            0,
+            limit,
+            0,
+            self,
+          );
+          unsold -= before - WETH.balanceOf(self);
+        }
       }
-    });
+    }
+
+    // Settle on Base: the checks, the USDC out, and the WETH this intent delivered and did not sell
+    // back.
+    const spent = amountIn - unsold;
+    const out = USDC.balanceOf(self) - usdcBefore;
+    require(out >= minOut, "output below minOut");
+    require(out * 10 ** 18 >= minAvgPrice * spent, "average price below minAvgPrice");
+    USDC.transfer(recipient, out);
+    if (unsold > 0) {
+      WETH.transfer(refundTo, unsold);
+    }
+  });
 }
