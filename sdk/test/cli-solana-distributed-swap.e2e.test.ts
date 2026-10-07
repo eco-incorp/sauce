@@ -22,14 +22,20 @@ import { fileURLToPath } from "node:url";
 import { address, createKeyPairSignerFromBytes, lamports } from "@solana/kit";
 import type { Address, KeyPairSigner } from "@solana/kit";
 import { findAssociatedTokenPda } from "@solana-program/token";
+import { Rent } from "litesvm";
 
 import { nodeIo, runCli } from "../src/cli/run.js";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../src/deployments/index.js";
-import { derivePotPda } from "../src/svm/index.js";
+import {
+  buildSetExecutionFeeInstruction,
+  deriveProgramDataPda,
+  derivePotPda,
+} from "../src/svm/index.js";
 import {
   describeSvm,
   ENGINE_SO,
   randomAddress,
+  sendInstructions,
   setTokenAccount,
   startEngine,
   tokenAmount,
@@ -152,6 +158,34 @@ describeSvm(
         ENGINE_SO as string,
         ENGINE,
       );
+      // Mainnet's rent, which is not LiteSVM's default, and its Kitchen fee, paid by each cook into
+      // the fee config, which holds just its rent-exempt balance under that rent, as mainnet's
+      // does: a rehearsal's copy that kept LiteSVM's own rent would fail the cook as leaving the
+      // fee config below the minimum.
+      harness.svm.setRent(new Rent(5080n, 1.0, 50));
+      const feeConfig = harness.svm.getAccount(harness.feeConfig);
+      if (!feeConfig.exists) throw new Error("the harness made no Kitchen fee config");
+      harness.svm.setAccount({
+        address: harness.feeConfig,
+        data: feeConfig.data,
+        executable: false,
+        lamports: lamports(
+          harness.svm.minimumBalanceForRentExemption(BigInt(feeConfig.data.length)),
+        ),
+        programAddress: feeConfig.programAddress,
+        space: BigInt(feeConfig.data.length),
+      });
+      const { address: programData } = await deriveProgramDataPda(KITCHEN);
+      const priced = await sendInstructions(harness, [
+        buildSetExecutionFeeInstruction({
+          kitchen: KITCHEN,
+          authority: harness.payer.address,
+          programData,
+          feeConfig: harness.feeConfig,
+          fee: 85_672n,
+        }),
+      ]);
+      if (!priced.ok) throw new Error(`set_execution_fee: ${priced.err}`);
       loadVenues(harness.svm);
       restoreVenues(harness.svm);
       work = mkdtempSync(join(tmpdir(), "sauce-solana-dswap-"));

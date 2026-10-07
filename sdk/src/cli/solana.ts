@@ -114,6 +114,7 @@ import { secret } from "./signer.js";
 import { requireSupported } from "./support.js";
 import {
   accountsNow,
+  messageAccounts,
   movedBy,
   svmMovedJson,
   svmMovedLines,
@@ -396,6 +397,27 @@ export function failureReason(
   return JSON.stringify(err, (_key, value: unknown) =>
     typeof value === "bigint" ? value.toString() : value,
   );
+}
+
+/**
+ * `reason` with the account a transaction error names only by its index in the message (`accounts`,
+ * in that order) and what that account is (`labels`): a bare index cannot be read without the
+ * message.
+ */
+export function namingAccount(
+  reason: string,
+  accounts: readonly Address[],
+  labels?: ReadonlyMap<string, string>,
+): string {
+  const index = /account_index"?:\s*(\d+)/.exec(reason)?.[1];
+  const account = index === undefined ? undefined : accounts[Number(index)];
+  if (account === undefined) return reason;
+  const label = labels?.get(account);
+  const rent = /InsufficientFundsForRent/.test(reason)
+    ? ", which the transaction would leave below its rent-exempt minimum"
+    : "";
+
+  return `${reason}: account ${index} is ${account}${label === undefined ? "" : ` (${label})`}${rent}`;
 }
 
 export interface SvmSent {
@@ -1657,35 +1679,36 @@ async function stagedRehearsal(
     cook,
   ];
   const lookupTables = fork.table(tableAddresses(await transactionOf(instructions)));
-  const simulated = fork.simulate(
-    await buildExecuteTransaction({
-      payer: signer,
-      instructions,
-      latestBlockhash: {
-        blockhash: fork.svm.latestBlockhash() as Blockhash,
-        lastValidBlockHeight: 1_000_000n,
-      },
-      lookupTables,
-    }),
-    tracked,
-  );
+  const cookTransaction = await buildExecuteTransaction({
+    payer: signer,
+    instructions,
+    latestBlockhash: {
+      blockhash: fork.svm.latestBlockhash() as Blockhash,
+      lastValidBlockHeight: 1_000_000n,
+    },
+    lookupTables,
+  });
+  const simulated = fork.simulate(cookTransaction, tracked);
   const failed = !simulated.ok;
   const { logs, units, returnData, after } = simulated;
+  const labels = await accountLabels(input, prepared.pot, prepared.given);
   const moved = failed
     ? undefined
-    : await movedBy(
-        prepared.rpc,
-        input.chain,
-        tracked,
-        before,
-        after,
-        await accountLabels(input, prepared.pot, prepared.given),
-        owner,
-      );
-  const returns = failed ? undefined : bytesToHex(returnData);
+    : await movedBy(prepared.rpc, input.chain, tracked, before, after, labels, owner);
+  // What main returned stands even when the transaction then fails on its own (a rent check, say):
+  // only a failed instruction undoes the program's return.
+  const instructionFailed =
+    (simulated.err as { InstructionError?: unknown } | null)?.InstructionError !== undefined ||
+    /InstructionError/.test(String(simulated.err));
+  const returns =
+    !failed || (!instructionFailed && returnData.length > 0) ? bytesToHex(returnData) : undefined;
   const returnType = mainReturnType(input.text);
   const reason = failed
-    ? failureReason(simulated.err, logs, returnData.length > 0 ? returnData : undefined)
+    ? namingAccount(
+        failureReason(simulated.err, logs, returnData.length > 0 ? returnData : undefined),
+        messageAccounts(cookTransaction, lookupTables),
+        labels,
+      )
     : undefined;
   const staged = `${bytecode.length}-byte`;
   const json = {
@@ -1751,9 +1774,15 @@ async function stagedRehearsal(
   }
 
   return {
-    text: [`The cook fails: ${reason}`, ...how, "Program logs:", ...logs.map((l) => `  ${l}`)].join(
-      "\n",
-    ),
+    text: [
+      `The cook fails: ${reason}`,
+      ...(returns === undefined || returnType === undefined
+        ? []
+        : [`${returnedLine(returnType, returns, input.chain)}, before the transaction failed`]),
+      ...how,
+      "Program logs:",
+      ...logs.map((l) => `  ${l}`),
+    ].join("\n"),
     json,
     ...(notes.length === 0 ? {} : { notes }),
     exitCode: 1,

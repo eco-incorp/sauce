@@ -28,6 +28,7 @@ import { CliError } from "./args.js";
 type Rpc = ReturnType<typeof createSolanaRpc>;
 
 const UPGRADEABLE_LOADER = "BPFLoaderUpgradeab1e11111111111111111111111";
+const RENT_SYSVAR = "SysvarRent111111111111111111111111111111111" as Address;
 const LOOKUP_TABLE_PROGRAM = "AddressLookupTab1e1111111111111111111111111";
 const WRAPPED_SOL = "So11111111111111111111111111111111111111112";
 /** Where the copy keeps the lookup table it makes: a key no cluster account has. */
@@ -150,14 +151,15 @@ export async function openFork(
   let litesvm: typeof import("litesvm");
   try {
     litesvm = await import("litesvm");
-  } catch {
+  } catch (error) {
     throw new CliError(
-      "rehearsing a cook too large for one transaction runs it in a local copy of the accounts it " +
-        "names, with LiteSVM, which this project does not have: add it (npm install litesvm), " +
-        "or send the cook with `sauce run`, which stages it and rehearses the staged cook first",
+      "rehearsing this cook runs it in a local copy of the accounts it names, with LiteSVM, which " +
+        `does not load here (${(error as Error).message.split("\n")[0]}): it ships native ` +
+        "binaries for Linux and macOS on x64 and arm64. Send the cook with `sauce run`, " +
+        "which stages it and rehearses the staged cook on the cluster first",
     );
   }
-  const { Clock, FailedTransactionMetadata, FeatureSet, LiteSVM } = litesvm;
+  const { Clock, FailedTransactionMetadata, FeatureSet, LiteSVM, Rent } = litesvm;
   const features = FeatureSet.allEnabled();
   features.deactivate(new Uint8Array(getAddressEncoder().encode(CPI_NESTING_8 as Address)));
   const svm = new LiteSVM()
@@ -171,8 +173,14 @@ export async function openFork(
   svm.addProgramFromFile(engine, svmEnginePath("mainnet"));
   svm.addProgramFromFile(kitchen, svmKitchenPath());
 
+  // The cluster's rent, which is not LiteSVM's default: an account the cluster holds rent-exempt
+  // must stay so in the copy when the cook pays into it, as the Kitchen's fee config is paid.
   const unique = [...new Set(keys)].filter((key) => key !== engine && key !== kitchen);
-  const accounts = await read(rpc, ask, unique);
+  const [rent, ...accounts] = await read(rpc, ask, [RENT_SYSVAR, ...unique]);
+  if (rent !== null && rent !== undefined && rent.data.length >= 17) {
+    const view = new DataView(rent.data.buffer, rent.data.byteOffset, rent.data.byteLength);
+    svm.setRent(new Rent(view.getBigUint64(0, true), view.getFloat64(8, true), rent.data[16]!));
+  }
   let loaded = 0;
   for (const [index, account] of accounts.entries()) {
     const key = unique[index]!;

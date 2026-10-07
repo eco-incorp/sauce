@@ -61,6 +61,35 @@ export interface SvmMoved {
 }
 
 /**
+ * Every account of `transaction`'s message, in the order a transaction error's `account_index`
+ * counts them: its own, then those it loads from `lookupTables`, writable before read-only.
+ */
+export function messageAccounts(
+  transaction: Transaction,
+  lookupTables: AddressesByLookupTableAddress = {},
+): Address[] {
+  const message = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes) as {
+    staticAccounts?: readonly Address[];
+    addressTableLookups?: readonly {
+      lookupTableAddress: Address;
+      writableIndexes: readonly number[];
+      readonlyIndexes: readonly number[];
+    }[];
+  };
+  const lookups = message.addressTableLookups ?? [];
+  const loaded = (pick: "writableIndexes" | "readonlyIndexes") =>
+    lookups.flatMap((lookup) =>
+      lookup[pick].flatMap((index) => lookupTables[lookup.lookupTableAddress]?.[index] ?? []),
+    );
+
+  return [
+    ...(message.staticAccounts ?? []),
+    ...loaded("writableIndexes"),
+    ...loaded("readonlyIndexes"),
+  ];
+}
+
+/**
  * The writable accounts of `transaction`'s message, in its order: everything a cook can change —
  * its own, then those it loads writable from `lookupTables` (each table's addresses, as the
  * message was compressed against).

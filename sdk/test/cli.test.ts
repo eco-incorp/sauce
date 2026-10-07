@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { once } from "node:events";
 import { createServer } from "node:http";
-import { address as svmAddress } from "@solana/kit";
+import { address as svmAddress, type Address } from "@solana/kit";
 import { findAssociatedTokenPda } from "@solana-program/token";
 import {
   bytesToHex,
@@ -45,6 +45,7 @@ import { PRICE_UNITS } from "../src/cli/price.js";
 import {
   awaitAccount,
   failureReason,
+  namingAccount,
   parseAccounts,
   resolveTokenAccounts,
 } from "../src/cli/solana.js";
@@ -1762,6 +1763,34 @@ describe("sauce pot", () => {
     const svm = await sauce("pot", "--owner", OWNER, "--chain", "solana");
     expect(svm.code).toBe(2);
     expect(svm.stderr).toMatch(/is not a Solana address \(a base58 public key\)/);
+  });
+
+  it("names the account a Solana transaction error gives only by its index", () => {
+    const accounts = [
+      "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9",
+      "ComputeBudget111111111111111111111111111111",
+      "DRBtuXHdgM2qjkC6rfZn6s1cMeU6rxauV5K9TVX5DpFs",
+    ] as Address[];
+    const labels = new Map([[accounts[2]!, "the Kitchen's fee config"]]);
+    // As LiteSVM words it, and as a node's simulation does.
+    expect(
+      namingAccount(
+        '"TransactionErrorInsufficientFundsForRent { account_index: 2 }"',
+        accounts,
+        labels,
+      ),
+    ).toBe(
+      '"TransactionErrorInsufficientFundsForRent { account_index: 2 }": account 2 is ' +
+        "DRBtuXHdgM2qjkC6rfZn6s1cMeU6rxauV5K9TVX5DpFs (the Kitchen's fee config), which the " +
+        "transaction would leave below its rent-exempt minimum",
+    );
+    expect(namingAccount('{"InvalidAccountForFee":{"account_index":0}}', accounts)).toBe(
+      '{"InvalidAccountForFee":{"account_index":0}}: account 0 is ' +
+        "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9",
+    );
+    // No index, or one past the message: the reason as it was.
+    expect(namingAccount("the program threw", accounts)).toBe("the program threw");
+    expect(namingAccount("x { account_index: 9 }", accounts)).toBe("x { account_index: 9 }");
   });
 
   it("names a Solana failure only for the program the logs show failing", () => {
