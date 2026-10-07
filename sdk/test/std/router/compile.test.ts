@@ -165,6 +165,25 @@ describe("@sauce/router: every fragment it calls is pinned", () => {
     }
   });
 
+  // The try forms catch the Router's call with a value, which the compiler carries only as a scalar:
+  // the same methods, declaring `amountInUsed` alone. Its selector and its first word are the
+  // release's, so the Router answers it and the value decoded is what it paid.
+  it("holds the one-output Router fragments to the release's, less their second output", () => {
+    const released = (
+      JSON.parse(readFileSync(join(SRC, "artifacts", "ISauceRouter.json"), "utf8")) as {
+        abi: AbiFunction[];
+      }
+    ).abi.filter((item) => item.type === "function");
+    const paid = fragments("sauce-router-paid.abi.json");
+    expect(paid.map((f) => f.name)).toEqual(fragments("sauce-router.abi.json").map((f) => f.name));
+    for (const fn of paid) {
+      const theirs = released.find((item) => item.name === fn.name)!;
+      expect(plain(fn)).toEqual(plain({ ...theirs, outputs: theirs.outputs.slice(0, 1) }));
+      expect(fn.outputs.map((o) => o.name)).toEqual(["amountInUsed"]);
+      expect(toFunctionSelector(fn)).toBe(toFunctionSelector(theirs));
+    }
+  });
+
   it("holds every fragment the registry also declares equal to the twin the registry pins", () => {
     const twin = (slug: string, file: string, name: string): AbiFunction[] =>
       (
