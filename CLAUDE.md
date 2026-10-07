@@ -598,7 +598,9 @@ maxPrice, minOut, recipient: Account)` — arrays because a non-`main` function 
 `maxPrice` fee-inclusive in the skill's units, each function working out the pool's own sqrt limit
 (or Phoenix ticks). AT THE POOL'S OWN LIMIT: `try<Venue>AtLimit`/`<venue>AtLimit` for those nine and
 Invariant and OpenBook v2 (`(…, priceLots, orders, minOut, recipient)`), and Manifest's
-`tryManifest`/`manifest` (no limit: its swap has none), taking the pool-native limit a caller computed
+`tryManifest`/`manifest` (no limit: its swap has none; Invariant's program does NOT stop at its limit
+— a swap reaching it with input left fails `0x1778` and aborts the transaction, measured at 1,000
+USDC on the fixture's window — so there the input must fit), taking the pool-native limit a caller computed
 (Q64.64 sqrt; Invariant's 1e24 root; Phoenix ticks; OpenBook price lots; 0 = none where the venue
 takes it): no fee read and no root, so adaptive-fee Orca and Byreal's own-fee pools trade here, and
 `minOut` rides in the venue's own floor field where its instruction has one (the others' recipient is

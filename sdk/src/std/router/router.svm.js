@@ -3,9 +3,11 @@
 //
 // Every swap here is a LIMIT ORDER at one pool: it offers the pool up to `amountIn` of the token
 // paid and lets the pool trade until its price reaches the limit; the pool takes only what it
-// swapped before that and leaves the rest in the paying account, so nothing is stranded. Every swap
-// is EXACT INPUT up to the limit: nothing here can express an exact-output swap. Every function
-// takes RUN-TIME arguments. There are four forms of each venue's swap:
+// swapped before that and leaves the rest in the paying account, so nothing is stranded.
+// Invariant's is the exception: its program refuses a swap that reaches its limit with input left
+// (custom error 0x1778), which aborts the whole transaction, so there the input must fit inside the
+// limit. Every swap is EXACT INPUT up to the limit: nothing here can express an exact-output swap.
+// Every function takes RUN-TIME arguments. There are four forms of each venue's swap:
 //
 //   try<Venue>(slot, trader, amountIn, maxPrice, minOut, recipient)          at a price
 //   try<Venue>AtLimit(slot, trader, amountIn, limit, minOut, recipient)      at the pool's own limit
@@ -113,7 +115,8 @@
 // — `minOut`, and at least 1 — and reverts below it, so `0` always means skipped. A swap that ran and
 // moved nothing either way is a skip too: a Phoenix or OpenBook order whose book has no offer within
 // its price fills nothing, which only the paying account's balance tells. A failure the checks do not
-// foresee still aborts the transaction: a tick array missing from the slot. A slot that is not the
+// foresee still aborts the transaction: a tick array missing from the slot, and an Invariant input
+// past its limit. A slot that is not the
 // pair, whose program is not the venue's or not the pool's owner, or whose pool no venue here owns
 // (`trySwap`: "not a supported venue's pool"; a venue's own function: "not a <venue> pool"), and a
 // limit or a floor its order cannot carry, revert: those are the caller's, not the pool's state. Only
@@ -2155,7 +2158,9 @@ export function phoenixCpi(
 
 // Invariant, HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt, at `limit`, its own `sqrt_price_limit`: a
 // price square root times 10^24, not Q64.64 (0: none, which its program takes only selling token
-// X). Its instruction carries no least out: the recipient's balance is held to `minOut`.
+// X). Its program does not stop there: a swap that reaches the limit with input left is refused
+// (custom error 0x1778), and the whole transaction with it, so `amountIn` must fit inside the limit.
+// Its instruction carries no least out: the recipient's balance is held to `minOut`.
 export function tryInvariantAtLimit(
   slot: Account[],
   trader: Account[],

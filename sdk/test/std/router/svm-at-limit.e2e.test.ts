@@ -15,7 +15,8 @@
  *   - a `try…AtLimit` returns 0 having moved nothing for every skip its header names, its plain form
  *     reverts there, and a swap below its floor reverts, the venue's own floor first where it has one;
  *   - Raydium's bitmap extension is optional, a Crema slot of fewer arrays passes fewer, Phoenix and
- *     OpenBook trade at a price as well as at any, an adaptive-fee Orca pool trades at a limit;
+ *     OpenBook trade at a price as well as at any, an adaptive-fee Orca pool trades at a limit, and
+ *     Invariant's program refuses an input past its limit rather than stopping there;
  *   - and what each costs in compute beside the hand-built CPI, small and to the pool's window edge:
  *     printed as tables. `…Data` and `…Cpi` are compiled for the one trade, every argument but the
  *     amount a literal, as the hand-built CPI's own bytes carry them and as a router compiling one
@@ -984,6 +985,26 @@ describeSvm("@sauce/router's Solana arm at a pool's own limit", () => {
           past[past.length - 1] = 2n ** 64n;
           expect(failed(await w.viaTry({ args: past })).reason).toBe("minOut past 64 bits");
         }
+      },
+      120_000,
+    );
+  });
+
+  // Invariant's program does not stop at its limit: a swap that reaches it with input left is
+  // refused, so an input past the window aborts the transaction rather than filling to its edge.
+  describe("Invariant takes no input past its limit", () => {
+    it.each([
+      ["xToY", 10n ** 9n],
+      ["yToX", 10n ** 10n],
+    ] as const)(
+      "%s, %s: its program refuses it (0x1778), every way",
+      async (direction, amountIn) => {
+        const t = served("invariant-usdc-usdt", direction);
+        const w = ways(t, amountIn);
+        for (const sent of [w.hand, w.viaData, w.viaCpi, w.viaTry])
+          expect(venueFailure(failed(await sent()), t.programId)).toEqual([
+            `Program ${t.programId} failed: custom program error: 0x1778`,
+          ]);
       },
       120_000,
     );

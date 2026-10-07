@@ -336,7 +336,9 @@ trySwap(slot: Account[], trader: Account[], amountIn, maxPrice, minOut, recipien
   fees of its own trade at a limit, and a limit computed to keep a walk inside the tick arrays a slot
   carries keeps it there however the fee moves. `0` is no limit: the program's own bound on Raydium's
   code, Orca and DefiTuna, an order at any price on Phoenix and OpenBook, and on Invariant only selling
-  token X. Cropper's and Crema's programs take no `0`; give them their own bound.
+  token X. Cropper's and Crema's programs take no `0`; give them their own bound. Invariant's
+  program does not stop at its limit: a swap that reaches it with input left is refused (custom
+  error `0x1778`), and the whole transaction with it, so there `amountIn` must fit inside the limit.
 - **`minOut`** is the least a swap that ran may deliver; below it the whole program reverts. At a
   pool's own limit it rides in the venue's own least-out field where the instruction has one
   (Raydium's code and the whirlpools' `other_amount_threshold`, Crema's `amount_limit`, Manifest's
@@ -365,7 +367,8 @@ buy: dust an earlier pool left (an atom, which the fee takes whole) is skipped, 
 venue that would keep it or refuse it. A Phoenix or OpenBook order whose book has no offer within
 its price is placed and fills nothing, so it returns `0` too, nothing having moved. A swap that ran
 returns at least 1, held to `minOut` and at least 1, and reverts below it. A failure the checks do
-not foresee, such as a tick array missing from the slot, fails the transaction.
+not foresee, such as a tick array missing from the slot or an Invariant input past its limit, fails
+the transaction.
 
 ```js
 import { trySwap } from "@sauce/router";
