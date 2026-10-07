@@ -386,7 +386,7 @@ Every action below is executed in CI against the deployed contracts it names, th
 
 ### Swaps
 
-Each swap at one of `@sauce/router`'s nine venues is that library's function, so the action and a Sauce program calling it run the same code. The first three go through the Pot's Router, which answers their pools' callbacks; the others call the pool directly. See the [`@sauce/router` reference](../api/router.md) for what each does and refuses.
+Each swap at one of `@sauce/router`'s venues is that library's function, so the action and a Sauce program calling it run the same code. The first three go through the Pot's Router, which answers their pools' callbacks; the others call the pool directly. See the [`@sauce/router` reference](../api/router.md) for what each does and refuses.
 
 | Action            | Calls                                                                           | Output   |
 | ----------------- | ------------------------------------------------------------------------------- | -------- |

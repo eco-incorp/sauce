@@ -122,24 +122,29 @@ it stays in the Pot.)
 
 The `try` forms are the one way to get a swap that may fail without reverting the program, and they
 lose nothing either: a `try` that cannot swap returns `0` having moved nothing, and the program
-goes on. That holds three ways:
+goes on. A swap that ran returns at least 1, so `0` always means nothing moved. That holds three
+ways:
 
 - `tryUniswapV2`, `tryTraderJoeLB`, `tryDodoV2` and `tryWoofi` check, before anything moves, that
-  the pool takes the whole input at the floor — the V2 reserves, LB's `getSwapOut`, DODO V2's
-  `querySellBase`/`querySellQuote` (priced for the Pot), WooPPV2's `tryQuery` — and otherwise run
-  uncaught, so a failure the check did not foresee still reverts;
+  the pool takes the whole input at the floor — `minOut`, and at least 1 — from the V2 reserves,
+  LB's `getSwapOut`, DODO V2's `querySellBase`/`querySellQuote` or WooPPV2's `query`. A pool with
+  no code, or whose view reverts, is skipped. Otherwise the swap runs uncaught, so a failure the
+  check did not foresee still reverts;
 - `tryCurve` and `tryBalancerV2` catch the pool's failure and reset the approval to zero: the pool
-  pulls the input and enforces the floor inside the call that is caught;
+  pulls the input and enforces the floor, at least 1, inside the call that is caught;
 - `tryUniswapV3`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL` and `tryInfinityBin` catch the
   Router's call, inside which the Router pays the pool. A pool that has no code, is not the named
-  pair's (V3, Maverick), or whose swap the pool or the Router refuses is skipped. What a swap that
-  ran delivered is the recipient's `tokenOut` balance change (its native balance for the zero
-  address); the generation-4 Router takes no floor, so it is held to `minOut` afterwards and the
-  program reverts below it.
+  pair's (V3, Maverick), or whose swap the pool or the Router refuses (a key no pool has, a price
+  limit behind the pool's price) is skipped. The generation-4 Router takes no floor, so a swap that
+  ran is held to one afterwards: what the recipient's `tokenOut` balance gained (its native balance
+  for the zero address) must reach `minOut`, and at least 1, or the program reverts, because a swap
+  that took input and delivered nothing (an input the pool keeps as its fee) cannot be undone. A
+  swap that ran and moved nothing either way, in a pool with no liquidity in range, is skipped: the
+  Pot's `tokenIn` balance, read around the call, tells the two apart.
 
-For the first two kinds a swap that ran returns at least 1, so `0` always means skipped. A Router
-`try` with a `minOut` of `0` also returns `0` for a swap that ran and delivered nothing (an input the
-pool rounds away); pass a positive `minOut` where `0` must mean skipped.
+DODO V2 charges its fee by the transaction's origin, which a program cannot read, so `tryDodoV2`
+asks the view for the Pot's fee. Where a pool's fee model tells the two apart, the swap can deliver
+other than the quote, and below the floor it reverts.
 
 ## Venues
 

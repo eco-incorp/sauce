@@ -31,17 +31,19 @@ Every function takes its arguments in one order — the pool, the two tokens, th
 own facts, then the floor and the recipient — and returns the amount of `tokenOut` the recipient
 received:
 
-| Function      | Arguments                                                                                                 | Reached through  |
-| ------------- | --------------------------------------------------------------------------------------------------------- | ---------------- |
-| `uniswapV2`   | `pair, tokenIn, tokenOut, amountIn, feePpm, minOut, recipient`                                            | the pair         |
-| `uniswapV3`   | `pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient`                                 | the Pot's Router |
-| `uniswapV4`   | `poolManager, tokenIn, tokenOut, amountIn, fee, tickSpacing, hooks, sqrtPriceLimitX96, minOut, recipient` | the Pot's Router |
-| `curve`       | `pool, tokenIn, tokenOut, amountIn, i, j, uint256Indices, minOut, recipient`                              | the pool         |
-| `balancerV2`  | `vault, tokenIn, tokenOut, amountIn, poolId, minOut, recipient`                                           | the Vault        |
-| `dodoV2`      | `pool, tokenIn, tokenOut, amountIn, baseToken, quoteToken, minOut, recipient`                             | the pool         |
-| `traderJoeLB` | `pair, tokenIn, tokenOut, amountIn, tokenX, tokenY, minOut, recipient`                                    | the pair         |
-| `woofi`       | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                    | the WooPPV2      |
-| `maverickV2`  | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                    | the Pot's Router |
+| Function      | Arguments                                                                                                       | Reached through  |
+| ------------- | --------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `uniswapV2`   | `pair, tokenIn, tokenOut, amountIn, feePpm, minOut, recipient`                                                  | the pair         |
+| `uniswapV3`   | `pool, tokenIn, tokenOut, amountIn, sqrtPriceLimitX96, minOut, recipient`                                       | the Pot's Router |
+| `uniswapV4`   | `poolManager, tokenIn, tokenOut, amountIn, fee, tickSpacing, hooks, sqrtPriceLimitX96, minOut, recipient`       | the Pot's Router |
+| `curve`       | `pool, tokenIn, tokenOut, amountIn, i, j, uint256Indices, minOut, recipient`                                    | the pool         |
+| `balancerV2`  | `vault, tokenIn, tokenOut, amountIn, poolId, minOut, recipient`                                                 | the Vault        |
+| `dodoV2`      | `pool, tokenIn, tokenOut, amountIn, baseToken, quoteToken, minOut, recipient`                                   | the pool         |
+| `traderJoeLB` | `pair, tokenIn, tokenOut, amountIn, tokenX, tokenY, minOut, recipient`                                          | the pair         |
+| `woofi`       | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                          | the WooPPV2      |
+| `maverickV2`  | `pool, tokenIn, tokenOut, amountIn, minOut, recipient`                                                          | the Pot's Router |
+| `infinityCL`  | `vault, tokenIn, tokenOut, amountIn, poolManager, fee, parameters, hooks, sqrtPriceLimitX96, minOut, recipient` | the Pot's Router |
+| `infinityBin` | `vault, tokenIn, tokenOut, amountIn, poolManager, fee, parameters, hooks, minOut, recipient`                    | the Pot's Router |
 
 - **`amountIn`** is what the Pot pays. **Every swap is exact input.**
 - **`minOut`** is the least the swap may deliver; below it the whole program reverts. `0` sets no
@@ -55,9 +57,18 @@ received:
 Each venue has a `try` form — `tryUniswapV2`, `tryCurve`, `tryBalancerV2`, `tryDodoV2`,
 `tryTraderJoeLB`, `tryWoofi`, `tryUniswapV3`, `tryUniswapV4`, `tryMaverickV2`, `tryInfinityCL`,
 `tryInfinityBin` — that takes the same arguments as the function it names and returns `0`, having
-moved nothing, instead of reverting when the swap cannot be made. The forms that call the Router
-(V3, V4, Maverick, Infinity) catch the Router's call and hold a swap that ran to `minOut` after it;
-with a `minOut` of `0` they also return `0` for a swap that ran and delivered nothing.
+moved nothing, instead of reverting when the swap cannot be made. A swap that ran returns at least
+1, so `0` always means nothing moved:
+
+- the forms of the venues paid first check the pool's own view before anything moves (the V2
+  reserves, LB's `getSwapOut`, DODO V2's `querySellBase`/`querySellQuote`, WooPPV2's `query`), or
+  catch the pool's failure and reset the approval (`tryCurve`, `tryBalancerV2`); a pool with no code
+  is skipped;
+- the forms that call the Router (V3, V4, Maverick, Infinity) catch the Router's call, so a pool with
+  no code, a pool for another pair, a key no pool has and a swap the pool or the Router refuses are
+  skipped. A swap that ran must then deliver `minOut`, and at least 1, or the whole program reverts:
+  an input the pool kept (a dust amount it takes as its fee) cannot be given back. A swap that ran in
+  a pool with no liquidity in range moved nothing either way, and returns `0`.
 
 ## How each venue is reached
 
@@ -65,10 +76,11 @@ with a `minOut` of `0` they also return `0` for a swap that ran and delivered no
 call back: the function pushes the input to the pool, or approves exactly the input for the pool to
 pull, and calls it. Such a swap **consumes its whole input or reverts**; nothing is refunded.
 
-**Called back.** Uniswap V3 and its forks, Uniswap V4 and Maverick V2 pools re-enter their caller
-mid-swap to be paid, which a program cannot answer. Those functions call the **Pot's Router**,
-`ctx.self()`: the Pot's fallback delegatecalls the Router it is configured with (`router()` on the
-Pot), so the Router runs in the Pot's context, holds the Pot's balances, and answers the callback.
+**Called back.** Uniswap V3 and its forks, Uniswap V4, Maverick V2 and PancakeSwap Infinity pools
+re-enter their caller mid-swap to be paid, which a program cannot answer. Those functions call the
+**Pot's Router**, `ctx.self()`: the Pot's fallback delegatecalls the Router it is configured with
+(`router()` on the Pot), so the Router runs in the Pot's context, holds the Pot's balances, and
+answers the callback.
 It services these callbacks:
 
 - `uniswapV3SwapCallback`: Uniswap V3 and forks that keep the name, including Aerodrome Slipstream;
@@ -76,7 +88,9 @@ It services these callbacks:
 - `algebraSwapCallback`: Algebra pools (Camelot V3, QuickSwap V3), whose `swap` has the same
   selector as Uniswap V3's;
 - `synthraV3SwapCallback`, `unitFlowV3SwapCallback`: Synthra V3 and UnitFlow V3;
-- `unlockCallback`: Uniswap V4.
+- `unlockCallback`: Uniswap V4;
+- `maverickV2SwapCallback`: Maverick V2;
+- `lockAcquired`: PancakeSwap Infinity, CL and bin pools alike.
 
 So `uniswapV3` drives every one of those V3-style pools. Each callback is authenticated to the pool
 being swapped, pays **once**, and pays only

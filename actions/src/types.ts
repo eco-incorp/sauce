@@ -362,7 +362,7 @@ export interface FluidDexT1SwapAction extends Spends {
   recipient: Recipient;
 }
 
-/** A swap that `@sauce/router` implements: one pool, at one of its nine venues. */
+/** A swap that `@sauce/router` implements: one pool, at one of its venues. */
 export type RouterSwapAction =
   | UniswapV2SwapAction
   | UniswapV3SwapAction

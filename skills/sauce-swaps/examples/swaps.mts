@@ -105,7 +105,7 @@ check(
   "PancakeSwap Infinity Bin has no limit",
 );
 
-// The pool callbacks the Router services: which pool families `uniswapV3`/`uniswapV4` can drive.
+// The pool callbacks the Router services: which pool families the Router-routed functions drive.
 for (const callback of [
   "uniswapV3SwapCallback",
   "pancakeV3SwapCallback",
@@ -113,6 +113,8 @@ for (const callback of [
   "synthraV3SwapCallback",
   "unitFlowV3SwapCallback",
   "unlockCallback",
+  "maverickV2SwapCallback",
+  "lockAcquired",
 ]) {
   check(has(callback), `the Router implements ${callback}`);
 }

@@ -18,7 +18,7 @@
  * A binding method's output is declared, and so decoded, only when an action reads it — see
  * `abis.ts`.
  *
- * ONE SWAP IMPLEMENTATION. A swap action at one of `@sauce/router`'s nine venues is a call into
+ * ONE SWAP IMPLEMENTATION. A swap action at one of `@sauce/router`'s venues is a call into
  * that library — `uniswapV2Swap` is `uniswapV2(...)`, `curveSwap` is `curve(...)` — with the
  * action's fields as its arguments, so an action program and a hand-written Sauce program trade a
  * venue through the same code. The program imports what it calls from `@sauce/router`, which the
