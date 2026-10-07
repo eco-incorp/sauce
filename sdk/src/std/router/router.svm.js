@@ -50,11 +50,13 @@
 // adaptive fee, or a Byreal pool's own), a pool with no liquidity at its price, a pool already at or
 // past its own limit, and an input smaller than one of a market's lots. A swap that ran returns at
 // least 1: it is held to the floor afterwards — `minOut`, and at least 1 — and reverts below it, so
-// `0` always means skipped. A swap that ran and moved nothing either way is a skip too: a Phoenix
-// order whose book has no offer within the limit fills nothing, which only the paying account's
-// balance tells. A failure the checks do not foresee (a tick array missing from the slot) still
-// aborts the transaction. A slot that is not the pair, or whose program is not the venue's or not
-// the pool's owner, reverts: those are the caller's accounts, not the pool's state.
+// `0` always means skipped. An input too small to buy anything (an atom) is below that floor where
+// Orca's code takes it and gives nothing back. A swap that ran and moved nothing either way is a
+// skip too: a Phoenix order whose book has no offer within the limit fills nothing, which only the
+// paying account's balance tells. A failure the checks do not foresee still aborts the transaction:
+// a tick array missing from the slot, or an input Raydium's code finds too small to swap. A slot
+// that is not the pair, or whose program is not the venue's or not the pool's owner, reverts: those
+// are the caller's accounts, not the pool's state.
 //
 // The plain forms swap or revert: each is its `try` form, reverting where that returns 0.
 //

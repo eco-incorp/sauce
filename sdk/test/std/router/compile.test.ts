@@ -395,7 +395,7 @@ describe("@sauce/router: packaging", () => {
       "`woofi` is not exported by module",
     );
     expect(() => compileStdRouter(svmOnly, "evm")).toThrow("`trySwap` is not exported by module");
-    expect(() => compileWithRs({ source: svmOnly, target: "evm" })).toThrow(
+    expect(() => compileWithRs({ source: svmOnly, target: "v12" })).toThrow(
       "`trySwap` is not exported by module",
     );
     expect(() => compileStdRouter(evmOnly, "evm")).not.toThrow();
