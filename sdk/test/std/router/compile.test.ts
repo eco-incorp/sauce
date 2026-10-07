@@ -74,6 +74,15 @@ import {
   stabbleWeightedSwap,
   stepn,
   tokenSwapV1,
+  DENALI_PROGRAM_ID,
+  DERIVERSE_PROGRAM_ID,
+  FLINT_PROGRAM_ID,
+  GAVEL_PROGRAM_ID,
+  HADRON_PROGRAM_ID,
+  RIPTIDE_PROGRAM_ID,
+  SOLFI_V2_PROGRAM_ID,
+  TAURUSFI_PROGRAM_ID,
+  TESSERAV_PROGRAM_ID,
 } from "../../../src/svm/index.js";
 import {
   compileStdRouter,
@@ -577,6 +586,15 @@ describe("@sauce/router (SVM): the exact-input venues' program ids", () => {
     guacswap: guacswap.programId,
     meteoraDlmm: METEORA_DLMM_PROGRAM_ID,
     sarosDlmm: SAROS_DLMM_PROGRAM_ID,
+    solfiV2: SOLFI_V2_PROGRAM_ID,
+    hadron: HADRON_PROGRAM_ID,
+    taurusfi: TAURUSFI_PROGRAM_ID,
+    riptide: RIPTIDE_PROGRAM_ID,
+    denali: DENALI_PROGRAM_ID,
+    gavel: GAVEL_PROGRAM_ID,
+    tesserav: TESSERAV_PROGRAM_ID,
+    flint: FLINT_PROGRAM_ID,
+    deriverse: DERIVERSE_PROGRAM_ID,
   };
   const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
   const carries = (code: string) =>

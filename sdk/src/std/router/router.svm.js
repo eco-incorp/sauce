@@ -4986,3 +4986,1007 @@ export function sarosDlmmCpi(
   require(held - left <= amountIn, "debit");
   return held - left;
 }
+
+// Proprietary and oracle-priced venues. Each prices off its market maker's own oracle or quote, which a
+// keeper keeps fresh, and refuses a swap on a quote gone stale: a `try` form cannot see that, so a
+// stale quote fails the transaction.
+
+// SolFi v2, SV2EYYJyRz2YhfXwXnhNAevDEui5Q6yrfyo13WtupPF: `swap`, priced off its oracle and the
+// program's
+// registry. The slot is `[program, pool, oracle, registry, vaultA, vaultB, instructionsSysvar]`.
+// The
+// swap writes the authority, so it has to be attached writable.
+function swapSolfiV2(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0x06873437b4fbc9f40437dd3ce63f9cfe8c2484035593a12781ba2a97be341696, "not a SolFi v2 pool");
+  const payMint = trader[2];
+  const buyMint = trader[3];
+  const tokenProgram = trader[4];
+  const token2022 = trader[5];
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const paysA = svm.sload(slot[4], 0, 32).toBe() == payMint.address;
+  const mintA = paysA ? payMint : buyMint;
+  const mintB = paysA ? buyMint : payMint;
+  // The amount, the floor, then the direction: 0 pays token A.
+  const word = amountIn | ((minOut == 0 ? 1 : minOut) << 64) | ((paysA ? 0 : 1) << 128);
+  const ix = hex`07`;
+  svm.call(
+    program,
+    [
+      trader[0],
+      slot[1],
+      slot[2],
+      slot[3],
+      slot[4],
+      slot[5],
+      paysA ? trader[1] : recipient,
+      paysA ? recipient : trader[1],
+      mintA,
+      mintB,
+      mintA.owner == token2022.address ? token2022 : tokenProgram,
+      mintB.owner == token2022.address ? token2022 : tokenProgram,
+      slot[6],
+    ],
+    ix.concat(word.toBytesLe(17)),
+  );
+}
+
+export function solfiV2(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapSolfiV2(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips an empty side.
+export function trySolfiV2(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(pool.owner ==
+    0x06873437b4fbc9f40437dd3ce63f9cfe8c2484035593a12781ba2a97be341696, "not a SolFi v2 pool");
+  const paysA = svm.sload(slot[4], 0, 32).toBe() == trader[2].address;
+  if (svm.sload(paysA ? slot[5] : slot[4], 64, 8).toLe() == 0) {
+    return 0;
+  }
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapSolfiV2(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: the authority (writable), the pool, its oracle, the program's registry, its A and
+// B vaults, the authority's A and B token accounts (the paying one among them), mints A and B,
+// their token programs, and the Instructions sysvar. It pays A when `source` is the A account.
+export function solfiV2Cpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0x06873437b4fbc9f40437dd3ce63f9cfe8c2484035593a12781ba2a97be341696, "not a SolFi v2 pool");
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const word =
+    amountIn | ((minOut == 0 ? 1 : minOut) << 64) | ((accounts[6] == source ? 0 : 1) << 128);
+  const ix = hex`07`;
+  const data = ix.concat(word.toBytesLe(17));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Hadron, HADRoNbLovyqhCsocfYQYB7QdfCAAinN9HTePvBCVDQ8: `swap`. The slot is `[program, pool,
+// assetConfigA, assetConfigB, growingA, vaultA, vaultB, globalConfig, feeVaultA, feeVaultB, clock,
+// metadataA]`, the fee vaults being the fee treasury's token accounts for A and B (the swap pays
+// its
+// fee into the paid token's) and `clock` the Clock sysvar. Its swap takes SPL Token for both
+// tokens.
+function swapHadron(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0xf017451f68c728954ad10c442fc0a04a2b56c57fe52a96c8221a0c61c0e8727d, "not a Hadron pool");
+  const payMint = trader[2];
+  const tokenProgram = trader[4];
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const paysA = svm.sload(slot[5], 0, 32).toBe() == payMint.address;
+  // The direction (1 pays token A), the amount, the floor, then a deadline that never passes.
+  const word = (paysA ? 1 : 0) | (amountIn << 8) | (minOut << 72) | (0x7fffffffffffffff << 136);
+  const ix = hex`03`;
+  svm.call(
+    program,
+    [
+      tokenProgram,
+      tokenProgram,
+      slot[1],
+      slot[2],
+      slot[3],
+      slot[4],
+      slot[1],
+      trader[0],
+      trader[1],
+      paysA ? slot[5] : slot[6],
+      paysA ? slot[6] : slot[5],
+      recipient,
+      slot[7],
+      paysA ? slot[8] : slot[9],
+      slot[10],
+      slot[11],
+    ],
+    ix.concat(word.toBytesLe(25)),
+  );
+}
+
+export function hadron(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapHadron(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips an empty side.
+export function tryHadron(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(pool.owner ==
+    0xf017451f68c728954ad10c442fc0a04a2b56c57fe52a96c8221a0c61c0e8727d, "not a Hadron pool");
+  const paysA = svm.sload(slot[5], 0, 32).toBe() == trader[2].address;
+  if (svm.sload(paysA ? slot[6] : slot[5], 64, 8).toLe() == 0) {
+    return 0;
+  }
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapHadron(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: SPL Token twice, the pool, its A and B asset configs, its growing account, the
+// pool again, the authority, the authority's paying token account, the pool's paying and paid
+// vaults, the authority's receiving token account, the global config, the fee vault for the paid
+// token, the Clock sysvar, and the pool's A metadata. It pays A when `source`'s mint is the
+// pool's A.
+export function hadronCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0xf017451f68c728954ad10c442fc0a04a2b56c57fe52a96c8221a0c61c0e8727d, "not a Hadron pool");
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const paysA = svm.sload(source, 0, 32).toBe() == svm.sload(accounts[2], 41, 32).toBe();
+  const word = (paysA ? 1 : 0) | (amountIn << 8) | (minOut << 72) | (0x7fffffffffffffff << 136);
+  const ix = hex`03`;
+  const data = ix.concat(word.toBytesLe(25));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// TaurusFi, 9VX8EKBg6vM6tA68xaDsPkbrx26XConZjkQmhVApUptc: `swap`, priced off its price account,
+// which
+// is the pool. The slot is `[program, price, vault0, vault1, vaultAuthority, globalConfig,
+// globalAuthority, instructionsSysvar]`. Its swap has no floor of its own and writes the authority,
+// so it has to be attached writable. It refuses a swap once the price account's slot window has
+// passed.
+function swapTaurusfi(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0x7e2bd1f2dfc2858aaf5b54d049c0254a20cf4fd320baf46601c3c1f308603115, "not a TaurusFi pool");
+  const payMint = trader[2];
+  const buyMint = trader[3];
+  const tokenProgram = trader[4];
+  const token2022 = trader[5];
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const pays0 = svm.sload(slot[2], 0, 32).toBe() == payMint.address;
+  // The amount, then two fixed bytes: the swap reads its direction from the accounts.
+  const word = amountIn | (1 << 72);
+  const ix = hex`08`;
+  svm.call(
+    program,
+    [
+      slot[2],
+      slot[3],
+      trader[0],
+      pays0 ? trader[1] : recipient,
+      pays0 ? recipient : trader[1],
+      slot[4],
+      slot[5],
+      slot[1],
+      slot[6],
+      payMint.owner == token2022.address ? token2022 : tokenProgram,
+      buyMint.owner == token2022.address ? token2022 : tokenProgram,
+      payMint,
+      buyMint,
+      slot[7],
+    ],
+    ix.concat(word.toBytesLe(10)),
+  );
+}
+
+export function taurusfi(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapTaurusfi(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips an empty side.
+export function tryTaurusfi(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(pool.owner ==
+    0x7e2bd1f2dfc2858aaf5b54d049c0254a20cf4fd320baf46601c3c1f308603115, "not a TaurusFi pool");
+  const pays0 = svm.sload(slot[2], 0, 32).toBe() == trader[2].address;
+  if (svm.sload(pays0 ? slot[3] : slot[2], 64, 8).toLe() == 0) {
+    return 0;
+  }
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapTaurusfi(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: the pool's token 0 and token 1 vaults, the authority (writable), the authority's
+// token 0 and token 1 accounts (the paying one among them), the vault authority, the global
+// config, the price account, the global authority, the paid and bought tokens' programs, the
+// paid and bought mints, and the Instructions sysvar.
+export function taurusfiCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0x7e2bd1f2dfc2858aaf5b54d049c0254a20cf4fd320baf46601c3c1f308603115, "not a TaurusFi pool");
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const word = amountIn | (1 << 72);
+  const ix = hex`08`;
+  const data = ix.concat(word.toBytesLe(10));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Riptide, riptK81hDxhe5pW5jSzSM9iRA8azgEgLJ4dXkPtBS7j: `swap`. The slot is `[program, pool,
+// vaultA,
+// vaultB, instructionsSysvar, dontFront]`, `dontFront` being
+// `jitodontfront111111111111111111111111111111`, which the swap requires. Its swap has no floor of
+// its own.
+function swapRiptide(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0x0cbcc08307b47ca54d6b52f31d59682d7ba7f1bdbc905d762b0ff05df2bc4b4a, "not a Riptide pool");
+  const payMint = trader[2];
+  const buyMint = trader[3];
+  const tokenProgram = trader[4];
+  const token2022 = trader[5];
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const paysA = svm.sload(slot[2], 0, 32).toBe() == payMint.address;
+  const mintA = paysA ? payMint : buyMint;
+  const mintB = paysA ? buyMint : payMint;
+  // The amount, the direction (1 pays token A), then two fixed bytes.
+  const word = amountIn | ((paysA ? 1 : 0) << 64) | (1 << 80);
+  const ix = hex`02`;
+  svm.call(
+    program,
+    [
+      trader[0],
+      slot[1],
+      mintA,
+      mintB,
+      paysA ? trader[1] : recipient,
+      paysA ? recipient : trader[1],
+      slot[2],
+      slot[3],
+      mintA.owner == token2022.address ? token2022 : tokenProgram,
+      mintB.owner == token2022.address ? token2022 : tokenProgram,
+      trader[6],
+      slot[4],
+      slot[5],
+    ],
+    ix.concat(word.toBytesLe(11)),
+  );
+}
+
+export function riptide(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapRiptide(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips an empty side.
+export function tryRiptide(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(pool.owner ==
+    0x0cbcc08307b47ca54d6b52f31d59682d7ba7f1bdbc905d762b0ff05df2bc4b4a, "not a Riptide pool");
+  const paysA = svm.sload(slot[2], 0, 32).toBe() == trader[2].address;
+  if (svm.sload(paysA ? slot[3] : slot[2], 64, 8).toLe() == 0) {
+    return 0;
+  }
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapRiptide(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: the authority, the pool, mints A and B, the authority's A and B token accounts
+// (the paying one among them), the pool's A and B vaults, their token programs, the Memo
+// program, the Instructions sysvar, and `jitodontfront111111111111111111111111111111`. It pays A
+// when `source` is the A account.
+export function riptideCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0x0cbcc08307b47ca54d6b52f31d59682d7ba7f1bdbc905d762b0ff05df2bc4b4a, "not a Riptide pool");
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const word = amountIn | ((accounts[4] == source ? 1 : 0) << 64) | (1 << 80);
+  const ix = hex`02`;
+  const data = ix.concat(word.toBytesLe(11));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Denali, DNL1tgEj3nJovHw9jtyCCQD3arssCJzkmpDizknwzey4: `swap`, priced off its oracle. The slot is
+// `[program, pool, vaultA, vaultB, oracle, globalConfig]`.
+function swapDenali(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0xb7c2f0db335735cbd89036f3678822a6f71b6b9fd244cef6245abcd89b0a848f, "not a Denali pool");
+  const payMint = trader[2];
+  const buyMint = trader[3];
+  const tokenProgram = trader[4];
+  const token2022 = trader[5];
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const paysA = svm.sload(slot[2], 0, 32).toBe() == payMint.address;
+  const mintA = paysA ? payMint : buyMint;
+  const mintB = paysA ? buyMint : payMint;
+  // The direction (0 pays token A), the amount, the floor.
+  const word = (paysA ? 0 : 1) | (amountIn << 8) | (minOut << 72);
+  const ix = hex`68688356a1bdb4d8`;
+  svm.call(
+    program,
+    [
+      trader[0],
+      slot[1],
+      mintA,
+      mintB,
+      slot[2],
+      slot[3],
+      mintA.owner == token2022.address ? token2022 : tokenProgram,
+      mintB.owner == token2022.address ? token2022 : tokenProgram,
+      slot[4],
+      slot[5],
+      paysA ? trader[1] : recipient,
+      paysA ? recipient : trader[1],
+    ],
+    ix.concat(word.toBytesLe(17)),
+  );
+}
+
+export function denali(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapDenali(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips an empty side.
+export function tryDenali(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(pool.owner ==
+    0xb7c2f0db335735cbd89036f3678822a6f71b6b9fd244cef6245abcd89b0a848f, "not a Denali pool");
+  const paysA = svm.sload(slot[2], 0, 32).toBe() == trader[2].address;
+  if (svm.sload(paysA ? slot[3] : slot[2], 64, 8).toLe() == 0) {
+    return 0;
+  }
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapDenali(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: the authority, the pool, mints A and B, the pool's A and B vaults, their token
+// programs, the oracle, the global config, and the authority's A and B token accounts (the
+// paying one among them). It pays A when `source` is the A account.
+export function denaliCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0xb7c2f0db335735cbd89036f3678822a6f71b6b9fd244cef6245abcd89b0a848f, "not a Denali pool");
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const word = (accounts[10] == source ? 0 : 1) | (amountIn << 8) | (minOut << 72);
+  const ix = hex`68688356a1bdb4d8`;
+  const data = ix.concat(word.toBytesLe(17));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Gavel, srAMMzfVHVAtgSJc8iH6CfKzuWuUTzLHVCE81QU1rgi: the sr-AMM's `swap`. The slot is
+// `[program, pool,
+// logAuthority, baseVault, quoteVault]`. Its swap takes SPL Token for both tokens.
+function swapGavel(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0x0d06a0920ae43425bbcbc1e38e455bffe287f632ddefb1c1ecbecbf35f71f373, "not a Gavel pool");
+  const payMint = trader[2];
+  const tokenProgram = trader[4];
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const sellsBase = svm.sload(slot[3], 0, 32).toBe() == payMint.address;
+  // The instruction, the side (1 sells the base token), exact input, the amount, the floor.
+  const word = ((sellsBase ? 1 : 0) << 8) | (amountIn << 24) | ((minOut == 0 ? 1 : minOut) << 88);
+  svm.call(
+    program,
+    [
+      program,
+      slot[2],
+      slot[1],
+      trader[0],
+      sellsBase ? trader[1] : recipient,
+      sellsBase ? recipient : trader[1],
+      slot[3],
+      slot[4],
+      tokenProgram,
+    ],
+    word.toBytesLe(19),
+  );
+}
+
+export function gavel(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapGavel(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips an empty side.
+export function tryGavel(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(pool.owner ==
+    0x0d06a0920ae43425bbcbc1e38e455bffe287f632ddefb1c1ecbecbf35f71f373, "not a Gavel pool");
+  const sellsBase = svm.sload(slot[3], 0, 32).toBe() == trader[2].address;
+  if (svm.sload(sellsBase ? slot[4] : slot[3], 64, 8).toLe() == 0) {
+    return 0;
+  }
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapGavel(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: the program itself, its log authority, the pool, the authority, the authority's
+// base and quote token accounts (the paying one among them), the pool's base and quote vaults,
+// and SPL Token. It sells the base token when `source` is the base account.
+export function gavelCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0x0d06a0920ae43425bbcbc1e38e455bffe287f632ddefb1c1ecbecbf35f71f373, "not a Gavel pool");
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const word =
+    ((accounts[4] == source ? 1 : 0) << 8) | (amountIn << 24) | ((minOut == 0 ? 1 : minOut) << 88);
+  const data = word.toBytesLe(19);
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Tessera V, TessVdML9pBGgG9yGks7o4HewRaXVAMuoVj4x83GLQH: `swap`, selling token A only (the B-to-A
+// swap's accounts are not verified). The slot is `[program, pool, authority, vaultA, vaultB,
+// instructionsSysvar, config, oracle]`, `authority` being the program's own. It refuses a swap many
+// slots after its quote was last stamped.
+function swapTesserav(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0x06d3edc4e573adaff3e573898b545b1ee8d28d058ed94e88e0bcb332571bea0a, "not a Tessera V pool");
+  const payMint = trader[2];
+  const buyMint = trader[3];
+  const tokenProgram = trader[4];
+  const token2022 = trader[5];
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  require(svm.sload(slot[3], 0, 32).toBe() == payMint.address, "Tessera V sells only token A");
+  // The direction (1 sells token A), the amount, the floor.
+  const word = 1 | (amountIn << 8) | ((minOut == 0 ? 1 : minOut) << 72);
+  const ix = hex`10`;
+  svm.call(
+    program,
+    [
+      slot[2],
+      slot[1],
+      trader[0],
+      slot[3],
+      slot[4],
+      trader[1],
+      recipient,
+      payMint,
+      buyMint,
+      payMint.owner == token2022.address ? token2022 : tokenProgram,
+      buyMint.owner == token2022.address ? token2022 : tokenProgram,
+      slot[5],
+      slot[6],
+      slot[7],
+    ],
+    ix.concat(word.toBytesLe(17)),
+  );
+}
+
+export function tesserav(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapTesserav(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips an empty side.
+export function tryTesserav(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(pool.owner ==
+    0x06d3edc4e573adaff3e573898b545b1ee8d28d058ed94e88e0bcb332571bea0a, "not a Tessera V pool");
+  if (svm.sload(slot[4], 64, 8).toLe() == 0) {
+    return 0;
+  }
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapTesserav(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: the program's authority, the pool, the authority, the pool's A and B vaults, the
+// authority's A and B token accounts (A paying), mints A and B, their token programs, the
+// Instructions sysvar, the program's config and its oracle account.
+export function tesseravCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0x06d3edc4e573adaff3e573898b545b1ee8d28d058ed94e88e0bcb332571bea0a, "not a Tessera V pool");
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const word = 1 | (amountIn << 8) | ((minOut == 0 ? 1 : minOut) << 72);
+  const ix = hex`10`;
+  const data = ix.concat(word.toBytesLe(17));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Flint, FLiNTXPwppyoJabCoxc2uiiRygAHpmMXajiDXo2Ub1z: `swap` between two of its markets, one per
+// token.
+// The slot is `[program, marketA, marketB, vaultA, vaultB, instructionsSysvar]`, each vault its
+// market's. Its swap has no floor of its own; a pair it does not quote both ways refuses the other.
+function swapFlint(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0x03ac6bd3a59b41770ebf4c239e0266a3e41b9e64adac3a030eaccc6bad070b89, "not a Flint pool");
+  const payMint = trader[2];
+  const buyMint = trader[3];
+  const tokenProgram = trader[4];
+  const token2022 = trader[5];
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const paysA = svm.sload(slot[3], 0, 32).toBe() == payMint.address;
+  // The amount, then two fixed bytes: the swap reads its direction from the accounts.
+  const word = amountIn;
+  const ix = hex`0b`;
+  svm.call(
+    program,
+    [
+      trader[0],
+      slot[5],
+      paysA ? slot[1] : slot[2],
+      paysA ? slot[2] : slot[1],
+      trader[1],
+      paysA ? slot[3] : slot[4],
+      recipient,
+      paysA ? slot[4] : slot[3],
+      payMint.owner == token2022.address ? token2022 : tokenProgram,
+      buyMint.owner == token2022.address ? token2022 : tokenProgram,
+      program,
+    ],
+    ix.concat(word.toBytesLe(10)),
+  );
+}
+
+export function flint(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapFlint(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips an empty side.
+export function tryFlint(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(pool.owner ==
+    0x03ac6bd3a59b41770ebf4c239e0266a3e41b9e64adac3a030eaccc6bad070b89, "not a Flint pool");
+  const paysA = svm.sload(slot[3], 0, 32).toBe() == trader[2].address;
+  if (svm.sload(paysA ? slot[4] : slot[3], 64, 8).toLe() == 0) {
+    return 0;
+  }
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapFlint(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: the authority, the Instructions sysvar, the paid and bought tokens' markets, the
+// authority's paying token account, the paid market's vault, the authority's receiving token
+// account, the bought market's vault, the paid and bought tokens' programs, and the program
+// itself.
+export function flintCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0x03ac6bd3a59b41770ebf4c239e0266a3e41b9e64adac3a030eaccc6bad070b89, "not a Flint pool");
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const word = amountIn;
+  const ix = hex`0b`;
+  const data = ix.concat(word.toBytesLe(10));
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}
+
+// Deriverse, DRVSpZ2YUYYKgZP8XtLhAGtT1zYSCKzeHfb4DgRnrgqD: a spot instrument's `swap`, a market order
+// against its book. The slot is `[program, instrument, assetVault, crncyVault, bidsTree, bidOrders,
+// asksTree, askOrders, lines, maps, clientInfos]`: selling the asset token takes the bids, buying it
+// the asks. The swap requires the authority's associated token accounts, writes the authority, so it
+// has to be attached writable, and takes SPL Token for both tokens.
+function swapDeriverse(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): void {
+  const program = slot[0];
+  require(program.address ==
+    0xb89258789c952e0f14bdab2a705585135da2b43447b210b4754cd2c15d2110a0, "not a Deriverse pool");
+  const payMint = trader[2];
+  const buyMint = trader[3];
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const instrument = slot[1];
+  const sells = svm.sload(instrument, 416, 32).toBe() == payMint.address;
+  // The instruction, the side (1 buys the asset), the instrument's id, no price, the amount, the floor.
+  const word =
+    0x1a |
+    ((sells ? 0 : 1) << 8) |
+    (svm.sload(instrument, 8, 4).toLe() << 32) |
+    (amountIn << 128) |
+    ((minOut == 0 ? 1 : minOut) << 192);
+  svm.call(
+    program,
+    [
+      trader[0],
+      sells ? payMint : buyMint,
+      sells ? buyMint : payMint,
+      slot[2],
+      slot[3],
+      instrument,
+      sells ? slot[4] : slot[6],
+      sells ? slot[5] : slot[7],
+      slot[8],
+      slot[9],
+      slot[10],
+      sells ? trader[1] : recipient,
+      sells ? recipient : trader[1],
+      trader[4],
+    ],
+    word.toBytesLe(32),
+  );
+}
+
+export function deriverse(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapDeriverse(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// Skips an empty side.
+export function tryDeriverse(
+  slot: Account[],
+  trader: Account[],
+  amountIn: Uint256,
+  minOut: Uint256,
+  recipient: Account,
+): Uint256 {
+  const pool = slot[1];
+  if (pool.address == 0 || amountIn == 0) {
+    return 0;
+  }
+  require(pool.owner ==
+    0xb89258789c952e0f14bdab2a705585135da2b43447b210b4754cd2c15d2110a0, "not a Deriverse pool");
+  const sells = svm.sload(pool, 416, 32).toBe() == trader[2].address;
+  if (svm.sload(sells ? slot[3] : slot[2], 64, 8).toLe() == 0) {
+    return 0;
+  }
+  const before = svm.sload(recipient, 64, 8).toLe();
+  swapDeriverse(slot, trader, amountIn, minOut, recipient);
+  const received = svm.sload(recipient, 64, 8).toLe() - before;
+  require(received > 0 && received >= minOut, "below minOut");
+  return received;
+}
+
+// `accounts`: the authority (writable), the asset and currency mints, the instrument's asset and
+// currency vaults, the instrument, the bids tree and orders (selling the asset) or the asks tree and
+// orders (buying it), its lines, maps and client infos, the authority's asset and currency token
+// accounts (the paying one among them), and SPL Token. It sells the asset when `source` is the asset
+// account.
+export function deriverseCpi(
+  program: Account,
+  accounts: Account[],
+  source: Account,
+  amountIn: Uint256,
+  minOut: Uint256,
+): Uint256 {
+  require(program.address ==
+    0xb89258789c952e0f14bdab2a705585135da2b43447b210b4754cd2c15d2110a0, "not a Deriverse pool");
+  require((amountIn | minOut) <= 0xffffffffffffffff, "past 64 bits");
+  const word =
+    0x1a |
+    ((accounts[11] == source ? 0 : 1) << 8) |
+    (svm.sload(accounts[5], 8, 4).toLe() << 32) |
+    (amountIn << 128) |
+    ((minOut == 0 ? 1 : minOut) << 192);
+  const data = word.toBytesLe(32);
+  const held = svm.sload(source, 64, 8).toLe();
+  svm.call(program, accounts, data);
+  const left = svm.sload(source, 64, 8).toLe();
+  if (left >= held) {
+    return 0;
+  }
+  require(held - left <= amountIn, "debit");
+  return held - left;
+}

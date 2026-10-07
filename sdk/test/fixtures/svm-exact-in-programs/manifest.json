@@ -186,6 +186,60 @@
       "programId": "1qbkdrr3z4ryLA7pZykqxvxWPoeifcVKo6ZG9CfkvVE",
       "file": "saros-dlmm.so.gz",
       "sha256": "fe5b8e318e3ce1aaf742715103a374c6842cc99b446039e9ba1205eedf4ab2aa"
+    },
+    {
+      "name": "solfi-v2",
+      "programId": "SV2EYYJyRz2YhfXwXnhNAevDEui5Q6yrfyo13WtupPF",
+      "file": "solfi-v2.so.gz",
+      "sha256": "1d8503647bd9d4982c5ac333f12c3b803c50dfa241b9e8d087983c1ec28c549b"
+    },
+    {
+      "name": "hadron",
+      "programId": "HADRoNbLovyqhCsocfYQYB7QdfCAAinN9HTePvBCVDQ8",
+      "file": "hadron.so.gz",
+      "sha256": "d08a1a5993212f5b858a371460a8b804896d139d47b6bb57f3755fb53a1d977a"
+    },
+    {
+      "name": "taurusfi",
+      "programId": "9VX8EKBg6vM6tA68xaDsPkbrx26XConZjkQmhVApUptc",
+      "file": "taurusfi.so.gz",
+      "sha256": "026f5ef2073ef291d4ad5168e8ad1d8739c6d647ebfe6ee38943bb63a778f162"
+    },
+    {
+      "name": "riptide",
+      "programId": "riptK81hDxhe5pW5jSzSM9iRA8azgEgLJ4dXkPtBS7j",
+      "file": "riptide.so.gz",
+      "sha256": "32a8a8f75662cfdc8d29abe4bf6826c9c027a4b9222d544f46285762c661ab86"
+    },
+    {
+      "name": "denali",
+      "programId": "DNL1tgEj3nJovHw9jtyCCQD3arssCJzkmpDizknwzey4",
+      "file": "denali.so.gz",
+      "sha256": "24036b8d6e53dce0a756ef10ae64c4ed645a8733eadc5942eeb3fab9f036fac5"
+    },
+    {
+      "name": "gavel",
+      "programId": "srAMMzfVHVAtgSJc8iH6CfKzuWuUTzLHVCE81QU1rgi",
+      "file": "gavel.so.gz",
+      "sha256": "62c4c4e280f485c9da2c4ef6d31744bbbc1fe50e9bc8e2e03450c871e0b89b88"
+    },
+    {
+      "name": "tesserav",
+      "programId": "TessVdML9pBGgG9yGks7o4HewRaXVAMuoVj4x83GLQH",
+      "file": "tesserav.so.gz",
+      "sha256": "82fd37995fcece47a253b1a00c1dd7e4c3fff706b2e42384110e2cbabf4201b3"
+    },
+    {
+      "name": "flint",
+      "programId": "FLiNTXPwppyoJabCoxc2uiiRygAHpmMXajiDXo2Ub1z",
+      "file": "flint.so.gz",
+      "sha256": "f6a7393598b5e2e52abc74a6f73699a4d94e7e0c81dce8a686bee5010f7d6ff3"
+    },
+    {
+      "name": "deriverse",
+      "programId": "DRVSpZ2YUYYKgZP8XtLhAGtT1zYSCKzeHfb4DgRnrgqD",
+      "file": "deriverse.so.gz",
+      "sha256": "13a87c3105475aeeb1fb7ddf3e89499d4dfbc79f3f5585703e4feceb55d84820"
     }
   ]
 }

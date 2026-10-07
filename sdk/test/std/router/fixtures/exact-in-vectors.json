@@ -5009,6 +5009,1192 @@
           "role": "s0:prog"
         }
       ]
+    },
+    "solfi-v2:65ZH:0": {
+      "venue": "solfi-v2",
+      "pool": "65ZHSArs5XxPseKQbB1B4r16vDxMWnCxHMzogDAqiDUc",
+      "direction": 0,
+      "cfg": {
+        "venue": "solfi-v2",
+        "pool": "65ZHSArs5XxPseKQbB1B4r16vDxMWnCxHMzogDAqiDUc",
+        "direction": 0,
+        "mintA": "So11111111111111111111111111111111111111112",
+        "mintB": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "vaultA": "CRo8DBwrmd97DJfAnvCv96tZPL5Mktf2NZy2ZnhDer1A",
+        "vaultB": "GhFfLFSprPpfoRaWakPMmJTMJBHuz6C694jYwxy2dAic",
+        "oracle": "2ny7eGyZCoeEVTkNLf5HcnJFBKkyA4p4gcrtb3b8y8ou",
+        "registry": "FmxXDSR9WvpJTCh738D1LEDuhMoA8geCtZgHb3isy7Dp",
+        "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "additiveK": "1932"
+      },
+      "pay": "So11111111111111111111111111111111111111112",
+      "buy": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "program": "SV2EYYJyRz2YhfXwXnhNAevDEui5Q6yrfyo13WtupPF",
+      "prefix": "07",
+      "suffix": "010000000000000000",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "address": "65ZHSArs5XxPseKQbB1B4r16vDxMWnCxHMzogDAqiDUc",
+          "writable": true
+        },
+        {
+          "address": "2ny7eGyZCoeEVTkNLf5HcnJFBKkyA4p4gcrtb3b8y8ou"
+        },
+        {
+          "address": "FmxXDSR9WvpJTCh738D1LEDuhMoA8geCtZgHb3isy7Dp",
+          "writable": true
+        },
+        {
+          "address": "CRo8DBwrmd97DJfAnvCv96tZPL5Mktf2NZy2ZnhDer1A",
+          "writable": true
+        },
+        {
+          "address": "GhFfLFSprPpfoRaWakPMmJTMJBHuz6C694jYwxy2dAic",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "ref": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ]
+    },
+    "solfi-v2:65ZH:1": {
+      "venue": "solfi-v2",
+      "pool": "65ZHSArs5XxPseKQbB1B4r16vDxMWnCxHMzogDAqiDUc",
+      "direction": 1,
+      "cfg": {
+        "venue": "solfi-v2",
+        "pool": "65ZHSArs5XxPseKQbB1B4r16vDxMWnCxHMzogDAqiDUc",
+        "direction": 1,
+        "mintA": "So11111111111111111111111111111111111111112",
+        "mintB": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "vaultA": "CRo8DBwrmd97DJfAnvCv96tZPL5Mktf2NZy2ZnhDer1A",
+        "vaultB": "GhFfLFSprPpfoRaWakPMmJTMJBHuz6C694jYwxy2dAic",
+        "oracle": "2ny7eGyZCoeEVTkNLf5HcnJFBKkyA4p4gcrtb3b8y8ou",
+        "registry": "FmxXDSR9WvpJTCh738D1LEDuhMoA8geCtZgHb3isy7Dp",
+        "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "additiveK": "1932"
+      },
+      "pay": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "buy": "So11111111111111111111111111111111111111112",
+      "program": "SV2EYYJyRz2YhfXwXnhNAevDEui5Q6yrfyo13WtupPF",
+      "prefix": "07",
+      "suffix": "010000000000000001",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "address": "65ZHSArs5XxPseKQbB1B4r16vDxMWnCxHMzogDAqiDUc",
+          "writable": true
+        },
+        {
+          "address": "2ny7eGyZCoeEVTkNLf5HcnJFBKkyA4p4gcrtb3b8y8ou"
+        },
+        {
+          "address": "FmxXDSR9WvpJTCh738D1LEDuhMoA8geCtZgHb3isy7Dp",
+          "writable": true
+        },
+        {
+          "address": "CRo8DBwrmd97DJfAnvCv96tZPL5Mktf2NZy2ZnhDer1A",
+          "writable": true
+        },
+        {
+          "address": "GhFfLFSprPpfoRaWakPMmJTMJBHuz6C694jYwxy2dAic",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "ref": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ]
+    },
+    "hadron:6rK6:AtoB": {
+      "venue": "hadron",
+      "pool": "6rK6f3zsp744uxhzA9n9rrzbpf4CvBy7oj3eaRrLogxL",
+      "direction": "AtoB",
+      "cfg": {
+        "venue": "hadron",
+        "pool": "6rK6f3zsp744uxhzA9n9rrzbpf4CvBy7oj3eaRrLogxL",
+        "direction": "AtoB",
+        "mintA": "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn",
+        "mintB": "So11111111111111111111111111111111111111112",
+        "vaultA": "2ntWy8nrEJNTtc79Epa3GxagBGTUZT5JHDoZuqunCWQ1",
+        "vaultB": "9XLNHvXpe18meH8P5zZ1fzL697dBpBakoWnnKXCxiL6y",
+        "assetCfgA": "BKWdoS5GN6J9YFxANmdfb3rtcYUT8M4Hr6axB7j8pFDy",
+        "assetCfgB": "GCUvxH2tqxCYh4YcLD3PMMf1PCUbYPXeKVvXR1oUVVis",
+        "growingA": "ESRUJyvNhxCPSn1nEHYhNXBkkL61J5Veeeq7UTdkPiQe",
+        "metaA": "FDAzdHWFX9rawHp5o7phRH7BNnpCi24zRefusqC52Fqk",
+        "global": "63sGvdACSA2Kvf4yr7n7SFEJ9V1yAVVyyduPU3br8Lyt",
+        "feeVaultA": "fqTrbnsCjPQFS434BHRAfs8bMC5JH7pZWm5sfDYkPWr",
+        "feeVaultB": "AwaxSAq5Fzr6GmgVLnSxQ6mqawTKWszjwAHXDC4DZhf2"
+      },
+      "pay": "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn",
+      "buy": "So11111111111111111111111111111111111111112",
+      "program": "HADRoNbLovyqhCsocfYQYB7QdfCAAinN9HTePvBCVDQ8",
+      "prefix": "0301",
+      "suffix": "0000000000000000ffffffffffffff7f",
+      "patch": "in",
+      "accounts": [
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "6rK6f3zsp744uxhzA9n9rrzbpf4CvBy7oj3eaRrLogxL",
+          "writable": true
+        },
+        {
+          "address": "BKWdoS5GN6J9YFxANmdfb3rtcYUT8M4Hr6axB7j8pFDy",
+          "writable": true
+        },
+        {
+          "address": "GCUvxH2tqxCYh4YcLD3PMMf1PCUbYPXeKVvXR1oUVVis",
+          "writable": true
+        },
+        {
+          "address": "ESRUJyvNhxCPSn1nEHYhNXBkkL61J5Veeeq7UTdkPiQe",
+          "writable": true
+        },
+        {
+          "address": "6rK6f3zsp744uxhzA9n9rrzbpf4CvBy7oj3eaRrLogxL",
+          "writable": true
+        },
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "address": "2ntWy8nrEJNTtc79Epa3GxagBGTUZT5JHDoZuqunCWQ1",
+          "writable": true
+        },
+        {
+          "address": "9XLNHvXpe18meH8P5zZ1fzL697dBpBakoWnnKXCxiL6y",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "63sGvdACSA2Kvf4yr7n7SFEJ9V1yAVVyyduPU3br8Lyt",
+          "writable": true
+        },
+        {
+          "address": "fqTrbnsCjPQFS434BHRAfs8bMC5JH7pZWm5sfDYkPWr",
+          "writable": true
+        },
+        {
+          "address": "SysvarC1ock11111111111111111111111111111111"
+        },
+        {
+          "address": "FDAzdHWFX9rawHp5o7phRH7BNnpCi24zRefusqC52Fqk",
+          "writable": true
+        }
+      ]
+    },
+    "hadron:6rK6:BtoA": {
+      "venue": "hadron",
+      "pool": "6rK6f3zsp744uxhzA9n9rrzbpf4CvBy7oj3eaRrLogxL",
+      "direction": "BtoA",
+      "cfg": {
+        "venue": "hadron",
+        "pool": "6rK6f3zsp744uxhzA9n9rrzbpf4CvBy7oj3eaRrLogxL",
+        "direction": "BtoA",
+        "mintA": "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn",
+        "mintB": "So11111111111111111111111111111111111111112",
+        "vaultA": "2ntWy8nrEJNTtc79Epa3GxagBGTUZT5JHDoZuqunCWQ1",
+        "vaultB": "9XLNHvXpe18meH8P5zZ1fzL697dBpBakoWnnKXCxiL6y",
+        "assetCfgA": "BKWdoS5GN6J9YFxANmdfb3rtcYUT8M4Hr6axB7j8pFDy",
+        "assetCfgB": "GCUvxH2tqxCYh4YcLD3PMMf1PCUbYPXeKVvXR1oUVVis",
+        "growingA": "ESRUJyvNhxCPSn1nEHYhNXBkkL61J5Veeeq7UTdkPiQe",
+        "metaA": "FDAzdHWFX9rawHp5o7phRH7BNnpCi24zRefusqC52Fqk",
+        "global": "63sGvdACSA2Kvf4yr7n7SFEJ9V1yAVVyyduPU3br8Lyt",
+        "feeVaultA": "fqTrbnsCjPQFS434BHRAfs8bMC5JH7pZWm5sfDYkPWr",
+        "feeVaultB": "AwaxSAq5Fzr6GmgVLnSxQ6mqawTKWszjwAHXDC4DZhf2"
+      },
+      "pay": "So11111111111111111111111111111111111111112",
+      "buy": "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn",
+      "program": "HADRoNbLovyqhCsocfYQYB7QdfCAAinN9HTePvBCVDQ8",
+      "prefix": "0300",
+      "suffix": "0000000000000000ffffffffffffff7f",
+      "patch": "in",
+      "accounts": [
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "6rK6f3zsp744uxhzA9n9rrzbpf4CvBy7oj3eaRrLogxL",
+          "writable": true
+        },
+        {
+          "address": "BKWdoS5GN6J9YFxANmdfb3rtcYUT8M4Hr6axB7j8pFDy",
+          "writable": true
+        },
+        {
+          "address": "GCUvxH2tqxCYh4YcLD3PMMf1PCUbYPXeKVvXR1oUVVis",
+          "writable": true
+        },
+        {
+          "address": "ESRUJyvNhxCPSn1nEHYhNXBkkL61J5Veeeq7UTdkPiQe",
+          "writable": true
+        },
+        {
+          "address": "6rK6f3zsp744uxhzA9n9rrzbpf4CvBy7oj3eaRrLogxL",
+          "writable": true
+        },
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "address": "9XLNHvXpe18meH8P5zZ1fzL697dBpBakoWnnKXCxiL6y",
+          "writable": true
+        },
+        {
+          "address": "2ntWy8nrEJNTtc79Epa3GxagBGTUZT5JHDoZuqunCWQ1",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "63sGvdACSA2Kvf4yr7n7SFEJ9V1yAVVyyduPU3br8Lyt",
+          "writable": true
+        },
+        {
+          "address": "AwaxSAq5Fzr6GmgVLnSxQ6mqawTKWszjwAHXDC4DZhf2",
+          "writable": true
+        },
+        {
+          "address": "SysvarC1ock11111111111111111111111111111111"
+        },
+        {
+          "address": "FDAzdHWFX9rawHp5o7phRH7BNnpCi24zRefusqC52Fqk",
+          "writable": true
+        }
+      ]
+    },
+    "taurusfi:EWqX:0to1": {
+      "venue": "taurusfi",
+      "pool": "EWqXjWSd4sfVsZHdSc25DoD1QfMbMrVpQZPpayoiFPSP",
+      "direction": "0to1",
+      "cfg": {
+        "venue": "taurusfi",
+        "pool": "EWqXjWSd4sfVsZHdSc25DoD1QfMbMrVpQZPpayoiFPSP",
+        "direction": "0to1",
+        "priceScaled": "73309219060",
+        "vault0": "BA6hdJwgzayrm3Q7Z6MPq1wVgPcUMJDbQcUwxJ9Nfu1H",
+        "vault1": "7qPQugSL2cJgnVDQWNPt6woSidEF4XQhjPDkYrdnv8CK",
+        "mint0": "So11111111111111111111111111111111111111112",
+        "mint1": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "decimals0": 9,
+        "decimals1": 6,
+        "vaultAuthority": "544UsNRFNU7tzWKcHGZorwy7UKnsso9x83N9WWMvY5JX",
+        "globalConfig": "ECADA9SPXrZTTbWG5JJTCC7KsagYR2MLZhw2KgFhivu9",
+        "globalAuthority": "Hg2PTGCBUwRvp7S3AF5BF4tfawNshXc1N2DDWijjJndo",
+        "priceAccount": "EWqXjWSd4sfVsZHdSc25DoD1QfMbMrVpQZPpayoiFPSP"
+      },
+      "pay": "So11111111111111111111111111111111111111112",
+      "buy": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "program": "9VX8EKBg6vM6tA68xaDsPkbrx26XConZjkQmhVApUptc",
+      "prefix": "08",
+      "suffix": "0001",
+      "patch": "in",
+      "accounts": [
+        {
+          "address": "BA6hdJwgzayrm3Q7Z6MPq1wVgPcUMJDbQcUwxJ9Nfu1H",
+          "writable": true
+        },
+        {
+          "address": "7qPQugSL2cJgnVDQWNPt6woSidEF4XQhjPDkYrdnv8CK",
+          "writable": true
+        },
+        {
+          "user": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "544UsNRFNU7tzWKcHGZorwy7UKnsso9x83N9WWMvY5JX",
+          "writable": true
+        },
+        {
+          "address": "ECADA9SPXrZTTbWG5JJTCC7KsagYR2MLZhw2KgFhivu9"
+        },
+        {
+          "address": "EWqXjWSd4sfVsZHdSc25DoD1QfMbMrVpQZPpayoiFPSP"
+        },
+        {
+          "address": "Hg2PTGCBUwRvp7S3AF5BF4tfawNshXc1N2DDWijjJndo"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ]
+    },
+    "taurusfi:EWqX:1to0": {
+      "venue": "taurusfi",
+      "pool": "EWqXjWSd4sfVsZHdSc25DoD1QfMbMrVpQZPpayoiFPSP",
+      "direction": "1to0",
+      "cfg": {
+        "venue": "taurusfi",
+        "pool": "EWqXjWSd4sfVsZHdSc25DoD1QfMbMrVpQZPpayoiFPSP",
+        "direction": "1to0",
+        "priceScaled": "73309219060",
+        "vault0": "BA6hdJwgzayrm3Q7Z6MPq1wVgPcUMJDbQcUwxJ9Nfu1H",
+        "vault1": "7qPQugSL2cJgnVDQWNPt6woSidEF4XQhjPDkYrdnv8CK",
+        "mint0": "So11111111111111111111111111111111111111112",
+        "mint1": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "decimals0": 9,
+        "decimals1": 6,
+        "vaultAuthority": "544UsNRFNU7tzWKcHGZorwy7UKnsso9x83N9WWMvY5JX",
+        "globalConfig": "ECADA9SPXrZTTbWG5JJTCC7KsagYR2MLZhw2KgFhivu9",
+        "globalAuthority": "Hg2PTGCBUwRvp7S3AF5BF4tfawNshXc1N2DDWijjJndo",
+        "priceAccount": "EWqXjWSd4sfVsZHdSc25DoD1QfMbMrVpQZPpayoiFPSP"
+      },
+      "pay": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "buy": "So11111111111111111111111111111111111111112",
+      "program": "9VX8EKBg6vM6tA68xaDsPkbrx26XConZjkQmhVApUptc",
+      "prefix": "08",
+      "suffix": "0001",
+      "patch": "in",
+      "accounts": [
+        {
+          "address": "BA6hdJwgzayrm3Q7Z6MPq1wVgPcUMJDbQcUwxJ9Nfu1H",
+          "writable": true
+        },
+        {
+          "address": "7qPQugSL2cJgnVDQWNPt6woSidEF4XQhjPDkYrdnv8CK",
+          "writable": true
+        },
+        {
+          "user": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "address": "544UsNRFNU7tzWKcHGZorwy7UKnsso9x83N9WWMvY5JX",
+          "writable": true
+        },
+        {
+          "address": "ECADA9SPXrZTTbWG5JJTCC7KsagYR2MLZhw2KgFhivu9"
+        },
+        {
+          "address": "EWqXjWSd4sfVsZHdSc25DoD1QfMbMrVpQZPpayoiFPSP"
+        },
+        {
+          "address": "Hg2PTGCBUwRvp7S3AF5BF4tfawNshXc1N2DDWijjJndo"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ]
+    },
+    "riptide:6Vzx:0": {
+      "venue": "riptide",
+      "pool": "6Vzx4ASRjUPW2yBxHdBT3hDam2zxB6UmhM2MYYM5k8ci",
+      "direction": 0,
+      "cfg": {
+        "venue": "riptide",
+        "pool": "6Vzx4ASRjUPW2yBxHdBT3hDam2zxB6UmhM2MYYM5k8ci",
+        "direction": 0,
+        "mintA": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+        "mintB": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "vaultA": "A6rHcum9j6Sp9aqC4HeicRCxs1Q9bHKSUYkFJcpSd42m",
+        "vaultB": "6mPqT4tT2YjgSRrVCkcf1LDdvTWVSR4NQRy6ddfrST8"
+      },
+      "pay": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+      "buy": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "program": "riptK81hDxhe5pW5jSzSM9iRA8azgEgLJ4dXkPtBS7j",
+      "prefix": "02",
+      "suffix": "010001",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "address": "6Vzx4ASRjUPW2yBxHdBT3hDam2zxB6UmhM2MYYM5k8ci",
+          "writable": true
+        },
+        {
+          "address": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "A6rHcum9j6Sp9aqC4HeicRCxs1Q9bHKSUYkFJcpSd42m",
+          "writable": true
+        },
+        {
+          "address": "6mPqT4tT2YjgSRrVCkcf1LDdvTWVSR4NQRy6ddfrST8",
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+        },
+        {
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "address": "jitodontfront111111111111111111111111111111"
+        }
+      ]
+    },
+    "riptide:6Vzx:1": {
+      "venue": "riptide",
+      "pool": "6Vzx4ASRjUPW2yBxHdBT3hDam2zxB6UmhM2MYYM5k8ci",
+      "direction": 1,
+      "cfg": {
+        "venue": "riptide",
+        "pool": "6Vzx4ASRjUPW2yBxHdBT3hDam2zxB6UmhM2MYYM5k8ci",
+        "direction": 1,
+        "mintA": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+        "mintB": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "vaultA": "A6rHcum9j6Sp9aqC4HeicRCxs1Q9bHKSUYkFJcpSd42m",
+        "vaultB": "6mPqT4tT2YjgSRrVCkcf1LDdvTWVSR4NQRy6ddfrST8"
+      },
+      "pay": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "buy": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+      "program": "riptK81hDxhe5pW5jSzSM9iRA8azgEgLJ4dXkPtBS7j",
+      "prefix": "02",
+      "suffix": "000001",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "address": "6Vzx4ASRjUPW2yBxHdBT3hDam2zxB6UmhM2MYYM5k8ci",
+          "writable": true
+        },
+        {
+          "address": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "address": "A6rHcum9j6Sp9aqC4HeicRCxs1Q9bHKSUYkFJcpSd42m",
+          "writable": true
+        },
+        {
+          "address": "6mPqT4tT2YjgSRrVCkcf1LDdvTWVSR4NQRy6ddfrST8",
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+        },
+        {
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "address": "jitodontfront111111111111111111111111111111"
+        }
+      ]
+    },
+    "denali:8njE:0": {
+      "venue": "denali",
+      "pool": "8njE4Rq7nWX5XiQMH5sNcJy5GrHV2aFUFaZzuQUBFQZ8",
+      "direction": 0,
+      "cfg": {
+        "venue": "denali",
+        "pool": "8njE4Rq7nWX5XiQMH5sNcJy5GrHV2aFUFaZzuQUBFQZ8",
+        "direction": 0,
+        "mintA": "AavE1kKKnesPw4MuRJmJ9jZs9QzEE8CPxQ3ViczUDfc1",
+        "mintB": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "vaultA": "BeSFY7QztQo6GX812ekv1ub8t9kXgpTKUH71ngD5rPzY",
+        "vaultB": "HXuusHMQViPmRr2wxMJU2tYoqHxhVkRT8YTkWWW2dvDS",
+        "oracle": "GqRig1jpXvingfnYNCo4Jp8beXQAXf5CfSzAMTdrtD2F"
+      },
+      "pay": "AavE1kKKnesPw4MuRJmJ9jZs9QzEE8CPxQ3ViczUDfc1",
+      "buy": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "program": "DNL1tgEj3nJovHw9jtyCCQD3arssCJzkmpDizknwzey4",
+      "prefix": "68688356a1bdb4d800",
+      "suffix": "0000000000000000",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "address": "8njE4Rq7nWX5XiQMH5sNcJy5GrHV2aFUFaZzuQUBFQZ8",
+          "writable": true
+        },
+        {
+          "address": "AavE1kKKnesPw4MuRJmJ9jZs9QzEE8CPxQ3ViczUDfc1"
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "address": "BeSFY7QztQo6GX812ekv1ub8t9kXgpTKUH71ngD5rPzY",
+          "writable": true
+        },
+        {
+          "address": "HXuusHMQViPmRr2wxMJU2tYoqHxhVkRT8YTkWWW2dvDS",
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "GqRig1jpXvingfnYNCo4Jp8beXQAXf5CfSzAMTdrtD2F"
+        },
+        {
+          "address": "46TF9vo4oqnLuY7LrueQybyJoLsgMeauUhTHFYfcgFyJ"
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        }
+      ]
+    },
+    "denali:8njE:1": {
+      "venue": "denali",
+      "pool": "8njE4Rq7nWX5XiQMH5sNcJy5GrHV2aFUFaZzuQUBFQZ8",
+      "direction": 1,
+      "cfg": {
+        "venue": "denali",
+        "pool": "8njE4Rq7nWX5XiQMH5sNcJy5GrHV2aFUFaZzuQUBFQZ8",
+        "direction": 1,
+        "mintA": "AavE1kKKnesPw4MuRJmJ9jZs9QzEE8CPxQ3ViczUDfc1",
+        "mintB": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "vaultA": "BeSFY7QztQo6GX812ekv1ub8t9kXgpTKUH71ngD5rPzY",
+        "vaultB": "HXuusHMQViPmRr2wxMJU2tYoqHxhVkRT8YTkWWW2dvDS",
+        "oracle": "GqRig1jpXvingfnYNCo4Jp8beXQAXf5CfSzAMTdrtD2F"
+      },
+      "pay": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "buy": "AavE1kKKnesPw4MuRJmJ9jZs9QzEE8CPxQ3ViczUDfc1",
+      "program": "DNL1tgEj3nJovHw9jtyCCQD3arssCJzkmpDizknwzey4",
+      "prefix": "68688356a1bdb4d801",
+      "suffix": "0000000000000000",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "address": "8njE4Rq7nWX5XiQMH5sNcJy5GrHV2aFUFaZzuQUBFQZ8",
+          "writable": true
+        },
+        {
+          "address": "AavE1kKKnesPw4MuRJmJ9jZs9QzEE8CPxQ3ViczUDfc1"
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "address": "BeSFY7QztQo6GX812ekv1ub8t9kXgpTKUH71ngD5rPzY",
+          "writable": true
+        },
+        {
+          "address": "HXuusHMQViPmRr2wxMJU2tYoqHxhVkRT8YTkWWW2dvDS",
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "GqRig1jpXvingfnYNCo4Jp8beXQAXf5CfSzAMTdrtD2F"
+        },
+        {
+          "address": "46TF9vo4oqnLuY7LrueQybyJoLsgMeauUhTHFYfcgFyJ"
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        }
+      ]
+    },
+    "gavel:CcWf:baseIn": {
+      "venue": "gavel",
+      "pool": "CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi",
+      "direction": "baseIn",
+      "cfg": {
+        "venue": "gavel",
+        "pool": "CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi",
+        "direction": "baseIn",
+        "baseMint": "ibRLJrmgVuZh3tdDpjGgU5CQCCxpxuer7B7ckjGdLsv",
+        "quoteMint": "So11111111111111111111111111111111111111112",
+        "baseVault": "DJcpo1c2dExp7c1P3FQ2tb3VyRPQvcwh1pXapvPnL8yC",
+        "quoteVault": "8vtp7k9xybmfj4QiD2nvGRP5jd6o3zVRcUKpRc8P2Sye",
+        "baseDecimals": 6,
+        "quoteDecimals": 9,
+        "feeInBps": "30"
+      },
+      "pay": "ibRLJrmgVuZh3tdDpjGgU5CQCCxpxuer7B7ckjGdLsv",
+      "buy": "So11111111111111111111111111111111111111112",
+      "program": "srAMMzfVHVAtgSJc8iH6CfKzuWuUTzLHVCE81QU1rgi",
+      "prefix": "000100",
+      "suffix": "0100000000000000",
+      "patch": "in",
+      "accounts": [
+        {
+          "address": "srAMMzfVHVAtgSJc8iH6CfKzuWuUTzLHVCE81QU1rgi"
+        },
+        {
+          "address": "37zgQb6PjFuxah6R8CTk67gEvLrpqPQ61E7vh9ARPGFD"
+        },
+        {
+          "address": "CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi",
+          "writable": true
+        },
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "DJcpo1c2dExp7c1P3FQ2tb3VyRPQvcwh1pXapvPnL8yC",
+          "writable": true
+        },
+        {
+          "address": "8vtp7k9xybmfj4QiD2nvGRP5jd6o3zVRcUKpRc8P2Sye",
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ]
+    },
+    "gavel:CcWf:quoteIn": {
+      "venue": "gavel",
+      "pool": "CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi",
+      "direction": "quoteIn",
+      "cfg": {
+        "venue": "gavel",
+        "pool": "CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi",
+        "direction": "quoteIn",
+        "baseMint": "ibRLJrmgVuZh3tdDpjGgU5CQCCxpxuer7B7ckjGdLsv",
+        "quoteMint": "So11111111111111111111111111111111111111112",
+        "baseVault": "DJcpo1c2dExp7c1P3FQ2tb3VyRPQvcwh1pXapvPnL8yC",
+        "quoteVault": "8vtp7k9xybmfj4QiD2nvGRP5jd6o3zVRcUKpRc8P2Sye",
+        "baseDecimals": 6,
+        "quoteDecimals": 9,
+        "feeInBps": "30"
+      },
+      "pay": "So11111111111111111111111111111111111111112",
+      "buy": "ibRLJrmgVuZh3tdDpjGgU5CQCCxpxuer7B7ckjGdLsv",
+      "program": "srAMMzfVHVAtgSJc8iH6CfKzuWuUTzLHVCE81QU1rgi",
+      "prefix": "000000",
+      "suffix": "0100000000000000",
+      "patch": "in",
+      "accounts": [
+        {
+          "address": "srAMMzfVHVAtgSJc8iH6CfKzuWuUTzLHVCE81QU1rgi"
+        },
+        {
+          "address": "37zgQb6PjFuxah6R8CTk67gEvLrpqPQ61E7vh9ARPGFD"
+        },
+        {
+          "address": "CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi",
+          "writable": true
+        },
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "address": "DJcpo1c2dExp7c1P3FQ2tb3VyRPQvcwh1pXapvPnL8yC",
+          "writable": true
+        },
+        {
+          "address": "8vtp7k9xybmfj4QiD2nvGRP5jd6o3zVRcUKpRc8P2Sye",
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ]
+    },
+    "tesserav:FLck:aToB": {
+      "venue": "tesserav",
+      "pool": "FLckHLGMJy5gEoXWwcE68Nprde1D4araK4TGLw4pQq2n",
+      "direction": "aToB",
+      "cfg": {
+        "venue": "tesserav",
+        "pool": "FLckHLGMJy5gEoXWwcE68Nprde1D4araK4TGLw4pQq2n",
+        "direction": "aToB",
+        "mintA": "So11111111111111111111111111111111111111112",
+        "mintB": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "auth": "8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF",
+        "vaultA": "5pVN5XZB8cYBjNLFrsBCPWkCQBan5K5Mq2dWGzwPgGJV",
+        "vaultB": "9t4P5wMwfFkyn92Z7hf463qYKEZf8ERVZsGBEPNp8uJx",
+        "swapGlobalAccounts": [
+          "8xeaWCsJYxRoudEZGJWURdfrtFhLYZz9b4iHJnW5tb3d",
+          "BAT1Ndpu5gbLTp2AZkSXP79LJBZfCH4B3zGhi6LtvdhK",
+          "4cG31VNF9TzFinNc7BmnjhFvGjxkY3sCETVMtMgbrhPs"
+        ]
+      },
+      "pay": "So11111111111111111111111111111111111111112",
+      "buy": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "program": "TessVdML9pBGgG9yGks7o4HewRaXVAMuoVj4x83GLQH",
+      "prefix": "1001",
+      "suffix": "0100000000000000",
+      "patch": "in",
+      "accounts": [
+        {
+          "address": "8ekCy2jHHUbW2yeNGFWYJT9Hm9FW7SvZcZK66dSZCDiF"
+        },
+        {
+          "address": "FLckHLGMJy5gEoXWwcE68Nprde1D4araK4TGLw4pQq2n",
+          "writable": true
+        },
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "address": "5pVN5XZB8cYBjNLFrsBCPWkCQBan5K5Mq2dWGzwPgGJV",
+          "writable": true
+        },
+        {
+          "address": "9t4P5wMwfFkyn92Z7hf463qYKEZf8ERVZsGBEPNp8uJx",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "address": "BAT1Ndpu5gbLTp2AZkSXP79LJBZfCH4B3zGhi6LtvdhK"
+        },
+        {
+          "address": "4cG31VNF9TzFinNc7BmnjhFvGjxkY3sCETVMtMgbrhPs"
+        }
+      ]
+    },
+    "flint:Dj9T:AtoB": {
+      "venue": "flint",
+      "pool": "Dj9TPFLUsN9BmGMMC3GEbRb2Nuu3q5RMCQ7rzY8tg1Ww",
+      "direction": "AtoB",
+      "cfg": {
+        "venue": "flint",
+        "pool": "Dj9TPFLUsN9BmGMMC3GEbRb2Nuu3q5RMCQ7rzY8tg1Ww",
+        "entry": {
+          "marketA": "35JazRP82XNsPLWL31Y3kwxYr3SABLufx9UnUJLnpkZz",
+          "vaultA": "67nP7KoBRgrM6uJgPwVjDsxeV132471AvtJABLhj6jq5",
+          "mintA": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+          "tokenProgramA": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "marketB": "Dj9TPFLUsN9BmGMMC3GEbRb2Nuu3q5RMCQ7rzY8tg1Ww",
+          "vaultB": "EiyYcHeonaax5m3BaUK55GkjevQrueatjCDaUoUQ7FJU",
+          "mintB": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "tokenProgramB": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "disc": 11,
+          "tailZeros": 2,
+          "reversible": false,
+          "haircutAtoBPpm": "700000"
+        },
+        "direction": "AtoB"
+      },
+      "pay": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+      "buy": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "program": "FLiNTXPwppyoJabCoxc2uiiRygAHpmMXajiDXo2Ub1z",
+      "prefix": "0b",
+      "suffix": "0000",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "signer": true
+        },
+        {
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "address": "35JazRP82XNsPLWL31Y3kwxYr3SABLufx9UnUJLnpkZz",
+          "writable": true
+        },
+        {
+          "address": "Dj9TPFLUsN9BmGMMC3GEbRb2Nuu3q5RMCQ7rzY8tg1Ww",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "address": "67nP7KoBRgrM6uJgPwVjDsxeV132471AvtJABLhj6jq5",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "EiyYcHeonaax5m3BaUK55GkjevQrueatjCDaUoUQ7FJU",
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "address": "FLiNTXPwppyoJabCoxc2uiiRygAHpmMXajiDXo2Ub1z"
+        }
+      ]
+    },
+    "deriverse:8Wk2:sell": {
+      "venue": "deriverse",
+      "pool": "8Wk2L1yDovBJifCN1o86X7g7pDcqLau39m6tEsJ9Sheh",
+      "direction": null,
+      "cfg": {
+        "venue": "deriverse",
+        "pool": "8Wk2L1yDovBJifCN1o86X7g7pDcqLau39m6tEsJ9Sheh",
+        "side": "sell",
+        "instrId": 0,
+        "assetTokenId": 2,
+        "crncyTokenId": 1,
+        "assetMint": "So11111111111111111111111111111111111111112",
+        "crncyMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "assetVault": "CJ1fhvsz9FwFM54JyXpNvAj6dvxtiRQjMhYmG1aQVVX8",
+        "crncyVault": "EPUHjseXG3izk3MVUJ1PcyWT9xeBhtAnq8gUpq3j8Uni",
+        "asksTree": "5HrX1UJLHQEBy3r5MTFNqEEw5sdQ3Fq4Sjq1JCmFgYWA",
+        "askOrders": "DUSwtK7JwPbCbRpUmKZsDmuaZasGVnvX5VJpgR8yHKKY",
+        "bidsTree": "3vCToKSjuzX3dZ48hert2LsCTRyfDS6Cf7fXULfxsoPy",
+        "bidOrders": "BaojxUEuwerwQHQRBtTpuuMUreboaxymjyySPsdoJkYc",
+        "lines": "5163SrbBvsKPQz86yfSGXLnPqu83X6bAQD1Gy7AA4n3",
+        "mapsAddress": "9zeBhQkMGmvko7CyPcYg3TUmfneES329dTYtMGs3wx6j",
+        "clientInfos": "HfJ9RgUGSrcsx1ctERFUUkHaMeeNr4a6vB7QQDFBKFwJ",
+        "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "feePpm": "120"
+      },
+      "pay": "So11111111111111111111111111111111111111112",
+      "buy": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "program": "DRVSpZ2YUYYKgZP8XtLhAGtT1zYSCKzeHfb4DgRnrgqD",
+      "prefix": "1a000000000000000000000000000000",
+      "suffix": "0100000000000000",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "address": "CJ1fhvsz9FwFM54JyXpNvAj6dvxtiRQjMhYmG1aQVVX8",
+          "writable": true
+        },
+        {
+          "address": "EPUHjseXG3izk3MVUJ1PcyWT9xeBhtAnq8gUpq3j8Uni",
+          "writable": true
+        },
+        {
+          "address": "8Wk2L1yDovBJifCN1o86X7g7pDcqLau39m6tEsJ9Sheh",
+          "writable": true
+        },
+        {
+          "address": "3vCToKSjuzX3dZ48hert2LsCTRyfDS6Cf7fXULfxsoPy",
+          "writable": true
+        },
+        {
+          "address": "BaojxUEuwerwQHQRBtTpuuMUreboaxymjyySPsdoJkYc",
+          "writable": true
+        },
+        {
+          "address": "5163SrbBvsKPQz86yfSGXLnPqu83X6bAQD1Gy7AA4n3",
+          "writable": true
+        },
+        {
+          "address": "9zeBhQkMGmvko7CyPcYg3TUmfneES329dTYtMGs3wx6j",
+          "writable": true
+        },
+        {
+          "address": "HfJ9RgUGSrcsx1ctERFUUkHaMeeNr4a6vB7QQDFBKFwJ",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ]
+    },
+    "deriverse:8Wk2:buy": {
+      "venue": "deriverse",
+      "pool": "8Wk2L1yDovBJifCN1o86X7g7pDcqLau39m6tEsJ9Sheh",
+      "direction": null,
+      "cfg": {
+        "venue": "deriverse",
+        "pool": "8Wk2L1yDovBJifCN1o86X7g7pDcqLau39m6tEsJ9Sheh",
+        "side": "buy",
+        "instrId": 0,
+        "assetTokenId": 2,
+        "crncyTokenId": 1,
+        "assetMint": "So11111111111111111111111111111111111111112",
+        "crncyMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "assetVault": "CJ1fhvsz9FwFM54JyXpNvAj6dvxtiRQjMhYmG1aQVVX8",
+        "crncyVault": "EPUHjseXG3izk3MVUJ1PcyWT9xeBhtAnq8gUpq3j8Uni",
+        "asksTree": "5HrX1UJLHQEBy3r5MTFNqEEw5sdQ3Fq4Sjq1JCmFgYWA",
+        "askOrders": "DUSwtK7JwPbCbRpUmKZsDmuaZasGVnvX5VJpgR8yHKKY",
+        "bidsTree": "3vCToKSjuzX3dZ48hert2LsCTRyfDS6Cf7fXULfxsoPy",
+        "bidOrders": "BaojxUEuwerwQHQRBtTpuuMUreboaxymjyySPsdoJkYc",
+        "lines": "5163SrbBvsKPQz86yfSGXLnPqu83X6bAQD1Gy7AA4n3",
+        "mapsAddress": "9zeBhQkMGmvko7CyPcYg3TUmfneES329dTYtMGs3wx6j",
+        "clientInfos": "HfJ9RgUGSrcsx1ctERFUUkHaMeeNr4a6vB7QQDFBKFwJ",
+        "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "feePpm": "120"
+      },
+      "pay": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "buy": "So11111111111111111111111111111111111111112",
+      "program": "DRVSpZ2YUYYKgZP8XtLhAGtT1zYSCKzeHfb4DgRnrgqD",
+      "prefix": "1a010000000000000000000000000000",
+      "suffix": "0100000000000000",
+      "patch": "in",
+      "accounts": [
+        {
+          "user": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "address": "CJ1fhvsz9FwFM54JyXpNvAj6dvxtiRQjMhYmG1aQVVX8",
+          "writable": true
+        },
+        {
+          "address": "EPUHjseXG3izk3MVUJ1PcyWT9xeBhtAnq8gUpq3j8Uni",
+          "writable": true
+        },
+        {
+          "address": "8Wk2L1yDovBJifCN1o86X7g7pDcqLau39m6tEsJ9Sheh",
+          "writable": true
+        },
+        {
+          "address": "5HrX1UJLHQEBy3r5MTFNqEEw5sdQ3Fq4Sjq1JCmFgYWA",
+          "writable": true
+        },
+        {
+          "address": "DUSwtK7JwPbCbRpUmKZsDmuaZasGVnvX5VJpgR8yHKKY",
+          "writable": true
+        },
+        {
+          "address": "5163SrbBvsKPQz86yfSGXLnPqu83X6bAQD1Gy7AA4n3",
+          "writable": true
+        },
+        {
+          "address": "9zeBhQkMGmvko7CyPcYg3TUmfneES329dTYtMGs3wx6j",
+          "writable": true
+        },
+        {
+          "address": "HfJ9RgUGSrcsx1ctERFUUkHaMeeNr4a6vB7QQDFBKFwJ",
+          "writable": true
+        },
+        {
+          "user": "out",
+          "writable": true
+        },
+        {
+          "user": "in",
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ]
     }
   }
 }

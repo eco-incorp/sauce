@@ -307,6 +307,15 @@ export const SVM_EXACT_IN: Readonly<Record<string, number>> = {
   mercurial: 5,
   perena: 5,
   metadaoFutarchy: 5,
+  solfiV2: 7,
+  hadron: 12,
+  taurusfi: 8,
+  riptide: 6,
+  denali: 6,
+  gavel: 5,
+  tesserav: 8,
+  flint: 6,
+  deriverse: 11,
 };
 
 /** The exact-input venues whose swap takes more accounts than a function can list: a `Cpi` form

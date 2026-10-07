@@ -73,6 +73,8 @@ const cfg = (key: string): Record<string, string> => VECTORS[key]!.cfg as Record
 const WSOL = "So11111111111111111111111111111111111111112" as Address;
 const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" as Address;
 const USDT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB" as Address;
+const INSTRUCTIONS = "Sysvar1nstructions1111111111111111111111111" as Address;
+const CLOCK = "SysvarC1ock11111111111111111111111111111111" as Address;
 
 const w = (address: string): SlotAccount => ({ address: address as Address, writable: true });
 const r = (address: string): SlotAccount => ({ address: address as Address });
@@ -116,6 +118,8 @@ interface Venue {
   programs: string[];
   dirs: string[];
   clock: bigint;
+  /** The Clock's slot, for a venue that checks its quote's slot against it. */
+  atSlot?: bigint;
   slot: (harness: EngineHarness) => SlotAccount[];
   cases: (harness: EngineHarness) => Case[];
   /** Accounts the swap writes that the fixture does not carry, placed before the state is frozen. */
@@ -905,6 +909,416 @@ const VENUES: Venue[] = [
       { why: "a DAO not in its spot state", at: (slot) => slot[1]!.address, offset: 8, bytes: [1] },
     ],
   },
+  {
+    name: "SolfiV2",
+    programs: ["solfi-v2"],
+    dirs: ["solfi-v2", "pumpswap"],
+    clock: 436_250_364n,
+    atSlot: 436_250_364n,
+    slot: () => {
+      const c = cfg("solfi-v2:65ZH:0");
+      return [
+        r("SV2EYYJyRz2YhfXwXnhNAevDEui5Q6yrfyo13WtupPF"),
+        w(c.pool!),
+        r(c.oracle!),
+        w(c.registry!),
+        w(c.vaultA!),
+        w(c.vaultB!),
+        r(INSTRUCTIONS),
+      ];
+    },
+    cases: () => [
+      {
+        vector: "solfi-v2:65ZH:0",
+        pay: WSOL,
+        buy: USDC,
+        amountIn: 2_000_000_000n,
+        received: 148_944_767n,
+        authorityWritable: true,
+      },
+      {
+        vector: "solfi-v2:65ZH:1",
+        pay: USDC,
+        buy: WSOL,
+        amountIn: 148_944_767n,
+        authorityWritable: true,
+      },
+    ],
+    skips: [
+      {
+        why: "an empty side",
+        at: (slot) => slot[5]!.address,
+        offset: 64,
+        bytes: [0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ],
+  },
+  {
+    name: "Hadron",
+    programs: ["hadron"],
+    dirs: ["hadron"],
+    clock: 1_783_175_236n,
+    // The fee treasury's wrapped-SOL account, which the fixture lacks: a B-to-A swap pays into it.
+    fabricate: (harness) => [
+      setTokenAccount(
+        harness,
+        cfg("hadron:6rK6:AtoB").feeVaultB as Address,
+        WSOL,
+        "7Ly5vZTDz2ZJGrqTa9gCP2NWjFDvnxSLVQEdmvMcVaVn" as Address,
+        0n,
+      ),
+    ],
+    slot: () => {
+      const c = cfg("hadron:6rK6:AtoB");
+      return [
+        r("HADRoNbLovyqhCsocfYQYB7QdfCAAinN9HTePvBCVDQ8"),
+        w(c.pool!),
+        w(c.assetCfgA!),
+        w(c.assetCfgB!),
+        w(c.growingA!),
+        w(c.vaultA!),
+        w(c.vaultB!),
+        w(c.global!),
+        w(c.feeVaultA!),
+        w(c.feeVaultB!),
+        r(CLOCK),
+        w(c.metaA!),
+      ];
+    },
+    cases: () => {
+      const c = cfg("hadron:6rK6:AtoB");
+      return [
+        {
+          vector: "hadron:6rK6:AtoB",
+          pay: c.mintA as Address,
+          buy: WSOL,
+          amountIn: 50_000_000n,
+          received: 64_586_434n,
+          native: true,
+        },
+        {
+          vector: "hadron:6rK6:BtoA",
+          pay: WSOL,
+          buy: c.mintA as Address,
+          amountIn: 64_586_434n,
+          native: true,
+        },
+      ];
+    },
+    skips: [
+      {
+        why: "an empty side",
+        at: (slot) => slot[6]!.address,
+        offset: 64,
+        bytes: [0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ],
+  },
+  {
+    name: "Taurusfi",
+    programs: ["taurusfi"],
+    dirs: ["taurusfi"],
+    clock: 1_786_027_892n,
+    // Inside the price account's slot window, as the swap requires.
+    atSlot: 437_603_687n,
+    slot: () => {
+      const c = cfg("taurusfi:EWqX:0to1");
+      return [
+        r("9VX8EKBg6vM6tA68xaDsPkbrx26XConZjkQmhVApUptc"),
+        r(c.priceAccount!),
+        w(c.vault0!),
+        w(c.vault1!),
+        w(c.vaultAuthority!),
+        r(c.globalConfig!),
+        r(c.globalAuthority!),
+        r(INSTRUCTIONS),
+      ];
+    },
+    cases: () => [
+      {
+        vector: "taurusfi:EWqX:0to1",
+        pay: WSOL,
+        buy: USDC,
+        amountIn: 1_000_000_000n,
+        received: 73_280_342n,
+        authorityWritable: true,
+        native: true,
+      },
+      {
+        vector: "taurusfi:EWqX:1to0",
+        pay: USDC,
+        buy: WSOL,
+        amountIn: 100_000_000n,
+        received: 1_363_597_637n,
+        authorityWritable: true,
+        native: true,
+      },
+    ],
+    skips: [
+      {
+        why: "an empty side",
+        at: (slot) => slot[3]!.address,
+        offset: 64,
+        bytes: [0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ],
+  },
+  {
+    name: "Riptide",
+    programs: ["riptide"],
+    dirs: ["riptide"],
+    clock: 1_783_123_200n,
+    slot: () => {
+      const c = cfg("riptide:6Vzx:0");
+      return [
+        r("riptK81hDxhe5pW5jSzSM9iRA8azgEgLJ4dXkPtBS7j"),
+        w(c.pool!),
+        w(c.vaultA!),
+        w(c.vaultB!),
+        r(INSTRUCTIONS),
+        r("jitodontfront111111111111111111111111111111"),
+      ];
+    },
+    cases: () => [
+      {
+        vector: "riptide:6Vzx:0",
+        pay: USDT,
+        buy: USDC,
+        amountIn: 1_000_000n,
+        received: 998_739n,
+      },
+      {
+        vector: "riptide:6Vzx:1",
+        pay: USDC,
+        buy: USDT,
+        amountIn: 1_000_000n,
+        received: 1_000_313n,
+      },
+    ],
+    skips: [
+      {
+        why: "an empty side",
+        at: (slot) => slot[3]!.address,
+        offset: 64,
+        bytes: [0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ],
+  },
+  {
+    name: "Denali",
+    programs: ["denali"],
+    dirs: ["denali"],
+    clock: 1_783_123_200n,
+    slot: () => {
+      const c = cfg("denali:8njE:0");
+      const a = VECTORS["denali:8njE:0"]!.accounts;
+      return [
+        r("DNL1tgEj3nJovHw9jtyCCQD3arssCJzkmpDizknwzey4"),
+        w(c.pool!),
+        w(c.vaultA!),
+        w(c.vaultB!),
+        r(c.oracle!),
+        r(a[9]!.address!),
+      ];
+    },
+    cases: () => {
+      const c = cfg("denali:8njE:0");
+      return [
+        {
+          vector: "denali:8njE:0",
+          pay: c.mintA as Address,
+          buy: USDC,
+          amountIn: 100_000_000n,
+          received: 90_535_066n,
+        },
+        {
+          vector: "denali:8njE:1",
+          pay: USDC,
+          buy: c.mintA as Address,
+          amountIn: 90_535_066n,
+        },
+      ];
+    },
+    skips: [
+      {
+        why: "an empty side",
+        at: (slot) => slot[3]!.address,
+        offset: 64,
+        bytes: [0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ],
+  },
+  {
+    name: "Gavel",
+    programs: ["gavel"],
+    dirs: ["gavel"],
+    clock: 1_783_123_200n,
+    // The pool's two vaults, which the fixture lacks: token accounts each owning itself, as the
+    // program's vault PDAs do, funded past the trades.
+    fabricate: (harness) => {
+      const c = cfg("gavel:CcWf:baseIn");
+      return [
+        setTokenAccount(
+          harness,
+          c.baseVault as Address,
+          c.baseMint as Address,
+          c.baseVault as Address,
+          100_000_000_000_000n,
+        ),
+        setTokenAccount(
+          harness,
+          c.quoteVault as Address,
+          WSOL,
+          c.quoteVault as Address,
+          10_000_000_000n,
+        ),
+      ];
+    },
+    slot: () => {
+      const c = cfg("gavel:CcWf:baseIn");
+      const a = VECTORS["gavel:CcWf:baseIn"]!.accounts;
+      return [
+        r("srAMMzfVHVAtgSJc8iH6CfKzuWuUTzLHVCE81QU1rgi"),
+        w(c.pool!),
+        r(a[1]!.address!),
+        w(c.baseVault!),
+        w(c.quoteVault!),
+      ];
+    },
+    cases: () => {
+      const c = cfg("gavel:CcWf:baseIn");
+      return [
+        {
+          vector: "gavel:CcWf:baseIn",
+          pay: c.baseMint as Address,
+          buy: WSOL,
+          amountIn: 1_000_000_000n,
+          received: 10_370_694n,
+        },
+        {
+          vector: "gavel:CcWf:quoteIn",
+          pay: WSOL,
+          buy: c.baseMint as Address,
+          amountIn: 10_370_694n,
+        },
+      ];
+    },
+    skips: [
+      {
+        why: "an empty side",
+        at: (slot) => slot[4]!.address,
+        offset: 64,
+        bytes: [0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ],
+  },
+  {
+    name: "Tesserav",
+    programs: ["tesserav"],
+    dirs: ["tesserav-swap"],
+    clock: 1_786_000_000n,
+    // The slot after the pool's quote was stamped: the swap refuses a quote many slots old.
+    atSlot: 446_799_768n,
+    slot: () => {
+      const c = cfg("tesserav:FLck:aToB") as unknown as Record<string, string> & {
+        swapGlobalAccounts: string[];
+      };
+      return [
+        r("TessVdML9pBGgG9yGks7o4HewRaXVAMuoVj4x83GLQH"),
+        w(c.pool),
+        r(c.auth),
+        w(c.vaultA),
+        w(c.vaultB),
+        r(INSTRUCTIONS),
+        r(c.swapGlobalAccounts[1]!),
+        r(c.swapGlobalAccounts[2]!),
+      ];
+    },
+    cases: () => [{ vector: "tesserav:FLck:aToB", pay: WSOL, buy: USDC, amountIn: 1_000_000_000n }],
+    skips: [
+      {
+        why: "an empty side",
+        at: (slot) => slot[4]!.address,
+        offset: 64,
+        bytes: [0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ],
+  },
+  {
+    name: "Flint",
+    programs: ["flint"],
+    dirs: ["flint"],
+    clock: 1_783_123_200n,
+    slot: () => {
+      const a = VECTORS["flint:Dj9T:AtoB"]!.accounts;
+      return [
+        r("FLiNTXPwppyoJabCoxc2uiiRygAHpmMXajiDXo2Ub1z"),
+        w(a[2]!.address!),
+        w(a[3]!.address!),
+        w(a[5]!.address!),
+        w(a[7]!.address!),
+        r(INSTRUCTIONS),
+      ];
+    },
+    cases: () => [{ vector: "flint:Dj9T:AtoB", pay: USDT, buy: USDC, amountIn: 1_000_000n }],
+    skips: [
+      {
+        why: "an empty side",
+        at: (slot) => slot[4]!.address,
+        offset: 64,
+        bytes: [0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ],
+  },
+  {
+    name: "Deriverse",
+    programs: ["deriverse"],
+    dirs: ["deriverse-swap", "pumpswap"],
+    clock: 1_783_123_200n,
+    slot: () => {
+      const a = VECTORS["deriverse:8Wk2:sell"]!.accounts;
+      const b = VECTORS["deriverse:8Wk2:buy"]!.accounts;
+      return [
+        r("DRVSpZ2YUYYKgZP8XtLhAGtT1zYSCKzeHfb4DgRnrgqD"),
+        w(a[5]!.address!),
+        w(a[3]!.address!),
+        w(a[4]!.address!),
+        w(a[6]!.address!),
+        w(a[7]!.address!),
+        w(b[6]!.address!),
+        w(b[7]!.address!),
+        w(a[8]!.address!),
+        w(a[9]!.address!),
+        w(a[10]!.address!),
+      ];
+    },
+    cases: () => [
+      {
+        vector: "deriverse:8Wk2:sell",
+        pay: WSOL,
+        buy: USDC,
+        amountIn: 100_000_000n,
+        ata: true,
+        authorityWritable: true,
+      },
+      {
+        vector: "deriverse:8Wk2:buy",
+        pay: USDC,
+        buy: WSOL,
+        amountIn: 10_000_000n,
+        ata: true,
+        authorityWritable: true,
+      },
+    ],
+    skips: [
+      {
+        why: "an empty side",
+        at: (slot) => slot[3]!.address,
+        offset: 64,
+        bytes: [0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ],
+  },
 ];
 
 let stabbleBeneficiaryA: Address;
@@ -912,6 +1326,11 @@ let stabbleBeneficiaryWsol: Address;
 
 const le64 = (value: bigint): string =>
   Buffer.from(new BigUint64Array([value]).buffer).toString("hex");
+
+/** A ref's address: the trade's own, or the ref itself where sauce-recipes names an account (a
+ *  sysvar) by its address. */
+const refOf = (ref: string, refs: Record<string, Address>): Address | undefined =>
+  refs[ref] ?? (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(ref) ? (ref as Address) : undefined);
 
 /** The venue instruction sauce-recipes builds for `vector`, with the trade's own accounts. */
 const expectedCall = (
@@ -924,7 +1343,7 @@ const expectedCall = (
   accounts: vector.accounts.map((account) => {
     if (account.user !== undefined) return user[account.user as "owner" | "in" | "out"];
     if (account.address !== undefined) return account.address;
-    const ref = refs[account.ref!];
+    const ref = refOf(account.ref!, refs);
     if (ref === undefined) throw new Error(`no address for ${account.ref}`);
     return ref;
   }),
@@ -940,7 +1359,7 @@ const cpiFromVector = (vector: Vector, refs: Record<string, Address> = {}): CpiA
           ? "source"
           : account.user === "out"
             ? "recipient"
-            : (account.address ?? refs[account.ref!]!),
+            : (account.address ?? refOf(account.ref!, refs)!),
     writable: account.writable === true,
   }));
 
@@ -993,6 +1412,7 @@ describeSvm("@sauce/router's exact-input venues, on the venues' own programs and
           venue.clock,
           venue.dirs,
           venue.programs.map((name) => [venueProgramId(name), `${name}.so.gz`]),
+          venue.atSlot,
         );
         freeze(harness, venue.fabricate?.(harness) ?? []);
         slot = venue.slot(harness);
