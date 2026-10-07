@@ -336,6 +336,42 @@ describeSvm("the Solana distributed swap, on the venues' own programs and pools"
     for (const p of DEEP.slice(1)) expect(priceOf(p)).toBe(snapshotPrice(p));
   }, 120_000);
 
+  it("skips the slots a pool before them left only dust, and completes", async () => {
+    const raydium = pool("raydium-clmm-sol-usdc");
+    // What Raydium's pool takes before its price reaches its own limit, on its own.
+    const alone = succeeded(
+      await cook({
+        slots: [raydium],
+        pay: USDC,
+        buy: WSOL,
+        budget: 1_000_000n * 10n ** 6n,
+        maxPrice,
+      }),
+    );
+    expect(priceOf(raydium)).toBe(ownLimit(raydium, maxPrice, false));
+    // One atom more: each slot after it is offered one atom of USDC, which its fee takes whole, so
+    // it buys nothing there, and the slot is skipped rather than the cook reverted.
+    const after = [
+      pool("orca-whirlpool-sol-usdc"),
+      pool("pancakeswap-clmm-sol-usdc"),
+      pool("defituna-sol-usdc"),
+    ];
+    const outcome = succeeded(
+      await cook({
+        slots: [raydium, ...after],
+        pay: USDC,
+        buy: WSOL,
+        budget: alone.spent + 1n,
+        maxPrice,
+      }),
+    );
+    expect(outcome.spent).toBe(alone.spent);
+    expect(outcome.bought).toBe(alone.bought);
+    expect(outcome.unspent).toBe(1n);
+    expect(outcome.refunded).toBe(1n);
+    for (const p of after) expect(priceOf(p)).toBe(snapshotPrice(p));
+  }, 120_000);
+
   it("skips a missing slot, a pool past its limit, a pool with fees past its rate and an empty pool", async () => {
     const crema = pool("crema-sol-usdc");
     const byreal = pool("byreal-sol-usdc");

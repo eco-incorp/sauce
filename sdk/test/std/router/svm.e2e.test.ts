@@ -9,8 +9,9 @@
  *     amount received, the same input taken, the pool left at the same price — its own limit, for
  *     an order large enough to reach it — through the venue's `try` form, its plain form and
  *     `trySwap`, both ways for the deep pools;
- *   - each `try` form returns 0 having moved nothing for every skip its header names, and its plain
- *     form reverts there;
+ *   - each `try` form returns 0 having moved nothing for every skip its header names (an input too
+ *     small to buy one unit and a Phoenix limit too large for an order among them), and its plain
+ *     form reverts there; the smallest input the estimate lets through delivers at least one unit;
  *   - a swap that ran below its floor reverts, `try` form or not;
  *   - a slot that is not the pair, whose program is not its pool's owner, or whose pool is another
  *     venue's or no venue's, is refused.
@@ -424,6 +425,25 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
       },
       true,
     );
+    // One atom of USDC buys a few lamports at the pool's price, but the fee, rounded up, takes it:
+    // what is left buys nothing, so the pool is not called.
+    add("an input too small to buy one unit at the pool's price", CLMM, async (entry) => ({
+      ...(await orderFor(entry)),
+      amountIn: 1n,
+    }));
+    // A limit past the order's 64-bit price, both ways: buying at a price no tick reaches, and
+    // selling for one so high that no bid could meet it.
+    add("a limit too large for an order, buying", ["Phoenix"], async (entry) => ({
+      ...(await orderFor(entry)),
+      maxPrice: 2n ** 200n,
+    }));
+    add("a limit too large for an order, selling", ["Phoenix"], async (entry) => ({
+      ...(await orderFor(entry)),
+      pay: WSOL,
+      buy: USDC,
+      amountIn: 10n * 10n ** 9n,
+      maxPrice: 1n,
+    }));
     add("an input smaller than one lot", ["Phoenix"], async (entry) => {
       const order = await orderFor(entry);
       return { ...order, amountIn: le(BYTES.get(order.pool.pool)!, 192, 8) - 1n };
@@ -480,35 +500,21 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     );
   });
 
-  // One atom of USDC buys nothing. Orca's code takes it and gives nothing back, which cannot be
-  // undone, so it is never read as a skip: the floor, at least 1, refuses it. Raydium's code refuses
-  // the swap itself, a failure no check before it foresees, and the whole transaction fails.
-  describe("an input too small to buy anything", () => {
-    it.each(["OrcaWhirlpool", "Cropper", "Defituna", "Crema"])(
-      "%s takes it and delivers nothing: below the floor",
-      async (venue) => {
-        const order = { ...(await orderFor(VENUES.find((v) => v.venue === venue)!)), amountIn: 1n };
-        for (const name of [`try${venue}`, "trySwap"])
-          expect(refused(await cook(compiled(name), order))).toBe("below minOut");
-      },
-      120_000,
-    );
-
-    it.each(["RaydiumClmm", "PancakeswapClmm", "Byreal", "StabbleClmm"])(
-      "%s refuses it itself",
-      async (venue) => {
-        const entry = VENUES.find((v) => v.venue === venue)!;
-        const order = { ...(await orderFor(entry)), amountIn: 1n };
-        for (const name of [`try${venue}`, "trySwap"]) {
-          const outcome = await cook(compiled(name), order);
-          if (outcome.ok) throw new Error(`${name} swapped one atom`);
-          expect(outcome.reason).toBe("");
-          expect(outcome.logs.join("\n")).toContain(`Program ${order.pool.program} failed`);
-        }
-      },
-      120_000,
-    );
-  });
+  // The estimate lets through the smallest input that buys one unit at the pool's price, and the
+  // pool delivers it.
+  it.each(VENUES.filter((v) => v.venue !== "Phoenix"))(
+    "$venue: two atoms pass the estimate and deliver at least one",
+    async (entry) => {
+      const order = { ...(await orderFor(entry)), amountIn: 2n };
+      for (const name of [`try${entry.venue}`, "trySwap"]) {
+        const outcome = succeeded(await cook(compiled(name), order));
+        expect(outcome.paid).toBe(2n);
+        expect(outcome.returned).toBe(outcome.received);
+        expect(outcome.received).toBeGreaterThan(0n);
+      }
+    },
+    120_000,
+  );
 
   describe("the caller's accounts, refused", () => {
     it("a pool that is not the pair, and a market that is not", async () => {
