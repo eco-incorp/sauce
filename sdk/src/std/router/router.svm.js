@@ -48,13 +48,14 @@
 // a missing slot (the System program as its pool), no input, a pool whose swaps are switched off, a
 // paused pool or a market not open for taking, a fee that is more than one rate (a dynamic or
 // adaptive fee, or a Byreal pool's own), a pool with no liquidity at its price, a pool already at or
-// past its own limit, and an input smaller than one of a market's lots. A swap that ran returns at
-// least 1: it is held to the floor afterwards — `minOut`, and at least 1 — and reverts below it, so
-// `0` always means skipped. An input too small to buy anything (an atom) is below that floor where
-// Orca's code takes it and gives nothing back. A swap that ran and moved nothing either way is a
-// skip too: a Phoenix order whose book has no offer within the limit fills nothing, which only the
-// paying account's balance tells. A failure the checks do not foresee still aborts the transaction:
-// a tick array missing from the slot, or an input Raydium's code finds too small to swap. A slot
+// past its own limit, an input too small to buy one unit at the pool's price after its fee (the
+// most it could buy, as the price only worsens: dust an earlier pool left, which a venue would take
+// for nothing or refuse), an input smaller than one of a market's lots, and a market limit too
+// large for an order's 64-bit price. A swap that ran returns at least 1: it is held to the floor
+// afterwards — `minOut`, and at least 1 — and reverts below it, so `0` always means skipped. A swap
+// that ran and moved nothing either way is a skip too: a Phoenix order whose book has no offer
+// within the limit fills nothing, which only the paying account's balance tells. A failure the
+// checks do not foresee still aborts the transaction: a tick array missing from the slot. A slot
 // that is not the pair, whose program is not the venue's or not the pool's owner, or whose pool no
 // venue here owns (`trySwap`: "not a supported venue's pool"; a venue's own function: "not a <venue>
 // pool") reverts: those are the caller's accounts, not the pool's state. Only a missing slot, the
@@ -68,8 +69,8 @@
 // SIZE. A Solana program rides in transactions, so the arm shares code through internal functions
 // (each venue's `swap<Venue>`, `clmmOrder`, `settled`) where the EVM arm keeps each function flat,
 // and only the functions a program calls are compiled into it. `trySwap` takes any of the nine, so
-// it carries all nine venues' code: a program calling it is about 4.3 KB, one calling a single
-// venue's function about 1.3 to 1.5 KB. A program that knows its venue calls that venue's function;
+// it carries all nine venues' code: a program calling it is about 4.4 KB, one calling a single
+// venue's function about 1.3 to 1.6 KB. A program that knows its venue calls that venue's function;
 // `trySwap` is for slots whose venue is only known when the program runs. Each venue's function
 // checks its own program id, so a direct call never signs into a program the slot names; only
 // `trySwap`'s internal path relies on its one read of the pool's owner.
@@ -114,6 +115,14 @@ function clmmOrder(
   const own = paysA ? Math.mulDiv(limit, 10 ** 18, root) : Math.mulDiv(limit, root, 10 ** 18);
   const better = paysA ? price > own : price < own;
   if (liquidity == 0 || !better) {
+    return hex``;
+  }
+  // The most the input could buy: all of it at the pool's current price, after its fee, which the
+  // pool takes from the input rounded up. The price only worsens as the pool sells, so an input
+  // that buys less than one unit here (dust left by an earlier pool) buys nothing at all.
+  const kept = (amountIn * (1000000 - fee)) / 1000000;
+  const square = price * price; // a Q64.64 price is under 2^96, so its square fits
+  if (paysA ? kept * square < 1 << 128 : kept << 128 < square) {
     return hex``;
   }
   const none = hex`0000000000000000`;
@@ -439,9 +448,10 @@ function swapPhoenix(
     ticks = Math.mulDiv(10 ** 36, 10000, maxPrice * (10000 - fee) * tick) + 1;
     side = hex`000201`;
   }
-  // Every lot of the input, of the token it pays: base lots selling base, quote lots buying it.
+  // Every lot of the input, of the token it pays: base lots selling base, quote lots buying it. The
+  // order's price is 64 bits, and a limit past them would be cut to some other price: no order.
   const lots = amountIn / (paysBase ? baseLot : quoteLot);
-  if (lots == 0) {
+  if (lots == 0 || ticks > 0xffffffffffffffff) {
     return;
   }
   // No minimum fill, a self-trade cancels the resting order, no match limit, client id 0, no
