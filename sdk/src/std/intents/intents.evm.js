@@ -178,11 +178,6 @@ export class Intent {
         "`<Chain>.hop({ … })` has no body. Finish it with `.then(() => { … })`, or `await` it and write the body after it: the code that runs on its destination with what was received",
       );
     }
-    if (this._handler !== undefined) {
-      throw new Error(
-        "`.catch(...)` needs a compiler that compiles `try`, which this one does not: leave the handler out",
-      );
-    }
     const config = this._config;
     const creator = config.refundee;
     if (creator === undefined) {
@@ -235,7 +230,7 @@ export class Intent {
         "the intent runs a program, so its cook must pay that chain's Kitchen fee — give the hop a `fee`, or set `intents.executionFee` (`destinationExecutionFee()` reads it)",
       );
     }
-    const body = program(this._body, this._destination.chainId);
+    const body = program(this._run(), this._destination.chainId);
     const calls = new Items();
     for (const call of this._before) calls.add(call);
     for (const delivered of deliveryTokens.list) {
@@ -317,6 +312,21 @@ export class Intent {
       if (nativeAmount > 0) evm.call(vault, nativeAmount, hex``);
       evm.call(this._here.portal, 0, hex`645c890c`.concat(intent));
     }
+  }
+
+  // What the destination runs: the body, or with a handler the body in a `try`, the handler in its
+  // place when the body reverts, everything the body did undone.
+  _run() {
+    const body = this._body;
+    const handler = this._handler;
+    if (handler === undefined) return body;
+    return () => {
+      try {
+        body();
+      } catch {
+        handler();
+      }
+    };
   }
 
   // A salt the intent was not given: the compile's, mixed with how many intents this transaction
