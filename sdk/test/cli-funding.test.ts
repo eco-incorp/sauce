@@ -158,6 +158,73 @@ describe("sauce run --fund, refused before anything is sent", () => {
     );
   });
 
+  // Every `await` the compiler refuses reaches it as written: the program compiles as the user
+  // wrote it before any funding wraps it, and `thenForm` leaves such a program untouched.
+  const hop =
+    "Ethereum.hop({ reward: { token: USDC, amount }, receive: { token: USDC, amount }, refundee: to })";
+  it.each([
+    [
+      "in an `if`",
+      [`  if (amount > 1) {`, `    await ${hop};`, "  }"],
+      "an `await` inside an `if`",
+      "3:5",
+    ],
+    [
+      "in a loop",
+      ["  for (let i = 0; i < 2; i += 1) {", `    await ${hop};`, "  }"],
+      "an `await` inside a loop",
+      "3:5",
+    ],
+    ["used as a value", [`  const x = await ${hop};`], "an `await` used as a value", "2:13"],
+    [
+      "followed by a value `return`",
+      [`  await ${hop};`, "  USDC.transfer(to, amount);", "  return amount;"],
+      "a value `return` after an `await`",
+      "4:3",
+    ],
+    [
+      "in a `try` with a statement after it",
+      [
+        "  try {",
+        `    await ${hop};`,
+        "  } catch (e) {",
+        "    USDC.transfer(to, 1);",
+        "  }",
+        "  USDC.transfer(to, 2);",
+      ],
+      "a statement after a `try` that awaits",
+      "7:3",
+    ],
+  ])(
+    "--fund on a program with an `await` %s: the compiler's refusal, at the file's line",
+    async (_name, lines, words, at) => {
+      const file = join(work, "awaits.sauce.ts");
+      writeFileSync(
+        file,
+        [
+          "function main(to: Address, amount: Uint256): Uint256 {",
+          ...lines,
+          "  return 0;",
+          "}",
+          "",
+        ].join("\n"),
+      );
+      let stderr = "";
+      const code = await runCli(
+        [
+          ...["run", file, "--chain", "base", "--rpc-url", "http://127.0.0.1:9"],
+          ...["--private-key", OWNER_KEY, "--fund", "USDC:1", "--intent-execution-fee", "0"],
+          ...["--args", "0x6666666666666666666666666666666666666666", "5"],
+        ],
+        { ...nodeIo(), stdout: () => undefined, stderr: (text) => void (stderr += text) },
+      );
+      expect(code).toBe(1);
+      expect(stderr).toContain(words);
+      expect(stderr).toContain(`--> ${file}:${at}`);
+      expect(stderr).not.toContain("main.js");
+    },
+  );
+
   it("--fund on Solana", async () => {
     const refused = await run("--chain", "solana", "--fund", "USDC:1");
     expect(refused.code).toBe(2);
@@ -251,6 +318,51 @@ describe("the funding wrapper", () => {
       expect(wrapped.indexOf("// sweep")).toBeGreaterThan(wrapped.indexOf("}).then"));
       expect(compileSauceProgram(base, wrapped, { defines: {}, intents }).bodies).toHaveLength(1);
     }
+  });
+
+  it("leaves a program untouched where the compiler refuses one of its `await`s", () => {
+    const hop =
+      "Arbitrum.hop({ reward: { token: USDC, amount: 2 }, receive: { token: USDC, amount: 1 }, refundee: to, fee: 0 })";
+    const main = (...body: string[]) =>
+      [
+        "function main(to: Address, amount: Uint256): Uint256 {",
+        ...body,
+        "  return 0;",
+        "}",
+        "",
+      ].join("\n");
+    for (const source of [
+      main("  if (amount > 1) {", `    await ${hop};`, "  }"),
+      main("  for (let i = 0; i < 2; i += 1) {", `    await ${hop};`, "  }"),
+      main("  {", `    await ${hop};`, "  }"),
+      main(`  const x = await ${hop};`),
+      main(`  await ${hop};`, "  USDC.transfer(to, amount);", "  return amount;"),
+      main("  try {", `    await ${hop};`, "  } catch (e) {}", "  USDC.transfer(to, 2);"),
+      main("  try {", "    USDC.transfer(to, 1);", "  } catch (e) {", `    await ${hop};`, "  }"),
+      `function helper(to: Address) {\n  await ${hop};\n}\n${main("  helper(to);")}`,
+    ]) {
+      expect(thenForm(source)).toBe(source);
+    }
+  });
+
+  it("moves nothing: the user's statements keep their lines", () => {
+    const source = [
+      "function main(to: Address, amount: Uint256) {",
+      "  await Arbitrum.hop({ reward: { token: USDC, amount }, refundee: to, fee: 0 });",
+      "  USDC.transfer(to, amount); // on Arbitrum",
+      "  await Optimism.hop({ reward: { token: USDC, amount }, refundee: to, fee: 0 });",
+      "  USDC.transfer(to, 1);",
+      "}",
+      "",
+    ].join("\n");
+    const written = thenForm(source).split("\n");
+    expect(written).toHaveLength(source.split("\n").length);
+    expect(written[2]).toContain("USDC.transfer(to, amount); // on Arbitrum");
+    expect(written[4]).toContain("USDC.transfer(to, 1);");
+    // The `await`s are blanked where they stood, not reprinted.
+    expect(written[1]!.indexOf("Arbitrum.hop(")).toBe(
+      source.split("\n")[1]!.indexOf("Arbitrum.hop("),
+    );
   });
 
   it("an `await` is its `.then` form, byte for byte, in a `try` and nested in another", () => {

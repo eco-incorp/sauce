@@ -762,80 +762,169 @@ function sweepLines(
   return sweeps;
 }
 
-/** A statement list of a program, with the `try` whose block it is, if any. */
-interface StatementList {
+/** The nodes that are functions: an `await` in one is that function's, not the enclosing list's. */
+const FUNCTIONS: ReadonlySet<string> = new Set([
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "ArrowFunctionExpression",
+]);
+
+/** A statement list where the compiler takes an `await`, with the `try` whose block it is. */
+interface AwaitList {
   readonly statements: readonly AstNode[];
   readonly tried?: AstNode;
 }
 
+/** The `await` an expression statement is, or `undefined`. */
+const awaitOf = (statement: AstNode): AstNode | undefined =>
+  statement.type === "ExpressionStatement" &&
+  (statement.expression as AstNode).type === "AwaitExpression"
+    ? (statement.expression as AstNode)
+    : undefined;
+
+/**
+ * Where `program` awaits, when every `await` stands where the compiler takes one: a statement
+ * directly in `main`'s body, a script's top level, a body a call takes, or a `try` block there,
+ * with no value `return` after it and nothing after a `try` that awaits. `undefined` when one does
+ * not: that program is the compiler's to refuse, at its own line.
+ */
+function awaitLists(program: AstNode): AwaitList[] | undefined {
+  const lists: AwaitList[] = [];
+  let refused = false;
+  let awaits = 0;
+  /** A value `return` in `node`, outside any function it holds. */
+  const returnsValue = (node: unknown): boolean => {
+    if (node === null || typeof node !== "object") return false;
+    if (Array.isArray(node)) return node.some(returnsValue);
+    const at = node as AstNode;
+    if (at.type === "ReturnStatement") return at.argument !== null && at.argument !== undefined;
+    if (FUNCTIONS.has(at.type)) return false;
+    return Object.entries(at).some(([key, value]) => key !== "loc" && returnsValue(value));
+  };
+  const visit = (node: unknown, takes: AwaitList | undefined): void => {
+    if (node === null || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const each of node) visit(each, undefined);
+      return;
+    }
+    const at = node as AstNode;
+    if (at.type === "AwaitExpression") {
+      // Reached only where no list took it: a value, or a list the compiler refuses one in.
+      refused = true;
+      return;
+    }
+    const list = (statements: AstNode[], tried?: AstNode): void => {
+      const here: AwaitList = { statements, ...(tried === undefined ? {} : { tried }) };
+      lists.push(here);
+      statements.forEach((statement, index) => {
+        const awaited = awaitOf(statement);
+        if (awaited !== undefined) {
+          awaits++;
+          if (returnsValue(statements.slice(index + 1))) refused = true;
+          visit(awaited.argument, undefined);
+          return;
+        }
+        if (statement.type === "TryStatement") {
+          const block = (statement.block as AstNode).body as AstNode[];
+          if (block.some((each) => awaitOf(each) !== undefined) && index < statements.length - 1) {
+            refused = true;
+          }
+          list(block, statement);
+          visit(statement.handler, undefined);
+          visit(statement.finalizer, undefined);
+          return;
+        }
+        visit(statement, undefined);
+      });
+    };
+    if (at.type === "Program" && takes === undefined) {
+      list(at.body as AstNode[]);
+      return;
+    }
+    if (at.type === "FunctionDeclaration" && (at.id as AstNode | null)?.name === "main") {
+      list((at.body as AstNode).body as AstNode[]);
+      return;
+    }
+    if (at.type === "CallExpression") {
+      visit(at.callee, undefined);
+      for (const argument of (at.arguments as AstNode[]) ?? []) {
+        const body = argument.body as AstNode | undefined;
+        if (FUNCTIONS.has(argument.type) && body?.type === "BlockStatement") {
+          list(body.body as AstNode[]);
+        } else {
+          visit(argument, undefined);
+        }
+      }
+      return;
+    }
+    for (const [key, value] of Object.entries(at)) {
+      if (key !== "loc") visit(value, undefined);
+    }
+  };
+  visit(program, undefined);
+
+  return refused || awaits === 0 ? (refused ? undefined : []) : lists;
+}
+
+/** `text` with the characters from `start` to `end` blanked, newlines kept: what follows stays
+ *  where it was. */
+const blank = (text: string, start: number, end: number): string =>
+  `${text.slice(0, start)}${Array.from(text.slice(start, end), (char) => (char === "\n" ? char : " ")).join("")}${text.slice(end)}`;
+
 /**
  * `text` with every `await` written as the `.then` it is: `await x; rest` is
- * `x.then(() => { rest });`, and inside a `try`, `.catch(...)` of its handler follows it — the
- * compiler's own reading, so the program is the same, byte for byte. The last `await` is written
- * first, so one in the rest of another is already a `.then` when the outer one takes it in, and one
- * in a `try` takes that `try`'s handler before the `try` it is in moves into a body.
+ * `x.then(() => { rest });`, and inside a `try` that `try`'s handler is the `.catch(...)` that
+ * follows it — the compiler's own reading, so the program is the same, byte for byte. It works on
+ * the parse `routes/parse.ts` makes, and moves nothing: the `await` is blanked, and `.then(() => {`,
+ * ` })` and the `.catch` are written around the user's statements where they stand. The last
+ * `await` is written first, so one in the rest of another is already a `.then` when the outer one
+ * takes it in. A program with an `await` the compiler refuses is returned as it is, for the compiler
+ * to refuse at its own line.
  */
-export function thenForm(text: string): string {
+export function thenForm(given: string): string {
+  let text = given;
   for (;;) {
     let program: AstNode;
     try {
       program = parseSauce(text);
     } catch {
-      return text;
+      return given;
     }
-    const lists: StatementList[] = [];
-    const visit = (node: unknown): void => {
-      if (node === null || typeof node !== "object") return;
-      if (Array.isArray(node)) {
-        for (const each of node) visit(each);
-        return;
-      }
-      const at = node as AstNode;
-      if (at.type === "Program" || at.type === "BlockStatement") {
-        lists.push({ statements: at.body as AstNode[] });
-      }
-      if (at.type === "TryStatement") {
-        const block = at.block as AstNode;
-        lists.push({ statements: block.body as AstNode[], tried: at });
-        visit(block.body);
-        visit(at.handler);
-        visit(at.finalizer);
-        return;
-      }
-      for (const [key, value] of Object.entries(at)) {
-        if (key !== "type" && key !== "start" && key !== "end" && key !== "loc") visit(value);
-      }
-    };
-    visit(program);
-    let last: { list: StatementList; index: number } | undefined;
+    const lists = awaitLists(program);
+    if (lists === undefined) return given;
+    let last: { list: AwaitList; index: number } | undefined;
     for (const list of lists) {
       list.statements.forEach((statement, index) => {
-        const awaited =
-          statement.type === "ExpressionStatement" &&
-          (statement.expression as AstNode).type === "AwaitExpression";
-        if (
-          awaited &&
-          (last === undefined || statement.start > last.list.statements[last.index]!.start)
-        ) {
+        if (awaitOf(statement) === undefined) return;
+        if (last === undefined || statement.start > last.list.statements[last.index]!.start) {
           last = { list, index };
         }
       });
     }
-    if (last === undefined) return text.replace(/\basync(\s+function\s+main\b)/, "$1");
+    if (last === undefined) {
+      // `async` on `main` is the compiler's to ignore, and a renamed `main` must not carry it.
+      const main = (program.body as AstNode[]).find(
+        (node) =>
+          node.type === "FunctionDeclaration" && (node.id as AstNode | null)?.name === "main",
+      );
+      return main?.async === true ? blank(text, main.start, main.start + "async".length) : text;
+    }
     const { list, index } = last;
     const statement = list.statements[index]!;
-    const opened = (statement.expression as AstNode).argument as AstNode;
+    const awaited = awaitOf(statement)!;
+    const opened = awaited.argument as AstNode;
     const rest = list.statements.slice(index + 1);
-    const body = rest.length === 0 ? "" : text.slice(rest[0]!.start, rest[rest.length - 1]!.end);
+    const end = rest.length === 0 ? statement.end : rest[rest.length - 1]!.end;
     const handler = list.tried?.handler as AstNode | undefined;
+    const param = handler?.param as AstNode | null | undefined;
     const caught =
       handler === undefined
         ? ""
-        : `.catch((${handler.param === null || handler.param === undefined ? "" : text.slice((handler.param as AstNode).start, (handler.param as AstNode).end)}) => ${text.slice((handler.body as AstNode).start, (handler.body as AstNode).end)})`;
-    const end = rest.length === 0 ? statement.end : rest[rest.length - 1]!.end;
+        : `.catch((${param === null || param === undefined ? "" : text.slice(param.start, param.end)}) => ` +
+          `${text.slice((handler.body as AstNode).start, (handler.body as AstNode).end)})`;
     text =
-      `${text.slice(0, statement.start)}${text.slice(opened.start, opened.end)}` +
-      `.then(() => {\n${body}\n})${caught};${text.slice(end)}`;
+      `${blank(text, awaited.start, opened.start).slice(0, opened.end)}.then(() => {` +
+      `${blank(text, opened.end, statement.end).slice(opened.end, end)} })${caught};${text.slice(end)}`;
   }
 }
 

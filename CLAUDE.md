@@ -886,7 +886,11 @@ wraps the file's source before that compile — a new `main` with the same signa
 through `@sauce/token` (`permitTransferFrom`, `permit`, `transferFrom`), calls the original
 renamed, and sweeps; in a script, the pulls after its imports and the sweeps after its last
 statement; a program that awaits an intent is wrapped in its `.then` form (`funding.ts#thenForm`,
-the compiler's own reading, byte for byte), so the sweeps run where it opens, not in the body —
+the compiler's own reading, byte for byte), so the sweeps run where it opens, not in the body.
+`thenForm` works on `routes/parse.ts`'s AST and moves nothing: it blanks each `await`, writes
+`.then(() => {`, ` })` and a `try`'s `.catch` around the statements where they stand, and leaves a
+program with an `await` the compiler refuses untouched; the file is compiled as written before any
+funding wraps it, so such a program fails with the compiler's own error at the file's line —
 signing Permit2 or EIP-2612 locally; `cli-funding.e2e.test.ts` runs every
 mode against canonical Permit2's runtime (`test/fixtures/cli/Permit2.json`). `cli.e2e.test.ts` runs the
 EVM commands against anvils with the released gated stack (and one `cast send` line verbatim);
