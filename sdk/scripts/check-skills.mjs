@@ -1009,10 +1009,15 @@ async function runUsage(where, file, argv, chain, header = false) {
   const args = at < 0 ? undefined : rest.slice(at + 1);
   const kept = [];
   const accounts = [];
+  // `--accounts <file>` gives every account in one JSON object, which a usage line names by file.
+  let accountsFile = false;
   for (let i = 0; i < options.length; i++) {
     const flag = options[i];
     const value = options[i + 1];
-    if (flag === "--intent-execution-fee" && value === "auto") {
+    if (flag === "--accounts") {
+      accountsFile = true;
+      i++;
+    } else if (flag === "--intent-execution-fee" && value === "auto") {
       // `auto` reads the destination's Kitchen fee through --config; offline there is no endpoint,
       // and the fee changes only the cook's value, so the run takes 0.
       kept.push(flag, "0");
@@ -1066,7 +1071,11 @@ async function runUsage(where, file, argv, chain, header = false) {
   }
   if (target === "svm") {
     const slots = (manifest?.accounts ?? []).filter((a) => a.kind === "slot").map((a) => a.name);
-    if (["run", "simulate", "tx"].includes(name) && slots.join() !== accounts.join())
+    if (
+      ["run", "simulate", "tx"].includes(name) &&
+      !accountsFile &&
+      slots.join() !== accounts.join()
+    )
       fail(where, `names --account ${accounts.join(", ")}, but main takes ${slots.join(", ")}`);
     return;
   }

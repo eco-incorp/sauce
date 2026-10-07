@@ -10,6 +10,7 @@
  * venue the program does not take, and a slot whose program does not own its pool.
  */
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { AccountRole, getAddressCodec } from "@solana/kit";
 import type { Address, AddressesByLookupTableAddress, Instruction } from "@solana/kit";
 import { FailedTransactionMetadata } from "litesvm";
@@ -48,7 +49,6 @@ import {
   NONE,
   ownLimit,
   pool,
-  PROGRAM,
   restoreVenues,
   SLOT_NAMES,
   SYSTEM,
@@ -59,6 +59,14 @@ import {
   WSOL,
 } from "./venue-fixture.js";
 import type { Pool } from "./venue-fixture.js";
+
+/** The skill's program. */
+const PROGRAM = fileURLToPath(
+  new URL(
+    "../../../skills/sauce-solana-distributed-swap/examples/solana-distributed-swap.sauce.ts",
+    import.meta.url,
+  ),
+);
 
 interface Order {
   slots: Pool[];

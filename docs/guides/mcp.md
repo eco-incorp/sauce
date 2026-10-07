@@ -315,7 +315,7 @@ server's instructions also list:
 | `--owner`                  | `owner`                |
 | `--pot`                    | `pot`                  |
 | `--value`                  | `value`                |
-| `--account`                | `accounts`             |
+| `--account`, `--accounts`  | `accounts`             |
 | `--intent-deadline`        | `intentDeadline`       |
 | `--intent-creator`         | `intentCreator`        |
 | `--intent-execution-fee`   | `intentExecutionFee`   |
@@ -324,6 +324,7 @@ server's instructions also list:
 | `--intent-prover`          | `intentProver`         |
 | `--no-prove`               | `prove: false`         |
 | `--max-execution-fee`      | `maxExecutionFee`      |
+| `--lookup-table`           | `lookupTables`         |
 | `--via`                    | `via`                  |
 | `--compact-args`           | `compactArgs`          |
 | `--chain`                  | `chain`                |

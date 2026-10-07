@@ -15,12 +15,6 @@ import type { LiteSVM } from "litesvm";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURE = join(HERE, "../fixtures/svm-venues");
-/** The skill's program. */
-export const PROGRAM = join(
-  HERE,
-  "../../../skills/sauce-solana-distributed-swap/examples/solana-distributed-swap.sauce.ts",
-);
-
 export interface Pool {
   name: string;
   venue: string;

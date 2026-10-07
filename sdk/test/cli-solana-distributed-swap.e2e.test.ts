@@ -5,8 +5,11 @@
  * which it creates first. Against the released Kitchen and engine and the venues' own mainnet
  * programs and pools (`svm/venue-fixture.ts`) in LiteSVM, behind a JSON-RPC shim
  * (`svm/rpc-shim.ts`). A second run takes the table the first created with `--lookup-table`.
- * `sauce simulate` and `sauce tx` refuse it, a cook past one transaction, naming staging and the
- * lookup table. The program's own behavior is held in `svm/distributed-swap.e2e.test.ts`.
+ * `sauce simulate` rehearses it in a local copy of the accounts it reads, and `sauce tx`, which
+ * cannot hand a cook past one transaction to a signer, refuses it. `sauce pools` gives each pool's
+ * slot as the fixture holds it, and a rehearsal for an owner with nothing takes `--assume-balance`
+ * and its accounts from an `--accounts` file. The program's own behavior is held in
+ * `svm/distributed-swap.e2e.test.ts`.
  *
  * GATED on the engine artifacts like every engine-executing suite, and a hard failure without them
  * in CI.
@@ -15,6 +18,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { address, createKeyPairSignerFromBytes, lamports } from "@solana/kit";
 import type { Address, KeyPairSigner } from "@solana/kit";
 import { findAssociatedTokenPda } from "@solana-program/token";
@@ -45,7 +49,6 @@ import {
   NONE,
   ownLimit,
   pool,
-  PROGRAM,
   restoreVenues,
   SLOT_NAMES,
   TOKEN,
@@ -54,6 +57,14 @@ import {
   WSOL,
 } from "./svm/venue-fixture.js";
 import type { Pool } from "./svm/venue-fixture.js";
+
+/** The skill's program. */
+const PROGRAM = fileURLToPath(
+  new URL(
+    "../../skills/sauce-solana-distributed-swap/examples/solana-distributed-swap.sauce.ts",
+    import.meta.url,
+  ),
+);
 
 const SOLANA_URL = "http://127.0.0.1:65533/";
 const KITCHEN = address(v12SvmKitchenProgramId());
@@ -105,11 +116,11 @@ describeSvm(
       return setTokenAccount(harness, account, mint, pot, amount);
     }
 
-    /** Every account the program takes, as `--account` flags in its manifest's order. */
-    const accounts = (slots: Pool[], recipient: Address, refund: Address): string[] => {
+    /** Every account the program takes, by name, in its manifest's order. */
+    const named = (slots: Pool[], recipient: Address, refund: Address): Record<string, string> => {
       const filled = [...slots];
       while (filled.length < 4) filled.push(NONE);
-      const named: Record<string, string> = {
+      const byName: Record<string, string> = {
         authority: "pot",
         source: "pot:USDC",
         output: "pot:WSOL",
@@ -123,11 +134,17 @@ describeSvm(
       };
       filled.forEach((p, k) => {
         const each = [p.program, p.pool, p.config, p.vaultA, p.vaultB, p.extra, ...p.payB];
-        SLOT_NAMES(k).forEach((name, j) => (named[name] = each[j]!));
+        SLOT_NAMES(k).forEach((name, j) => (byName[name] = each[j]!));
       });
 
-      return Object.entries(named).flatMap(([name, value]) => ["--account", `${name}=${value}`]);
+      return byName;
     };
+    /** The same as `--account` flags. */
+    const accounts = (slots: Pool[], recipient: Address, refund: Address): string[] =>
+      Object.entries(named(slots, recipient, refund)).flatMap(([name, value]) => [
+        "--account",
+        `${name}=${value}`,
+      ]);
 
     beforeAll(async () => {
       harness = await startEngine(
@@ -317,14 +334,27 @@ describeSvm(
       );
     }, 300_000);
 
-    it("rehearses for an owner with no Pot, no lamports and no USDC, given --assume-balance", async () => {
+    it("rehearses for an owner with no Pot, no lamports and no USDC, given --assume-balance and --accounts", async () => {
       restoreVenues(harness.svm);
       const stranger = (await keypairFile(work)).signer.address;
       const recipient = setTokenAccount(harness, randomAddress(), WSOL, randomAddress(), 0n);
       const refund = setTokenAccount(harness, randomAddress(), USDC, randomAddress(), 0n);
+      // Every account but one from an `--accounts` file, and that one as an `--account` beside it.
+      const rest = Object.fromEntries(
+        Object.entries(named(DEEP, recipient, refund)).filter(([name]) => name !== "refund"),
+      );
+      const file = join(work, "accounts.json");
+      writeFileSync(file, JSON.stringify(rest));
       const run = await sauce(
         ...["simulate", PROGRAM, "--chain", "solana", "--rpc-url", SOLANA_URL, "--owner", stranger],
-        ...["--assume-balance", "USDC:1000000", ...accounts(DEEP, recipient, refund)],
+        ...[
+          "--assume-balance",
+          "USDC:1000000",
+          "--accounts",
+          file,
+          "--account",
+          `refund=${refund}`,
+        ],
         ...["--args", String(budget), String(maxPrice), "0", "0", "--json"],
       );
       if (run.code !== 0) throw new Error(`exit ${run.code}\n${run.stderr}\n${run.stdout}`);

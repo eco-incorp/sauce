@@ -459,6 +459,12 @@ const COOK: FlagSpecs = {
     help: "An account main takes, by name: an address, pot, owner, pot:USDC (the Pot's USDC account), mint:USDC or program:USDC (its token program)",
     only: "svm",
   },
+  accounts: {
+    type: "string",
+    value: "<json|file>",
+    help: "The accounts main takes as one JSON object of NAME to value, as --account takes them, inline or in a file",
+    only: "svm",
+  },
   via: {
     type: "string",
     value: "<kitchen|engine>",
@@ -816,6 +822,32 @@ function argsInput(
   return { args: { from: "--args-json", values } };
 }
 
+/**
+ * A Solana cook's accounts: `--accounts`' object (inline, or a file) and each `--account`, every name
+ * once.
+ */
+function accountsOf(args: ParsedArgs, io: CliIo): Record<string, string> {
+  const json = stringFlag(args, "accounts");
+  const given = repeatedFlag(args, "account");
+  if (json === undefined) return parseAccounts(given);
+  const text = /^\s*\{/.test(json) ? json : readInput(io, json);
+  let object: unknown;
+  try {
+    object = JSON.parse(text);
+  } catch (error) {
+    throw new UsageError(`--accounts: not JSON (${(error as Error).message})`);
+  }
+  if (typeof object !== "object" || object === null || Array.isArray(object)) {
+    throw new UsageError("--accounts: expected a JSON object of each account's name to its value");
+  }
+  const entries = Object.entries(object as Record<string, unknown>).map(([name, value]) => {
+    if (typeof value !== "string") throw new UsageError(`--accounts: ${name} is not a string`);
+    return `${name}=${value}`;
+  });
+
+  return parseAccounts([...entries, ...given]);
+}
+
 /** The salt `--salt`/`--salt-hex` choose (zero when neither). */
 const saltOf = (args: ParsedArgs) =>
   parseSalt(stringFlag(args, "salt"), stringFlag(args, "salt-hex"));
@@ -845,7 +877,7 @@ function cookInput(
   program: ProgramInput,
 ): CookInput {
   const value = stringFlag(args, "value");
-  if (repeatedFlag(args, "account").length > 0) {
+  if (repeatedFlag(args, "account").length > 0 || stringFlag(args, "accounts") !== undefined) {
     throw new UsageError(
       `--account names a Solana program's accounts; a program on ${program.chain.slug} takes none`,
     );
@@ -1509,7 +1541,7 @@ function svmCookInput(
     ...program,
     owner: svmOwner(args, signer),
     ...saltOf(args),
-    accounts: parseAccounts(repeatedFlag(args, "account")),
+    accounts: accountsOf(args, io),
     ...argsInput(args, io, trailing),
     rpcUrl: requiredEndpoint(args, io, program.chain),
     ...(via === undefined ? {} : { via: parseVia(via) }),

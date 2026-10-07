@@ -39,7 +39,7 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["owner"], input: "owner" },
   { flags: ["pot"], input: "pot" },
   { flags: ["value"], input: "value" },
-  { flags: ["account"], input: "accounts" },
+  { flags: ["account", "accounts"], input: "accounts" },
   { flags: ["intent-deadline"], input: "intentDeadline" },
   { flags: ["intent-creator"], input: "intentCreator" },
   { flags: ["intent-execution-fee"], input: "intentExecutionFee" },

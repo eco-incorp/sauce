@@ -1168,6 +1168,17 @@ USDC/SPCXc on base at block 36120411: 3 pools with liquidity, deepest first (by 
 …
 ```
 
+On Solana, `sauce pools --chain solana USDC WSOL` finds the pair's pools with
+`getProgramAccounts` on the program of each venue whose swap stops at a price limit: Raydium CLMM,
+PancakeSwap CLMM, Byreal and Stabble CLMM, Orca Whirlpools and Cropper, DefiTuna, Crema, and
+Phoenix's markets. A Solana program takes its pools as accounts, so beside each pool's fee,
+liquidity and price both ways (`sides`, as above) it gives `slots`: by the token paid, the nine
+accounts [the distributed swap on Solana](solana-distributed-swap.md) takes for the pool — its
+program, the pool, its config, its two vaults, one more account its swap takes, and the three tick
+arrays its walk crosses that way, each unused one the System program. A pool the distributed swap
+skips (no liquidity, swaps switched off, a fee that is more than one rate, paused, a market not open
+for taking) is listed under `skipped` with why. `--block` and `--v4-key` are EVM's.
+
 ### `sauce inspect`
 
 ```sh
@@ -1229,9 +1240,10 @@ the owner's (a direct cook, `--via engine`, has no Pot, so no `pot:` account); `
 mint and `program:USDC` its token program, SPL Token or Token-2022, the accounts
 `transferChecked` takes. A registered symbol's program is the registry's; any other mint's is read
 from the cluster. A tokenized stock is named the same way, by its symbol in any case
-(`pot:TSLAx`, `mint:NVDA_US`). A slot with no `--account` is named with the role it needs, and `simulate` notes each
-account it was given that the cluster does not have (a guard on it fails with no message of its
-own).
+(`pot:TSLAx`, `mint:NVDA_US`). `--accounts <json | file>` gives them all at once, one JSON object
+of each name to its value, as `--account` takes it; an `--account` beside it adds one more. A slot
+with no `--account` is named with the role it needs, and `simulate` notes each account it was given
+that the cluster does not have (a guard on it fails with no message of its own).
 
 ```js
 // @chain solana
