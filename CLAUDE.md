@@ -661,9 +661,10 @@ bigint or a function of the destination; the CLI reads each destination's Kitche
 delivers nothing; `receive: { token: USDC, amount }` is the destination's token of THAT SYMBOL,
 re-resolved there (only the tokens: every other value is computed on the source), and a token only
 the destination has is written `Token(0x…)` until the compiler can hand a call it runs an unknown
-bare name. `.catch((e) => { … })` makes the body and its handler one destination program,
-`try { … } catch (e) { … }` (EVM only; it compiles once the compiler's try/catch lands), and
-`await x; rest` is the compiler's `x.then(() => { rest })` (once its `await` lands). Until then the
+bare name. `.catch(handler)` makes the body and its handler one destination program,
+`intents.evm.js#_run`: `() => { try { body(); } catch { handler(); } }`, byte for byte the `try` a
+program would write (EVM only); a handler reading `e` waits on the compiler's `catch (e)` (v12
+#553), and `await x; rest` is the compiler's `x.then(() => { rest })` (once its `await` lands). Until then the
 example files the suites EXECUTE (and the file `sauce intent publish` writes) are written with
 `.then(...)`, while prose and skill blocks lead with `await`: `check-skills.mjs#THEN_UNTIL_AWAIT`
 lists every such file, requires every example that opens a hop with `.then` to be listed, and fails

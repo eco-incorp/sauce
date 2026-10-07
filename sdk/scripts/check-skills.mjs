@@ -1952,13 +1952,8 @@ const summary =
 const PENDING = [
   {
     file: "skills/",
-    match: /a `try`\/`catch` statement is not supported/,
-    waits: "the compiler's try/catch (v12 #552)",
-  },
-  {
-    file: "skills/sauce-intents/SKILL.md",
-    match: /`\.catch\(\.\.\.\)` needs a compiler that compiles `try`/,
-    waits: "the compiler's try/catch, which `.catch` lowers to (v12 #552)",
+    match: /a `catch` parameter \(a caught failure keeps no revert data/,
+    waits: "the compiler's catch (e) (v12 #553)",
   },
   {
     file: "skills/",
@@ -1969,7 +1964,7 @@ const PENDING = [
     file: "skills/sauce-script/references/builtins.md",
     match:
       /\.catch\(\) handler parameter|"a `\.catch\(\)`|"a `try` block|"`try`\/`catch` is not available/,
-    waits: "the compiler's try/catch and catch (e) (v12 #552, #553)",
+    waits: "the compiler's catch (e) (v12 #553)",
   },
 ];
 const pending = [];

@@ -523,8 +523,7 @@ describe("sauce compile", () => {
     expect(awaited).toEqual(report([`${opened}.then(() => {`, ...body, "});", ""].join("\n")));
   });
 
-  // Pending the compiler: `.catch(...)` and `try` (#552), whose handlers run where they say.
-  it.failing("reads a handler on every chain it runs on, as the compile reports it", async () => {
+  it("reads a handler on every chain it runs on", async () => {
     const { appliedDefines } = await import("../src/cli/report.js");
     const opened =
       "Arbitrum.hop({ reward: [{ token: USDC, amount: 1 }], refundee: 0x3333333333333333333333333333333333333333 })";

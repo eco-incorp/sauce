@@ -209,13 +209,34 @@ describe("the intents a program opens, as compiled", () => {
     },
   );
 
-  // Pending the compiler: `try`/`catch`, which a handler compiles to.
-  it.failing("`.then(...).catch((e) => { … })` handles the body on its destination", () => {
+  it("`.then(...).catch(() => { … })` is the body in a `try` on its destination, byte for byte", () => {
+    const handled = compile(
+      `function main() {
+  Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
+    .then(() => { USDC.transfer(RECIPIENT, 1000000); })
+    .catch(() => { USDC.transfer(${CREATOR}, 1000000); });
+}`,
+      INTENTS,
+    );
+    const tried = compileSauceProgram(
+      "arbitrum",
+      `function main() {
+  try { USDC.transfer(RECIPIENT, 1000000); } catch { USDC.transfer(${CREATOR}, 1000000); }
+}`,
+      { defines: { RECIPIENT } },
+    );
+    expect(handled.bodies.map((body) => body.destination.slug)).toEqual(["arbitrum"]);
+    expect(bytesToHex(handled.bodies[0]!.bytecode)).toBe(bytesToHex(tried.bytecode));
+  });
+
+  // Pending the compiler: `catch (e)`, which hands the handler what the body reverted with (v12
+  // #553).
+  it.failing("a handler reads what the body reverted with", () => {
     compile(
       `function main() {
   Arbitrum.hop({ reward: { token: USDC, amount: 1010000 }, receive: { token: USDC, amount: 1000000 }, refundee: ${CREATOR} })
     .then(() => { USDC.transfer(RECIPIENT, 1000000); })
-    .catch((e) => { USDC.transfer(${CREATOR}, 1000000); });
+    .catch((e) => { USDC.transfer(${CREATOR}, e.length); });
 }`,
       INTENTS,
     );

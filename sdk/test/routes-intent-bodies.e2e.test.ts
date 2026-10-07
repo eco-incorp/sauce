@@ -1312,7 +1312,6 @@ describeEvm("intent bodies, executed", () => {
       expect(publishedIn(logs)[0]!.rewardTokens[0]!.amount).toBe(held);
     }, 300_000);
 
-    // Pending the compiler: `try`/`catch`, which a handler compiles to.
     describe("`.catch(...)` handles an intent's body on the destination", () => {
       // The body runs in a frame of its own; when it reverts everything it did is undone, the
       // handler runs in its place, and the fill still succeeds.
@@ -1356,7 +1355,9 @@ describeEvm("intent bodies, executed", () => {
           0x6e6fn,
         ],
       ] as const) {
-        it.failing(
+        // Pending the compiler: `catch (e)`, which hands the handler what the body reverted with
+        // (v12 #553).
+        (handler.startsWith("(e)") ? it.failing : it)(
           name,
           async () => {
             const token = await deploy(MOCK_ERC20.creationCode);
