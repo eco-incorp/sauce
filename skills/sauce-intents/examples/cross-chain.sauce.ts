@@ -25,12 +25,12 @@ function main(beneficiary: Address, refundTo: Address) {
   require(amount > 0, "nothing to forward");
   const delivered = amount - (amount * 10) / 10000; // the solver keeps 0.1%
 
-  Ethereum.hop({
+  await Ethereum.hop({
     reward: { token: USDC, amount },
     receive: { token: USDC, amount: delivered },
     refundee: refundTo,
-  }).then(() => {
-    USDC.approve(AaveV3.Pool, delivered);
-    AaveV3.Pool.supply(USDC, delivered, beneficiary, 0);
   });
+  // On Ethereum.
+  USDC.approve(AaveV3.Pool, delivered);
+  AaveV3.Pool.supply(USDC, delivered, beneficiary, 0);
 }

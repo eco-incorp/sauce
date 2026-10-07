@@ -81,8 +81,8 @@ an intent carrying it onward.
 // it is whatever the swap, bridge or transfer just before it produced — which is the reason to
 // build the intent here rather than off-chain.
 //
-// `Ethereum.hop({ reward, receive, refundee }).then(() => { ... })` is the whole of it: the
-// reward this program escrows, what a solver delivers on Ethereum, and what runs there. `amount` is
+// `await Ethereum.hop({ reward, receive, refundee })` is the whole of it: the reward this program
+// escrows, what a solver delivers on Ethereum, and, after it, what runs there. `amount` is
 // an ordinary variable of this program and `recipient` one of its parameters, and using them in the
 // intent is enough: the program encodes the intent as it runs, with their values, and the SDK fills
 // in the Portal, the prover, the vault and the encoding. The intent names its refundee, `refundTo`,
@@ -106,13 +106,12 @@ function main(recipient: Address, minAmount: Uint256, refundTo: Address) {
   const amount = USDC.balanceOf(ctx.self());
   require(amount >= minAmount, "nothing to forward");
 
-  Ethereum.hop({
+  await Ethereum.hop({
     reward: { token: USDC, amount },
     receive: { token: USDC, amount },
     refundee: refundTo,
-  }).then(() => {
-    USDC.transfer(recipient, amount);
   });
+  USDC.transfer(recipient, amount); // on Ethereum
 }
 ```
 
@@ -131,9 +130,9 @@ Without Sauce, this step is either a contract you write and deploy (read the bal
 intent around the amount, ask the Portal for its vault, pay the reward into it, call `publish`) or
 a second transaction you build yourself after reading what the first produced.
 
-`Ethereum.hop({ … })` opens the intent, and its `.then(...)` is the body that runs there. As in
-JavaScript, `await` is the same: `await Ethereum.hop({ … });` followed by the body's statements,
-which then run on Ethereum, so a hop to one chain and on to the next reads top to bottom.
+`await Ethereum.hop({ … })` opens the intent, and the statements after it are the body, which runs
+on Ethereum, so a hop to one chain and on to the next reads top to bottom. As in JavaScript, it is
+`Ethereum.hop({ … }).then(() => { … })`.
 
 `USDC` is a registered token symbol. In the body it means **Ethereum's** USDC, because that is where
 the body runs, and in `receive` only the tokens are Ethereum's, looked up again there by symbol,

@@ -80,8 +80,7 @@ is published in the outer one's fill, read from the `IntentPublished` in that fi
 The same intent can be a file, all of it SauceScript, and the CLI opens it on the chain that pays
 the outer reward. Its inputs are `main`'s parameters, which `sauce intent publish --args` passes to
 the cook that publishes it. The delivery is each hop's `receive`, and the lowering adds the transfer
-into the Pot itself. Each body is written out with `.then(...)`, the same program as the `await`s
-above:
+into the Pot itself:
 
 ```js
 // An intent from Ethereum to Base whose body opens an intent of its own, from Base back to
@@ -102,20 +101,20 @@ above:
 // Every `USDC` is the USDC of the chain where its part runs: the outer reward's is Ethereum's; the
 // outer body's, its delivery's and the inner reward's are Base's; the inner body's is Ethereum's.
 function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo: Address) {
-  Base.hop({
+  await Base.hop({
     reward: { token: USDC, amount: reward },
     receive: { token: USDC, amount: delivered },
     refundee: refundTo,
-  }).then(() => {
-    const payout = delivered - delivered / 1000;
-    Ethereum.hop({
-      reward: { token: USDC, amount: delivered },
-      receive: { token: USDC, amount: payout },
-      refundee: refundTo, // every intent a program opens names its refundee
-    }).then(() => {
-      USDC.transfer(recipient, payout);
-    });
   });
+  // On Base, in the fill of the outer intent.
+  const payout = delivered - delivered / 1000;
+  await Ethereum.hop({
+    reward: { token: USDC, amount: delivered },
+    receive: { token: USDC, amount: payout },
+    refundee: refundTo, // every intent a program opens names its refundee
+  });
+  // On Ethereum, in the fill of the inner one.
+  USDC.transfer(recipient, payout);
 }
 ```
 
@@ -213,22 +212,22 @@ function main(
   minOut: Uint256,
   refundTo: Address,
 ) {
-  Base.hop({
+  await Base.hop({
     reward: { token: USDC, amount: reward },
     receive: { token: USDC, amount: delivered },
     refundee: refundTo,
-  }).then(() => {
-    const pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
-    const bought = uniswapV3(pool, USDC, WETH, delivered, 0, minOut, ctx.self());
-    const payout = bought - bought / 1000;
-    Ethereum.hop({
-      reward: { token: WETH, amount: bought },
-      receive: { token: WETH, amount: payout },
-      refundee: refundTo,
-    }).then(() => {
-      WETH.transfer(recipient, payout);
-    });
   });
+  // On Base: buy WETH with what was delivered, and hop on with it.
+  const pool = UniswapV3.Factory.getPool(USDC, WETH, 500);
+  const bought = uniswapV3(pool, USDC, WETH, delivered, 0, minOut, ctx.self());
+  const payout = bought - bought / 1000;
+  await Ethereum.hop({
+    reward: { token: WETH, amount: bought },
+    receive: { token: WETH, amount: payout },
+    refundee: refundTo,
+  });
+  // On Ethereum.
+  WETH.transfer(recipient, payout);
 }
 ```
 
@@ -270,37 +269,13 @@ its own.
 ## Three levels
 
 Hops chain as far as you write them. Three, each paying the next what it was delivered: to Base,
-then Ethereum, then back to Base, each line after an `await` running on the chain it hopped to:
-
-```js
-function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo: Address) {
-  await Base.hop({
-    reward: { token: USDC, amount: reward },
-    receive: { token: USDC, amount: delivered },
-    refundee: refundTo,
-  });
-  const second = delivered - delivered / 1000; // on Base
-  await Ethereum.hop({
-    reward: { token: USDC, amount: delivered },
-    receive: { token: USDC, amount: second },
-    refundee: refundTo,
-  });
-  const third = second - second / 1000; // on Ethereum
-  await Base.hop({
-    reward: { token: USDC, amount: second },
-    receive: { token: USDC, amount: third },
-    refundee: refundTo,
-  });
-  USDC.transfer(recipient, third); // on Base again
-}
-```
-
-This file is the same program with each body written out with `.then(...)`. It is published like
-the file above, by a cook on your Pot on Ethereum
+then Ethereum, then back to Base, each line after an `await` running on the chain it hopped to. It
+is published like the file above, by a cook on your Pot on Ethereum
 ([cross-chain-cascade.ts](../examples/cross-chain-cascade.ts) compiles it):
 
 ```js
-// Three hops, written as three intents opening one another: Base, then Ethereum, then Base again.
+// Three hops, one `await` each: Base, then Ethereum, then Base again. The code after each `await`
+// runs on the chain it hopped to, in the fill of that hop, and opens the next.
 // All of it is SauceScript, opened on Ethereum and published by a cook on your Pot:
 //   sauce intent publish cross-chain-cascade.sauce.ts --chain ethereum --keystore <keystore> \
 //     --fund USDC:<amount> --args <recipient> <delivered> <reward> <refundTo>
@@ -325,27 +300,27 @@ the file above, by a cook on your Pot on Ethereum
 // reward is escrowed by the program offering it: the first hop's in Ethereum's USDC, the second's in
 // Base's and the third's in Ethereum's.
 function main(recipient: Address, delivered: Uint256, reward: Uint256, refundTo: Address) {
-  Base.hop({
+  await Base.hop({
     reward: { token: USDC, amount: reward },
     receive: { token: USDC, amount: delivered },
     refundee: refundTo,
-  }).then(() => {
-    const second = delivered - delivered / 1000;
-    Ethereum.hop({
-      reward: { token: USDC, amount: delivered },
-      receive: { token: USDC, amount: second },
-      refundee: refundTo,
-    }).then(() => {
-      const third = second - second / 1000;
-      Base.hop({
-        reward: { token: USDC, amount: second },
-        receive: { token: USDC, amount: third },
-        refundee: refundTo,
-      }).then(() => {
-        USDC.transfer(recipient, third);
-      });
-    });
   });
+  // On Base, in the fill of the first hop.
+  const second = delivered - delivered / 1000;
+  await Ethereum.hop({
+    reward: { token: USDC, amount: delivered },
+    receive: { token: USDC, amount: second },
+    refundee: refundTo,
+  });
+  // On Ethereum, in the fill of the second.
+  const third = second - second / 1000;
+  await Base.hop({
+    reward: { token: USDC, amount: second },
+    receive: { token: USDC, amount: third },
+    refundee: refundTo,
+  });
+  // On Base again, in the fill of the third.
+  USDC.transfer(recipient, third);
 }
 ```
 
