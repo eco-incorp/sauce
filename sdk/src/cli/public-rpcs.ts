@@ -30,6 +30,11 @@ export interface PublicRpc {
   readonly url: string;
   /** Whether it runs `eth_simulateV1` as the command sends it. EVM endpoints only. */
   readonly simulateV1?: boolean;
+  /**
+   * Whether it answers `getProgramAccounts` with filters, as `sauce pools` scans a venue's pools.
+   * Solana endpoints only: one that refuses it (publicnode answers 403) is never sent a scan.
+   */
+  readonly programAccounts?: boolean;
 }
 
 /** The public endpoints of each canonical chain, by chain id, in the order they are tried. */
@@ -219,7 +224,7 @@ export const PUBLIC_RPCS: Readonly<Record<number, readonly PublicRpc[]>> = {
   ],
   // Solana (mainnet-beta), under the eco-routes chain id
   1399811149: [
-    { url: "https://api.mainnet-beta.solana.com" },
-    { url: "https://solana-rpc.publicnode.com" },
+    { url: "https://api.mainnet-beta.solana.com", programAccounts: true },
+    { url: "https://solana-rpc.publicnode.com", programAccounts: false },
   ],
 };

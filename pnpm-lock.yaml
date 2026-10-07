@@ -41,6 +41,9 @@ importers:
       dotenv:
         specifier: ^17.3.1
         version: 17.4.2
+      litesvm:
+        specifier: ^1.2.1
+        version: 1.2.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       sauce-compiler:
         specifier: npm:@eco-incorp/sauce-compiler@2.5.0
         version: '@eco-incorp/sauce-compiler@2.5.0'
@@ -198,6 +201,9 @@ importers:
       '@solana/kit':
         specifier: ^6.10.0
         version: 6.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      litesvm:
+        specifier: ^1.2.1
+        version: 1.2.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       sauce-compiler:
         specifier: npm:@eco-incorp/sauce-compiler@2.5.0
         version: '@eco-incorp/sauce-compiler@2.5.0'
@@ -214,9 +220,6 @@ importers:
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@20.19.41)
-      litesvm:
-        specifier: ^1.2.1
-        version: 1.2.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       ts-jest:
         specifier: ^29.1.0
         version: 29.4.11(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.0)(jest-util@30.4.1)(jest@29.7.0(@types/node@20.19.41))(typescript@5.9.3)

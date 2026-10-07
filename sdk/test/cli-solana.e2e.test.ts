@@ -259,6 +259,11 @@ function shim(harness: EngineHarness): {
           context,
           value: Number(harness.svm.getBalance(address(params[0] as string)) ?? 0n),
         });
+      // The clock, which a rehearsal in a local copy sets its own to.
+      case "getSlot":
+        return answer(id, Number(harness.svm.getClock().slot));
+      case "getBlockTime":
+        return answer(id, Number(harness.svm.getClock().unixTimestamp));
       case "getMinimumBalanceForRentExemption":
         return answer(
           id,
@@ -1001,7 +1006,10 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(poor.code).toBe(1);
     expect(JSON.parse(poor.stdout)).toMatchObject({ ok: false, createPot: { owner: broke } });
     expect(poor.stderr).toMatch(
-      new RegExp(`^${broke} holds 0 lamports, and the cook takes \\d+: \\d+ in rent for the Pot`),
+      new RegExp(
+        `^${broke} holds 0 lamports, and the cook takes \\d+: \\d+ in rent for the Pot`,
+        "m",
+      ),
     );
     expect(poor.stderr).toContain("Solana's simulateTransaction takes no balance overrides");
   }, 60_000);
@@ -1035,7 +1043,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       owner.signer.address,
       `["${key}","${key}"]`,
     );
-    expect(other.stdout).toMatch(/^The cook fails: the program threw "not the key"/);
+    expect(other.stdout).toMatch(/^The cook reverts: the program threw "not the key"/);
     const evm = await sauce(
       ...base,
       ...flags,
@@ -1082,7 +1090,7 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(failed.code).toBe(1);
     // The token program's refusal in its own words, from the line it logged.
     expect(failed.stdout).toMatch(
-      /^The cook fails: SPL Token refused: insufficient funds \(custom program error 1\)/,
+      /^The cook reverts: SPL Token refused: insufficient funds \(custom program error 1\)/,
     );
     expect(failed.stdout).toMatch(/Program logs:\n {2}Program /);
     expect(failed.stdout).toMatch(/insufficient funds/i);
@@ -1274,23 +1282,32 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     });
     const { codeBuffer } = out.staged as { codeBuffer: Address };
     expect(harness.svm.getAccount(codeBuffer).exists).toBe(false);
-    // Too large for a single unsigned transaction or a simulation: both say by how much, and that
-    // `sauce run` stages it. A simulation says so before it looks for the Pot.
+    // Too large for a single unsigned transaction: it says by how much, and that `sauce run`
+    // stages it.
     const program = compileSauceProgram("solana", readFileSync(big, "utf8"), {}).bytecode.length;
-    for (const command of ["tx", "simulate"]) {
-      const refused = await sauce(
-        ...[command, big, "--owner", owner.signer.address, "--salt", "absent"],
-        ...["--rpc-url", RPC_URL],
-      );
-      expect(refused.code).toBe(1);
-      expect(refused.stderr).toMatch(
-        new RegExp(
-          `the payload \\(the program, with no arguments\\) is ${program} bytes, so its cook is ` +
-            "a (\\d+)-byte transaction, (\\d+) past Solana's 1232\\. .* Shrink the payload by at " +
-            "least \\2 bytes to fit, or let `sauce run` stage it",
-        ),
-      );
-    }
+    const refused = await sauce(
+      ...["tx", big, "--owner", owner.signer.address, "--salt", "absent"],
+      ...["--rpc-url", RPC_URL],
+    );
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toMatch(
+      new RegExp(
+        `the payload \\(the program, with no arguments\\) is ${program} bytes, so its cook is ` +
+          "a (\\d+)-byte transaction, (\\d+) past Solana's 1232\\. .* Shrink the payload by at " +
+          "least \\2 bytes to fit, or let `sauce run` stage it",
+      ),
+    );
+    // A simulation stages it in a local copy of the accounts, the missing Pot created there first.
+    const rehearsed = await sauce(
+      ...["simulate", big, "--owner", owner.signer.address, "--salt", "absent"],
+      ...["--rpc-url", RPC_URL, "--json"],
+    );
+    expect(json(rehearsed)).toMatchObject({
+      ok: true,
+      path: "local copy (LiteSVM)",
+      staged: { bytes: program },
+      createPot: expect.any(Object),
+    });
   }, 120_000);
 
   it("`sauce tx` prints the cook unsigned; signed by the owner as printed, it lands", async () => {
@@ -1862,17 +1879,16 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
     expect(tokenAmount(harness, potTslax)).toBe(50_000_000n);
     expect(tokenAmount(harness, toTslax)).toBe(50_000_000n);
 
-    // Past one transaction: a rehearsal is refused, saying by how much, and that `run` stages it.
+    // Past one transaction: a rehearsal stages it in a local copy, and moves what the run moved.
     const accounts = argv
       .slice(2, at)
       .filter((word, i, all) => word === "--account" || all[i - 1] === "--account");
-    const refused = await sauce(
+    const rehearsed = await sauce(
       ...["simulate", file, "--chain", "solana", "--owner", owner.signer.address],
       ...["--salt", salt, "--rpc-url", RPC_URL, ...accounts, ...argv.slice(at)],
     );
-    expect(refused.code).toBe(1);
-    expect(refused.stderr).toMatch(
-      /Shrink the payload by at least \d+ bytes to fit, or let `sauce run` stage it/,
-    );
+    expect(rehearsed.code).toBe(0);
+    expect(rehearsed.stdout).toContain("Rehearsed in a local copy (LiteSVM)");
+    expect(rehearsed.stdout).toMatch(/1 USDC/);
   }, 120_000);
 });

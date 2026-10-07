@@ -80,6 +80,18 @@ export function ok(result: CallToolResult): Record<string, unknown> {
   return result.structuredContent as Record<string, unknown>;
 }
 
+/**
+ * An error result that still carries its structured content, as a rehearsal that reverted does:
+ * that content; fails when the call succeeded or carries none.
+ */
+export function erred(result: CallToolResult): Record<string, unknown> {
+  assert.equal(result.isError, true, `expected an error result, got: ${textOf(result)}`);
+  assert.ok(result.structuredContent !== undefined, "the error carries structured content");
+  assert.deepEqual(JSON.parse(textOf(result)), result.structuredContent);
+
+  return result.structuredContent as Record<string, unknown>;
+}
+
 /** An error result's message; fails when the call succeeded. */
 export function failed(result: CallToolResult): string {
   assert.equal(result.isError, true, `expected an error, got: ${textOf(result)}`);

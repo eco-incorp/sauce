@@ -299,6 +299,7 @@ The full list, with what each rejection says, is section 14 of
 | template literals, comparing bytes with `==`                                                                      | `"text"`, or bytes built with `.concat`; compare `crypto.keccak256` of each                  |
 | `as` casts, default parameters, spread, object destructuring                                                      | explicit values and field access                                                             |
 | `arr.push(x)`, `console.log`, `Math.min`/`max`/`abs`/`pow`                                                        | `new Array(n)` and an index; `if`; `**`                                                      |
+| a method on a literal: ``hex`a9059cbb`.concat(d)``                                                                | bind it first: ``const selector = hex`a9059cbb`; selector.concat(d)``                        |
 
 ```sauce fails
 function main(x: Uint256): Uint256 {
@@ -415,7 +416,8 @@ function's parameter has no annotation, so it is a number: annotate it, `first: 
 other message, find it in [references/builtins.md](references/builtins.md). `a nested function
 declaration is not supported` means a function declared inside another function or a block:
 declare it at the top level. `X is called but never declared` means a function that is not in
-scope, usually a typo.
+scope, usually a typo. `calling anything other than a plain function name` at a method call on a
+literal (``hex`…`.concat(…)``) means the literal must be bound to a `const` first.
 
 ## Example
 

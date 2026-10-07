@@ -453,7 +453,7 @@ describe("sauce simulate --assume-balance, offline", () => {
     expect(run.stderr).toContain(message);
   });
 
-  it("is refused on Solana, whose simulateTransaction takes no overrides", async () => {
+  it("names a token Solana does not register, before reaching any endpoint", async () => {
     const run = await sauce(
       "simulate",
       PAY,
@@ -467,7 +467,9 @@ describe("sauce simulate --assume-balance, offline", () => {
       "ETH:1",
     );
     expect(run.code).toBe(2);
-    expect(run.stderr).toContain("--assume-balance is for EVM chains");
+    expect(run.stderr).toContain(
+      "--assume-balance ETH:1: ETH is not a mint solana registers: give its symbol (sauce globals --chain solana) or its base58 address",
+    );
   });
 
   it("lists the flags one kind of chain takes under their own heading in --help", async () => {
@@ -484,11 +486,15 @@ describe("sauce simulate --assume-balance, offline", () => {
       "Usage: sauce simulate <file | -> --chain <slug|id> (--owner <address> | --pot <address>)",
     );
     expect(help).toContain("       sauce simulate <file | -> --chain solana --owner <pubkey>");
-    for (const flag of ["--pot", "--value", "--assume-balance", "--fund-mode", "--keystore"]) {
+    for (const flag of ["--pot", "--value", "--fund-mode", "--keystore"]) {
       expect(section("EVM chains only:")).toContain(`${flag} `);
       expect(section("Options:")).not.toContain(`${flag} `);
     }
+    // A balance assumed in the rehearsal: an EVM state override, or a local copy on Solana.
+    expect(section("Options:")).toContain("--assume-balance ");
     expect(section("Solana only:")).toContain("--account NAME=<address>");
+    expect(section("Solana only:")).toContain("--accounts <json|file>");
+    expect(section("Solana only:")).toContain("--lookup-table <address>");
     expect(section("Solana only:")).toContain("--keypair <path>");
     expect(section("Options:")).not.toContain("--keypair ");
     expect(section("Options:")).toContain("--owner <address>");

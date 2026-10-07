@@ -178,7 +178,8 @@ sauce run payout-solana.sauce.ts --chain solana --keypair <keypair> \
 ```
 
 Two transfers and the reads are past one Solana transaction, so `sauce run` stages the program
-before the cook; `sauce simulate` and `sauce tx` refuse it, naming how many bytes it is over.
+before the cook, and `sauce simulate` rehearses it staged, in a local copy of its accounts;
+`sauce tx` refuses it, naming how many bytes it is over.
 `sauce-solana` has the rest: binding a slot to the Pot, transaction size, each Token-2022
 extension, and running through the Kitchen or the engine.
 
